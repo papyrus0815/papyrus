@@ -16,3 +16,8 @@ export const SIDE_OUTCOME_OPTIONS = (Object.keys(SIDE_OUTCOME_LABEL) as SideOutc
   label: SIDE_OUTCOME_LABEL[value],
 }))
 
+
+/** 진영을 붙일 때 들어가는 기본 이름('진영 1'·'진영 2'…) — 아직 이름을 짓지 않은 진영 */
+export function isPlaceholderSideName(name: string | null | undefined): boolean {
+  return /^진영\s*\d+$/.test(name?.trim() ?? '')
+}

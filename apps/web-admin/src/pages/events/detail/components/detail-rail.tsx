@@ -12,6 +12,12 @@ interface DetailRailProps {
 const READING_LINE = 120
 
 /**
+ * 펼친 단락 목록의 상한 — 묶음의 전개는 하위 사건이 단락이라 1차대전은 18줄이 전부 서서 장부 칼럼을 넘쳤고,
+ * 본문 전개 목록과 같은 내용을 한 번 더 늘어놓았다. 지금 읽는 자리 둘레 8줄만 두고 나머지는 '전체 N건'으로 연다.
+ */
+const SUB_CAP = 8
+
+/**
  * 목차 — 우측 장부 칼럼(S.Aside) 안의 섹션 내비.
  *
  * sticky·스크롤은 Aside가 소유한다. 여기는 '현재 위치 + 점프' 단일 책무.
@@ -74,6 +80,15 @@ export function DetailRail({ sections }: DetailRailProps) {
   }, [flatIds])
 
   const handleNavClick = (id: string) => scrollToAnchor(id)
+  /** '전체 N건 보기'로 연 섹션 */
+  const [expandedSections, setExpandedSections] = useState<ReadonlySet<string>>(() => new Set())
+  const toggleExpanded = (id: string) =>
+    setExpandedSections((previous) => {
+      const next = new Set(previous)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   if (sections.length === 0) return null
 
@@ -99,13 +114,27 @@ export function DetailRail({ sections }: DetailRailProps) {
                 >
                   {link.label}
                 </S.RailNavItem>
-                {isActive && children.length > 0 && (
+                {isActive && children.length > 0 && (() => {
+                  const expanded = expandedSections.has(link.id)
+                  const capped = !expanded && children.length > SUB_CAP + 1
+                  const activeIndex = children.findIndex(
+                    (child) => child.id === activeId || child.headings?.some((heading) => heading.id === activeId),
+                  )
+                  const windowStart = capped
+                    ? Math.max(0, Math.min(activeIndex - 3, children.length - SUB_CAP))
+                    : 0
+                  const windowEnd = capped ? windowStart + SUB_CAP : children.length
+                  return (
+                  <>
                   <S.RailSubList aria-label={`${link.label} 단락`}>
-                    {children.map((child, index) => {
+                    {children.slice(windowStart, windowEnd).map((child, offset) => {
+                      const index = windowStart + offset
                       const headings = child.headings ?? []
                       const inChild = child.id === activeId || headings.some((heading) => heading.id === activeId)
-                      /* 국면이 바뀌는 자리에 장 소제목 — 하위 14건이 한 줄로 늘어서던 목차를 장으로 가른다 */
-                      const chapterStarts = child.chapter && child.chapter !== children[index - 1]?.chapter
+                      /* 국면이 바뀌는 자리에 장 소제목 — 하위 14건이 한 줄로 늘어서던 목차를 장으로 가른다.
+                         창의 첫 줄은 앞이 잘렸어도 어느 장인지 보여 준다 */
+                      const chapterStarts =
+                        child.chapter && (offset === 0 || child.chapter !== children[index - 1]?.chapter)
                       return (
                       <li key={child.id}>
                         {chapterStarts && <S.RailChapterLabel title={child.chapter}>{child.chapter}</S.RailChapterLabel>}
@@ -142,7 +171,18 @@ export function DetailRail({ sections }: DetailRailProps) {
                       )
                     })}
                   </S.RailSubList>
-                )}
+                  {(capped || expanded) && (
+                    <S.RailMoreButton
+                      type="button"
+                      aria-expanded={expanded}
+                      onClick={() => toggleExpanded(link.id)}
+                    >
+                      {expanded ? '줄여 보기' : `전체 ${children.length}건 보기`}
+                    </S.RailMoreButton>
+                  )}
+                  </>
+                  )
+                })()}
               </li>
             )
           })}

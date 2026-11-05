@@ -504,6 +504,38 @@ function EventDetailContent({
     observer.observe(bar)
     return () => observer.disconnect()
   }, [])
+  /**
+   * 탭 줄이 가로로 넘칠 때(휴대폰 폭) — 잘린 쪽에 페이드를 걸어 '더 있다'를 알리고(예전엔 '연…'에서 말없이 잘렸다),
+   * 선택한 탭이 화면 밖이면 그 탭까지 민다(딥링크 ?tab=media로 들어온 경우).
+   */
+  useEffect(() => {
+    const bar = tabsRef.current
+    if (!bar) return undefined
+    const sync = () => {
+      const overflowStart = bar.scrollLeft > 2
+      const overflowEnd = bar.scrollLeft + bar.clientWidth < bar.scrollWidth - 2
+      bar.toggleAttribute('data-fade-start', overflowStart)
+      bar.toggleAttribute('data-fade-end', overflowEnd)
+    }
+    sync()
+    bar.addEventListener('scroll', sync, { passive: true })
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(sync)
+    observer?.observe(bar)
+    return () => {
+      bar.removeEventListener('scroll', sync)
+      observer?.disconnect()
+    }
+  }, [])
+  useEffect(() => {
+    const bar = tabsRef.current
+    const selectedTab = bar?.querySelector<HTMLElement>(`#event-tab-${activeTab}`)
+    if (!bar || !selectedTab || bar.scrollWidth <= bar.clientWidth) return
+    const barRect = bar.getBoundingClientRect()
+    const tabRect = selectedTab.getBoundingClientRect()
+    if (tabRect.left < barRect.left || tabRect.right > barRect.right) {
+      bar.scrollTo({ left: bar.scrollLeft + tabRect.left - barRect.left - 24 })
+    }
+  }, [activeTab])
   const isFirstTabRef = useRef(true)
   useEffect(() => {
     if (isFirstTabRef.current) {
@@ -914,7 +946,9 @@ function EventDetailContent({
                       aria-selected={selected}
                       tabIndex={selected ? 0 : -1}
                       $active={selected}
-                      title={tab.hint}
+                      /* 기록이 없는 탭은 한 단 흐리게 — 눌러 봐야 '아직 …없습니다'인 탭이 셋씩 서 있었다(누르면 그대로 추가 안내) */
+                      data-empty={tab.id !== 'overview' && count === 0 ? 'true' : undefined}
+                      title={tab.id !== 'overview' && count === 0 ? `${tab.hint} — 아직 없음` : tab.hint}
                       onClick={() => setActiveTab(tab.id)}
                     >
                       {tab.label}
@@ -937,9 +971,13 @@ function EventDetailContent({
                   {/* 묶음 사건인데 배경·여파가 둘 다 비었으면 — 전체 글을 쓸 자리를 **한 곳에서** 짚는다
                       (요약·배경·여파 쓰기가 여기 모이므로 아래 빈 요약 자리표시·'더 채울 수 있는 것'의
                       배경·여파 칩은 내지 않는다 — 같은 버튼이 화면에 두 번 서 있었다) */}
-                  {(collectionTextNotice || singleTextNotice) && (
+                  {/*
+                    * 요약이 있으면 요약이 먼저, 안내는 그 뒤 — 안내('전체에 대한 글이 비어 있습니다')가 요약 위에 서서
+                    * 글이 있는 사건도 '비어 있다'가 첫 줄로 읽혔다. 요약이 없으면 안내가 먼저(요약 쓰기가 거기 있다).
+                    */}
+                  {!hasSummary && (collectionTextNotice || singleTextNotice) && (
                     <CollectionWholeTextNotice
-                      onWriteSummary={hasSummary ? undefined : () => setSummaryOpen(true)}
+                      onWriteSummary={() => setSummaryOpen(true)}
                       onWriteBackground={() => revealSection('background')}
                       onWriteNarrative={singleTextNotice ? () => revealSection('narrative') : undefined}
                       onWriteAftermath={() => revealSection('aftermath')}
@@ -948,6 +986,13 @@ function EventDetailContent({
                   {/* 요약 — 히어로에서 옮겨 와 개요의 머리글이 된다(히어로는 제목·행위자·국가만) */}
                   {((!collectionTextNotice && !singleTextNotice) || hasSummary || summaryOpen) && (
                     <DetailSummary event={event} onPatch={onPatch} autoEdit={summaryOpen && !hasSummary} />
+                  )}
+                  {hasSummary && (collectionTextNotice || singleTextNotice) && (
+                    <CollectionWholeTextNotice
+                      onWriteBackground={() => revealSection('background')}
+                      onWriteNarrative={singleTextNotice ? () => revealSection('narrative') : undefined}
+                      onWriteAftermath={() => revealSection('aftermath')}
+                    />
                   )}
                   {/* (제거) 개요의 '전개' 간트 — 같은 하위 사건이 바로 아래 '전개' 목록과 조망 탭 간트에
                       또 나왔다. 시간축으로 보는 자리는 조망 탭 하나다(하위 사건 기간에 맞춘 축). */}

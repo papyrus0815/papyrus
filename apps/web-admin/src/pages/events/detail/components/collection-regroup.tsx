@@ -215,6 +215,8 @@ export function RegroupBar({
   candidates,
   onDone,
   onCancel,
+  onMakeChapter,
+  chapterBlockedReason = null,
 }: {
   parent: { id: string; domain?: string | null }
   selected: RegroupCandidate[]
@@ -222,6 +224,13 @@ export function RegroupBar({
   candidates: RegroupCandidate[]
   onDone: () => void
   onCancel: () => void
+  /**
+   * 고른 것을 **국면**으로 — 깊이를 늘리지 않는 목차. 주면 이것이 기본 동작이 되고 '새 묶음'은 보조로 내려간다
+   * (예전엔 '새 묶음으로 묶기'뿐이라 고르기가 곧 한 단 더 깊은 트리를 만들었다).
+   */
+  onMakeChapter?: (title: string, selected: RegroupCandidate[]) => Promise<void>
+  /** 국면으로 못 나누는 까닭 — 하위 묶음 안의 사건이 섞였을 때 */
+  chapterBlockedReason?: string | null
 }) {
   const queryClient = useQueryClient()
   const [title, setTitle] = useState('')
@@ -249,6 +258,21 @@ export function RegroupBar({
       onDone()
     } catch (error) {
       notify.error(`묶지 못했습니다 — ${crossPatchErrorMessage(error)}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const chapterAllowed = Boolean(onMakeChapter) && !chapterBlockedReason
+  const makeChapter = async () => {
+    const name = title.trim()
+    if (!name || count === 0 || !onMakeChapter || chapterBlockedReason) return
+    setBusy(true)
+    try {
+      await onMakeChapter(name, selected)
+      onDone()
+    } catch (error) {
+      notify.error(`국면을 만들지 못했습니다 — ${crossPatchErrorMessage(error)}`)
     } finally {
       setBusy(false)
     }
@@ -283,20 +307,45 @@ export function RegroupBar({
       <BarGroup
         onSubmit={(submitEvent) => {
           submitEvent.preventDefault()
-          void groupIntoNew()
+          void (chapterAllowed ? makeChapter() : groupIntoNew())
         }}
       >
         <BarInput
           value={title}
           onChange={(changeEvent) => setTitle(changeEvent.target.value)}
-          placeholder="새 묶음 이름 — 예: 7월 위기"
-          aria-label="새 묶음 이름"
+          placeholder={onMakeChapter ? '이름 — 예: 전시 내부 위기와 6월 시위' : '새 묶음 이름 — 예: 7월 위기'}
+          aria-label={onMakeChapter ? '국면 또는 새 묶음 이름' : '새 묶음 이름'}
           disabled={busy}
         />
-        <BarPrimary type="submit" disabled={busy || count === 0 || !title.trim()}>
-          새 묶음으로 묶기
-        </BarPrimary>
+        {onMakeChapter && (
+          <BarPrimary
+            type="submit"
+            disabled={busy || count === 0 || !title.trim() || !chapterAllowed}
+            title={chapterBlockedReason ?? '깊이는 그대로 — 고른 사건의 처음~끝을 기간으로 하는 목차(국면)'}
+          >
+            국면으로 나누기
+          </BarPrimary>
+        )}
+        {onMakeChapter ? (
+          <BarSecondary
+            type="button"
+            disabled={busy || count === 0 || !title.trim()}
+            onClick={() => void groupIntoNew()}
+            title="고른 것을 하나의 사건(묶음)으로 — 트리가 한 단 깊어집니다"
+          >
+            새 묶음 사건으로
+          </BarSecondary>
+        ) : (
+          <BarPrimary type="submit" disabled={busy || count === 0 || !title.trim()}>
+            새 묶음으로 묶기
+          </BarPrimary>
+        )}
       </BarGroup>
+      {onMakeChapter && (
+        <BarHint>
+          {chapterBlockedReason ?? '국면 = 목차(깊이 그대로) · 새 묶음 = 고른 것을 사건 하나로(한 단 깊게)'}
+        </BarHint>
+      )}
       {targets.length > 0 && (
         <BarGroup
           onSubmit={(submitEvent) => {
@@ -330,6 +379,13 @@ export function RegroupBar({
 }
 
 /* ───────────────────────── 조판 ───────────────────────── */
+
+/** 국면과 새 묶음의 차이 한 줄 — 막대 맨 아래 전체 폭 */
+const BarHint = styled.span`
+  flex-basis: 100%;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
 
 const Segment = styled.span`
   display: inline-flex;

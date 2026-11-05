@@ -15,7 +15,7 @@
  *
  * 문서 구성(섹션별 단락 수)은 목차가 맡는다 — 이 패널 아래에 있다.
  */
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { FiMapPin } from 'react-icons/fi'
@@ -33,6 +33,8 @@ import { metaText } from '@/pages/events/styles/theme'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { formatYearLabel, parseIsoDateParts } from '@/shared/lib/iso-date'
 import { commentsQueryOptions } from '@/entities/comment/comment.api'
+import { getEventOverview } from '@/shared/api/event-overview'
+import { eventKeys } from '@/shared/api/event-query-keys'
 import { formatObservationValue } from '@/entities/evidence/lib/format-observation'
 import { pathKeys } from '@/shared/router'
 import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal'
@@ -43,11 +45,15 @@ import {
   groupCountriesByRole,
   type RoleCountry,
 } from './event-facts.lib'
+import { heroCardsShowAllCountries } from './hero-countries.lib'
 import { InlineDateRange, InlineText } from './inline'
 import { type LatLng } from './location-picker-map'
 import { LocationPickerModal, formatCoordinate, googleMapsUrl } from './location-picker-modal'
+
+/** 작은 위치 지도 — 핀이 있을 때만 leaflet을 싣는다 */
+const LocationPreviewMap = lazy(() => import('./location-preview-map'))
 import { OriginalDateLine } from './original-date-line'
-import { SIDE_OUTCOME_LABEL } from './side-outcome'
+import { SIDE_OUTCOME_LABEL, isPlaceholderSideName } from './side-outcome'
 import { representativeOf } from './side-metrics.lib'
 import { scrollToAnchor } from './scroll-to-anchor'
 
@@ -103,6 +109,16 @@ export function DetailFacts({
     event.locationLatitude != null && event.locationLongitude != null
       ? { lat: Number(event.locationLatitude), lng: Number(event.locationLongitude) }
       : null
+  /** 묶음 — 하위에 꽂힌 핀 수(조망 응답, 전개·조망과 같은 캐시). 자기 위치가 없을 때 '하위 N곳 · 지도'로 */
+  const isCollection = event.kind === 'COLLECTION'
+  const { data: overview } = useQuery({
+    queryKey: eventKeys.overview(event.id),
+    queryFn: () => getEventOverview(event.id),
+    enabled: isCollection && !locationText && !locationPoint,
+    staleTime: 30_000,
+  })
+  const childPinCount =
+    overview?.descendants.filter((node) => node.locationLatitude != null && node.locationLongitude != null).length ?? 0
   const rowsRef = useRef<HTMLDivElement>(null)
   const [rowCount, setRowCount] = useState(0)
   useEffect(() => {
@@ -131,6 +147,11 @@ export function DetailFacts({
   const sideNames = sides
     .filter((side) => side.name.trim())
     .map((side) => (side.outcome ? `${side.name.trim()}(${SIDE_OUTCOME_LABEL[side.outcome]})` : side.name.trim()))
+  /*
+   * 이름을 안 지은 진영 — 진영을 붙이면 '진영 1·진영 2…'로 시작한다(실DB 104행 중 5행이 그대로). 다 그런 사건은
+   * '진영 1 대 진영 2 대 진영 3 대 진영 4'가 사실처럼 섰다(프랑스 혁명). 이때는 수와 '이름 짓기'로 대신한다.
+   */
+  const unnamedSides = sides.length >= 2 && sides.every((side) => isPlaceholderSideName(side.name))
   /*
    * 사상자 — 측정값(D3)에서 진영마다 한 줄. 정의가 다른 지표를 섞지 않도록 우선순위대로 하나만 고른다.
    * (군 손실 합계 → 총사망 → 전투 사망 → 전사 → 정의 미상 사망)
@@ -169,6 +190,11 @@ export function DetailFacts({
       }),
     ),
   ])
+
+  const heroShowsAll = heroCardsShowAllCountries(
+    [...(event.relatedCountries ?? []), ...(event.relatedHistoricalCountries ?? [])],
+    sides,
+  )
 
   const parent = event.parentEvent
   const extraParentCount = event.extraParents?.length ?? 0
@@ -221,6 +247,10 @@ export function DetailFacts({
             ) : (
               <span>{formatCoordinate(locationPoint as LatLng)}</span>
             )}
+            {/* 위치 메모 — 장소 이름과 따로, 작게(두 줄까지, 전체는 마우스를 올리면) */}
+            {event.locationNote?.trim() && (
+              <LocationNote title={event.locationNote}>{event.locationNote}</LocationNote>
+            )}
             <LocationActions>
               <LocationMapButton
                 type="button"
@@ -237,10 +267,33 @@ export function DetailFacts({
             </LocationActions>
           </LocationText>
         </LocationLine>
+      ) : childPinCount > 0 ? (
+        /* 묶음은 대개 자기 위치가 없다(프랑스 혁명) — 그 자리에 하위 핀을 모은 지도로 가는 길. 자기 위치는 옆 '+' */
+        <ChildMapLine>
+          <ChildMapLink to={{ search: '?tab=survey&sv=map' }}>
+            <FiMapPin aria-hidden /> 하위 {childPinCount}곳 · 지도 보기
+          </ChildMapLink>
+          <AddLine type="button" onClick={() => setLocationModalOpen(true)} title="이 사건 자체의 위치">
+            + 이 사건 위치
+          </AddLine>
+        </ChildMapLine>
       ) : (
         <AddLine type="button" onClick={() => setLocationModalOpen(true)}>
           <FiMapPin aria-hidden /> 위치 추가
         </AddLine>
+      )}
+      {/* 핀을 꽂은 보람이 보이게 — 작은 지도, 누르면 큰 지도(위치 모달) */}
+      {locationPoint && (
+        <MiniMapButton
+          type="button"
+          onClick={() => setLocationModalOpen(true)}
+          aria-label={`${locationText || '위치'} — 큰 지도로 보기·핀 옮기기`}
+          title="큰 지도로 보기·핀 옮기기"
+        >
+          <Suspense fallback={<MiniMapLoading />}>
+            <LocationPreviewMap point={locationPoint} height={140} />
+          </Suspense>
+        </MiniMapButton>
       )}
       {locationModalOpen && (
         <LocationPickerModal
@@ -250,6 +303,7 @@ export function DetailFacts({
             location: event.location,
             latitude: locationPoint?.lat ?? null,
             longitude: locationPoint?.lng ?? null,
+            note: event.locationNote ?? null,
           }}
           onSave={(value) => {
             onPatch(value as UpdateEventDto)
@@ -284,10 +338,18 @@ export function DetailFacts({
             <ClampedText title={outcome}>{outcome}</ClampedText>
           </FactRow>
         )}
-        {sideNames.length >= 2 && (
-          <FactRow label="진영" wide>
-            {sideNames.join(' 대 ')}
+        {unnamedSides ? (
+          <FactRow label="진영">
+            <JumpButton type="button" onClick={() => jumpTo('module-sides')} title="진영 이름이 아직 기본값입니다">
+              {sides.length}개 · 이름 짓기
+            </JumpButton>
           </FactRow>
+        ) : (
+          sideNames.length >= 2 && (
+            <FactRow label="진영" wide>
+              {sideNames.join(' 대 ')}
+            </FactRow>
+          )
         )}
         {casualties.length > 0 && (
           <FactRow label="사상자" wide>
@@ -300,7 +362,8 @@ export function DetailFacts({
         )}
 
         {/* 배역이 하나뿐이면(전원 '참여국') 히어로의 나라 줄과 같은 목록이다 — 편이 갈릴 때만 세운다 */}
-        {roleGroups.length > 1 && roleGroups.map((group) => {
+        {/* 히어로 카드가 나라를 다 보여 주면 같은 목록의 반복이다 — 카드가 '+N개국'으로 접힐 때만 장부가 전체를 든다 */}
+        {roleGroups.length > 1 && !heroShowsAll && roleGroups.map((group) => {
           const shown = group.countries.slice(0, COUNTRIES_PER_ROLE)
           const overflow = group.countries.length - shown.length
           return (
@@ -500,6 +563,9 @@ const LocationLine = styled(EditableLine)`
   [data-edit-host] > span:first-child {
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    @container eventdetail (max-width: 639px) {
+      -webkit-line-clamp: 1;
+    }
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
@@ -544,6 +610,81 @@ const PinIcon = styled.span`
     width: 12px;
     height: 12px;
   }
+`
+
+const LocationNote = styled.span`
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.5;
+  color: ${metaText};
+
+  /* 휴대폰 폭 — 탭 위 자리를 아낀다. 메모는 마우스 올림(title)·'지도' 모달이 든다 */
+  @container eventdetail (max-width: 639px) {
+    display: none;
+  }
+`
+
+const ChildMapLine = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+`
+
+const ChildMapLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  text-decoration: none;
+
+  svg {
+    width: 13px;
+    height: 13px;
+  }
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+`
+
+/** 작은 위치 지도 — 장부 칼럼 폭 그대로, 누르는 자리 전체 */
+const MiniMapButton = styled.button`
+  display: block;
+  width: 100%;
+  margin: 2px 0 4px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: ${RADIUS.MD};
+  background: transparent;
+  cursor: zoom-in;
+  /* leaflet 내부 z-index(400~)가 sticky 칼럼 위로 뜨지 않게 이 상자 안에 가둔다 */
+  isolation: isolate;
+
+  /* 한 열 배치에선 장부가 탭 위에 끼므로 140px 지도가 본문을 첫 화면 밖으로 민다 — '지도' 버튼이 같은 모달을 연다 */
+  @container eventdetail (max-width: 919px) {
+    display: none;
+  }
+
+  &:hover,
+  &:focus-visible {
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+  }
+`
+
+const MiniMapLoading = styled.div`
+  height: 140px;
+  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.04)')};
 `
 
 const LocationText = styled.div`

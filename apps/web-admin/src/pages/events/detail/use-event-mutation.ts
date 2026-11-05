@@ -42,6 +42,7 @@ const OPTIMISTIC_SCALAR_FIELDS = [
   /** 위치 핀 — 빠지면 지도 모달에서 저장해도 refetch 전까지 '지도에 찍기'로 남는다 */
   'locationLatitude',
   'locationLongitude',
+  'locationNote',
   'background',
   'aftermath',
   'warCost',

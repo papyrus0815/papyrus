@@ -1,7 +1,7 @@
 import { type DragEvent, Fragment, type ReactNode, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiLayers, FiLink2, FiPlus } from 'react-icons/fi'
+import { FiChevronDown, FiChevronRight, FiLayers, FiLink2, FiMapPin, FiPlus } from 'react-icons/fi'
 import { Link, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -40,8 +40,15 @@ import {
 import { type GapInfo, type QuietSpan, quietSpansWithStart, siblingGaps, spanText, trailingQuiet } from './development-gap.lib'
 import { HeaderTextAction } from './section-collapse'
 import { EventPhaseEditor } from './event-phase-editor'
-import { type EventPhase, type PhaseReach, phaseRangeLabel, phaseReach } from './event-phase.lib'
-import { CollectionFooter, ExpandToggle, KindSwitch, RegroupBar, createCollectionWith } from './collection-regroup'
+import { type EventPhase, type PhaseReach, isoToPhasePoint, phaseRangeLabel, phaseReach } from './event-phase.lib'
+import {
+  CollectionFooter,
+  ExpandToggle,
+  KindSwitch,
+  RegroupBar,
+  type RegroupCandidate,
+  createCollectionWith,
+} from './collection-regroup'
 import { compareEventStart, crossPatchErrorMessage } from './detail-network.lib'
 import {
   type DropAction,
@@ -80,27 +87,51 @@ interface CollectionDevelopmentProps {
  * 장 머리 자리 — 화면 차례에서 국면 자리가 바뀌는 첫 행마다 하나, 건수는 그 구간만.
  * 직계(이 사건의 국면)와 펼친 하위 묶음(그 묶음의 국면)이 같은 규칙을 쓴다.
  */
+/** 전개 펼침 단계 — 사건까지(전부) · 국면까지(국면 목차만) · 묶음만(직계만) */
+type FoldLevel = 'events' | 'chapters' | 'collections'
+
+interface ChapterRun {
+  reach: PhaseReach
+  count: number
+  /** 구간 열쇠 — 접기 상태를 기억하는 데 쓴다('p3' = 3국면, 'o:before' = 국면 전) */
+  key: string
+}
+
 function chapterRuns(
   chapterList: ReadonlyArray<EventPhase>,
   rows: ReadonlyArray<{ id: string }>,
   reachById: ReadonlyMap<string, PhaseReach>,
-): Map<string, { reach: PhaseReach; count: number }> {
-  const heads = new Map<string, { reach: PhaseReach; count: number }>()
-  if (chapterList.length === 0) return heads
-  let currentKey: string | null = null
-  let currentHead: { reach: PhaseReach; count: number } | null = null
+): { heads: Map<string, ChapterRun>; runOf: Map<string, string> } {
+  const heads = new Map<string, ChapterRun>()
+  const runOf = new Map<string, string>()
+  if (chapterList.length === 0) return { heads, runOf }
+  let currentHead: ChapterRun | null = null
   for (const row of rows) {
     const reach = reachById.get(row.id)
     if (!reach) continue
     const key = reach.from != null ? `p${reach.from}` : `o:${reach.outside}`
-    if (key !== currentKey || !currentHead) {
-      currentKey = key
-      currentHead = { reach, count: 0 }
+    if (!currentHead || key !== currentHead.key) {
+      currentHead = { reach, count: 0, key }
       heads.set(row.id, currentHead)
     }
     currentHead.count += 1
+    runOf.set(row.id, key)
   }
-  return heads
+  return { heads, runOf }
+}
+
+/** 접기 상태 저장 열쇠 — 사건마다. 다른 사건에 다녀와도 접어 둔 그대로(예전엔 돌아오면 5,000px가 다 펼쳐졌다) */
+const FOLD_STORAGE_PREFIX = 'event-development-fold:'
+
+function readFoldState(eventId: string): { collapsed: Set<string>; chapters: Set<string> } {
+  try {
+    const raw = window.localStorage.getItem(`${FOLD_STORAGE_PREFIX}${eventId}`)
+    if (!raw) return { collapsed: new Set(), chapters: new Set() }
+    const parsed = JSON.parse(raw) as { collapsed?: string[]; chapters?: string[] }
+    return { collapsed: new Set(parsed.collapsed ?? []), chapters: new Set(parsed.chapters ?? []) }
+  } catch {
+    return { collapsed: new Set(), chapters: new Set() }
+  }
 }
 
 export function CollectionDevelopment({ event, onPatch, onGatherExisting }: CollectionDevelopmentProps) {
@@ -111,12 +142,36 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
   const [previewId, setPreviewId] = useState<string | null>(null)
   const navigate = useNavigate()
   /** 접은 묶음 — 기본은 전부 펼친다('모든 사건을 본다'). 접은 것만 기억한다 */
-  const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(() => new Set())
+  const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(() => readFoldState(event.id).collapsed)
+  /** 접은 국면 — '사건 id|구간 열쇠'. 장 머리를 누르면 그 국면의 사건만 접힌다 */
+  const [foldedChapters, setFoldedChapters] = useState<ReadonlySet<string>>(() => readFoldState(event.id).chapters)
+  /* 다른 사건으로 옮겨 가면 그 사건의 접기 상태로 */
+  const foldLoadedFor = useRef(event.id)
+  useEffect(() => {
+    if (foldLoadedFor.current === event.id) return
+    foldLoadedFor.current = event.id
+    const stored = readFoldState(event.id)
+    setCollapsedIds(stored.collapsed)
+    setFoldedChapters(stored.chapters)
+  }, [event.id])
+  useEffect(() => {
+    if (foldLoadedFor.current !== event.id) return
+    try {
+      window.localStorage.setItem(
+        `${FOLD_STORAGE_PREFIX}${event.id}`,
+        JSON.stringify({ collapsed: [...collapsedIds], chapters: [...foldedChapters] }),
+      )
+    } catch {
+      /* 저장 못 해도 이번 방문 동안은 접힌 그대로 */
+    }
+  }, [event.id, collapsedIds, foldedChapters])
   /** 참여국 국가원수의 즉위·취임 표지 — 기본은 보인다. 머리의 단추로 숨긴다 */
   const [showAccessions, setShowAccessions] = useState(true)
   /** 국면(목차) 편집 모달 */
   const [chapterEditorOpen, setChapterEditorOpen] = useState(false)
   const [savingChapters, setSavingChapters] = useState(false)
+  /** '이 국면에 사건' — 등록 모달이 저장되면 새 사건을 이 국면에 지정한다 */
+  const [pendingChapter, setPendingChapter] = useState<EventPhase | null>(null)
   /** 골라서 묶기 — 켜면 번호 자리가 고르기 칸이 되고 아래에 묶기 막대가 붙는다 */
   const [selecting, setSelecting] = useState(false)
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set())
@@ -169,6 +224,25 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
     queryFn: () => getEventOverview(event.id),
     staleTime: 0,
   })
+  /**
+   * 행 표지 — 어디서(위치)·무엇과 이어지나(연결 수). 조망 응답이 하위 전부의 위치·관련 사건을 실어 준다.
+   * 누르면 조망의 지도·연결 보기로(하위 전부를 한 지도·한 목록에서).
+   */
+  const rowSignals = useMemo(() => {
+    const place = new Map<string, { label: string; pinned: boolean }>()
+    const links = new Map<string, number>()
+    if (!overview) return { place, links }
+    for (const node of [overview.root, ...overview.descendants]) {
+      const pinned = node.locationLatitude != null && node.locationLongitude != null
+      const label = node.location?.trim() ?? ''
+      if (pinned || label) place.set(node.id, { label: label || '핀', pinned })
+    }
+    for (const relation of overview.relations ?? []) {
+      for (const id of [relation.fromId, relation.toId]) links.set(id, (links.get(id) ?? 0) + 1)
+    }
+    return { place, links }
+  }, [overview])
+
   /**
    * 이 화면에서 바꾼 종류 — 조망 응답에 종류가 안 실려 오는 동안(옛 API 빌드) 하위의 하위는 '하위가 있나'로만
    * 판별돼, 하위 없는 사건을 묶음으로 바꿔도 개별로 남아 보였다. 바꾼 결과를 기억해 판별에 얹는다.
@@ -652,6 +726,30 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
                 </DomainMeta>
               )}
               {node.viaExtraLink && <span>추가 상위로 연결</span>}
+              {(() => {
+                const place = rowSignals.place.get(node.id)
+                const linkCount = rowSignals.links.get(node.id) ?? 0
+                return (
+                  <>
+                    {place && (
+                      <SignalLink
+                        to={{ search: '?tab=survey&sv=map' }}
+                        title={place.pinned ? `${place.label} — 조망 지도에서 보기` : `${place.label} — 아직 핀 없음, 조망 지도에서 찍기`}
+                        data-unpinned={place.pinned ? undefined : ''}
+                      >
+                        <FiMapPin aria-hidden />
+                        <span className="text">{place.label}</span>
+                      </SignalLink>
+                    )}
+                    {linkCount > 0 && (
+                      <SignalLink to={{ search: '?tab=survey&sv=links' }} title={`관련 사건 연결 ${linkCount} — 조망 연결 보기에서`}>
+                        <FiLink2 aria-hidden />
+                        연결 {linkCount}
+                      </SignalLink>
+                    )}
+                  </>
+                )
+              })()}
               {/* 여러 국면에 걸친 하위 — 장 머리는 시작 국면에 서니, 끝 국면까지 간다고 적는다 */}
               {(() => {
                 const reach = node.depth === 1 ? reachById.get(node.id) : undefined
@@ -693,6 +791,29 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
                 />
               )}
             </StepHead>
+            {/* 접힌 묶음 — 안의 국면 차례를 한 줄로(무엇이 접혀 있는지). 누르면 펼친다 */}
+            {node.isCollection && collapsed && (nestedRuns.get(node.id)?.heads.size ?? 0) > 0 && (
+              <ChapterSummary
+                type="button"
+                onClick={() => setCollapsedIds((prev) => toggleIn(prev, node.id))}
+                aria-label={`${node.title} 펼치기`}
+              >
+                {(() => {
+                  /* 같은 국면은 합쳐 센다 — 구간이 끊겨도(사이에 국면 밖 사건) '3국면'이 두 번 서지 않게. 국면 순, 밖은 끝 */
+                  const totals = new Map<string, { label: string; count: number; order: number }>()
+                  for (const run of nestedRuns.get(node.id)?.heads.values() ?? []) {
+                    const label = run.reach.from != null ? `${run.reach.from}국면` : '국면 밖'
+                    const entry = totals.get(label) ?? { label, count: 0, order: run.reach.from ?? Number.MAX_SAFE_INTEGER }
+                    entry.count += run.count
+                    totals.set(label, entry)
+                  }
+                  return [...totals.values()]
+                    .sort((left, right) => left.order - right.order)
+                    .map((entry) => `${entry.label} ${entry.count}`)
+                    .join(' · ')
+                })()}
+              </ChapterSummary>
+            )}
             {owned && !selecting && !draggingId && (
               <StepTools>
                 <KindSwitch
@@ -727,31 +848,14 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
               {/* 하위 번호는 상위 번호를 잇는다 — 3의 하위는 3-1·3-2, 그 하위는 3-1-1(몇 번째 국면의 몇 번째인지) */}
               {(() => {
                 /* 펼친 묶음에도 그 묶음의 국면 — 최상위(프랑스 혁명)에서 대분류 안의 1·2·3국면이 보이게 */
-                const nestedChapters = [...(node.phases ?? [])].sort((left, right) => left.order - right.order)
-                const nestedHeads =
-                  nestedChapters.length > 0
-                    ? chapterRuns(
-                        nestedChapters,
-                        node.children,
-                        new Map(
-                          node.children.map((child) => [
-                            child.id,
-                            phaseReach(nestedChapters, {
-                              id: child.id,
-                              phaseId: child.phaseId ?? null,
-                              startDate: child.startDate,
-                              startDatePrecision: child.startDatePrecision,
-                              endDate: child.endDate,
-                              endDatePrecision: child.endDatePrecision,
-                            }),
-                          ]),
-                        ),
-                      )
-                    : null
+                const runs = nestedRuns.get(node.id)
                 return node.children.flatMap((child, childIndex) => {
-                  const head = nestedHeads?.get(child.id)
+                  const head = runs?.heads.get(child.id)
+                  const runKey = runs?.runOf.get(child.id)
+                  const headNode = head && runs ? renderChapterHead(head, child.id, runs.chapters, node.depth + 1, node.id) : null
+                  if (runKey && foldedChapters.has(chapterFoldKey(node.id, runKey))) return headNode ? [headNode] : []
                   const row = renderRow(child, `${ordinal}-${childIndex + 1}`)
-                  return head ? [renderChapterHead(head, child.id, nestedChapters, node.depth + 1), row] : [row]
+                  return headNode ? [headNode, row] : [row]
                 })
               })()}
               <NestedFooterItem $depth={node.depth + 1}>
@@ -819,10 +923,37 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
    * 장 머리 — 화면 차례에서 국면 자리가 바뀌는 첫 행 앞에 하나. 건수는 **그 구간만**(예전엔 같은 '국면 밖'이
    * 위아래 두 번 서며 둘 다 전체 수를 적었다). 국면 밖은 첫 국면 전·국면 사이·마지막 국면 후로 나눈다.
    */
-  const chapterHeads = useMemo(
+  const rootRuns = useMemo(
     () => chapterRuns(chapters, groups.flatMap((group) => group.items), reachById),
     [chapters, groups, reachById],
   )
+  /** 펼친 하위 묶음마다 그 묶음의 국면 구간 — 렌더마다 다시 세지 않게 한 번에 */
+  const nestedRuns = useMemo(() => {
+    const byId = new Map<string, { chapters: EventPhase[]; heads: Map<string, ChapterRun>; runOf: Map<string, string> }>()
+    for (const value of index.values()) {
+      const node = value as TreeRow
+      if (!node.isCollection || !node.phases?.length) continue
+      const nodeChapters = [...node.phases].sort((left, right) => left.order - right.order)
+      const reach = new Map(
+        node.children.map((child) => [
+          child.id,
+          phaseReach(nodeChapters, {
+            id: child.id,
+            phaseId: child.phaseId ?? null,
+            startDate: child.startDate,
+            startDatePrecision: child.startDatePrecision,
+            endDate: child.endDate,
+            endDatePrecision: child.endDatePrecision,
+          }),
+        ]),
+      )
+      byId.set(node.id, { chapters: nodeChapters, ...chapterRuns(nodeChapters, node.children, reach) })
+    }
+    return byId
+  }, [index])
+  /** 국면 구간 접기 열쇠 — 소유 묶음 id|구간 */
+  const chapterFoldKey = (ownerId: string, runKey: string) => `${ownerId}|${runKey}`
+  const toggleChapterFold = (key: string) => setFoldedChapters((prev) => toggleIn(prev, key))
   const saveChapters = async (phases: EventPhaseInput[]) => {
     setSavingChapters(true)
     try {
@@ -836,14 +967,68 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
       setSavingChapters(false)
     }
   }
+  /**
+   * 골라서 국면으로 — 고른 직계 하위의 처음~끝을 기간으로 국면을 하나 더하고(시작 순 자리), 날짜로는 다른 국면에
+   * 들어갈 것만 새 국면에 손으로 지정한다. 깊이는 그대로(새 묶음과 달리 트리를 한 단 깊게 만들지 않는다).
+   */
+  const makeChapterFrom = async (title: string, selected: ReadonlyArray<RegroupCandidate>) => {
+    const span = spanOfChildren(selected)
+    const start = isoToPhasePoint(span?.startDate, span?.startDatePrecision)
+    const end = isoToPhasePoint(span?.endDate ?? span?.startDate, span?.endDate ? span?.endDatePrecision : span?.startDatePrecision)
+    const toInput = (chapter: EventPhase): EventPhaseInput => ({
+      id: chapter.id,
+      title: chapter.title,
+      startEra: chapter.startEra ?? null,
+      startYear: chapter.startYear ?? null,
+      startMonth: chapter.startMonth ?? null,
+      startDay: chapter.startDay ?? null,
+      endEra: chapter.endEra ?? null,
+      endYear: chapter.endYear ?? null,
+      endMonth: chapter.endMonth ?? null,
+      endDay: chapter.endDay ?? null,
+      description: chapter.description ?? null,
+    })
+    const added: EventPhaseInput = {
+      title,
+      startEra: start?.era ?? null,
+      startYear: start?.year ?? null,
+      startMonth: start?.month ?? null,
+      startDay: start?.day ?? null,
+      endEra: end?.era ?? null,
+      endYear: end?.year ?? null,
+      endMonth: end?.month ?? null,
+      endDay: end?.day ?? null,
+    }
+    const keyOfInput = (input: EventPhaseInput) =>
+      input.startYear == null
+        ? Number.POSITIVE_INFINITY
+        : (input.startEra === 'BC' ? -input.startYear : input.startYear) * 10000 +
+          (input.startMonth ?? 1) * 100 +
+          (input.startDay ?? 1)
+    const next = [...chapters.map(toInput), added].sort((left, right) => keyOfInput(left) - keyOfInput(right))
+    const saved = (await putEventPhases(event.id, next)) as unknown as EventPhase[]
+    const created = saved.find((phase) => !chapters.some((chapter) => chapter.id === phase.id))
+    if (created) {
+      for (const item of selected) {
+        const reach = phaseReach(saved, item)
+        const landed = reach.from != null ? saved[reach.from - 1] : null
+        if (landed?.id !== created.id) await updateEvent(item.id, { phaseId: created.id } as UpdateEventDto)
+      }
+    }
+    invalidateEventQueries(queryClient, { eventId: event.id })
+    notify.success(`${selected.length}건으로 국면 '${title}'을(를) 만들었습니다`)
+  }
   /** 장 머리 한 줄 — 몇 번째 국면·이름·기간·이 구간 건수. 국면 밖은 어디쯤인지(전·사이·후)와 기준 날짜 */
   const renderChapterHead = (
-    head: { reach: PhaseReach; count: number },
+    head: ChapterRun,
     firstNodeId: string,
     chapterList: ReadonlyArray<EventPhase> = chapters,
     depth = 1,
+    ownerId: string = event.id,
   ): ReactNode => {
     const chapters = chapterList
+    const foldKey = chapterFoldKey(ownerId, head.key)
+    const folded = foldedChapters.has(foldKey)
     const position = head.reach.from
     const chapter = position != null ? chapters[position - 1] : null
     const first = chapters[0]
@@ -876,11 +1061,34 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
         </ChapterMark>
         <ChapterText>
           <ChapterKicker>
+            {/* 이 국면만 접기 — 장 머리는 남고 그 아래 사건만 접힌다 */}
+            <ChapterFold
+              type="button"
+              aria-expanded={!folded}
+              aria-label={`${kicker}${chapter ? ` ${chapter.title}` : ''} ${folded ? '펼치기' : '접기'}`}
+              onClick={() => toggleChapterFold(foldKey)}
+            >
+              {folded ? <FiChevronRight aria-hidden /> : <FiChevronDown aria-hidden />}
+            </ChapterFold>
             <b>{kicker}</b>
             {range && <span>{range}</span>}
-            <span>{head.count}건</span>
+            <span>{folded ? `${head.count}건 접힘` : `${head.count}건`}</span>
+            {/* 이 국면 자리에서 바로 등록 — 저장되면 이 국면에 지정된다(직계 국면만) */}
+            {chapter && depth === 1 && (
+              <ChapterAdd
+                type="button"
+                onClick={() => {
+                  setPendingChapter(chapter)
+                  setCreateOpen(true)
+                }}
+                aria-label={`${kicker} ${chapter.title}에 하위 사건 추가`}
+              >
+                + 이 국면에 사건
+              </ChapterAdd>
+            )}
           </ChapterKicker>
           <ChapterTitle $depth={depth}>{title}</ChapterTitle>
+          {chapter?.description && <ChapterDescription $depth={depth}>{chapter.description}</ChapterDescription>}
         </ChapterText>
       </ChapterHead>
     )
@@ -893,6 +1101,41 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
     [allOwned],
   )
   const allFolded = foldableIds.length > 0 && foldableIds.every((id) => collapsedIds.has(id))
+  /** 모든 국면 구간 열쇠 — 이 사건의 국면과 펼친 하위 묶음들의 국면 */
+  const allChapterKeys = useMemo(
+    () => [
+      ...[...new Set(rootRuns.runOf.values())].map((key) => chapterFoldKey(event.id, key)),
+      ...[...nestedRuns.entries()].flatMap(([ownerId, runs]) =>
+        [...new Set(runs.runOf.values())].map((key) => chapterFoldKey(ownerId, key)),
+      ),
+    ],
+    // chapterFoldKey는 순수 함수(열쇠 조립)
+    [rootRuns, nestedRuns, event.id],
+  )
+  /** 국면이 없는 묶음 — '국면까지'에서는 통째로 접는다(펼쳐 두면 사건이 다 보여 단계가 무의미) */
+  const foldableWithoutChapters = foldableIds.filter((id) => !nestedRuns.has(id))
+  const foldLevel: FoldLevel | null =
+    collapsedIds.size === 0 && foldedChapters.size === 0
+      ? 'events'
+      : allFolded
+        ? 'collections'
+        : allChapterKeys.length > 0 &&
+            allChapterKeys.every((key) => foldedChapters.has(key)) &&
+            foldableWithoutChapters.every((id) => collapsedIds.has(id))
+          ? 'chapters'
+          : null
+  const applyFoldLevel = (level: FoldLevel) => {
+    if (level === 'events') {
+      setCollapsedIds(new Set())
+      setFoldedChapters(new Set())
+    } else if (level === 'chapters') {
+      setCollapsedIds(new Set(foldableWithoutChapters))
+      setFoldedChapters(new Set(allChapterKeys))
+    } else {
+      setCollapsedIds(new Set(foldableIds))
+      setFoldedChapters(new Set())
+    }
+  }
 
   return (
     <S.Section id="narrative" aria-busy={busy} ref={sectionRef}>
@@ -933,13 +1176,30 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
                 {showAccessions ? `즉위 표지 숨기기 (${accessions.length})` : `즉위 표지 보기 (${accessions.length})`}
               </HeaderTextAction>
             )}
-            {foldableIds.length > 0 && (
-              <HeaderTextAction
-                type="button"
-                onClick={() => setCollapsedIds(allFolded ? new Set() : new Set(foldableIds))}
-              >
-                {allFolded ? '모두 펼치기' : '모두 접기'}
-              </HeaderTextAction>
+            {(foldableIds.length > 0 || allChapterKeys.length > 0) && (
+              /*
+               * 펼침 단계 — 예전엔 '모두 접기/펼치기' 둘뿐이라 최상위 전개가 4,978px 아니면 524px였다.
+               * 가운데 '국면까지'는 대분류와 그 국면 목차만 남기고 사건을 접는다(목차처럼 훑기).
+               */
+              <FoldLevels role="group" aria-label="전개 펼침 단계">
+                {(
+                  [
+                    ['events', '사건까지'],
+                    ...(allChapterKeys.length > 0 ? [['chapters', '국면까지']] : []),
+                    ...(foldableIds.length > 0 ? [['collections', '묶음만']] : []),
+                  ] as Array<[FoldLevel, string]>
+                ).map(([level, label]) => (
+                  <HeaderTextAction
+                    key={level}
+                    type="button"
+                    aria-pressed={foldLevel === level}
+                    data-active={foldLevel === level || undefined}
+                    onClick={() => applyFoldLevel(level)}
+                  >
+                    {label}
+                  </HeaderTextAction>
+                ))}
+              </FoldLevels>
             )}
           </S.SectionActions>
         )}
@@ -999,9 +1259,15 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
                   const out: ReactNode[] = []
                   for (const node of group.items) {
                     /* 국면 자리가 바뀌는 자리에 장 머리 — 국면이 정의돼 있을 때만 */
-                    const chapterHead = chapterHeads.get(node.id)
+                    const chapterHead = rootRuns.heads.get(node.id)
                     if (chapterHead) out.push(renderChapterHead(chapterHead, node.id))
                     const nodeKey = eventWindow(node)?.startKey ?? null
+                    /* 접은 국면 — 그 사건과 그 사이에 든 즉위 표지·공백 줄은 그리지 않는다 */
+                    const runKey = rootRuns.runOf.get(node.id)
+                    if (runKey && foldedChapters.has(chapterFoldKey(event.id, runKey))) {
+                      while (nodeKey != null && pending.length > 0 && pending[0].sortKey < nodeKey) pending.shift()
+                      continue
+                    }
                     /* 공백 줄은 그것이 시작된 때(앞 사건이 끝난 날)에 — 그 안에 든 즉위 표지보다 앞에 선다 */
                     const quiet = quietById.get(node.id)
                     if (quiet) {
@@ -1058,6 +1324,12 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
               )}
               onDone={stopSelecting}
               onCancel={stopSelecting}
+              onMakeChapter={makeChapterFrom}
+              chapterBlockedReason={
+                allOwned.some((node) => selectedIds.has(node.id) && node.depth > 1)
+                  ? '하위 묶음 안의 사건이 섞여 국면으로 나눌 수 없습니다 — 그 묶음 화면에서 나누세요'
+                  : null
+              }
             />
           ) : (
             <NextStep>
@@ -1109,15 +1381,27 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
             onClose={() => {
               setCreateOpen(false)
               setCreateUnder(null)
+              setPendingChapter(null)
             }}
             initialParent={
               createUnder
                 ? { ...createUnder, domain: event.domain }
                 : { id: event.id, title: event.title, domain: event.domain }
             }
-            onSaved={() => {
-              invalidateEventQueries(queryClient, { eventId: event.id })
-              if (createUnder) invalidateEventQueries(queryClient, { eventId: createUnder.id })
+            onSaved={(savedId) => {
+              /* '이 국면에 사건'으로 열었으면 새 사건을 그 국면에 — 날짜를 무엇으로 적든 고른 장에 선다 */
+              const chapter = pendingChapter
+              setPendingChapter(null)
+              const pin =
+                chapter && savedId && !createUnder
+                  ? updateEvent(savedId, { phaseId: chapter.id } as UpdateEventDto).catch(() =>
+                      notify.error('국면에 넣지 못했습니다 — 하위 사건의 연관 탭에서 지정하세요'),
+                    )
+                  : Promise.resolve()
+              void pin.then(() => {
+                invalidateEventQueries(queryClient, { eventId: event.id })
+                if (createUnder) invalidateEventQueries(queryClient, { eventId: createUnder.id })
+              })
             }}
           />
         </Suspense>
@@ -1654,12 +1938,15 @@ const StepSpan = styled.span`
   color: ${metaText};
 `
 
-/** '앞 사건 9일 뒤'·'앞 사건과 같은 날'·'10번 사건 3일 뒤 · 아직 진행 중'(뒷말은 견준 사건이 아직 이어지고 있다는 뜻) */
+/**
+ * '앞 사건 9일 뒤'·'앞 사건과 같은 날'·'10번 사건 3일 뒤 · 기간 겹침'(뒷말 = 견준 사건이 끝나기 전에 시작).
+ * 예전 뒷말 '아직 진행 중'은 이 사건 얘기인지 앞 사건 얘기인지 읽히지 않았다. 자세한 말은 title이 든다.
+ */
 function gapPhrase(gap: GapInfo & { anchorRef: string | null }): string {
   const reference = gap.anchorRef ? `${gap.anchorRef}번 사건` : '앞 사건'
   const sameTime = gap.text === '같은 날' || gap.text === '같은 달'
   const base = sameTime ? `${reference}과 ${gap.text}` : `${reference} ${gap.text}`
-  return gap.ongoing ? `${base} · 아직 진행 중` : base
+  return gap.ongoing ? `${base} · 기간 겹침` : base
 }
 
 /** 앞 사건과의 간격 — 날짜 줄 끝, 한 단 흐리게(날짜보다 앞서지 않게) */
@@ -1684,6 +1971,43 @@ const StepHead = styled.div`
 `
 
 /** 분야 — 아이콘 + 이름. 예전 글자 글리프(⚔·✚)는 12px에서 '✕'·'+'로 읽혀 지우기·추가 버튼처럼 보였다 */
+/** 행 표지(위치·연결) — 날짜 줄의 조용한 링크. 핀 없는 위치 글은 한 단 흐리게 */
+const SignalLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  max-width: 220px;
+  font-weight: 500;
+  color: ${metaText};
+  text-decoration: none;
+
+  &[data-unpinned] {
+    opacity: 0.75;
+  }
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  svg {
+    flex-shrink: 0;
+    width: 11px;
+    height: 11px;
+  }
+  .text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+`
+
 const DomainMeta = styled.span`
   display: inline-flex;
   align-items: center;
@@ -2026,6 +2350,94 @@ const ChapterKicker = styled.span`
   }
 `
 
+const ChapterFold = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin-left: -2px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: ${metaText};
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)')};
+  }
+`
+
+/** 접힌 묶음의 국면 차례 — 제목 아래 작은 한 줄 */
+const ChapterSummary = styled.button`
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+`
+
+/** 펼침 단계 — 고른 단계는 굵게 */
+const FoldLevels = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 8px;
+  border-left: 1px solid ${({ theme }) => theme.colors.border.default};
+
+  [data-active] {
+    font-weight: 800;
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+`
+
+const ChapterAdd = styled.button`
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  cursor: pointer;
+  opacity: 0.75;
+
+  &:hover,
+  &:focus-visible {
+    opacity: 1;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+`
+
+/** 국면 설명 — 장 머리 아래 한두 줄(펼친 하위 묶음 안은 한 줄) */
+const ChapterDescription = styled.p<{ $depth: number }>`
+  margin: 2px 0 0;
+  display: -webkit-box;
+  -webkit-line-clamp: ${({ $depth }) => ($depth > 1 ? 1 : 3)};
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: ${({ $depth }) => ($depth > 1 ? 12.5 : 13.5)}px;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
 const ChapterTitle = styled.span<{ $depth: number }>`
   font-size: ${({ $depth }) => ($depth > 1 ? 14 : 16.5)}px;
   font-weight: 700;
@@ -2175,15 +2587,18 @@ export function CollectionWholeTextNotice({
   )
 }
 
+/*
+ * '아직 글이 없다' 안내 — 면 없는 한 줄. 예전엔 강조색 면 상자라 오른쪽 '비어 있는 항목 · 채우기', 아래 '더 채울 수
+ * 있는 것'과 함께 같은 말이 세 번, 그중 가장 크게 섰다. 쓰기 단추만 강조색으로 남긴다.
+ */
 const Notice = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 6px 16px;
+  gap: 4px 14px;
   max-width: ${S.PROSE_WIDTH}px;
-  padding: 10px 14px;
-  border-radius: ${RADIUS.SM};
-  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid ${({ theme }) => ledgerAccentSubtle(theme.mode)};
 `
 
 const NoticeText = styled.p`
@@ -2191,12 +2606,13 @@ const NoticeText = styled.p`
   margin: 0;
   /* 한국어는 낱말 경계에서 줄을 바꾼다 — 안 그러면 '배 / 경'처럼 낱말이 잘린다 */
   word-break: keep-all;
-  font-size: 13.5px;
+  font-size: 12.5px;
   line-height: 1.6;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${metaText};
 
   b {
-    color: ${({ theme }) => theme.colors.text.primary};
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
 `
 

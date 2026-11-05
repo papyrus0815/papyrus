@@ -14,6 +14,8 @@ import {
   assignPhases,
   formatPhasePoint,
   parsePhasePoint,
+  phaseBoundaryIssues,
+  pointBefore,
 } from './event-phase.lib'
 
 /**
@@ -26,6 +28,10 @@ interface Draft {
   title: string
   start: string
   end: string
+  /** 국면 설명 — 장 머리 아래 한두 줄 */
+  description: string
+  /** 설명 칸 펼침 */
+  describing?: boolean
 }
 
 interface EventPhaseEditorProps {
@@ -49,6 +55,7 @@ const toDraft = (phase: EventPhase): Draft => ({
   title: phase.title,
   start: formatPhasePoint(phase.startEra, phase.startYear, phase.startMonth, phase.startDay),
   end: formatPhasePoint(phase.endEra, phase.endYear, phase.endMonth, phase.endDay),
+  description: phase.description ?? '',
 })
 
 export function EventPhaseEditor({
@@ -63,7 +70,7 @@ export function EventPhaseEditor({
   const [drafts, setDrafts] = useState<Draft[]>(() =>
     phases.length > 0
       ? [...phases].sort((left, right) => left.order - right.order).map(toDraft)
-      : [{ key: nextKey(), title: '', start: '', end: '' }],
+      : [{ key: nextKey(), title: '', start: '', end: '', description: '' }],
   )
 
   const update = (key: string, patch: Partial<Draft>) =>
@@ -91,12 +98,31 @@ export function EventPhaseEditor({
           endYear: end?.year ?? null,
           endMonth: end?.month ?? null,
           endDay: end?.day ?? null,
+          description: draft.description.trim() || null,
         }
         return { key: draft.key, errors, input }
       }),
     [drafts],
   )
   const hasErrors = parsed.some((row) => row.errors.length > 0)
+
+  /* 앞 국면과의 겹침·틈 — 겹치면 그 구간 사건이 앞 국면에만 들고, 틈이 있으면 그 사이 사건이 '국면 사이'로 빠진다 */
+  const issues = useMemo(
+    () => phaseBoundaryIssues(parsed.map((row, index) => ({ ...row.input, id: row.key, order: index }))),
+    [parsed],
+  )
+  const hasBoundaryIssues = issues.some((issue) => issue.overlap || issue.gapDays != null)
+  /** 끝을 다음 국면 시작 전날로 — 마지막 국면은 그대로 */
+  const stitchEnds = () =>
+    setDrafts((prev) =>
+      prev.map((draft, index) => {
+        const next = prev[index + 1]
+        const nextStart = next ? parsePhasePoint(next.start) : null
+        if (!nextStart) return draft
+        const before = pointBefore(nextStart)
+        return before ? { ...draft, end: formatPhasePoint(before.era, before.year, before.month, before.day) } : draft
+      }),
+    )
 
   /* 미리보기 — 지금 적은 국면으로 하위가 몇 건씩 들어가는지(손 지정은 기존 국면 id일 때만 유지) */
   const counts = useMemo(() => {
@@ -173,16 +199,45 @@ export function EventPhaseEditor({
                 >
                   <FiTrash2 aria-hidden />
                 </IconButton>
+                <RowFoot>
+                  {issues[index]?.overlap && <Issue $warn>앞 국면과 기간이 겹칩니다</Issue>}
+                  {issues[index]?.gapDays != null && <Issue>앞 국면 끝과 {issues[index].gapDays}일 빔</Issue>}
+                  {draft.describing || draft.description ? (
+                    <DescriptionInput
+                      value={draft.description}
+                      onChange={(changeEvent) => update(draft.key, { description: changeEvent.target.value })}
+                      placeholder="이 국면이 어떤 시기였는지 한두 문장 — 장 머리 아래에 보입니다"
+                      aria-label={`${index + 1}국면 설명`}
+                      rows={2}
+                      maxLength={1000}
+                      autoFocus={draft.describing && !draft.description}
+                    />
+                  ) : (
+                    <LinkButton type="button" onClick={() => update(draft.key, { describing: true })}>
+                      + 설명
+                    </LinkButton>
+                  )}
+                </RowFoot>
               </Row>
             )
           })}
         </Rows>
         <AddRow
           type="button"
-          onClick={() => setDrafts((prev) => [...prev, { key: nextKey(), title: '', start: '', end: '' }])}
+          onClick={() =>
+            setDrafts((prev) => [...prev, { key: nextKey(), title: '', start: '', end: '', description: '' }])
+          }
         >
           <FiPlus aria-hidden /> 국면 추가
         </AddRow>
+        {hasBoundaryIssues && (
+          <Note $warn>
+            국면 사이가 겹치거나 비어 있습니다 — 겹친 구간의 사건은 앞 국면에만, 빈 구간의 사건은 ‘국면 사이’로 갑니다.{' '}
+            <LinkButton type="button" onClick={stitchEnds}>
+              끝을 다음 국면 시작 전날로 맞추기
+            </LinkButton>
+          </Note>
+        )}
         {counts.outside > 0 && drafts.length > 0 && (
           <Note>어느 국면에도 들지 않는 하위 사건 {counts.outside}건 — 전개에서 ‘국면 전·사이·후’로 따로 모입니다.</Note>
         )}
@@ -245,6 +300,61 @@ const Row = styled.li`
     & > :nth-child(5) { grid-area: end; }
     & > :nth-child(6) { grid-area: count; }
     & > :nth-child(7) { grid-area: del; }
+  }
+`
+
+/** 줄 아래 — 경계 경고와 설명(이름 칸부터 끝까지) */
+const RowFoot = styled.div`
+  grid-column: 2 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+
+  @media (max-width: 639px) {
+    grid-column: 2 / -1;
+    grid-row: 3;
+  }
+`
+
+const Issue = styled.span<{ $warn?: boolean }>`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme, $warn }) => ($warn ? (theme.mode === 'dark' ? '#fbbf24' : '#b45309') : metaText({ theme }))};
+`
+
+const DescriptionInput = styled.textarea`
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: ${RADIUS.SM};
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.primary};
+  resize: vertical;
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+`
+
+const LinkButton = styled.button`
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 `
 

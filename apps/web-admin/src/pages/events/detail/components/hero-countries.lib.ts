@@ -93,3 +93,23 @@ export function groupHeroCountries(
     overflow: Math.max(0, group.items.length - perLine),
   }))
 }
+
+/** 히어로 진영 카드의 장 수 — 진영이 갈리면 진영당, 아니면 격자 전체(넓은 폭 기준) */
+export const HERO_CARDS_PER_SIDE = 2
+export const HERO_CARDS_FLAT = 6
+
+/**
+ * 히어로 카드가 **모든 나라를 다 보여 주는가** — 그렇다면 우측 장부의 배역별 나라 줄은 같은 목록의 반복이다
+ * (샌프란시스코처럼 '+8개국'으로 접히는 사건에서만 장부 줄이 정보를 더한다).
+ * 진영이 없으면 동맹/적대 배역은 카드 태그로 안 보이므로(QUIET_ROLES) 그때는 다 보여도 장부 줄이 필요하다.
+ */
+export function heroCardsShowAllCountries(
+  countries: ReadonlyArray<{ sideId?: string | null; role?: string | null }>,
+  sides: ReadonlyArray<SideRef>,
+): boolean {
+  if (countries.length === 0) return false
+  const groups = groupBySide(countries, sides)
+  if (groups) return groups.every((group) => group.items.length <= HERO_CARDS_PER_SIDE)
+  if (countries.length > HERO_CARDS_FLAT) return false
+  return countries.every((country) => country.role !== 'ALLY' && country.role !== 'ADVERSARY')
+}

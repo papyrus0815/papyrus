@@ -1,6 +1,9 @@
 import {
   assignPhases,
   datedPhases,
+  isoToPhasePoint,
+  phaseBoundaryIssues,
+  pointBefore,
   phaseReach,
   phaseReachLabel,
   childStartKey,
@@ -110,5 +113,27 @@ describe('phaseReach', () => {
     expect(phaseReachLabel(phaseReach(phases, span('early', '1789-05-05', '1791-09-30')))).toBe('국면 전')
     expect(phaseReachLabel(phaseReach(phases, span('late', '1792-10-01', '1793-06-02')))).toBe('국면 후')
     expect(phaseReachLabel(phaseReach(phases, { ...span('manual', '1792-04-20', '1797-10-17'), phaseId: 'p3' }))).toBe('3국면')
+  })
+})
+
+describe('국면 경계', () => {
+  it('겹침과 틈을 찾는다', () => {
+    const list = [phase('a', 0, [1792, 4], [1792, 9]), phase('b', 1, [1792, 8], [1792, 10]), phase('c', 2, [1793, 1])]
+    expect(phaseBoundaryIssues(list)).toEqual([
+      { overlap: false, gapDays: null },
+      { overlap: true, gapDays: null },
+      { overlap: false, gapDays: 61 },
+    ])
+    expect(phaseBoundaryIssues(phases).every((issue) => !issue.overlap && issue.gapDays == null)).toBe(true)
+  })
+  it('바로 앞 시점 — 정밀도 그대로, 해·달을 넘긴다', () => {
+    expect(pointBefore({ era: 'AD', year: 1792, month: 8, day: 1 })).toEqual({ era: 'AD', year: 1792, month: 7, day: 31 })
+    expect(pointBefore({ era: 'AD', year: 1793, month: 1, day: 1 })).toEqual({ era: 'AD', year: 1792, month: 12, day: 31 })
+    expect(pointBefore({ era: 'AD', year: 1792, month: 4, day: null })).toEqual({ era: 'AD', year: 1792, month: 3, day: null })
+    expect(pointBefore({ era: 'AD', year: 1792, month: null, day: null })).toEqual({ era: 'AD', year: 1791, month: null, day: null })
+  })
+  it('사건 날짜를 국면 시점으로', () => {
+    expect(isoToPhasePoint('1792-08-10T00:00:00.000Z', 'day')).toEqual({ era: 'AD', year: 1792, month: 8, day: 10 })
+    expect(isoToPhasePoint('1792-01-01T00:00:00.000Z', null)).toEqual({ era: 'AD', year: 1792, month: null, day: null })
   })
 })

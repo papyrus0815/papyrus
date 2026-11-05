@@ -273,6 +273,17 @@ export const TabBar = styled.div`
   &::-webkit-scrollbar {
     display: none;
   }
+
+  /* 넘친 쪽 페이드 — 페이지가 data-fade-start/end를 단다(가로로 넘칠 때만) */
+  &[data-fade-end] {
+    mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+  }
+  &[data-fade-start] {
+    mask-image: linear-gradient(to right, transparent, #000 32px);
+  }
+  &[data-fade-start][data-fade-end] {
+    mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+  }
 `
 
 export const Tab = styled.button<{ $active: boolean }>`
@@ -310,6 +321,12 @@ export const Tab = styled.button<{ $active: boolean }>`
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: -4px;
     border-radius: 8px;
+  }
+
+  /* 아직 기록이 없는 탭 — 고를 수는 있되 '여기 뭔가 있다'로 읽히지 않게. 선택되면 보통 탭처럼 */
+  &[data-empty]:not([aria-selected='true']) {
+    color: ${metaText};
+    font-weight: 400;
   }
 `
 
@@ -367,6 +384,18 @@ export const Main = styled.main`
   }
   [role='region']:has(table) > :not(table):not(:has(table)) {
     max-width: ${PROSE_WIDTH}px;
+  }
+
+  /*
+   * 붙여 넣은 글이 끌고 온 '검정' 지정 — 일본 최초 철도의 소제목이 font color="#000000"라 다크 모드에선 지면색에
+   * 묻혔다. 검정·흰색 지정만 지면 글자색으로 돌린다(일부러 칠한 다른 색은 그대로).
+   */
+  [role='region'] font[color='#000000'],
+  [role='region'] font[color='#000'],
+  [role='region'] font[color='black'],
+  [role='region'] font[color='#ffffff'],
+  [role='region'] font[color='#fff'] {
+    color: inherit;
   }
 
   /* 편집 중 — 편집기를 감싼 상자들의 읽기 상한(720)·해제(표)를 걷고, 편집기 자체를 연혁 폭에 묶는다 */
@@ -471,6 +500,27 @@ export const HeroTopRow = styled.div`
   @media (max-width: 768px) {
     padding-right: 56px;
   }
+
+  /*
+   * 휴대폰 폭은 한 줄 고정 — 줄바꿈을 허락하면 '⋯'(사건 메뉴)가 혼자 둘째 줄로 떨어져 윗줄이 두 줄이 됐다
+   * (일본 최초 철도 390px 실측). 분류·상위 체인이 줄어 말줄임으로 물러나고, 안내·메뉴 버튼은 제 폭을 지킨다.
+   */
+  @container eventdetail (max-width: 639px) {
+    flex-wrap: nowrap;
+    gap: 8px;
+
+    > * {
+      flex-shrink: 0;
+    }
+    > [data-shrink] {
+      flex-shrink: 1;
+      min-width: 0;
+    }
+    /* 분류는 짧고 늘 있는 축이라 덜 줄인다 — 같이 줄면 '전투·직…'처럼 분류가 먼저 잘렸다(발미 390px) */
+    > [data-shrink]:not(nav) {
+      flex-shrink: 0.15;
+    }
+  }
 `
 
 export const Breadcrumb = styled.nav`
@@ -481,6 +531,36 @@ export const Breadcrumb = styled.nav`
   font-size: 12px;
   /* 상위 사건 체인 — 링크다. 읽히지 않으면 위계가 통째로 사라진다(metaText 근거는 HeroTopRow). */
   color: ${metaText};
+
+  /*
+   * 휴대폰 폭 — 한 줄. 바로 위 상위 하나만 남기고(가장 중요한 축) 먼 조상은 '…'으로 접는다.
+   * 남은 제목도 길면 말줄임. 전체 체인은 오른쪽 장부의 '상위 사건'과 연관 탭이 든다.
+   */
+  @container eventdetail (max-width: 639px) {
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    gap: 6px;
+
+    > span {
+      display: none;
+    }
+    a:not([data-extra-parents]):not(:last-of-type):not(:has(+ [data-extra-parents])) {
+      display: none;
+    }
+    &:has(a:not([data-extra-parents]) + a:not([data-extra-parents]))::before,
+    &:has(> span + a)::before {
+      content: '…';
+      flex-shrink: 0;
+    }
+    a:not([data-extra-parents]) {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    [data-extra-parents] {
+      flex-shrink: 0;
+    }
+  }
 
   a {
     color: inherit;
@@ -548,6 +628,18 @@ export const CategoryChip = styled.span<{ $color: string; $colorDark?: string }>
 
   > [aria-hidden] {
     line-height: 1;
+  }
+
+  /* 휴대폰 폭 한 줄(HeroTopRow) — 세부 분야부터 말줄임 */
+  @container eventdetail (max-width: 639px) {
+    white-space: nowrap;
+    overflow: hidden;
+
+    > :last-child {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
   }
 `
 
@@ -740,6 +832,26 @@ export const RailSubItem = styled.button<{ $active: boolean }>`
 
 /* 단락 번호 — 본문의 단락 번호와 같은 mono 숫자라 '본문의 3'과 '목차의 3'이 한 눈에 짝이 된다. */
 /** 목차의 장(국면) 소제목 — 단락 줄 위에 작게, 강조색 */
+/** 목차 단락 '전체 N건 보기' — 단락 줄과 같은 들여쓰기, 한 단 흐린 링크 */
+export const RailMoreButton = styled.button`
+  margin: 4px 0 0 26px;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+  }
+`
+
 export const RailChapterLabel = styled.span`
   display: block;
   margin: 8px 0 2px;
@@ -855,8 +967,12 @@ export const SectionSubtitle = styled.span`
 export const SectionActions = styled.div`
   margin-left: auto;
   display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 4px;
+  /* 좁은 폭 — '국면 편집 · 사건까지 국면까지 묶음만'이 오른쪽 끝에서 잘렸다. 줄을 바꾸고 제목 아래로 */
+  min-width: 0;
 `
 
 export const EditIconButton = styled.button`

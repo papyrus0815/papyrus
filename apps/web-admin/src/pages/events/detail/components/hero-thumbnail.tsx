@@ -119,9 +119,8 @@ export function HeroThumbnail({ event, onPatch, onOpenMedia }: HeroThumbnailProp
           {...dragHandlers}
         >
           <FiUploadCloud aria-hidden />
-          <EmptyText>
+          <EmptyText title="사건의 성격을 한눈에 — 지도·사진·문서 한 장(끌어다 놓아도 됩니다)">
             <strong>{uploading ? '올리는 중…' : '대표 이미지 추가'}</strong>
-            <span>사건의 성격을 한눈에 — 지도·사진·문서 한 장</span>
           </EmptyText>
         </EmptyDrop>
         {fileInput}
@@ -186,7 +185,8 @@ const Frame = styled.div`
   overflow: hidden;
   aspect-ratio: 16 / 9;
   /* 280px이었다 — 1500×900에서 탭이 549px, 첫 내용이 840px에야 섰다(첫 화면을 그림이 다 썼다). */
-  max-height: 208px;
+  /* 208 → 168: 묶음 사건(1차대전)은 그림 + 진영 카드에 탭이 950 화면의 763px에야 섰다 */
+  max-height: 168px;
   width: 100%;
   border-radius: ${RADIUS.MD};
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
@@ -200,7 +200,8 @@ const Frame = styled.div`
   /* 휴대폰 폭 — 16:9 배너가 200px을 먹어 탭이 y=610(화면 844의 72%)에야 섰다. 얇은 띠로 */
   @container eventdetail (max-width: 639px) {
     aspect-ratio: 21 / 9;
-    max-height: 148px;
+    /* 148 → 112: 그래도 탭이 844 화면의 765~811px였다(그림 아래 제목·인물·나라·위치가 더 쌓인다) */
+    max-height: 112px;
   }
 
   &[data-drag] {
@@ -305,17 +306,19 @@ const CaptionSource = styled.span`
   opacity: 0.85;
 `
 
-/* 빈 칸 — 좁은 지면은 한 줄 높이, 넓은 지면은 그림이 설 자리만큼 */
+/*
+ * 빈 칸 — 작은 알약 한 개. 64px → 52px로 줄였어도 이미지 없는 사건마다 제목 위에 폭 전체 점선 상자가 서서
+ * 첫 화면에서 제목보다 먼저 읽혔다. 설명('지도·사진·문서 한 장')은 마우스를 올리면. 넓은 지면은 그림이 설 자리만큼.
+ */
 const EmptyDrop = styled.button`
-  display: flex;
+  display: inline-flex;
+  align-self: flex-start;
   align-items: center;
-  gap: 12px;
-  width: 100%;
-  /* 64px이었다 — 글이 하나도 없는 사건에선 제목보다 이 빈 칸이 먼저, 더 크게 보였다 */
-  min-height: 52px;
-  padding: 8px 14px;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 12px;
   border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: ${RADIUS.MD};
+  border-radius: 999px;
   background: transparent;
   font: inherit;
   text-align: left;
@@ -327,15 +330,17 @@ const EmptyDrop = styled.button`
 
   > svg {
     flex-shrink: 0;
-    width: 22px;
-    height: 22px;
+    width: 15px;
+    height: 15px;
   }
 
-  /* 넓은 지면에선 제목 묶음 높이만큼만 — 빈 칸 때문에 탭이 내려가지 않게(Slot이 칸 높이로 늘어난다) */
+  /* 넓은 지면에선 제목 옆 그림 자리 — 제목 묶음 높이만큼(빈 칸 때문에 탭이 내려가지 않게) */
   @container eventdetail (min-width: 1240px) {
     flex: 1;
+    align-self: stretch;
     flex-direction: column;
     justify-content: center;
+    border-radius: ${RADIUS.MD};
     text-align: center;
   }
 
@@ -359,8 +364,8 @@ const EmptyText = styled.span`
   gap: 3px;
 
   strong {
-    font-size: 13.5px;
-    font-weight: 700;
+    font-size: 12.5px;
+    font-weight: 600;
   }
   span {
     font-size: 12px;

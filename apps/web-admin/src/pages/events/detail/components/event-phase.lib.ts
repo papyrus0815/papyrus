@@ -7,7 +7,7 @@
  */
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 
-import { isDayPrecise } from './event-facts.lib'
+import { astronomicalYear, dayNumber, isDayPrecise } from './event-facts.lib'
 
 export interface PhasePoint {
   era?: 'BC' | 'AD' | null
@@ -273,4 +273,63 @@ export function phaseReachLabel(reach: PhaseReach): string {
     return reach.outside === 'before' ? '국면 전' : reach.outside === 'after' ? '국면 후' : '국면 밖'
   }
   return reach.to != null && reach.to !== reach.from ? `${reach.from}–${reach.to}국면` : `${reach.from}국면`
+}
+
+/** 사건 날짜(ISO + 정밀도) → 국면 시점 — '골라서 국면으로'가 고른 사건의 처음·끝으로 기간을 채운다 */
+export function isoToPhasePoint(iso: string | null | undefined, precision?: string | null): PhasePoint | null {
+  const parts = parseIsoDateParts(iso)
+  if (!parts) return null
+  const resolved = precision === 'year' || precision === 'month' ? precision : isDayPrecise(iso as string, precision) ? 'day' : 'year'
+  return {
+    era: parts.year < 0 ? 'BC' : 'AD',
+    year: Math.abs(parts.year),
+    month: resolved === 'year' ? null : parts.month,
+    day: resolved === 'day' ? parts.day : null,
+  }
+}
+
+const serialOf = (era: string | null | undefined, year: number, month: number, day: number) =>
+  dayNumber(astronomicalYear(signed(era, year)), month, day)
+
+export interface PhaseBoundaryIssue {
+  /** 앞 국면과 기간이 겹친다 — 겹친 구간의 사건은 앞 국면에만 들어간다 */
+  overlap: boolean
+  /** 앞 국면 끝과 이 국면 시작 사이 빈 날 수(하루 넘게 빌 때만) */
+  gapDays: number | null
+}
+
+/** 국면 순서대로, 앞 국면과의 겹침·틈 — 첫 국면은 늘 문제 없음. 끝을 비운 국면은 다음 국면 전까지라 틈이 없다 */
+export function phaseBoundaryIssues(phases: ReadonlyArray<EventPhase>): PhaseBoundaryIssue[] {
+  return phases.map((phase, index) => {
+    const previous = phases[index - 1]
+    if (!previous || previous.endYear == null || phase.startYear == null) return { overlap: false, gapDays: null }
+    const endMonth = previous.endMonth ?? 12
+    const previousEnd = serialOf(
+      previous.endEra,
+      previous.endYear,
+      endMonth,
+      previous.endDay ?? lastDay(Math.abs(signed(previous.endEra, previous.endYear)), endMonth),
+    )
+    const start = serialOf(phase.startEra, phase.startYear, phase.startMonth ?? 1, phase.startDay ?? 1)
+    if (start <= previousEnd) return { overlap: true, gapDays: null }
+    const gap = start - previousEnd - 1
+    return { overlap: false, gapDays: gap > 0 ? gap : null }
+  })
+}
+
+/** 이 시점 바로 앞 — 같은 정밀도로(일 → 전날, 월 → 전달, 연 → 전해). 앞 국면 끝을 다음 국면 시작에 이어 붙일 때 */
+export function pointBefore(point: PhasePoint): PhasePoint | null {
+  if (point.year == null) return null
+  const era = point.era ?? 'AD'
+  const astro = astronomicalYear(signed(era, point.year))
+  const fromAstro = (value: number) => (value <= 0 ? { era: 'BC' as const, year: 1 - value } : { era: 'AD' as const, year: value })
+  if (point.month != null && point.day != null) {
+    const date = new Date(Date.UTC(2000, point.month - 1, point.day - 1))
+    const yearShift = point.month === 1 && point.day === 1 ? -1 : 0
+    return { ...fromAstro(astro + yearShift), month: date.getUTCMonth() + 1, day: date.getUTCDate() }
+  }
+  if (point.month != null) {
+    return point.month === 1 ? { ...fromAstro(astro - 1), month: 12, day: null } : { era, year: point.year, month: point.month - 1, day: null }
+  }
+  return { ...fromAstro(astro - 1), month: null, day: null }
 }

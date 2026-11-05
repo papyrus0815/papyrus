@@ -41,15 +41,15 @@ import {
   formatHeadPoint,
   headsForCountry,
 } from './contemporary-heads.lib'
-import { groupBySide } from './hero-countries.lib'
+import { groupBySide, HERO_CARDS_FLAT, HERO_CARDS_PER_SIDE } from './hero-countries.lib'
 import { withSideColors } from './side-colors'
 import { LOSS_METRIC_PRIORITY, PERSONNEL_METRIC, representativeOf } from './side-metrics.lib'
 import { SIDE_OUTCOME_LABEL } from './side-outcome'
 
 /** 진영 열마다 보이는 카드 수 — 넘치면 '+N개국' */
-const CARDS_PER_SIDE = 3
+const CARDS_PER_SIDE = HERO_CARDS_PER_SIDE
 /** 진영 없는 격자의 카드 수 */
-const CARDS_FLAT = 6
+const CARDS_FLAT = HERO_CARDS_FLAT
 
 /** 역할 칩을 달지 않는 역할 — '참여국'은 기본, 동맹/적대는 진영 열이 이미 말하고, '기타'는 정보가 없다 */
 const QUIET_ROLES = new Set(['PARTICIPANT', 'ALLY', 'ADVERSARY', 'OTHER'])
@@ -93,7 +93,8 @@ export function HeroCountryCards({
    * 진영을 나란히 두 열로 세우고 진영당 2장(나머지는 '+N개국')으로 줄인다.
    */
   const narrow = useMediaQuery('(max-width: 639px)')
-  const perSide = narrow ? 2 : CARDS_PER_SIDE
+  /* 진영당 장 수는 폭과 무관하게 같다 — 데스크톱 3·휴대폰 2이던 때는 같은 동맹국이 '+1'·'+2'로 달라 보였다 */
+  const perSide = CARDS_PER_SIDE
   const flatCount = narrow ? 4 : CARDS_FLAT
 
   const countries = useMemo<CardCountry[]>(

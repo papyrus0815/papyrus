@@ -141,12 +141,12 @@ export function DetailHero({
   return (
     <S.Hero>
       <S.HeroTopRow>
-        <BackLink to={pathKeys.events.root()} viewTransition>
-          <FiArrowLeft />
-          목록
+        <BackLink to={pathKeys.events.root()} viewTransition aria-label="사건 목록">
+          <FiArrowLeft aria-hidden />
+          <BackLabel>목록</BackLabel>
         </BackLink>
-        <Sep>·</Sep>
-        <S.CategoryChip $color={categorySoft.text} $colorDark={categorySoft.textDark}>
+        <Sep aria-hidden>·</Sep>
+        <S.CategoryChip data-shrink $color={categorySoft.text} $colorDark={categorySoft.textDark}>
           <category.Icon aria-hidden size={12} />
           {/* 분야는 필수 — 비우는 줄 없이 9개 중 하나로만 바꾼다 */}
           <InlineSelect
@@ -169,7 +169,7 @@ export function DetailHero({
         </S.CategoryChip>
 
         {(parentChain.length > 0 || extraParents.length > 0) && (
-          <S.Breadcrumb aria-label="상위 사건">
+          <S.Breadcrumb data-shrink aria-label="상위 사건">
             {parentChainTruncated && (
               <ParentEllipsis title="더 상위 사건이 있습니다">…</ParentEllipsis>
             )}
@@ -320,8 +320,12 @@ export function DetailSummary({
     if (!node) return undefined
     const measure = () => {
       if (expanded) return
-      /* 반 줄 미만 넘침은 무시 — 딱 다섯 줄에도 '더 보기'가 붙지 않게 */
-      setOverflowing(node.scrollHeight > node.clientHeight + 12)
+      /*
+       * 두 줄 반까지의 넘침은 접지 않는다 — 발미 전투는 두 단락(7줄)인데 다섯 줄에서 잘려 흐려지고 '요약 전체 보기'가
+       * 붙었다. 버튼 한 줄(≈1.4줄)을 아끼려고 두 줄을 가리는 셈이었다. scrollHeight는 높이 제한과 무관하게 본래 높이다.
+       */
+      const lineHeight = parseFloat(getComputedStyle(node).lineHeight) || 28
+      setOverflowing(node.scrollHeight > lineHeight * (SUMMARY_LINES + 2.5))
     }
     measure()
     const observer = new ResizeObserver(measure)
@@ -334,7 +338,7 @@ export function DetailSummary({
     <SummaryHost>
       <SummaryClamp
         ref={contentRef}
-        $limit={!expanded}
+        $limit={clamped}
         $fade={clamped}
         onFocusCapture={() => setExpanded(true)}
       >
@@ -343,7 +347,8 @@ export function DetailSummary({
           value={event.description ?? ''}
           /* 비우면 빈 문자열 전송 → 컬럼 비움(`|| undefined`는 서버가 무시). */
           onSave={(next) => onPatch({ description: next.trim() })}
-          placeholder="요약 — 한두 단락"
+          /* 빈 요약은 '내용'이 아니라 동작으로 읽혀야 한다 — '요약 — 한두 단락'이 기울임 글로 본문처럼 섰다 */
+          placeholder="+ 요약 쓰기"
           multiline
           multilineEnter
           renderRead={renderEmphasis}
@@ -363,8 +368,10 @@ export function DetailSummary({
  * 요약 다섯 줄 상자 — 높이 제한($limit)은 넘침을 재기 위해 접힌 동안 늘 걸고, 아래 흐림($fade)은 실제로 넘칠
  * 때만(짧은 요약의 마지막 줄이 괜히 흐려지지 않게). 흐림은 mask라 지면색을 몰라도 된다.
  */
+const SUMMARY_LINES = 5
+
 const SummaryClamp = styled.div<{ $limit: boolean; $fade: boolean }>`
-  ${({ $limit }) => ($limit ? 'max-height: calc(1.65em * 5); overflow: hidden;' : '')}
+  ${({ $limit }) => ($limit ? `max-height: calc(1.65em * ${SUMMARY_LINES}); overflow: hidden;` : '')}
   ${({ $fade }) => ($fade ? 'mask-image: linear-gradient(to bottom, #000 calc(100% - 2.2em), transparent);' : '')}
 `
 
@@ -868,12 +875,24 @@ const BackLink = styled(Link)`
   }
 `
 
+/** 휴대폰 폭에선 화살표만 — 윗줄을 한 줄에 지키려고(이름은 aria-label) */
+const BackLabel = styled.span`
+  @container eventdetail (max-width: 639px) {
+    display: none;
+  }
+`
+
 /* 구분자 '·' — 읽는 토큰이 아니라 장식이라 색은 tertiary 그대로(AA 대상 아님).
    다만 크기는 같은 줄의 다른 토큰과 맞춘다(12/12.5/13 세 종류가 섞여 있었다). */
 const Sep = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
   opacity: 0.5;
   font-size: 12px;
+
+  /* 휴대폰 폭은 '목록' 글자가 빠져 화살표만 남는다 — 화살표 뒤 '·'는 떠 있는 점으로만 보였다 */
+  @container eventdetail (max-width: 639px) {
+    display: none;
+  }
 `
 
 const ParentEllipsis = styled.span`
