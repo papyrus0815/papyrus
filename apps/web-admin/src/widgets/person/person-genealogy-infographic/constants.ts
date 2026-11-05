@@ -4,7 +4,7 @@
  * ForkFromTwoGrandparents 등 SVG viewBox 계산에 직접 쓰이므로 변경 시 fork 모듈의 좌표도 확인 필요.
  */
 export const NODE_W = 192
-export const NODE_H = 232
+export const NODE_H = 252
 export const GP_PAIR_GAP = 12
 /**
  * 조상(AncestorColumn) 재귀에서 부/모 두 컬럼 사이 gap(px).
@@ -51,6 +51,7 @@ export const TRUNCATION_SCOPE_LABEL: Record<string, string> = {
   'grandchildren': '손자녀',
   'children-inferred-spouses': '자녀의 배우자(추정)',
   'great-grandchildren': '증손자녀',
+  'grandchildren-inferred-spouses': '손자녀의 배우자(추정)',
   'all-spouses': '배우자 일괄',
   'spouse-parents': '처가·시가 부모',
   'spouse-parent-spouses': '처가·시가 부부쌍',

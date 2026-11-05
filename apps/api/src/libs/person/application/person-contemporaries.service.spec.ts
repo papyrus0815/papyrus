@@ -230,22 +230,44 @@ describe('PersonContemporariesService', () => {
       )
     })
 
-    it('BC 전용 창(toYear<=1)은 빈 결과 — 현 스키마의 tenure는 AD 전용', async () => {
-      const { service, prismaFake } = createService({
-        subject: { id: 'subject-1' },
+    it('BC 전용 창(toYear<=1)도 구조화 기원전 행(startEra="BC", startDate=NULL)으로 동시대 수장을 조회하며 음수 연도 DATETIME 파라미터는 SQL에 넘기지 않는다', async () => {
+      const { service, calls } = createService({
+        subject: { id: 'subject-1', isAlive: false, deathEra: 'BC', deathDate: utc(210) },
+        candidateReigns: [
+          reignRow({
+            id: 'qin-shi-huang',
+            startDate: null,
+            endDate: null,
+            startEra: 'BC',
+            startYear: 221,
+            endEra: 'BC',
+            endYear: 210,
+            historicalCountry: { id: 'qin', name: '진' },
+            person: rulerPerson({
+              id: 'ying-zheng',
+              name: '영정',
+              isAlive: false,
+              deathEra: 'BC',
+              deathDate: utc(210),
+            }),
+          }),
+        ],
       })
       const result = await service.getContemporaries({
         ...BASE_PARAMS,
-        fromYear: -300,
+        fromYear: -250,
         toYear: -200,
       })
-      expect(result.rulers).toEqual([])
-      expect(result.meta.totalPersons).toBe(0)
-      // 후보 조회 자체를 하지 않는다 (음수 연도 DATETIME 파라미터 금지)
-      const candidateCalls = (
-        prismaFake.governmentPositionTenure.findMany.mock.calls as any[]
-      ).filter((call) => call[0].where.AND)
-      expect(candidateCalls).toHaveLength(0)
+      expect(result.rulers).toHaveLength(1)
+      expect(result.rulers[0]!.person.id).toBe('ying-zheng')
+      expect(result.rulers[0]!.records[0]!.startYear).toBe(-221)
+      expect(result.rulers[0]!.records[0]!.endYear).toBe(-210)
+      expect(result.rulers[0]!.records[0]!.startDate).toBe('-0221-01-01')
+      expect(result.rulers[0]!.records[0]!.endDate).toBe('-0210-01-01')
+      expect(result.rulers[0]!.overlapYears).toBe(12)
+      // 순수 BC 창 SQL은 startDate=null, startEra='BC'만 조회하며 음수 Date를 넘기지 않는다
+      const reignWhere = calls.reignWheres.find((where: any) => where.AND)
+      expect(reignWhere.AND[0]).toEqual({ startDate: null, startEra: 'BC' })
     })
   })
 
@@ -346,6 +368,47 @@ describe('PersonContemporariesService', () => {
     // 재위 후보 SQL은 startDate=NULL 행도 통과시키는 superset이어야 한다(상한 프루닝에서 탈락 금지)
     const reignWhere = calls.reignWheres.find((where: any) => where.AND)
     const upperBound = reignWhere.AND.find((clause: any) =>
+      clause.OR?.some((condition: any) => condition.startDate === null),
+    )
+    expect(upperBound).toBeTruthy()
+  })
+
+  it('구조화 축 비군주직 재임(startDate=NULL, AD<1000)도 창 유도 및 후보로 매칭된다', async () => {
+    const { service, calls } = createService({
+      subject: { id: 'subject-1', isAlive: false, deathDate: null },
+      subjectTenures: [
+        {
+          startDate: null,
+          endDate: null,
+          startEra: 'AD',
+          startYear: 750,
+          endEra: 'AD',
+          endYear: 760,
+          countryId: null,
+          historicalCountryId: 'tang',
+        },
+      ],
+      candidateTenures: [
+        tenureRow({
+          id: 'ancient-chancellor',
+          startDate: null,
+          endDate: null,
+          startEra: 'AD',
+          startYear: 752,
+          endEra: 'AD',
+          endYear: 758,
+          historicalCountry: { id: 'tang', name: '당' },
+          country: null,
+          person: rulerPerson({ id: 'chancellor', isAlive: false, deathDate: null }),
+        }),
+      ],
+    })
+    const result = await service.getContemporaries(BASE_PARAMS)
+    expect(result.meta.window).toEqual({ fromYear: 750, toYear: 761 })
+    expect(result.rulers).toHaveLength(1)
+    expect(result.rulers[0]!.person.id).toBe('chancellor')
+    const tenureWhere = calls.tenureWheres.find((where: any) => where.AND)
+    const upperBound = tenureWhere.AND.find((clause: any) =>
       clause.OR?.some((condition: any) => condition.startDate === null),
     )
     expect(upperBound).toBeTruthy()

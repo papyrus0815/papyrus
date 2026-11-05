@@ -162,7 +162,7 @@ describe('TenureReignList', () => {
     expect(screen.getByText(/^1643년 5월 14일 – 1715년 9월 1일$/)).toBeInTheDocument()
   })
 
-  it('BC·고대 기록은 길이를 파생하지 않는다(근사 오표기 방지)', () => {
+  it('BC·고대 기록도 천문 연도 기반으로 길이를 정확히 파생한다', () => {
     renderWithTheme(
       <TenureReignList
         {...baseProps}
@@ -179,7 +179,59 @@ describe('TenureReignList', () => {
         ]}
       />,
     )
-    expect(screen.queryByText(/^약 /)).not.toBeInTheDocument()
+    expect(screen.getByText('약 11년 6개월')).toBeInTheDocument()
+  })
+
+  it('연(year) 정밀도 재임·재위는 합성 1월 1일 때문에 2~12월생 나이가 1세 깎이지 않고 즉위·퇴위 모두 "경"이 붙는다', () => {
+    // baseProps: 1638년 9월 5일생 → 1643년(연 정밀도) 즉위 시 5세경, 1715년(연 정밀도) 퇴위 시 77세경
+    renderWithTheme(
+      <TenureReignList
+        {...baseProps}
+        items={[
+          makeItem({
+            kind: 'reign',
+            record: {
+              id: 'r-year',
+              title: '국왕',
+              startDate: '1643-01-01T00:00:00.000Z',
+              startDatePrecision: 'year',
+              endDate: '1715-01-01T00:00:00.000Z',
+              endDatePrecision: 'year',
+            },
+          }),
+        ]}
+      />,
+    )
+    expect(screen.getByText('5세경에 즉위')).toBeInTheDocument()
+    expect(screen.getByText('77세경에 퇴위')).toBeInTheDocument()
+  })
+
+  it('endDate 없이 DEATH_IN_OFFICE(재직·재위 중 사망)인 카드도 구조화 사망일이 주어지면 기간 길이와 퇴위 나이를 함께 표시한다', () => {
+    renderWithTheme(
+      <TenureReignList
+        {...baseProps}
+        isDeceased
+        deathYear={1715}
+        deathMonth={9}
+        deathDay={1}
+        deathEra="AD"
+        deathDateStr="1715년 9월 1일"
+        items={[
+          makeItem({
+            kind: 'reign',
+            record: {
+              id: 'r-death-in-office',
+              title: '프랑스 국왕',
+              startDate: '1643-05-14T00:00:00.000Z',
+              endDate: null,
+              endReason: 'DEATH_IN_OFFICE',
+            },
+          }),
+        ]}
+      />,
+    )
+    expect(screen.getByText('약 72년 4개월')).toBeInTheDocument()
+    expect(screen.getByText('76세에 퇴위')).toBeInTheDocument()
   })
 
   it("종료 사유가 OTHER인데 부연이 있으면 '기타' 토큰을 렌더하지 않는다", () => {

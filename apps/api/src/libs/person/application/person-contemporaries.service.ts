@@ -1,6 +1,7 @@
 import { reignWhere, tenureWhere } from '../infrastructure/office-holding.query'
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '@prisma/prisma.service'
+import { toSignedDateString } from '../domain/structured-date.util'
 import {
   ContemporaryRecordDto,
   ContemporaryRulerDto,
@@ -15,7 +16,6 @@ import {
   signedYearFromEraDate,
   signedYearFromStructuredOrDate,
   utcYearStart,
-  yearOf,
 } from './head-record.shared'
 
 /** 응답 인물 수 cap — 초과분은 meta.omittedCount로 노출 (무성 절단 금지) */
@@ -83,6 +83,10 @@ export class PersonContemporariesService {
         select: {
           startDate: true,
           endDate: true,
+          startEra: true,
+          startYear: true,
+          endEra: true,
+          endYear: true,
           countryId: true,
           historicalCountryId: true,
         },
@@ -102,13 +106,20 @@ export class PersonContemporariesService {
         },
       }),
     ])
-    // 창 유도·sameCountry 스코프의 원천 — 재위는 구조화 축(startEra/startYear)이 진실이므로
-    // (AD<1000·BC는 startDate=NULL) 부호 연도를 구조화 우선으로 파생한다. tenure는 구조화
-    // 컬럼이 없어 DATETIME 폴백만 탄다.
+    // 창 유도·sameCountry 스코프의 원천 — 재임·재위 모두 구조화 축(startEra/startYear)이 진실이므로
+    // (AD<1000·BC는 startDate=NULL) 부호 연도를 구조화 우선으로 파생한다.
     const subjectHeadRecords = [
       ...subjectTenures.map((record) => ({
-        startSignedYear: yearOf(record.startDate),
-        endSignedYear: yearOf(record.endDate),
+        startSignedYear: signedYearFromStructuredOrDate(
+          record.startEra,
+          record.startYear,
+          record.startDate,
+        ),
+        endSignedYear: signedYearFromStructuredOrDate(
+          record.endEra,
+          record.endYear,
+          record.endDate,
+        ),
         countryId: record.countryId,
         historicalCountryId: record.historicalCountryId,
       })),
@@ -143,8 +154,7 @@ export class PersonContemporariesService {
       rulers: [],
     })
 
-    // 현 스키마의 tenure/reign DATETIME은 AD 전용 — 창이 AD와 겹치지 않으면 빈 결과
-    if (toYear <= 1) return emptyResponse()
+    if (toYear <= fromYear) return emptyResponse()
 
     let scopeWhere: any | null = null
     if (scope === 'sameCountry') {
@@ -152,34 +162,36 @@ export class PersonContemporariesService {
       if (!scopeWhere) return emptyResponse() // 대상에 국가 정보가 없으면(교황 등) 같은 나라가 정의 불가
     }
 
-    // overlap: startDate < toDateExclusive AND (endDate IS NULL OR endDate >= fromDate).
-    // MySQL DATETIME은 AD1000 미만이 불안정하므로 SQL 파라미터는 1년으로 클램프
-    // (연도 필터의 정본은 아래 후처리 — SQL은 인덱스 프루닝용).
-    const fromDate = utcYearStart(Math.max(fromYear, 1))
-    const toDateExclusive = utcYearStart(Math.max(toYear, 1))
+    // 순수 기원전(BC) 창(toYear <= 1)은 음수 연도 DATETIME 파라미터를 SQL에 넘기지 않고
+    // 구조화 기원전 행(startDate=NULL, startEra='BC')만 후보로 조회해 후처리 부호연도로 판정한다.
+    const isPureBcWindow = toYear <= 1
+    const fromDate = isPureBcWindow ? null : utcYearStart(Math.max(fromYear, 1))
+    const toDateExclusive = isPureBcWindow ? null : utcYearStart(Math.max(toYear, 1))
     // 하한 분기: startDate >= fromDate 분기가 있어야 종료<시작 오염 데이터도 후처리 정본
     // (시작 클램프)이 판정할 수 있는 진짜 superset이 된다 — endDate만 보면 그런 행을 선탈락시킴.
-    const lowerBoundOr = {
-      OR: [
-        { endDate: null },
-        { endDate: { gte: fromDate } },
-        { startDate: { gte: fromDate } },
-      ],
-    }
+    const lowerBoundOr = isPureBcWindow
+      ? { endDate: null }
+      : {
+          OR: [
+            { endDate: null },
+            { endDate: { gte: fromDate! } },
+            { startDate: { gte: fromDate! } },
+          ],
+        }
     const sharedAnd: any[] = [
       lowerBoundOr,
       { personId: { not: subject.id } },
       ...(scopeWhere ? [scopeWhere] : []),
     ]
-    // GovernmentPositionTenure.startDate는 필수 DATETIME(AD1000+)이라 상한 프루닝이 정확.
-    const tenureOverlapAnd: any[] = [{ startDate: { lt: toDateExclusive } }, ...sharedAnd]
-    // SovereignReign은 BC·AD<1000을 startDate=NULL(startEra/startYear가 진실)로 두므로,
+    // 재임·재위 모두 BC·AD<1000을 startDate=NULL(startEra/startYear가 진실)로 두므로,
     // NULL startDate 행도 통과시켜 후처리(구조화 부호연도)가 판정하게 한다 — SQL은 프루닝용 superset.
-    // (이 분기 없이는 카롤루스 등 AD<1000 재위가 상한 프루닝에서 조용히 탈락한다.)
-    const reignOverlapAnd: any[] = [
-      { OR: [{ startDate: { lt: toDateExclusive } }, { startDate: null }] },
-      ...sharedAnd,
-    ]
+    const upperBoundOr = isPureBcWindow
+      ? { startDate: null, startEra: 'BC' }
+      : {
+          OR: [{ startDate: { lt: toDateExclusive! } }, { startDate: null }],
+        }
+    const tenureOverlapAnd: any[] = [upperBoundOr, ...sharedAnd]
+    const reignOverlapAnd: any[] = [upperBoundOr, ...sharedAnd]
 
     const recordSelect = {
       id: true,
@@ -202,7 +214,15 @@ export class PersonContemporariesService {
             ...tenureOverlapAnd,
           ],
         }),
-        select: { ...recordSelect, positionType: true, title: true },
+        select: {
+          ...recordSelect,
+          positionType: true,
+          title: true,
+          startEra: true,
+          startYear: true,
+          endEra: true,
+          endYear: true,
+        },
         orderBy: { startDate: 'desc' },
         take: PERSON_CONTEMPORARIES_CANDIDATE_SAFETY_TAKE,
       }),
@@ -265,14 +285,20 @@ export class PersonContemporariesService {
           ordinal: row.ordinal ?? null,
           startYear,
           endYear,
-          // 구조화 재위(startDate=NULL)는 부호 연도 1월 1일로 합성 — dedup 키·정렬 안정성 유지
+          // 구조화 재위(startDate=NULL)는 부호 연도 1월 1일로 합성 — BC는 '-YYYY-01-01'로 합성해 파싱 안전성 유지
           startDate: row.startDate
             ? row.startDate.toISOString()
-            : utcYearStart(startYear).toISOString(),
+            : startYear < 1
+              ? (toSignedDateString('BC', Math.abs(startYear), 1, 1) ??
+                utcYearStart(startYear).toISOString())
+              : utcYearStart(startYear).toISOString(),
           endDate: row.endDate
             ? row.endDate.toISOString()
             : endYear != null
-              ? utcYearStart(endYear).toISOString()
+              ? endYear < 1
+                ? (toSignedDateString('BC', Math.abs(endYear), 1, 1) ??
+                  utcYearStart(endYear).toISOString())
+                : utcYearStart(endYear).toISOString()
               : null,
           country: row.country ?? null,
           historicalCountry: row.historicalCountry ?? null,

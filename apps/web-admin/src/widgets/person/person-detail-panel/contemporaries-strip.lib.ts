@@ -49,11 +49,34 @@ export interface ContemporaryCountryGroup {
   chips: ContemporaryChip[]
 }
 
+/**
+ * 종료일 미입력(endYear=null) 기록의 실효 종료 연도 — 서버 effectiveEndYear(head-record.shared.ts)와 동기화.
+ * 사망 연도가 있으면 그 연도로 캡하고, 사망 확정·몰년 미상이면 시작 연도로 클램프하여
+ * 고인의 열린 재임 바가 기준 창 끝까지 100%로 부풀려지는 불일치를 막는다.
+ */
+export function effectiveRecordEndYear(
+  record: ContemporaryRecord,
+  window: { fromYear: number; toYear: number },
+  person?: Pick<ContemporaryRuler['person'], 'deathYear' | 'isAlive'>,
+): number {
+  if (record.endYear != null) {
+    return Math.max(record.startYear, record.endYear)
+  }
+  if (person?.deathYear != null) {
+    return Math.max(record.startYear, person.deathYear)
+  }
+  if (person && !person.isAlive) {
+    return record.startYear
+  }
+  return Math.max(record.startYear, window.toYear - 1)
+}
+
 function overlapOf(
   record: ContemporaryRecord,
   window: { fromYear: number; toYear: number },
+  person?: Pick<ContemporaryRuler['person'], 'deathYear' | 'isAlive'>,
 ): number {
-  const end = record.endYear ?? window.toYear - 1
+  const end = effectiveRecordEndYear(record, window, person)
   return (
     Math.min(end, window.toYear - 1) - Math.max(record.startYear, window.fromYear)
   )
@@ -65,9 +88,9 @@ export function primaryRecordOf(
   window: { fromYear: number; toYear: number },
 ): ContemporaryRecord {
   let primary = ruler.records[0]!
-  let best = overlapOf(primary, window)
+  let best = overlapOf(primary, window, ruler.person)
   for (const record of ruler.records.slice(1)) {
-    const overlap = overlapOf(record, window)
+    const overlap = overlapOf(record, window, ruler.person)
     if (overlap > best) {
       primary = record
       best = overlap
@@ -153,9 +176,11 @@ export function chipDetailTextOf(
 export function overlapRangePctOf(
   record: ContemporaryRecord,
   window: { fromYear: number; toYear: number },
+  person?: Pick<ContemporaryRuler['person'], 'deathYear' | 'isAlive'>,
 ): { startPct: number; widthPct: number } {
   const totalSpan = Math.max(1, window.toYear - window.fromYear)
-  const recordEndExclusive = (record.endYear ?? window.toYear - 1) + 1
+  const effectiveEnd = effectiveRecordEndYear(record, window, person)
+  const recordEndExclusive = effectiveEnd + 1
   const clampedStart = Math.max(
     window.fromYear,
     Math.min(window.toYear, record.startYear),
@@ -207,7 +232,7 @@ export function groupRulersByCountry(
     const label = chipLabelOf(ruler, record)
     const displayName = displayNameOf(ruler)
     const realName = displayName && displayName !== label ? displayName : null
-    const { startPct, widthPct } = overlapRangePctOf(record, window)
+    const { startPct, widthPct } = overlapRangePctOf(record, window, ruler.person)
     group.chips.push({
       personId: ruler.person.id,
       label,

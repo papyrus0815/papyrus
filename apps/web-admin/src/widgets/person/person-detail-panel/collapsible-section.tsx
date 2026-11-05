@@ -4,7 +4,7 @@
  * - 펼침/접힘 상태는 storageKey 별 localStorage에 보존(인물 전환·새로고침에도 유지).
  * - 헤더는 토글 버튼, 본문은 framer-motion height 애니메이션.
  */
-import { type ReactNode, useCallback, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useState } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
 import { FiChevronRight } from 'react-icons/fi'
@@ -13,6 +13,60 @@ import styled from 'styled-components'
 import { CountMuted, sectionHeadingCss } from './person-detail-panel.styles'
 
 const STORAGE_PREFIX = 'papyrus.person-career.collapse.'
+const EXPAND_EVENT_NAME = 'papyrus:expand-collapsible'
+
+/**
+ * 외부(연보 타임라인 점프·상단 구성 요약 칩 클릭 등)에서 특정 섹션을 강제로 펼친다.
+ * 탭 전환 전에 호출되더라도 localStorage에 '1'을 먼저 기록해 마운트 즉시 열린 상태로 렌더되게 하고,
+ * 이미 마운트된 섹션은 커스텀 이벤트로 즉시 펼친다.
+ */
+export function expandCollapsibleSection(storageKey: string): void {
+  try {
+    window.localStorage.setItem(STORAGE_PREFIX + storageKey, '1')
+  } catch {
+    /* localStorage 접근 불가 시 무시 */
+  }
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent<{ storageKey: string }>(EXPAND_EVENT_NAME, {
+        detail: { storageKey },
+      }),
+    )
+  }
+}
+
+/** 연보·타임라인 recordKey에서 소속 CollapsibleSection storageKey를 판별해 자동으로 펼친다 */
+export function expandCollapsibleSectionForRecordKey(recordKey: string): boolean {
+  let targetKey: string | null = null
+  if (recordKey.startsWith('career-') || recordKey === 'section-careers') {
+    targetKey = 'careers'
+  } else if (
+    recordKey.startsWith('education-') ||
+    recordKey === 'section-education'
+  ) {
+    targetKey = 'education'
+  } else if (recordKey.startsWith('award-') || recordKey === 'section-awards') {
+    targetKey = 'awards'
+  } else if (
+    recordKey.startsWith('book-') ||
+    recordKey.startsWith('company-') ||
+    recordKey.startsWith('orgrole-') ||
+    recordKey.startsWith('milcmd-') ||
+    recordKey === 'section-activities'
+  ) {
+    targetKey = 'activities'
+  } else if (
+    recordKey.startsWith('partymem-') ||
+    recordKey.startsWith('partylead-') ||
+    recordKey.startsWith('candidacy-') ||
+    recordKey === 'section-politics'
+  ) {
+    targetKey = 'politics'
+  }
+  if (!targetKey) return false
+  expandCollapsibleSection(targetKey)
+  return true
+}
 
 function readStored(storageKey: string, defaultOpen: boolean): boolean {
   try {
@@ -56,6 +110,17 @@ export function CollapsibleSection({
   children,
 }: CollapsibleSectionProps) {
   const [open, setOpen] = useState(() => readStored(storageKey, defaultOpen))
+
+  useEffect(() => {
+    const handleExpand = (e: Event) => {
+      const detail = (e as CustomEvent<{ storageKey?: string }>).detail
+      if (detail?.storageKey === storageKey) {
+        setOpen(true)
+      }
+    }
+    window.addEventListener(EXPAND_EVENT_NAME, handleExpand)
+    return () => window.removeEventListener(EXPAND_EVENT_NAME, handleExpand)
+  }, [storageKey])
 
   const toggle = useCallback(() => {
     setOpen((prev) => {

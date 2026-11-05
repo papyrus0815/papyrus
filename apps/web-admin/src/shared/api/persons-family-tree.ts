@@ -22,6 +22,8 @@ export interface FamilyTreePerson {
   deathYear?: number | null
   /** 출생 서열 (1-base, 형제·자녀 정렬 1차 키) */
   birthOrder?: number | null
+  /** 성별 내 출생 서열 (1-base, 예: 3남 = 3) */
+  genderBirthOrder?: number | null
   /** 생존 여부 — 몰년 미상 역사 인물(false)과 현대 생존 인물(true) 구분 */
   isAlive?: boolean | null
   /** 활동시기(floruit) — 생몰 전면 미상 인물의 활동 연대 폴백 */
@@ -40,6 +42,8 @@ export interface FamilyTreePerson {
    */
   fatherId?: string | null
   motherId?: string | null
+  adoptiveFatherId?: string | null
+  adoptiveMotherId?: string | null
   // 카드 hover/확장용 메타
   originalName?: string | null
   posthumousName?: string | null
@@ -81,11 +85,17 @@ export interface FamilyTreeEdge {
   source: string
   target: string
   type: 'parent-child' | 'spouse'
+  /** parent-child 엣지: 생물학적 혈통(biological) vs 입양·출계(adoptive) */
+  lineage?: 'biological' | 'adoptive'
   /** spouse 엣지에만: 결혼 시작/종료 연도(부호 연도 — BC는 음수) + 메모 */
   marriageStartYear?: number | null
   marriageEndYear?: number | null
+  /** spouse 엣지에만: 혼인 종료/해소 사유 (DEATH·DIVORCE·DEPOSED 등) */
+  marriageEndReason?: string | null
   /** spouse 엣지에만: 혼인 서열/형태 (MarriageRank 토큰 — PRIMARY·CONCUBINE 등) */
   marriageRank?: string | null
+  /** spouse 엣지에만: 비대칭 서열 귀속 배우자 ID */
+  rankHolderId?: string | null
   note?: string | null
   /** spouse 엣지에만: PersonSpouse 미등록 — 자녀의 다른 친부모로 추정된 배우자 */
   inferred?: boolean

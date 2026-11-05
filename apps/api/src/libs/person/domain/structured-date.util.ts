@@ -131,3 +131,21 @@ export function structuredDateKey(
   const signed = era === 'BC' ? -year : year
   return signed * 10000 + (month ?? 1) * 100 + (day ?? 1)
 }
+
+/**
+ * 구조화 종료 날짜 → 상한 비교 키(부호 연·월·일). 연도 모르면 null.
+ * 종료 시점의 월·일이 미상('year' 또는 'month' 정밀도)일 때 해당 연도 말(12-31) 또는 월 말(31)을 상한으로 삼아,
+ * 같은 해/같은 달 안의 구체적 시작일(예: 시작 1920-03-15 [day], 종료 1920년 [year])이 역전으로 오판되지 않게 한다.
+ */
+export function structuredDateEndKey(
+  era: string | null | undefined,
+  year: number | null | undefined,
+  month: number | null | undefined,
+  day: number | null | undefined,
+): number | null {
+  if (year == null) return null
+  const signed = era === 'BC' ? -year : year
+  const effectiveMonth = month ?? 12
+  const effectiveDay = month == null ? 31 : (day ?? 31)
+  return signed * 10000 + effectiveMonth * 100 + effectiveDay
+}

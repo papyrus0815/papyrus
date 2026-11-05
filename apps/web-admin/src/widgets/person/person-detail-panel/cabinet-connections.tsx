@@ -15,7 +15,7 @@ import {
 } from '@/shared/api/person-career'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
-import { parseIsoDateParts } from './helpers'
+import { isoDateSortKey, parseIsoDateParts } from './helpers'
 import { subSectionSeam } from './sub-section-seam'
 
 const CABINET_PARTY_ROLE_LABELS: Record<string, string> = {
@@ -31,23 +31,46 @@ function yearLabel(iso?: string | null): string | null {
   return p.era === 'BC' ? `BC ${p.year}` : `${p.year}`
 }
 
-function periodLabel(t: {
-  startDate?: string | null
-  endDate?: string | null
-}): string {
+export function periodLabel(
+  t: {
+    startDate?: string | null
+    endDate?: string | null
+    endReason?: string | null
+    person?: {
+      isAlive?: boolean | null
+      isDeathDateUnknown?: boolean | null
+      deathDate?: string | null
+    } | null
+  },
+  cabinetClosed = false,
+): string {
   const s = yearLabel(t.startDate)
   const e = yearLabel(t.endDate)
   if (!s && !e) return ''
-  return `${s ?? '?'}–${e ?? '현재'}`
+  if (e) return `${s ?? '?'}–${e}`
+  const isDeceased =
+    t.person?.isAlive === false ||
+    t.person?.isDeathDateUnknown === true ||
+    Boolean(t.person?.deathDate)
+  const startParts = parseIsoDateParts(t.startDate)
+  const isAncientOrHistorical =
+    startParts != null &&
+    (startParts.era === 'BC' ||
+      new Date().getFullYear() - startParts.year > 100)
+  const hasEnded =
+    Boolean(t.endReason) || isDeceased || cabinetClosed || isAncientOrHistorical
+  return `${s ?? '?'}–${hasEnded ? '미상' : '현재'}`
 }
 
-/** 각료 정렬: 직위 rank 오름차순(낮을수록 상위), 없으면 뒤로, 그다음 시작일 */
-function sortMembers(members: CabinetOverviewTenure[]): CabinetOverviewTenure[] {
+/** 각료 정렬: 직위 rank 오름차순(낮을수록 상위), 없으면 뒤로, 그다음 시작일(기원전·고대 안전) */
+export function sortMembers(
+  members: CabinetOverviewTenure[],
+): CabinetOverviewTenure[] {
   return [...members].sort((a, b) => {
     const ra = a.positionDefinition?.rank ?? Number.MAX_SAFE_INTEGER
     const rb = b.positionDefinition?.rank ?? Number.MAX_SAFE_INTEGER
     if (ra !== rb) return ra - rb
-    return (a.startDate ?? '').localeCompare(b.startDate ?? '')
+    return isoDateSortKey(a.startDate) - isoDateSortKey(b.startDate)
   })
 }
 
@@ -75,6 +98,14 @@ export function CabinetConnections({
   })
 
   const head = data?.headTenure ?? null
+  const cabinetClosed = Boolean(
+    head &&
+      (head.endDate ||
+        head.endReason ||
+        head.person?.isAlive === false ||
+        head.person?.isDeathDateUnknown === true ||
+        head.person?.deathDate),
+  )
   const members = data ? sortMembers(data.memberTenures) : []
   const parties = data?.politicalParties ?? []
   const rows: Array<{ t: CabinetOverviewTenure; isHead: boolean }> = [
@@ -112,7 +143,7 @@ export function CabinetConnections({
                   const posTitle =
                     t.title ?? t.positionDefinition?.title ?? '직책'
                   const name = t.person ? getPersonDisplayName(t.person) : '미상'
-                  const period = periodLabel(t)
+                  const period = periodLabel(t, cabinetClosed)
                   return (
                     <MemberRow key={t.id} $head={isHead}>
                       <PosChip $head={isHead}>{posTitle}</PosChip>

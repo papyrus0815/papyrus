@@ -18,7 +18,6 @@ import {
   FiUserMinus,
   FiUserPlus,
 } from 'react-icons/fi'
-import { dateSortKey } from '@/shared/lib/iso-date'
 import styled, { css, keyframes } from 'styled-components'
 
 import {
@@ -27,15 +26,12 @@ import {
   type PersonLifeEvent,
   type PersonLifeEventCategory,
 } from '@/shared/api/person-life-events'
-import {
-  APPOINTMENT_METHOD_LABELS,
-  TENURE_END_REASON_LABELS,
-} from '@/shared/lib/tenure-labels'
+import { APPOINTMENT_METHOD_LABELS } from '@/shared/lib/tenure-labels'
 // 재임·재위 기간 라벨은 개요 카드와 단일 출처 공유 — 종료일·정밀도·재직중사망·미상/현재
 // 폴백을 BC-safe로 한 곳에서 파생(표기 드리프트 방지). formatIsoDateKo도 BC-safe 사망일용.
 import {
   deriveTenurePeriodLabel,
-  formatIsoDateKo,
+  endReasonLabelFor,
 } from '@/widgets/person/person-detail-panel/helpers'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
@@ -80,10 +76,21 @@ export interface SpouseRelationInput extends FamilyMember {
   marriageStartYear?: number | null
   marriageStartMonth?: number | null
   marriageStartDay?: number | null
-  /** 혼인 시작 기원 — 'BC'면 타임라인(AD 축)에서 혼인 노드 제외(크기값 연도 둔갑 방지) */
   marriageStartEra?: string | null
   /** 혼인 시작 정밀도('year'|'month'|'day') — 01-01 채움을 '1월 1일'로 둔갑시키지 않게 라벨 게이트 */
   marriageStartPrecision?: string | null
+  marriageEndDate?: string | null
+  marriageEndYear?: number | null
+  marriageEndMonth?: number | null
+  marriageEndDay?: number | null
+  marriageEndEra?: string | null
+  marriageEndPrecision?: string | null
+  marriageEndReason?: string | null
+  marriageEndReasonDetail?: string | null
+  /** 관점 인지 혼인 위계 라벨 (정실, 계비·후처, 후궁·측실, 부군 등) */
+  marriageRankLabel?: string | null
+  /** 혼인 비고 (PersonSpouse.note) */
+  note?: string | null
 }
 
 interface ReignInput {
@@ -93,6 +100,7 @@ interface ReignInput {
   startDatePrecision?: string | null
   endDate?: string | null
   endDatePrecision?: string | null
+  regnalName?: string | null
   notes?: string | null
   /** 대수 — 재위·재임 공통 */
   ordinal?: number | null
@@ -104,6 +112,15 @@ interface ReignInput {
   positionDefinition?: { title?: string | null } | null
   country?: { name?: string | null } | null
   historicalCountry?: { name?: string | null } | null
+  accessionEvent?: { id: string; title?: string | null; deletedAt?: string | null } | null
+  achievements?: Array<{
+    id?: string
+    title?: string | null
+    description?: string | null
+    startDate?: string | null
+    endDate?: string | null
+    eventId?: string | null
+  }> | null
 }
 
 interface TenureInput {
@@ -114,6 +131,7 @@ interface TenureInput {
   endDate?: string | null
   endDatePrecision?: string | null
   title?: string | null
+  positionType?: string | null
   notes?: string | null
   /** 대수 — 재위·재임 공통 */
   ordinal?: number | null
@@ -122,18 +140,31 @@ interface TenureInput {
   appointmentDetail?: string | null
   endReason?: string | null
   endReasonDetail?: string | null
-  positionDefinition?: { title?: string | null } | null
+  positionDefinition?: { title?: string | null; positionType?: string | null } | null
   country?: { name?: string | null } | null
   historicalCountry?: { name?: string | null } | null
+  accessionEvent?: { id: string; title?: string | null; deletedAt?: string | null } | null
+  achievements?: Array<{
+    id?: string
+    title?: string | null
+    description?: string | null
+    startDate?: string | null
+    endDate?: string | null
+    eventId?: string | null
+  }> | null
 }
 
 interface CareerInput {
   id: string
+  /** 이력·활동 탭 스크롤 이동용 타깃 키 (예: 'career-xxx', 'education-xxx', 'award-xxx') */
+  recordKey?: string | null
   startDate?: string | null
+  startDatePrecision?: string | null
   endDate?: string | null
+  endDatePrecision?: string | null
   title?: string | null
   notes?: string | null
-  /** 분야 라벨 (군사·기업·학계 등) — 상위에서 매핑해 전달 */
+  /** 분야 라벨 (군사·기업·학계·학력·수상 등) — 상위에서 매핑해 전달 */
   kindLabel?: string | null
   organization?: { name?: string | null } | null
   rank?: { name?: string | null } | null
@@ -161,6 +192,9 @@ export interface PersonLifeTimelineInfographicProps {
   /** 출생·사망 기원 (BC/AD). null/미지정은 AD */
   birthEra?: string | null
   deathEra?: string | null
+  /** 출생·사망 정밀도 ('year' | 'month' | 'day' | null) */
+  birthDatePrecision?: string | null
+  deathDatePrecision?: string | null
   /** 출생지 — 연보 "출생" 카드 subtitle (도시>행정구역>자유텍스트 폴백은 부모가 계산) */
   birthPlace?: string | null
   /** 사망 상세 — 연보 "사망" 카드에 함께 표시 */
@@ -187,6 +221,8 @@ export interface PersonLifeTimelineInfographicProps {
   onFamilyPersonClick?: (personId: string) => void
   /** 사건 카드 클릭 → 해당 사건 상세로 이동 */
   onEventClick?: (eventId: string) => void
+  /** 재위·재임·경력 카드 클릭 → '이력·활동' 탭 해당 카드로 스크롤 이동 */
+  onJumpToRecord?: (recordKey: string) => void
   /** 빈 상태 CTA — "연보 추가하기" 버튼 콜백 */
   onAddLifeEvent?: () => void
   /**
@@ -206,16 +242,31 @@ export interface PersonLifeTimelineInfographicProps {
  * 로컬 자정으로 만들면 어느 시간대에서도 저장된 날짜가 보인다. 연도 0~99는 JS가 19xx로
  * 바꾸므로 setFullYear로 다시 박고, 음수(기원전) 표기(-0044-03-15)도 받는다.
  */
-function parseDate(iso?: string | null): Date | null {
+/** era='BC'인데 부호 없는 ISO 문자열('0044-03-15...')로 들어올 때 음수 부호를 정규화 */
+function normalizeEraDateIso(
+  iso?: string | null,
+  era?: string | null,
+): string | null {
   if (!iso) return null
-  const match = /^(-?\d{1,6})-(\d{2})-(\d{2})/.exec(iso)
+  const trimmed = String(iso).trim()
+  if (!trimmed) return null
+  if (era === 'BC' && !trimmed.startsWith('-')) {
+    return `-${trimmed}`
+  }
+  return trimmed
+}
+
+function parseDate(iso?: string | null, era?: string | null): Date | null {
+  const normalized = normalizeEraDateIso(iso, era)
+  if (!normalized) return null
+  const match = /^(-?\d{1,6})-(\d{2})-(\d{2})/.exec(normalized)
   if (match) {
     const year = Number(match[1])
     const local = new Date(2000, Number(match[2]) - 1, Number(match[3]))
     local.setFullYear(year)
     return isNaN(local.getTime()) ? null : local
   }
-  const fallback = new Date(iso)
+  const fallback = new Date(normalized)
   return isNaN(fallback.getTime()) ? null : fallback
 }
 
@@ -223,9 +274,29 @@ function yearOf(d: Date | null): number | null {
   return d ? d.getFullYear() : null
 }
 
+/**
+ * 천문학적 연도 환산 (서력 기원에 0년이 없음을 보정: BC 1년 = 0, BC N년 = 1 - N).
+ * parseDate()가 기원전 N년을 fullYear = -N으로 저장하므로 음수일 때 1을 더한다.
+ */
+function astroYearOf(d: Date | null): number | null {
+  if (!d) return null
+  const fy = d.getFullYear()
+  return fy < 0 ? 1 + fy : fy
+}
+
+function astroApproxDays(d: Date | null): number | null {
+  const ay = astroYearOf(d)
+  if (ay == null || !d) return null
+  return ay * 365.25 + d.getMonth() * 30.4375 + d.getDate()
+}
+
 function isoDayKey(d: Date | null): string | null {
   if (!d) return null
-  const y = String(d.getFullYear()).padStart(4, '0')
+  const fy = d.getFullYear()
+  const y =
+    fy < 0
+      ? `-${String(-fy).padStart(4, '0')}`
+      : String(fy).padStart(4, '0')
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
@@ -273,13 +344,28 @@ const DEATH_TYPE_LABELS: Record<string, string> = {
   OTHER: '기타',
 }
 
-function ageAt(d: Date | null, birth: Date | null): number | null {
-  if (!d || !birth) return null
-  const age = d.getFullYear() - birth.getFullYear()
-  const beforeBirthday =
-    d.getMonth() < birth.getMonth() ||
-    (d.getMonth() === birth.getMonth() && d.getDate() < birth.getDate())
-  return age - (beforeBirthday ? 1 : 0)
+function ageAt(
+  d: Date | null,
+  birth: Date | null,
+  dPrecision?: string | null,
+  birthPrecision?: string | null,
+): number | null {
+  const dAstro = astroYearOf(d)
+  const bAstro = astroYearOf(birth)
+  if (dAstro == null || bAstro == null || !d || !birth) return null
+  let age = dAstro - bAstro
+  // 연 단위 정밀도('year')는 월·일(01-01)이 관행 채움값이므로 생일 전 차감을 하지 않는다
+  if (dPrecision !== 'year' && birthPrecision !== 'year') {
+    if (dPrecision === 'month' || birthPrecision === 'month') {
+      if (d.getMonth() < birth.getMonth()) age -= 1
+    } else {
+      const beforeBirthday =
+        d.getMonth() < birth.getMonth() ||
+        (d.getMonth() === birth.getMonth() && d.getDate() < birth.getDate())
+      if (beforeBirthday) age -= 1
+    }
+  }
+  return age >= 0 ? age : null
 }
 
 // ───── 타임라인 노드 ─────
@@ -316,7 +402,9 @@ interface TimelineNode {
   kind: TimelineKind
   start: Date | null
   end: Date | null
+  startPrecision?: string | null
   sortKey: number
+  sortOrder?: number
   title: string
   subtitle?: string | null
   dateLabel: string
@@ -328,6 +416,10 @@ interface TimelineNode {
   familyPersonId?: string
   /** 사건 노드의 사건 ID — 카드 클릭으로 사건 상세 이동 */
   eventId?: string | null
+  /** 재위·재임·경력 노드에 연결된 즉위/관련 사건 제목 (버튼 라벨용) */
+  linkedEventTitle?: string | null
+  /** 이력·활동 탭 스크롤 이동용 타깃 키 */
+  recordKey?: string | null
   /** 본인 오늘 기준 기간(일) — 긴 재위/재임에 막대 표시 기준 */
   durationDays?: number | null
 }
@@ -358,42 +450,60 @@ function htmlToPlainText(html: string | null | undefined): string {
     .trim()
 }
 
-/** 인물 연보 전체를 JSON 또는 Markdown 파일로 다운로드 */
-function exportLifeEvents(
-  lifeEvents: PersonLifeEvent[],
+const KIND_EXPORT_LABEL: Record<TimelineKind, string> = {
+  birth: '출생',
+  reign: '재위',
+  tenure: '재임',
+  career: '경력·활동',
+  event: '사건',
+  life: '연보',
+  'family-birth': '가족 출생',
+  'family-death': '가족 사망',
+  marriage: '혼인·가족',
+  death: '사망·생존',
+}
+
+/** 통합 연보 타임라인(현재 활성화된 필터·검색 기준)을 JSON 또는 Markdown 파일로 다운로드 */
+function exportTimelineNodes(
+  nodes: TimelineNode[],
   format: 'json' | 'markdown',
 ) {
-  if (typeof document === 'undefined' || lifeEvents.length === 0) return
-  const sorted = [...lifeEvents].sort((a, b) => {
-    // 부호 연-월-일 키 — new Date()는 기원전 연보에서 NaN이 돼 내보내기 순서가 뒤섞였다
-    const aTs = dateSortKey(a.startDate) ?? 0
-    const bTs = dateSortKey(b.startDate) ?? 0
-    if (aTs !== bTs) return aTs - bTs
-    return (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
-  })
+  if (typeof document === 'undefined' || nodes.length === 0) return
 
   let content: string
   let mime: string
   let ext: string
 
   if (format === 'json') {
-    content = JSON.stringify(sorted, null, 2)
+    const payload = nodes.map((n) => ({
+      key: n.key,
+      kind: n.kind,
+      kindLabel:
+        n.kind === 'life' && n.category
+          ? PERSON_LIFE_EVENT_CATEGORY_LABEL[n.category]
+          : KIND_EXPORT_LABEL[n.kind],
+      title: n.title,
+      subtitle: n.subtitle ?? null,
+      dateLabel: n.dateLabel || null,
+      description: n.description ? htmlToPlainText(n.description) : null,
+      category: n.category ?? null,
+      ...(n.lifeEventSource ? { lifeEvent: n.lifeEventSource } : {}),
+    }))
+    content = JSON.stringify(payload, null, 2)
     mime = 'application/json;charset=utf-8'
     ext = 'json'
   } else {
     const lines: string[] = ['# 인물 연보', '']
-    for (const le of sorted) {
-      const date = le.startDate
-        ? le.endDate && le.endDate !== le.startDate
-          ? `${le.startDate.slice(0, 10)} ~ ${le.endDate.slice(0, 10)}`
-          : le.startDate.slice(0, 10)
-        : '(날짜 미정)'
-      const cat = le.category
-        ? ` _(${PERSON_LIFE_EVENT_CATEGORY_LABEL[le.category]})_`
-        : ''
-      lines.push(`## ${le.title}${cat}`)
+    for (const n of nodes) {
+      const date = n.dateLabel || '(날짜 미정)'
+      const badge =
+        n.kind === 'life' && n.category
+          ? PERSON_LIFE_EVENT_CATEGORY_LABEL[n.category]
+          : KIND_EXPORT_LABEL[n.kind]
+      const sub = n.subtitle ? ` · ${n.subtitle}` : ''
+      lines.push(`## ${n.title} _(${badge}${sub})_`)
       lines.push(`*${date}*`)
-      const desc = htmlToPlainText(le.description)
+      const desc = htmlToPlainText(n.description)
       if (desc) {
         lines.push('')
         lines.push(desc)
@@ -409,7 +519,7 @@ function exportLifeEvents(
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `life-events-${new Date()
+  a.download = `person-chronology-${new Date()
     .toISOString()
     .slice(0, 10)}.${ext}`
   document.body.appendChild(a)
@@ -418,16 +528,76 @@ function exportLifeEvents(
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
+/**
+ * 재위/재임의 종료 상한 Date 계산:
+ * - 명시적 endDate가 있을 때: precision='year'면 해당 연도 12-31, 'month'면 해당 월 말일로 확장해
+ *   연·월 단위 재위/재임 중 발생한 구체적 일자 사건이 컨텍스트에서 누락되지 않게 한다.
+ * - endDate가 없을 때:
+ *   - endReason === 'DIED_IN_OFFICE'이고 사망일이 있으면 사망일을 상한으로 사용
+ *   - 그 외 endReason이 명시된 종료 기록(퇴임일 미상)이면 무한 연장하지 않고 시작 연도 말까지만 인정
+ *   - 현직(endReason 없음)이라도 인물이 사망(death != null 또는 isAlive === false)했으면 사망일을 상한으로 제한
+ */
+function resolveActiveRangeEnd(
+  start: Date,
+  endDateIso: string | null | undefined,
+  endPrecision: string | null | undefined,
+  endReason: string | null | undefined,
+  death: Date | null,
+  isAlive: boolean | null | undefined,
+): Date | null {
+  const rawEnd = parseDate(endDateIso)
+  if (rawEnd) {
+    if (endPrecision === 'year') {
+      const d = new Date(0)
+      d.setFullYear(rawEnd.getFullYear(), 11, 31)
+      d.setHours(0, 0, 0, 0)
+      return d
+    }
+    if (endPrecision === 'month') {
+      const d = new Date(0)
+      d.setFullYear(rawEnd.getFullYear(), rawEnd.getMonth() + 1, 0)
+      d.setHours(0, 0, 0, 0)
+      return d
+    }
+    return rawEnd
+  }
+  if ((endReason === 'DEATH_IN_OFFICE' || endReason === 'DIED_IN_OFFICE') && death) {
+    return death
+  }
+  if (endReason != null && endReason.trim() !== '') {
+    const d = new Date(0)
+    d.setFullYear(start.getFullYear(), 11, 31)
+    d.setHours(0, 0, 0, 0)
+    return d
+  }
+  if (death) return death
+  if (isAlive === false) {
+    const d = new Date(0)
+    d.setFullYear(start.getFullYear(), 11, 31)
+    d.setHours(0, 0, 0, 0)
+    return d
+  }
+  return null
+}
+
 /** 노드의 시작일이 어떤 재위/재임 기간 안에 들어가면 그 색을 반환 (재위 우선) */
 function pickActiveContextColor(
   date: Date | null,
   reignRanges: ActiveRange[],
   tenureRanges: ActiveRange[],
+  nodePrecision?: string | null,
 ): string | null {
   if (!date) return null
   const ts = date.getTime()
-  const inRange = (r: ActiveRange) =>
-    ts >= r.start.getTime() && (r.end == null || ts <= r.end.getTime())
+  const nodeYear = date.getFullYear()
+  const inRange = (r: ActiveRange) => {
+    if (nodePrecision === 'year') {
+      const startYear = r.start.getFullYear()
+      const endYear = r.end ? r.end.getFullYear() : null
+      return nodeYear >= startYear && (endYear == null || nodeYear <= endYear)
+    }
+    return ts >= r.start.getTime() && (r.end == null || ts <= r.end.getTime())
+  }
   const r = reignRanges.find(inRange)
   if (r) return r.color
   const t = tenureRanges.find(inRange)
@@ -440,6 +610,8 @@ export function PersonLifeTimelineInfographic({
   deathDate,
   birthEra,
   deathEra,
+  birthDatePrecision,
+  deathDatePrecision,
   birthPlace,
   deathType,
   deathCause,
@@ -458,6 +630,7 @@ export function PersonLifeTimelineInfographic({
   onStartEditLife,
   onFamilyPersonClick,
   onEventClick,
+  onJumpToRecord,
   onAddLifeEvent,
   highlightedLifeEventId,
 }: PersonLifeTimelineInfographicProps) {
@@ -474,17 +647,39 @@ export function PersonLifeTimelineInfographic({
     }, 60)
     return () => window.clearTimeout(timer)
   }, [highlightedLifeEventId])
-  const birth = useMemo(() => parseDate(birthDate), [birthDate])
-  const death = useMemo(() => parseDate(deathDate), [deathDate])
+  const normalizedBirthIso = useMemo(
+    () => normalizeEraDateIso(birthDate, birthEra),
+    [birthDate, birthEra],
+  )
+  const normalizedDeathIso = useMemo(
+    () => normalizeEraDateIso(deathDate, deathEra),
+    [deathDate, deathEra],
+  )
+  const birth = useMemo(
+    () => parseDate(normalizedBirthIso),
+    [normalizedBirthIso],
+  )
+  const death = useMemo(
+    () => parseDate(normalizedDeathIso),
+    [normalizedDeathIso],
+  )
 
   const nodes = useMemo<TimelineNode[]>(() => {
     const result: TimelineNode[] = []
     const POS_INF = Number.POSITIVE_INFINITY
-    const toTs = (d: Date | null) => (d ? d.getTime() : POS_INF)
-    const diffDays = (a: Date | null, b: Date | null) =>
-      a && b
-        ? Math.max(1, Math.round((b.getTime() - a.getTime()) / 86_400_000))
-        : null
+    const UNDATED_SORT_KEY = Number.MAX_SAFE_INTEGER - 100
+    const toTs = (d: Date | null) => (d ? d.getTime() : UNDATED_SORT_KEY)
+    const diffDays = (a: Date | null, b: Date | null) => {
+      const aDays = astroApproxDays(a)
+      const bDays = astroApproxDays(b)
+      if (aDays == null || bDays == null) return null
+      return Math.max(1, Math.round(bDays - aDays))
+    }
+    const isPersonDeceased =
+      !!death || isAlive === false
+    const egoDeathDateStr = death
+      ? formatWithPrecision(death, deathDatePrecision ?? 'day')
+      : null
 
     if (birth) {
       result.push({
@@ -492,10 +687,11 @@ export function PersonLifeTimelineInfographic({
         kind: 'birth',
         start: birth,
         end: null,
+        startPrecision: birthDatePrecision ?? 'day',
         sortKey: toTs(birth) - 1,
         title: '출생',
         subtitle: birthPlace ?? null,
-        dateLabel: formatWithPrecision(birth, 'day'),
+        dateLabel: formatWithPrecision(birth, birthDatePrecision ?? 'day'),
       })
     }
 
@@ -504,13 +700,25 @@ export function PersonLifeTimelineInfographic({
       const endsAt = parseDate(reign.endDate)
       const country = reign.historicalCountry?.name ?? reign.country?.name ?? null
       const pos = reign.positionDefinition?.title ?? '재위'
+      const titleParts = [
+        country,
+        reign.regnalName ? `${reign.regnalName} (${pos})` : pos,
+      ].filter(Boolean)
+      const achievementLines = (reign.achievements ?? [])
+        .map((a) => a.title?.trim())
+        .filter((t): t is string => !!t)
+      const accEv =
+        reign.accessionEvent && !reign.accessionEvent.deletedAt
+          ? reign.accessionEvent
+          : null
       result.push({
         key: `reign-${reign.id}`,
         kind: 'reign',
         start: startsAt,
         end: endsAt,
+        startPrecision: reign.startDatePrecision ?? 'day',
         sortKey: toTs(startsAt),
-        title: [country, pos].filter(Boolean).join(' · ') || '재위',
+        title: titleParts.join(' · ') || '재위',
         subtitle:
           reign.ordinal != null
             ? `${reign.ordinal}대${reign.subTermNumber != null ? ` ${reign.subTermNumber}기` : ''}`
@@ -521,8 +729,8 @@ export function PersonLifeTimelineInfographic({
           endDate: reign.endDate,
           endDatePrecision: reign.endDatePrecision,
           endReason: reign.endReason,
-          isDeceased: !!deathDate,
-          deathDateStr: deathDate ? formatIsoDateKo(deathDate) : null,
+          isDeceased: isPersonDeceased,
+          deathDateStr: egoDeathDateStr,
         }).rangeLabel,
         description:
           [
@@ -537,10 +745,13 @@ export function PersonLifeTimelineInfographic({
                   .join(' — ')}`
               : null,
             reign.notes,
+            achievementLines.length > 0
+              ? `주요 업적: ${achievementLines.join(', ')}`
+              : null,
             reign.endReason || reign.endReasonDetail
-              ? `종료: ${[
+              ? `퇴위: ${[
                   reign.endReason
-                    ? TENURE_END_REASON_LABELS[reign.endReason] ?? reign.endReason
+                    ? endReasonLabelFor(reign.endReason, 'reign')
                     : null,
                   reign.endReasonDetail,
                 ]
@@ -550,6 +761,9 @@ export function PersonLifeTimelineInfographic({
           ]
             .filter(Boolean)
             .join('\n') || null,
+        recordKey: `reign-${reign.id}`,
+        eventId: accEv?.id ?? null,
+        linkedEventTitle: accEv?.title ?? null,
         durationDays: diffDays(startsAt, endsAt),
       })
     }
@@ -559,11 +773,22 @@ export function PersonLifeTimelineInfographic({
       const endsAt = parseDate(tenure.endDate)
       const country = tenure.historicalCountry?.name ?? tenure.country?.name ?? null
       const pos = tenure.title ?? tenure.positionDefinition?.title ?? '재임'
+      const posType =
+        tenure.positionType ?? tenure.positionDefinition?.positionType ?? null
+      const tenureFamily = posType === 'NOBLE_TITLE' ? 'noble' : 'office'
+      const achievementLines = (tenure.achievements ?? [])
+        .map((a) => a.title?.trim())
+        .filter((t): t is string => !!t)
+      const accEv =
+        tenure.accessionEvent && !tenure.accessionEvent.deletedAt
+          ? tenure.accessionEvent
+          : null
       result.push({
         key: `tenure-${tenure.id}`,
         kind: 'tenure',
         start: startsAt,
         end: endsAt,
+        startPrecision: tenure.startDatePrecision ?? 'day',
         sortKey: toTs(startsAt),
         title: [country, pos].filter(Boolean).join(' · ') || '재임',
         subtitle:
@@ -576,13 +801,13 @@ export function PersonLifeTimelineInfographic({
           endDate: tenure.endDate,
           endDatePrecision: tenure.endDatePrecision,
           endReason: tenure.endReason,
-          isDeceased: !!deathDate,
-          deathDateStr: deathDate ? formatIsoDateKo(deathDate) : null,
+          isDeceased: isPersonDeceased,
+          deathDateStr: egoDeathDateStr,
         }).rangeLabel,
         description:
           [
             tenure.appointmentMethod || tenure.appointmentDetail
-              ? `취임: ${[
+              ? `${tenureFamily === 'noble' ? '수작' : '취임'}: ${[
                   tenure.appointmentMethod
                     ? APPOINTMENT_METHOD_LABELS[tenure.appointmentMethod] ?? tenure.appointmentMethod
                     : null,
@@ -592,10 +817,13 @@ export function PersonLifeTimelineInfographic({
                   .join(' — ')}`
               : null,
             tenure.notes,
+            achievementLines.length > 0
+              ? `주요 업적: ${achievementLines.join(', ')}`
+              : null,
             tenure.endReason || tenure.endReasonDetail
               ? `종료: ${[
                   tenure.endReason
-                    ? TENURE_END_REASON_LABELS[tenure.endReason] ?? tenure.endReason
+                    ? endReasonLabelFor(tenure.endReason, tenureFamily)
                     : null,
                   tenure.endReasonDetail,
                 ]
@@ -605,6 +833,9 @@ export function PersonLifeTimelineInfographic({
           ]
             .filter(Boolean)
             .join('\n') || null,
+        recordKey: `tenure-${tenure.id}`,
+        eventId: accEv?.id ?? null,
+        linkedEventTitle: accEv?.title ?? null,
         durationDays: diffDays(startsAt, endsAt),
       })
     }
@@ -620,11 +851,18 @@ export function PersonLifeTimelineInfographic({
         kind: 'career',
         start: s,
         end: e,
+        startPrecision: c.startDatePrecision ?? 'day',
         sortKey: toTs(s),
         title: head || c.kindLabel || '경력',
         subtitle: c.kindLabel ?? null,
-        dateLabel: formatRange(s, e),
+        dateLabel: formatRange(
+          s,
+          e,
+          c.startDatePrecision,
+          c.endDatePrecision,
+        ),
         description: c.notes ?? null,
+        recordKey: c.recordKey ?? `career-${c.id}`,
         durationDays: diffDays(s, e),
       })
     }
@@ -645,6 +883,7 @@ export function PersonLifeTimelineInfographic({
         kind: 'event',
         start: s,
         end: e,
+        startPrecision: evt.event?.startDatePrecision ?? 'day',
         sortKey: toTs(s),
         title: evt.event?.title ?? '(제목 없음)',
         subtitle: evt.role ?? null,
@@ -668,7 +907,9 @@ export function PersonLifeTimelineInfographic({
         kind: 'life',
         start: s,
         end: e,
+        startPrecision: le.startDatePrecision ?? 'day',
         sortKey: toTs(s),
+        sortOrder: le.sortOrder ?? 0,
         title: le.title,
         // 카테고리는 KindBadge가 보여주므로 subtitle 생략 (중복 방지)
         dateLabel: formatRange(
@@ -685,15 +926,37 @@ export function PersonLifeTimelineInfographic({
     }
 
     // ───── 가족 이벤트 ─────
-    // dedup: 연보(life)에 같은 날짜 기록이 있으면 자동 생성 가족 노드는 숨김
-    const lifeEventDayKeys = new Set<string>()
+    // 정밀도 인식 중복 제거:
+    //  1) 둘 다 일 단위('day') 정밀도이면서 정확히 같은 날이거나,
+    //  2) 같은 해의 연보(lifeEvent) 제목에 해당 가족 구성원의 이름이 명시된 경우에만 중복으로 간주.
+    //  (연 단위 연보 '1820-01-01' 하나 때문에 같은 해의 연 단위 가족 출생/사망이 통째로 증발하던 결함 수정)
+    const exactDayLifeKeys = new Set<string>()
     for (const le of lifeEvents) {
-      const k = isoDayKey(parseDate(le.startDate))
-      if (k) lifeEventDayKeys.add(k)
+      if ((le.startDatePrecision ?? 'day') === 'day') {
+        const k = isoDayKey(parseDate(le.startDate))
+        if (k) exactDayLifeKeys.add(k)
+      }
     }
-    const hasLifeOverlap = (d: Date) => {
-      const k = isoDayKey(d)
-      return k ? lifeEventDayKeys.has(k) : false
+    const hasLifeOverlap = (
+      d: Date,
+      precision?: string | null,
+      memberName?: string | null,
+    ) => {
+      if ((precision ?? 'day') === 'day') {
+        const k = isoDayKey(d)
+        if (k && exactDayLifeKeys.has(k)) return true
+      }
+      if (memberName && memberName.trim()) {
+        const targetYear = yearOf(d)
+        const trimmedName = memberName.trim()
+        for (const le of lifeEvents) {
+          const leYear = yearOf(parseDate(le.startDate))
+          if (leYear != null && leYear === targetYear && le.title.includes(trimmedName)) {
+            return true
+          }
+        }
+      }
+      return false
     }
 
     const pushFamilyBirth = (
@@ -701,19 +964,19 @@ export function PersonLifeTimelineInfographic({
       m: FamilyMember,
       idx = 0,
     ) => {
-      // BC 가족 출생일은 DATETIME 크기값 저장이라 AD 축 타임라인에 올리면 연도가 둔갑 — 제외.
-      if (m.birthEra === 'BC') return
-      const d = parseDate(m.birthDate)
+      const d = parseDate(m.birthDate, m.birthEra)
       if (!d) return
-      if (hasLifeOverlap(d)) return
+      const prec = m.birthDatePrecision ?? 'day'
+      if (hasLifeOverlap(d, prec, m.name)) return
       result.push({
         key: `${rel}-birth-${m.id ?? idx}`,
         kind: 'family-birth',
         start: d,
         end: null,
+        startPrecision: prec,
         sortKey: toTs(d),
         title: `${m.name} 출생`,
-        dateLabel: formatWithPrecision(d, m.birthDatePrecision ?? 'day'),
+        dateLabel: formatWithPrecision(d, prec),
         familyRelation: rel,
         familyPersonId: m.id,
       })
@@ -723,33 +986,28 @@ export function PersonLifeTimelineInfographic({
       m: FamilyMember,
       idx = 0,
     ) => {
-      if (m.deathEra === 'BC') return
-      const d = parseDate(m.deathDate)
+      const d = parseDate(m.deathDate, m.deathEra)
       if (!d) return
-      if (hasLifeOverlap(d)) return
-      // 향년 계산 — 출생연도 있으면 사망 시 만 나이 (BC era는 미상으로 처리)
-      const birth = m.birthEra === 'BC' ? null : parseDate(m.birthDate)
-      const yearOnly = m.birthDatePrecision === 'year' || m.deathDatePrecision === 'year'
-      const ageAtDeath =
-        birth && birth.getFullYear() <= d.getFullYear()
-          ? (() => {
-              let age = d.getFullYear() - birth.getFullYear()
-              if (!yearOnly) {
-                const md = d.getMonth() - birth.getMonth()
-                if (md < 0 || (md === 0 && d.getDate() < birth.getDate())) age--
-              }
-              return age >= 0 ? age : null
-            })()
-          : null
+      const prec = m.deathDatePrecision ?? 'day'
+      if (hasLifeOverlap(d, prec, m.name)) return
+      // 향년 계산 — 천문학적 연도 기반(BC·BC→AD 교차 안전)
+      const mBirth = parseDate(m.birthDate, m.birthEra)
+      const ageAtDeath = ageAt(
+        d,
+        mBirth,
+        m.deathDatePrecision,
+        m.birthDatePrecision,
+      )
       result.push({
         key: `${rel}-death-${m.id ?? idx}`,
         kind: 'family-death',
         start: d,
         end: null,
+        startPrecision: prec,
         sortKey: toTs(d),
         title: `${m.name} 사망`,
         subtitle: ageAtDeath != null ? `향년 ${ageAtDeath}세` : null,
-        dateLabel: formatWithPrecision(d, m.deathDatePrecision ?? 'day'),
+        dateLabel: formatWithPrecision(d, prec),
         familyRelation: rel,
         familyPersonId: m.id,
       })
@@ -776,16 +1034,15 @@ export function PersonLifeTimelineInfographic({
       pushFamilyBirth('spouse', sp, i)
       pushFamilyDeath('spouse', sp, i)
 
-      // BC 혼인일은 DATETIME 크기값 저장이라 AD 축 타임라인에 올리면 연도가 둔갑 — 제외.
-      // AD 1000년 미만이나 연/월 정밀 혼인은 marriageStartDate가 null이고 구조화 연/월/일만 있으므로 폴백.
+      // 구조화 혼인 시작일 (BC 및 AD < 1000 모두 지원)
       const structuredMarriageIso =
         sp.marriageStartYear != null
-          ? `${String(sp.marriageStartYear).padStart(4, '0')}-${String(sp.marriageStartMonth ?? 1).padStart(2, '0')}-${String(sp.marriageStartDay ?? 1).padStart(2, '0')}`
+          ? `${sp.marriageStartEra === 'BC' ? '-' : ''}${String(sp.marriageStartYear).padStart(4, '0')}-${String(sp.marriageStartMonth ?? 1).padStart(2, '0')}-${String(sp.marriageStartDay ?? 1).padStart(2, '0')}`
           : null
-      const mStart =
-        sp.marriageStartEra === 'BC'
-          ? null
-          : parseDate(sp.marriageStartDate ?? structuredMarriageIso)
+      const mStart = parseDate(
+        sp.marriageStartDate ?? structuredMarriageIso,
+        sp.marriageStartEra,
+      )
       const effectivePrecision =
         sp.marriageStartPrecision ??
         (sp.marriageStartDate == null && sp.marriageStartYear != null
@@ -795,19 +1052,75 @@ export function PersonLifeTimelineInfographic({
               ? 'month'
               : 'day'
           : 'day')
-      if (mStart && !hasLifeOverlap(mStart)) {
+      const structuredMarriageEndIso =
+        sp.marriageEndYear != null
+          ? `${sp.marriageEndEra === 'BC' ? '-' : ''}${String(sp.marriageEndYear).padStart(4, '0')}-${String(sp.marriageEndMonth ?? 1).padStart(2, '0')}-${String(sp.marriageEndDay ?? 1).padStart(2, '0')}`
+          : null
+      const mEnd = parseDate(
+        sp.marriageEndDate ?? structuredMarriageEndIso,
+        sp.marriageEndEra,
+      )
+      // 사별(DEATH / 레거시 WIDOWED)은 배우자 사망 카드와 중복되므로 배우자 사망일이 있을 때만 제외
+      const spouseDeathKnown = parseDate(sp.deathDate, sp.deathEra) != null
+      const isBereavementEnd =
+        sp.marriageEndReason === 'DEATH' || sp.marriageEndReason === 'WIDOWED'
+      const willPushMarriageEnd = Boolean(mEnd && (!isBereavementEnd || !spouseDeathKnown))
+
+      if (mStart && !hasLifeOverlap(mStart, effectivePrecision, sp.name)) {
         result.push({
           key: `marriage-start-${sp.id ?? i}`,
           kind: 'marriage',
           start: mStart,
           end: null,
+          startPrecision: effectivePrecision,
           sortKey: toTs(mStart),
           title: `${sp.name}과 혼인`,
-          // 연/월 정밀 혼인일의 01-01 채움이 '1월 1일'로 둔갑하지 않게 정밀도만큼만 표기
+          subtitle: sp.marriageRankLabel ?? null,
           dateLabel: formatWithPrecision(mStart, effectivePrecision),
+          description: !willPushMarriageEnd ? (sp.note ?? null) : null,
           familyRelation: 'spouse',
           familyPersonId: sp.id,
         })
+      }
+
+      if (mEnd && willPushMarriageEnd) {
+        const effectiveEndPrecision =
+          sp.marriageEndPrecision ??
+          (sp.marriageEndDate == null && sp.marriageEndYear != null
+            ? sp.marriageEndMonth == null
+              ? 'year'
+              : sp.marriageEndDay == null
+                ? 'month'
+                : 'day'
+            : 'day')
+        if (!hasLifeOverlap(mEnd, effectiveEndPrecision, sp.name)) {
+          const endTitleSuffix =
+            sp.marriageEndReason === 'DIVORCE'
+              ? '이혼'
+              : sp.marriageEndReason === 'DEPOSED'
+                ? '폐위·출처'
+                : sp.marriageEndReason === 'ANNULMENT'
+                  ? '혼인무효'
+                  : sp.marriageEndReason === 'SEPARATION'
+                    ? '별거'
+                    : isBereavementEnd
+                      ? '사별'
+                      : '혼인 해소'
+          result.push({
+            key: `marriage-end-${sp.id ?? i}`,
+            kind: 'marriage',
+            start: mEnd,
+            end: null,
+            startPrecision: effectiveEndPrecision,
+            sortKey: toTs(mEnd),
+            title: `${sp.name}과 ${endTitleSuffix}`,
+            subtitle: sp.marriageRankLabel ?? null,
+            dateLabel: formatWithPrecision(mEnd, effectiveEndPrecision),
+            description: sp.marriageEndReasonDetail ?? sp.note ?? null,
+            familyRelation: 'spouse',
+            familyPersonId: sp.id,
+          })
+        }
       }
     }
 
@@ -823,10 +1136,11 @@ export function PersonLifeTimelineInfographic({
         kind: 'death',
         start: death,
         end: null,
+        startPrecision: deathDatePrecision ?? 'day',
         sortKey: toTs(death) + 1,
         title: '사망',
         subtitle: deathTypeLabel,
-        dateLabel: formatWithPrecision(death, 'day'),
+        dateLabel: formatWithPrecision(death, deathDatePrecision ?? 'day'),
         description: deathDescription,
       })
     } else if (isAlive === true && birth) {
@@ -841,22 +1155,72 @@ export function PersonLifeTimelineInfographic({
       })
     }
 
-    // 본인 출생 이전 / 사망 이후 이벤트는 타임라인에서 제외 (ego의 birth·death 노드는 유지)
-    let filtered = result
-    if (birth) {
-      const birthTs = birth.getTime()
-      filtered = filtered.filter(
-        (n) => n.kind === 'birth' || n.sortKey >= birthTs,
-      )
-    }
-    if (death) {
-      const deathTs = death.getTime()
-      filtered = filtered.filter(
-        (n) => n.kind === 'death' || n.sortKey <= deathTs,
-      )
+    // 정밀도 인식 생애 경계 판정:
+    //  - 연('year')·월('month') 정밀도 노드가 출생/사망 연월과 같을 때 관행 채움일(01-01) 차이로 탈락하지 않도록 보정
+    //  - 부모·형제·배우자·자녀 사망 등 주변 가족 생몰 맥락(family-birth/family-death)만 생애 구간으로 클리핑하되,
+    //    유복자(child 출생이 사망 후 1년 / 310일 이내)는 보존한다.
+    //  - 인물의 직접 기록(life, event, reign, tenure, career, marriage)은 사후(추존·시호·유고집·부관참시 등) 및
+    //    출생 전 기록이라도 무단 삭제하지 않고 사망 아래 / 출생 위에 시간순으로 표시한다.
+    const isAfterOrAtBirth = (n: TimelineNode): boolean => {
+      if (!birth || n.kind === 'birth' || n.kind === 'death' || !n.start) return true
+      const nYear = yearOf(n.start)!
+      const bYear = yearOf(birth)!
+      if (n.startPrecision === 'year' || birthDatePrecision === 'year') {
+        return nYear >= bYear
+      }
+      if (n.startPrecision === 'month' || birthDatePrecision === 'month') {
+        return (
+          nYear > bYear ||
+          (nYear === bYear && n.start.getMonth() >= birth.getMonth())
+        )
+      }
+      return n.start.getTime() >= birth.getTime()
     }
 
-    // 같은 날짜(연도만 있는 데이터 포함)에서 종류별 우선순위 tie-break
+    const isBeforeOrAtDeath = (n: TimelineNode): boolean => {
+      if (!death || n.kind === 'birth' || n.kind === 'death' || !n.start) return true
+      const nYear = yearOf(n.start)!
+      const dYear = yearOf(death)!
+      if (n.startPrecision === 'year' || deathDatePrecision === 'year') {
+        return nYear <= dYear
+      }
+      if (n.startPrecision === 'month' || deathDatePrecision === 'month') {
+        return (
+          nYear < dYear ||
+          (nYear === dYear && n.start.getMonth() <= death.getMonth())
+        )
+      }
+      return n.start.getTime() <= death.getTime()
+    }
+
+    /** 유복자(사후 출생 친자녀) 허용 — 백엔드 assertParentChildLifespanOrder 계약(사망연도 + 1년 / 약 310일)과 정합 */
+    const isPosthumousChildBirthWithinGrace = (n: TimelineNode): boolean => {
+      if (!death || !n.start || n.kind !== 'family-birth' || n.familyRelation !== 'child') {
+        return false
+      }
+      const nYear = yearOf(n.start)!
+      const dYear = yearOf(death)!
+      if (n.startPrecision === 'year' || deathDatePrecision === 'year' || n.startPrecision === 'month' || deathDatePrecision === 'month') {
+        return nYear <= dYear + 1
+      }
+      return n.start.getTime() <= death.getTime() + 310 * 86_400_000
+    }
+
+    const shouldKeepNode = (n: TimelineNode): boolean => {
+      if (n.kind === 'family-birth' || n.kind === 'family-death') {
+        if (!isAfterOrAtBirth(n)) return false
+        if (isBeforeOrAtDeath(n)) return true
+        return isPosthumousChildBirthWithinGrace(n)
+      }
+      return true
+    }
+
+    const filtered = result.filter(shouldKeepNode)
+
+    // 같은 날짜(연도만 있는 데이터 포함)에서 종류별 우선순위 + sortOrder tie-break.
+    // - 출생(birth)은 출생 이후(동일 연도 year-precision 포함) 노드들보다 앞, 출생 전 기록보다는 뒤.
+    // - 사망(death, 날짜 있는 사망 노드)은 생전(동일 연도 year-precision 포함) 노드들보다 뒤,
+    //   사후 기록(유복자·사후 연보·추서·사후 사건 등) 및 날짜 미상 노드보다는 앞으로 정렬.
     const kindOrder: Record<TimelineKind, number> = {
       birth: 0,
       'family-birth': 1,
@@ -870,13 +1234,34 @@ export function PersonLifeTimelineInfographic({
       death: 9,
     }
     filtered.sort((a, b) => {
+      if (a.kind === 'birth' && b.kind !== 'birth') {
+        if (b.start != null && !isAfterOrAtBirth(b)) return 1
+        return -1
+      }
+      if (b.kind === 'birth' && a.kind !== 'birth') {
+        if (a.start != null && !isAfterOrAtBirth(a)) return -1
+        return 1
+      }
+      if (a.kind === 'death' && b.kind !== 'death') {
+        if (b.start == null) return -1
+        if (a.start == null) return 1
+        return isBeforeOrAtDeath(b) ? 1 : -1
+      }
+      if (b.kind === 'death' && a.kind !== 'death') {
+        if (a.start == null) return 1
+        if (b.start == null) return -1
+        return isBeforeOrAtDeath(a) ? -1 : 1
+      }
       if (a.sortKey !== b.sortKey) return a.sortKey - b.sortKey
-      return kindOrder[a.kind] - kindOrder[b.kind]
+      if (a.kind !== b.kind) return kindOrder[a.kind] - kindOrder[b.kind]
+      return (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
     })
     return filtered
   }, [
     birth,
     death,
+    birthDatePrecision,
+    deathDatePrecision,
     birthPlace,
     deathType,
     deathCause,
@@ -967,12 +1352,19 @@ export function PersonLifeTimelineInfographic({
           if (!s) return null
           return {
             start: s,
-            end: parseDate(r.endDate),
+            end: resolveActiveRangeEnd(
+              s,
+              r.endDate,
+              r.endDatePrecision,
+              r.endReason,
+              death,
+              isAlive,
+            ),
             color: kindColorMap.reign.base,
           }
         })
         .filter((v): v is ActiveRange => v !== null),
-    [reigns],
+    [reigns, death, isAlive],
   )
   const tenureRanges = useMemo<ActiveRange[]>(
     () =>
@@ -982,12 +1374,19 @@ export function PersonLifeTimelineInfographic({
           if (!s) return null
           return {
             start: s,
-            end: parseDate(t.endDate),
+            end: resolveActiveRangeEnd(
+              s,
+              t.endDate,
+              t.endDatePrecision,
+              t.endReason,
+              death,
+              isAlive,
+            ),
             color: kindColorMap.tenure.base,
           }
         })
         .filter((v): v is ActiveRange => v !== null),
-    [tenures],
+    [tenures, death, isAlive],
   )
 
   return (
@@ -1027,7 +1426,7 @@ export function PersonLifeTimelineInfographic({
             placeholder="제목·본문 검색"
             aria-label="타임라인 검색"
           />
-          {lifeEvents.length > 0 && (
+          {renderedNodes.length > 0 && (
             <ExportMenu>
               <ExportToggle
                 type="button"
@@ -1040,13 +1439,23 @@ export function PersonLifeTimelineInfographic({
               <ExportDropdown>
                 <ExportItem
                   type="button"
-                  onClick={() => exportLifeEvents(lifeEvents, 'json')}
+                  onClick={() =>
+                    exportTimelineNodes(
+                      renderedNodes.filter(matchesQuery),
+                      'json',
+                    )
+                  }
                 >
                   JSON
                 </ExportItem>
                 <ExportItem
                   type="button"
-                  onClick={() => exportLifeEvents(lifeEvents, 'markdown')}
+                  onClick={() =>
+                    exportTimelineNodes(
+                      renderedNodes.filter(matchesQuery),
+                      'markdown',
+                    )
+                  }
                 >
                   Markdown
                 </ExportItem>
@@ -1082,24 +1491,69 @@ export function PersonLifeTimelineInfographic({
         <TimelineList>
           {renderedNodes.map((node, idx) => {
             const year = yearOf(node.start)
+            const deathYear = yearOf(death)
+            const birthYear = yearOf(birth)
+            const isPosthumousNode =
+              death != null &&
+              node.start != null &&
+              node.kind !== 'death' &&
+              node.kind !== 'birth' &&
+              (node.startPrecision === 'year' || deathDatePrecision === 'year'
+                ? year! > deathYear!
+                : node.startPrecision === 'month' || deathDatePrecision === 'month'
+                  ? year! > deathYear! ||
+                    (year === deathYear && node.start.getMonth() > death.getMonth())
+                  : node.start.getTime() > death.getTime())
+            const isPreBirthNode =
+              birth != null &&
+              node.start != null &&
+              node.kind !== 'birth' &&
+              node.kind !== 'death' &&
+              (node.startPrecision === 'year' || birthDatePrecision === 'year'
+                ? year! < birthYear!
+                : node.startPrecision === 'month' || birthDatePrecision === 'month'
+                  ? year! < birthYear! ||
+                    (year === birthYear && node.start.getMonth() < birth.getMonth())
+                  : node.start.getTime() < birth.getTime())
+            const postYears =
+              isPosthumousNode && year != null && deathYear != null
+                ? Math.max(0, year - deathYear)
+                : null
             const age =
               node.kind === 'birth'
                 ? 0
-                : node.start && birth
-                  ? ageAt(node.start, birth)
-                  : null
+                : isPosthumousNode || isPreBirthNode
+                  ? null
+                  : node.start && birth
+                    ? ageAt(
+                        node.start,
+                        birth,
+                        node.startPrecision,
+                        birthDatePrecision,
+                      )
+                    : null
+            const isAgeApprox =
+              node.startPrecision === 'year' || birthDatePrecision === 'year'
             const isFirst = idx === 0
             const isLast = idx === renderedNodes.length - 1
 
-            // 직전 노드와 같은 연도면 YearLabel 숨김 (묶음 시각화)
+            // 직전 노드와 같은 연도면 YearLabel 숨김 (묶음 시각화 — 단, 사망 직후 사후 첫 노드는 사후 구분을 위해 표시)
             const prevNode = idx > 0 ? renderedNodes[idx - 1] : null
             const prevYear = prevNode ? yearOf(prevNode.start) : null
-            const sameYearAsPrev = year != null && prevYear === year
+            const sameYearAsPrev =
+              year != null &&
+              prevYear === year &&
+              !(isPosthumousNode && prevNode?.kind === 'death')
 
             // 활성 재위/재임 컨텍스트 색 — 연보·사건 노드의 spine을 옅게 칠함
             const contextColor =
-              node.kind === 'life' || node.kind === 'event'
-                ? pickActiveContextColor(node.start, reignRanges, tenureRanges)
+              (node.kind === 'life' || node.kind === 'event') && !isPosthumousNode
+                ? pickActiveContextColor(
+                    node.start,
+                    reignRanges,
+                    tenureRanges,
+                    node.startPrecision,
+                  )
                 : null
 
             const highlighted =
@@ -1125,16 +1579,22 @@ export function PersonLifeTimelineInfographic({
                   {year != null && !sameYearAsPrev ? (
                     <>
                       <YearLabel>
-                        {year < 0
-                          ? `기원전 ${-year}`
-                          : (node.kind === 'death'
-                                ? (deathEra ?? birthEra)
-                                : birthEra) === 'BC'
-                            ? `기원전 ${year}`
-                            : year}
+                        {year < 0 ? `기원전 ${-year}` : year}
                       </YearLabel>
-                      {age != null && age >= 0 && node.kind !== 'birth' && (
-                        <AgeLabel>{age}세</AgeLabel>
+                      {isPosthumousNode ? (
+                        <AgeLabel>
+                          {postYears && postYears > 0 ? `사후 ${postYears}년` : '사후'}
+                        </AgeLabel>
+                      ) : isPreBirthNode ? (
+                        <AgeLabel>출생 전</AgeLabel>
+                      ) : (
+                        age != null &&
+                        age >= 0 &&
+                        node.kind !== 'birth' && (
+                          <AgeLabel>
+                            {age}세{isAgeApprox ? '경' : ''}
+                          </AgeLabel>
+                        )
                       )}
                       {node.kind === 'birth' && <AgeLabel>출생</AgeLabel>}
                     </>
@@ -1191,14 +1651,23 @@ export function PersonLifeTimelineInfographic({
                       node.kind === 'event' &&
                       !!node.eventId &&
                       !!onEventClick
-                    const clickable = canEditLife || canNavFamily || canNavEvent
+                    const canJumpRecord =
+                      (node.kind === 'reign' ||
+                        node.kind === 'tenure' ||
+                        node.kind === 'career') &&
+                      !!node.recordKey &&
+                      !!onJumpToRecord
+                    const clickable =
+                      canEditLife || canNavFamily || canNavEvent || canJumpRecord
                     const handleClick = canEditLife
                       ? () => onStartEditLife!(node.lifeEventSource!)
                       : canNavFamily
                         ? () => onFamilyPersonClick!(node.familyPersonId!)
                         : canNavEvent
                           ? () => onEventClick!(node.eventId!)
-                          : undefined
+                          : canJumpRecord
+                            ? () => onJumpToRecord!(node.recordKey!)
+                            : undefined
                     const cardAriaLabel = node.dateLabel
                       ? `${node.title} — ${node.dateLabel}`
                       : node.title
@@ -1317,6 +1786,22 @@ export function PersonLifeTimelineInfographic({
                           >
                             <FiLink size={11} strokeWidth={2.4} aria-hidden="true" />
                             사건: {node.lifeEventSource.event.title}
+                          </LinkedEventLink>
+                        )}
+                      {(node.kind === 'reign' || node.kind === 'tenure') &&
+                        node.eventId &&
+                        node.linkedEventTitle &&
+                        onEventClick && (
+                          <LinkedEventLink
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onEventClick(node.eventId!)
+                            }}
+                            aria-label={`관련 사건 '${node.linkedEventTitle}' 보기`}
+                          >
+                            <FiLink size={11} strokeWidth={2.4} aria-hidden="true" />
+                            즉위·취임 사건: {node.linkedEventTitle}
                           </LinkedEventLink>
                         )}
                       </EventCard>

@@ -209,10 +209,16 @@ describe('primaryRecordOf — 창과 가장 길게 겹치는 기록', () => {
     expect(primaryRecordOf(ruler({}, [short, long]), WINDOW).recordId).toBe('long')
   })
 
-  it('종료 미기록은 창 끝까지 겹치는 것으로 간주', () => {
+  it('종료 미기록은 창 끝까지 겹치는 것으로 간주하되, 사망 연도가 있으면 그 연도로 캡한다', () => {
     const closed = record({ recordId: 'closed', startYear: 1400, endYear: 1410 })
     const open = record({ recordId: 'open', startYear: 1430, endYear: null })
     expect(primaryRecordOf(ruler({}, [closed, open]), WINDOW).recordId).toBe('open')
+
+    // open 기록의 인물이 1432년에 사망했다면 겹침은 2년(1430~1432)으로 캡되어 closed(10년)가 primary가 된다
+    expect(
+      primaryRecordOf(ruler({ deathYear: 1432, isAlive: false }, [closed, open]), WINDOW)
+        .recordId,
+    ).toBe('closed')
   })
 })
 
@@ -309,6 +315,24 @@ describe('overlapRangePctOf — 기준 창 대비 겹침 시작·폭(%) 계산',
     )
     expect(late.startPct).toBe(52)
     expect(late.widthPct).toBe(45)
+  })
+
+  it('종료일 미입력(endYear=null) 고인은 deathYear로 캡되어 창 끝까지 100%로 부풀려지지 않는다', () => {
+    const capped = overlapRangePctOf(
+      record({ startYear: 1418, endYear: null }),
+      { fromYear: 1418, toYear: 1451 },
+      { deathYear: 1424, isAlive: false },
+    )
+    expect(capped.startPct).toBe(0)
+    expect(capped.widthPct).toBe(21)
+
+    const unknownDeathDeceased = overlapRangePctOf(
+      record({ startYear: 1418, endYear: null }),
+      { fromYear: 1418, toYear: 1451 },
+      { deathYear: null, isAlive: false },
+    )
+    expect(unknownDeathDeceased.startPct).toBe(0)
+    expect(unknownDeathDeceased.widthPct).toBe(6)
   })
 })
 

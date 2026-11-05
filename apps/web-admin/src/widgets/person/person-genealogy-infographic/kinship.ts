@@ -1,9 +1,9 @@
 import type { FamilyTreeData, FamilyTreePerson } from '@/shared/api/persons-family-tree'
-import { MARRIAGE_RANK_LABELS } from '@/shared/lib/marriage-rank-labels'
+import { resolvePerspectiveMarriageRankLabel } from '@/shared/lib/marriage-rank-labels'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import { classifySiblingKinship, ftResolveParentIds } from './family-tree-derive'
-import { compareSiblings } from './utils'
+import { compareSiblingSeniority } from './utils'
 
 export interface KinshipInfo {
   /** 한국어 친족 호칭 (예: '아버지', '조부', '백부 (큰아버지)', '이복형제', '조카') */
@@ -21,51 +21,94 @@ export interface KinshipInfo {
 }
 
 /**
- * 자녀 카드 배지 라벨 생성 — 성별·출생 서열(birthOrder)을 반영해
- * '장남', '장녀', '아들 · 2째', '딸 · 3째', '아들', '딸', '자녀'로 구체화한다.
+ * 자녀 카드 배지 라벨 생성 — 성별·성별 내 출생 서열(genderBirthOrder)·통합 출생 서열(birthOrder)·입양 여부를 반영해
+ * '장남', '3남', '장녀 (2째)', '양자 · 2남', '아들 · 2째', '아들', '딸', '자녀'로 구체화한다.
  */
 export function formatChildRoleBadge(child: {
   gender?: string | null
   birthOrder?: number | null
+  genderBirthOrder?: number | null
+  isAdopted?: boolean
 }): string {
   const g = (child.gender ?? '').toUpperCase()
   const order = child.birthOrder
+  const gOrder = child.genderBirthOrder
+  const adoptPrefix = child.isAdopted
+    ? g === 'MALE' || g === 'M'
+      ? '양자 · '
+      : g === 'FEMALE' || g === 'F'
+        ? '양녀 · '
+        : '입양 · '
+    : ''
+
   if (g === 'MALE' || g === 'M') {
-    if (order === 1) return '장남 (1째)'
-    if (order != null && order > 1) return `아들 (${order}째)`
-    return '아들'
+    if (gOrder != null && gOrder >= 1) {
+      const gLabel = gOrder === 1 ? '장남' : `${gOrder}남`
+      return order != null && order >= 1
+        ? `${adoptPrefix}${gLabel} (${order}째)`
+        : `${adoptPrefix}${gLabel}`
+    }
+    if (order === 1) return `${adoptPrefix}장남 (1째)`
+    if (order != null && order > 1) return `${adoptPrefix}아들 (${order}째)`
+    return child.isAdopted ? '양자' : '아들'
   }
   if (g === 'FEMALE' || g === 'F') {
-    if (order === 1) return '장녀 (1째)'
-    if (order != null && order > 1) return `딸 (${order}째)`
-    return '딸'
+    if (gOrder != null && gOrder >= 1) {
+      const gLabel = gOrder === 1 ? '장녀' : `${gOrder}녀`
+      return order != null && order >= 1
+        ? `${adoptPrefix}${gLabel} (${order}째)`
+        : `${adoptPrefix}${gLabel}`
+    }
+    if (order === 1) return `${adoptPrefix}장녀 (1째)`
+    if (order != null && order > 1) return `${adoptPrefix}딸 (${order}째)`
+    return child.isAdopted ? '양녀' : '딸'
   }
-  if (order != null && order >= 1) return `자녀 (${order}째)`
-  return '자녀'
+  if (order != null && order >= 1) return `${adoptPrefix}자녀 (${order}째)`
+  return child.isAdopted ? '양자녀' : '자녀'
 }
 
 /**
  * 손자녀·증손자녀 등 후손 카드 배지 라벨 생성 —
- *KinshipInfo(친손/외손 및 성별 반영)가 있으면 우선 사용하고, 없으면 성별+세대 기본값으로 폴백.
+ * KinshipInfo(친손/외손 및 성별 반영)가 있으면 우선 사용하고, 없으면 성별+세대 기본값으로 폴백.
+ * 현재 부모 슬롯 기준 입양 자녀(opts.isAdoptedUnderParent)이면 '양손자·양손녀' 등 입양 후손 라벨로 표시한다.
  */
 export function formatDescendantRoleBadge(
   person: { gender?: string | null },
   defaultBadge: string,
   kinship?: KinshipInfo | null,
+  opts?: { isAdoptedUnderParent?: boolean },
 ): string {
-  if (kinship?.title) return kinship.title
   const g = (person.gender ?? '').toUpperCase()
-  if (defaultBadge === '손자녀') {
-    if (g === 'MALE' || g === 'M') return '손자'
-    if (g === 'FEMALE' || g === 'F') return '손녀'
-  } else if (defaultBadge === '증손자녀') {
-    if (g === 'MALE' || g === 'M') return '증손자'
-    if (g === 'FEMALE' || g === 'F') return '증손녀'
-  } else if (defaultBadge === '고손자녀') {
-    if (g === 'MALE' || g === 'M') return '고손자'
-    if (g === 'FEMALE' || g === 'F') return '고손녀'
+  const isAdopted = Boolean(opts?.isAdoptedUnderParent)
+  if (kinship?.title) {
+    if (kinship.title.includes(' · ')) {
+      const parts = kinship.title.split(' · ').map((s) => s.trim()).filter(Boolean)
+      const adoptPart = parts.find((p) => p.startsWith('양'))
+      const bioPart = parts.find((p) => !p.startsWith('양'))
+      if (!isAdopted && bioPart) {
+        return bioPart
+      }
+      if (isAdopted && adoptPart && bioPart) {
+        return `${adoptPart} · ${bioPart}`
+      }
+    }
+    if (isAdopted && !kinship.title.startsWith('양')) {
+      return `양${kinship.title.replace(/^친/, '')}`
+    }
+    return kinship.title
   }
-  return defaultBadge
+  const prefix = isAdopted ? '양' : ''
+  if (defaultBadge === '손자녀') {
+    if (g === 'MALE' || g === 'M') return `${prefix}손자`
+    if (g === 'FEMALE' || g === 'F') return `${prefix}손녀`
+  } else if (defaultBadge === '증손자녀') {
+    if (g === 'MALE' || g === 'M') return `${prefix}증손자`
+    if (g === 'FEMALE' || g === 'F') return `${prefix}증손녀`
+  } else if (defaultBadge === '고손자녀') {
+    if (g === 'MALE' || g === 'M') return `${prefix}고손자`
+    if (g === 'FEMALE' || g === 'F') return `${prefix}고손녀`
+  }
+  return isAdopted ? `${prefix}${defaultBadge}` : defaultBadge
 }
 
 /**
@@ -100,7 +143,12 @@ export function computeKinshipMap(
     return names.join(' → ')
   }
 
-  const pcEdges = (familyTreeData.edges ?? []).filter((e) => e.type === 'parent-child')
+  const pcEdges = (familyTreeData.edges ?? []).filter(
+    (e) => e.type === 'parent-child' && e.lineage !== 'adoptive',
+  )
+  const adoptPcEdges = (familyTreeData.edges ?? []).filter(
+    (e) => e.type === 'parent-child' && e.lineage === 'adoptive',
+  )
   const spouseEdges = (familyTreeData.edges ?? []).filter((e) => e.type === 'spouse')
 
   const rawParentsOf = new Map<string, string[]>()
@@ -110,10 +158,23 @@ export function computeKinshipMap(
     rawParentsOf.set(e.target, list)
   }
 
+  const rawAdoptParentsOf = new Map<string, string[]>()
+  for (const e of adoptPcEdges) {
+    const list = rawAdoptParentsOf.get(e.target) ?? []
+    if (!list.includes(e.source)) list.push(e.source)
+    rawAdoptParentsOf.set(e.target, list)
+  }
+
   const parentsOf = new Map<string, { fatherId: string | null; motherId: string | null }>()
+  const adoptiveParentsOf = new Map<
+    string,
+    { adoptiveFatherId: string | null; adoptiveMotherId: string | null }
+  >()
   const childrenOf = new Map<string, string[]>()
   for (const n of familyTreeData.nodes) {
-    const resolved = ftResolveParentIds(n.id, rawParentsOf, nodeMap)
+    const resolved = ftResolveParentIds(n.id, rawParentsOf, nodeMap, {
+      allowAdoptiveFallback: false,
+    })
     const fatherId = resolved.fatherId ?? n.fatherId ?? null
     const motherId = resolved.motherId ?? n.motherId ?? null
     parentsOf.set(n.id, { fatherId, motherId })
@@ -127,19 +188,64 @@ export function computeKinshipMap(
       if (!list.includes(n.id)) list.push(n.id)
       childrenOf.set(motherId, list)
     }
+
+    const adoptEdgeIds = (rawAdoptParentsOf.get(n.id) ?? []).filter(
+      (pid) => pid && pid !== n.id && pid !== fatherId && pid !== motherId,
+    )
+    let edgeAf: string | null = null
+    let edgeAm: string | null = null
+    for (const pid of adoptEdgeIds) {
+      const pNode = nodeMap.get(pid)
+      const pg = (pNode?.gender ?? '').toUpperCase()
+      if ((pg === 'MALE' || pg === 'M') && !edgeAf) edgeAf = pid
+      else if ((pg === 'FEMALE' || pg === 'F') && !edgeAm) edgeAm = pid
+    }
+    for (const pid of adoptEdgeIds) {
+      if (pid === edgeAf || pid === edgeAm) continue
+      if (!edgeAf) edgeAf = pid
+      else if (!edgeAm) edgeAm = pid
+    }
+    const rawAf = n.adoptiveFatherId ?? edgeAf
+    const rawAm = n.adoptiveMotherId ?? edgeAm
+    adoptiveParentsOf.set(n.id, {
+      adoptiveFatherId:
+        rawAf && rawAf !== n.id && rawAf !== fatherId && rawAf !== motherId ? rawAf : null,
+      adoptiveMotherId:
+        rawAm && rawAm !== n.id && rawAm !== fatherId && rawAm !== motherId ? rawAm : null,
+    })
+  }
+
+  const siblingFksOf = (id: string) => {
+    const node = nodeMap.get(id)
+    const bio = parentsOf.get(id)
+    const adopt = adoptiveParentsOf.get(id)
+    return {
+      fatherId: bio?.fatherId ?? node?.fatherId ?? null,
+      motherId: bio?.motherId ?? node?.motherId ?? null,
+      adoptiveFatherId: adopt?.adoptiveFatherId ?? node?.adoptiveFatherId ?? null,
+      adoptiveMotherId: adopt?.adoptiveMotherId ?? node?.adoptiveMotherId ?? null,
+    }
   }
 
   const spousesOf = new Map<
     string,
-    Array<{ partnerId: string; marriageRank: string | null }>
+    Array<{ partnerId: string; marriageRank: string | null; rankHolderId: string | null }>
   >()
   for (const e of spouseEdges) {
     const listA = spousesOf.get(e.source) ?? []
-    listA.push({ partnerId: e.target, marriageRank: e.marriageRank ?? null })
+    listA.push({
+      partnerId: e.target,
+      marriageRank: e.marriageRank ?? null,
+      rankHolderId: e.rankHolderId ?? null,
+    })
     spousesOf.set(e.source, listA)
 
     const listB = spousesOf.get(e.target) ?? []
-    listB.push({ partnerId: e.source, marriageRank: e.marriageRank ?? null })
+    listB.push({
+      partnerId: e.source,
+      marriageRank: e.marriageRank ?? null,
+      rankHolderId: e.rankHolderId ?? null,
+    })
     spousesOf.set(e.target, listB)
   }
 
@@ -428,15 +534,9 @@ export function computeKinshipMap(
             title = '고모'
           } else if (g === 'MALE') {
             const fatherNode = egoParents.fatherId ? nodeMap.get(egoParents.fatherId) : null
-            if (
-              fatherNode &&
-              (fatherNode.birthOrder != null || fatherNode.birthYear != null) &&
-              (person.birthOrder != null || person.birthYear != null)
-            ) {
-              title =
-                compareSiblings(person, fatherNode) < 0
-                  ? '백부 (큰아버지)'
-                  : '숙부 (작은아버지)'
+            const seniority = fatherNode ? compareSiblingSeniority(person, fatherNode) : null
+            if (seniority != null && seniority !== 0) {
+              title = seniority < 0 ? '백부 (큰아버지)' : '숙부 (작은아버지)'
             } else {
               title = '백부·숙부 (삼촌)'
             }
@@ -480,11 +580,394 @@ export function computeKinshipMap(
     }
   }
 
-  // 6. 인척 (배우자·처가·시가·혈족의 배우자)
-  // 6a. 본인 배우자
+  // 6. 입양(양가) 계보 보강 — 양부·양모·양조부모(다세대) 및 양자·양녀·양손자·양증손자(다세대) 호칭 부여
+  // 인척(Section 7) 분류 이전에 수행해야 양자녀·양손자녀의 배우자(며느리·사위·손자부·손서)도 정확히 도출되며,
+  // 이미 생물학적 방계 혈족(예: 백부/숙부·조카·종손)으로 분류된 경우 양부모·양자녀 관계를 병기한다.
+  const applyAdoptiveKinship = (
+    targetId: string | null | undefined,
+    adoptTitle: string,
+    pathIds: string[],
+    chon: number = 1,
+    generationLabel?: string,
+  ) => {
+    if (!targetId || targetId === egoId || !nodeMap.has(targetId)) return
+    const existing = result.get(targetId)
+    if (existing) {
+      // 친족 간 출계 입양(예: 백부·숙부 입양)에서 양부의 부모는 곧 본인의 친조부모(egoAncestors)이므로,
+      // 이미 동일 계열의 친생 직계 존속(예: '조부' vs '양조부', '증조부' vs '양증조부')인 경우
+      // '양조부 · 조부'로 중복 오염시키지 않고 본생 직계 존속 호칭을 그대로 유지한다.
+      if (
+        egoAncestors.has(targetId) &&
+        adoptTitle.startsWith('양') &&
+        existing.title === adoptTitle.slice(1)
+      ) {
+        return
+      }
+      if (!existing.title.includes(adoptTitle)) {
+        const bioCloserOrEqual = existing.chon != null && existing.chon <= chon
+        const mergedTitle = bioCloserOrEqual
+          ? `${existing.title} · ${adoptTitle}`
+          : `${adoptTitle} · ${existing.title}`
+        const nextGenLabel = existing.generationLabel ?? generationLabel ?? null
+        result.set(targetId, {
+          ...existing,
+          title: mergedTitle,
+          generationLabel: nextGenLabel,
+          summary:
+            existing.chon != null && existing.chon !== chon
+              ? bioCloserOrEqual
+                ? `${mergedTitle} (본생 ${existing.chon}촌 · 입양 ${chon}촌)`
+                : `${mergedTitle} (입양 ${chon}촌 · 본생 ${existing.chon}촌)`
+              : existing.chon != null
+                ? `${mergedTitle} (${existing.chon}촌)`
+                : mergedTitle,
+        })
+      }
+      return
+    }
+    const summaryLabel = generationLabel
+      ? `${adoptTitle} (입양 ${generationLabel} · ${chon}촌)`
+      : `${adoptTitle} (입양·출계 · ${chon}촌)`
+    result.set(targetId, {
+      title: adoptTitle,
+      chon,
+      generationLabel: generationLabel ?? null,
+      summary: summaryLabel,
+      pathNodeIds: pathIds,
+      pathSummary: formatPathSummary(pathIds),
+    })
+  }
+
+  // 6a. 다세대 양가 조상 BFS (양부·양모 → 양조부·양조모·양외조부·양외조모 → 양증조부·양고조부 등)
+  const egoFks = siblingFksOf(egoId)
+  const adoptAncQueue: Array<{
+    id: string
+    steps: number
+    side: 'paternal' | 'maternal'
+    slot: 'father' | 'mother'
+    pathIds: string[]
+  }> = []
+  const visitedAdoptAnc = new Set<string>([egoId])
+  if (
+    egoFks.adoptiveFatherId &&
+    egoFks.adoptiveFatherId !== egoFks.fatherId &&
+    nodeMap.has(egoFks.adoptiveFatherId)
+  ) {
+    adoptAncQueue.push({
+      id: egoFks.adoptiveFatherId,
+      steps: 1,
+      side: 'paternal',
+      slot: 'father',
+      pathIds: [egoId, egoFks.adoptiveFatherId],
+    })
+  }
+  if (
+    egoFks.adoptiveMotherId &&
+    egoFks.adoptiveMotherId !== egoFks.motherId &&
+    nodeMap.has(egoFks.adoptiveMotherId)
+  ) {
+    adoptAncQueue.push({
+      id: egoFks.adoptiveMotherId,
+      steps: 1,
+      side: 'maternal',
+      slot: 'mother',
+      pathIds: [egoId, egoFks.adoptiveMotherId],
+    })
+  }
+  // 친생 조상 중 입양된 조상의 양부모 가지도 탐색
+  for (const [ancId, trace] of egoAncestors) {
+    const ancNode = nodeMap.get(ancId)
+    if (!ancNode || trace.steps >= 5) continue
+    const ancFks = siblingFksOf(ancId)
+    if (
+      ancFks.adoptiveFatherId &&
+      ancFks.adoptiveFatherId !== ancFks.fatherId &&
+      nodeMap.has(ancFks.adoptiveFatherId)
+    ) {
+      adoptAncQueue.push({
+        id: ancFks.adoptiveFatherId,
+        steps: trace.steps + 1,
+        side: trace.side,
+        slot: 'father',
+        pathIds: [...trace.pathIds, ancFks.adoptiveFatherId],
+      })
+    }
+    if (
+      ancFks.adoptiveMotherId &&
+      ancFks.adoptiveMotherId !== ancFks.motherId &&
+      nodeMap.has(ancFks.adoptiveMotherId)
+    ) {
+      adoptAncQueue.push({
+        id: ancFks.adoptiveMotherId,
+        steps: trace.steps + 1,
+        side: trace.side,
+        slot: 'mother',
+        pathIds: [...trace.pathIds, ancFks.adoptiveMotherId],
+      })
+    }
+  }
+  while (adoptAncQueue.length > 0) {
+    const curr = adoptAncQueue.shift()!
+    if (visitedAdoptAnc.has(curr.id)) continue
+    visitedAdoptAnc.add(curr.id)
+    const ancPerson = nodeMap.get(curr.id)
+    if (!ancPerson) continue
+    const g = (ancPerson.gender ?? '').toUpperCase()
+    const isMale = g === 'MALE' || (g !== 'FEMALE' && curr.slot === 'father')
+    const prefix = curr.side === 'maternal' ? '양외' : '양'
+    let adoptTitle = ''
+    let genLabel: string | undefined
+    if (curr.steps === 1) {
+      adoptTitle = isMale ? '양부' : '양모'
+    } else if (curr.steps === 2) {
+      adoptTitle = isMale ? `${prefix}조부` : `${prefix}조모`
+      genLabel = '2대조'
+    } else if (curr.steps === 3) {
+      adoptTitle = isMale ? `${prefix}증조부` : `${prefix}증조모`
+      genLabel = '3대조'
+    } else if (curr.steps === 4) {
+      adoptTitle = isMale ? `${prefix}고조부` : `${prefix}고조모`
+      genLabel = '4대조'
+    } else {
+      adoptTitle = `${prefix}${curr.steps}대조`
+      genLabel = `${curr.steps}대조`
+    }
+    applyAdoptiveKinship(curr.id, adoptTitle, curr.pathIds, curr.steps, genLabel)
+
+    if (curr.steps < 6) {
+      const currFks = siblingFksOf(curr.id)
+      for (const nextFatherId of [currFks.adoptiveFatherId, currFks.fatherId]) {
+        if (nextFatherId && !visitedAdoptAnc.has(nextFatherId) && nodeMap.has(nextFatherId)) {
+          adoptAncQueue.push({
+            id: nextFatherId,
+            steps: curr.steps + 1,
+            side: curr.side,
+            slot: 'father',
+            pathIds: [...curr.pathIds, nextFatherId],
+          })
+        }
+      }
+      for (const nextMotherId of [currFks.adoptiveMotherId, currFks.motherId]) {
+        if (nextMotherId && !visitedAdoptAnc.has(nextMotherId) && nodeMap.has(nextMotherId)) {
+          adoptAncQueue.push({
+            id: nextMotherId,
+            steps: curr.steps + 1,
+            side: curr.side,
+            slot: 'mother',
+            pathIds: [...curr.pathIds, nextMotherId],
+          })
+        }
+      }
+    }
+  }
+
+  // 6b. 입양(양가) 형제 및 다세대 입양 후손(양자·양녀 → 양손자·양손녀 → 양증손자·양고손자 등) BFS
+  const adoptChildrenOf = new Map<string, string[]>()
+  const allParentIdsOf = (p: FamilyTreePerson): string[] => {
+    const fks = siblingFksOf(p.id)
+    return [
+      fks.adoptiveFatherId,
+      fks.adoptiveMotherId,
+      fks.fatherId,
+      fks.motherId,
+    ].filter((v): v is string => Boolean(v))
+  }
+  const egoAllParentIds = allParentIdsOf(ego)
+  const adoptiveSiblingIds: string[] = []
+  for (const n of familyTreeData.nodes) {
+    const nFks = siblingFksOf(n.id)
+    if (n.id !== egoId && classifySiblingKinship(egoFks, nFks).kinship === 'ADOPTIVE') {
+      const nParents = allParentIdsOf(n)
+      const sharedPid = egoAllParentIds.find((pid) => nParents.includes(pid))
+      const sibPath =
+        sharedPid && nodeMap.has(sharedPid)
+          ? [egoId, sharedPid, n.id]
+          : [egoId, n.id]
+      applyAdoptiveKinship(n.id, '입양형제', sibPath, 2)
+      adoptiveSiblingIds.push(n.id)
+    }
+    for (const apId of [nFks.adoptiveFatherId, nFks.adoptiveMotherId]) {
+      if (!apId || apId === nFks.fatherId || apId === nFks.motherId) continue
+      const list = adoptChildrenOf.get(apId) ?? []
+      if (!list.includes(n.id)) list.push(n.id)
+      adoptChildrenOf.set(apId, list)
+    }
+  }
+  for (const e of familyTreeData.edges ?? []) {
+    if (e.type === 'parent-child' && e.lineage === 'adoptive') {
+      const list = adoptChildrenOf.get(e.source) ?? []
+      if (!list.includes(e.target)) list.push(e.target)
+      adoptChildrenOf.set(e.source, list)
+    }
+  }
+
+  const adoptDescQueue: Array<{
+    id: string
+    steps: number
+    hasAdoptiveStep: boolean
+    pathIds: string[]
+  }> = [{ id: egoId, steps: 0, hasAdoptiveStep: false, pathIds: [egoId] }]
+  const visitedAdoptDesc = new Set<string>([`${egoId}:false`])
+
+  while (adoptDescQueue.length > 0) {
+    const curr = adoptDescQueue.shift()!
+    if (curr.steps >= 1 && curr.hasAdoptiveStep) {
+      const descPerson = nodeMap.get(curr.id)
+      if (descPerson) {
+        const g = (descPerson.gender ?? '').toUpperCase()
+        let adoptDescTitle = ''
+        let genLabel: string | undefined
+        if (curr.steps === 1) {
+          adoptDescTitle = g === 'MALE' ? '양자' : g === 'FEMALE' ? '양녀' : '양자녀'
+        } else if (curr.steps === 2) {
+          adoptDescTitle = g === 'MALE' ? '양손자' : g === 'FEMALE' ? '양손녀' : '양손자녀'
+          genLabel = '2대손'
+        } else if (curr.steps === 3) {
+          adoptDescTitle = g === 'MALE' ? '양증손자' : g === 'FEMALE' ? '양증손녀' : '양증손'
+          genLabel = '3대손'
+        } else if (curr.steps === 4) {
+          adoptDescTitle = g === 'MALE' ? '양고손자' : g === 'FEMALE' ? '양고손녀' : '양고손'
+          genLabel = '4대손'
+        } else {
+          adoptDescTitle = `양${curr.steps}대손`
+          genLabel = `${curr.steps}대손`
+        }
+        applyAdoptiveKinship(curr.id, adoptDescTitle, curr.pathIds, curr.steps, genLabel)
+      }
+    }
+    if (curr.steps >= 6) continue
+
+    const bioKids = childrenOf.get(curr.id) ?? []
+    for (const cid of bioKids) {
+      const stateKey = `${cid}:${curr.hasAdoptiveStep}`
+      if (!visitedAdoptDesc.has(stateKey) && !curr.pathIds.includes(cid) && nodeMap.has(cid)) {
+        visitedAdoptDesc.add(stateKey)
+        adoptDescQueue.push({
+          id: cid,
+          steps: curr.steps + 1,
+          hasAdoptiveStep: curr.hasAdoptiveStep,
+          pathIds: [...curr.pathIds, cid],
+        })
+      }
+    }
+    const adoptKids = adoptChildrenOf.get(curr.id) ?? []
+    for (const cid of adoptKids) {
+      const stateKey = `${cid}:true`
+      if (!visitedAdoptDesc.has(stateKey) && !curr.pathIds.includes(cid) && nodeMap.has(cid)) {
+        visitedAdoptDesc.add(stateKey)
+        adoptDescQueue.push({
+          id: cid,
+          steps: curr.steps + 1,
+          hasAdoptiveStep: true,
+          pathIds: [...curr.pathIds, cid],
+        })
+      }
+    }
+  }
+
+  // 6c. 입양 방계 친족 (양조카 3촌, 양백부·양숙부·양고모·양외숙부·양이모 3촌, 양사촌 4촌)
+  // 1) 입양형제의 자녀(친자녀·양자녀) 및 친형제의 양자녀 → 양조카 (3촌)
+  for (const n of familyTreeData.nodes) {
+    const sibKin = result.get(n.id)
+    if (!sibKin || sibKin.chon !== 2 || sibKin.generationLabel) continue
+    const isAdoptSib =
+      adoptiveSiblingIds.includes(n.id) || sibKin.title.includes('입양형제')
+    const bioKids = childrenOf.get(n.id) ?? []
+    const adoptKids = adoptChildrenOf.get(n.id) ?? []
+    const targetKids = isAdoptSib
+      ? [...new Set([...bioKids, ...adoptKids])]
+      : adoptKids
+    for (const cid of targetKids) {
+      if (cid === egoId || result.has(cid) || !nodeMap.has(cid)) continue
+      const cNode = nodeMap.get(cid)
+      const cg = (cNode?.gender ?? '').toUpperCase()
+      const title = cg === 'FEMALE' ? '양조카 (양질녀)' : '양조카'
+      const basePath = sibKin.pathNodeIds ?? [egoId, n.id]
+      applyAdoptiveKinship(cid, title, [...basePath, cid], 3)
+    }
+  }
+
+  // 2) 양부·양모의 형제자매(양삼촌·양고모·양외삼촌·양이모, 3촌) 및 그 자녀(양사촌, 4촌)
+  for (const [side, apId] of [
+    ['paternal', egoFks.adoptiveFatherId],
+    ['maternal', egoFks.adoptiveMotherId],
+  ] as const) {
+    if (!apId || !nodeMap.has(apId)) continue
+    if (side === 'paternal' && apId === egoParents.fatherId) continue
+    if (side === 'maternal' && apId === egoParents.motherId) continue
+    const apNode = nodeMap.get(apId)!
+    const apParents = allParentIdsOf(apNode)
+    const apFks = siblingFksOf(apId)
+
+    for (const auNode of familyTreeData.nodes) {
+      if (auNode.id === apId || auNode.id === egoId) continue
+      const sibCheck = classifySiblingKinship(apFks, siblingFksOf(auNode.id))
+      if (sibCheck.sharedAxis === 'none') continue
+      const auParents = allParentIdsOf(auNode)
+      const sharedGpId = apParents.find((pid) => auParents.includes(pid))
+      const auPath =
+        sharedGpId && nodeMap.has(sharedGpId)
+          ? [egoId, apId, sharedGpId, auNode.id]
+          : [egoId, apId, auNode.id]
+      const aug = (auNode.gender ?? '').toUpperCase()
+
+      if (!result.has(auNode.id)) {
+        let auTitle = ''
+        if (side === 'paternal') {
+          if (aug === 'FEMALE') {
+            auTitle = '양고모'
+          } else if (aug === 'MALE') {
+            const seniority = compareSiblingSeniority(auNode, apNode)
+            if (seniority != null && seniority !== 0) {
+              auTitle = seniority < 0 ? '양백부 (큰아버지)' : '양숙부 (작은아버지)'
+            } else {
+              auTitle = '양백부·숙부 (양삼촌)'
+            }
+          } else {
+            auTitle = '양가 삼촌·고모'
+          }
+        } else {
+          if (aug === 'FEMALE') auTitle = '양이모'
+          else if (aug === 'MALE') auTitle = '양외숙부 (외삼촌)'
+          else auTitle = '양외가 삼촌·이모'
+        }
+        applyAdoptiveKinship(auNode.id, auTitle, auPath, 3)
+      }
+
+      const cousinIds = [
+        ...new Set([
+          ...(childrenOf.get(auNode.id) ?? []),
+          ...(adoptChildrenOf.get(auNode.id) ?? []),
+        ]),
+      ]
+      for (const cid of cousinIds) {
+        if (cid === egoId || result.has(cid) || !nodeMap.has(cid)) continue
+        let cTitle = ''
+        if (side === 'paternal') {
+          cTitle = aug === 'FEMALE' ? '양고종사촌' : '양종형제 (양친사촌)'
+        } else {
+          if (aug === 'FEMALE') cTitle = '양이종사촌'
+          else if (aug === 'MALE') cTitle = '양외종사촌'
+          else cTitle = '양외사촌·이종사촌'
+        }
+        applyAdoptiveKinship(cid, cTitle, [...auPath, cid], 4)
+      }
+    }
+  }
+
+  // 7. 인척 (배우자·처가·시가·혈족 및 양가 친족의 배우자)
+  // 7a. 본인 배우자
   for (const sp of spousesOf.get(egoId) ?? []) {
     if (result.has(sp.partnerId)) continue
-    const rankLabel = sp.marriageRank ? MARRIAGE_RANK_LABELS[sp.marriageRank] : null
+    const partnerNode = nodeMap.get(sp.partnerId)
+    const rankLabel = resolvePerspectiveMarriageRankLabel({
+      marriageRank: sp.marriageRank,
+      rankHolderId: sp.rankHolderId,
+      viewerPersonId: egoId,
+      viewerGender: ego.gender ?? null,
+      spouseId: sp.partnerId,
+      spouseGender: partnerNode?.gender ?? null,
+    })
     const title = rankLabel ? `배우자 · ${rankLabel}` : '배우자'
     const pathIds = [egoId, sp.partnerId]
     result.set(sp.partnerId, {
@@ -496,11 +979,20 @@ export function computeKinshipMap(
     })
   }
 
-  // 6b. 아버지/어머니의 다른 배우자 (서모·계모 / 계부)
+  // 7b. 아버지/어머니의 다른 배우자 (서모·계모 / 계부)
   if (egoParents.fatherId) {
+    const fatherNode = nodeMap.get(egoParents.fatherId)
     for (const sp of spousesOf.get(egoParents.fatherId) ?? []) {
       if (result.has(sp.partnerId)) continue
-      const rankLabel = sp.marriageRank ? MARRIAGE_RANK_LABELS[sp.marriageRank] : null
+      const partnerNode = nodeMap.get(sp.partnerId)
+      const rankLabel = resolvePerspectiveMarriageRankLabel({
+        marriageRank: sp.marriageRank,
+        rankHolderId: sp.rankHolderId,
+        viewerPersonId: egoParents.fatherId,
+        viewerGender: fatherNode?.gender ?? null,
+        spouseId: sp.partnerId,
+        spouseGender: partnerNode?.gender ?? null,
+      })
       const title = rankLabel ? `부친의 배우자 (${rankLabel})` : '계모·서모 (부친의 배우자)'
       const pathIds = [egoId, egoParents.fatherId, sp.partnerId]
       result.set(sp.partnerId, {
@@ -526,13 +1018,51 @@ export function computeKinshipMap(
       })
     }
   }
+  if (egoFks.adoptiveFatherId && egoFks.adoptiveFatherId !== egoParents.fatherId) {
+    const adoptFatherNode = nodeMap.get(egoFks.adoptiveFatherId)
+    for (const sp of spousesOf.get(egoFks.adoptiveFatherId) ?? []) {
+      if (result.has(sp.partnerId)) continue
+      const partnerNode = nodeMap.get(sp.partnerId)
+      const rankLabel = resolvePerspectiveMarriageRankLabel({
+        marriageRank: sp.marriageRank,
+        rankHolderId: sp.rankHolderId,
+        viewerPersonId: egoFks.adoptiveFatherId,
+        viewerGender: adoptFatherNode?.gender ?? null,
+        spouseId: sp.partnerId,
+        spouseGender: partnerNode?.gender ?? null,
+      })
+      const title = rankLabel ? `양부의 배우자 (${rankLabel})` : '양부의 배우자'
+      const pathIds = [egoId, egoFks.adoptiveFatherId, sp.partnerId]
+      result.set(sp.partnerId, {
+        title,
+        chon: null,
+        summary: title,
+        pathNodeIds: pathIds,
+        pathSummary: formatPathSummary(pathIds),
+      })
+    }
+  }
+  if (egoFks.adoptiveMotherId && egoFks.adoptiveMotherId !== egoParents.motherId) {
+    for (const sp of spousesOf.get(egoFks.adoptiveMotherId) ?? []) {
+      if (result.has(sp.partnerId)) continue
+      const title = '양모의 배우자'
+      const pathIds = [egoId, egoFks.adoptiveMotherId, sp.partnerId]
+      result.set(sp.partnerId, {
+        title,
+        chon: null,
+        summary: title,
+        pathNodeIds: pathIds,
+        pathSummary: formatPathSummary(pathIds),
+      })
+    }
+  }
 
-  // 6c. 본인 배우자의 부모 (장인·장모 / 시부모)
+  // 7c. 본인 배우자의 부모 (장인·장모 / 시부모)
   for (const sp of spousesOf.get(egoId) ?? []) {
-    const spParents = parentsOf.get(sp.partnerId)
+    const spFks = siblingFksOf(sp.partnerId)
     for (const [slot, pid] of [
-      ['father', spParents?.fatherId],
-      ['mother', spParents?.motherId],
+      ['father', spFks.fatherId ?? spFks.adoptiveFatherId],
+      ['mother', spFks.motherId ?? spFks.adoptiveMotherId],
     ] as const) {
       if (!pid || result.has(pid) || !nodeMap.has(pid)) continue
       const title =
@@ -548,7 +1078,7 @@ export function computeKinshipMap(
     }
   }
 
-  // 6d. 기타 이미 분류된 혈족의 배우자 (며느리·사위·손자부·손서·형수·제수·매부·숙모 등)
+  // 7d. 기타 이미 분류된 혈족·양가 친족의 배우자 (며느리·사위·손자부·손서·형수·제수·매부·숙모 등)
   for (const person of familyTreeData.nodes) {
     if (result.has(person.id)) continue
     const g = (person.gender ?? '').toUpperCase()
@@ -559,29 +1089,44 @@ export function computeKinshipMap(
       const partnerNode = nodeMap.get(sp.partnerId)
       const partnerGender = (partnerNode?.gender ?? '').toUpperCase()
       let title = `${partnerKin.title}의 배우자`
-      if (
-        partnerKin.chon === 1 &&
-        (partnerKin.title === '아들' || partnerKin.title === '딸' || partnerKin.title === '자녀')
-      ) {
+      const isDirectOrAdoptedChild =
+        (partnerKin.chon === 1 &&
+          (partnerKin.title === '아들' ||
+            partnerKin.title === '딸' ||
+            partnerKin.title === '자녀')) ||
+        partnerKin.title === '양자' ||
+        partnerKin.title === '양녀' ||
+        partnerKin.title === '양자녀' ||
+        partnerKin.title.startsWith('양자 ·') ||
+        partnerKin.title.startsWith('양녀 ·') ||
+        partnerKin.title.startsWith('양자녀 ·')
+      if (isDirectOrAdoptedChild) {
         title =
           g === 'FEMALE' ? '자부 (며느리)' : g === 'MALE' ? '사위 (부마)' : '자녀의 배우자'
-      } else if (partnerKin.chon === 2 && partnerKin.generationLabel === '2대손') {
+      } else if (partnerKin.generationLabel === '2대손') {
         title =
           g === 'FEMALE'
             ? '손자부 (손자며느리)'
             : g === 'MALE'
               ? '손서 (손자사위)'
               : '손자녀의 배우자'
-      } else if (partnerKin.chon === 2 && !partnerKin.generationLabel) {
+      } else if (partnerKin.generationLabel === '3대손') {
+        title =
+          g === 'FEMALE'
+            ? '증손부 (증손자며느리)'
+            : g === 'MALE'
+              ? '증손서 (증손자사위)'
+              : '증손자녀의 배우자'
+      } else if (
+        (partnerKin.chon === 2 && !partnerKin.generationLabel) ||
+        partnerKin.title.startsWith('입양형제')
+      ) {
         // 형제자매의 배우자
         if (g === 'FEMALE' && partnerGender === 'MALE') {
-          if (
-            partnerNode &&
-            (partnerNode.birthOrder != null || partnerNode.birthYear != null) &&
-            (ego.birthOrder != null || ego.birthYear != null)
-          ) {
+          const seniority = partnerNode ? compareSiblingSeniority(partnerNode, ego) : null
+          if (seniority != null && seniority !== 0) {
             title =
-              compareSiblings(partnerNode, ego) < 0
+              seniority < 0
                 ? '형수·올케 (손위 형제의 배우자)'
                 : '제수·올케 (아우의 배우자)'
           } else {
@@ -600,6 +1145,16 @@ export function computeKinshipMap(
         title = '이모부'
       } else if (partnerKin.chon === 3 && partnerKin.title.startsWith('외숙부')) {
         title = '외숙모'
+      } else if (partnerKin.chon === 3 && partnerKin.title.startsWith('양백부')) {
+        title = '양백모 (큰어머니)'
+      } else if (partnerKin.chon === 3 && partnerKin.title.startsWith('양숙부')) {
+        title = '양숙모 (작은어머니)'
+      } else if (partnerKin.chon === 3 && partnerKin.title === '양고모') {
+        title = '양고모부'
+      } else if (partnerKin.chon === 3 && partnerKin.title === '양이모') {
+        title = '양이모부'
+      } else if (partnerKin.chon === 3 && partnerKin.title.startsWith('양외숙부')) {
+        title = '양외숙모'
       }
       const pathIds = [...(partnerKin.pathNodeIds ?? [egoId, sp.partnerId]), person.id]
       result.set(person.id, {

@@ -96,7 +96,9 @@ import {
   buildInitialDate,
   calcLifespan,
   formatRelativeTime,
+  normalizePersonNamePayloadFields,
   parseDateString,
+  resolveNameRequiredError,
 } from './person-register-view.helpers'
 import { SelectBtn } from './_form-primitives'
 import { AffiliationSection } from './sections/affiliation-section'
@@ -135,6 +137,7 @@ import {
   DraftDiscardBtn,
   DraftRestoreBtn,
   FieldError,
+  FieldErrorActionBtn,
   InlineFields,
   LoadingHost,
   NameCell,
@@ -181,7 +184,6 @@ export interface PersonRegisterViewProps {
   /** 필수 필드 채움 변화 — 모달 헤더 인디케이터/사이드 인덱스용 */
   onValuesChange?: (values: {
     name: boolean
-    surname: boolean
     gender: boolean
     countryId: boolean
   }) => void
@@ -300,10 +302,14 @@ export function PersonRegisterView({
   // 가족
   const [fatherId, setFatherId] = useState('')
   const [motherId, setMotherId] = useState('')
+  const [adoptiveFatherId, setAdoptiveFatherId] = useState('')
+  const [adoptiveMotherId, setAdoptiveMotherId] = useState('')
   // 사생아·서출 — 가계도 카드 별표(*) 마커
   const [illegitimate, setIllegitimate] = useState(false)
   // 출생 서열 (1-base 숫자 문자열, 빈 문자열 = 미지정)
   const [birthOrder, setBirthOrder] = useState('')
+  // 성별 내 출생 서열 (장남=1, 2남=2, 장녀=1 등)
+  const [genderBirthOrder, setGenderBirthOrder] = useState('')
   /**
    * 배우자 관계 목록(반복 행) — 각 행: 배우자 + 혼인 시작/종료일 + 메모.
    * 다중 배우자(정실/후궁·순차 재혼)와 결혼일을 폼에서 직접 편집·추가/삭제한다.
@@ -322,6 +328,8 @@ export function PersonRegisterView({
   const [showDeathDateModal, setShowDeathDateModal] = useState(false)
   const [showFatherModal, setShowFatherModal] = useState(false)
   const [showMotherModal, setShowMotherModal] = useState(false)
+  const [showAdoptiveFatherModal, setShowAdoptiveFatherModal] = useState(false)
+  const [showAdoptiveMotherModal, setShowAdoptiveMotherModal] = useState(false)
   const [showSpouseModal, setShowSpouseModal] = useState(false)
   /** 기본 섹션의 "원어 · 이름의 뜻 · 별칭" 접기 영역 */
   const [nameMeaningsOpen, setNameMeaningsOpen] = useState(false)
@@ -421,11 +429,10 @@ export function PersonRegisterView({
   useEffect(() => {
     onValuesChangeRef.current?.({
       name: !!name?.trim(),
-      surname: !!surname?.trim(),
       gender: !!gender,
       countryId: !!primaryCountryId,
     })
-  }, [name, surname, gender, primaryCountryId])
+  }, [name, gender, primaryCountryId])
 
   const [modernCountries, setModernCountries] = useState<CountryResponseDto[]>(
     [],
@@ -447,7 +454,13 @@ export function PersonRegisterView({
   const [editFamilyCache, setEditFamilyCache] = useState<{
     father?: PersonResponseDto
     mother?: PersonResponseDto
-    spouse?: PersonResponseDto
+    adoptiveFather?: PersonResponseDto
+    adoptiveMother?: PersonResponseDto
+    spouses?: PersonResponseDto[]
+    children?: PersonResponseDto[]
+    ancestorIds?: string[]
+    descendantIds?: string[]
+    siblingIds?: string[]
   }>({})
 
   /** id → 인물 — 가족 카드 렌더용. persons 풀 + 수정 모드 캐시 합집합. */
@@ -458,8 +471,20 @@ export function PersonRegisterView({
       m.set(editFamilyCache.father.id, editFamilyCache.father)
     if (editFamilyCache.mother)
       m.set(editFamilyCache.mother.id, editFamilyCache.mother)
-    if (editFamilyCache.spouse)
-      m.set(editFamilyCache.spouse.id, editFamilyCache.spouse)
+    if (editFamilyCache.adoptiveFather)
+      m.set(editFamilyCache.adoptiveFather.id, editFamilyCache.adoptiveFather)
+    if (editFamilyCache.adoptiveMother)
+      m.set(editFamilyCache.adoptiveMother.id, editFamilyCache.adoptiveMother)
+    if (editFamilyCache.spouses) {
+      for (const sp of editFamilyCache.spouses) {
+        if (sp?.id) m.set(sp.id, sp)
+      }
+    }
+    if (editFamilyCache.children) {
+      for (const ch of editFamilyCache.children) {
+        if (ch?.id) m.set(ch.id, ch)
+      }
+    }
     return m
   }, [persons, editFamilyCache])
 
@@ -479,10 +504,12 @@ export function PersonRegisterView({
       if (p.id === editPersonId) return false
       if (p.id === fatherId) return false
       if (p.id === motherId) return false
+      if (p.id === adoptiveFatherId) return false
+      if (p.id === adoptiveMotherId) return false
       if (spouseRows.some((relation) => relation.spouseId === p.id)) return false
       return true
     })
-  }, [recentlyRegistered, editPersonId, fatherId, motherId, spouseRows])
+  }, [recentlyRegistered, editPersonId, fatherId, motherId, adoptiveFatherId, adoptiveMotherId, spouseRows])
 
   /** countryId → defaultNameDisplayOrder. 이름 미리보기 순서 결정용. */
   const countryNameOrderById = useMemo(() => {
@@ -635,8 +662,23 @@ export function PersonRegisterView({
 
   // idle 발화 전 "+ 새 인물" 등 인물 선택 모달을 열면 즉시 로드(레이스 폴백).
   useEffect(() => {
-    if (showFatherModal || showMotherModal || showSpouseModal) loadPersons()
-  }, [showFatherModal, showMotherModal, showSpouseModal, loadPersons])
+    if (
+      showFatherModal ||
+      showMotherModal ||
+      showAdoptiveFatherModal ||
+      showAdoptiveMotherModal ||
+      showSpouseModal
+    ) {
+      loadPersons()
+    }
+  }, [
+    showFatherModal,
+    showMotherModal,
+    showAdoptiveFatherModal,
+    showAdoptiveMotherModal,
+    showSpouseModal,
+    loadPersons,
+  ])
 
   useEffect(() => {
     // 수정 모드에서는 인물 데이터가 권위 — 부모가 흘려보낸 initialCountryId가 덮어쓰지 않게.
@@ -718,8 +760,11 @@ export function PersonRegisterView({
     makeFormField('religionId', () => religionId, setReligionId, ''),
     makeFormField('fatherId', () => fatherId, setFatherId, ''),
     makeFormField('motherId', () => motherId, setMotherId, ''),
+    makeFormField('adoptiveFatherId', () => adoptiveFatherId, setAdoptiveFatherId, ''),
+    makeFormField('adoptiveMotherId', () => adoptiveMotherId, setAdoptiveMotherId, ''),
     makeFormField('illegitimate', () => illegitimate, setIllegitimate, false),
     makeFormField('birthOrder', () => birthOrder, setBirthOrder, ''),
+    makeFormField('genderBirthOrder', () => genderBirthOrder, setGenderBirthOrder, ''),
     makeFormField('spouseRelations', () => spouseRows, setSpouseRows, []),
     makeFormField('profileImageUrl', () => profileImageUrl, setProfileImageUrl, ''),
     makeFormField('templeName', () => templeName, setTempleName, ''),
@@ -920,9 +965,14 @@ export function PersonRegisterView({
         setReligionId(p.religionId ?? '')
         setFatherId(p.fatherId ?? p.father?.id ?? '')
         setMotherId(p.motherId ?? p.mother?.id ?? '')
+        setAdoptiveFatherId((p as any).adoptiveFatherId ?? (p as any).adoptiveFather?.id ?? '')
+        setAdoptiveMotherId((p as any).adoptiveMotherId ?? (p as any).adoptiveMother?.id ?? '')
         setIllegitimate(Boolean((p as any).illegitimate))
         setBirthOrder((p as any).birthOrder != null ? String((p as any).birthOrder) : '')
-        // 배우자 관계 전체(결혼 시작/종료일·서열·다중 배우자 포함)를 반복 행으로 로드.
+        setGenderBirthOrder(
+          (p as any).genderBirthOrder != null ? String((p as any).genderBirthOrder) : '',
+        )
+        // 배우자 관계 전체(결혼 시작/종료일·서열·해소사유·귀속주체·다중 배우자 포함)를 반복 행으로 로드.
         // 날짜는 era+precision을 반영한 부분 정밀 부호 문자열('1526'·'-0044-03-15')로 복원 —
         // DATETIME의 01-01 채움·BC 크기값 저장을 폼에 노출하지 않는다.
         const spouseRels: SpouseFormRow[] = (p.spouseRelations ?? [])
@@ -957,6 +1007,8 @@ export function PersonRegisterView({
                 ),
             ),
             rank: rel.marriageRank ?? '',
+            endReason: rel.marriageEndReason ?? '',
+            rankHolderId: rel.rankHolderId ?? null,
             note: rel.note ?? null,
           }))
           // 서버가 서열→부호연도→id로 정렬해 주지만, 방어적으로 같은 키로 재정렬(스냅샷 draft 등
@@ -973,10 +1025,43 @@ export function PersonRegisterView({
           })
         setSpouseRows(spouseRels)
         // detail 응답의 임베디드 인물을 가족 캐시에 보관 — 인물 풀 lazy 로드 전에도 카드 정확.
+        const detailSpouses = (p.spouseRelations ?? [])
+          .map((rel: any) => rel?.spouse)
+          .filter((sp: any): sp is PersonResponseDto => Boolean(sp?.id))
+        const detailAncestorIds: string[] = []
+        for (const parentNode of [
+          p.father,
+          p.mother,
+          (p as any).adoptiveFather,
+          (p as any).adoptiveMother,
+        ]) {
+          if (!parentNode) continue
+          for (const gp of [
+            parentNode.father,
+            parentNode.mother,
+            parentNode.adoptiveFather,
+            parentNode.adoptiveMother,
+          ]) {
+            if (gp?.id && gp.id !== editPersonId) detailAncestorIds.push(gp.id)
+          }
+        }
+        const detailChildren = ((p as any).children ?? []).filter(
+          (c: any): c is PersonResponseDto => Boolean(c?.id),
+        )
+        const detailDescendantIds = detailChildren.map((c: any) => c.id)
+        const detailSiblingIds = ((p as any).siblings ?? [])
+          .map((s: any) => s?.id)
+          .filter((sid: any): sid is string => Boolean(sid))
         setEditFamilyCache({
           father: p.father ?? undefined,
           mother: p.mother ?? undefined,
-          spouse: p.spouseRelations?.[0]?.spouse ?? undefined,
+          adoptiveFather: (p as any).adoptiveFather ?? undefined,
+          adoptiveMother: (p as any).adoptiveMother ?? undefined,
+          spouses: detailSpouses,
+          children: detailChildren,
+          ancestorIds: [...new Set(detailAncestorIds)],
+          descendantIds: [...new Set(detailDescendantIds)],
+          siblingIds: [...new Set(detailSiblingIds)],
         })
         if (p.birthYear != null || p.birthDate) {
           if (p.birthYear != null) {
@@ -1066,8 +1151,13 @@ export function PersonRegisterView({
             p.father?.id ||
             p.motherId ||
             p.mother?.id ||
+            (p as any).adoptiveFatherId ||
+            (p as any).adoptiveFather?.id ||
+            (p as any).adoptiveMotherId ||
+            (p as any).adoptiveMother?.id ||
             (p as any).illegitimate ||
             (p as any).birthOrder != null ||
+            (p as any).genderBirthOrder != null ||
             spouseRels.length > 0,
         )
         setFamilyOpen(hasFamily)
@@ -1213,8 +1303,11 @@ export function PersonRegisterView({
     if (
       raw.fatherId ||
       raw.motherId ||
+      raw.adoptiveFatherId ||
+      raw.adoptiveMotherId ||
       raw.illegitimate ||
       raw.birthOrder ||
+      raw.genderBirthOrder ||
       (Array.isArray(raw.spouseRelations) && raw.spouseRelations.length > 0)
     ) {
       setFamilyOpen(true)
@@ -1539,6 +1632,8 @@ export function PersonRegisterView({
     showDeathDateModal ||
     showFatherModal ||
     showMotherModal ||
+    showAdoptiveFatherModal ||
+    showAdoptiveMotherModal ||
     showSpouseModal ||
     affCountryPickerRow !== null ||
     affDateModalOpen ||
@@ -1681,17 +1776,36 @@ export function PersonRegisterView({
     })
   }
 
-  /** 필수 텍스트 필드 onBlur — 빈 값이면 에러 노출. 입력 시작 시 onChange의 clearFieldError가 클리어. */
+  /** 필수 텍스트 필드 onBlur — 빈 값이면 에러 노출. 성에만 값이 있으면 단일명 안내 문구로 분기. */
   const handleRequiredTextBlur = (key: 'name', value: string) => {
-    if (!value.trim()) {
-      setOrClearError(key, REQUIRED_MESSAGES[key])
+    const errMsg = resolveNameRequiredError(value, surname)
+    if (errMsg) {
+      setOrClearError(key, errMsg)
     }
+  }
+
+  /** 성 칸에만 단일명을 적고 이름 칸을 비웠을 때 한 번의 클릭으로 이름 칸으로 이동 */
+  const handleMoveSurnameToName = () => {
+    const movedName = surname.trim()
+    if (!movedName) return
+    setName(movedName)
+    setSurname('')
+    if (surnameMeaning.trim() && !nameMeaning.trim()) {
+      setNameMeaning(surnameMeaning)
+      setSurnameMeaning('')
+    }
+    clearFieldError('name')
+    markDirty()
+    requestAnimationFrame(() => {
+      document.getElementById(fid('name'))?.focus()
+    })
   }
 
   const validate = (): Record<string, string> => {
     const e: Record<string, string> = {}
     // 성(surname)은 외자·단일명·성 미상 인물을 위해 선택. 이름·성별·국적만 필수.
-    if (!name.trim()) e.name = REQUIRED_MESSAGES.name
+    const nameErr = resolveNameRequiredError(name, surname)
+    if (nameErr) e.name = nameErr
     if (!gender) e.gender = REQUIRED_MESSAGES.gender
     if (!primaryCountryId) e.countryId = REQUIRED_MESSAGES.countryId
     const dateErrs = computeBirthDeathErrors(
@@ -1727,6 +1841,7 @@ export function PersonRegisterView({
         (hasAnyPartialDateInput(row.start) ||
           hasAnyPartialDateInput(row.end) ||
           row.rank ||
+          row.endReason ||
           (row.note && row.note.trim())),
     )
     // 혼인 종료일이 시작일보다 빠른 행(음수 기간)도 차단 — 공통 정밀도까지만 보수 비교(BC 안전).
@@ -1742,9 +1857,413 @@ export function PersonRegisterView({
       spouseIdsSeen.add(row.spouseId)
       return false
     })
-    if (orphanSpouseMeta || badSpouseDate || duplicateSpouse) {
+
+    // 가족 관계 도메인 선행 검증 — 썸네일 업로드(uploadFile) 전에 차단하여 고아 파일 생성을 막는다.
+    const familyDomainErrors: string[] = []
+    const parentSlots = [
+      fatherId,
+      motherId,
+      adoptiveFatherId,
+      adoptiveMotherId,
+    ].filter(Boolean)
+    if (editPersonId && parentSlots.includes(editPersonId)) {
+      familyDomainErrors.push('자기 자신을 부모(양부모 포함)로 지정할 수 없습니다.')
+    }
+    if (new Set(parentSlots).size !== parentSlots.length) {
+      familyDomainErrors.push(
+        '같은 인물을 두 개 이상의 부모(생부모·양부모) 슬롯에 중복 지정할 수 없습니다.',
+      )
+    }
+    const fatherGender = (personById.get(fatherId)?.gender ?? '').toUpperCase()
+    const adoptFatherGender = (
+      personById.get(adoptiveFatherId)?.gender ?? ''
+    ).toUpperCase()
+    const motherGender = (personById.get(motherId)?.gender ?? '').toUpperCase()
+    const adoptMotherGender = (
+      personById.get(adoptiveMotherId)?.gender ?? ''
+    ).toUpperCase()
+    if (fatherGender === 'FEMALE' || adoptFatherGender === 'FEMALE') {
+      familyDomainErrors.push(
+        '여성 인물을 아버지(또는 양부)로 지정할 수 없습니다.',
+      )
+    }
+    if (motherGender === 'MALE' || adoptMotherGender === 'MALE') {
+      familyDomainErrors.push(
+        '남성 인물을 어머니(또는 양모)로 지정할 수 없습니다.',
+      )
+    }
+
+    // 친부모(생부·생모) 및 직계 존속 출생연도·사망연도 역전 검증 (양부모는 연대 제약 제외)
+    const selfBirthTrim = birthYear.trim()
+    const selfBirthNum =
+      !isBirthDateUnknown && selfBirthTrim ? Number(selfBirthTrim) : Number.NaN
+    const selfBirthSigned =
+      Number.isInteger(selfBirthNum) && selfBirthNum > 0
+        ? birthEra === 'BC'
+          ? -selfBirthNum
+          : selfBirthNum
+        : null
+    const selfDeathTrim = deathYear.trim()
+    const selfDeathNum =
+      !isAlive && !isDeathDateUnknown && selfDeathTrim
+        ? Number(selfDeathTrim)
+        : Number.NaN
+    const selfDeathSigned =
+      Number.isInteger(selfDeathNum) && selfDeathNum > 0
+        ? deathEra === 'BC'
+          ? -selfDeathNum
+          : selfDeathNum
+        : null
+
+    const signedBirthOf = (p?: PersonResponseDto): number | null => {
+      if (!p) return null
+      if (p.birthYear != null && !Number.isNaN(p.birthYear)) {
+        const mag = Math.abs(p.birthYear)
+        return p.birthEra === 'BC' ? -mag : mag
+      }
+      if (p.birthDate) {
+        const parsed = parseDateString(p.birthDate)
+        if (parsed.year > 0) {
+          return (p.birthEra ?? parsed.era) === 'BC'
+            ? -parsed.year
+            : parsed.year
+        }
+      }
+      return null
+    }
+    const signedDeathOf = (p?: PersonResponseDto): number | null => {
+      if (!p) return null
+      if (p.deathYear != null && !Number.isNaN(p.deathYear)) {
+        const mag = Math.abs(p.deathYear)
+        return p.deathEra === 'BC' ? -mag : mag
+      }
+      if (p.deathDate) {
+        const parsed = parseDateString(p.deathDate)
+        if (parsed.year > 0) {
+          return (p.deathEra ?? parsed.era) === 'BC'
+            ? -parsed.year
+            : parsed.year
+        }
+      }
+      return null
+    }
+
+    if (selfBirthSigned != null) {
+      const visitedBioAnc = new Set<string>()
+      let frontier = [fatherId, motherId].filter(
+        (pid): pid is string => Boolean(pid) && pid !== editPersonId,
+      )
+      let depth = 0
+      let birthOrderViolated = false
+      while (frontier.length > 0 && depth < 16 && !birthOrderViolated) {
+        const next: string[] = []
+        for (const bioPid of frontier) {
+          if (visitedBioAnc.has(bioPid)) continue
+          visitedBioAnc.add(bioPid)
+          const anc = personById.get(bioPid)
+          const pBirthSigned = signedBirthOf(anc)
+          if (pBirthSigned != null && pBirthSigned >= selfBirthSigned) {
+            familyDomainErrors.push(
+              depth === 0
+                ? '친생 부모(생부·생모)의 출생연도는 자녀의 출생연도보다 앞선 해여야 합니다.'
+                : '친생 조상(조부모 등 직계 존속)의 출생연도는 후손의 출생연도보다 앞선 해여야 합니다.',
+            )
+            birthOrderViolated = true
+            break
+          }
+          if (anc?.fatherId && !visitedBioAnc.has(anc.fatherId)) {
+            next.push(anc.fatherId)
+          }
+          if (anc?.motherId && !visitedBioAnc.has(anc.motherId)) {
+            next.push(anc.motherId)
+          }
+        }
+        frontier = next
+        depth += 1
+      }
+      if (motherId) {
+        const motherDeathSigned = signedDeathOf(personById.get(motherId))
+        if (motherDeathSigned != null && motherDeathSigned < selfBirthSigned) {
+          familyDomainErrors.push(
+            '친모의 사망 연도는 친자녀의 출생 연도보다 이전일 수 없습니다.',
+          )
+        }
+      }
+      if (fatherId) {
+        const fatherDeathSigned = signedDeathOf(personById.get(fatherId))
+        if (
+          fatherDeathSigned != null &&
+          fatherDeathSigned + 1 < selfBirthSigned
+        ) {
+          familyDomainErrors.push(
+            '친부의 사망 연도(+1년 유복자 범위) 이후에 출생한 인물을 친자녀로 지정할 수 없습니다.',
+          )
+        }
+      }
+    }
+
+    // 혼인 시작·종료 연도 vs 부부 양측 출생·사망 연도 검증
+    const signedPartialYear = (parts: {
+      era?: 'AD' | 'BC'
+      year?: string
+    }): number | null => {
+      const yTrim = (parts.year ?? '').trim()
+      if (!yTrim) return null
+      const num = Number(yTrim)
+      if (!Number.isInteger(num) || num <= 0) return null
+      return parts.era === 'BC' ? -num : num
+    }
+    let spouseBirthViolation = false
+    let spouseDeathViolation = false
+    for (const row of normalizedSpouseRows) {
+      if (!row.spouseId) continue
+      const mStart = signedPartialYear(row.start)
+      const mEnd = signedPartialYear(row.end)
+      if (mStart == null && mEnd == null) continue
+      const sp = personById.get(row.spouseId)
+      const spBirth = signedBirthOf(sp)
+      const spDeath = signedDeathOf(sp)
+      if (
+        (selfBirthSigned != null &&
+          ((mStart != null && mStart < selfBirthSigned) ||
+            (mEnd != null && mEnd < selfBirthSigned))) ||
+        (spBirth != null &&
+          ((mStart != null && mStart < spBirth) ||
+            (mEnd != null && mEnd < spBirth)))
+      ) {
+        spouseBirthViolation = true
+      }
+      if (
+        (selfDeathSigned != null &&
+          ((mStart != null && mStart > selfDeathSigned) ||
+            (mEnd != null && mEnd > selfDeathSigned))) ||
+        (spDeath != null &&
+          ((mStart != null && mStart > spDeath) ||
+            (mEnd != null && mEnd > spDeath)))
+      ) {
+        spouseDeathViolation = true
+      }
+    }
+    if (spouseBirthViolation) {
+      familyDomainErrors.push(
+        '혼인 시작·종료 연도는 부부 당사자의 출생 연도보다 이전일 수 없습니다.',
+      )
+    }
+    if (spouseDeathViolation) {
+      familyDomainErrors.push(
+        '혼인 시작·종료 연도는 부부 당사자의 사망 연도보다 이후일 수 없습니다.',
+      )
+    }
+
+    // 배우자 vs 본인·부모(양부모 포함)·직계 존비속·형제자매 교차 충돌 및 역방향 자녀 정합성 검증
+    const parentSet = new Set(parentSlots)
+    const activeSpouseIds = [...spouseIdsSeen]
+    if (editPersonId && activeSpouseIds.includes(editPersonId)) {
+      familyDomainErrors.push('자기 자신을 배우자로 지정할 수 없습니다.')
+    }
+    if (activeSpouseIds.some((sid) => parentSet.has(sid))) {
+      familyDomainErrors.push(
+        '부모(양부모 포함)로 지정한 인물을 동시에 배우자로 지정할 수 없습니다.',
+      )
+    }
+
+    // 상위 직계 존속(조부모 등) 및 하위 직계 비속(자녀·손자녀 등) 집합 도출
+    const higherAncestorSet = new Set<string>(
+      (editFamilyCache.ancestorIds ?? []).filter(
+        (id) => Boolean(id) && id !== editPersonId && !parentSet.has(id),
+      ),
+    )
+    const ancUpQueue = [...parentSlots, ...higherAncestorSet]
+    const seenAncUp = new Set<string>(editPersonId ? [editPersonId] : [])
+    while (ancUpQueue.length > 0) {
+      const cur = ancUpQueue.shift()!
+      if (!cur || seenAncUp.has(cur)) continue
+      seenAncUp.add(cur)
+      if (!parentSet.has(cur)) higherAncestorSet.add(cur)
+      const node = personById.get(cur) as
+        | (PersonResponseDto & {
+            adoptiveFatherId?: string | null
+            adoptiveMotherId?: string | null
+          })
+        | undefined
+      if (!node) continue
+      for (const nextP of [
+        node.fatherId,
+        node.motherId,
+        node.adoptiveFatherId,
+        node.adoptiveMotherId,
+      ]) {
+        if (nextP && !seenAncUp.has(nextP)) ancUpQueue.push(nextP)
+      }
+    }
+
+    const descendantSet = new Set<string>(
+      (editFamilyCache.descendantIds ?? []).filter(
+        (id) => Boolean(id) && id !== editPersonId,
+      ),
+    )
+    if (editPersonId) {
+      const childrenByParent = new Map<string, string[]>()
+      for (const p of personById.values()) {
+        const pExt = p as PersonResponseDto & {
+          adoptiveFatherId?: string | null
+          adoptiveMotherId?: string | null
+        }
+        for (const pid of [
+          pExt.fatherId,
+          pExt.motherId,
+          pExt.adoptiveFatherId,
+          pExt.adoptiveMotherId,
+        ]) {
+          if (!pid || pid === pExt.id) continue
+          const list = childrenByParent.get(pid) ?? []
+          if (!list.includes(pExt.id)) list.push(pExt.id)
+          childrenByParent.set(pid, list)
+        }
+      }
+      const downQueue = [editPersonId, ...descendantSet]
+      const seenDown = new Set<string>()
+      while (downQueue.length > 0) {
+        const cur = downQueue.shift()!
+        if (!cur || seenDown.has(cur)) continue
+        seenDown.add(cur)
+        if (cur !== editPersonId) descendantSet.add(cur)
+        for (const cid of childrenByParent.get(cur) ?? []) {
+          if (!seenDown.has(cid)) downQueue.push(cid)
+        }
+      }
+    }
+
+    if (parentSlots.some((pid) => descendantSet.has(pid))) {
+      familyDomainErrors.push(
+        '부모/조상 관계에 순환이 생깁니다 — 직계 비속(자녀·손자녀 등)을 부모로 지정할 수 없습니다.',
+      )
+    }
+    if (
+      activeSpouseIds.some(
+        (sid) => higherAncestorSet.has(sid) || descendantSet.has(sid),
+      )
+    ) {
+      familyDomainErrors.push(
+        '직계 존비속(조부모·자녀·손자녀 등)을 배우자로 지정할 수 없습니다.',
+      )
+    }
+
+    // 수정 모드 역방향 검증: 기존 자녀와의 성별 정합성 및 친자녀 출생연도 역전 차단
+    if (editPersonId) {
+      const selfGenderUpper = gender.trim().toUpperCase()
+      const directChildren = Array.from(personById.values()).filter((p) => {
+        const pExt = p as PersonResponseDto & {
+          adoptiveFatherId?: string | null
+          adoptiveMotherId?: string | null
+        }
+        return (
+          pExt.fatherId === editPersonId ||
+          pExt.motherId === editPersonId ||
+          pExt.adoptiveFatherId === editPersonId ||
+          pExt.adoptiveMotherId === editPersonId
+        )
+      })
+      if (
+        selfGenderUpper === 'FEMALE' &&
+        directChildren.some((c) => {
+          const cExt = c as PersonResponseDto & { adoptiveFatherId?: string | null }
+          return cExt.fatherId === editPersonId || cExt.adoptiveFatherId === editPersonId
+        })
+      ) {
+        familyDomainErrors.push(
+          '이미 아버지(친부 또는 양부)로 등록된 자녀가 있어 성별을 여성으로 변경할 수 없습니다.',
+        )
+      }
+      if (
+        selfGenderUpper === 'MALE' &&
+        directChildren.some((c) => {
+          const cExt = c as PersonResponseDto & { adoptiveMotherId?: string | null }
+          return cExt.motherId === editPersonId || cExt.adoptiveMotherId === editPersonId
+        })
+      ) {
+        familyDomainErrors.push(
+          '이미 어머니(친모 또는 양모)로 등록된 자녀가 있어 성별을 남성으로 변경할 수 없습니다.',
+        )
+      }
+
+      if (selfBirthSigned != null || selfDeathSigned != null) {
+        let revBirthViolated = false
+        let revMotherDeathViolated = false
+        let revFatherDeathViolated = false
+        for (const child of directChildren) {
+          const isBioFather = child.fatherId === editPersonId
+          const isBioMother = child.motherId === editPersonId
+          if (!isBioFather && !isBioMother) continue
+          const childBirthSigned = signedBirthOf(child)
+          if (childBirthSigned == null) continue
+          if (selfBirthSigned != null && selfBirthSigned >= childBirthSigned) {
+            revBirthViolated = true
+          }
+          if (
+            isBioMother &&
+            selfDeathSigned != null &&
+            selfDeathSigned < childBirthSigned
+          ) {
+            revMotherDeathViolated = true
+          }
+          if (
+            isBioFather &&
+            selfDeathSigned != null &&
+            selfDeathSigned + 1 < childBirthSigned
+          ) {
+            revFatherDeathViolated = true
+          }
+        }
+        if (revBirthViolated) {
+          familyDomainErrors.push(
+            '친부모의 출생 연도는 기존 친자녀의 출생 연도보다 앞서야 합니다.',
+          )
+        }
+        if (revMotherDeathViolated) {
+          familyDomainErrors.push(
+            '친모의 사망 연도는 기존 친자녀의 출생 연도보다 이전일 수 없습니다.',
+          )
+        }
+        if (revFatherDeathViolated) {
+          familyDomainErrors.push(
+            '친부의 사망 연도(+1년 유복자 범위)는 기존 친자녀의 출생 연도보다 이전일 수 없습니다.',
+          )
+        }
+      }
+    }
+
+    if (parentSet.size > 0 && activeSpouseIds.length > 0) {
+      const hasSiblingSpouse = activeSpouseIds.some((sid) => {
+        const sp = personById.get(sid) as
+          | (PersonResponseDto & {
+              adoptiveFatherId?: string | null
+              adoptiveMotherId?: string | null
+            })
+          | undefined
+        if (!sp) return false
+        return [
+          sp.fatherId,
+          sp.motherId,
+          sp.adoptiveFatherId,
+          sp.adoptiveMotherId,
+        ].some((pid) => Boolean(pid) && parentSet.has(pid!))
+      })
+      if (hasSiblingSpouse) {
+        familyDomainErrors.push(
+          '형제자매(이복·이부·입양형제 포함)를 배우자로 지정할 수 없습니다.',
+        )
+      }
+    }
+
+    if (
+      orphanSpouseMeta ||
+      badSpouseDate ||
+      duplicateSpouse ||
+      familyDomainErrors.length > 0
+    ) {
       setFamilyOpen(true)
-      const parts: string[] = []
+      const parts: string[] = [...familyDomainErrors]
       if (orphanSpouseMeta)
         parts.push('배우자가 선택되지 않은 행에 혼인일·서열·메모가 입력되어 있습니다. 배우자를 선택하거나 행을 비워주세요.')
       if (badSpouseDate) parts.push('배우자 혼인 종료일이 시작일보다 빠른 행이 있습니다.')
@@ -1785,12 +2304,48 @@ export function PersonRegisterView({
       })
       .map((raw) => {
         const row = normalizeSpouseRow(raw)
+        const rank = row.rank || null
+        const isAsymmetricRank =
+          rank === 'PRIMARY' || rank === 'SECONDARY' || rank === 'CONCUBINE'
+        const selfGender = gender.trim().toUpperCase()
+        const spouseGender = (
+          personById.get(row.spouseId)?.gender ?? ''
+        ).toUpperCase()
+        const isSelfDefaultHolder =
+          (selfGender === 'FEMALE' && spouseGender !== 'FEMALE') ||
+          (spouseGender === 'MALE' && selfGender !== 'MALE')
+        const inferredHolderId =
+          isAsymmetricRank && editPersonId
+            ? isSelfDefaultHolder
+              ? editPersonId
+              : row.spouseId
+            : isAsymmetricRank && !isSelfDefaultHolder
+              ? row.spouseId
+              : null
+        const validRowRankHolderId =
+          row.rankHolderId &&
+          (row.rankHolderId === row.spouseId ||
+            (editPersonId != null && row.rankHolderId === editPersonId))
+            ? row.rankHolderId
+            : null
+        const resolvedRankHolderId = !isAsymmetricRank
+          ? rank === 'CONSORT' && validRowRankHolderId
+            ? validRowRankHolderId
+            : row.rankHolderId
+              ? null
+              : undefined
+          : (validRowRankHolderId ?? inferredHolderId ?? undefined)
         return {
           spouseId: row.spouseId,
           // 폼 파츠 → 구조화 DateInfo 전송(BC·연단위 보존, 정밀도 사다리). 레거시 ISO 채널은 미사용.
           marriageStart: partialPartsToDateInfo(row.start) ?? null,
           marriageEnd: partialPartsToDateInfo(row.end) ?? null,
-          marriageRank: row.rank || null,
+          marriageRank: rank,
+          marriageEndReason: row.endReason || null,
+          // 기존에 귀속 주체(rankHolderId)가 기록된 경우 보존하고, 신규 지정 시 성별 기준 추론하며, 비대칭 서열 해제 시 null로 정리
+          ...(resolvedRankHolderId !== undefined
+            ? { rankHolderId: resolvedRankHolderId }
+            : {}),
           note: row.note?.trim() ? row.note.trim() : null,
         }
       })
@@ -1811,16 +2366,18 @@ export function PersonRegisterView({
     } else {
       profileImageField = profileImageUrl.trim() || undefined
     }
+    const normalizedNameFields = normalizePersonNamePayloadFields({
+      name,
+      surname,
+      middleName,
+      nameFormat,
+      originalName,
+      surnameMeaning,
+      nameMeaning,
+      middleNameMeaning,
+    })
     const input: CreatePersonInput = {
-      name: name.trim(),
-      surname: surname.trim() || null,
-      middleName: middleName.trim() || null,
-      // 'auto'면 null로 저장 → 소속 국가 기본 순서를 따른다.
-      nameDisplayOrder: nameFormat === 'auto' ? null : nameFormat,
-      originalName: originalName.trim() || null,
-      surnameMeaning: surnameMeaning.trim() || null,
-      nameMeaning: nameMeaning.trim() || null,
-      middleNameMeaning: middleNameMeaning.trim() || null,
+      ...normalizedNameFields,
       gender: gender || null,
       profileImageUrl:
         profileImageField === null
@@ -1870,10 +2427,16 @@ export function PersonRegisterView({
       religionId: religionId || undefined,
       fatherId: fatherId || undefined,
       motherId: motherId || undefined,
+      adoptiveFatherId: adoptiveFatherId || undefined,
+      adoptiveMotherId: adoptiveMotherId || undefined,
       illegitimate,
       birthOrder: (() => {
         const parsed = parseInt(birthOrder.trim(), 10)
         return birthOrder.trim() && !isNaN(parsed) && parsed >= 1 ? parsed : null
+      })(),
+      genderBirthOrder: (() => {
+        const parsed = parseInt(genderBirthOrder.trim(), 10)
+        return genderBirthOrder.trim() && !isNaN(parsed) && parsed >= 1 ? parsed : null
       })(),
       // 신규: 첫 배우자만 / 수정: 보존된 전체 관계를 왕복(첫 관계만 교체, 비우면 첫 관계 제거).
       spouseRelations: buildSpouseRelations(),
@@ -2019,6 +2582,8 @@ export function PersonRegisterView({
           religionId: religionId || null,
           fatherId: fatherId || null,
           motherId: motherId || null,
+          adoptiveFatherId: adoptiveFatherId || null,
+          adoptiveMotherId: adoptiveMotherId || null,
           birthCityId: birthCityId || null,
           deathCityId: deathCityId || null,
           // 행정구역도 명시 null로 — cityId만 null 처리하면 장소를 비워도 기존 adminDivisionId가 서버에 잔존한다.
@@ -2156,7 +2721,12 @@ export function PersonRegisterView({
       {
         id: 'family',
         label: '가족',
-        filled: !!fatherId || !!motherId || spouseRows.length > 0,
+        filled:
+          !!fatherId ||
+          !!motherId ||
+          !!adoptiveFatherId ||
+          !!adoptiveMotherId ||
+          spouseRows.length > 0,
       },
     ]
     // id·label·filled가 실제로 바뀐 경우에만 부모로 전달 (불필요한 리렌더 차단).
@@ -2184,6 +2754,8 @@ export function PersonRegisterView({
     countryAffiliations,
     fatherId,
     motherId,
+    adoptiveFatherId,
+    adoptiveMotherId,
     spouseRows,
   ])
 
@@ -2269,8 +2841,10 @@ export function PersonRegisterView({
                       <FormInput
                         id={fid('surname')}
                         value={surname}
-                        onChange={(e) => setSurname(e.target.value)}
-                        placeholder="홍"
+                        onChange={(changeEvent) =>
+                          setSurname(changeEvent.target.value)
+                        }
+                        placeholder="홍 (없으면 비움)"
                       />
                     </NameCell>
                     <NameCell>
@@ -2280,8 +2854,8 @@ export function PersonRegisterView({
                       <FormInput
                         id={fid('name')}
                         value={name}
-                        onChange={(e) => {
-                          setName(e.target.value)
+                        onChange={(changeEvent) => {
+                          setName(changeEvent.target.value)
                           clearFieldError('name')
                         }}
                         onBlur={() => handleRequiredTextBlur('name', name)}
@@ -2300,7 +2874,9 @@ export function PersonRegisterView({
                       <FormInput
                         id={fid('middleName')}
                         value={middleName}
-                        onChange={(e) => setMiddleName(e.target.value)}
+                        onChange={(changeEvent) =>
+                          setMiddleName(changeEvent.target.value)
+                        }
                         placeholder="없으면 비움"
                       />
                     </NameCell>
@@ -2308,7 +2884,15 @@ export function PersonRegisterView({
                   {errors.name && (
                     <FieldError id={fid('name-err')} role="alert">
                       <FiAlertCircle size={13} />
-                      {errors.name}
+                      <span>{errors.name}</span>
+                      {surname.trim() && !name.trim() && (
+                        <FieldErrorActionBtn
+                          type="button"
+                          onClick={handleMoveSurnameToName}
+                        >
+                          &lsquo;{surname.trim()}&rsquo; 이름으로 옮기기
+                        </FieldErrorActionBtn>
+                      )}
                     </FieldError>
                   )}
                   {/* 성 또는 중간이름이 입력되었거나 표시 순서가 수동 지정된 경우에만 표시 순서 + 실시간 조합명 노출 */}
@@ -2566,7 +3150,7 @@ export function PersonRegisterView({
                       </FieldControl>
                     </FieldRow>
                     <FieldRow>
-                      <FieldLabel htmlFor={fid('surnameMeaning')}>
+                      <FieldLabel htmlFor={fid('nameMeaning')}>
                         이름의 뜻
                       </FieldLabel>
                       <FieldControl>
@@ -2574,22 +3158,34 @@ export function PersonRegisterView({
                           <FormInput
                             id={fid('surnameMeaning')}
                             value={surnameMeaning}
-                            onChange={(e) => setSurnameMeaning(e.target.value)}
-                            placeholder="성의 뜻"
+                            onChange={(changeEvent) =>
+                              setSurnameMeaning(changeEvent.target.value)
+                            }
+                            disabled={!surname.trim()}
+                            placeholder={
+                              surname.trim() ? '성의 뜻' : '성의 뜻 (성 없음)'
+                            }
                           />
                           <FormInput
                             id={fid('nameMeaning')}
                             value={nameMeaning}
-                            onChange={(e) => setNameMeaning(e.target.value)}
+                            onChange={(changeEvent) =>
+                              setNameMeaning(changeEvent.target.value)
+                            }
                             placeholder="이름의 뜻"
                           />
                           <FormInput
                             id={fid('middleNameMeaning')}
                             value={middleNameMeaning}
-                            onChange={(e) =>
-                              setMiddleNameMeaning(e.target.value)
+                            onChange={(changeEvent) =>
+                              setMiddleNameMeaning(changeEvent.target.value)
                             }
-                            placeholder="중간이름의 뜻"
+                            disabled={!middleName.trim()}
+                            placeholder={
+                              middleName.trim()
+                                ? '중간이름의 뜻'
+                                : '중간이름의 뜻 (중간이름 없음)'
+                            }
                           />
                         </InlineFields>
                       </FieldControl>
@@ -2847,8 +3443,11 @@ export function PersonRegisterView({
                       Boolean(
                         fatherId ||
                           motherId ||
+                          adoptiveFatherId ||
+                          adoptiveMotherId ||
                           illegitimate ||
                           birthOrder.trim() ||
+                          genderBirthOrder.trim() ||
                           spouseRows.length > 0,
                       ) && <AdvancedToggleBadge>입력됨</AdvancedToggleBadge>}
                   </AdvancedToggleBody>
@@ -2859,19 +3458,29 @@ export function PersonRegisterView({
                       fid={fid}
                       fatherId={fatherId}
                       motherId={motherId}
+                      adoptiveFatherId={adoptiveFatherId}
+                      adoptiveMotherId={adoptiveMotherId}
                       illegitimate={illegitimate}
                       birthOrder={birthOrder}
+                      genderBirthOrder={genderBirthOrder}
                       spouseRows={spouseRows}
                       setFatherId={setFatherId}
                       setMotherId={setMotherId}
+                      setAdoptiveFatherId={setAdoptiveFatherId}
+                      setAdoptiveMotherId={setAdoptiveMotherId}
                       setIllegitimate={setIllegitimate}
                       setBirthOrder={setBirthOrder}
+                      setGenderBirthOrder={setGenderBirthOrder}
                       setSpouseRows={setSpouseRows}
                       showFatherModal={showFatherModal}
                       showMotherModal={showMotherModal}
+                      showAdoptiveFatherModal={showAdoptiveFatherModal}
+                      showAdoptiveMotherModal={showAdoptiveMotherModal}
                       showSpouseModal={showSpouseModal}
                       setShowFatherModal={setShowFatherModal}
                       setShowMotherModal={setShowMotherModal}
+                      setShowAdoptiveFatherModal={setShowAdoptiveFatherModal}
+                      setShowAdoptiveMotherModal={setShowAdoptiveMotherModal}
                       setShowSpouseModal={setShowSpouseModal}
                       knownPersons={knownPersons}
                       persons={persons}
@@ -2879,6 +3488,9 @@ export function PersonRegisterView({
                       recentCandidates={recentCandidates}
                       editPersonId={editPersonId}
                       countryId={countryId}
+                      initialAncestorIds={editFamilyCache.ancestorIds}
+                      initialDescendantIds={editFamilyCache.descendantIds}
+                      initialSiblingIds={editFamilyCache.siblingIds}
                       markDirty={markDirty}
                       onDateModalOpenChange={setSpouseDateModalOpen}
                     />

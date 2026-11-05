@@ -436,6 +436,22 @@ const eventCountry: Projection = {
 
 // ─────────────────────────── 인물 ↔ 인물 ───────────────────────────
 
+const MARRIAGE_RANK_ROLE_LABEL: Record<string, string> = {
+  PRIMARY: '정실',
+  SECONDARY: '계비·후처',
+  CONCUBINE: '후궁·측실',
+  CONSORT: '배우자 (부군·왕배)',
+  MORGANA: '귀천상혼',
+}
+
+const MARRIAGE_END_REASON_ROLE_LABEL: Record<string, string> = {
+  DEATH: '사별',
+  DIVORCE: '이혼',
+  DEPOSED: '폐위·출처',
+  ANNULMENT: '혼인무효',
+  SEPARATION: '별거',
+}
+
 const parent: Projection = {
   relation: 'person.parent',
   group: 'family',
@@ -444,22 +460,63 @@ const parent: Projection = {
   async forward(prisma, ctx, personId) {
     const person = await prisma.person.findUnique({
       where: { id: personId },
-      select: { father: { select: PERSON_TARGET_SELECT }, mother: { select: PERSON_TARGET_SELECT } },
+      select: {
+        father: { select: PERSON_TARGET_SELECT },
+        mother: { select: PERSON_TARGET_SELECT },
+        adoptiveFather: { select: PERSON_TARGET_SELECT },
+        adoptiveMother: { select: PERSON_TARGET_SELECT },
+      },
     })
     const base = { relation: this.relation, group: this.group, direction: 'out' as const }
+    const adoptFather =
+      person?.adoptiveFather && person.adoptiveFather.id !== person?.father?.id
+        ? person.adoptiveFather
+        : null
+    const adoptMother =
+      person?.adoptiveMother && person.adoptiveMother.id !== person?.mother?.id
+        ? person.adoptiveMother
+        : null
     return result([
       edge(base, '아버지', person?.father ? personTarget(person.father, ctx.accountId) : null),
       edge(base, '어머니', person?.mother ? personTarget(person.mother, ctx.accountId) : null),
+      edge(base, '양부', adoptFather ? personTarget(adoptFather, ctx.accountId) : null, '입양·출계'),
+      edge(base, '양모', adoptMother ? personTarget(adoptMother, ctx.accountId) : null, '입양·출계'),
     ])
   },
   async reverse(prisma, ctx, _kind, id) {
     const rows = await prisma.person.findMany({
-      where: { OR: [{ fatherId: id }, { motherId: id }] },
-      select: PERSON_TARGET_SELECT,
+      where: {
+        OR: [
+          { fatherId: id },
+          { motherId: id },
+          { adoptiveFatherId: id },
+          { adoptiveMotherId: id },
+        ],
+      },
+      select: {
+        ...PERSON_TARGET_SELECT,
+        fatherId: true,
+        motherId: true,
+        adoptiveFatherId: true,
+        adoptiveMotherId: true,
+      },
       orderBy: { birthDate: 'asc' },
     })
     const base = { relation: this.relation, group: this.group, direction: 'in' as const }
-    return result(rows.map((row) => edge(base, '자녀', personTarget(row, ctx.accountId))))
+    return result(
+      rows.map((row) => {
+        const isAdoptedOnly =
+          (row.adoptiveFatherId === id || row.adoptiveMotherId === id) &&
+          row.fatherId !== id &&
+          row.motherId !== id
+        return edge(
+          base,
+          isAdoptedOnly ? '양자녀' : '자녀',
+          personTarget(row, ctx.accountId),
+          isAdoptedOnly ? '입양·출계' : null,
+        )
+      }),
+    )
   },
 }
 
@@ -473,24 +530,46 @@ const spouse: Projection = {
       where: { OR: [{ personId }, { spouseId: personId }] },
       select: {
         personId: true,
+        marriageRank: true,
+        rankHolderId: true,
+        marriageEndReason: true,
         marriageStartEra: true,
         marriageStartYear: true,
         marriageStartDate: true,
         marriageEndEra: true,
         marriageEndYear: true,
         marriageEndDate: true,
-        person: { select: PERSON_TARGET_SELECT },
-        spouse: { select: PERSON_TARGET_SELECT },
+        person: { select: { ...PERSON_TARGET_SELECT, gender: true } },
+        spouse: { select: { ...PERSON_TARGET_SELECT, gender: true } },
       },
     })
     const base = { relation: this.relation, group: this.group, direction: 'out' as const }
     return result(
-      rows.map((row) =>
-        edge(
+      rows.map((row) => {
+        const partner = row.personId === personId ? row.spouse : row.person
+        let rankRole: string | null = null
+        if (row.marriageRank) {
+          const isAsymmetric =
+            row.marriageRank === 'PRIMARY' ||
+            row.marriageRank === 'SECONDARY' ||
+            row.marriageRank === 'CONCUBINE'
+          if (isAsymmetric && row.rankHolderId === personId) {
+            const g = (partner?.gender ?? '').toUpperCase()
+            rankRole = g === 'MALE' ? '부군 (남편)' : g === 'FEMALE' ? '부인 (아내)' : null
+          } else {
+            rankRole = MARRIAGE_RANK_ROLE_LABEL[row.marriageRank] ?? null
+          }
+        }
+        const endRole = row.marriageEndReason
+          ? (MARRIAGE_END_REASON_ROLE_LABEL[row.marriageEndReason] ?? null)
+          : null
+        const roleParts = [rankRole, endRole].filter(Boolean)
+        const role = roleParts.length > 0 ? roleParts.join(' · ') : null
+        return edge(
           base,
           '배우자',
-          personTarget(row.personId === personId ? row.spouse : row.person, ctx.accountId),
-          null,
+          personTarget(partner, ctx.accountId),
+          role,
           periodFromStructured({
             startEra: row.marriageStartEra,
             startYear: row.marriageStartYear,
@@ -499,8 +578,8 @@ const spouse: Projection = {
             endYear: row.marriageEndYear,
             endDate: row.marriageEndDate,
           }),
-        ),
-      ),
+        )
+      }),
     )
   },
 }

@@ -1033,47 +1033,67 @@ export function HeadsOfStateSection({
   const normId = (id: unknown) =>
     id != null && id !== '' ? String(id).trim().toLowerCase() : null
 
-  /** person 객체에서 부모 ID 읽기 (camel/snake, 직속/중첩 모두 시도) */
-  const getParentIdFromPerson = (p: any) => {
-    if (!p || typeof p !== 'object') return null
-    const fatherId = normId((p as any)?.fatherId ?? (p as any)?.father_id)
-    const motherId = normId((p as any)?.motherId ?? (p as any)?.mother_id)
-    if (fatherId) return fatherId
-    if (motherId) return motherId
-    const inner = (p as any)?.person ?? (p as any)?.data
-    if (inner && typeof inner === 'object') {
-      const f = normId(inner.fatherId ?? inner.father_id)
-      const m = normId(inner.motherId ?? inner.mother_id)
-      if (f) return f
-      if (m) return m
+  /** person 객체에서 후보 부모 ID 목록 읽기 (부·모·양부·양모, camel/snake, 직속/중첩 모두 시도) */
+  const getParentIdsFromPerson = (p: any): string[] => {
+    if (!p || typeof p !== 'object') return []
+    const out: string[] = []
+    const pushCandidate = (raw: unknown) => {
+      const id = normId(raw)
+      if (id && !out.includes(id)) out.push(id)
     }
-    return null
+    const readFrom = (obj: any) => {
+      if (!obj || typeof obj !== 'object') return
+      pushCandidate(obj.fatherId ?? obj.father_id ?? obj.father?.id)
+      pushCandidate(obj.motherId ?? obj.mother_id ?? obj.mother?.id)
+      pushCandidate(
+        obj.adoptiveFatherId ?? obj.adoptive_father_id ?? obj.adoptiveFather?.id,
+      )
+      pushCandidate(
+        obj.adoptiveMotherId ?? obj.adoptive_mother_id ?? obj.adoptiveMother?.id,
+      )
+    }
+    readFrom(p)
+    readFrom((p as any)?.person ?? (p as any)?.data)
+    return out
   }
 
-  /** 연결선/이전 표시용: 부모가 현재 목록(personIds)에 있을 때만 부모 id 반환 */
+  /** person 객체에서 대표 부모 ID 읽기 */
+  const getParentIdFromPerson = (p: any) => {
+    return getParentIdsFromPerson(p)[0] ?? null
+  }
+
+  /** 연결선/이전 표시용: 후보 부모(부·모·양부·양모) 중 현재 목록(personIds)에 있는 첫 부모 id 반환 */
   const getParentIdInSet = (p: any, personIds: Set<string>) => {
-    const parentId = getParentIdFromPerson(p)
-    return parentId && personIds.has(parentId) ? parentId : null
+    const candidates = getParentIdsFromPerson(p)
+    return candidates.find((id) => personIds.has(id)) ?? null
   }
 
-  /** 행 그룹핑용: 부모 id. tenure.person(tenures API) 우선, 없으면 persons 목록에서 조회 */
+  /** 행 그룹핑용: 부모 id. 현재 군주 목록(personIds)에 포함된 부모(부·모·양부·양모)를 최우선 선택 */
   const getParentIdFromTenureForRow = (
     t: any,
-    _personIds: Set<string>,
+    personIds: Set<string>,
     personByIdMap: Map<string, any>,
     personsList: any[],
   ) => {
     const pid = normId(t?.person?.id ?? (t as any)?.personId)
-    let parentId = getParentIdFromPerson(t?.person)
-    if (parentId) return parentId
-    parentId = normId((t as any)?.fatherId ?? (t as any)?.father_id)
-    if (parentId) return parentId
+    const candidates: string[] = []
+    const addCandidates = (ids: string[]) => {
+      for (const id of ids) {
+        if (id && !candidates.includes(id)) candidates.push(id)
+      }
+    }
+    addCandidates(getParentIdsFromPerson(t?.person))
+    addCandidates(getParentIdsFromPerson(t))
     if (pid) {
       const fromList = personsList.find((p: any) => normId(p.id) === pid)
       const p = fromList ?? personByIdMap.get(pid)
-      if (p) return getParentIdFromPerson(p)
+      if (p) addCandidates(getParentIdsFromPerson(p))
     }
-    return null
+    if (personIds && personIds.size > 0) {
+      const inSet = candidates.find((id) => personIds.has(id))
+      if (inSet) return inSet
+    }
+    return candidates[0] ?? null
   }
 
   /** personId → full person. 국가 재임 인물 + 전역 재임(교황 등) 인물 포함. lineage 부모-자식 해석용 */
@@ -1681,7 +1701,10 @@ export function HeadsOfStateSection({
                     )}
                     <AddTenureButton
                       type="button"
-                      onClick={() => setRegisterKindOpen(true)}
+                      onClick={() => {
+                        setRegisterMonarchical(false)
+                        setRegisterPersonPickerOpen(true)
+                      }}
                     >
                       <FiPlus size={20} />
                       수반 등록

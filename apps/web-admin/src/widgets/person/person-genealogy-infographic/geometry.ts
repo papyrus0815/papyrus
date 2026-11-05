@@ -118,23 +118,24 @@ export function ancestorColumnWidth(
   depth: number,
   maxDepth: number,
   visited: Set<string>,
+  opts?: { preferAdoptive?: boolean },
 ): number {
   // 렌더가 null을 반환하는 경우(방문 완료·노드 부재)는 폭 0.
   if (visited.has(personId) || !nodeMap.has(personId)) return 0
   const nextVisited = new Set(visited)
   nextVisited.add(personId)
-  const { fatherId, motherId } = ftResolveParentIds(personId, parentsOf, nodeMap)
+  const { fatherId, motherId } = ftResolveParentIds(personId, parentsOf, nodeMap, opts)
   const canGoDeeper = depth < maxDepth
   const showFather = canGoDeeper && !!fatherId && !visited.has(fatherId)
   const showMother = canGoDeeper && !!motherId && !visited.has(motherId)
   if (!showFather && !showMother) return NODE_W
   const fatherW =
     showFather && fatherId
-      ? ancestorColumnWidth(fatherId, parentsOf, nodeMap, depth + 1, maxDepth, nextVisited)
+      ? ancestorColumnWidth(fatherId, parentsOf, nodeMap, depth + 1, maxDepth, nextVisited, opts)
       : 0
   const motherW =
     showMother && motherId
-      ? ancestorColumnWidth(motherId, parentsOf, nodeMap, depth + 1, maxDepth, nextVisited)
+      ? ancestorColumnWidth(motherId, parentsOf, nodeMap, depth + 1, maxDepth, nextVisited, opts)
       : 0
   const parentsW = fatherW + motherW + (showFather && showMother ? ANC_PARENTS_GAP : 0)
   return Math.max(NODE_W, parentsW)

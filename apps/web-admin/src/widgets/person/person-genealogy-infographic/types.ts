@@ -24,6 +24,8 @@ export type NodePerson = PersonNameFields & {
   deathEra?: string | null
   /** 출생 서열 (1-base, 형제·자녀 정렬 1차 키) */
   birthOrder?: number | null
+  /** 동일 성별 내 출생 서열 (1-base: 예 3 + MALE = 3남) */
+  genderBirthOrder?: number | null
   /** 생존 여부 — 몰년 미상 역사 인물(false)과 현대 생존 인물(true) 구분 */
   isAlive?: boolean | null
   /** 활동시기(floruit) — 생몰 전면 미상 인물의 활동 연대 폴백 */
@@ -44,12 +46,18 @@ export type NodePerson = PersonNameFields & {
    */
   fatherId?: string | null
   motherId?: string | null
+  adoptiveFatherId?: string | null
+  adoptiveMotherId?: string | null
+  /** ego 대비 입양(양자·양녀) 여부 */
+  isAdopted?: boolean | null
   /**
    * BFS spouse 엣지 provenance — true면 PersonSpouse 미등록(자녀의 다른 친부모로 추론된
    * 배우자). 확정 배우자와 구분해 '배우자(추정)'로 표시(오정보 방지).
    */
   inferred?: boolean | null
   marriageRank?: string | null
+  marriageEndReason?: string | null
+  rankHolderId?: string | null
   marriageStartYear?: number | null
   marriageEndYear?: number | null
   marriageNote?: string | null
@@ -94,8 +102,11 @@ export type FlagSource =
 
 export type PersonMetaSource = {
   id?: string
+  gender?: string | null
   fatherId?: string | null
   motherId?: string | null
+  adoptiveFatherId?: string | null
+  adoptiveMotherId?: string | null
   originalName?: string | null
   posthumousName?: string | null
   templeName?: string | null
@@ -103,14 +114,19 @@ export type PersonMetaSource = {
   birthPlace?: string | null
   deathPlace?: string | null
   birthOrder?: number | null
-  /** 배우자 카드 전용 — 혼인 서열·혼인 기간·비고 */
+  genderBirthOrder?: number | null
+  /** 배우자 카드 전용 — 혼인 서열·해소 사유·혼인 기간·비고 */
   marriageRank?: string | null
+  marriageEndReason?: string | null
+  rankHolderId?: string | null
   marriageStartYear?: number | null
   marriageEndYear?: number | null
   marriageNote?: string | null
-  /** 형제 카드 전용(withSiblingKinshipMeta 주입) — 부모 이름·판별불가 고지 */
+  /** 형제·자녀 카드 전용(withParentNames / withSiblingKinshipMeta 주입) — 부모 이름·판별불가 고지 */
   fatherName?: string | null
   motherName?: string | null
+  adoptiveFatherName?: string | null
+  adoptiveMotherName?: string | null
   kinshipNote?: string | null
 }
 

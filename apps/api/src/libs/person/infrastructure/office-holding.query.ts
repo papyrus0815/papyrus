@@ -12,6 +12,7 @@
  * 모든 재임은 직위 정의를 갖는다(필수, 맞는 카탈로그가 없으면 유형의 일반 정의) — 판정은 정의 하나로 닫힌다.
  */
 import type { Prisma } from '@prisma/client'
+import { toSignedDateString } from '../domain/structured-date.util'
 
 export const MONARCHICAL_TENURE = {
   positionDefinition: { is: { isMonarchical: true } },
@@ -64,8 +65,18 @@ export function asOfficeHolding<T extends Record<string, any>>(
   isMonarchical?: boolean,
 ): T & { isMonarchical: boolean; endDatePrecision: Precision | null } {
   const derived = precisionOf(row.endYear, row.endMonth, row.endDay)
+  const startDate =
+    row.startYear != null && (row.startEra === 'BC' || row.startDate == null)
+      ? toSignedDateString(row.startEra, row.startYear, row.startMonth, row.startDay)
+      : row.startDate
+  const endDate =
+    row.endYear != null && (row.endEra === 'BC' || row.endDate == null)
+      ? toSignedDateString(row.endEra, row.endYear, row.endMonth, row.endDay)
+      : row.endDate
   return {
     ...row,
+    startDate,
+    endDate,
     isMonarchical: isMonarchical ?? row.positionDefinition?.isMonarchical === true,
     endDatePrecision: row.endYear !== undefined ? (derived === 'day' ? null : derived) : null,
   }

@@ -24,6 +24,7 @@ import {
   type PartyMembershipRoleCategory,
   type PartyMembershipRow,
 } from '@/shared/api/election'
+import { personKeys } from '@/entities/person/query-keys'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
@@ -97,10 +98,12 @@ function membershipDateToYmd(
 
 function membershipEndDisplay(
   end: string | Date | Record<string, never> | null | undefined,
+  isDeceased = false,
 ): string {
-  if (end == null || end === '') return '현재'
+  const openLabel = isDeceased ? '미상' : '현재'
+  if (end == null || end === '') return openLabel
   if (typeof end === 'object' && !(end instanceof Date)) {
-    if (Object.keys(end).length === 0) return '현재'
+    if (Object.keys(end).length === 0) return openLabel
   }
   return membershipDateToYmd(end as string | Date | null) || '—'
 }
@@ -165,6 +168,10 @@ type Props = {
   actionsRef?: React.Ref<PersonPoliticsSectionActions>
   /** 목록 아래 덧붙일 내용 — 개요에서는 당 지도부 이력 */
   footer?: React.ReactNode
+  /** 고인 여부 — 종료일이 비어 있을 때 '현재' 대신 '미상'으로 표시하고 진행중 강조를 해제 */
+  isDeceased?: boolean
+  /** 읽기 전용(모달 임베드 등) — 추가·수정·삭제 액션을 숨김 */
+  readOnly?: boolean
 }
 
 export interface PersonPoliticsSectionActions {
@@ -179,6 +186,8 @@ export function PersonPoliticsSection({
   variant = 'standalone',
   actionsRef,
   footer,
+  isDeceased = false,
+  readOnly = false,
 }: Props) {
   const queryClient = useQueryClient()
   const playClickSound = useClickSound()
@@ -224,6 +233,9 @@ export function PersonPoliticsSection({
 
   const invalidatePerson = () => {
     queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
+    queryClient.invalidateQueries({ queryKey: personKeys.all })
+    queryClient.invalidateQueries({ queryKey: personKeys.infographic })
+    queryClient.invalidateQueries({ queryKey: ['persons', 'compare-records'] })
   }
 
   const createMut = useMutation({
@@ -296,6 +308,7 @@ export function PersonPoliticsSection({
   }
 
   const startEdit = (row: PartyMembershipRow) => {
+    if (readOnly) return
     setPanelOpen(false)
     setEditingId(row.id)
     setEditPartyId(row.partyId ?? row.party?.id ?? '')
@@ -313,6 +326,7 @@ export function PersonPoliticsSection({
   }
 
   const openCreateModal = () => {
+    if (readOnly) return
     setEditingId(null)
     resetForm()
     setPanelOpen(true)
@@ -376,7 +390,7 @@ export function PersonPoliticsSection({
             </SectionDesc>
           </TitleText>
         </TitleBlock>
-        {!isMembershipModalOpen ? (
+        {!readOnly && !isMembershipModalOpen ? (
           <HeaderBtn type="button" onClick={openCreateModal}>
             <FiPlus size={17} strokeWidth={2.5} />
             당원 소속 추가
@@ -635,29 +649,42 @@ export function PersonPoliticsSection({
                   )
                 : null
             const startYmd = membershipDateToYmd(membershipRow.startDate)
-            const endDisplay = membershipEndDisplay(membershipRow.endDate)
+            const endDisplay = membershipEndDisplay(
+              membershipRow.endDate,
+              isDeceased,
+            )
             const periodLabel = `${startYmd || '미상'} ~ ${endDisplay}`
-            const isOngoing = !membershipRow.endDate && !!startYmd
+            const isOngoing =
+              !membershipRow.endDate && !!startYmd && !isDeceased
             return (
-              <OverviewItem key={membershipRow.id}>
-                <OverviewActionGroup>
-                  <OverviewActionBtn
-                    type="button"
-                    aria-label="수정"
-                    onClick={() => startEdit(membershipRow)}
-                  >
-                    <FiEdit2 size={12} />
-                  </OverviewActionBtn>
-                  <OverviewActionBtn
-                    type="button"
-                    $danger
-                    aria-label="삭제"
-                    disabled={deleteMut.isPending}
-                    onClick={() => setDeleteTarget(membershipRow)}
-                  >
-                    <FiTrash2 size={13} />
-                  </OverviewActionBtn>
-                </OverviewActionGroup>
+              <OverviewItem
+                key={membershipRow.id}
+                id={
+                  membershipRow.id
+                    ? `person-record-partymem-${membershipRow.id}`
+                    : undefined
+                }
+              >
+                {!readOnly && (
+                  <OverviewActionGroup>
+                    <OverviewActionBtn
+                      type="button"
+                      aria-label="수정"
+                      onClick={() => startEdit(membershipRow)}
+                    >
+                      <FiEdit2 size={12} />
+                    </OverviewActionBtn>
+                    <OverviewActionBtn
+                      type="button"
+                      $danger
+                      aria-label="삭제"
+                      disabled={deleteMut.isPending}
+                      onClick={() => setDeleteTarget(membershipRow)}
+                    >
+                      <FiTrash2 size={13} />
+                    </OverviewActionBtn>
+                  </OverviewActionGroup>
+                )}
                 <OverviewDateCol $ongoing={isOngoing} $muted={!startYmd}>
                   {periodLabel}
                 </OverviewDateCol>
@@ -694,7 +721,7 @@ export function PersonPoliticsSection({
               <th>지도부 위계</th>
               <th>기간</th>
               <th>직함·세부</th>
-              <th />
+              {!readOnly && <th />}
             </tr>
           </thead>
           <tbody>
@@ -717,27 +744,29 @@ export function PersonPoliticsSection({
                 </td>
                 <td>
                   {membershipDateToYmd(membershipRow.startDate) || '—'} ~{' '}
-                  {membershipEndDisplay(membershipRow.endDate)}
+                  {membershipEndDisplay(membershipRow.endDate, isDeceased)}
                 </td>
                 <td>{membershipRow.roleTitle ?? '—'}</td>
-                <td>
-                  <IconBtn
-                    type="button"
-                    aria-label="수정"
-                    onClick={() => startEdit(membershipRow)}
-                  >
-                    <FiEdit2 size={14} />
-                  </IconBtn>
-                  <IconBtn
-                    type="button"
-                    $danger
-                    aria-label="삭제"
-                    disabled={deleteMut.isPending}
-                    onClick={() => setDeleteTarget(membershipRow)}
-                  >
-                    <FiTrash2 size={14} />
-                  </IconBtn>
-                </td>
+                {!readOnly && (
+                  <td>
+                    <IconBtn
+                      type="button"
+                      aria-label="수정"
+                      onClick={() => startEdit(membershipRow)}
+                    >
+                      <FiEdit2 size={14} />
+                    </IconBtn>
+                    <IconBtn
+                      type="button"
+                      $danger
+                      aria-label="삭제"
+                      disabled={deleteMut.isPending}
+                      onClick={() => setDeleteTarget(membershipRow)}
+                    >
+                      <FiTrash2 size={14} />
+                    </IconBtn>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -781,7 +810,14 @@ export function PersonPoliticsSection({
             ].filter(Boolean) as string[]
             const hasPollDate = candidacyRow.pollLabel !== '—'
             return (
-              <OverviewItem key={candidacyRow.id}>
+              <OverviewItem
+                key={candidacyRow.id}
+                id={
+                  candidacyRow.id
+                    ? `person-record-candidacy-${candidacyRow.id}`
+                    : undefined
+                }
+              >
                 <OverviewDateCol $muted={!hasPollDate}>
                   {hasPollDate ? candidacyRow.pollLabel : '일자 미상'}
                 </OverviewDateCol>
@@ -1195,7 +1231,18 @@ const OverviewItem = styled.div`
   padding: 12px 10px;
   border-radius: 8px;
   background: transparent;
-  transition: background-color 0.14s ease;
+  scroll-margin-top: var(--person-sticky-offset, 24px);
+  transition:
+    background-color 0.14s ease,
+    box-shadow 0.2s ease;
+
+  &[data-highlighted='true'] {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.14)'
+        : 'rgba(99, 102, 241, 0.08)'};
+    box-shadow: inset 2px 0 0 #6366f1;
+  }
 
   & + & {
     border-top: 1px solid

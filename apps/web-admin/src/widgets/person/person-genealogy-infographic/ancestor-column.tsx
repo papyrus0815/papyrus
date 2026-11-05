@@ -36,8 +36,14 @@ interface AncestorColumnProps {
   siblingsByPersonId?: Map<string, FamilyTreePerson[]>
   onPersonClick?: (id: string) => void
   onOpenSiblings?: (person: FamilyTreePerson, siblings: FamilyTreePerson[]) => void
-  /** depth=1(아버지/어머니) 직계 부모 연결 해제 핸들러 */
+  /** depth=1(아버지/어머니/양부/양모) 직계 부모 연결 해제 핸들러 */
   onUnlinkDirectParent?: () => void
+  /** depth=1 배지 라벨 오버라이드 (예: '양부', '양모', '생부', '생모') */
+  directParentBadgeOverride?: string
+  /** 조상 트리 계보 모드 (양가 우선 여부) */
+  preferAdoptive?: boolean
+  /** 현재 조상 가지가 입양(양가) 연결을 경유했는지 여부 (2대조 이상 '양조부·양조모' 등 배지 반영) */
+  isAdoptiveLineage?: boolean
 }
 
 /**
@@ -63,6 +69,9 @@ export function AncestorColumn({
   onPersonClick,
   onOpenSiblings,
   onUnlinkDirectParent,
+  directParentBadgeOverride,
+  preferAdoptive,
+  isAdoptiveLineage,
 }: AncestorColumnProps) {
   if (visited.has(personId)) return null
   const person = nodeMap.get(personId)
@@ -73,7 +82,13 @@ export function AncestorColumn({
   nextVisited.add(personId)
 
   const depth = path.length
-  const { fatherId, motherId } = ftResolveParentIds(personId, parentsOf, nodeMap)
+  const { fatherId, motherId } = ftResolveParentIds(personId, parentsOf, nodeMap, { preferAdoptive })
+  const isFatherStepAdoptive = Boolean(
+    fatherId && fatherId === person.adoptiveFatherId && fatherId !== person.fatherId,
+  )
+  const isMotherStepAdoptive = Boolean(
+    motherId && motherId === person.adoptiveMotherId && motherId !== person.motherId,
+  )
   const canGoDeeper = depth < maxDepth
   const showFather = canGoDeeper && Boolean(fatherId) && fatherId && !visited.has(fatherId)
   const showMother = canGoDeeper && Boolean(motherId) && motherId && !visited.has(motherId)
@@ -83,11 +98,11 @@ export function AncestorColumn({
   // 컬럼 자체는 flex 0 0 auto로 콘텐츠에 맞춰 shrink되므로 폭을 주입할 필요는 없고, fork만 소비.
   const fatherW =
     showFather && fatherId
-      ? ancestorColumnWidth(fatherId, parentsOf, nodeMap, depth + 1, maxDepth, nextVisited)
+      ? ancestorColumnWidth(fatherId, parentsOf, nodeMap, depth + 1, maxDepth, nextVisited, { preferAdoptive })
       : 0
   const motherW =
     showMother && motherId
-      ? ancestorColumnWidth(motherId, parentsOf, nodeMap, depth + 1, maxDepth, nextVisited)
+      ? ancestorColumnWidth(motherId, parentsOf, nodeMap, depth + 1, maxDepth, nextVisited, { preferAdoptive })
       : 0
 
   const role: AvatarRole =
@@ -101,7 +116,10 @@ export function AncestorColumn({
           : 'grandparentAlt'
         : 'ancestor'
   const badgeRole = depth <= 2 ? role : 'ancestor'
-  const label = getAncestorBadgeLabel(path, person.gender)
+  const label =
+    depth === 1 && directParentBadgeOverride
+      ? directParentBadgeOverride
+      : getAncestorBadgeLabel(path, person.gender, { isAdoptive: Boolean(isAdoptiveLineage) })
 
   // 비소유 노드(다른 계정 등록)는 상세를 열 수 없음 → 클릭 비활성 + dim
   const openable = person.isOwned !== false
@@ -133,6 +151,8 @@ export function AncestorColumn({
                 siblingsByPersonId={siblingsByPersonId}
                 onPersonClick={onPersonClick}
                 onOpenSiblings={onOpenSiblings}
+                preferAdoptive={preferAdoptive}
+                isAdoptiveLineage={Boolean(isAdoptiveLineage || isFatherStepAdoptive)}
               />
             )}
             {showMother && motherId && (
@@ -146,6 +166,8 @@ export function AncestorColumn({
                 siblingsByPersonId={siblingsByPersonId}
                 onPersonClick={onPersonClick}
                 onOpenSiblings={onOpenSiblings}
+                preferAdoptive={preferAdoptive}
+                isAdoptiveLineage={Boolean(isAdoptiveLineage || isMotherStepAdoptive)}
               />
             )}
           </AncParentsGrid>

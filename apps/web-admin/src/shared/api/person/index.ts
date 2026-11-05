@@ -34,9 +34,17 @@ export type Person = {
   birthEra?: Era | null
   birthDate?: string | null
   birthYear?: number | null
+  birthOrder?: number | null
   deathEra?: Era | null
   deathDate?: string | null
   deathYear?: number | null
+  floruitStartYear?: number | null
+  floruitEndYear?: number | null
+  floruitEra?: Era | null
+  sovereignReigns?: Array<{
+    dynastyOrdinal?: number | null
+    ordinal?: number | null
+  }> | null
   gender?: string | null
   biography?: string | null
   profileImageUrl?: string | null

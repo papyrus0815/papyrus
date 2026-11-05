@@ -9,13 +9,14 @@ import {
   PersonReignAdjacencyResponseDto,
   ReignAdjacencyEntryDto,
 } from '../presentation/dto/person-reign-adjacency.response'
+import { structuredDateKey, toSignedDateString } from '../domain/structured-date.util'
 import {
   HEAD_POSITION_TYPES,
   RULER_PERSON_SELECT,
   deathInfoOf,
   effectiveEndYear,
   signedYearFromEraDate,
-  yearOf,
+  signedYearFromStructuredOrDate,
 } from './head-record.shared'
 
 /** 이웃 후보 over-fetch 상한 — 동률 클러스터·dedup 붕괴 대비 (depth=1 고정 MVP) */
@@ -61,6 +62,16 @@ const ANCHOR_BASE_SELECT = {
   id: true,
   startDate: true,
   endDate: true,
+  startEra: true,
+  startYear: true,
+  startMonth: true,
+  startDay: true,
+  startKey: true,
+  endEra: true,
+  endYear: true,
+  endMonth: true,
+  endDay: true,
+  endKey: true,
   startDatePrecision: true,
   countryId: true,
   historicalCountryId: true,
@@ -90,6 +101,16 @@ const NEIGHBOR_SELECT = {
   regnalName: true,
   startDate: true,
   endDate: true,
+  startEra: true,
+  startYear: true,
+  startMonth: true,
+  startDay: true,
+  startKey: true,
+  endEra: true,
+  endYear: true,
+  endMonth: true,
+  endDay: true,
+  endKey: true,
   startDatePrecision: true,
   person: { select: RULER_PERSON_SELECT },
   country: { select: { id: true, name: true, flagEmoji: true } },
@@ -167,6 +188,58 @@ function monthDay(date: Date): number {
   return (date.getUTCMonth() + 1) * 100 + date.getUTCDate()
 }
 
+/** 구조화 날짜(startKey / startEra+startYear) 우선, DATETIME 폴백 비교 키 */
+function startKeyOfRow(row: {
+  startKey?: number | null
+  startEra?: string | null
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
+  startDate?: Date | null
+}): number | null {
+  if (row.startKey != null) return row.startKey
+  if (row.startYear != null) {
+    return structuredDateKey(row.startEra ?? 'AD', row.startYear, row.startMonth, row.startDay)
+  }
+  if (row.startDate != null) {
+    return row.startDate.getUTCFullYear() * 10000 + monthDay(row.startDate)
+  }
+  return null
+}
+
+/** 구조화 날짜 우선, DATETIME 폴백 'YYYY-MM-DD' / '-YYYY-MM-DD' */
+function startIsoDayOfRow(row: {
+  startEra?: string | null
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
+  startDate?: Date | null
+}): string {
+  const fromStructured = toSignedDateString(
+    row.startEra,
+    row.startYear,
+    row.startMonth,
+    row.startDay,
+  )
+  if (fromStructured) return fromStructured
+  return row.startDate ? isoDay(row.startDate) : ''
+}
+
+/** 구조화 월·일 우선, DATETIME 폴백 MMDD 정수 */
+function startMonthDayOfRow(row: {
+  startMonth?: number | null
+  startDay?: number | null
+  startDate?: Date | null
+}): number {
+  if (row.startMonth != null || row.startDay != null) {
+    return (row.startMonth ?? 1) * 100 + (row.startDay ?? 1)
+  }
+  if (row.startDate != null) {
+    return monthDay(row.startDate)
+  }
+  return 101
+}
+
 function toPersonDto(person: any, accountId?: string): ContemporaryRulerPersonDto {
   return {
     id: person.id,
@@ -187,6 +260,22 @@ function toPersonDto(person: any, accountId?: string): ContemporaryRulerPersonDt
 }
 
 function toRecordDto(row: any, isMonarchical: boolean): AdjacencyRecordDto {
+  const startYear = signedYearFromStructuredOrDate(
+    row.startEra,
+    row.startYear,
+    row.startDate,
+  ) as number
+  const endYear = signedYearFromStructuredOrDate(row.endEra, row.endYear, row.endDate)
+  const startDate =
+    row.startDate != null && row.startEra !== 'BC'
+      ? row.startDate.toISOString()
+      : (toSignedDateString(row.startEra, row.startYear, row.startMonth, row.startDay) ??
+        (row.startDate ? row.startDate.toISOString() : ''))
+  const endDate =
+    row.endDate != null && row.endEra !== 'BC'
+      ? row.endDate.toISOString()
+      : (toSignedDateString(row.endEra, row.endYear, row.endMonth, row.endDay) ??
+        (row.endDate ? row.endDate.toISOString() : null))
   return {
     recordId: row.id,
     isMonarchical,
@@ -200,10 +289,10 @@ function toRecordDto(row: any, isMonarchical: boolean): AdjacencyRecordDto {
     appointmentMethod: row.appointmentMethod ?? null,
     regnalName: row.regnalName ?? null,
     ordinal: row.ordinal ?? null,
-    startYear: yearOf(row.startDate) as number,
-    endYear: yearOf(row.endDate),
-    startDate: row.startDate.toISOString(),
-    endDate: row.endDate ? row.endDate.toISOString() : null,
+    startYear,
+    endYear,
+    startDate,
+    endDate,
     startDatePrecision: row.startDatePrecision ?? null,
     country: row.country ?? null,
     historicalCountry: row.historicalCountry ?? null,
@@ -214,7 +303,9 @@ interface NeighborCandidate {
   isMonarchical: boolean
   row: any
   personId: string
-  startDate: Date
+  startIsoDay: string
+  startMonthDay: number
+  startKey: number
   startYear: number
   /** startDatePrecision === 'year' — 같은 해 순서 모호 판정 */
   precisionYear: boolean
@@ -300,10 +391,20 @@ export class PersonReignAdjacencyService {
 
     for (const anchor of anchors) {
       const anchorStartDate = anchor.row.startDate
-      const anchorStartYear = yearOf(anchorStartDate)
-      // 현 스키마 tenure/reign DATETIME은 AD 전용 — 연도<1은 BC 취급, 계산 생략.
-      // (startDate는 필수 컬럼이라 null 분기는 실질 미발생 — TS 내로잉용)
-      if (anchorStartDate == null || anchorStartYear == null || anchorStartYear < 1) {
+      const anchorStartYear = signedYearFromStructuredOrDate(
+        anchor.row.startEra,
+        anchor.row.startYear,
+        anchorStartDate,
+      )
+      const anchorStartKey = startKeyOfRow(anchor.row)
+      const hasStructuredStart = anchor.row.startYear != null && anchor.row.startYear >= 1
+      // 구조화 연도(startYear)가 없는 레거시 DATETIME 행에서 연도<1(BC)이거나 날짜가 없으면 계산 생략.
+      // 구조화 축(startEra/startYear/startKey)이 채워진 고대(AD<1000)·BC 행은 startKey 기반으로 정상 계산한다.
+      if (
+        anchorStartYear == null ||
+        anchorStartKey == null ||
+        (!hasStructuredStart && (anchorStartDate == null || anchorStartYear < 1))
+      ) {
         bcSkippedCount++
         continue
       }
@@ -317,7 +418,11 @@ export class PersonReignAdjacencyService {
 
       const anchorEndYear = effectiveEndYear({
         startYear: anchorStartYear,
-        endYear: yearOf(anchor.row.endDate),
+        endYear: signedYearFromStructuredOrDate(
+          anchor.row.endEra,
+          anchor.row.endYear,
+          anchor.row.endDate,
+        ),
         death: subjectDeath,
         nowYear,
       })
@@ -334,8 +439,8 @@ export class PersonReignAdjacencyService {
       const axis = axisOfAnchor(anchor.isMonarchical, anchor.row as AxisSource)
 
       const [predRows, succRows] = await Promise.all([
-        this.fetchNeighbors(scopeWhere, anchorStartDate, 'PREDECESSOR', axis),
-        this.fetchNeighbors(scopeWhere, anchorStartDate, 'SUCCESSOR', axis),
+        this.fetchNeighbors(scopeWhere, anchor.row, anchorStartKey, 'PREDECESSOR', axis),
+        this.fetchNeighbors(scopeWhere, anchor.row, anchorStartKey, 'SUCCESSOR', axis),
       ])
       const predecessors = this.nearestGroup(predRows, 'PREDECESSOR', context)
       const successors = this.nearestGroup(succRows, 'SUCCESSOR', context)
@@ -448,16 +553,63 @@ export class PersonReignAdjacencyService {
    */
   private async fetchNeighbors(
     scopeWhere: object,
-    anchorStartDate: Date,
+    anchorRow: {
+      startDate?: Date | null
+      startYear?: number | null
+      startKey?: number | null
+    },
+    anchorStartKey: number,
     relation: AdjacencyRelation,
     axis: SuccessionAxis,
   ): Promise<NeighborCandidate[]> {
-    const dateFilter =
-      relation === 'PREDECESSOR'
-        ? { startDate: { lt: anchorStartDate } }
-        : { startDate: { gt: anchorStartDate } }
-    const orderBy = {
-      startDate: relation === 'PREDECESSOR' ? ('desc' as const) : ('asc' as const),
+    const anchorStartDate = anchorRow.startDate ?? null
+    const hasStructuredAnchor = anchorRow.startYear != null || anchorRow.startKey != null
+    let dateFilter: object
+    let orderBy: any
+    if (anchorStartDate != null && !hasStructuredAnchor) {
+      dateFilter =
+        relation === 'PREDECESSOR'
+          ? { startDate: { lt: anchorStartDate } }
+          : { startDate: { gt: anchorStartDate } }
+      orderBy = {
+        startDate: relation === 'PREDECESSOR' ? ('desc' as const) : ('asc' as const),
+      }
+    } else if (anchorStartDate != null) {
+      // AD >= 1000 앵커라도 선대(PREDECESSOR)가 AD < 1000 / BC(startDate=null)일 수 있으므로
+      // startKey 비교를 함께 열어 AD 1000 경계 단절을 막는다.
+      dateFilter =
+        relation === 'PREDECESSOR'
+          ? {
+              OR: [
+                { startDate: { lt: anchorStartDate } },
+                { startDate: null, startKey: { lt: anchorStartKey } },
+              ],
+            }
+          : {
+              OR: [
+                { startDate: { gt: anchorStartDate } },
+                { startKey: { gt: anchorStartKey } },
+              ],
+            }
+      orderBy = [
+        { startKey: relation === 'PREDECESSOR' ? ('desc' as const) : ('asc' as const) },
+        { startDate: relation === 'PREDECESSOR' ? ('desc' as const) : ('asc' as const) },
+      ]
+    } else {
+      // AD < 1000 · BC 앵커(startDate=null): startKey 기준 탐색 + 후대가 AD >= 1000인 경우 포함
+      dateFilter =
+        relation === 'PREDECESSOR'
+          ? { startKey: { lt: anchorStartKey } }
+          : {
+              OR: [
+                { startKey: { gt: anchorStartKey } },
+                { startDate: { not: null } },
+              ],
+            }
+      orderBy = [
+        { startKey: relation === 'PREDECESSOR' ? ('desc' as const) : ('asc' as const) },
+        { startDate: relation === 'PREDECESSOR' ? ('desc' as const) : ('asc' as const) },
+      ]
     }
     // 이웃 tenure는 **앵커와 같은 축**만 — 장관·의원은 물론 다른 축 수장도 배제.
     // TITLED는 positionType과 title이 둘 다 같아야 "같은 자리"다.
@@ -485,24 +637,38 @@ export class PersonReignAdjacencyService {
     ])
     const candidates: NeighborCandidate[] = []
     for (const row of tenureRows) {
-      const candidate = this.toCandidate(row, false)
+      const candidate = this.toCandidate(row, false, anchorStartKey, relation)
       if (candidate) candidates.push(candidate)
     }
     for (const row of reignRows) {
-      const candidate = this.toCandidate(row, true)
+      const candidate = this.toCandidate(row, true, anchorStartKey, relation)
       if (candidate) candidates.push(candidate)
     }
     return candidates
   }
 
-  private toCandidate(row: any, isMonarchical: boolean): NeighborCandidate | null {
-    const startYear = yearOf(row.startDate)
-    if (startYear == null) return null
+  private toCandidate(
+    row: any,
+    isMonarchical: boolean,
+    anchorStartKey: number,
+    relation: AdjacencyRelation,
+  ): NeighborCandidate | null {
+    const startYear = signedYearFromStructuredOrDate(
+      row.startEra,
+      row.startYear,
+      row.startDate,
+    )
+    const startKey = startKeyOfRow(row)
+    if (startYear == null || startKey == null) return null
+    if (relation === 'PREDECESSOR' && startKey >= anchorStartKey) return null
+    if (relation === 'SUCCESSOR' && startKey <= anchorStartKey) return null
     return {
       isMonarchical,
       row,
       personId: row.person.id,
-      startDate: row.startDate,
+      startIsoDay: startIsoDayOfRow(row),
+      startMonthDay: startMonthDayOfRow(row),
+      startKey,
       startYear,
       precisionYear: row.startDatePrecision === 'year',
     }
@@ -523,7 +689,7 @@ export class PersonReignAdjacencyService {
     // 군주(동군연합)가 선대로 두 번 서지 않게. (재위·재임 이중 입력은 한 테이블이 된 뒤 없다.)
     const byDedup = new Map<string, NeighborCandidate>()
     for (const candidate of candidates) {
-      const key = `${candidate.personId}:${isoDay(candidate.startDate)}`
+      const key = `${candidate.personId}:${candidate.startIsoDay}`
       if (!byDedup.has(key)) byDedup.set(key, candidate)
     }
     const deduped = [...byDedup.values()]
@@ -537,10 +703,10 @@ export class PersonReignAdjacencyService {
     const boundaryKey = (candidate: NeighborCandidate) =>
       ambiguousYear.has(candidate.startYear)
         ? `Y:${candidate.startYear}`
-        : `D:${isoDay(candidate.startDate)}`
+        : `D:${candidate.startIsoDay}`
     const rank = (candidate: NeighborCandidate) =>
       candidate.startYear * 10000 +
-      (ambiguousYear.has(candidate.startYear) ? 0 : monthDay(candidate.startDate))
+      (ambiguousYear.has(candidate.startYear) ? 0 : candidate.startMonthDay)
 
     // 가까운 순: 선대=내림차순, 후대=오름차순. 동률 안정정렬은 record.id.
     deduped.sort((left, right) => {
@@ -572,7 +738,11 @@ export class PersonReignAdjacencyService {
   ): AdjacencyNeighborDto {
     const neighborEndYear = effectiveEndYear({
       startYear: candidate.startYear,
-      endYear: yearOf(candidate.row.endDate),
+      endYear: signedYearFromStructuredOrDate(
+        candidate.row.endEra,
+        candidate.row.endYear,
+        candidate.row.endDate,
+      ),
       death: deathInfoOf(candidate.row.person),
       nowYear: context.nowYear,
     })

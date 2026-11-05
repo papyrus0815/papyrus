@@ -159,27 +159,32 @@ export function endReasonLabelFor(reason: string, family: TenureFamily): string 
  *
  * ⚠️ 시그니처 규약: 완성된 한국어 문자열(rangeLabel·endLabel·deathDateStr)을 **받지 않는다**.
  *    표시 문자열 파싱 금지를 주석이 아니라 타입으로 강제한다 — 앞으로의 기간 파생도 이 규약을 따를 것.
- * ⚠️ fail-quiet: 재임 테이블에는 구조화 연도 컬럼이 없고 DATETIME뿐이며, mariadb가
- *    연도<100 DATETIME을 손상시킨 이력이 있다 → 양 끝점이 AD 1000+ 일 때만 표시한다.
- *    (근사가 틀리게 보이느니 안 보이는 편이 낫다)
+ * 천문 연도(BC N년 = 1−N, 역사적 0년 없음)를 사용해 고대(AD<1000)·기원전(BC)·BC→AD 교차 구간도 정확히 계산한다.
  */
 export function deriveTenureDurationLabel(
   startDate?: string | null,
   endDate?: string | null,
   startDatePrecision?: string | null,
+  endDatePrecision?: string | null,
 ): string | null {
   const start = parseIsoDateParts(startDate)
   const end = parseIsoDateParts(endDate)
   if (!start || !end) return null
-  if (start.era !== 'AD' || end.era !== 'AD') return null
-  if (start.year < 1000 || end.year < 1000) return null
-  const months = end.year * 12 + end.month - (start.year * 12 + start.month)
+  const startAstroYear = astroYearFromEra(start.year, start.era)
+  const endAstroYear = astroYearFromEra(end.year, end.era)
+  if (startAstroYear == null || endAstroYear == null) return null
+  if (startDatePrecision === 'year' || endDatePrecision === 'year') {
+    const yearDiff = endAstroYear - startAstroYear
+    if (yearDiff < 1 || yearDiff > 100) return null
+    return `약 ${yearDiff}년`
+  }
+  const months = endAstroYear * 12 + end.month - (startAstroYear * 12 + start.month)
   // 0개월(같은 달) · 100년 초과(데이터 오류)는 표시하지 않는다
   if (months < 1 || months > 1200) return null
   const years = Math.floor(months / 12)
   const restMonths = months % 12
   if (years < 1) return `약 ${restMonths}개월`
-  if (startDatePrecision === 'year' || restMonths === 0) return `약 ${years}년`
+  if (restMonths === 0) return `약 ${years}년`
   return `약 ${years}년 ${restMonths}개월`
 }
 
@@ -239,6 +244,7 @@ export function getAgeAtDate(
   birthDay?: number | null,
   dateIso?: string | null,
   birthEra?: string | null,
+  datePrecision?: string | null,
 ): number | null {
   if (birthYear == null) return null
   const p = parseIsoDateParts(dateIso)
@@ -247,10 +253,54 @@ export function getAgeAtDate(
   const dateAstro = p.era === 'BC' ? 1 - p.year : p.year
   let age = dateAstro - birthAstro
   if (age < 0) return null
-  if (birthMonth != null && birthDay != null) {
-    if (p.month < birthMonth || (p.month === birthMonth && p.day < birthDay)) age--
+  // 연('year') 정밀도(또는 정밀도 미지정 01-01 자리표시)는 월·일을 알 수 없으므로 합성 1월 1일로 인해
+  // 2~12월생의 만 나이가 일괄 1세 차감되는 오차를 막는다. 월('month') 정밀도는 일(day) 비교만 생략한다.
+  const isYearOnly =
+    datePrecision === 'year' ||
+    (!datePrecision && p.month === 1 && p.day === 1)
+  if (!isYearOnly && birthMonth != null) {
+    if (p.month < birthMonth) {
+      age--
+    } else if (
+      datePrecision !== 'month' &&
+      p.month === birthMonth &&
+      birthDay != null &&
+      p.day < birthDay
+    ) {
+      age--
+    }
   }
-  return age
+  return age >= 0 ? age : null
+}
+
+/**
+ * 생몰년·활동연대(floruit) 모두 미상인 인물의 히어로 부제 폴백 라벨.
+ * 재임·재위 시작/종료일을 BC-safe로 파싱해 '재위 기원전 221년 ~ 기원전 210년' 또는 '재임 1960년경'으로 표시한다.
+ */
+export function deriveTenureFallbackLabel(
+  items: ReadonlyArray<{
+    kind: 'reign' | 'tenure'
+    data: { startDate?: string | null; endDate?: string | null }
+  }>,
+): string {
+  if (items.length === 0) return ''
+  const hasReign = items.some((it) => it.kind === 'reign')
+  const prefix = hasReign ? '재위' : '재임'
+  const formatSignedYr = (signed: number) =>
+    signed < 0 ? `기원전 ${-signed}년` : `${signed}년`
+  const signedYears: number[] = []
+  for (const it of items) {
+    const sp = parseIsoDateParts(it.data.startDate)
+    if (sp) signedYears.push(sp.era === 'BC' ? -sp.year : sp.year)
+    const ep = parseIsoDateParts(it.data.endDate)
+    if (ep) signedYears.push(ep.era === 'BC' ? -ep.year : ep.year)
+  }
+  if (signedYears.length === 0) return ''
+  const minY = Math.min(...signedYears)
+  const maxY = Math.max(...signedYears)
+  return minY === maxY
+    ? `${prefix} ${formatSignedYr(minY)}경`
+    : `${prefix} ${formatSignedYr(minY)} ~ ${formatSignedYr(maxY)}`
 }
 
 /**
@@ -294,6 +344,8 @@ export interface TenurePeriodLabel {
   startStr: string
   /** 시작이 연 정밀도만인지 — 나이 배지 '경' 접미 게이트 */
   startYearOnly: boolean
+  /** 종료가 연 정밀도(또는 01-01 자리표시)인지 — 종료 나이 배지 '경' 접미 게이트 */
+  endYearOnly?: boolean
   /** 종료 표기 — 종료일 ?? (재직중사망→사망일, 종료사유·고인→'미상', 그 외 '현재') */
   endLabel: string
   /** 종료일이 실제 존재하는지 — age-at-end 계산·en대시 게이트 */
@@ -333,6 +385,13 @@ export function deriveTenurePeriodLabel(
    */
   const endPrecision = input.endDatePrecision
   const endParts = parseIsoDateParts(input.endDate)
+  const endYearOnly =
+    !!input.endDate &&
+    (endPrecision === 'year' ||
+      (!endPrecision &&
+        endParts != null &&
+        endParts.month === 1 &&
+        endParts.day === 1))
   let endStr: string
   if (!input.endDate) {
     endStr = ''
@@ -365,5 +424,5 @@ export function deriveTenurePeriodLabel(
     : hasEndDate
       ? `? – ${endLabel}`
       : ''
-  return { startStr, startYearOnly, endLabel, hasEndDate, rangeLabel }
+  return { startStr, startYearOnly, endYearOnly, endLabel, hasEndDate, rangeLabel }
 }

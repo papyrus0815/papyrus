@@ -100,4 +100,43 @@ describe('computeLifeTimeline', () => {
     expect(layout.from).toBe(-100)
     expect(layout.bars[0].x0).toBeGreaterThan(0.7)
   })
+
+  it('종료 사유(사임·해임 등)로 종료 확정(closed: true)된 기록은 종료일이 없어도 사망/현재까지 열린 막대로 늘리지 않는다', () => {
+    const layout = computeLifeTimeline({
+      ...base,
+      records: [
+        {
+          key: 'tenure-closed',
+          family: 'office',
+          title: '장관',
+          startDate: '1980-03-01',
+          endDate: null,
+          closed: true,
+        },
+      ],
+      birthYear: 1940,
+      deathYear: 2020,
+    })!
+    expect(layout.bars[0].open).toBe(false)
+    expect(layout.bars[0].endYear).toBeNull()
+    expect(layout.bars[0].x1).toBeLessThan(0.6)
+  })
+
+  it('BC→AD 경계(기원전 63년 ~ 기원후 14년) 축에서 역사적 0년 눈금을 생성하지 않는다', () => {
+    const layout = computeLifeTimeline({
+      ...base,
+      records: [
+        {
+          key: 'reign-augustus',
+          family: 'reign',
+          title: '아우구스투스',
+          startDate: '-0027-01-16',
+          endDate: '0014-08-19',
+        },
+      ],
+      birthYear: -63,
+      deathYear: 14,
+    })!
+    expect(layout.ticks.some((tick) => tick.year === 0)).toBe(false)
+  })
 })

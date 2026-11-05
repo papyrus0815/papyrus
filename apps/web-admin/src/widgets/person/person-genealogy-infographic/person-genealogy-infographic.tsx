@@ -28,7 +28,12 @@ import { FiCrosshair, FiHeart, FiUsers } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
 import type { FamilyTreeData, FamilyTreePerson } from '@/shared/api/persons-family-tree'
-import { MARRIAGE_RANK_LABELS, marriageRankOrder } from '@/shared/lib/marriage-rank-labels'
+import {
+  MARRIAGE_END_REASON_LABELS,
+  MARRIAGE_RANK_LABELS,
+  marriageRankOrder,
+  resolvePerspectiveMarriageRankLabel,
+} from '@/shared/lib/marriage-rank-labels'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import { AncestorColumn } from './ancestor-column'
@@ -89,6 +94,7 @@ import {
   ancestorColumnWidth,
   birthYearOf,
   childrenCenterShift,
+  compareSiblingChronology,
   compareSiblings,
   computeChildLayouts,
   isChildOnLeftInPair,
@@ -104,6 +110,8 @@ export interface PersonGenealogyInfographicProps {
   maternalGrandmother?: NodePerson | null
   father?: NodePerson | null
   mother?: NodePerson | null
+  adoptiveFather?: NodePerson | null
+  adoptiveMother?: NodePerson | null
   spouses?: NodePerson[] | null
   /** @deprecated legacy 단수 배우자 — spouses 배열로 대체됨. 死코드지만 호스트 커밋 전까지 유지(G24 후속). */
   spouse?: NodePerson | null
@@ -121,13 +129,15 @@ export interface PersonGenealogyInfographicProps {
   showHeader?: boolean
 }
 
-/** spouse 엣지에서 뽑은 배우자 노드 + provenance 메타 (inferred·혼인연도·서열·비고) */
+/** spouse 엣지에서 뽑은 배우자 노드 + provenance 메타 (inferred·혼인연도·서열·해소사유·비고) */
 type SpouseEdgeEntry = {
   node: FamilyTreePerson
   inferred: boolean
   marriageStartYear: number | null
   marriageEndYear: number | null
   marriageRank: string | null
+  marriageEndReason: string | null
+  rankHolderId: string | null
   note: string | null
 }
 
@@ -142,14 +152,31 @@ function compareSpouseEntries(entryA: SpouseEdgeEntry, entryB: SpouseEdgeEntry):
 
 function formatSpouseBadge(
   sp: NodePerson,
-  opts?: { index?: number; totalCount?: number; extraSpouseCount?: number },
+  opts?: {
+    index?: number
+    totalCount?: number
+    extraSpouseCount?: number
+    ownerId?: string | null
+    ownerGender?: string | null
+  },
 ): string {
   const totalCount = opts?.totalCount ?? 1
   const index = opts?.index
   const extraCount = opts?.extraSpouseCount ?? 0
   const base = totalCount > 1 && index != null ? `배우자 ${index + 1}` : '배우자'
-  const rankLabel = sp.marriageRank ? MARRIAGE_RANK_LABELS[sp.marriageRank] : null
-  const withRank = rankLabel ? `${base} · ${rankLabel}` : base
+  const rankLabel = resolvePerspectiveMarriageRankLabel({
+    marriageRank: sp.marriageRank,
+    rankHolderId: sp.rankHolderId,
+    viewerPersonId: opts?.ownerId ?? null,
+    viewerGender: opts?.ownerGender ?? null,
+    spouseId: sp.id ?? null,
+    spouseGender: sp.gender ?? null,
+  })
+  const endReasonLabel = sp.marriageEndReason
+    ? MARRIAGE_END_REASON_LABELS[sp.marriageEndReason] ?? null
+    : null
+  const suffixParts = [rankLabel, endReasonLabel].filter(Boolean)
+  const withRank = suffixParts.length > 0 ? `${base} · ${suffixParts.join(' · ')}` : base
   const withInferred = sp.inferred ? `${withRank} (추정)` : withRank
   return extraCount > 0 ? `${withInferred} (+${extraCount})` : withInferred
 }
@@ -163,6 +190,7 @@ function formatSpouseBadge(
 const EMBED_UNRENDERED_SCOPES = new Set<string>([
   'spouse-children',
   'sibling-other-parents',
+  'grandchildren-inferred-spouses',
   'cousins',
 ])
 
@@ -171,6 +199,7 @@ export function PersonGenealogyInfographic({
   paternalGrandfather, paternalGrandmother,
   maternalGrandfather, maternalGrandmother,
   father, mother,
+  adoptiveFather, adoptiveMother,
   spouses: spousesProp,
   spouse: spouseLegacy,
   children,
@@ -180,6 +209,13 @@ export function PersonGenealogyInfographic({
   onUnlinkRelation,
   showHeader = true,
 }: PersonGenealogyInfographicProps) {
+  const [ancestorLineageMode, setAncestorLineageMode] = useState<'biological' | 'adoptive'>(
+    'biological',
+  )
+  useEffect(() => {
+    setAncestorLineageMode('biological')
+  }, [ego.id])
+
   // ── FamilyTreeData 기반 동적 조상 렌더링 준비 ──────────────────
   const ftNodeMap = useMemo(() => {
     if (!familyTreeData) return new Map<string, FamilyTreePerson>()
@@ -196,12 +232,25 @@ export function PersonGenealogyInfographic({
   const spouseNamesByPersonId = useMemo(() => {
     const m = new Map<string, string[]>()
     if (!familyTreeData) return m
-    const addName = (pid: string, partnerId: string, rank?: string | null) => {
+    const addName = (
+      pid: string,
+      partnerId: string,
+      rank?: string | null,
+      rankHolderId?: string | null,
+    ) => {
       if (pid === ego.id) return
       const partner = ftNodeMap.get(partnerId)
       if (!partner) return
+      const ownerNode = ftNodeMap.get(pid)
       const base = getPersonDisplayName(partner, true)
-      const rankLabel = rank ? MARRIAGE_RANK_LABELS[rank] : null
+      const rankLabel = resolvePerspectiveMarriageRankLabel({
+        marriageRank: rank,
+        rankHolderId,
+        viewerPersonId: pid,
+        viewerGender: ownerNode?.gender ?? null,
+        spouseId: partnerId,
+        spouseGender: partner.gender,
+      })
       const formatted = rankLabel ? `${base} (${rankLabel})` : base
       const list = m.get(pid) ?? []
       if (!list.includes(formatted)) list.push(formatted)
@@ -209,8 +258,8 @@ export function PersonGenealogyInfographic({
     }
     for (const e of familyTreeData.edges) {
       if (e.type !== 'spouse') continue
-      addName(e.source, e.target, e.marriageRank)
-      addName(e.target, e.source, e.marriageRank)
+      addName(e.source, e.target, e.marriageRank, e.rankHolderId)
+      addName(e.target, e.source, e.marriageRank, e.rankHolderId)
     }
     return m
   }, [familyTreeData, ftNodeMap, ego.id])
@@ -228,25 +277,118 @@ export function PersonGenealogyInfographic({
     return m
   }, [familyTreeData])
 
+  const egoFtNode = ego.id ? ftNodeMap.get(ego.id) : undefined
+  const egoBioFatherId = egoFtNode?.fatherId ?? ego.fatherId ?? father?.id ?? null
+  const egoBioMotherId = egoFtNode?.motherId ?? ego.motherId ?? mother?.id ?? null
+  const egoAdoptFatherId =
+    egoFtNode?.adoptiveFatherId ?? ego.adoptiveFatherId ?? adoptiveFather?.id ?? null
+  const egoAdoptMotherId =
+    egoFtNode?.adoptiveMotherId ?? ego.adoptiveMotherId ?? adoptiveMother?.id ?? null
+  const hasBioParents = Boolean(egoBioFatherId || egoBioMotherId)
+  const hasAdoptParents = Boolean(egoAdoptFatherId || egoAdoptMotherId)
+  const hasBothBioAndAdoptLineages = hasBioParents && hasAdoptParents
+
   const { fatherId: ftFatherId, motherId: ftMotherId } = useMemo(
-    () => familyTreeData
-      ? ftResolveParentIds(familyTreeData.egoId, ftParentsOf, ftNodeMap)
-      : {},
-    [familyTreeData, ftParentsOf, ftNodeMap],
+    () =>
+      familyTreeData
+        ? ftResolveParentIds(familyTreeData.egoId, ftParentsOf, ftNodeMap, {
+            preferAdoptive: ancestorLineageMode === 'adoptive',
+          })
+        : {},
+    [familyTreeData, ftParentsOf, ftNodeMap, ancestorLineageMode],
   )
+  const usesFtAncestorTree = Boolean(familyTreeData && (ftFatherId || ftMotherId))
+  const fallbackFatherNode =
+    ancestorLineageMode === 'adoptive'
+      ? (adoptiveFather ?? father ?? null)
+      : (father ?? adoptiveFather ?? null)
+  const fallbackMotherNode =
+    ancestorLineageMode === 'adoptive'
+      ? (adoptiveMother ?? mother ?? null)
+      : (mother ?? adoptiveMother ?? null)
+  const isFallbackFatherAdoptive = Boolean(
+    fallbackFatherNode &&
+      adoptiveFather &&
+      fallbackFatherNode.id === adoptiveFather.id &&
+      fallbackFatherNode.id !== father?.id,
+  )
+  const isFallbackMotherAdoptive = Boolean(
+    fallbackMotherNode &&
+      adoptiveMother &&
+      fallbackMotherNode.id === adoptiveMother.id &&
+      fallbackMotherNode.id !== mother?.id,
+  )
+  const primaryFatherId = usesFtAncestorTree
+    ? (ftFatherId ?? null)
+    : (fallbackFatherNode?.id ?? null)
+  const primaryMotherId = usesFtAncestorTree
+    ? (ftMotherId ?? null)
+    : (fallbackMotherNode?.id ?? null)
+  const isFtFatherAdoptive = Boolean(
+    ftFatherId && ftFatherId === egoAdoptFatherId && ftFatherId !== egoBioFatherId,
+  )
+  const isFtMotherAdoptive = Boolean(
+    ftMotherId && ftMotherId === egoAdoptMotherId && ftMotherId !== egoBioMotherId,
+  )
+  const secondaryParents = useMemo(() => {
+    const out: Array<{
+      person: NodePerson
+      badge: string
+      unlinkKind: 'father' | 'mother' | 'adoptiveFather' | 'adoptiveMother'
+    }> = []
+    const toNode = (id: string | null, fallback?: NodePerson | null): NodePerson | null => {
+      if (!id) return null
+      const ft = ftNodeMap.get(id)
+      if (ft) return ftPersonToNodePerson(ft)
+      return fallback ?? null
+    }
+    if (egoAdoptFatherId && egoAdoptFatherId !== primaryFatherId) {
+      const node = toNode(egoAdoptFatherId, adoptiveFather)
+      if (node) out.push({ person: node, badge: '양부(입양)', unlinkKind: 'adoptiveFather' })
+    }
+    if (egoAdoptMotherId && egoAdoptMotherId !== primaryMotherId) {
+      const node = toNode(egoAdoptMotherId, adoptiveMother)
+      if (node) out.push({ person: node, badge: '양모(입양)', unlinkKind: 'adoptiveMother' })
+    }
+    if (egoBioFatherId && egoBioFatherId !== primaryFatherId) {
+      const node = toNode(egoBioFatherId, father)
+      if (node) out.push({ person: node, badge: '생부(본생)', unlinkKind: 'father' })
+    }
+    if (egoBioMotherId && egoBioMotherId !== primaryMotherId) {
+      const node = toNode(egoBioMotherId, mother)
+      if (node) out.push({ person: node, badge: '생모(본생)', unlinkKind: 'mother' })
+    }
+    return out
+  }, [
+    egoAdoptFatherId,
+    egoAdoptMotherId,
+    egoBioFatherId,
+    egoBioMotherId,
+    primaryFatherId,
+    primaryMotherId,
+    ftNodeMap,
+    adoptiveFather,
+    adoptiveMother,
+    father,
+    mother,
+  ])
 
   // ego 부/모 조상 컬럼의 실측 폭 — ParentsRow 레이아웃과 부모→ego fork 끝점 계산에 사용.
   // (부모는 depth 1: path 'F'/'M' 길이 1)
   const { ancFatherW, ancMotherW } = useMemo(
     () => ({
       ancFatherW: ftFatherId
-        ? ancestorColumnWidth(ftFatherId, ftParentsOf, ftNodeMap, 1, FT_MAX_DEPTH, new Set())
+        ? ancestorColumnWidth(ftFatherId, ftParentsOf, ftNodeMap, 1, FT_MAX_DEPTH, new Set(), {
+            preferAdoptive: ancestorLineageMode === 'adoptive',
+          })
         : 0,
       ancMotherW: ftMotherId
-        ? ancestorColumnWidth(ftMotherId, ftParentsOf, ftNodeMap, 1, FT_MAX_DEPTH, new Set())
+        ? ancestorColumnWidth(ftMotherId, ftParentsOf, ftNodeMap, 1, FT_MAX_DEPTH, new Set(), {
+            preferAdoptive: ancestorLineageMode === 'adoptive',
+          })
         : 0,
     }),
-    [ftFatherId, ftMotherId, ftParentsOf, ftNodeMap],
+    [ftFatherId, ftMotherId, ftParentsOf, ftNodeMap, ancestorLineageMode],
   )
 
   // childrenOf 맵: parentId → grandchild ids (familyTreeData 기반)
@@ -265,18 +407,44 @@ export function PersonGenealogyInfographic({
 
   /**
    * 가계도 안 모든 인물 → 형제자매 노드 배열 (출생연도 오름차순).
-   * 부모 한쪽이라도 공유하면 형제로 인정 (이복 형제 포함).
+   * 부모 한쪽이라도 공유하면 형제로 인정 (이복·이부·입양 형제 포함).
+   * 엣지(ftParentsOf/ftChildrenOf)뿐 아니라 노드 스칼라 부모 FK도 함께 사용해,
+   * 고조부모 등 최대 깊이 경계에서 부모 노드가 미페치돼 엣지가 없는 경우에도 형제를 묶는다.
    * ego 본인은 결과에서 제외 (ego의 형제는 별도 SiblingsStack로 표시).
    */
   const siblingsByPersonId = useMemo(() => {
     const out = new Map<string, FamilyTreePerson[]>()
     if (!familyTreeData) return out
+    const childrenByAnyParentId = new Map<string, Set<string>>()
+    const addParentChildLink = (pid: string | null | undefined, cid: string) => {
+      if (!pid || pid === cid) return
+      const set = childrenByAnyParentId.get(pid) ?? new Set<string>()
+      set.add(cid)
+      childrenByAnyParentId.set(pid, set)
+    }
+    for (const [pid, cids] of ftChildrenOf) {
+      for (const cid of cids) addParentChildLink(pid, cid)
+    }
     for (const node of familyTreeData.nodes) {
-      const parents = ftParentsOf.get(node.id) ?? []
-      if (parents.length === 0) continue
+      addParentChildLink(node.fatherId, node.id)
+      addParentChildLink(node.motherId, node.id)
+      addParentChildLink(node.adoptiveFatherId, node.id)
+      addParentChildLink(node.adoptiveMotherId, node.id)
+    }
+    for (const node of familyTreeData.nodes) {
+      const parents = new Set<string>([
+        ...(ftParentsOf.get(node.id) ?? []),
+        ...([
+          node.fatherId,
+          node.motherId,
+          node.adoptiveFatherId,
+          node.adoptiveMotherId,
+        ].filter((pid): pid is string => Boolean(pid && pid !== node.id))),
+      ])
+      if (parents.size === 0) continue
       const siblingIds = new Set<string>()
       for (const pid of parents) {
-        for (const cid of ftChildrenOf.get(pid) ?? []) {
+        for (const cid of childrenByAnyParentId.get(pid) ?? []) {
           if (cid !== node.id && cid !== ego.id) siblingIds.add(cid)
         }
       }
@@ -312,11 +480,17 @@ export function PersonGenealogyInfographic({
     const spouseEdgesByPersonId = new Map<string, SpouseEdgeEntry[]>()
     for (const e of familyTreeData.edges) {
       if (e.type !== 'spouse') continue
+      const validRankHolderId =
+        e.rankHolderId && (e.rankHolderId === e.source || e.rankHolderId === e.target)
+          ? e.rankHolderId
+          : null
       const meta = {
         inferred: Boolean(e.inferred),
         marriageStartYear: e.marriageStartYear ?? null,
         marriageEndYear: e.marriageEndYear ?? null,
         marriageRank: e.marriageRank ?? null,
+        marriageEndReason: e.marriageEndReason ?? null,
+        rankHolderId: validRankHolderId,
         note: e.note ?? null,
       }
       const a = ftNodeMap.get(e.source)
@@ -336,6 +510,8 @@ export function PersonGenealogyInfographic({
       ...ftPersonToNodePerson(entry.node),
       inferred: entry.inferred,
       marriageRank: entry.marriageRank,
+      marriageEndReason: entry.marriageEndReason,
+      rankHolderId: entry.rankHolderId,
       marriageStartYear: entry.marriageStartYear,
       marriageEndYear: entry.marriageEndYear,
       marriageNote: entry.note,
@@ -354,9 +530,20 @@ export function PersonGenealogyInfographic({
     // 자녀 — ftChildrenOf[ego.id], 각 자녀의 spouse를 spouse 엣지에서 찾아 join.
     // 툴팁에 반대편 부모 이름 주입(ego 본인 라인은 자명하므로 생략) — 다중 혼인에서
     // 어느 배우자 소생인지 hover로 확인 가능(칩은 반대편 부모가 갈릴 때만).
+    // 양자(adoptiveFatherId/adoptiveMotherId === egoId 이고 친부모 !== egoId)는 생부/생모가 아닌
+    // 함께 입양한 양부모(배우자) 기준으로 서열 순서를 판별해야 생부가 배우자로 오인되지 않는다.
     const otherParentRankOf = (c: FamilyTreePerson): number => {
-      const otherId =
-        c.fatherId && c.fatherId !== egoId
+      const isAdopted =
+        (c.adoptiveFatherId === egoId || c.adoptiveMotherId === egoId) &&
+        c.fatherId !== egoId &&
+        c.motherId !== egoId
+      const otherId = isAdopted
+        ? c.adoptiveFatherId && c.adoptiveFatherId !== egoId
+          ? c.adoptiveFatherId
+          : c.adoptiveMotherId && c.adoptiveMotherId !== egoId
+            ? c.adoptiveMotherId
+            : null
+        : c.fatherId && c.fatherId !== egoId
           ? c.fatherId
           : c.motherId && c.motherId !== egoId
             ? c.motherId
@@ -369,24 +556,25 @@ export function PersonGenealogyInfographic({
       .map((cid) => ftNodeMap.get(cid))
       .filter((c): c is FamilyTreePerson => Boolean(c))
       .sort((a, b) => {
-        const ao = a.birthOrder ?? Number.POSITIVE_INFINITY
-        const bo = b.birthOrder ?? Number.POSITIVE_INFINITY
-        if (ao !== bo) return ao - bo
-        const ay = birthYearOf(a) ?? Number.POSITIVE_INFINITY
-        const by = birthYearOf(b) ?? Number.POSITIVE_INFINITY
-        if (ay !== by) return ay - by
+        const chrono = compareSiblingChronology(a, b)
+        if (chrono !== 0) return chrono
         const ar = otherParentRankOf(a)
         const br = otherParentRankOf(b)
         if (ar !== br) return ar - br
-        return a.id.localeCompare(b.id)
+        return compareSiblings(a, b)
       })
       .map((c) => {
         const spouseCandidates = [...(spouseEdgesByPersonId.get(c.id) ?? [])].sort(
           compareSpouseEntries,
         )
         const sp = spouseCandidates[0] ?? null
+        const isAdopted =
+          (c.adoptiveFatherId === egoId || c.adoptiveMotherId === egoId) &&
+          c.fatherId !== egoId &&
+          c.motherId !== egoId
         return {
           ...withParentNames(ftPersonToNodePerson(c), ftNodeMap, { omitParentId: egoId }),
+          isAdopted,
           spouse: sp ? toSpouseNode(sp) : null,
           extraSpouseCount: Math.max(0, spouseCandidates.length - 1),
         }
@@ -412,36 +600,72 @@ export function PersonGenealogyInfographic({
    * 가계도 안 다른 후손이면 "내부 결혼"으로 표시. 한 인물이 가계도 안 여러 친척과
    * 결혼한 경우(왕가 재혼 케이스) 모두 표시되도록 배열로 관리한다.
    */
-  const { descendantsByParentId, inMarriageByPersonId } = useMemo(() => {
+  const {
+    descendantsByParentId,
+    inMarriageByPersonId,
+    hasDescendantBothBioAndAdoptLineages,
+  } = useMemo(() => {
     const out = new Map<string, FamilyTreePerson[]>()
     const inMarriage = new Map<string, FamilyTreePerson[]>()
     if (!familyTreeData) {
-      return { descendantsByParentId: out, inMarriageByPersonId: inMarriage }
+      return {
+        descendantsByParentId: out,
+        inMarriageByPersonId: inMarriage,
+        hasDescendantBothBioAndAdoptLineages: false,
+      }
     }
     const childIds = new Set(childList.map((c) => c.id).filter(Boolean) as string[])
     const excludeIds = new Set<string>([ego.id, ...childIds].filter(Boolean) as string[])
 
-    // Phase 1: 후손별 첫 부모 결정 (BFS 출생 서열·연도 정렬 순)
+    const bioChildrenOf = new Map<string, string[]>()
+    const adoptChildrenOf = new Map<string, string[]>()
+    const bioParentsByTarget = new Map<string, string[]>()
+    const adoptParentsByTarget = new Map<string, string[]>()
+    for (const e of familyTreeData.edges) {
+      if (e.type !== 'parent-child') continue
+      const childMap = e.lineage === 'adoptive' ? adoptChildrenOf : bioChildrenOf
+      const cArr = childMap.get(e.source) ?? []
+      if (!cArr.includes(e.target)) cArr.push(e.target)
+      childMap.set(e.source, cArr)
+
+      const targetMap = e.lineage === 'adoptive' ? adoptParentsByTarget : bioParentsByTarget
+      const pArr = targetMap.get(e.target) ?? []
+      if (!pArr.includes(e.source)) pArr.push(e.source)
+      targetMap.set(e.target, pArr)
+    }
+
+    // Phase 1: 세대별(level-by-level) 후손 첫 부모 결정.
+    // 형제간 양자 출계(형 A와 동생 B 사이에 손자녀 입양)에서 형/동생 나이순에 따라 귀속이 뒤집히지 않도록
+    // 현재 계보 모드(ancestorLineageMode)의 우선 계보 간선을 먼저 배정하고, 미배정 후손만 차순위 계보 간선으로 배정한다.
     const primaryParent = new Map<string, string>()
-    const queue: string[] = [...childIds]
+    let currentLevel: string[] = [...childIds]
     const seen = new Set<string>(childIds)
-    while (queue.length > 0) {
-      const pid = queue.shift()!
-      const childIdsOfP = ftChildrenOf.get(pid) ?? []
-      const childNodes = childIdsOfP
-        .map((cid) => ftNodeMap.get(cid))
-        .filter((n): n is FamilyTreePerson => Boolean(n))
-        .filter((n) => !excludeIds.has(n.id))
-        .sort(compareSiblings)
-      for (const cn of childNodes) {
-        if (!primaryParent.has(cn.id)) {
-          primaryParent.set(cn.id, pid)
-          if (!seen.has(cn.id)) {
-            seen.add(cn.id)
-            queue.push(cn.id)
+    const preferAdoptiveDesc = ancestorLineageMode === 'adoptive'
+    const firstMap = preferAdoptiveDesc ? adoptChildrenOf : bioChildrenOf
+    const secondMap = preferAdoptiveDesc ? bioChildrenOf : adoptChildrenOf
+
+    while (currentLevel.length > 0) {
+      const nextLevel: string[] = []
+      for (const sourceMap of [firstMap, secondMap]) {
+        for (const pid of currentLevel) {
+          const childIdsOfP = sourceMap.get(pid) ?? []
+          const childNodes = childIdsOfP
+            .map((cid) => ftNodeMap.get(cid))
+            .filter((n): n is FamilyTreePerson => Boolean(n))
+            .filter((n) => !excludeIds.has(n.id))
+            .sort(compareSiblings)
+          for (const cn of childNodes) {
+            if (!primaryParent.has(cn.id)) {
+              primaryParent.set(cn.id, pid)
+              if (!seen.has(cn.id)) {
+                seen.add(cn.id)
+                nextLevel.push(cn.id)
+              }
+            }
           }
         }
       }
+      currentLevel = nextLevel
     }
 
     // Phase 2: descendantsByParentId 빌드 — primary parent 한 명에게만 자녀 할당
@@ -456,29 +680,58 @@ export function PersonGenealogyInfographic({
       list.sort(compareSiblings)
     }
 
-    // Phase 3: 내부 결혼 마커 — 다중 in-tree 결혼은 모두 누적
+    // Phase 3: 내부 결혼 마커 — 다중 in-tree 결혼은 모두 누적.
+    // 주의: 친생 간선(fatherId+motherId)과 입양 간선(adoptiveFatherId+adoptiveMotherId)을 혼합하면
+    // 형제간 출계 입양(형 A의 친자를 동생 B가 입양)에서 A와 B가 부부(내부 근친혼)로 오판되므로,
+    // 반드시 같은 계보 축(친부+친모 쌍, 또는 양부+양모 쌍) 내부에서만 공동 부모 여부를 판정한다.
     const pushInMarriage = (key: string, partner: FamilyTreePerson) => {
       const list = inMarriage.get(key) ?? []
       if (!list.some((p) => p.id === partner.id)) list.push(partner)
       inMarriage.set(key, list)
     }
-    for (const [descId, primaryPid] of primaryParent) {
-      const allParents = ftParentsOf.get(descId) ?? []
-      for (const otherPid of allParents) {
-        if (otherPid === primaryPid) continue
-        if (primaryParent.has(otherPid) || childIds.has(otherPid)) {
-          const other = ftNodeMap.get(otherPid)
-          const primary = ftNodeMap.get(primaryPid)
-          if (other && primary) {
-            pushInMarriage(primaryPid, other)
-            pushInMarriage(otherPid, primary)
+    const isInTreeDescendant = (pid: string) => primaryParent.has(pid) || childIds.has(pid)
+    let hasDescLineageDual = false
+    for (const [descId] of primaryParent) {
+      const descNode = ftNodeMap.get(descId)
+      const hasScalarFks =
+        descNode && (descNode.fatherId !== undefined || descNode.motherId !== undefined)
+      const bioPair = hasScalarFks
+        ? ([descNode.fatherId, descNode.motherId].filter(Boolean) as string[])
+        : (bioParentsByTarget.get(descId) ?? [])
+      const adoptPair = hasScalarFks
+        ? ([descNode.adoptiveFatherId, descNode.adoptiveMotherId].filter(Boolean) as string[])
+        : (adoptParentsByTarget.get(descId) ?? [])
+
+      const inTreeBio = [...new Set(bioPair)].filter(isInTreeDescendant)
+      const inTreeAdopt = [...new Set(adoptPair)].filter(
+        (pid) => isInTreeDescendant(pid) && !inTreeBio.includes(pid),
+      )
+      if (inTreeBio.length > 0 && inTreeAdopt.length > 0) {
+        hasDescLineageDual = true
+      }
+
+      for (const coParentGroup of [bioPair, adoptPair]) {
+        const inTreeCoParents = [...new Set(coParentGroup)].filter(isInTreeDescendant)
+        if (inTreeCoParents.length < 2) continue
+        for (let i = 0; i < inTreeCoParents.length; i++) {
+          for (let j = i + 1; j < inTreeCoParents.length; j++) {
+            const pA = ftNodeMap.get(inTreeCoParents[i])
+            const pB = ftNodeMap.get(inTreeCoParents[j])
+            if (pA && pB && pA.id !== pB.id) {
+              pushInMarriage(pA.id, pB)
+              pushInMarriage(pB.id, pA)
+            }
           }
         }
       }
     }
 
-    return { descendantsByParentId: out, inMarriageByPersonId: inMarriage }
-  }, [familyTreeData, ftChildrenOf, ftNodeMap, ftParentsOf, childList, ego.id])
+    return {
+      descendantsByParentId: out,
+      inMarriageByPersonId: inMarriage,
+      hasDescendantBothBioAndAdoptLineages: hasDescLineageDual,
+    }
+  }, [familyTreeData, ftChildrenOf, ftNodeMap, ftParentsOf, childList, ego.id, ancestorLineageMode])
 
   const siblingList = useMemo(
     () =>
@@ -507,13 +760,20 @@ export function PersonGenealogyInfographic({
   const egoParentFks = useMemo<SiblingParentFks>(() => {
     const bfsEgo = ego.id ? ftNodeMap.get(ego.id) : undefined
     if (bfsEgo && bfsEgo.fatherId !== undefined && bfsEgo.motherId !== undefined) {
-      return { fatherId: bfsEgo.fatherId ?? null, motherId: bfsEgo.motherId ?? null }
+      return {
+        fatherId: bfsEgo.fatherId ?? null,
+        motherId: bfsEgo.motherId ?? null,
+        adoptiveFatherId: bfsEgo.adoptiveFatherId ?? null,
+        adoptiveMotherId: bfsEgo.adoptiveMotherId ?? null,
+      }
     }
     return {
       fatherId: ego.fatherId ?? father?.id ?? null,
       motherId: ego.motherId ?? mother?.id ?? null,
+      adoptiveFatherId: ego.adoptiveFatherId ?? adoptiveFather?.id ?? null,
+      adoptiveMotherId: ego.adoptiveMotherId ?? adoptiveMother?.id ?? null,
     }
-  }, [ftNodeMap, ego, father, mother])
+  }, [ftNodeMap, ego, father, mother, adoptiveFather, adoptiveMother])
 
   const clickableProps = (id?: string) => {
     // BFS 응답에 isOwned=false로 온 노드는 상세를 열 수 없음(다른 계정 등록) → 클릭 비활성 + dim.
@@ -533,16 +793,18 @@ export function PersonGenealogyInfographic({
       : {}
   }
 
-  const hasPaternalGp = Boolean(paternalGrandfather || paternalGrandmother)
-  const hasMaternalGp = Boolean(maternalGrandfather || maternalGrandmother)
-  const hasParents = Boolean(father || mother)
-  const twoParents = Boolean(father && mother)
+  const hasPaternalGp =
+    !isFallbackFatherAdoptive && Boolean(paternalGrandfather || paternalGrandmother)
+  const hasMaternalGp =
+    !isFallbackMotherAdoptive && Boolean(maternalGrandfather || maternalGrandmother)
+  const hasParents = Boolean(fallbackFatherNode || fallbackMotherNode)
+  const twoParents = Boolean(fallbackFatherNode && fallbackMotherNode)
   const hasSpouses = spouseList.length > 0
   const hasChildren = childList.length > 0
   const hasSiblings = siblingList.length > 0
 
-  const hasFatherSide = Boolean(father || paternalGrandfather || paternalGrandmother)
-  const hasMotherSide = Boolean(mother || maternalGrandfather || maternalGrandmother)
+  const hasFatherSide = Boolean(fallbackFatherNode || hasPaternalGp)
+  const hasMotherSide = Boolean(fallbackMotherNode || hasMaternalGp)
   const twoSides = hasFatherSide && hasMotherSide
 
   const hasFtAncestors = Boolean(ftFatherId || ftMotherId)
@@ -550,7 +812,13 @@ export function PersonGenealogyInfographic({
   // 듀얼 소스(REST props + family-tree BFS) refetch 레이스로 마운트 중 조건이 뒤집히면
   // 렌더 간 훅 수가 달라져 React가 throw한다. 실제 반환은 모든 훅을 지난 렌더 직전에서.
   const isEmptyTree =
-    !hasFatherSide && !hasMotherSide && !hasFtAncestors && !hasSpouses && !hasChildren && !hasSiblings
+    !hasFatherSide &&
+    !hasMotherSide &&
+    !hasFtAncestors &&
+    secondaryParents.length === 0 &&
+    !hasSpouses &&
+    !hasChildren &&
+    !hasSiblings
 
   const firstSpouse = spouseList[0] ?? null
   // 형제자매가 있으면 왼쪽을 차지하므로, 배우자는 항상 오른쪽
@@ -589,15 +857,18 @@ export function PersonGenealogyInfographic({
     const visibleIds = new Set(visibleSiblings.map((sib) => sib.id))
     let paternalCount = 0
     let maternalCount = 0
+    let adoptiveCount = 0
     for (const sib of siblingList) {
       if (sib.id && visibleIds.has(sib.id)) continue
       const { kinship } = classifySiblingKinship(egoParentFks, sib)
       if (kinship === 'PATERNAL_HALF') paternalCount += 1
       else if (kinship === 'MATERNAL_HALF') maternalCount += 1
+      else if (kinship === 'ADOPTIVE') adoptiveCount += 1
     }
     const parts: string[] = []
     if (paternalCount > 0) parts.push(`이복 ${paternalCount}`)
     if (maternalCount > 0) parts.push(`이부 ${maternalCount}`)
+    if (adoptiveCount > 0) parts.push(`입양 ${adoptiveCount}`)
     return parts.length > 0 ? parts.join(' · ') : null
   }, [hiddenSiblingCount, visibleSiblings, siblingList, egoParentFks])
 
@@ -614,38 +885,64 @@ export function PersonGenealogyInfographic({
   )
 
   /**
-   * 다중 혼인 자녀의 생모·생부 귀속 칩(«○○○ 소생») 노출 조건:
-   * 1) 자녀들의 반대편 부모가 2명 이상으로 갈리거나,
-   * 2) 본인의 배우자가 2명 이상(예: 정실·계비·후궁)이고 자녀에게 반대편 부모가 기록된 경우
-   *    (단일 배우자 소생이거나 외동자녀여도 다중 배우자 중 누구의 소생인지 즉시 식별 가능하도록).
+   * 다중 혼인 자녀의 생모·생부/양모·양부 귀속 칩(«○○○ 소생» / «○○○ 입양») 노출 조건:
+   * 1) 자녀들의 반대편 공동 부모(친자녀는 반대편 친부모, 양자녀는 반대편 양부모)가 2명 이상으로 갈리거나,
+   * 2) 본인의 배우자가 2명 이상(예: 정실·계비·후궁)이고 자녀에게 반대편 공동 부모가 기록된 경우
+   *    (단일 배우자 소생이거나 외동자녀여도 다중 배우자 중 누구의 소생/입양인지 즉시 식별 가능하도록).
+   * 주의: 양자녀의 생부/생모(fatherId/motherId)는 ego의 배우자가 아니므로 공동 부모 판별에서 제외한다.
    */
+  const resolveChildCoParentWithEgo = useCallback(
+    (child: NodePerson): { coParentId: string | null; isAdopted: boolean } => {
+      if (!ego.id) return { coParentId: null, isAdopted: false }
+      const isAdopted =
+        typeof (child as ChildPerson).isAdopted === 'boolean'
+          ? Boolean((child as ChildPerson).isAdopted)
+          : Boolean(
+              (child.adoptiveFatherId === ego.id || child.adoptiveMotherId === ego.id) &&
+                child.fatherId !== ego.id &&
+                child.motherId !== ego.id,
+            )
+      if (isAdopted) {
+        const coParentId =
+          child.adoptiveFatherId && child.adoptiveFatherId !== ego.id
+            ? child.adoptiveFatherId
+            : child.adoptiveMotherId && child.adoptiveMotherId !== ego.id
+              ? child.adoptiveMotherId
+              : null
+        return { coParentId, isAdopted: true }
+      }
+      const coParentId =
+        child.fatherId && child.fatherId !== ego.id
+          ? child.fatherId
+          : child.motherId && child.motherId !== ego.id
+            ? child.motherId
+            : null
+      return { coParentId, isAdopted: false }
+    },
+    [ego.id],
+  )
   const childOtherParentIds = useMemo(() => {
     const ids = new Set<string>()
     if (!ego.id) return ids
     for (const child of childList) {
-      const otherId =
-        child.fatherId && child.fatherId !== ego.id ? child.fatherId
-        : child.motherId && child.motherId !== ego.id ? child.motherId
-        : null
-      if (otherId) ids.add(otherId)
+      const { coParentId } = resolveChildCoParentWithEgo(child)
+      if (coParentId) ids.add(coParentId)
     }
     return ids
-  }, [childList, ego.id])
+  }, [childList, ego.id, resolveChildCoParentWithEgo])
   const showConsortMarks =
     childOtherParentIds.size >= 2 ||
     (spouseList.length >= 2 && childOtherParentIds.size >= 1)
   const consortMarkFor = (child: NodePerson) => {
     if (!showConsortMarks || !ego.id) return null
-    const otherId =
-      child.fatherId && child.fatherId !== ego.id ? child.fatherId
-      : child.motherId && child.motherId !== ego.id ? child.motherId
-      : null
-    if (!otherId) return null
-    const node = ftNodeMap.get(otherId)
+    const { coParentId, isAdopted } = resolveChildCoParentWithEgo(child)
+    if (!coParentId) return null
+    const node = ftNodeMap.get(coParentId)
     if (!node) return null // 그래프 밖 — 이름 없는 칩은 노이즈, 툴팁(카드 hover)이 담당
     const name = getPersonDisplayName(node, true)
+    const suffix = isAdopted ? '입양' : '소생'
     // title 없음 — pointer-events:none 칩이라 네이티브 툴팁은 어차피 사문(死文)
-    return <ConsortMark aria-label={`${name} 소생`}>{name} 소생</ConsortMark>
+    return <ConsortMark aria-label={`${name} ${suffix}`}>{name} {suffix}</ConsortMark>
   }
 
   /**
@@ -858,17 +1155,37 @@ export function PersonGenealogyInfographic({
               <LegendTerm>형제</LegendTerm>(무표기) 친형제 또는 부모 기록 미상 — 카드에 마우스를
               올리면 사유가 표시됩니다 · <LegendTerm>*</LegendTerm> 서출(이복 여부와 별개) ·{' '}
               <LegendTerm>(추정)</LegendTerm> 자녀 관계로 추정된 배우자 ·{' '}
-              <LegendTerm>○○○ 소생</LegendTerm> 다중 혼인에서 자녀의 반대편 부모(생모·생부)
+              <LegendTerm>○○○ 소생</LegendTerm> 다중 혼인에서 자녀의 반대편 부모(생모·생부) ·{' '}
+              <LegendTerm>양부·양모 / 양자·양녀</LegendTerm> 입양(출계) 계보
             </LegendBody>
           </LegendDetails>
-          <RecenterCanvasBtn
-            type="button"
-            onClick={() => recenterToEgo(true)}
-            title="본인 카드로 화면 중앙 이동"
-          >
-            <FiCrosshair size={12} />
-            <span>본인 위치로</span>
-          </RecenterCanvasBtn>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            {(hasBothBioAndAdoptLineages || hasDescendantBothBioAndAdoptLineages) && (
+              <RecenterCanvasBtn
+                type="button"
+                onClick={() =>
+                  setAncestorLineageMode((prev) =>
+                    prev === 'biological' ? 'adoptive' : 'biological',
+                  )
+                }
+                title="가계도 트리를 본생(생가) 또는 입양(양가) 기준으로 전환합니다"
+              >
+                <span>
+                  {ancestorLineageMode === 'biological'
+                    ? '⇄ 양가(입양) 계보로 전환'
+                    : '⇄ 생가(본생) 계보로 전환'}
+                </span>
+              </RecenterCanvasBtn>
+            )}
+            <RecenterCanvasBtn
+              type="button"
+              onClick={() => recenterToEgo(true)}
+              title="본인 카드로 화면 중앙 이동"
+            >
+              <FiCrosshair size={12} />
+              <span>본인 위치로</span>
+            </RecenterCanvasBtn>
+          </div>
         </TopControlRow>
 
         <TreeCanvas
@@ -898,12 +1215,21 @@ export function PersonGenealogyInfographic({
                       siblingsByPersonId={siblingsByPersonId}
                       onPersonClick={onPersonClick}
                       onOpenSiblings={(person, sibs) => setAncestorSiblingsOf({ person, siblings: sibs })}
+                      preferAdoptive={ancestorLineageMode === 'adoptive'}
+                      isAdoptiveLineage={isFtFatherAdoptive}
+                      directParentBadgeOverride={
+                        isFtFatherAdoptive
+                          ? '양부(입양)'
+                          : hasBothBioAndAdoptLineages
+                            ? '생부(본생)'
+                            : undefined
+                      }
                       onUnlinkDirectParent={
                         onUnlinkRelation
                           ? () => {
                               const node = ftNodeMap.get(ftFatherId)
                               onUnlinkRelation({
-                                kind: 'father',
+                                kind: isFtFatherAdoptive ? 'adoptiveFather' : 'father',
                                 targetId: ftFatherId,
                                 targetName: node ? getPersonDisplayName(node, true) : '아버지',
                               })
@@ -923,12 +1249,21 @@ export function PersonGenealogyInfographic({
                       siblingsByPersonId={siblingsByPersonId}
                       onPersonClick={onPersonClick}
                       onOpenSiblings={(person, sibs) => setAncestorSiblingsOf({ person, siblings: sibs })}
+                      preferAdoptive={ancestorLineageMode === 'adoptive'}
+                      isAdoptiveLineage={isFtMotherAdoptive}
+                      directParentBadgeOverride={
+                        isFtMotherAdoptive
+                          ? '양모(입양)'
+                          : hasBothBioAndAdoptLineages
+                            ? '생모(본생)'
+                            : undefined
+                      }
                       onUnlinkDirectParent={
                         onUnlinkRelation
                           ? () => {
                               const node = ftNodeMap.get(ftMotherId)
                               onUnlinkRelation({
-                                kind: 'mother',
+                                kind: isFtMotherAdoptive ? 'adoptiveMother' : 'mother',
                                 targetId: ftMotherId,
                                 targetName: node ? getPersonDisplayName(node, true) : '어머니',
                               })
@@ -957,11 +1292,11 @@ export function PersonGenealogyInfographic({
                 </ForkTrack>
               </GenerationBlock>
             ) : (hasFatherSide || hasMotherSide) ? (
-              // fallback: 조부모까지만 표시하는 기존 렌더링
+              // fallback: 조부모까지만 표시하는 기존 렌더링 (생가/양가 모드 및 단독 양부모 폴백 지원)
               <GenerationBlock>
                 <ParentsRow $twoSides={twoSides}>
                   {hasFatherSide && (
-                    <FamilyColumn $hasParent={Boolean(father)}>
+                    <FamilyColumn $hasParent={Boolean(fallbackFatherNode)}>
                       {hasPaternalGp && (
                         <>
                           <GrandparentPair>
@@ -982,7 +1317,7 @@ export function PersonGenealogyInfographic({
                               </GeoNode>
                             )}
                           </GrandparentPair>
-                          {father && (
+                          {fallbackFatherNode && (
                             <GrandparentForkTrack $twoGp={Boolean(paternalGrandfather && paternalGrandmother)}>
                               {paternalGrandfather && paternalGrandmother
                                 ? <ForkFromTwoGrandparents />
@@ -992,30 +1327,36 @@ export function PersonGenealogyInfographic({
                           )}
                         </>
                       )}
-                      {father && (
-                        <GeoNode $role="parent" {...clickableProps(father.id)}>
-                          {onUnlinkRelation && father.id && (
+                      {fallbackFatherNode && (
+                        <GeoNode $role="parent" {...clickableProps(fallbackFatherNode.id)}>
+                          {onUnlinkRelation && fallbackFatherNode.id && (
                             <CardUnlinkButton
-                              label="아버지 연결 해제"
+                              label={`${isFallbackFatherAdoptive ? '양부' : '아버지'} 연결 해제`}
                               onUnlink={() =>
                                 onUnlinkRelation({
-                                  kind: 'father',
-                                  targetId: father.id!,
-                                  targetName: getPersonDisplayName(father, true),
+                                  kind: isFallbackFatherAdoptive ? 'adoptiveFather' : 'father',
+                                  targetId: fallbackFatherNode.id!,
+                                  targetName: getPersonDisplayName(fallbackFatherNode, true),
                                 })
                               }
                             />
                           )}
-                          <GeoThumbnail person={father} role="parent" />
-                          <NodeNameBlock person={father} />
-                          <NodeBadge $role="parent">아버지</NodeBadge>
-                          <CardHoverInfo person={father} />
+                          <GeoThumbnail person={fallbackFatherNode} role="parent" />
+                          <NodeNameBlock person={fallbackFatherNode} />
+                          <NodeBadge $role="parent">
+                            {isFallbackFatherAdoptive
+                              ? '양부(입양)'
+                              : hasBothBioAndAdoptLineages
+                                ? '생부(본생)'
+                                : '아버지'}
+                          </NodeBadge>
+                          <CardHoverInfo person={fallbackFatherNode} />
                         </GeoNode>
                       )}
                     </FamilyColumn>
                   )}
                   {hasMotherSide && (
-                    <FamilyColumn $hasParent={Boolean(mother)}>
+                    <FamilyColumn $hasParent={Boolean(fallbackMotherNode)}>
                       {hasMaternalGp && (
                         <>
                           <GrandparentPair>
@@ -1036,7 +1377,7 @@ export function PersonGenealogyInfographic({
                               </GeoNode>
                             )}
                           </GrandparentPair>
-                          {mother && (
+                          {fallbackMotherNode && (
                             <GrandparentForkTrack $twoGp={Boolean(maternalGrandfather && maternalGrandmother)}>
                               {maternalGrandfather && maternalGrandmother
                                 ? <ForkFromTwoGrandparents />
@@ -1046,24 +1387,30 @@ export function PersonGenealogyInfographic({
                           )}
                         </>
                       )}
-                      {mother && (
-                        <GeoNode $role="parentAlt" {...clickableProps(mother.id)}>
-                          {onUnlinkRelation && mother.id && (
+                      {fallbackMotherNode && (
+                        <GeoNode $role="parentAlt" {...clickableProps(fallbackMotherNode.id)}>
+                          {onUnlinkRelation && fallbackMotherNode.id && (
                             <CardUnlinkButton
-                              label="어머니 연결 해제"
+                              label={`${isFallbackMotherAdoptive ? '양모' : '어머니'} 연결 해제`}
                               onUnlink={() =>
                                 onUnlinkRelation({
-                                  kind: 'mother',
-                                  targetId: mother.id!,
-                                  targetName: getPersonDisplayName(mother, true),
+                                  kind: isFallbackMotherAdoptive ? 'adoptiveMother' : 'mother',
+                                  targetId: fallbackMotherNode.id!,
+                                  targetName: getPersonDisplayName(fallbackMotherNode, true),
                                 })
                               }
                             />
                           )}
-                          <GeoThumbnail person={mother} role="parentAlt" />
-                          <NodeNameBlock person={mother} />
-                          <NodeBadge $role="parentAlt">어머니</NodeBadge>
-                          <CardHoverInfo person={mother} />
+                          <GeoThumbnail person={fallbackMotherNode} role="parentAlt" />
+                          <NodeNameBlock person={fallbackMotherNode} />
+                          <NodeBadge $role="parentAlt">
+                            {isFallbackMotherAdoptive
+                              ? '양모(입양)'
+                              : hasBothBioAndAdoptLineages
+                                ? '생모(본생)'
+                                : '어머니'}
+                          </NodeBadge>
+                          <CardHoverInfo person={fallbackMotherNode} />
                         </GeoNode>
                       )}
                     </FamilyColumn>
@@ -1076,6 +1423,50 @@ export function PersonGenealogyInfographic({
                 )}
               </GenerationBlock>
             ) : null}
+
+            {/* ── 생가/양가 병존 시 보조 부모 카드 행 ── */}
+            {secondaryParents.length > 0 && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '12px',
+                  marginBottom: '12px',
+                  flexWrap: 'wrap',
+                }}
+              >
+                {secondaryParents.map(({ person: spParent, badge, unlinkKind }) => {
+                  const role = unlinkKind.toLowerCase().includes('mother')
+                    ? ('parentAlt' as const)
+                    : ('parent' as const)
+                  return (
+                    <GeoNode
+                      key={`${unlinkKind}-${spParent.id}`}
+                      $role={role}
+                      {...clickableProps(spParent.id)}
+                    >
+                      {onUnlinkRelation && spParent.id && (
+                        <CardUnlinkButton
+                          label={`${badge} 연결 해제`}
+                          onUnlink={() =>
+                            onUnlinkRelation({
+                              kind: unlinkKind,
+                              targetId: spParent.id!,
+                              targetName: getPersonDisplayName(spParent, true),
+                            })
+                          }
+                        />
+                      )}
+                      <GeoThumbnail person={spParent} role={role} />
+                      <NodeNameBlock person={spParent} />
+                      <NodeBadge $role={role}>{badge}</NodeBadge>
+                      <CardHoverInfo person={spParent} />
+                    </GeoNode>
+                  )
+                })}
+              </div>
+            )}
 
             {/* ── 본인 세대 ── */}
             <GenerationBlock>
@@ -1144,7 +1535,11 @@ export function PersonGenealogyInfographic({
                           <GeoThumbnail person={sp} role="spouse" />
                           <NodeNameBlock person={sp} />
                           <NodeBadge $role="spouse">
-                            {formatSpouseBadge(sp, { index: i, totalCount: spouseList.length })}
+                            {formatSpouseBadge(sp, {
+                              index: i,
+                              totalCount: spouseList.length,
+                              ownerId: ego.id,
+                            })}
                           </NodeBadge>
                           <CardHoverInfo person={sp} />
                         </GeoNode>
@@ -1189,7 +1584,11 @@ export function PersonGenealogyInfographic({
                           <GeoThumbnail person={sp} role="spouse" />
                           <NodeNameBlock person={sp} />
                           <NodeBadge $role="spouse">
-                            {formatSpouseBadge(sp, { index: i, totalCount: spouseList.length })}
+                            {formatSpouseBadge(sp, {
+                              index: i,
+                              totalCount: spouseList.length,
+                              ownerId: ego.id,
+                            })}
                           </NodeBadge>
                           <CardHoverInfo person={sp} />
                         </GeoNode>
@@ -1222,6 +1621,8 @@ export function PersonGenealogyInfographic({
                           role="spouse"
                           badge={formatSpouseBadge(child.spouse, {
                             extraSpouseCount: child.extraSpouseCount,
+                            ownerId: child.id,
+                            ownerGender: child.gender,
                           })}
                           onPersonClick={onPersonClick}
                         />
@@ -1285,6 +1686,7 @@ export function PersonGenealogyInfographic({
                       {childList[0].id &&
                         visibleDescendantsByParentId.has(childList[0].id) && (
                           <DescendantSubtree
+                            parentId={childList[0].id}
                             descendants={visibleDescendantsByParentId.get(childList[0].id) ?? []}
                             childrenOf={visibleDescendantsByParentId}
                             depth={0}
@@ -1306,6 +1708,8 @@ export function PersonGenealogyInfographic({
                           role="spouse"
                           badge={formatSpouseBadge(child.spouse, {
                             extraSpouseCount: child.extraSpouseCount,
+                            ownerId: child.id,
+                            ownerGender: child.gender,
                           })}
                           onPersonClick={onPersonClick}
                         />
@@ -1344,6 +1748,7 @@ export function PersonGenealogyInfographic({
                       )
                       const grandSubtree = grands && grands.length > 0 ? (
                         <DescendantSubtree
+                          parentId={child.id}
                           descendants={grands}
                           childrenOf={visibleDescendantsByParentId}
                           depth={0}
@@ -1412,6 +1817,8 @@ export function PersonGenealogyInfographic({
                           role="spouse"
                           badge={formatSpouseBadge(child.spouse, {
                             extraSpouseCount: child.extraSpouseCount,
+                            ownerId: child.id,
+                            ownerGender: child.gender,
                           })}
                           onPersonClick={onPersonClick}
                         />

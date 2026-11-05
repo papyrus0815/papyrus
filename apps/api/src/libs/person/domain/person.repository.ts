@@ -40,8 +40,8 @@ import {
  */
 export interface CreatePersonData {
   name: string
-  middleName?: string
-  surname?: string
+  middleName?: string | null
+  surname?: string | null
   /** null·미지정이면 개인 설정 미저장(국가 기본값 폴백) */
   nameDisplayOrder?: 'korean' | 'western' | null
   originalName?: string | null
@@ -85,10 +85,14 @@ export interface CreatePersonData {
   denominationId?: string
   fatherId?: string
   motherId?: string
+  adoptiveFatherId?: string
+  adoptiveMotherId?: string
   /** 사생아·서출 여부 — 가계도 카드 별표 마커 */
   illegitimate?: boolean
   /** 출생 서열 (1-base, 성별 통합) */
   birthOrder?: number | null
+  /** 성별 내 출생 서열 (1-base, 아들끼리/딸끼리 서열 — 예: 3남 = 3) */
+  genderBirthOrder?: number | null
   /** 주 국적 — 현대 Country FK */
   countryId?: string | null
   /** 주 국적이 역사(과거) 국가일 때의 first-class FK (HistoricalCountry) */
@@ -120,8 +124,10 @@ export interface CreatePersonData {
     marriageEndMonth?: number | null
     marriageEndDay?: number | null
     marriageEndPrecision?: string | null
+    marriageEndReason?: string | null
     /// 혼인 서열/형태 (Prisma MarriageRank 토큰)
     marriageRank?: string | null
+    rankHolderId?: string | null
     note?: string
   }>
   /** 국가 소속(다중) — 주 국적 외 출생지·복무·망명·이중국적 등 */
@@ -153,8 +159,8 @@ export interface CreatePersonData {
  */
 export interface UpdatePersonData {
   name?: string
-  middleName?: string
-  surname?: string
+  middleName?: string | null
+  surname?: string | null
   /** null = 개인 설정 해제(국가 기본값 폴백), undefined = 변경 없음 */
   nameDisplayOrder?: 'korean' | 'western' | null
   originalName?: string | null
@@ -198,10 +204,14 @@ export interface UpdatePersonData {
   denominationId?: string
   fatherId?: string | null
   motherId?: string | null
+  adoptiveFatherId?: string | null
+  adoptiveMotherId?: string | null
   /** 사생아·서출 여부 — 가계도 카드 별표 마커 */
   illegitimate?: boolean
   /** 출생 서열 (1-base, 성별 통합) */
   birthOrder?: number | null
+  /** 성별 내 출생 서열 (1-base, 아들끼리/딸끼리 서열 — 예: 3남 = 3) */
+  genderBirthOrder?: number | null
   /** 주 국적 — 현대 Country FK. null=명시적 해제 */
   countryId?: string | null
   /** 주 국적이 역사(과거) 국가일 때의 first-class FK. null=명시적 해제 */
@@ -233,8 +243,10 @@ export interface UpdatePersonData {
     marriageEndMonth?: number | null
     marriageEndDay?: number | null
     marriageEndPrecision?: string | null
+    marriageEndReason?: string | null
     /// 혼인 서열/형태 (Prisma MarriageRank 토큰)
     marriageRank?: string | null
+    rankHolderId?: string | null
     note?: string
   }>
   /** 국가 소속(다중) — 주 국적 외 소속. 있으면 주 국적 외 전체 교체 */

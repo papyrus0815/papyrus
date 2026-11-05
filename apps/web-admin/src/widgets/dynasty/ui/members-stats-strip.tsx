@@ -21,22 +21,20 @@ function signedYear(era: 'BC' | 'AD' | null | undefined, year: number): number {
   return era === 'BC' ? -year : year
 }
 
-function formatYearLabel(
-  era: 'BC' | 'AD' | null | undefined,
-  year: number,
-): string {
-  return era === 'BC' ? `BC ${year}` : `${year}`
+function formatSignedYearLabel(signed: number): string {
+  return signed < 0 ? `BC ${Math.abs(signed)}` : `${signed}`
 }
 
 function ageOf(p: Person): number | null {
   if (p.birthYear == null) return null
   const start = signedYear(p.birthEra ?? null, p.birthYear)
   if (p.isAlive) {
-    return new Date().getFullYear() - start
+    const diff = new Date().getFullYear() - start
+    return diff >= 0 ? diff : null
   }
   if (p.deathYear == null) return null
   const end = signedYear(p.deathEra ?? null, p.deathYear)
-  return end - start
+  return end >= start ? end - start : null
 }
 
 export function MembersStatsStrip({ persons }: Props) {
@@ -51,26 +49,33 @@ export function MembersStatsStrip({ persons }: Props) {
   const avgAge =
     ages.length > 0 ? Math.round(ages.reduce((s, v) => s + v, 0) / ages.length) : null
 
-  // 시대 범위 (출생년 최저 ~ 사망년/현재 최고)
-  const births = persons
-    .filter((p) => p.birthYear != null)
-    .map((p) => signedYear(p.birthEra ?? null, p.birthYear!))
-  const deaths = persons
-    .filter((p) => p.deathYear != null)
-    .map((p) => signedYear(p.deathEra ?? null, p.deathYear!))
-  const minBirth = births.length ? Math.min(...births) : null
-  const maxDeath = deaths.length ? Math.max(...deaths) : null
+  // 시대 범위 (출생/전성기 최저 ~ 사망/전성기/현재 최고)
+  const startYears: number[] = []
+  const endYears: number[] = []
+  for (const p of persons) {
+    if (p.birthYear != null) {
+      startYears.push(signedYear(p.birthEra ?? null, p.birthYear))
+    } else if (p.floruitStartYear != null) {
+      startYears.push(signedYear(p.floruitEra ?? null, p.floruitStartYear))
+    }
 
-  const minBirthPerson = persons.find(
-    (p) =>
-      p.birthYear != null &&
-      signedYear(p.birthEra ?? null, p.birthYear) === minBirth,
-  )
-  const maxDeathPerson = persons.find(
-    (p) =>
-      p.deathYear != null &&
-      signedYear(p.deathEra ?? null, p.deathYear) === maxDeath,
-  )
+    if (p.deathYear != null) {
+      endYears.push(signedYear(p.deathEra ?? null, p.deathYear))
+    } else if (!p.isAlive && p.floruitEndYear != null) {
+      endYears.push(signedYear(p.floruitEra ?? null, p.floruitEndYear))
+    } else if (!p.isAlive && p.birthYear == null && p.floruitStartYear != null) {
+      endYears.push(signedYear(p.floruitEra ?? null, p.floruitStartYear))
+    }
+  }
+  const minStart = startYears.length ? Math.min(...startYears) : null
+  const maxEnd = endYears.length ? Math.max(...endYears) : null
+  const eraStartLabel = minStart != null ? formatSignedYearLabel(minStart) : null
+  const eraEndLabel =
+    alive > 0
+      ? '현재'
+      : maxEnd != null
+        ? formatSignedYearLabel(maxEnd)
+        : null
 
   // 최장수
   let longestPerson: Person | null = null
@@ -111,13 +116,13 @@ export function MembersStatsStrip({ persons }: Props) {
           <StatSub>세</StatSub>
         </StatChip>
       )}
-      {minBirthPerson && maxDeathPerson && (
+      {eraStartLabel && eraEndLabel && (
         <StatChip>
           <StatLabel>시대</StatLabel>
           <StatValue>
-            {formatYearLabel(minBirthPerson.birthEra ?? null, minBirthPerson.birthYear!)}
+            {eraStartLabel}
             <StatSub> – </StatSub>
-            {formatYearLabel(maxDeathPerson.deathEra ?? null, maxDeathPerson.deathYear!)}
+            {eraEndLabel}
           </StatValue>
         </StatChip>
       )}

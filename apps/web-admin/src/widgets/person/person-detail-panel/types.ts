@@ -86,10 +86,12 @@ export interface CombinedTenureItem {
  */
 type PersonNodeLite = PersonNameFields & { id?: string; gender?: string | null; profileImageUrl?: string | null; profileImages?: { url?: string | null }[] | null; dynasty?: { id?: string; name?: string | null } | null; birthDate?: string | Date | null; deathDate?: string | Date | null }
 
-/** 부모 노드: leaf 필드 + (조부모) father/mother(leaf). 기존 인라인 구조와 동일. */
+/** 부모 노드: leaf 필드 + (조부모) father/mother/adoptiveFather/adoptiveMother(leaf). */
 type PersonAncestorNode = PersonNodeLite & {
   father?: PersonNodeLite | null
   mother?: PersonNodeLite | null
+  adoptiveFather?: PersonNodeLite | null
+  adoptiveMother?: PersonNodeLite | null
 }
 
 /** 인물 상세 API 응답의 실질적 shape (persons-detail은 any 반환이므로 이 컴포넌트 내에서 타입 선언) */
@@ -229,16 +231,24 @@ export interface PersonDetailData {
   /** 부모 FK 스칼라 — 형제 친/이복/이부 판별(classifySiblingKinship)의 anchor 입력 */
   fatherId?: string | null
   motherId?: string | null
+  adoptiveFatherId?: string | null
+  adoptiveMotherId?: string | null
+  birthOrder?: number | null
+  genderBirthOrder?: number | null
   father?: PersonAncestorNode | null
   mother?: PersonAncestorNode | null
+  adoptiveFather?: PersonAncestorNode | null
+  adoptiveMother?: PersonAncestorNode | null
   spouse?: PersonNameFields | null
   siblings?: Array<PersonNameFields & {
     id?: string; gender?: string | null; profileImageUrl?: string | null;
     profileImages?: { url?: string | null }[] | null;
     dynasty?: { id?: string; name?: string | null } | null;
     birthDate?: string | Date | null; deathDate?: string | Date | null;
+    birthOrder?: number | null; genderBirthOrder?: number | null;
     /** 친/이복/이부 판별용 부모 FK + 사생아 마커 (REST 투영과 정합) */
     fatherId?: string | null; motherId?: string | null;
+    adoptiveFatherId?: string | null; adoptiveMotherId?: string | null;
     illegitimate?: boolean | null;
   }> | null
   children?: Array<PersonNameFields & {
@@ -246,6 +256,15 @@ export interface PersonDetailData {
     profileImages?: { url?: string | null }[] | null;
     dynasty?: { id?: string; name?: string | null } | null;
     birthDate?: string | Date | null; deathDate?: string | Date | null;
+    birthOrder?: number | null; genderBirthOrder?: number | null;
+    fatherId?: string | null; motherId?: string | null;
+    adoptiveFatherId?: string | null; adoptiveMotherId?: string | null;
+    fatherName?: string | null; motherName?: string | null;
+    adoptiveFatherName?: string | null; adoptiveMotherName?: string | null;
+    father?: (PersonNameFields & { id?: string }) | null;
+    mother?: (PersonNameFields & { id?: string }) | null;
+    isAdopted?: boolean;
+    illegitimate?: boolean | null;
   }> | null
   spouseRelations?: Array<{
     id?: string
@@ -262,8 +281,10 @@ export interface PersonDetailData {
     marriageEndMonth?: number | null
     marriageEndDay?: number | null
     marriageEndPrecision?: string | null
+    marriageEndReason?: string | null
     /** 혼인 서열/형태 (MarriageRank 토큰) */
     marriageRank?: string | null
+    rankHolderId?: string | null
     note?: string | null
     spouse?: (PersonNameFields & {
       id?: string

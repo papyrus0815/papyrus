@@ -218,9 +218,13 @@ model Person {
   /// 사생아·서출 여부 (가계도 카드에 별표 마커)
   illegitimate Boolean @default(false) @map("illegitimate")
 
-  /// 출생 서열 (1-base, 성별 통합 — 예: 5 → "5남" 또는 gender 미상 시 "다섯째").
+  /// 출생 서열 (1-base, 성별 통합 — 예: 5 → "다섯째").
   /// 생일 미상 형제가 많은 사서 인물용 — 가계도 형제 정렬의 1차 키(birthYear는 2차).
   birthOrder Int? @map("birth_order")
+
+  /// 성별 내 출생 서열 (1-base, 아들끼리/딸끼리 서열 — 예: 3 + MALE → "3남", 1 + FEMALE → "장녀").
+  /// 통합 서열(birthOrder) 미상인 채 "태종의 3남"처럼 전해지는 사서 기록 및 미등록 형제 존재 시 서열 왜곡 방지용.
+  genderBirthOrder Int? @map("gender_birth_order")
 
   /// 활동시기(floruit) — 생몰이 아예 미상이고 '활동 연대'만 아는 고대·중세 인물용(생몰의 폴백, 생몰 있으면 미표시).
   /// 크기값(양수) 연도 + floruitEra(BC/AD). 세기만 알면 start=1401·end=1500처럼 세기 경계로 채운다.
@@ -247,11 +251,15 @@ model Person {
   preEnthronementTitle String? @map("pre_enthronement_title") @db.VarChar(100)
 
   //--- 외래키
-  dynastyId      String? @map("dynasty_id") @db.Char(36)
-  religionId     String? @map("religion_id") @db.Char(36)
-  denominationId String? @map("denomination_id") @db.Char(36)
-  fatherId       String? @map("father_id") @db.Char(36)
-  motherId       String? @map("mother_id") @db.Char(36)
+  dynastyId        String? @map("dynasty_id") @db.Char(36)
+  religionId       String? @map("religion_id") @db.Char(36)
+  denominationId   String? @map("denomination_id") @db.Char(36)
+  fatherId         String? @map("father_id") @db.Char(36)
+  motherId         String? @map("mother_id") @db.Char(36)
+  /// 양부(養父)·출계 아버지 FK — 생부(fatherId)와 별도로 왕실 종법·입양 계승선을 동시에 보존
+  adoptiveFatherId String? @map("adoptive_father_id") @db.Char(36)
+  /// 양모(養母)·출계 어머니 FK — 생모(motherId)와 별도로 입양·법통 어머니를 보존
+  adoptiveMotherId String? @map("adoptive_mother_id") @db.Char(36)
   /// @deprecated 직업 정보는 Career 테이블들 사용 (MilitaryCareer, BusinessCareer 등)
   jobId          String? @map("job_id") @db.Char(36)
   countryId      String? @map("country_id") @db.Char(36) // 주 국적 — 현대 Country 전용. 역사국가 주국적은 historicalCountryId 사용
@@ -272,20 +280,25 @@ model Person {
   deathPlaceText String? @map("death_place_text") @db.VarChar(255)
 
   //--- 관계 필드
-  dynasty            Dynasty?              @relation(fields: [dynastyId], references: [id], onDelete: SetNull)
-  religion           Religion?             @relation(fields: [religionId], references: [id], onDelete: SetNull)
-  denomination       ReligionDenomination? @relation("DenominationToPerson", fields: [denominationId], references: [id], onDelete: SetNull)
-  job                Job?                  @relation("JobToPerson", fields: [jobId], references: [id], onDelete: SetNull)
-  country            Country?              @relation("CountryToPerson", fields: [countryId], references: [id], onDelete: SetNull)
-  historicalCountry  HistoricalCountry?    @relation("PersonHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
-  birthCity          City?                 @relation("PersonBirthCity", fields: [birthCityId], references: [id], onDelete: SetNull)
-  deathCity          City?                 @relation("PersonDeathCity", fields: [deathCityId], references: [id], onDelete: SetNull)
-  birthAdminDivision AdministrativeDivision? @relation("PersonBirthAdminDivision", fields: [birthAdminDivisionId], references: [id], onDelete: SetNull)
-  deathAdminDivision AdministrativeDivision? @relation("PersonDeathAdminDivision", fields: [deathAdminDivisionId], references: [id], onDelete: SetNull)
-  father             Person?               @relation("ParentChildFather", fields: [fatherId], references: [id], onDelete: SetNull)
-  mother             Person?               @relation("ParentChildMother", fields: [motherId], references: [id], onDelete: SetNull)
-  childrenFromFather Person[]              @relation("ParentChildFather")
-  childrenFromMother Person[]              @relation("ParentChildMother")
+  dynasty                 Dynasty?                @relation(fields: [dynastyId], references: [id], onDelete: SetNull)
+  religion                Religion?               @relation(fields: [religionId], references: [id], onDelete: SetNull)
+  denomination            ReligionDenomination?   @relation("DenominationToPerson", fields: [denominationId], references: [id], onDelete: SetNull)
+  job                     Job?                    @relation("JobToPerson", fields: [jobId], references: [id], onDelete: SetNull)
+  country                 Country?                @relation("CountryToPerson", fields: [countryId], references: [id], onDelete: SetNull)
+  historicalCountry       HistoricalCountry?      @relation("PersonHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+  birthCity               City?                   @relation("PersonBirthCity", fields: [birthCityId], references: [id], onDelete: SetNull)
+  deathCity               City?                   @relation("PersonDeathCity", fields: [deathCityId], references: [id], onDelete: SetNull)
+  birthAdminDivision      AdministrativeDivision? @relation("PersonBirthAdminDivision", fields: [birthAdminDivisionId], references: [id], onDelete: SetNull)
+  deathAdminDivision      AdministrativeDivision? @relation("PersonDeathAdminDivision", fields: [deathAdminDivisionId], references: [id], onDelete: SetNull)
+  father                  Person?                 @relation("ParentChildFather", fields: [fatherId], references: [id], onDelete: SetNull)
+  mother                  Person?                 @relation("ParentChildMother", fields: [motherId], references: [id], onDelete: SetNull)
+  childrenFromFather      Person[]                @relation("ParentChildFather")
+  childrenFromMother      Person[]                @relation("ParentChildMother")
+  adoptiveFather          Person?                 @relation("ParentChildAdoptiveFather", fields: [adoptiveFatherId], references: [id], onDelete: SetNull)
+  adoptiveMother          Person?                 @relation("ParentChildAdoptiveMother", fields: [adoptiveMotherId], references: [id], onDelete: SetNull)
+  adoptedChildrenAsFather Person[]                @relation("ParentChildAdoptiveFather")
+  adoptedChildrenAsMother Person[]                @relation("ParentChildAdoptiveMother")
+  parentMarriage          PersonSpouse?           @relation("MarriageChildren", fields: [parentMarriageId], references: [id], onDelete: SetNull)
   foundedCompanies   Company[]             @relation("FounderToCompany")
   /// 시조로 등록된 가문들 (보통 0~1)
   foundedDynasties   Dynasty[]             @relation("DynastyFounder")
@@ -370,6 +383,8 @@ model Person {
   @@index([denominationId], name: "idx_person_denominationId")
   @@index([fatherId], name: "idx_person_fatherId")
   @@index([motherId], name: "idx_person_motherId")
+  @@index([adoptiveFatherId], name: "idx_person_adoptiveFatherId")
+  @@index([adoptiveMotherId], name: "idx_person_adoptiveMotherId")
   @@index([jobId], name: "idx_person_jobId")
   @@index([countryId], name: "idx_person_countryId")
   @@index([historicalCountryId], name: "idx_person_historicalCountryId")
@@ -495,6 +510,16 @@ enum MarriageRank {
   OTHER      // 기타
 }
 
+/// 혼인 종료/해소 사유 — 사별·이혼·폐위·무효 등
+enum MarriageEndReason {
+  DEATH      // 사별
+  DIVORCE    // 이혼
+  DEPOSED    // 폐위·출궁
+  ANNULMENT  // 혼인무효·파혼
+  SEPARATION // 별거·결별
+  OTHER      // 기타
+}
+
 model PersonSpouse {
   id       String @id @default(uuid()) @db.Char(36)
   personId String @map("person_id") @db.Char(36)
@@ -527,15 +552,23 @@ model PersonSpouse {
   /// 혼인 종료일 정밀도: 'year'|'month'|'day'
   marriageEndPrecision String? @map("marriage_end_precision") @db.VarChar(10)
 
+  /// 혼인 종료/해소 사유 (사별·이혼·폐위·무효 등)
+  marriageEndReason MarriageEndReason? @map("marriage_end_reason")
+
   /// 혼인 서열/형태 (정실·계비·후궁 등). null = 미분류
   marriageRank MarriageRank? @map("marriage_rank")
+
+  /// 비대칭 혼인 서열(PRIMARY·SECONDARY·CONCUBINE 등)이 귀속되는 대상 배우자 ID (personId 또는 spouseId).
+  /// canonical(min,max) 정규화 시에도 누구에게 부여된 서열인지 방향성을 보존해 시점 역전을 방지한다.
+  rankHolderId String? @map("rank_holder_id") @db.Char(36)
 
   note String? @db.Text
   createdAt         DateTime  @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt         DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
 
-  person Person @relation("PersonAsPerson", fields: [personId], references: [id], onDelete: Cascade)
-  spouse Person @relation("PersonAsSpouse", fields: [spouseId], references: [id], onDelete: Cascade)
+  person   Person   @relation("PersonAsPerson", fields: [personId], references: [id], onDelete: Cascade)
+  spouse   Person   @relation("PersonAsSpouse", fields: [spouseId], references: [id], onDelete: Cascade)
+  children Person[] @relation("MarriageChildren")
 
   @@index([personId], name: "idx_person_spouse_personId")
   @@index([spouseId], name: "idx_person_spouse_spouseId")

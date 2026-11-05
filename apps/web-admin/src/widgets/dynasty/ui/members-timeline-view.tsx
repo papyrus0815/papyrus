@@ -42,26 +42,47 @@ export function MembersTimelineView({ persons }: Props) {
   const navigate = useNavigate()
   const now = new Date().getFullYear()
 
-  // 출생년 정렬 (없는 경우 맨 뒤)
-  const sorted = [...persons].sort((a, b) => {
-    const ya = a.birthYear != null ? signedYear(a.birthEra ?? null, a.birthYear) : Number.POSITIVE_INFINITY
-    const yb = b.birthYear != null ? signedYear(b.birthEra ?? null, b.birthYear) : Number.POSITIVE_INFINITY
-    return ya - yb
+  // 인물별 시작/종료 연도 계산 (출생·사망 우선, 없으면 전성기(floruit) 폴백)
+  const spans = persons.map((p) => {
+    const start =
+      p.birthYear != null
+        ? signedYear(p.birthEra ?? null, p.birthYear)
+        : p.floruitStartYear != null
+          ? signedYear(p.floruitEra ?? null, p.floruitStartYear)
+          : null
+    const rawEnd =
+      p.deathYear != null
+        ? signedYear(p.deathEra ?? null, p.deathYear)
+        : p.isAlive
+          ? now
+          : p.floruitEndYear != null
+            ? signedYear(p.floruitEra ?? null, p.floruitEndYear)
+            : p.birthYear == null && p.floruitStartYear != null
+              ? signedYear(p.floruitEra ?? null, p.floruitStartYear)
+              : null
+    const end =
+      start != null && rawEnd != null && rawEnd >= start ? rawEnd : null
+    const isFloruitFallback = p.birthYear == null && p.floruitStartYear != null
+    return { person: p, start, end, isFloruitFallback }
   })
 
-  // 시간 축 범위
-  const births = persons
-    .filter((p) => p.birthYear != null)
-    .map((p) => signedYear(p.birthEra ?? null, p.birthYear!))
-  const deaths = persons
-    .filter((p) => p.deathYear != null)
-    .map((p) => signedYear(p.deathEra ?? null, p.deathYear!))
-  const minVal = births.length ? Math.min(...births) : 0
-  const maxRaw = deaths.length ? Math.max(...deaths, now) : now
+  // 시간 축 범위 — 생존 인물이 있을 때만 현재 연도(now)를 상한에 포함해 고대·중세 가문 축이 찌그러지지 않게 함
+  const hasAlive = persons.some((p) => p.isAlive)
+  const startYears = spans
+    .map((s) => s.start)
+    .filter((v): v is number => v != null)
+  const endYears = spans
+    .map((s) => s.end ?? s.start)
+    .filter((v): v is number => v != null)
+  const minVal = startYears.length ? Math.min(...startYears) : now - 100
+  const maxCandidates = hasAlive ? [...endYears, now] : endYears
+  const maxRaw = maxCandidates.length
+    ? Math.max(...maxCandidates, minVal + 1)
+    : now
   const pad = Math.max(10, Math.round((maxRaw - minVal) * 0.04))
   const axisMin = minVal - pad
   const axisMax = maxRaw + pad
-  const range = axisMax - axisMin
+  const range = Math.max(1, axisMax - axisMin)
 
   const ticks = pickAxisTicks(axisMin, axisMax)
 
@@ -82,17 +103,7 @@ export function MembersTimelineView({ persons }: Props) {
           </Track>
         </Header>
         <Rows>
-          {sorted.map((p) => {
-            const hasBirth = p.birthYear != null
-            const hasDeath = p.deathYear != null
-            const start = hasBirth
-              ? signedYear(p.birthEra ?? null, p.birthYear!)
-              : null
-            const end = hasDeath
-              ? signedYear(p.deathEra ?? null, p.deathYear!)
-              : p.isAlive
-                ? now
-                : null
+          {spans.map(({ person: p, start, end, isFloruitFallback }) => {
             const isRuling = !!p.regnalName?.trim()
             const isAlive = !!p.isAlive
 
@@ -101,13 +112,17 @@ export function MembersTimelineView({ persons }: Props) {
             const widthPct =
               start != null && end != null
                 ? Math.max(1, Math.min(100 - leftPct, ((end - start) / range) * 100))
-                : 0
+                : start != null
+                  ? 1
+                  : 0
 
             const displayName = getPersonDisplayName(p, true)
             const ageInfo =
-              start != null && end != null
+              !isFloruitFallback && start != null && end != null
                 ? `${Math.max(0, end - start)}세${isAlive ? '+' : ''}`
-                : '연도 미상'
+                : isFloruitFallback && start != null
+                  ? `fl. ${formatYear(start)}${end != null && end !== start ? `–${formatYear(end)}` : ''}`
+                  : '연도 미상'
 
             return (
               <Row
@@ -142,8 +157,11 @@ export function MembersTimelineView({ persons }: Props) {
                       $alive={isAlive}
                     >
                       <BarLabel>
+                        {isFloruitFallback ? 'fl. ' : ''}
                         {formatYear(start)}
-                        {end != null ? ` – ${isAlive ? '현재' : formatYear(end)}` : ''}
+                        {end != null && (!isFloruitFallback || end !== start)
+                          ? ` – ${isAlive ? '현재' : formatYear(end)}`
+                          : ''}
                       </BarLabel>
                     </Bar>
                   ) : (

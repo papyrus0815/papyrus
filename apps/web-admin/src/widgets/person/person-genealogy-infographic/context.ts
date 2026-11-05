@@ -28,7 +28,14 @@ export const SpouseNamesLookupContext = createContext<Map<string, string[]>>(
 )
 
 export type UnlinkRelationPayload = {
-  kind: 'father' | 'mother' | 'spouse' | 'child' | 'sibling'
+  kind:
+    | 'father'
+    | 'mother'
+    | 'adoptiveFather'
+    | 'adoptiveMother'
+    | 'spouse'
+    | 'child'
+    | 'sibling'
   targetId: string
   targetName: string
 }

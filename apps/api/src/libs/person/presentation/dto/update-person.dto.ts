@@ -23,18 +23,20 @@ export class UpdatePersonDto {
   name?: string
 
   /**
-   * 중간 이름 (선택)
+   * 중간 이름 (선택). null이면 저장된 값 삭제
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  middleName?: string
+  middleName?: string | null
 
   /**
-   * 성 (선택)
+   * 성 (선택). null이면 저장된 값 삭제(성이 없는 인물로 변경 시)
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  surname?: string
+  surname?: string | null
 
   /**
    * 이름 표시 순서: korean(성+이름), western(이름+성).
@@ -318,6 +320,22 @@ export class UpdatePersonDto {
   motherId?: string | null
 
   /**
+   * 양부(입양·출계 아버지) ID (선택). null이면 해제
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  adoptiveFatherId?: string | null
+
+  /**
+   * 양모(입양·출계 어머니) ID (선택). null이면 해제
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  adoptiveMotherId?: string | null
+
+  /**
    * 사생아·서출 여부 — 가계도 카드 별표(*) 마커.
    */
   @IsOptional()
@@ -332,6 +350,15 @@ export class UpdatePersonDto {
   @IsInt()
   @Min(1)
   birthOrder?: number | null
+
+  /**
+   * 성별 내 출생 서열 (1-base, 아들끼리/딸끼리 서열 — 예: 3 + MALE → "3남"). null이면 해제.
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsInt()
+  @Min(1)
+  genderBirthOrder?: number | null
 
   /**
    * 주 국적 — 현대 Country ID (선택). null=명시적 해제. 역사 국가면 historicalCountryId 사용.

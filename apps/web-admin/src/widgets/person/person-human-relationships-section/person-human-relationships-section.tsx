@@ -61,6 +61,7 @@ import {
 } from '@/shared/api/person-life-events'
 import { type PersonResponseDto, getAllPersons } from '@/shared/api/persons'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { compareByDate, signedDateFromParts } from '@/shared/lib/iso-date'
 import { formatLifespan as formatLifespanText } from '@/shared/lib/lifespan-text'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
@@ -86,6 +87,8 @@ type Props = {
    * 미지정 시 기존처럼 `/persons-timeline/:id` 페이지로 이동.
    */
   onPersonClick?: (personId: string) => void
+  /** 읽기 전용(모달 임베드 등) — 관계 추가·수정·삭제·시기 추가/편집 액션을 숨김 */
+  readOnly?: boolean
 }
 
 function normalizeRelationshipType(
@@ -119,6 +122,7 @@ export function PersonHumanRelationshipsSection({
   personId,
   relationships,
   onPersonClick,
+  readOnly = false,
 }: Props) {
   const queryClient = useQueryClient()
   const rawList = relationships ?? []
@@ -643,6 +647,7 @@ export function PersonHumanRelationshipsSection({
   ])
 
   const startEdit = (rel: RelRowModel) => {
+    if (readOnly) return
     setEditingId(rel.id)
     setEditAffinity(rel.affinityLevel as AffinityLevel | null)
     setEditType(rel.relationshipType)
@@ -682,6 +687,7 @@ export function PersonHumanRelationshipsSection({
   }
 
   const openCreateModal = (presetType: PersonHumanRelationshipType) => {
+    if (readOnly) return
     resetNewForm()
     setNewType(presetType)
     setCreateModalOpen(true)
@@ -868,18 +874,23 @@ export function PersonHumanRelationshipsSection({
         {(rel.phases ?? []).length > 0 && (
           <PhaseTimeline
             phases={rel.phases ?? []}
-            onEditPhase={(phase) => openPhaseModal(rel.id, phase)}
-            onDeletePhase={(phase) =>
-              setConfirmDialog({
-                message: `"${phase.label || '시기'}"를 삭제할까요?`,
-                onConfirm: () => {
-                  phaseDeleteMut.mutate({
-                    relationshipId: rel.id,
-                    phaseId: phase.id,
-                  })
-                  setConfirmDialog(null)
-                },
-              })
+            onEditPhase={
+              readOnly ? undefined : (phase) => openPhaseModal(rel.id, phase)
+            }
+            onDeletePhase={
+              readOnly
+                ? undefined
+                : (phase) =>
+                    setConfirmDialog({
+                      message: `"${phase.label || '시기'}"를 삭제할까요?`,
+                      onConfirm: () => {
+                        phaseDeleteMut.mutate({
+                          relationshipId: rel.id,
+                          phaseId: phase.id,
+                        })
+                        setConfirmDialog(null)
+                      },
+                    })
             }
           />
         )}
@@ -905,7 +916,11 @@ export function PersonHumanRelationshipsSection({
                 key={s.id}
                 to={`/persons-timeline/${s.lifeEvent.personId}`}
                 onClick={(e) => handlePersonLinkClick(e, s.lifeEvent.personId)}
-                title={`${s.lifeEvent.title} — ${formatDateDisplay(s.lifeEvent.startDate ?? '')}`}
+                title={
+                  s.lifeEvent.startDate
+                    ? `${s.lifeEvent.title} — ${formatDateDisplay(s.lifeEvent.startDate, s.lifeEvent.startDatePrecision)}`
+                    : s.lifeEvent.title
+                }
               >
                 <FiCalendar size={11} aria-hidden />
                 {s.lifeEvent.title}
@@ -914,37 +929,39 @@ export function PersonHumanRelationshipsSection({
           </SourceChipRow>
         )}
         {rel.note ? <RelNote>{rel.note}</RelNote> : null}
-        <RelCardActions>
-          <IconTextBtn type="button" onClick={() => startEdit(rel)}>
-            <FiEdit2 size={14} />
-            수정
-          </IconTextBtn>
-          <IconTextBtn
-            type="button"
-            onClick={() => openPhaseModal(rel.id, null)}
-            title="이 관계의 시기별 변화 추가"
-          >
-            <FiPlus size={14} />
-            시기 추가
-          </IconTextBtn>
-          <IconTextBtn
-            type="button"
-            $danger
-            onClick={() => {
-              const name = getPersonDisplayName(rel.otherPerson)
-              setConfirmDialog({
-                message: `「${name}」와(과)의 관계를 삭제할까요?`,
-                onConfirm: () => {
-                  deleteMut.mutate(rel.id)
-                  setConfirmDialog(null)
-                },
-              })
-            }}
-          >
-            <FiTrash2 size={14} />
-            삭제
-          </IconTextBtn>
-        </RelCardActions>
+        {!readOnly && (
+          <RelCardActions>
+            <IconTextBtn type="button" onClick={() => startEdit(rel)}>
+              <FiEdit2 size={14} />
+              수정
+            </IconTextBtn>
+            <IconTextBtn
+              type="button"
+              onClick={() => openPhaseModal(rel.id, null)}
+              title="이 관계의 시기별 변화 추가"
+            >
+              <FiPlus size={14} />
+              시기 추가
+            </IconTextBtn>
+            <IconTextBtn
+              type="button"
+              $danger
+              onClick={() => {
+                const name = getPersonDisplayName(rel.otherPerson)
+                setConfirmDialog({
+                  message: `「${name}」와(과)의 관계를 삭제할까요?`,
+                  onConfirm: () => {
+                    deleteMut.mutate(rel.id)
+                    setConfirmDialog(null)
+                  },
+                })
+              }}
+            >
+              <FiTrash2 size={14} />
+              삭제
+            </IconTextBtn>
+          </RelCardActions>
+        )}
       </RelCard>
     )
   }
@@ -1369,14 +1386,16 @@ export function PersonHumanRelationshipsSection({
               <FiBookOpen size={14} />
               계보 보기
             </HeaderBtn>
-            <HeaderBtn
-              type="button"
-              onClick={() => openCreateModal('GENERAL')}
-              aria-label="인간관계 추가"
-            >
-              <FiPlus size={14} />
-              관계 추가
-            </HeaderBtn>
+            {!readOnly && (
+              <HeaderBtn
+                type="button"
+                onClick={() => openCreateModal('GENERAL')}
+                aria-label="인간관계 추가"
+              >
+                <FiPlus size={14} />
+                관계 추가
+              </HeaderBtn>
+            )}
           </HeaderActionGroup>
         </HeaderRow>
 
@@ -2116,6 +2135,7 @@ function SourceSelector({
       personId: string
       ownerLabel: string
       startDate: string | null
+      startDatePrecision: string | null
     }> = []
     for (const e of subjectEvents) {
       merged.push({
@@ -2123,7 +2143,10 @@ function SourceSelector({
         title: e.title,
         personId: e.personId,
         ownerLabel: '이 인물',
-        startDate: e.startDate,
+        startDate:
+          signedDateFromParts(e.startEra, e.startYear, e.startMonth, e.startDay) ??
+          e.startDate,
+        startDatePrecision: e.startDatePrecision ?? null,
       })
     }
     for (const e of relatedEvents) {
@@ -2132,14 +2155,13 @@ function SourceSelector({
         title: e.title,
         personId: e.personId,
         ownerLabel: '상대 인물',
-        startDate: e.startDate,
+        startDate:
+          signedDateFromParts(e.startEra, e.startYear, e.startMonth, e.startDay) ??
+          e.startDate,
+        startDatePrecision: e.startDatePrecision ?? null,
       })
     }
-    return merged.sort((a, b) => {
-      const aDate = a.startDate ?? '9999'
-      const bDate = b.startDate ?? '9999'
-      return aDate.localeCompare(bDate)
-    })
+    return merged.sort((a, b) => compareByDate(a.startDate, b.startDate, 'asc'))
   }, [subjectEvents, relatedEvents])
 
   const selected = useMemo(() => new Set(value), [value])
@@ -2199,7 +2221,7 @@ function SourceSelector({
                 <SourceItemOwner>{event.ownerLabel}</SourceItemOwner>
                 {event.startDate && (
                   <SourceItemDate>
-                    {formatDateDisplay(event.startDate)}
+                    {formatDateDisplay(event.startDate, event.startDatePrecision)}
                   </SourceItemDate>
                 )}
               </SourceItemMeta>
@@ -2221,12 +2243,20 @@ function sortTags(tags: PersonRelationshipTag[]): PersonRelationshipTag[] {
   )
 }
 
-/** ISO 일자 → 표시 (BC는 음수 ISO 형식 `-yyyy-MM-DD`) */
-function formatDateDisplay(iso: string): string {
+/** ISO 일자 → 표시 (BC는 음수 ISO 형식 `-yyyy-MM-DD`, 정밀도 year/month 반영) */
+function formatDateDisplay(iso: string, precision?: string | null): string {
   if (!iso) return ''
   const isBce = iso.startsWith('-')
   const body = isBce ? iso.slice(1) : iso
   const ymd = body.slice(0, 10)
+  if (precision === 'year') {
+    const y = parseInt(ymd.slice(0, 4), 10)
+    if (Number.isFinite(y) && y > 0) return isBce ? `BC ${y}년` : `${y}년`
+  }
+  if (precision === 'month') {
+    const ym = ymd.slice(0, 7)
+    return isBce ? `BC ${ym}` : ym
+  }
   return isBce ? `BC ${ymd}` : ymd
 }
 

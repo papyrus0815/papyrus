@@ -111,10 +111,14 @@ export interface PersonResponseDto {
   denomination?: { id: string; name: string } | null
   fatherId: string | null
   motherId: string | null
+  adoptiveFatherId?: string | null
+  adoptiveMotherId?: string | null
   /** 사생아·서출 여부 — 가계도 카드 별표(*) 마커 */
   illegitimate: boolean
   /** 출생 서열 (1-base, 성별 통합) */
   birthOrder?: number | null
+  /** 성별 내 출생 서열 (1-base, 아들끼리/딸끼리 서열 — 예: 3남 = 3) */
+  genderBirthOrder?: number | null
   /** effective 주 국적 id (역사>현대 우선). 역사국가면 HistoricalCountry PK가 담길 수 있음 — 라우팅엔 country.modernCountryId 사용. */
   countryId: string | null
   /** 주 국적이 역사(과거) 국가일 때의 first-class FK (HistoricalCountry PK). 현대 주국적이면 null. */
@@ -252,6 +256,8 @@ export interface FamilyTreeNodeDto {
   deathYear: number | null
   /** 출생 서열 (1-base, 형제·자녀 정렬 1차 키) */
   birthOrder: number | null
+  /** 성별 내 출생 서열 (1-base, 아들끼리/딸끼리 서열 — 예: 3남 = 3) */
+  genderBirthOrder?: number | null
   /** 생존 여부 — 몰년 미상 역사 인물(false)과 현대 생존 인물(true) 구분 */
   isAlive: boolean
   /** 활동시기(floruit) — 생몰 전면 미상 인물의 활동 연대 폴백 */
@@ -270,6 +276,9 @@ export interface FamilyTreeNodeDto {
    */
   fatherId: string | null
   motherId: string | null
+  /** 양부모(입양·출계) FK 스칼라 */
+  adoptiveFatherId?: string | null
+  adoptiveMotherId?: string | null
   originalName: string | null
   posthumousName: string | null
   templeName: string | null
@@ -288,11 +297,17 @@ export interface FamilyTreeEdgeDto {
   source: string
   target: string
   type: 'parent-child' | 'spouse'
+  /** parent-child 엣지: 친생('biological', 기본) vs 입양·출계('adoptive') */
+  lineage?: 'biological' | 'adoptive'
   /** spouse 엣지에만: 결혼 시작/종료 연도(부호 연도 — BC는 음수) + 메모 */
   marriageStartYear?: number | null
   marriageEndYear?: number | null
+  /** spouse 엣지에만: 혼인 종료/해소 사유 (DEATH·DIVORCE·DEPOSED 등) */
+  marriageEndReason?: string | null
   /** spouse 엣지에만: 혼인 서열/형태 (MarriageRank 토큰 — PRIMARY·CONCUBINE 등) */
   marriageRank?: string | null
+  /** spouse 엣지에만: 비대칭 서열(PRIMARY·SECONDARY·CONCUBINE) 귀속 배우자 ID */
+  rankHolderId?: string | null
   note?: string | null
   /** spouse 엣지에만: PersonSpouse 미등록 — 자녀의 다른 친부모로 추정된 배우자 */
   inferred?: boolean

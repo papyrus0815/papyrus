@@ -64,24 +64,42 @@ function periodOf(d: {
   return `${formatCountryYearShort(start) ?? ''}–${formatCountryYearShort(end) ?? ''}`
 }
 
-/** 시조 생몰 연도 — "595–673" / "595–" / null. */
-function lifespanYears(
-  birth: string | null,
-  death: string | null,
-): string | null {
-  const birthYear = yearOf(birth)
-  const deathYear = yearOf(death)
-  if (!birthYear && !deathYear) return null
-  return `${birthYear ?? '?'}–${deathYear ?? ''}`
+/**
+ * 시조 생몰 연도 — "595–673" / "BC 100–BC 44" / "595–" / null.
+ * birthDate/deathDate는 크기값(양수) 연도로 저장되므로 birthEra/deathEra로 부호를 복원한다.
+ */
+function founderLifespanOf(f: {
+  birthDate: string | null
+  deathDate: string | null
+  birthEra?: string | null
+  deathEra?: string | null
+}): string | null {
+  const by = yearOf(f.birthDate)
+  const dy = yearOf(f.deathDate)
+  if (!by && !dy) return null
+  const bLabel = by ? (f.birthEra === 'BC' ? `BC ${by}` : by) : '?'
+  const dLabel = dy ? (f.deathEra === 'BC' ? `BC ${dy}` : dy) : ''
+  return `${bLabel}–${dLabel}`
 }
 
 function ageOf(p: Person): number | null {
   if (p.birthYear == null) return null
   const start = signedYear(p.birthEra ?? null, p.birthYear)
-  if (p.isAlive) return new Date().getFullYear() - start
+  if (p.isAlive) {
+    const diff = new Date().getFullYear() - start
+    return diff >= 0 ? diff : null
+  }
   if (p.deathYear == null) return null
   const end = signedYear(p.deathEra ?? null, p.deathYear)
-  return end - start
+  return end >= start ? end - start : null
+}
+
+function effectiveChronoYear(p: Person): number {
+  if (p.birthYear != null) return signedYear(p.birthEra ?? null, p.birthYear)
+  if (p.floruitStartYear != null) return signedYear(p.floruitEra ?? null, p.floruitStartYear)
+  if (p.floruitEndYear != null) return signedYear(p.floruitEra ?? null, p.floruitEndYear)
+  if (p.deathYear != null) return signedYear(p.deathEra ?? null, p.deathYear)
+  return Number.POSITIVE_INFINITY
 }
 
 function compareBy(sort: MemberSort) {
@@ -95,15 +113,24 @@ function compareBy(sort: MemberSort) {
     if (sort === 'age') {
       const aa = ageOf(a) ?? -1
       const ab = ageOf(b) ?? -1
-      return ab - aa
+      if (ab !== aa) return ab - aa
     }
     if (sort === 'influence') {
-      return (b.influence ?? -1) - (a.influence ?? -1)
+      const ia = a.influence ?? -1
+      const ib = b.influence ?? -1
+      if (ib !== ia) return ib - ia
     }
-    // birth: oldest first; missing birth at end
-    const ya = a.birthYear != null ? signedYear(a.birthEra ?? null, a.birthYear) : Number.POSITIVE_INFINITY
-    const yb = b.birthYear != null ? signedYear(b.birthEra ?? null, b.birthYear) : Number.POSITIVE_INFINITY
-    return ya - yb
+    // birth (default & tie-breaker): oldest first (birthYear → floruit → deathYear); missing at end
+    const ya = effectiveChronoYear(a)
+    const yb = effectiveChronoYear(b)
+    if (ya !== yb) return ya - yb
+    if (a.birthOrder != null && b.birthOrder != null && a.birthOrder !== b.birthOrder) {
+      return a.birthOrder - b.birthOrder
+    }
+    return getPersonDisplayName(a, true).localeCompare(
+      getPersonDisplayName(b, true),
+      'ko',
+    )
   }
 }
 
@@ -177,10 +204,10 @@ export function DynastyMembersInfographicModal({
 
   // 헤더 요약 파생값 — 시조(등록 인물 또는 텍스트)·존속기간·설명.
   const founderName = dynasty?.founder
-    ? [dynasty.founder.surname, dynasty.founder.name].filter(Boolean).join(' ')
+    ? getPersonDisplayName(dynasty.founder)
     : dynasty?.founderText?.trim() || null
   const founderLifespan = dynasty?.founder
-    ? lifespanYears(dynasty.founder.birthDate, dynasty.founder.deathDate)
+    ? founderLifespanOf(dynasty.founder)
     : null
   const periodLabel = dynasty ? periodOf(dynasty) : null
   const description = dynasty?.description?.trim() || null

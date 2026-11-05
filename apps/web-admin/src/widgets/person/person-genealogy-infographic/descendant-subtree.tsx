@@ -5,7 +5,8 @@ import type { FamilyTreePerson } from '@/shared/api/persons-family-tree'
 
 import { DescendantNode } from './card'
 import { DESCENDANT_GAP } from './constants'
-import { KinshipLookupContext } from './context'
+import { FamilyTreeLookupContext, KinshipLookupContext } from './context'
+import { withParentNames } from './family-tree-derive'
 import { ForkFromOneParent, ForkToCompactChildren } from './forks'
 import { descendantSlotWidths, nextGenOf } from './geometry'
 import { formatDescendantRoleBadge } from './kinship'
@@ -22,6 +23,7 @@ const DESCENDANT_BADGES = ['손자녀', '증손자녀', '고손자녀', '후손'
  * 더 깊이 있을 수 있지만 BFS limit + UI 가독성 위해 maxDepth 제한.
  */
 export function DescendantSubtree({
+  parentId,
   descendants,
   childrenOf,
   depth,
@@ -30,6 +32,7 @@ export function DescendantSubtree({
   inMarriageByPersonId,
   onPersonClick,
 }: {
+  parentId?: string
   descendants: FamilyTreePerson[]
   childrenOf: Map<string, FamilyTreePerson[]>
   depth: number
@@ -39,6 +42,7 @@ export function DescendantSubtree({
   onPersonClick?: (id: string) => void
 }) {
   const kinshipMap = useContext(KinshipLookupContext)
+  const nodeMap = useContext(FamilyTreeLookupContext)
   if (descendants.length === 0) return null
   const badge = DESCENDANT_BADGES[depth] ?? '후손'
   // 각 후손 페어의 실제 렌더 폭 = max(NODE_W, 그 아래 서브트리 폭). geometry 단일 출처를
@@ -60,17 +64,30 @@ export function DescendantSubtree({
           if (g.id) nextVisited.add(g.id)
           const inMarriagesWith = g.id ? inMarriageByPersonId?.get(g.id) ?? [] : []
           const gKin = g.id ? kinshipMap.get(g.id) : undefined
-          const resolvedBadge = formatDescendantRoleBadge(g, badge, gKin)
+          const isAdoptedUnderParent = Boolean(
+            parentId &&
+              (g.adoptiveFatherId === parentId || g.adoptiveMotherId === parentId) &&
+              g.fatherId !== parentId &&
+              g.motherId !== parentId,
+          )
+          const resolvedBadge = formatDescendantRoleBadge(g, badge, gKin, {
+            isAdoptedUnderParent,
+          })
+          const enrichedPerson =
+            nodeMap.size > 0
+              ? withParentNames(g, nodeMap, parentId ? { omitParentId: parentId } : undefined)
+              : g
           return (
             <GrandchildPair key={g.id}>
               <DescendantNode
-                person={g}
+                person={enrichedPerson}
                 badge={resolvedBadge}
                 inMarriagesWith={inMarriagesWith}
                 onPersonClick={onPersonClick}
               />
               {next.length > 0 && (
                 <DescendantSubtree
+                  parentId={g.id}
                   descendants={next}
                   childrenOf={childrenOf}
                   depth={depth + 1}

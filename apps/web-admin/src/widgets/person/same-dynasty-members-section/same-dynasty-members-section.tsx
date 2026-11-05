@@ -38,12 +38,34 @@ function formatYearLabel(
   return era === 'BC' ? `BC ${year}` : `${year}`
 }
 
+function formatFloruitLabel(p: Person): string {
+  const s = p.floruitStartYear
+  const e = p.floruitEndYear
+  if (s == null && e == null) return ''
+  const era = p.floruitEra ?? 'AD'
+  const prefix = era === 'BC' ? 'BC ' : ''
+  if (s != null && e != null && s !== e) return `활동 ${prefix}${s}–${e}`
+  const single = s ?? e
+  return single != null ? `활동 ${prefix}${single}` : ''
+}
+
+function primarySortYear(p: Person): number {
+  if (p.birthYear != null) return signedYear(p.birthEra ?? null, p.birthYear)
+  const flYear = p.floruitStartYear ?? p.floruitEndYear ?? null
+  if (flYear != null) return signedYear(p.floruitEra ?? null, flYear)
+  if (p.deathYear != null) return signedYear(p.deathEra ?? null, p.deathYear)
+  return Number.POSITIVE_INFINITY
+}
+
 function lifespan(p: Person): string {
   const b = formatYearLabel(p.birthEra ?? null, p.birthYear ?? null)
   const d = p.isAlive
     ? '—'
     : formatYearLabel(p.deathEra ?? null, p.deathYear ?? null)
-  if (!b && !d) return '연도 미상'
+  if (!b && !d) {
+    const fl = formatFloruitLabel(p)
+    return fl || '연도 미상'
+  }
   if (!b) return `? — ${d || '?'}`
   if (p.isAlive) return `${b} —`
   return `${b} — ${d || '?'}`
@@ -72,8 +94,8 @@ export function SameDynastyMembersSection({
   // 상단 가계도의 실제 대수(sovereignCountry.ordinal)와 모순되므로 정본 재위 대수만 사용한다.
   const { sorted, regnalIndex } = useMemo(() => {
     const list = [...persons].sort((a, b) => {
-      const ya = a.birthYear != null ? signedYear(a.birthEra ?? null, a.birthYear) : Number.POSITIVE_INFINITY
-      const yb = b.birthYear != null ? signedYear(b.birthEra ?? null, b.birthYear) : Number.POSITIVE_INFINITY
+      const ya = primarySortYear(a)
+      const yb = primarySortYear(b)
       if (ya !== yb) return ya - yb
       const oa = a.birthOrder ?? Number.POSITIVE_INFINITY
       const ob = b.birthOrder ?? Number.POSITIVE_INFINITY

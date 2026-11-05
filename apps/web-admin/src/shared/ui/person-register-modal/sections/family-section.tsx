@@ -4,13 +4,16 @@
  * - 각 슬롯 위에 "최근 등록한 인물" dashed 칩 행 (또 등록 모드에서 가계 일괄 등록 가속).
  * - 슬롯 클릭 시 PersonSelectModal — 검색·필터·"+ 새 인물" 인라인 등록.
  */
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 
 import { FiAlertCircle, FiChevronDown, FiPlus } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import type { PersonResponseDto } from '@/shared/api/persons'
-import { MARRIAGE_RANK_OPTIONS } from '@/shared/lib/marriage-rank-labels'
+import {
+  MARRIAGE_END_REASON_OPTIONS,
+  MARRIAGE_RANK_OPTIONS,
+} from '@/shared/lib/marriage-rank-labels'
 import {
   buildPartialDateString,
   emptyPartialDateParts,
@@ -57,6 +60,10 @@ export interface SpouseFormRow {
   end: PartialDateParts
   /** MarriageRank 토큰 또는 ''(미분류) */
   rank: string
+  /** MarriageEndReason 토큰 또는 ''(유지/미지정) */
+  endReason?: string
+  /** 서열 귀속 주체 인물 ID (반대편에서 편집 시 역전 방지용 보존 필드) */
+  rankHolderId?: string | null
   note: string | null
 }
 
@@ -70,6 +77,7 @@ export function normalizeSpouseRow(
         marriageStartDate?: string
         marriageEndDate?: string
         marriageRank?: string | null
+        marriageEndReason?: string | null
       })
     | null
     | undefined,
@@ -79,6 +87,8 @@ export function normalizeSpouseRow(
     start: raw?.start ?? parsePartialDateString(raw?.marriageStartDate),
     end: raw?.end ?? parsePartialDateString(raw?.marriageEndDate),
     rank: raw?.rank ?? raw?.marriageRank ?? '',
+    endReason: raw?.endReason ?? raw?.marriageEndReason ?? '',
+    rankHolderId: raw?.rankHolderId ?? null,
     note: raw?.note ?? null,
   }
 }
@@ -88,23 +98,34 @@ export interface FamilySectionProps {
   // 가족 슬롯
   fatherId: string
   motherId: string
+  adoptiveFatherId?: string
+  adoptiveMotherId?: string
   /** 사생아·서출 — 가계도 카드 별표(*) 마커 */
   illegitimate: boolean
   /** 출생 서열 (1-base 숫자 문자열, 빈 문자열 = 미지정) */
   birthOrder: string
-  /** 배우자 관계 반복 행 (배우자 + 혼인 시작/종료일·서열 + 메모) */
+  /** 성별 내 출생 서열 (장남/2남/장녀 등, 1-base 숫자 문자열) */
+  genderBirthOrder?: string
+  /** 배우자 관계 반복 행 (배우자 + 혼인 시작/종료일·서열·해소사유 + 메모) */
   spouseRows: SpouseFormRow[]
   setFatherId: (id: string) => void
   setMotherId: (id: string) => void
+  setAdoptiveFatherId?: (id: string) => void
+  setAdoptiveMotherId?: (id: string) => void
   setIllegitimate: (value: boolean) => void
   setBirthOrder: (value: string) => void
+  setGenderBirthOrder?: (value: string) => void
   setSpouseRows: React.Dispatch<React.SetStateAction<SpouseFormRow[]>>
   // PersonSelectModal 표시 상태(= "+ 새 인물" 생성 분기)
   showFatherModal: boolean
   showMotherModal: boolean
+  showAdoptiveFatherModal?: boolean
+  showAdoptiveMotherModal?: boolean
   showSpouseModal: boolean
   setShowFatherModal: (v: boolean) => void
   setShowMotherModal: (v: boolean) => void
+  setShowAdoptiveFatherModal?: (v: boolean) => void
+  setShowAdoptiveMotherModal?: (v: boolean) => void
   setShowSpouseModal: (v: boolean) => void
   /** 인라인 검색 옵션 원천 — 인물 풀 + 수정 모드 편집 캐시 합집합(즉시 표시) */
   knownPersons: PersonResponseDto[]
@@ -116,6 +137,12 @@ export interface FamilySectionProps {
   // 폼 컨텍스트
   editPersonId?: string | null
   countryId: string
+  /** 수정 모드 상세 응답에서 확보된 조부모 등 상위 직계 존속 ID 목록 */
+  initialAncestorIds?: string[]
+  /** 수정 모드 상세 응답에서 확보된 자녀 등 직계 비속 ID 목록 */
+  initialDescendantIds?: string[]
+  /** 수정 모드 상세 응답에서 확보된 형제자매 ID 목록 */
+  initialSiblingIds?: string[]
   // 부모 dirty 추적
   markDirty: () => void
   /**
@@ -129,19 +156,29 @@ export function FamilySection({
   fid,
   fatherId,
   motherId,
+  adoptiveFatherId = '',
+  adoptiveMotherId = '',
   illegitimate,
   birthOrder,
+  genderBirthOrder = '',
   spouseRows,
   setFatherId,
   setMotherId,
+  setAdoptiveFatherId,
+  setAdoptiveMotherId,
   setIllegitimate,
   setBirthOrder,
+  setGenderBirthOrder,
   setSpouseRows,
   showFatherModal,
   showMotherModal,
+  showAdoptiveFatherModal = false,
+  showAdoptiveMotherModal = false,
   showSpouseModal,
   setShowFatherModal,
   setShowMotherModal,
+  setShowAdoptiveFatherModal,
+  setShowAdoptiveMotherModal,
   setShowSpouseModal,
   knownPersons,
   persons,
@@ -149,6 +186,9 @@ export function FamilySection({
   recentCandidates,
   editPersonId,
   countryId,
+  initialAncestorIds,
+  initialDescendantIds,
+  initialSiblingIds,
   markDirty,
   onDateModalOpenChange,
 }: FamilySectionProps) {
@@ -181,6 +221,7 @@ export function FamilySection({
       hasAnyPartialDateInput(row.start) ||
         hasAnyPartialDateInput(row.end) ||
         row.rank ||
+        row.endReason ||
         (row.note && row.note.trim()),
     )
   const toggleMetaOpen = (spouseId: string) =>
@@ -196,6 +237,8 @@ export function FamilySection({
     start: emptyPartialDateParts(),
     end: emptyPartialDateParts(),
     rank: '',
+    endReason: '',
+    rankHolderId: null,
     note: null,
   })
   const addSpouseRow = () => setSpouseRows((prev) => [...prev, emptySpouseRow()])
@@ -211,11 +254,16 @@ export function FamilySection({
   const fillSpouseFromModal = (id: string) => {
     setSpouseRows((prev) => {
       if (pendingSpouseRowIndex != null && pendingSpouseRowIndex < prev.length)
-        return prev.map((row, rowIndex) =>
-          rowIndex === pendingSpouseRowIndex
-            ? { ...normalizeSpouseRow(row), spouseId: id }
-            : row,
-        )
+        return prev.map((row, rowIndex) => {
+          if (rowIndex !== pendingSpouseRowIndex) return row
+          const normalized = normalizeSpouseRow(row)
+          return {
+            ...normalized,
+            spouseId: id,
+            rankHolderId:
+              normalized.spouseId === id ? normalized.rankHolderId : null,
+          }
+        })
       if (prev.some((row) => row.spouseId === id)) return prev
       return [...prev, { ...emptySpouseRow(), spouseId: id }]
     })
@@ -236,23 +284,235 @@ export function FamilySection({
     markDirty()
   }
 
-  /** 인물 풀 → 콤보 옵션(슬롯별 exclude 적용). */
-  const personOptions = (excludeIds: string[]): SearchOption[] =>
-    knownPersons
-      .filter((person) => !excludeIds.includes(person.id))
+  // ─── 성별 · 직계 존비속 · 2촌 형제자매 후보 제외 집합 ────────────────────────
+  const {
+    femaleIds,
+    maleIds,
+    higherAncestorIds,
+    allDescendantIds,
+    allLinealIds,
+    siblingIds,
+    spouseConflictParentIds,
+  } = useMemo(() => {
+    const fSet = new Set<string>()
+    const mSet = new Set<string>()
+    const byId = new Map<string, PersonResponseDto>()
+    for (const p of [...knownPersons, ...persons]) {
+      if (!p?.id) continue
+      byId.set(p.id, p)
+      const g = (p.gender ?? '').toUpperCase()
+      if (g === 'FEMALE') fSet.add(p.id)
+      else if (g === 'MALE') mSet.add(p.id)
+    }
+
+    const directParents = [
+      fatherId,
+      motherId,
+      adoptiveFatherId,
+      adoptiveMotherId,
+    ].filter(Boolean)
+    const directParentSet = new Set(directParents)
+
+    // 1) 상향 BFS: 조부모·증조부모 등 2세대 이상 상위 직계 존속
+    const higherAncSet = new Set<string>(
+      (initialAncestorIds ?? []).filter(
+        (id) => Boolean(id) && id !== editPersonId && !directParentSet.has(id),
+      ),
+    )
+    const upQueue = [...directParents, ...higherAncSet]
+    const seenUp = new Set<string>(editPersonId ? [editPersonId] : [])
+    while (upQueue.length > 0) {
+      const cur = upQueue.shift()!
+      if (!cur || seenUp.has(cur)) continue
+      seenUp.add(cur)
+      if (!directParentSet.has(cur)) higherAncSet.add(cur)
+      const node = byId.get(cur) as
+        | (PersonResponseDto & {
+            adoptiveFatherId?: string | null
+            adoptiveMotherId?: string | null
+          })
+        | undefined
+      if (!node) continue
+      for (const nextP of [
+        node.fatherId,
+        node.motherId,
+        node.adoptiveFatherId,
+        node.adoptiveMotherId,
+      ]) {
+        if (nextP && !seenUp.has(nextP)) upQueue.push(nextP)
+      }
+    }
+
+    // 2) 하향 BFS 인덱스: 부모 → 자녀 맵 (직계 비속 및 배우자 직계 비속 추적 공유)
+    const childrenByParent = new Map<string, string[]>()
+    for (const p of byId.values()) {
+      const pExt = p as PersonResponseDto & {
+        adoptiveFatherId?: string | null
+        adoptiveMotherId?: string | null
+      }
+      for (const pid of [
+        pExt.fatherId,
+        pExt.motherId,
+        pExt.adoptiveFatherId,
+        pExt.adoptiveMotherId,
+      ]) {
+        if (!pid || pid === pExt.id) continue
+        const list = childrenByParent.get(pid) ?? []
+        if (!list.includes(pExt.id)) list.push(pExt.id)
+        childrenByParent.set(pid, list)
+      }
+    }
+
+    const descSet = new Set<string>(
+      (initialDescendantIds ?? []).filter(
+        (id) => Boolean(id) && id !== editPersonId,
+      ),
+    )
+    if (editPersonId) {
+      const downQueue = [editPersonId, ...descSet]
+      const seenDown = new Set<string>()
+      while (downQueue.length > 0) {
+        const cur = downQueue.shift()!
+        if (!cur || seenDown.has(cur)) continue
+        seenDown.add(cur)
+        if (cur !== editPersonId) descSet.add(cur)
+        for (const cid of childrenByParent.get(cur) ?? []) {
+          if (!seenDown.has(cid)) downQueue.push(cid)
+        }
+      }
+    }
+
+    // 3) 2촌 형제자매: 현재 지정된 부모·양부모 중 하나라도 공유하는 인물
+    const sibSet = new Set<string>(
+      directParentSet.size > 0
+        ? (initialSiblingIds ?? []).filter(
+            (id) => Boolean(id) && id !== editPersonId,
+          )
+        : [],
+    )
+    if (directParentSet.size > 0) {
+      for (const p of byId.values()) {
+        if (!p.id || p.id === editPersonId) continue
+        const pExt = p as PersonResponseDto & {
+          adoptiveFatherId?: string | null
+          adoptiveMotherId?: string | null
+        }
+        const pParents = [
+          pExt.fatherId,
+          pExt.motherId,
+          pExt.adoptiveFatherId,
+          pExt.adoptiveMotherId,
+        ].filter((v): v is string => Boolean(v))
+        if (pParents.some((pid) => directParentSet.has(pid))) {
+          sibSet.add(p.id)
+        }
+      }
+    }
+
+    // 4) 배우자 역방향 부모 후보 제외:
+    //    이미 선택된 배우자(usedSpouseIds)의 부모(지정 시 배우자와 2촌 형제가 됨) 및
+    //    배우자의 직계 비속(지정 시 배우자가 본인의 직계 존속이 됨)은 부모 슬롯에서 제외한다.
+    const spouseConflictParentSet = new Set<string>()
+    for (const sid of usedSpouseIds) {
+      const spNode = byId.get(sid) as
+        | (PersonResponseDto & {
+            adoptiveFatherId?: string | null
+            adoptiveMotherId?: string | null
+          })
+        | undefined
+      if (spNode) {
+        for (const spPid of [
+          spNode.fatherId,
+          spNode.motherId,
+          spNode.adoptiveFatherId,
+          spNode.adoptiveMotherId,
+        ]) {
+          if (spPid) spouseConflictParentSet.add(spPid)
+        }
+      }
+      const spDownQueue = [...(childrenByParent.get(sid) ?? [])]
+      const seenSpDown = new Set<string>([sid])
+      while (spDownQueue.length > 0) {
+        const cur = spDownQueue.shift()!
+        if (!cur || seenSpDown.has(cur)) continue
+        seenSpDown.add(cur)
+        spouseConflictParentSet.add(cur)
+        for (const cid of childrenByParent.get(cur) ?? []) {
+          if (!seenSpDown.has(cid)) spDownQueue.push(cid)
+        }
+      }
+    }
+
+    const higherAncArr = [...higherAncSet]
+    const descArr = [...descSet]
+    return {
+      femaleIds: [...fSet],
+      maleIds: [...mSet],
+      higherAncestorIds: higherAncArr,
+      allDescendantIds: descArr,
+      allLinealIds: [...directParents, ...higherAncArr, ...descArr],
+      siblingIds: [...sibSet],
+      spouseConflictParentIds: [...spouseConflictParentSet],
+    }
+  }, [
+    knownPersons,
+    persons,
+    fatherId,
+    motherId,
+    adoptiveFatherId,
+    adoptiveMotherId,
+    usedSpouseIds,
+    editPersonId,
+    initialAncestorIds,
+    initialDescendantIds,
+    initialSiblingIds,
+  ])
+
+  /** 인물 풀 → 콤보 옵션(슬롯별 exclude 적용, 현재 선택값은 표시 유지를 위해 예외 허용). */
+  const personOptions = (
+    excludeIds: string[],
+    currentSelectedId?: string,
+  ): SearchOption[] => {
+    const excludeSet = new Set(excludeIds.filter(Boolean))
+    return knownPersons
+      .filter(
+        (person) =>
+          (currentSelectedId && person.id === currentSelectedId) ||
+          !excludeSet.has(person.id),
+      )
       .map((person) => ({
         value: person.id,
         label: getPersonDisplayName(person),
       }))
+  }
 
-  /** "최근 등록" 칩의 슬롯 지정 버튼 — 글리프/라벨/setter만 다름. */
+  /** "최근 등록" 칩의 슬롯 지정 버튼 — 성별·근친 불변식에 위배되는 슬롯은 숨긴다. */
   const recentSlots: ReadonlyArray<{
     glyph: string
     label: string
     setId: (id: string) => void
+    canAssign?: (person: PersonResponseDto) => boolean
   }> = [
-    { glyph: '父', label: '아버지로 지정', setId: setFatherId },
-    { glyph: '母', label: '어머니로 지정', setId: setMotherId },
+    {
+      glyph: '父',
+      label: '아버지로 지정',
+      setId: setFatherId,
+      canAssign: (p) =>
+        (p.gender ?? '').toUpperCase() !== 'FEMALE' &&
+        !higherAncestorIds.includes(p.id) &&
+        !allDescendantIds.includes(p.id) &&
+        !spouseConflictParentIds.includes(p.id),
+    },
+    {
+      glyph: '母',
+      label: '어머니로 지정',
+      setId: setMotherId,
+      canAssign: (p) =>
+        (p.gender ?? '').toUpperCase() !== 'MALE' &&
+        !higherAncestorIds.includes(p.id) &&
+        !allDescendantIds.includes(p.id) &&
+        !spouseConflictParentIds.includes(p.id),
+    },
     {
       glyph: '配',
       label: '배우자로 추가',
@@ -262,6 +522,8 @@ export function FamilySection({
             ? prev
             : [...prev, { ...emptySpouseRow(), spouseId: id }],
         ),
+      canAssign: (p) =>
+        !allLinealIds.includes(p.id) && !siblingIds.includes(p.id),
     },
   ]
 
@@ -270,7 +532,7 @@ export function FamilySection({
    * 3중 복붙 대신 config로 구동해 exclude 리스트가 서로 어긋나는 실수를 막는다.
    */
   const selectSlots: ReadonlyArray<{
-    slot: 'father' | 'mother'
+    slot: 'father' | 'mother' | 'adoptiveFather' | 'adoptiveMother'
     show: boolean
     setShow: (v: boolean) => void
     selectedId: string
@@ -286,9 +548,19 @@ export function FamilySection({
       setShow: setShowFatherModal,
       selectedId: fatherId,
       setId: setFatherId,
-      excludeIds: [editPersonId ?? '', motherId, ...usedSpouseIds],
+      excludeIds: [
+        editPersonId ?? '',
+        motherId,
+        adoptiveFatherId,
+        adoptiveMotherId,
+        ...usedSpouseIds,
+        ...higherAncestorIds,
+        ...allDescendantIds,
+        ...spouseConflictParentIds,
+        ...femaleIds,
+      ],
       excludeReason:
-        '자기 자신, 어머니·배우자로 지정한 인물은 아버지로 선택할 수 없습니다.',
+        '자기 자신, 여성 인물, 어머니·양부모·배우자(및 배우자의 부모·비속)·직계 존비속은 아버지로 선택할 수 없습니다.',
       title: '아버지 선택',
       searchPlaceholder: '아버지로 등록할 인물을 검색…',
     },
@@ -298,12 +570,74 @@ export function FamilySection({
       setShow: setShowMotherModal,
       selectedId: motherId,
       setId: setMotherId,
-      excludeIds: [editPersonId ?? '', fatherId, ...usedSpouseIds],
+      excludeIds: [
+        editPersonId ?? '',
+        fatherId,
+        adoptiveFatherId,
+        adoptiveMotherId,
+        ...usedSpouseIds,
+        ...higherAncestorIds,
+        ...allDescendantIds,
+        ...spouseConflictParentIds,
+        ...maleIds,
+      ],
       excludeReason:
-        '자기 자신, 아버지·배우자로 지정한 인물은 어머니로 선택할 수 없습니다.',
+        '자기 자신, 남성 인물, 아버지·양부모·배우자(및 배우자의 부모·비속)·직계 존비속은 어머니로 선택할 수 없습니다.',
       title: '어머니 선택',
       searchPlaceholder: '어머니로 등록할 인물을 검색…',
     },
+    ...(setAdoptiveFatherId && setShowAdoptiveFatherModal
+      ? [
+          {
+            slot: 'adoptiveFather' as const,
+            show: showAdoptiveFatherModal,
+            setShow: setShowAdoptiveFatherModal,
+            selectedId: adoptiveFatherId,
+            setId: setAdoptiveFatherId,
+            excludeIds: [
+              editPersonId ?? '',
+              fatherId,
+              motherId,
+              adoptiveMotherId,
+              ...usedSpouseIds,
+              ...higherAncestorIds,
+              ...allDescendantIds,
+              ...spouseConflictParentIds,
+              ...femaleIds,
+            ],
+            excludeReason:
+              '자기 자신, 여성 인물, 친부모·양모·배우자(및 배우자의 부모·비속)·직계 존비속은 양부로 선택할 수 없습니다.',
+            title: '양부(입양 아버지) 선택',
+            searchPlaceholder: '양부로 등록할 인물을 검색…',
+          },
+        ]
+      : []),
+    ...(setAdoptiveMotherId && setShowAdoptiveMotherModal
+      ? [
+          {
+            slot: 'adoptiveMother' as const,
+            show: showAdoptiveMotherModal,
+            setShow: setShowAdoptiveMotherModal,
+            selectedId: adoptiveMotherId,
+            setId: setAdoptiveMotherId,
+            excludeIds: [
+              editPersonId ?? '',
+              fatherId,
+              motherId,
+              adoptiveFatherId,
+              ...usedSpouseIds,
+              ...higherAncestorIds,
+              ...allDescendantIds,
+              ...spouseConflictParentIds,
+              ...maleIds,
+            ],
+            excludeReason:
+              '자기 자신, 남성 인물, 친부모·양부·배우자(및 배우자의 부모·비속)·직계 존비속은 양모로 선택할 수 없습니다.',
+            title: '양모(입양 어머니) 선택',
+            searchPlaceholder: '양모로 등록할 인물을 검색…',
+          },
+        ]
+      : []),
   ]
 
   /**
@@ -315,29 +649,35 @@ export function FamilySection({
     return (
       <RecentChipRow>
         <RecentChipLabel>최근 등록</RecentChipLabel>
-        {recentCandidates.map((p) => (
-          <RecentChipGroup key={p.id} title={getPersonDisplayName(p)}>
-            <RecentChipName>{getPersonDisplayName(p)}</RecentChipName>
-            <RecentChipActions>
-              {recentSlots.map((slot) => (
-                <RecentSlotBtn
-                  key={slot.glyph}
-                  type="button"
-                  aria-label={`${getPersonDisplayName(p)} ${slot.label}`}
-                  title={slot.label}
-                  onClick={() => {
-                    slot.setId(p.id)
-                    markDirty()
-                    // 부/모는 단일 슬롯이라 기존 값을 덮어쓴다 — 무성 교체 대신 지정 결과를 알림.
-                    notify.success(`${getPersonDisplayName(p)} · ${slot.label}`)
-                  }}
-                >
-                  {slot.glyph}
-                </RecentSlotBtn>
-              ))}
-            </RecentChipActions>
-          </RecentChipGroup>
-        ))}
+        {recentCandidates.map((p) => {
+          const allowedSlots = recentSlots.filter(
+            (slot) => !slot.canAssign || slot.canAssign(p),
+          )
+          if (allowedSlots.length === 0) return null
+          return (
+            <RecentChipGroup key={p.id} title={getPersonDisplayName(p)}>
+              <RecentChipName>{getPersonDisplayName(p)}</RecentChipName>
+              <RecentChipActions>
+                {allowedSlots.map((slot) => (
+                  <RecentSlotBtn
+                    key={slot.glyph}
+                    type="button"
+                    aria-label={`${getPersonDisplayName(p)} ${slot.label}`}
+                    title={slot.label}
+                    onClick={() => {
+                      slot.setId(p.id)
+                      markDirty()
+                      // 부/모는 단일 슬롯이라 기존 값을 덮어쓴다 — 무성 교체 대신 지정 결과를 알림.
+                      notify.success(`${getPersonDisplayName(p)} · ${slot.label}`)
+                    }}
+                  >
+                    {slot.glyph}
+                  </RecentSlotBtn>
+                ))}
+              </RecentChipActions>
+            </RecentChipGroup>
+          )
+        })}
       </RecentChipRow>
     )
   }
@@ -352,11 +692,24 @@ export function FamilySection({
       <FieldControl>
       <FamilyParentsRow>
         <FamilySlot>
-          <FamilySlotLabel>아버지</FamilySlotLabel>
+          <FamilySlotLabel>아버지 (친부)</FamilySlotLabel>
           <InlineSearchSelect
             ariaLabel="아버지"
             placeholder="아버지 검색·선택"
-            options={personOptions([editPersonId ?? '', motherId, ...usedSpouseIds])}
+            options={personOptions(
+              [
+                editPersonId ?? '',
+                motherId,
+                adoptiveFatherId,
+                adoptiveMotherId,
+                ...usedSpouseIds,
+                ...higherAncestorIds,
+                ...allDescendantIds,
+                ...spouseConflictParentIds,
+                ...femaleIds,
+              ],
+              fatherId,
+            )}
             value={fatherId}
             onChange={(id) => {
               setFatherId(id)
@@ -368,11 +721,24 @@ export function FamilySection({
           />
         </FamilySlot>
         <FamilySlot>
-          <FamilySlotLabel>어머니</FamilySlotLabel>
+          <FamilySlotLabel>어머니 (친모)</FamilySlotLabel>
           <InlineSearchSelect
             ariaLabel="어머니"
             placeholder="어머니 검색·선택"
-            options={personOptions([editPersonId ?? '', fatherId, ...usedSpouseIds])}
+            options={personOptions(
+              [
+                editPersonId ?? '',
+                fatherId,
+                adoptiveFatherId,
+                adoptiveMotherId,
+                ...usedSpouseIds,
+                ...higherAncestorIds,
+                ...allDescendantIds,
+                ...spouseConflictParentIds,
+                ...maleIds,
+              ],
+              motherId,
+            )}
             value={motherId}
             onChange={(id) => {
               setMotherId(id)
@@ -384,6 +750,72 @@ export function FamilySection({
           />
         </FamilySlot>
       </FamilyParentsRow>
+      {setAdoptiveFatherId && setAdoptiveMotherId && (
+        <FamilyParentsRow style={{ marginTop: 8 }}>
+          <FamilySlot>
+            <FamilySlotLabel>양부 (입양·출계)</FamilySlotLabel>
+            <InlineSearchSelect
+              ariaLabel="양부"
+              placeholder="양부 검색·선택 (선택)"
+              options={personOptions(
+                [
+                  editPersonId ?? '',
+                  fatherId,
+                  motherId,
+                  adoptiveMotherId,
+                  ...usedSpouseIds,
+                  ...higherAncestorIds,
+                  ...allDescendantIds,
+                  ...spouseConflictParentIds,
+                  ...femaleIds,
+                ],
+                adoptiveFatherId,
+              )}
+              value={adoptiveFatherId}
+              onChange={(id) => {
+                setAdoptiveFatherId(id)
+                markDirty()
+              }}
+              onCreateNew={
+                setShowAdoptiveFatherModal ? () => setShowAdoptiveFatherModal(true) : undefined
+              }
+              createLabel="새 인물 등록"
+              limit={30}
+            />
+          </FamilySlot>
+          <FamilySlot>
+            <FamilySlotLabel>양모 (입양·출계)</FamilySlotLabel>
+            <InlineSearchSelect
+              ariaLabel="양모"
+              placeholder="양모 검색·선택 (선택)"
+              options={personOptions(
+                [
+                  editPersonId ?? '',
+                  fatherId,
+                  motherId,
+                  adoptiveFatherId,
+                  ...usedSpouseIds,
+                  ...higherAncestorIds,
+                  ...allDescendantIds,
+                  ...spouseConflictParentIds,
+                  ...maleIds,
+                ],
+                adoptiveMotherId,
+              )}
+              value={adoptiveMotherId}
+              onChange={(id) => {
+                setAdoptiveMotherId(id)
+                markDirty()
+              }}
+              onCreateNew={
+                setShowAdoptiveMotherModal ? () => setShowAdoptiveMotherModal(true) : undefined
+              }
+              createLabel="새 인물 등록"
+              limit={30}
+            />
+          </FamilySlot>
+        </FamilyParentsRow>
+      )}
       <IllegitimateRow>
         <IllegitimateCheckbox
           type="checkbox"
@@ -400,9 +832,31 @@ export function FamilySection({
         >
           사생아·서출
         </IllegitimateLabel>
-        <BirthOrderGroup title="형제·자매 중 출생 순서(1 이상 정수). 동년생·출생연도 미상 형제의 가계도 정렬에 사용됩니다">
+        {setGenderBirthOrder && (
+          <BirthOrderGroup title="성별 내 출생 순서(장남=1, 2남=2, 장녀=1 등). 가계도 카드의 '장남·3남·장녀' 배지에 우선 표시됩니다">
+            <BirthOrderLabel htmlFor={fid('gender-birth-order')}>
+              성별 서열
+            </BirthOrderLabel>
+            <BirthOrderInput
+              id={fid('gender-birth-order')}
+              type="number"
+              min={1}
+              step={1}
+              inputMode="numeric"
+              placeholder="예: 1"
+              value={genderBirthOrder}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/[^0-9]/g, '')
+                setGenderBirthOrder(raw)
+                markDirty()
+              }}
+            />
+            <BirthOrderUnit>남/녀</BirthOrderUnit>
+          </BirthOrderGroup>
+        )}
+        <BirthOrderGroup title="형제·자매 중 전체 출생 순서(1 이상 정수). 동년생·출생연도 미상 형제의 가계도 정렬에 사용됩니다">
           <BirthOrderLabel htmlFor={fid('birth-order')}>
-            출생 서열
+            전체 출생순
           </BirthOrderLabel>
           <BirthOrderInput
             id={fid('birth-order')}
@@ -446,16 +900,22 @@ export function FamilySection({
                     <InlineSearchSelect
                       ariaLabel={`배우자 ${index + 1}`}
                       placeholder="배우자 검색·선택"
-                      options={personOptions([
-                        editPersonId ?? '',
-                        fatherId,
-                        motherId,
-                        // 다른 행에 이미 지정된 배우자는 제외(같은 행 값은 표시 유지)
-                        ...usedSpouseIds.filter((id) => id !== row.spouseId),
-                      ])}
+                      options={personOptions(
+                        [
+                          editPersonId ?? '',
+                          ...allLinealIds,
+                          ...siblingIds,
+                          // 다른 행에 이미 지정된 배우자는 제외(같은 행 값은 표시 유지)
+                          ...usedSpouseIds.filter((id) => id !== row.spouseId),
+                        ],
+                        row.spouseId,
+                      )}
                       value={row.spouseId}
                       onChange={(id) => {
-                        updateSpouseRow(index, { spouseId: id })
+                        updateSpouseRow(index, {
+                          spouseId: id,
+                          ...(row.spouseId !== id ? { rankHolderId: null } : {}),
+                        })
                         markDirty()
                       }}
                       onCreateNew={() => {
@@ -539,6 +999,30 @@ export function FamilySection({
                           >
                             <option value="">미분류</option>
                             {MARRIAGE_RANK_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </SpouseRankSelect>
+                          <SpouseRankCaret>
+                            <FiChevronDown size={14} />
+                          </SpouseRankCaret>
+                        </SpouseRankSelectWrap>
+                      </SpouseMetaField>
+                      {/* 혼인 해소 사유 — 사별·이혼·폐비 등 (유지/미지정 허용) */}
+                      <SpouseMetaField>
+                        <SpouseDateLabel>해소 사유</SpouseDateLabel>
+                        <SpouseRankSelectWrap>
+                          <SpouseRankSelect
+                            aria-label={`배우자 ${index + 1} 혼인 해소 사유`}
+                            value={row.endReason ?? ''}
+                            onChange={(event) => {
+                              updateSpouseRow(index, { endReason: event.target.value })
+                              markDirty()
+                            }}
+                          >
+                            <option value="">유지/미지정</option>
+                            {MARRIAGE_END_REASON_OPTIONS.map((option) => (
                               <option key={option.value} value={option.value}>
                                 {option.label}
                               </option>
@@ -674,8 +1158,8 @@ export function FamilySection({
           }}
           excludeIds={[
             editPersonId ?? '',
-            fatherId,
-            motherId,
+            ...allLinealIds,
+            ...siblingIds,
             // 다른 행에 이미 지정된 배우자 제외(현재 편집 중 행 값은 허용)
             ...usedSpouseIds.filter(
               (id) =>
@@ -683,7 +1167,7 @@ export function FamilySection({
                 id !== spouseRows[pendingSpouseRowIndex]?.spouseId,
             ),
           ].filter(Boolean)}
-          excludeReason="자기 자신, 부모·이미 지정된 배우자는 배우자로 선택할 수 없습니다."
+          excludeReason="자기 자신, 직계 존비속(부모·양부모·조부모·자녀 등)·형제자매·이미 지정된 배우자는 배우자로 선택할 수 없습니다."
           title="배우자 선택"
           searchPlaceholder="배우자로 등록할 인물을 검색…"
           defaultCountryId={countryId || undefined}

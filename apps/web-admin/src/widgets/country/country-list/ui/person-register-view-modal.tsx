@@ -48,7 +48,6 @@ export function PersonRegisterViewModal({
   const [isDirty, setIsDirty] = useState(false)
   const [filled, setFilled] = useState<{
     name?: boolean
-    surname?: boolean
     gender?: boolean
     countryId?: boolean
   }>({})

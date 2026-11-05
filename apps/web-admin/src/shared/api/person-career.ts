@@ -618,6 +618,7 @@ export type CabinetOverviewTenure = {
   subTermNumber?: number | null
   startDate?: string | null
   endDate?: string | null
+  endReason?: string | null
   administrationDepartmentId?: string | null
   administrationDepartment?: {
     id: string
@@ -632,6 +633,10 @@ export type CabinetOverviewTenure = {
     nameDisplayOrder?: string | null
     regnalName?: string | null
     profileImageUrl?: string | null
+    isAlive?: boolean | null
+    isDeathDateUnknown?: boolean | null
+    deathDate?: string | null
+    deathEra?: string | null
     country?: {
       defaultNameDisplayOrder?: string | null
       isoCode?: string | null

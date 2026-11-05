@@ -58,9 +58,16 @@ import {
   UpsertPersonTraitsDto,
   UpsertPersonEvaluationDto,
   PersonEvaluationResponseDto,
+  LinkPersonFamilyDto,
+  UpdatePersonSpouseRelationDto,
+  UpdatePersonChildMetaDto,
+  FamilyLinkKind,
+  DateInfoDto,
 } from '../presentation/dto'
 import {
+  applyDatePrecision,
   mapStructuredDateInput,
+  structuredDateEndKey,
   structuredDateKey,
   toSignedDateString,
 } from '../domain/structured-date.util'
@@ -161,7 +168,22 @@ function summarizePersonChanges(
     { label: '사진', keys: ['profileImageUrl'] },
     { label: '영향력', keys: ['influence'] },
     // illegitimate(사생아·서출)는 부모 관계 맥락이라 '관계' 그룹에 둔다(가족 섹션 체크박스에서 저작).
-    { label: '관계', keys: ['dynastyId', 'religionId', 'denominationId', 'fatherId', 'motherId', 'countryId', 'illegitimate', 'birthOrder'] },
+    {
+      label: '관계',
+      keys: [
+        'dynastyId',
+        'religionId',
+        'denominationId',
+        'fatherId',
+        'motherId',
+        'adoptiveFatherId',
+        'adoptiveMotherId',
+        'countryId',
+        'illegitimate',
+        'birthOrder',
+        'genderBirthOrder',
+      ],
+    },
   ]
   const changed = groups
     .filter((g) => g.keys.some((k) => data[k] !== undefined && normField(data[k]) !== normField(existing[k])))
@@ -405,53 +427,105 @@ export class PersonService {
   /**
    * 부모/조상 그래프 무결성 검증 — 자기 자신을 부모로 지정(자기부모)하거나
    * 조상 체인에 자기 자신이 등장(순환)하는 손상 그래프 생성을 막는다.
-   * 새로 지정되는 fatherId/motherId만 검사(기존 엣지는 저장 시점에 이미 검증됨).
+   * 생부모(fatherId/motherId) 및 양부모(adoptiveFatherId/adoptiveMotherId) 4개 슬롯을 모두 검사한다.
    */
   private async assertNoParentCycle(
-    id: string,
+    id: string | null,
     fatherId?: string | null,
     motherId?: string | null,
+    adoptiveFatherId?: string | null,
+    adoptiveMotherId?: string | null,
   ): Promise<void> {
-    // ''는 repository sanitizePersonFkFields가 '변경 없음'으로 삭제하는 실재 클라이언트
-    // 센티널 — 여기서도 undefined로 정규화해 아래 '한쪽만 갱신' 조합 검사와 일치시킨다.
     if (fatherId === '') fatherId = undefined
     if (motherId === '') motherId = undefined
-    if (fatherId && fatherId === id)
-      throw new BadRequestException('자기 자신을 아버지로 지정할 수 없습니다.')
-    if (motherId && motherId === id)
-      throw new BadRequestException('자기 자신을 어머니로 지정할 수 없습니다.')
+    if (adoptiveFatherId === '') adoptiveFatherId = undefined
+    if (adoptiveMotherId === '') adoptiveMotherId = undefined
 
-    const start = [fatherId, motherId].filter((value): value is string => !!value)
-    if (start.length === 0) return
-
-    // 동일인 중복 FK(아버지=어머니) 가드 — 형제 친/이복/이부 판별(부모 ID 집합 비교)이
-    // 축퇴 집합에서 '부모 1명 공유=친형제 확정'으로 오판하지 않도록 쓰기 시점에 차단.
-    // 한쪽만 갱신되는 update는 기존 반대편 FK와의 조합도 검사한다(undefined=변경 없음).
-    if (fatherId && motherId && fatherId === motherId)
-      throw new BadRequestException('아버지와 어머니를 같은 인물로 지정할 수 없습니다.')
-    if ((fatherId && motherId === undefined) || (motherId && fatherId === undefined)) {
-      const existing = await this.prisma.person.findUnique({
-        where: { id },
-        select: { fatherId: true, motherId: true },
-      })
-      const nextFather = fatherId !== undefined ? fatherId : existing?.fatherId
-      const nextMother = motherId !== undefined ? motherId : existing?.motherId
-      if (nextFather && nextMother && nextFather === nextMother)
-        throw new BadRequestException('아버지와 어머니를 같은 인물로 지정할 수 없습니다.')
+    if (id) {
+      if (fatherId && fatherId === id)
+        throw new BadRequestException('자기 자신을 아버지로 지정할 수 없습니다.')
+      if (motherId && motherId === id)
+        throw new BadRequestException('자기 자신을 어머니로 지정할 수 없습니다.')
+      if (adoptiveFatherId && adoptiveFatherId === id)
+        throw new BadRequestException('자기 자신을 양부로 지정할 수 없습니다.')
+      if (adoptiveMotherId && adoptiveMotherId === id)
+        throw new BadRequestException('자기 자신을 양모로 지정할 수 없습니다.')
     }
 
-    // 지정된 부모들의 조상 체인을 위로 순회 — 도중에 id가 나오면 순환(자기 자신이 조상).
+    const start = [fatherId, motherId, adoptiveFatherId, adoptiveMotherId].filter(
+      (value): value is string => !!value,
+    )
+    if (start.length === 0) return
+
+    let effectiveFather = fatherId
+    let effectiveMother = motherId
+    let effectiveAdoptiveFather = adoptiveFatherId
+    let effectiveAdoptiveMother = adoptiveMotherId
+
+    if (
+      id &&
+      (fatherId === undefined ||
+        motherId === undefined ||
+        adoptiveFatherId === undefined ||
+        adoptiveMotherId === undefined)
+    ) {
+      const existing = await this.prisma.person.findUnique({
+        where: { id },
+        select: {
+          fatherId: true,
+          motherId: true,
+          adoptiveFatherId: true,
+          adoptiveMotherId: true,
+        },
+      })
+      if (effectiveFather === undefined) effectiveFather = existing?.fatherId
+      if (effectiveMother === undefined) effectiveMother = existing?.motherId
+      if (effectiveAdoptiveFather === undefined) effectiveAdoptiveFather = existing?.adoptiveFatherId
+      if (effectiveAdoptiveMother === undefined) effectiveAdoptiveMother = existing?.adoptiveMotherId
+    }
+
+    if (effectiveFather && effectiveMother && effectiveFather === effectiveMother) {
+      throw new BadRequestException('아버지와 어머니를 같은 인물로 지정할 수 없습니다.')
+    }
+    if (
+      effectiveAdoptiveFather &&
+      effectiveAdoptiveMother &&
+      effectiveAdoptiveFather === effectiveAdoptiveMother
+    ) {
+      throw new BadRequestException('양부와 양모를 같은 인물로 지정할 수 없습니다.')
+    }
+    const bioSet = new Set([effectiveFather, effectiveMother].filter((v): v is string => !!v))
+    for (const adoptiveId of [effectiveAdoptiveFather, effectiveAdoptiveMother]) {
+      if (adoptiveId && bioSet.has(adoptiveId)) {
+        throw new BadRequestException('생부모와 양부모를 같은 인물로 중복 지정할 수 없습니다.')
+      }
+    }
+
+    if (!id) return
+
+    // 지정된 부모들의 조상 체인(생부모 + 양부모)을 위로 순회 — 도중에 id가 나오면 순환.
     const visited = new Set<string>()
     let frontier = start
     let depth = 0
     while (frontier.length > 0 && depth < 64) {
       const parents = await this.prisma.person.findMany({
         where: { id: { in: frontier } },
-        select: { id: true, fatherId: true, motherId: true },
+        select: {
+          id: true,
+          fatherId: true,
+          motherId: true,
+          adoptiveFatherId: true,
+          adoptiveMotherId: true,
+        },
       })
       const next: string[] = []
       for (const parent of parents) {
-        for (const ancestorId of [parent.fatherId, parent.motherId]) {
+        for (const ancestorId of [
+          parent.fatherId,
+          parent.motherId,
+          parent.adoptiveFatherId,
+          parent.adoptiveMotherId,
+        ]) {
           if (!ancestorId) continue
           if (ancestorId === id)
             throw new BadRequestException(
@@ -469,12 +543,737 @@ export class PersonService {
   }
 
   /**
+   * 부모 슬롯 성별 정합성 검증 — 아버지/양부에 FEMALE, 어머니/양모에 MALE이 지정되는 것을 차단한다.
+   */
+  private async assertParentGenderConsistency(slots: {
+    fatherId?: string | null
+    motherId?: string | null
+    adoptiveFatherId?: string | null
+    adoptiveMotherId?: string | null
+  }): Promise<void> {
+    const ids = [
+      slots.fatherId,
+      slots.motherId,
+      slots.adoptiveFatherId,
+      slots.adoptiveMotherId,
+    ].filter((v): v is string => !!v && v !== '')
+    if (ids.length === 0) return
+
+    const rows = await this.prisma.person.findMany({
+      where: { id: { in: [...new Set(ids)] } },
+      select: { id: true, gender: true },
+    })
+    const genderById = new Map(rows.map((r) => [r.id, r.gender]))
+
+    if (slots.fatherId && genderById.get(slots.fatherId) === 'FEMALE') {
+      throw new BadRequestException('여성 인물을 아버지(친부)로 지정할 수 없습니다.')
+    }
+    if (slots.motherId && genderById.get(slots.motherId) === 'MALE') {
+      throw new BadRequestException('남성 인물을 어머니(친모)로 지정할 수 없습니다.')
+    }
+    if (slots.adoptiveFatherId && genderById.get(slots.adoptiveFatherId) === 'FEMALE') {
+      throw new BadRequestException('여성 인물을 양부로 지정할 수 없습니다.')
+    }
+    if (slots.adoptiveMotherId && genderById.get(slots.adoptiveMotherId) === 'MALE') {
+      throw new BadRequestException('남성 인물을 양모로 지정할 수 없습니다.')
+    }
+  }
+
+  /**
+   * 역방향(Parent → Children) 성별 정합성 검증:
+   * 이미 누군가의 아버지(친부·양부)로 등록된 인물을 FEMALE로 변경하거나,
+   * 이미 어머니(친모·양모)로 등록된 인물을 MALE로 변경하는 것을 차단한다.
+   */
+  private async assertReverseParentGenderConsistency(
+    personId: string,
+    nextGender: string | null | undefined,
+  ): Promise<void> {
+    if (!nextGender) return
+    const g = nextGender.toUpperCase()
+    if (g === 'FEMALE') {
+      const childAsFather = await this.prisma.person.findFirst({
+        where: { OR: [{ fatherId: personId }, { adoptiveFatherId: personId }] },
+        select: { id: true },
+      })
+      if (childAsFather) {
+        throw new BadRequestException(
+          '이미 아버지(친부 또는 양부)로 등록된 자녀가 있어 성별을 여성으로 변경할 수 없습니다.',
+        )
+      }
+    } else if (g === 'MALE') {
+      const childAsMother = await this.prisma.person.findFirst({
+        where: { OR: [{ motherId: personId }, { adoptiveMotherId: personId }] },
+        select: { id: true },
+      })
+      if (childAsMother) {
+        throw new BadRequestException(
+          '이미 어머니(친모 또는 양모)로 등록된 자녀가 있어 성별을 남성으로 변경할 수 없습니다.',
+        )
+      }
+    }
+  }
+
+  private extractSignedYearFromDate(
+    date: Date | null | undefined,
+    era: string | null | undefined,
+  ): number | null {
+    if (!date) return null
+    const y = date.getUTCFullYear()
+    if (Number.isNaN(y)) return null
+    return era === 'BC' ? -y : y
+  }
+
+  /**
+   * 친부모(및 다세대 친생 직계 존속)–자녀(및 다세대 친생 직계 비속) 생몰 연도 선후 검증:
+   * 1) 모든 친생 직계 존속(부모·조부모·증조부모 등)의 출생 연도는 본인의 출생 연도보다 엄격히 앞서야 한다.
+   * 2) 본인의 출생 연도가 미상(null)이더라도, 친생 직계 존속의 최대 출생 연도는 기존 친생 직계 비속의 최소 출생 연도보다 앞서야 한다.
+   * 3) 직접 친모의 사망 연도는 친자녀 출생 연도 이상이어야 하며, 직접 친부의 사망 연도(+1년 유복자 범위)는 친자녀 출생 연도 이상이어야 한다.
+   */
+  private async assertParentChildLifespanOrder(
+    childBirthSignedYear: number | null,
+    biologicalParents: {
+      fatherId?: string | null
+      motherId?: string | null
+    },
+    personId?: string | null,
+  ): Promise<void> {
+    const fatherId =
+      biologicalParents.fatherId && biologicalParents.fatherId !== ''
+        ? biologicalParents.fatherId
+        : null
+    const motherId =
+      biologicalParents.motherId && biologicalParents.motherId !== ''
+        ? biologicalParents.motherId
+        : null
+    const initialIds = [...new Set([fatherId, motherId].filter((v): v is string => !!v))]
+    if (initialIds.length === 0) return
+
+    const visitedAncestors = new Set<string>()
+    let frontier = initialIds.filter((id) => id !== personId)
+    let depth = 0
+    let maxAncestorBirth: number | null = null
+
+    while (frontier.length > 0 && depth < 64) {
+      for (const pid of frontier) visitedAncestors.add(pid)
+      const rows = await this.prisma.person.findMany({
+        where: { id: { in: frontier } },
+        select: {
+          id: true,
+          birthDate: true,
+          birthEra: true,
+          deathDate: true,
+          deathEra: true,
+          fatherId: true,
+          motherId: true,
+        },
+      })
+      const next: string[] = []
+      for (const row of rows) {
+        const ancBirthSigned = this.extractSignedYearFromDate(row.birthDate, row.birthEra)
+        if (ancBirthSigned != null) {
+          if (maxAncestorBirth == null || ancBirthSigned > maxAncestorBirth) {
+            maxAncestorBirth = ancBirthSigned
+          }
+          if (childBirthSignedYear != null && ancBirthSigned >= childBirthSignedYear) {
+            throw new BadRequestException(
+              depth === 0
+                ? '친부모의 출생 연도는 자녀의 출생 연도보다 앞서야 합니다.'
+                : '친생 부모(조부모 등 직계 존속 포함)의 출생 연도는 자녀(후손)의 출생 연도보다 앞서야 합니다.',
+            )
+          }
+        }
+        if (depth === 0 && childBirthSignedYear != null) {
+          const parentDeathSigned = this.extractSignedYearFromDate(row.deathDate, row.deathEra)
+          if (parentDeathSigned != null) {
+            if (row.id === motherId && parentDeathSigned < childBirthSignedYear) {
+              throw new BadRequestException(
+                '친모의 사망 연도는 친자녀의 출생 연도보다 이전일 수 없습니다.',
+              )
+            }
+            if (row.id === fatherId && parentDeathSigned + 1 < childBirthSignedYear) {
+              throw new BadRequestException(
+                '친부의 사망 연도(+1년 유복자 범위) 이후에 출생한 인물을 친자녀로 지정할 수 없습니다.',
+              )
+            }
+          }
+        }
+        for (const p of [row.fatherId, row.motherId]) {
+          if (p && p !== personId && !visitedAncestors.has(p)) {
+            next.push(p)
+          }
+        }
+      }
+      frontier = [...new Set(next)]
+      depth += 1
+    }
+
+    // 본인 출생 연도가 미상(null)이거나 기존 인물에 친부모를 새로 연결할 때,
+    // 기존 친생 비속(자녀·손자녀 등)의 출생 연도와 조상의 출생 연도 역전 여부도 함께 검증
+    if (personId && maxAncestorBirth != null) {
+      const visitedDesc = new Set<string>([personId])
+      let descFrontier = [personId]
+      let descDepth = 0
+      while (descFrontier.length > 0 && descDepth < 64) {
+        const children = await this.prisma.person.findMany({
+          where: {
+            OR: descFrontier.flatMap((pid) => [{ fatherId: pid }, { motherId: pid }]),
+          },
+          select: { id: true, birthDate: true, birthEra: true },
+        })
+        const nextDesc: string[] = []
+        for (const c of children) {
+          if (!c.id || visitedDesc.has(c.id)) continue
+          visitedDesc.add(c.id)
+          const descBirthSigned = this.extractSignedYearFromDate(c.birthDate, c.birthEra)
+          if (descBirthSigned != null && maxAncestorBirth >= descBirthSigned) {
+            throw new BadRequestException(
+              '친생 부모(조부모 등 직계 존속 포함)의 출생 연도는 자녀(후손)의 출생 연도보다 앞서야 합니다.',
+            )
+          }
+          nextDesc.push(c.id)
+        }
+        descFrontier = [...new Set(nextDesc)]
+        descDepth += 1
+      }
+    }
+  }
+
+  /**
+   * 역방향(Parent → Children/Descendants) 생몰 연도 선후 검증:
+   * 1) 이미 친자녀(또는 친손자녀 등 다세대 친생 비속)가 등록된 인물의 출생 연도를 친생 비속의 출생 연도 이후(같거나 늦음)로 수정하는 것을 차단한다.
+   * 2) 직접 친자녀가 있는 인물의 사망 연도를 친자녀 출생 연도 이전(친부는 +1년 유복자 범위 이전)으로 수정하는 것을 차단한다.
+   */
+  private async assertReverseParentChildLifespanOrder(
+    personId: string,
+    parentBirthSignedYear: number | null,
+    parentDeathSignedYear?: number | null,
+  ): Promise<void> {
+    if (parentBirthSignedYear == null && parentDeathSignedYear == null) return
+
+    const visited = new Set<string>([personId])
+    let frontier = [personId]
+    let depth = 0
+
+    while (frontier.length > 0 && depth < 64) {
+      const children = await this.prisma.person.findMany({
+        where: {
+          OR: frontier.flatMap((pid) => [{ fatherId: pid }, { motherId: pid }]),
+        },
+        select: {
+          id: true,
+          birthDate: true,
+          birthEra: true,
+          fatherId: true,
+          motherId: true,
+        },
+      })
+      const next: string[] = []
+      for (const child of children) {
+        if (!child.id || visited.has(child.id)) continue
+        visited.add(child.id)
+        const childSigned = this.extractSignedYearFromDate(child.birthDate, child.birthEra)
+        if (childSigned != null) {
+          if (parentBirthSignedYear != null && parentBirthSignedYear >= childSigned) {
+            throw new BadRequestException(
+              depth === 0
+                ? '친부모의 출생 연도는 기존 친자녀의 출생 연도보다 앞서야 합니다.'
+                : '친부모(조부모 등 직계 존속)의 출생 연도는 기존 친자녀(손자녀 등 직계 비속 포함)의 출생 연도보다 앞서야 합니다.',
+            )
+          }
+          if (depth === 0 && parentDeathSignedYear != null) {
+            if (child.motherId === personId && parentDeathSignedYear < childSigned) {
+              throw new BadRequestException(
+                '친모의 사망 연도는 기존 친자녀의 출생 연도보다 이전일 수 없습니다.',
+              )
+            }
+            if (child.fatherId === personId && parentDeathSignedYear + 1 < childSigned) {
+              throw new BadRequestException(
+                '친부의 사망 연도(+1년 유복자 범위)는 기존 친자녀의 출생 연도보다 이전일 수 없습니다.',
+              )
+            }
+          }
+        }
+        next.push(child.id)
+      }
+      frontier = [...new Set(next)]
+      depth += 1
+    }
+  }
+
+  /**
+   * 초기 부모 ID 집합으로부터 최대 64세대까지 모든 직계 존속(생부모·양부모) ID를 수집한다.
+   */
+  private async collectLinealAncestorIds(
+    initialParentIds: Array<string | null | undefined>,
+    excludeSelfId?: string | null,
+  ): Promise<Set<string>> {
+    const ancestors = new Set<string>()
+    let frontier = [
+      ...new Set(
+        initialParentIds.filter(
+          (v): v is string => !!v && v !== '' && v !== excludeSelfId,
+        ),
+      ),
+    ]
+    let depth = 0
+    while (frontier.length > 0 && depth < 64) {
+      for (const pid of frontier) ancestors.add(pid)
+      const rows = await this.prisma.person.findMany({
+        where: { id: { in: frontier } },
+        select: {
+          id: true,
+          fatherId: true,
+          motherId: true,
+          adoptiveFatherId: true,
+          adoptiveMotherId: true,
+        },
+      })
+      const next: string[] = []
+      for (const r of rows) {
+        for (const p of [r.fatherId, r.motherId, r.adoptiveFatherId, r.adoptiveMotherId]) {
+          if (p && p !== excludeSelfId && !ancestors.has(p)) {
+            next.push(p)
+          }
+        }
+      }
+      frontier = [...new Set(next)]
+      depth += 1
+    }
+    return ancestors
+  }
+
+  /**
+   * 기준 인물로부터 최대 64세대까지 모든 직계 비속(친자녀·양자녀·손자녀 등) ID를 수집한다.
+   */
+  private async collectLinealDescendantIds(rootId: string): Promise<Set<string>> {
+    const descendants = new Set<string>()
+    let frontier = [rootId]
+    let depth = 0
+    while (frontier.length > 0 && depth < 64) {
+      const children = await this.prisma.person.findMany({
+        where: {
+          OR: frontier.flatMap((pid) => [
+            { fatherId: pid },
+            { motherId: pid },
+            { adoptiveFatherId: pid },
+            { adoptiveMotherId: pid },
+          ]),
+        },
+        select: { id: true },
+      })
+      const next: string[] = []
+      for (const c of children) {
+        if (c.id && c.id !== rootId && !descendants.has(c.id)) {
+          descendants.add(c.id)
+          next.push(c.id)
+        }
+      }
+      frontier = [...new Set(next)]
+      depth += 1
+    }
+    return descendants
+  }
+
+  /**
+   * 배우자 불변식 검증:
+   * 1) 혼인 시작 연도 <= 혼인 종료 연도 (BC 부호연도 기준)
+   * 2) 혼인 시작·종료 연도는 부부 양측의 생존 기간(출생 연도 이상 ~ 사망 연도 이하) 내에 있어야 함
+   * 3) 직계 존비속(부모·양부모·조부모·자녀·양자녀·손자녀 등 다세대 직계) 및 2촌 형제자매를 배우자로 지정 불가
+   */
+  private async assertSpouseInvariants(
+    ownerId: string | null,
+    spouseRelations:
+      | Array<{
+          spouseId: string
+          marriageStartDate?: Date | null
+          marriageStartEra?: string | null
+          marriageStartYear?: number | null
+          marriageEndDate?: Date | null
+          marriageEndEra?: string | null
+          marriageEndYear?: number | null
+        }>
+      | undefined,
+    effectiveParentIds: Array<string | null | undefined>,
+    ownerLifespan?: {
+      birthSigned: number | null
+      deathSigned: number | null
+    },
+  ): Promise<void> {
+    if (!spouseRelations || spouseRelations.length === 0) return
+    const parentSet = new Set(effectiveParentIds.filter((v): v is string => !!v && v !== ''))
+    const allAncestorSet = await this.collectLinealAncestorIds(effectiveParentIds, ownerId)
+
+    const signedYearOf = (
+      year?: number | null,
+      date?: Date | null,
+      era?: string | null,
+    ): number | null => {
+      const mag = year ?? (date ? date.getUTCFullYear() : null)
+      if (mag == null || Number.isNaN(mag)) return null
+      return era === 'BC' ? -mag : mag
+    }
+
+    const ownBirthSigned = ownerLifespan?.birthSigned ?? null
+    const ownDeathSigned = ownerLifespan?.deathSigned ?? null
+
+    const spouseIds: string[] = []
+    for (const rel of spouseRelations) {
+      if (!rel.spouseId) continue
+      if (ownerId && rel.spouseId === ownerId) {
+        throw new BadRequestException('자기 자신을 배우자로 지정할 수 없습니다.')
+      }
+      if (parentSet.has(rel.spouseId)) {
+        throw new BadRequestException('부모(양부모 포함)를 배우자로 지정할 수 없습니다.')
+      }
+      if (allAncestorSet.has(rel.spouseId)) {
+        throw new BadRequestException('직계 존속(조부모·증조부모 등)을 배우자로 지정할 수 없습니다.')
+      }
+      const startSigned = signedYearOf(
+        rel.marriageStartYear,
+        rel.marriageStartDate,
+        rel.marriageStartEra,
+      )
+      const endSigned = signedYearOf(
+        rel.marriageEndYear,
+        rel.marriageEndDate,
+        rel.marriageEndEra,
+      )
+      if (startSigned != null && endSigned != null && startSigned > endSigned) {
+        throw new BadRequestException('혼인 시작 연도는 종료 연도보다 이전이거나 같아야 합니다.')
+      }
+      if (
+        ownBirthSigned != null &&
+        ((startSigned != null && startSigned < ownBirthSigned) ||
+          (endSigned != null && endSigned < ownBirthSigned))
+      ) {
+        throw new BadRequestException(
+          '혼인 시작·종료 연도는 부부 당사자의 출생 연도보다 이전일 수 없습니다.',
+        )
+      }
+      if (
+        ownDeathSigned != null &&
+        ((startSigned != null && startSigned > ownDeathSigned) ||
+          (endSigned != null && endSigned > ownDeathSigned))
+      ) {
+        throw new BadRequestException(
+          '혼인 시작·종료 연도는 부부 당사자의 사망 연도보다 이후일 수 없습니다.',
+        )
+      }
+      spouseIds.push(rel.spouseId)
+    }
+
+    if (spouseIds.length > 0) {
+      const uniqueSpouseIds = [...new Set(spouseIds)]
+      if (ownerId) {
+        const childConflict = await this.prisma.person.findFirst({
+          where: {
+            id: { in: uniqueSpouseIds },
+            OR: [
+              { fatherId: ownerId },
+              { motherId: ownerId },
+              { adoptiveFatherId: ownerId },
+              { adoptiveMotherId: ownerId },
+            ],
+          },
+          select: { id: true },
+        })
+        if (childConflict) {
+          throw new BadRequestException('자녀(양자녀 포함)를 배우자로 지정할 수 없습니다.')
+        }
+      }
+
+      // 배우자 후보들의 부모·양부모 및 생몰 연도 조회:
+      // 1) 본인의 유효 부모(parentSet)와 하나라도 겹치면 2촌 형제자매(친형제·이복/이부형제·입양형제)이므로 차단
+      // 2) 다세대 직계 비속(손자녀·증손자녀 등) 여부 검증 — 배우자 후보들의 조상 체인에 ownerId가 등장하면 직계 비속
+      // 3) 혼인 시작·종료 연도가 배우자 후보의 출생 연도 이전이거나 사망 연도 이후인지 검증
+      const spouseRows = await this.prisma.person.findMany({
+        where: { id: { in: uniqueSpouseIds } },
+        select: {
+          id: true,
+          fatherId: true,
+          motherId: true,
+          adoptiveFatherId: true,
+          adoptiveMotherId: true,
+          birthDate: true,
+          birthEra: true,
+          deathDate: true,
+          deathEra: true,
+        },
+      })
+      const spouseById = new Map(spouseRows.map((s) => [s.id, s]))
+      const spouseParentFrontier: Array<string | null | undefined> = []
+      for (const s of spouseRows) {
+        if (
+          ownerId &&
+          (s.fatherId === ownerId ||
+            s.motherId === ownerId ||
+            s.adoptiveFatherId === ownerId ||
+            s.adoptiveMotherId === ownerId)
+        ) {
+          throw new BadRequestException('자녀(양자녀 포함)를 배우자로 지정할 수 없습니다.')
+        }
+        const sParents = [
+          s.fatherId,
+          s.motherId,
+          s.adoptiveFatherId,
+          s.adoptiveMotherId,
+        ].filter((v): v is string => !!v && v !== '')
+        if (parentSet.size > 0 && sParents.some((pid) => parentSet.has(pid))) {
+          throw new BadRequestException(
+            '형제자매(이복·이부·입양형제 포함)를 배우자로 지정할 수 없습니다.',
+          )
+        }
+        spouseParentFrontier.push(
+          s.fatherId,
+          s.motherId,
+          s.adoptiveFatherId,
+          s.adoptiveMotherId,
+        )
+      }
+      for (const rel of spouseRelations) {
+        if (!rel.spouseId) continue
+        const sp = spouseById.get(rel.spouseId)
+        if (!sp) continue
+        const startSigned = signedYearOf(
+          rel.marriageStartYear,
+          rel.marriageStartDate,
+          rel.marriageStartEra,
+        )
+        const endSigned = signedYearOf(
+          rel.marriageEndYear,
+          rel.marriageEndDate,
+          rel.marriageEndEra,
+        )
+        if (startSigned == null && endSigned == null) continue
+        const spBirthSigned = this.extractSignedYearFromDate(sp.birthDate, sp.birthEra)
+        const spDeathSigned = this.extractSignedYearFromDate(sp.deathDate, sp.deathEra)
+        if (
+          spBirthSigned != null &&
+          ((startSigned != null && startSigned < spBirthSigned) ||
+            (endSigned != null && endSigned < spBirthSigned))
+        ) {
+          throw new BadRequestException(
+            '혼인 시작·종료 연도는 부부 당사자의 출생 연도보다 이전일 수 없습니다.',
+          )
+        }
+        if (
+          spDeathSigned != null &&
+          ((startSigned != null && startSigned > spDeathSigned) ||
+            (endSigned != null && endSigned > spDeathSigned))
+        ) {
+          throw new BadRequestException(
+            '혼인 시작·종료 연도는 부부 당사자의 사망 연도보다 이후일 수 없습니다.',
+          )
+        }
+      }
+      if (ownerId) {
+        const spouseAncestors = await this.collectLinealAncestorIds(spouseParentFrontier)
+        if (spouseAncestors.has(ownerId)) {
+          throw new BadRequestException(
+            '직계 비속(손자녀·증손자녀 등)을 배우자로 지정할 수 없습니다.',
+          )
+        }
+      }
+    }
+  }
+
+  /**
+   * 역방향(Person Lifespan → Existing Marriages) 생몰 연도–혼인 기간 정합성 검증:
+   * 이미 혼인 시작·종료 연도가 기록된 배우자 관계가 있을 때, 본인의 출생 연도를 혼인 연도 이후로 수정하거나
+   * 사망 연도를 혼인 연도 이전으로 수정하는 것을 차단한다.
+   */
+  private async assertReverseSpouseMarriageLifespanOrder(
+    personId: string,
+    birthSigned: number | null,
+    deathSigned: number | null,
+  ): Promise<void> {
+    if (birthSigned == null && deathSigned == null) return
+    const rows = await this.prisma.personSpouse.findMany({
+      where: {
+        OR: [{ personId }, { spouseId: personId }],
+      },
+      select: {
+        marriageStartYear: true,
+        marriageStartDate: true,
+        marriageStartEra: true,
+        marriageEndYear: true,
+        marriageEndDate: true,
+        marriageEndEra: true,
+      },
+    })
+    const signedYearOf = (
+      year?: number | null,
+      date?: Date | null,
+      era?: string | null,
+    ): number | null => {
+      const mag = year ?? (date ? date.getUTCFullYear() : null)
+      if (mag == null || Number.isNaN(mag)) return null
+      return era === 'BC' ? -mag : mag
+    }
+    for (const r of rows) {
+      const startSigned = signedYearOf(
+        r.marriageStartYear,
+        r.marriageStartDate,
+        r.marriageStartEra,
+      )
+      const endSigned = signedYearOf(
+        r.marriageEndYear,
+        r.marriageEndDate,
+        r.marriageEndEra,
+      )
+      if (
+        birthSigned != null &&
+        ((startSigned != null && startSigned < birthSigned) ||
+          (endSigned != null && endSigned < birthSigned))
+      ) {
+        throw new BadRequestException(
+          '출생 연도는 기존 혼인 관계의 시작·종료 연도보다 이후일 수 없습니다.',
+        )
+      }
+      if (
+        deathSigned != null &&
+        ((startSigned != null && startSigned > deathSigned) ||
+          (endSigned != null && endSigned > deathSigned))
+      ) {
+        throw new BadRequestException(
+          '사망 연도는 기존 혼인 관계의 시작·종료 연도보다 이전일 수 없습니다.',
+        )
+      }
+    }
+  }
+
+  /**
+   * 양방향 배우자–직계 존비속 및 2촌 형제자매 충돌 방지:
+   * 1) 이미 배우자로 등록된 인물을 부모(양부모·조부모 포함)로 지정하거나 자녀(손자녀 포함)로 지정하는 것을 차단한다.
+   * 2) 부모(양부모 포함) 지정으로 인해 기존 배우자와 부모를 공유하는 2촌 형제자매가 되는 것을 차단한다.
+   */
+  private async assertParentsNotExistingSpouses(
+    personId: string,
+    parentIds: Array<string | null | undefined>,
+    overrideSpouseIds?: string[],
+  ): Promise<void> {
+    const validParentIds = [...new Set(parentIds.filter((v): v is string => !!v && v !== ''))]
+    if (validParentIds.length === 0) return
+    const validParentSet = new Set(validParentIds)
+    const allAncestorIds = await this.collectLinealAncestorIds(validParentIds, personId)
+    if (allAncestorIds.size === 0) return
+    const descendantIds = await this.collectLinealDescendantIds(personId)
+    const ancestorList = [...allAncestorIds]
+
+    // 본인의 기존(또는 동시에 수정되는) 배우자 집합 계산
+    let existingSpouseIds: string[]
+    if (overrideSpouseIds !== undefined) {
+      existingSpouseIds = [
+        ...new Set(overrideSpouseIds.filter((sid): sid is string => Boolean(sid) && sid !== personId)),
+      ]
+      if (existingSpouseIds.some((sid) => allAncestorIds.has(sid))) {
+        throw new BadRequestException(
+          '이미 배우자로 등록된 인물을 부모(양부모 포함) 또는 자녀로 지정할 수 없습니다.',
+        )
+      }
+    } else {
+      const directSpouseRows = await this.prisma.personSpouse.findMany({
+        where: {
+          OR: [{ personId }, { spouseId: personId }],
+        },
+        select: { personId: true, spouseId: true },
+      })
+      existingSpouseIds = [
+        ...new Set(
+          directSpouseRows
+            .map((r) => (r.personId === personId ? r.spouseId : r.personId))
+            .filter((sid): sid is string => Boolean(sid) && sid !== personId),
+        ),
+      ]
+    }
+
+    // overrideSpouseIds가 지정된 경우 본인(personId)의 배우자는 새 배열(existingSpouseIds)로 검증했으므로
+    // DB 조회에서는 직계 비속(descendantIds)만 검사해, 삭제 예정인 구 배우자 행을 부모로 재지정할 때의 오탐을 방지한다.
+    const dbCheckTargetIds =
+      overrideSpouseIds !== undefined ? [...descendantIds] : [personId, ...descendantIds]
+    if (dbCheckTargetIds.length > 0) {
+      const spouseConflict = await this.prisma.personSpouse.findFirst({
+        where: {
+          OR: dbCheckTargetIds.flatMap((descId) => [
+            { personId: descId, spouseId: { in: ancestorList } },
+            { spouseId: descId, personId: { in: ancestorList } },
+          ]),
+        },
+        select: { id: true },
+      })
+      if (spouseConflict) {
+        throw new BadRequestException(
+          '이미 배우자로 등록된 인물을 부모(양부모 포함) 또는 자녀로 지정할 수 없습니다.',
+        )
+      }
+    }
+    if (existingSpouseIds.length > 0) {
+      const existingSpousePersons = await this.prisma.person.findMany({
+        where: { id: { in: existingSpouseIds } },
+        select: {
+          id: true,
+          fatherId: true,
+          motherId: true,
+          adoptiveFatherId: true,
+          adoptiveMotherId: true,
+        },
+      })
+      for (const sp of existingSpousePersons) {
+        const spParents = [
+          sp.fatherId,
+          sp.motherId,
+          sp.adoptiveFatherId,
+          sp.adoptiveMotherId,
+        ].filter((v): v is string => !!v && v !== '')
+        if (spParents.some((pid) => validParentSet.has(pid))) {
+          throw new BadRequestException(
+            '이미 배우자로 등록된 인물과 동일한 부모(양부모 포함)를 지정하여 형제자매가 되게 할 수 없습니다.',
+          )
+        }
+      }
+    }
+  }
+
+  /**
    * 생몰 연도 역전 방지 — 출생이 사망보다 뒤면 거부. BC 부호연도(BC=음수)로 비교하며
    * 네이티브 Date 대소 비교는 쓰지 않는다(BC가 AD로 둔갑). 모달의 클라이언트 검증
    * (computeBirthDeathErrors)이 인라인 편집·가계도 저작 등 비모달 쓰기 경로에서는 우회되므로
    * 도메인 계층에 서버 가드를 둔다(자기부모 가드 assertNoParentCycle와 동일 위치·정책).
    * date: null=명시적 해제, undefined=변경 없음(기존 유지), Date=새 값.
    */
+  private computeSignedLifespanYears(
+    birthDate: Date | null | undefined,
+    birthEra: 'BC' | 'AD' | null | undefined,
+    deathDate: Date | null | undefined,
+    deathEra: 'BC' | 'AD' | null | undefined,
+    existing?: {
+      birthEra?: string | null
+      birthYear?: number | null
+      deathEra?: string | null
+      deathYear?: number | null
+    },
+  ): { birthSigned: number | null; deathSigned: number | null } {
+    const signedYear = (
+      date: Date | null | undefined,
+      era: 'BC' | 'AD' | null | undefined,
+      exEra?: string | null,
+      exYear?: number | null,
+    ): number | null => {
+      if (date === null) return null
+      if (date !== undefined) {
+        const year = date.getUTCFullYear()
+        const useEra = era ?? exEra
+        return useEra === 'BC' ? -year : year
+      }
+      if (exYear == null) return null
+      return exEra === 'BC' ? -exYear : exYear
+    }
+    return {
+      birthSigned: signedYear(birthDate, birthEra, existing?.birthEra, existing?.birthYear),
+      deathSigned: signedYear(deathDate, deathEra, existing?.deathEra, existing?.deathYear),
+    }
+  }
+
   private assertLifespanOrder(
     birthDate: Date | null | undefined,
     birthEra: 'BC' | 'AD' | null | undefined,
@@ -486,40 +1285,59 @@ export class PersonService {
       deathEra?: string | null
       deathYear?: number | null
     },
-  ): void {
-    const signedYear = (
-      date: Date | null | undefined,
-      era: 'BC' | 'AD' | null | undefined,
-      exEra?: string | null,
-      exYear?: number | null,
-    ): number | null => {
-      if (date === null) return null
-      if (date !== undefined) {
-        // buildUtcDateFromParts가 setUTCFullYear로 크기값 연도를 정확히 심으므로 <100 연도도 안전.
-        // era 누락 시 기존 era로 폴백 — 비모달 쓰기가 date만 보내도 BC가 AD로 둔갑하지 않도록.
-        const year = date.getUTCFullYear()
-        const useEra = era ?? exEra
-        return useEra === 'BC' ? -year : year
-      }
-      if (exYear == null) return null
-      return exEra === 'BC' ? -exYear : exYear
-    }
-    const birthSigned = signedYear(birthDate, birthEra, existing?.birthEra, existing?.birthYear)
-    const deathSigned = signedYear(deathDate, deathEra, existing?.deathEra, existing?.deathYear)
+  ): { birthSigned: number | null; deathSigned: number | null } {
+    const { birthSigned, deathSigned } = this.computeSignedLifespanYears(
+      birthDate,
+      birthEra,
+      deathDate,
+      deathEra,
+      existing,
+    )
     if (birthSigned != null && deathSigned != null && birthSigned > deathSigned) {
       throw new BadRequestException('출생 연도는 사망 연도보다 이전이거나 같아야 합니다.')
     }
+    return { birthSigned, deathSigned }
   }
 
   /**
    * 인물 생성 (accountId 있으면 소유자로 저장)
    */
   async create(data: CreatePersonData, accountId?: string): Promise<PersonResponseDto> {
-    this.assertLifespanOrder(data.birthDate, data.birthEra, data.deathDate, data.deathEra)
-    // 중복 FK(아버지=어머니) 가드 — update의 assertNoParentCycle과 동일 불변식.
-    // 생성 시점엔 자기부모·순환이 원천 불가(id 미존재)라 등호 검사만으로 충분(DB 왕복 0).
-    if (data.fatherId && data.motherId && data.fatherId === data.motherId)
-      throw new BadRequestException('아버지와 어머니를 같은 인물로 지정할 수 없습니다.')
+    const { birthSigned, deathSigned } = this.assertLifespanOrder(
+      data.birthDate,
+      data.birthEra,
+      data.deathDate,
+      data.deathEra,
+    )
+    await this.assertNoParentCycle(
+      null,
+      data.fatherId,
+      data.motherId,
+      data.adoptiveFatherId,
+      data.adoptiveMotherId,
+    )
+    await this.assertParentGenderConsistency({
+      fatherId: data.fatherId,
+      motherId: data.motherId,
+      adoptiveFatherId: data.adoptiveFatherId,
+      adoptiveMotherId: data.adoptiveMotherId,
+    })
+    await this.assertParentChildLifespanOrder(
+      birthSigned,
+      { fatherId: data.fatherId, motherId: data.motherId },
+      null,
+    )
+    await this.assertSpouseInvariants(
+      null,
+      data.spouseRelations,
+      [
+        data.fatherId,
+        data.motherId,
+        data.adoptiveFatherId,
+        data.adoptiveMotherId,
+      ],
+      { birthSigned, deathSigned },
+    )
     const createData = accountId != null ? { ...data, accountId } : data
     const person = await this.personRepository.create(createData)
     // 커밋 이후 부수효과(알림)는 저장 성공과 독립 — 예외가 나도 저장 성공을 실패로
@@ -553,17 +1371,121 @@ export class PersonService {
         ? new ForbiddenException('본인이 등록한 인물만 수정할 수 있습니다.')
         : new NotFoundException(`인물을 찾을 수 없습니다 (ID: ${id})`)
     }
-    // 부모 지정 시 자기부모·조상 순환 방지 (지정된 부모만 검사)
-    if (data.fatherId != null || data.motherId != null) {
-      await this.assertNoParentCycle(id, data.fatherId, data.motherId)
+    // 부모 지정 시 자기부모·조상 순환·성별 정합성 방지
+    if (
+      data.fatherId != null ||
+      data.motherId != null ||
+      data.adoptiveFatherId != null ||
+      data.adoptiveMotherId != null
+    ) {
+      await this.assertNoParentCycle(
+        id,
+        data.fatherId,
+        data.motherId,
+        data.adoptiveFatherId,
+        data.adoptiveMotherId,
+      )
+      await this.assertParentGenderConsistency({
+        fatherId: data.fatherId,
+        motherId: data.motherId,
+        adoptiveFatherId: data.adoptiveFatherId,
+        adoptiveMotherId: data.adoptiveMotherId,
+      })
     }
     // 수정 후 유효 생몰(변경분 ?? 기존)로 역전 검증 — 한쪽만 바꿔도 잔존값과 비교.
-    this.assertLifespanOrder(data.birthDate, data.birthEra, data.deathDate, data.deathEra, {
-      birthEra: existing.birthEra,
-      birthYear: existing.birthYear,
-      deathEra: existing.deathEra,
-      deathYear: existing.deathYear,
-    })
+    const { birthSigned, deathSigned } = this.assertLifespanOrder(
+      data.birthDate,
+      data.birthEra,
+      data.deathDate,
+      data.deathEra,
+      {
+        birthEra: existing.birthEra,
+        birthYear: existing.birthYear,
+        deathEra: existing.deathEra,
+        deathYear: existing.deathYear,
+      },
+    )
+    const resolveEffectiveFk = (
+      incoming: string | null | undefined,
+      current: string | null | undefined,
+    ): string | null | undefined => {
+      if (incoming === undefined) return current
+      return incoming === '' || incoming === null ? null : incoming
+    }
+    const effectiveFatherId = resolveEffectiveFk(data.fatherId, existing.fatherId)
+    const effectiveMotherId = resolveEffectiveFk(data.motherId, existing.motherId)
+    const effectiveAdoptiveFatherId = resolveEffectiveFk(
+      data.adoptiveFatherId,
+      existing.adoptiveFatherId,
+    )
+    const effectiveAdoptiveMotherId = resolveEffectiveFk(
+      data.adoptiveMotherId,
+      existing.adoptiveMotherId,
+    )
+
+    if (data.gender !== undefined) {
+      await this.assertReverseParentGenderConsistency(id, data.gender)
+    }
+
+    if (
+      data.fatherId !== undefined ||
+      data.motherId !== undefined ||
+      data.birthDate !== undefined ||
+      data.birthEra !== undefined
+    ) {
+      await this.assertParentChildLifespanOrder(
+        birthSigned,
+        { fatherId: effectiveFatherId, motherId: effectiveMotherId },
+        id,
+      )
+    }
+    if (
+      data.birthDate !== undefined ||
+      data.birthEra !== undefined ||
+      data.deathDate !== undefined ||
+      data.deathEra !== undefined
+    ) {
+      await this.assertReverseParentChildLifespanOrder(id, birthSigned, deathSigned)
+    }
+    if (data.spouseRelations !== undefined) {
+      await this.assertSpouseInvariants(
+        id,
+        data.spouseRelations,
+        [
+          effectiveFatherId,
+          effectiveMotherId,
+          effectiveAdoptiveFatherId,
+          effectiveAdoptiveMotherId,
+        ],
+        { birthSigned, deathSigned },
+      )
+    } else if (
+      data.birthDate !== undefined ||
+      data.birthEra !== undefined ||
+      data.deathDate !== undefined ||
+      data.deathEra !== undefined
+    ) {
+      await this.assertReverseSpouseMarriageLifespanOrder(id, birthSigned, deathSigned)
+    }
+    if (
+      data.fatherId !== undefined ||
+      data.motherId !== undefined ||
+      data.adoptiveFatherId !== undefined ||
+      data.adoptiveMotherId !== undefined
+    ) {
+      await this.assertParentsNotExistingSpouses(
+        id,
+        [
+          effectiveFatherId,
+          effectiveMotherId,
+          effectiveAdoptiveFatherId,
+          effectiveAdoptiveMotherId,
+        ],
+        data.spouseRelations !== undefined
+          ? data.spouseRelations.map((r) => r.spouseId)
+          : undefined,
+      )
+    }
     const person = await this.personRepository.update(id, data)
     const change = describePersonUpdate(existing, data)
     // 전기 등 하위 리소스 변경이면 제목이 이미 구체적이므로 preview 생략,
@@ -595,6 +1517,885 @@ export class PersonService {
       personCompletenessBonus(person),
     )
     return person
+  }
+
+  /**
+   * 전용 가족 관계 연결 Use-Case (`POST /persons/:id/family/links`).
+   * `PUT /persons/:id` 전체 배열 재전송이나 클라이언트 측 타 인물 FK 우회 수정을 대체하는 원자적 도메인 명령.
+   */
+  async linkFamilyMember(
+    personId: string,
+    dto: LinkPersonFamilyDto,
+    accountId?: string,
+  ): Promise<PersonResponseDto> {
+    if (!dto.targetId || dto.targetId === personId) {
+      throw new BadRequestException('자기 자신을 가족으로 연결할 수 없습니다.')
+    }
+    const ego = await this.personRepository.findById(personId, accountId)
+    if (!ego) {
+      throw accountId
+        ? new ForbiddenException('본인이 등록한 인물만 수정할 수 있습니다.')
+        : new NotFoundException(`인물을 찾을 수 없습니다 (ID: ${personId})`)
+    }
+    const target = await this.personRepository.findById(dto.targetId)
+    if (!target) {
+      throw new NotFoundException(`대상 인물을 찾을 수 없습니다 (ID: ${dto.targetId})`)
+    }
+
+    if (
+      dto.kind === 'father' ||
+      dto.kind === 'mother' ||
+      dto.kind === 'adoptiveFather' ||
+      dto.kind === 'adoptiveMother'
+    ) {
+      const slotMap = {
+        father: 'fatherId',
+        mother: 'motherId',
+        adoptiveFather: 'adoptiveFatherId',
+        adoptiveMother: 'adoptiveMotherId',
+      } as const
+      const slot = slotMap[dto.kind]
+      await this.update(personId, { [slot]: dto.targetId }, accountId)
+      return this.findById(personId, accountId)
+    }
+
+    if (dto.kind === 'spouse') {
+      const startMapped =
+        dto.marriageStart !== undefined && dto.marriageStart !== null
+          ? mapStructuredDateInput(dto.marriageStart, undefined)
+          : undefined
+      const endMapped =
+        dto.marriageEnd !== undefined && dto.marriageEnd !== null
+          ? mapStructuredDateInput(dto.marriageEnd, undefined)
+          : undefined
+      const startSide =
+        dto.marriageStart !== undefined
+          ? dto.marriageStart === null || dto.marriageStart.year == null
+            ? { date: null, era: null, year: null, month: null, day: null, precision: null }
+            : {
+                date: startMapped?.date ?? null,
+                era: startMapped?.era ?? null,
+                year: dto.marriageStart.year ?? null,
+                month: dto.marriageStart.month ?? null,
+                day: dto.marriageStart.day ?? null,
+                precision: startMapped?.precision ?? null,
+              }
+          : undefined
+      const endSide =
+        dto.marriageEnd !== undefined
+          ? dto.marriageEnd === null || dto.marriageEnd.year == null
+            ? { date: null, era: null, year: null, month: null, day: null, precision: null }
+            : {
+                date: endMapped?.date ?? null,
+                era: endMapped?.era ?? null,
+                year: dto.marriageEnd.year ?? null,
+                month: dto.marriageEnd.month ?? null,
+                day: dto.marriageEnd.day ?? null,
+                precision: endMapped?.precision ?? null,
+              }
+          : undefined
+      const egoLifespan = this.computeSignedLifespanYears(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        {
+          birthEra: ego.birthEra,
+          birthYear: ego.birthYear,
+          deathEra: ego.deathEra,
+          deathYear: ego.deathYear,
+        },
+      )
+      await this.assertSpouseInvariants(
+        personId,
+        [
+          {
+            spouseId: dto.targetId,
+            marriageStartDate: startSide?.date ?? startMapped?.date,
+            marriageStartEra: startSide?.era ?? startMapped?.era,
+            marriageStartYear: startSide?.year ?? startMapped?.year,
+            marriageEndDate: endSide?.date ?? endMapped?.date,
+            marriageEndEra: endSide?.era ?? endMapped?.era,
+            marriageEndYear: endSide?.year ?? endMapped?.year,
+          },
+        ],
+        [ego.fatherId, ego.motherId, ego.adoptiveFatherId, ego.adoptiveMotherId],
+        egoLifespan,
+      )
+      const [pairPersonId, pairSpouseId] =
+        personId < dto.targetId ? [personId, dto.targetId] : [dto.targetId, personId]
+      const rank = dto.marriageRank ?? null
+      const isAsymmetricRank =
+        rank === 'PRIMARY' || rank === 'SECONDARY' || rank === 'CONCUBINE'
+      const egoGender = (ego.gender ?? '').toUpperCase()
+      const targetGender = (target.gender ?? '').toUpperCase()
+      const defaultHolderId =
+        (egoGender === 'FEMALE' && targetGender !== 'FEMALE') ||
+        (targetGender === 'MALE' && egoGender !== 'MALE')
+          ? personId
+          : dto.targetId
+      const isValidCoupleHolder =
+        dto.rankHolderId === personId || dto.rankHolderId === dto.targetId
+      const sanitizedDtoHolderId = isValidCoupleHolder
+        ? dto.rankHolderId!
+        : dto.rankHolderId === null
+          ? null
+          : undefined
+      const resolvedRankHolderId =
+        sanitizedDtoHolderId !== undefined
+          ? sanitizedDtoHolderId
+          : isAsymmetricRank
+            ? defaultHolderId
+            : null
+
+      await this.prisma.$transaction(async (tx) => {
+        const existingRows = await tx.personSpouse.findMany({
+          where: {
+            OR: [
+              { personId: pairPersonId, spouseId: pairSpouseId },
+              { personId: pairSpouseId, spouseId: pairPersonId },
+            ],
+          },
+          select: { id: true, personId: true, spouseId: true, marriageRank: true, rankHolderId: true },
+        })
+        let marriageId: string
+        if (existingRows.length > 0) {
+          const primaryRow =
+            existingRows.find(
+              (r) => r.personId === pairPersonId && r.spouseId === pairSpouseId,
+            ) ?? existingRows[0]
+          marriageId = primaryRow.id
+          const duplicateIds = existingRows
+            .filter((r) => r.id !== primaryRow.id)
+            .map((r) => r.id)
+          if (duplicateIds.length > 0) {
+            await tx.person.updateMany({
+              where: { parentMarriageId: { in: duplicateIds } },
+              data: { parentMarriageId: marriageId },
+            })
+            await tx.personSpouse.deleteMany({
+              where: { id: { in: duplicateIds } },
+            })
+          }
+          await tx.personSpouse.update({
+            where: { id: primaryRow.id },
+            data: {
+              personId: pairPersonId,
+              spouseId: pairSpouseId,
+              ...(dto.marriageRank !== undefined ? { marriageRank: rank as any } : {}),
+              ...(dto.marriageEndReason !== undefined
+                ? { marriageEndReason: (dto.marriageEndReason ?? null) as any }
+                : {}),
+              ...(dto.rankHolderId !== undefined || dto.marriageRank !== undefined
+                ? { rankHolderId: resolvedRankHolderId }
+                : {}),
+              ...(startSide !== undefined
+                ? {
+                    marriageStartDate: startSide.date,
+                    marriageStartEra: startSide.era as any,
+                    marriageStartYear: startSide.year,
+                    marriageStartMonth: startSide.month,
+                    marriageStartDay: startSide.day,
+                    marriageStartPrecision: startSide.precision,
+                  }
+                : {}),
+              ...(endSide !== undefined
+                ? {
+                    marriageEndDate: endSide.date,
+                    marriageEndEra: endSide.era as any,
+                    marriageEndYear: endSide.year,
+                    marriageEndMonth: endSide.month,
+                    marriageEndDay: endSide.day,
+                    marriageEndPrecision: endSide.precision,
+                  }
+                : {}),
+              ...(dto.note !== undefined ? { note: dto.note ?? null } : {}),
+            },
+          })
+        } else {
+          const created = await tx.personSpouse.create({
+            data: {
+              personId: pairPersonId,
+              spouseId: pairSpouseId,
+              marriageRank: rank as any,
+              marriageEndReason: (dto.marriageEndReason ?? null) as any,
+              rankHolderId: resolvedRankHolderId,
+              marriageStartDate: startSide?.date ?? null,
+              marriageStartEra: (startSide?.era ?? null) as any,
+              marriageStartYear: startSide?.year ?? null,
+              marriageStartMonth: startSide?.month ?? null,
+              marriageStartDay: startSide?.day ?? null,
+              marriageStartPrecision: startSide?.precision ?? null,
+              marriageEndDate: endSide?.date ?? null,
+              marriageEndEra: (endSide?.era ?? null) as any,
+              marriageEndYear: endSide?.year ?? null,
+              marriageEndMonth: endSide?.month ?? null,
+              marriageEndDay: endSide?.day ?? null,
+              marriageEndPrecision: endSide?.precision ?? null,
+              note: dto.note ?? null,
+            },
+          })
+          marriageId = created.id
+        }
+        await tx.person.updateMany({
+          where: {
+            OR: [
+              { fatherId: pairPersonId, motherId: pairSpouseId },
+              { fatherId: pairSpouseId, motherId: pairPersonId },
+            ],
+            NOT: { parentMarriageId: marriageId },
+          },
+          data: { parentMarriageId: marriageId },
+        })
+        await tx.person.updateMany({
+          where: { id: { in: [personId, dto.targetId] } },
+          data: { updatedAt: new Date() },
+        })
+      })
+      const updated = await this.findById(personId, accountId)
+      try {
+        await this.notificationService.notifyPerson(
+          personDisplayName(updated),
+          EventMethod.UPDATE,
+          updated.id,
+          '배우자 관계 추가',
+        )
+      } catch (err) {
+        console.error('[person.linkFamilyMember:spouse] 알림 발행 실패(무시):', err)
+      }
+      return updated
+    }
+
+    if (dto.kind === 'child') {
+      let parentSlot: 'fatherId' | 'motherId' | 'adoptiveFatherId' | 'adoptiveMotherId'
+      if (dto.explicitParentSlot) {
+        parentSlot = dto.explicitParentSlot
+      } else if (dto.parentSlot) {
+        parentSlot = dto.isAdoptive
+          ? dto.parentSlot === 'mother'
+            ? 'adoptiveMotherId'
+            : 'adoptiveFatherId'
+          : dto.parentSlot === 'mother'
+            ? 'motherId'
+            : 'fatherId'
+      } else if (dto.isAdoptive) {
+        if (ego.gender === 'FEMALE') parentSlot = 'adoptiveMotherId'
+        else if (ego.gender === 'MALE') parentSlot = 'adoptiveFatherId'
+        else {
+          throw new BadRequestException(
+            '성별이 지정되지 않은 인물의 양자녀를 추가할 때는 부모 역할(양부/양모)을 명시해야 합니다.',
+          )
+        }
+      } else {
+        if (ego.gender === 'FEMALE') parentSlot = 'motherId'
+        else if (ego.gender === 'MALE') parentSlot = 'fatherId'
+        else {
+          throw new BadRequestException(
+            '성별이 지정되지 않은 인물의 자녀를 추가할 때는 부모 역할(친부/친모)을 명시해야 합니다.',
+          )
+        }
+      }
+
+      const childUpdate: UpdatePersonData = { [parentSlot]: personId }
+      if (dto.otherParentId) {
+        if (dto.isAdoptive) {
+          const otherAdoptSlot =
+            parentSlot === 'adoptiveFatherId' ? 'adoptiveMotherId' : 'adoptiveFatherId'
+          childUpdate[otherAdoptSlot] = dto.otherParentId
+        } else {
+          const otherSlot = parentSlot === 'fatherId' ? 'motherId' : 'fatherId'
+          childUpdate[otherSlot] = dto.otherParentId
+        }
+      }
+      if (dto.birthOrder !== undefined) childUpdate.birthOrder = dto.birthOrder
+      if (dto.genderBirthOrder !== undefined) childUpdate.genderBirthOrder = dto.genderBirthOrder
+
+      await this.update(dto.targetId, childUpdate, accountId)
+      return this.findById(personId, accountId)
+    }
+
+    if (dto.kind === 'sibling') {
+      const existingMarriage = await this.prisma.personSpouse.findFirst({
+        where: {
+          OR: [
+            { personId, spouseId: dto.targetId },
+            { personId: dto.targetId, spouseId: personId },
+          ],
+        },
+        select: { id: true },
+      })
+      if (existingMarriage) {
+        throw new BadRequestException(
+          '이미 배우자로 등록된 인물을 형제자매로 연결할 수 없습니다.',
+        )
+      }
+      const lineage = dto.siblingLineage ?? 'FULL'
+      const sharedFather = ego.fatherId ?? target.fatherId ?? null
+      const sharedMother = ego.motherId ?? target.motherId ?? null
+
+      if (lineage === 'ADOPTIVE') {
+        const hasEgoAdopt = Boolean(ego.adoptiveFatherId || ego.adoptiveMotherId)
+        const hasTargetAdopt = Boolean(target.adoptiveFatherId || target.adoptiveMotherId)
+        const hasEgoBio = Boolean(ego.fatherId || ego.motherId)
+        const hasTargetBio = Boolean(target.fatherId || target.motherId)
+        if (!hasEgoAdopt && !hasTargetAdopt && !hasEgoBio && !hasTargetBio) {
+          throw new BadRequestException(
+            '입양형제로 연결하려면 두 인물 중 최소 한 명에게 부모(양부모 또는 친부모)가 등록되어 있어야 합니다.',
+          )
+        }
+        const egoPatch: UpdatePersonData = {}
+        const targetPatch: UpdatePersonData = {}
+        if (hasEgoAdopt) {
+          if (ego.adoptiveFatherId && target.adoptiveFatherId !== ego.adoptiveFatherId && target.fatherId !== ego.adoptiveFatherId) {
+            targetPatch.adoptiveFatherId = ego.adoptiveFatherId
+          }
+          if (ego.adoptiveMotherId && target.adoptiveMotherId !== ego.adoptiveMotherId && target.motherId !== ego.adoptiveMotherId) {
+            targetPatch.adoptiveMotherId = ego.adoptiveMotherId
+          }
+        } else if (hasTargetAdopt) {
+          if (target.adoptiveFatherId && ego.adoptiveFatherId !== target.adoptiveFatherId && ego.fatherId !== target.adoptiveFatherId) {
+            egoPatch.adoptiveFatherId = target.adoptiveFatherId
+          }
+          if (target.adoptiveMotherId && ego.adoptiveMotherId !== target.adoptiveMotherId && ego.motherId !== target.adoptiveMotherId) {
+            egoPatch.adoptiveMotherId = target.adoptiveMotherId
+          }
+        } else if (hasEgoBio) {
+          if (
+            ego.fatherId &&
+            target.adoptiveFatherId !== ego.fatherId &&
+            target.fatherId !== ego.fatherId
+          ) {
+            targetPatch.adoptiveFatherId = ego.fatherId
+          }
+          if (
+            ego.motherId &&
+            target.adoptiveMotherId !== ego.motherId &&
+            target.motherId !== ego.motherId
+          ) {
+            targetPatch.adoptiveMotherId = ego.motherId
+          }
+        } else if (hasTargetBio) {
+          if (
+            target.fatherId &&
+            ego.adoptiveFatherId !== target.fatherId &&
+            ego.fatherId !== target.fatherId
+          ) {
+            egoPatch.adoptiveFatherId = target.fatherId
+          }
+          if (
+            target.motherId &&
+            ego.adoptiveMotherId !== target.motherId &&
+            ego.motherId !== target.motherId
+          ) {
+            egoPatch.adoptiveMotherId = target.motherId
+          }
+        }
+        const nextEgoAdoptF =
+          egoPatch.adoptiveFatherId !== undefined ? egoPatch.adoptiveFatherId : ego.adoptiveFatherId
+        const nextEgoAdoptM =
+          egoPatch.adoptiveMotherId !== undefined ? egoPatch.adoptiveMotherId : ego.adoptiveMotherId
+        const nextTargetAdoptF =
+          targetPatch.adoptiveFatherId !== undefined
+            ? targetPatch.adoptiveFatherId
+            : target.adoptiveFatherId
+        const nextTargetAdoptM =
+          targetPatch.adoptiveMotherId !== undefined
+            ? targetPatch.adoptiveMotherId
+            : target.adoptiveMotherId
+        const sharesAdoptiveAxis = Boolean(
+          (nextEgoAdoptF &&
+            (nextEgoAdoptF === nextTargetAdoptF || nextEgoAdoptF === target.fatherId)) ||
+            (nextEgoAdoptM &&
+              (nextEgoAdoptM === nextTargetAdoptM || nextEgoAdoptM === target.motherId)) ||
+            (nextTargetAdoptF && nextTargetAdoptF === ego.fatherId) ||
+            (nextTargetAdoptM && nextTargetAdoptM === ego.motherId),
+        )
+        if (!sharesAdoptiveAxis) {
+          throw new BadRequestException(
+            '이미 동일한 친부모로만 연결된 인물은 생부모와 양부모 중복 금지 규칙에 따라 입양형제로 중복 지정할 수 없습니다.',
+          )
+        }
+        if (Object.keys(egoPatch).length > 0) await this.update(personId, egoPatch, accountId)
+        if (Object.keys(targetPatch).length > 0) await this.update(dto.targetId, targetPatch, accountId)
+      } else if (lineage === 'PATERNAL_HALF') {
+        if (!sharedFather) {
+          throw new BadRequestException(
+            '이복형제(동부이모)로 연결하려면 두 인물 중 최소 한 명에게 아버지가 등록되어 있어야 합니다.',
+          )
+        }
+        if (ego.motherId && target.motherId && ego.motherId === target.motherId) {
+          throw new BadRequestException(
+            '이미 동일한 어머니(친모)를 공유하는 인물은 이복형제(동부이모)로 연결할 수 없습니다. 친형제(부모 공유)를 선택해 주세요.',
+          )
+        }
+        if (ego.fatherId !== sharedFather) {
+          await this.update(personId, { fatherId: sharedFather }, accountId)
+        }
+        if (target.fatherId !== sharedFather) {
+          await this.update(dto.targetId, { fatherId: sharedFather }, accountId)
+        }
+      } else if (lineage === 'MATERNAL_HALF') {
+        if (!sharedMother) {
+          throw new BadRequestException(
+            '이부형제(동모이부)로 연결하려면 두 인물 중 최소 한 명에게 어머니가 등록되어 있어야 합니다.',
+          )
+        }
+        if (ego.fatherId && target.fatherId && ego.fatherId === target.fatherId) {
+          throw new BadRequestException(
+            '이미 동일한 아버지(친부)를 공유하는 인물은 이부형제(동모이부)로 연결할 수 없습니다. 친형제(부모 공유)를 선택해 주세요.',
+          )
+        }
+        if (ego.motherId !== sharedMother) {
+          await this.update(personId, { motherId: sharedMother }, accountId)
+        }
+        if (target.motherId !== sharedMother) {
+          await this.update(dto.targetId, { motherId: sharedMother }, accountId)
+        }
+      } else {
+        if (!sharedFather && !sharedMother) {
+          throw new BadRequestException(
+            '친형제자매로 연결하려면 두 인물 중 최소 한 명에게 부모(부 또는 모)가 등록되어 있어야 합니다.',
+          )
+        }
+        const egoPatch: UpdatePersonData = {}
+        const targetPatch: UpdatePersonData = {}
+        if (sharedFather && ego.fatherId !== sharedFather) egoPatch.fatherId = sharedFather
+        if (sharedMother && ego.motherId !== sharedMother) egoPatch.motherId = sharedMother
+        if (sharedFather && target.fatherId !== sharedFather) targetPatch.fatherId = sharedFather
+        if (sharedMother && target.motherId !== sharedMother) targetPatch.motherId = sharedMother
+        if (Object.keys(egoPatch).length > 0) await this.update(personId, egoPatch, accountId)
+        if (Object.keys(targetPatch).length > 0) await this.update(dto.targetId, targetPatch, accountId)
+      }
+      return this.findById(personId, accountId)
+    }
+
+    throw new BadRequestException(`지원하지 않는 가족 관계 유형입니다: ${dto.kind}`)
+  }
+
+  /**
+   * 배우자 관계 단건 수정 (`PUT /persons/:id/family/spouses/:spouseId`).
+   * 전체 배우자 배열을 덮어쓰지 않고 해당 커플 행만 원자적으로 부분 수정한다.
+   */
+  async updateSpouseRelation(
+    personId: string,
+    spouseId: string,
+    dto: UpdatePersonSpouseRelationDto,
+    accountId?: string,
+  ): Promise<PersonResponseDto> {
+    const ego = await this.personRepository.findById(personId, accountId)
+    if (!ego) {
+      throw accountId
+        ? new ForbiddenException('본인이 등록한 인물만 수정할 수 있습니다.')
+        : new NotFoundException(`인물을 찾을 수 없습니다 (ID: ${personId})`)
+    }
+    const [pairPersonId, pairSpouseId] =
+      personId < spouseId ? [personId, spouseId] : [spouseId, personId]
+
+    const existingRows = await this.prisma.personSpouse.findMany({
+      where: {
+        OR: [
+          { personId: pairPersonId, spouseId: pairSpouseId },
+          { personId: pairSpouseId, spouseId: pairPersonId },
+        ],
+      },
+    })
+    if (existingRows.length === 0) {
+      throw new NotFoundException('수정할 배우자 관계를 찾을 수 없습니다.')
+    }
+    const primaryRow =
+      existingRows.find(
+        (r) => r.personId === pairPersonId && r.spouseId === pairSpouseId,
+      ) ?? existingRows[0]
+    const duplicateIds = existingRows
+      .filter((r) => r.id !== primaryRow.id)
+      .map((r) => r.id)
+    // 레거시 양방향 중복 행이 존재하는 경우 반대편 행에만 기록된 메타데이터가 유실되지 않도록 병합
+    const existing = existingRows.reduce(
+      (acc, row) => ({
+        ...acc,
+        marriageStartDate: acc.marriageStartDate ?? row.marriageStartDate,
+        marriageStartEra: acc.marriageStartEra ?? row.marriageStartEra,
+        marriageStartYear: acc.marriageStartYear ?? row.marriageStartYear,
+        marriageStartMonth: acc.marriageStartMonth ?? row.marriageStartMonth,
+        marriageStartDay: acc.marriageStartDay ?? row.marriageStartDay,
+        marriageStartPrecision: acc.marriageStartPrecision ?? row.marriageStartPrecision,
+        marriageEndDate: acc.marriageEndDate ?? row.marriageEndDate,
+        marriageEndEra: acc.marriageEndEra ?? row.marriageEndEra,
+        marriageEndYear: acc.marriageEndYear ?? row.marriageEndYear,
+        marriageEndMonth: acc.marriageEndMonth ?? row.marriageEndMonth,
+        marriageEndDay: acc.marriageEndDay ?? row.marriageEndDay,
+        marriageEndPrecision: acc.marriageEndPrecision ?? row.marriageEndPrecision,
+        marriageEndReason: acc.marriageEndReason ?? row.marriageEndReason,
+        marriageRank: acc.marriageRank ?? row.marriageRank,
+        rankHolderId: acc.rankHolderId ?? row.rankHolderId,
+        note: acc.note ?? row.note,
+      }),
+      primaryRow,
+    )
+
+    const mapDateSide = (side: DateInfoDto | null | undefined, existingSide: {
+      date: Date | null
+      era: string | null
+      year: number | null
+      month: number | null
+      day: number | null
+      precision: string | null
+    }) => {
+      if (side === undefined) return existingSide
+      if (side === null || side.year == null) {
+        return { date: null, era: null, year: null, month: null, day: null, precision: null }
+      }
+      const mapped = mapStructuredDateInput(side, undefined)
+      return {
+        date: mapped.date ?? null,
+        era: mapped.era ?? null,
+        year: side.year ?? null,
+        month: side.month ?? null,
+        day: side.day ?? null,
+        precision: mapped.precision ?? null,
+      }
+    }
+
+    const startSide = mapDateSide(dto.marriageStart, {
+      date: existing.marriageStartDate,
+      era: existing.marriageStartEra,
+      year: existing.marriageStartYear,
+      month: existing.marriageStartMonth,
+      day: existing.marriageStartDay,
+      precision: existing.marriageStartPrecision,
+    })
+    const endSide = mapDateSide(dto.marriageEnd, {
+      date: existing.marriageEndDate,
+      era: existing.marriageEndEra,
+      year: existing.marriageEndYear,
+      month: existing.marriageEndMonth,
+      day: existing.marriageEndDay,
+      precision: existing.marriageEndPrecision,
+    })
+
+    const egoLifespan = this.computeSignedLifespanYears(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        birthEra: ego.birthEra,
+        birthYear: ego.birthYear,
+        deathEra: ego.deathEra,
+        deathYear: ego.deathYear,
+      },
+    )
+    await this.assertSpouseInvariants(
+      personId,
+      [
+        {
+          spouseId,
+          marriageStartDate: startSide.date,
+          marriageStartEra: startSide.era,
+          marriageStartYear: startSide.year,
+          marriageEndDate: endSide.date,
+          marriageEndEra: endSide.era,
+          marriageEndYear: endSide.year,
+        },
+      ],
+      [ego.fatherId, ego.motherId, ego.adoptiveFatherId, ego.adoptiveMotherId],
+      egoLifespan,
+    )
+
+    const nextRank = dto.marriageRank !== undefined ? dto.marriageRank : existing.marriageRank
+    const isAsymmetricRank =
+      nextRank === 'PRIMARY' || nextRank === 'SECONDARY' || nextRank === 'CONCUBINE'
+    const validExistingHolderId =
+      existing.rankHolderId === personId || existing.rankHolderId === spouseId
+        ? existing.rankHolderId
+        : null
+    const validDtoHolderId =
+      dto.rankHolderId === personId || dto.rankHolderId === spouseId
+        ? dto.rankHolderId
+        : dto.rankHolderId === null
+          ? null
+          : undefined
+    let nextRankHolderId = validExistingHolderId
+    if (validDtoHolderId !== undefined) {
+      nextRankHolderId = validDtoHolderId
+    } else if (dto.marriageRank !== undefined || dto.rankHolderId !== undefined) {
+      if (!isAsymmetricRank) {
+        nextRankHolderId = null
+      } else if (validExistingHolderId) {
+        nextRankHolderId = validExistingHolderId
+      } else if (isAsymmetricRank) {
+        const spousePerson = await this.personRepository.findById(spouseId)
+        const egoGender = (ego.gender ?? '').toUpperCase()
+        const spouseGender = (spousePerson?.gender ?? '').toUpperCase()
+        nextRankHolderId =
+          egoGender === 'FEMALE' && spouseGender !== 'FEMALE' ? personId : spouseId
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      if (duplicateIds.length > 0) {
+        await tx.person.updateMany({
+          where: { parentMarriageId: { in: duplicateIds } },
+          data: { parentMarriageId: existing.id },
+        })
+        await tx.personSpouse.deleteMany({
+          where: { id: { in: duplicateIds } },
+        })
+      }
+      await tx.personSpouse.update({
+        where: { id: existing.id },
+        data: {
+          personId: pairPersonId,
+          spouseId: pairSpouseId,
+          marriageStartDate: startSide.date,
+          marriageStartEra: startSide.era as any,
+          marriageStartYear: startSide.year,
+          marriageStartMonth: startSide.month,
+          marriageStartDay: startSide.day,
+          marriageStartPrecision: startSide.precision,
+          marriageEndDate: endSide.date,
+          marriageEndEra: endSide.era as any,
+          marriageEndYear: endSide.year,
+          marriageEndMonth: endSide.month,
+          marriageEndDay: endSide.day,
+          marriageEndPrecision: endSide.precision,
+          marriageRank: (nextRank ?? null) as any,
+          rankHolderId: nextRankHolderId,
+          marriageEndReason: (dto.marriageEndReason !== undefined
+            ? (dto.marriageEndReason ?? null)
+            : (existing.marriageEndReason ?? null)) as any,
+          note: dto.note !== undefined ? (dto.note ?? null) : (existing.note ?? null),
+        },
+      })
+      await tx.person.updateMany({
+        where: {
+          OR: [
+            { fatherId: pairPersonId, motherId: pairSpouseId },
+            { fatherId: pairSpouseId, motherId: pairPersonId },
+          ],
+          NOT: { parentMarriageId: existing.id },
+        },
+        data: { parentMarriageId: existing.id },
+      })
+      await tx.person.updateMany({
+        where: { id: { in: [personId, spouseId] } },
+        data: { updatedAt: new Date() },
+      })
+    })
+
+    const updated = await this.findById(personId, accountId)
+    try {
+      await this.notificationService.notifyPerson(
+        personDisplayName(updated),
+        EventMethod.UPDATE,
+        updated.id,
+        '배우자 관계 수정',
+      )
+    } catch (err) {
+      console.error('[person.updateSpouseRelation] 알림 발행 실패(무시):', err)
+    }
+    return updated
+  }
+
+  /**
+   * 자녀 가족 메타 단건 수정 (`PUT /persons/:id/family/children/:childId`).
+   * 자녀의 출생 서열(birthOrder), 성별 서열(genderBirthOrder), 서출 여부(illegitimate), 소생 부모(otherParentId)를 원자적으로 수정한다.
+   */
+  async updateChildFamilyMeta(
+    personId: string,
+    childId: string,
+    dto: UpdatePersonChildMetaDto,
+    accountId?: string,
+  ): Promise<PersonResponseDto> {
+    const ego = await this.personRepository.findById(personId, accountId)
+    if (!ego) {
+      throw accountId
+        ? new ForbiddenException('본인이 등록한 인물만 수정할 수 있습니다.')
+        : new NotFoundException(`인물을 찾을 수 없습니다 (ID: ${personId})`)
+    }
+    const child = await this.personRepository.findById(childId)
+    if (!child) {
+      throw new NotFoundException(`자녀 인물을 찾을 수 없습니다 (ID: ${childId})`)
+    }
+    const isParent =
+      child.fatherId === personId ||
+      child.motherId === personId ||
+      child.adoptiveFatherId === personId ||
+      child.adoptiveMotherId === personId
+    if (!isParent) {
+      throw new BadRequestException('해당 인물은 현재 인물의 자녀(또는 양자녀)가 아닙니다.')
+    }
+
+    const childUpdate: UpdatePersonData = {}
+    if (dto.birthOrder !== undefined) childUpdate.birthOrder = dto.birthOrder
+    if (dto.genderBirthOrder !== undefined) childUpdate.genderBirthOrder = dto.genderBirthOrder
+    if (dto.illegitimate !== undefined) childUpdate.illegitimate = dto.illegitimate
+    if (dto.otherParentId !== undefined) {
+      if (child.fatherId === personId) {
+        childUpdate.motherId = dto.otherParentId
+      } else if (child.motherId === personId) {
+        childUpdate.fatherId = dto.otherParentId
+      } else if (child.adoptiveFatherId === personId) {
+        childUpdate.adoptiveMotherId = dto.otherParentId
+      } else if (child.adoptiveMotherId === personId) {
+        childUpdate.adoptiveFatherId = dto.otherParentId
+      } else if (ego.gender === 'MALE') {
+        childUpdate.motherId = dto.otherParentId
+      } else if (ego.gender === 'FEMALE') {
+        childUpdate.fatherId = dto.otherParentId
+      }
+    }
+
+    if (Object.keys(childUpdate).length > 0) {
+      await this.update(childId, childUpdate, accountId)
+    }
+    return this.findById(personId, accountId)
+  }
+
+  /**
+   * 가족 관계 단건 해제 (`DELETE /persons/:id/family/links/:kind/:targetId`).
+   */
+  async unlinkFamilyMember(
+    personId: string,
+    kind: FamilyLinkKind,
+    targetId: string,
+    accountId?: string,
+  ): Promise<PersonResponseDto> {
+    const ego = await this.personRepository.findById(personId, accountId)
+    if (!ego) {
+      throw accountId
+        ? new ForbiddenException('본인이 등록한 인물만 수정할 수 있습니다.')
+        : new NotFoundException(`인물을 찾을 수 없습니다 (ID: ${personId})`)
+    }
+
+    if (kind === 'father') {
+      if (ego.fatherId === targetId) await this.update(personId, { fatherId: null }, accountId)
+      return this.findById(personId, accountId)
+    }
+    if (kind === 'mother') {
+      if (ego.motherId === targetId) await this.update(personId, { motherId: null }, accountId)
+      return this.findById(personId, accountId)
+    }
+    if (kind === 'adoptiveFather') {
+      if (ego.adoptiveFatherId === targetId) {
+        await this.update(personId, { adoptiveFatherId: null }, accountId)
+      }
+      return this.findById(personId, accountId)
+    }
+    if (kind === 'adoptiveMother') {
+      if (ego.adoptiveMotherId === targetId) {
+        await this.update(personId, { adoptiveMotherId: null }, accountId)
+      }
+      return this.findById(personId, accountId)
+    }
+    if (kind === 'spouse') {
+      await this.prisma.$transaction(async (tx) => {
+        const existingRows = await tx.personSpouse.findMany({
+          where: {
+            OR: [
+              { personId, spouseId: targetId },
+              { personId: targetId, spouseId: personId },
+            ],
+          },
+          select: { id: true },
+        })
+        const deletedIds = existingRows.map((r) => r.id)
+        await tx.person.updateMany({
+          where: {
+            OR: [
+              ...(deletedIds.length > 0 ? [{ parentMarriageId: { in: deletedIds } }] : []),
+              { fatherId: personId, motherId: targetId },
+              { fatherId: targetId, motherId: personId },
+            ],
+          },
+          data: { parentMarriageId: null },
+        })
+        await tx.personSpouse.deleteMany({
+          where: {
+            OR: [
+              { personId, spouseId: targetId },
+              { personId: targetId, spouseId: personId },
+            ],
+          },
+        })
+        await tx.person.updateMany({
+          where: { id: { in: [personId, targetId] } },
+          data: { updatedAt: new Date() },
+        })
+      })
+      const updated = await this.findById(personId, accountId)
+      try {
+        await this.notificationService.notifyPerson(
+          personDisplayName(updated),
+          EventMethod.UPDATE,
+          updated.id,
+          '배우자 관계 해제',
+        )
+      } catch (err) {
+        console.error('[person.unlinkFamilyMember:spouse] 알림 발행 실패(무시):', err)
+      }
+      return updated
+    }
+    if (kind === 'child') {
+      const child = await this.personRepository.findById(targetId)
+      if (!child) return this.findById(personId, accountId)
+      const patch: UpdatePersonData = {}
+      if (child.fatherId === personId) patch.fatherId = null
+      if (child.motherId === personId) patch.motherId = null
+      if (child.adoptiveFatherId === personId) patch.adoptiveFatherId = null
+      if (child.adoptiveMotherId === personId) patch.adoptiveMotherId = null
+      if (Object.keys(patch).length > 0) {
+        await this.update(targetId, patch, accountId)
+      }
+      return this.findById(personId, accountId)
+    }
+    if (kind === 'sibling') {
+      const sib = await this.personRepository.findById(targetId)
+      if (!sib) return this.findById(personId, accountId)
+      const egoAllFathers = [ego.fatherId, ego.adoptiveFatherId].filter(Boolean) as string[]
+      const egoAllMothers = [ego.motherId, ego.adoptiveMotherId].filter(Boolean) as string[]
+      const sibPatch: UpdatePersonData = {}
+      const egoPatch: UpdatePersonData = {}
+
+      // 1) 상대 형제(sib)의 양부모 슬롯이 ego의 부모(친부모·양부모)와 일치하면 양부모 슬롯만 우선 해제
+      if (sib.adoptiveFatherId && egoAllFathers.includes(sib.adoptiveFatherId)) {
+        sibPatch.adoptiveFatherId = null
+      }
+      if (sib.adoptiveMotherId && egoAllMothers.includes(sib.adoptiveMotherId)) {
+        sibPatch.adoptiveMotherId = null
+      }
+
+      // 2) 친부모 슬롯은 반드시 친부모끼리(ego.fatherId===sib.fatherId, ego.motherId===sib.motherId)만 비교.
+      //    ego의 양부모(adoptiveFatherId/adoptiveMotherId)와 일치한다는 이유로 친자인 sib의 생부/생모를
+      //    삭제하면 sib가 친부모 및 다른 모든 친형제들과 끊어지는 교차 계보 파괴가 발생한다.
+      if (sib.fatherId && ego.fatherId && sib.fatherId === ego.fatherId) {
+        sibPatch.fatherId = null
+      }
+      if (sib.motherId && ego.motherId && sib.motherId === ego.motherId) {
+        sibPatch.motherId = null
+      }
+
+      // 3) ego가 입양자(ego.adoptiveFatherId === sib.fatherId 등)이고 sib가 양가의 친자인 경우,
+      //    sib의 친부모는 보존하고 ego 본인의 양부모 연결을 해제한다.
+      if (Object.keys(sibPatch).length === 0) {
+        if (ego.adoptiveFatherId && sib.fatherId && ego.adoptiveFatherId === sib.fatherId) {
+          egoPatch.adoptiveFatherId = null
+        }
+        if (ego.adoptiveMotherId && sib.motherId && ego.adoptiveMotherId === sib.motherId) {
+          egoPatch.adoptiveMotherId = null
+        }
+      }
+
+      if (Object.keys(sibPatch).length > 0) {
+        await this.update(targetId, sibPatch, accountId)
+      }
+      if (Object.keys(egoPatch).length > 0) {
+        await this.update(personId, egoPatch, accountId)
+      }
+      return this.findById(personId, accountId)
+    }
+
+    throw new BadRequestException(`지원하지 않는 가족 관계 유형입니다: ${kind}`)
   }
 
   /**
@@ -966,19 +2767,37 @@ export class PersonService {
   /**
    * 연보 start/end 날짜 범위 검증 — endDate < startDate 금지.
    * 두 값이 모두 있을 때만 검사(각각 null 허용).
+   * 정밀도('year'·'month'·'day')를 반영하되 종료일은 해당 정밀도의 상한(연말 12-31 / 월말 31)으로 비교해,
+   * 같은 해/같은 달 안의 구체적 시작일(예: 시작 1920-03-15 [day], 종료 1920년 [year])이 역전으로 오판되지 않게 한다.
    */
   private assertLifeEventDateRange(
     startDate?: string | null,
     endDate?: string | null,
+    startDatePrecision?: string | null,
+    endDatePrecision?: string | null,
   ): void {
     if (!startDate || !endDate) return
     // 부호 연-월-일로 비교 — new Date()는 기원전('-0044-…')을 서기로 읽거나 거부한다
-    const keyOf = (iso: string) => {
-      const parsed = mapStructuredDateInput(null, iso)
-      return structuredDateKey(parsed.era, parsed.year, parsed.month, parsed.day)
-    }
-    const startKey = keyOf(startDate)
-    const endKey = keyOf(endDate)
+    const startParsed = applyDatePrecision(
+      mapStructuredDateInput(null, startDate),
+      startDatePrecision ?? 'day',
+    )
+    const endParsed = applyDatePrecision(
+      mapStructuredDateInput(null, endDate),
+      endDatePrecision ?? 'day',
+    )
+    const startKey = structuredDateKey(
+      startParsed.era,
+      startParsed.year,
+      startParsed.month,
+      startParsed.day,
+    )
+    const endKey = structuredDateEndKey(
+      endParsed.era,
+      endParsed.year,
+      endParsed.month,
+      endParsed.day,
+    )
     if (startKey != null && endKey != null && endKey < startKey) {
       throw new BadRequestException('종료일은 시작일 이후여야 합니다.')
     }
@@ -999,7 +2818,12 @@ export class PersonService {
     if (person.accountId != null && person.accountId !== requireActorId(accountId)) {
       throw new ForbiddenException('본인이 등록한 인물에만 연보를 추가할 수 있습니다.')
     }
-    this.assertLifeEventDateRange(dto.startDate, dto.endDate)
+    this.assertLifeEventDateRange(
+      dto.startDate,
+      dto.endDate,
+      dto.startDatePrecision,
+      dto.endDatePrecision,
+    )
     await this.assertLifeEventLinkableEvent(dto.eventId, accountId)
     return this.personRepository.addPersonLifeEvent(dto, requireActorId(accountId))
   }
@@ -1060,7 +2884,21 @@ export class PersonService {
       dto.startDate !== undefined ? toIsoOrNull(dto.startDate) : storedSigned('start')
     const effectiveEnd =
       dto.endDate !== undefined ? toIsoOrNull(dto.endDate) : storedSigned('end')
-    this.assertLifeEventDateRange(effectiveStart, effectiveEnd)
+    const existingRow = existing as Record<string, unknown>
+    const effectiveStartPrecision =
+      dto.startDatePrecision !== undefined
+        ? dto.startDatePrecision
+        : (existingRow.startDatePrecision as string | null) ?? 'day'
+    const effectiveEndPrecision =
+      dto.endDatePrecision !== undefined
+        ? dto.endDatePrecision
+        : (existingRow.endDatePrecision as string | null) ?? 'day'
+    this.assertLifeEventDateRange(
+      effectiveStart,
+      effectiveEnd,
+      effectiveStartPrecision,
+      effectiveEndPrecision,
+    )
     await this.assertLifeEventLinkableEvent(dto.eventId, accountId)
     return this.personRepository.updatePersonLifeEvent(id, dto)
   }
@@ -1586,8 +3424,32 @@ export class PersonService {
       note: string | null
       fromPersonId: string
       toPersonId: string
-      fromPerson: { id: string; name: string; surname: string | null; middleName: string | null; nameDisplayOrder: string | null; country: { defaultNameDisplayOrder: string | null } | null; profileImageUrl: string | null; birthDate: Date | null; deathDate: Date | null }
-      toPerson: { id: string; name: string; surname: string | null; middleName: string | null; nameDisplayOrder: string | null; country: { defaultNameDisplayOrder: string | null } | null; profileImageUrl: string | null; birthDate: Date | null; deathDate: Date | null }
+      fromPerson: {
+        id: string
+        name: string
+        surname: string | null
+        middleName: string | null
+        nameDisplayOrder: string | null
+        country: { defaultNameDisplayOrder: string | null } | null
+        profileImageUrl: string | null
+        birthDate: Date | null
+        birthEra?: string | null
+        deathDate: Date | null
+        deathEra?: string | null
+      }
+      toPerson: {
+        id: string
+        name: string
+        surname: string | null
+        middleName: string | null
+        nameDisplayOrder: string | null
+        country: { defaultNameDisplayOrder: string | null } | null
+        profileImageUrl: string | null
+        birthDate: Date | null
+        birthEra?: string | null
+        deathDate: Date | null
+        deathEra?: string | null
+      }
       tags?: { tag: PersonRelationshipTag }[]
       sources?: {
         id: string
@@ -1598,7 +3460,17 @@ export class PersonService {
           personId: string
           title: string
           startDate: Date | null
+          startEra?: string | null
+          startYear?: number | null
+          startMonth?: number | null
+          startDay?: number | null
+          startDatePrecision?: string | null
           endDate: Date | null
+          endEra?: string | null
+          endYear?: number | null
+          endMonth?: number | null
+          endDay?: number | null
+          endDatePrecision?: string | null
         }
       }[]
       phases?: {
@@ -1659,8 +3531,26 @@ export class PersonService {
           id: s.lifeEvent.id,
           personId: s.lifeEvent.personId,
           title: s.lifeEvent.title,
-          startDate: s.lifeEvent.startDate?.toISOString() ?? null,
-          endDate: s.lifeEvent.endDate?.toISOString() ?? null,
+          startDate:
+            toSignedDateString(
+              s.lifeEvent.startEra,
+              s.lifeEvent.startYear,
+              s.lifeEvent.startMonth,
+              s.lifeEvent.startDay,
+            ) ??
+            s.lifeEvent.startDate?.toISOString() ??
+            null,
+          startDatePrecision: s.lifeEvent.startDatePrecision ?? null,
+          endDate:
+            toSignedDateString(
+              s.lifeEvent.endEra,
+              s.lifeEvent.endYear,
+              s.lifeEvent.endMonth,
+              s.lifeEvent.endDay,
+            ) ??
+            s.lifeEvent.endDate?.toISOString() ??
+            null,
+          endDatePrecision: s.lifeEvent.endDatePrecision ?? null,
         },
       })),
       phases: (rel.phases ?? []).map((p) => ({
@@ -1686,8 +3576,22 @@ export class PersonService {
     country: { defaultNameDisplayOrder: string | null } | null
     profileImageUrl: string | null
     birthDate: Date | null
+    birthEra?: string | null
     deathDate: Date | null
+    deathEra?: string | null
   }) {
+    const toEraAwareIso = (d: Date | null, era?: string | null): string | null => {
+      if (!d || Number.isNaN(d.getTime())) return null
+      if (era === 'BC') {
+        return toSignedDateString(
+          'BC',
+          d.getUTCFullYear(),
+          d.getUTCMonth() + 1,
+          d.getUTCDate(),
+        )
+      }
+      return d.toISOString()
+    }
     return {
       id: p.id,
       name: p.name,
@@ -1696,8 +3600,10 @@ export class PersonService {
       nameDisplayOrder: p.nameDisplayOrder,
       country: p.country,
       profileImageUrl: p.profileImageUrl,
-      birthDate: p.birthDate?.toISOString() ?? null,
-      deathDate: p.deathDate?.toISOString() ?? null,
+      birthDate: toEraAwareIso(p.birthDate, p.birthEra),
+      birthEra: p.birthEra ?? null,
+      deathDate: toEraAwareIso(p.deathDate, p.deathEra),
+      deathEra: p.deathEra ?? null,
     }
   }
 
@@ -1713,7 +3619,9 @@ export class PersonService {
         country: { select: { defaultNameDisplayOrder: true } },
         profileImageUrl: true,
         birthDate: true,
+        birthEra: true,
         deathDate: true,
+        deathEra: true,
       },
     },
     toPerson: {
@@ -1726,7 +3634,9 @@ export class PersonService {
         country: { select: { defaultNameDisplayOrder: true } },
         profileImageUrl: true,
         birthDate: true,
+        birthEra: true,
         deathDate: true,
+        deathEra: true,
       },
     },
     tags: { select: { tag: true } },
@@ -1738,7 +3648,17 @@ export class PersonService {
             personId: true,
             title: true,
             startDate: true,
+            startEra: true,
+            startYear: true,
+            startMonth: true,
+            startDay: true,
+            startDatePrecision: true,
             endDate: true,
+            endEra: true,
+            endYear: true,
+            endMonth: true,
+            endDay: true,
+            endDatePrecision: true,
           },
         },
       },
@@ -2213,7 +4133,9 @@ export class PersonService {
       country: { select: { defaultNameDisplayOrder: true } },
       profileImageUrl: true,
       birthDate: true,
+      birthEra: true,
       deathDate: true,
+      deathEra: true,
     } as const
 
     const rootBrief = await this.prisma.person.findUniqueOrThrow({

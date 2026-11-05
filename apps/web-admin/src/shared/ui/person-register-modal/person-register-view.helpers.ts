@@ -24,10 +24,61 @@ export const GENDER_OPTIONS: SegOption<string>[] = [
 /** 필수 필드 에러 메시지 — blur·submit 검증이 동일 문구를 쓰도록 단일 정의. */
 export const REQUIRED_MESSAGES = {
   name: '이름을 입력해주세요.',
-  surname: '성을 입력해주세요.',
+  nameWhenSurnameOnly:
+    '이름을 입력해주세요. 성이 없는 단일명 인물은 이름 칸에 입력합니다.',
   gender: '성별을 선택해주세요.',
   countryId: '국적을 선택해주세요.',
 } as const
+
+/**
+ * 이름(name) 필수 검증 문구 도출.
+ * 성(surname)에만 값이 있고 이름(name)이 비어 있으면 단일명 안내 문구를 반환한다.
+ */
+export function resolveNameRequiredError(
+  name: string,
+  surname: string,
+): string | null {
+  if (name.trim()) return null
+  return surname.trim()
+    ? REQUIRED_MESSAGES.nameWhenSurnameOnly
+    : REQUIRED_MESSAGES.name
+}
+
+/**
+ * 성·이름·중간이름 및 각 뜻/표시순서 payload 정규화.
+ * - 성이나 중간이름이 비어 있으면 대응하는 뜻(surnameMeaning·middleNameMeaning)도 null로 정리해 고아 데이터 방지.
+ * - 성과 중간이름이 모두 비어 있으면 개인 표시순서(nameDisplayOrder)도 null로 정리.
+ */
+export function normalizePersonNamePayloadFields(params: {
+  name: string
+  surname: string
+  middleName: string
+  nameFormat: 'auto' | 'korean' | 'western'
+  originalName: string
+  surnameMeaning: string
+  nameMeaning: string
+  middleNameMeaning: string
+}) {
+  const trimmedSurname = params.surname.trim()
+  const trimmedMiddleName = params.middleName.trim()
+  return {
+    name: params.name.trim(),
+    surname: trimmedSurname || null,
+    middleName: trimmedMiddleName || null,
+    nameDisplayOrder:
+      params.nameFormat === 'auto' || (!trimmedSurname && !trimmedMiddleName)
+        ? null
+        : params.nameFormat,
+    originalName: params.originalName.trim() || null,
+    surnameMeaning: trimmedSurname
+      ? params.surnameMeaning.trim() || null
+      : null,
+    nameMeaning: params.nameMeaning.trim() || null,
+    middleNameMeaning: trimmedMiddleName
+      ? params.middleNameMeaning.trim() || null
+      : null,
+  }
+}
 
 /** 자주 사용하는 5개. 나머지는 "더보기"로 접기. */
 export const PRIMARY_DEATH_TYPES: SegOption<string>[] = [
@@ -111,28 +162,28 @@ export const buildInitialDate = (
   day?: string,
 ) => {
   if (!year) return undefined
-  const y = parseInt(year, 10)
-  if (isNaN(y)) return undefined
-  const m = month ? parseInt(month, 10) : 1
-  const d = day ? parseInt(day, 10) : 1
-  const yearStr = Math.abs(y).toString().padStart(4, '0')
-  const monthStr = String(m).padStart(2, '0')
-  const dayStr = String(d).padStart(2, '0')
+  const parsedYear = parseInt(year, 10)
+  if (isNaN(parsedYear)) return undefined
+  const parsedMonth = month ? parseInt(month, 10) : 1
+  const parsedDay = day ? parseInt(day, 10) : 1
+  const yearStr = Math.abs(parsedYear).toString().padStart(4, '0')
+  const monthStr = String(parsedMonth).padStart(2, '0')
+  const dayStr = String(parsedDay).padStart(2, '0')
   return `${era === 'BC' ? '-' : ''}${yearStr}-${monthStr}-${dayStr}`
 }
 
 export const formatDateDisplay = (
   era: Era,
-  y: string,
-  m: string,
-  d: string,
+  yearRaw: string,
+  monthRaw: string,
+  dayRaw: string,
 ) => {
-  if (!y.trim()) return '날짜 선택'
-  const year = parseInt(y, 10)
+  if (!yearRaw.trim()) return '날짜 선택'
+  const year = parseInt(yearRaw, 10)
   if (isNaN(year)) return '날짜 선택'
   const prefix = era === 'BC' ? `BC ${year}` : `${year}년`
-  const month = m ? parseInt(m, 10) : null
-  const day = d ? parseInt(d, 10) : null
+  const month = monthRaw ? parseInt(monthRaw, 10) : null
+  const day = dayRaw ? parseInt(dayRaw, 10) : null
   if (month && day) return `${prefix} ${month}월 ${day}일`
   if (month) return `${prefix} ${month}월`
   return prefix
@@ -182,8 +233,8 @@ export function formatRelativeTime(timestamp: number): string {
   const day = 24 * hour
   if (diff < 30 * 1000) return '방금'
   if (diff < hour) {
-    const m = Math.floor(diff / minute)
-    return `${m}분 전`
+    const minutes = Math.floor(diff / minute)
+    return `${minutes}분 전`
   }
   const date = new Date(timestamp)
   if (diff < day) {
@@ -244,8 +295,11 @@ export interface PersonDraftSnapshot extends Record<string, unknown> {
   religionId: string
   fatherId: string
   motherId: string
+  adoptiveFatherId?: string
+  adoptiveMotherId?: string
   illegitimate: boolean
   birthOrder?: string
+  genderBirthOrder?: string
   /** 배우자 파츠 행 — 구형 스냅샷(부분 정밀 문자열/ISO)은 normalizeSpouseRow가 승격 */
   spouseRelations: SpouseFormRow[]
   profileImageUrl: string

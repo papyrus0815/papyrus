@@ -152,6 +152,30 @@ export const AdvancedToggleBadge = styled.span`
   background: ${({ theme }) => theme.colors.activeLight};
 `
 
+/**
+ * 필드 오류 옆 빠른 교정 버튼 (예: 성 칸에만 단일명을 적은 경우 '이름으로 옮기기')
+ */
+export const FieldErrorActionBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: ${RADIUS.pill};
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+
+  &:hover {
+    opacity: 0.8;
+    text-decoration: underline;
+  }
+`
+
 // ─── Layout wrapper — 사건 등록 폼과 같은 옆 라벨 행 ─────────────────────────
 // 라벨 열 200px(14/600 primary) | 간격 24 | 필드 열(상한 680px).
 // 격자 규칙 — 라벨(또는 라벨을 품은 머리 줄)은 1열 1행에 못박고, 나머지 자식은 전부 2열.

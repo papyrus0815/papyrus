@@ -20,13 +20,23 @@ function signedYear(era: 'BC' | 'AD' | null | undefined, year: number): number {
   return era === 'BC' ? -year : year
 }
 
-/** 생몰 한 줄 — 정본 formatLifespan에 위임(부호연도 어댑트). 빈 문자열이면 '연도 미상' 폴백. */
+/** 생몰 한 줄 — 정본 formatLifespan에 위임(부호연도·추정·전성기 어댑트). 빈 문자열이면 '연도 미상' 폴백. */
 function formatLifespan(p: Person): string {
   return (
     formatLifespanText({
       birthYear: p.birthYear != null ? signedYear(p.birthEra, p.birthYear) : null,
       deathYear: p.deathYear != null ? signedYear(p.deathEra, p.deathYear) : null,
       isAlive: p.isAlive ?? undefined,
+      isBirthDateApproximate: p.isBirthDateApproximate,
+      isDeathDateApproximate: p.isDeathDateApproximate,
+      floruitStartYear:
+        p.floruitStartYear != null
+          ? signedYear(p.floruitEra, p.floruitStartYear)
+          : null,
+      floruitEndYear:
+        p.floruitEndYear != null
+          ? signedYear(p.floruitEra, p.floruitEndYear)
+          : null,
     }) || '연도 미상'
   )
 }
@@ -34,10 +44,13 @@ function formatLifespan(p: Person): string {
 function ageOf(p: Person): number | null {
   if (p.birthYear == null) return null
   const start = signedYear(p.birthEra ?? null, p.birthYear)
-  if (p.isAlive) return new Date().getFullYear() - start
+  if (p.isAlive) {
+    const diff = new Date().getFullYear() - start
+    return diff >= 0 ? diff : null
+  }
   if (p.deathYear == null) return null
   const end = signedYear(p.deathEra ?? null, p.deathYear)
-  return end - start
+  return end >= start ? end - start : null
 }
 
 function MemberAvatar({ person }: { person: Person }) {

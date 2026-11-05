@@ -62,8 +62,12 @@ export interface SpouseRelationInput {
   /** 구조화 혼인 시작 — BC·연단위 (서버 DateInfoDto). 폼은 문자열 채널을 쓰고 payload 빌드에서 변환 */
   marriageStart?: DateInfoInput | null
   marriageEnd?: DateInfoInput | null
+  /** 혼인 종료/해소 사유 (MarriageEndReason 토큰 — DEATH·DIVORCE·DEPOSED 등) */
+  marriageEndReason?: string | null
   /** 혼인 서열/형태 (MarriageRank 토큰 — PRIMARY·CONCUBINE 등). null = 미분류 */
   marriageRank?: string | null
+  /** 비대칭 서열(PRIMARY/SECONDARY/CONCUBINE) 귀속 배우자 ID */
+  rankHolderId?: string | null
   /**
    * 폼 행 상태 겸 레거시 채널 — 부분 정밀 부호 문자열('1526'·'1526-03'·'-0044-03-15').
    * shared/lib/partial-date-string 헬퍼로 파싱·조립. payload에서는 구조화 marriageStart로 변환 전송.
@@ -112,6 +116,12 @@ interface RelaxedPersonInputFields {
   deathEra?: Era
   /** 출생 서열 (1-base, 성별 통합). null = 해제 */
   birthOrder?: number | null
+  /** 성별 내 출생 서열 (1-base, 예: 3남 = 3). null = 해제 */
+  genderBirthOrder?: number | null
+  /** 양부 ID (입양·출계). null = 해제 */
+  adoptiveFatherId?: string | null
+  /** 양모 ID (입양·출계). null = 해제 */
+  adoptiveMotherId?: string | null
   /** 활동시기(floruit) 기원 — 폼 Era 리터럴로 완화. null = 해제(floruit 연도 없음) */
   floruitEra?: Era | null
   /** 수정 시 null = 출생일·기원(birthDate·birthEra) 해제 */
@@ -372,4 +382,138 @@ export async function getModernCountryPersonCounts(): Promise<
     '/persons/dashboard/person-counts-by-modern-country',
   )
   return Array.isArray(data) ? data : []
+}
+
+// ── 전용 가족 관계 원자적 도메인 API ─────────────────────────────────────
+export type FamilyLinkKind =
+  | 'father'
+  | 'mother'
+  | 'adoptiveFather'
+  | 'adoptiveMother'
+  | 'spouse'
+  | 'child'
+  | 'sibling'
+
+export type SiblingLineageKind = 'FULL' | 'PATERNAL_HALF' | 'MATERNAL_HALF' | 'ADOPTIVE'
+
+export type MarriageEndReasonToken =
+  | 'DEATH'
+  | 'DIVORCE'
+  | 'DEPOSED'
+  | 'ANNULMENT'
+  | 'SEPARATION'
+  | 'OTHER'
+
+export interface LinkPersonFamilyInput {
+  kind: FamilyLinkKind
+  targetId: string
+  marriageRank?: string | null
+  marriageEndReason?: MarriageEndReasonToken | null
+  rankHolderId?: string | null
+  otherParentId?: string | null
+  isAdoptive?: boolean
+  birthOrder?: number | null
+  genderBirthOrder?: number | null
+  siblingLineage?: SiblingLineageKind
+  explicitParentSlot?: 'fatherId' | 'motherId' | 'adoptiveFatherId' | 'adoptiveMotherId'
+}
+
+export interface UpdatePersonSpouseRelationInput {
+  marriageRank?: string | null
+  marriageEndReason?: MarriageEndReasonToken | null
+  rankHolderId?: string | null
+  marriageStart?: DateInfoInput | null
+  marriageEnd?: DateInfoInput | null
+  note?: string | null
+}
+
+export interface UpdatePersonChildMetaInput {
+  birthOrder?: number | null
+  genderBirthOrder?: number | null
+  illegitimate?: boolean
+  otherParentId?: string | null
+}
+
+async function personsMutateJson<T>(
+  method: 'POST' | 'PUT' | 'DELETE',
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  const conn = getApiConnection()
+  const base = conn.host.replace(/\/$/, '')
+  const url = `${base}${path.startsWith('/') ? path : `/${path}`}`
+  const headers = new Headers()
+  headers.set('Content-Type', 'application/json')
+  if (conn.headers) {
+    for (const [headerKey, headerValue] of Object.entries(conn.headers)) {
+      if (headerValue != null && headerValue !== '')
+        headers.set(headerKey, String(headerValue))
+    }
+  }
+  const fetchFn = conn.fetch ?? fetch
+  const res = await fetchFn(url, {
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+    credentials: conn.options?.credentials ?? 'include',
+  })
+  if (!res.ok) {
+    let msg = res.statusText
+    try {
+      const parsed = await res.json()
+      if (parsed?.message) {
+        msg = Array.isArray(parsed.message) ? parsed.message.join(', ') : String(parsed.message)
+      }
+    } catch {
+      /* ignore */
+    }
+    throw new Error(msg)
+  }
+  return res.json() as Promise<T>
+}
+
+export async function linkPersonFamily(
+  personId: string,
+  input: LinkPersonFamilyInput,
+): Promise<PersonResponseDto> {
+  return personsMutateJson<PersonResponseDto>(
+    'POST',
+    `/persons/${encodeURIComponent(personId)}/family/links`,
+    input,
+  )
+}
+
+export async function updatePersonSpouseRelation(
+  personId: string,
+  spouseId: string,
+  input: UpdatePersonSpouseRelationInput,
+): Promise<PersonResponseDto> {
+  return personsMutateJson<PersonResponseDto>(
+    'PUT',
+    `/persons/${encodeURIComponent(personId)}/family/spouses/${encodeURIComponent(spouseId)}`,
+    input,
+  )
+}
+
+export async function updatePersonChildMeta(
+  personId: string,
+  childId: string,
+  input: UpdatePersonChildMetaInput,
+): Promise<PersonResponseDto> {
+  return personsMutateJson<PersonResponseDto>(
+    'PUT',
+    `/persons/${encodeURIComponent(personId)}/family/children/${encodeURIComponent(childId)}`,
+    input,
+  )
+}
+
+export async function unlinkPersonFamily(
+  personId: string,
+  kind: FamilyLinkKind,
+  targetId: string,
+): Promise<PersonResponseDto> {
+  return personsMutateJson<PersonResponseDto>(
+    'DELETE',
+    `/persons/${encodeURIComponent(personId)}/family/links/${encodeURIComponent(kind)}/${encodeURIComponent(targetId)}`,
+  )
 }

@@ -8,9 +8,13 @@ import { FiCheck, FiUsers, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import {
+  MARRIAGE_END_REASON_LABELS,
+  MARRIAGE_END_REASON_OPTIONS,
   MARRIAGE_RANK_LABELS,
   MARRIAGE_RANK_OPTIONS,
   marriageRankOrder,
+  resolvePerspectiveMarriageRankLabel,
+  type MarriageEndReasonToken,
   type MarriageRankToken,
 } from '@/shared/lib/marriage-rank-labels'
 import {
@@ -37,6 +41,7 @@ import type { PersonDetailData } from './types'
 export interface InferredSpouseSummary {
   id: string
   name: string
+  gender?: string | null
   surname?: string | null
   middleName?: string | null
   nameDisplayOrder?: string | null
@@ -51,6 +56,8 @@ interface SpouseDetailSectionProps {
   inferredSpouses?: InferredSpouseSummary[]
   /** 본인 ID (자녀의 반대편 부모 판별용) */
   egoId?: string
+  /** 본인 성별 (관점 인식 서열 라벨 및 반대편 부모 성별 필터링용) */
+  egoGender?: string | null
   /** 사망자면 진행형 기간의 끝을 '현재' 대신 '미상'으로 폴백(재임·재위 규약과 통일) */
   isDeceased?: boolean
   /** 배우자·소생 자녀 이름 클릭 시 인물 모달/상세로 이동 */
@@ -59,19 +66,41 @@ interface SpouseDetailSectionProps {
   onUnlinkSpouse?: (spouseId: string, spouseName: string) => void
   /** 기등록 배우자의 혼인 서열 1-Click 변경 핸들러 */
   onChangeSpouseRank?: (spouseId: string, rank: MarriageRankToken | null) => void
+  /** 기등록 배우자의 혼인 종료 사유(사별·이혼·폐위 등) 1-Click 변경 핸들러 */
+  onChangeSpouseEndReason?: (spouseId: string, reason: MarriageEndReasonToken | null) => void
   /** 추정 배우자를 정식 배우자(PersonSpouse)로 1-Click 승격 등록하는 핸들러 */
   onPromoteInferredSpouse?: (spouseId: string, rank: MarriageRankToken | null) => void
-  /** 자녀의 출생 서열(birthOrder) 또는 반대편 부모(생모·생부) 인라인 빠른 수정 핸들러 */
+  /** 자녀의 출생 서열(birthOrder), 성별 서열(genderBirthOrder), 반대편 부모(생모·생부) 인라인 빠른 수정 핸들러 */
   onQuickUpdateChild?: (
     childId: string,
-    patch: { birthOrder?: number | null; otherParentId?: string | null },
+    patch: {
+      birthOrder?: number | null
+      genderBirthOrder?: number | null
+      otherParentId?: string | null
+    },
   ) => void
 }
 
 function compareChildOrder(a: any, b: any): number {
-  const ao = a?.birthOrder ?? Number.POSITIVE_INFINITY
-  const bo = b?.birthOrder ?? Number.POSITIVE_INFINITY
-  if (ao !== bo) return ao - bo
+  const ao = a?.birthOrder
+  const bo = b?.birthOrder
+  if (ao != null && bo != null && ao !== bo) return ao - bo
+
+  const ag = (a?.gender ?? '').toUpperCase()
+  const bg = (b?.gender ?? '').toUpperCase()
+  const ago = a?.genderBirthOrder
+  const bgo = b?.genderBirthOrder
+  if (
+    ag &&
+    ag === bg &&
+    (ag === 'MALE' || ag === 'FEMALE') &&
+    ago != null &&
+    bgo != null &&
+    ago !== bgo
+  ) {
+    return ago - bgo
+  }
+
   const signedBirthYear = (p: any): number => {
     const rawYear =
       p?.birthYear ??
@@ -82,19 +111,51 @@ function compareChildOrder(a: any, b: any): number {
   const ay = signedBirthYear(a)
   const by = signedBirthYear(b)
   if (ay !== by) return ay - by
+
+  const aoFallback = ao ?? Number.POSITIVE_INFINITY
+  const boFallback = bo ?? Number.POSITIVE_INFINITY
+  if (aoFallback !== boFallback) return aoFallback - boFallback
+
+  const signedFloruit = (p: any): number => {
+    if (p?.floruitStartYear == null) return Number.POSITIVE_INFINITY
+    return p?.floruitEra === 'BC'
+      ? -Math.abs(p.floruitStartYear)
+      : p.floruitStartYear
+  }
+  const af = signedFloruit(a)
+  const bf = signedFloruit(b)
+  if (af !== bf) return af - bf
+
+  const agoFallback = ago ?? Number.POSITIVE_INFINITY
+  const bgoFallback = bgo ?? Number.POSITIVE_INFINITY
+  if (agoFallback !== bgoFallback) return agoFallback - bgoFallback
+
   return String(a?.id ?? '').localeCompare(String(b?.id ?? ''))
 }
 
 function getSharedChildrenForSpouse(
   spouseId: string | null | undefined,
   childrenList: PersonDetailData['children'],
+  egoId?: string | null,
 ) {
   if (!spouseId || !childrenList?.length) return []
   return childrenList
     .filter((child: any) => {
       const fId = child.fatherId ?? child.father?.id ?? null
       const mId = child.motherId ?? child.mother?.id ?? null
-      return fId === spouseId || mId === spouseId
+      const afId = child.adoptiveFatherId ?? child.adoptiveFather?.id ?? null
+      const amId = child.adoptiveMotherId ?? child.adoptiveMother?.id ?? null
+      if (egoId) {
+        const isEgoBio = fId === egoId || mId === egoId
+        const isEgoAdoptive = afId === egoId || amId === egoId || Boolean(child.isAdopted)
+        if (isEgoBio && !isEgoAdoptive) {
+          return fId === spouseId || mId === spouseId
+        }
+        if (isEgoAdoptive && !isEgoBio) {
+          return afId === spouseId || amId === spouseId
+        }
+      }
+      return fId === spouseId || mId === spouseId || afId === spouseId || amId === spouseId
     })
     .slice()
     .sort(compareChildOrder)
@@ -121,22 +182,25 @@ function signedMarriageStartYear(
 export function filterVisibleSpouseRelations(
   spouseRelations: PersonDetailData['spouseRelations'],
   childrenList?: PersonDetailData['children'],
+  opts?: { includeAll?: boolean; egoId?: string | null },
 ) {
   const list = spouseRelations ?? []
   const hasMultipleSpouses = list.length >= 2
   return list
     .filter((rel) => {
+      if (opts?.includeAll || hasMultipleSpouses) return true
       const hasMeta = Boolean(
         rel.note ||
           rel.marriageRank ||
+          rel.marriageEndReason ||
           rel.marriageStartDate ||
           rel.marriageEndDate ||
           rel.marriageStartYear != null ||
           rel.marriageEndYear != null,
       )
       if (hasMeta) return true
-      if (hasMultipleSpouses && rel.spouse?.id) {
-        return getSharedChildrenForSpouse(rel.spouse.id, childrenList).length > 0
+      if (rel.spouse?.id) {
+        return getSharedChildrenForSpouse(rel.spouse.id, childrenList, opts?.egoId).length > 0
       }
       return false
     })
@@ -152,8 +216,9 @@ export function filterVisibleSpouseRelations(
 export function hasVisibleSpouseDetails(
   spouseRelations: PersonDetailData['spouseRelations'],
   childrenList?: PersonDetailData['children'],
+  egoId?: string | null,
 ): boolean {
-  return filterVisibleSpouseRelations(spouseRelations, childrenList).length > 0
+  return filterVisibleSpouseRelations(spouseRelations, childrenList, { egoId }).length > 0
 }
 
 export function SpouseDetailSection({
@@ -161,10 +226,12 @@ export function SpouseDetailSection({
   childrenList,
   inferredSpouses,
   egoId,
+  egoGender,
   isDeceased,
   onPersonClick,
   onUnlinkSpouse,
   onChangeSpouseRank,
+  onChangeSpouseEndReason,
   onPromoteInferredSpouse,
   onQuickUpdateChild,
 }: SpouseDetailSectionProps) {
@@ -195,7 +262,13 @@ export function SpouseDetailSection({
     (sp) => sp.id && !explicitIds.has(sp.id),
   )
 
-  const rels = filterVisibleSpouseRelations(spouseRelations, childrenList)
+  const isEditable = Boolean(
+    onChangeSpouseRank || onChangeSpouseEndReason || onUnlinkSpouse,
+  )
+  const rels = filterVisibleSpouseRelations(spouseRelations, childrenList, {
+    includeAll: isEditable,
+    egoId,
+  })
   const sortedChildren = (childrenList ?? []).slice().sort(compareChildOrder)
   const showQuickChildEditor = Boolean(onQuickUpdateChild && sortedChildren.length > 0)
 
@@ -203,22 +276,72 @@ export function SpouseDetailSection({
     return null
   }
 
-  // 자녀의 반대편 부모 후보 옵션 (명시 배우자 + 추정 배우자)
-  const allSpouseOptions: Array<{ id: string; label: string }> = []
+  // 자녀의 반대편 부모 후보 옵션 (명시 배우자 + 추정 배우자 + 자녀에 이미 지정된 공동 부모)
+  const allSpouseOptions: Array<{ id: string; label: string; gender?: string | null }> = []
   const seenOptionIds = new Set<string>()
   for (const rel of spouseRelations ?? []) {
     const sp = rel.spouse
     if (!sp?.id || seenOptionIds.has(sp.id)) continue
     seenOptionIds.add(sp.id)
     const nm = getPersonDisplayName(sp, true)
-    const rk = rel.marriageRank ? MARRIAGE_RANK_LABELS[rel.marriageRank] : null
-    allSpouseOptions.push({ id: sp.id, label: rk ? `${nm} (${rk})` : nm })
+    const rk = resolvePerspectiveMarriageRankLabel({
+      marriageRank: rel.marriageRank,
+      rankHolderId: rel.rankHolderId,
+      viewerPersonId: egoId,
+      viewerGender: egoGender,
+      spouseId: sp.id,
+      spouseGender: sp.gender,
+    })
+    allSpouseOptions.push({
+      id: sp.id,
+      label: rk ? `${nm} (${rk})` : nm,
+      gender: sp.gender ?? null,
+    })
   }
   for (const inf of pendingInferred) {
     if (!inf.id || seenOptionIds.has(inf.id)) continue
     seenOptionIds.add(inf.id)
     const nm = getPersonDisplayName(inf, true)
-    allSpouseOptions.push({ id: inf.id, label: `${nm} (추정)` })
+    allSpouseOptions.push({
+      id: inf.id,
+      label: `${nm} (추정)`,
+      gender: inf.gender ?? null,
+    })
+  }
+  for (const ch of childrenList ?? []) {
+    const fId = ch.fatherId ?? ch.father?.id ?? null
+    const mId = ch.motherId ?? ch.mother?.id ?? null
+    const afId = ch.adoptiveFatherId ?? null
+    const amId = ch.adoptiveMotherId ?? null
+    const isAdoptedToEgo = Boolean(
+      egoId && (afId === egoId || amId === egoId) && fId !== egoId && mId !== egoId,
+    )
+    const pairs: Array<[string | null, string | null | undefined, string]> = isAdoptedToEgo
+      ? [
+          [afId, ch.adoptiveFatherName, 'MALE'],
+          [amId, ch.adoptiveMotherName, 'FEMALE'],
+        ]
+      : [
+          [
+            fId,
+            ch.fatherName ?? (ch.father ? getPersonDisplayName(ch.father, true) : null),
+            'MALE',
+          ],
+          [
+            mId,
+            ch.motherName ?? (ch.mother ? getPersonDisplayName(ch.mother, true) : null),
+            'FEMALE',
+          ],
+        ]
+    for (const [pid, pName, expectedGender] of pairs) {
+      if (!pid || pid === egoId || seenOptionIds.has(pid)) continue
+      seenOptionIds.add(pid)
+      allSpouseOptions.push({
+        id: pid,
+        label: `${pName || pid} (공동 부모)`,
+        gender: expectedGender,
+      })
+    }
   }
 
   const totalSpouseDisplayCount = rels.length + pendingInferred.length
@@ -243,12 +366,24 @@ export function SpouseDetailSection({
               const name = sp ? getPersonDisplayName(sp, true) : '이름 없음'
               const start = marriageDateLabel(rel, 'Start')
               const end = marriageDateLabel(rel, 'End')
-              const period = formatPeriod(start, end, isDeceased ? '미상' : '현재')
-              const rankLabel = rel.marriageRank
-                ? MARRIAGE_RANK_LABELS[rel.marriageRank] ?? rel.marriageRank
+              const endReasonLabel = rel.marriageEndReason
+                ? MARRIAGE_END_REASON_LABELS[rel.marriageEndReason] ?? rel.marriageEndReason
                 : null
+              const rawPeriod = formatPeriod(start, end, isDeceased ? '미상' : '현재')
+              const period =
+                rawPeriod && endReasonLabel
+                  ? `${rawPeriod} (${endReasonLabel})`
+                  : rawPeriod || (endReasonLabel ? `혼인 종료: ${endReasonLabel}` : '')
+              const rankLabel = resolvePerspectiveMarriageRankLabel({
+                marriageRank: rel.marriageRank,
+                rankHolderId: rel.rankHolderId,
+                viewerPersonId: egoId,
+                viewerGender: egoGender,
+                spouseId,
+                spouseGender: sp?.gender ?? null,
+              })
               const interactive = Boolean(spouseId && onPersonClick)
-              const sharedChildren = getSharedChildrenForSpouse(spouseId, childrenList)
+              const sharedChildren = getSharedChildrenForSpouse(spouseId, childrenList, egoId)
               return (
                 <SpouseDetailItem key={rel.id ?? `spouse-${idx}`}>
                   <SpouseDetailHeader>
@@ -283,6 +418,23 @@ export function SpouseDetailSection({
                           ))}
                         </SpouseRankSelect>
                       )}
+                      {onChangeSpouseEndReason && spouseId && (
+                        <SpouseRankSelect
+                          aria-label={`${name} 혼인 종료 사유 변경`}
+                          value={rel.marriageEndReason ?? ''}
+                          onChange={(e) => {
+                            const val = (e.target.value || null) as MarriageEndReasonToken | null
+                            onChangeSpouseEndReason(spouseId, val)
+                          }}
+                        >
+                          <option value="">종료 사유 미지정</option>
+                          {MARRIAGE_END_REASON_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </SpouseRankSelect>
+                      )}
                       {onUnlinkSpouse && spouseId && (
                         <SpouseUnlinkBtn
                           type="button"
@@ -307,6 +459,20 @@ export function SpouseDetailSection({
                           const cId = child.id as string | undefined
                           const cName = getPersonDisplayName(child, true)
                           const cClickable = Boolean(cId && onPersonClick)
+                          const isAdopted = Boolean(
+                            child.isAdopted ??
+                              (egoId &&
+                                (child.adoptiveFatherId === egoId ||
+                                  child.adoptiveMotherId === egoId) &&
+                                child.fatherId !== egoId &&
+                                child.motherId !== egoId),
+                          )
+                          const bioParentLabel =
+                            isAdopted && (child.fatherName || child.motherName)
+                              ? ` (양자·${child.fatherName ?? child.motherName} 소생)`
+                              : isAdopted
+                                ? ' (입양)'
+                                : ''
                           return (
                             <SpouseChildChip
                               key={cId ?? `sc-${cIdx}`}
@@ -315,6 +481,7 @@ export function SpouseDetailSection({
                               onClick={() => cId && onPersonClick?.(cId)}
                             >
                               {cName}
+                              {bioParentLabel}
                             </SpouseChildChip>
                           )
                         })}
@@ -329,7 +496,10 @@ export function SpouseDetailSection({
             {pendingInferred.map((inf) => {
               const name = getPersonDisplayName(inf, true)
               const interactive = Boolean(inf.id && onPersonClick)
-              const sharedChildren = getSharedChildrenForSpouse(inf.id, childrenList)
+              const sharedChildren = getSharedChildrenForSpouse(inf.id, childrenList, egoId)
+              const egoIsFemaleWithMalePartner =
+                (egoGender ?? '').toUpperCase() === 'FEMALE' &&
+                (inf.gender ?? '').toUpperCase() !== 'FEMALE'
               return (
                 <SpouseDetailItem key={`inferred-${inf.id}`}>
                   <SpouseDetailHeader>
@@ -352,26 +522,44 @@ export function SpouseDetailSection({
                         <PromoteSpouseBtn
                           type="button"
                           onClick={() => onPromoteInferredSpouse(inf.id, 'PRIMARY')}
-                          title={`${name}을(를) 정실 배우자로 정식 등록`}
+                          title={
+                            egoIsFemaleWithMalePartner
+                              ? `${name}과(와) 정실(본처) 혼인으로 정식 등록`
+                              : `${name}을(를) 정실 배우자로 정식 등록`
+                          }
                         >
                           <FiCheck size={11} />
-                          <span>정실 등록</span>
+                          <span>
+                            {egoIsFemaleWithMalePartner ? '정실(본처)로 등록' : '정실 등록'}
+                          </span>
                         </PromoteSpouseBtn>
                         <PromoteSpouseBtn
                           type="button"
                           onClick={() => onPromoteInferredSpouse(inf.id, 'CONCUBINE')}
-                          title={`${name}을(를) 후궁·첩으로 정식 등록`}
+                          title={
+                            egoIsFemaleWithMalePartner
+                              ? `${name}과(와) 후궁·측실 혼인으로 정식 등록`
+                              : `${name}을(를) 후궁·첩으로 정식 등록`
+                          }
                         >
                           <FiCheck size={11} />
-                          <span>후궁 등록</span>
+                          <span>
+                            {egoIsFemaleWithMalePartner ? '후궁·측실로 등록' : '후궁 등록'}
+                          </span>
                         </PromoteSpouseBtn>
                         <PromoteSpouseBtn
                           type="button"
                           onClick={() => onPromoteInferredSpouse(inf.id, null)}
-                          title={`${name}을(를) 정식 배우자로 등록`}
+                          title={
+                            egoIsFemaleWithMalePartner
+                              ? `${name}을(를) 정식 배우자(부군)로 등록`
+                              : `${name}을(를) 정식 배우자로 등록`
+                          }
                         >
                           <FiCheck size={11} />
-                          <span>배우자 등록</span>
+                          <span>
+                            {egoIsFemaleWithMalePartner ? '부군(배우자) 등록' : '배우자 등록'}
+                          </span>
                         </PromoteSpouseBtn>
                       </SpouseHeaderRight>
                     )}
@@ -420,8 +608,72 @@ export function SpouseDetailSection({
               const cName = getPersonDisplayName(child, true)
               const fId = (child.fatherId ?? child.father?.id ?? null) as string | null
               const mId = (child.motherId ?? child.mother?.id ?? null) as string | null
-              const otherParentId =
-                egoId && fId === egoId ? mId : egoId && mId === egoId ? fId : mId ?? fId
+              const afId = (child.adoptiveFatherId ?? child.adoptiveFather?.id ?? null) as string | null
+              const amId = (child.adoptiveMotherId ?? child.adoptiveMother?.id ?? null) as string | null
+              const isAdoptedChild = Boolean(
+                egoId &&
+                  (afId === egoId || amId === egoId) &&
+                  fId !== egoId &&
+                  mId !== egoId,
+              )
+              const otherParentId = isAdoptedChild
+                ? egoId && afId === egoId
+                  ? amId
+                  : egoId && amId === egoId
+                    ? afId
+                    : amId ?? afId
+                : egoId && fId === egoId
+                  ? mId
+                  : egoId && mId === egoId
+                    ? fId
+                    : mId ?? fId
+              const egoUpper = (egoGender ?? '').toUpperCase()
+              const targetSlot:
+                | 'fatherId'
+                | 'motherId'
+                | 'adoptiveFatherId'
+                | 'adoptiveMotherId'
+                | null = isAdoptedChild
+                ? egoId && afId === egoId
+                  ? 'adoptiveMotherId'
+                  : egoId && amId === egoId
+                    ? 'adoptiveFatherId'
+                    : egoUpper === 'MALE'
+                      ? 'adoptiveMotherId'
+                      : egoUpper === 'FEMALE'
+                        ? 'adoptiveFatherId'
+                        : null
+                : egoId && fId === egoId
+                  ? 'motherId'
+                  : egoId && mId === egoId
+                    ? 'fatherId'
+                    : egoUpper === 'MALE'
+                      ? 'motherId'
+                      : egoUpper === 'FEMALE'
+                        ? 'fatherId'
+                        : null
+              const crossLineageParentSet = new Set(
+                (isAdoptedChild ? [fId, mId] : [afId, amId]).filter(Boolean) as string[],
+              )
+              const rowSpouseOptions = allSpouseOptions.filter((opt) => {
+                if (opt.id === cId) return false
+                if (opt.id === otherParentId) return true
+                if (crossLineageParentSet.has(opt.id)) return false
+                const optGender = (opt.gender ?? '').toUpperCase()
+                if (
+                  (targetSlot === 'motherId' || targetSlot === 'adoptiveMotherId') &&
+                  optGender === 'MALE'
+                ) {
+                  return false
+                }
+                if (
+                  (targetSlot === 'fatherId' || targetSlot === 'adoptiveFatherId') &&
+                  optGender === 'FEMALE'
+                ) {
+                  return false
+                }
+                return true
+              })
               return (
                 <ChildQuickRow key={cId}>
                   <ChildQuickIndex>{idx + 1}.</ChildQuickIndex>
@@ -430,10 +682,18 @@ export function SpouseDetailSection({
                     onClick={() => onPersonClick?.(cId)}
                   >
                     {cName}
+                    {isAdoptedChild
+                      ? child.fatherName || child.motherName
+                        ? ` (양자·${child.fatherName ?? child.motherName} 소생)`
+                        : ' (양자녀)'
+                      : child.adoptiveFatherName || child.adoptiveMotherName
+                        ? ` (출계·${child.adoptiveFatherName ?? child.adoptiveMotherName} 입양)`
+                        : ''}
                   </ChildQuickNameBtn>
                   <ChildQuickFieldLabel>
-                    <span>서열</span>
+                    <span>통합 서열</span>
                     <ChildQuickOrderInput
+                      key={`birthOrder-${cId}-${child.birthOrder ?? ''}`}
                       type="number"
                       min={1}
                       step={1}
@@ -458,9 +718,43 @@ export function SpouseDetailSection({
                       }}
                     />
                   </ChildQuickFieldLabel>
-                  {allSpouseOptions.length > 0 && (
+                  <ChildQuickFieldLabel>
+                    <span>
+                      {(child.gender ?? '').toUpperCase() === 'MALE'
+                        ? '몇남'
+                        : (child.gender ?? '').toUpperCase() === 'FEMALE'
+                          ? '몇녀'
+                          : '성별 서열'}
+                    </span>
+                    <ChildQuickOrderInput
+                      key={`genderBirthOrder-${cId}-${child.genderBirthOrder ?? ''}`}
+                      type="number"
+                      min={1}
+                      step={1}
+                      defaultValue={child.genderBirthOrder ?? ''}
+                      placeholder="-"
+                      aria-label={`${cName} 성별 출생 서열`}
+                      onBlur={(e) => {
+                        const raw = e.target.value.trim()
+                        const nextOrder = raw ? Number.parseInt(raw, 10) : null
+                        const normalized =
+                          nextOrder != null && Number.isInteger(nextOrder) && nextOrder >= 1
+                            ? nextOrder
+                            : null
+                        if (normalized !== (child.genderBirthOrder ?? null)) {
+                          onQuickUpdateChild?.(cId, { genderBirthOrder: normalized })
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          ;(e.target as HTMLInputElement).blur()
+                        }
+                      }}
+                    />
+                  </ChildQuickFieldLabel>
+                  {rowSpouseOptions.length > 0 && (
                     <ChildQuickFieldLabel>
-                      <span>반대편 부모</span>
+                      <span>{isAdoptedChild ? '반대편 양부모' : '반대편 부모'}</span>
                       <ChildQuickParentSelect
                         aria-label={`${cName} 반대편 부모 선택`}
                         value={otherParentId ?? ''}
@@ -470,7 +764,7 @@ export function SpouseDetailSection({
                         }}
                       >
                         <option value="">미지정</option>
-                        {allSpouseOptions.map((opt) => (
+                        {rowSpouseOptions.map((opt) => (
                           <option key={opt.id} value={opt.id}>
                             {opt.label}
                           </option>

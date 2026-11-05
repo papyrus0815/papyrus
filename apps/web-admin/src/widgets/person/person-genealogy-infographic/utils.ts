@@ -1,6 +1,10 @@
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { formatLifespan as formatLifespanText } from '@/shared/lib/lifespan-text'
-import { MARRIAGE_RANK_LABELS } from '@/shared/lib/marriage-rank-labels'
+import {
+  MARRIAGE_END_REASON_LABELS,
+  MARRIAGE_RANK_LABELS,
+  resolvePerspectiveMarriageRankLabel,
+} from '@/shared/lib/marriage-rank-labels'
 import {
   type PersonNameFields,
   getPersonDisplayName,
@@ -60,20 +64,121 @@ export function formatYear(signed: number | null): string | null {
 }
 
 /**
- * 형제·자녀·후손 공통 정렬 — 출생 서열(birthOrder) 1차, 부호 출생연도(birthYearOf) 2차, id 3차.
- * 사서 인물은 생년 미상이 흔해 birthOrder 없이는 정렬이 깨진다.
+ * 형제·자녀·후손 공통 정렬:
+ * 1) 양쪽 모두 통합 출생 서열(birthOrder)이 있으면 birthOrder 오름차순
+ * 2) 동일 성별(gender)이며 양쪽 모두 동성 서열(genderBirthOrder)이 있으면 genderBirthOrder 오름차순
+ * 3) 양쪽 모두 출생연도(birthYearOf)가 있으면 출생연도 오름차순 (한쪽만 birthOrder가 있을 때 확정 출생연도가 역전되지 않게 보장)
+ * 4) 한쪽만 있는 birthOrder → 출생연도 → 활동연대(floruitStartYear) → genderBirthOrder → id 순 폴백
  */
-export function compareSiblings(
-  a: YearParts & { id?: string; birthOrder?: number | null },
-  b: YearParts & { id?: string; birthOrder?: number | null },
+export type SiblingSortComparable = YearParts & {
+  id?: string
+  gender?: string | null
+  birthOrder?: number | null
+  genderBirthOrder?: number | null
+  floruitStartYear?: number | null
+  floruitEra?: string | null
+}
+
+export function compareSiblingChronology(
+  a: SiblingSortComparable,
+  b: SiblingSortComparable,
 ): number {
+  if (a.birthOrder != null && b.birthOrder != null && a.birthOrder !== b.birthOrder) {
+    return a.birthOrder - b.birthOrder
+  }
+  const ga = (a.gender ?? '').toUpperCase()
+  const gb = (b.gender ?? '').toUpperCase()
+  if (
+    ga &&
+    gb &&
+    ga === gb &&
+    a.genderBirthOrder != null &&
+    b.genderBirthOrder != null &&
+    a.genderBirthOrder !== b.genderBirthOrder
+  ) {
+    return a.genderBirthOrder - b.genderBirthOrder
+  }
+  const ay = birthYearOf(a)
+  const by = birthYearOf(b)
+  if (ay != null && by != null && ay !== by) return ay - by
+
   const ao = a.birthOrder ?? Number.POSITIVE_INFINITY
   const bo = b.birthOrder ?? Number.POSITIVE_INFINITY
   if (ao !== bo) return ao - bo
-  const ay = birthYearOf(a) ?? Number.POSITIVE_INFINITY
-  const by = birthYearOf(b) ?? Number.POSITIVE_INFINITY
-  if (ay !== by) return ay - by
+
+  const ayInf = ay ?? Number.POSITIVE_INFINITY
+  const byInf = by ?? Number.POSITIVE_INFINITY
+  if (ayInf !== byInf) return ayInf - byInf
+
+  const af = signedYearFromParts(a.floruitStartYear ?? null, a.floruitEra) ?? Number.POSITIVE_INFINITY
+  const bf = signedYearFromParts(b.floruitStartYear ?? null, b.floruitEra) ?? Number.POSITIVE_INFINITY
+  if (af !== bf) return af - bf
+
+  const ago = a.genderBirthOrder ?? Number.POSITIVE_INFINITY
+  const bgo = b.genderBirthOrder ?? Number.POSITIVE_INFINITY
+  if (ago !== bgo) return ago - bgo
+
+  return 0
+}
+
+export function compareSiblings(
+  a: SiblingSortComparable,
+  b: SiblingSortComparable,
+): number {
+  const chrono = compareSiblingChronology(a, b)
+  if (chrono !== 0) return chrono
   return String(a.id ?? '').localeCompare(String(b.id ?? ''))
+}
+
+/**
+ * 친족 호칭(백부 vs 숙부, 양백부 vs 양숙부, 형수 vs 제수) 전용 연장자 확정 비교.
+ * - 음수(<0): a가 확실히 손위(연장자)
+ * - 양수(>0): a가 확실히 손아래(연하자)
+ * - null: 한쪽은 출생연도만 있고 다른 쪽은 2순위 이하 서열만 있는 등 직접 비교가 불가능해 단정할 수 없음
+ */
+export function compareSiblingSeniority(
+  a: SiblingSortComparable,
+  b: SiblingSortComparable,
+): number | null {
+  if (a.birthOrder != null && b.birthOrder != null && a.birthOrder !== b.birthOrder) {
+    return a.birthOrder - b.birthOrder
+  }
+  const ga = (a.gender ?? '').toUpperCase()
+  const gb = (b.gender ?? '').toUpperCase()
+  const sameGender = Boolean(ga && gb && ga === gb)
+  if (
+    sameGender &&
+    a.genderBirthOrder != null &&
+    b.genderBirthOrder != null &&
+    a.genderBirthOrder !== b.genderBirthOrder
+  ) {
+    return a.genderBirthOrder - b.genderBirthOrder
+  }
+  const ay = birthYearOf(a)
+  const by = birthYearOf(b)
+  if (ay != null && by != null && ay !== by) {
+    return ay - by
+  }
+  if (a.birthOrder === 1 && (b.birthOrder == null || b.birthOrder > 1)) {
+    return -1
+  }
+  if (b.birthOrder === 1 && (a.birthOrder == null || a.birthOrder > 1)) {
+    return 1
+  }
+  if (sameGender) {
+    if (a.genderBirthOrder === 1 && (b.genderBirthOrder == null || b.genderBirthOrder > 1)) {
+      return -1
+    }
+    if (b.genderBirthOrder === 1 && (a.genderBirthOrder == null || a.genderBirthOrder > 1)) {
+      return 1
+    }
+  }
+  const af = signedYearFromParts(a.floruitStartYear ?? null, a.floruitEra)
+  const bf = signedYearFromParts(b.floruitStartYear ?? null, b.floruitEra)
+  if (ay == null && by == null && af != null && bf != null && af !== bf) {
+    return af - bf
+  }
+  return null
 }
 
 export function isDeceasedOf(p: NodePerson): boolean {
@@ -137,11 +242,49 @@ export function buildPersonTooltipLines(person: PersonMetaSource): PersonTooltip
   if (person.preEnthronementTitle) lines.push({ label: '작호', value: person.preEnthronementTitle })
   if (person.templeName) lines.push({ label: '묘호', value: person.templeName })
   if (person.posthumousName) lines.push({ label: '시호', value: person.posthumousName })
-  if (person.birthOrder != null) lines.push({ label: '서열', value: `${person.birthOrder}번째` })
+  if (person.birthOrder != null || person.genderBirthOrder != null) {
+    const g = (person.gender ?? '').toUpperCase()
+    const genderSuffix = g === 'MALE' ? '남' : g === 'FEMALE' ? '녀' : '번째(동성)'
+    const parts: string[] = []
+    if (person.genderBirthOrder != null) {
+      parts.push(
+        person.genderBirthOrder === 1 && (g === 'MALE' || g === 'FEMALE')
+          ? g === 'MALE'
+            ? '장남'
+            : '장녀'
+          : `${person.genderBirthOrder}${genderSuffix}`,
+      )
+    }
+    if (person.birthOrder != null) {
+      parts.push(`${person.birthOrder}번째`)
+    }
+    lines.push({ label: '서열', value: parts.join(' · ') })
+  }
   if (person.birthPlace) lines.push({ label: '출생', value: person.birthPlace })
   if (person.deathPlace) lines.push({ label: '사망', value: person.deathPlace })
   if (person.marriageRank && MARRIAGE_RANK_LABELS[person.marriageRank]) {
-    lines.push({ label: '혼인 형태', value: MARRIAGE_RANK_LABELS[person.marriageRank] })
+    const viewerPersonId =
+      person.rankHolderId && person.id && person.rankHolderId !== person.id
+        ? person.rankHolderId
+        : null
+    const rankLabel =
+      resolvePerspectiveMarriageRankLabel({
+        marriageRank: person.marriageRank,
+        rankHolderId: person.rankHolderId,
+        viewerPersonId,
+        spouseId: person.id ?? null,
+        spouseGender: person.gender ?? null,
+      }) ?? MARRIAGE_RANK_LABELS[person.marriageRank]
+    lines.push({ label: '혼인 형태', value: rankLabel })
+  }
+  if (
+    person.marriageEndReason &&
+    MARRIAGE_END_REASON_LABELS[person.marriageEndReason]
+  ) {
+    lines.push({
+      label: '혼인 해소',
+      value: MARRIAGE_END_REASON_LABELS[person.marriageEndReason],
+    })
   }
   if (person.marriageStartYear != null || person.marriageEndYear != null) {
     const startLabel = formatYear(person.marriageStartYear ?? null) ?? '?'
@@ -149,9 +292,13 @@ export function buildPersonTooltipLines(person: PersonMetaSource): PersonTooltip
     lines.push({ label: '혼인 기간', value: `${startLabel}–${endLabel}` })
   }
   if (person.marriageNote) lines.push({ label: '혼인 비고', value: person.marriageNote })
-  // 형제 카드 전용 — withSiblingKinshipMeta가 주입 (소생 구분 열람 + 판별불가 사유 고지)
+  // 형제·자녀 카드 전용 — withParentNames / withSiblingKinshipMeta가 주입
   if (person.fatherName) lines.push({ label: '아버지', value: person.fatherName })
   if (person.motherName) lines.push({ label: '어머니', value: person.motherName })
+  if (person.adoptiveFatherName)
+    lines.push({ label: '양부(입양)', value: person.adoptiveFatherName })
+  if (person.adoptiveMotherName)
+    lines.push({ label: '양모(입양)', value: person.adoptiveMotherName })
   if (person.kinshipNote) lines.push({ label: '형제 관계', value: person.kinshipNote })
   return lines
 }

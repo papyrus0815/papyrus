@@ -53,7 +53,13 @@ import {
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { notify } from '@/shared/ui/toast'
 import type { PersonEventCandidate } from '@/shared/api/person-event-links'
-import { dateSortKey, isoToDateInput, signedDateFromParts } from '@/shared/lib/iso-date'
+import {
+  dateSortKey,
+  isoPeriodEnd,
+  isoToDateInput,
+  parseIsoDateParts,
+  signedDateFromParts,
+} from '@/shared/lib/iso-date'
 import {
   KitAddButton,
   KitOptionalTag,
@@ -243,6 +249,8 @@ interface DraftPayload {
   endDate: string
   startPrecision: DatePrecision
   endPrecision: DatePrecision
+  sortOrder?: number | ''
+  linkedEvent?: LinkedEventChoice | null
   savedAt: number
 }
 
@@ -375,7 +383,14 @@ export function PersonLifeEventFormModal({
           setEndDate(draft.endDate)
           setStartPrecision(draft.startPrecision)
           setEndPrecision(draft.endPrecision)
-          setSortOrder('')
+          setSortOrder(
+            draft.sortOrder !== undefined
+              ? draft.sortOrder
+              : (baseSort as number | ''),
+          )
+          if (draft.linkedEvent !== undefined) {
+            setLinkedEvent(draft.linkedEvent)
+          }
           restoredFromDraft = true
         }
       }
@@ -432,6 +447,8 @@ export function PersonLifeEventFormModal({
           endDate,
           startPrecision,
           endPrecision,
+          sortOrder,
+          linkedEvent,
           savedAt: Date.now(),
         }
         localStorage.setItem(
@@ -457,6 +474,8 @@ export function PersonLifeEventFormModal({
     endDate,
     startPrecision,
     endPrecision,
+    sortOrder,
+    linkedEvent,
     personId,
     lifeEventId,
   ])
@@ -493,34 +512,62 @@ export function PersonLifeEventFormModal({
     descVisibleLength >= DESCRIPTION_SOFT_LIMIT ? 'warn' : 'muted'
 
   const titleError = titleTouched && title.trim().length === 0
-  const dateError =
-    startDate &&
-    endDate &&
-    (dateSortKey(endDate) ?? 0) < (dateSortKey(startDate) ?? 0)
-      ? '종료일은 시작일 이후여야 합니다.'
-      : ''
+  const dateError = useMemo(() => {
+    if (!startDate || !endDate) return ''
+    const startParts = parseIsoDateParts(startDate)
+    if (!startParts) return ''
+    const normalizedStartKey =
+      startParts.year * 10000 +
+      (startDatePrecision === 'year' ? 1 : startParts.month) * 100 +
+      (startDatePrecision === 'year' || startDatePrecision === 'month'
+        ? 1
+        : startParts.day)
+    const normalizedEndKey = dateSortKey(isoPeriodEnd(endDate, endDatePrecision))
+    if (normalizedEndKey != null && normalizedEndKey < normalizedStartKey) {
+      return '종료일은 시작일 이후여야 합니다.'
+    }
+    return ''
+  }, [startDate, endDate, startDatePrecision, endDatePrecision])
 
-  /** 시작일이 출생 이전 / 사망 이후면 경고 — 저장은 허용하되 알림 (timeline에서
-      자동 필터되어 안 보일 수 있음을 사용자에게 미리 알림) */
+  /** 시작일이 출생 이전 / 사망 이후면 경고 — 저장은 허용하되 알림 (출생 전 / 사후 구간으로 표시됨을 안내) */
   const dateRangeWarning = useMemo(() => {
     if (!startDate) return ''
-    // 부호 연-월-일 키 비교 — new Date()는 기원전('-0044-…')을 서기로 읽거나 NaN
-    const start = dateSortKey(startDate)
-    if (start == null) return ''
+    const startParts = parseIsoDateParts(startDate)
+    if (!startParts) return ''
     if (birthDate) {
-      const birth = dateSortKey(birthDate)
-      if (birth != null && start < birth) {
-        return '시작일이 인물 출생 이전입니다 — 타임라인에 표시되지 않을 수 있습니다.'
+      const birthParts = parseIsoDateParts(birthDate)
+      if (birthParts) {
+        const isBeforeBirth =
+          startDatePrecision === 'year'
+            ? startParts.year < birthParts.year
+            : startDatePrecision === 'month'
+              ? startParts.year < birthParts.year ||
+                (startParts.year === birthParts.year &&
+                  startParts.month < birthParts.month)
+              : (dateSortKey(startDate) ?? 0) < (dateSortKey(birthDate) ?? 0)
+        if (isBeforeBirth) {
+          return '시작일이 인물 출생 이전입니다 — 타임라인에서 출생 전 기록으로 표시됩니다.'
+        }
       }
     }
     if (deathDate) {
-      const death = dateSortKey(deathDate)
-      if (death != null && start > death) {
-        return '시작일이 인물 사망 이후입니다 — 타임라인에 표시되지 않을 수 있습니다.'
+      const deathParts = parseIsoDateParts(deathDate)
+      if (deathParts) {
+        const isAfterDeath =
+          startDatePrecision === 'year'
+            ? startParts.year > deathParts.year
+            : startDatePrecision === 'month'
+              ? startParts.year > deathParts.year ||
+                (startParts.year === deathParts.year &&
+                  startParts.month > deathParts.month)
+              : (dateSortKey(startDate) ?? 0) > (dateSortKey(deathDate) ?? 0)
+        if (isAfterDeath) {
+          return '시작일이 인물 사망 이후입니다 — 타임라인에서 사후 기록으로 표시됩니다.'
+        }
       }
     }
     return ''
-  }, [startDate, birthDate, deathDate])
+  }, [startDate, startDatePrecision, birthDate, deathDate])
 
   /** 동일 제목+날짜 연보 중복 경고 (자기 자신 제외) — 저장은 허용 */
   const duplicateWarning = useMemo(() => {

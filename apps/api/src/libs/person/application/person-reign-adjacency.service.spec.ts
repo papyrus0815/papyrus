@@ -951,6 +951,103 @@ describe('PersonReignAdjacencyService', () => {
     expect(calls.neighborReignWheres).toHaveLength(0)
   })
 
+  it('구조화 축(startEra/startYear/startKey)이 채워진 고대(AD<1000)·BC 앵커 및 AD 1000 경계 승계를 정상 해석한다', async () => {
+    const { service } = createService({
+      subject: { id: 'subject-1', isAlive: false, deathDate: null },
+      anchorReigns: [
+        // 1) 고대(AD<1000) 앵커: startDate=null, startEra='AD', startYear=996 (로베르 2세)
+        anchorReign({
+          id: 'robert-2',
+          startDate: null,
+          endDate: null,
+          startEra: 'AD',
+          startYear: 996,
+          endEra: 'AD',
+          endYear: 1031,
+          historicalCountryId: 'francia',
+        }),
+        // 2) 기원전(BC) 앵커: startDate=null, startEra='BC', startYear=27 (아우구스투스)
+        anchorReign({
+          id: 'augustus',
+          startDate: null,
+          endDate: null,
+          startEra: 'BC',
+          startYear: 27,
+          endEra: 'AD',
+          endYear: 14,
+          historicalCountryId: 'rome',
+        }),
+      ],
+      worldReigns: [
+        // 로베르 2세의 선대: 위그 카페 (AD 987, startDate=null)
+        worldReign({
+          id: 'hugh-capet',
+          startDate: null,
+          endDate: null,
+          startEra: 'AD',
+          startYear: 987,
+          endEra: 'AD',
+          endYear: 996,
+          historicalCountry: { id: 'francia', name: '프랑스 왕국' },
+          person: rulerPerson({ id: 'hugh-p' }),
+        }),
+        // 로베르 2세의 후대: 앙리 1세 (AD 1031, startDate=utc(1031) — AD 1000 경계 돌파)
+        worldReign({
+          id: 'henry-1',
+          startDate: utc(1031),
+          endDate: utc(1060),
+          startEra: 'AD',
+          startYear: 1031,
+          endEra: 'AD',
+          endYear: 1060,
+          historicalCountry: { id: 'francia', name: '프랑스 왕국' },
+          person: rulerPerson({ id: 'henry-p' }),
+        }),
+        // 아우구스투스의 선대: 카이사르 (BC 49)
+        worldReign({
+          id: 'caesar',
+          startDate: null,
+          endDate: null,
+          startEra: 'BC',
+          startYear: 49,
+          endEra: 'BC',
+          endYear: 44,
+          historicalCountry: { id: 'rome', name: '로마' },
+          person: rulerPerson({ id: 'caesar-p' }),
+        }),
+        // 아우구스투스의 후대: 티베리우스 (AD 14)
+        worldReign({
+          id: 'tiberius',
+          startDate: null,
+          endDate: null,
+          startEra: 'AD',
+          startYear: 14,
+          endEra: 'AD',
+          endYear: 37,
+          historicalCountry: { id: 'rome', name: '로마' },
+          person: rulerPerson({ id: 'tiberius-p' }),
+        }),
+      ],
+    })
+    const result = await service.getReignAdjacency(BASE_PARAMS)
+    expect(result.meta.bcSkippedCount).toBe(0)
+    expect(result.entries).toHaveLength(2)
+
+    const robertEntry = result.entries.find((e) => e.subjectRecordId === 'robert-2')!
+    expect(robertEntry.predecessors.map((n) => n.person.id)).toEqual(['hugh-p'])
+    expect(robertEntry.predecessors[0]!.record.startYear).toBe(987)
+    expect(robertEntry.predecessors[0]!.record.startDate).toBe('0987-01-01')
+    expect(robertEntry.successors.map((n) => n.person.id)).toEqual(['henry-p'])
+    expect(robertEntry.successors[0]!.record.startYear).toBe(1031)
+
+    const augustusEntry = result.entries.find((e) => e.subjectRecordId === 'augustus')!
+    expect(augustusEntry.predecessors.map((n) => n.person.id)).toEqual(['caesar-p'])
+    expect(augustusEntry.predecessors[0]!.record.startYear).toBe(-49)
+    expect(augustusEntry.predecessors[0]!.record.startDate).toBe('-0049-01-01')
+    expect(augustusEntry.successors.map((n) => n.person.id)).toEqual(['tiberius-p'])
+    expect(augustusEntry.successors[0]!.record.startYear).toBe(14)
+  })
+
   it('국가 정보 없는 앵커(교황 등)는 제외 — noCountryCount로 노출', async () => {
     const { service, calls } = createService({
       subject: { id: 'subject-1' },

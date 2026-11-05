@@ -22,6 +22,7 @@ export function ftPersonToNodePerson(p: FamilyTreePerson): NodePerson {
     birthEra: p.birthEra ?? null,
     deathEra: p.deathEra ?? null,
     birthOrder: p.birthOrder ?? null,
+    genderBirthOrder: p.genderBirthOrder ?? null,
     isAlive: p.isAlive ?? null,
     floruitStartYear: p.floruitStartYear ?? null,
     floruitEndYear: p.floruitEndYear ?? null,
@@ -33,6 +34,8 @@ export function ftPersonToNodePerson(p: FamilyTreePerson): NodePerson {
     // null(기록 미상)의 구분이 withSiblingKinshipMeta의 노트 생략 게이트에 필요하다.
     fatherId: p.fatherId,
     motherId: p.motherId,
+    adoptiveFatherId: p.adoptiveFatherId,
+    adoptiveMotherId: p.adoptiveMotherId,
     originalName: p.originalName ?? null,
     posthumousName: p.posthumousName ?? null,
     templeName: p.templeName ?? null,
@@ -61,6 +64,7 @@ export function ftResolveParentIds(
   personId: string,
   parentsOf: Map<string, string[]>,
   nodeMap: Map<string, FamilyTreePerson>,
+  opts?: { preferAdoptive?: boolean; allowAdoptiveFallback?: boolean },
 ): { fatherId?: string; motherId?: string } {
   // Pass 0: 노드 FK 스칼라 직독 — 신 계약이면 항상 두 키가 존재(null 포함).
   // 손상 FK 방어: 자기부모(fk===personId)는 기각(서버 엣지 억제와 동일 정책),
@@ -69,8 +73,35 @@ export function ftResolveParentIds(
   if (self && self.fatherId !== undefined && self.motherId !== undefined) {
     const resolveFk = (value: string | null | undefined): string | undefined =>
       value && value !== personId && nodeMap.has(value) ? value : undefined
-    const fatherFk = resolveFk(self.fatherId)
-    const motherFk = resolveFk(self.motherId)
+    const bioFather = resolveFk(self.fatherId)
+    const bioMother = resolveFk(self.motherId)
+    if (opts?.allowAdoptiveFallback === false) {
+      if (bioFather && bioFather === bioMother) return { fatherId: bioFather, motherId: undefined }
+      return { fatherId: bioFather, motherId: bioMother }
+    }
+    const adoptFather = resolveFk(self.adoptiveFatherId)
+    const adoptMother = resolveFk(self.adoptiveMotherId)
+    // 부부 단위(couple-coherent) 혈통/양통 해석:
+    // 친생 부모 중 한 명만 있고 양부모가 있는 경우 친생+입양이 한 부부 슬롯으로 뒤섞이는 것을 방지한다.
+    const hasBio = Boolean(bioFather || bioMother)
+    const hasAdopt = Boolean(adoptFather || adoptMother)
+    let fatherFk: string | undefined
+    let motherFk: string | undefined
+    if (opts?.preferAdoptive) {
+      if (hasAdopt) {
+        fatherFk = adoptFather
+        motherFk = adoptMother
+      } else {
+        fatherFk = bioFather
+        motherFk = bioMother
+      }
+    } else if (hasBio) {
+      fatherFk = bioFather
+      motherFk = bioMother
+    } else {
+      fatherFk = adoptFather
+      motherFk = adoptMother
+    }
     if (fatherFk && fatherFk === motherFk) return { fatherId: fatherFk, motherId: undefined }
     return { fatherId: fatherFk, motherId: motherFk }
   }
@@ -98,9 +129,16 @@ export function ftResolveParentIds(
 export type SiblingParentFks = {
   fatherId?: string | null
   motherId?: string | null
+  adoptiveFatherId?: string | null
+  adoptiveMotherId?: string | null
 }
 
-export type SiblingKinship = 'FULL' | 'PATERNAL_HALF' | 'MATERNAL_HALF' | 'UNDETERMINED'
+export type SiblingKinship =
+  | 'FULL'
+  | 'PATERNAL_HALF'
+  | 'MATERNAL_HALF'
+  | 'ADOPTIVE'
+  | 'UNDETERMINED'
 
 export type SiblingKinshipResult = {
   kinship: SiblingKinship
@@ -171,6 +209,36 @@ export function classifySiblingKinship(
   if (motherShared && anchorFather != null && sibFather != null)
     return { kinship: 'MATERNAL_HALF', sharedAxis }
 
+  // 입양(양가) 형제 판별 — 생부모 축은 공유하지 않으나 양부모(adoptiveFatherId/adoptiveMotherId)를
+  // 공유하거나 한쪽의 양부모가 다른 쪽의 생부모·양부모인 경우 'ADOPTIVE'로 확정한다.
+  if (sharedAxis === 'none') {
+    const anchorFathers = [anchorFather, anchor.adoptiveFatherId ?? null].filter(
+      (v): v is string => v != null && v !== '',
+    )
+    const anchorMothers = [anchorMother, anchor.adoptiveMotherId ?? null].filter(
+      (v): v is string => v != null && v !== '',
+    )
+    const sibFathers = [sibFather, sibling.adoptiveFatherId ?? null].filter(
+      (v): v is string => v != null && v !== '',
+    )
+    const sibMothers = [sibMother, sibling.adoptiveMotherId ?? null].filter(
+      (v): v is string => v != null && v !== '',
+    )
+    const adoptFatherShared = anchorFathers.some((id) => sibFathers.includes(id))
+    const adoptMotherShared = anchorMothers.some((id) => sibMothers.includes(id))
+    if (adoptFatherShared || adoptMotherShared) {
+      return {
+        kinship: 'ADOPTIVE',
+        sharedAxis:
+          adoptFatherShared && adoptMotherShared
+            ? 'both'
+            : adoptFatherShared
+              ? 'father'
+              : 'mother',
+      }
+    }
+  }
+
   // 기록 결손으로 인한 판별불가 — 비공유 축에서 어느 쪽 기록이 비었는지 구분(문구용)
   const anchorGap = sharedAxis === 'father' ? anchorMother == null : anchorFather == null
   const siblingGap = sharedAxis === 'father' ? sibMother == null : sibFather == null
@@ -190,6 +258,7 @@ export function siblingKinshipBadgeLabel(result: SiblingKinshipResult): string {
   switch (result.kinship) {
     case 'PATERNAL_HALF': return '이복형제'
     case 'MATERNAL_HALF': return '이부형제'
+    case 'ADOPTIVE': return '입양형제'
     default: return '형제'
   }
 }
@@ -199,6 +268,7 @@ export function siblingKinshipAriaLabel(result: SiblingKinshipResult): string | 
   switch (result.kinship) {
     case 'PATERNAL_HALF': return '이복형제 — 아버지는 같고 어머니가 다릅니다'
     case 'MATERNAL_HALF': return '이부형제 — 어머니는 같고 아버지가 다릅니다'
+    case 'ADOPTIVE': return '입양형제 — 양부모(입양·출계)로 맺어진 형제입니다'
     default: return undefined
   }
 }
@@ -214,6 +284,7 @@ export function siblingKinshipNote(result: SiblingKinshipResult): string | null 
     case 'FULL': return '부모 모두 공유 — 친형제'
     case 'PATERNAL_HALF': return '아버지 공유 · 어머니 다름 — 이복형제'
     case 'MATERNAL_HALF': return '어머니 공유 · 아버지 다름 — 이부형제'
+    case 'ADOPTIVE': return '양부모 공유 — 입양(양가) 형제'
     default: break
   }
   if (result.cause === 'data-anomaly') return '부모 기록이 서로 모순 — 관계 미확정'
@@ -258,7 +329,12 @@ export function withParentNames<T extends SiblingParentFks>(
   person: T,
   nodeMap: Map<string, FamilyTreePerson> | null,
   opts?: { omitParentId?: string | null },
-): T & { fatherName?: string | null; motherName?: string | null } {
+): T & {
+  fatherName?: string | null
+  motherName?: string | null
+  adoptiveFatherName?: string | null
+  adoptiveMotherName?: string | null
+} {
   const omit = opts?.omitParentId ?? null
   return {
     ...person,
@@ -266,6 +342,14 @@ export function withParentNames<T extends SiblingParentFks>(
       omit != null && person.fatherId === omit ? null : resolveParentName(person.fatherId, nodeMap),
     motherName:
       omit != null && person.motherId === omit ? null : resolveParentName(person.motherId, nodeMap),
+    adoptiveFatherName:
+      omit != null && person.adoptiveFatherId === omit
+        ? null
+        : resolveParentName(person.adoptiveFatherId, nodeMap),
+    adoptiveMotherName:
+      omit != null && person.adoptiveMotherId === omit
+        ? null
+        : resolveParentName(person.adoptiveMotherId, nodeMap),
   }
 }
 
@@ -286,7 +370,12 @@ export function withSiblingKinshipMeta<T extends SiblingParentFks>(
 
 // ─── 형제 레인 파티션 (밀집 왕가 가독성 — 모달 그룹핑) ────────────────
 
-export type SiblingLaneKind = 'full' | 'paternal-half' | 'maternal-half' | 'undetermined'
+export type SiblingLaneKind =
+  | 'full'
+  | 'paternal-half'
+  | 'maternal-half'
+  | 'adoptive'
+  | 'undetermined'
 
 export type SiblingLane<T> = {
   /** React key용 안정 식별자 (미상 부모는 ID별 별도 레인) */
@@ -303,7 +392,7 @@ export type SiblingLane<T> = {
  * - 그룹 키는 공동부모 FK(이복→어머니 ID, 이부→아버지 ID). parentMarriageId가 아니다
  *   (writer 0 공백·FK relation 미도입 — G22 의존 회피).
  * - 레인 내 순서는 입력 배열 순서 그대로(재정렬 금지 — 기존 comparator 위임).
- * - 레인 순서: 친형제 → 이복(첫 등장 순 = 최연장자 출생 asc) → 이부 → 관계 미상 최후순.
+ * - 레인 순서: 친형제 → 이복(첫 등장 순 = 최연장자 출생 asc) → 이부 → 입양(양가) 형제 → 관계 미상 최후순.
  * - 부모 이름 미해소(그래프 밖)여도 ID별 별도 레인 — «이 가계도에 미표시» 비단정 문구.
  */
 /** ①②③… 원형 숫자 (20 초과는 괄호 폴백) — 이름 미해소 레인의 안정 구분자 */
@@ -317,6 +406,12 @@ export function partitionSiblingsByKinship<T extends SiblingParentFks>(
   nodeMap: Map<string, FamilyTreePerson> | null,
 ): SiblingLane<T>[] {
   const fullLane: SiblingLane<T> = { key: 'full', kind: 'full', title: '친형제', siblings: [] }
+  const adoptiveLane: SiblingLane<T> = {
+    key: 'adoptive',
+    kind: 'adoptive',
+    title: '입양(양가) 형제',
+    siblings: [],
+  }
   // 사유를 단정하지 않는 중립 제목 — 이 레인은 기록 결손뿐 아니라 기록 모순(data-anomaly)도
   // 담으므로 '기록 불충분' 단정은 카드 노트('부모 기록이 서로 모순')와 자기모순이 된다.
   const undeterminedLane: SiblingLane<T> = {
@@ -378,6 +473,8 @@ export function partitionSiblingsByKinship<T extends SiblingParentFks>(
         maternalLanes.set(fatherId, lane)
       }
       lane.siblings.push(sibling)
+    } else if (kinship === 'ADOPTIVE') {
+      adoptiveLane.siblings.push(sibling)
     } else {
       undeterminedLane.siblings.push(sibling)
     }
@@ -387,6 +484,7 @@ export function partitionSiblingsByKinship<T extends SiblingParentFks>(
   if (fullLane.siblings.length > 0) lanes.push(fullLane)
   lanes.push(...paternalLanes.values())
   lanes.push(...maternalLanes.values())
+  if (adoptiveLane.siblings.length > 0) lanes.push(adoptiveLane)
   if (undeterminedLane.siblings.length > 0) lanes.push(undeterminedLane)
   return lanes
 }
@@ -399,6 +497,7 @@ export function partitionSiblingsByKinship<T extends SiblingParentFks>(
 export function getAncestorBadgeLabel(
   path: string,
   gender: string | null | undefined,
+  opts?: { isAdoptive?: boolean },
 ): string {
   const g = (gender ?? '').toUpperCase()
   const isFemale = g === 'FEMALE' || g === 'F'
@@ -406,6 +505,21 @@ export function getAncestorBadgeLabel(
   const lastSlot = path[path.length - 1]
   const isPaternalPerson = isMale || (!isFemale && lastSlot === 'F')
   const isPaternalSide = path[0] === 'F'
+  if (opts?.isAdoptive) {
+    const adoptSidePrefix = isPaternalSide ? '양' : '양외'
+    switch (path.length) {
+      case 1:
+        return isPaternalPerson ? '양부' : '양모'
+      case 2:
+        return adoptSidePrefix + (isPaternalPerson ? '조부' : '조모')
+      case 3:
+        return adoptSidePrefix + (isPaternalPerson ? '증조부' : '증조모')
+      case 4:
+        return adoptSidePrefix + (isPaternalPerson ? '고조부' : '고조모')
+      default:
+        return `${adoptSidePrefix}${path.length - 1}대조${isPaternalPerson ? '부' : '모'}`
+    }
+  }
   switch (path.length) {
     case 1:
       return isPaternalPerson ? '아버지' : '어머니'

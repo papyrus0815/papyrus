@@ -19,6 +19,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiChevronDown, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { personKeys } from '@/entities/person/query-keys'
 import { getApiConnection } from '@/shared/api/client'
 import { type Job, jobApi } from '@/shared/api/job'
 import {
@@ -167,7 +168,8 @@ const KIND_CONFIG: Record<CareerKind, KindConfig> = {
     orgLabel: '법원·검찰청·로펌',
     orgRequired: false,
     extras: [
-      { key: 'specialization', label: '전문 분야 · 심급', placeholder: '예: 형사 · 대법원' },
+      { key: 'specialization', label: '전문 분야', placeholder: '예: 형사, 헌법' },
+      { key: 'courtLevel', label: '심급', placeholder: '예: 대법원, 고등법원' },
     ],
     submit: (dto) => personCareerApi.addLegalCareer(dto as never),
   },
@@ -364,6 +366,11 @@ export function CareerRegisterModal({
           : (initialCareer.positionId ?? initialCareer.rank?.id ?? ''),
       )
       const nextExtras: Record<string, string> = {}
+      const rawSpec = initialCareer.specialization ?? ''
+      const [legalSpec, ...legalCourtParts] =
+        nextKind === 'legal' && rawSpec.includes(' · ')
+          ? rawSpec.split(' · ')
+          : [rawSpec]
       const rawMap: Record<string, unknown> = {
         title: initialCareer.rawTitle ?? initialCareer.title,
         level: initialCareer.level,
@@ -377,7 +384,11 @@ export function CareerRegisterModal({
         sport: initialCareer.sport,
         jerseyNumber: initialCareer.jerseyNumber,
         beat: initialCareer.beat,
-        specialization: initialCareer.specialization,
+        specialization: nextKind === 'legal' ? legalSpec : initialCareer.specialization,
+        courtLevel:
+          nextKind === 'legal' && legalCourtParts.length > 0
+            ? legalCourtParts.join(' · ')
+            : undefined,
       }
       for (const field of KIND_CONFIG[nextKind].extras) {
         const val = rawMap[field.key]
@@ -444,20 +455,26 @@ export function CareerRegisterModal({
         }
         payload[field.key] = field.type === 'number' ? Number(raw) : raw
       }
+      const invalidateRelatedPersonQueries = () => {
+        queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
+        queryClient.invalidateQueries({ queryKey: personKeys.all })
+        queryClient.invalidateQueries({ queryKey: personKeys.infographic })
+        queryClient.invalidateQueries({ queryKey: ['persons', 'compare-records'] })
+      }
       if (isEditMode && initialCareer?.id) {
         await personCareerApi.updateCareerByKind(
           kind,
           initialCareer.id,
           payload,
         )
-        queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
+        invalidateRelatedPersonQueries()
         notify.success('경력이 수정되었습니다.')
         onSuccess?.()
         onClose()
         return
       }
       await cfg.submit(payload)
-      queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
+      invalidateRelatedPersonQueries()
       notify.success('경력이 등록되었습니다.')
       onSuccess?.()
       if (keepOpen) {

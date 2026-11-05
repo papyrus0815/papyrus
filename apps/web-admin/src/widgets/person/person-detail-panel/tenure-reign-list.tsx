@@ -61,6 +61,11 @@ interface TenureReignListProps {
   birthDay?: number | null
   /** 출생 era(BC/AD) — 나이 배지 계산이 BC 출생·BC→AD 교차에서 어긋나지 않게 위임 */
   birthEra?: string | null
+  /** 재직·재위 중 사망(DEATH_IN_OFFICE) 시 종료일 미기재 카드의 기간 길이·종료 나이 파생용 구조화 사망 정보 */
+  deathYear?: number | null
+  deathMonth?: number | null
+  deathDay?: number | null
+  deathEra?: string | null
   /** 사망일 표시 문자열(재직 중 사망 시 종료일 폴백) */
   deathDateStr: string
   isDeceased: boolean
@@ -91,6 +96,10 @@ export function TenureReignList({
   birthMonth,
   birthDay,
   birthEra,
+  deathYear,
+  deathMonth,
+  deathDay,
+  deathEra,
   deathDateStr,
   isDeceased,
   embedInModal,
@@ -154,7 +163,7 @@ export function TenureReignList({
           record.historicalCountry?.name ?? record.country?.name ?? null
         // 종료일·정밀도·재직중사망·미상/현재 폴백은 연보 타임라인과 공용 파생(단일 출처)으로.
         // ('year' 정밀도 = 연도만 앎 / DEATH_IN_OFFICE → 사망일 / 종료사유·고인 → '미상')
-        const { startYearOnly, rangeLabel } = deriveTenurePeriodLabel(
+        const { startYearOnly, endYearOnly, rangeLabel } = deriveTenurePeriodLabel(
           {
             startDate: record.startDate,
             startDatePrecision: record.startDatePrecision,
@@ -165,14 +174,37 @@ export function TenureReignList({
             deathDateStr,
           },
         )
+        // 재직·재위 중 사망(DEATH_IN_OFFICE)이고 종료일이 비어 있으면 구조화 사망일에서 실효 종료 ISO·정밀도를 파생
+        const fallbackDeathIso =
+          !record.endDate &&
+          record.endReason === 'DEATH_IN_OFFICE' &&
+          deathYear != null
+            ? `${deathEra === 'BC' ? '-' : ''}${String(deathYear).padStart(4, '0')}-${String(deathMonth ?? 1).padStart(2, '0')}-${String(deathDay ?? 1).padStart(2, '0')}`
+            : null
+        const fallbackDeathPrecision =
+          fallbackDeathIso != null
+            ? deathMonth == null
+              ? 'year'
+              : deathDay == null
+                ? 'month'
+                : 'day'
+            : null
+        const effectiveEndDate = record.endDate ?? fallbackDeathIso
+        const effectiveEndPrecision = record.endDate
+          ? record.endDatePrecision
+          : fallbackDeathPrecision
+        const effectiveEndYearOnly = record.endDate
+          ? Boolean(endYearOnly)
+          : fallbackDeathPrecision === 'year'
         // 진행 중(표시 전용 파생) — rangeLabel의 '– 현재'와 같은 조건. 기간 팩트를 액센트로.
         const isOngoing =
           !!record.startDate && !record.endDate && !record.endReason && !isDeceased
         // 기간 옆 길이("약 3년") — 원천 ISO에서만 파생한다(rangeLabel 파싱 금지 규약)
         const durationLabel = deriveTenureDurationLabel(
           record.startDate,
-          record.endDate,
+          effectiveEndDate,
           record.startDatePrecision,
+          effectiveEndPrecision,
         )
         /**
          * 'OTHER(기타)'는 사유가 아니라 **결측 마커**다. 부연이 있으면 토큰을 렌더하지
@@ -196,14 +228,16 @@ export function TenureReignList({
           birthDay,
           record.startDate,
           birthEra,
+          startYearOnly ? 'year' : (record.startDatePrecision ?? 'day'),
         )
-        const ageAtEnd = record.endDate
+        const ageAtEnd = effectiveEndDate
           ? getAgeAtDate(
               birthYear,
               birthMonth,
               birthDay,
-              record.endDate,
+              effectiveEndDate,
               birthEra,
+              effectiveEndYearOnly ? 'year' : (effectiveEndPrecision ?? 'day'),
             )
           : null
         const mainTitle =
@@ -320,7 +354,7 @@ export function TenureReignList({
                   )}
                   {ageAtEnd != null && (
                     <UnifiedFact>
-                      {ageAtEnd}세에 {endVerb}
+                      {ageAtEnd}세{effectiveEndYearOnly ? '경' : ''}에 {endVerb}
                     </UnifiedFact>
                   )}
                 </UnifiedFactLine>

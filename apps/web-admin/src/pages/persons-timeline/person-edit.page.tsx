@@ -46,7 +46,6 @@ export default function PersonEditPage() {
   // '필수만 채우면 끝' 안심 신호를 sticky 푸터의 진척칩으로 대체(모달 푸터와 동형).
   const [filled, setFilled] = useState<{
     name?: boolean
-    surname?: boolean
     gender?: boolean
     countryId?: boolean
   }>({})

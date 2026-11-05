@@ -136,6 +136,9 @@ export class PersonEventLinkService {
         birthEra: true,
         deathDate: true,
         deathEra: true,
+        floruitStartYear: true,
+        floruitEndYear: true,
+        floruitEra: true,
         countryId: true,
         historicalCountryId: true,
         country: { select: { name: true } },
@@ -256,9 +259,21 @@ export class PersonEventLinkService {
 
     const birthYear = personSignedYear(person.birthEra, person.birthDate)
     const deathYear = personSignedYear(person.deathEra, person.deathDate)
-    // 생몰이 없으면 연도 창을 두지 않는다. 사망만 모르면(생존·미상) 출생 이후 전부.
-    const fromYear = birthYear
-    const toYear = deathYear
+    const floruitFrom =
+      person.floruitStartYear != null
+        ? person.floruitEra === 'BC'
+          ? -person.floruitStartYear
+          : person.floruitStartYear
+        : null
+    const floruitTo =
+      person.floruitEndYear != null
+        ? person.floruitEra === 'BC'
+          ? -person.floruitEndYear
+          : person.floruitEndYear
+        : null
+    // 생몰이 없으면 활동기(floruit)를 연도 창으로 삼는다. 사망만 모르면(생존·미상) 출생 이후 전부.
+    const fromYear = birthYear ?? floruitFrom
+    const toYear = deathYear ?? (birthYear == null ? floruitTo : null)
 
     const inCountry = (event: EventRow) =>
       !hasCountry ||
@@ -316,7 +331,15 @@ export class PersonEventLinkService {
           id: true,
           countryId: true,
           historicalCountryId: true,
+          startEra: true,
+          startYear: true,
+          startMonth: true,
+          startDay: true,
           startDate: true,
+          endEra: true,
+          endYear: true,
+          endMonth: true,
+          endDay: true,
           endDate: true,
           accessionEventId: true,
           achievements: { select: { eventId: true } },
@@ -383,8 +406,8 @@ export class PersonEventLinkService {
         id: tenure.id,
         countryId: tenure.countryId,
         historicalCountryId: tenure.historicalCountryId,
-        start: partsOf(null, null, null, null, tenure.startDate),
-        end: partsOf(null, null, null, null, tenure.endDate),
+        start: partsOf(tenure.startEra, tenure.startYear, tenure.startMonth, tenure.startDay, tenure.startDate),
+        end: partsOf(tenure.endEra, tenure.endYear, tenure.endMonth, tenure.endDay, tenure.endDate),
         excluded: new Set(
           [tenure.accessionEventId, ...tenure.achievements.map((row) => row.eventId)].filter(
             (id): id is string => !!id,

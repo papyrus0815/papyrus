@@ -44,7 +44,17 @@ import {
 import type { PersonHumanRelationshipItem } from '@/shared/api/person-human-relationships'
 import { personCareerApi } from '@/shared/api/person-career'
 import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
-import { deletePerson, updatePerson, getAllPersons, getPersonById } from '@/shared/api/persons'
+import {
+  deletePerson,
+  updatePerson,
+  getAllPersons,
+  getPersonById,
+  linkPersonFamily,
+  updatePersonSpouseRelation,
+  updatePersonChildMeta,
+  unlinkPersonFamily,
+  type SiblingLineageKind,
+} from '@/shared/api/persons'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
@@ -71,8 +81,11 @@ import {
   useRichTextTooltipEscape,
 } from '@/shared/hooks/use-rich-text-prose-click'
 import {
+  MARRIAGE_END_REASON_OPTIONS,
   MARRIAGE_RANK_LABELS,
   MARRIAGE_RANK_OPTIONS,
+  resolvePerspectiveMarriageRankLabel,
+  type MarriageEndReasonToken,
   type MarriageRankToken,
 } from '@/shared/lib/marriage-rank-labels'
 import { NICKNAME_TYPE_LABELS } from '@/shared/lib/nickname-type-labels'
@@ -91,7 +104,11 @@ import type { EntityConnectionTarget } from '@/shared/api/entity-graph'
 import { ConnectionsPanel } from '@/shared/ui/entity-graph'
 import { BioClamp } from './bio-clamp'
 import { BirthDeathCards } from './birth-death-cards'
-import { CollapsibleSection } from './collapsible-section'
+import {
+  CollapsibleSection,
+  expandCollapsibleSection,
+  expandCollapsibleSectionForRecordKey,
+} from './collapsible-section'
 import { PersonBiographySections } from './person-biography-sections'
 import { SpouseDetailSection } from './spouse-detail-section'
 import { getRecordFamily } from '@/entities/government-position/model/record-family'
@@ -297,6 +314,7 @@ import type {
 } from './types'
 import {
   ageBetweenYears,
+  deriveTenureFallbackLabel,
   formatDateKo,
   formatIsoDateKo,
   formatPeriod,
@@ -425,9 +443,12 @@ export function PersonDetailPanel({
       ? raw
       : 'overview'
   }, [])
-  const [activeTab, setActiveTab] = useState<TabType>(() =>
-    embedInModal ? 'overview' : parseTab(searchParams.get('tab')),
-  )
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    if (embedInModal) return 'overview'
+    const rawTab = searchParams.get('tab')
+    if (!rawTab && searchParams.get('life')) return 'events'
+    return parseTab(rawTab)
+  })
   /** 탭 전환: 로컬 state 갱신 + (독립 페이지일 때만) URL `?tab=` 갱신(replace, 기존 쿼리 보존) */
   const handleTabChange = useCallback(
     (next: TabType) => {
@@ -448,7 +469,9 @@ export function PersonDetailPanel({
   /** 외부 URL 변화(뒤로가기 등) → activeTab 동기화. 같은 값이면 setState 스킵해 불필요 렌더 방지 */
   useEffect(() => {
     if (embedInModal) return
-    const urlTab = parseTab(searchParams.get('tab'))
+    const rawTab = searchParams.get('tab')
+    const urlTab: TabType =
+      !rawTab && searchParams.get('life') ? 'events' : parseTab(rawTab)
     setActiveTab((prev) => (prev === urlTab ? prev : urlTab))
   }, [embedInModal, parseTab, searchParams])
   /** 탭바 화살표 키 내비게이션(AY4) — ←/→ 순환, Home/End. roving tabindex와 함께 완결. */
@@ -599,9 +622,9 @@ export function PersonDetailPanel({
     staleTime: 60 * 1000,
   })
 
-  // ── 타임라인 인포그래픽용 파생 데이터 (참조 안정) ──
+  // ── 타임라인 인포그래픽용 파생 데이터 (참조 안정, 친부모 미상 시 양부모 폴백) ──
   const timelineFather = useMemo(() => {
-    const f = person?.father as any
+    const f = ((person?.father ?? (person as PersonDetailData)?.adoptiveFather) as any) ?? null
     if (!f) return null
     return {
       id: f.id,
@@ -616,7 +639,7 @@ export function PersonDetailPanel({
   }, [person])
 
   const timelineMother = useMemo(() => {
-    const m = person?.mother as any
+    const m = ((person?.mother ?? (person as PersonDetailData)?.adoptiveMother) as any) ?? null
     if (!m) return null
     return {
       id: m.id,
@@ -661,9 +684,24 @@ export function PersonDetailPanel({
         marriageStartYear: rel.marriageStartYear ?? null,
         marriageStartMonth: rel.marriageStartMonth ?? null,
         marriageStartDay: rel.marriageStartDay ?? null,
-        // BC 혼인은 타임라인(AD 축)에 올리면 둔갑 — era로 게이트
         marriageStartEra: rel.marriageStartEra ?? null,
         marriageStartPrecision: rel.marriageStartPrecision ?? null,
+        marriageEndDate: rel.marriageEndDate ?? null,
+        marriageEndYear: rel.marriageEndYear ?? null,
+        marriageEndMonth: rel.marriageEndMonth ?? null,
+        marriageEndDay: rel.marriageEndDay ?? null,
+        marriageEndEra: rel.marriageEndEra ?? null,
+        marriageEndPrecision: rel.marriageEndPrecision ?? null,
+        marriageEndReason: rel.marriageEndReason ?? null,
+        marriageRankLabel: resolvePerspectiveMarriageRankLabel({
+          marriageRank: rel.marriageRank ?? null,
+          rankHolderId: rel.rankHolderId ?? null,
+          viewerPersonId: person?.id ?? null,
+          viewerGender: person?.gender ?? null,
+          spouseId: sp?.id ?? null,
+          spouseGender: sp?.gender ?? null,
+        }),
+        note: rel.note ?? null,
       }
     })
   }, [person])
@@ -694,7 +732,7 @@ export function PersonDetailPanel({
     () => (person?.events ?? []) as any[],
     [person],
   )
-  /** 분야별 경력을 타임라인 인포그래픽 입력으로 매핑 — kind→한국어 라벨 부여 */
+  /** 분야별 경력 + 학력·수상·군부대·조직·정당·선거·저서·창업·국가귀속을 타임라인 인포그래픽 입력으로 통합 매핑 */
   const timelineCareers = useMemo(() => {
     const KIND_LABELS: Record<string, string> = {
       military: '군사',
@@ -707,16 +745,244 @@ export function PersonDetailPanel({
       legal: '법조',
       medical: '의료',
     }
-    return ((person?.careers ?? []) as any[]).map((c) => ({
-      id: c.id,
-      startDate: c.startDate ?? null,
-      endDate: c.endDate ?? null,
-      title: c.title ?? null,
-      notes: c.notes ?? null,
-      kindLabel: KIND_LABELS[c.kind] ?? c.kind ?? null,
-      organization: c.organization ?? null,
-      rank: c.rank ?? null,
-    }))
+    const items: Array<{
+      id: string
+      recordKey?: string | null
+      startDate?: string | null
+      endDate?: string | null
+      startDatePrecision?: string | null
+      endDatePrecision?: string | null
+      title?: string | null
+      notes?: string | null
+      kindLabel?: string | null
+      organization?: { id: string; name: string } | null
+      rank?: { id: string; name: string } | null
+    }> = []
+
+    for (const c of (person?.careers ?? []) as any[]) {
+      items.push({
+        id: c.id,
+        recordKey: c.id ? `career-${c.id}` : 'section-career',
+        startDate: c.startDate ?? null,
+        endDate: c.endDate ?? null,
+        title: c.timelineTitle || c.title || null,
+        notes: c.notes ?? null,
+        kindLabel: KIND_LABELS[c.kind] ?? c.kind ?? null,
+        organization: c.organization ?? null,
+        rank: c.rank ?? null,
+      })
+    }
+
+    for (const edu of (person?.educations ?? []) as any[]) {
+      const subParts = [
+        edu.major,
+        edu.department,
+        edu.degree,
+        edu.status,
+      ].filter(Boolean)
+      items.push({
+        id: `edu-${edu.id}`,
+        recordKey: edu.id ? `education-${edu.id}` : 'section-education',
+        startDate: edu.startDate ?? null,
+        endDate: edu.endDate ?? null,
+        title: edu.timelineTitle || subParts.join(' · ') || '학력',
+        notes: edu.notes ?? null,
+        kindLabel: '학력',
+        organization: edu.organization ?? null,
+        rank: null,
+      })
+    }
+
+    for (const aw of (person?.awards ?? []) as any[]) {
+      items.push({
+        id: `award-${aw.id}`,
+        recordKey: aw.id ? `award-${aw.id}` : 'section-awards',
+        startDate: aw.awardDate ?? null,
+        endDate: null,
+        title: aw.awardName ?? '수상·훈장',
+        notes: aw.description ?? null,
+        kindLabel: aw.category ? `수상 · ${aw.category}` : '수상·훈장',
+        organization: aw.awardingBody
+          ? { id: `award-org-${aw.id}`, name: aw.awardingBody }
+          : null,
+        rank: null,
+      })
+    }
+
+    for (const cmd of (person?.militaryCommands ?? []) as any[]) {
+      const roleText = [cmd.rank, cmd.role].filter(Boolean).join(' · ')
+      items.push({
+        id: `mil-${cmd.id}`,
+        recordKey: cmd.id ? `milcmd-${cmd.id}` : 'section-activities',
+        startDate: cmd.startDate ?? null,
+        endDate: cmd.endDate ?? null,
+        title: roleText || '군부대 지휘',
+        notes: null,
+        kindLabel: '군 지휘',
+        organization: cmd.unit
+          ? { id: cmd.unit.id ?? `unit-${cmd.id}`, name: cmd.unit.name }
+          : null,
+        rank: null,
+      })
+    }
+
+    for (const orgRole of (person?.organizationRoles ?? []) as any[]) {
+      items.push({
+        id: `orgrole-${orgRole.id}`,
+        recordKey: orgRole.id ? `orgrole-${orgRole.id}` : 'section-activities',
+        startDate: orgRole.startDate ?? null,
+        endDate: orgRole.endDate ?? null,
+        title: orgRole.roleTitle ?? '조직 활동',
+        notes: null,
+        kindLabel: '조직',
+        organization: orgRole.organization ?? null,
+        rank: null,
+      })
+    }
+
+    for (const pl of (person?.partyLeaderships ?? []) as any[]) {
+      items.push({
+        id: `partylead-${pl.id}`,
+        recordKey: pl.id ? `partylead-${pl.id}` : 'section-politics',
+        startDate: pl.startDate ?? null,
+        endDate: pl.endDate ?? null,
+        title: pl.roleTitle ?? '당 지도부',
+        notes: null,
+        kindLabel: '정당',
+        organization: pl.party ?? null,
+        rank: null,
+      })
+    }
+
+    for (const pm of ((person as any)?.partyMemberships ?? []) as any[]) {
+      if (!pm.startDate && !pm.endDate) continue
+      items.push({
+        id: `partymem-${pm.id}`,
+        recordKey: pm.id ? `partymem-${pm.id}` : 'section-politics',
+        startDate: pm.startDate ?? pm.endDate ?? null,
+        endDate: pm.startDate ? (pm.endDate ?? null) : null,
+        title: pm.roleTitle ?? '당원 활동',
+        notes: pm.notes ?? null,
+        kindLabel: '정당',
+        organization: pm.party ?? null,
+        rank: null,
+      })
+    }
+
+    for (const ec of ((person as any)?.electionCandidacies ?? []) as any[]) {
+      const electionDate = ec.election?.pollDate ?? ec.election?.electionDate ?? null
+      if (!electionDate) continue
+      const isElected = ec.result?.elected ?? ec.isElected
+      const resultLabel =
+        isElected === true
+          ? '당선'
+          : isElected === false
+            ? '낙선'
+            : ec.withdrawnDate
+              ? '사퇴'
+              : '출마'
+      const electionName =
+        ec.election?.name ?? ec.election?.shortName ?? ec.election?.title ?? '선거'
+      const districtName = ec.electoralDistrict?.name ?? ec.constituency ?? null
+      const notes = [districtName, ec.notes].filter(Boolean).join(' · ') || null
+      items.push({
+        id: `election-${ec.id}`,
+        recordKey: ec.id ? `candidacy-${ec.id}` : 'section-politics',
+        startDate: electionDate,
+        endDate: null,
+        title: `${electionName} (${resultLabel})`,
+        notes,
+        kindLabel: '선거',
+        organization: ec.party ?? null,
+        rank: null,
+      })
+    }
+
+    const AFFILIATION_LABELS: Record<string, string> = {
+      CITIZENSHIP: '국적·시민권',
+      SERVED: '국가 복무',
+      EXILE: '망명',
+      RESIDENCE: '거주·체류',
+    }
+    for (const ca of ((person as any)?.countryAffiliations ?? []) as any[]) {
+      const affType = String(ca.affiliationType ?? '')
+      if (affType === 'BIRTH_PLACE' || affType === 'DEATH_PLACE') continue
+      const startIso =
+        ca.startYear != null
+          ? `${ca.startEra === 'BC' ? '-' : ''}${String(ca.startYear).padStart(4, '0')}-${String(ca.startMonth ?? 1).padStart(2, '0')}-${String(ca.startDay ?? 1).padStart(2, '0')}`
+          : (ca.startDate ?? null)
+      const endIso =
+        ca.endYear != null
+          ? `${ca.endEra === 'BC' ? '-' : ''}${String(ca.endYear).padStart(4, '0')}-${String(ca.endMonth ?? 1).padStart(2, '0')}-${String(ca.endDay ?? 1).padStart(2, '0')}`
+          : (ca.endDate ?? null)
+      if (!startIso) continue
+      const startPrec =
+        ca.startYear != null
+          ? ca.startMonth == null
+            ? 'year'
+            : ca.startDay == null
+              ? 'month'
+              : 'day'
+          : null
+      const endPrec =
+        ca.endYear != null
+          ? ca.endMonth == null
+            ? 'year'
+            : ca.endDay == null
+              ? 'month'
+              : 'day'
+          : null
+      const countryObj = ca.historicalCountry ?? ca.country ?? null
+      const affLabel = AFFILIATION_LABELS[affType] ?? '국가 소속'
+      items.push({
+        id: `affiliation-${ca.id}`,
+        recordKey: null,
+        startDate: startIso,
+        endDate: endIso,
+        startDatePrecision: startPrec,
+        endDatePrecision: endPrec,
+        title: countryObj?.name ? `${countryObj.name} ${affLabel}` : affLabel,
+        notes: ca.note ?? null,
+        kindLabel: affLabel,
+        organization: countryObj
+          ? { id: countryObj.id ?? `aff-c-${ca.id}`, name: countryObj.name }
+          : null,
+        rank: null,
+      })
+    }
+
+    for (const bk of (person?.books ?? []) as any[]) {
+      if (bk.publishedYear == null) continue
+      items.push({
+        id: `book-${bk.id}`,
+        recordKey: bk.id ? `book-${bk.id}` : 'section-activities',
+        startDate: `${String(bk.publishedYear).padStart(4, '0')}-01-01`,
+        endDate: null,
+        startDatePrecision: 'year',
+        title: bk.title ?? '저서',
+        notes: bk.summary ?? null,
+        kindLabel: '저작',
+        organization: null,
+        rank: null,
+      })
+    }
+
+    for (const co of (person?.foundedCompanies ?? []) as any[]) {
+      if (!co.foundedAt) continue
+      items.push({
+        id: `company-${co.id}`,
+        recordKey: co.id ? `company-${co.id}` : 'section-activities',
+        startDate: co.foundedAt,
+        endDate: null,
+        title: `${co.name ?? '기업'} 창업`,
+        notes: co.description ?? null,
+        kindLabel: '창업',
+        organization: null,
+        rank: null,
+      })
+    }
+
+    return items
   }, [person])
   /**
    * eventId → 이 인물 시점의 사건 컨텍스트(role/note) 룩업.
@@ -852,11 +1118,13 @@ export function PersonDetailPanel({
       person.isAlive === false ||
       person.isDeathDateUnknown === true
     if (!deceased) return null
+    // person.deathDate(DateTime)는 BC에서도 부호 없는 양수 연도이므로 deathYear/deathEra 우선 합성
     const capIso =
-      person.deathDate ??
-      (person.deathYear != null
+      person.deathYear != null
         ? `${person.deathEra === 'BC' ? '-' : ''}${String(person.deathYear).padStart(4, '0')}-${String(person.deathMonth ?? 12).padStart(2, '0')}-${String(person.deathDay ?? 28).padStart(2, '0')}`
-        : null)
+        : person.deathDate
+          ? `${person.deathEra === 'BC' && !String(person.deathDate).startsWith('-') ? '-' : ''}${String(person.deathDate)}`
+          : null
     const cap = capIso ? isoDateToApproxDays(capIso) : null
     return cap ?? 'unknown'
   }, [person])
@@ -878,8 +1146,17 @@ export function PersonDetailPanel({
         if (s == null) return null
         let e = isoDateToApproxDays(data.endDate)
         if (e == null) {
-          if (openEnd == null) return null
-          e = openEnd
+          if (data.endReason === 'DEATH_IN_OFFICE') {
+            if (typeof tenureOpenEndCap !== 'number') return null
+            e = tenureOpenEndCap
+          } else if (data.endReason) {
+            // 사임·임기 만료·폐위 등 종료 사유가 있으나 종료일이 미상인 경우
+            // 사망일/현재까지 열지 않는다 (생애 막대·기간 라벨 불변식과 일치)
+            e = s
+          } else {
+            if (openEnd == null) return null
+            e = openEnd
+          }
         }
         return [s, Math.max(s, e)] as [number, number]
       })
@@ -903,7 +1180,7 @@ export function PersonDetailPanel({
     if (curStart != null) totalDays += curEnd - curStart
     const years = Math.round(totalDays / 365.25)
     return years > 0 ? years : null
-  }, [combinedTenures])
+  }, [combinedTenures, tenureOpenEndCap])
 
   /**
    * 생애 타임라인 배치 — 머리 카드 안에서 재임·작위·재위 구간을 생애 축 위에 보여준다.
@@ -932,6 +1209,9 @@ export function PersonDetailPanel({
             : data.title ?? data.positionDefinition?.title ?? '직책',
         startDate: data.startDate,
         endDate: data.endDate,
+        closed: Boolean(
+          data.endReason && data.endReason !== 'DEATH_IN_OFFICE',
+        ),
       })),
       birthYear: signed(person.birthYear, person.birthEra),
       deathYear: signed(person.deathYear, person.deathEra),
@@ -943,24 +1223,32 @@ export function PersonDetailPanel({
     })
   }, [person, combinedTenures])
 
-  /** 타임라인 막대 → '이력·활동' 탭의 그 카드로. 다른 탭이면 전환한 뒤 렌더를 기다려 스크롤한다. */
+  /** 타임라인 막대·연보 카드 → '이력·활동' 탭의 그 카드로. 다른 탭이면 전환한 뒤 렌더를 기다려 스크롤한다. */
   const jumpToRecord = useCallback(
     (key: string) => {
+      const expanded = expandCollapsibleSectionForRecordKey(key)
       const scroll = () => {
-        const el = document.getElementById(`person-record-${key}`)
-        if (!el) return
+        const el =
+          document.getElementById(`person-record-${key}`) ??
+          document.getElementById(`career-${key}`)
+        if (!el) return false
         el.scrollIntoView({ behavior: 'smooth', block: 'start' })
         el.setAttribute('data-highlighted', 'true')
         window.setTimeout(() => {
           el.removeAttribute('data-highlighted')
         }, 1600)
+        return true
       }
       if (activeTab !== 'career') {
         handleTabChange('career')
-        window.setTimeout(scroll, 80)
+        window.setTimeout(() => {
+          if (!scroll()) window.setTimeout(scroll, 80)
+        }, 80)
         return
       }
-      scroll()
+      if (!scroll() && expanded) {
+        window.setTimeout(scroll, 50)
+      }
     },
     [activeTab, handleTabChange],
   )
@@ -973,11 +1261,20 @@ export function PersonDetailPanel({
     return rels
       .map((rel) => {
         const sp = rel.spouse ?? null
+        const rankLabel = resolvePerspectiveMarriageRankLabel({
+          rank: rel.marriageRank ?? null,
+          rankHolderId: rel.rankHolderId ?? null,
+          egoId: person?.id ?? null,
+          viewerGender: person?.gender ?? null,
+          partnerId: sp?.id ?? null,
+          partnerGender: sp?.gender ?? null,
+        })
         return {
           id: sp?.id as string | undefined,
           name: sp ? getPersonDisplayName(sp, true) : '',
           /** 혼인 서열 토큰 — 있으면 이름 뒤 괄호 표기 */
           rank: rel.marriageRank ?? null,
+          rankLabel,
         }
       })
       .filter((entry) => entry.name && entry.name !== '이름 없음')
@@ -1077,23 +1374,42 @@ export function PersonDetailPanel({
     [personId, queryClient],
   )
 
-  // ─── 가계도 하향 저작 — ego 기준 자녀/부모/형제/배우자 추가·기존 인물 연결 ──────────
+  // ─── 가계도 하향 저작 — ego 기준 자녀/부모/양부모/형제/배우자 추가·기존 인물 연결 ──────────
   const [familyAddMode, setFamilyAddMode] = useState<
-    'child' | 'father' | 'mother' | 'sibling' | 'spouse' | null
+    | 'child'
+    | 'father'
+    | 'mother'
+    | 'adoptiveFather'
+    | 'adoptiveMother'
+    | 'sibling'
+    | 'spouse'
+    | null
   >(null)
-  /** 배우자 추가 모달 상단에서 즉시 지정할 혼인 서열(정실·계비·후궁 등) */
+  /** 배우자 추가 모달 상단에서 즉시 지정할 혼인 서열(정실·계비·후궁 등) 및 해소 사유 */
   const [pendingSpouseRank, setPendingSpouseRank] = useState<MarriageRankToken | null>(
     null,
   )
-  /** 자녀 추가 모달 상단에서 원스톱으로 지정할 반대편 부모(배우자) ID 및 출생 서열 */
+  const [pendingSpouseEndReason, setPendingSpouseEndReason] =
+    useState<MarriageEndReasonToken | null>(null)
+  /** 자녀 추가 모달 상단에서 원스톱으로 지정할 반대편 부모(배우자) ID·출생 서열·성별 서열·입양 여부 */
   const [pendingChildOtherParentId, setPendingChildOtherParentId] = useState<string>('')
   const [pendingChildBirthOrder, setPendingChildBirthOrder] = useState<string>('')
+  const [pendingChildGenderBirthOrder, setPendingChildGenderBirthOrder] =
+    useState<string>('')
+  const [pendingChildIsAdoptive, setPendingChildIsAdoptive] = useState<boolean>(false)
+  /** 형제 추가 모달 상단에서 선택할 형제 계보(친형제·이복·이부) */
+  const [pendingSiblingLineage, setPendingSiblingLineage] =
+    useState<SiblingLineageKind>('FULL')
 
   useEffect(() => {
     if (!familyAddMode) {
       setPendingSpouseRank(null)
+      setPendingSpouseEndReason(null)
       setPendingChildOtherParentId('')
       setPendingChildBirthOrder('')
+      setPendingChildGenderBirthOrder('')
+      setPendingChildIsAdoptive(false)
+      setPendingSiblingLineage('FULL')
     }
   }, [familyAddMode])
 
@@ -1105,7 +1421,8 @@ export function PersonDetailPanel({
   const [childOtherParent, setChildOtherParent] = useState<{
     childId: string
     childName: string
-    slot: 'fatherId' | 'motherId'
+    slot: 'fatherId' | 'motherId' | 'adoptiveFatherId' | 'adoptiveMotherId'
+    excludeIds?: string[]
   } | null>(null)
   /** 모달 열릴 때만 인물 풀 로드(검색 + "새 인물" 생성 대상).
    *  쿼리 키를 personKeys.all(['persons']) 프리픽스 안에 둬 invalidatePersonCaches가
@@ -1116,212 +1433,6 @@ export function PersonDetailPanel({
     enabled: familyAddMode !== null || childOtherParent !== null,
     staleTime: 5 * 60_000,
   })
-  /** 반대편 부모 최유력 후보(=ego의 배우자) — 피커 목록 상단에 핀 */
-  const egoSpouseIdsForPin = useMemo(
-    () =>
-      (person?.spouseRelations ?? []).flatMap((rel) =>
-        rel.spouse?.id ? [rel.spouse.id] : [],
-      ),
-    [person],
-  )
-
-  const serializeExistingSpouseRelations = useCallback(
-    (currentPerson: NonNullable<typeof person>) => {
-      const toDateInfo = (
-        era?: string | null,
-        year?: number | null,
-        month?: number | null,
-        day?: number | null,
-      ) =>
-        year != null
-          ? {
-              era: (era === 'BC' ? 'BC' : 'AD') as 'BC' | 'AD',
-              year,
-              ...(month != null ? { month } : {}),
-              ...(day != null ? { day } : {}),
-            }
-          : undefined
-      return (currentPerson.spouseRelations ?? []).flatMap((rel) =>
-        rel.spouse?.id
-          ? [
-              {
-                spouseId: rel.spouse.id,
-                marriageStart: toDateInfo(
-                  rel.marriageStartEra,
-                  rel.marriageStartYear,
-                  rel.marriageStartMonth,
-                  rel.marriageStartDay,
-                ),
-                marriageEnd: toDateInfo(
-                  rel.marriageEndEra,
-                  rel.marriageEndYear,
-                  rel.marriageEndMonth,
-                  rel.marriageEndDay,
-                ),
-                marriageStartDate: rel.marriageStartDate ?? undefined,
-                marriageEndDate: rel.marriageEndDate ?? undefined,
-                marriageRank:
-                  (rel.marriageRank as MarriageRankToken | null | undefined) ?? null,
-                note: rel.note ?? null,
-              },
-            ]
-          : [],
-      )
-    },
-    [],
-  )
-
-  /**
-   * 가계도 카드·배우자 상세 섹션에서 1클릭으로 가족 관계 연결 해제.
-   */
-  const handleUnlinkFamilyRelation = useCallback(
-    async ({ kind, targetId, targetName }: UnlinkRelationPayload) => {
-      const currentPerson = person
-      if (!currentPerson || !targetId) return
-      const egoName = getPersonDisplayName(
-        currentPerson as unknown as PersonNameFields,
-        true,
-      )
-      const kindLabelMap: Record<UnlinkRelationPayload['kind'], string> = {
-        father: '아버지',
-        mother: '어머니',
-        spouse: '배우자',
-        child: '자녀',
-        sibling: '형제자매',
-      }
-      const roleLabel = kindLabelMap[kind]
-      const ok = await confirm({
-        title: `${roleLabel} 연결 해제`,
-        message: `${egoName}와(과) ${targetName}의 ${roleLabel} 연결을 해제할까요? (인물 데이터 자체는 삭제되지 않습니다)`,
-        confirmLabel: '연결 해제',
-        danger: true,
-      })
-      if (!ok) return
-
-      try {
-        if (kind === 'father') {
-          await updatePerson(currentPerson.id, { fatherId: null })
-        } else if (kind === 'mother') {
-          await updatePerson(currentPerson.id, { motherId: null })
-        } else if (kind === 'spouse') {
-          const existing = serializeExistingSpouseRelations(currentPerson)
-          await updatePerson(currentPerson.id, {
-            spouseRelations: existing.filter((r) => r.spouseId !== targetId),
-          })
-        } else if (kind === 'child') {
-          const fresh = await getPersonById(targetId)
-          const patch: { fatherId?: null; motherId?: null } = {}
-          if (fresh.fatherId === currentPerson.id) patch.fatherId = null
-          if (fresh.motherId === currentPerson.id) patch.motherId = null
-          if (!('fatherId' in patch) && !('motherId' in patch)) {
-            const g = (currentPerson.gender ?? '').toUpperCase()
-            if (g === 'FEMALE') patch.motherId = null
-            else patch.fatherId = null
-          }
-          await updatePerson(targetId, patch)
-        } else if (kind === 'sibling') {
-          const fresh = await getPersonById(targetId)
-          const egoFatherId = currentPerson.father?.id ?? currentPerson.fatherId ?? null
-          const egoMotherId = currentPerson.mother?.id ?? currentPerson.motherId ?? null
-          const patch: { fatherId?: null; motherId?: null } = {}
-          if (egoFatherId && fresh.fatherId === egoFatherId) patch.fatherId = null
-          if (egoMotherId && fresh.motherId === egoMotherId) patch.motherId = null
-          await updatePerson(targetId, patch)
-        }
-        await invalidatePersonCaches(true)
-        notify.success(`${roleLabel} 연결을 해제했습니다.`)
-      } catch (err) {
-        notify.error(extractApiErrorMessage(err, '가족 연결 해제에 실패했습니다.'))
-      }
-    },
-    [person, serializeExistingSpouseRelations, invalidatePersonCaches],
-  )
-
-  /**
-   * D1: 기등록 배우자의 혼인 서열(정실·계비·후궁 등) 1-Click 변경.
-   */
-  const handleChangeSpouseRank = useCallback(
-    async (spouseId: string, rank: MarriageRankToken | null) => {
-      const currentPerson = person
-      if (!currentPerson || !spouseId) return
-      try {
-        const existing = serializeExistingSpouseRelations(currentPerson)
-        const updated = existing.map((rel) =>
-          rel.spouseId === spouseId ? { ...rel, marriageRank: rank } : rel,
-        )
-        await updatePerson(currentPerson.id, { spouseRelations: updated })
-        await invalidatePersonCaches(true)
-        notify.success('혼인 서열을 변경했습니다.')
-      } catch (err) {
-        notify.error(extractApiErrorMessage(err, '혼인 서열 변경에 실패했습니다.'))
-      }
-    },
-    [person, serializeExistingSpouseRelations, invalidatePersonCaches],
-  )
-
-  /**
-   * D1: 추정 배우자(자녀 기록 기반)를 1-Click으로 정식 배우자(PersonSpouse)로 승격 등록.
-   */
-  const handlePromoteInferredSpouse = useCallback(
-    async (spouseId: string, rank: MarriageRankToken | null) => {
-      const currentPerson = person
-      if (!currentPerson || !spouseId) return
-      try {
-        const existing = serializeExistingSpouseRelations(currentPerson)
-        if (existing.some((rel) => rel.spouseId === spouseId)) return
-        await updatePerson(currentPerson.id, {
-          spouseRelations: [
-            ...existing,
-            {
-              spouseId,
-              ...(rank ? { marriageRank: rank } : {}),
-            },
-          ],
-        })
-        await invalidatePersonCaches(true)
-        notify.success('정식 배우자로 등록했습니다.')
-      } catch (err) {
-        notify.error(extractApiErrorMessage(err, '배우자 등록에 실패했습니다.'))
-      }
-    },
-    [person, serializeExistingSpouseRelations, invalidatePersonCaches],
-  )
-
-  /**
-   * D2: 기등록 자녀의 출생 서열(birthOrder) 또는 반대편 부모(생모·생부) 인라인 빠른 수정.
-   */
-  const handleQuickUpdateChild = useCallback(
-    async (
-      childId: string,
-      patch: { birthOrder?: number | null; otherParentId?: string | null },
-    ) => {
-      const currentPerson = person
-      if (!currentPerson || !childId) return
-      try {
-        const updatePayload: {
-          birthOrder?: number | null
-          fatherId?: string | null
-          motherId?: string | null
-        } = {}
-        if ('birthOrder' in patch) {
-          updatePayload.birthOrder = patch.birthOrder ?? null
-        }
-        if ('otherParentId' in patch) {
-          const g = (currentPerson.gender ?? '').toUpperCase()
-          const otherSlot: 'fatherId' | 'motherId' =
-            g === 'FEMALE' ? 'fatherId' : 'motherId'
-          updatePayload[otherSlot] = patch.otherParentId ?? null
-        }
-        await updatePerson(childId, updatePayload)
-        await invalidatePersonCaches(true)
-        notify.success('자녀 정보를 수정했습니다.')
-      } catch (err) {
-        notify.error(extractApiErrorMessage(err, '자녀 정보 수정에 실패했습니다.'))
-      }
-    },
-    [person, invalidatePersonCaches],
-  )
-
   /** BFS 가계도에서 자녀의 반대편 부모로 추론된 추정 배우자 목록 */
   const inferredSpousesFromTree = useMemo(() => {
     if (!familyTreeData || !person?.id) return []
@@ -1335,6 +1446,7 @@ export function PersonDetailPanel({
     const out: Array<{
       id: string
       name: string
+      gender?: string | null
       surname?: string | null
       middleName?: string | null
       nameDisplayOrder?: string | null
@@ -1352,6 +1464,7 @@ export function PersonDetailPanel({
       out.push({
         id: partnerNode.id,
         name: partnerNode.name,
+        gender: partnerNode.gender ?? null,
         surname: partnerNode.surname ?? null,
         middleName: partnerNode.middleName ?? null,
         nameDisplayOrder: partnerNode.nameDisplayOrder ?? null,
@@ -1361,11 +1474,148 @@ export function PersonDetailPanel({
     return out
   }, [familyTreeData, person?.id, person?.spouseRelations])
 
+  /** 반대편 부모 최유력 후보(=ego의 명시 배우자 + 추정 배우자) — 피커 목록 상단에 핀 */
+  const egoSpouseIdsForPin = useMemo(() => {
+    const explicitIds = (person?.spouseRelations ?? []).flatMap((rel) =>
+      rel.spouse?.id ? [rel.spouse.id] : [],
+    )
+    const inferredIds = inferredSpousesFromTree.map((inf) => inf.id).filter(Boolean)
+    return [...new Set([...explicitIds, ...inferredIds])]
+  }, [person, inferredSpousesFromTree])
+
   /**
-   * 선택/생성한 인물을 ego와 연결하는 FK write.
-   * - child : 대상 인물의 fatherId/motherId(ego 성별) = ego
-   * - father/mother : ego의 fatherId/motherId = 대상 인물
-   * - spouse : ego.spouseRelations에 대상 인물 추가(기존 관계 보존, 서버가 canonical 정규화)
+   * 가계도 카드·배우자 상세 섹션에서 1클릭으로 가족 관계 연결 해제.
+   */
+  const handleUnlinkFamilyRelation = useCallback(
+    async ({ kind, targetId, targetName }: UnlinkRelationPayload) => {
+      const currentPerson = person
+      if (!currentPerson || !targetId) return
+      const egoName = getPersonDisplayName(
+        currentPerson as unknown as PersonNameFields,
+        true,
+      )
+      const kindLabelMap: Record<UnlinkRelationPayload['kind'], string> = {
+        father: '아버지',
+        mother: '어머니',
+        adoptiveFather: '양부(입양)',
+        adoptiveMother: '양모(입양)',
+        spouse: '배우자',
+        child: '자녀',
+        sibling: '형제자매',
+      }
+      const roleLabel = kindLabelMap[kind]
+      const confirmMessage =
+        kind === 'sibling'
+          ? `${targetName}의 공유 부모 연결을 해제하여 ${egoName}의 형제자매에서 제외할까요? (${targetName}의 공유 부모 슬롯이 해제되며 인물 데이터 자체는 삭제되지 않습니다)`
+          : `${egoName}와(과) ${targetName}의 ${roleLabel} 연결을 해제할까요? (인물 데이터 자체는 삭제되지 않습니다)`
+      const ok = await confirm({
+        title: `${roleLabel} 연결 해제`,
+        message: confirmMessage,
+        confirmLabel: '연결 해제',
+        danger: true,
+      })
+      if (!ok) return
+
+      try {
+        await unlinkPersonFamily(currentPerson.id, kind, targetId)
+        await invalidatePersonCaches(true)
+        notify.success(`${roleLabel} 연결을 해제했습니다.`)
+      } catch (err) {
+        notify.error(extractApiErrorMessage(err, '가족 연결 해제에 실패했습니다.'))
+      }
+    },
+    [person, invalidatePersonCaches],
+  )
+
+  /**
+   * D1: 기등록 배우자의 혼인 서열(정실·계비·후궁 등) 1-Click 원자적 변경.
+   */
+  const handleChangeSpouseRank = useCallback(
+    async (spouseId: string, rank: MarriageRankToken | null) => {
+      const currentPerson = person
+      if (!currentPerson || !spouseId) return
+      try {
+        await updatePersonSpouseRelation(currentPerson.id, spouseId, {
+          marriageRank: rank,
+        })
+        await invalidatePersonCaches(true)
+        notify.success('혼인 서열을 변경했습니다.')
+      } catch (err) {
+        notify.error(extractApiErrorMessage(err, '혼인 서열 변경에 실패했습니다.'))
+      }
+    },
+    [person, invalidatePersonCaches],
+  )
+
+  /**
+   * 기등록 배우자의 혼인 해소 사유(사별·이혼·폐위 등) 1-Click 원자적 변경.
+   */
+  const handleChangeSpouseEndReason = useCallback(
+    async (spouseId: string, reason: MarriageEndReasonToken | null) => {
+      const currentPerson = person
+      if (!currentPerson || !spouseId) return
+      try {
+        await updatePersonSpouseRelation(currentPerson.id, spouseId, {
+          marriageEndReason: reason,
+        })
+        await invalidatePersonCaches(true)
+        notify.success('혼인 해소 사유를 변경했습니다.')
+      } catch (err) {
+        notify.error(extractApiErrorMessage(err, '혼인 해소 사유 변경에 실패했습니다.'))
+      }
+    },
+    [person, invalidatePersonCaches],
+  )
+
+  /**
+   * D1: 추정 배우자(자녀 기록 기반)를 1-Click으로 정식 배우자(PersonSpouse)로 승격 등록.
+   */
+  const handlePromoteInferredSpouse = useCallback(
+    async (spouseId: string, rank: MarriageRankToken | null) => {
+      const currentPerson = person
+      if (!currentPerson || !spouseId) return
+      try {
+        await linkPersonFamily(currentPerson.id, {
+          kind: 'spouse',
+          targetId: spouseId,
+          ...(rank ? { marriageRank: rank } : {}),
+        })
+        await invalidatePersonCaches(true)
+        notify.success('정식 배우자로 등록했습니다.')
+      } catch (err) {
+        notify.error(extractApiErrorMessage(err, '배우자 등록에 실패했습니다.'))
+      }
+    },
+    [person, invalidatePersonCaches],
+  )
+
+  /**
+   * D2: 기등록 자녀의 출생 서열(birthOrder), 성별 서열(genderBirthOrder), 또는 반대편 부모(생모·생부) 인라인 빠른 수정.
+   */
+  const handleQuickUpdateChild = useCallback(
+    async (
+      childId: string,
+      patch: {
+        birthOrder?: number | null
+        genderBirthOrder?: number | null
+        otherParentId?: string | null
+      },
+    ) => {
+      const currentPerson = person
+      if (!currentPerson || !childId) return
+      try {
+        await updatePersonChildMeta(currentPerson.id, childId, patch)
+        await invalidatePersonCaches(true)
+        notify.success('자녀 정보를 수정했습니다.')
+      } catch (err) {
+        notify.error(extractApiErrorMessage(err, '자녀 정보 수정에 실패했습니다.'))
+      }
+    },
+    [person, invalidatePersonCaches],
+  )
+
+  /**
+   * 선택/생성한 인물을 ego와 연결하는 원자적 가족 도메인 API 호출.
    */
   const applyFamilyLink = useCallback(
     async (targetId: string, targetName?: string) => {
@@ -1377,13 +1627,14 @@ export function PersonDetailPanel({
       }
       try {
         if (mode === 'child') {
-          const egoName = getPersonDisplayName(currentPerson as unknown as PersonNameFields, true)
-          // ego 성별로 자녀의 부/모 슬롯 결정. MALE/FEMALE이 아니면(미지정 등) 어느 슬롯에
-          // 넣을지 명시적으로 물어 여성 인물이 아버지 슬롯에 잘못 들어가는 것을 막는다.
+          const egoName = getPersonDisplayName(
+            currentPerson as unknown as PersonNameFields,
+            true,
+          )
           const genderUpper = (currentPerson.gender ?? '').toUpperCase()
-          let slot: 'fatherId' | 'motherId'
-          if (genderUpper === 'FEMALE') slot = 'motherId'
-          else if (genderUpper === 'MALE') slot = 'fatherId'
+          let parentSlot: 'father' | 'mother'
+          if (genderUpper === 'FEMALE') parentSlot = 'mother'
+          else if (genderUpper === 'MALE') parentSlot = 'father'
           else {
             const asFather = await confirm({
               title: '부모 슬롯 선택',
@@ -1391,26 +1642,52 @@ export function PersonDetailPanel({
               confirmLabel: '아버지로',
               cancelLabel: '어머니로',
             })
-            slot = asFather ? 'fatherId' : 'motherId'
+            parentSlot = asFather ? 'father' : 'mother'
           }
-          // 대상 자녀에게 이미 다른 부/모가 지정돼 있으면 무경고 덮어쓰기 대신 교체 확인.
-          // (덮어쓰면 그 자녀가 기존 부모의 가계도에서 조용히 사라진다)
           const target = familyAddPool?.find((candidate) => candidate.id === targetId)
-          const existingParentId = slot === 'fatherId' ? target?.fatherId : target?.motherId
-          if (existingParentId && existingParentId !== currentPerson.id) {
-            const slotLabel = slot === 'fatherId' ? '아버지' : '어머니'
-            const ok = await confirm({
-              title: `${slotLabel} 교체`,
-              message: `이 인물에게는 이미 ${slotLabel}가 지정되어 있습니다. ${egoName}(으)로 교체하면 기존 ${slotLabel}의 가계도에서 빠집니다. 교체할까요?`,
-              confirmLabel: '교체',
-              danger: true,
-            })
-            if (!ok) {
-              setFamilyAddMode(null)
-              return
+          if (!pendingChildIsAdoptive) {
+            const existingParentId =
+              parentSlot === 'father' ? target?.fatherId : target?.motherId
+            if (existingParentId && existingParentId !== currentPerson.id) {
+              const slotLabel = parentSlot === 'father' ? '아버지' : '어머니'
+              const ok = await confirm({
+                title: `${slotLabel} 교체`,
+                message: `이 인물에게는 이미 ${slotLabel}가 지정되어 있습니다. ${egoName}(으)로 교체하면 기존 ${slotLabel}의 가계도에서 빠집니다. 교체할까요?`,
+                confirmLabel: '교체',
+                danger: true,
+              })
+              if (!ok) {
+                setFamilyAddMode(null)
+                return
+              }
+            }
+          } else {
+            const existingAdoptiveParentId =
+              parentSlot === 'father'
+                ? (target as { adoptiveFatherId?: string | null } | undefined)?.adoptiveFatherId
+                : (target as { adoptiveMotherId?: string | null } | undefined)?.adoptiveMotherId
+            if (existingAdoptiveParentId && existingAdoptiveParentId !== currentPerson.id) {
+              const slotLabel = parentSlot === 'father' ? '양부(입양)' : '양모(입양)'
+              const ok = await confirm({
+                title: `${slotLabel} 교체`,
+                message: `이 인물에게는 이미 ${slotLabel}가 지정되어 있습니다. ${egoName}(으)로 교체하면 기존 ${slotLabel}의 양자녀 목록에서 빠집니다. 교체할까요?`,
+                confirmLabel: '교체',
+                danger: true,
+              })
+              if (!ok) {
+                setFamilyAddMode(null)
+                return
+              }
             }
           }
-          const otherSlot: 'fatherId' | 'motherId' = slot === 'fatherId' ? 'motherId' : 'fatherId'
+          const otherSlot: 'fatherId' | 'motherId' | 'adoptiveFatherId' | 'adoptiveMotherId' =
+            pendingChildIsAdoptive
+              ? parentSlot === 'father'
+                ? 'adoptiveMotherId'
+                : 'adoptiveFatherId'
+              : parentSlot === 'father'
+                ? 'motherId'
+                : 'fatherId'
           const parsedOrder = pendingChildBirthOrder.trim()
             ? Number.parseInt(pendingChildBirthOrder.trim(), 10)
             : null
@@ -1418,28 +1695,100 @@ export function PersonDetailPanel({
             parsedOrder != null && Number.isInteger(parsedOrder) && parsedOrder >= 1
               ? parsedOrder
               : undefined
+          const parsedGenderOrder = pendingChildGenderBirthOrder.trim()
+            ? Number.parseInt(pendingChildGenderBirthOrder.trim(), 10)
+            : null
+          const validGenderBirthOrder =
+            parsedGenderOrder != null &&
+            Number.isInteger(parsedGenderOrder) &&
+            parsedGenderOrder >= 1
+              ? parsedGenderOrder
+              : undefined
           const inlineOtherParentId =
             pendingChildOtherParentId && pendingChildOtherParentId !== targetId
               ? pendingChildOtherParentId
               : null
 
-          await updatePerson(targetId, {
-            [slot]: currentPerson.id,
-            ...(inlineOtherParentId ? { [otherSlot]: inlineOtherParentId } : {}),
+          await linkPersonFamily(currentPerson.id, {
+            kind: 'child',
+            targetId,
+            parentSlot,
+            isAdoptive: pendingChildIsAdoptive,
+            ...(inlineOtherParentId ? { otherParentId: inlineOtherParentId } : {}),
             ...(validBirthOrder !== undefined ? { birthOrder: validBirthOrder } : {}),
+            ...(validGenderBirthOrder !== undefined
+              ? { genderBirthOrder: validGenderBirthOrder }
+              : {}),
           })
-          // 모달 상단에서 반대편 부모를 이미 지정했으면 2단계 프롬프트를 생략한다.
+          const targetAny = target as any
+          const existingOtherParentOnTarget =
+            otherSlot === 'motherId'
+              ? target?.motherId
+              : otherSlot === 'fatherId'
+                ? target?.fatherId
+                : otherSlot === 'adoptiveMotherId'
+                  ? (targetAny?.adoptiveMother?.id ?? targetAny?.adoptiveMotherId)
+                  : (targetAny?.adoptiveFather?.id ?? targetAny?.adoptiveFatherId)
           const otherAlreadySet =
-            Boolean(inlineOtherParentId) ||
-            Boolean(otherSlot === 'motherId' ? target?.motherId : target?.fatherId)
+            Boolean(inlineOtherParentId) || Boolean(existingOtherParentOnTarget)
           if (!otherAlreadySet) {
+            const crossLineageParentIds = pendingChildIsAdoptive
+              ? [
+                  target?.father?.id ?? target?.fatherId,
+                  target?.mother?.id ?? target?.motherId,
+                ]
+              : [
+                  targetAny?.adoptiveFather?.id ?? targetAny?.adoptiveFatherId,
+                  targetAny?.adoptiveMother?.id ?? targetAny?.adoptiveMotherId,
+                ]
+            const egoDirectParentIds = [
+              currentPerson.father?.id ?? currentPerson.fatherId,
+              currentPerson.mother?.id ?? currentPerson.motherId,
+              (currentPerson as any).adoptiveFather?.id ??
+                (currentPerson as any).adoptiveFatherId,
+              (currentPerson as any).adoptiveMother?.id ??
+                (currentPerson as any).adoptiveMotherId,
+            ]
+            const childDescendantIds: string[] = []
+            if (familyTreeData?.nodes?.length) {
+              const childrenByParent = new Map<string, string[]>()
+              const addDir = (pId: string, cId: string) => {
+                if (!pId || !cId || pId === cId) return
+                const cs = childrenByParent.get(pId) ?? []
+                if (!cs.includes(cId)) cs.push(cId)
+                childrenByParent.set(pId, cs)
+              }
+              for (const n of familyTreeData.nodes) {
+                if (n.fatherId) addDir(n.fatherId, n.id)
+                if (n.motherId) addDir(n.motherId, n.id)
+                if (n.adoptiveFatherId) addDir(n.adoptiveFatherId, n.id)
+                if (n.adoptiveMotherId) addDir(n.adoptiveMotherId, n.id)
+              }
+              const queue = [...(childrenByParent.get(targetId) ?? [])]
+              const seen = new Set<string>([targetId])
+              while (queue.length > 0) {
+                const cur = queue.shift()!
+                if (seen.has(cur)) continue
+                seen.add(cur)
+                childDescendantIds.push(cur)
+                for (const nxt of childrenByParent.get(cur) ?? []) {
+                  if (!seen.has(nxt)) queue.push(nxt)
+                }
+              }
+            }
             setChildOtherParent({
               childId: targetId,
-              // 즉석 생성 인물은 풀 스냅샷에 없다 — 모달이 건네준 표시명으로 폴백
               childName: target
                 ? getPersonDisplayName(target as unknown as PersonNameFields, true)
                 : (targetName ?? '자녀'),
               slot: otherSlot,
+              excludeIds: [
+                targetId,
+                currentPerson.id,
+                ...(crossLineageParentIds.filter(Boolean) as string[]),
+                ...(egoDirectParentIds.filter(Boolean) as string[]),
+                ...childDescendantIds,
+              ],
             })
           }
         } else if (mode === 'father') {
@@ -1455,7 +1804,7 @@ export function PersonDetailPanel({
               return
             }
           }
-          await updatePerson(currentPerson.id, { fatherId: targetId })
+          await linkPersonFamily(currentPerson.id, { kind: 'father', targetId })
         } else if (mode === 'mother') {
           if (currentPerson.mother?.id && currentPerson.mother.id !== targetId) {
             const ok = await confirm({
@@ -1469,25 +1818,113 @@ export function PersonDetailPanel({
               return
             }
           }
-          await updatePerson(currentPerson.id, { motherId: targetId })
+          await linkPersonFamily(currentPerson.id, { kind: 'mother', targetId })
+        } else if (mode === 'adoptiveFather') {
+          const existingAdoptFatherId =
+            (currentPerson as PersonDetailData).adoptiveFather?.id ??
+            (currentPerson as PersonDetailData).adoptiveFatherId ??
+            null
+          if (existingAdoptFatherId && existingAdoptFatherId !== targetId) {
+            const ok = await confirm({
+              title: '양부(입양) 교체',
+              message: '이미 양부가 지정되어 있습니다. 선택한 인물로 교체할까요?',
+              confirmLabel: '교체',
+              danger: true,
+            })
+            if (!ok) {
+              setFamilyAddMode(null)
+              return
+            }
+          }
+          await linkPersonFamily(currentPerson.id, { kind: 'adoptiveFather', targetId })
+        } else if (mode === 'adoptiveMother') {
+          const existingAdoptMotherId =
+            (currentPerson as PersonDetailData).adoptiveMother?.id ??
+            (currentPerson as PersonDetailData).adoptiveMotherId ??
+            null
+          if (existingAdoptMotherId && existingAdoptMotherId !== targetId) {
+            const ok = await confirm({
+              title: '양모(입양) 교체',
+              message: '이미 양모가 지정되어 있습니다. 선택한 인물로 교체할까요?',
+              confirmLabel: '교체',
+              danger: true,
+            })
+            if (!ok) {
+              setFamilyAddMode(null)
+              return
+            }
+          }
+          await linkPersonFamily(currentPerson.id, { kind: 'adoptiveMother', targetId })
         } else if (mode === 'sibling') {
           const egoFatherId = currentPerson.father?.id ?? currentPerson.fatherId ?? null
           const egoMotherId = currentPerson.mother?.id ?? currentPerson.motherId ?? null
-          if (!egoFatherId && !egoMotherId) {
-            notify.error('형제를 추가하려면 먼저 아버지 또는 어머니를 지정해 주세요.')
+          const egoAdoptFatherId =
+            (currentPerson as any).adoptiveFather?.id ??
+            (currentPerson as any).adoptiveFatherId ??
+            null
+          const egoAdoptMotherId =
+            (currentPerson as any).adoptiveMother?.id ??
+            (currentPerson as any).adoptiveMotherId ??
+            null
+          const target = familyAddPool?.find((candidate) => candidate.id === targetId) as any
+          const targetFatherId = target?.father?.id ?? target?.fatherId ?? null
+          const targetMotherId = target?.mother?.id ?? target?.motherId ?? null
+          const targetAdoptFatherId =
+            target?.adoptiveFather?.id ?? target?.adoptiveFatherId ?? null
+          const targetAdoptMotherId =
+            target?.adoptiveMother?.id ?? target?.adoptiveMotherId ?? null
+
+          const hasAnyParent = Boolean(
+            egoFatherId ||
+              egoMotherId ||
+              egoAdoptFatherId ||
+              egoAdoptMotherId ||
+              targetFatherId ||
+              targetMotherId ||
+              targetAdoptFatherId ||
+              targetAdoptMotherId,
+          )
+          if (!hasAnyParent) {
+            notify.error(
+              '형제를 추가하려면 현재 인물 또는 선택한 인물 중 최소 한 명에게 부모(친부모·양부모)가 지정되어 있어야 합니다.',
+            )
             setFamilyAddMode(null)
             return
           }
-          const target = familyAddPool?.find((candidate) => candidate.id === targetId)
           const conflictFather =
-            egoFatherId && target?.fatherId && target.fatherId !== egoFatherId
+            pendingSiblingLineage !== 'MATERNAL_HALF' &&
+            pendingSiblingLineage !== 'ADOPTIVE' &&
+            egoFatherId &&
+            targetFatherId &&
+            targetFatherId !== egoFatherId
           const conflictMother =
-            egoMotherId && target?.motherId && target.motherId !== egoMotherId
-          if (conflictFather || conflictMother) {
+            pendingSiblingLineage !== 'PATERNAL_HALF' &&
+            pendingSiblingLineage !== 'ADOPTIVE' &&
+            egoMotherId &&
+            targetMotherId &&
+            targetMotherId !== egoMotherId
+          const conflictAdoptFather =
+            pendingSiblingLineage === 'ADOPTIVE' &&
+            egoAdoptFatherId &&
+            targetAdoptFatherId &&
+            targetAdoptFatherId !== egoAdoptFatherId
+          const conflictAdoptMother =
+            pendingSiblingLineage === 'ADOPTIVE' &&
+            egoAdoptMotherId &&
+            targetAdoptMotherId &&
+            targetAdoptMotherId !== egoAdoptMotherId
+          if (
+            conflictFather ||
+            conflictMother ||
+            conflictAdoptFather ||
+            conflictAdoptMother
+          ) {
+            const isAdoptConflict = conflictAdoptFather || conflictAdoptMother
             const ok = await confirm({
-              title: '부모 정보 덮어쓰기',
-              message:
-                '선택한 인물에게 이미 다른 부모가 등록되어 있습니다. 현재 인물의 부모로 덮어써서 형제로 연결할까요?',
+              title: isAdoptConflict ? '양부모 정보 덮어쓰기' : '부모 정보 덮어쓰기',
+              message: isAdoptConflict
+                ? '선택한 인물에게 이미 다른 양부모가 등록되어 있습니다. 현재 인물의 양부모로 덮어써서 입양형제로 연결할까요?'
+                : '선택한 인물에게 이미 다른 부모가 등록되어 있습니다. 현재 인물의 부모로 덮어써서 형제로 연결할까요?',
               confirmLabel: '연결',
               danger: true,
             })
@@ -1496,32 +1933,32 @@ export function PersonDetailPanel({
               return
             }
           }
-          await updatePerson(targetId, {
-            ...(egoFatherId ? { fatherId: egoFatherId } : {}),
-            ...(egoMotherId ? { motherId: egoMotherId } : {}),
+          await linkPersonFamily(currentPerson.id, {
+            kind: 'sibling',
+            targetId,
+            siblingLineage: pendingSiblingLineage,
           })
         } else if (mode === 'spouse') {
-          const existing = serializeExistingSpouseRelations(currentPerson)
-          if (existing.some((rel) => rel.spouseId === targetId)) {
+          const alreadySpouse = (currentPerson.spouseRelations ?? []).some(
+            (rel) => rel.spouse?.id === targetId,
+          )
+          if (alreadySpouse) {
             notify.error('이미 배우자로 등록된 인물입니다.')
             setFamilyAddMode(null)
             return
           }
-          await updatePerson(currentPerson.id, {
-            spouseRelations: [
-              ...existing,
-              {
-                spouseId: targetId,
-                ...(pendingSpouseRank ? { marriageRank: pendingSpouseRank } : {}),
-              },
-            ],
+          await linkPersonFamily(currentPerson.id, {
+            kind: 'spouse',
+            targetId,
+            ...(pendingSpouseRank ? { marriageRank: pendingSpouseRank } : {}),
+            ...(pendingSpouseEndReason
+              ? { marriageEndReason: pendingSpouseEndReason }
+              : {}),
           })
         }
         await invalidatePersonCaches(true)
         notify.success('가족 관계를 추가했습니다.')
       } catch (err) {
-        // 서버(assertNoParentCycle 등)가 보낸 구체 사유를 표시 — nestia HttpError.message는
-        // 응답 body(JSON) 문자열이라 그대로 쓰지 않고 { message } 를 파싱한다.
         notify.error(extractApiErrorMessage(err, '가족 관계 추가에 실패했습니다.'))
       } finally {
         setFamilyAddMode(null)
@@ -1532,9 +1969,12 @@ export function PersonDetailPanel({
       familyAddMode,
       familyAddPool,
       pendingSpouseRank,
+      pendingSpouseEndReason,
       pendingChildOtherParentId,
       pendingChildBirthOrder,
-      serializeExistingSpouseRelations,
+      pendingChildGenderBirthOrder,
+      pendingChildIsAdoptive,
+      pendingSiblingLineage,
       invalidatePersonCaches,
     ],
   )
@@ -1543,16 +1983,28 @@ export function PersonDetailPanel({
   const applyChildOtherParent = useCallback(
     async (targetId: string) => {
       const pending = childOtherParent
-      if (!pending || targetId === pending.childId) {
+      if (!pending || !person || targetId === pending.childId) {
         setChildOtherParent(null)
         return
       }
       try {
-        // 프롬프트가 뜬 뒤 다른 탭/세션이 이 슬롯을 채웠을 수 있다 — 스테일 풀 스냅샷
-        // 대신 쓰기 직전 서버 재확인 후, 점유 시 ego 슬롯과 동일한 교체 confirm.
-        const fresh = await getPersonById(pending.childId)
-        const occupiedId = pending.slot === 'motherId' ? fresh.motherId : fresh.fatherId
-        const slotLabel = pending.slot === 'motherId' ? '어머니' : '아버지'
+        const fresh = (await getPersonById(pending.childId)) as any
+        const occupiedId =
+          pending.slot === 'motherId'
+            ? fresh.motherId
+            : pending.slot === 'fatherId'
+              ? fresh.fatherId
+              : pending.slot === 'adoptiveMotherId'
+                ? (fresh.adoptiveMother?.id ?? fresh.adoptiveMotherId)
+                : (fresh.adoptiveFather?.id ?? fresh.adoptiveFatherId)
+        const slotLabel =
+          pending.slot === 'motherId'
+            ? '어머니'
+            : pending.slot === 'fatherId'
+              ? '아버지'
+              : pending.slot === 'adoptiveMotherId'
+                ? '양모'
+                : '양부'
         if (occupiedId && occupiedId !== targetId) {
           const ok = await confirm({
             title: `${slotLabel} 교체`,
@@ -1562,7 +2014,9 @@ export function PersonDetailPanel({
           })
           if (!ok) return
         }
-        await updatePerson(pending.childId, { [pending.slot]: targetId })
+        await updatePersonChildMeta(person.id, pending.childId, {
+          otherParentId: targetId,
+        })
         await invalidatePersonCaches(true)
         notify.success(`${slotLabel} 관계를 추가했습니다.`)
       } catch (err) {
@@ -1571,7 +2025,7 @@ export function PersonDetailPanel({
         setChildOtherParent(null)
       }
     },
-    [childOtherParent, invalidatePersonCaches],
+    [childOtherParent, person, invalidatePersonCaches],
   )
 
   /** 가족 추가 모달 config(제목·exclude) — 모드+ego 기준. person 없으면 null. */
@@ -1582,27 +2036,190 @@ export function PersonDetailPanel({
             rel.spouse?.id ? [rel.spouse.id] : [],
           )
           const selfId = person.id
-          const fatherId = person.father?.id ?? ''
-          const motherId = person.mother?.id ?? ''
-          // 자녀는 배우자 후보에서 제외 — 자식 페이지에선 부모 선택이 막히는데 부모
-          // 페이지에선 자식 선택이 허용되는 비대칭 근친혼 게이트를 없앤다.
+          const pDetail = person as PersonDetailData
+          const fatherId = person.father?.id ?? pDetail.fatherId ?? ''
+          const motherId = person.mother?.id ?? pDetail.motherId ?? ''
+          const adoptFatherId =
+            pDetail.adoptiveFather?.id ?? pDetail.adoptiveFatherId ?? ''
+          const adoptMotherId =
+            pDetail.adoptiveMother?.id ?? pDetail.adoptiveMotherId ?? ''
           const childIds = (person.children ?? [])
             .map((child) => child.id)
             .filter(Boolean) as string[]
           const siblingIds = (person.siblings ?? [])
             .map((sib) => sib.id)
             .filter(Boolean) as string[]
+
+          // 다세대 직계 존속·비속 ID 수집 (person 상세의 조부모 + familyTreeData BFS 그래프)
+          const higherAncestorSet = new Set<string>()
+          for (const parentNode of [
+            pDetail.father,
+            pDetail.mother,
+            pDetail.adoptiveFather,
+            pDetail.adoptiveMother,
+          ]) {
+            if (!parentNode) continue
+            for (const gp of [
+              parentNode.father,
+              parentNode.mother,
+              parentNode.adoptiveFather,
+              parentNode.adoptiveMother,
+            ]) {
+              if (gp?.id && gp.id !== selfId) higherAncestorSet.add(gp.id)
+            }
+          }
+          const descendantSet = new Set<string>(childIds)
+          if (familyTreeData?.nodes?.length) {
+            const parentsByChild = new Map<string, string[]>()
+            const childrenByParent = new Map<string, string[]>()
+            const addDir = (pId: string, cId: string) => {
+              if (!pId || !cId || pId === cId) return
+              const ps = parentsByChild.get(cId) ?? []
+              if (!ps.includes(pId)) ps.push(pId)
+              parentsByChild.set(cId, ps)
+              const cs = childrenByParent.get(pId) ?? []
+              if (!cs.includes(cId)) cs.push(cId)
+              childrenByParent.set(pId, cs)
+            }
+            for (const n of familyTreeData.nodes) {
+              if (n.fatherId) addDir(n.fatherId, n.id)
+              if (n.motherId) addDir(n.motherId, n.id)
+              if (n.adoptiveFatherId) addDir(n.adoptiveFatherId, n.id)
+              if (n.adoptiveMotherId) addDir(n.adoptiveMotherId, n.id)
+            }
+            for (const e of familyTreeData.edges ?? []) {
+              if (
+                e.type === 'parent-child' ||
+                e.type === 'adoptive-parent-child'
+              ) {
+                addDir(e.source, e.target)
+              }
+            }
+            const directParentSet = new Set(
+              [fatherId, motherId, adoptFatherId, adoptMotherId].filter(Boolean),
+            )
+            // 상향 BFS: 직계 존속
+            const upQueue = [...(parentsByChild.get(selfId) ?? [])]
+            const seenUp = new Set<string>([selfId])
+            while (upQueue.length > 0) {
+              const cur = upQueue.shift()!
+              if (seenUp.has(cur)) continue
+              seenUp.add(cur)
+              if (!directParentSet.has(cur)) higherAncestorSet.add(cur)
+              for (const nextP of parentsByChild.get(cur) ?? []) {
+                if (!seenUp.has(nextP)) upQueue.push(nextP)
+              }
+            }
+            // 하향 BFS: 직계 비속
+            const downQueue = [...(childrenByParent.get(selfId) ?? [])]
+            const seenDown = new Set<string>([selfId])
+            while (downQueue.length > 0) {
+              const cur = downQueue.shift()!
+              if (seenDown.has(cur)) continue
+              seenDown.add(cur)
+              descendantSet.add(cur)
+              for (const nextC of childrenByParent.get(cur) ?? []) {
+                if (!seenDown.has(nextC)) downQueue.push(nextC)
+              }
+            }
+          }
+          const higherAncestorIds = [...higherAncestorSet]
+          const allAncestorIds = [
+            fatherId,
+            motherId,
+            adoptFatherId,
+            adoptMotherId,
+            ...higherAncestorIds,
+          ].filter(Boolean)
+          const allDescendantIds = [...descendantSet]
+          const femalePoolIds = (familyAddPool ?? [])
+            .filter((p) => (p.gender ?? '').toUpperCase() === 'FEMALE')
+            .map((p) => p.id)
+          const malePoolIds = (familyAddPool ?? [])
+            .filter((p) => (p.gender ?? '').toUpperCase() === 'MALE')
+            .map((p) => p.id)
+
           const byMode = {
-            child: { title: '자녀로 추가할 인물', exclude: [selfId] },
-            father: { title: '아버지로 지정할 인물', exclude: [selfId, motherId, ...spouseIds] },
-            mother: { title: '어머니로 지정할 인물', exclude: [selfId, fatherId, ...spouseIds] },
+            child: {
+              title: '자녀로 추가할 인물',
+              exclude: [
+                selfId,
+                ...allAncestorIds,
+                ...allDescendantIds,
+                ...spouseIds,
+              ],
+            },
+            father: {
+              title: '아버지로 지정할 인물',
+              exclude: [
+                selfId,
+                motherId,
+                adoptFatherId,
+                adoptMotherId,
+                ...higherAncestorIds,
+                ...allDescendantIds,
+                ...spouseIds,
+                ...femalePoolIds,
+              ],
+            },
+            mother: {
+              title: '어머니로 지정할 인물',
+              exclude: [
+                selfId,
+                fatherId,
+                adoptFatherId,
+                adoptMotherId,
+                ...higherAncestorIds,
+                ...allDescendantIds,
+                ...spouseIds,
+                ...malePoolIds,
+              ],
+            },
+            adoptiveFather: {
+              title: '양부(입양 아버지)로 지정할 인물',
+              exclude: [
+                selfId,
+                fatherId,
+                motherId,
+                adoptMotherId,
+                ...higherAncestorIds,
+                ...allDescendantIds,
+                ...spouseIds,
+                ...femalePoolIds,
+              ],
+            },
+            adoptiveMother: {
+              title: '양모(입양 어머니)로 지정할 인물',
+              exclude: [
+                selfId,
+                fatherId,
+                motherId,
+                adoptFatherId,
+                ...higherAncestorIds,
+                ...allDescendantIds,
+                ...spouseIds,
+                ...malePoolIds,
+              ],
+            },
             sibling: {
               title: '형제자매로 추가할 인물',
-              exclude: [selfId, fatherId, motherId, ...spouseIds, ...childIds, ...siblingIds],
+              exclude: [
+                selfId,
+                ...allAncestorIds,
+                ...allDescendantIds,
+                ...spouseIds,
+                ...siblingIds,
+              ],
             },
             spouse: {
               title: '배우자로 추가할 인물',
-              exclude: [selfId, fatherId, motherId, ...spouseIds, ...childIds],
+              exclude: [
+                selfId,
+                ...allAncestorIds,
+                ...allDescendantIds,
+                ...siblingIds,
+                ...spouseIds,
+              ],
             },
           } as const
           return byMode[familyAddMode]
@@ -1675,9 +2292,16 @@ export function PersonDetailPanel({
           entryDeleteTarget.id,
         )
       }
-      await queryClient.invalidateQueries({
-        queryKey: personKeys.detailFull(personId),
-      })
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: personKeys.detailFull(personId),
+        }),
+        queryClient.invalidateQueries({ queryKey: personKeys.all }),
+        queryClient.invalidateQueries({ queryKey: personKeys.infographic }),
+        queryClient.invalidateQueries({
+          queryKey: ['persons', 'compare-records'],
+        }),
+      ])
       notify.success(`'${entryDeleteTarget.label}' 항목을 삭제했습니다.`)
       setEntryDeleteTarget(null)
     } catch (err) {
@@ -1868,33 +2492,10 @@ export function PersonDetailPanel({
             : null,
         )
       : ''
-  const tenureFallbackLabel = (() => {
-    if (
-      birthLabel ||
-      deathLabel ||
-      floruitLabel ||
-      combinedTenures.items.length === 0
-    ) {
-      return ''
-    }
-    const hasReign = combinedTenures.items.some((it) => it.kind === 'reign')
-    const prefix = hasReign ? '재위' : '재임'
-    const formatSignedYr = (signed: number) =>
-      signed < 0 ? `기원전 ${-signed}년` : `${signed}년`
-    const signedYears: number[] = []
-    for (const it of combinedTenures.items) {
-      const sp = parseIsoDateParts(it.data.startDate)
-      if (sp) signedYears.push(sp.year)
-      const ep = parseIsoDateParts(it.data.endDate)
-      if (ep) signedYears.push(ep.year)
-    }
-    if (signedYears.length === 0) return ''
-    const minY = Math.min(...signedYears)
-    const maxY = Math.max(...signedYears)
-    return minY === maxY
-      ? `${prefix} ${formatSignedYr(minY)}경`
-      : `${prefix} ${formatSignedYr(minY)} ~ ${formatSignedYr(maxY)}`
-  })()
+  const tenureFallbackLabel =
+    birthLabel || deathLabel || floruitLabel
+      ? ''
+      : deriveTenureFallbackLabel(combinedTenures.items)
   const subtitleLifespan = (() => {
     if (isDeceased) {
       if (birthLabel && deathLabel) {
@@ -1945,14 +2546,31 @@ export function PersonDetailPanel({
   })()
 
   /** 탭 건수 — 누르기 전에 어디에 기록이 있는지 한눈에 파악 */
+  const distinctGrandparentIds = new Set<string>()
+  for (const parentNode of [p.father, p.mother, p.adoptiveFather, p.adoptiveMother]) {
+    if (!parentNode) continue
+    for (const gp of [
+      parentNode.father,
+      parentNode.mother,
+      parentNode.adoptiveFather,
+      parentNode.adoptiveMother,
+    ]) {
+      if (gp?.id) distinctGrandparentIds.add(gp.id)
+    }
+  }
+  const explicitSpouseCount = p.spouseRelations?.length
+    ? p.spouseRelations.length
+    : p.spouse
+      ? 1
+      : 0
+  const totalSpouseCount = explicitSpouseCount + inferredSpousesFromTree.length
   const genealogyCount =
     (p.father ? 1 : 0) +
     (p.mother ? 1 : 0) +
-    (p.father?.father ? 1 : 0) +
-    (p.father?.mother ? 1 : 0) +
-    (p.mother?.father ? 1 : 0) +
-    (p.mother?.mother ? 1 : 0) +
-    (p.spouseRelations?.length ? p.spouseRelations.length : p.spouse ? 1 : 0) +
+    (p.adoptiveFather ? 1 : 0) +
+    (p.adoptiveMother ? 1 : 0) +
+    distinctGrandparentIds.size +
+    totalSpouseCount +
     (person.children?.length ?? 0) +
     (p.siblings?.length ?? 0)
   const humanRelationshipsCount =
@@ -2299,7 +2917,21 @@ export function PersonDetailPanel({
                     label: '모',
                     personId: p.mother.id ?? undefined,
                   })
-                const spouseCount = (p.spouseRelations ?? []).length
+                if (p.adoptiveFather)
+                  badges.push({
+                    key: 'adoptiveFather',
+                    label: '양부',
+                    personId: p.adoptiveFather.id ?? undefined,
+                    title: '양부(입양 아버지)',
+                  })
+                if (p.adoptiveMother)
+                  badges.push({
+                    key: 'adoptiveMother',
+                    label: '양모',
+                    personId: p.adoptiveMother.id ?? undefined,
+                    title: '양모(입양 어머니)',
+                  })
+                const spouseCount = totalSpouseCount
                 if (spouseCount > 0)
                   badges.push({
                     key: 'spouses',
@@ -2320,23 +2952,38 @@ export function PersonDetailPanel({
                 if (siblingCount > 0) {
                   // 공유 축 분해 툴팁 — 사실 진술만(이복/이부 단정 없음). REST siblings는
                   // take 무제한(무절단 완전)이라 억제 조건 불필요. FK 미도달(구 캐시)이면 생략.
-                  const egoFks = { fatherId: p.fatherId ?? null, motherId: p.motherId ?? null }
+                  const egoFks = {
+                    fatherId: p.fatherId ?? p.father?.id ?? null,
+                    motherId: p.motherId ?? p.mother?.id ?? null,
+                    adoptiveFatherId: p.adoptiveFatherId ?? p.adoptiveFather?.id ?? null,
+                    adoptiveMotherId: p.adoptiveMotherId ?? p.adoptiveMother?.id ?? null,
+                  }
                   let fullCount = 0
                   let fatherOnlyCount = 0
                   let motherOnlyCount = 0
+                  let adoptiveCount = 0
                   let hasFkData = false
                   for (const sib of p.siblings ?? []) {
-                    if (sib?.fatherId === undefined && sib?.motherId === undefined) continue
+                    if (
+                      sib?.fatherId === undefined &&
+                      sib?.motherId === undefined &&
+                      sib?.adoptiveFatherId === undefined &&
+                      sib?.adoptiveMotherId === undefined
+                    ) {
+                      continue
+                    }
                     hasFkData = true
                     const shared = classifySiblingKinship(egoFks, sib).sharedAxis
                     if (shared === 'both') fullCount += 1
                     else if (shared === 'father') fatherOnlyCount += 1
                     else if (shared === 'mother') motherOnlyCount += 1
+                    else if (shared === 'adoptive') adoptiveCount += 1
                   }
                   const parts: string[] = []
                   if (fullCount > 0) parts.push(`부모 모두 공유 ${fullCount}`)
                   if (fatherOnlyCount > 0) parts.push(`아버지만 공유 ${fatherOnlyCount}`)
                   if (motherOnlyCount > 0) parts.push(`어머니만 공유 ${motherOnlyCount}`)
+                  if (adoptiveCount > 0) parts.push(`양부모 공유 ${adoptiveCount}`)
                   badges.push({
                     key: 'siblings',
                     label: `형제 ${siblingCount}`,
@@ -2462,9 +3109,7 @@ export function PersonDetailPanel({
                           ) : (
                             sp.name
                           )}
-                          {sp.rank
-                            ? ` (${MARRIAGE_RANK_LABELS[sp.rank] ?? sp.rank})`
-                            : ''}
+                          {sp.rankLabel ? ` (${sp.rankLabel})` : ''}
                         </span>
                       ))
                     : fallbackName}
@@ -2849,36 +3494,42 @@ export function PersonDetailPanel({
                     const activeCareerSections = [
                       {
                         id: 'career-section-tenures',
+                        storageKey: null,
                         label: '재임·재위',
                         count: combinedTenures.count,
                         color: '#6366f1',
                       },
                       {
                         id: 'career-section-careers',
+                        storageKey: 'careers',
                         label: '분야별 경력',
                         count: p.careers?.length ?? 0,
                         color: '#3b82f6',
                       },
                       {
                         id: 'career-section-education',
+                        storageKey: 'education',
                         label: '학력',
                         count: p.educations?.length ?? 0,
                         color: '#14b8a6',
                       },
                       {
                         id: 'career-section-awards',
+                        storageKey: 'awards',
                         label: '수상·훈장',
                         count: p.awards?.length ?? 0,
                         color: '#f59e0b',
                       },
                       {
                         id: 'career-section-activities',
+                        storageKey: 'activities',
                         label: '활동·이력',
                         count: activitiesCount,
                         color: '#8b5cf6',
                       },
                       {
                         id: 'career-section-politics',
+                        storageKey: 'politics',
                         label: '정당·선거',
                         count: politicsCount,
                         color: '#ec4899',
@@ -2895,6 +3546,9 @@ export function PersonDetailPanel({
                               type="button"
                               onClick={() => {
                                 playClickSound()
+                                if (sec.storageKey) {
+                                  expandCollapsibleSection(sec.storageKey)
+                                }
                                 const el = document.getElementById(sec.id)
                                 el?.scrollIntoView({
                                   behavior: 'smooth',
@@ -2939,7 +3593,9 @@ export function PersonDetailPanel({
                               type="button"
                               onClick={() => {
                                 playClickSound()
-                                setAddKindChooserOpen(true)
+                                setEditingTenureId(null)
+                                setEditingReignId(null)
+                                setTenureModalOpen(true)
                               }}
                             >
                               <FiPlus size={12} />
@@ -2954,6 +3610,10 @@ export function PersonDetailPanel({
                         birthMonth={person.birthMonth}
                         birthDay={person.birthDay}
                         birthEra={person.birthEra ?? null}
+                        deathYear={person.deathYear}
+                        deathMonth={person.deathMonth}
+                        deathDay={person.deathDay}
+                        deathEra={person.deathEra ?? null}
                         deathDateStr={deathDateStr}
                         isDeceased={isDeceased}
                         embedInModal={embedInModal}
@@ -3105,7 +3765,10 @@ export function PersonDetailPanel({
                                         : null,
                                     ].filter(Boolean) as string[]
                                     return (
-                                      <SimpleEntryItem key={c.id ?? `career-${k}-${cIdx}`}>
+                                      <SimpleEntryItem
+                                        key={c.id ?? `career-${k}-${cIdx}`}
+                                        id={c.id ? `person-record-career-${c.id}` : undefined}
+                                      >
                                         {!embedInModal && c.id && (
                                           <>
                                             <SimpleEntryEditBtn
@@ -3234,7 +3897,10 @@ export function PersonDetailPanel({
                               e.classNumber != null ? `${e.classNumber}기` : null,
                             ].filter(Boolean) as string[]
                             return (
-                              <SimpleEntryItem key={e.id ?? `edu-${eduIdx}`}>
+                              <SimpleEntryItem
+                                key={e.id ?? `edu-${eduIdx}`}
+                                id={e.id ? `person-record-education-${e.id}` : undefined}
+                              >
                                 {!embedInModal && e.id && (
                                   <>
                                     <SimpleEntryEditBtn
@@ -3354,7 +4020,10 @@ export function PersonDetailPanel({
                           .map((a, awardIdx) => {
                             const awardDateStr = formatIsoDateKo(a.awardDate)
                             return (
-                              <SimpleEntryItem key={a.id ?? `award-${awardIdx}`}>
+                              <SimpleEntryItem
+                                key={a.id ?? `award-${awardIdx}`}
+                                id={a.id ? `person-record-award-${a.id}` : undefined}
+                              >
                                 {!embedInModal && a.id && (
                                   <>
                                     <SimpleEntryEditBtn
@@ -3449,7 +4118,10 @@ export function PersonDetailPanel({
                               </ActivityGroupTitle>
                               <SimpleEntryList>
                                 {books.map((b, bookIdx) => (
-                                  <SimpleEntryItem key={b.id ?? `book-${bookIdx}`}>
+                                  <SimpleEntryItem
+                                    key={b.id ?? `book-${bookIdx}`}
+                                    id={b.id ? `person-record-book-${b.id}` : undefined}
+                                  >
                                     <SimpleEntryDateCol $muted={!b.publishedYear}>
                                       {b.publishedYear
                                         ? `${b.publishedYear}년`
@@ -3486,6 +4158,7 @@ export function PersonDetailPanel({
                                   return (
                                     <SimpleEntryItem
                                       key={c.id ?? `founded-${foundedIdx}`}
+                                      id={c.id ? `person-record-company-${c.id}` : undefined}
                                     >
                                       <SimpleEntryDateCol
                                         $muted={!foundedDateStr}
@@ -3536,7 +4209,10 @@ export function PersonDetailPanel({
                                     const isOngoing =
                                       !!o.startDate && !o.endDate && !isDeceased
                                     return (
-                                      <SimpleEntryItem key={o.id ?? `org-${orgIdx}`}>
+                                      <SimpleEntryItem
+                                        key={o.id ?? `org-${orgIdx}`}
+                                        id={o.id ? `person-record-orgrole-${o.id}` : undefined}
+                                      >
                                         <SimpleEntryDateCol
                                           $ongoing={isOngoing}
                                           $muted={!period}
@@ -3593,7 +4269,10 @@ export function PersonDetailPanel({
                                       !!m.startDate && !m.endDate && !isDeceased
                                     const titleParts = [m.rank, m.role].filter(Boolean) as string[]
                                     return (
-                                      <SimpleEntryItem key={m.id ?? `mil-${milIdx}`}>
+                                      <SimpleEntryItem
+                                        key={m.id ?? `mil-${milIdx}`}
+                                        id={m.id ? `person-record-milcmd-${m.id}` : undefined}
+                                      >
                                         <SimpleEntryDateCol
                                           $ongoing={isOngoing}
                                           $muted={!period}
@@ -3661,6 +4340,8 @@ export function PersonDetailPanel({
                         countryId={person.countryId ?? null}
                         variant="overview"
                         actionsRef={politicsActionsRef}
+                        isDeceased={isDeceased}
+                        readOnly={embedInModal}
                         partyMemberships={
                           (
                             person as {
@@ -3704,7 +4385,10 @@ export function PersonDetailPanel({
                                     const isOngoing =
                                       !!l.startDate && !l.endDate && !isDeceased
                                     return (
-                                      <SimpleEntryItem key={l.id ?? `party-${partyIdx}`}>
+                                      <SimpleEntryItem
+                                        key={l.id ?? `party-${partyIdx}`}
+                                        id={l.id ? `person-record-partylead-${l.id}` : undefined}
+                                      >
                                         <SimpleEntryDateCol
                                           $ongoing={isOngoing}
                                           $muted={!period}
@@ -3882,15 +4566,27 @@ export function PersonDetailPanel({
                       >
                         {person.mother ? '어머니 변경' : '+ 어머니 추가'}
                       </FamilyActionBtn>
-                      {(person.father || person.mother) && (
-                        <FamilyActionBtn
-                          type="button"
-                          onClick={() => setFamilyAddMode('sibling')}
-                          title="현재 부모를 공유하는 형제·자매를 연결합니다"
-                        >
-                          + 형제 추가
-                        </FamilyActionBtn>
-                      )}
+                      <FamilyActionBtn
+                        type="button"
+                        onClick={() => setFamilyAddMode('adoptiveFather')}
+                        title="출계·입양으로 모신 양부(양아버지)를 지정합니다 (본생 아버지와 함께 보존됩니다)"
+                      >
+                        {p.adoptiveFather ? '양부 변경' : '+ 양부(입양)'}
+                      </FamilyActionBtn>
+                      <FamilyActionBtn
+                        type="button"
+                        onClick={() => setFamilyAddMode('adoptiveMother')}
+                        title="출계·입양으로 모신 양모(양어머니)를 지정합니다 (본생 어머니와 함께 보존됩니다)"
+                      >
+                        {p.adoptiveMother ? '양모 변경' : '+ 양모(입양)'}
+                      </FamilyActionBtn>
+                      <FamilyActionBtn
+                        type="button"
+                        onClick={() => setFamilyAddMode('sibling')}
+                        title="부모(친부모·양부모)를 공유하는 형제·자매를 연결합니다"
+                      >
+                        + 형제 추가
+                      </FamilyActionBtn>
                       <FamilyActionBtn type="button" onClick={() => setFamilyAddMode('spouse')}>
                         + 배우자 추가
                       </FamilyActionBtn>
@@ -3916,6 +4612,8 @@ export function PersonDetailPanel({
                       showHeader={false}
                       father={person.father}
                       mother={person.mother}
+                      adoptiveFather={p.adoptiveFather}
+                      adoptiveMother={p.adoptiveMother}
                       paternalGrandfather={person.father?.father}
                       paternalGrandmother={person.father?.mother}
                       maternalGrandfather={person.mother?.father}
@@ -3926,6 +4624,8 @@ export function PersonDetailPanel({
                             ? {
                                 ...r.spouse,
                                 marriageRank: r.marriageRank ?? null,
+                                marriageEndReason: r.marriageEndReason ?? null,
+                                rankHolderId: r.rankHolderId ?? null,
                                 marriageStartYear: r.marriageStartYear ?? null,
                                 marriageEndYear: r.marriageEndYear ?? null,
                                 marriageNote: r.note ?? null,
@@ -3969,109 +4669,136 @@ export function PersonDetailPanel({
                           <div
                             style={{
                               display: 'flex',
-                              alignItems: 'center',
-                              flexWrap: 'wrap',
-                              gap: '6px',
+                              flexDirection: 'column',
+                              gap: '8px',
                               padding: '10px 16px',
                               borderBottom: '1px solid rgba(148, 163, 184, 0.18)',
                               fontSize: '12px',
                             }}
                           >
-                            <span style={{ fontWeight: 600, marginRight: '4px', opacity: 0.75 }}>
-                              혼인 서열(선택):
-                            </span>
-                            {(
-                              [
-                                { value: null, label: '미지정' },
-                                ...MARRIAGE_RANK_OPTIONS,
-                              ] as const
-                            ).map((opt) => {
-                              const active = pendingSpouseRank === opt.value
-                              return (
-                                <button
-                                  key={opt.value ?? 'none'}
-                                  type="button"
-                                  onClick={() => setPendingSpouseRank(opt.value)}
-                                  style={{
-                                    padding: '3px 10px',
-                                    borderRadius: '999px',
-                                    fontSize: '11.5px',
-                                    fontWeight: active ? 700 : 500,
-                                    border: active
-                                      ? '1px solid #6366f1'
-                                      : '1px solid rgba(148, 163, 184, 0.35)',
-                                    background: active
-                                      ? 'rgba(99, 102, 241, 0.14)'
-                                      : 'transparent',
-                                    color: active ? '#6366f1' : 'inherit',
-                                    cursor: 'pointer',
-                                  }}
-                                >
-                                  {opt.label}
-                                </button>
-                              )
-                            })}
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                flexWrap: 'wrap',
+                                gap: '6px',
+                              }}
+                            >
+                              <span style={{ fontWeight: 600, marginRight: '4px', opacity: 0.75 }}>
+                                혼인 서열(선택):
+                              </span>
+                              {(
+                                [
+                                  { value: null, label: '미지정' },
+                                  ...MARRIAGE_RANK_OPTIONS,
+                                ] as const
+                              ).map((opt) => {
+                                const active = pendingSpouseRank === opt.value
+                                return (
+                                  <button
+                                    key={opt.value ?? 'none'}
+                                    type="button"
+                                    onClick={() => setPendingSpouseRank(opt.value)}
+                                    style={{
+                                      padding: '3px 10px',
+                                      borderRadius: '999px',
+                                      fontSize: '11.5px',
+                                      fontWeight: active ? 700 : 500,
+                                      border: active
+                                        ? '1px solid #6366f1'
+                                        : '1px solid rgba(148, 163, 184, 0.35)',
+                                      background: active
+                                        ? 'rgba(99, 102, 241, 0.14)'
+                                        : 'transparent',
+                                      color: active ? '#6366f1' : 'inherit',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    {opt.label}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                flexWrap: 'wrap',
+                                gap: '6px',
+                              }}
+                            >
+                              <span style={{ fontWeight: 600, marginRight: '4px', opacity: 0.75 }}>
+                                혼인 해소 사유(선택):
+                              </span>
+                              {(
+                                [
+                                  { value: null, label: '유지/미지정' },
+                                  ...MARRIAGE_END_REASON_OPTIONS,
+                                ] as const
+                              ).map((opt) => {
+                                const active = pendingSpouseEndReason === opt.value
+                                return (
+                                  <button
+                                    key={opt.value ?? 'none'}
+                                    type="button"
+                                    onClick={() => setPendingSpouseEndReason(opt.value)}
+                                    style={{
+                                      padding: '3px 10px',
+                                      borderRadius: '999px',
+                                      fontSize: '11.5px',
+                                      fontWeight: active ? 700 : 500,
+                                      border: active
+                                        ? '1px solid #d97706'
+                                        : '1px solid rgba(148, 163, 184, 0.35)',
+                                      background: active
+                                        ? 'rgba(217, 119, 6, 0.14)'
+                                        : 'transparent',
+                                      color: active ? '#d97706' : 'inherit',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    {opt.label}
+                                  </button>
+                                )
+                              })}
+                            </div>
                           </div>
                         ) : familyAddMode === 'child' ? (
                           <div
                             style={{
                               display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              flexWrap: 'wrap',
-                              gap: '8px 14px',
+                              flexDirection: 'column',
+                              gap: '8px',
                               padding: '10px 16px',
                               borderBottom: '1px solid rgba(148, 163, 184, 0.18)',
                               fontSize: '12px',
                             }}
                           >
-                            {(person.spouseRelations ?? []).some((r) => r.spouse?.id) && (
-                              <div
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  flexWrap: 'wrap',
-                                  gap: '5px',
-                                }}
-                              >
-                                <span style={{ fontWeight: 600, marginRight: '4px', opacity: 0.75 }}>
-                                  반대편 부모(배우자):
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => setPendingChildOtherParentId('')}
-                                  style={{
-                                    padding: '3px 9px',
-                                    borderRadius: '999px',
-                                    fontSize: '11.5px',
-                                    fontWeight: !pendingChildOtherParentId ? 700 : 500,
-                                    border: !pendingChildOtherParentId
-                                      ? '1px solid #6366f1'
-                                      : '1px solid rgba(148, 163, 184, 0.35)',
-                                    background: !pendingChildOtherParentId
-                                      ? 'rgba(99, 102, 241, 0.14)'
-                                      : 'transparent',
-                                    color: !pendingChildOtherParentId ? '#6366f1' : 'inherit',
-                                    cursor: 'pointer',
-                                  }}
-                                >
-                                  나중에/직접 선택
-                                </button>
-                                {(person.spouseRelations ?? []).map((rel) => {
-                                  const sp = rel.spouse
-                                  if (!sp?.id) return null
-                                  const spName = getPersonDisplayName(sp, true)
-                                  const rankLbl = rel.marriageRank
-                                    ? MARRIAGE_RANK_LABELS[rel.marriageRank]
-                                    : null
-                                  const active = pendingChildOtherParentId === sp.id
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                flexWrap: 'wrap',
+                                gap: '8px 14px',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ fontWeight: 600, opacity: 0.75 }}>계보 구분:</span>
+                                {(
+                                  [
+                                    { value: false, label: '친생(친자녀)' },
+                                    { value: true, label: '입양(양자·양녀)' },
+                                  ] as const
+                                ).map((opt) => {
+                                  const active = pendingChildIsAdoptive === opt.value
                                   return (
                                     <button
-                                      key={sp.id}
+                                      key={String(opt.value)}
                                       type="button"
-                                      onClick={() => setPendingChildOtherParentId(sp.id!)}
+                                      onClick={() => setPendingChildIsAdoptive(opt.value)}
                                       style={{
-                                        padding: '3px 9px',
+                                        padding: '3px 10px',
                                         borderRadius: '999px',
                                         fontSize: '11.5px',
                                         fontWeight: active ? 700 : 500,
@@ -4085,41 +4812,252 @@ export function PersonDetailPanel({
                                         cursor: 'pointer',
                                       }}
                                     >
-                                      {spName}
-                                      {rankLbl ? ` (${rankLbl})` : ''}
+                                      {opt.label}
                                     </button>
                                   )
                                 })}
                               </div>
-                            )}
-                            <label
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                fontWeight: 600,
-                              }}
-                            >
-                              <span style={{ opacity: 0.75 }}>출생 서열(선택):</span>
-                              <input
-                                type="number"
-                                min={1}
-                                step={1}
-                                inputMode="numeric"
-                                placeholder="예: 1"
-                                value={pendingChildBirthOrder}
-                                onChange={(e) => setPendingChildBirthOrder(e.target.value)}
-                                style={{
-                                  width: '68px',
-                                  padding: '3px 8px',
-                                  borderRadius: '6px',
-                                  border: '1px solid rgba(148, 163, 184, 0.4)',
-                                  background: 'transparent',
-                                  color: 'inherit',
-                                  fontSize: '12px',
-                                }}
-                              />
-                            </label>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                                <label
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  <span style={{ opacity: 0.75 }}>성별 서열(몇남/몇녀):</span>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    step={1}
+                                    inputMode="numeric"
+                                    placeholder="예: 3"
+                                    value={pendingChildGenderBirthOrder}
+                                    onChange={(e) => setPendingChildGenderBirthOrder(e.target.value)}
+                                    style={{
+                                      width: '60px',
+                                      padding: '3px 8px',
+                                      borderRadius: '6px',
+                                      border: '1px solid rgba(148, 163, 184, 0.4)',
+                                      background: 'transparent',
+                                      color: 'inherit',
+                                      fontSize: '12px',
+                                    }}
+                                  />
+                                </label>
+                                <label
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  <span style={{ opacity: 0.75 }}>전체 출생순:</span>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    step={1}
+                                    inputMode="numeric"
+                                    placeholder="예: 1"
+                                    value={pendingChildBirthOrder}
+                                    onChange={(e) => setPendingChildBirthOrder(e.target.value)}
+                                    style={{
+                                      width: '60px',
+                                      padding: '3px 8px',
+                                      borderRadius: '6px',
+                                      border: '1px solid rgba(148, 163, 184, 0.4)',
+                                      background: 'transparent',
+                                      color: 'inherit',
+                                      fontSize: '12px',
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                            </div>
+                            {(() => {
+                              const egoUpper = (person.gender ?? '').toUpperCase()
+                              const isOppositeSlotIncompatible = (candidateGender?: string | null) => {
+                                const cg = (candidateGender ?? '').toUpperCase()
+                                if (egoUpper === 'MALE' && cg === 'MALE') return true
+                                if (egoUpper === 'FEMALE' && cg === 'FEMALE') return true
+                                return false
+                              }
+                              const spouseCandidates: Array<{
+                                id: string
+                                name: string
+                                badge: string | null
+                              }> = []
+                              const seenCandIds = new Set<string>()
+                              for (const rel of person.spouseRelations ?? []) {
+                                const sp = rel.spouse
+                                if (
+                                  !sp?.id ||
+                                  seenCandIds.has(sp.id) ||
+                                  isOppositeSlotIncompatible(sp.gender)
+                                ) {
+                                  continue
+                                }
+                                seenCandIds.add(sp.id)
+                                const spName = getPersonDisplayName(sp, true)
+                                const rankLbl = resolvePerspectiveMarriageRankLabel({
+                                  rank: rel.marriageRank,
+                                  rankHolderId: rel.rankHolderId,
+                                  egoId: person.id,
+                                  viewerGender: person.gender,
+                                  partnerId: sp.id,
+                                  partnerGender: sp.gender,
+                                })
+                                spouseCandidates.push({
+                                  id: sp.id,
+                                  name: spName,
+                                  badge: rankLbl,
+                                })
+                              }
+                              for (const inf of inferredSpousesFromTree) {
+                                if (
+                                  !inf.id ||
+                                  seenCandIds.has(inf.id) ||
+                                  isOppositeSlotIncompatible(inf.gender)
+                                ) {
+                                  continue
+                                }
+                                seenCandIds.add(inf.id)
+                                spouseCandidates.push({
+                                  id: inf.id,
+                                  name: getPersonDisplayName(inf, true),
+                                  badge: '추정',
+                                })
+                              }
+                              if (spouseCandidates.length === 0) return null
+                              return (
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    flexWrap: 'wrap',
+                                    gap: '5px',
+                                  }}
+                                >
+                                  <span style={{ fontWeight: 600, marginRight: '4px', opacity: 0.75 }}>
+                                    {pendingChildIsAdoptive
+                                      ? '반대편 양부모(배우자):'
+                                      : '반대편 부모(배우자):'}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPendingChildOtherParentId('')}
+                                    style={{
+                                      padding: '3px 9px',
+                                      borderRadius: '999px',
+                                      fontSize: '11.5px',
+                                      fontWeight: !pendingChildOtherParentId ? 700 : 500,
+                                      border: !pendingChildOtherParentId
+                                        ? '1px solid #6366f1'
+                                        : '1px solid rgba(148, 163, 184, 0.35)',
+                                      background: !pendingChildOtherParentId
+                                        ? 'rgba(99, 102, 241, 0.14)'
+                                        : 'transparent',
+                                      color: !pendingChildOtherParentId ? '#6366f1' : 'inherit',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    나중에/직접 선택
+                                  </button>
+                                  {spouseCandidates.map((cand) => {
+                                    const active = pendingChildOtherParentId === cand.id
+                                    return (
+                                      <button
+                                        key={cand.id}
+                                        type="button"
+                                        onClick={() => setPendingChildOtherParentId(cand.id)}
+                                        style={{
+                                          padding: '3px 9px',
+                                          borderRadius: '999px',
+                                          fontSize: '11.5px',
+                                          fontWeight: active ? 700 : 500,
+                                          border: active
+                                            ? '1px solid #6366f1'
+                                            : '1px solid rgba(148, 163, 184, 0.35)',
+                                          background: active
+                                            ? 'rgba(99, 102, 241, 0.14)'
+                                            : 'transparent',
+                                          color: active ? '#6366f1' : 'inherit',
+                                          cursor: 'pointer',
+                                        }}
+                                      >
+                                        {cand.name}
+                                        {cand.badge ? ` (${cand.badge})` : ''}
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              )
+                            })()}
+                          </div>
+                        ) : familyAddMode === 'sibling' ? (
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              flexWrap: 'wrap',
+                              gap: '6px',
+                              padding: '10px 16px',
+                              borderBottom: '1px solid rgba(148, 163, 184, 0.18)',
+                              fontSize: '12px',
+                            }}
+                          >
+                            <span style={{ fontWeight: 600, marginRight: '4px', opacity: 0.75 }}>
+                              형제 구분:
+                            </span>
+                            {(
+                              [
+                                { value: 'FULL', label: '친형제 (부모 공유)', enabled: true },
+                                {
+                                  value: 'PATERNAL_HALF',
+                                  label: '이복형제 (아버지 공유)',
+                                  enabled: true,
+                                },
+                                {
+                                  value: 'MATERNAL_HALF',
+                                  label: '이부형제 (어머니 공유)',
+                                  enabled: true,
+                                },
+                                {
+                                  value: 'ADOPTIVE',
+                                  label: '입양형제 (양부모 공유)',
+                                  enabled: true,
+                                },
+                              ] as const
+                            )
+                              .filter((opt) => opt.enabled)
+                              .map((opt) => {
+                                const active = pendingSiblingLineage === opt.value
+                                return (
+                                  <button
+                                    key={opt.value}
+                                    type="button"
+                                    onClick={() => setPendingSiblingLineage(opt.value)}
+                                    style={{
+                                      padding: '3px 10px',
+                                      borderRadius: '999px',
+                                      fontSize: '11.5px',
+                                      fontWeight: active ? 700 : 500,
+                                      border: active
+                                        ? '1px solid #6366f1'
+                                        : '1px solid rgba(148, 163, 184, 0.35)',
+                                      background: active
+                                        ? 'rgba(99, 102, 241, 0.14)'
+                                        : 'transparent',
+                                      color: active ? '#6366f1' : 'inherit',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    {opt.label}
+                                  </button>
+                                )
+                              })}
                           </div>
                         ) : undefined
                       }
@@ -4133,6 +5071,7 @@ export function PersonDetailPanel({
                   childrenList={person.children}
                   inferredSpouses={inferredSpousesFromTree}
                   egoId={person.id}
+                  egoGender={person.gender}
                   isDeceased={isDeceased}
                   onPersonClick={handlePersonClick}
                   onUnlinkSpouse={
@@ -4146,6 +5085,9 @@ export function PersonDetailPanel({
                       : undefined
                   }
                   onChangeSpouseRank={!embedInModal ? handleChangeSpouseRank : undefined}
+                  onChangeSpouseEndReason={
+                    !embedInModal ? handleChangeSpouseEndReason : undefined
+                  }
                   onPromoteInferredSpouse={
                     !embedInModal ? handlePromoteInferredSpouse : undefined
                   }
@@ -4156,6 +5098,7 @@ export function PersonDetailPanel({
                 {(!embedInModal || humanRelationshipsCount > 0) && (
                   <PersonHumanRelationshipsSection
                     personId={person.id}
+                    readOnly={embedInModal}
                     relationships={
                       (
                         person as {
@@ -4447,16 +5390,18 @@ export function PersonDetailPanel({
                   <PersonLifeTimelineInfographic
                     birthDate={
                       p.birthYear != null
-                        ? `${String(p.birthYear).padStart(4, '0')}-${String(p.birthMonth ?? 1).padStart(2, '0')}-${String(p.birthDay ?? 1).padStart(2, '0')}`
+                        ? `${p.birthEra === 'BC' ? '-' : ''}${String(p.birthYear).padStart(4, '0')}-${String(p.birthMonth ?? 1).padStart(2, '0')}-${String(p.birthDay ?? 1).padStart(2, '0')}`
                         : null
                     }
                     deathDate={
                       p.deathYear != null
-                        ? `${String(p.deathYear).padStart(4, '0')}-${String(p.deathMonth ?? 1).padStart(2, '0')}-${String(p.deathDay ?? 1).padStart(2, '0')}`
+                        ? `${p.deathEra === 'BC' ? '-' : ''}${String(p.deathYear).padStart(4, '0')}-${String(p.deathMonth ?? 1).padStart(2, '0')}-${String(p.deathDay ?? 1).padStart(2, '0')}`
                         : null
                     }
                     birthEra={p.birthEra ?? null}
                     deathEra={p.deathEra ?? null}
+                    birthDatePrecision={p.birthDatePrecision ?? null}
+                    deathDatePrecision={p.deathDatePrecision ?? null}
                     birthPlace={
                       p.birthCity?.name ??
                       p.birthAdminDivision?.name ??
@@ -4498,6 +5443,7 @@ export function PersonDetailPanel({
                       // 페이지 직접 진입 대신 인라인 미리보기 모달 — 빠른 훑어보기 → 필요할 때만 상세로 이동
                       setViewingEventId(eventId)
                     }}
+                    onJumpToRecord={jumpToRecord}
                   />
                 </section>
               </TabContent>
@@ -4517,8 +5463,16 @@ export function PersonDetailPanel({
         open={lifeEventModalOpen}
         personId={person.id}
         lifeEvent={editingLifeEvent}
-        birthDate={person.birthDate ?? null}
-        deathDate={person.deathDate ?? null}
+        birthDate={
+          p.birthYear != null
+            ? `${p.birthEra === 'BC' ? '-' : ''}${String(p.birthYear).padStart(4, '0')}-${String(p.birthMonth ?? 1).padStart(2, '0')}-${String(p.birthDay ?? 1).padStart(2, '0')}`
+            : person.birthDate ?? null
+        }
+        deathDate={
+          p.deathYear != null
+            ? `${p.deathEra === 'BC' ? '-' : ''}${String(p.deathYear).padStart(4, '0')}-${String(p.deathMonth ?? 1).padStart(2, '0')}-${String(p.deathDay ?? 1).padStart(2, '0')}`
+            : person.deathDate ?? null
+        }
         existingLifeEvents={lifeEvents}
         existingTenures={timelineTenures.map((t: any) => ({
           id: t.id,
@@ -4665,8 +5619,27 @@ export function PersonDetailPanel({
           selectedPersonId=""
           onSelect={(id) => applyChildOtherParent(id)}
           onClose={() => setChildOtherParent(null)}
-          excludeIds={[childOtherParent.childId, person.id].filter(Boolean)}
-          title={`${childOtherParent.childName}의 ${childOtherParent.slot === 'motherId' ? '어머니' : '아버지'}도 지정할까요? (닫으면 건너뜀)`}
+          excludeIds={[
+            ...(childOtherParent.excludeIds ?? [childOtherParent.childId, person.id]),
+            ...(familyAddPool ?? [])
+              .filter((p) => {
+                const g = (p.gender ?? '').toUpperCase()
+                return childOtherParent.slot === 'motherId' ||
+                  childOtherParent.slot === 'adoptiveMotherId'
+                  ? g === 'MALE'
+                  : g === 'FEMALE'
+              })
+              .map((p) => p.id),
+          ].filter(Boolean)}
+          title={`${childOtherParent.childName}의 ${
+            childOtherParent.slot === 'motherId'
+              ? '어머니'
+              : childOtherParent.slot === 'fatherId'
+                ? '아버지'
+                : childOtherParent.slot === 'adoptiveMotherId'
+                  ? '양모'
+                  : '양부'
+          }도 지정할까요? (닫으면 건너뜀)`}
           searchPlaceholder="인물 검색…"
           defaultCountryId={(person as { countryId?: string }).countryId || undefined}
           allowCreate

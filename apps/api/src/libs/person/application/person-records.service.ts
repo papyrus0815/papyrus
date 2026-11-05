@@ -126,6 +126,11 @@ export class PersonRecordsService {
             birthDate: true,
             deathEra: true,
             deathDate: true,
+            isAlive: true,
+            isDeathDateUnknown: true,
+            floruitStartYear: true,
+            floruitEndYear: true,
+            floruitEra: true,
           },
         }),
         wants('LIFE_EVENT')
@@ -161,11 +166,38 @@ export class PersonRecordsService {
             this.prisma.tenureAchievement.findMany({
               where: { tenure: { personId: { in: personIds } } },
               include: {
+                event: {
+                  select: {
+                    id: true,
+                    startDate: true,
+                    startDatePrecision: true,
+                    startEra: true,
+                    startYear: true,
+                    startMonth: true,
+                    startDay: true,
+                    endDate: true,
+                    endEra: true,
+                    endYear: true,
+                    endMonth: true,
+                    endDay: true,
+                    deletedAt: true,
+                  },
+                },
                 tenure: {
                   select: {
                     personId: true,
                     startDate: true,
+                    startDatePrecision: true,
+                    startEra: true,
+                    startYear: true,
+                    startMonth: true,
+                    startDay: true,
                     endDate: true,
+                    endEra: true,
+                    endYear: true,
+                    endMonth: true,
+                    endDay: true,
+                    endReason: true,
                     country: { select: { name: true } },
                     historicalCountry: { select: { name: true } },
                   },
@@ -186,9 +218,13 @@ export class PersonRecordsService {
                     startDatePrecision: true,
                     startEra: true,
                     startYear: true,
+                    startMonth: true,
+                    startDay: true,
                     endDate: true,
                     endEra: true,
                     endYear: true,
+                    endMonth: true,
+                    endDay: true,
                   },
                 },
               },
@@ -200,6 +236,18 @@ export class PersonRecordsService {
             })
           : Promise.resolve([]),
       ])
+
+    const deceasedPersonIds = new Set(
+      persons
+        .filter(
+          (p) =>
+            p.deathDate != null ||
+            (p as any).isAlive === false ||
+            (p as any).isDeathDateUnknown === true ||
+            (p as any).floruitEndYear != null,
+        )
+        .map((p) => p.id),
+    )
 
     const records: PersonRecordItemDto[] = []
 
@@ -238,6 +286,8 @@ export class PersonRecordsService {
     for (const row of tenures) {
       const baseTitle =
         row.title ?? row.positionDefinition?.title ?? row.positionType
+      const hasStart = row.startDate != null || row.startYear != null
+      const hasEnd = row.endDate != null || row.endYear != null
       records.push({
         kind: 'TENURE',
         sourceId: row.id,
@@ -245,11 +295,29 @@ export class PersonRecordsService {
         title: row.ordinal != null ? `제${row.ordinal}대 ${baseTitle}` : baseTitle,
         summary: toPlainTextSummary(row.appointmentDetail),
         category: row.positionType,
-        startYear: yearOf(row.startDate),
-        endYear: yearOf(row.endDate),
-        ongoing: row.endDate == null,
-        startDate: isoOf(row.startDate),
-        endDate: isoOf(row.endDate),
+        startYear:
+          row.startYear != null
+            ? row.startEra === 'BC'
+              ? -row.startYear
+              : row.startYear
+            : yearOf(row.startDate),
+        endYear:
+          row.endYear != null
+            ? row.endEra === 'BC'
+              ? -row.endYear
+              : row.endYear
+            : yearOf(row.endDate),
+        ongoing:
+          hasStart &&
+          !hasEnd &&
+          row.endReason == null &&
+          !deceasedPersonIds.has(row.personId),
+        startDate:
+          toSignedDateString(row.startEra, row.startYear, row.startMonth, row.startDay) ??
+          isoOf(row.startDate),
+        endDate:
+          toSignedDateString(row.endEra, row.endYear, row.endMonth, row.endDay) ??
+          isoOf(row.endDate),
         precision: row.startDatePrecision ?? null,
         linkEventId: row.accessionEventId ?? null,
         countryName: row.country?.name ?? row.historicalCountry?.name ?? null,
@@ -259,6 +327,8 @@ export class PersonRecordsService {
 
     for (const row of reigns) {
       const positionTitle = row.title ?? row.positionDefinition?.title ?? '군주'
+      const hasStart = row.startDate != null || row.startYear != null
+      const hasEnd = row.endDate != null || row.endYear != null
       records.push({
         kind: 'REIGN',
         sourceId: row.id,
@@ -268,11 +338,29 @@ export class PersonRecordsService {
           : `${positionTitle} 재위`,
         summary: toPlainTextSummary(row.appointmentDetail),
         category: row.positionDefinition?.positionType ?? 'HEAD_OF_STATE',
-        startYear: yearOf(row.startDate),
-        endYear: yearOf(row.endDate),
-        ongoing: row.endDate == null,
-        startDate: isoOf(row.startDate),
-        endDate: isoOf(row.endDate),
+        startYear:
+          row.startYear != null
+            ? row.startEra === 'BC'
+              ? -row.startYear
+              : row.startYear
+            : yearOf(row.startDate),
+        endYear:
+          row.endYear != null
+            ? row.endEra === 'BC'
+              ? -row.endYear
+              : row.endYear
+            : yearOf(row.endDate),
+        ongoing:
+          hasStart &&
+          !hasEnd &&
+          row.endReason == null &&
+          !deceasedPersonIds.has(row.personId),
+        startDate:
+          toSignedDateString(row.startEra, row.startYear, row.startMonth, row.startDay) ??
+          isoOf(row.startDate),
+        endDate:
+          toSignedDateString(row.endEra, row.endYear, row.endMonth, row.endDay) ??
+          isoOf(row.endDate),
         precision: row.startDatePrecision ?? null,
         linkEventId: row.accessionEventId ?? null,
         countryName: row.country?.name ?? row.historicalCountry?.name ?? null,
@@ -280,11 +368,75 @@ export class PersonRecordsService {
       })
     }
 
-    // 업적: 자체 날짜가 없으면 부모 재임/재위 기간을 상속(그 재임 중의 일이라는 계약)
+    // 업적: 자체 날짜 → 연결된 사건 날짜 → 부모 재임/재위 기간(구조화 날짜 포함) 순으로 폴백
     for (const row of achievements) {
       const hasOwnDates = row.startDate != null || row.endDate != null
-      const startDate = hasOwnDates ? row.startDate : row.tenure.startDate
-      const endDate = hasOwnDates ? row.endDate : row.tenure.endDate
+      const linkedEv = row.event && !row.event.deletedAt ? row.event : null
+      const hasEventDates =
+        !hasOwnDates &&
+        linkedEv != null &&
+        (linkedEv.startYear != null ||
+          linkedEv.startDate != null ||
+          linkedEv.endYear != null ||
+          linkedEv.endDate != null)
+      const tenureStartYear =
+        row.tenure.startYear != null
+          ? row.tenure.startEra === 'BC'
+            ? -row.tenure.startYear
+            : row.tenure.startYear
+          : yearOf(row.tenure.startDate)
+      const tenureEndYear =
+        row.tenure.endYear != null
+          ? row.tenure.endEra === 'BC'
+            ? -row.tenure.endYear
+            : row.tenure.endYear
+          : yearOf(row.tenure.endDate)
+      const startYear = hasOwnDates
+        ? yearOf(row.startDate)
+        : hasEventDates
+          ? signedYearFromEvent(linkedEv.startEra, linkedEv.startYear, linkedEv.startDate)
+          : tenureStartYear
+      const endYear = hasOwnDates
+        ? yearOf(row.endDate)
+        : hasEventDates
+          ? signedYearFromEvent(linkedEv.endEra, linkedEv.endYear, linkedEv.endDate)
+          : tenureEndYear
+      const startDateStr = hasOwnDates
+        ? isoOf(row.startDate)
+        : hasEventDates
+          ? (linkedEv.startYear != null && (linkedEv.startEra === 'BC' || !linkedEv.startDate)
+              ? toSignedDateString(
+                  linkedEv.startEra,
+                  linkedEv.startYear,
+                  linkedEv.startMonth,
+                  linkedEv.startDay,
+                )
+              : null) ?? isoOf(linkedEv.startDate)
+          : toSignedDateString(
+              row.tenure.startEra,
+              row.tenure.startYear,
+              row.tenure.startMonth,
+              row.tenure.startDay,
+            ) ?? isoOf(row.tenure.startDate)
+      const endDateStr = hasOwnDates
+        ? isoOf(row.endDate)
+        : hasEventDates
+          ? (linkedEv.endYear != null && (linkedEv.endEra === 'BC' || !linkedEv.endDate)
+              ? toSignedDateString(
+                  linkedEv.endEra,
+                  linkedEv.endYear,
+                  linkedEv.endMonth,
+                  linkedEv.endDay,
+                )
+              : null) ?? isoOf(linkedEv.endDate)
+          : toSignedDateString(
+              row.tenure.endEra,
+              row.tenure.endYear,
+              row.tenure.endMonth,
+              row.tenure.endDay,
+            ) ?? isoOf(row.tenure.endDate)
+      const tenureHasStart = row.tenure.startDate != null || row.tenure.startYear != null
+      const tenureHasEnd = row.tenure.endDate != null || row.tenure.endYear != null
       records.push({
         kind: 'ACHIEVEMENT',
         sourceId: row.id,
@@ -292,12 +444,22 @@ export class PersonRecordsService {
         title: row.title,
         summary: toPlainSummary(row.description),
         category: null,
-        startYear: yearOf(startDate),
-        endYear: yearOf(endDate),
-        ongoing: !hasOwnDates && row.tenure.endDate == null,
-        startDate: isoOf(startDate),
-        endDate: isoOf(endDate),
-        precision: null,
+        startYear,
+        endYear,
+        ongoing:
+          !hasOwnDates &&
+          !hasEventDates &&
+          tenureHasStart &&
+          !tenureHasEnd &&
+          row.tenure.endReason == null &&
+          !deceasedPersonIds.has(row.tenure.personId),
+        startDate: startDateStr,
+        endDate: endDateStr,
+        precision: hasOwnDates
+          ? null
+          : hasEventDates
+            ? linkedEv.startDatePrecision ?? null
+            : row.tenure.startDatePrecision ?? null,
         linkEventId: row.eventId ?? null,
         countryName:
           row.tenure.country?.name ?? row.tenure.historicalCountry?.name ?? null,
@@ -317,8 +479,24 @@ export class PersonRecordsService {
         startYear: signedYearFromEvent(event.startEra, event.startYear, event.startDate),
         endYear: signedYearFromEvent(event.endEra, event.endYear, event.endDate),
         ongoing: false,
-        startDate: isoOf(event.startDate),
-        endDate: isoOf(event.endDate),
+        startDate:
+          (event.startYear != null && (event.startEra === 'BC' || !event.startDate)
+            ? toSignedDateString(
+                event.startEra,
+                event.startYear,
+                event.startMonth,
+                event.startDay,
+              )
+            : null) ?? isoOf(event.startDate),
+        endDate:
+          (event.endYear != null && (event.endEra === 'BC' || !event.endDate)
+            ? toSignedDateString(
+                event.endEra,
+                event.endYear,
+                event.endMonth,
+                event.endDay,
+              )
+            : null) ?? isoOf(event.endDate),
         precision: event.startDatePrecision ?? null,
         linkEventId: event.id,
         countryName: null,

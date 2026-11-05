@@ -15,6 +15,7 @@ import {
   PersonNicknameType,
   Era,
   MarriageRank,
+  MarriageEndReason,
   Prisma,
   GovernmentPositionType,
 } from '@prisma/client'
@@ -35,6 +36,7 @@ import { careerItemLabel, educationItemLabel, awardItemLabel } from '../domain/s
 import {
   applyDatePrecision,
   mapStructuredDateInput,
+  structuredDateEndKey,
   structuredDateKey,
   toSignedDateString,
 } from '../domain/structured-date.util'
@@ -102,6 +104,9 @@ const PERSON_LIFE_EVENT_LINKED_EVENT_SELECT = {
   title: true,
   startEra: true,
   startYear: true,
+  startMonth: true,
+  startDay: true,
+  startDatePrecision: true,
   startDate: true,
 } as const
 import {
@@ -532,6 +537,8 @@ export class PersonPrismaRepository implements IPersonRepository {
       'denominationId',
       'fatherId',
       'motherId',
+      'adoptiveFatherId',
+      'adoptiveMotherId',
     ] as const
     const out = { ...data } as T & Record<string, unknown>
     for (const key of fkKeys) {
@@ -699,8 +706,11 @@ export class PersonPrismaRepository implements IPersonRepository {
       denomination: person.denomination != null ? { id: person.denomination.id, name: person.denomination.name } : null,
       fatherId: person.fatherId,
       motherId: person.motherId,
+      adoptiveFatherId: (person as any).adoptiveFatherId ?? null,
+      adoptiveMotherId: (person as any).adoptiveMotherId ?? null,
       illegitimate: Boolean(person.illegitimate),
       birthOrder: (person as any).birthOrder ?? null,
+      genderBirthOrder: (person as any).genderBirthOrder ?? null,
       countryId: this.getEffectiveBirthCountryId(person),
       historicalCountryId: person.historicalCountryId ?? null,
       country: this.resolveCountryBlockForName(person),
@@ -794,17 +804,21 @@ export class PersonPrismaRepository implements IPersonRepository {
         // BC 또는 AD 1000년 미만 재임/재위는 DB의 startDate/endDate(DATETIME)가 NULL이므로
         // 구조화 연도(startEra·startYear / endEra·endYear)를 우선 사용해 부호 연도 문자열로 내려준다.
         const startDate =
-          t.startYear != null && (t.startEra === 'BC' || !t.startDate)
+          t.startYear != null && (t.startEra === 'BC' || !(t.startDate instanceof Date))
             ? String(t.startEra === 'BC' ? -t.startYear : t.startYear)
-            : t.startDate
+            : t.startDate instanceof Date
               ? t.startDate.toISOString()
-              : null
+              : typeof t.startDate === 'string'
+                ? t.startDate
+                : null
         const endDate =
-          t.endYear != null && (t.endEra === 'BC' || !t.endDate)
+          t.endYear != null && (t.endEra === 'BC' || !(t.endDate instanceof Date))
             ? String(t.endEra === 'BC' ? -t.endYear : t.endYear)
-            : t.endDate
+            : t.endDate instanceof Date
               ? t.endDate.toISOString()
-              : null
+              : typeof t.endDate === 'string'
+                ? t.endDate
+                : null
         return {
           startDate,
           endDate,
@@ -1523,19 +1537,102 @@ export class PersonPrismaRepository implements IPersonRepository {
       birthDate: true,
       birthEra: true,
       birthDatePrecision: true,
+      isBirthDateApproximate: true,
+      isBirthDateUnknown: true,
       deathDate: true,
       deathEra: true,
       deathDatePrecision: true,
+      isDeathDateApproximate: true,
+      isDeathDateUnknown: true,
+      floruitStartYear: true,
+      floruitEndYear: true,
+      floruitEra: true,
       birthOrder: true,
+      genderBirthOrder: true,
       isAlive: true,
       illegitimate: true,
       fatherId: true,
       motherId: true,
+      adoptiveFatherId: true,
+      adoptiveMotherId: true,
+      parentMarriageId: true,
+      templeName: true,
+      posthumousName: true,
+      preEnthronementTitle: true,
+      GovernmentTenures: {
+        where: MONARCHICAL_TENURE,
+        select: { regnalName: true, ordinal: true },
+        orderBy: [
+          { startDate: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
+          { startYear: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
+        ],
+        take: 1,
+      },
       profileImageUrl: true,
       profileImages: {
         select: { url: true, priority: true },
         orderBy: [{ priority: Prisma.SortOrder.asc }],
         take: 1,
+      },
+    } satisfies Prisma.PersonSelect
+
+    const CHILD_BIO_PARENT_SELECT = {
+      id: true,
+      name: true,
+      surname: true,
+      middleName: true,
+      nameDisplayOrder: true,
+      country: { select: { defaultNameDisplayOrder: true } },
+      GovernmentTenures: {
+        where: MONARCHICAL_TENURE,
+        select: { regnalName: true, ordinal: true },
+        orderBy: [
+          { startDate: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
+          { startYear: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
+        ],
+        take: 1,
+      },
+    } satisfies Prisma.PersonSelect
+
+    const CHILD_SPOUSE_SELECT = {
+      ...FAMILY_MEMBER_BASE_SELECT,
+      father: { select: CHILD_BIO_PARENT_SELECT },
+      mother: { select: CHILD_BIO_PARENT_SELECT },
+      adoptiveFather: { select: CHILD_BIO_PARENT_SELECT },
+      adoptiveMother: { select: CHILD_BIO_PARENT_SELECT },
+      // 자녀의 배우자 (가계도에 표시) — 정방향
+      spouseRelationsAsPerson: {
+        select: {
+          id: true,
+          marriageStartDate: true,
+          marriageStartEra: true,
+          marriageStartYear: true,
+          marriageEndDate: true,
+          marriageEndEra: true,
+          marriageEndYear: true,
+          marriageEndReason: true,
+          marriageRank: true,
+          rankHolderId: true,
+          spouse: { select: FAMILY_MEMBER_BASE_SELECT },
+        },
+      },
+      // 자녀의 배우자 (가계도에 표시) — 역방향.
+      // canonical(min,max) 쓰기로 자녀 id > 배우자 id면 결혼 행이 이쪽에 저장되므로
+      // 이걸 함께 조회하지 않으면 자녀 배우자가 절반가량 누락된다.
+      spouseRelationsAsSpouse: {
+        select: {
+          id: true,
+          marriageStartDate: true,
+          marriageStartEra: true,
+          marriageStartYear: true,
+          marriageEndDate: true,
+          marriageEndEra: true,
+          marriageEndYear: true,
+          marriageEndReason: true,
+          marriageRank: true,
+          rankHolderId: true,
+          person: { select: FAMILY_MEMBER_BASE_SELECT },
+        },
       },
     } satisfies Prisma.PersonSelect
 
@@ -1548,90 +1645,70 @@ export class PersonPrismaRepository implements IPersonRepository {
         father: {
           select: {
             ...FAMILY_MEMBER_BASE_SELECT,
-            // 친조부모
+            // 친조부모 (생부모·양부모 포함)
             father: { select: FAMILY_MEMBER_BASE_SELECT },
             mother: { select: FAMILY_MEMBER_BASE_SELECT },
-            // 형제자매 (부의 자녀)
+            adoptiveFather: { select: FAMILY_MEMBER_BASE_SELECT },
+            adoptiveMother: { select: FAMILY_MEMBER_BASE_SELECT },
+            // 형제자매 (부의 친자녀·양자녀 — 양방향 슬롯 방어)
             childrenFromFather: { select: FAMILY_MEMBER_BASE_SELECT },
+            childrenFromMother: { select: FAMILY_MEMBER_BASE_SELECT },
+            adoptedChildrenAsFather: { select: FAMILY_MEMBER_BASE_SELECT },
+            adoptedChildrenAsMother: { select: FAMILY_MEMBER_BASE_SELECT },
           },
         },
         mother: {
           select: {
             ...FAMILY_MEMBER_BASE_SELECT,
-            // 외조부모
+            // 외조부모 (생부모·양부모 포함)
             father: { select: FAMILY_MEMBER_BASE_SELECT },
             mother: { select: FAMILY_MEMBER_BASE_SELECT },
-            // 형제자매 (모의 자녀)
+            adoptiveFather: { select: FAMILY_MEMBER_BASE_SELECT },
+            adoptiveMother: { select: FAMILY_MEMBER_BASE_SELECT },
+            // 형제자매 (모의 친자녀·양자녀 — 양방향 슬롯 방어)
+            childrenFromFather: { select: FAMILY_MEMBER_BASE_SELECT },
             childrenFromMother: { select: FAMILY_MEMBER_BASE_SELECT },
+            adoptedChildrenAsFather: { select: FAMILY_MEMBER_BASE_SELECT },
+            adoptedChildrenAsMother: { select: FAMILY_MEMBER_BASE_SELECT },
+          },
+        },
+        adoptiveFather: {
+          select: {
+            ...FAMILY_MEMBER_BASE_SELECT,
+            father: { select: FAMILY_MEMBER_BASE_SELECT },
+            mother: { select: FAMILY_MEMBER_BASE_SELECT },
+            adoptiveFather: { select: FAMILY_MEMBER_BASE_SELECT },
+            adoptiveMother: { select: FAMILY_MEMBER_BASE_SELECT },
+            childrenFromFather: { select: FAMILY_MEMBER_BASE_SELECT },
+            childrenFromMother: { select: FAMILY_MEMBER_BASE_SELECT },
+            adoptedChildrenAsFather: { select: FAMILY_MEMBER_BASE_SELECT },
+            adoptedChildrenAsMother: { select: FAMILY_MEMBER_BASE_SELECT },
+          },
+        },
+        adoptiveMother: {
+          select: {
+            ...FAMILY_MEMBER_BASE_SELECT,
+            father: { select: FAMILY_MEMBER_BASE_SELECT },
+            mother: { select: FAMILY_MEMBER_BASE_SELECT },
+            adoptiveFather: { select: FAMILY_MEMBER_BASE_SELECT },
+            adoptiveMother: { select: FAMILY_MEMBER_BASE_SELECT },
+            childrenFromFather: { select: FAMILY_MEMBER_BASE_SELECT },
+            childrenFromMother: { select: FAMILY_MEMBER_BASE_SELECT },
+            adoptedChildrenAsFather: { select: FAMILY_MEMBER_BASE_SELECT },
+            adoptedChildrenAsMother: { select: FAMILY_MEMBER_BASE_SELECT },
           },
         },
         childrenFromFather: {
-          select: {
-            ...FAMILY_MEMBER_BASE_SELECT,
-            // 자녀의 배우자 (가계도에 표시) — 정방향
-            spouseRelationsAsPerson: {
-              select: {
-                id: true,
-                marriageStartDate: true,
-                marriageStartEra: true,
-                marriageStartYear: true,
-                marriageEndDate: true,
-                marriageEndEra: true,
-                marriageEndYear: true,
-                marriageRank: true,
-                spouse: { select: FAMILY_MEMBER_BASE_SELECT },
-              },
-            },
-            // 자녀의 배우자 (가계도에 표시) — 역방향.
-            // canonical(min,max) 쓰기로 자녀 id > 배우자 id면 결혼 행이 이쪽에 저장되므로
-            // 이걸 함께 조회하지 않으면 자녀 배우자가 절반가량 누락된다.
-            spouseRelationsAsSpouse: {
-              select: {
-                id: true,
-                marriageStartDate: true,
-                marriageStartEra: true,
-                marriageStartYear: true,
-                marriageEndDate: true,
-                marriageEndEra: true,
-                marriageEndYear: true,
-                marriageRank: true,
-                person: { select: FAMILY_MEMBER_BASE_SELECT },
-              },
-            },
-          },
+          select: CHILD_SPOUSE_SELECT,
         },
         childrenFromMother: {
-          select: {
-            ...FAMILY_MEMBER_BASE_SELECT,
-            // 자녀의 배우자 (가계도에 표시) — 정방향
-            spouseRelationsAsPerson: {
-              select: {
-                id: true,
-                marriageStartDate: true,
-                marriageStartEra: true,
-                marriageStartYear: true,
-                marriageEndDate: true,
-                marriageEndEra: true,
-                marriageEndYear: true,
-                marriageRank: true,
-                spouse: { select: FAMILY_MEMBER_BASE_SELECT },
-              },
-            },
-            // 자녀의 배우자 (가계도에 표시) — 역방향.
-            spouseRelationsAsSpouse: {
-              select: {
-                id: true,
-                marriageStartDate: true,
-                marriageStartEra: true,
-                marriageStartYear: true,
-                marriageEndDate: true,
-                marriageEndEra: true,
-                marriageEndYear: true,
-                marriageRank: true,
-                person: { select: FAMILY_MEMBER_BASE_SELECT },
-              },
-            },
-          },
+          select: CHILD_SPOUSE_SELECT,
+        },
+        adoptedChildrenAsFather: {
+          select: CHILD_SPOUSE_SELECT,
+        },
+        adoptedChildrenAsMother: {
+          select: CHILD_SPOUSE_SELECT,
         },
         spouseRelationsAsPerson: {
           select: {
@@ -1648,7 +1725,9 @@ export class PersonPrismaRepository implements IPersonRepository {
             marriageEndMonth: true,
             marriageEndDay: true,
             marriageEndPrecision: true,
+            marriageEndReason: true,
             marriageRank: true,
+            rankHolderId: true,
             note: true,
             spouse: { select: FAMILY_MEMBER_BASE_SELECT },
           },
@@ -1669,7 +1748,9 @@ export class PersonPrismaRepository implements IPersonRepository {
             marriageEndMonth: true,
             marriageEndDay: true,
             marriageEndPrecision: true,
+            marriageEndReason: true,
             marriageRank: true,
+            rankHolderId: true,
             note: true,
             person: { select: FAMILY_MEMBER_BASE_SELECT },
           },
@@ -1796,6 +1877,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           },
         },
         PersonEvent: {
+          where: { event: { deletedAt: null } },
           select: {
             id: true,
             role: true,
@@ -1805,7 +1887,17 @@ export class PersonPrismaRepository implements IPersonRepository {
                 id: true,
                 title: true,
                 startDate: true,
+                startDatePrecision: true,
+                startEra: true,
+                startYear: true,
+                startMonth: true,
+                startDay: true,
                 endDate: true,
+                endDatePrecision: true,
+                endEra: true,
+                endYear: true,
+                endMonth: true,
+                endDay: true,
                 description: true,
                 domain: true,
                 countryRelations: {
@@ -1914,15 +2006,18 @@ export class PersonPrismaRepository implements IPersonRepository {
         educations: {
           select: {
             id: true,
+            timelineTitle: true,
             educationType: true,
             classNumber: true,
             degree: true,
             major: true,
             department: true,
+            studentNumber: true,
             startDate: true,
             endDate: true,
             status: true,
             notes: true,
+            showPositionInfo: true,
             organization: { select: { id: true, name: true } },
           },
           orderBy: { startDate: Prisma.SortOrder.desc },
@@ -1946,7 +2041,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         // 분야별 경력 (9종)
         militaryCareers: {
           select: {
-            id: true, branch: true, position: true, termNumber: true,
+            id: true, timelineTitle: true, showPositionInfo: true,
+            branch: true, position: true, termNumber: true,
             startDate: true, endDate: true, notes: true,
             rank: { select: { id: true, title: true } },
             organization: { select: { id: true, name: true } },
@@ -1955,7 +2051,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         },
         businessCareers: {
           select: {
-            id: true, title: true, level: true,
+            id: true, timelineTitle: true, showPositionInfo: true,
+            title: true, level: true,
             startDate: true, endDate: true, notes: true,
             position: { select: { id: true, title: true } },
             organization: { select: { id: true, name: true } },
@@ -1964,7 +2061,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         },
         academicCareers: {
           select: {
-            id: true, department: true, researchField: true,
+            id: true, timelineTitle: true, showPositionInfo: true,
+            department: true, researchField: true,
             startDate: true, endDate: true, notes: true,
             position: { select: { id: true, title: true } },
             organization: { select: { id: true, name: true } },
@@ -1973,7 +2071,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         },
         religiousCareers: {
           select: {
-            id: true, title: true,
+            id: true, timelineTitle: true, showPositionInfo: true,
+            title: true,
             startDate: true, endDate: true, notes: true,
             position: { select: { id: true, title: true } },
             organization: { select: { id: true, name: true } },
@@ -1982,7 +2081,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         },
         artistCareers: {
           select: {
-            id: true,
+            id: true, timelineTitle: true, showPositionInfo: true,
+            genre: true, artField: true,
             startDate: true, endDate: true, notes: true,
             position: { select: { id: true, title: true } },
             organization: { select: { id: true, name: true } },
@@ -1991,8 +2091,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         },
         athleteCareers: {
           select: {
-            id: true,
-            sport: true, position: true,
+            id: true, timelineTitle: true, showPositionInfo: true,
+            sport: true, position: true, jerseyNumber: true,
             startDate: true, endDate: true, notes: true,
             job: { select: { id: true, title: true } },
             organization: { select: { id: true, name: true } },
@@ -2001,7 +2101,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         },
         mediaCareers: {
           select: {
-            id: true,
+            id: true, timelineTitle: true, showPositionInfo: true,
+            department: true, beat: true,
             startDate: true, endDate: true, notes: true,
             position: { select: { id: true, title: true } },
             organization: { select: { id: true, name: true } },
@@ -2010,7 +2111,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         },
         legalCareers: {
           select: {
-            id: true,
+            id: true, timelineTitle: true, showPositionInfo: true,
+            specialization: true,
             startDate: true, endDate: true, notes: true,
             position: { select: { id: true, title: true } },
             organization: { select: { id: true, name: true } },
@@ -2019,7 +2121,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         },
         medicalCareers: {
           select: {
-            id: true,
+            id: true, timelineTitle: true, showPositionInfo: true,
+            department: true, specialization: true,
             startDate: true, endDate: true, notes: true,
             position: { select: { id: true, title: true } },
             organization: { select: { id: true, name: true } },
@@ -2040,7 +2143,44 @@ export class PersonPrismaRepository implements IPersonRepository {
         { startDate: Prisma.SortOrder.desc },
       ],
     })
-    return { ...person, sovereignReigns: reigns.map((reign) => asOfficeHolding(reign, true)) }
+    const formatEventDates = (ev: any) => {
+      if (!ev) return ev
+      const startDate =
+        ev.startYear != null && (ev.startEra === 'BC' || ev.startDate == null)
+          ? toSignedDateString(
+              ev.startEra,
+              ev.startYear,
+              ev.startMonth ?? (ev.startDate ? ev.startDate.getUTCMonth() + 1 : null),
+              ev.startDay ?? (ev.startDate ? ev.startDate.getUTCDate() : null),
+            )
+          : ev.startDate
+      const endDate =
+        ev.endYear != null && (ev.endEra === 'BC' || ev.endDate == null)
+          ? toSignedDateString(
+              ev.endEra,
+              ev.endYear,
+              ev.endMonth ?? (ev.endDate ? ev.endDate.getUTCMonth() + 1 : null),
+              ev.endDay ?? (ev.endDate ? ev.endDate.getUTCDate() : null),
+            )
+          : ev.endDate
+      return { ...ev, startDate, endDate }
+    }
+    return {
+      ...person,
+      GovernmentTenures: Array.isArray((person as any).GovernmentTenures)
+        ? (person as any).GovernmentTenures.map((tenure: any) => asOfficeHolding(tenure, false))
+        : (person as any).GovernmentTenures,
+      PersonEvent: Array.isArray((person as any).PersonEvent)
+        ? (person as any).PersonEvent.map((pe: any) => ({
+            ...pe,
+            event: formatEventDates(pe.event),
+          }))
+        : (person as any).PersonEvent,
+      countryAffiliations: Array.isArray((person as any).countryAffiliations)
+        ? (person as any).countryAffiliations.map(withSignedDates)
+        : (person as any).countryAffiliations,
+      sovereignReigns: reigns.map((reign) => asOfficeHolding(reign, true)),
+    }
   }
 
   /**
@@ -2066,40 +2206,186 @@ export class PersonPrismaRepository implements IPersonRepository {
       marriageEndMonth?: number | null
       marriageEndDay?: number | null
       marriageEndPrecision?: string | null
+      marriageEndReason?: string | null
       marriageRank?: string | null
+      rankHolderId?: string | null
       note?: string | null
     }>,
-  ): Prisma.PersonSpouseCreateManyInput[] {
-    const seen = new Set<string>()
-    const rows: Prisma.PersonSpouseCreateManyInput[] = []
+    genderById?: Map<string, string | null>,
+  ): Array<
+    Prisma.PersonSpouseCreateManyInput & {
+      explicitMarriageRank?: string | null
+      explicitRankHolderId?: string | null
+      explicitMarriageEndReason?: string | null
+      explicitNote?: string | null
+    }
+  > {
+    const byKey = new Map<
+      string,
+      Prisma.PersonSpouseCreateManyInput & {
+        explicitMarriageRank?: string | null
+        explicitRankHolderId?: string | null
+        explicitMarriageEndReason?: string | null
+        explicitNote?: string | null
+      }
+    >()
+    const ownerGender = (genderById?.get(ownerId) ?? '').toUpperCase()
     for (const relation of relations) {
       if (!relation.spouseId || relation.spouseId === ownerId) continue
       const [personId, spouseId] =
         ownerId < relation.spouseId ? [ownerId, relation.spouseId] : [relation.spouseId, ownerId]
       const key = `${personId}__${spouseId}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      rows.push({
-        personId,
-        spouseId,
-        marriageStartDate: relation.marriageStartDate ?? null,
-        // 컨트롤러 mapSpouseDateInput이 era/precision을 보증 — 도메인 계약은 string이라 여기서 좁힘
-        marriageStartEra: (relation.marriageStartEra as Era | undefined) ?? null,
-        marriageStartYear: relation.marriageStartYear ?? null,
-        marriageStartMonth: relation.marriageStartMonth ?? null,
-        marriageStartDay: relation.marriageStartDay ?? null,
-        marriageStartPrecision: relation.marriageStartPrecision ?? null,
-        marriageEndDate: relation.marriageEndDate ?? null,
-        marriageEndEra: (relation.marriageEndEra as Era | undefined) ?? null,
-        marriageEndYear: relation.marriageEndYear ?? null,
-        marriageEndMonth: relation.marriageEndMonth ?? null,
-        marriageEndDay: relation.marriageEndDay ?? null,
-        marriageEndPrecision: relation.marriageEndPrecision ?? null,
-        marriageRank: (relation.marriageRank as MarriageRank | undefined) ?? null,
-        note: relation.note ?? null,
+      const rank = (relation.marriageRank as MarriageRank | undefined) ?? null
+      const isAsymmetricRank =
+        rank === 'PRIMARY' || rank === 'SECONDARY' || rank === 'CONCUBINE'
+      const spouseGender = (genderById?.get(relation.spouseId) ?? '').toUpperCase()
+      const defaultRankHolderId = !isAsymmetricRank
+        ? null
+        : (ownerGender === 'FEMALE' && spouseGender !== 'FEMALE') ||
+            (spouseGender === 'MALE' && ownerGender !== 'MALE')
+          ? ownerId
+          : relation.spouseId
+      // rankHolderId는 반드시 부부 당사자(ownerId 또는 spouseId) 중 한 명이어야 한다.
+      // 배우자 변경 등으로 이전 배우자(제3자)의 UUID가 넘어온 경우 무효화하고 기본 추론값을 사용한다.
+      const isValidCoupleHolder =
+        relation.rankHolderId === ownerId || relation.rankHolderId === relation.spouseId
+      const sanitizedExplicitHolderId = isValidCoupleHolder
+        ? relation.rankHolderId!
+        : relation.rankHolderId === null
+          ? null
+          : undefined
+      const resolvedInitialHolderId =
+        sanitizedExplicitHolderId !== undefined ? sanitizedExplicitHolderId : defaultRankHolderId
+      const existing = byKey.get(key)
+      if (!existing) {
+        byKey.set(key, {
+          personId,
+          spouseId,
+          marriageStartDate: relation.marriageStartDate ?? null,
+          // 컨트롤러 mapSpouseDateInput이 era/precision을 보증 — 도메인 계약은 string이라 여기서 좁힘
+          marriageStartEra: (relation.marriageStartEra as Era | undefined) ?? null,
+          marriageStartYear: relation.marriageStartYear ?? null,
+          marriageStartMonth: relation.marriageStartMonth ?? null,
+          marriageStartDay: relation.marriageStartDay ?? null,
+          marriageStartPrecision: relation.marriageStartPrecision ?? null,
+          marriageEndDate: relation.marriageEndDate ?? null,
+          marriageEndEra: (relation.marriageEndEra as Era | undefined) ?? null,
+          marriageEndYear: relation.marriageEndYear ?? null,
+          marriageEndMonth: relation.marriageEndMonth ?? null,
+          marriageEndDay: relation.marriageEndDay ?? null,
+          marriageEndPrecision: relation.marriageEndPrecision ?? null,
+          marriageEndReason: (relation.marriageEndReason as MarriageEndReason | undefined) ?? null,
+          explicitMarriageEndReason: relation.marriageEndReason,
+          marriageRank: rank,
+          explicitMarriageRank: relation.marriageRank,
+          rankHolderId: resolvedInitialHolderId,
+          explicitRankHolderId: sanitizedExplicitHolderId,
+          note: relation.note ?? null,
+          explicitNote: relation.note,
+        })
+      } else {
+        existing.marriageStartDate = existing.marriageStartDate ?? relation.marriageStartDate ?? null
+        existing.marriageStartEra =
+          existing.marriageStartEra ?? ((relation.marriageStartEra as Era | undefined) ?? null)
+        existing.marriageStartYear = existing.marriageStartYear ?? relation.marriageStartYear ?? null
+        existing.marriageStartMonth = existing.marriageStartMonth ?? relation.marriageStartMonth ?? null
+        existing.marriageStartDay = existing.marriageStartDay ?? relation.marriageStartDay ?? null
+        existing.marriageStartPrecision =
+          existing.marriageStartPrecision ?? relation.marriageStartPrecision ?? null
+        existing.marriageEndDate = existing.marriageEndDate ?? relation.marriageEndDate ?? null
+        existing.marriageEndEra =
+          existing.marriageEndEra ?? ((relation.marriageEndEra as Era | undefined) ?? null)
+        existing.marriageEndYear = existing.marriageEndYear ?? relation.marriageEndYear ?? null
+        existing.marriageEndMonth = existing.marriageEndMonth ?? relation.marriageEndMonth ?? null
+        existing.marriageEndDay = existing.marriageEndDay ?? relation.marriageEndDay ?? null
+        existing.marriageEndPrecision =
+          existing.marriageEndPrecision ?? relation.marriageEndPrecision ?? null
+        existing.marriageEndReason =
+          existing.marriageEndReason ??
+          ((relation.marriageEndReason as MarriageEndReason | undefined) ?? null)
+        if (existing.explicitMarriageEndReason === undefined) {
+          existing.explicitMarriageEndReason = relation.marriageEndReason
+        }
+        existing.marriageRank = existing.marriageRank ?? rank
+        if (existing.explicitMarriageRank === undefined) {
+          existing.explicitMarriageRank = relation.marriageRank
+        }
+        existing.rankHolderId = existing.rankHolderId ?? resolvedInitialHolderId
+        if (existing.explicitRankHolderId === undefined) {
+          existing.explicitRankHolderId = sanitizedExplicitHolderId
+        }
+        existing.note = existing.note ?? relation.note ?? null
+        if (existing.explicitNote === undefined) {
+          existing.explicitNote = relation.note
+        }
+      }
+    }
+    return [...byKey.values()]
+  }
+
+  /**
+   * 인물의 친부(fatherId)·친모(motherId) 조합에 대응하는 PersonSpouse 행을 찾아 parentMarriageId를 동기화한다.
+   */
+  private async syncParentMarriageForPerson(
+    tx: Prisma.TransactionClient,
+    personId: string,
+  ): Promise<void> {
+    const person = await tx.person.findUnique({
+      where: { id: personId },
+      select: { fatherId: true, motherId: true, parentMarriageId: true },
+    })
+    if (!person) return
+    if (!person.fatherId || !person.motherId) {
+      if (person.parentMarriageId != null) {
+        await tx.person.update({
+          where: { id: personId },
+          data: { parentMarriageId: null },
+        })
+      }
+      return
+    }
+    const [pA, pB] =
+      person.fatherId < person.motherId
+        ? [person.fatherId, person.motherId]
+        : [person.motherId, person.fatherId]
+    const marriage = await tx.personSpouse.findFirst({
+      where: {
+        OR: [
+          { personId: pA, spouseId: pB },
+          { personId: pB, spouseId: pA },
+        ],
+      },
+      select: { id: true },
+    })
+    const desiredId = marriage?.id ?? null
+    if (person.parentMarriageId !== desiredId) {
+      await tx.person.update({
+        where: { id: personId },
+        data: { parentMarriageId: desiredId },
       })
     }
-    return rows
+  }
+
+  /**
+   * 부부(personA, personB)의 결혼 행이 생성/유지될 때 공통 친자녀들의 parentMarriageId를 해당 결혼 행으로 동기화한다.
+   * 과거 삭제된 PersonSpouse.id가 남아 있는(dangling) 경우에도 현재 유효한 marriageId로 갱신한다.
+   */
+  private async syncChildrenParentMarriageForCouple(
+    tx: Prisma.TransactionClient,
+    personAId: string,
+    personBId: string,
+    marriageId: string,
+  ): Promise<void> {
+    await tx.person.updateMany({
+      where: {
+        OR: [
+          { fatherId: personAId, motherId: personBId },
+          { fatherId: personBId, motherId: personAId },
+        ],
+        NOT: { parentMarriageId: marriageId },
+      },
+      data: { parentMarriageId: marriageId },
+    })
   }
 
   /**
@@ -2231,10 +2517,39 @@ export class PersonPrismaRepository implements IPersonRepository {
       }
 
       if (spouseRelations?.length) {
-        const rows = this.buildCanonicalSpouseRows(createdPerson.id, spouseRelations)
-        if (rows.length) {
-          await tx.personSpouse.createMany({ data: rows, skipDuplicates: true })
+        const spouseIdsToLookup = [
+          ...new Set(spouseRelations.map((r) => r.spouseId).filter(Boolean)),
+        ]
+        const genderRows = spouseIdsToLookup.length
+          ? await tx.person.findMany({
+              where: { id: { in: spouseIdsToLookup } },
+              select: { id: true, gender: true },
+            })
+          : []
+        const genderById = new Map<string, string | null>(
+          genderRows.map((p) => [p.id, p.gender]),
+        )
+        genderById.set(createdPerson.id, createdPerson.gender)
+        const rows = this.buildCanonicalSpouseRows(createdPerson.id, spouseRelations, genderById)
+        for (const {
+          explicitMarriageRank: _unusedRank,
+          explicitRankHolderId: _unused,
+          explicitMarriageEndReason: _unusedEndReason,
+          explicitNote: _unusedNote,
+          ...row
+        } of rows) {
+          const createdSpouseRow = await tx.personSpouse.create({ data: row })
+          await this.syncChildrenParentMarriageForCouple(
+            tx,
+            row.personId,
+            row.spouseId,
+            createdSpouseRow.id,
+          )
         }
+      }
+
+      if (createdPerson.fatherId || createdPerson.motherId) {
+        await this.syncParentMarriageForPerson(tx, createdPerson.id)
       }
 
       // 별칭(아명·출생명 등) 일괄 생성
@@ -2404,36 +2719,134 @@ export class PersonPrismaRepository implements IPersonRepository {
       if (spouseRelations !== undefined) {
         // 이 인물이 얽힌 배우자 행을 canonical(min,max) 페어로 수렴시키되, 통째 delete-recreate가
         // 아니라 페어키로 매칭해 **유지되는 커플은 id를 보존한 채 update**한다. delete-recreate는
-        // 매 저장마다 PersonSpouse.id를 새로 발급해 (a) 자녀의 parentMarriageId(FK 아닌 맨 참조)
-        // 링크를 끊고 (b) 배우자와 무관한 인물 편집에도 배우자 행을 churn했다.
+        // 매 저장마다 PersonSpouse.id를 새로 발급해 (a) 자녀의 parentMarriageId(FK) 링크를 끊고
+        // (b) 배우자와 무관한 인물 편집에도 배우자 행을 churn했다.
         // (폼은 역방향 행도 hydrate하므로 payload가 이 인물의 결혼 전체를 담는다)
-        const desiredRows = this.buildCanonicalSpouseRows(id, spouseRelations)
+        const spouseIdsToLookup = [
+          id,
+          ...new Set(spouseRelations.map((r) => r.spouseId).filter(Boolean)),
+        ]
+        const genderRows = await tx.person.findMany({
+          where: { id: { in: spouseIdsToLookup } },
+          select: { id: true, gender: true },
+        })
+        const genderById = new Map<string, string | null>(
+          genderRows.map((p) => [p.id, p.gender]),
+        )
+        const desiredRows = this.buildCanonicalSpouseRows(id, spouseRelations, genderById)
         const desiredByKey = new Map(
           desiredRows.map((row) => [`${row.personId}__${row.spouseId}`, row]),
         )
         const existing = await tx.personSpouse.findMany({
           where: { OR: [{ personId: id }, { spouseId: id }] },
-          select: { id: true, personId: true, spouseId: true },
+          select: {
+            id: true,
+            personId: true,
+            spouseId: true,
+            marriageRank: true,
+            rankHolderId: true,
+            marriageEndReason: true,
+            note: true,
+          },
         })
-        // canonical 키별 대표 기존 행(first-wins)만 유지, 나머지(중복·역방향 잔재)는 삭제 대상.
-        const keptRowIdByKey = new Map<string, string>()
+        // 정준 방향(personId < spouseId) 행을 먼저 순회하도록 정렬해, 양방향 중복행 정리 시
+        // 항상 canonical 행의 id가 kept로 선택되도록 보장한다.
+        const sortedExisting = [...existing].sort((a, b) => {
+          const aCanon = a.personId < a.spouseId ? 0 : 1
+          const bCanon = b.personId < b.spouseId ? 0 : 1
+          return aCanon - bCanon
+        })
+        // canonical 키별 대표 기존 행만 유지하고, 중복·역방향 잔재 행의 메타데이터는 대표 행에 병합한다.
+        const keptRowByKey = new Map<
+          string,
+          {
+            id: string
+            marriageRank: MarriageRank | null
+            rankHolderId: string | null
+            marriageEndReason: MarriageEndReason | null
+            note: string | null
+          }
+        >()
         const rowIdsToDelete: string[] = []
-        for (const row of existing) {
+        const removedCoupleRowIds: string[] = []
+        const duplicateRowMigrations: Array<{ duplicateId: string; keptId: string }> = []
+        for (const row of sortedExisting) {
           const [pairPersonId, pairSpouseId] =
             row.personId < row.spouseId ? [row.personId, row.spouseId] : [row.spouseId, row.personId]
           const key = `${pairPersonId}__${pairSpouseId}`
-          if (!keptRowIdByKey.has(key) && desiredByKey.has(key)) keptRowIdByKey.set(key, row.id)
-          else rowIdsToDelete.push(row.id)
+          if (!desiredByKey.has(key)) {
+            removedCoupleRowIds.push(row.id)
+            rowIdsToDelete.push(row.id)
+            continue
+          }
+          const existingKept = keptRowByKey.get(key)
+          if (!existingKept) {
+            keptRowByKey.set(key, {
+              id: row.id,
+              marriageRank: row.marriageRank,
+              rankHolderId: row.rankHolderId,
+              marriageEndReason: row.marriageEndReason,
+              note: row.note,
+            })
+          } else {
+            existingKept.marriageRank = existingKept.marriageRank ?? row.marriageRank
+            existingKept.rankHolderId = existingKept.rankHolderId ?? row.rankHolderId
+            existingKept.marriageEndReason =
+              existingKept.marriageEndReason ?? row.marriageEndReason
+            existingKept.note = existingKept.note ?? row.note
+            duplicateRowMigrations.push({ duplicateId: row.id, keptId: existingKept.id })
+            rowIdsToDelete.push(row.id)
+          }
         }
         // 1) 불필요·중복 행 먼저 삭제 — 유지 행을 canonical 방향으로 정규화할 때 unique 충돌 방지.
+        // 중복(역방향) 행을 참조하던 자녀의 parentMarriageId는 대표 행(kept.id)으로 이관하고,
+        // 완전히 삭제된 커플을 참조하던 자녀의 parentMarriageId만 null로 정리한다.
         if (rowIdsToDelete.length) {
+          for (const { duplicateId, keptId } of duplicateRowMigrations) {
+            await tx.person.updateMany({
+              where: { parentMarriageId: duplicateId },
+              data: { parentMarriageId: keptId },
+            })
+          }
+          if (removedCoupleRowIds.length) {
+            await tx.person.updateMany({
+              where: { parentMarriageId: { in: removedCoupleRowIds } },
+              data: { parentMarriageId: null },
+            })
+          }
           await tx.personSpouse.deleteMany({ where: { id: { in: rowIdsToDelete } } })
         }
         // 2) 유지 커플: id 보존한 채 canonical 방향 + 결혼 메타를 갱신.
-        for (const [key, rowId] of keptRowIdByKey) {
+        for (const [key, kept] of keptRowByKey) {
           const row = desiredByKey.get(key)!
+          // 클라이언트가 marriageRank를 명시하지 않았으면(undefined) 기존(병합된) marriageRank를 보존한다.
+          const nextRank =
+            row.explicitMarriageRank !== undefined
+              ? ((row.marriageRank as MarriageRank | null) ?? null)
+              : kept.marriageRank
+          // 클라이언트가 rankHolderId를 명시하지 않았고 새 marriageRank가 여전히 비대칭 서열(PRIMARY/SECONDARY/CONCUBINE)이면
+          // 기존 rankHolderId를 보존해 반대편(예: 후궁) 프로필 저장·서열 변경 시 rankHolderId가 역전되지 않게 한다.
+          const isNextAsymmetric =
+            nextRank === 'PRIMARY' || nextRank === 'SECONDARY' || nextRank === 'CONCUBINE'
+          const validKeptRankHolderId =
+            kept.rankHolderId === row.personId || kept.rankHolderId === row.spouseId
+              ? kept.rankHolderId
+              : null
+          const resolvedRankHolderId =
+            row.explicitRankHolderId !== undefined
+              ? (row.explicitRankHolderId ?? null)
+              : !isNextAsymmetric
+                ? null
+                : (validKeptRankHolderId ?? (row.rankHolderId ?? null))
+          // 클라이언트가 marriageEndReason을 보내지 않은 경우(undefined), 기존 행의 해소 사유를 보존한다.
+          const resolvedMarriageEndReason =
+            row.explicitMarriageEndReason !== undefined
+              ? ((row.explicitMarriageEndReason as MarriageEndReason | null) ?? null)
+              : kept.marriageEndReason
+          const resolvedNote =
+            row.explicitNote !== undefined ? (row.note ?? null) : kept.note
           await tx.personSpouse.update({
-            where: { id: rowId },
+            where: { id: kept.id },
             data: {
               personId: row.personId,
               spouseId: row.spouseId,
@@ -2449,18 +2862,37 @@ export class PersonPrismaRepository implements IPersonRepository {
               marriageEndMonth: row.marriageEndMonth ?? null,
               marriageEndDay: row.marriageEndDay ?? null,
               marriageEndPrecision: row.marriageEndPrecision ?? null,
-              marriageRank: row.marriageRank ?? null,
-              note: row.note ?? null,
+              marriageEndReason: resolvedMarriageEndReason,
+              marriageRank: nextRank,
+              rankHolderId: resolvedRankHolderId,
+              note: resolvedNote,
             },
           })
+          await this.syncChildrenParentMarriageForCouple(tx, row.personId, row.spouseId, kept.id)
         }
         // 3) 신규 커플만 create.
         const rowsToCreate = desiredRows.filter(
-          (row) => !keptRowIdByKey.has(`${row.personId}__${row.spouseId}`),
+          (row) => !keptRowByKey.has(`${row.personId}__${row.spouseId}`),
         )
-        if (rowsToCreate.length) {
-          await tx.personSpouse.createMany({ data: rowsToCreate, skipDuplicates: true })
+        for (const {
+          explicitMarriageRank: _unusedRank,
+          explicitRankHolderId: _unusedRankHolder,
+          explicitMarriageEndReason: _unusedEndReason,
+          explicitNote: _unusedNote,
+          ...row
+        } of rowsToCreate) {
+          const createdSpouseRow = await tx.personSpouse.create({ data: row })
+          await this.syncChildrenParentMarriageForCouple(
+            tx,
+            row.personId,
+            row.spouseId,
+            createdSpouseRow.id,
+          )
         }
+      }
+
+      if ('fatherId' in updateData || 'motherId' in updateData) {
+        await this.syncParentMarriageForPerson(tx, id)
       }
 
       // 전기(생애 서술) 섹션 — id 보존 diff-update(CC3). 기존 delete-and-recreate는 매 저장마다
@@ -2622,17 +3054,61 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
+   * 경력·학력 시작일/종료일 역전 검증 (종료일이 시작일보다 앞설 수 없음).
+   */
+  private assertCareerDateRange(
+    startDate?: Date | null,
+    endDate?: Date | null,
+  ): void {
+    if (startDate && endDate && endDate.getTime() < startDate.getTime()) {
+      throw new BadRequestException('종료일이 시작일보다 앞설 수 없습니다.')
+    }
+  }
+
+  private async resolveAndAssertUpdateCareerDates(
+    delegate: {
+      findUnique: (args: any) => Promise<{ startDate?: Date | null; endDate?: Date | null } | null>
+    },
+    id: string,
+    startDateInput?: string | Date | null,
+    endDateInput?: string | Date | null,
+  ): Promise<{ startDate?: Date | null; endDate?: Date | null }> {
+    const nextStart = this.toCareerDate(startDateInput)
+    const nextEnd = this.toCareerDate(endDateInput)
+    if (startDateInput !== undefined || endDateInput !== undefined) {
+      let effectiveStart = nextStart
+      let effectiveEnd = nextEnd
+      if (startDateInput === undefined || endDateInput === undefined) {
+        const current = await delegate.findUnique({
+          where: { id },
+          select: { startDate: true, endDate: true },
+        })
+        if (startDateInput === undefined) effectiveStart = current?.startDate ?? null
+        if (endDateInput === undefined) effectiveEnd = current?.endDate ?? null
+      }
+      this.assertCareerDateRange(effectiveStart, effectiveEnd)
+    }
+    return {
+      ...(startDateInput !== undefined ? { startDate: nextStart } : {}),
+      ...(endDateInput !== undefined ? { endDate: nextEnd } : {}),
+    }
+  }
+
+  /**
    * 군인 경력 추가
    */
   async addMilitaryCareer(dto: CreateMilitaryCareerDto): Promise<MilitaryCareerResponseDto> {
     const { images, startDate, endDate, ...careerData } = dto
-    
+    const resolvedStart = this.toCareerDate(startDate) ?? undefined
+    const resolvedEnd = this.toCareerDate(endDate) ?? undefined
+    this.assertCareerDateRange(resolvedStart, resolvedEnd)
+
     const career = await this.prisma.militaryCareer.create({
       data: {
         ...careerData,
         branch: careerData.branch || '육군',
-        startDate: this.toCareerDate(startDate) ?? undefined,
-        endDate: this.toCareerDate(endDate) ?? undefined,
+        startDate: resolvedStart,
+        endDate: resolvedEnd,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
@@ -2647,12 +3123,15 @@ export class PersonPrismaRepository implements IPersonRepository {
    */
   async addBusinessCareer(dto: CreateBusinessCareerDto): Promise<BusinessCareerResponseDto> {
     const { images, startDate, endDate, ...careerData } = dto
-    
+    const resolvedStart = this.toCareerDate(startDate) ?? undefined
+    const resolvedEnd = this.toCareerDate(endDate) ?? undefined
+    this.assertCareerDateRange(resolvedStart, resolvedEnd)
+
     const career = await this.prisma.businessCareer.create({
       data: {
         ...careerData,
-        startDate: this.toCareerDate(startDate) ?? undefined,
-        endDate: this.toCareerDate(endDate) ?? undefined,
+        startDate: resolvedStart,
+        endDate: resolvedEnd,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
@@ -2667,12 +3146,15 @@ export class PersonPrismaRepository implements IPersonRepository {
    */
   async addAcademicCareer(dto: CreateAcademicCareerDto): Promise<AcademicCareerResponseDto> {
     const { images, startDate, endDate, ...careerData } = dto
-    
+    const resolvedStart = this.toCareerDate(startDate) ?? undefined
+    const resolvedEnd = this.toCareerDate(endDate) ?? undefined
+    this.assertCareerDateRange(resolvedStart, resolvedEnd)
+
     const career = await this.prisma.academicCareer.create({
       data: {
         ...careerData,
-        startDate: this.toCareerDate(startDate) ?? undefined,
-        endDate: this.toCareerDate(endDate) ?? undefined,
+        startDate: resolvedStart,
+        endDate: resolvedEnd,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
@@ -2687,12 +3169,15 @@ export class PersonPrismaRepository implements IPersonRepository {
    */
   async addAthleteCareer(dto: CreateAthleteCareerDto): Promise<AthleteCareerResponseDto> {
     const { images, startDate, endDate, ...careerData } = dto
-    
+    const resolvedStart = this.toCareerDate(startDate) ?? undefined
+    const resolvedEnd = this.toCareerDate(endDate) ?? undefined
+    this.assertCareerDateRange(resolvedStart, resolvedEnd)
+
     const career = await this.prisma.athleteCareer.create({
       data: {
         ...careerData,
-        startDate: this.toCareerDate(startDate) ?? undefined,
-        endDate: this.toCareerDate(endDate) ?? undefined,
+        startDate: resolvedStart,
+        endDate: resolvedEnd,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
@@ -2707,13 +3192,16 @@ export class PersonPrismaRepository implements IPersonRepository {
    */
   async addReligiousCareer(dto: CreateReligiousCareerDto): Promise<ReligiousCareerResponseDto> {
     const { images, startDate, endDate, religion, denomination, rank, ...careerData } = dto
-    
+    const resolvedStart = this.toCareerDate(startDate) ?? undefined
+    const resolvedEnd = this.toCareerDate(endDate) ?? undefined
+    this.assertCareerDateRange(resolvedStart, resolvedEnd)
+
     const career = await this.prisma.religiousCareer.create({
       data: {
         ...careerData,
         title: careerData.title ?? rank ?? undefined,
-        startDate: this.toCareerDate(startDate) ?? undefined,
-        endDate: this.toCareerDate(endDate) ?? undefined,
+        startDate: resolvedStart,
+        endDate: resolvedEnd,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
@@ -2728,14 +3216,17 @@ export class PersonPrismaRepository implements IPersonRepository {
    */
   async addArtistCareer(dto: CreateArtistCareerDto): Promise<ArtistCareerResponseDto> {
     const { images, startDate, endDate, artForm, style, ...careerData } = dto
-    
+    const resolvedStart = this.toCareerDate(startDate) ?? undefined
+    const resolvedEnd = this.toCareerDate(endDate) ?? undefined
+    this.assertCareerDateRange(resolvedStart, resolvedEnd)
+
     const career = await this.prisma.artistCareer.create({
       data: {
         ...careerData,
         artField: careerData.artField ?? artForm ?? undefined,
         genre: careerData.genre ?? style ?? undefined,
-        startDate: this.toCareerDate(startDate) ?? undefined,
-        endDate: this.toCareerDate(endDate) ?? undefined,
+        startDate: resolvedStart,
+        endDate: resolvedEnd,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
@@ -2750,15 +3241,18 @@ export class PersonPrismaRepository implements IPersonRepository {
    */
   async addMediaCareer(dto: CreateMediaCareerDto): Promise<MediaCareerResponseDto> {
     const { images, startDate, endDate, mediaType, role, ...careerData } = dto
-    
+    const resolvedStart = this.toCareerDate(startDate) ?? undefined
+    const resolvedEnd = this.toCareerDate(endDate) ?? undefined
+    this.assertCareerDateRange(resolvedStart, resolvedEnd)
+
     const career = await this.prisma.mediaCareer.create({
       data: {
         ...careerData,
         department: careerData.department ?? mediaType ?? undefined,
         beat: careerData.beat ?? role ?? undefined,
         organizationId: careerData.organizationId || '',
-        startDate: this.toCareerDate(startDate) ?? undefined,
-        endDate: this.toCareerDate(endDate) ?? undefined,
+        startDate: resolvedStart,
+        endDate: resolvedEnd,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
@@ -2773,6 +3267,9 @@ export class PersonPrismaRepository implements IPersonRepository {
    */
   async addLegalCareer(dto: CreateLegalCareerDto): Promise<LegalCareerResponseDto> {
     const { images, startDate, endDate, courtLevel, ...careerData } = dto
+    const resolvedStart = this.toCareerDate(startDate) ?? undefined
+    const resolvedEnd = this.toCareerDate(endDate) ?? undefined
+    this.assertCareerDateRange(resolvedStart, resolvedEnd)
     const mergedSpec = [careerData.specialization, courtLevel]
       .filter((v): v is string => !!v && v.trim().length > 0)
       .join(' · ')
@@ -2781,8 +3278,8 @@ export class PersonPrismaRepository implements IPersonRepository {
       data: {
         ...careerData,
         specialization: mergedSpec || undefined,
-        startDate: this.toCareerDate(startDate) ?? undefined,
-        endDate: this.toCareerDate(endDate) ?? undefined,
+        startDate: resolvedStart,
+        endDate: resolvedEnd,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
@@ -2797,13 +3294,16 @@ export class PersonPrismaRepository implements IPersonRepository {
    */
   async addMedicalCareer(dto: CreateMedicalCareerDto): Promise<MedicalCareerResponseDto> {
     const { images, startDate, endDate, ...careerData } = dto
-    
+    const resolvedStart = this.toCareerDate(startDate) ?? undefined
+    const resolvedEnd = this.toCareerDate(endDate) ?? undefined
+    this.assertCareerDateRange(resolvedStart, resolvedEnd)
+
     const career = await this.prisma.medicalCareer.create({
       data: {
         ...careerData,
         organizationId: careerData.organizationId || '',
-        startDate: this.toCareerDate(startDate) ?? undefined,
-        endDate: this.toCareerDate(endDate) ?? undefined,
+        startDate: resolvedStart,
+        endDate: resolvedEnd,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
@@ -3257,6 +3757,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       endYear: true,
       endMonth: true,
       endDay: true,
+      endReason: true,
       administrationDepartmentId: true,
       administrationDepartment: {
         select: { id: true, name: true, categoryId: true },
@@ -3269,6 +3770,10 @@ export class PersonPrismaRepository implements IPersonRepository {
           middleName: true,
           nameDisplayOrder: true,
           profileImageUrl: true,
+          isAlive: true,
+          isDeathDateUnknown: true,
+          deathDate: true,
+          deathEra: true,
           country: {
             select: { defaultNameDisplayOrder: true, isoCode: true, flagEmoji: true },
           },
@@ -3327,8 +3832,12 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (accountId != null && cabinet.accountId != null && cabinet.accountId !== accountId) {
       return null
     }
-    const { accountId: _ownerAccountId, ...rest } = cabinet
-    return serializeBigInt(rest)
+    const { accountId: _ownerAccountId, headTenure, memberTenures, ...rest } = cabinet
+    return serializeBigInt({
+      ...rest,
+      headTenure: headTenure ? withSignedDates(headTenure) : null,
+      memberTenures: (memberTenures ?? []).map((t) => withSignedDates(t)),
+    })
   }
 
   async findCabinets(params: {
@@ -4401,12 +4910,15 @@ export class PersonPrismaRepository implements IPersonRepository {
    */
   async addEducation(dto: CreateEducationDto): Promise<PersonEducationResponseDto> {
     const { images, startDate, endDate, ...educationData } = dto
-    
+    const resolvedStart = this.toCareerDate(startDate) ?? undefined
+    const resolvedEnd = this.toCareerDate(endDate) ?? undefined
+    this.assertCareerDateRange(resolvedStart, resolvedEnd)
+
     const education = await this.prisma.personEducation.create({
       data: {
         ...educationData,
-        startDate: this.toCareerDate(startDate) ?? undefined,
-        endDate: this.toCareerDate(endDate) ?? undefined,
+        startDate: resolvedStart,
+        endDate: resolvedEnd,
         images: images && images.length > 0 ? {
           create: images
         } : undefined
@@ -4437,12 +4949,17 @@ export class PersonPrismaRepository implements IPersonRepository {
 
   async updateMilitaryCareer(id: string, dto: Partial<CreateMilitaryCareerDto>): Promise<MilitaryCareerResponseDto> {
     const { images: _images, personId: _personId, startDate, endDate, ...rest } = dto
+    const dates = await this.resolveAndAssertUpdateCareerDates(
+      this.prisma.militaryCareer,
+      id,
+      startDate,
+      endDate,
+    )
     const row = await this.prisma.militaryCareer.update({
       where: { id },
       data: {
         ...rest,
-        ...(startDate !== undefined ? { startDate: this.toCareerDate(startDate) } : {}),
-        ...(endDate !== undefined ? { endDate: this.toCareerDate(endDate) } : {}),
+        ...dates,
       } as any,
     })
     return this.mapToMilitaryCareerResponse(row)
@@ -4450,12 +4967,17 @@ export class PersonPrismaRepository implements IPersonRepository {
 
   async updateBusinessCareer(id: string, dto: Partial<CreateBusinessCareerDto>): Promise<BusinessCareerResponseDto> {
     const { images: _images, personId: _personId, startDate, endDate, ...rest } = dto
+    const dates = await this.resolveAndAssertUpdateCareerDates(
+      this.prisma.businessCareer,
+      id,
+      startDate,
+      endDate,
+    )
     const row = await this.prisma.businessCareer.update({
       where: { id },
       data: {
         ...rest,
-        ...(startDate !== undefined ? { startDate: this.toCareerDate(startDate) } : {}),
-        ...(endDate !== undefined ? { endDate: this.toCareerDate(endDate) } : {}),
+        ...dates,
       } as any,
     })
     return this.mapToBusinessCareerResponse(row)
@@ -4463,12 +4985,17 @@ export class PersonPrismaRepository implements IPersonRepository {
 
   async updateAcademicCareer(id: string, dto: Partial<CreateAcademicCareerDto>): Promise<AcademicCareerResponseDto> {
     const { images: _images, personId: _personId, startDate, endDate, ...rest } = dto
+    const dates = await this.resolveAndAssertUpdateCareerDates(
+      this.prisma.academicCareer,
+      id,
+      startDate,
+      endDate,
+    )
     const row = await this.prisma.academicCareer.update({
       where: { id },
       data: {
         ...rest,
-        ...(startDate !== undefined ? { startDate: this.toCareerDate(startDate) } : {}),
-        ...(endDate !== undefined ? { endDate: this.toCareerDate(endDate) } : {}),
+        ...dates,
       } as any,
     })
     return this.mapToAcademicCareerResponse(row)
@@ -4476,12 +5003,17 @@ export class PersonPrismaRepository implements IPersonRepository {
 
   async updateAthleteCareer(id: string, dto: Partial<CreateAthleteCareerDto>): Promise<AthleteCareerResponseDto> {
     const { images: _images, personId: _personId, startDate, endDate, ...rest } = dto
+    const dates = await this.resolveAndAssertUpdateCareerDates(
+      this.prisma.athleteCareer,
+      id,
+      startDate,
+      endDate,
+    )
     const row = await this.prisma.athleteCareer.update({
       where: { id },
       data: {
         ...rest,
-        ...(startDate !== undefined ? { startDate: this.toCareerDate(startDate) } : {}),
-        ...(endDate !== undefined ? { endDate: this.toCareerDate(endDate) } : {}),
+        ...dates,
       } as any,
     })
     return this.mapToAthleteCareerResponse(row)
@@ -4489,13 +5021,18 @@ export class PersonPrismaRepository implements IPersonRepository {
 
   async updateReligiousCareer(id: string, dto: Partial<CreateReligiousCareerDto>): Promise<ReligiousCareerResponseDto> {
     const { images: _images, personId: _personId, startDate, endDate, religion: _rel, denomination: _den, rank, ...rest } = dto
+    const dates = await this.resolveAndAssertUpdateCareerDates(
+      this.prisma.religiousCareer,
+      id,
+      startDate,
+      endDate,
+    )
     const row = await this.prisma.religiousCareer.update({
       where: { id },
       data: {
         ...rest,
         ...(rest.title !== undefined || rank !== undefined ? { title: rest.title ?? rank ?? null } : {}),
-        ...(startDate !== undefined ? { startDate: this.toCareerDate(startDate) } : {}),
-        ...(endDate !== undefined ? { endDate: this.toCareerDate(endDate) } : {}),
+        ...dates,
       } as any,
     })
     return this.mapToReligiousCareerResponse(row)
@@ -4503,14 +5040,19 @@ export class PersonPrismaRepository implements IPersonRepository {
 
   async updateArtistCareer(id: string, dto: Partial<CreateArtistCareerDto>): Promise<ArtistCareerResponseDto> {
     const { images: _images, personId: _personId, startDate, endDate, artForm, style, ...rest } = dto
+    const dates = await this.resolveAndAssertUpdateCareerDates(
+      this.prisma.artistCareer,
+      id,
+      startDate,
+      endDate,
+    )
     const row = await this.prisma.artistCareer.update({
       where: { id },
       data: {
         ...rest,
         ...(rest.artField !== undefined || artForm !== undefined ? { artField: rest.artField ?? artForm ?? null } : {}),
         ...(rest.genre !== undefined || style !== undefined ? { genre: rest.genre ?? style ?? null } : {}),
-        ...(startDate !== undefined ? { startDate: this.toCareerDate(startDate) } : {}),
-        ...(endDate !== undefined ? { endDate: this.toCareerDate(endDate) } : {}),
+        ...dates,
       } as any,
     })
     return this.mapToArtistCareerResponse(row)
@@ -4518,14 +5060,19 @@ export class PersonPrismaRepository implements IPersonRepository {
 
   async updateMediaCareer(id: string, dto: Partial<CreateMediaCareerDto>): Promise<MediaCareerResponseDto> {
     const { images: _images, personId: _personId, startDate, endDate, mediaType, role, ...rest } = dto
+    const dates = await this.resolveAndAssertUpdateCareerDates(
+      this.prisma.mediaCareer,
+      id,
+      startDate,
+      endDate,
+    )
     const row = await this.prisma.mediaCareer.update({
       where: { id },
       data: {
         ...rest,
         ...(rest.department !== undefined || mediaType !== undefined ? { department: rest.department ?? mediaType ?? null } : {}),
         ...(rest.beat !== undefined || role !== undefined ? { beat: rest.beat ?? role ?? null } : {}),
-        ...(startDate !== undefined ? { startDate: this.toCareerDate(startDate) } : {}),
-        ...(endDate !== undefined ? { endDate: this.toCareerDate(endDate) } : {}),
+        ...dates,
       } as any,
     })
     return this.mapToMediaCareerResponse(row)
@@ -4533,6 +5080,12 @@ export class PersonPrismaRepository implements IPersonRepository {
 
   async updateLegalCareer(id: string, dto: Partial<CreateLegalCareerDto>): Promise<LegalCareerResponseDto> {
     const { images: _images, personId: _personId, startDate, endDate, courtLevel, ...rest } = dto
+    const dates = await this.resolveAndAssertUpdateCareerDates(
+      this.prisma.legalCareer,
+      id,
+      startDate,
+      endDate,
+    )
     const specDefined = rest.specialization !== undefined || courtLevel !== undefined
     const mergedSpec = [rest.specialization, courtLevel]
       .filter((v): v is string => !!v && v.trim().length > 0)
@@ -4542,8 +5095,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       data: {
         ...rest,
         ...(specDefined ? { specialization: mergedSpec || null } : {}),
-        ...(startDate !== undefined ? { startDate: this.toCareerDate(startDate) } : {}),
-        ...(endDate !== undefined ? { endDate: this.toCareerDate(endDate) } : {}),
+        ...dates,
       } as any,
     })
     return this.mapToLegalCareerResponse(row)
@@ -4551,12 +5103,17 @@ export class PersonPrismaRepository implements IPersonRepository {
 
   async updateMedicalCareer(id: string, dto: Partial<CreateMedicalCareerDto>): Promise<MedicalCareerResponseDto> {
     const { images: _images, personId: _personId, startDate, endDate, ...rest } = dto
+    const dates = await this.resolveAndAssertUpdateCareerDates(
+      this.prisma.medicalCareer,
+      id,
+      startDate,
+      endDate,
+    )
     const row = await this.prisma.medicalCareer.update({
       where: { id },
       data: {
         ...rest,
-        ...(startDate !== undefined ? { startDate: this.toCareerDate(startDate) } : {}),
-        ...(endDate !== undefined ? { endDate: this.toCareerDate(endDate) } : {}),
+        ...dates,
       } as any,
     })
     return this.mapToMedicalCareerResponse(row)
@@ -4564,12 +5121,17 @@ export class PersonPrismaRepository implements IPersonRepository {
 
   async updateEducation(id: string, dto: Partial<CreateEducationDto>): Promise<PersonEducationResponseDto> {
     const { images: _images, personId: _personId, startDate, endDate, ...rest } = dto
+    const dates = await this.resolveAndAssertUpdateCareerDates(
+      this.prisma.personEducation,
+      id,
+      startDate,
+      endDate,
+    )
     const row = await this.prisma.personEducation.update({
       where: { id },
       data: {
         ...rest,
-        ...(startDate !== undefined ? { startDate: this.toCareerDate(startDate) } : {}),
-        ...(endDate !== undefined ? { endDate: this.toCareerDate(endDate) } : {}),
+        ...dates,
       } as any,
     })
     return this.mapToPersonEducationResponse(row)
@@ -4811,15 +5373,32 @@ export class PersonPrismaRepository implements IPersonRepository {
     dto: CreatePersonLifeEventDto,
     accountId: string,
   ): Promise<any> {
+    const startCols = structuredDateColumns('start', dto.startDate, dto.startDatePrecision)
+    const endCols = structuredDateColumns('end', dto.endDate, dto.endDatePrecision)
+    const startKey = structuredDateKey(
+      startCols.startEra as string | null,
+      startCols.startYear as number | null,
+      startCols.startMonth as number | null,
+      startCols.startDay as number | null,
+    )
+    const endKey = structuredDateEndKey(
+      endCols.endEra as string | null,
+      endCols.endYear as number | null,
+      endCols.endMonth as number | null,
+      endCols.endDay as number | null,
+    )
+    if (startKey != null && endKey != null && startKey > endKey) {
+      throw new BadRequestException('종료일이 시작일보다 앞설 수 없습니다.')
+    }
     return this.prisma.personLifeEvent.create({
       data: {
         personId: dto.personId,
         title: dto.title,
         description: dto.description ?? null,
         category: dto.category ?? null,
-        ...structuredDateColumns('start', dto.startDate, dto.startDatePrecision),
+        ...startCols,
         startDatePrecision: dto.startDate ? (dto.startDatePrecision ?? 'day') : null,
-        ...structuredDateColumns('end', dto.endDate, dto.endDatePrecision),
+        ...endCols,
         endDatePrecision: dto.endDate ? (dto.endDatePrecision ?? 'day') : null,
         sortOrder: dto.sortOrder ?? 0,
         eventId: dto.eventId ?? null,
@@ -4833,27 +5412,65 @@ export class PersonPrismaRepository implements IPersonRepository {
     id: string,
     dto: UpdatePersonLifeEventDto,
   ): Promise<any> {
+    const existing = await this.prisma.personLifeEvent.findUnique({ where: { id } })
+    if (!existing) throw new NotFoundException('생애 사건을 찾을 수 없습니다.')
+
     const data: Prisma.PersonLifeEventUpdateInput = {}
     if (dto.title !== undefined) data.title = dto.title
     if (dto.description !== undefined) data.description = dto.description
     if (dto.category !== undefined) data.category = dto.category
-    if (dto.startDate !== undefined) {
-      Object.assign(
-        data,
-        structuredDateColumns('start', dto.startDate, dto.startDatePrecision),
-      )
+
+    const existingStartIso =
+      toSignedDateString(existing.startEra, existing.startYear, existing.startMonth, existing.startDay) ??
+      (existing.startDate ? existing.startDate.toISOString().slice(0, 10) : null)
+    const existingEndIso =
+      toSignedDateString(existing.endEra, existing.endYear, existing.endMonth, existing.endDay) ??
+      (existing.endDate ? existing.endDate.toISOString().slice(0, 10) : null)
+
+    const effectiveStartIso = dto.startDate !== undefined ? dto.startDate : existingStartIso
+    const effectiveStartPrecision =
+      dto.startDatePrecision !== undefined
+        ? dto.startDatePrecision
+        : existing.startDatePrecision ?? 'day'
+    const effectiveEndIso = dto.endDate !== undefined ? dto.endDate : existingEndIso
+    const effectiveEndPrecision =
+      dto.endDatePrecision !== undefined
+        ? dto.endDatePrecision
+        : existing.endDatePrecision ?? 'day'
+
+    const startCols = structuredDateColumns(
+      'start',
+      effectiveStartIso,
+      effectiveStartIso ? effectiveStartPrecision : null,
+    )
+    const endCols = structuredDateColumns(
+      'end',
+      effectiveEndIso,
+      effectiveEndIso ? effectiveEndPrecision : null,
+    )
+    const startKey = structuredDateKey(
+      startCols.startEra as string | null,
+      startCols.startYear as number | null,
+      startCols.startMonth as number | null,
+      startCols.startDay as number | null,
+    )
+    const endKey = structuredDateEndKey(
+      endCols.endEra as string | null,
+      endCols.endYear as number | null,
+      endCols.endMonth as number | null,
+      endCols.endDay as number | null,
+    )
+    if (startKey != null && endKey != null && startKey > endKey) {
+      throw new BadRequestException('종료일이 시작일보다 앞설 수 없습니다.')
     }
-    if (dto.startDatePrecision !== undefined) {
-      data.startDatePrecision = dto.startDatePrecision
+
+    if (dto.startDate !== undefined || dto.startDatePrecision !== undefined) {
+      Object.assign(data, startCols)
+      data.startDatePrecision = effectiveStartIso ? (effectiveStartPrecision ?? 'day') : null
     }
-    if (dto.endDate !== undefined) {
-      Object.assign(
-        data,
-        structuredDateColumns('end', dto.endDate, dto.endDatePrecision),
-      )
-    }
-    if (dto.endDatePrecision !== undefined) {
-      data.endDatePrecision = dto.endDatePrecision
+    if (dto.endDate !== undefined || dto.endDatePrecision !== undefined) {
+      Object.assign(data, endCols)
+      data.endDatePrecision = effectiveEndIso ? (effectiveEndPrecision ?? 'day') : null
     }
     if (dto.sortOrder !== undefined) data.sortOrder = dto.sortOrder
     if (dto.eventId !== undefined) {
@@ -4898,9 +5515,13 @@ export class PersonPrismaRepository implements IPersonRepository {
       const leftKey = keyOf(left)
       const rightKey = keyOf(right)
       if (leftKey == null || rightKey == null) {
-        return leftKey == null ? (rightKey == null ? 0 : 1) : -1
+        if (leftKey == null && rightKey == null) {
+          return (left.sortOrder ?? 0) - (right.sortOrder ?? 0)
+        }
+        return leftKey == null ? 1 : -1
       }
-      return leftKey - rightKey
+      if (leftKey !== rightKey) return leftKey - rightKey
+      return (left.sortOrder ?? 0) - (right.sortOrder ?? 0)
     })
     return rows.map(({ event, ...row }) => ({
       ...withSignedDates(row),
@@ -4910,7 +5531,16 @@ export class PersonPrismaRepository implements IPersonRepository {
             title: event.title,
             startEra: event.startEra,
             startYear: event.startYear,
-            startDate: event.startDate,
+            startDatePrecision: (event as any).startDatePrecision ?? null,
+            startDate:
+              event.startYear != null && (event.startEra === 'BC' || event.startDate == null)
+                ? toSignedDateString(
+                    event.startEra,
+                    event.startYear,
+                    (event as any).startMonth ?? (event.startDate ? event.startDate.getUTCMonth() + 1 : null),
+                    (event as any).startDay ?? (event.startDate ? event.startDate.getUTCDate() : null),
+                  )
+                : event.startDate,
           }
         : null,
     }))
@@ -5153,9 +5783,10 @@ export class PersonPrismaRepository implements IPersonRepository {
       profileImageUrl: true, birthDate: true, deathDate: true,
       // BC/AD — birthDate는 크기값(양수) 연도로 저장되므로 era 없이는 BC가 AD로 둔갑한다.
       birthEra: true, deathEra: true,
-      birthOrder: true, isAlive: true,
+      birthOrder: true, genderBirthOrder: true, isAlive: true,
       floruitStartYear: true, floruitEndYear: true, floruitEra: true,
       fatherId: true, motherId: true,
+      adoptiveFatherId: true, adoptiveMotherId: true,
       // 소유권 — 노드 isOwned(상세 열람 가능 여부) 계산에 사용
       accountId: true,
       // 사생아·서출 플래그 (UI 별표 마커)
@@ -5248,7 +5879,9 @@ export class PersonPrismaRepository implements IPersonRepository {
           marriageEndDate: true,
           marriageEndEra: true,
           marriageEndYear: true,
+          marriageEndReason: true,
           marriageRank: true,
+          rankHolderId: true,
           note: true,
         },
       },
@@ -5261,20 +5894,25 @@ export class PersonPrismaRepository implements IPersonRepository {
           marriageEndDate: true,
           marriageEndEra: true,
           marriageEndYear: true,
+          marriageEndReason: true,
           marriageRank: true,
+          rankHolderId: true,
           note: true,
         },
       },
     } satisfies Prisma.PersonSelect
 
     const nodeMap        = new Map<string, any>()
-    const parentChildSet = new Set<string>()  // "parentId__childId"
+    const parentChildSet = new Set<string>()  // "parentId__childId" (biological)
+    const adoptiveParentChildSet = new Set<string>() // "parentId__childId" (adoptive)
     /** spouse 엣지 키 → 메타 (정렬된 "a__b"). 첫 번째 등장한 메타를 보존 */
     const spouseEdgeMeta = new Map<string, {
       /** 부호 연도 — BC는 음수 (marriageStartEra로 복원; DATETIME은 크기값 저장) */
       marriageStartYear: number | null
       marriageEndYear: number | null
+      marriageEndReason: string | null
       marriageRank: string | null
+      rankHolderId: string | null
       note: string | null
       /** true = 실제 PersonSpouse 없이 자녀의 다른 친부모로 추론된 엣지(점선 '추정'용).
        *  false = 실제 PersonSpouse 유래(결혼일·메모가 비어 있어도 확정 관계). */
@@ -5284,6 +5922,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     const truncations: Array<{ scope: string; took: number; limit: number }> = []
 
     const addPCEdge = (p: string, c: string) => parentChildSet.add(`${p}__${c}`)
+    const addAdoptivePCEdge = (p: string, c: string) => adoptiveParentChildSet.add(`${p}__${c}`)
     const yearOfDate = (d: Date | string | null | undefined): number | null => {
       if (!d) return null
       const dt = d instanceof Date ? d : new Date(d)
@@ -5301,7 +5940,9 @@ export class PersonPrismaRepository implements IPersonRepository {
         marriageEndDate?: Date | null
         marriageEndEra?: string | null
         marriageEndYear?: number | null
+        marriageEndReason?: string | null
         marriageRank?: string | null
+        rankHolderId?: string | null
         note?: string | null
       },
       derived = false,
@@ -5314,7 +5955,9 @@ export class PersonPrismaRepository implements IPersonRepository {
         startYear != null && meta?.marriageStartEra === 'BC' ? -startYear : startYear
       const incomingEndYear =
         endYear != null && meta?.marriageEndEra === 'BC' ? -endYear : endYear
+      const incomingEndReason = (meta?.marriageEndReason ?? null) as string | null
       const incomingRank = (meta?.marriageRank ?? null) as string | null
+      const incomingRankHolderId = (meta?.rankHolderId ?? null) as string | null
       const incomingNote = (meta?.note ?? null) as string | null
 
       const existing = spouseEdgeMeta.get(key)
@@ -5323,7 +5966,9 @@ export class PersonPrismaRepository implements IPersonRepository {
           // BC는 음수 부호 연도로 — 소비자(♥ 라벨·정렬)가 era 없이도 순서·표기 판단 가능
           marriageStartYear: incomingStartYear,
           marriageEndYear: incomingEndYear,
+          marriageEndReason: incomingEndReason,
           marriageRank: incomingRank,
+          rankHolderId: incomingRankHolderId,
           note: incomingNote,
           derived,
         })
@@ -5332,7 +5977,9 @@ export class PersonPrismaRepository implements IPersonRepository {
         // derived 엣지가 먼저 생성된 경우에도 non-null 메타데이터가 유실되지 않도록 병합한다.
         existing.marriageStartYear = existing.marriageStartYear ?? incomingStartYear
         existing.marriageEndYear = existing.marriageEndYear ?? incomingEndYear
+        existing.marriageEndReason = existing.marriageEndReason ?? incomingEndReason
         existing.marriageRank = existing.marriageRank ?? incomingRank
+        existing.rankHolderId = existing.rankHolderId ?? incomingRankHolderId
         existing.note = existing.note ?? incomingNote
         existing.derived = existing.derived && derived
       }
@@ -5369,6 +6016,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         nodeMap.set(p.id, p)
         if (p.fatherId) addPCEdge(p.fatherId, p.id)
         if (p.motherId) addPCEdge(p.motherId, p.id)
+        if (p.adoptiveFatherId) addAdoptivePCEdge(p.adoptiveFatherId, p.id)
+        if (p.adoptiveMotherId) addAdoptivePCEdge(p.adoptiveMotherId, p.id)
         for (const r of p.spouseRelationsAsPerson ?? []) {
           addSpouseEdge(p.id, r.spouseId, r)
         }
@@ -5385,7 +6034,12 @@ export class PersonPrismaRepository implements IPersonRepository {
     ): Promise<string[]> => {
       if (parentIds.length === 0) return []
       const where: Prisma.PersonWhereInput = {
-        OR: parentIds.flatMap(pid => [{ fatherId: pid }, { motherId: pid }]),
+        OR: parentIds.flatMap(pid => [
+          { fatherId: pid },
+          { motherId: pid },
+          { adoptiveFatherId: pid },
+          { adoptiveMotherId: pid },
+        ]),
       }
       if (opts.excludeIds && opts.excludeIds.length > 0) {
         where.NOT = { id: { in: opts.excludeIds } }
@@ -5394,26 +6048,73 @@ export class PersonPrismaRepository implements IPersonRepository {
       // 넉넉히 조회한 뒤 애플리케이션 레벨에서 부호 연도(BC는 음수) 기준 재정렬 후 take만큼 절단한다.
       const rows = await this.prisma.person.findMany({
         where,
-        select: { id: true, birthOrder: true, birthDate: true, birthEra: true },
+        select: {
+          id: true,
+          gender: true,
+          birthOrder: true,
+          genderBirthOrder: true,
+          birthDate: true,
+          birthEra: true,
+          floruitStartYear: true,
+          floruitEra: true,
+        },
         orderBy: [
           { birthOrder: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
           { birthDate: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
+          { floruitStartYear: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
+          { genderBirthOrder: { sort: Prisma.SortOrder.asc, nulls: Prisma.NullsOrder.last } },
           { id: Prisma.SortOrder.asc },
         ],
         take: Math.max(opts.take + 1, 200),
       })
-      const signedBirthYear = (r: { birthDate: Date | null; birthEra: Era | null }) => {
+      const signedBirthYear = (r: { birthDate: Date | null; birthEra: Era | null }): number | null => {
         const y = yearOfDate(r.birthDate)
-        if (y == null) return Number.POSITIVE_INFINITY
-        return r.birthEra === 'BC' ? -y : y
+        if (y == null) return null
+        return r.birthEra === 'BC' ? -Math.abs(y) : y
+      }
+      const signedFloruitStart = (r: {
+        floruitStartYear: number | null
+        floruitEra: Era | null
+      }): number | null => {
+        if (r.floruitStartYear == null) return null
+        return r.floruitEra === 'BC' ? -Math.abs(r.floruitStartYear) : r.floruitStartYear
       }
       rows.sort((a, b) => {
+        if (a.birthOrder != null && b.birthOrder != null && a.birthOrder !== b.birthOrder) {
+          return a.birthOrder - b.birthOrder
+        }
+        const ga = (a.gender ?? '').toUpperCase()
+        const gb = (b.gender ?? '').toUpperCase()
+        if (
+          ga &&
+          gb &&
+          ga === gb &&
+          a.genderBirthOrder != null &&
+          b.genderBirthOrder != null &&
+          a.genderBirthOrder !== b.genderBirthOrder
+        ) {
+          return a.genderBirthOrder - b.genderBirthOrder
+        }
+        const yearA = signedBirthYear(a)
+        const yearB = signedBirthYear(b)
+        if (yearA != null && yearB != null && yearA !== yearB) return yearA - yearB
+
         const orderA = a.birthOrder ?? Number.POSITIVE_INFINITY
         const orderB = b.birthOrder ?? Number.POSITIVE_INFINITY
         if (orderA !== orderB) return orderA - orderB
-        const yearA = signedBirthYear(a)
-        const yearB = signedBirthYear(b)
-        if (yearA !== yearB) return yearA - yearB
+
+        const yearInfA = yearA ?? Number.POSITIVE_INFINITY
+        const yearInfB = yearB ?? Number.POSITIVE_INFINITY
+        if (yearInfA !== yearInfB) return yearInfA - yearInfB
+
+        const floruitA = signedFloruitStart(a) ?? Number.POSITIVE_INFINITY
+        const floruitB = signedFloruitStart(b) ?? Number.POSITIVE_INFINITY
+        if (floruitA !== floruitB) return floruitA - floruitB
+
+        const genderOrderA = a.genderBirthOrder ?? Number.POSITIVE_INFINITY
+        const genderOrderB = b.genderBirthOrder ?? Number.POSITIVE_INFINITY
+        if (genderOrderA !== genderOrderB) return genderOrderA - genderOrderB
+
         return a.id.localeCompare(b.id)
       })
       const truncated = rows.length > opts.take
@@ -5430,34 +6131,43 @@ export class PersonPrismaRepository implements IPersonRepository {
     const ego = nodeMap.get(personId)
     if (!ego) return { egoId: personId, nodes: [], edges: [] }
 
-    // ── Step 2: 부모 + 명시적 배우자 ─────────────────────────────────
-    const egoParentIds        = [ego.fatherId, ego.motherId].filter(Boolean) as string[]
+    // ── Step 2: 부모(생부모 + 양부모) + 명시적 배우자 ─────────────────
+    const egoParentIds        = [
+      ego.fatherId,
+      ego.motherId,
+      ego.adoptiveFatherId,
+      ego.adoptiveMotherId,
+    ].filter(Boolean) as string[]
     const egoExplicitSpouseIds = getSpouseIds(ego)
     await fetchBatch([...egoParentIds, ...egoExplicitSpouseIds])
 
-    // ── Step 3: 조부모 + 증조부모 ─────────────────────────────────────
+    // ── Step 3: 조부모 + 증조부모 (생가 + 양가 다세대 순회) ────────────────
+    const collectAllParentIds = (node: any): string[] => {
+      if (!node) return []
+      return [
+        node.fatherId,
+        node.motherId,
+        node.adoptiveFatherId,
+        node.adoptiveMotherId,
+      ].filter(Boolean) as string[]
+    }
+
     const gpIds: string[] = []
     for (const pid of egoParentIds) {
-      const p = nodeMap.get(pid)
-      if (p?.fatherId) gpIds.push(p.fatherId)
-      if (p?.motherId) gpIds.push(p.motherId)
+      gpIds.push(...collectAllParentIds(nodeMap.get(pid)))
     }
     await fetchBatch(gpIds)
 
     const ggpIds: string[] = []
     for (const gpId of gpIds) {
-      const gp = nodeMap.get(gpId)
-      if (gp?.fatherId) ggpIds.push(gp.fatherId)
-      if (gp?.motherId) ggpIds.push(gp.motherId)
+      ggpIds.push(...collectAllParentIds(nodeMap.get(gpId)))
     }
     await fetchBatch(ggpIds)
 
     // ── Step 3c: 고조부모 (4세대 위) ─────────────────────────────
     const gggpIds: string[] = []
     for (const ggpId of ggpIds) {
-      const ggp = nodeMap.get(ggpId)
-      if (ggp?.fatherId) gggpIds.push(ggp.fatherId)
-      if (ggp?.motherId) gggpIds.push(ggp.motherId)
+      gggpIds.push(...collectAllParentIds(nodeMap.get(ggpId)))
     }
     await fetchBatch(gggpIds)
 
@@ -5467,18 +6177,43 @@ export class PersonPrismaRepository implements IPersonRepository {
       scope: 'children',
     })
 
-    // ── Step 5: 자녀의 다른 쪽 부모 → 추론 배우자 ─────────────────────
-    // ego가 실제로 부모인 자녀에 한해서만 추론한다.
-    // 명시 배우자의 다른 관계 자녀가 childIds에 포함되지 않으므로
-    // 무관한 인물이 ego의 배우자로 잘못 연결되는 문제를 방지한다.
+    // ── Step 5: 자녀의 다른 쪽 부모 → 추론 배우자 + 양자녀의 생부모·출계 자녀의 양부모 보조 수집 ──
+    // ego가 실제로 친부모인 자녀는 반대편 친부모를, 양부모인 자녀는 반대편 양부모를 추론 배우자로 수집한다.
+    // 양자녀의 친부모(fatherId/motherId) 및 출계(出系)한 친생자의 양부모(adoptiveFatherId/adoptiveMotherId)는
+    // ego의 배우자가 아니므로 추론 배우자에는 넣지 않고, 보조 노드(supportOnly)로 페치해
+    // 자녀 카드 툴팁·라벨에서 생부/생모·양부/양모 이름이 해소되도록 보장한다.
     const inferredSpouseIds: string[] = []
+    const adoptedChildBioParentIds: string[] = []
     for (const cid of childIds) {
       const child = nodeMap.get(cid)
       if (!child) continue
-      const egoIsParent = child.fatherId === personId || child.motherId === personId
-      if (!egoIsParent) continue
-      if (child.fatherId && child.fatherId !== personId) inferredSpouseIds.push(child.fatherId)
-      if (child.motherId && child.motherId !== personId) inferredSpouseIds.push(child.motherId)
+      const egoIsBioParent = child.fatherId === personId || child.motherId === personId
+      const egoIsAdoptParent =
+        child.adoptiveFatherId === personId || child.adoptiveMotherId === personId
+      if (egoIsBioParent) {
+        if (child.fatherId && child.fatherId !== personId) inferredSpouseIds.push(child.fatherId)
+        if (child.motherId && child.motherId !== personId) inferredSpouseIds.push(child.motherId)
+        if (child.adoptiveFatherId && child.adoptiveFatherId !== personId) {
+          adoptedChildBioParentIds.push(child.adoptiveFatherId)
+        }
+        if (child.adoptiveMotherId && child.adoptiveMotherId !== personId) {
+          adoptedChildBioParentIds.push(child.adoptiveMotherId)
+        }
+      }
+      if (egoIsAdoptParent) {
+        if (child.adoptiveFatherId && child.adoptiveFatherId !== personId) {
+          inferredSpouseIds.push(child.adoptiveFatherId)
+        }
+        if (child.adoptiveMotherId && child.adoptiveMotherId !== personId) {
+          inferredSpouseIds.push(child.adoptiveMotherId)
+        }
+        if (child.fatherId && child.fatherId !== personId) {
+          adoptedChildBioParentIds.push(child.fatherId)
+        }
+        if (child.motherId && child.motherId !== personId) {
+          adoptedChildBioParentIds.push(child.motherId)
+        }
+      }
     }
     await fetchBatch(inferredSpouseIds)
     // 추론된 배우자 — PersonSpouse 레코드가 없는 경우만 spouse 엣지 추가 (derived=true).
@@ -5510,24 +6245,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       scope: 'siblings',
       excludeIds: [personId],
     })
-
-    // ── Step 7a: 형제의 반대편 부모 (cap 40) ─────────────────────────
-    // 자녀는 Step 5가 반대편 부모를 항상 페치하지만 형제는 대응 단계가 없어,
-    // 이복/이부 툴팁·모달의 부모 이름 해소가 후궁·무등록 혼인(PersonSpouse 없음)에서
-    // 실패한다. 판별 자체는 노드 fatherId/motherId 스칼라 비교라 이 페치와 무관 —
-    // 여기서 못 가져와도 판정은 정확하고, 이름만 «이 가계도에 미표시»로 폴백된다.
-    const siblingOtherParentIds: string[] = []
-    for (const sid of sibIds) {
-      const sib = nodeMap.get(sid)
-      if (!sib) continue
-      if (sib.fatherId && !egoParentIds.includes(sib.fatherId)) siblingOtherParentIds.push(sib.fatherId)
-      if (sib.motherId && !egoParentIds.includes(sib.motherId)) siblingOtherParentIds.push(sib.motherId)
-    }
-    // 7a로 '새로' 유입되는 노드를 기억 — Step 9 배우자 수집(cap 200)에서 제외해,
-    // 이름 해소 보조용 노드의 배우자가 렌더되는 후손·방계의 배우자 예산을 선점하지 않게 한다.
-    const supportOnlyCandidateIds = siblingOtherParentIds.filter(id => !nodeMap.has(id))
-    await fetchBatch(siblingOtherParentIds, { cap: 40, scope: 'sibling-other-parents' })
-    const supportOnlyNodeIds = new Set(supportOnlyCandidateIds.filter(id => nodeMap.has(id)))
 
     // ── Step 7b/7c/7d/7e: 방계 친척 ── includeCollaterals=false면 일괄 스킵 ─
     let auntsUnclesIds: string[] = []
@@ -5581,7 +6298,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       scope: 'grandchildren',
     })
 
-    // ── Step 8a: 자녀의 추론 배우자 (사위·며느리 — 손자녀의 반대편 부모) ─
+    // ── Step 8a: 자녀의 추론 배우자 (사위·며느리 — 손자녀의 반대편 친부모·양부모) ─
     if (grandchildIds.length > 0 && childIds.length > 0) {
       const childIdSet = new Set(childIds)
       const childInferredSpouseIds: string[] = []
@@ -5590,39 +6307,131 @@ export class PersonPrismaRepository implements IPersonRepository {
         if (!gc) continue
         const fInChild = gc.fatherId && childIdSet.has(gc.fatherId)
         const mInChild = gc.motherId && childIdSet.has(gc.motherId)
-        if (!fInChild && !mInChild) continue
-        if (gc.fatherId && !childIdSet.has(gc.fatherId)) childInferredSpouseIds.push(gc.fatherId)
-        if (gc.motherId && !childIdSet.has(gc.motherId)) childInferredSpouseIds.push(gc.motherId)
+        if (fInChild || mInChild) {
+          if (gc.fatherId && !childIdSet.has(gc.fatherId)) childInferredSpouseIds.push(gc.fatherId)
+          if (gc.motherId && !childIdSet.has(gc.motherId)) childInferredSpouseIds.push(gc.motherId)
+          if (gc.adoptiveFatherId && !childIdSet.has(gc.adoptiveFatherId)) {
+            adoptedChildBioParentIds.push(gc.adoptiveFatherId)
+          }
+          if (gc.adoptiveMotherId && !childIdSet.has(gc.adoptiveMotherId)) {
+            adoptedChildBioParentIds.push(gc.adoptiveMotherId)
+          }
+        }
+        const afInChild = gc.adoptiveFatherId && childIdSet.has(gc.adoptiveFatherId)
+        const amInChild = gc.adoptiveMotherId && childIdSet.has(gc.adoptiveMotherId)
+        if (afInChild || amInChild) {
+          if (gc.adoptiveFatherId && !childIdSet.has(gc.adoptiveFatherId)) {
+            childInferredSpouseIds.push(gc.adoptiveFatherId)
+          }
+          if (gc.adoptiveMotherId && !childIdSet.has(gc.adoptiveMotherId)) {
+            childInferredSpouseIds.push(gc.adoptiveMotherId)
+          }
+          if (gc.fatherId && !childIdSet.has(gc.fatherId)) {
+            adoptedChildBioParentIds.push(gc.fatherId)
+          }
+          if (gc.motherId && !childIdSet.has(gc.motherId)) {
+            adoptedChildBioParentIds.push(gc.motherId)
+          }
+        }
       }
       await fetchBatch(childInferredSpouseIds, { cap: 60, scope: 'children-inferred-spouses' })
     }
 
-    // ── Step 8b: 증손자녀 (손자녀의 자녀) ───────────────────────────
+    // ── Step 8b: 증손자녀 (손자녀의 자녀) 및 손자녀의 추론 배우자(손자부·손서) ──
     if (grandchildIds.length > 0) {
-      await fetchChildrenOf(grandchildIds, {
+      const greatGrandchildIds = await fetchChildrenOf(grandchildIds, {
         take: 100,
         scope: 'great-grandchildren',
       })
+      if (greatGrandchildIds.length > 0) {
+        const grandchildIdSet = new Set(grandchildIds)
+        const grandchildInferredSpouseIds: string[] = []
+        for (const ggcid of greatGrandchildIds) {
+          const ggc = nodeMap.get(ggcid)
+          if (!ggc) continue
+          const fInGc = ggc.fatherId && grandchildIdSet.has(ggc.fatherId)
+          const mInGc = ggc.motherId && grandchildIdSet.has(ggc.motherId)
+          if (fInGc || mInGc) {
+            if (ggc.fatherId && !grandchildIdSet.has(ggc.fatherId)) {
+              grandchildInferredSpouseIds.push(ggc.fatherId)
+            }
+            if (ggc.motherId && !grandchildIdSet.has(ggc.motherId)) {
+              grandchildInferredSpouseIds.push(ggc.motherId)
+            }
+            if (ggc.adoptiveFatherId && !grandchildIdSet.has(ggc.adoptiveFatherId)) {
+              adoptedChildBioParentIds.push(ggc.adoptiveFatherId)
+            }
+            if (ggc.adoptiveMotherId && !grandchildIdSet.has(ggc.adoptiveMotherId)) {
+              adoptedChildBioParentIds.push(ggc.adoptiveMotherId)
+            }
+          }
+          const afInGc = ggc.adoptiveFatherId && grandchildIdSet.has(ggc.adoptiveFatherId)
+          const amInGc = ggc.adoptiveMotherId && grandchildIdSet.has(ggc.adoptiveMotherId)
+          if (afInGc || amInGc) {
+            if (ggc.adoptiveFatherId && !grandchildIdSet.has(ggc.adoptiveFatherId)) {
+              grandchildInferredSpouseIds.push(ggc.adoptiveFatherId)
+            }
+            if (ggc.adoptiveMotherId && !grandchildIdSet.has(ggc.adoptiveMotherId)) {
+              grandchildInferredSpouseIds.push(ggc.adoptiveMotherId)
+            }
+            if (ggc.fatherId && !grandchildIdSet.has(ggc.fatherId)) {
+              adoptedChildBioParentIds.push(ggc.fatherId)
+            }
+            if (ggc.motherId && !grandchildIdSet.has(ggc.motherId)) {
+              adoptedChildBioParentIds.push(ggc.motherId)
+            }
+          }
+        }
+        await fetchBatch(grandchildInferredSpouseIds, {
+          cap: 60,
+          scope: 'grandchildren-inferred-spouses',
+        })
+      }
     }
+
+    // ── Step 8c (구 7a): 형제의 반대편 부모 + 양자녀의 생부모·출계 자녀의 양부모 보조 노드 (cap 40) ──
+    // 반드시 방계 친척(Step 7b~7e) 및 후손·자녀 배우자(Step 8~8b) 수집 이후에 실행한다.
+    // 그렇지 않으면 백숙부·사촌이 양자의 생부로 먼저 조회될 때 supportOnlyNodeIds로 낙인찍혀
+    // Step 9 배우자 페치 및 Step 12 부부 간선 생성에서 누락된다.
+    const siblingOtherParentIds: string[] = [...adoptedChildBioParentIds]
+    for (const sid of sibIds) {
+      const sib = nodeMap.get(sid)
+      if (!sib) continue
+      if (sib.fatherId && !egoParentIds.includes(sib.fatherId)) siblingOtherParentIds.push(sib.fatherId)
+      if (sib.motherId && !egoParentIds.includes(sib.motherId)) siblingOtherParentIds.push(sib.motherId)
+      if (sib.adoptiveFatherId && !egoParentIds.includes(sib.adoptiveFatherId))
+        siblingOtherParentIds.push(sib.adoptiveFatherId)
+      if (sib.adoptiveMotherId && !egoParentIds.includes(sib.adoptiveMotherId))
+        siblingOtherParentIds.push(sib.adoptiveMotherId)
+    }
+    // 정규 혈족·방계·후손 수집 이후에도 아직 nodeMap에 없던 순수 보조 노드만 기억 —
+    // Step 9 배우자 수집(cap 200)에서 제외해 이름 해소 보조용 노드의 배우자가 예산을 선점하지 않게 한다.
+    const supportOnlyCandidateIds = siblingOtherParentIds.filter(id => !nodeMap.has(id))
+    await fetchBatch(siblingOtherParentIds, { cap: 40, scope: 'sibling-other-parents' })
+    const supportOnlyNodeIds = new Set(supportOnlyCandidateIds.filter(id => nodeMap.has(id)))
 
     // ── Step 9: 수집된 모든 인물의 배우자 (cap 200) ───────────────────
     // 4대 조상·방계·후손이 모두 nodeMap에 들어와 있어 부풀 위험이 큰 단계.
     // cap을 두지 않으면 합스부르크급 가계에서 한번에 수천 행을 페치하게 된다.
     const allSpouseIds: string[] = []
     for (const [nid, p] of nodeMap) {
-      // Step 7a 이름 해소 보조 전용 노드 — 배우자는 임베드가 렌더하지 않는 데이터라 cap 예산에서 제외
+      // 이름 해소 보조 전용 노드 — 배우자는 임베드가 렌더하지 않는 데이터라 cap 예산에서 제외
       if (supportOnlyNodeIds.has(nid)) continue
       for (const sid of getSpouseIds(p)) allSpouseIds.push(sid)
     }
+    for (const sid of allSpouseIds) supportOnlyNodeIds.delete(sid)
     await fetchBatch(allSpouseIds, { cap: 200, scope: 'all-spouses' })
 
-    // ── Step 10: ego 배우자의 부모 (처가/시가, cap 80) ────────────────
+    // ── Step 10: ego 배우자의 부모·양부모 (처가/시가, cap 80) ───────────
     const spouseParentIds: string[] = []
     for (const sid of allEgoSpouseIds) {
       const s = nodeMap.get(sid)
       if (s?.fatherId) spouseParentIds.push(s.fatherId)
       if (s?.motherId) spouseParentIds.push(s.motherId)
+      if (s?.adoptiveFatherId) spouseParentIds.push(s.adoptiveFatherId)
+      if (s?.adoptiveMotherId) spouseParentIds.push(s.adoptiveMotherId)
     }
+    for (const pid of spouseParentIds) supportOnlyNodeIds.delete(pid)
     await fetchBatch(spouseParentIds, { cap: 80, scope: 'spouse-parents' })
 
     // ── Step 11: 배우자 부모의 배우자 (처가/시가 부부쌍, cap 80) ───────
@@ -5631,6 +6440,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       const p = nodeMap.get(pid)
       for (const sid of getSpouseIds(p ?? {})) spouseParentSpouseIds.push(sid)
     }
+    for (const sid of spouseParentSpouseIds) supportOnlyNodeIds.delete(sid)
     await fetchBatch(spouseParentSpouseIds, { cap: 80, scope: 'spouse-parent-spouses' })
 
     // ── Step 12: 전 세대 공동 부모(fatherId + motherId) 추론 부부 간선 보강 ─
@@ -5652,6 +6462,21 @@ export class PersonPrismaRepository implements IPersonRepository {
         !supportOnlyNodeIds.has(mId)
       ) {
         addSpouseEdge(fId, mId, undefined, true)
+      }
+      const afId = p.adoptiveFatherId as string | null | undefined
+      const amId = p.adoptiveMotherId as string | null | undefined
+      if (
+        afId &&
+        amId &&
+        afId !== amId &&
+        afId !== nid &&
+        amId !== nid &&
+        nodeMap.has(afId) &&
+        nodeMap.has(amId) &&
+        !supportOnlyNodeIds.has(afId) &&
+        !supportOnlyNodeIds.has(amId)
+      ) {
+        addSpouseEdge(afId, amId, undefined, true)
       }
     }
 
@@ -5728,6 +6553,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         birthYear:  yearOfDate(p.birthDate),
         deathYear:  yearOfDate(p.deathDate),
         birthOrder: (p.birthOrder ?? null) as number | null,
+        genderBirthOrder: (p.genderBirthOrder ?? null) as number | null,
         isAlive:    Boolean(p.isAlive),
         floruitStartYear: (p.floruitStartYear ?? null) as number | null,
         floruitEndYear:   (p.floruitEndYear ?? null) as number | null,
@@ -5742,6 +6568,10 @@ export class PersonPrismaRepository implements IPersonRepository {
         // 스칼라에서도 null 새니타이즈 — 클라이언트가 유령 조상 카드를 그리지 않게.
         fatherId: (p.fatherId && p.fatherId !== p.id ? p.fatherId : null) as string | null,
         motherId: (p.motherId && p.motherId !== p.id ? p.motherId : null) as string | null,
+        adoptiveFatherId:
+          (p.adoptiveFatherId && p.adoptiveFatherId !== p.id ? p.adoptiveFatherId : null) as string | null,
+        adoptiveMotherId:
+          (p.adoptiveMotherId && p.adoptiveMotherId !== p.id ? p.adoptiveMotherId : null) as string | null,
         // 새 메타 필드 (UI 카드 hover/확장에 사용)
         originalName:         (p.originalName ?? null) as string | null,
         posthumousName:       (p.posthumousName ?? null) as string | null,
@@ -5795,11 +6625,14 @@ export class PersonPrismaRepository implements IPersonRepository {
       source: string
       target: string
       type: 'parent-child' | 'spouse'
+      lineage?: 'biological' | 'adoptive'
       /** 부호 연도 — BC는 음수 */
       marriageStartYear?: number | null
       marriageEndYear?: number | null
+      marriageEndReason?: string | null
       /** 혼인 서열/형태 (MarriageRank 토큰) */
       marriageRank?: string | null
+      rankHolderId?: string | null
       note?: string | null
       /** PersonSpouse 레코드가 없고 자녀의 다른 친부모로 추정된 배우자 */
       inferred?: boolean
@@ -5810,7 +6643,14 @@ export class PersonPrismaRepository implements IPersonRepository {
       // 쓰기 경로(PersonService)에서 막지만 기존 손상 행에 대한 read-side 안전망.
       if (src === tgt) continue
       if (nodeMap.has(src) && nodeMap.has(tgt))
-        edges.push({ source: src, target: tgt, type: 'parent-child' })
+        edges.push({ source: src, target: tgt, type: 'parent-child', lineage: 'biological' })
+    }
+    for (const key of adoptiveParentChildSet) {
+      if (parentChildSet.has(key)) continue
+      const [src, tgt] = key.split('__')
+      if (src === tgt) continue
+      if (nodeMap.has(src) && nodeMap.has(tgt))
+        edges.push({ source: src, target: tgt, type: 'parent-child', lineage: 'adoptive' })
     }
     for (const [key, meta] of spouseEdgeMeta) {
       const [a, b] = key.split('__')
@@ -5821,7 +6661,9 @@ export class PersonPrismaRepository implements IPersonRepository {
           type: 'spouse',
           marriageStartYear: meta.marriageStartYear,
           marriageEndYear: meta.marriageEndYear,
+          marriageEndReason: meta.marriageEndReason,
           marriageRank: meta.marriageRank,
+          rankHolderId: meta.rankHolderId,
           note: meta.note,
           // 결혼일·메모가 비어 있어도 실제 PersonSpouse면 확정(실선). 추론 엣지만 '추정'(점선).
           inferred: meta.derived,

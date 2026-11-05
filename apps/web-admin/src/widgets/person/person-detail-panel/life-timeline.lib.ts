@@ -18,6 +18,8 @@ export interface LifeRecordInput {
   title: string
   startDate?: string | null
   endDate?: string | null
+  /** 종료 사유가 기록되어 있어 종료일 미상이어도 열린(현직) 막대가 아닌지 여부 */
+  closed?: boolean
 }
 
 export interface LifeBar {
@@ -79,15 +81,26 @@ export function computeLifeTimeline(input: {
   const firstStart = Math.min(...dated.map((entry) => entry.start))
   const from = birthYear ?? Math.floor(firstStart)
   /* 열린 끝의 기본값 — 고인은 사망 연도(모르면 그 구간 시작 직후), 생존자는 현재 */
-  const openEnd = (start: number) =>
-    deathYear != null ? deathYear + 0.5 : isDeceased ? start + 0.5 : nowYear
+  const openEnd = (start: number, closed?: boolean) =>
+    closed
+      ? start + 0.5
+      : deathYear != null
+        ? deathYear + 0.5
+        : isDeceased
+          ? start + 0.5
+          : nowYear
   const withEnds = dated.map(({ record, start }) => {
     const end = yearFraction(record.endDate)
+    const isOpen = end == null && !record.closed
     return {
       record,
       start,
-      end: end != null ? Math.max(end, start) : Math.max(openEnd(start), start),
-      open: end == null,
+      hasExplicitEnd: end != null,
+      end:
+        end != null
+          ? Math.max(end, start)
+          : Math.max(openEnd(start, record.closed), start),
+      open: isOpen,
     }
   })
   const lastEnd = Math.max(...withEnds.map((entry) => entry.end))
@@ -105,7 +118,7 @@ export function computeLifeTimeline(input: {
   const bars = withEnds
     .slice()
     .sort((left, right) => left.start - right.start || right.end - left.end)
-    .map(({ record, start, end, open }) => {
+    .map(({ record, start, hasExplicitEnd, end, open }) => {
       let lane = laneEnds.findIndex((laneEnd) => laneEnd <= start + 0.01)
       if (lane === -1) {
         lane = laneEnds.length < MAX_LANES ? laneEnds.length : MAX_LANES - 1
@@ -119,7 +132,7 @@ export function computeLifeTimeline(input: {
         x0: position(start),
         x1: position(end),
         startYear: Math.floor(start),
-        endYear: open ? null : Math.floor(end),
+        endYear: hasExplicitEnd ? Math.floor(end) : null,
         open,
       }
     })
@@ -131,7 +144,11 @@ export function computeLifeTimeline(input: {
     year <= to;
     year += step
   ) {
-    ticks.push({ year, x: position(year) })
+    // 서력 기원에는 0년이 없으므로 0년 눈금은 건너뛰거나 서기 1년으로 대체한다
+    const displayYear = year === 0 ? 1 : year
+    if (displayYear > to) continue
+    if (ticks.some((t) => t.year === displayYear)) continue
+    ticks.push({ year: displayYear, x: position(displayYear) })
   }
 
   return { from, to, bars, laneCount: laneEnds.length, ticks }

@@ -45,33 +45,47 @@ function formatYearLabel(
   return era === 'BC' ? `BC ${year}` : `${year}`
 }
 
+function formatFloruitLabel(p: Person): string {
+  const s = p.floruitStartYear
+  const e = p.floruitEndYear
+  if (s == null && e == null) return ''
+  const era = p.floruitEra ?? 'AD'
+  const prefix = era === 'BC' ? 'BC ' : ''
+  if (s != null && e != null && s !== e) return `활동 ${prefix}${s}–${e}`
+  const single = s ?? e
+  return single != null ? `활동 ${prefix}${single}` : ''
+}
+
+function primarySortYear(p: Person): number {
+  if (p.birthYear != null) return signedYear(p.birthEra ?? null, p.birthYear)
+  const flYear = p.floruitStartYear ?? p.floruitEndYear ?? null
+  if (flYear != null) return signedYear(p.floruitEra ?? null, flYear)
+  if (p.deathYear != null) return signedYear(p.deathEra ?? null, p.deathYear)
+  return Number.POSITIVE_INFINITY
+}
+
 function lifespan(p: Person): string {
   const b = formatYearLabel(p.birthEra ?? null, p.birthYear ?? null)
   const d = p.isAlive
     ? '—'
     : formatYearLabel(p.deathEra ?? null, p.deathYear ?? null)
-  if (!b && !d) return '연도 미상'
+  if (!b && !d) {
+    const fl = formatFloruitLabel(p)
+    return fl || '연도 미상'
+  }
   if (!b) return `? — ${d || '?'}`
   if (p.isAlive) return `${b} —`
   return `${b} — ${d || '?'}`
 }
 
 /**
- * 멤버 정렬: 세대(GENERATION)는 출생순이 자연스럽고,
+ * 멤버 정렬: 세대(GENERATION)는 출생순(활동연대·사망연도 폴백 포함)이 자연스럽고,
  * 그 외(계파·동기 등)는 백엔드 sortOrder(수동 정렬)를 존중.
  */
 function sortMembers(group: PersonGroup) {
   if (group.type === 'GENERATION') {
     return [...group.members].sort((a, b) => {
-      const ya =
-        a.person.birthYear != null
-          ? signedYear(a.person.birthEra ?? null, a.person.birthYear)
-          : Number.POSITIVE_INFINITY
-      const yb =
-        b.person.birthYear != null
-          ? signedYear(b.person.birthEra ?? null, b.person.birthYear)
-          : Number.POSITIVE_INFINITY
-      return ya - yb
+      return primarySortYear(a.person) - primarySortYear(b.person)
     })
   }
   // 백엔드가 이미 sortOrder→createdAt으로 정렬해 내려줌 — 순서 유지

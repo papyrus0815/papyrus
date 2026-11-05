@@ -50,17 +50,41 @@ export function CardHoverInfo({ person }: { person: PersonMetaSource }) {
     const ftNode = person.id ? lookup.get(person.id) : undefined
     const fId = person.fatherId ?? ftNode?.fatherId ?? null
     const mId = person.motherId ?? ftNode?.motherId ?? null
+    const afId = person.adoptiveFatherId ?? ftNode?.adoptiveFatherId ?? null
+    const amId = person.adoptiveMotherId ?? ftNode?.adoptiveMotherId ?? null
+    // withParentNames(..., { omitParentId: egoId })가 의도적으로 null을 주입한 경우(자명한 본인 부모 생략)
+    // null을 그대로 보존하고, undefined(미주입)일 때만 lookup에서 해소한다.
     const resolvedFatherName =
-      person.fatherName ??
-      (fId && lookup.has(fId) ? getPersonDisplayName(lookup.get(fId)!, true) : null)
+      person.fatherName !== undefined
+        ? person.fatherName
+        : fId && lookup.has(fId)
+          ? getPersonDisplayName(lookup.get(fId)!, true)
+          : null
     const resolvedMotherName =
-      person.motherName ??
-      (mId && lookup.has(mId) ? getPersonDisplayName(lookup.get(mId)!, true) : null)
+      person.motherName !== undefined
+        ? person.motherName
+        : mId && lookup.has(mId)
+          ? getPersonDisplayName(lookup.get(mId)!, true)
+          : null
+    const resolvedAdoptiveFatherName =
+      person.adoptiveFatherName !== undefined
+        ? person.adoptiveFatherName
+        : afId && lookup.has(afId)
+          ? getPersonDisplayName(lookup.get(afId)!, true)
+          : null
+    const resolvedAdoptiveMotherName =
+      person.adoptiveMotherName !== undefined
+        ? person.adoptiveMotherName
+        : amId && lookup.has(amId)
+          ? getPersonDisplayName(lookup.get(amId)!, true)
+          : null
 
     const baseLines = buildPersonTooltipLines({
       ...person,
       fatherName: resolvedFatherName,
       motherName: resolvedMotherName,
+      adoptiveFatherName: resolvedAdoptiveFatherName,
+      adoptiveMotherName: resolvedAdoptiveMotherName,
     })
     const spouseNames = person.id ? spouseNamesLookup.get(person.id) : undefined
     const withSpouses =
@@ -608,14 +632,14 @@ export const GeoNode = styled.div<{
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 10px;
+  gap: 8px;
   flex: 0 0 ${NODE_W}px;
   width: ${NODE_W}px;
   min-width: ${NODE_W}px;
   max-width: ${NODE_W}px;
-  height: ${NODE_H}px;
+  height: auto;
   min-height: ${NODE_H}px;
-  padding: 18px 14px 16px;
+  padding: 16px 12px 18px;
   border-radius: 16px;
   justify-content: flex-start;
   box-sizing: border-box;
@@ -767,13 +791,13 @@ export const AvatarFrame = styled.div`
 `
 
 export const NodeAvatar = styled.div<{ $role: string; $hasImage?: boolean }>`
-  width: 96px;
-  height: 96px;
+  width: 88px;
+  height: 88px;
   border-radius: 9999px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
   letter-spacing: -0.03em;
   flex-shrink: 0;
@@ -796,15 +820,19 @@ const NodeNameWrap = styled.div`
 
 const NodeRegnalName = styled.div`
   /* 군주 라벨 — ♛ regnalName + 대수 + 즉위국명. 카드 폭(140~192px)에서 잘리지 않도록
-     줄바꿈 허용(normal). 길면 한 줄 → 두 줄로 자연스럽게 wrap. */
+     최대 2줄까지 줄바꿈 허용 후 말줄임 처리해 카드 세로 오버플로를 방지한다. */
   font-size: 11px;
   font-weight: 700;
   letter-spacing: -0.01em;
-  line-height: 1.3;
+  line-height: 1.25;
   color: ${({ theme }) => theme.colors.warning};
   word-break: keep-all;
   white-space: normal;
   overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   max-width: 100%;
   padding: 0 4px;
   text-align: center;
@@ -876,12 +904,16 @@ const NodeDynasty = styled.div`
 `
 
 export const NodeBadge = styled.span<{ $role: string }>`
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 500;
   letter-spacing: -0.01em;
-  padding: 4px 10px;
+  line-height: 1.25;
+  padding: 3px 9px;
   border-radius: 8px;
   margin-top: auto;
+  max-width: 100%;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 
   ${({ $role, theme }) => {
     const dark = theme.mode === 'dark'

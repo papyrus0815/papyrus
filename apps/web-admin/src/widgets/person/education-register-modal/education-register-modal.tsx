@@ -16,6 +16,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiChevronDown, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { personKeys } from '@/entities/person/query-keys'
 import { getApiConnection } from '@/shared/api/client'
 import {
   type OrganizationType,
@@ -169,6 +170,12 @@ export function EducationRegisterModal({
     setSubmitting(true)
     try {
       const classNumberValue = classNumber.trim()
+      const invalidateRelatedPersonQueries = () => {
+        queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
+        queryClient.invalidateQueries({ queryKey: personKeys.all })
+        queryClient.invalidateQueries({ queryKey: personKeys.infographic })
+        queryClient.invalidateQueries({ queryKey: ['persons', 'compare-records'] })
+      }
       if (isEditMode && initialEducation?.id) {
         await personCareerApi.updateEducation(initialEducation.id, {
           organizationId,
@@ -185,7 +192,7 @@ export function EducationRegisterModal({
           endDate: endDate || (null as unknown as undefined),
           notes: notes.trim() || (null as unknown as undefined),
         })
-        queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
+        invalidateRelatedPersonQueries()
         notify.success('학력이 수정되었습니다.')
         onSuccess?.()
         onClose()
@@ -205,7 +212,7 @@ export function EducationRegisterModal({
         endDate: endDate || undefined,
         notes: notes.trim() || undefined,
       })
-      queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
+      invalidateRelatedPersonQueries()
       notify.success('학력이 등록되었습니다.')
       onSuccess?.()
       if (keepOpen) {

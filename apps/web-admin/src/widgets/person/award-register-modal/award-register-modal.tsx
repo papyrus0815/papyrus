@@ -14,6 +14,7 @@ import { useQueryClient } from '@tanstack/react-query'
 
 import styled from 'styled-components'
 
+import { personKeys } from '@/entities/person/query-keys'
 import { personCareerApi } from '@/shared/api/person-career'
 import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
@@ -81,6 +82,12 @@ export function AwardRegisterModal({
     if (!canSubmit) return
     setSubmitting(true)
     try {
+      const invalidateRelatedPersonQueries = () => {
+        queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
+        queryClient.invalidateQueries({ queryKey: personKeys.all })
+        queryClient.invalidateQueries({ queryKey: personKeys.infographic })
+        queryClient.invalidateQueries({ queryKey: ['persons', 'compare-records'] })
+      }
       if (isEditMode && initialAward?.id) {
         await personCareerApi.updateAward(initialAward.id, {
           awardName: awardName.trim(),
@@ -89,7 +96,7 @@ export function AwardRegisterModal({
           awardDate: awardDate || (null as unknown as undefined),
           description: description.trim() || (null as unknown as undefined),
         })
-        queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
+        invalidateRelatedPersonQueries()
         notify.success('수상·훈장이 수정되었습니다.')
         onSuccess?.()
         onClose()
@@ -103,7 +110,7 @@ export function AwardRegisterModal({
         awardDate: awardDate || undefined,
         description: description.trim() || undefined,
       })
-      queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
+      invalidateRelatedPersonQueries()
       notify.success('수상·훈장이 등록되었습니다.')
       onSuccess?.()
       onClose()

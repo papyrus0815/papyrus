@@ -53,6 +53,10 @@ import {
   UpsertPersonStatsDto,
   UpsertPersonTraitsDto,
   UpsertPersonEvaluationDto,
+  LinkPersonFamilyDto,
+  UpdatePersonSpouseRelationDto,
+  UpdatePersonChildMetaDto,
+  FamilyLinkKind,
 } from './dto'
 
 export interface PersonCountByModernCountry {
@@ -548,8 +552,11 @@ export class PersonController {
     historicalCountryId: string | null
     fatherId: string | null
     motherId: string | null
+    adoptiveFatherId: string | null
+    adoptiveMotherId: string | null
     illegitimate: boolean
     birthOrder: number | null
+    genderBirthOrder: number | null
     country: any
     dynasty: any
     religion: any
@@ -566,6 +573,8 @@ export class PersonController {
     deathAdminDivision: { id: string; name: string } | null
     father: any
     mother: any
+    adoptiveFather: any
+    adoptiveMother: any
     children: any[]
     siblings: any[]
     foundedCompanies: any[]
@@ -610,21 +619,49 @@ export class PersonController {
       this.personService.findHumanRelationshipsForDetail(id),
     ])
 
-    // 출생 서열(birthOrder) 1차 → 부호 있는 출생연도(BC 음수) 2차 정렬 유틸
-    const signedBirthYearOf = (p: any): number => {
-      if (!p?.birthDate) return Number.POSITIVE_INFINITY
+    // 출생 서열(birthOrder) 1차(양쪽 보유 시) → 동성 서열(genderBirthOrder) → 부호 출생연도(BC 음수) → 활동연대(floruit) 정렬 유틸
+    const signedBirthYearOf = (p: any): number | null => {
+      if (!p?.birthDate) return null
       const d = p.birthDate instanceof Date ? p.birthDate : new Date(p.birthDate)
       const y = d.getUTCFullYear()
-      if (Number.isNaN(y)) return Number.POSITIVE_INFINITY
+      if (Number.isNaN(y)) return null
       return p.birthEra === 'BC' ? -Math.abs(y) : y
     }
+    const signedFloruitStartOf = (p: any): number | null => {
+      if (p?.floruitStartYear == null) return null
+      return p.floruitEra === 'BC' ? -Math.abs(p.floruitStartYear) : p.floruitStartYear
+    }
     const compareFamilySiblings = (a: any, b: any): number => {
+      if (a?.birthOrder != null && b?.birthOrder != null && a.birthOrder !== b.birthOrder) {
+        return a.birthOrder - b.birthOrder
+      }
+      const ga = (a?.gender ?? '').toUpperCase()
+      const gb = (b?.gender ?? '').toUpperCase()
+      if (
+        ga &&
+        gb &&
+        ga === gb &&
+        a?.genderBirthOrder != null &&
+        b?.genderBirthOrder != null &&
+        a.genderBirthOrder !== b.genderBirthOrder
+      ) {
+        return a.genderBirthOrder - b.genderBirthOrder
+      }
+      const ay = signedBirthYearOf(a)
+      const by = signedBirthYearOf(b)
+      if (ay != null && by != null && ay !== by) return ay - by
       const ao = a?.birthOrder ?? Number.POSITIVE_INFINITY
       const bo = b?.birthOrder ?? Number.POSITIVE_INFINITY
       if (ao !== bo) return ao - bo
-      const ay = signedBirthYearOf(a)
-      const by = signedBirthYearOf(b)
-      if (ay !== by) return ay - by
+      const ayInf = ay ?? Number.POSITIVE_INFINITY
+      const byInf = by ?? Number.POSITIVE_INFINITY
+      if (ayInf !== byInf) return ayInf - byInf
+      const af = signedFloruitStartOf(a) ?? Number.POSITIVE_INFINITY
+      const bf = signedFloruitStartOf(b) ?? Number.POSITIVE_INFINITY
+      if (af !== bf) return af - bf
+      const ago = a?.genderBirthOrder ?? Number.POSITIVE_INFINITY
+      const bgo = b?.genderBirthOrder ?? Number.POSITIVE_INFINITY
+      if (ago !== bgo) return ago - bgo
       return String(a?.id ?? '').localeCompare(String(b?.id ?? ''))
     }
     const rankOrderOf = (rank?: string | null): number => {
@@ -639,12 +676,67 @@ export class PersonController {
       }
     }
 
-    // 부모와 자녀 중복 제거
+    const extractRegnalName = (m: any): string | null =>
+      m?.regnalName ?? m?.GovernmentTenures?.[0]?.regnalName ?? null
+    const extractYear = (d: any): number | null => {
+      if (!d) return null
+      const dt = d instanceof Date ? d : new Date(d)
+      return Number.isNaN(dt.getTime()) ? null : dt.getUTCFullYear()
+    }
+    const extractMonth = (d: any, precision?: string | null): number | null => {
+      if (!d || precision === 'year') return null
+      const dt = d instanceof Date ? d : new Date(d)
+      return Number.isNaN(dt.getTime()) ? null : dt.getUTCMonth() + 1
+    }
+    const extractDay = (d: any, precision?: string | null): number | null => {
+      if (!d || precision === 'year' || precision === 'month') return null
+      const dt = d instanceof Date ? d : new Date(d)
+      return Number.isNaN(dt.getTime()) ? null : dt.getUTCDate()
+    }
+    const formatMemberName = (m: any): string | null => {
+      if (!m) return null
+      const regnal = extractRegnalName(m)
+      if (regnal) return regnal
+      const order = m.nameDisplayOrder ?? m.country?.defaultNameDisplayOrder ?? 'korean'
+      const parts =
+        order === 'western'
+          ? [m.name, m.middleName, m.surname]
+          : [m.surname, m.middleName, m.name]
+      const joined = parts
+        .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+        .join(order === 'western' ? ' ' : '')
+      return joined || m.name || null
+    }
+    const enrichFamilyMember = (m: any): any => {
+      if (!m) return null
+      return {
+        ...m,
+        regnalName: extractRegnalName(m),
+        birthYear: m.birthYear ?? extractYear(m.birthDate),
+        birthMonth: m.birthMonth ?? extractMonth(m.birthDate, m.birthDatePrecision),
+        birthDay: m.birthDay ?? extractDay(m.birthDate, m.birthDatePrecision),
+        deathYear: m.deathYear ?? extractYear(m.deathDate),
+        deathMonth: m.deathMonth ?? extractMonth(m.deathDate, m.deathDatePrecision),
+        deathDay: m.deathDay ?? extractDay(m.deathDate, m.deathDatePrecision),
+        father: m.father ? enrichFamilyMember(m.father) : m.father,
+        mother: m.mother ? enrichFamilyMember(m.mother) : m.mother,
+        adoptiveFather: m.adoptiveFather ? enrichFamilyMember(m.adoptiveFather) : m.adoptiveFather,
+        adoptiveMother: m.adoptiveMother ? enrichFamilyMember(m.adoptiveMother) : m.adoptiveMother,
+      }
+    }
+
+    // 부모와 자녀(친자녀 + 양자녀) 중복 제거
     const childrenMap = new Map()
     person.childrenFromFather?.forEach((child: any) =>
       childrenMap.set(child.id, child),
     )
     person.childrenFromMother?.forEach((child: any) =>
+      childrenMap.set(child.id, child),
+    )
+    person.adoptedChildrenAsFather?.forEach((child: any) =>
+      childrenMap.set(child.id, child),
+    )
+    person.adoptedChildrenAsMother?.forEach((child: any) =>
       childrenMap.set(child.id, child),
     )
     // 각 자녀에 주 배우자(spouse) 평탄화 — 가계도 렌더용.
@@ -653,10 +745,20 @@ export class PersonController {
     const children = Array.from(childrenMap.values())
       .sort(compareFamilySiblings)
       .map((child: any) => {
+        const sanitizeCoupleRankHolderId = (
+          rawHolderId: unknown,
+          idA: unknown,
+          idB: unknown,
+        ): string | null => {
+          if (typeof rawHolderId !== 'string' || !rawHolderId) return null
+          return rawHolderId === idA || rawHolderId === idB ? rawHolderId : null
+        }
         const spouseCandidates = [
           ...(child.spouseRelationsAsPerson ?? []).map((r: any) => ({
             node: r.spouse,
             marriageRank: r.marriageRank ?? null,
+            marriageEndReason: r.marriageEndReason ?? null,
+            rankHolderId: sanitizeCoupleRankHolderId(r.rankHolderId, child.id, r.spouse?.id),
             marriageStartYear:
               r.marriageStartYear != null
                 ? r.marriageStartEra === 'BC' ? -r.marriageStartYear : r.marriageStartYear
@@ -673,6 +775,8 @@ export class PersonController {
           ...(child.spouseRelationsAsSpouse ?? []).map((r: any) => ({
             node: r.person,
             marriageRank: r.marriageRank ?? null,
+            marriageEndReason: r.marriageEndReason ?? null,
+            rankHolderId: sanitizeCoupleRankHolderId(r.rankHolderId, child.id, r.person?.id),
             marriageStartYear:
               r.marriageStartYear != null
                 ? r.marriageStartEra === 'BC' ? -r.marriageStartYear : r.marriageStartYear
@@ -688,28 +792,66 @@ export class PersonController {
           })),
         ]
           .filter((c) => Boolean(c.node))
-          .sort((a, b) => {
-            const rd = rankOrderOf(a.marriageRank) - rankOrderOf(b.marriageRank)
-            if (rd !== 0) return rd
-            const ay = a.marriageStartYear ?? Number.POSITIVE_INFINITY
-            const by = b.marriageStartYear ?? Number.POSITIVE_INFINITY
-            return ay - by
-          })
-        // 배우자 ID 중복 제거
+        // 배우자 ID 중복 제거 (양방향 중복행이 있을 때 비어있지 않은 메타데이터를 필드 단위로 병합한 뒤 정렬)
         const uniqueSpouses: typeof spouseCandidates = []
-        const seenSpouseIds = new Set<string>()
+        const byChildSpouseId = new Map<string, (typeof spouseCandidates)[number]>()
         for (const cand of spouseCandidates) {
-          if (cand.node?.id && seenSpouseIds.has(cand.node.id)) continue
-          if (cand.node?.id) seenSpouseIds.add(cand.node.id)
-          uniqueSpouses.push(cand)
+          const sid = cand.node?.id ? String(cand.node.id) : null
+          if (!sid) {
+            uniqueSpouses.push(cand)
+            continue
+          }
+          const existing = byChildSpouseId.get(sid)
+          if (!existing) {
+            const copy = { ...cand }
+            byChildSpouseId.set(sid, copy)
+            uniqueSpouses.push(copy)
+          } else {
+            existing.marriageRank = existing.marriageRank ?? cand.marriageRank
+            existing.marriageEndReason = existing.marriageEndReason ?? cand.marriageEndReason
+            existing.rankHolderId = existing.rankHolderId ?? cand.rankHolderId
+            existing.marriageStartYear = existing.marriageStartYear ?? cand.marriageStartYear
+            existing.marriageEndYear = existing.marriageEndYear ?? cand.marriageEndYear
+          }
         }
+        uniqueSpouses.sort((a, b) => {
+          const rd = rankOrderOf(a.marriageRank) - rankOrderOf(b.marriageRank)
+          if (rd !== 0) return rd
+          const ay = a.marriageStartYear ?? Number.POSITIVE_INFINITY
+          const by = b.marriageStartYear ?? Number.POSITIVE_INFINITY
+          return ay - by
+        })
         const primary = uniqueSpouses[0] ?? null
+        const isAdopted = Boolean(
+          (child.adoptiveFatherId === person.id || child.adoptiveMotherId === person.id) &&
+            child.fatherId !== person.id &&
+            child.motherId !== person.id,
+        )
         return {
-          ...child,
+          ...enrichFamilyMember(child),
+          isAdopted,
+          fatherName:
+            child.fatherId && child.fatherId !== person.id
+              ? formatMemberName(child.father)
+              : null,
+          motherName:
+            child.motherId && child.motherId !== person.id
+              ? formatMemberName(child.mother)
+              : null,
+          adoptiveFatherName:
+            child.adoptiveFatherId && child.adoptiveFatherId !== person.id
+              ? formatMemberName(child.adoptiveFather)
+              : null,
+          adoptiveMotherName:
+            child.adoptiveMotherId && child.adoptiveMotherId !== person.id
+              ? formatMemberName(child.adoptiveMother)
+              : null,
           spouse: primary
             ? {
-                ...primary.node,
+                ...enrichFamilyMember(primary.node),
                 marriageRank: primary.marriageRank,
+                marriageEndReason: primary.marriageEndReason,
+                rankHolderId: primary.rankHolderId,
                 marriageStartYear: primary.marriageStartYear,
                 marriageEndYear: primary.marriageEndYear,
               }
@@ -738,10 +880,27 @@ export class PersonController {
       return obj
     }
 
-    // 형제자매 계산 (부·모의 자녀 중 본인 제외)
+    // 형제자매 계산 (부·모·양부·양모의 친자녀 및 양자녀 중 본인 제외 — 양방향 슬롯 대칭 수집)
     const siblingMap = new Map<string, any>()
-    person.father?.childrenFromFather?.forEach((s: any) => { if (s.id !== person.id) siblingMap.set(s.id, s) })
-    person.mother?.childrenFromMother?.forEach((s: any) => { if (s.id !== person.id) siblingMap.set(s.id, s) })
+    for (const parentRel of [
+      person.father,
+      person.mother,
+      person.adoptiveFather,
+      person.adoptiveMother,
+    ]) {
+      parentRel?.childrenFromFather?.forEach((s: any) => {
+        if (s.id !== person.id) siblingMap.set(s.id, s)
+      })
+      parentRel?.childrenFromMother?.forEach((s: any) => {
+        if (s.id !== person.id) siblingMap.set(s.id, s)
+      })
+      parentRel?.adoptedChildrenAsFather?.forEach((s: any) => {
+        if (s.id !== person.id) siblingMap.set(s.id, s)
+      })
+      parentRel?.adoptedChildrenAsMother?.forEach((s: any) => {
+        if (s.id !== person.id) siblingMap.set(s.id, s)
+      })
+    }
     const siblings = serializeBigInt(
       Array.from(siblingMap.values())
         .sort(compareFamilySiblings)
@@ -751,16 +910,34 @@ export class PersonController {
           surname: s.surname,
           middleName: s.middleName ?? null,
           nameDisplayOrder: s.nameDisplayOrder,
+          regnalName: extractRegnalName(s),
+          templeName: s.templeName ?? null,
+          posthumousName: s.posthumousName ?? null,
+          preEnthronementTitle: s.preEnthronementTitle ?? null,
           country: s.country ?? null,
           gender: s.gender,
           dynasty: s.dynasty,
           birthDate: s.birthDate instanceof Date ? s.birthDate.toISOString() : s.birthDate ?? null,
+          birthYear: s.birthYear ?? extractYear(s.birthDate),
+          birthMonth: s.birthMonth ?? extractMonth(s.birthDate, s.birthDatePrecision),
+          birthDay: s.birthDay ?? extractDay(s.birthDate, s.birthDatePrecision),
           birthEra: s.birthEra ?? null,
           birthDatePrecision: s.birthDatePrecision ?? null,
+          isBirthDateApproximate: Boolean(s.isBirthDateApproximate),
+          isBirthDateUnknown: Boolean(s.isBirthDateUnknown),
           deathDate: s.deathDate instanceof Date ? s.deathDate.toISOString() : s.deathDate ?? null,
+          deathYear: s.deathYear ?? extractYear(s.deathDate),
+          deathMonth: s.deathMonth ?? extractMonth(s.deathDate, s.deathDatePrecision),
+          deathDay: s.deathDay ?? extractDay(s.deathDate, s.deathDatePrecision),
           deathEra: s.deathEra ?? null,
           deathDatePrecision: s.deathDatePrecision ?? null,
+          isDeathDateApproximate: Boolean(s.isDeathDateApproximate),
+          isDeathDateUnknown: Boolean(s.isDeathDateUnknown),
+          floruitStartYear: s.floruitStartYear ?? null,
+          floruitEndYear: s.floruitEndYear ?? null,
+          floruitEra: s.floruitEra ?? null,
           birthOrder: s.birthOrder ?? null,
+          genderBirthOrder: s.genderBirthOrder ?? null,
           isAlive: Boolean(s.isAlive),
           profileImageUrl: s.profileImageUrl ?? null,
           profileImages: s.profileImages ?? [],
@@ -768,6 +945,8 @@ export class PersonController {
           // classifySiblingKinship과 '*' 마커가 동작하도록 가계도 노드와 필드 정합.
           fatherId: s.fatherId ?? null,
           motherId: s.motherId ?? null,
+          adoptiveFatherId: s.adoptiveFatherId ?? null,
+          adoptiveMotherId: s.adoptiveMotherId ?? null,
           illegitimate: Boolean(s.illegitimate),
         })),
     )
@@ -892,29 +1071,42 @@ export class PersonController {
       })(),
       fatherId: person.fatherId ?? null,
       motherId: person.motherId ?? null,
+      adoptiveFatherId: (person as any).adoptiveFatherId ?? null,
+      adoptiveMotherId: (person as any).adoptiveMotherId ?? null,
       // 사생아·서출 — 수정 모달 hydration(체크박스) + 가계도 ego 카드 별표 마커.
       // 누락 시 illegitimate=true 인물을 수정 저장하면 플래그가 무성 클리어된다.
       illegitimate: Boolean(person.illegitimate),
       birthOrder: (person as any).birthOrder ?? null,
-      father: person.father != null ? serializeBigInt(person.father) : null,
-      mother: person.mother != null ? serializeBigInt(person.mother) : null,
+      genderBirthOrder: (person as any).genderBirthOrder ?? null,
+      father: person.father != null ? serializeBigInt(enrichFamilyMember(person.father)) : null,
+      mother: person.mother != null ? serializeBigInt(enrichFamilyMember(person.mother)) : null,
+      adoptiveFather:
+        (person as any).adoptiveFather != null
+          ? serializeBigInt(enrichFamilyMember((person as any).adoptiveFather))
+          : null,
+      adoptiveMother:
+        (person as any).adoptiveMother != null
+          ? serializeBigInt(enrichFamilyMember((person as any).adoptiveMother))
+          : null,
       children: serializeBigInt(children),
       siblings: siblings,
-      foundedCompanies: (person.foundedCompanies || []).map((company: any) => ({
-        id: company.id,
-        name: company.organization?.name ?? null,
-        foundedAt: company.organization?.foundedDate ?? null,
-        description: company.organization?.description ?? null,
-      })),
-      books: person.Book || [],
-      organizationRoles: person.OrganizationPersonRole || [],
-      partyLeaderships: person.PoliticalPartyLeadership || [],
+      foundedCompanies: serializeBigInt(
+        (person.foundedCompanies || []).map((company: any) => ({
+          id: company.id,
+          name: company.organization?.name ?? null,
+          foundedAt: company.organization?.foundedDate ?? null,
+          description: company.organization?.description ?? null,
+        })),
+      ),
+      books: serializeBigInt(person.Book || []),
+      organizationRoles: serializeBigInt(person.OrganizationPersonRole || []),
+      partyLeaderships: serializeBigInt(person.PoliticalPartyLeadership || []),
       partyMemberships: serializeBigInt(person.politicalPartyMemberships || []),
       electionCandidacies: serializeBigInt(person.electionCandidacies || []),
-      militaryCommands: person.MilitaryUnitCommander || [],
-      events: person.PersonEvent || [],
+      militaryCommands: serializeBigInt(person.MilitaryUnitCommander || []),
+      events: serializeBigInt(person.PersonEvent || []),
       governmentPositions: serializeBigInt(person.GovernmentTenures ?? []),
-      spouseRelations: (() => {
+      ...(() => {
         const mapRel = (rel: any, spousePerson: any) => ({
           id: rel.id,
           marriageStartDate: rel.marriageStartDate?.toISOString?.() ?? null,
@@ -929,9 +1121,15 @@ export class PersonController {
           marriageEndMonth: rel.marriageEndMonth ?? null,
           marriageEndDay: rel.marriageEndDay ?? null,
           marriageEndPrecision: rel.marriageEndPrecision ?? null,
+          marriageEndReason: rel.marriageEndReason ?? null,
           marriageRank: rel.marriageRank ?? null,
+          rankHolderId:
+            typeof rel.rankHolderId === 'string' &&
+            (rel.rankHolderId === person.id || rel.rankHolderId === spousePerson?.id)
+              ? rel.rankHolderId
+              : null,
           note: rel.note ?? null,
-          spouse: spousePerson ? serializeBigInt(spousePerson) : null,
+          spouse: spousePerson ? serializeBigInt(enrichFamilyMember(spousePerson)) : null,
         })
         // 혼인 시작 부호 연도(BC 음수) — 구조화 연도 우선(DateTime은 AD 1000+ 전용), 레거시는 ISO 연도
         const signedStartYear = (rel: {
@@ -952,12 +1150,14 @@ export class PersonController {
           marriageStartDate: string | null
           marriageEndYear: number | null
           marriageEndDate: string | null
+          marriageEndReason: string | null
           marriageRank: string | null
           note: string | null
         }) =>
           [
             rel.marriageStartYear != null || rel.marriageStartDate,
             rel.marriageEndYear != null || rel.marriageEndDate,
+            rel.marriageEndReason,
             rel.marriageRank,
             rel.note,
           ].filter(Boolean).length
@@ -974,9 +1174,36 @@ export class PersonController {
             continue
           }
           const kept = bySpouseId.get(spouseId)
-          if (!kept || relRichness(rel) > relRichness(kept)) bySpouseId.set(spouseId, rel)
+          if (!kept) {
+            bySpouseId.set(spouseId, rel)
+          } else {
+            const [primary, secondary] =
+              relRichness(rel) > relRichness(kept) ? [rel, kept] : [kept, rel]
+            bySpouseId.set(spouseId, {
+              id: primary.id,
+              marriageStartDate: primary.marriageStartDate ?? secondary.marriageStartDate ?? null,
+              marriageStartEra: primary.marriageStartEra ?? secondary.marriageStartEra ?? null,
+              marriageStartYear: primary.marriageStartYear ?? secondary.marriageStartYear ?? null,
+              marriageStartMonth: primary.marriageStartMonth ?? secondary.marriageStartMonth ?? null,
+              marriageStartDay: primary.marriageStartDay ?? secondary.marriageStartDay ?? null,
+              marriageStartPrecision:
+                primary.marriageStartPrecision ?? secondary.marriageStartPrecision ?? null,
+              marriageEndDate: primary.marriageEndDate ?? secondary.marriageEndDate ?? null,
+              marriageEndEra: primary.marriageEndEra ?? secondary.marriageEndEra ?? null,
+              marriageEndYear: primary.marriageEndYear ?? secondary.marriageEndYear ?? null,
+              marriageEndMonth: primary.marriageEndMonth ?? secondary.marriageEndMonth ?? null,
+              marriageEndDay: primary.marriageEndDay ?? secondary.marriageEndDay ?? null,
+              marriageEndPrecision:
+                primary.marriageEndPrecision ?? secondary.marriageEndPrecision ?? null,
+              marriageEndReason: primary.marriageEndReason ?? secondary.marriageEndReason ?? null,
+              marriageRank: primary.marriageRank ?? secondary.marriageRank ?? null,
+              rankHolderId: primary.rankHolderId ?? secondary.rankHolderId ?? null,
+              note: primary.note ?? secondary.note ?? null,
+              spouse: primary.spouse ?? secondary.spouse ?? null,
+            })
+          }
         }
-        return [...bySpouseId.values(), ...noSpouseRows]
+        const sortedSpouseRelations = [...bySpouseId.values(), ...noSpouseRows]
           // 안정 정렬: 서열(정실 우선, 미분류 후순위) → 혼인 시작 부호 연도 → 행 id.
           // DB 자연 순서(UUID) 의존을 서버에서 제거해 모든 소비자가 같은 순서를 본다.
           .sort((a, b) => {
@@ -988,11 +1215,11 @@ export class PersonController {
             if (yearA !== yearB) return yearA - yearB
             return String(a.id).localeCompare(String(b.id))
           })
+        return {
+          spouseRelations: sortedSpouseRelations,
+          spouse: sortedSpouseRelations[0]?.spouse ?? null,
+        }
       })(),
-      spouse:
-        person.spouseRelationsAsPerson?.[0]?.spouse ??
-        person.spouseRelationsAsSpouse?.[0]?.person ??
-        null,
       humanRelationships,
       isBirthDateUnknown: person.isBirthDateUnknown ?? false,
       isBirthDateApproximate: (person as any).isBirthDateApproximate ?? false,
@@ -1048,6 +1275,8 @@ export class PersonController {
                   : (c.positionId ?? rawRank?.id ?? null),
               organizationId: c.organizationId ?? c.organization?.id ?? null,
               organization: c.organization ?? null,
+              timelineTitle: c.timelineTitle ?? null,
+              showPositionInfo: c.showPositionInfo ?? true,
               title,
               rawTitle: c.title ?? null,
               position: typeof c.position === 'string' ? c.position : null,
@@ -1173,9 +1402,12 @@ export class PersonController {
       denominationId: dto.denominationId,
       fatherId: dto.fatherId,
       motherId: dto.motherId,
+      adoptiveFatherId: dto.adoptiveFatherId,
+      adoptiveMotherId: dto.adoptiveMotherId,
       // 사생아·서출 — 가계도 카드 별표 마커 (누락 시 체크박스가 조용히 무동작)
       illegitimate: dto.illegitimate,
       birthOrder: dto.birthOrder,
+      genderBirthOrder: dto.genderBirthOrder,
       countryId: dto.countryId,
       historicalCountryId: dto.historicalCountryId,
       birthCityId: dto.birthCityId,
@@ -1202,7 +1434,9 @@ export class PersonController {
           marriageEndMonth: end.month,
           marriageEndDay: end.day,
           marriageEndPrecision: end.precision,
+          marriageEndReason: s.marriageEndReason ?? null,
           marriageRank: s.marriageRank ?? null,
+          rankHolderId: s.rankHolderId,
           note: s.note,
         }
       }),
@@ -1329,9 +1563,12 @@ export class PersonController {
       denominationId: dto.denominationId,
       fatherId: dto.fatherId,
       motherId: dto.motherId,
+      adoptiveFatherId: dto.adoptiveFatherId,
+      adoptiveMotherId: dto.adoptiveMotherId,
       // 사생아·서출 — 가계도 카드 별표 마커 (누락 시 체크박스가 조용히 무동작)
       illegitimate: dto.illegitimate,
       birthOrder: dto.birthOrder,
+      genderBirthOrder: dto.genderBirthOrder,
       countryId: dto.countryId,
       historicalCountryId: dto.historicalCountryId,
       birthCityId: dto.birthCityId,
@@ -1358,7 +1595,9 @@ export class PersonController {
           marriageEndMonth: end.month,
           marriageEndDay: end.day,
           marriageEndPrecision: end.precision,
+          marriageEndReason: s.marriageEndReason,
           marriageRank: s.marriageRank ?? null,
+          rankHolderId: s.rankHolderId,
           note: s.note,
         }
       }),
@@ -1368,6 +1607,50 @@ export class PersonController {
       // 낙관적 동시성 토큰(CC1) — 있으면 repository가 트랜잭션 첫 줄에서 updatedAt 프리컨디션 검사(409).
       expectedUpdatedAt: dto.expectedUpdatedAt,
     }, accountId)
+  }
+
+  // ── 전용 가족 관계 원자적 도메인 API ─────────────────────────────────
+  @Post(':id/family/links')
+  async linkFamilyMember(
+    @Param('id') id: string,
+    @Body() dto: LinkPersonFamilyDto,
+    @Request() req: any,
+  ): Promise<PersonResponseDto> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.linkFamilyMember(id, dto, accountId)
+  }
+
+  @Put(':id/family/spouses/:spouseId')
+  async updateSpouseRelation(
+    @Param('id') id: string,
+    @Param('spouseId') spouseId: string,
+    @Body() dto: UpdatePersonSpouseRelationDto,
+    @Request() req: any,
+  ): Promise<PersonResponseDto> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.updateSpouseRelation(id, spouseId, dto, accountId)
+  }
+
+  @Put(':id/family/children/:childId')
+  async updateChildFamilyMeta(
+    @Param('id') id: string,
+    @Param('childId') childId: string,
+    @Body() dto: UpdatePersonChildMetaDto,
+    @Request() req: any,
+  ): Promise<PersonResponseDto> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.updateChildFamilyMeta(id, childId, dto, accountId)
+  }
+
+  @Delete(':id/family/links/:kind/:targetId')
+  async unlinkFamilyMember(
+    @Param('id') id: string,
+    @Param('kind') kind: FamilyLinkKind,
+    @Param('targetId') targetId: string,
+    @Request() req: any,
+  ): Promise<PersonResponseDto> {
+    const accountId = req.user?.id ?? req.user?.sub
+    return this.personService.unlinkFamilyMember(id, kind, targetId, accountId)
   }
 
   /**

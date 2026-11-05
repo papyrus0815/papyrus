@@ -1,6 +1,10 @@
 import { IsString, IsOptional, IsDateString, IsEnum, IsBoolean, IsArray, ValidateNested, IsNumber, IsIn, ValidateIf, IsInt, Min, Max, MaxLength } from 'class-validator'
 import { Type } from 'class-transformer'
-import type { PersonNicknameType, MarriageRank as PrismaMarriageRank } from '@prisma/client'
+import type {
+  PersonNicknameType,
+  MarriageRank as PrismaMarriageRank,
+  MarriageEndReason as PrismaMarriageEndReason,
+} from '@prisma/client'
 
 import { MaxByteLength } from '../../../shared/max-byte-length.validator'
 
@@ -22,6 +26,24 @@ export enum MarriageRank {
 /** 컴파일 타임 미러 검증 — Prisma MarriageRank와 어긋나면 이 대입에서 tsc 에러 */
 export const MARRIAGE_RANK_MIRROR_SYNCED: `${MarriageRank}` extends PrismaMarriageRank
   ? PrismaMarriageRank extends `${MarriageRank}`
+    ? true
+    : never
+  : never = true
+
+/**
+ * 혼인 종료/해소 사유 (Prisma MarriageEndReason 미러)
+ */
+export enum MarriageEndReason {
+  DEATH = 'DEATH',
+  DIVORCE = 'DIVORCE',
+  DEPOSED = 'DEPOSED',
+  ANNULMENT = 'ANNULMENT',
+  SEPARATION = 'SEPARATION',
+  OTHER = 'OTHER',
+}
+
+export const MARRIAGE_END_REASON_MIRROR_SYNCED: `${MarriageEndReason}` extends PrismaMarriageEndReason
+  ? PrismaMarriageEndReason extends `${MarriageEndReason}`
     ? true
     : never
   : never = true
@@ -50,11 +72,23 @@ export class SpouseRelationDto {
   @Type(() => DateInfoDto)
   marriageEnd?: DateInfoDto | null
 
+  /** 혼인 종료/해소 사유 (사별·이혼·폐위·무효 등). null = 미지정 */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsEnum(MarriageEndReason)
+  marriageEndReason?: MarriageEndReason | null
+
   /** 혼인 서열/형태 (정실·계비·후궁 등). null = 미분류 */
   @IsOptional()
   @ValidateIf((_o, v) => v != null)
   @IsEnum(MarriageRank)
   marriageRank?: MarriageRank | null
+
+  /** 비대칭 혼인 서열(PRIMARY·SECONDARY·CONCUBINE)이 귀속되는 배우자 ID (생략 시 spouseId로 자동 귀속) */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsString()
+  rankHolderId?: string | null
 
   /** @deprecated 레거시 ISO 채널 — 구조화 marriageStart가 정본. 서버는 문자열 직접 파싱(BC '-' 접두 인식) */
   @IsOptional()
@@ -284,20 +318,22 @@ export class CreatePersonDto {
   name!: string
 
   /**
-   * 중간 이름 (Middle Name)
+   * 중간 이름 (Middle Name, 선택). null 가능 (빈값 저장 시)
    * @example "Fitzgerald"
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  middleName?: string
+  middleName?: string | null
 
   /**
-   * 성 (선택)
+   * 성 (선택). 성이 없는 인물(단일명·고대/중세 인물 등)은 null 가능
    * @example "이"
    */
   @IsOptional()
+  @ValidateIf((_o, v) => v != null)
   @IsString()
-  surname?: string
+  surname?: string | null
 
   /**
    * 이름 표시 순서: korean(성+이름), western(이름+성).
@@ -604,6 +640,20 @@ export class CreatePersonDto {
   motherId?: string
 
   /**
+   * 양부(입양·출계 아버지) ID (선택)
+   */
+  @IsOptional()
+  @IsString()
+  adoptiveFatherId?: string
+
+  /**
+   * 양모(입양·출계 어머니) ID (선택)
+   */
+  @IsOptional()
+  @IsString()
+  adoptiveMotherId?: string
+
+  /**
    * 사생아·서출 여부 — 가계도 카드 별표(*) 마커. 기본 false.
    */
   @IsOptional()
@@ -611,13 +661,22 @@ export class CreatePersonDto {
   illegitimate?: boolean
 
   /**
-   * 출생 서열 (1-base, 성별 통합 — 예: 5 → "5남"). null이면 미지정.
+   * 출생 서열 (1-base, 성별 통합 — 예: 5 → "다섯째"). null이면 미지정.
    */
   @IsOptional()
   @ValidateIf((_o, v) => v != null)
   @IsInt()
   @Min(1)
   birthOrder?: number | null
+
+  /**
+   * 성별 내 출생 서열 (1-base, 아들끼리/딸끼리 서열 — 예: 3 + MALE → "3남"). null이면 미지정.
+   */
+  @IsOptional()
+  @ValidateIf((_o, v) => v != null)
+  @IsInt()
+  @Min(1)
+  genderBirthOrder?: number | null
 
   /**
    * 주 국적 — 현대 Country ID (선택). 역사(과거) 국가면 historicalCountryId 사용.

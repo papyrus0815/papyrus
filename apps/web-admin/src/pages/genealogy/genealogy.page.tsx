@@ -29,7 +29,12 @@ import { FiArrowLeft, FiDownload, FiSearch, FiTarget, FiUsers } from 'react-icon
 
 import { getPersonFamilyTree, type FamilyTreePerson, type FamilyTreeData } from '@/shared/api/persons-family-tree'
 import { getUploadImageUrl } from '@/shared/api/upload'
-import { MARRIAGE_RANK_LABELS, marriageRankOrder } from '@/shared/lib/marriage-rank-labels'
+import {
+  MARRIAGE_END_REASON_LABELS,
+  MARRIAGE_RANK_LABELS,
+  marriageRankOrder,
+  resolvePerspectiveMarriageRankLabel,
+} from '@/shared/lib/marriage-rank-labels'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { TRUNCATION_SCOPE_LABEL } from '@/widgets/person/person-genealogy-infographic/constants'
 import { computeKinshipMap, type KinshipInfo } from '@/widgets/person/person-genealogy-infographic/kinship'
@@ -54,7 +59,7 @@ interface LayoutSizes {
 
 const DESKTOP_SIZES: LayoutSizes = {
   NODE_W: 164,
-  NODE_H: 210,
+  NODE_H: 224,
   H_GAP: 48,
   V_GAP: 100,
   AVATAR: 64,
@@ -62,7 +67,7 @@ const DESKTOP_SIZES: LayoutSizes = {
 
 const COMPACT_SIZES: LayoutSizes = {
   NODE_W: 120,
-  NODE_H: 160,
+  NODE_H: 176,
   H_GAP: 32,
   V_GAP: 70,
   AVATAR: 48,
@@ -103,6 +108,8 @@ function computeLayout(
   // ── A. Adjacency ──────────────────────────────────────────────────
   const childrenOf = new Map<string, string[]>()
   const parentsOf  = new Map<string, string[]>()
+  const bioChildrenOf = new Map<string, string[]>()
+  const bioParentsOf  = new Map<string, string[]>()
   const spousesOf  = new Map<string, string[]>()
 
   const addTo = (map: Map<string, string[]>, key: string, val: string) => {
@@ -114,6 +121,10 @@ function computeLayout(
     if (e.type === 'parent-child') {
       addTo(childrenOf, e.source, e.target)
       addTo(parentsOf,  e.target, e.source)
+      if (e.lineage !== 'adoptive') {
+        addTo(bioChildrenOf, e.source, e.target)
+        addTo(bioParentsOf,  e.target, e.source)
+      }
     } else {
       addTo(spousesOf, e.source, e.target)
       addTo(spousesOf, e.target, e.source)
@@ -121,10 +132,25 @@ function computeLayout(
   }
 
   // ── B. Generation assignment ──────────────────────────────────────
-  // Phase 1: BFS from ego via parent-child edges
+  // Phase 1a: BFS from ego via BIOLOGICAL parent-child edges first
+  //           (prevents cross-generational adoption from corrupting biological generation rows)
   const genMap = new Map<string, number>([[egoId, 0]])
   {
     const q: string[] = [egoId]
+    while (q.length) {
+      const id = q.shift()!
+      const g  = genMap.get(id)!
+      for (const pid of bioParentsOf.get(id) ?? []) {
+        if (!genMap.has(pid)) { genMap.set(pid, g - 1); q.push(pid) }
+      }
+      for (const cid of bioChildrenOf.get(id) ?? []) {
+        if (!genMap.has(cid)) { genMap.set(cid, g + 1); q.push(cid) }
+      }
+    }
+  }
+  // Phase 1b: Expand remaining unplaced nodes via adoptive + biological parent-child edges
+  {
+    const q: string[] = [...genMap.keys()]
     while (q.length) {
       const id = q.shift()!
       const g  = genMap.get(id)!
@@ -160,6 +186,9 @@ function computeLayout(
       for (const cid of childrenOf.get(id) ?? []) {
         if (!genMap.has(cid)) { genMap.set(cid, g + 1); q.push(cid) }
       }
+      for (const sid of spousesOf.get(id) ?? []) {
+        if (!genMap.has(sid)) { genMap.set(sid, g); q.push(sid) }
+      }
     }
   }
 
@@ -186,11 +215,26 @@ function computeLayout(
       ),
     )
 
+  // In-law spouses of a descendant (gen >= 1) at the same generation who do not have their own parents at g - 1
+  const descSpouses = (id: string): string[] => {
+    if (id === egoId) return []
+    const g = genMap.get(id) ?? 0
+    if (g < 1) return []
+    return (spousesOf.get(id) ?? []).filter(
+      (sid) =>
+        sid !== egoId &&
+        genMap.get(sid) === g &&
+        !(parentsOf.get(sid) ?? []).some((pid) => genMap.get(pid) === g - 1),
+    )
+  }
+
   const subW = new Map<string, number>()
   const getSubW = (id: string): number => {
     if (subW.has(id)) return subW.get(id)!
     const ch = descCh(id)
-    const w  = ch.length === 0 ? STEP : ch.reduce((s, c) => s + getSubW(c), 0)
+    const ownW = (1 + descSpouses(id).length) * STEP
+    const chW = ch.length === 0 ? 0 : ch.reduce((s, c) => s + getSubW(c), 0)
+    const w = Math.max(ownW, chW)
     subW.set(id, w)
     return w
   }
@@ -199,7 +243,17 @@ function computeLayout(
   const xMap = new Map<string, number>()
 
   const placeDesc = (id: string, cx: number) => {
-    xMap.set(id, cx)
+    if (id === egoId) {
+      xMap.set(id, cx)
+    } else {
+      const spList = descSpouses(id).filter((sid) => !xMap.has(sid))
+      const coupleCount = 1 + spList.length
+      const startX = cx - ((coupleCount - 1) * STEP) / 2
+      xMap.set(id, startX)
+      spList.forEach((sid, idx) => {
+        xMap.set(sid, startX + (idx + 1) * STEP)
+      })
+    }
     const ch = descCh(id)
     if (!ch.length) return
     const total = ch.reduce((s, c) => s + getSubW(c), 0)
@@ -326,16 +380,31 @@ function computeLayout(
   // Place any remaining gen >= 1 descendants whose parents are already placed
   const descGens = [...new Set(genMap.values())].filter((g) => g >= 1).sort((a, b) => a - b)
   for (const g of descGens) {
+    const groupsByParents = new Map<string, { placedParents: string[]; members: FamilyTreePerson[] }>()
     for (const n of nodes) {
       if (genMap.get(n.id) !== g || xMap.has(n.id)) continue
       const placedParents = (parentsOf.get(n.id) ?? []).filter((pid) => xMap.has(pid))
       if (placedParents.length > 0) {
-        const px =
-          placedParents.reduce((s, pid) => s + xMap.get(pid)!, 0) / placedParents.length
-        placeDesc(n.id, px)
+        const key = [...placedParents].sort().join(',')
+        const group = groupsByParents.get(key) ?? { placedParents, members: [] }
+        group.members.push(n)
+        groupsByParents.set(key, group)
       }
     }
-    // Also place spouses of placed descendants at generation g
+    for (const { placedParents, members } of groupsByParents.values()) {
+      members.sort(compareSiblings)
+      const px =
+        placedParents.reduce((s, pid) => s + xMap.get(pid)!, 0) / placedParents.length
+      const totalW = members.reduce((s, m) => s + getSubW(m.id), 0)
+      let left = px - totalW / 2
+      for (const m of members) {
+        if (xMap.has(m.id)) continue
+        const w = getSubW(m.id)
+        placeDesc(m.id, left + w / 2)
+        left += w
+      }
+    }
+    // Also place any remaining spouses of placed descendants at generation g
     const placedAtG = nodes
       .filter((n) => genMap.get(n.id) === g && xMap.has(n.id))
       .sort((a, b) => (xMap.get(a.id) ?? 0) - (xMap.get(b.id) ?? 0))
@@ -363,6 +432,22 @@ function computeLayout(
   }
 
   // ── F. Ancestor rows (gen < 0), nearest-first ────────────────────
+  // True direct ancestors of ego (via biological/adoptive parent edges upward from egoId).
+  // Distinguishes ego's own lineage from half-siblings' other parents or spouse's parents at gen < 0.
+  const egoTrueAncestorIds = new Set<string>()
+  {
+    const ancQueue: string[] = [egoId]
+    while (ancQueue.length > 0) {
+      const curr = ancQueue.shift()!
+      for (const pid of parentsOf.get(curr) ?? []) {
+        if (!egoTrueAncestorIds.has(pid) && (genMap.get(pid) ?? 0) < 0) {
+          egoTrueAncestorIds.add(pid)
+          ancQueue.push(pid)
+        }
+      }
+    }
+  }
+
   const allGens      = [...new Set(genMap.values())].sort((a, b) => a - b)
   const ancestorGens = allGens.filter((g) => g < 0).sort((a, b) => b - a) // -1, -2, …
 
@@ -371,7 +456,7 @@ function computeLayout(
       .filter((n) => genMap.get(n.id) === g && !xMap.has(n.id))
       .sort(compareSiblings)
 
-    // Pass 1: Direct ancestors with positioned children at g + 1
+    // Pass 1: Nodes at gen g with positioned children at g + 1
     const idealX = new Map<string, number>()
     const directAncestorIds = new Set<string>()
     for (const n of unplaced) {
@@ -421,10 +506,16 @@ function computeLayout(
     const units: AncUnit[] = []
     const processed = new Set<string>()
 
-    // Process direct ancestors first so couples stay together accurately
+    // Process ego's true direct ancestors first, then other parent nodes with positioned children,
+    // then collaterals anchored to a direct ancestor at gen g.
+    // Unanchored nodes at gen < 0 (e.g. children of great-uncles whose parents at g - 1 are not placed yet)
+    // are deferred to F2 (top-down) so they don't get exiled to maxX() or distort g - 1 sibling anchoring.
     const orderedForPairing = [
-      ...unplaced.filter((n) => directAncestorIds.has(n.id)),
-      ...unplaced.filter((n) => !directAncestorIds.has(n.id)),
+      ...unplaced.filter((n) => egoTrueAncestorIds.has(n.id)),
+      ...unplaced.filter((n) => !egoTrueAncestorIds.has(n.id) && directAncestorIds.has(n.id)),
+      ...unplaced.filter(
+        (n) => !egoTrueAncestorIds.has(n.id) && !directAncestorIds.has(n.id) && idealX.has(n.id),
+      ),
     ]
 
     for (const n of orderedForPairing) {
@@ -434,9 +525,14 @@ function computeLayout(
       const partners = (spousesOf.get(n.id) ?? []).filter(
         (sid) => genMap.get(sid) === g && !xMap.has(sid) && !processed.has(sid),
       )
-      // Prefer a partner who is also a direct ancestor (co-parent)
+      // Prefer a partner who is also a true direct ancestor of ego (when n is ego's true ancestor),
+      // then a co-parent of positioned children, then the first available partner
       const partner =
-        partners.find((sid) => directAncestorIds.has(sid)) ?? partners[0]
+        (egoTrueAncestorIds.has(n.id)
+          ? partners.find((sid) => egoTrueAncestorIds.has(sid))
+          : undefined) ??
+        partners.find((sid) => directAncestorIds.has(sid)) ??
+        partners[0]
 
       if (partner) {
         processed.add(partner)
@@ -474,13 +570,13 @@ function computeLayout(
         units.push({
           members,
           desiredCenter: center,
-          isDirect: directAncestorIds.has(n.id) || directAncestorIds.has(partner),
+          isDirect: egoTrueAncestorIds.has(n.id) || egoTrueAncestorIds.has(partner),
         })
       } else {
         units.push({
           members: [n.id],
           desiredCenter: idealX.get(n.id) ?? maxX() + STEP,
-          isDirect: directAncestorIds.has(n.id),
+          isDirect: egoTrueAncestorIds.has(n.id),
         })
       }
     }
@@ -496,12 +592,23 @@ function computeLayout(
       const minCenterDist = unitHalfSpan(units[i - 1]) + unitHalfSpan(units[i]) + STEP
       if (placedCenters[i] < placedCenters[i - 1] + minCenterDist) {
         // If unit[i] is a direct ancestor and unit[i-1] is a collateral (e.g. paternal uncle),
-        // prefer pushing the left collateral further left so the direct ancestor stays over ego!
+        // prefer pushing the left collateral further left so the direct ancestor stays over ego,
+        // without displacing any earlier direct ancestor unit[j - 1].
         if (units[i].isDirect && !units[i - 1].isDirect) {
           placedCenters[i - 1] = placedCenters[i] - minCenterDist
           for (let j = i - 1; j > 0; j--) {
             const d = unitHalfSpan(units[j - 1]) + unitHalfSpan(units[j]) + STEP
             if (placedCenters[j - 1] > placedCenters[j] - d) {
+              if (units[j - 1].isDirect) {
+                placedCenters[j] = placedCenters[j - 1] + d
+                for (let k = j + 1; k <= i; k++) {
+                  const dk = unitHalfSpan(units[k - 1]) + unitHalfSpan(units[k]) + STEP
+                  if (placedCenters[k] < placedCenters[k - 1] + dk) {
+                    placedCenters[k] = placedCenters[k - 1] + dk
+                  }
+                }
+                break
+              }
               placedCenters[j - 1] = placedCenters[j] - d
             }
           }
@@ -520,61 +627,132 @@ function computeLayout(
     })
   }
 
-  // ── F2. Cousins & collateral nodes at gen >= 0 whose ancestor parents were placed in F ─
-  for (const g of [0, 1, 2]) {
+  // ── F2. Cousins & collateral nodes across all generations whose parents were placed above ─
+  const resolveHorizontalCollisionsAtGen = (g: number) => {
+    const placedAtG = nodes
+      .filter((n) => genMap.get(n.id) === g && xMap.has(n.id))
+      .sort((a, b) => (xMap.get(a.id) ?? 0) - (xMap.get(b.id) ?? 0))
+    const anchorIdx =
+      g === 0
+        ? placedAtG.findIndex((n) => n.id === egoId)
+        : placedAtG.findIndex((n) => egoTrueAncestorIds.has(n.id))
+    if (anchorIdx >= 0) {
+      // Push nodes right of anchor rightward on collision
+      for (let i = anchorIdx + 1; i < placedAtG.length; i++) {
+        const prevX = xMap.get(placedAtG[i - 1].id)!
+        const currX = xMap.get(placedAtG[i].id)!
+        if (currX < prevX + STEP) {
+          xMap.set(placedAtG[i].id, prevX + STEP)
+        }
+      }
+      // Push nodes left of anchor leftward on collision
+      for (let i = anchorIdx - 1; i >= 0; i--) {
+        const nextX = xMap.get(placedAtG[i + 1].id)!
+        const currX = xMap.get(placedAtG[i].id)!
+        if (currX > nextX - STEP) {
+          xMap.set(placedAtG[i].id, nextX - STEP)
+        }
+      }
+    } else {
+      for (let i = 1; i < placedAtG.length; i++) {
+        const prevX = xMap.get(placedAtG[i - 1].id)!
+        const currX = xMap.get(placedAtG[i].id)!
+        if (currX < prevX + STEP) {
+          xMap.set(placedAtG[i].id, prevX + STEP)
+        }
+      }
+    }
+  }
+
+  for (const g of allGens) {
+    const newlyPlacedIds: string[] = []
+    const unplacedAtG = nodes
+      .filter((n) => genMap.get(n.id) === g && !xMap.has(n.id))
+      .sort(compareSiblings)
+    const groupsByParents = new Map<
+      string,
+      { placedParents: string[]; members: FamilyTreePerson[] }
+    >()
+    for (const n of unplacedAtG) {
+      const placedParents = (parentsOf.get(n.id) ?? []).filter((pid) => xMap.has(pid))
+      if (placedParents.length > 0) {
+        const key = [...placedParents].sort().join(',')
+        const group = groupsByParents.get(key) ?? { placedParents, members: [] }
+        group.members.push(n)
+        groupsByParents.set(key, group)
+      }
+    }
+    for (const { placedParents, members } of groupsByParents.values()) {
+      const px =
+        placedParents.reduce((s, pid) => s + xMap.get(pid)!, 0) / placedParents.length
+      const reservedInGroup = new Set<string>(members.map((m) => m.id))
+      const units: Array<{ memberId: string; spIds: string[] }> = []
+      for (const m of members) {
+        if (xMap.has(m.id)) continue
+        const spIds = (spousesOf.get(m.id) ?? []).filter(
+          (sid) =>
+            genMap.get(sid) === g &&
+            !xMap.has(sid) &&
+            !reservedInGroup.has(sid),
+        )
+        for (const sid of spIds) reservedInGroup.add(sid)
+        units.push({ memberId: m.id, spIds })
+      }
+      const totalSlots = units.reduce((s, u) => s + 1 + u.spIds.length, 0)
+      let cursor = px - ((totalSlots - 1) * STEP) / 2
+      for (const u of units) {
+        xMap.set(u.memberId, cursor)
+        newlyPlacedIds.push(u.memberId)
+        cursor += STEP
+        for (const sid of u.spIds) {
+          xMap.set(sid, cursor)
+          newlyPlacedIds.push(sid)
+          cursor += STEP
+        }
+      }
+    }
+    if (newlyPlacedIds.length > 0) {
+      resolveHorizontalCollisionsAtGen(g)
+    }
+  }
+
+  // ── F3. Biological parents of adopted children (or co-parents) with positioned children at g + 1 ─
+  for (const g of [...allGens].reverse()) {
     const newlyPlacedIds: string[] = []
     const unplacedAtG = nodes
       .filter((n) => genMap.get(n.id) === g && !xMap.has(n.id))
       .sort(compareSiblings)
     for (const n of unplacedAtG) {
-      const placedParents = (parentsOf.get(n.id) ?? []).filter((pid) => xMap.has(pid))
-      if (placedParents.length > 0) {
-        const px =
-          placedParents.reduce((s, pid) => s + xMap.get(pid)!, 0) / placedParents.length
-        xMap.set(n.id, px)
-        newlyPlacedIds.push(n.id)
-        // Also place spouse of cousin if at same generation
-        const spIds = (spousesOf.get(n.id) ?? []).filter(
-          (sid) => genMap.get(sid) === g && !xMap.has(sid),
-        )
-        spIds.forEach((sid, idx) => {
-          xMap.set(sid, px + (idx + 1) * STEP)
-          newlyPlacedIds.push(sid)
+      if (xMap.has(n.id)) continue
+      const posKids = (childrenOf.get(n.id) ?? []).filter(
+        (c) => genMap.get(c) === g + 1 && xMap.has(c),
+      )
+      if (posKids.length === 0) continue
+      const xs = posKids.map((c) => xMap.get(c)!)
+      const cx = (Math.min(...xs) + Math.max(...xs)) / 2
+      const spIds = (spousesOf.get(n.id) ?? []).filter(
+        (sid) => genMap.get(sid) === g && !xMap.has(sid),
+      )
+      if (spIds.length > 0) {
+        const partner = spIds[0]
+        const gA = (nodeById.get(n.id)?.gender ?? '').toUpperCase()
+        const gB = (nodeById.get(partner)?.gender ?? '').toUpperCase()
+        const ordered =
+          gA === 'FEMALE' && gB === 'MALE' ? [partner, n.id] : [n.id, partner]
+        xMap.set(ordered[0], cx - STEP / 2)
+        xMap.set(ordered[1], cx + STEP / 2)
+        newlyPlacedIds.push(ordered[0], ordered[1])
+        spIds.slice(1).forEach((extraSid, idx) => {
+          xMap.set(extraSid, cx + STEP / 2 + (idx + 1) * STEP)
+          newlyPlacedIds.push(extraSid)
         })
+      } else {
+        xMap.set(n.id, cx)
+        newlyPlacedIds.push(n.id)
       }
     }
     if (newlyPlacedIds.length > 0) {
-      // Resolve horizontal collisions at generation g while keeping ego anchored at 0
-      const placedAtG = nodes
-        .filter((n) => genMap.get(n.id) === g && xMap.has(n.id))
-        .sort((a, b) => (xMap.get(a.id) ?? 0) - (xMap.get(b.id) ?? 0))
-      const egoIdx = placedAtG.findIndex((n) => n.id === egoId)
-      if (egoIdx >= 0) {
-        // Push nodes right of ego rightward on collision
-        for (let i = egoIdx + 1; i < placedAtG.length; i++) {
-          const prevX = xMap.get(placedAtG[i - 1].id)!
-          const currX = xMap.get(placedAtG[i].id)!
-          if (currX < prevX + STEP) {
-            xMap.set(placedAtG[i].id, prevX + STEP)
-          }
-        }
-        // Push nodes left of ego leftward on collision
-        for (let i = egoIdx - 1; i >= 0; i--) {
-          const nextX = xMap.get(placedAtG[i + 1].id)!
-          const currX = xMap.get(placedAtG[i].id)!
-          if (currX > nextX - STEP) {
-            xMap.set(placedAtG[i].id, nextX - STEP)
-          }
-        }
-      } else {
-        for (let i = 1; i < placedAtG.length; i++) {
-          const prevX = xMap.get(placedAtG[i - 1].id)!
-          const currX = xMap.get(placedAtG[i].id)!
-          if (currX < prevX + STEP) {
-            xMap.set(placedAtG[i].id, prevX + STEP)
-          }
-        }
-      }
+      resolveHorizontalCollisionsAtGen(g)
     }
   }
 
@@ -606,6 +784,7 @@ function buildGraph(
 ): { rfNodes: Node[]; rfEdges: Edge[]; kinshipMap: Map<string, KinshipInfo> } {
   const positions = computeLayout(data, sizes)
   const kinshipMap = computeKinshipMap(data, data.egoId)
+  const nodeById = new Map(data.nodes.map((p) => [p.id, p]))
 
   const rfNodes: Node[] = data.nodes.map((p) => ({
     id: p.id,
@@ -622,6 +801,7 @@ function buildGraph(
 
   const rfEdges: Edge[] = data.edges.map((e, i) => {
     const isSpouse = e.type === 'spouse'
+    const isAdoptiveEdge = !isSpouse && e.lineage === 'adoptive'
     // inferred는 계약(FamilyTreeEdge)에 이미 선언됨 — any 캐스트 불필요(계약 변경 시 컴파일 강제).
     const inferred = isSpouse && Boolean(e.inferred)
     // 부호 연도(BC 음수) → 컴팩트 라벨: BC 44 등. AD는 숫자 그대로.
@@ -631,16 +811,57 @@ function buildGraph(
       isSpouse && (e.marriageStartYear != null || e.marriageEndYear != null)
         ? `${fmtMarriageYear(e.marriageStartYear) ?? '?'}–${fmtMarriageYear(e.marriageEndYear) ?? ''}`
         : null
-    const rankLabel =
-      isSpouse && e.marriageRank ? MARRIAGE_RANK_LABELS[e.marriageRank] ?? null : null
-    const spouseDetailParts = [rankLabel, marriagePeriod].filter(Boolean).join(' ')
+    const srcGender = (nodeById.get(e.source)?.gender ?? '').toUpperCase()
+    const tgtGender = (nodeById.get(e.target)?.gender ?? '').toUpperCase()
+    const defaultNonEgoPartnerId =
+      srcGender === 'FEMALE' && tgtGender !== 'FEMALE'
+        ? e.source
+        : tgtGender === 'FEMALE' && srcGender !== 'FEMALE'
+          ? e.target
+          : srcGender === 'MALE' && tgtGender !== 'MALE'
+            ? e.target
+            : tgtGender === 'MALE' && srcGender !== 'MALE'
+              ? e.source
+              : e.target
+    const validEdgeRankHolderId =
+      e.rankHolderId === e.source || e.rankHolderId === e.target
+        ? e.rankHolderId
+        : null
+    const perspectivePartnerId =
+      e.source === data.egoId
+        ? e.target
+        : e.target === data.egoId
+          ? e.source
+          : (validEdgeRankHolderId ?? defaultNonEgoPartnerId)
+    const perspectiveOwnerId =
+      perspectivePartnerId === e.target ? e.source : e.target
+    const rankLabel = isSpouse
+      ? (resolvePerspectiveMarriageRankLabel({
+          rank: e.marriageRank,
+          rankHolderId: validEdgeRankHolderId,
+          egoId: perspectiveOwnerId,
+          viewerGender: nodeById.get(perspectiveOwnerId)?.gender ?? null,
+          partnerId: perspectivePartnerId,
+          partnerGender: nodeById.get(perspectivePartnerId)?.gender ?? null,
+        }) ??
+        (e.marriageRank ? MARRIAGE_RANK_LABELS[e.marriageRank] ?? null : null))
+      : null
+    const endReasonLabel =
+      isSpouse && e.marriageEndReason
+        ? MARRIAGE_END_REASON_LABELS[e.marriageEndReason] ?? null
+        : null
+    const spouseDetailParts = [rankLabel, endReasonLabel, marriagePeriod]
+      .filter(Boolean)
+      .join(' · ')
     const labelText = isSpouse
       ? inferred
         ? '♡'
         : spouseDetailParts
           ? `♥ ${spouseDetailParts}`
           : '♥'
-      : undefined
+      : isAdoptiveEdge
+        ? '입양'
+        : undefined
 
     // 부부 엣지는 좌측 노드의 우측 핸들(right)에서 우측 노드의 좌측 핸들(left-t)로 수평 연결
     let source = e.source
@@ -676,8 +897,14 @@ function buildGraph(
             fontWeight: 700,
             fontSize: 12,
           }
-        : undefined,
-      labelBgStyle: isSpouse ? { fill: 'transparent' } : undefined,
+        : isAdoptiveEdge
+          ? {
+              fill: '#6366f1',
+              fontWeight: 700,
+              fontSize: 10.5,
+            }
+          : undefined,
+      labelBgStyle: isSpouse || isAdoptiveEdge ? { fill: 'transparent' } : undefined,
       style: isSpouse
         ? {
             stroke: inferred ? '#e2e8f0' : '#fda4af',
@@ -685,14 +912,20 @@ function buildGraph(
             strokeDasharray: inferred ? '2 4' : '4 3',
             opacity: inferred ? 0.65 : 1,
           }
-        : { stroke: '#94a3b8', strokeWidth: 1.5 },
+        : isAdoptiveEdge
+          ? {
+              stroke: '#818cf8',
+              strokeWidth: 1.5,
+              strokeDasharray: '5 4',
+            }
+          : { stroke: '#94a3b8', strokeWidth: 1.5 },
       markerEnd: isSpouse
         ? undefined
         : {
             type: 'arrowclosed' as any,
             width: 12,
             height: 12,
-            color: '#94a3b8',
+            color: isAdoptiveEdge ? '#818cf8' : '#94a3b8',
           },
     }
   })
@@ -754,7 +987,23 @@ function buildPersonTooltip(
   if (p.preEnthronementTitle) lines.push(`작호 — ${p.preEnthronementTitle}`)
   if (p.templeName) lines.push(`묘호 — ${p.templeName}`)
   if (p.posthumousName) lines.push(`시호 — ${p.posthumousName}`)
-  if (p.birthOrder != null) lines.push(`서열 — ${p.birthOrder}번째`)
+  if (p.genderBirthOrder != null || p.birthOrder != null) {
+    const g = (p.gender ?? '').toUpperCase()
+    const gLabel =
+      p.genderBirthOrder != null
+        ? g === 'MALE'
+          ? p.genderBirthOrder === 1
+            ? '장남'
+            : `${p.genderBirthOrder}남`
+          : g === 'FEMALE'
+            ? p.genderBirthOrder === 1
+              ? '장녀'
+              : `${p.genderBirthOrder}녀`
+            : `성별 서열 ${p.genderBirthOrder}번째`
+        : null
+    const oLabel = p.birthOrder != null ? `전체 ${p.birthOrder}째` : null
+    lines.push(`서열 — ${[gLabel, oLabel].filter(Boolean).join(' · ')}`)
+  }
   if (p.birthPlace) lines.push(`출생 — ${p.birthPlace}`)
   if (p.deathPlace) lines.push(`사망 — ${p.deathPlace}`)
   return lines.join('\n')
