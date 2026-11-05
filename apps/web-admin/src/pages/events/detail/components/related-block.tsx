@@ -253,8 +253,12 @@ export function RelatedBlock({
   }
   const candidateOptions = pickerOpen ? buildCandidateOptions() : []
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: eventRelationKeys.all })
+  /* 관계는 조망(하위끼리 연결)·연결 그래프(마인드맵)에도 실린다 — 둘 다 ['events', …] 아래 */
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: eventRelationKeys.all })
+    void queryClient.invalidateQueries({ queryKey: ['events', 'overview'] })
+    void queryClient.invalidateQueries({ queryKey: ['events', 'relation-graph'] })
+  }
 
   const saveMutation = useMutation({
     mutationFn: async (next: Draft) => {

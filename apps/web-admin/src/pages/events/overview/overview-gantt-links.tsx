@@ -13,21 +13,8 @@ import { useTheme } from 'styled-components'
 
 import { type EventOverviewRelation } from '@/shared/api/event-overview'
 
+import { DIRECTED_RELATIONS as DIRECTED_TYPES, RELATION_DASH } from '../mindmap/survey-mindmap.lib'
 
-/** 관계 종류 → 선 모양(연결 보기 범례와 같은 규약). 색이 아니라 모양으로 가른다 */
-export const RELATION_DASH: Record<EventOverviewRelation['type'], string> = {
-  LED_TO: '',
-  INFLUENCED: '6 4',
-  RESPONSE_TO: '10 3 2 3',
-  CONCURRENT: '2 4',
-  RELATED: '1 5',
-}
-
-/**
- * 방향 있는 관계 — shared/api/event-relations의 같은 이름 상수와 같은 값. 여기서 그 모듈을 가져오면 간트(overview-sections)가
- * API 클라이언트(import.meta)를 끌고 들어가 조망 렌더 테스트가 돌지 못한다.
- */
-const DIRECTED_TYPES: ReadonlySet<EventOverviewRelation['type']> = new Set(['LED_TO', 'INFLUENCED', 'RESPONSE_TO'])
 
 interface GanttLinksProps {
   relations: ReadonlyArray<EventOverviewRelation>

@@ -840,6 +840,8 @@ export function EventOverviewPanel({
         {activeView === 'links' && (
           <RelationsPanel
             root={root}
+            ordered={derived.ordered}
+            dateLabelById={derived.dateLabelById}
             relations={data.relations ?? []}
             nodeById={derived.nodeById}
             numberById={derived.numberById}

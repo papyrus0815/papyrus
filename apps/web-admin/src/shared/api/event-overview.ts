@@ -15,3 +15,11 @@ export type EventOverviewRelation = EventOverview['relations'][number]
 export async function getEventOverview(eventId: string): Promise<EventOverview> {
   return functional.events.overview.get(nestiaApiService.getConnection(), eventId)
 }
+
+/** 사건 중심 연결 그래프 — GET /events/:eventId/relation-graph(상위·하위 한 단 + 관련 최대 2단). 상세 › 연관 마인드맵 */
+export type EventRelationGraph = Awaited<ReturnType<typeof functional.events.relation_graph.relationGraph>>
+export type EventRelationGraphNode = EventRelationGraph['nodes'][number]
+
+export async function getEventRelationGraph(eventId: string, depth = 2): Promise<EventRelationGraph> {
+  return functional.events.relation_graph.relationGraph(nestiaApiService.getConnection(), eventId, String(depth))
+}

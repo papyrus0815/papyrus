@@ -37,6 +37,8 @@ import {
 } from './detail-network.lib'
 import { KeywordsBlock } from './keywords-block'
 import { NetworkZone, ZoneTail } from './network-zone'
+import { HeaderTextAction } from './section-collapse'
+import { EventRelationMindmap } from '../../mindmap/event-relation-mindmap'
 import { RelatedHelp } from './related-help'
 import { sectionKindOf } from './narrative-sections.lib'
 import { keywordSuggestions } from './related-suggestions.lib'
@@ -110,6 +112,22 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
   const queryClient = useQueryClient()
   // 섹션 부제의 '관련 N' — RelatedBlock과 같은 캐시를 읽는다(추가 요청 없음)
   const relatedQuery = useEventRelations(event.id)
+  /** 연결 지도 펼침 — 사람마다 기억(편의 상태) */
+  const [mapShown, setMapShownState] = useState(() => {
+    try {
+      return window.localStorage.getItem('event-relation-map') !== 'hidden'
+    } catch {
+      return true
+    }
+  })
+  const setMapShown = (next: boolean) => {
+    setMapShownState(next)
+    try {
+      window.localStorage.setItem('event-relation-map', next ? 'shown' : 'hidden')
+    } catch {
+      /* 저장소가 막혀도 이번 화면은 바뀐다 */
+    }
+  }
 
   /* '새 하위 사건 만들기' — 기존 사건 연결(SelectModal)이 아니라 등록 모달을
    * initialParent={현재 사건}으로 열어, 고아 생성→상세 이동→수동 연결 3단계를
@@ -169,6 +187,8 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
   }
   const handleRelatedCreated = () => {
     queryClient.invalidateQueries({ queryKey: eventRelationKeys.all })
+    queryClient.invalidateQueries({ queryKey: ['events', 'overview'] })
+    queryClient.invalidateQueries({ queryKey: ['events', 'relation-graph'] })
     queryClient.invalidateQueries({ queryKey: eventKeys.detail(event.id) })
     queryClient.invalidateQueries({ queryKey: eventKeys.lists() })
   }
@@ -752,7 +772,19 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
         {relationSummary && (
           <S.SectionSubtitle>{relationSummary}</S.SectionSubtitle>
         )}
+        {(parentEvent || extraParents.length > 0 || children.length > 0 || relatedCount > 0) && (
+          <S.SectionActions>
+            <HeaderTextAction type="button" onClick={() => setMapShown(!mapShown)} aria-expanded={mapShown}>
+              {mapShown ? '연결 지도 접기' : '연결 지도 보기'}
+            </HeaderTextAction>
+          </S.SectionActions>
+        )}
       </S.SectionHeader>
+
+      {/* 연결 지도 — 이 사건을 가운데 둔 마인드맵(상위·하위 한 단 + 관련 두 단). 아래 목록이 편집 자리 */}
+      {mapShown && (parentEvent || extraParents.length > 0 || children.length > 0 || relatedCount > 0) && (
+        <EventRelationMindmap eventId={event.id} />
+      )}
 
       {/*
         * 소속 구역 — 상위·하위(어느 묶음 안에 있나). 아래 '관련 사건'(원인·결과)과 종류가 다른 연결이라

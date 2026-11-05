@@ -50,6 +50,8 @@ export const eventKeys = {
    * 건드리므로, 조망은 staleTime 0으로 들어올 때마다 다시 받는다.
    */
   overview: (eventId: string) => ['events', 'overview', eventId] as const,
+  /** 사건 중심 연결 그래프 — ['events'] 아래라 사건·관계를 고치면 함께 다시 받는다 */
+  relationGraph: (eventId: string) => ['events', 'relation-graph', eventId] as const,
   /** 수장 타임라인 사건 오버레이 후보 */
   headsOfStateOverlay: () => ['events', 'heads-of-state-overlay-list'] as const,
   /** 수장 지도 아틀라스 — 하위 포함 전량(관계선 파생용) */

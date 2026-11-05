@@ -9,17 +9,37 @@
  * - 바깥 연결: 한쪽이 트리 밖. 이 묶음이 무엇을 낳았나/무엇에서 왔나. 누르면 그 사건 상세로.
  * - 간트 화살표는 전개 보기의 '연결 보기' 토글(GanttPanel)이 같은 데이터로 그린다.
  */
+import { Suspense, lazy, useMemo, useState } from 'react'
+
 import { FiArrowRight, FiCornerDownRight } from 'react-icons/fi'
-import { Link } from 'react-router-dom'
-import styled from 'styled-components'
+import { Link, useNavigate } from 'react-router-dom'
+import styled, { useTheme } from 'styled-components'
 
 import { type EventOverviewNode, type EventOverviewRelation } from '@/shared/api/event-overview'
 import { DIRECTED_RELATION_TYPES, EVENT_RELATION_LABELS } from '@/shared/api/event-relations'
 import { pathKeys } from '@/shared/router'
 import { metaText } from '@/pages/events/styles/theme'
 
+import {
+  RELATION_DASH,
+  RELATION_TYPE_NAME,
+  type RelationType,
+  buildSurveyMindmap,
+} from '../mindmap/survey-mindmap.lib'
 import { type OverviewGrouping } from './event-overview.lib'
 import * as S from './overview.styles'
+
+const MindmapCanvas = lazy(() => import('../mindmap/mindmap-canvas'))
+
+/** 보기 — 마인드맵(기본)·목록. 사람마다 고른 것을 기억(편의 상태라 브라우저 저장소) */
+const VIEW_KEY = 'survey-relations-view'
+function readView(): 'map' | 'list' {
+  try {
+    return window.localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'map'
+  } catch {
+    return 'map'
+  }
+}
 
 const TYPE_ORDER: ReadonlyArray<EventOverviewRelation['type']> = [
   'LED_TO',
@@ -31,6 +51,9 @@ const TYPE_ORDER: ReadonlyArray<EventOverviewRelation['type']> = [
 
 interface RelationsPanelProps {
   root: EventOverviewNode
+  /** 전개 순서의 하위 전부 — 마인드맵 나무 */
+  ordered: ReadonlyArray<EventOverviewNode>
+  dateLabelById?: Map<string, string>
   relations: ReadonlyArray<EventOverviewRelation>
   nodeById: Map<string, EventOverviewNode>
   numberById: Map<string, string>
@@ -44,6 +67,8 @@ interface RelationsPanelProps {
 
 export function RelationsPanel({
   root,
+  ordered,
+  dateLabelById,
   relations,
   nodeById,
   numberById,
@@ -54,6 +79,60 @@ export function RelationsPanel({
   onOpen,
   onShowOnGantt,
 }: RelationsPanelProps) {
+  const theme = useTheme()
+  const navigate = useNavigate()
+  const [view, setViewState] = useState<'map' | 'list'>(readView)
+  const setView = (next: 'map' | 'list') => {
+    setViewState(next)
+    try {
+      window.localStorage.setItem(VIEW_KEY, next)
+    } catch {
+      /* 저장소가 막혀도 이번 화면은 바뀐다 */
+    }
+  }
+  const [mode, setMode] = useState<'links' | 'all'>('links')
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
+  const [hiddenTypes, setHiddenTypes] = useState<ReadonlySet<RelationType>>(() => new Set())
+  const presentTypes = TYPE_ORDER.filter((type) => relations.some((relation) => relation.type === type))
+  const groupIndex = useMemo(() => new Map(grouping.groups.map((group) => [group.id, group.index])), [grouping])
+  const mindmap = useMemo(
+    () =>
+      buildSurveyMindmap({
+        root,
+        ordered,
+        relations,
+        numberById,
+        dateLabelById,
+        colorOf: (id) => {
+          const groupId = grouping.groupIdOf.get(id)
+          const index = groupId !== undefined ? groupIndex.get(groupId) : undefined
+          return index !== undefined ? S.groupColor(index, theme.mode) : null
+        },
+        mode,
+        collapsed,
+        hiddenTypes,
+      }),
+    [root, ordered, relations, numberById, dateLabelById, grouping, groupIndex, theme.mode, mode, collapsed, hiddenTypes],
+  )
+  const openFromMap = (id: string) => {
+    if (id.startsWith('ext:')) navigate(pathKeys.events.detail(id.slice(4)))
+    else if (nodeById.has(id)) onOpen(id)
+  }
+  const toggleCollapsed = (id: string) =>
+    setCollapsed((previous) => {
+      const next = new Set(previous)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  const toggleType = (type: RelationType) =>
+    setHiddenTypes((previous) => {
+      const next = new Set(previous)
+      if (next.has(type)) next.delete(type)
+      else next.add(type)
+      return next
+    })
+
   const inside = relations.filter((relation) => !relation.external)
   const outside = relations.filter((relation) => relation.external)
   const groupTitle = (id: string) => {
@@ -98,17 +177,70 @@ export function RelationsPanel({
     <S.Panel $wide id="overview-relations" aria-labelledby="overview-relations-title">
       <S.PanelHead>
         <S.PanelTitle id="overview-relations-title">연결</S.PanelTitle>
-        {onShowOnGantt && inside.length > 0 && (
-          <S.TextButton type="button" onClick={onShowOnGantt}>
-            전개 간트에 화살표로 보기
-          </S.TextButton>
-        )}
+        <S.ViewSwitch role="group" aria-label="연결 보기 방식">
+          <S.ViewSwitchItem type="button" $active={view === 'map'} aria-pressed={view === 'map'} onClick={() => setView('map')}>
+            마인드맵
+          </S.ViewSwitchItem>
+          <S.ViewSwitchItem type="button" $active={view === 'list'} aria-pressed={view === 'list'} onClick={() => setView('list')}>
+            목록
+          </S.ViewSwitchItem>
+        </S.ViewSwitch>
         <S.PanelNote style={{ flexBasis: '100%' }}>
           하위 사건끼리 {inside.length} · 이 묶음 밖과 {outside.length} — 각 사건 문서의 연관 탭에서 이은 것을 모았습니다
+          {onShowOnGantt && inside.length > 0 && (
+            <>
+              {' · '}
+              <S.TextButton type="button" onClick={onShowOnGantt}>
+                전개 간트에 화살표로 보기
+              </S.TextButton>
+            </>
+          )}
         </S.PanelNote>
       </S.PanelHead>
 
-      {TYPE_ORDER.map((type) => {
+      {view === 'map' && (
+        <>
+          <MapToolbar>
+            <S.ViewSwitch role="group" aria-label="마디 범위">
+              <S.ViewSwitchItem type="button" $active={mode === 'links'} aria-pressed={mode === 'links'} onClick={() => setMode('links')}>
+                연결만
+              </S.ViewSwitchItem>
+              <S.ViewSwitchItem type="button" $active={mode === 'all'} aria-pressed={mode === 'all'} onClick={() => setMode('all')}>
+                전체 {ordered.length}
+              </S.ViewSwitchItem>
+            </S.ViewSwitch>
+            {presentTypes.length > 1 && (
+              <TypeFilter role="group" aria-label="관계 종류 거르기">
+                {presentTypes.map((type) => (
+                  <TypeChip key={type} type="button" aria-pressed={!hiddenTypes.has(type)} onClick={() => toggleType(type)}>
+                    <svg width="22" height="6" aria-hidden="true">
+                      <line x1="1" y1="3" x2="21" y2="3" stroke="currentColor" strokeWidth="2" strokeDasharray={RELATION_DASH[type] || undefined} strokeLinecap="round" />
+                    </svg>
+                    {RELATION_TYPE_NAME[type]}
+                  </TypeChip>
+                ))}
+              </TypeFilter>
+            )}
+            <S.PanelNote>
+              {mode === 'links'
+                ? '연결이 닿은 사건과 그 위 묶음만(국면은 마디에 마우스를 올리면) · 마디를 누르면 사건 창, 올리면 그 연결만 진하게'
+                : '접은 가지로 가는 연결은 그 가지에 모여 ×N'}
+            </S.PanelNote>
+          </MapToolbar>
+          <Suspense fallback={<MapLoading>마인드맵을 싣는 중…</MapLoading>}>
+            <MindmapCanvas
+              data={mindmap}
+              height={mode === 'all' ? 640 : 520}
+              hotId={hotId}
+              onOpen={openFromMap}
+              onToggle={toggleCollapsed}
+              onHover={(id) => onHover(id && nodeById.has(id) ? id : null)}
+            />
+          </Suspense>
+        </>
+      )}
+
+      {view === 'list' && TYPE_ORDER.map((type) => {
         const list = inside.filter((relation) => relation.type === type)
         if (list.length === 0) return null
         const label = EVENT_RELATION_LABELS[type]
@@ -152,7 +284,7 @@ export function RelationsPanel({
         )
       })}
 
-      {outside.length > 0 && (
+      {view === 'list' && outside.length > 0 && (
         <TypeBlock aria-label="이 묶음 밖과 이어진 사건">
           <TypeHead>
             이 묶음 밖과 이어진 사건<S.Muted> {outside.length}</S.Muted>
@@ -192,6 +324,54 @@ export function RelationsPanel({
     </S.Panel>
   )
 }
+
+const MapToolbar = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+`
+
+const TypeFilter = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+`
+
+const TypeChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: pointer;
+
+  &[aria-pressed='false'] {
+    color: ${metaText};
+    text-decoration: line-through;
+    opacity: 0.7;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
+  }
+`
+
+const MapLoading = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 520px;
+  border-radius: 12px;
+  font-size: 13px;
+  color: ${metaText};
+  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.04)')};
+`
 
 const TypeBlock = styled.section`
   display: flex;
