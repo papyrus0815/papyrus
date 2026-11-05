@@ -1,10 +1,11 @@
-import { Controller, Get, Param, Req, UseGuards } from '@nestjs/common'
+import { Controller, Get, Param, Query, Req, UseGuards } from '@nestjs/common'
 import { AuthGuard } from '@nestjs/passport'
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger'
 
 import {
   EventOverviewService,
   type EventOverviewResponse,
+  type EventRelationGraphResponse,
 } from '../application/event-overview.service'
 
 /**
@@ -25,6 +26,16 @@ export class EventOverviewController {
     @Param('eventId') eventId: string,
   ): Promise<EventOverviewResponse> {
     return this.overview.getOverview(eventId, req.user?.id ?? req.user?.sub ?? '')
+  }
+
+  /** 사건 중심 연결 그래프(상세 › 연관 마인드맵) — GET /events/:eventId/relation-graph?depth=2 */
+  @Get(':eventId/relation-graph')
+  async relationGraph(
+    @Req() req: AuthedRequest,
+    @Param('eventId') eventId: string,
+    @Query('depth') depth?: string,
+  ): Promise<EventRelationGraphResponse> {
+    return this.overview.getRelationGraph(eventId, req.user?.id ?? req.user?.sub ?? '', depth ? Number(depth) || 2 : 2)
   }
 }
 

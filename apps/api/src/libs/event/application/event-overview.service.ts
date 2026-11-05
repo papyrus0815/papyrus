@@ -133,6 +133,34 @@ export interface EventOverviewResponse {
   truncated: boolean
 }
 
+/** 사건 중심 연결 그래프 — 상세 › 연관 마인드맵. 가운데 사건의 상위·하위(한 단) + 관련 사건(최대 2단) */
+export interface EventRelationGraphNode {
+  id: string
+  title: string
+  startDate: string | null
+  domain: EventDomainValue
+  kind: 'SINGLE' | 'COLLECTION'
+  /** 가운데에서 몇 단(가운데 0) */
+  hop: number
+  /** 어떻게 닿았나 — 가운데·상위·하위·관련 */
+  via: 'center' | 'parent' | 'child' | 'relation'
+  /** 이 마디를 처음 찾은 마디(마인드맵 가지의 부모) */
+  reachedFrom: string | null
+}
+
+export interface EventRelationGraphResponse {
+  centerId: string
+  nodes: EventRelationGraphNode[]
+  relations: Array<{ id: string; fromId: string; toId: string; type: EventOverviewRelation['type']; description: string | null }>
+  /** 하위가 상한에 걸려 잘렸는가 */
+  childrenTruncated: boolean
+  /** 마디 상한에 걸려 관련의 관련이 잘렸는가 */
+  truncated: boolean
+}
+
+const GRAPH_CHILD_CAP = 40
+const GRAPH_NODE_CAP = 200
+
 const NODE_INCLUDE = {
   // 국면(묶음 안의 구획) — 조망이 묶음 띠 위에 장 경계를 긋는다
   phases: { orderBy: [{ order: 'asc' as const }, { createdAt: 'asc' as const }] },
@@ -247,6 +275,90 @@ export class EventOverviewService {
       )
     const relations = await this.loadRelations(ids)
     return { root, descendants, relations, truncated }
+  }
+
+  /**
+   * 사건 중심 연결 그래프 — 상위·추가 상위·하위는 한 단만(묶음 하위가 수십 건이라 더 내려가면 마인드맵이 터진다),
+   * 관련 사건(event_relation 양방향)은 depth 단까지 너비 우선. 소프트삭제 사건은 뺀다.
+   */
+  async getRelationGraph(eventId: string, userId: string, depth = 2): Promise<EventRelationGraphResponse> {
+    await assertEventOwnership(this.prisma, eventId, userId, { action: '조회', deleted: 'not-found' })
+    const maxHop = Math.min(3, Math.max(1, Math.floor(depth)))
+    const meta = new Map<string, { hop: number; via: EventRelationGraphNode['via']; reachedFrom: string | null }>([
+      [eventId, { hop: 0, via: 'center', reachedFrom: null }],
+    ])
+    const add = (id: string, hop: number, via: EventRelationGraphNode['via'], reachedFrom: string) => {
+      if (meta.has(id) || meta.size >= GRAPH_NODE_CAP) return false
+      meta.set(id, { hop, via, reachedFrom })
+      return true
+    }
+
+    const center = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { parentEventId: true, extraParentLinks: { select: { parentEventId: true } } },
+    })
+    if (center?.parentEventId) add(center.parentEventId, 1, 'parent', eventId)
+    for (const link of center?.extraParentLinks ?? []) add(link.parentEventId, 1, 'parent', eventId)
+    const children = await this.prisma.event.findMany({
+      where: { parentEventId: eventId, deletedAt: null },
+      select: { id: true },
+      orderBy: [{ startDate: 'asc' }, { createdAt: 'asc' }],
+      take: GRAPH_CHILD_CAP + 1,
+    })
+    const childrenTruncated = children.length > GRAPH_CHILD_CAP
+    for (const child of children.slice(0, GRAPH_CHILD_CAP)) add(child.id, 1, 'child', eventId)
+
+    const relationRows = new Map<string, { id: string; eventId: string; relatedEventId: string; relationType: EventOverviewRelation['type']; relationDescription: string | null }>()
+    let truncated = false
+    let frontier = [eventId]
+    for (let hop = 1; hop <= maxHop && frontier.length > 0; hop += 1) {
+      const rows = await this.prisma.eventRelation.findMany({
+        where: { OR: [{ eventId: { in: frontier } }, { relatedEventId: { in: frontier } }] },
+        select: { id: true, eventId: true, relatedEventId: true, relationType: true, relationDescription: true },
+        orderBy: { createdAt: 'asc' },
+      })
+      const next: string[] = []
+      for (const row of rows) {
+        relationRows.set(row.id, row)
+        const fromFrontier = frontier.includes(row.eventId)
+        const other = fromFrontier ? row.relatedEventId : row.eventId
+        const source = fromFrontier ? row.eventId : row.relatedEventId
+        if (meta.has(other)) continue
+        if (add(other, hop, 'relation', source)) next.push(other)
+        else truncated = true
+      }
+      frontier = next
+    }
+
+    const ids = [...meta.keys()]
+    const rows = await this.prisma.event.findMany({
+      where: { id: { in: ids }, deletedAt: null },
+      select: { id: true, title: true, domain: true, kind: true, startDate: true, startEra: true, startYear: true, startMonth: true, startDay: true },
+    })
+    const alive = new Set(rows.map((row) => row.id))
+    const nodes: EventRelationGraphNode[] = rows.map((row) => {
+      const info = meta.get(row.id)!
+      return {
+        id: row.id,
+        title: row.title,
+        startDate: formatEventDate(row.startDate, row.startEra, row.startYear, row.startMonth, row.startDay),
+        domain: row.domain,
+        kind: row.kind,
+        hop: info.hop,
+        via: info.via,
+        reachedFrom: info.reachedFrom && alive.has(info.reachedFrom) ? info.reachedFrom : info.reachedFrom ? eventId : null,
+      }
+    })
+    const relations = [...relationRows.values()]
+      .filter((row) => alive.has(row.eventId) && alive.has(row.relatedEventId))
+      .map((row) => ({
+        id: row.id,
+        fromId: row.eventId,
+        toId: row.relatedEventId,
+        type: row.relationType,
+        description: row.relationDescription ?? null,
+      }))
+    return { centerId: eventId, nodes, relations, childrenTruncated, truncated }
   }
 
   /** 트리 id 집합에 한쪽이라도 걸린 관련 사건 — 소프트삭제된 반대편은 뺀다 */
