@@ -189,6 +189,37 @@ export class EventCountryParticipantService {
   }
 
   /**
+   * **없는 나라만 더한다** — 이미 참여국인 나라는 역할·서술·순서 모두 그대로(큐레이션 보존).
+   * 영토 이전 줄처럼 다른 기록이 '이 나라도 이 사건의 당사자'임을 알려 줄 때 쓴다. 새 줄은 맨 뒤에.
+   */
+  async addMissing(
+    tx: Prisma.TransactionClient,
+    eventId: string,
+    parties: Array<{ countryId: string | null; historicalCountryId: string | null; role: EventCountryRole }>,
+  ): Promise<number> {
+    if (parties.length === 0) return 0
+    const existing = await tx.eventCountryRelation.findMany({
+      where: { eventId },
+      select: { countryId: true, historicalCountryId: true, sortOrder: true },
+    })
+    const present = new Set(existing.map((row) => partyKeyOf(row)))
+    let nextOrder = existing.reduce((max, row) => Math.max(max, row.sortOrder), -1) + 1
+    const missing = parties.filter((party) => !present.has(partyKeyOf(party)))
+    for (const party of missing) {
+      await tx.eventCountryRelation.create({
+        data: {
+          eventId,
+          countryId: party.countryId,
+          historicalCountryId: party.countryId ? null : party.historicalCountryId,
+          role: party.role,
+          sortOrder: nextOrder++,
+        },
+      })
+    }
+    return missing.length
+  }
+
+  /**
    * 사건 생성 직후용 — 기존 행이 없음이 보장되므로 한 번의 createMany로 끝낸다.
    */
   async createAll(

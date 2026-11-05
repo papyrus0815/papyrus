@@ -139,6 +139,9 @@ model Treaty {
   /// 이 조약이 걸린 사건 (체결 사건·비준 사건·파기 사건은 서로 다른 행)
   eventLinks TreatyEventLink[]
 
+  /// 이 조약을 근거로 한 영토 이전
+  territoryTransfers EventTerritoryTransfer[] @relation("TerritoryTransferTreaty")
+
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

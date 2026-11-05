@@ -4,6 +4,8 @@ import { MilitaryEventService } from '../application/military-event.service'
 import { EventCountryParticipantService } from '../application/event-country-participant.service'
 import { EventRelationService } from '../application/event-relation.service'
 import { EventSideService } from '../application/event-side.service'
+import { EventTerritoryTransferService } from '../application/event-territory-transfer.service'
+import { EventTerritoryTransferController } from '../presentation/event-territory-transfer.controller'
 import { EventSectionService } from '../application/event-section.service'
 import { EventSideController } from '../presentation/event-side.controller'
 import { EventOverviewController } from '../presentation/event-overview.controller'
@@ -17,13 +19,20 @@ import { NotificationModule } from '../../notification/notification.module'
 
 @Module({
   imports: [PrismaModule, NotificationModule],
-  controllers: [EventController, EventSideController, EventOverviewController, EventPhaseController],
+  controllers: [
+    EventController,
+    EventSideController,
+    EventOverviewController,
+    EventPhaseController,
+    EventTerritoryTransferController,
+  ],
   providers: [
     EventService,
     MilitaryEventService,
     EventCountryParticipantService,
     EventRelationService,
     EventSideService,
+    EventTerritoryTransferService,
     EventSectionService,
     EventOverviewService,
     EventPrismaRepository,

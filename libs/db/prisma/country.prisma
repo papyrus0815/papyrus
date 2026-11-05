@@ -114,6 +114,8 @@ model Country {
   governmentTenures         GovernmentPositionTenure[]       @relation("TenureCountry")
   politicalSystems          PoliticalSystem[]                @relation("CountryPoliticalSystems")
   eventCountryRelations     EventCountryRelation[]
+  territoryTransfersFrom    EventTerritoryTransfer[] @relation("TerritoryTransferFromCountry")
+  territoryTransfersTo      EventTerritoryTransfer[] @relation("TerritoryTransferToCountry")
 
   // 🆕 정규화된 군사 사건 관계
   treatySignatories    TreatySignatory[]
