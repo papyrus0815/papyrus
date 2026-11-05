@@ -1,6 +1,6 @@
 import { type EventOverviewNode, type EventOverviewRelation } from '@/shared/api/event-overview'
 
-import { buildSurveyMindmap } from './survey-mindmap.lib'
+import { buildSurveyMindmap, defaultCollapsed } from './survey-mindmap.lib'
 
 const node = (id: string, parentEventId: string | null, extra: Partial<EventOverviewNode> = {}): EventOverviewNode =>
   ({
@@ -99,5 +99,14 @@ describe('buildSurveyMindmap', () => {
     expect(data.tree.children.map((child) => child.id)).toContain('outside')
     expect(data.relations).toEqual([expect.objectContaining({ from: 'a1', to: 'ext:x' })])
     expect(data.specs.has('b1')).toBe(false)
+  })
+})
+
+describe('defaultCollapsed', () => {
+  it('국면 마디와 3단 이하 묶음만 접는다(첫 단 묶음은 펼친 채)', () => {
+    const top = node('top', 'root', { kind: 'COLLECTION', phases: [{ id: 'p1', title: 'P1', order: 1 }] as EventOverviewNode['phases'] })
+    const deep = node('deep', 'top', { kind: 'COLLECTION' })
+    const ids = defaultCollapsed(root, [top, deep])
+    expect([...ids].sort()).toEqual(['deep', 'phase:p1'])
   })
 })

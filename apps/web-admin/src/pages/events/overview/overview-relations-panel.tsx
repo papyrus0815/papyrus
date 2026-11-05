@@ -25,6 +25,7 @@ import {
   RELATION_TYPE_NAME,
   type RelationType,
   buildSurveyMindmap,
+  defaultCollapsed,
 } from '../mindmap/survey-mindmap.lib'
 import { type OverviewGrouping } from './event-overview.lib'
 import * as S from './overview.styles'
@@ -96,8 +97,10 @@ export function RelationsPanel({
       /* 저장소가 막혀도 이번 화면은 바뀐다 */
     }
   }
-  const [mode, setMode] = useState<'links' | 'all'>('links')
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
+  /* 기본 '전체' — 최상위에서는 하위 전부가 한 그림에 보여야 한다(사용자 지시). '연결만'은 인과만 추릴 때 */
+  const [mode, setMode] = useState<'links' | 'all'>('all')
+  /* '전체' 첫 화면은 국면·깊은 묶음을 접어서 — 뿌리 → 묶음 → 국면(건수)이 한눈에, 펼쳐서 파고든다 */
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => defaultCollapsed(root, ordered))
   const [hiddenTypes, setHiddenTypes] = useState<ReadonlySet<RelationType>>(() => new Set())
   const presentTypes = TYPE_ORDER.filter((type) => relations.some((relation) => relation.type === type))
   const groupIndex = useMemo(() => new Map(grouping.groups.map((group) => [group.id, group.index])), [grouping])
@@ -217,6 +220,26 @@ export function RelationsPanel({
                 전체 {ordered.length}
               </S.ViewSwitchItem>
             </S.ViewSwitch>
+            {mode === 'all' && (
+              <S.ViewSwitch role="group" aria-label="펼침">
+                <S.ViewSwitchItem
+                  type="button"
+                  $active={collapsed.size > 0}
+                  aria-pressed={collapsed.size > 0}
+                  onClick={() => setCollapsed(defaultCollapsed(root, ordered))}
+                >
+                  국면까지
+                </S.ViewSwitchItem>
+                <S.ViewSwitchItem
+                  type="button"
+                  $active={collapsed.size === 0}
+                  aria-pressed={collapsed.size === 0}
+                  onClick={() => setCollapsed(new Set())}
+                >
+                  모두 펼치기
+                </S.ViewSwitchItem>
+              </S.ViewSwitch>
+            )}
             {presentTypes.length > 1 && (
               <TypeFilter role="group" aria-label="관계 종류 거르기">
                 {presentTypes.map((type) => (
@@ -232,7 +255,7 @@ export function RelationsPanel({
             <S.PanelNote>
               {mode === 'links'
                 ? '연결이 닿은 사건과 그 위 묶음만 · 선을 누르면 이유, 마디 끝 ●을 끌어 다른 사건에 놓으면 새 연결'
-                : '접은 가지로 가는 연결은 그 가지에 모여 ×N'}
+                : '국면 ▸를 누르면 펼침 · 접은 가지로 가는 연결은 그 가지에 모여 ×N · 선을 누르면 이유'}
             </S.PanelNote>
           </MapToolbar>
           <Suspense fallback={<MapLoading>마인드맵을 싣는 중…</MapLoading>}>
@@ -242,7 +265,6 @@ export function RelationsPanel({
               hotId={hotId}
               onOpen={openFromMap}
               onToggle={toggleCollapsed}
-              onHover={(id) => onHover(id && nodeById.has(id) ? id : null)}
               fullscreenTitle={`${root.title} — 연결 마인드맵`}
               onCreateRelation={relationActions.create}
               onUpdateRelation={relationActions.update}

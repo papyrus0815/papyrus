@@ -9,7 +9,7 @@
  */
 import '@xyflow/react/dist/style.css'
 
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 
 import { FiMaximize2, FiSearch } from 'react-icons/fi'
 
@@ -62,10 +62,13 @@ interface MindmapCanvasProps {
   onDeleteRelation?: (item: MindRelationItem) => Promise<void>
 }
 
-/** 화면 맞춤이 이 배율 아래로 내려가면(글자 ≈7px) 뿌리 둘레를 읽히는 배율로 먼저 보이고 나머지는 끌어서 */
-const READABLE_ZOOM = 0.62
+/**
+ * 화면 맞춤이 이 배율 아래로 내려가면 뿌리 둘레를 읽히는 배율로 먼저 보이고 나머지는 끌어서. 0.62였다가 0.5 —
+ * 본문 열(650px)의 '국면까지' 첫 화면(프랑스 혁명 21마디)이 0.55배라 잘렸는데, 상위에선 전부 보여야 한다.
+ */
+const READABLE_ZOOM = 0.5
 /** 이보다 멀면 사건 마디를 번호만으로(의미 축소) */
-const FAR_ZOOM = 0.42
+const FAR_ZOOM = 0.36
 
 type MindNodeData = MindNodeSpec & {
   side: MindPosition['side']
@@ -200,6 +203,27 @@ function MindmapFlow({
   const { fitView, getZoom, setCenter } = useReactFlow()
   const zoom = useStore((state) => state.transform[2])
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  /*
+   * 마우스 올림은 잠깐 머물러야 잡는다 — 마디 사이 틈(≈5px)을 지날 때마다 '모두 흐림 ↔ 원래대로'가 번갈아
+   * 그림 전체가 깜빡였다(흔들림). 들어갈 땐 90ms 머문 뒤, 나갈 땐 160ms 안에 다른 마디로 들어가면 놓지 않는다.
+   */
+  const hoverTimer = useRef<number | null>(null)
+  const setHoverSteady = (id: string | null) => {
+    if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current)
+    hoverTimer.current = window.setTimeout(
+      () => {
+        setHoveredId(id)
+        onHover?.(id)
+      },
+      id ? 90 : 160,
+    )
+  }
+  useEffect(
+    () => () => {
+      if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current)
+    },
+    [],
+  )
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
   const [pending, setPending] = useState<{ fromId: string; toId: string } | null>(null)
   const [query, setQuery] = useState('')
@@ -274,7 +298,7 @@ function MindmapFlow({
           sourceHandle: side === 'left' ? 'l-s' : 'r-s',
           targetHandle: side === 'left' ? 'r-t' : 'l-t',
           type: 'default',
-          style: { stroke: color, strokeWidth: Math.max(1.2, 3.2 - depth * 0.7), strokeOpacity: connected ? 0.35 : 0.75 },
+          style: { stroke: color, strokeWidth: Math.max(1.2, 3.2 - depth * 0.7), strokeOpacity: connected ? 0.4 : 0.75 },
           focusable: false,
         })
         visit(child, depth + 1)
@@ -316,7 +340,8 @@ function MindmapFlow({
           title: relation.title ? `${relation.title}\n(누르면 자세히)` : undefined,
           ink,
           opacity: touched ? (connected || selected ? 0.95 : restOpacity) : 0.12,
-          width: (connected && touched) || selected ? 2.4 : 1.6,
+          /* 굵기는 그대로 — 올릴 때마다 1.6↔2.4로 바뀌면 선이 튀어 보였다. 진하기(투명도)만 바꾼다 */
+          width: selected ? 2.4 : 1.8,
         },
       })
     }
@@ -387,14 +412,8 @@ function MindmapFlow({
           setSelectedEdgeId(edge.id === selectedEdgeId ? null : edge.id)
         }}
         onPaneClick={() => setSelectedEdgeId(null)}
-        onNodeMouseEnter={(_, node) => {
-          setHoveredId(node.id)
-          onHover?.(node.id)
-        }}
-        onNodeMouseLeave={() => {
-          setHoveredId(null)
-          onHover?.(null)
-        }}
+        onNodeMouseEnter={(_, node) => setHoverSteady(node.id)}
+        onNodeMouseLeave={() => setHoverSteady(null)}
         proOptions={{ hideAttribution: true }}
       >
         <Background variant={BackgroundVariant.Dots} gap={22} size={1} color={theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb'} />
@@ -516,10 +535,11 @@ const Host = styled.div`
     color: inherit;
   }
 
+  /* 손잡이는 마디 안쪽 끝 — 바깥(-7px)에 두면 손잡이로 가는 순간 마디를 벗어나 '나감→들어옴'이 되풀이됐다 */
   .react-flow__handle.mind-connect {
     width: 14px;
     height: 14px;
-    right: -7px;
+    right: 3px;
     border: 2px solid ${({ theme }) => theme.colors.background.primary};
     border-radius: 50%;
     background: ${({ theme }) => theme.colors.text.primary};
@@ -540,6 +560,9 @@ const Host = styled.div`
     border: 0;
     background: transparent;
     opacity: 0;
+  }
+  .react-flow__edge-path {
+    transition: stroke-opacity 0.18s ease;
   }
   .react-flow__edge-textbg {
     fill: ${({ theme }) => theme.colors.background.primary};
@@ -646,7 +669,7 @@ const NodeBox = styled.div<{ $kind: MindNodeKind; $color: string | null; $hot: b
   font-size: 12.5px;
   line-height: 1.2;
   opacity: ${({ $dim }) => ($dim ? 0.35 : 1)};
-  transition: opacity 0.12s;
+  transition: opacity 0.18s ease, outline-color 0.18s ease;
 
   ${({ $kind, $color, theme, $focus }) => {
     const surface = theme.colors.background.primary
@@ -693,7 +716,9 @@ const NodeBox = styled.div<{ $kind: MindNodeKind; $color: string | null; $hot: b
     `
   }}
 
-  ${({ $hot, theme }) => ($hot ? `outline: 2px solid ${theme.colors.text.primary}; outline-offset: 2px;` : '')}
+  /* 강조는 outline — 사건 마디의 왼쪽 색 띠(inset box-shadow)를 덮지 않고, 자리도 차지하지 않는다 */
+  outline: 2px solid ${({ $hot, theme }) => ($hot ? theme.colors.text.primary : 'transparent')};
+  outline-offset: 2px;
 `
 
 const NodeButton = styled.button`

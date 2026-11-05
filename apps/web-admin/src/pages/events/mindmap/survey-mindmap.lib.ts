@@ -277,3 +277,16 @@ export function buildSurveyMindmap(input: SurveyMindmapInput): MindmapData & { v
   }
   return { tree, specs, relations: [...merged.values()], visibleRelationCount: relations.length }
 }
+
+/**
+ * '전체'의 첫 접힘 — 국면 마디와 깊은 묶음(3단 이하)을 접어 둔다. 프랑스 혁명 전부(118마디)를 펼치면 본문 열에서
+ * 가운데만 보였다 — 첫 화면은 뿌리 → 묶음 → 국면(건수)과 그 사이 연결(×N)로 한눈에, 펼쳐서 파고든다.
+ */
+export function defaultCollapsed(root: EventOverviewNode, ordered: ReadonlyArray<EventOverviewNode>): Set<string> {
+  const ids = new Set<string>()
+  for (const node of [root, ...ordered]) {
+    for (const phase of node.phases ?? []) ids.add(`${PHASE_PREFIX}${phase.id}`)
+    if (node.id !== root.id && node.parentEventId !== root.id && node.kind === 'COLLECTION') ids.add(node.id)
+  }
+  return ids
+}

@@ -783,7 +783,7 @@ export function DetailNetwork({ event, onPatch, onRequestSplit }: DetailNetworkP
 
       {/* 연결 지도 — 이 사건을 가운데 둔 마인드맵(상위·하위 한 단 + 관련 두 단). 아래 목록이 편집 자리 */}
       {mapShown && (parentEvent || extraParents.length > 0 || children.length > 0 || relatedCount > 0) && (
-        <EventRelationMindmap eventId={event.id} />
+        <EventRelationMindmap eventId={event.id} isCollection={isCollection} />
       )}
 
       {/*

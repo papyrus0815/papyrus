@@ -1,26 +1,140 @@
 /**
- * 상세 › 연관의 '연결 지도' — 이 사건을 가운데 두고 상위·하위·관련(1~2단)을 마인드맵으로.
+ * 상세 › 연관의 '연결 지도'.
  *
- * 묶음 밖 사건의 인과 사슬(NSPM-2 → 5건, 랑고바르드 섬 9개)은 조망 마인드맵(최상위 아래만)에는 안 들어온다 —
- * 여기서는 사건 하나에서 출발해 관련의 관련까지 걸어 나간다. 마디를 누르면 그 사건 상세로(가서 다시 펼친다).
+ * - 묶음 사건(최상위 포함): 그 사건 아래 **전체** 나무(묶음 → 국면 → 사건) + 하위끼리·바깥과의 연결 전부 — 상위에서는
+ *   모든 마인드맵이 한 그림에 보여야 한다(사용자 지시). 데이터는 조망 응답을 그대로(같은 캐시).
+ * - 단일 사건: 그 사건을 가운데 두고 상위·하위·관련(1~2단). 묶음 밖 인과 사슬(NSPM-2 → 5건)은 여기서 걷는다.
+ * 마디를 누르면 그 사건 상세로(가서 다시 펼친다).
  */
-import { Suspense, lazy, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 
-import { getEventRelationGraph } from '@/shared/api/event-overview'
+import { getEventOverview, getEventRelationGraph } from '@/shared/api/event-overview'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import { pathKeys } from '@/shared/router'
 import { metaText } from '@/pages/events/styles/theme'
 
+import { buildGantt, collectionGroups, orderedDescendants, outlineNumbers } from '../overview/event-overview.lib'
+import { groupColor } from '../overview/overview.styles'
 import { buildEgoMindmap } from './ego-mindmap.lib'
+import { type RelationType, buildSurveyMindmap, defaultCollapsed } from './survey-mindmap.lib'
 import { useMindmapRelationActions } from './use-mindmap-relation-actions'
 
 const MindmapCanvas = lazy(() => import('./mindmap-canvas'))
 
-export function EventRelationMindmap({ eventId }: { eventId: string }) {
+export function EventRelationMindmap({ eventId, isCollection = false }: { eventId: string; isCollection?: boolean }) {
+  return isCollection ? <CollectionMindmap eventId={eventId} /> : <EgoMindmap eventId={eventId} />
+}
+
+/** 묶음 — 아래 전체 나무 + 모든 연결(조망 응답) */
+function CollectionMindmap({ eventId }: { eventId: string }) {
+  const navigate = useNavigate()
+  const theme = useTheme()
+  const [mode, setMode] = useState<'links' | 'all'>('all')
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
+  const [hiddenTypes] = useState<ReadonlySet<RelationType>>(() => new Set())
+  const { data, isLoading, isError } = useQuery({
+    queryKey: eventKeys.overview(eventId),
+    queryFn: () => getEventOverview(eventId),
+    staleTime: 30_000,
+  })
+  const relationActions = useMindmapRelationActions()
+  /* 처음 받은 때 한 번 — 국면·깊은 묶음을 접은 채로 시작(펼친 상태는 그 뒤로 사람이 정한다) */
+  const [seeded, setSeeded] = useState(false)
+  useEffect(() => {
+    if (!data || seeded) return
+    setCollapsed(defaultCollapsed(data.root, data.descendants))
+    setSeeded(true)
+  }, [data, seeded])
+  const prepared = useMemo(() => {
+    if (!data) return null
+    const gantt = buildGantt(data.root, data.descendants, 'children')
+    const ordered = orderedDescendants(gantt)
+    return {
+      ordered,
+      numberById: outlineNumbers(ordered, data.root.id),
+      grouping: collectionGroups(ordered, gantt),
+      dateLabelById: new Map(gantt.rows.map((row) => [row.node.id, row.dateLabel])),
+    }
+  }, [data])
+  const mindmap = useMemo(() => {
+    if (!data || !prepared) return null
+    const groupIndex = new Map(prepared.grouping.groups.map((group) => [group.id, group.index]))
+    return buildSurveyMindmap({
+      root: data.root,
+      ordered: prepared.ordered,
+      relations: data.relations ?? [],
+      numberById: prepared.numberById,
+      dateLabelById: prepared.dateLabelById,
+      colorOf: (id) => {
+        const groupId = prepared.grouping.groupIdOf.get(id)
+        const index = groupId !== undefined ? groupIndex.get(groupId) : undefined
+        return index !== undefined ? groupColor(index, theme.mode) : null
+      },
+      groupOf: (id) => prepared.grouping.groupIdOf.get(id) ?? null,
+      mode,
+      collapsed,
+      hiddenTypes,
+    })
+  }, [data, prepared, theme.mode, mode, collapsed, hiddenTypes])
+
+  if (isLoading) return <Loading>연결 지도를 모으는 중…</Loading>
+  if (isError || !data || !mindmap || !prepared) return <Note>연결 지도를 불러오지 못했습니다.</Note>
+  const relationCount = data.relations?.length ?? 0
+
+  return (
+    <Wrap>
+      <Toolbar>
+        <Switch role="group" aria-label="마디 범위">
+          <button type="button" aria-pressed={mode === 'all'} onClick={() => setMode('all')}>
+            전체 {prepared.ordered.length}
+          </button>
+          <button type="button" aria-pressed={mode === 'links'} onClick={() => setMode('links')} disabled={relationCount === 0}>
+            연결만
+          </button>
+        </Switch>
+        {mode === 'all' && (
+          <Switch role="group" aria-label="펼침">
+            <button type="button" aria-pressed={collapsed.size > 0} onClick={() => setCollapsed(defaultCollapsed(data.root, data.descendants))}>
+              국면까지
+            </button>
+            <button type="button" aria-pressed={collapsed.size === 0} onClick={() => setCollapsed(new Set())}>
+              모두 펼치기
+            </button>
+          </Switch>
+        )}
+        <Note as="span">
+          아래 사건 전부와 연결 {relationCount}개 · 국면 ▸를 누르면 펼침 · 선을 누르면 이유 · 마디 끝 ●을 끌어 놓으면 새 연결
+        </Note>
+      </Toolbar>
+      <Suspense fallback={<Loading>지도를 싣는 중…</Loading>}>
+        <MindmapCanvas
+          data={mindmap}
+          height={mode === 'all' ? 600 : 520}
+          onOpen={(id) => navigate(pathKeys.events.detail(id.startsWith('ext:') ? id.slice(4) : id))}
+          onToggle={(id) =>
+            setCollapsed((previous) => {
+              const next = new Set(previous)
+              if (next.has(id)) next.delete(id)
+              else next.add(id)
+              return next
+            })
+          }
+          fullscreenTitle={`${data.root.title} — 연결 지도`}
+          onCreateRelation={relationActions.create}
+          onUpdateRelation={relationActions.update}
+          onDeleteRelation={relationActions.remove}
+        />
+      </Suspense>
+    </Wrap>
+  )
+}
+
+/** 단일 사건 — 가운데 두고 상위·하위·관련 1~2단 */
+function EgoMindmap({ eventId }: { eventId: string }) {
   const navigate = useNavigate()
   const [hops, setHops] = useState<1 | 2>(2)
   const { data, isLoading, isError } = useQuery({
