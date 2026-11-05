@@ -1,6 +1,5 @@
 import { Type } from 'class-transformer'
 import {
-  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -304,12 +303,15 @@ export class CreateObservationDto {
   @IsIn(ESTIMATE_METHOD_VALUES as unknown as string[])
   method?: EstimateMethodValue | null
 
-  /** 출처 — **1개 이상 필수** */
+  /**
+   * 출처 — 선택(2026-11-05 사용자 지시: "출처 없이도 등록할 수 있어야"). 예전엔 1개 이상 필수라 출처를 모르는
+   * 숫자는 아예 적을 수 없었다. 출처 없는 값은 화면에서 '출처 미검증'으로 흐리게 보이고 나중에 출처를 달 수 있다.
+   */
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => CitationInputDto)
-  citations!: CitationInputDto[]
+  citations?: CitationInputDto[]
 }
 
 /**
@@ -386,10 +388,9 @@ export class UpdateObservationDto {
   @IsIn(ESTIMATE_METHOD_VALUES as unknown as string[])
   method?: EstimateMethodValue | null
 
-  /** 주면 전체 교체(자연키 머지 — 살아남은 인용은 건드리지 않는다). 주면 1개 이상 */
+  /** 주면 전체 교체(자연키 머지 — 살아남은 인용은 건드리지 않는다). 빈 배열 = 출처를 모두 뗀다 */
   @IsOptional()
   @IsArray()
-  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => CitationInputDto)
   citations?: CitationInputDto[]

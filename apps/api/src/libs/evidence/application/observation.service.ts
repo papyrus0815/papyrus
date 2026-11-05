@@ -75,7 +75,7 @@ const OBSERVATION_INCLUDE = {
 type ObservationRow = Prisma.ObservationGetPayload<{ include: typeof OBSERVATION_INCLUDE }>
 
 /**
- * 측정값 — **쓰기 단일 통로**. 출처 1개 이상을 강제하는 곳이 여기 하나뿐이어야 한다.
+ * 측정값 — **쓰기 단일 통로**. 출처는 선택이다(없으면 화면이 '출처 미검증'으로 표시) — 출처 규칙을 바꿀 곳은 여기 하나.
  */
 @Injectable()
 export class ObservationService {
@@ -165,7 +165,7 @@ export class ObservationService {
         tx,
         CitationTargetType.OBSERVATION,
         created.id,
-        dto.citations,
+        dto.citations ?? [],
         actorId,
       )
       return created.id
