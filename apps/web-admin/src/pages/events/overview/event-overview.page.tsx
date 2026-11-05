@@ -60,6 +60,8 @@ import {
   SidesMetricsPanel,
 } from './overview-sections'
 import { OverviewEventModal } from './overview-event-modal'
+import { MapPanel } from './overview-map-panel'
+import { RelationsPanel } from './overview-relations-panel'
 import {
   type AccessionMarker,
   type BridgeCountry,
@@ -83,6 +85,9 @@ const SURVEY_VIEWS = [
   { id: 'timeline', label: '전개', hint: '언제' },
   { id: 'participants', label: '참여', hint: '누가' },
   { id: 'composition', label: '구성', hint: '무엇' },
+  /* 어디서·왜 — 하위 전부의 핀과 하위끼리의 연결. 루트 상세의 지도·연관은 루트 자신만 봐서 안 보였다 */
+  { id: 'map', label: '지도', hint: '어디서' },
+  { id: 'links', label: '연결', hint: '왜' },
   { id: 'records', label: '기록 점검', hint: '얼마나' },
 ] as const
 type SurveyView = (typeof SURVEY_VIEWS)[number]['id']
@@ -284,8 +289,16 @@ export function EventOverviewPanel({
       missingCountries: missingRootCountries(root, descendants),
       directCount: descendants.filter((node) => node.depth === 1).length,
       sideCount: [root, ...descendants].reduce((sum, node) => sum + node.sides.length, 0),
+      dateLabelById: new Map(gantt.rows.map((row) => [row.node.id, row.dateLabel])),
+      nodeById: new Map([root, ...descendants].map((node) => [node.id, node])),
+      pinCount: [root, ...descendants].filter((node) => node.locationLatitude != null && node.locationLongitude != null)
+        .length,
+      innerRelations: (data.relations ?? []).filter((relation) => !relation.external),
     }
   }, [data, ganttFit])
+  /** 전개 간트의 연결 화살표 — `?links=1` */
+  const showLinks = searchParams.get('links') === '1'
+  const setShowLinks = (next: boolean) => setParam('links', next ? '1' : null)
 
   /** 거르기 — 나라·세부·시기가 여럿 걸리면 교집합. 없으면 null(아무것도 흐리지 않음) */
   const periodKey = searchParams.get('when')
@@ -543,7 +556,11 @@ export function EventOverviewPanel({
                 ? String(derived.matrix.length)
                 : view.id === 'composition'
                   ? null // 세부 분야 '종류 수'는 읽을 값이 아니었다 — 숫자를 달지 않는다
-                  : `${Math.round(derived.coverage * 100)}%`
+                  : view.id === 'map'
+                    ? String(derived.pinCount)
+                    : view.id === 'links'
+                      ? String(data.relations?.length ?? 0)
+                      : `${Math.round(derived.coverage * 100)}%`
           return (
             <S.SectionNavLink
               key={view.id}
@@ -723,6 +740,9 @@ export function EventOverviewPanel({
               onOpen={openEventById}
               accessions={accessions}
               rootPhases={root.phases as EventPhase[] | undefined}
+              relations={derived.innerRelations}
+              showLinks={showLinks}
+              onToggleLinks={() => setShowLinks(!showLinks)}
             />
             <DistributionPanel
               part="period"
@@ -802,6 +822,45 @@ export function EventOverviewPanel({
               </S.EmptyStrip>
             )}
           </>
+        )}
+        {activeView === 'map' && (
+          <MapPanel
+            rootId={root.id}
+            root={root}
+            ordered={derived.ordered}
+            numberById={derived.numberById}
+            dateLabelById={derived.dateLabelById}
+            grouping={derived.grouping}
+            visibleIds={visibleIds}
+            hotId={highlightId}
+            onHover={setHotId}
+            onOpen={openEventById}
+          />
+        )}
+        {activeView === 'links' && (
+          <RelationsPanel
+            root={root}
+            relations={data.relations ?? []}
+            nodeById={derived.nodeById}
+            numberById={derived.numberById}
+            grouping={derived.grouping}
+            visibleIds={visibleIds}
+            hotId={highlightId}
+            onHover={setHotId}
+            onOpen={openEventById}
+            /* 탭과 토글을 한 번에 — setSearchParams를 두 번 부르면 둘째가 첫째를 덮는다(렌더 시점 값 기준) */
+            onShowOnGantt={() =>
+              setSearchParams(
+                (previous) => {
+                  const next = new URLSearchParams(previous)
+                  next.set('links', '1')
+                  next.delete('sv')
+                  return next
+                },
+                { replace: true },
+              )
+            }
+          />
         )}
         {activeView === 'records' && (
           <ChecklistPanel

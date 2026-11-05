@@ -10,6 +10,7 @@ export type EventOverview = Awaited<ReturnType<typeof functional.events.overview
 export type EventOverviewNode = EventOverview['root']
 export type EventOverviewCountry = EventOverviewNode['countries'][number]
 export type EventOverviewPerson = EventOverviewNode['persons'][number]
+export type EventOverviewRelation = EventOverview['relations'][number]
 
 export async function getEventOverview(eventId: string): Promise<EventOverview> {
   return functional.events.overview.get(nestiaApiService.getConnection(), eventId)

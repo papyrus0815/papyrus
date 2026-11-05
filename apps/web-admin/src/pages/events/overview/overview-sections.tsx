@@ -9,7 +9,7 @@ import { Fragment, type ReactNode, useEffect, useRef, useState } from 'react'
 import { useTheme } from 'styled-components'
 
 import { domainAccent, domainLabel } from '@/entities/event/model/event-domain'
-import type { EventOverviewNode } from '@/shared/api/event-overview'
+import type { EventOverviewNode, EventOverviewRelation } from '@/shared/api/event-overview'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 
@@ -44,6 +44,7 @@ import { withSideColors } from '../detail/components/side-colors'
 import { type AccessionMarker } from '../detail/components/contemporary-heads.lib'
 import { toAxisSpan } from '../detail/components/development-timeline.lib'
 import { type EventPhase, datedPhases, phaseRangeLabel } from '../detail/components/event-phase.lib'
+import { GanttLinks } from './overview-gantt-links'
 import * as S from './overview.styles'
 
 /** 사건 하나가 지금 걸러진 집합 밖인가 — 집합이 없으면 아무것도 흐리지 않는다 */
@@ -113,7 +114,14 @@ export function GanttPanel({
   onOpen,
   accessions = [],
   rootPhases = [],
+  relations = [],
+  showLinks = false,
+  onToggleLinks,
 }: HoverProps & {
+  /** 하위 사건끼리의 관련 사건 — 주면 머리에 '연결' 토글, 켜면 막대 사이 화살표 */
+  relations?: ReadonlyArray<EventOverviewRelation>
+  showLinks?: boolean
+  onToggleLinks?: () => void
   /** 참여국 국가원수의 즉위·취임 — 축의 왕관과 줄마다 점선 */
   accessions?: AccessionMarker[]
   /** 조망을 연 사건의 국면 — 축 아래 '국면' 띠 한 줄 */
@@ -307,6 +315,17 @@ export function GanttPanel({
             {regrouping ? '고르기 끝' : '묶음 만들기'}
           </S.RegroupToggle>
         )}
+        {onToggleLinks && relations.length > 0 && (
+          <S.RegroupToggle
+            type="button"
+            aria-pressed={showLinks}
+            $active={showLinks}
+            onClick={onToggleLinks}
+            title="하위 사건끼리 이어 둔 관련 사건(직접 계기·배경·대응…)을 막대 사이 화살표로"
+          >
+            연결 {relations.length}
+          </S.RegroupToggle>
+        )}
         <S.ViewSwitch role="group" aria-label="시간축 범위">
           <S.ViewSwitchItem
             type="button"
@@ -339,6 +358,7 @@ export function GanttPanel({
               : ` · 상위 기간 밖 ${outsideCount}건(제목 뒤 '기간 전·후' 표지)`)}
           {accessionMarks.length > 0 && ' · ♛·★ 점선 = 참여국 국가원수 즉위·취임(축의 표지에 마우스를 올리면 이름)'}
           {hiddenCount > 0 && ` · 묶음 밖 ${hiddenCount}건 숨김`}
+          {showLinks && relations.length > 0 && ' · 화살표 = 연결(실선 직접 계기 · 긴 점선 배경 · 점선 같은 국면·그 밖)'}
         </S.PanelNote>
         {domainsShown.length > 1 && (
           <S.DomainLegend aria-label="막대 색 — 분야">
@@ -406,7 +426,7 @@ export function GanttPanel({
         <S.Empty>날짜가 있는 하위 사건이 없습니다.</S.Empty>
       ) : (
         <S.GanttScroll>
-          <S.GanttGrid role="list" aria-label="하위 사건 시간축">
+          <S.GanttGrid role="list" aria-label="하위 사건 시간축" style={{ position: 'relative' }}>
             <S.GanttAxisCorner aria-hidden="true" />
             <S.GanttAxis aria-hidden="true" ref={axisRef} $withAccessions={accessionMarks.length > 0}>
               {edges.map((edge) => (
@@ -647,6 +667,7 @@ export function GanttPanel({
                       <S.AccessionLine key={mark.key} style={{ left: `${mark.pct}%` }} />
                     ))}
                     <S.Bar
+                      data-gantt-bar={row.node.id}
                       $color={color}
                       $uncertain={row.uncertain}
                       $point={row.isPoint}
@@ -671,6 +692,13 @@ export function GanttPanel({
                 </div>
               )
             })}
+            {showLinks && relations.length > 0 && (
+              <GanttLinks
+                relations={relations}
+                hotId={hotId}
+                layoutKey={`${fit}|${[...foldedGroups].join(',')}|${visibleIds ? [...visibleIds].length : 'all'}|${hideFiltered}`}
+              />
+            )}
           </S.GanttGrid>
         </S.GanttScroll>
       )}

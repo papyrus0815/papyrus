@@ -1,0 +1,350 @@
+/**
+ * 조망 › 연결 — '왜(서로 어떻게 이어지나)'. 트리 안 사건이 낀 관련 사건(event_relation)을 한곳에.
+ *
+ * 왜: 상세의 연관 탭은 그 사건 하나의 연결만 본다. 프랑스 혁명 루트는 자기 연결이 0이라, 하위끼리의 인과
+ * (바스티유 습격 → 연맹제, 니스 병합 → 이탈리아 원정…) 9개가 루트에선 하나도 안 보였다.
+ *
+ * - 안쪽 연결: 둘 다 이 트리 안. 연관 탭과 같은 종류 차례·이름(EVENT_RELATION_LABELS)으로 묶는다.
+ *   묶음(가지)을 건너는 연결은 '가지를 건넘' 표지 — 큰 흐름 사이의 인과라 따로 눈에 걸리게.
+ * - 바깥 연결: 한쪽이 트리 밖. 이 묶음이 무엇을 낳았나/무엇에서 왔나. 누르면 그 사건 상세로.
+ * - 간트 화살표는 전개 보기의 '연결 보기' 토글(GanttPanel)이 같은 데이터로 그린다.
+ */
+import { FiArrowRight, FiCornerDownRight } from 'react-icons/fi'
+import { Link } from 'react-router-dom'
+import styled from 'styled-components'
+
+import { type EventOverviewNode, type EventOverviewRelation } from '@/shared/api/event-overview'
+import { DIRECTED_RELATION_TYPES, EVENT_RELATION_LABELS } from '@/shared/api/event-relations'
+import { pathKeys } from '@/shared/router'
+import { metaText } from '@/pages/events/styles/theme'
+
+import { type OverviewGrouping } from './event-overview.lib'
+import * as S from './overview.styles'
+
+const TYPE_ORDER: ReadonlyArray<EventOverviewRelation['type']> = [
+  'LED_TO',
+  'INFLUENCED',
+  'RESPONSE_TO',
+  'CONCURRENT',
+  'RELATED',
+]
+
+interface RelationsPanelProps {
+  root: EventOverviewNode
+  relations: ReadonlyArray<EventOverviewRelation>
+  nodeById: Map<string, EventOverviewNode>
+  numberById: Map<string, string>
+  grouping: OverviewGrouping
+  visibleIds: Set<string> | null
+  hotId: string | null
+  onHover: (id: string | null) => void
+  onOpen: (id: string) => void
+  onShowOnGantt?: () => void
+}
+
+export function RelationsPanel({
+  root,
+  relations,
+  nodeById,
+  numberById,
+  grouping,
+  visibleIds,
+  hotId,
+  onHover,
+  onOpen,
+  onShowOnGantt,
+}: RelationsPanelProps) {
+  const inside = relations.filter((relation) => !relation.external)
+  const outside = relations.filter((relation) => relation.external)
+  const groupTitle = (id: string) => {
+    const groupId = grouping.groupIdOf.get(id)
+    return groupId ? (grouping.groups.find((group) => group.id === groupId)?.title ?? null) : null
+  }
+  const dimmed = (relation: EventOverviewRelation) =>
+    visibleIds !== null &&
+    ![relation.fromId, relation.toId].some((id) => id === root.id || visibleIds.has(id))
+
+  const endpoint = (id: string) => {
+    const node = nodeById.get(id)
+    if (!node) return null
+    const number = id === root.id ? '★' : (numberById.get(id) ?? '')
+    return (
+      <Endpoint
+        type="button"
+        onClick={() => onOpen(id)}
+        onMouseEnter={() => onHover(id)}
+        onMouseLeave={() => onHover(null)}
+        onFocus={() => onHover(id)}
+        onBlur={() => onHover(null)}
+        data-hot={hotId === id ? '' : undefined}
+        title={node.title}
+      >
+        <span className="number">{number}</span>
+        <span className="title">{node.title}</span>
+      </Endpoint>
+    )
+  }
+
+  if (relations.length === 0) {
+    return (
+      <S.EmptyStrip>
+        <strong>하위 사건끼리 이어 둔 관련 사건이 없습니다</strong> — 하위 사건 문서의 연관 탭에서 '직접 계기·배경·대응'으로
+        이으면 여기에 모이고, 전개 간트에 화살표로 그려집니다.
+      </S.EmptyStrip>
+    )
+  }
+
+  return (
+    <S.Panel $wide id="overview-relations" aria-labelledby="overview-relations-title">
+      <S.PanelHead>
+        <S.PanelTitle id="overview-relations-title">연결</S.PanelTitle>
+        {onShowOnGantt && inside.length > 0 && (
+          <S.TextButton type="button" onClick={onShowOnGantt}>
+            전개 간트에 화살표로 보기
+          </S.TextButton>
+        )}
+        <S.PanelNote style={{ flexBasis: '100%' }}>
+          하위 사건끼리 {inside.length} · 이 묶음 밖과 {outside.length} — 각 사건 문서의 연관 탭에서 이은 것을 모았습니다
+        </S.PanelNote>
+      </S.PanelHead>
+
+      {TYPE_ORDER.map((type) => {
+        const list = inside.filter((relation) => relation.type === type)
+        if (list.length === 0) return null
+        const label = EVENT_RELATION_LABELS[type]
+        return (
+          <TypeBlock key={type} aria-label={label.name}>
+            <TypeHead>
+              <LineSample $type={type} aria-hidden />
+              {label.name}
+              <S.Muted> {list.length}</S.Muted>
+              <TypeHint>{label.hint}</TypeHint>
+            </TypeHead>
+            <ul>
+              {list.map((relation) => {
+                const fromGroup = groupTitle(relation.fromId)
+                const toGroup = groupTitle(relation.toId)
+                const crosses = fromGroup !== null && toGroup !== null && fromGroup !== toGroup
+                return (
+                  <RelationRow key={relation.id} data-dim={dimmed(relation) ? '' : undefined}>
+                    <Pair>
+                      {endpoint(relation.fromId)}
+                      <Arrow aria-label={DIRECTED_RELATION_TYPES.has(type) ? label.outgoing : label.name}>
+                        {DIRECTED_RELATION_TYPES.has(type) ? <FiArrowRight /> : '↔'}
+                      </Arrow>
+                      {endpoint(relation.toId)}
+                    </Pair>
+                    {(crosses || relation.description) && (
+                      <RowMeta>
+                        {crosses && (
+                          <CrossTag title="서로 다른 묶음(큰 흐름) 사이의 연결">
+                            가지를 건넘 · {fromGroup} → {toGroup}
+                          </CrossTag>
+                        )}
+                        {relation.description && <span className="why">{relation.description}</span>}
+                      </RowMeta>
+                    )}
+                  </RelationRow>
+                )
+              })}
+            </ul>
+          </TypeBlock>
+        )
+      })}
+
+      {outside.length > 0 && (
+        <TypeBlock aria-label="이 묶음 밖과 이어진 사건">
+          <TypeHead>
+            이 묶음 밖과 이어진 사건<S.Muted> {outside.length}</S.Muted>
+            <TypeHint>이 사건들이 무엇에서 왔고 무엇을 낳았나</TypeHint>
+          </TypeHead>
+          <ul>
+            {outside.map((relation) => {
+              const external = relation.external!
+              const insideId = external.side === 'to' ? relation.fromId : relation.toId
+              const label = EVENT_RELATION_LABELS[relation.type]
+              const outsideLink = (
+                <ExternalLink to={pathKeys.events.detail(external.id)} title={external.title}>
+                  <FiCornerDownRight aria-hidden />
+                  {external.title}
+                  {external.startDate && <span className="date">{external.startDate.slice(0, 4)}</span>}
+                </ExternalLink>
+              )
+              return (
+                <RelationRow key={relation.id} data-dim={dimmed(relation) ? '' : undefined}>
+                  <Pair>
+                    {external.side === 'from' ? outsideLink : endpoint(insideId)}
+                    <Arrow aria-label={label.name}>
+                      {DIRECTED_RELATION_TYPES.has(relation.type) ? <FiArrowRight /> : '↔'}
+                    </Arrow>
+                    {external.side === 'from' ? endpoint(insideId) : outsideLink}
+                  </Pair>
+                  <RowMeta>
+                    <span className="kind">{label.name}</span>
+                    {relation.description && <span className="why">{relation.description}</span>}
+                  </RowMeta>
+                </RelationRow>
+              )
+            })}
+          </ul>
+        </TypeBlock>
+      )}
+    </S.Panel>
+  )
+}
+
+const TypeBlock = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+`
+
+const TypeHead = styled.h3`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const TypeHint = styled.span`
+  font-size: 12px;
+  font-weight: 400;
+  color: ${metaText};
+`
+
+const LineSample = styled.span<{ $type: EventOverviewRelation['type'] }>`
+  display: inline-block;
+  width: 22px;
+  height: 0;
+  border-top: 2px ${({ $type }) => ($type === 'LED_TO' ? 'solid' : $type === 'INFLUENCED' || $type === 'RESPONSE_TO' ? 'dashed' : 'dotted')}
+    ${({ theme }) => theme.colors.text.secondary};
+`
+
+const RelationRow = styled.li`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.default};
+
+  &[data-dim] {
+    opacity: 0.45;
+  }
+`
+
+const Pair = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  min-width: 0;
+`
+
+const Endpoint = styled.button`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 1px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: pointer;
+
+  &:hover,
+  &[data-hot] {
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.06)')};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
+  }
+
+  .number {
+    flex-shrink: 0;
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+    color: ${metaText};
+  }
+  .title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+`
+
+const Arrow = styled.span`
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  color: ${metaText};
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+`
+
+const RowMeta = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  padding-left: 4px;
+  font-size: 12px;
+  color: ${metaText};
+
+  .kind {
+    font-weight: 600;
+  }
+  .why {
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+`
+
+const CrossTag = styled.span`
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const ExternalLink = styled(Link)`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  text-decoration: underline;
+  text-decoration-color: ${({ theme }) => theme.colors.border.default};
+  text-underline-offset: 3px;
+
+  svg {
+    align-self: center;
+    flex-shrink: 0;
+    width: 13px;
+    height: 13px;
+    color: ${metaText};
+  }
+  .date {
+    font-size: 11.5px;
+    font-weight: 400;
+    color: ${metaText};
+  }
+`
