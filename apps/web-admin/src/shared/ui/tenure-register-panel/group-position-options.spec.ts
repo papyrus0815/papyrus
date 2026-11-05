@@ -5,6 +5,7 @@ import {
   parseRecentTitleValue,
   recentTitleValue,
   DEFAULT_COLLAPSED_POSITION_GROUPS,
+  DEFAULT_COLLAPSED_REIGN_GROUPS,
   REIGN_OTHER_GROUP_LABEL,
 } from './group-position-options'
 
@@ -209,16 +210,35 @@ describe('groupHeadsPositionOptions — 수반 등록 피커', () => {
 })
 
 describe('buildReignPositionOptions — 군주 재위 피커', () => {
-  it('군주 칭호 → 작위 → 그 밖의 직위 순으로 묶는다', () => {
+  it('군주 칭호 → 작위 → 그 밖의 직위 순으로 묶고, 장관 같은 공직은 넣지 않는다', () => {
     const options = buildReignPositionOptions({ definitions: ALL })
+    expect(options.map((option) => option.value)).not.toContain('m')
     expect(options.map((option) => option.group)).toEqual([
       '군주 칭호',
       '작위·칭호',
-      // 대통령·쇼군·외무장관 — 관직 유형은 전부 접히는 그룹으로
-      '그 밖의 직위',
+      // 대통령·쇼군 — 꼭대기 자리만 접히는 그룹으로
       '그 밖의 직위',
       '그 밖의 직위',
     ])
+  })
+
+  it('이 국가에서 쓰인 장관 정의(usedInThisCountry)도 군주 피커에 올라오지 않는다', () => {
+    const options = buildReignPositionOptions({
+      definitions: [국왕, { ...외무장관, usedInThisCountry: true, usedCount: 10 }],
+    })
+    expect(options.map((option) => option.value)).toEqual(['k'])
+  })
+
+  it('군주 칭호는 위계(rank) 순 — 황제 → 국왕 → 선제후 → 번주', () => {
+    const options = buildReignPositionOptions({
+      definitions: [
+        { id: 'han', title: '번주', positionType: 'HEAD_OF_STATE', isMonarchical: true, rank: 6 },
+        { id: 'el', title: '선제후', positionType: 'HEAD_OF_STATE', isMonarchical: true, rank: 3 },
+        { ...국왕, rank: 2 },
+        { id: 'em', title: '황제', positionType: 'HEAD_OF_STATE', isMonarchical: true, rank: 1 },
+      ],
+    })
+    expect(options.map((option) => option.label)).toEqual(['황제', '국왕', '선제후', '번주'])
   })
 
   it('쇼군처럼 관직 유형으로 등록된 재위도 사라지지 않는다(실측 15행)', () => {
@@ -228,11 +248,15 @@ describe('buildReignPositionOptions — 군주 재위 피커', () => {
     expect(쇼군옵션?.group).toBe(REIGN_OTHER_GROUP_LABEL)
   })
 
-  it('수정 중인 정의가 서버 목록에 없어도 되살린다', () => {
+  it('수정 중인 정의는 공직이라도 되살린다 — 장관 정의로 잘못 등록된 재위의 편집 경로 보존', () => {
     const options = buildReignPositionOptions({
       definitions: [국왕],
-      pinnedDefinition: 쇼군,
+      pinnedDefinition: 외무장관,
     })
-    expect(options.map((option) => option.value)).toContain('s')
+    expect(options.map((option) => option.value)).toContain('m')
+  })
+
+  it('작위·그 밖의 직위는 기본으로 접는다', () => {
+    expect(DEFAULT_COLLAPSED_REIGN_GROUPS).toEqual(['작위·칭호', REIGN_OTHER_GROUP_LABEL])
   })
 })

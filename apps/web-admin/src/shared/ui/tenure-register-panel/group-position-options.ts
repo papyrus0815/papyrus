@@ -278,15 +278,42 @@ export function groupHeadsPositionOptions(
 
 /** 재위 피커에서 기본으로 접어 둘 그룹. */
 export const REIGN_OTHER_GROUP_LABEL = '그 밖의 직위'
-export const DEFAULT_COLLAPSED_REIGN_GROUPS = [REIGN_OTHER_GROUP_LABEL]
+/** 작위(공작·백작 등 비주권 칭호)는 재위가 아니라 접어 둔다 — 주권 공작·백작은 '군주 칭호'에 따로 있다 */
+export const DEFAULT_COLLAPSED_REIGN_GROUPS = [
+  RECORD_FAMILY_GROUP_LABELS.NOBLE_TITLE,
+  REIGN_OTHER_GROUP_LABEL,
+]
 
 /**
- * "군주 재위" 피커의 선택지 — 재임 피커의 거울상.
+ * 군주 재위 피커에 '그 밖의 직위'로 남길 관직 유형 — 국가·정부의 꼭대기 자리뿐.
+ * 쇼군(HEAD_OF_GOVERNMENT, 실측 15행)·섭정·왕위 계승자처럼 군주 재위와 맞닿는 자리는 남기고,
+ * 장관·차관·의원·외교관·군 지휘관 같은 공직은 군주 등록에서 고를 이유가 없어 아예 뺀다.
+ */
+const REIGN_ADJACENT_OFFICE_TYPES = new Set([
+  'HEAD_OF_STATE',
+  'HEAD_OF_GOVERNMENT',
+  'REGENT',
+  'HEIR_APPARENT',
+])
+
+/** 위계(rank) → 제목 순. rank는 같은 기록가족 안의 서열이다(황제 1 · 국왕 2 · 대공·선제후 3 …). */
+function compareByRankThenTitle(
+  left: PositionDefinitionLike,
+  right: PositionDefinitionLike,
+): number {
+  const rankDiff = (left.rank ?? 999) - (right.rank ?? 999)
+  if (rankDiff !== 0) return rankDiff
+  return definitionLabel(left).localeCompare(definitionLabel(right))
+}
+
+/**
+ * "군주 재위" 피커의 선택지 — 인물 상세 '군주 등록'처럼 재위로 진입했을 때 쓴다.
  *
- * 재위 패널은 그동안 필터가 **전혀 없어** 정의 50건(대통령·서기장·각료 포함)을 그대로 보여줬다.
- * 그렇다고 관직을 하드 제외할 수도 없다: 실측상 쇼군(15건)·총리(2건)·대통령(1건)처럼
- * isMonarchical=false인 정의로 등록된 재위가 18행 존재한다. 그래서 여기서도 강등만 한다 —
- * 군주 칭호·작위를 위로 올리고, 그 밖의 직위는 접히는 그룹으로 내린다.
+ * - 군주 칭호는 위계(rank) 순: 황제·천황 → 국왕·술탄 → 대공·선제후 → 공작·변경백 → 백작 → 번주.
+ * - 작위는 군주 칭호 다음, 그 밖의 직위(대통령·쇼군·섭정 등 꼭대기 자리)는 접힌 그룹.
+ * - 장관·차관·외교관 등 공직은 넣지 않는다. 예전엔 '이 국가에서 쓰인 직책'(usedInThisCountry)이
+ *   재위·재임을 가리지 않고 세서 외무장관이 군주 피커 상단까지 올라왔다.
+ * - 수정 중인 정의는 어떤 필터보다 먼저 살린다(장관 정의로 잘못 등록된 재위도 편집 경로 보존).
  */
 export function buildReignPositionOptions({
   definitions,
@@ -296,7 +323,11 @@ export function buildReignPositionOptions({
   pinnedDefinition?: PositionDefinitionLike | null
 }): PositionOptionItem[] {
   // 일반 정의는 재위 피커에 두지 않는다('기타 (직접 입력)'이 그 길) — 수정 중인 정의만 살린다
-  const visible = definitions.filter((def) => def.isGeneric !== true)
+  const visible = definitions.filter((def) => {
+    if (def.isGeneric === true) return false
+    if (getRecordFamily(def) !== 'OFFICE') return true
+    return REIGN_ADJACENT_OFFICE_TYPES.has(def.positionType ?? '')
+  })
   if (pinnedDefinition?.id && !visible.some((def) => def.id === pinnedDefinition.id)) {
     visible.push(pinnedDefinition)
   }
@@ -304,13 +335,11 @@ export function buildReignPositionOptions({
   const groupOf = (def: PositionDefinitionLike): string => {
     const family = getRecordFamily(def)
     if (family !== 'OFFICE') return RECORD_FAMILY_GROUP_LABELS[family]
-    // 쇼군처럼 관직 유형이지만 이 국가에서 실제 재위로 쓰인 정의는 접힌 그룹에 묻지 않는다
-    return def.usedInThisCountry === true ? USED_GROUP_LABEL : REIGN_OTHER_GROUP_LABEL
+    return REIGN_OTHER_GROUP_LABEL
   }
 
   const order = [
     RECORD_FAMILY_GROUP_LABELS.SOVEREIGN,
-    USED_GROUP_LABEL,
     RECORD_FAMILY_GROUP_LABELS.NOBLE_TITLE,
     REIGN_OTHER_GROUP_LABEL,
   ]
@@ -318,6 +347,7 @@ export function buildReignPositionOptions({
   order.forEach((group) => {
     visible
       .filter((def) => groupOf(def) === group)
+      .sort(compareByRankThenTitle)
       .forEach((def) => {
         options.push({ value: def.id, label: definitionLabel(def), group })
       })

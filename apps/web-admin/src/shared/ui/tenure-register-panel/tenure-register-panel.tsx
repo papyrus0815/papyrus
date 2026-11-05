@@ -1416,17 +1416,39 @@ export function TenureRegisterPanel({
    * 정부수반·관직을 나누지 않고 한 피커에 통합 노출한다.
    */
   const isMinisterFlowForFilter = !tenureId && initialCabinetId != null
+  /**
+   * '군주 등록'으로 연 피커인가 — 진입 맥락으로만 정한다(직책을 고를 때마다 바뀌는 monarchicalMode를
+   * 쓰면 쇼군 하나 골랐다고 목록이 장관까지 든 통합 피커로 뒤집힌다). 수정은 그 기록이 재위였는지로.
+   */
+  const reignPickerEntry = isEdit
+    ? (editingTenure as any)?.isMonarchical === true
+    : defaultMonarchical && !isMinisterFlowForFilter
   const positionTitleOptions: SelectOption<string>[] = useMemo(
     () =>
-      buildPositionOptions({
-        definitions: positionDefinitions as PositionDefinitionLike[],
-        isMinisterFlow: isMinisterFlowForFilter,
-        builtins: BUILTIN_POSITIONS,
-        pinnedDefinition,
-        recentTitles,
-        otherValue: OTHER_POSITION_VALUE,
-      }),
-    [positionDefinitions, isMinisterFlowForFilter, pinnedDefinition, recentTitles],
+      reignPickerEntry
+        ? // 군주 등록 — 군주 칭호(위계순)·작위·꼭대기 자리만. 장관·외교관 등 공직은 넣지 않는다.
+          [
+            ...buildReignPositionOptions({
+              definitions: positionDefinitions as PositionDefinitionLike[],
+              pinnedDefinition,
+            }),
+            { value: OTHER_POSITION_VALUE, label: '기타 (직접 입력)' },
+          ]
+        : buildPositionOptions({
+            definitions: positionDefinitions as PositionDefinitionLike[],
+            isMinisterFlow: isMinisterFlowForFilter,
+            builtins: BUILTIN_POSITIONS,
+            pinnedDefinition,
+            recentTitles,
+            otherValue: OTHER_POSITION_VALUE,
+          }),
+    [
+      reignPickerEntry,
+      positionDefinitions,
+      isMinisterFlowForFilter,
+      pinnedDefinition,
+      recentTitles,
+    ],
   )
 
   /**
@@ -1463,7 +1485,9 @@ export function TenureRegisterPanel({
           : '직책 선택'
       : (selectedDef?.title ?? selectedDef?.name ?? (title || '직책 선택'))
 
-  const collapsedPositionGroups = DEFAULT_COLLAPSED_POSITION_GROUPS
+  const collapsedPositionGroups = reignPickerEntry
+    ? DEFAULT_COLLAPSED_REIGN_GROUPS
+    : DEFAULT_COLLAPSED_POSITION_GROUPS
 
   const filteredPositionOptions = useMemo(() => {
     if (!positionQuery.trim()) return positionTitleOptions
