@@ -324,6 +324,8 @@ export function ObservationFormModal({
     }
   }
   const citation = citationDraft()
+  /** 새 출처 칸에 제목 말고 다른 것만 적었나 — 그대로 저장하면 적은 것이 조용히 버려진다 */
+  const newSourceTouched = Boolean(newSource.authors.trim() || newSource.publishedYear.trim() || newSource.url.trim())
 
   /** 저장을 막는 첫 사유 — 바닥줄에 그대로(누르고 나서 토스트로 알게 하지 않는다) */
   const blocker = !metric
@@ -336,9 +338,11 @@ export function ObservationFormModal({
           ? '범위의 하한이 상한보다 큽니다'
           : metric.valueKind === 'MONEY' && !currencyCode.trim()
             ? '금액 지표에는 통화 코드가 필요합니다'
-            : !initial && !citation
-              ? '출처를 고르거나 새 출처의 제목을 적어 주세요'
+            : sourceMode === 'new' && !newSource.title.trim() && newSourceTouched
+              ? '새 출처의 제목을 적어 주세요(출처 없이 기록하려면 저자·연도·URL을 비우세요)'
               : null
+  /** 출처 없이 기록하는가 — 막지 않고 바닥줄에 알리기만 한다(2026-11-05 사용자 지시) */
+  const withoutSource = !initial && !citation
 
   const submit = async () => {
     if (blocker || !metric) {
@@ -372,7 +376,7 @@ export function ObservationFormModal({
           subjectType: target.subjectType,
           subjectId: target.subjectId,
           ...common,
-          citations: [citation!],
+          citations: citation ? [citation] : [],
         })
       }
       await queryClient.invalidateQueries({ queryKey: eventKeys.observations(eventId) })
@@ -451,7 +455,7 @@ export function ObservationFormModal({
       isOpen
       onClose={onClose}
       title={initial ? '수치 고치기' : '수치 기록'}
-      subtitle="출처가 달린 숫자만 진영 비교·해설에 쓰입니다"
+      subtitle="출처를 달면 값의 무게가 생깁니다 — 모르면 비워 두고 나중에 달 수 있습니다"
       maxWidth="1080px"
       initialFocusRef={focusValueFirst ? valueInputRef : subjectInputRef}
     >
@@ -721,7 +725,7 @@ export function ObservationFormModal({
               id="obs-step-source"
               icon={<FiBookOpen />}
               title="근거"
-              caption={initial ? '출처를 더 달 수 있습니다(선택)' : '출처 없는 숫자는 기록하지 않습니다'}
+              caption={initial ? '출처를 더 달 수 있습니다(선택)' : '선택 — 비우면 출처 미검증으로 기록됩니다'}
               done={stepDone.source}
             />
 
@@ -934,8 +938,8 @@ export function ObservationFormModal({
 
         <Footer>
           <FooterSummary $blocked={Boolean(blocker)}>
-            {blocker ? <FiAlertCircle aria-hidden /> : <FiCheckCircle aria-hidden />}
-            <span>{blocker ?? summary}</span>
+            {blocker || withoutSource ? <FiAlertCircle aria-hidden /> : <FiCheckCircle aria-hidden />}
+            <span>{blocker ?? (withoutSource ? `${summary} · 출처 없이 기록` : summary)}</span>
           </FooterSummary>
           <Button type="button" onClick={onClose}>
             취소

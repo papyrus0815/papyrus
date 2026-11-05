@@ -109,6 +109,11 @@ export function observationExtent(observation: Pick<Observation, 'value' | 'low'
 }
 
 /** 출처가 검증되지 않은 측정값인가 — 화면이 숨기지 않고 표시해야 한다 */
+/** 미검증 값의 표지 — 출처가 아예 없으면 '출처 없음', 검증 안 된 옛 출처만 있으면 '출처 미검증' */
+export function unverifiedLabel(observation: Pick<Observation, 'citations'>): string {
+  return observation.citations.length === 0 ? '출처 없음' : '출처 미검증'
+}
+
 export function isUnverified(observation: Pick<Observation, 'citations'>): boolean {
   return (
     observation.citations.length === 0 ||

@@ -59,7 +59,11 @@ export function InlineSelect({
 
   return (
     <ReadHost className={className} data-edit-host>
-      <ReadValue data-empty={isEmpty || undefined}>
+      {/*
+        * 글자도 누르면 열린다 — 예전엔 옆 ▾(평소 투명, hover에만 보임)만 버튼이라, 밑줄이 생기는 '국가 넣기'·'군사'를
+        * 눌러도 아무 일이 없었다(진영 카드 '국가 넣기'로 진영에 나라를 못 넣는다는 제보). 키보드 경로는 ▾ 버튼이 든다.
+        */}
+      <ReadValue data-empty={isEmpty || undefined} onClick={() => setOpen(true)}>
         {prefix}
         {current ? current.label : placeholder}
       </ReadValue>
@@ -123,6 +127,7 @@ const ReadHost = styled.span`
 
 const ReadValue = styled.span`
   ${S.editableTrigger}
+  cursor: pointer;
 `
 
 /**

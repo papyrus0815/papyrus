@@ -25,6 +25,7 @@ import {
   formatObservationValue,
   isUnverified,
   observationExtent,
+  unverifiedLabel,
 } from '@/entities/evidence/lib/format-observation'
 import { eventTypeFeatures } from '@/entities/event/model'
 import { RADIUS } from '@/entities/event/ui/ledger-tokens'
@@ -37,6 +38,7 @@ import * as S from '../styles'
 import { type EventDetail, eventKeys, eventObservationsQueryOptions } from '../use-event-detail'
 import { MODULE_COLOR } from './module-colors'
 import { ObservationFormModal, type ObservationSubjectOption } from './observation-form-modal'
+import { SideMetricsChart } from './side-metrics-chart'
 import { withSideColors } from './side-colors'
 import { buildSideCommentary } from './side-metrics-commentary.lib'
 import {
@@ -86,6 +88,17 @@ interface ModuleMetricsProps {
 }
 
 const NEUTRAL = '#64748b'
+
+/** 비교표 보기 — 그래프/표. 사람마다 고른 것을 기억한다(편의 상태라 브라우저 저장소) */
+type MetricsView = 'chart' | 'table'
+const VIEW_STORAGE_KEY = 'event-metrics-view'
+function readMetricsView(): MetricsView {
+  try {
+    return window.localStorage.getItem(VIEW_STORAGE_KEY) === 'table' ? 'table' : 'chart'
+  } catch {
+    return 'chart'
+  }
+}
 
 /**
  * 수치(D3) — 병력·사상자·비용 같은 측정값. 숫자의 정본이 본문이 아니라 여기 있다.
@@ -229,6 +242,19 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
       .filter((group) => group.rows.length > 0)
   }, [observations, subjects, sides, participantSide])
 
+  /* 그래프는 값이 하나라도 있을 때만 — 빈 비교표(추천 지표 빈 칸)는 그 자체가 '여기 적으세요' 자리라 표로 둔다 */
+  const [view, setViewState] = useState<MetricsView>(readMetricsView)
+  const setView = (next: MetricsView) => {
+    setViewState(next)
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, next)
+    } catch {
+      /* 저장소가 막혀도 이번 화면은 바뀐다 */
+    }
+  }
+  const chartable = comparedRows.length > 0 && tableSides.length > 0
+  const showChart = chartable && view === 'chart'
+
   const unverifiedCount = observations.filter(isUnverified).length
   /**
    * 전부 미검증이면 행마다 '출처 미검증'을 달지 않는다 — 위 경고 한 줄이 이미 말한다(보불전쟁: 경고 1 + 배지 17).
@@ -265,10 +291,13 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
           {unverifiedCount > 0 && (
             /* 배너 대신 머리 칩 — 시드 값 72개가 전부 미검증이라 배너가 늘 떠 있었다 */
             <UnverifiedChip
-              title={`${allUnverified ? '이 사건의 수치는 모두' : `${unverifiedCount}개 수치는`} 출처가 검증되지 않았습니다 — 기존 시드가 출처 없이 넣은 값입니다. 값을 눌러 출처를 달 수 있습니다.`}
+              title={`${allUnverified ? '이 사건의 수치는 모두' : `${unverifiedCount}개 수치는`} 출처가 없거나 검증되지 않았습니다. 값을 눌러 출처를 달 수 있습니다.`}
             >
               <FiAlertTriangle aria-hidden="true" />
-              출처 미검증 {unverifiedCount}
+              {observations.filter(isUnverified).every((observation) => observation.citations.length === 0)
+                ? '출처 없음'
+                : '출처 미검증'}{' '}
+              {unverifiedCount}
             </UnverifiedChip>
           )}
           {/* 출처 서고 — 이 사건 수치의 출처를 등급·관점까지 손보는 곳 */}
@@ -306,7 +335,29 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
         </Commentary>
       )}
 
-      {tableRows.length > 0 && (
+      {chartable && (
+        <ViewSwitch role="group" aria-label="비교 보기">
+          <ViewOption type="button" aria-pressed={view === 'chart'} onClick={() => setView('chart')}>
+            그래프
+          </ViewOption>
+          <ViewOption type="button" aria-pressed={view === 'table'} onClick={() => setView('table')}>
+            표
+          </ViewOption>
+        </ViewSwitch>
+      )}
+
+      {showChart && (
+        <SideMetricsChart
+          rows={comparedRows}
+          sides={tableSides}
+          memberCells={memberCells}
+          onEdit={(observation) => setEditing(observation)}
+          onAdd={(sideId, metricKey) => setEditing({ kind: 'new', subjectId: sideId, metricKey })}
+          sourceLabel={sourceLine}
+        />
+      )}
+
+      {tableRows.length > 0 && !showChart && (
         <TableScroll>
           <SideTable aria-label="진영별 수치">
             <thead>
@@ -483,7 +534,7 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
                                     <EstimateTags observation={observation} showRole={cell.length > 1} />
                                     {observation.qualifier}
                                     {isUnverified(observation) && !allUnverified && (
-                                      <SourceBadge $unverified>출처 미검증</SourceBadge>
+                                      <SourceBadge $unverified>{unverifiedLabel(observation)}</SourceBadge>
                                     )}
                                   </CellNote>
                                 )}
@@ -578,7 +629,7 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
                     {!(unverified && allUnverified) && (
                       <SourceBadge $unverified={unverified} title={quote || undefined}>
                         {unverified
-                          ? '출처 미검증'
+                          ? unverifiedLabel(observation)
                           : sourceLine(observation)}
                       </SourceBadge>
                     )}
@@ -623,6 +674,39 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
     </S.Section>
   )
 }
+
+/** 그래프·표 전환 — 작은 두 칸 세그먼트 */
+const ViewSwitch = styled.div`
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)')};
+`
+
+const ViewOption = styled.button`
+  padding: 4px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+
+  &[aria-pressed='true'] {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#ffffff')};
+    box-shadow: ${({ theme }) => (theme.mode === 'dark' ? 'none' : '0 1px 2px rgba(15,23,42,0.12)')};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 1px;
+  }
+`
 
 const AddButton = styled.button`
   display: inline-flex;

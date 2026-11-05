@@ -177,7 +177,8 @@ export interface CreateObservationInput {
   note?: string | null
   estimateRole?: EstimateRole | null
   method?: EstimateMethod | null
-  citations: CitationInput[]
+  /** 선택 — 없으면 '출처 미검증'으로 저장(나중에 달 수 있다) */
+  citations?: CitationInput[]
 }
 
 export type UpdateObservationInput = Partial<Omit<CreateObservationInput, 'subjectType' | 'subjectId' | 'citations'>> & {
