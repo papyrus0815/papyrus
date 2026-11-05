@@ -1811,7 +1811,7 @@ describe('PersonService — 가족 관계 도메인 불변식 및 원자적 가�
       expect(rels[0].sources[0].lifeEvent.startDatePrecision).toBe('day')
     })
 
-    it('분야별 경력·학력 생성 및 부분 수정 시 종료일이 시작일보다 앞서면 BadRequestException으로 거부하고, 상세 조회 educations select에 studentNumber·showPositionInfo를 포함한다', async () => {
+    it('분야별 경력·학력 생성 및 부분 수정 시 종료일이 시작일보다 앞서면 BadRequestException으로 거부하고, 상세 조회 educations select에 studentNumber를 포함하고 PersonEducation에 없는 showPositionInfo는 넣지 않는다', async () => {
       const findFirstMock = jest.fn(async (_args?: any) => null)
       const repo = new PersonPrismaRepository({
         person: {
@@ -1871,7 +1871,8 @@ describe('PersonService — 가족 관계 도메인 불변식 및 원자적 가�
         }),
       ).rejects.toThrow('종료일이 시작일보다 앞설 수 없습니다.')
 
-      // 5) findByIdWithRelations 호출 시 educations.select에 studentNumber·showPositionInfo 포함 확인
+      // 5) findByIdWithRelations 호출 시 educations.select에 studentNumber 포함·showPositionInfo 미포함 확인
+      //    (PersonEducation 모델엔 showPositionInfo 컬럼이 없어 select하면 PrismaClientValidationError로 상세 500)
       let capturedInclude: any = null
       findFirstMock.mockImplementationOnce(async (args: any) => {
         capturedInclude = args.include
@@ -1879,7 +1880,7 @@ describe('PersonService — 가족 관계 도메인 불변식 및 원자적 가�
       })
       await repo.findByIdWithRelations('ego', 'acc-1')
       expect(capturedInclude?.educations?.select?.studentNumber).toBe(true)
-      expect(capturedInclude?.educations?.select?.showPositionInfo).toBe(true)
+      expect(capturedInclude?.educations?.select?.showPositionInfo).toBeUndefined()
     })
   })
 })

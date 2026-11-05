@@ -2017,7 +2017,6 @@ export class PersonPrismaRepository implements IPersonRepository {
             endDate: true,
             status: true,
             notes: true,
-            showPositionInfo: true,
             organization: { select: { id: true, name: true } },
           },
           orderBy: { startDate: Prisma.SortOrder.desc },
