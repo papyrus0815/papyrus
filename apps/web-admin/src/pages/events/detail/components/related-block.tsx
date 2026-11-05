@@ -1,14 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiArrowRight, FiChevronRight, FiPlus, FiX } from 'react-icons/fi'
+import { FiChevronRight, FiPlus, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
-import {
-  RADIUS,
-  ledgerAccent,
-} from '@/entities/event/ui/ledger-tokens'
+import { ledgerAccent } from '@/entities/event/ui/ledger-tokens'
 import { eventDomainDef } from '@/entities/event/model/event-domain'
 import { metaText } from '@/pages/events/styles/theme'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
@@ -32,23 +29,13 @@ import { formatYearLabel } from '@/shared/lib/iso-date'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { InlineText } from '@/shared/ui/inline-edit'
-import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
-import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
 import { notify } from '@/shared/ui/toast'
 
 import { usePrefetchEventDetail } from '../use-event-detail'
 import { eventRelationKeys, useEventRelations } from '../use-event-relations'
 import { REASON_MAX } from './detail-network.lib'
-import {
-  type PickerEvent,
-  byProximity,
-  directionConflicts,
-  inferDirection,
-  particle,
-  relationSentence,
-  relativeStart,
-  signedStartYear,
-} from './related-picker.lib'
+import { type LinkCandidate, type RelationDraft, RelatedLinkModal } from './related-link-modal'
+import { type PickerEvent, byProximity, inferDirection, particle, signedStartYear } from './related-picker.lib'
 import { type RelatedSuggestion } from './related-suggestions.lib'
 import * as NetStyles from './detail-network.styles'
 
@@ -60,7 +47,7 @@ import * as NetStyles from './detail-network.styles'
  * (롬바르드 쪽에선 '계기가 된 사건: 아바르 칸국 건국', 아바르 쪽에선 '이 사건으로 일어난 사건').
  * 묶음 순서는 앞 사건(원인 쪽) → 뒤 사건(결과 쪽) → 무방향.
  *
- * 추가 흐름: 사건 고르기(서버 검색 픽커) → 유형·방향·설명을 고르는 작성 줄 → 연결.
+ * 추가 흐름: 잇기 창(related-link-modal) 하나에서 사건 고르기 → 유형·방향·이유 → 연결(또는 연결하고 계속).
  * 이미 연결된 사건을 고르면 새로 만들지 않고 그 관계의 수정으로 들어간다(한 쌍 한 행).
  */
 
@@ -77,18 +64,7 @@ interface RelatedBlockProps {
   onOpenCreateRelated?: () => void
 }
 
-/** 작성 줄 상태 — 새 연결(relationId 없음) 또는 기존 관계 수정 */
-interface Draft {
-  relationId?: string
-  other: PickerEvent & { id: string; title: string }
-  relationType: EventRelationType
-  direction: EventRelationDirection
-  description: string
-}
-
-const TYPE_OPTIONS: Array<{ value: EventRelationType; label: string }> = (
-  ['LED_TO', 'INFLUENCED', 'RESPONSE_TO', 'CONCURRENT', 'RELATED'] as const
-).map((type) => ({ value: type, label: EVENT_RELATION_LABELS[type].name }))
+type Draft = RelationDraft
 
 /** 묶음의 자리 — 이 사건보다 앞선 원인 쪽 · 뒤따른 결과 쪽 · 곁 */
 type GroupSide = 'before' | 'after' | 'beside'
@@ -101,9 +77,6 @@ const SIDE_TITLE: Record<GroupSide, string> = {
 
 /** 같은 시기 후보의 창 — 앞뒤 30년(서버 기본), 가까운 순 */
 const NEAR_WINDOW_YEARS = 30
-/** 모달 구획 이름 — SelectModal 그룹 라벨 */
-const GROUP_KEYWORD = '같은 키워드'
-const GROUP_NEAR = `같은 시기 (앞뒤 ${NEAR_WINDOW_YEARS}년, 가까운 순)`
 
 /** 날짜 필드만 — 후보·관계 상대에서 작성 줄로 옮겨 담는다 */
 const startFieldsOf = (
@@ -157,8 +130,9 @@ export function RelatedBlock({
   const prefetchEvent = usePrefetchEventDetail()
   const { data: relations = [], isError } = useEventRelations(eventId)
 
+  /* 잇기 창 — 고르기와 정하기를 한 창에서(예전엔 고르면 창이 닫히고 작성 줄이 본문 아래에 따로 열렸다) */
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [draft, setDraft] = useState<Draft | null>(null)
+  const [initialDraft, setInitialDraft] = useState<Draft | null>(null)
   const [descriptionDraftId, setDescriptionDraftId] = useState<string | null>(null)
   const [suggestionsOpen, setSuggestionsOpen] = useState(false)
 
@@ -193,65 +167,59 @@ export function RelatedBlock({
   /** 이미 이은 사건은 후보에서 뺀다(연결 직후 목록이 바로 줄어든다) */
   const visibleSuggestions = suggestions.filter((suggestion) => !relatedIds.has(suggestion.id))
 
-  /** 후보 한 줄 설명 — 날짜 · 이 사건 기준 시점 · 소속(같은 상위/다른 묶음) · 이미 연결됨 */
-  const describe = (candidate: PickerEvent & { id: string }, extra: Array<string | null> = []) => {
-    const relative = relativeStart(self, candidate)
-    const existing = relatedIds.get(candidate.id)
-    const parts = [
-      ...extra,
-      relative ? `이 사건 ${relative}` : null,
-      existing ? `이미 연결됨(${EVENT_RELATION_LABELS[existing.relationType].name}) — 고르면 수정` : null,
-    ].filter(Boolean)
-    return parts.length ? parts.join(' · ') : undefined
-  }
-
-  /* 모달이 열려 있을 때만 — 많아야 55줄이라 메모하지 않는다(self는 매 렌더 새 객체) */
-  const buildCandidateOptions = (): SelectOption[] => {
+  /* 창이 열려 있을 때만 — 많아야 55줄. 같은 키워드(둘러볼 때만) + 서버 후보(가까운 순) */
+  const buildCandidates = (): LinkCandidate[] => {
     const excluded = (id: string) => id === eventId || Boolean(hierarchyIds?.has(id))
-    /* 같은 키워드 — 둘러볼 때만 위에. 검색 중엔 서버 결과만(같은 사건이 두 번 서지 않게) */
-    const keywordOptions: SelectOption[] = browsing
-      ? visibleSuggestions
+    const existingOf = (id: string) => {
+      const relation = relatedIds.get(id)
+      return relation
+        ? {
+            relationId: relation.id,
+            relationType: relation.relationType,
+            direction: relation.direction,
+            description: relation.description ?? null,
+          }
+        : undefined
+    }
+    const keywordRows: LinkCandidate[] = browsing
+      ? suggestions
           .filter((suggestion) => !excluded(suggestion.id))
           .map((suggestion) => ({
-            value: suggestion.id,
-            label: suggestion.title,
-            group: GROUP_KEYWORD,
-            description: describe(suggestion, [
-              candidateDateLabel(suggestion),
-              `겹친 키워드 ${suggestion.shared.slice(0, 3).join(' · ')}${suggestion.shared.length > 3 ? ` 외 ${suggestion.shared.length - 3}` : ''}`,
-            ]),
+            ...startFieldsOf(suggestion),
+            id: suggestion.id,
+            title: suggestion.title,
+            dateLabel: candidateDateLabel(suggestion),
+            membership: null,
+            sameParent: false,
+            sharedKeywords: suggestion.shared,
+            existing: existingOf(suggestion.id),
           }))
       : []
-    const keywordIds = new Set(keywordOptions.map((option) => option.value))
-    const candidates = byProximity(
+    const keywordIds = new Set(keywordRows.map((row) => row.id))
+    const serverRows: LinkCandidate[] = byProximity(
       self,
       (candidatesQuery.data ?? []).filter((candidate) => !excluded(candidate.id) && !keywordIds.has(candidate.id)),
-    ).slice(0, 50)
-    /* 둘러볼 때만 구획 — 근처 목록은 늘 이름을 달고(무엇의 근처인지), 최근 수정순은 키워드 구획과 나눌 때만 */
-    const candidateGroup = !browsing
-      ? undefined
-      : nearYear != null
-        ? GROUP_NEAR
-        : keywordOptions.length > 0
-          ? '최근 수정한 사건'
-          : undefined
-    const otherOptions = candidates.map((candidate) => {
-      const sibling = Boolean(candidate.parentEventId) && candidate.parentEventId === self.parentEventId
-      const membership = sibling
-        ? '같은 상위의 사건'
-        : candidate.parentEventTitle
-          ? `‘${candidate.parentEventTitle}’의 하위`
-          : null
-      return {
-        value: candidate.id,
-        label: candidate.title,
-        group: candidateGroup,
-        description: describe(candidate, [candidateDateLabel(candidate), membership]),
-      }
-    })
-    return [...keywordOptions, ...otherOptions]
+    )
+      .slice(0, 50)
+      .map((candidate) => {
+        const sameParent = Boolean(candidate.parentEventId) && candidate.parentEventId === self.parentEventId
+        return {
+          ...startFieldsOf(candidate),
+          id: candidate.id,
+          title: candidate.title,
+          dateLabel: candidateDateLabel(candidate),
+          membership: sameParent
+            ? '같은 상위의 사건'
+            : candidate.parentEventTitle
+              ? `‘${candidate.parentEventTitle}’의 하위`
+              : null,
+          sameParent,
+          existing: existingOf(candidate.id),
+        }
+      })
+    return byProximity(self, [...keywordRows, ...serverRows])
   }
-  const candidateOptions = pickerOpen ? buildCandidateOptions() : []
+  const linkCandidates = pickerOpen ? buildCandidates() : []
 
   /* 관계는 조망(하위끼리 연결)·연결 그래프(마인드맵)에도 실린다 — 둘 다 ['events', …] 아래 */
   const invalidate = () => {
@@ -286,7 +254,6 @@ export function RelatedBlock({
           ? '관계를 수정했습니다'
           : `‘${next.other.title}’${particle(next.other.title, '과/와')} 연결했습니다`,
       )
-      setDraft(null)
       void invalidate()
     },
     onError: (error) => notify.error(errorMessage(error, '관계를 저장하지 못했습니다')),
@@ -308,43 +275,40 @@ export function RelatedBlock({
     onError: () => notify.error('연결을 해제하지 못했습니다'),
   })
 
-  const openEdit = (relation: EventRelationItem) =>
-    setDraft({
+  const openEdit = (relation: EventRelationItem) => {
+    setInitialDraft({
       relationId: relation.id,
-      other: { id: relation.event.id, title: relation.event.title, ...startFieldsOf(relation.event) },
+      other: {
+        id: relation.event.id,
+        title: relation.event.title,
+        dateLabel: counterpartDateLabel(relation.event),
+        ...startFieldsOf(relation.event),
+      },
       relationType: relation.relationType,
       direction: relation.direction,
       description: relation.description ?? '',
     })
+    setPickerOpen(true)
+  }
 
   /**
-   * 새 연결 작성 줄 — 방향은 날짜로 정한다(앞 사건이 원인 쪽). 같은 날·날짜 모름이면 '상대 → 이 사건'.
-   * 예전엔 주석만 '날짜로 추정'이고 늘 상대 → 이 사건이라, 25일 뒤 최후통첩이 사라예보의 계기로 섰다.
+   * 새 연결로 바로 — 방향은 날짜로 정한다(앞 사건이 원인 쪽). 같은 날·날짜 모름이면 '상대 → 이 사건'.
+   * 예전엔 늘 상대 → 이 사건이라, 25일 뒤 최후통첩이 사라예보의 계기로 섰다.
    */
-  const openNew = (other: Draft['other'], relationType: EventRelationType) =>
-    setDraft({
+  const openNew = (other: Draft['other'], relationType: EventRelationType) => {
+    setInitialDraft({
       other,
       relationType,
       direction: inferDirection(self, other) ?? 'incoming',
       description: '',
     })
+    setPickerOpen(true)
+  }
 
-  const handlePick = (pickedId: string) => {
+  const closePicker = () => {
     setPickerOpen(false)
     setSearchTerm('')
-    const existing = relatedIds.get(pickedId)
-    if (existing) {
-      openEdit(existing)
-      return
-    }
-    const candidate =
-      candidatesQuery.data?.find((item) => item.id === pickedId) ??
-      visibleSuggestions.find((item) => item.id === pickedId)
-    openNew(
-      { id: pickedId, title: candidate?.title ?? '선택한 사건', ...(candidate ? startFieldsOf(candidate) : {}) },
-      // 가장 흔한 쓰임(앞 사건이 계기)
-      'LED_TO',
-    )
+    setInitialDraft(null)
   }
 
   const handleRemove = async (relation: EventRelationItem) => {
@@ -355,29 +319,6 @@ export function RelatedBlock({
     })
     if (ok) removeMutation.mutate(relation.id)
   }
-
-  /* 작성 줄 — 상대의 날짜·이 사건 기준 시점, 방향이 날짜와 어긋나는지 */
-  const draftRelative = draft ? relativeStart(self, draft.other) : null
-  const draftMeta = draft
-    ? [candidateDateLabel(draft.other), draftRelative ? `이 사건 ${draftRelative}` : null].filter(Boolean).join(' · ')
-    : ''
-  const draftConflict = draft
-    ? directionConflicts(draft.relationType, draft.direction, self, draft.other)
-    : false
-
-  /*
-   * 작성 줄이 열리면 그리로 데려간다 — 모달이 닫히며 포커스가 사라진 '관련 사건 연결' 버튼(작성 중엔 숨는다)에
-   * 남아 키보드 사용자는 어디로 갔는지 몰랐다. 첫 선택 컨트롤(고른 관계 유형)에 포커스.
-   */
-  const composerRef = useRef<HTMLDivElement>(null)
-  const draftKey = draft ? (draft.relationId ?? `new:${draft.other.id}`) : null
-  useEffect(() => {
-    if (!draftKey) return
-    const composer = composerRef.current
-    if (!composer) return
-    composer.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-    composer.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')?.focus({ preventScroll: true })
-  }, [draftKey])
 
   // 묶음 — 정해진 순서대로, 빈 묶음은 건너뛴다
   const groups = useMemo(() => {
@@ -500,135 +441,22 @@ export function RelatedBlock({
         </Group>
       ))}
 
-      {draft && (
-        <Composer
-          ref={composerRef}
-          role="group"
-          aria-label={draft.relationId ? '관계 수정' : '새 관련 사건 연결'}
-          onKeyDown={(keyEvent) => {
-            if (keyEvent.key === 'Escape') {
-              keyEvent.stopPropagation()
-              setDraft(null)
-            }
-            // ⌘/Ctrl+Enter — 설명을 쓰다 바로 저장
-            if (keyEvent.key === 'Enter' && (keyEvent.metaKey || keyEvent.ctrlKey) && !saveMutation.isPending) {
-              keyEvent.preventDefault()
-              saveMutation.mutate(draft)
-            }
-          }}
-        >
-          <ComposerTitle>
-            {draft.relationId ? '관계 수정' : '연결할 사건'} · <strong>{draft.other.title}</strong>
-            {draftMeta && <ComposerMeta>{draftMeta}</ComposerMeta>}
-          </ComposerTitle>
-
-          <ComposerField>
-            <ComposerLabel>관계</ComposerLabel>
-            <SegmentControl
-              value={draft.relationType}
-              onChange={(value) => setDraft({ ...draft, relationType: value as EventRelationType })}
-              options={TYPE_OPTIONS}
-              ariaLabel="관계 유형"
-            />
-            {/* 고른 유형이 무슨 뜻인지 — 이름만으론 '배경·영향'과 '직접 계기'의 경계를 알 수 없다 */}
-            <TypeHint>{EVENT_RELATION_LABELS[draft.relationType].hint}</TypeHint>
-          </ComposerField>
-
-          {DIRECTED_RELATION_TYPES.has(draft.relationType) && (
-            <ComposerField>
-              <ComposerLabel>방향</ComposerLabel>
-              <SegmentControl
-                value={draft.direction}
-                onChange={(value) =>
-                  setDraft({ ...draft, direction: value as EventRelationDirection })
-                }
-                options={[
-                  {
-                    value: 'incoming',
-                    label: (
-                      <DirectionLabel>
-                        상대 <FiArrowRight aria-hidden /> 이 사건
-                      </DirectionLabel>
-                    ),
-                  },
-                  {
-                    value: 'outgoing',
-                    label: (
-                      <DirectionLabel>
-                        이 사건 <FiArrowRight aria-hidden /> 상대
-                      </DirectionLabel>
-                    ),
-                  },
-                ]}
-                ariaLabel="관계 방향"
-              />
-              {/* 방향의 근거 — 계기·배경·대응은 앞 사건 → 뒤 사건. 날짜와 어긋나면 경고하고 한 번에 고친다 */}
-              {draftConflict ? (
-                <DirectionNote $warn role="status">
-                  날짜와 반대 방향 — 상대가 이 사건 {draftRelative}
-                  <NetStyles.TextBtn
-                    type="button"
-                    onClick={() => {
-                      const inferred = inferDirection(self, draft.other)
-                      if (inferred) setDraft({ ...draft, direction: inferred })
-                    }}
-                  >
-                    날짜대로 바꾸기
-                  </NetStyles.TextBtn>
-                </DirectionNote>
-              ) : (
-                draftRelative && <DirectionNote>날짜 기준: 상대가 이 사건 {draftRelative}</DirectionNote>
-              )}
-            </ComposerField>
-          )}
-
-          <Preview aria-live="polite">
-            {relationSentence(draft.relationType, draft.direction, eventTitle, draft.other.title)}
-          </Preview>
-
-          <DescriptionInput
-            value={draft.description}
-            onChange={(changeEvent) => setDraft({ ...draft, description: changeEvent.target.value })}
-            placeholder="어떻게 이어지는지 한두 문장 (선택) — 예: 아바르에 판노니아를 넘기고 이탈리아로 이주"
-            maxLength={REASON_MAX}
-            rows={2}
-            aria-label="관계 설명"
-          />
-
-          <ComposerActions>
-            <NetStyles.TextBtn type="button" onClick={() => setDraft(null)}>
-              취소
-            </NetStyles.TextBtn>
-            <NetStyles.StageCommitBtn
-              type="button"
-              disabled={saveMutation.isPending}
-              title="⌘/Ctrl+Enter"
-              onClick={() => saveMutation.mutate(draft)}
-            >
-              {saveMutation.isPending ? '저장 중…' : draft.relationId ? '수정' : '연결'}
-            </NetStyles.StageCommitBtn>
-          </ComposerActions>
-        </Composer>
-      )}
-
-      {!draft && (
-        <NetStyles.HierRow>
-          <NetStyles.AddBtn type="button" onClick={() => setPickerOpen(true)}>
-            <FiPlus /> 기존 사건과 잇기
+      <NetStyles.HierRow>
+        <NetStyles.AddBtn type="button" onClick={() => setPickerOpen(true)}>
+          <FiPlus /> 기존 사건과 잇기
+        </NetStyles.AddBtn>
+        {onOpenCreateRelated && (
+          <NetStyles.AddBtn type="button" onClick={onOpenCreateRelated}>
+            <FiPlus /> 새 관련 사건 등록
           </NetStyles.AddBtn>
-          {onOpenCreateRelated && (
-            <NetStyles.AddBtn type="button" onClick={onOpenCreateRelated}>
-              <FiPlus /> 새 관련 사건 등록
-            </NetStyles.AddBtn>
-          )}
-        </NetStyles.HierRow>
-      )}
+        )}
+      </NetStyles.HierRow>
 
       {/*
-        * 같은 키워드의 사건 — 이미 적어 둔 키워드가 말하는 이웃. 이은 관계와 섞여 보이지 않게 버튼 아래 점선 상자로. 누르면 상대가 채워진 작성 줄이 열려 유형만 고르면 된다
+        * 같은 키워드의 사건 — 이미 적어 둔 키워드가 말하는 이웃. 이은 관계와 섞여 보이지 않게 버튼 아래 점선 상자로. 누르면 상대가 골라진 잇기 창이 열려 유형만 고르면 된다
         * ('관련'으로 시작 — 계기·배경은 사람이 판단). 이미 이은 사건은 빠진다.
         */}
-      {!draft && visibleSuggestions.length > 0 && (
+      {visibleSuggestions.length > 0 && (
         <Suggestions>
           {/* 접어 둔 한 줄 — 이은 관계와 섞여 '이미 연결된 사건'처럼 읽히지 않게 */}
           <SuggestionToggle
@@ -661,7 +489,12 @@ export function RelatedBlock({
                     aria-label={`‘${suggestion.title}’${particle(suggestion.title, '과/와')} 잇기`}
                     onClick={() =>
                       openNew(
-                        { id: suggestion.id, title: suggestion.title, ...startFieldsOf(suggestion) },
+                        {
+                          id: suggestion.id,
+                          title: suggestion.title,
+                          dateLabel: candidateDateLabel(suggestion),
+                          ...startFieldsOf(suggestion),
+                        },
                         'RELATED',
                       )
                     }
@@ -676,28 +509,22 @@ export function RelatedBlock({
       )}
 
 
-      <SelectModal
+      <RelatedLinkModal
         isOpen={pickerOpen}
-        onClose={() => {
-          setPickerOpen(false)
-          setSearchTerm('')
-        }}
-        title="관련 사건 연결"
-        headerExtra={
-          <PickerIntro>
-            이 사건과 <strong>원인·결과로 이어진 다른 사건</strong>을 고르세요. 고른 뒤 직접 계기·배경·대응 중
-            무엇인지 정합니다.
-          </PickerIntro>
-        }
-        options={candidateOptions}
-        onSelect={handlePick}
-        searchable
-        searchPlaceholder="사건명으로 검색"
-        isLoading={candidatesQuery.isLoading}
-        isSearching={candidatesQuery.isFetching || searchTerm !== debouncedTerm}
-        hasError={candidatesQuery.isError}
+        onClose={closePicker}
+        eventTitle={eventTitle}
+        self={self}
+        candidates={linkCandidates}
+        searching={!browsing}
+        loading={candidatesQuery.isLoading}
+        failed={candidatesQuery.isError}
         onRetry={() => void candidatesQuery.refetch()}
         onQueryChange={setSearchTerm}
+        initialDraft={initialDraft}
+        saving={saveMutation.isPending}
+        onSave={async (next) => {
+          await saveMutation.mutateAsync(next)
+        }}
       />
     </NetStyles.HierBlock>
   )
@@ -816,28 +643,7 @@ const SuggestionToggle = styled.button`
   }
 `
 
-const TypeHint = styled.span`
-  flex-basis: 100%;
-  padding-left: 44px;
-  font-size: 12px;
-  color: ${metaText};
 
-  @media (max-width: 639px) {
-    padding-left: 0;
-  }
-`
-
-const PickerIntro = styled.p`
-  margin: 10px 0 12px;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: ${metaText};
-
-  strong {
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.secondary};
-  }
-`
 
 /** 행 오른쪽 편집 크롬 — ChildRow의 hover-reveal 스코프가 AddReasonBtn·RemoveChildBtn을 연다 */
 const RowActions = styled.div`
@@ -855,93 +661,12 @@ const RowActions = styled.div`
   }
 `
 
-const Composer = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 14px 16px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: ${RADIUS.MD};
-`
 
-const ComposerTitle = styled.div`
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.secondary};
 
-  strong {
-    color: ${({ theme }) => theme.colors.text.primary};
-    font-weight: 700;
-  }
-`
 
-const ComposerField = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-`
 
-const ComposerLabel = styled.span`
-  min-width: 32px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: ${metaText};
-`
 
-const ComposerMeta = styled.span`
-  display: block;
-  margin-top: 2px;
-  font-size: 12px;
-  color: ${metaText};
-`
 
-/** 방향 근거 — 날짜와 어긋나면 호박색 경고 + 고치기 버튼 */
-const DirectionNote = styled.span<{ $warn?: boolean }>`
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 10px;
-  font-size: 12px;
-  color: ${({ theme, $warn }) => ($warn ? (theme.mode === 'dark' ? '#fbbf24' : '#b45309') : metaText({ theme }))};
-  font-weight: ${({ $warn }) => ($warn ? 600 : 400)};
-`
 
-const DirectionLabel = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-`
 
-/** 저장될 관계를 한 문장으로 — 방향을 잘못 고르는 실수를 고르는 순간 보이게 */
-const Preview = styled.p`
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-`
 
-const DescriptionInput = styled.textarea`
-  width: 100%;
-  box-sizing: border-box;
-  padding: 8px 10px;
-  font-family: inherit;
-  font-size: 13.5px;
-  line-height: 1.5;
-  resize: vertical;
-  color: ${({ theme }) => theme.colors.text.primary};
-  background: transparent;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: ${RADIUS.SM};
-
-  &:focus {
-    outline: none;
-    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-`
-
-const ComposerActions = styled.div`
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 12px;
-`
