@@ -20,6 +20,7 @@ import { DIRECTED_RELATION_TYPES, EVENT_RELATION_LABELS } from '@/shared/api/eve
 import { pathKeys } from '@/shared/router'
 import { metaText } from '@/pages/events/styles/theme'
 
+import { buildChainMindmap } from '../mindmap/chain-mindmap.lib'
 import {
   RELATION_DASH,
   RELATION_TYPE_NAME,
@@ -97,8 +98,11 @@ export function RelationsPanel({
       /* 저장소가 막혀도 이번 화면은 바뀐다 */
     }
   }
-  /* 기본 '전체' — 최상위에서는 하위 전부가 한 그림에 보여야 한다(사용자 지시). '연결만'은 인과만 추릴 때 */
-  const [mode, setMode] = useState<'links' | 'all'>('all')
+  /*
+   * 기본 = 관련 사건 사슬(원인 → 결과) — "관련된 사건을 보는 마인드맵". 소속 나무는 '묶음 위 연결'(연결 닿은 가지만)과
+   * '소속 구조'(전부)로 고른다.
+   */
+  const [mode, setMode] = useState<'chains' | 'links' | 'all'>('chains')
   /* '전체' 첫 화면은 국면·깊은 묶음을 접어서 — 뿌리 → 묶음 → 국면(건수)이 한눈에, 펼쳐서 파고든다 */
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => defaultCollapsed(root, ordered))
   const [hiddenTypes, setHiddenTypes] = useState<ReadonlySet<RelationType>>(() => new Set())
@@ -106,7 +110,21 @@ export function RelationsPanel({
   const groupIndex = useMemo(() => new Map(grouping.groups.map((group) => [group.id, group.index])), [grouping])
   const mindmap = useMemo(
     () =>
-      buildSurveyMindmap({
+      mode === 'chains'
+        ? buildChainMindmap({
+            root,
+            ordered,
+            relations,
+            numberById,
+            colorOf: (id) => {
+              const groupId = grouping.groupIdOf.get(id)
+              const index = groupId !== undefined ? groupIndex.get(groupId) : undefined
+              return index !== undefined ? S.groupColor(index, theme.mode) : null
+            },
+            groupOf: (id) => grouping.groupIdOf.get(id) ?? null,
+            hiddenTypes,
+          })
+        : buildSurveyMindmap({
         root,
         ordered,
         relations,
@@ -212,12 +230,15 @@ export function RelationsPanel({
       {view === 'map' && (
         <>
           <MapToolbar>
-            <S.ViewSwitch role="group" aria-label="마디 범위">
+            <S.ViewSwitch role="group" aria-label="마인드맵 보기">
+              <S.ViewSwitchItem type="button" $active={mode === 'chains'} aria-pressed={mode === 'chains'} onClick={() => setMode('chains')}>
+                관련 사건 사슬
+              </S.ViewSwitchItem>
               <S.ViewSwitchItem type="button" $active={mode === 'links'} aria-pressed={mode === 'links'} onClick={() => setMode('links')}>
-                연결만
+                묶음 위 연결
               </S.ViewSwitchItem>
               <S.ViewSwitchItem type="button" $active={mode === 'all'} aria-pressed={mode === 'all'} onClick={() => setMode('all')}>
-                전체 {ordered.length}
+                소속 구조 {ordered.length}
               </S.ViewSwitchItem>
             </S.ViewSwitch>
             {mode === 'all' && (
@@ -253,15 +274,17 @@ export function RelationsPanel({
               </TypeFilter>
             )}
             <S.PanelNote>
-              {mode === 'links'
-                ? '연결이 닿은 사건과 그 위 묶음만 · 선을 누르면 이유, 마디 끝 ●을 끌어 다른 사건에 놓으면 새 연결'
-                : '국면 ▸를 누르면 펼침 · 접은 가지로 가는 연결은 그 가지에 모여 ×N · 선을 누르면 이유'}
+              {mode === 'chains'
+                ? '관련 사건만 원인 → 결과 사슬로 · 색 = 묶음 · 선을 누르면 이유, 마디 끝 ●을 끌어 다른 사건에 놓으면 새 연결'
+                : mode === 'links'
+                  ? '연결이 닿은 사건과 그 위 묶음 · 선을 누르면 이유'
+                  : '국면 ▸를 누르면 펼침 · 접은 가지로 가는 연결은 그 가지에 모여 ×N · 선을 누르면 이유'}
             </S.PanelNote>
           </MapToolbar>
           <Suspense fallback={<MapLoading>마인드맵을 싣는 중…</MapLoading>}>
             <MindmapCanvas
               data={mindmap}
-              height={mode === 'all' ? 640 : 520}
+              height={mode === 'all' ? 640 : mode === 'chains' ? Math.min(640, Math.max(380, 140 + mindmap.specs.size * 22)) : 520}
               hotId={hotId}
               onOpen={openFromMap}
               onToggle={toggleCollapsed}

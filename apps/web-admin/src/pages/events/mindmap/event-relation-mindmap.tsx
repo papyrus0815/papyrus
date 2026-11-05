@@ -1,8 +1,9 @@
 /**
  * 상세 › 연관의 '연결 지도'.
  *
- * - 묶음 사건(최상위 포함): 그 사건 아래 **전체** 나무(묶음 → 국면 → 사건) + 하위끼리·바깥과의 연결 전부 — 상위에서는
- *   모든 마인드맵이 한 그림에 보여야 한다(사용자 지시). 데이터는 조망 응답을 그대로(같은 캐시).
+ * - 묶음 사건(최상위 포함): 아래 사건 전부가 이은 **관련 사건**을 원인 → 결과 사슬로(기본, chain-mindmap.lib).
+ *   상위에서는 모든 관련 사건 지도가 한 그림에 보여야 한다(사용자 지시). 소속 나무(묶음 → 국면 → 사건)는 '소속 구조'로 고른다.
+ *   데이터는 조망 응답을 그대로(같은 캐시).
  * - 단일 사건: 그 사건을 가운데 두고 상위·하위·관련(1~2단). 묶음 밖 인과 사슬(NSPM-2 → 5건)은 여기서 걷는다.
  * 마디를 누르면 그 사건 상세로(가서 다시 펼친다).
  */
@@ -19,6 +20,7 @@ import { metaText } from '@/pages/events/styles/theme'
 
 import { buildGantt, collectionGroups, orderedDescendants, outlineNumbers } from '../overview/event-overview.lib'
 import { groupColor } from '../overview/overview.styles'
+import { buildChainMindmap } from './chain-mindmap.lib'
 import { buildEgoMindmap } from './ego-mindmap.lib'
 import { type RelationType, buildSurveyMindmap, defaultCollapsed } from './survey-mindmap.lib'
 import { useMindmapRelationActions } from './use-mindmap-relation-actions'
@@ -33,7 +35,8 @@ export function EventRelationMindmap({ eventId, isCollection = false }: { eventI
 function CollectionMindmap({ eventId }: { eventId: string }) {
   const navigate = useNavigate()
   const theme = useTheme()
-  const [mode, setMode] = useState<'links' | 'all'>('all')
+  /* 기본 = 관련 사건 사슬. 처음엔 소속 나무 전체를 기본으로 했다가 "관련된 사건을 보는 마인드맵이 아닌가"로 바로잡음 */
+  const [mode, setMode] = useState<'chains' | 'all'>('chains')
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
   const [hiddenTypes] = useState<ReadonlySet<RelationType>>(() => new Set())
   const { data, isLoading, isError } = useQuery({
@@ -63,6 +66,22 @@ function CollectionMindmap({ eventId }: { eventId: string }) {
   const mindmap = useMemo(() => {
     if (!data || !prepared) return null
     const groupIndex = new Map(prepared.grouping.groups.map((group) => [group.id, group.index]))
+    const colorOf = (id: string) => {
+      const groupId = prepared.grouping.groupIdOf.get(id)
+      const index = groupId !== undefined ? groupIndex.get(groupId) : undefined
+      return index !== undefined ? groupColor(index, theme.mode) : null
+    }
+    if (mode === 'chains') {
+      return buildChainMindmap({
+        root: data.root,
+        ordered: prepared.ordered,
+        relations: data.relations ?? [],
+        numberById: prepared.numberById,
+        colorOf,
+        groupOf: (id) => prepared.grouping.groupIdOf.get(id) ?? null,
+        hiddenTypes,
+      })
+    }
     return buildSurveyMindmap({
       root: data.root,
       ordered: prepared.ordered,
@@ -75,7 +94,7 @@ function CollectionMindmap({ eventId }: { eventId: string }) {
         return index !== undefined ? groupColor(index, theme.mode) : null
       },
       groupOf: (id) => prepared.grouping.groupIdOf.get(id) ?? null,
-      mode,
+      mode: 'all',
       collapsed,
       hiddenTypes,
     })
@@ -88,12 +107,12 @@ function CollectionMindmap({ eventId }: { eventId: string }) {
   return (
     <Wrap>
       <Toolbar>
-        <Switch role="group" aria-label="마디 범위">
-          <button type="button" aria-pressed={mode === 'all'} onClick={() => setMode('all')}>
-            전체 {prepared.ordered.length}
+        <Switch role="group" aria-label="지도 보기">
+          <button type="button" aria-pressed={mode === 'chains'} onClick={() => setMode('chains')}>
+            관련 사건 {relationCount}
           </button>
-          <button type="button" aria-pressed={mode === 'links'} onClick={() => setMode('links')} disabled={relationCount === 0}>
-            연결만
+          <button type="button" aria-pressed={mode === 'all'} onClick={() => setMode('all')}>
+            소속 구조
           </button>
         </Switch>
         {mode === 'all' && (
@@ -107,13 +126,17 @@ function CollectionMindmap({ eventId }: { eventId: string }) {
           </Switch>
         )}
         <Note as="span">
-          아래 사건 전부와 연결 {relationCount}개 · 국면 ▸를 누르면 펼침 · 선을 누르면 이유 · 마디 끝 ●을 끌어 놓으면 새 연결
+          {mode === 'chains'
+            ? relationCount > 0
+              ? '아래 사건들이 이은 관련 사건을 원인 → 결과 사슬로 · 색 = 묶음 · 선을 누르면 이유 · 마디 끝 ●을 끌어 놓으면 새 연결'
+              : '아래 사건끼리 이은 관련 사건이 아직 없습니다 — 마디 끝 ●을 끌어 다른 사건에 놓거나 각 사건의 연관에서 이으세요'
+            : '묶음 → 국면 → 사건 나무 위에 연결 · 국면 ▸를 누르면 펼침'}
         </Note>
       </Toolbar>
       <Suspense fallback={<Loading>지도를 싣는 중…</Loading>}>
         <MindmapCanvas
           data={mindmap}
-          height={mode === 'all' ? 600 : 520}
+          height={mode === 'all' ? 600 : Math.min(620, Math.max(360, 140 + mindmap.specs.size * 24))}
           onOpen={(id) => navigate(pathKeys.events.detail(id.startsWith('ext:') ? id.slice(4) : id))}
           onToggle={(id) =>
             setCollapsed((previous) => {
