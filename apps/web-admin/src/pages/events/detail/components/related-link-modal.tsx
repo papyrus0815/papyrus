@@ -68,7 +68,8 @@ const TYPE_OPTIONS: Array<{ value: EventRelationType; label: string }> = (
   ['LED_TO', 'INFLUENCED', 'RESPONSE_TO', 'CONCURRENT', 'RELATED'] as const
 ).map((type) => ({ value: type, label: EVENT_RELATION_LABELS[type].name }))
 
-type Filter = 'all' | 'sibling' | 'keyword'
+export type RelatedLinkFilter = 'all' | 'sibling' | 'keyword'
+type Filter = RelatedLinkFilter
 
 interface RelatedLinkModalProps {
   isOpen: boolean
@@ -91,6 +92,8 @@ interface RelatedLinkModalProps {
   onDelete?: (relationId: string) => Promise<void>
   /** 찾아도 없을 때 — 새 관련 사건 등록(창을 닫고 등록 창을 연다) */
   onCreateNew?: () => void
+  /** 열 때 거르기 — 본문 '같은 키워드 후보 N'은 'keyword'로 연다 */
+  initialFilter?: Filter
 }
 
 export function RelatedLinkModal({
@@ -109,6 +112,7 @@ export function RelatedLinkModal({
   onSave,
   onDelete,
   onCreateNew,
+  initialFilter = 'all',
 }: RelatedLinkModalProps) {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
@@ -130,7 +134,7 @@ export function RelatedLinkModal({
     setDraft(initialDraft)
     setQuery('')
     onQueryChange('')
-    setFilter('all')
+    setFilter(initialFilter)
     setLinkedCount(0)
     setLastLinked(null)
     // 열릴 때만

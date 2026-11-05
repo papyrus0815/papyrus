@@ -1,8 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiChevronRight, FiPlus, FiX } from 'react-icons/fi'
-import { Link } from 'react-router-dom'
+import { FiPlus, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { ledgerAccent } from '@/entities/event/ui/ledger-tokens'
@@ -16,7 +15,6 @@ import {
   type EventRelationCounterpart,
   type EventRelationDirection,
   type EventRelationItem,
-  type EventRelationType,
   createEventRelation,
   deleteEventRelation,
   relationGroupKey,
@@ -34,8 +32,8 @@ import { notify } from '@/shared/ui/toast'
 import { usePrefetchEventDetail } from '../use-event-detail'
 import { eventRelationKeys, useEventRelations } from '../use-event-relations'
 import { REASON_MAX } from './detail-network.lib'
-import { type LinkCandidate, type RelationDraft, RelatedLinkModal } from './related-link-modal'
-import { type PickerEvent, byProximity, inferDirection, particle, signedStartYear } from './related-picker.lib'
+import { type LinkCandidate, type RelatedLinkFilter, type RelationDraft, RelatedLinkModal } from './related-link-modal'
+import { type PickerEvent, byProximity, particle, signedStartYear } from './related-picker.lib'
 import { type RelatedSuggestion } from './related-suggestions.lib'
 import * as NetStyles from './detail-network.styles'
 
@@ -77,6 +75,13 @@ const SIDE_TITLE: Record<GroupSide, string> = {
   after: '이 사건이 낳은 결과 쪽',
   beside: '같은 때 얽힌 사건',
 }
+
+/**
+ * 긴 목록 접기 — 관련 사건이 이보다 많으면 종류 묶음마다 앞의 몇 건만 보이고 나머지는 '더 보기'.
+ * NSPM-2(관계 5)·연맹제(8)에서 이유 글까지 펼친 목록이 지도 아래 1,000px를 넘겼다.
+ */
+const LONG_LIST = 6
+const GROUP_PREVIEW = 3
 
 /** 같은 시기 후보의 창 — 앞뒤 30년(서버 기본), 가까운 순 */
 const NEAR_WINDOW_YEARS = 30
@@ -139,7 +144,10 @@ export function RelatedBlock({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [initialDraft, setInitialDraft] = useState<Draft | null>(null)
   const [descriptionDraftId, setDescriptionDraftId] = useState<string | null>(null)
-  const [suggestionsOpen, setSuggestionsOpen] = useState(false)
+  /** 잇기 창을 열 때의 거르기 — '같은 키워드 후보 N'은 키워드로 거른 채 연다 */
+  const [pickerFilter, setPickerFilter] = useState<RelatedLinkFilter>('all')
+  /** 긴 목록에서 펼친 묶음 */
+  const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(() => new Set())
 
   // ── 후보 검색(서버) — 상위/하위 픽커와 같은 link-candidates 엔드포인트 ──
   const [searchTerm, setSearchTerm] = useState('')
@@ -296,24 +304,11 @@ export function RelatedBlock({
     setPickerOpen(true)
   }
 
-  /**
-   * 새 연결로 바로 — 방향은 날짜로 정한다(앞 사건이 원인 쪽). 같은 날·날짜 모름이면 '상대 → 이 사건'.
-   * 예전엔 늘 상대 → 이 사건이라, 25일 뒤 최후통첩이 사라예보의 계기로 섰다.
-   */
-  const openNew = (other: Draft['other'], relationType: EventRelationType) => {
-    setInitialDraft({
-      other,
-      relationType,
-      direction: inferDirection(self, other) ?? 'incoming',
-      description: '',
-    })
-    setPickerOpen(true)
-  }
-
   const closePicker = () => {
     setPickerOpen(false)
     setSearchTerm('')
     setInitialDraft(null)
+    setPickerFilter('all')
   }
 
   const handleRemove = async (relation: EventRelationItem) => {
@@ -361,7 +356,10 @@ export function RelatedBlock({
 
       {isError && <NetStyles.HelperNote>관련 사건을 불러오지 못했습니다</NetStyles.HelperNote>}
 
-      {groups.map((group) => (
+      {groups.map((group) => {
+        const folded = relations.length > LONG_LIST && group.items.length > GROUP_PREVIEW + 1 && !expandedGroups.has(group.key)
+        const shownItems = folded ? group.items.slice(0, GROUP_PREVIEW) : group.items
+        return (
         <Group key={group.key} role="group" aria-label={group.label}>
           <GroupHead>
             <GroupArrow aria-hidden title={SIDE_TITLE[group.side]}>
@@ -373,7 +371,7 @@ export function RelatedBlock({
             </GroupLabel>
           </GroupHead>
           <NetStyles.ChildList>
-            {group.items.map((relation) => {
+            {shownItems.map((relation) => {
               const other = relation.event
               const category = eventDomainDef(other.domain)
               const dateLabel = counterpartDateLabel(other)
@@ -444,6 +442,7 @@ export function RelatedBlock({
                         showCount
                         style={{ flex: 1 }}
                         autoEdit={!hasDescription}
+                        renderRead={(text) => <ReasonText text={text} />}
                       />
                     </NetStyles.ChildReasonRow>
                   )}
@@ -451,8 +450,17 @@ export function RelatedBlock({
               )
             })}
           </NetStyles.ChildList>
+          {folded && (
+            <MoreButton
+              type="button"
+              onClick={() => setExpandedGroups((previous) => new Set(previous).add(group.key))}
+            >
+              {group.items.length - GROUP_PREVIEW}건 더 보기
+            </MoreButton>
+          )}
         </Group>
-      ))}
+        )
+      })}
 
       <NetStyles.HierRow>
         <NetStyles.AddBtn type="button" onClick={() => setPickerOpen(true)}>
@@ -463,63 +471,23 @@ export function RelatedBlock({
             <FiPlus /> 새 관련 사건 등록
           </NetStyles.AddBtn>
         )}
-      </NetStyles.HierRow>
-
-      {/*
-        * 같은 키워드의 사건 — 이미 적어 둔 키워드가 말하는 이웃. 이은 관계와 섞여 보이지 않게 버튼 아래 점선 상자로. 누르면 상대가 골라진 잇기 창이 열려 유형만 고르면 된다
-        * ('관련'으로 시작 — 계기·배경은 사람이 판단). 이미 이은 사건은 빠진다.
-        */}
-      {visibleSuggestions.length > 0 && (
-        <Suggestions>
-          {/* 접어 둔 한 줄 — 이은 관계와 섞여 '이미 연결된 사건'처럼 읽히지 않게 */}
-          <SuggestionToggle
+        {/*
+          * 같은 키워드의 사건 — 예전엔 버튼 아래 접힌 상자에 따로 있었고, 잇기 창에도 '같은 키워드' 거르기가 있어
+          * 같은 후보가 두 자리에 있었다. 한 자리(잇기 창)로 — 누르면 키워드로 거른 채 열린다. 이미 이은 사건은 빠진 수.
+          */}
+        {visibleSuggestions.length > 0 && (
+          <NetStyles.TextBtn
             type="button"
-            aria-expanded={suggestionsOpen}
-            aria-controls="related-suggestion-list"
-            onClick={() => setSuggestionsOpen((previous) => !previous)}
+            onClick={() => {
+              setPickerFilter('keyword')
+              setPickerOpen(true)
+            }}
+            title="이미 적어 둔 키워드가 겹치는 사건 — 잇기 창에서 키워드로 거른 채 열립니다"
           >
-            <FiChevronRight aria-hidden data-open={suggestionsOpen} />
-            같은 키워드로 이을 만한 사건 {visibleSuggestions.length}건
-          </SuggestionToggle>
-          {suggestionsOpen && (
-            <SuggestionList id="related-suggestion-list">
-              {visibleSuggestions.map((suggestion) => (
-                <SuggestionRow key={suggestion.id}>
-                  <SuggestionText>
-                    <SuggestionTitle
-                      to={pathKeys.events.detail(suggestion.id)}
-                      onMouseEnter={() => prefetchEvent(suggestion.id)}
-                    >
-                      {suggestion.title}
-                    </SuggestionTitle>
-                    <SuggestionShared>
-                      겹친 키워드 {suggestion.shared.slice(0, 4).join(' · ')}
-                      {suggestion.shared.length > 4 && ` 외 ${suggestion.shared.length - 4}`}
-                    </SuggestionShared>
-                  </SuggestionText>
-                  <NetStyles.TextBtn
-                    type="button"
-                    aria-label={`‘${suggestion.title}’${particle(suggestion.title, '과/와')} 잇기`}
-                    onClick={() =>
-                      openNew(
-                        {
-                          id: suggestion.id,
-                          title: suggestion.title,
-                          dateLabel: candidateDateLabel(suggestion),
-                          ...startFieldsOf(suggestion),
-                        },
-                        'RELATED',
-                      )
-                    }
-                  >
-                    잇기
-                  </NetStyles.TextBtn>
-                </SuggestionRow>
-              ))}
-            </SuggestionList>
-          )}
-        </Suggestions>
-      )}
+            같은 키워드 후보 {visibleSuggestions.length}
+          </NetStyles.TextBtn>
+        )}
+      </NetStyles.HierRow>
 
 
       <RelatedLinkModal
@@ -534,6 +502,7 @@ export function RelatedBlock({
         onRetry={() => void candidatesQuery.refetch()}
         onQueryChange={setSearchTerm}
         initialDraft={initialDraft}
+        initialFilter={pickerFilter}
         saving={saveMutation.isPending}
         onSave={async (next) => {
           const saved = await saveMutation.mutateAsync(next)
@@ -555,52 +524,10 @@ export function RelatedBlock({
   )
 }
 
-const SuggestionList = styled.ul`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-`
 
-const SuggestionRow = styled.li`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 6px 8px;
-  border-radius: 6px;
 
-  &:hover {
-    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.03)')};
-  }
-`
 
-const SuggestionText = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  flex: 1;
-  min-width: 0;
-`
 
-const SuggestionTitle = styled(Link)`
-  font-size: 14px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  text-decoration: none;
-  overflow-wrap: anywhere;
-
-  &:hover {
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
-`
-
-const SuggestionShared = styled.span`
-  font-size: 12px;
-  color: ${metaText};
-`
 
 const Group = styled.div`
   display: flex;
@@ -635,44 +562,7 @@ const GroupCount = styled.span`
   color: ${metaText};
 `
 
-const Suggestions = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-`
 
-/** 접힌 후보 한 줄 — 본문보다 한 단 낮은 메타 글씨 */
-const SuggestionToggle = styled.button`
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 24px;
-  padding: 0 4px 0 0;
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: ${metaText};
-  cursor: pointer;
-
-  svg {
-    transition: transform 0.15s ease;
-  }
-  svg[data-open='true'] {
-    transform: rotate(90deg);
-  }
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.secondary};
-  }
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 2px;
-    border-radius: 4px;
-  }
-`
 
 
 
@@ -692,12 +582,68 @@ const RowActions = styled.div`
   }
 `
 
+/**
+ * 관계 이유 — 두 줄까지만, 넘치면 '더 보기'. 이유 글이 길면(연맹제 8건 평균 2.6줄) 줄마다 키가 달라
+ * 목록이 들쭉날쭉했다. 편집은 옆 연필(InlineText)이 그대로 맡는다.
+ */
+function ReasonText({ text }: { text: string }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const [expanded, setExpanded] = useState(false)
+  const [overflowing, setOverflowing] = useState(false)
+  useLayoutEffect(() => {
+    const element = ref.current
+    if (!element || expanded) return
+    setOverflowing(element.scrollHeight > element.clientHeight + 1)
+  }, [text, expanded])
+  return (
+    <>
+      <ReasonClamp ref={ref} data-expanded={expanded || undefined}>
+        {text}
+      </ReasonClamp>
+      {(overflowing || expanded) && (
+        <ReasonToggle type="button" onClick={() => setExpanded((previous) => !previous)} aria-expanded={expanded}>
+          {expanded ? '접기' : '더 보기'}
+        </ReasonToggle>
+      )}
+    </>
+  )
+}
 
+const ReasonClamp = styled.span`
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 
+  &[data-expanded] {
+    display: block;
+    -webkit-line-clamp: unset;
+  }
+`
 
+const ReasonToggle = styled.button`
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${metaText};
+  cursor: pointer;
 
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+`
 
-
-
-
-
+const MoreButton = styled(ReasonToggle)`
+  align-self: flex-start;
+  min-height: 28px;
+  margin-left: 4px;
+  font-size: 12.5px;
+`

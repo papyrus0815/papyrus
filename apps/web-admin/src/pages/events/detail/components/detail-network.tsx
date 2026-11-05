@@ -9,7 +9,7 @@ import {
 } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useBlocker } from 'react-router-dom'
+import { Link, useBlocker } from 'react-router-dom'
 import { FiLayers, FiShuffle } from 'react-icons/fi'
 
 import { useEvents } from '@/entities/event/model'
@@ -21,6 +21,7 @@ import {
 } from '@/shared/api/events'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
+import { pathKeys } from '@/shared/router'
 import { notify } from '@/shared/ui/toast'
 
 import * as S from '../styles'
@@ -129,13 +130,18 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
   const descendantRelationCount = overview?.relations?.length ?? 0
   /** 지도·목록이 함께 가리키는 사건 — 목록 줄에 올리면 지도 마디가, 지도 마디에 올리면 목록 줄이 진해진다 */
   const [hotEventId, setHotEventId] = useState<string | null>(null)
-  /** 연결 지도 펼침 — 사람마다 기억(편의 상태) */
+  /**
+   * 연결 지도 펼침 — 사람마다 기억(편의 상태). 고른 적이 없으면 휴대폰(≤640)은 접은 채로:
+   * 390px에서 지도가 화면 한 장을 다 먹어 목록(편집 자리)이 두 화면 아래로 밀렸다(연맹제 탭 1,927px).
+   */
   const [mapShown, setMapShownState] = useState(() => {
     try {
-      return window.localStorage.getItem('event-relation-map') !== 'hidden'
+      const saved = window.localStorage.getItem('event-relation-map')
+      if (saved) return saved !== 'hidden'
     } catch {
-      return true
+      /* 저장소가 막혀도 아래 기본값으로 */
     }
+    return !window.matchMedia?.('(max-width: 640px)').matches
   })
   const setMapShown = (next: boolean) => {
     setMapShownState(next)
@@ -790,6 +796,18 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
    */
   const mapAvailable = relatedCount > 0 || (isCollection && descendantRelationCount > 0)
 
+  /*
+   * 소속 한 줄 — '어디에 속하나'를 지도 위에 경로로(프랑스 혁명 › 제1차 대불동맹 전쟁 › 발미). 소속 칸은 지도·관련 사건 사이에
+   * 있어, 지도를 읽기 전에 이 사건의 자리를 알 수 없었다. 편집은 아래 소속 칸이 그대로 맡는다(3단까지, 더 있으면 …).
+   */
+  const membershipPath: Array<{ id: string; title: string }> = []
+  let ancestor = parentEvent
+  while (ancestor && membershipPath.length < 3) {
+    membershipPath.unshift({ id: ancestor.id, title: ancestor.title })
+    ancestor = ancestor.parentEvent
+  }
+  const membershipTruncated = Boolean(ancestor)
+
   return (
     <S.Section id="network">
       <S.SectionHeader>
@@ -805,6 +823,27 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
           </S.SectionActions>
         )}
       </S.SectionHeader>
+
+      {membershipPath.length > 0 && (
+        <NetStyles.MembershipPath aria-label="소속 경로">
+          <NetStyles.MembershipLabel>소속</NetStyles.MembershipLabel>
+          {membershipTruncated && <span aria-hidden title="더 상위 사건이 있습니다">… ›</span>}
+          {membershipPath.map((step) => (
+            <span key={step.id}>
+              <Link to={pathKeys.events.detail(step.id)} viewTransition>
+                {step.title}
+              </Link>
+              <span aria-hidden> › </span>
+            </span>
+          ))}
+          <strong aria-current="page">{event.title}</strong>
+          {extraParents.length > 0 && (
+            <NetStyles.MembershipExtra title={extraParents.map((extra) => extra.title).join(', ')}>
+              · 다른 상위 {extraParents.length}
+            </NetStyles.MembershipExtra>
+          )}
+        </NetStyles.MembershipPath>
+      )}
 
       {/* 연결 지도 — 이 사건을 가운데 둔 마인드맵(상위·하위 한 단 + 관련 두 단). 아래 목록이 편집 자리 */}
       {mapShown && mapAvailable && (

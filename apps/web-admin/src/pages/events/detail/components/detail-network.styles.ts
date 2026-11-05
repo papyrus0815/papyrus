@@ -874,3 +874,44 @@ export const FoldedLinkChip = styled.button`
     outline-offset: 2px;
   }
 `
+
+/** 소속 한 줄 — 연관 탭 맨 위의 경로. 본문 링크보다 한 단 낮은 글씨, 이 사건만 진하게 */
+export const MembershipPath = styled.nav`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 4px;
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+  a:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  a:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  strong {
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+export const MembershipLabel = styled.span`
+  margin-right: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const MembershipExtra = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
