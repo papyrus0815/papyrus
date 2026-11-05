@@ -129,14 +129,15 @@ function CollectionMindmap({ eventId }: { eventId: string }) {
           {mode === 'chains'
             ? relationCount > 0
               ? '아래 사건들이 이은 관련 사건을 원인 → 결과 사슬로 · 색 = 묶음 · 선을 누르면 이유 · 마디 끝 ●을 끌어 놓으면 새 연결'
-              : '아래 사건끼리 이은 관련 사건이 아직 없습니다 — 마디 끝 ●을 끌어 다른 사건에 놓거나 각 사건의 연관에서 이으세요'
+              : '아래 사건끼리 이은 관련 사건이 아직 없습니다 — 지도 왼쪽 「이을 사건」에서 사건을 끌어 다른 사건 위에 놓으면 잇습니다'
             : '묶음 → 국면 → 사건 나무 위에 연결 · 국면 ▸를 누르면 펼침'}
         </Note>
       </Toolbar>
       <Suspense fallback={<Loading>지도를 싣는 중…</Loading>}>
         <MindmapCanvas
           data={mindmap}
-          height={mode === 'all' ? 600 : Math.min(620, Math.max(360, 140 + mindmap.specs.size * 24))}
+          /* 이을 사건 칸이 함께 서도 목록이 보이게 하한 440 */
+          height={mode === 'all' ? 600 : Math.min(620, Math.max(440, 140 + mindmap.specs.size * 24))}
           onOpen={(id) => navigate(pathKeys.events.detail(id.startsWith('ext:') ? id.slice(4) : id))}
           onToggle={(id) =>
             setCollapsed((previous) => {
@@ -147,6 +148,7 @@ function CollectionMindmap({ eventId }: { eventId: string }) {
             })
           }
           fullscreenTitle={`${data.root.title} — 연결 지도`}
+          candidates={'candidates' in mindmap ? mindmap.candidates : undefined}
           onCreateRelation={relationActions.create}
           onUpdateRelation={relationActions.update}
           onDeleteRelation={relationActions.remove}

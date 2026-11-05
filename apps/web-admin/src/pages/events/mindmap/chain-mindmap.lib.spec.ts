@@ -42,7 +42,7 @@ describe('buildChainMindmap', () => {
     expect(data.relations).toHaveLength(3)
   })
 
-  it('거꾸로만 닿는 사건은 닿은 마디 밑에, 바깥 사건은 ext: 마디', () => {
+  it('합류 원인은 결과 바로 위에 붙고, 바깥 사건은 ext: 마디', () => {
     const data = buildChainMindmap({
       ...base,
       relations: [
@@ -51,8 +51,9 @@ describe('buildChainMindmap', () => {
         { ...relation('r3', 'b', 'out'), external: { id: 'out', title: 'OUT', startDate: '1800-01-01', side: 'to' } },
       ],
     })
-    const heads = data.tree.children.map((child) => child.id)
-    expect(heads).toEqual(['a', 'c'])
+    /* 합류 원인 c는 새 사슬 머리가 아니라 결과 b 바로 위(같은 열)에 */
+    expect(data.tree.children.map((child) => child.id)).toEqual(['a'])
+    expect(data.tree.children[0].children.map((child) => child.id)).toEqual(['c', 'b'])
     expect(data.specs.get('ext:out')?.kind).toBe('external')
   })
 })

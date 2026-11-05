@@ -42,6 +42,7 @@ import { NewRelationCard, RelationCard, type RelationDraft } from './mindmap-rel
 import { DIRECTED_RELATIONS, RELATION_DASH, RELATION_TYPE_NAME } from './survey-mindmap.lib'
 import {
   MIND_NODE_SIZE,
+  type MindCandidate,
   type MindNodeKind,
   type MindNodeSpec,
   type MindRelationItem,
@@ -61,7 +62,13 @@ interface MindmapCanvasProps {
   onCreateRelation?: (fromId: string, toId: string, draft: RelationDraft) => Promise<void>
   onUpdateRelation?: (item: MindRelationItem, draft: RelationDraft) => Promise<void>
   onDeleteRelation?: (item: MindRelationItem) => Promise<void>
+  /** 지도에 없는 사건 — 주면 '이을 사건' 서랍(끌어 지도의 사건·서랍의 다른 사건에 놓으면 잇기) */
+  candidates?: MindCandidate[]
 }
+
+const DRAG_TYPE = 'application/x-papyrus-event'
+/** 이을 사건 칸 폭 — 지도 위에 뜨면 가운데 사건을 가렸다(놓을 자리가 서랍에 덮였다). 옆 칸으로 */
+const DRAWER_WIDTH = 264
 
 /**
  * 화면 맞춤이 이 배율 아래로 내려가면 뿌리 둘레를 읽히는 배율로 먼저 보이고 나머지는 끌어서. 0.62였다가 0.5 —
@@ -207,12 +214,16 @@ function MindmapFlow({
   onUpdateRelation,
   onDeleteRelation,
   onFullscreen,
+  candidates = [],
 }: MindmapCanvasProps & { onFullscreen?: () => void }) {
   const theme = useTheme()
   const { fitView, getZoom, setCenter, setViewport } = useReactFlow()
   const hostRef = useRef<HTMLDivElement>(null)
   const zoom = useStore((state) => state.transform[2])
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [bubbleOnLeft, setBubbleOnLeft] = useState(false)
+  /** 좁은 지도(본문 열) — 옆에 띄우면 어느 쪽이든 이웃을 덮어 아래 띠로 붙인다 */
+  const [bubbleDocked, setBubbleDocked] = useState(false)
   /*
    * 마우스 올림은 잠깐 머물러야 잡는다 — 마디 사이 틈(≈5px)을 지날 때마다 '모두 흐림 ↔ 원래대로'가 번갈아
    * 그림 전체가 깜빡였다(흔들림). 들어갈 땐 90ms 머문 뒤, 나갈 땐 160ms 안에 다른 마디로 들어가면 놓지 않는다.
@@ -222,6 +233,27 @@ function MindmapFlow({
     if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current)
     hoverTimer.current = window.setTimeout(
       () => {
+        /* 이유 말풍선은 마디 반대편에 — 마디 오른쪽(이어진 사건들 자리)을 덮었다 */
+        const host = hostRef.current
+        const element = id ? host?.querySelector(`.react-flow__node[data-id="${id}"]`) : null
+        if (host && element && id) {
+          /* 이어진 사건들이 주로 오른쪽에 있으면 왼쪽에, 아니면 오른쪽에 — 마디·이웃을 덮지 않게 */
+          const rect = element.getBoundingClientRect()
+          const center = rect.left + rect.width / 2
+          const neighborCenters = data.relations
+            .filter((relation) => relation.from === id || relation.to === id)
+            .map((relation) => (relation.from === id ? relation.to : relation.from))
+            .map((neighbor) => host.querySelector(`.react-flow__node[data-id="${neighbor}"]`)?.getBoundingClientRect())
+            .filter((neighborRect): neighborRect is DOMRect => Boolean(neighborRect))
+            .map((neighborRect) => neighborRect.left + neighborRect.width / 2)
+          const hostRect = host.getBoundingClientRect()
+          const leaning =
+            neighborCenters.length > 0
+              ? neighborCenters.reduce((sum, value) => sum + value, 0) / neighborCenters.length - center
+              : hostRect.left + hostRect.width / 2 - center
+          setBubbleOnLeft(leaning > 0)
+          setBubbleDocked(hostRect.width < 900)
+        }
         setHoveredId(id)
         onHover?.(id)
       },
@@ -236,6 +268,12 @@ function MindmapFlow({
   )
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
   const [pending, setPending] = useState<{ fromId: string; toId: string } | null>(null)
+  /* '이을 사건' 서랍 — 관계가 하나도 없으면(빈 지도) 처음부터 연다: 끌 마디가 없는데 '끌어 놓으라'고만 했다 */
+  const [drawerOpen, setDrawerOpen] = useState(() => data.relations.length === 0 && candidates.length > 0)
+  const [drawerQuery, setDrawerQuery] = useState('')
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null)
+  const candidateById = useMemo(() => new Map(candidates.map((candidate) => [candidate.id, candidate])), [candidates])
+  const titleOf = (id: string) => data.specs.get(id)?.label ?? candidateById.get(id)?.label ?? ''
   const [query, setQuery] = useState('')
   const [foundId, setFoundId] = useState<string | null>(null)
   const [cropped, setCropped] = useState(false)
@@ -301,7 +339,7 @@ function MindmapFlow({
         data: {
           ...spec,
           side: position.side,
-          hot: activeId === id,
+          hot: activeId === id || dropTargetId === id,
           dim: connected !== null && !connected.has(id) && spec.kind !== 'root',
           onOpen,
           onToggle,
@@ -310,7 +348,7 @@ function MindmapFlow({
       })
     }
     return list
-  }, [positions, data.specs, activeId, connected, onOpen, onToggle, canConnect])
+  }, [positions, data.specs, activeId, connected, onOpen, onToggle, canConnect, dropTargetId])
 
   /* 연결 선은 글자 보조색 — 검정(본문 잉크)이면 선 30여 개가 마디 글보다 먼저 눈에 걸렸다 */
   const ink = theme.colors.text.secondary
@@ -419,6 +457,11 @@ function MindmapFlow({
     return () => cancelAnimationFrame(frame)
     // centerOn은 positions·specs에서 나온다(signature가 그 변화를 잡는다)
   }, [signature, fitView])
+  /* 칸이 열리고 닫히면 지도 폭이 바뀐다 — 다시 맞춘다 */
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => requestAnimationFrame(() => void fitView({ padding: 0.08, maxZoom: 1.1, duration: 200 })))
+    return () => cancelAnimationFrame(frame)
+  }, [drawerOpen, fitView])
 
   /* 범례 — 그림에 실제로 있는 관계 종류만(선 모양 = 종류). 지도 밖 칩과 떨어져 있으면 선을 보며 맞춰 읽기 어렵다 */
   const legendTypes = useMemo(() => {
@@ -426,6 +469,15 @@ function MindmapFlow({
     return (['LED_TO', 'INFLUENCED', 'RESPONSE_TO', 'CONCURRENT', 'RELATED'] as const).filter((type) => present.has(type))
   }, [data.relations])
   const hasSecondary = data.relations.some((relation) => relation.cross)
+
+  /* 마우스를 올린 사건의 연결 이유 — 선을 눌러야만 보이던 '왜'를 올리기만 해도(읽기 전용 말풍선) */
+  const hoverReasons = useMemo(() => {
+    if (!hoveredId) return []
+    return data.relations
+      .filter((relation) => relation.from === hoveredId || relation.to === hoveredId)
+      .flatMap((relation) => relation.items ?? [])
+      .slice(0, 6)
+  }, [hoveredId, data.relations])
 
   const selectedEdge = selectedEdgeId ? data.relations.find((relation) => `rel:${relation.id}` === selectedEdgeId) : null
   const findMatches = (text: string) => {
@@ -437,7 +489,30 @@ function MindmapFlow({
   }
 
   return (
-    <Host ref={hostRef} style={{ height }} data-far={zoom < FAR_ZOOM ? '' : undefined}>
+    <Host
+      ref={hostRef}
+      style={{ height }}
+      data-far={zoom < FAR_ZOOM ? '' : undefined}
+      onDragOver={(dragEvent) => {
+        if (!onCreateRelation || !dragEvent.dataTransfer.types.includes(DRAG_TYPE)) return
+        dragEvent.preventDefault()
+        const element = document.elementFromPoint(dragEvent.clientX, dragEvent.clientY)
+        setDropTargetId(element?.closest('.react-flow__node')?.getAttribute('data-id') ?? null)
+      }}
+      onDragLeave={() => setDropTargetId(null)}
+      onDrop={(dropEvent) => {
+        const fromId = dropEvent.dataTransfer.getData(DRAG_TYPE)
+        setDropTargetId(null)
+        if (!fromId || !onCreateRelation) return
+        const element = document.elementFromPoint(dropEvent.clientX, dropEvent.clientY)
+        const toId = element?.closest('.react-flow__node')?.getAttribute('data-id')
+        if (!toId || toId === fromId || !data.specs.get(toId)?.connectable) return
+        dropEvent.preventDefault()
+        setSelectedEdgeId(null)
+        setPending({ fromId, toId })
+      }}
+    >
+      <FlowArea style={{ left: drawerOpen && canConnect && candidates.length > 0 ? DRAWER_WIDTH : 0 }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -480,8 +555,9 @@ function MindmapFlow({
         <Background variant={BackgroundVariant.Dots} gap={22} size={1} color={theme.mode === 'dark' ? '#2a2a2a' : '#e5e7eb'} />
         <Controls position="bottom-right" showInteractive={false} />
       </ReactFlow>
+      </FlowArea>
 
-      <TopBar>
+      <TopBar style={{ left: (drawerOpen && canConnect && candidates.length > 0 ? DRAWER_WIDTH : 0) + 10 }}>
         <SearchBox>
           <FiSearch aria-hidden />
           <input
@@ -514,6 +590,11 @@ function MindmapFlow({
             </button>
           </Cropped>
         )}
+        {canConnect && candidates.length > 0 && (
+          <DrawerToggle type="button" aria-pressed={drawerOpen} onClick={() => setDrawerOpen(!drawerOpen)}>
+            이을 사건 {candidates.length}
+          </DrawerToggle>
+        )}
         {fullscreenTitle && onFullscreen && (
           <FullscreenButton type="button" onClick={onFullscreen} aria-label={`${fullscreenTitle} 전체 화면`}>
             <FiMaximize2 aria-hidden />
@@ -522,8 +603,88 @@ function MindmapFlow({
         )}
       </TopBar>
 
-      {legendTypes.length > 0 && (
-        <Legend aria-label="선 모양 — 관계 종류">
+      {drawerOpen && canConnect && candidates.length > 0 && (
+        <Drawer aria-label="이을 사건">
+          <DrawerHead>
+            <strong>이을 사건</strong>
+            <span>아직 관련 사건이 없는 아래 사건 — 끌어서 지도의 사건이나 목록의 다른 사건 위에 놓으면 잇습니다</span>
+          </DrawerHead>
+          <input
+            type="search"
+            value={drawerQuery}
+            onChange={(changeEvent) => setDrawerQuery(changeEvent.target.value)}
+            placeholder="이름으로 거르기"
+            aria-label="이을 사건 거르기"
+          />
+          <ul>
+            {candidates
+              .filter((candidate) => !drawerQuery.trim() || candidate.label.includes(drawerQuery.trim()))
+              .map((candidate) => (
+                <li
+                  key={candidate.id}
+                  draggable
+                  data-drop={dropTargetId === candidate.id ? '' : undefined}
+                  title={`${candidate.label} — 끌어서 다른 사건 위에 놓기`}
+                  onDragStart={(dragEvent) => {
+                    dragEvent.dataTransfer.setData(DRAG_TYPE, candidate.id)
+                    dragEvent.dataTransfer.effectAllowed = 'link'
+                  }}
+                  onDragOver={(dragEvent) => {
+                    if (!dragEvent.dataTransfer.types.includes(DRAG_TYPE)) return
+                    dragEvent.preventDefault()
+                    dragEvent.stopPropagation()
+                    setDropTargetId(candidate.id)
+                  }}
+                  onDrop={(dropEvent) => {
+                    const fromId = dropEvent.dataTransfer.getData(DRAG_TYPE)
+                    dropEvent.preventDefault()
+                    dropEvent.stopPropagation()
+                    setDropTargetId(null)
+                    if (!fromId || fromId === candidate.id) return
+                    setSelectedEdgeId(null)
+                    setPending({ fromId, toId: candidate.id })
+                  }}
+                >
+                  <span className="meta">
+                    {candidate.number && <span className="number">{candidate.number}</span>}
+                    {candidate.year && <span className="year">{candidate.year}</span>}
+                  </span>
+                  <span className="label">{candidate.label}</span>
+                </li>
+              ))}
+          </ul>
+        </Drawer>
+      )}
+
+      {hoveredId && hoverReasons.length > 0 && !selectedEdge && !pending && (
+        <ReasonBubble
+          aria-hidden="true"
+          data-docked={bubbleDocked ? '' : undefined}
+          style={
+            bubbleDocked
+              ? { left: (drawerOpen && canConnect && candidates.length > 0 ? DRAWER_WIDTH : 0) + 10 }
+              : bubbleOnLeft
+                ? { left: (drawerOpen && canConnect && candidates.length > 0 ? DRAWER_WIDTH : 0) + 10, right: 'auto' }
+                : undefined
+          }
+        >
+          {hoverReasons.slice(0, bubbleDocked ? 3 : 6).map((item) => {
+            const outgoing = item.fromId === hoveredId || data.specs.get(hoveredId)?.label === item.fromTitle
+            return (
+              <li key={item.id}>
+                <span className="direction">
+                  {outgoing ? '→' : '←'} {RELATION_TYPE_NAME[item.type]}
+                </span>
+                <strong>{outgoing ? item.toTitle : item.fromTitle}</strong>
+                {item.description && <span className="why">{item.description}</span>}
+              </li>
+            )
+          })}
+        </ReasonBubble>
+      )}
+
+      {legendTypes.length > 0 && !(bubbleDocked && hoveredId && hoverReasons.length > 0 && !selectedEdge && !pending) && (
+        <Legend aria-label="선 모양 — 관계 종류" style={{ left: (drawerOpen && canConnect && candidates.length > 0 ? DRAWER_WIDTH : 0) + 10 }}>
           {legendTypes.map((type) => (
             <li key={type}>
               <svg width="26" height="8" aria-hidden="true">
@@ -560,8 +721,8 @@ function MindmapFlow({
       )}
       {pending && onCreateRelation && (
         <NewRelationCard
-          fromTitle={data.specs.get(pending.fromId)?.label ?? ''}
-          toTitle={data.specs.get(pending.toId)?.label ?? ''}
+          fromTitle={titleOf(pending.fromId)}
+          toTitle={titleOf(pending.toId)}
           onCancel={() => setPending(null)}
           onCreate={async (draft) => {
             await onCreateRelation(pending.fromId, pending.toId, draft)
@@ -683,6 +844,182 @@ const Legend = styled.ul`
   }
   .secondary {
     color: ${metaText};
+  }
+`
+
+const DrawerToggle = styled.button`
+  padding: 4px 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  font: inherit;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: pointer;
+
+  &[aria-pressed='true'] {
+    border-color: ${({ theme }) => theme.colors.text.primary};
+    font-weight: 700;
+  }
+`
+
+const FlowArea = styled.div`
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+`
+
+const Drawer = styled.aside`
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: ${DRAWER_WIDTH}px;
+  box-sizing: border-box;
+  padding: 12px 10px 10px;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+
+  input {
+    padding: 5px 8px;
+    border: 1px solid ${({ theme }) => theme.colors.border.default};
+    border-radius: 6px;
+    background: transparent;
+    font: inherit;
+    font-size: 12.5px;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  ul {
+    flex: 1 1 auto;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+    scrollbar-width: thin;
+  }
+  li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 6px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    font-size: 12px;
+    color: ${({ theme }) => theme.colors.text.primary};
+    cursor: grab;
+
+    &:hover {
+      background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.04)')};
+    }
+    &[data-drop] {
+      border-color: ${({ theme }) => theme.colors.text.primary};
+    }
+  }
+  .meta {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    min-width: 34px;
+    line-height: 1.1;
+  }
+  .number {
+    font-size: 11px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+  .year {
+    font-size: 10px;
+    color: ${metaText};
+  }
+  .label {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.25;
+  }
+`
+
+const DrawerHead = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  span {
+    font-size: 11.5px;
+    line-height: 1.4;
+    color: ${metaText};
+  }
+`
+
+const ReasonBubble = styled.ul`
+  position: absolute;
+  top: 48px;
+  right: 10px;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(280px, calc(100% - 20px));
+  max-height: calc(100% - 110px);
+  overflow: hidden;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 10px;
+  list-style: none;
+  background: ${({ theme }) => theme.colors.background.primary};
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+  pointer-events: none;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  li {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  /* 아래 띠 — 지도 아래쪽(범례 자리)에 가로로, 한 항목 두 줄 */
+  &[data-docked] {
+    top: auto;
+    bottom: 10px;
+    right: 56px;
+    width: auto;
+    max-height: none;
+    flex-direction: row;
+    gap: 14px;
+
+    li {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+    strong {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+  .direction {
+    font-size: 11px;
+    font-weight: 700;
+    color: ${metaText};
+  }
+  .why {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.45;
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
 `
 
@@ -884,10 +1221,7 @@ const NodeButton = styled.button`
     word-break: keep-all;
     overflow-wrap: anywhere;
   }
-  &:hover .label {
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
+  /* 마우스 올림 밑줄 없음(사용자 지시) — 강조는 사슬 진하기·테두리가 맡는다 */
   .year {
     font-size: 10px;
     font-variant-numeric: tabular-nums;

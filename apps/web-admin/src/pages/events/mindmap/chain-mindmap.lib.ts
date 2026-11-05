@@ -12,7 +12,7 @@
 import { type EventOverviewNode, type EventOverviewRelation } from '@/shared/api/event-overview'
 
 import { type MindTreeNode } from './mindmap-layout'
-import { MIND_NODE_SIZE, type MindEdgeSpec, type MindNodeSpec, type MindmapData } from './mindmap-types'
+import { MIND_NODE_SIZE, type MindCandidate, type MindEdgeSpec, type MindNodeSpec, type MindmapData } from './mindmap-types'
 import { DIRECTED_RELATIONS, RELATION_DASH, RELATION_TYPE_NAME, type RelationType, yearOf } from './survey-mindmap.lib'
 
 export interface ChainMindmapInput {
@@ -28,7 +28,7 @@ export interface ChainMindmapInput {
 
 const extId = (id: string) => `ext:${id}`
 
-export function buildChainMindmap(input: ChainMindmapInput): MindmapData & { chainCount: number } {
+export function buildChainMindmap(input: ChainMindmapInput): MindmapData & { chainCount: number; candidates: MindCandidate[] } {
   const { root, ordered, numberById, hiddenTypes } = input
   const relations = input.relations.filter((relation) => !hiddenTypes.has(relation.type))
   const byId = new Map([root, ...ordered].map((node) => [node.id, node]))
@@ -122,40 +122,80 @@ export function buildChainMindmap(input: ChainMindmapInput): MindmapData & { cha
   const placed = new Set<string>()
   /** 사슬 나무를 이룬 연결(부모 → 자식) — 나머지는 사슬을 가로지르는 보조 선 */
   const treeLinks = new Set<string>()
+  const parentOf = new Map<string, string>()
   for (const component of components) {
     /* 머리 — 방향 있는 연결이 들어오지 않는 사건(첫 원인). 없으면(고리) 가장 이른 사건 */
     const heads = component.filter((id) => !incomingDirected.get(id))
     const starts = heads.length > 0 ? heads : [component[0]]
-    const expand = (queue: string[], neighbors: Map<string, string[]>) => {
+    const expand = (queue: string[]) => {
       while (queue.length > 0) {
         const current = queue.shift()!
-        for (const next of [...(neighbors.get(current) ?? [])].sort(byDate)) {
+        for (const next of [...(forward.get(current) ?? [])].sort(byDate)) {
           if (placed.has(next)) continue
           placed.add(next)
           treeLinks.add(`${current}>${next}`)
           treeLinks.add(`${next}>${current}`)
           treeOf(current).children.push(treeOf(next))
+          parentOf.set(next, current)
           specs.get(next)!.hideTreeEdge = true
           queue.push(next)
         }
       }
     }
-    /* 머리를 이른 순으로 하나씩 펼친다 — 앞 머리에서 이미 닿은 사건(같은 국면으로 이어진 짝)은 새 머리가 되지 않는다 */
+    /* 1) 새 사건을 펼치는 머리만 사슬로(이른 순). 이미 놓인 결과로만 들어가는 머리(합류 원인)는 미룬다 */
+    const deferred: string[] = []
     for (const start of starts) {
       if (placed.has(start)) continue
+      const opensNew = (forward.get(start) ?? []).some((next) => !placed.has(next))
+      if (!opensNew && (forward.get(start) ?? []).some((next) => placed.has(next))) {
+        deferred.push(start)
+        continue
+      }
       placed.add(start)
       /* 뿌리 → 사슬 머리 선은 연결이 아니다 — 한 사슬의 시작을 가리키는 가는 선(나무 선)으로 남긴다.
          사슬은 모두 오른쪽으로 — 좌우로 나누면 왼쪽 사슬은 결과 → 원인(화살표가 왼쪽)으로 읽히고 그림이 옆으로 두 배 넓어졌다 */
       const head = treeOf(start)
       head.side = 'right'
       center.children.push(head)
-      expand([start], forward)
+      parentOf.set(start, center.id)
+      expand([start])
     }
-    /* 거꾸로만 닿는 사건 — 닿은 마디 밑에 */
-    expand(
-      component.filter((id) => placed.has(id)),
-      backward,
-    )
+    /*
+     * 2) 합류 원인·거꾸로만 닿는 사건 — 그 결과 **바로 위, 같은 열**에 붙인다. 예전엔 합류 머리를 날짜순 사슬 머리로
+     *    세워 결과가 멀리 있었고(보조 선 평균이 주 선의 2배), 거꾸로만 닿는 사건은 결과 오른쪽에 붙어 화살표가 되돌아갔다.
+     */
+    const pending = [...deferred, ...component.filter((id) => !placed.has(id) && !deferred.includes(id))]
+    let progressed = true
+    while (pending.length > 0 && progressed) {
+      progressed = false
+      for (const id of [...pending]) {
+        const target = [...(forward.get(id) ?? []), ...(backward.get(id) ?? [])].filter((next) => placed.has(next)).sort(byDate)[0]
+        if (!target) continue
+        const parentId = parentOf.get(target) ?? center.id
+        const siblings = treeOf(parentId).children
+        const tree = treeOf(id)
+        if (parentId === center.id) tree.side = 'right'
+        siblings.splice(Math.max(0, siblings.findIndex((child) => child.id === target)), 0, tree)
+        parentOf.set(id, parentId)
+        placed.add(id)
+        if (parentId !== center.id) specs.get(id)!.hideTreeEdge = true
+        treeLinks.add(`${id}>${target}`)
+        treeLinks.add(`${target}>${id}`)
+        pending.splice(pending.indexOf(id), 1)
+        progressed = true
+        expand([id])
+      }
+    }
+    /* 남은 것(이어진 사건이 하나도 놓이지 않은 고리) — 새 사슬로 */
+    for (const id of pending) {
+      if (placed.has(id)) continue
+      placed.add(id)
+      const head = treeOf(id)
+      head.side = 'right'
+      center.children.push(head)
+      parentOf.set(id, center.id)
+      expand([id])
+    }
   }
 
   const edges: MindEdgeSpec[] = relations.flatMap((relation) => {
@@ -190,5 +230,10 @@ export function buildChainMindmap(input: ChainMindmapInput): MindmapData & { cha
       },
     ]
   })
-  return { tree: center, specs, relations: edges, chainCount: components.length }
+  /* 지도에 없는 아래 사건(아직 관련 사건이 없는 것) — '이을 사건' 서랍. 끌어 지도의 사건에 놓으면 잇는다 */
+  const candidates: MindCandidate[] = ordered
+    .filter((node) => !treeNodes.has(node.id))
+    .map((node) => ({ id: node.id, label: node.title, number: numberById.get(node.id) ?? null, year: yearOf(node.startDate) }))
+  return { tree: center, specs, relations: edges, chainCount: components.length, candidates }
 }
+

@@ -193,14 +193,8 @@ export function RelationsPanel({
     )
   }
 
-  if (relations.length === 0) {
-    return (
-      <S.EmptyStrip>
-        <strong>하위 사건끼리 이어 둔 관련 사건이 없습니다</strong> — 하위 사건 문서의 연관 탭에서 '직접 계기·배경·대응'으로
-        이으면 여기에 모이고, 전개 간트에 화살표로 그려집니다.
-      </S.EmptyStrip>
-    )
-  }
+  /* 관계 0건 — 예전엔 안내 글만 남기고 끝나 이을 길이 없었다. 지도(이을 사건 서랍이 열린 채)로 바로 잇게 한다 */
+  const emptyRelations = relations.length === 0
 
   return (
     <S.Panel $wide id="overview-relations" aria-labelledby="overview-relations-title">
@@ -226,6 +220,13 @@ export function RelationsPanel({
           )}
         </S.PanelNote>
       </S.PanelHead>
+
+      {emptyRelations && (
+        <S.EmptyStrip>
+          <strong>하위 사건끼리 이어 둔 관련 사건이 아직 없습니다</strong> — 아래 지도 왼쪽 「이을 사건」에서 사건을 끌어 다른
+          사건 위에 놓으면 '직접 계기·배경·대응'으로 잇고, 전개 간트에 화살표로도 그려집니다.
+        </S.EmptyStrip>
+      )}
 
       {view === 'map' && (
         <>
@@ -289,6 +290,7 @@ export function RelationsPanel({
               onOpen={openFromMap}
               onToggle={toggleCollapsed}
               fullscreenTitle={`${root.title} — 연결 마인드맵`}
+              candidates={'candidates' in mindmap ? mindmap.candidates : undefined}
               onCreateRelation={relationActions.create}
               onUpdateRelation={relationActions.update}
               onDeleteRelation={relationActions.remove}

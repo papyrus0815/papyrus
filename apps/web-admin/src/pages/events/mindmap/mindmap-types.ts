@@ -57,6 +57,14 @@ export interface MindEdgeSpec {
   items?: MindRelationItem[]
 }
 
+/** 지도에 아직 없는 사건 — '이을 사건' 서랍의 한 줄 */
+export interface MindCandidate {
+  id: string
+  label: string
+  number?: string | null
+  year?: string | null
+}
+
 export interface MindmapData {
   tree: MindTreeNode
   specs: Map<string, MindNodeSpec>
