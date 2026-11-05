@@ -546,6 +546,7 @@ export class EventController {
       locationLatitude: event.locationLatitude ?? null,
       locationLongitude: event.locationLongitude ?? null,
       phaseId: event.phaseId ?? null,
+      locationNote: event.locationNote ?? null,
       // 국면 — 상세에서만 include된다(conditional: 목록·후보 payload를 []로 오염시키지 않게)
       phases: Array.isArray(event.phases) ? event.phases.map(toEventPhaseDto) : undefined,
       domain: event.domain ?? 'OTHER',
@@ -2112,6 +2113,7 @@ export class EventController {
         endCalendar: dto.endCalendar,
         endDateOriginal: emptyToNull(dto.endDateOriginal),
         location: dto.location,
+        locationNote: emptyToNull(dto.locationNote),
         ...coordinatePair(dto),
         domain: dto.domain,
         background: dto.background,
@@ -2202,6 +2204,7 @@ export class EventController {
         endCalendar: dto.endCalendar,
         endDateOriginal: emptyToNull(dto.endDateOriginal),
         location: dto.location,
+        locationNote: emptyToNull(dto.locationNote),
         ...coordinatePair(dto),
         phaseId: phasePatch,
         domain: dto.domain,

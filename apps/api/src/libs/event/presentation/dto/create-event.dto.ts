@@ -93,6 +93,17 @@ export class CreateEventDto {
   location?: string
 
   @ApiProperty({
+    description: "위치 메모 — '현 프랑스 마른주 발미' 같은 설명. 장소 이름(location)과 따로. 빈 문자열이면 지움",
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(2000)
+  locationNote?: string | null
+
+  @ApiProperty({
     description: '대표 위치 위도(WGS84, -90~90) — 경도와 짝. null이면 좌표 지우기',
     required: false,
     nullable: true,

@@ -73,6 +73,10 @@ export interface EventOverviewNode {
   endDate: string | null
   endDatePrecision: string | null
   location: string | null
+  /** 지도 핀(대표 한 점) — 위도·경도가 짝으로 있을 때만. 조망 '지도' 보기가 하위 전부를 한 지도에 꽂는다 */
+  locationLatitude: number | null
+  locationLongitude: number | null
+  locationNote: string | null
   /** 분야 — 무엇에 관한 일인가 */
   domain: EventDomainValue
   /** 세부 분야 — 점검표가 세부(와 분야)로 적용 칸을 고른다 */
@@ -106,10 +110,25 @@ export interface EventOverviewNode {
   hasAftermath: boolean
 }
 
+/**
+ * 관련 사건(event_relation) 한 줄 — 한쪽 이상이 이 트리 안. 방향 유형은 fromId → toId로 읽는다.
+ * 둘 다 트리 안이면 external은 null, 한쪽이 트리 밖이면 그 사건의 제목·날짜를 싣는다(조망은 트리 밖 노드를 모른다).
+ */
+export interface EventOverviewRelation {
+  id: string
+  fromId: string
+  toId: string
+  type: 'LED_TO' | 'INFLUENCED' | 'RESPONSE_TO' | 'CONCURRENT' | 'RELATED'
+  description: string | null
+  external: { id: string; title: string; startDate: string | null; side: 'from' | 'to' } | null
+}
+
 export interface EventOverviewResponse {
   root: EventOverviewNode
   /** 루트를 뺀 하위 전부 — 시작 시점 순 */
   descendants: EventOverviewNode[]
+  /** 트리 안 사건이 낀 관련 사건 연결 전부 — 루트 상세의 연관 탭은 루트 자신의 연결만 보여서 하위끼리의 인과가 안 보였다 */
+  relations: EventOverviewRelation[]
   /** 노드 상한에 걸려 잘렸는가 */
   truncated: boolean
 }
@@ -226,7 +245,42 @@ export class EventOverviewService {
           (left.startDate ?? '').localeCompare(right.startDate ?? '') ||
           left.title.localeCompare(right.title),
       )
-    return { root, descendants, truncated }
+    const relations = await this.loadRelations(ids)
+    return { root, descendants, relations, truncated }
+  }
+
+  /** 트리 id 집합에 한쪽이라도 걸린 관련 사건 — 소프트삭제된 반대편은 뺀다 */
+  private async loadRelations(ids: string[]): Promise<EventOverviewRelation[]> {
+    const inTree = new Set(ids)
+    const counterpart = { select: { id: true, title: true, deletedAt: true, startDate: true, startEra: true, startYear: true, startMonth: true, startDay: true } }
+    const rows = await this.prisma.eventRelation.findMany({
+      where: { OR: [{ eventId: { in: ids } }, { relatedEventId: { in: ids } }] },
+      include: { event: counterpart, relatedEvent: counterpart },
+      orderBy: { createdAt: 'asc' },
+    })
+    const result: EventOverviewRelation[] = []
+    for (const row of rows) {
+      if (row.event.deletedAt || row.relatedEvent.deletedAt) continue
+      const fromInside = inTree.has(row.eventId)
+      const toInside = inTree.has(row.relatedEventId)
+      const outside = !fromInside ? row.event : !toInside ? row.relatedEvent : null
+      result.push({
+        id: row.id,
+        fromId: row.eventId,
+        toId: row.relatedEventId,
+        type: row.relationType,
+        description: row.relationDescription ?? null,
+        external: outside
+          ? {
+              id: outside.id,
+              title: outside.title,
+              startDate: formatEventDate(outside.startDate, outside.startEra, outside.startYear, outside.startMonth, outside.startDay),
+              side: fromInside ? 'to' : 'from',
+            }
+          : null,
+      })
+    }
+    return result
   }
 
   private toNode(
@@ -285,6 +339,9 @@ export class EventOverviewService {
       endDate: formatEventDate(row.endDate, row.endEra, row.endYear, row.endMonth, row.endDay),
       endDatePrecision: row.endDatePrecision ?? null,
       location: row.location ?? null,
+      locationLatitude: row.locationLatitude != null && row.locationLongitude != null ? Number(row.locationLatitude) : null,
+      locationLongitude: row.locationLatitude != null && row.locationLongitude != null ? Number(row.locationLongitude) : null,
+      locationNote: row.locationNote ?? null,
       domain: row.domain,
       type: row.type,
       kind: row.kind,

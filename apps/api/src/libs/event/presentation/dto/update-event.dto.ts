@@ -97,6 +97,17 @@ export class UpdateEventDto {
   location?: string
 
   @ApiProperty({
+    description: "위치 메모 — '현 프랑스 마른주 발미' 같은 설명. 장소 이름(location)과 따로. 빈 문자열이면 지움",
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(2000)
+  locationNote?: string | null
+
+  @ApiProperty({
     description: '상위 사건의 국면에 손으로 넣기 — null이면 날짜로 자동 배정. 국면은 이 사건의 주 상위 것만',
     required: false,
     nullable: true,

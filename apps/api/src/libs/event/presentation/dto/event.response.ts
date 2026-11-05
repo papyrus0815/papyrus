@@ -55,6 +55,9 @@ export class EventResponseDto {
   @ApiProperty({ description: '위치 (자유 텍스트)', required: false })
   location?: string | null
 
+  @ApiProperty({ description: '위치 메모 — 장소 이름(location)과 따로 두는 설명', required: false, nullable: true })
+  locationNote?: string | null
+
   @ApiProperty({ description: '손으로 넣은 상위 사건의 국면 id — 비면 날짜로 자동 배정', required: false, nullable: true })
   phaseId?: string | null
 

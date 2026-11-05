@@ -358,6 +358,9 @@ model Event {
   /// 둘 다 있거나 둘 다 없다(서비스가 짝으로만 쓴다).
   locationLatitude  Decimal? @map("location_latitude") @db.Decimal(10, 7)
   locationLongitude Decimal? @map("location_longitude") @db.Decimal(10, 7)
+  /// 위치 메모 — '현 프랑스 마른주 발미'·'옛 수도원 정원이 지금의 테라스' 같은 설명. 장소 이름(location)과 나눠
+  /// 상세에는 이름만 크게 서고 메모는 그 아래 작게(예전엔 한 칸이라 설명문이 장소 이름 자리에 섰다)
+  locationNote String? @map("location_note") @db.Text
 
   /// 분야(필수) — 무엇에 관한 일인가. 2단계는 type(세부 분야)
   domain EventDomain @default(OTHER)

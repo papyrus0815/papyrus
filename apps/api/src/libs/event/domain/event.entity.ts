@@ -38,6 +38,8 @@ export class Event {
   endCalendar?: CalendarSystemValue | null
   endDateOriginal?: string | null
   location?: string | null
+  /** 위치 메모 — 장소 이름과 따로 두는 설명 */
+  locationNote?: string | null
   /** 상위 사건의 국면에 손으로 넣은 것(없으면 날짜로 자동) */
   phaseId?: string | null
   /** 대표 위치 좌표(WGS84) — 둘 다 있거나 둘 다 없다 */

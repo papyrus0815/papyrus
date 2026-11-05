@@ -88,6 +88,7 @@ export class EventPrismaRepository implements EventRepository {
         locationLatitude: data.locationLatitude,
         locationLongitude: data.locationLongitude,
         phaseId: data.phaseId,
+        locationNote: data.locationNote,
         domain: data.domain,
         background: data.background,
         aftermath: data.aftermath,
@@ -147,6 +148,7 @@ export class EventPrismaRepository implements EventRepository {
         locationLatitude: data.locationLatitude,
         locationLongitude: data.locationLongitude,
         phaseId: data.phaseId,
+        locationNote: data.locationNote,
         domain: data.domain,
         background: data.background,
         aftermath: data.aftermath,
@@ -209,6 +211,7 @@ export class EventPrismaRepository implements EventRepository {
       endDateOriginal: event.endDateOriginal,
       location: event.location,
       phaseId: event.phaseId ?? null,
+      locationNote: event.locationNote ?? null,
       // Decimal → number(소수 7자리 — 약 1cm). 없으면 null
       locationLatitude: event.locationLatitude != null ? Number(event.locationLatitude) : null,
       locationLongitude: event.locationLongitude != null ? Number(event.locationLongitude) : null,
