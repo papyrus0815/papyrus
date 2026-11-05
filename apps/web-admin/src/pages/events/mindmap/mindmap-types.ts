@@ -71,7 +71,8 @@ export const MIND_NODE_SIZE: Record<MindNodeKind, { width: number; height: numbe
   root: { width: 168, height: 40 },
   branch: { width: 176, height: 32 },
   phase: { width: 140, height: 24 },
-  event: { width: 188, height: 28 },
-  external: { width: 188, height: 28 },
+  /* 두 줄 제목 — 한 줄(28px)일 때 '1-17 세습 귀족 작위 …'처럼 거의 모든 제목이 잘렸다 */
+  event: { width: 196, height: 40 },
+  external: { width: 196, height: 40 },
 }
 

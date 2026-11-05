@@ -39,6 +39,7 @@ import { Modal } from '@/shared/ui/modal'
 
 import { type MindPosition, type MindTreeNode, layoutMindmap } from './mindmap-layout'
 import { NewRelationCard, RelationCard, type RelationDraft } from './mindmap-relation-card'
+import { DIRECTED_RELATIONS, RELATION_DASH, RELATION_TYPE_NAME } from './survey-mindmap.lib'
 import {
   MIND_NODE_SIZE,
   type MindNodeKind,
@@ -200,7 +201,8 @@ function MindmapFlow({
   onFullscreen,
 }: MindmapCanvasProps & { onFullscreen?: () => void }) {
   const theme = useTheme()
-  const { fitView, getZoom, setCenter } = useReactFlow()
+  const { fitView, getZoom, setCenter, setViewport } = useReactFlow()
+  const hostRef = useRef<HTMLDivElement>(null)
   const zoom = useStore((state) => state.transform[2])
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   /*
@@ -279,7 +281,8 @@ function MindmapFlow({
     return list
   }, [positions, data.specs, activeId, connected, onOpen, onToggle, canConnect])
 
-  const ink = theme.colors.text.primary
+  /* 연결 선은 글자 보조색 — 검정(본문 잉크)이면 선 30여 개가 마디 글보다 먼저 눈에 걸렸다 */
+  const ink = theme.colors.text.secondary
   const edges = useMemo<Edge[]>(() => {
     const list: Edge[] = []
     /* 나무 선 — 부모 → 자식, 자식 쪽 바깥 손잡이 */
@@ -321,8 +324,8 @@ function MindmapFlow({
         selected ||
         connected === null ||
         (connected.has(relation.from) && connected.has(relation.to) && (relation.from === activeId || relation.to === activeId))
-      /* 가지를 건너는 선은 평소 한 단 흐리게 — 뿌리를 가로질러 그림을 가른다 */
-      const restOpacity = relation.cross ? 0.4 : 0.7
+      /* 보조 선(가지를 건너는·사슬을 이루지 않은 선)은 평소 한 단 흐리고 가늘게 — 주 사슬이 먼저 읽히게 */
+      const restOpacity = relation.cross ? 0.32 : 0.8
       list.push({
         id: `rel:${relation.id}`,
         source: relation.from,
@@ -330,7 +333,7 @@ function MindmapFlow({
         sourceHandle: bow ? (bow === 'left' ? 'l-s' : 'r-s') : forward ? 'r-s' : 'l-s',
         targetHandle: bow ? (bow === 'left' ? 'l-t' : 'r-t') : forward ? 'l-t' : 'r-t',
         type: 'relation',
-        markerEnd: relation.arrow ? { type: MarkerType.ArrowClosed, color: ink, width: 16, height: 16 } : undefined,
+        markerEnd: relation.arrow ? { type: MarkerType.ArrowClosed, color: ink, width: 12, height: 12 } : undefined,
         zIndex: 5,
         focusable: false,
         data: {
@@ -341,7 +344,7 @@ function MindmapFlow({
           ink,
           opacity: touched ? (connected || selected ? 0.95 : restOpacity) : 0.12,
           /* 굵기는 그대로 — 올릴 때마다 1.6↔2.4로 바뀌면 선이 튀어 보였다. 진하기(투명도)만 바꾼다 */
-          width: selected ? 2.4 : 1.8,
+          width: selected ? 2.4 : relation.cross ? 1.3 : 1.8,
         },
       })
     }
@@ -358,13 +361,38 @@ function MindmapFlow({
       void fitView({ padding: 0.08, maxZoom: 1.1 }).then(() => {
         if (getZoom() < READABLE_ZOOM) {
           setCropped(true)
-          centerOn(data.tree.id, READABLE_ZOOM + 0.08)
+          const oneSided = ![...positions.values()].some((position) => position.side === 'left')
+          const rootPosition = positions.get(data.tree.id)
+          const rootSpec = data.specs.get(data.tree.id)
+          const host = hostRef.current
+          if (oneSided && rootPosition && rootSpec && host) {
+            /*
+             * 한쪽으로만 뻗는 지도(관련 사건 사슬) — 뿌리를 가운데 두면 왼쪽 절반이 비었다. 뿌리를 왼쪽 끝에 붙인다.
+             */
+            const zoom = READABLE_ZOOM + 0.08
+            const rootHeight = MIND_NODE_SIZE[rootSpec.kind].height
+            void setViewport(
+              {
+                x: 24 - rootPosition.x * zoom,
+                y: host.clientHeight / 2 - (rootPosition.y + rootHeight / 2) * zoom,
+                zoom,
+              },
+              { duration: 200 },
+            )
+          } else centerOn(data.tree.id, READABLE_ZOOM + 0.08)
         } else setCropped(false)
       })
     })
     return () => cancelAnimationFrame(frame)
     // centerOn은 positions·specs에서 나온다(signature가 그 변화를 잡는다)
   }, [signature, fitView])
+
+  /* 범례 — 그림에 실제로 있는 관계 종류만(선 모양 = 종류). 지도 밖 칩과 떨어져 있으면 선을 보며 맞춰 읽기 어렵다 */
+  const legendTypes = useMemo(() => {
+    const present = new Set(data.relations.flatMap((relation) => (relation.items ?? []).map((item) => item.type)))
+    return (['LED_TO', 'INFLUENCED', 'RESPONSE_TO', 'CONCURRENT', 'RELATED'] as const).filter((type) => present.has(type))
+  }, [data.relations])
+  const hasSecondary = data.relations.some((relation) => relation.cross)
 
   const selectedEdge = selectedEdgeId ? data.relations.find((relation) => `rel:${relation.id}` === selectedEdgeId) : null
   const findMatches = (text: string) => {
@@ -376,7 +404,7 @@ function MindmapFlow({
   }
 
   return (
-    <Host style={{ height }} data-far={zoom < FAR_ZOOM ? '' : undefined}>
+    <Host ref={hostRef} style={{ height }} data-far={zoom < FAR_ZOOM ? '' : undefined}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -460,6 +488,21 @@ function MindmapFlow({
           </FullscreenButton>
         )}
       </TopBar>
+
+      {legendTypes.length > 0 && (
+        <Legend aria-label="선 모양 — 관계 종류">
+          {legendTypes.map((type) => (
+            <li key={type}>
+              <svg width="26" height="8" aria-hidden="true">
+                <line x1="1" y1="4" x2={DIRECTED_RELATIONS.has(type) ? 19 : 25} y2="4" stroke="currentColor" strokeWidth="1.8" strokeDasharray={RELATION_DASH[type] || undefined} strokeLinecap="round" />
+                {DIRECTED_RELATIONS.has(type) && <path d="M19,1 L25,4 L19,7 z" fill="currentColor" />}
+              </svg>
+              {RELATION_TYPE_NAME[type]}
+            </li>
+          ))}
+          {hasSecondary && <li className="secondary">흐린 선 = 사슬을 가로지르는 연결</li>}
+        </Legend>
+      )}
 
       {selectedEdge?.items && selectedEdge.items.length > 0 && (
         <RelationCard
@@ -577,6 +620,35 @@ const Host = styled.div`
   }
 `
 
+const Legend = styled.ul`
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  max-width: calc(100% - 80px);
+  margin: 0;
+  padding: 5px 9px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  list-style: none;
+  background: ${({ theme }) => theme.colors.background.primary};
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  pointer-events: none;
+
+  li {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .secondary {
+    color: ${metaText};
+  }
+`
+
 const TopBar = styled.div`
   position: absolute;
   top: 10px;
@@ -666,7 +738,7 @@ const NodeBox = styled.div<{ $kind: MindNodeKind; $color: string | null; $hot: b
   align-items: center;
   gap: 4px;
   padding: 0 8px;
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.2;
   opacity: ${({ $dim }) => ($dim ? 0.35 : 1)};
   transition: opacity 0.18s ease, outline-color 0.18s ease;
@@ -702,17 +774,19 @@ const NodeBox = styled.div<{ $kind: MindNodeKind; $color: string | null; $hot: b
       `
     if ($kind === 'external')
       return `
-        border-radius: 999px;
+        border-radius: 8px;
         background: ${surface};
         color: ${ink};
         border: 1.5px dashed ${theme.colors.text.secondary};
       `
+    /* 사건 — 직사각형 + 왼쪽 묶음 색 띠. 알약(999px)에 띠를 넣으면 띠가 '(' 괄호처럼 휘어 보였다 */
     return `
-      border-radius: 999px;
+      border-radius: 8px;
       background: ${surface};
       color: ${ink};
       border: 1px solid ${theme.colors.border.default};
-      box-shadow: inset 3px 0 0 ${$color ?? theme.colors.border.default};
+      box-shadow: inset 4px 0 0 ${$color ?? theme.colors.border.default};
+      padding-left: 12px;
     `
   }}
 
@@ -750,11 +824,16 @@ const NodeButton = styled.button`
     font-variant-numeric: tabular-nums;
     color: ${metaText};
   }
+  /* 두 줄까지 — 넘치면 말줄임(전체는 마우스 올림) */
   .label {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.25;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
   }
   &:hover .label {
     text-decoration: underline;
@@ -789,10 +868,14 @@ const NodeText = styled.span`
     color: ${metaText};
   }
   .label {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.25;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
   }
 `
 

@@ -118,6 +118,8 @@ export function buildChainMindmap(input: ChainMindmapInput): MindmapData & { cha
   specs.set(root.id, { id: root.id, kind: 'root', label: root.title, openable: false, connectable: true })
   treeNodes.set(root.id, center)
   const placed = new Set<string>()
+  /** 사슬 나무를 이룬 연결(부모 → 자식) — 나머지는 사슬을 가로지르는 보조 선 */
+  const treeLinks = new Set<string>()
   for (const component of components) {
     /* 머리 — 방향 있는 연결이 들어오지 않는 사건(첫 원인). 없으면(고리) 가장 이른 사건 */
     const heads = component.filter((id) => !incomingDirected.get(id))
@@ -128,6 +130,8 @@ export function buildChainMindmap(input: ChainMindmapInput): MindmapData & { cha
         for (const next of [...(neighbors.get(current) ?? [])].sort(byDate)) {
           if (placed.has(next)) continue
           placed.add(next)
+          treeLinks.add(`${current}>${next}`)
+          treeLinks.add(`${next}>${current}`)
           treeOf(current).children.push(treeOf(next))
           specs.get(next)!.hideTreeEdge = true
           queue.push(next)
@@ -156,8 +160,6 @@ export function buildChainMindmap(input: ChainMindmapInput): MindmapData & { cha
     const from = nodeIdOf(relation.fromId)
     const to = nodeIdOf(relation.toId)
     if (from === to || !treeNodes.has(from) || !treeNodes.has(to)) return []
-    const fromGroup = input.groupOf?.(relation.fromId) ?? null
-    const toGroup = input.groupOf?.(relation.toId) ?? null
     return [
       {
         id: relation.id,
@@ -166,7 +168,11 @@ export function buildChainMindmap(input: ChainMindmapInput): MindmapData & { cha
         dash: RELATION_DASH[relation.type],
         arrow: DIRECTED_RELATIONS.has(relation.type),
         count: 1,
-        cross: fromGroup !== null && toGroup !== null && fromGroup !== toGroup,
+        /*
+         * 사슬을 이루지 않은 연결(이미 다른 사슬에 놓인 결과로 가는 선)은 보조 선 — 한 단 흐리고 가늘게.
+         * 프랑스 혁명에서 '1791년 프랑스 헌법 → 지롱드파 축출' 같은 긴 선이 주 사슬과 같은 무게로 그림을 갈랐다
+         */
+        cross: !treeLinks.has(`${from}>${to}`),
         title: `${RELATION_TYPE_NAME[relation.type]}: ${titleOf.get(from) ?? ''} → ${titleOf.get(to) ?? ''}${relation.description ? `\n${relation.description}` : ''}`,
         items: [
           {
