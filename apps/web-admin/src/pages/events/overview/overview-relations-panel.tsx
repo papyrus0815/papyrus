@@ -29,15 +29,21 @@ import {
 import { type OverviewGrouping } from './event-overview.lib'
 import * as S from './overview.styles'
 
+import { useMindmapRelationActions } from '../mindmap/use-mindmap-relation-actions'
+
 const MindmapCanvas = lazy(() => import('../mindmap/mindmap-canvas'))
 
 /** 보기 — 마인드맵(기본)·목록. 사람마다 고른 것을 기억(편의 상태라 브라우저 저장소) */
 const VIEW_KEY = 'survey-relations-view'
 function readView(): 'map' | 'list' {
+  /* 휴대폰 폭은 고른 적이 없으면 목록부터 — 390px에 맞춘 마인드맵은 0.26배라 글자가 3px였다(전체 화면으로는 연다) */
+  const narrow = typeof window !== 'undefined' && window.innerWidth < 640
   try {
-    return window.localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'map'
+    const stored = window.localStorage.getItem(VIEW_KEY)
+    if (stored === 'list' || stored === 'map') return stored
+    return narrow ? 'list' : 'map'
   } catch {
-    return 'map'
+    return narrow ? 'list' : 'map'
   }
 }
 
@@ -111,9 +117,11 @@ export function RelationsPanel({
         mode,
         collapsed,
         hiddenTypes,
+        groupOf: (id) => grouping.groupIdOf.get(id) ?? null,
       }),
     [root, ordered, relations, numberById, dateLabelById, grouping, groupIndex, theme.mode, mode, collapsed, hiddenTypes],
   )
+  const relationActions = useMindmapRelationActions()
   const openFromMap = (id: string) => {
     if (id.startsWith('ext:')) navigate(pathKeys.events.detail(id.slice(4)))
     else if (nodeById.has(id)) onOpen(id)
@@ -223,7 +231,7 @@ export function RelationsPanel({
             )}
             <S.PanelNote>
               {mode === 'links'
-                ? '연결이 닿은 사건과 그 위 묶음만(국면은 마디에 마우스를 올리면) · 마디를 누르면 사건 창, 올리면 그 연결만 진하게'
+                ? '연결이 닿은 사건과 그 위 묶음만 · 선을 누르면 이유, 마디 끝 ●을 끌어 다른 사건에 놓으면 새 연결'
                 : '접은 가지로 가는 연결은 그 가지에 모여 ×N'}
             </S.PanelNote>
           </MapToolbar>
@@ -235,6 +243,10 @@ export function RelationsPanel({
               onOpen={openFromMap}
               onToggle={toggleCollapsed}
               onHover={(id) => onHover(id && nodeById.has(id) ? id : null)}
+              fullscreenTitle={`${root.title} — 연결 마인드맵`}
+              onCreateRelation={relationActions.create}
+              onUpdateRelation={relationActions.update}
+              onDeleteRelation={relationActions.remove}
             />
           </Suspense>
         </>

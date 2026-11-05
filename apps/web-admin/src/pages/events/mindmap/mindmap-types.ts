@@ -6,6 +6,19 @@ import { type MindTreeNode } from './mindmap-layout'
 
 export type MindNodeKind = 'root' | 'branch' | 'phase' | 'event' | 'external'
 
+export type MindRelationType = 'LED_TO' | 'INFLUENCED' | 'RESPONSE_TO' | 'CONCURRENT' | 'RELATED'
+
+/** 선 하나가 품은 관계(접힌 가지로 모이면 여럿) — 선을 누르면 뜨는 카드가 이것으로 고치고 지운다 */
+export interface MindRelationItem {
+  id: string
+  fromId: string
+  toId: string
+  fromTitle: string
+  toTitle: string
+  type: MindRelationType
+  description: string | null
+}
+
 /* type(인터페이스 아님) — xyflow 노드 data는 Record<string, unknown>이어야 해 암묵 색인 서명이 필요하다 */
 export type MindNodeSpec = {
   id: string
@@ -22,6 +35,10 @@ export type MindNodeSpec = {
   collapse?: { collapsed: boolean; hidden: number } | null
   /** 가운데(상세 마인드맵의 그 사건) */
   focus?: boolean
+  /** 연도 꼬리표 — 마인드맵은 시간축이 없어 '언제'를 마디가 든다 */
+  year?: string | null
+  /** 이 마디에서 끌어 다른 마디에 놓아 관계를 만들 수 있는가(실제 사건 마디만) */
+  connectable?: boolean
   /** 부모에서 오는 나무 선을 긋지 않는다 — 관계 선이 이미 잇는 마디(같은 연결을 두 번 긋지 않게) */
   hideTreeEdge?: boolean
 }
@@ -35,6 +52,9 @@ export interface MindEdgeSpec {
   /** 같은 두 마디 사이 연결 수(접힌 가지로 모인 것) */
   count?: number
   title?: string
+  /** 묶음(가지)을 건너는 선 — 뿌리를 가로질러 그림을 가르므로 평소엔 한 단 흐리게 */
+  cross?: boolean
+  items?: MindRelationItem[]
 }
 
 export interface MindmapData {

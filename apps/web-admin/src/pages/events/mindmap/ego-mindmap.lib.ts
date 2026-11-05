@@ -9,7 +9,7 @@ import { type EventRelationGraph } from '@/shared/api/event-overview'
 
 import { type MindTreeNode } from './mindmap-layout'
 import { MIND_NODE_SIZE, type MindEdgeSpec, type MindNodeSpec, type MindmapData } from './mindmap-types'
-import { DIRECTED_RELATIONS, RELATION_DASH, RELATION_TYPE_NAME } from './survey-mindmap.lib'
+import { DIRECTED_RELATIONS, RELATION_DASH, RELATION_TYPE_NAME, yearOf } from './survey-mindmap.lib'
 
 export const CHILDREN_BRANCH_ID = 'children'
 
@@ -37,6 +37,7 @@ export function buildEgoMindmap(graph: EventRelationGraph, maxHop: number): Mind
     openable: false,
     focus: true,
     hint: center?.startDate?.slice(0, 10) ?? null,
+    connectable: true,
   })
 
   /* 상위 — 왼쪽, 나무 선(소속) */
@@ -44,7 +45,7 @@ export function buildEgoMindmap(graph: EventRelationGraph, maxHop: number): Mind
     const tree = ensure(node.id, 'event')
     tree.side = 'left'
     root.children.push(tree)
-    specs.set(node.id, { id: node.id, kind: 'event', label: node.title, number: '상위', openable: true, hint: node.startDate?.slice(0, 10) ?? null })
+    specs.set(node.id, { id: node.id, kind: 'event', label: node.title, number: '상위', openable: true, hint: node.startDate?.slice(0, 10) ?? null, year: yearOf(node.startDate), connectable: true })
   }
 
   /* 하위 — 오른쪽 '하위 N' 가지 아래 */
@@ -60,7 +61,7 @@ export function buildEgoMindmap(graph: EventRelationGraph, maxHop: number): Mind
     })
     for (const node of children) {
       branch.children.push(ensure(node.id, 'event'))
-      specs.set(node.id, { id: node.id, kind: 'event', label: node.title, openable: true, hint: node.startDate?.slice(0, 10) ?? null })
+      specs.set(node.id, { id: node.id, kind: 'event', label: node.title, openable: true, hint: node.startDate?.slice(0, 10) ?? null, year: yearOf(node.startDate), connectable: true })
     }
     root.children.push(branch)
   }
@@ -75,6 +76,8 @@ export function buildEgoMindmap(graph: EventRelationGraph, maxHop: number): Mind
       label: node.title,
       openable: true,
       hint: node.startDate?.slice(0, 10) ?? null,
+      year: yearOf(node.startDate),
+      connectable: true,
       hideTreeEdge: true,
     })
     const parentId = node.reachedFrom && treeNodes.has(node.reachedFrom) ? node.reachedFrom : graph.centerId
@@ -92,6 +95,17 @@ export function buildEgoMindmap(graph: EventRelationGraph, maxHop: number): Mind
   }
 
   const edges: MindEdgeSpec[] = relations.map((relation) => ({
+    items: [
+      {
+        id: relation.id,
+        fromId: relation.fromId,
+        toId: relation.toId,
+        fromTitle: byId.get(relation.fromId)?.title ?? '',
+        toTitle: byId.get(relation.toId)?.title ?? '',
+        type: relation.type,
+        description: relation.description,
+      },
+    ],
     id: relation.id,
     from: relation.fromId,
     to: relation.toId,

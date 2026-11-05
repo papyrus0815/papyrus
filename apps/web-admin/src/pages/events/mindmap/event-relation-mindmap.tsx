@@ -16,6 +16,7 @@ import { pathKeys } from '@/shared/router'
 import { metaText } from '@/pages/events/styles/theme'
 
 import { buildEgoMindmap } from './ego-mindmap.lib'
+import { useMindmapRelationActions } from './use-mindmap-relation-actions'
 
 const MindmapCanvas = lazy(() => import('./mindmap-canvas'))
 
@@ -28,6 +29,7 @@ export function EventRelationMindmap({ eventId }: { eventId: string }) {
     staleTime: 30_000,
   })
   const mindmap = useMemo(() => (data ? buildEgoMindmap(data, hops) : null), [data, hops])
+  const relationActions = useMindmapRelationActions()
   const relationCount = data?.relations.length ?? 0
   const farCount = data?.nodes.filter((node) => node.hop === 2).length ?? 0
 
@@ -49,7 +51,7 @@ export function EventRelationMindmap({ eventId }: { eventId: string }) {
           </button>
         </Switch>
         <Note as="span">
-          왼쪽 = 상위·원인, 오른쪽 = 하위·결과 · 관계 {relationCount}개 · 마디를 누르면 그 사건으로(가서 다시 펼침)
+          왼쪽 = 상위·원인, 오른쪽 = 하위·결과 · 관계 {relationCount}개 · 선을 누르면 이유 · 마디 끝 ●을 끌어 놓으면 새 연결
           {data.truncated && ' · 마디가 많아 일부만'}
         </Note>
       </Toolbar>
@@ -58,6 +60,10 @@ export function EventRelationMindmap({ eventId }: { eventId: string }) {
           data={mindmap}
           height={Math.min(560, Math.max(320, 120 + mindmap.specs.size * 22))}
           onOpen={(id) => navigate(pathKeys.events.detail(id))}
+          fullscreenTitle={`${data.nodes.find((node) => node.id === data.centerId)?.title ?? ''} — 연결 지도`}
+          onCreateRelation={relationActions.create}
+          onUpdateRelation={relationActions.update}
+          onDeleteRelation={relationActions.remove}
         />
       </Suspense>
     </Wrap>

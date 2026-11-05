@@ -7,6 +7,7 @@
  * - 트리 밖 관계는 뿌리 아래 '이 묶음 밖' 가지의 마디로.
  */
 import { type EventOverviewNode, type EventOverviewRelation } from '@/shared/api/event-overview'
+import { formatYearLabel, parseIsoDateParts } from '@/shared/lib/iso-date'
 
 import { type EventPhase, phaseReach } from '../detail/components/event-phase.lib'
 import { MIND_NODE_SIZE, type MindEdgeSpec, type MindNodeKind, type MindNodeSpec, type MindmapData } from './mindmap-types'
@@ -44,6 +45,14 @@ export interface SurveyMindmapInput {
   mode: 'links' | 'all'
   collapsed: ReadonlySet<string>
   hiddenTypes: ReadonlySet<RelationType>
+  /** 마디 → 묶음(가지) id — 가지를 건너는 선을 가린다 */
+  groupOf?: (id: string) => string | null
+}
+
+/** ISO 날짜 → '1789' · '기원전 567' — 마디 꼬리표 */
+export function yearOf(iso: string | null | undefined): string | null {
+  const year = parseIsoDateParts(iso)?.year
+  return year == null ? null : formatYearLabel(year)
 }
 
 interface Draft {
@@ -57,6 +66,7 @@ interface Draft {
   /** 사건 id(국면 마디는 null) — 보일지 정할 때 */
   eventId: string | null
   hint?: string | null
+  year?: string | null
 }
 
 const PHASE_PREFIX = 'phase:'
@@ -134,6 +144,7 @@ export function buildSurveyMindmap(input: SurveyMindmapInput): MindmapData & { v
       children: draftChildren,
       eventId: node.id,
       hint: input.dateLabelById?.get(node.id) ?? null,
+      year: isRoot ? null : yearOf(node.startDate),
     }
   }
   const fullTree = draftOf(root, true)
@@ -184,6 +195,8 @@ export function buildSurveyMindmap(input: SurveyMindmapInput): MindmapData & { v
       color: draft.color,
       openable: draft.openable,
       hint: draft.hint ?? null,
+      year: draft.year ?? null,
+      connectable: Boolean(draft.eventId),
       collapse:
         mode === 'all' && draft.kind !== 'root' && draft.children.length > 0
           ? { collapsed: isCollapsed, hidden }
@@ -231,14 +244,28 @@ export function buildSurveyMindmap(input: SurveyMindmapInput): MindmapData & { v
     const to = proxy.get(relation.toId)
     if (!from || !to || from === to) continue
     const key = `${from}>${to}:${relation.type}`
+    const fromTitle = byId.get(relation.fromId)?.title ?? relation.external?.title ?? ''
+    const toTitle = byId.get(relation.toId)?.title ?? relation.external?.title ?? ''
+    const item = {
+      id: relation.id,
+      fromId: relation.fromId,
+      toId: relation.toId,
+      fromTitle,
+      toTitle,
+      type: relation.type,
+      description: relation.description,
+    }
     const existing = merged.get(key)
     if (existing) {
       existing.count = (existing.count ?? 1) + 1
+      existing.items?.push(item)
       continue
     }
-    const fromTitle = byId.get(relation.fromId)?.title ?? relation.external?.title ?? ''
-    const toTitle = byId.get(relation.toId)?.title ?? relation.external?.title ?? ''
+    const fromGroup = input.groupOf?.(relation.fromId) ?? null
+    const toGroup = input.groupOf?.(relation.toId) ?? null
     merged.set(key, {
+      items: [item],
+      cross: fromGroup !== null && toGroup !== null && fromGroup !== toGroup,
       id: relation.id,
       from,
       to,
