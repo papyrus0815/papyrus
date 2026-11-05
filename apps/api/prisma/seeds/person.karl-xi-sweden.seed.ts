@@ -10,16 +10,14 @@
  * 재정과 상비군을 다시 세웠고, 그 과정에서 신분회 스스로가 국왕을 「절대적 주권 군주」로
  * 선언하게 만들었다. 아들 칼 12세가 대북방전쟁에서 쓴 국력은 이 사람이 쌓아 둔 것이다.
  *
- * ── 재위를 어느 역사국가에 다느냐(이 시드의 핵심 판정) ────────────────────────
- * 재위는 **「스웨덴 제국」(1611~1721, 대국 시대)** 행에 단다. 「스웨덴 왕국」(970~현존)이
- * 아니다. 이유는 서수 규약 때문이다 — [[reign-ordinal-scope-review]] 정본 P와 DB 실측에 따라
- * regnalNumber는 «그 역사국가 행 안에서의 통산 제N대»이고(그레이트브리튼 왕국이 앤 1 →
- * 조지 1세 2 → 조지 2세 3), 970년부터 오늘까지 이어지는 「스웨덴 왕국」 행에서는 중세 군주
- * 목록 자체가 사료마다 갈려 통산 순번을 확정할 수 없다. 반면 「스웨덴 제국」 행 안에서는
- * 구스타브 2세 아돌프 1 → 크리스티나 2 → 칼 10세 구스타브 3 → **칼 11세 4** → 칼 12세 5로
- * 순번이 일의적으로 정해지고, 그의 재위(1660~1697)가 이 행의 기간에 온전히 들어간다.
- * Person.historicalCountryId도 같은 행으로 맞춰 재위와 어긋나지 않게 하고, 상위 정체인
- * 「스웨덴 왕국」은 PersonCountryAffiliation(CITIZENSHIP)으로 따로 잇는다.
+ * ── 재위를 어느 역사국가에 다느냐 ──────────────────────────────────────────
+ * 재위·인물 국가·소속은 모두 **「스웨덴 왕국」(970~현존)** 행에 단다. 처음에는 대수를
+ * 일의적으로 매기려고 「스웨덴 제국」(대국 시대 1611~1721) 행에 달았으나, 그 행은 같은 왕국의
+ * 한 시대를 따로 세운 겹침 행이라 2026-11-04 대영제국과 함께 삭제했다.
+ * regnalNumber(통산 대수)는 **비운다** — 970년부터의 왕국 행에서는 중세 군주 목록이 사료마다
+ * 갈려 통산 순번을 확정할 수 없다([[tenure-termnumber-vs-subtermnumber]]: 공식 통산 대수가
+ * 없으면 NULL). 그래서 재위 멱등 키도 (historicalCountryId, regnalNumber)가 아니라
+ * (historicalCountryId, personId)다.
  *
  * ⚠️ 서수 «11세» 자체가 허구다 — 16세기 요하네스 망누스가 지어낸 고대 왕 계보 때문에 번호가
  * 여섯이나 부풀려졌고, 실제로 그는 스웨덴의 여섯 번째 칼이다. 그래도 공식 표기가 XI이므로
@@ -31,15 +29,15 @@
  * = 04-15 신력, 룬드 전투 1676-12-04 구력 = 12-14 신력). 구력을 정본으로 두는 것은 스웨덴어·
  * 영어 사료가 모두 구력 날짜로 적기 때문이고, 신력 환산은 notes·연보 설명에 병기한다.
  *
- * 의존: seedSwedenHistoricalCountries(「스웨덴 제국」·「스웨덴 왕국」·「스웨덴령 포메라니아」 HC)
+ * 의존: seedSwedenHistoricalCountries(「스웨덴 왕국」·「스웨덴령 포메라니아」 HC)
  *       + seedGovernmentPositionDefinitions('국왕' 정의). 「비텔스바흐 가문」 왕조는 있으면
  *       연결하고 없으면 생략한다.
  *
  * 등록 항목:
- *  - Person x1 (칼 11세 — historicalCountryId=스웨덴 제국, dynastyId=비텔스바흐 가문)
- *  - SovereignReign x1 (스웨덴 제국 제4대, 1660-02-13 ~ 1697-04-05)
+ *  - Person x1 (칼 11세 — historicalCountryId=스웨덴 왕국, dynastyId=비텔스바흐 가문)
+ *  - SovereignReign x1 (스웨덴 왕국, 통산 대수 NULL, 1660-02-13 ~ 1697-04-05)
  *  - PersonNickname x5
- *  - PersonCountryAffiliation x4
+ *  - PersonCountryAffiliation x3
  *  - PersonLifeEvent x26 (연보 — 배열 순서를 sortOrder로. 사망 당일·사후 항목은 넣지 않는다)
  *  - PersonStats x1 (6축 능력치, admin 평가)
  *
@@ -212,13 +210,13 @@ const KARL_XI = {
 
 // ── 재위 ────────────────────────────────────────────────────────────────────
 const REIGN = {
-  /** ⚠️「스웨덴 왕국」(970~)이 아니라 대국 시대 행. 파일 머리말의 판정 근거 참조 */
-  countryName: '스웨덴 제국',
+  /** 파일 머리말의 판정 근거 참조 — 「스웨덴 제국」 겹침 행은 2026-11-04 삭제 */
+  countryName: '스웨덴 왕국',
   positionTitle: '국왕',
   /** 이름별 서수 정본(Person.regnalName은 오염 필드라 쓰지 않는다) */
   regnalName: '칼 11세 (Karl XI)',
-  /** 스웨덴 제국(1611~1721) 통산 제4대 — 구스타브 2세 아돌프 1·크리스티나 2·칼 10세 구스타브 3 */
-  regnalNumber: 4,
+  /** 통산 대수는 비운다 — 970년부터의 왕국 행에서는 순번을 확정할 수 없다(머리말 참조) */
+  regnalNumber: null,
   termNumber: 1,
   startYear: 1660, startMonth: 2, startDay: 13,
   endYear: 1697, endMonth: 4, endDay: 5,
@@ -249,11 +247,9 @@ const REIGN = {
     '⚠️날짜는 모두 **율리우스력(구력)** — 스웨덴은 1700년까지 율리우스력을 썼다. 신력으로는 ' +
     '즉위 1660-02-23, 사망 1697-04-15이다. ' +
     '\n\n' +
-    '⚠️재위를 「스웨덴 왕국」(970~현존)이 아니라 「스웨덴 제국」(1611~1721) 행에 단 것은 서수 ' +
-    '규약 때문이다 — regnalNumber는 그 역사국가 행 안의 통산 제N대인데, 970년부터의 왕국 ' +
-    '행에서는 중세 군주 목록이 사료마다 갈려 순번을 확정할 수 없고 대국 시대 행 안에서는 ' +
-    '구스타브 2세 아돌프 1 → 크리스티나 2 → 칼 10세 구스타브 3 → 칼 11세 4로 일의적이다. ' +
-    '상위 정체 「스웨덴 왕국」은 소속 국가(CITIZENSHIP)로 따로 이어 두었다.',
+    '⚠️통산 대수는 비워 두었다 — 970년부터 이어지는 「스웨덴 왕국」 행에서는 중세 군주 목록이 ' +
+    '사료마다 갈려 순번을 확정할 수 없다. 대국 시대(1611~1721) 안에서는 구스타브 2세 아돌프 → ' +
+    '크리스티나 → 칼 10세 구스타브에 이은 네 번째 왕이다.',
 }
 
 // ── 별칭 ────────────────────────────────────────────────────────────────────
@@ -323,7 +319,7 @@ interface AffiliationSpec {
 
 const AFFILIATIONS: AffiliationSpec[] = [
   {
-    countryName: '스웨덴 제국',
+    countryName: '스웨덴 왕국',
     affiliationType: 'CITIZENSHIP',
     priority: 1,
     startYear: 1655, startMonth: 11, startDay: 24,
@@ -331,21 +327,11 @@ const AFFILIATIONS: AffiliationSpec[] = [
     note: '재위 국가이자 이 인물의 정본 국가. 생몰 전 기간이 대국 시대(1611~1721) 안에 들어간다.',
   },
   {
-    countryName: '스웨덴 제국',
+    countryName: '스웨덴 왕국',
     affiliationType: 'BIRTH_PLACE',
     priority: 1,
     startYear: 1655, startMonth: 11, startDay: 24,
     note: '스톡홀름 트레 크로노르 왕성 출생. 그가 죽은 곳이기도 하며, 사후 한 달 만에 불탔다.',
-  },
-  {
-    countryName: '스웨덴 왕국',
-    affiliationType: 'CITIZENSHIP',
-    priority: 2,
-    startYear: 1655, startMonth: 11, startDay: 24,
-    endYear: 1697, endMonth: 4, endDay: 5,
-    note:
-      '대국 시대를 품은 상위 정체. 재위는 서수 규약상 「스웨덴 제국」 행에 달았으므로, ' +
-      '끊이지 않고 이어지는 왕국 행과는 이 소속으로 잇는다.',
   },
   {
     countryName: '스웨덴령 포메라니아',
@@ -665,11 +651,11 @@ export async function seedKarlXISweden(prisma: PrismaService): Promise<void> {
     return
   }
 
-  const swedishEmpire = await prisma.historicalCountry.findFirst({
+  const swedishKingdom = await prisma.historicalCountry.findFirst({
     where: { name: REIGN.countryName },
     select: { id: true },
   })
-  if (!swedishEmpire) {
+  if (!swedishKingdom) {
     console.warn(
       `  ⚠️  「${REIGN.countryName}」 HC 미존재 — 먼저 seedSwedenHistoricalCountries 실행 필요. 시딩 중단.`,
     )
@@ -716,7 +702,7 @@ export async function seedKarlXISweden(prisma: PrismaService): Promise<void> {
     if (!person.deathNote) patch.deathNote = KARL_XI.deathNote
     if (person.influence == null) patch.influence = KARL_XI.influence
     if (person.birthOrder == null) patch.birthOrder = KARL_XI.birthOrder
-    if (!person.historicalCountryId) patch.historicalCountryId = swedishEmpire.id
+    if (!person.historicalCountryId) patch.historicalCountryId = swedishKingdom.id
     if (!person.dynastyId && wittelsbach) patch.dynastyId = wittelsbach.id
     if (Object.keys(patch).length > 0) {
       person = await prisma.person.update({ where: { id: person.id }, data: patch })
@@ -748,7 +734,7 @@ export async function seedKarlXISweden(prisma: PrismaService): Promise<void> {
         influence: KARL_XI.influence,
         birthPlaceText: KARL_XI.birthPlaceText,
         deathPlaceText: KARL_XI.deathPlaceText,
-        historicalCountryId: swedishEmpire.id,
+        historicalCountryId: swedishKingdom.id,
         dynastyId: wittelsbach?.id ?? undefined,
         accountId: admin.id,
       },
@@ -758,23 +744,17 @@ export async function seedKarlXISweden(prisma: PrismaService): Promise<void> {
   const personId = person.id
 
   // ── 2) 재위 ────────────────────────────────────────────────────────────────
-  // ⚠️멱등 키는 인물이 아니라 유니크 제약 (historicalCountryId, regnalNumber)이다.
+  // 멱등 키는 (historicalCountryId, personId) — 통산 대수가 NULL이라 대수로는 행을 찾을 수 없다.
   const existingReign = await reignRows(prisma).findFirst({
-    where: { historicalCountryId: swedishEmpire.id, regnalNumber: REIGN.regnalNumber },
+    where: { historicalCountryId: swedishKingdom.id, personId },
   })
   if (existingReign) {
-    if (existingReign.personId === personId) {
-      console.log(`  ⏭️  재위 스킵 (이미 존재): ${REIGN.countryName} 제${REIGN.regnalNumber}대`)
-    } else {
-      console.warn(
-        `  ⚠️  재위 ${REIGN.countryName} 제${REIGN.regnalNumber}대 — 다른 인물이 이미 점유 (skip)`,
-      )
-    }
+    console.log(`  ⏭️  재위 스킵 (이미 존재): ${REIGN.countryName} ${REIGN.regnalName}`)
   } else {
     await reignRows(prisma).create({
       data: {
         personId,
-        historicalCountryId: swedishEmpire.id,
+        historicalCountryId: swedishKingdom.id,
         positionDefinitionId: kingDef?.id ?? undefined,
         regnalName: REIGN.regnalName,
         regnalNumber: REIGN.regnalNumber,
@@ -802,7 +782,7 @@ export async function seedKarlXISweden(prisma: PrismaService): Promise<void> {
       },
     })
     console.log(
-      `  ✅ 재위: ${REIGN.countryName} 제${REIGN.regnalNumber}대 (${REIGN.startYear}~${REIGN.endYear})`,
+      `  ✅ 재위: ${REIGN.countryName} ${REIGN.regnalName} (${REIGN.startYear}~${REIGN.endYear})`,
     )
   }
 

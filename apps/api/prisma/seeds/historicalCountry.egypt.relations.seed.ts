@@ -108,7 +108,7 @@ const MEMBERSHIPS: {
   // 1914-11-05 오스만의 협상국 상대 참전으로 종주권 단절
   { parent: '오스만 제국', member: '이집트 헤디브국', role: HistoricalMembershipRole.VASSAL_STATE },
   // 1914-12-18 보호국 선포 ~ 1922-02-28 일방적 독립 선언(1882~1914 '베일 덮인 보호국'은 법적 지위가 아니라 제외)
-  { parent: '대영제국', member: '이집트 술탄국', role: HistoricalMembershipRole.PROTECTORATE, startDate: '1914-12-18', endDate: '1922-02-28' },
+  { parent: '그레이트브리튼 및 아일랜드 연합왕국', member: '이집트 술탄국', role: HistoricalMembershipRole.PROTECTORATE, startDate: '1914-12-18', endDate: '1922-02-28' },
 ]
 
 // ── 수평 관계 정의 ────────────────────────────────────────────────────────────

@@ -20,7 +20,7 @@ async function main() {
   }
 
   // 신규 5개 존재 확인
-  const newNames = ['그레이트브리튼 및 북아일랜드 연합왕국', '잉글랜드 연방', '대영제국', '서식스 왕국', '에식스 왕국']
+  const newNames = ['그레이트브리튼 및 북아일랜드 연합왕국', '잉글랜드 연방', '서식스 왕국', '에식스 왕국']
   console.log('\n=== 신규 엔티티 확인 ===')
   for (const name of newNames) {
     const hc = await prisma.historicalCountry.findFirst({ where: { name }, select: { id: true, name: true } })

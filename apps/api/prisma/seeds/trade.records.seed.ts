@@ -176,9 +176,9 @@ const RECORDS: RecordSeed[] = [
     ],
   },
 
-  // ── 대영제국 1913 — 구성만 (금액은 추계마다 갈려 비움) ──────
+  // ── 영국(연합왕국) 1913 — 구성만 (금액은 추계마다 갈려 비움) ──────
   {
-    historicalCountry: '대영제국',
+    historicalCountry: '그레이트브리튼 및 아일랜드 연합왕국',
     era: 'AD',
     year: 1913,
     isEstimate: true,

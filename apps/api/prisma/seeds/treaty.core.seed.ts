@@ -175,7 +175,7 @@ const TREATIES: TreatySpec[] = [
       '이 조약을 시작으로 미국·프랑스가 최혜국 대우를 요구해 같은 조건을 얻어냈다.',
     signatories: [
       { historical: '청나라', role: '흠차대신 기영' },
-      { historical: '대영제국', role: '전권대사 헨리 포틴저' },
+      { historical: '그레이트브리튼 및 아일랜드 연합왕국', role: '전권대사 헨리 포틴저' },
     ],
     terms: [
       {
@@ -309,7 +309,7 @@ const TREATIES: TreatySpec[] = [
       '1905년·1911년 두 차례 개정되며 적용 범위가 인도까지 확대됐다. ' +
       '워싱턴 회의에서 4개국 조약으로 대체되며 1923년 소멸했다.',
     signatories: [
-      { historical: '대영제국', role: '외무장관 랜즈다운 후작' },
+      { historical: '그레이트브리튼 및 아일랜드 연합왕국', role: '외무장관 랜즈다운 후작' },
       { historical: '일본 제국', role: '주영공사 하야시 다다스' },
     ],
   },
@@ -388,7 +388,7 @@ const TREATIES: TreatySpec[] = [
         note: '협상에서 배제된 채 서명',
       },
       { historical: '프랑스 제3공화국', role: '총리 조르주 클레망소' },
-      { historical: '대영제국', role: '총리 데이비드 로이드 조지' },
+      { historical: '그레이트브리튼 및 아일랜드 연합왕국', role: '총리 데이비드 로이드 조지', note: '조약문상 당사자 표기는 "British Empire"(자치령 대표 포함) — 국가 단위로는 연합왕국' },
       { historical: '이탈리아 왕국', role: '총리 비토리오 오를란도' },
       { historical: '일본 제국', role: '전권대사 사이온지 긴모치' },
       {
@@ -438,7 +438,7 @@ const TREATIES: TreatySpec[] = [
       '대등한 비율을 요구하던 일본이 1934년 폐기를 통고하면서 조약 체제는 1936년 말로 끝났다.',
     signatories: [
       { modern: '미국', role: '국무장관 찰스 에번스 휴스' },
-      { historical: '대영제국' },
+      { historical: '그레이트브리튼 및 아일랜드 연합왕국', note: '조약문상 당사자 표기는 "British Empire"(자치령 대표 포함) — 국가 단위로는 연합왕국' },
       { historical: '일본 제국', note: '1934년 12월 폐기 통고' },
       { historical: '프랑스 제3공화국' },
       { historical: '이탈리아 왕국' },

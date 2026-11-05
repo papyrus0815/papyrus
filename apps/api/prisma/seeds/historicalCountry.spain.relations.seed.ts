@@ -89,11 +89,7 @@ const TRANSITIONS: {
   { predecessor: '나바라 왕국', successor: '카스티야 왕국', eventType: TransitionEventType.CONQUEST, transitionScope: TransitionScope.STATE_SUCCESSION },
   { predecessor: '나바라 왕국', successor: '프랑스 왕국', eventType: TransitionEventType.UNION, transitionScope: TransitionScope.STATE_SUCCESSION },
 
-  // ── 제국과 단일 왕국 ────────────────────────────────────────────
-  // 1492년 대서양 사업은 카스티야 왕관의 소유였다(아라곤은 지중해 몫) — 제국 행의 출발점
-  { predecessor: '카스티야 왕국', successor: '스페인 제국', eventType: TransitionEventType.FOUNDED, transitionScope: TransitionScope.STATE_SUCCESSION },
-  // 1976-02 서사하라 철수로 해외 제국이 닫히고 본국만 남는다
-  { predecessor: '스페인 제국', successor: '스페인 왕국', eventType: TransitionEventType.DISSOLVED, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // ── 단일 왕국 ───────────────────────────────────────────────────
   // 1707~1716 누에바 플란타 — 카스티야가 통일의 주도핵(UNIFICATION), 아라곤·발렌시아는 흡수 구성체(UNION)
   // (불가리아 배치에서 확정한 UNIFICATION/UNION 구분)
   { predecessor: '카스티야 왕국', successor: '스페인 왕국 (부르봉)', eventType: TransitionEventType.UNIFICATION, transitionScope: TransitionScope.STATE_SUCCESSION },
@@ -150,23 +146,48 @@ const MEMBERSHIPS: {
   // 나폴레옹이 형을 앉힌 위성 왕국(알바니아 이탈리아 보호령 판례와 같은 자리)
   { parent: '프랑스 제1제국', member: '스페인 왕국 (보나파르트)', role: HistoricalMembershipRole.PROTECTORATE },
 
-  // ── 해외 제국 ───────────────────────────────────────────────────
-  { parent: '스페인 제국', member: '누에바에스파냐 부왕령', role: HistoricalMembershipRole.COLONY },
-  { parent: '스페인 제국', member: '페루 부왕령', role: HistoricalMembershipRole.COLONY },
-  { parent: '스페인 제국', member: '누에바그라나다 부왕령', role: HistoricalMembershipRole.COLONY },
-  { parent: '스페인 제국', member: '리오데라플라타 부왕령', role: HistoricalMembershipRole.COLONY },
-  // 필리핀은 1821년까지 누에바에스파냐 부왕의 관할이었고 그 뒤 본국 직할로 바뀌었다 — 두 부모를 각각 단다
+  // ── 해외 속령 ───────────────────────────────────────────────────
+  // 「스페인 제국」 겹침 행(2026-11-04 삭제) 대신 그 시기에 속령을 쥔 본국 행에 단다.
+  // 부모 행끼리 기간이 겹치지 않으면 날짜를 비운다 — 부모와 속령 존속기간의 교집합이 곧 소속 기간이다.
+  // 날짜를 적는 곳은 (1) 부모가 겹치는 내전기: 제2공화국(~1939-04)과 스페인국(1936-10~)이 겹치는데,
+  // 아프리카 속령은 1936년 가을까지 모두 국민파 손에 들어갔으므로 1936-10-01로 가른다
+  // (2) 필리핀처럼 한 부모의 기간 중간에 소속이 바뀐 경우뿐이다.
+  // 보나파르트 왕국(1808~1813)은 식민지가 인정하지 않았으므로(페르난도 7세 명의의 훈타) 부모로 달지 않는다.
+  //
+  // 인디아스는 법적으로 카스티야 왕관의 소유였다(1519 카를 5세의 불가분 병합 선언) — 1715년까지는 카스티야 왕국
+  { parent: '카스티야 왕국', member: '누에바에스파냐 부왕령', role: HistoricalMembershipRole.COLONY },
+  { parent: '스페인 왕국 (부르봉)', member: '누에바에스파냐 부왕령', role: HistoricalMembershipRole.COLONY },
+  { parent: '카스티야 왕국', member: '페루 부왕령', role: HistoricalMembershipRole.COLONY },
+  { parent: '스페인 왕국 (부르봉)', member: '페루 부왕령', role: HistoricalMembershipRole.COLONY },
+  { parent: '스페인 왕국 (부르봉)', member: '누에바그라나다 부왕령', role: HistoricalMembershipRole.COLONY },
+  { parent: '스페인 왕국 (부르봉)', member: '리오데라플라타 부왕령', role: HistoricalMembershipRole.COLONY },
+  // 필리핀은 1821년까지 누에바에스파냐 부왕의 관할이었고 그 뒤 본국 직할로 바뀌었다
   { parent: '누에바에스파냐 부왕령', member: '필리핀 도독령', role: HistoricalMembershipRole.COLONY, startDate: '1565-04-27', endDate: '1821-09-27' },
-  { parent: '스페인 제국', member: '필리핀 도독령', role: HistoricalMembershipRole.COLONY, startDate: '1821-09-27' },
-  { parent: '스페인 제국', member: '스페인령 기니', role: HistoricalMembershipRole.COLONY },
-  { parent: '스페인 제국', member: '스페인령 사하라', role: HistoricalMembershipRole.COLONY },
+  { parent: '스페인 왕국 (부르봉)', member: '필리핀 도독령', role: HistoricalMembershipRole.COLONY, startDate: '1821-09-27' },
+  { parent: '스페인 제1공화국', member: '필리핀 도독령', role: HistoricalMembershipRole.COLONY },
+  { parent: '스페인 왕국 (왕정복고)', member: '필리핀 도독령', role: HistoricalMembershipRole.COLONY },
+  { parent: '스페인 왕국 (부르봉)', member: '스페인령 기니', role: HistoricalMembershipRole.COLONY },
+  { parent: '스페인 제1공화국', member: '스페인령 기니', role: HistoricalMembershipRole.COLONY },
+  { parent: '스페인 왕국 (왕정복고)', member: '스페인령 기니', role: HistoricalMembershipRole.COLONY },
+  { parent: '스페인 제2공화국', member: '스페인령 기니', role: HistoricalMembershipRole.COLONY, endDate: '1936-10-01' },
+  { parent: '스페인국', member: '스페인령 기니', role: HistoricalMembershipRole.COLONY, startDate: '1936-10-01' },
+  { parent: '스페인 왕국 (왕정복고)', member: '스페인령 사하라', role: HistoricalMembershipRole.COLONY },
+  { parent: '스페인 제2공화국', member: '스페인령 사하라', role: HistoricalMembershipRole.COLONY, endDate: '1936-10-01' },
+  { parent: '스페인국', member: '스페인령 사하라', role: HistoricalMembershipRole.COLONY, startDate: '1936-10-01' },
+  // 1975-11 후안 카를로스 즉위 뒤 1976-02 철수까지
+  { parent: '스페인 왕국', member: '스페인령 사하라', role: HistoricalMembershipRole.COLONY },
   // 술탄의 명목 주권 아래 스페인이 행정을 맡은 보호령이라 PROTECTORATE
-  { parent: '스페인 제국', member: '스페인령 모로코', role: HistoricalMembershipRole.PROTECTORATE },
+  { parent: '스페인 왕국 (왕정복고)', member: '스페인령 모로코', role: HistoricalMembershipRole.PROTECTORATE },
+  { parent: '스페인 제2공화국', member: '스페인령 모로코', role: HistoricalMembershipRole.PROTECTORATE, endDate: '1936-10-01' },
+  { parent: '스페인국', member: '스페인령 모로코', role: HistoricalMembershipRole.PROTECTORATE, startDate: '1936-10-01' },
   // 유럽 쪽 속령 — 자체 군주 없이 스페인 왕이 주권자를 겸한 왕관령이라 DOMINION(스웨덴 발트 속령 전례).
-  // 세 행 모두 다른 시드(benelux·italy) 소유라 여기서는 소속 관계만 additive로 얹는다
-  { parent: '스페인 제국', member: '스페인령 네덜란드', role: HistoricalMembershipRole.DOMINION, startDate: '1581-07-26', endDate: '1714-03-07' },
-  { parent: '스페인 제국', member: '나폴리 왕국', role: HistoricalMembershipRole.DOMINION, startDate: '1504-01-31', endDate: '1713-04-11' },
-  { parent: '스페인 제국', member: '밀라노 공국', role: HistoricalMembershipRole.DOMINION, startDate: '1535-11-01', endDate: '1706-09-24' },
+  // 세 행 모두 다른 시드(benelux·italy) 소유라 여기서는 소속 관계만 additive로 얹는다.
+  // 나폴리는 1504년 아라곤 왕 페르난도 2세의 정복으로 아라곤 왕관에 붙었다.
+  // 네덜란드·밀라노는 엄밀히는 어느 왕관에도 속하지 않고 스페인 국왕이 겸유했다(플랑드르·이탈리아 평의회) —
+  // 1715년 이전에는 단일 '스페인' 행이 없으므로, 군주국의 중심이자 재정·군사를 댄 카스티야 왕국에 근사해 단다.
+  { parent: '아라곤 왕국', member: '나폴리 왕국', role: HistoricalMembershipRole.DOMINION, startDate: '1504-01-31', endDate: '1713-04-11' },
+  { parent: '카스티야 왕국', member: '스페인령 네덜란드', role: HistoricalMembershipRole.DOMINION, startDate: '1581-07-26', endDate: '1714-03-07' },
+  { parent: '카스티야 왕국', member: '밀라노 공국', role: HistoricalMembershipRole.DOMINION, startDate: '1535-11-01', endDate: '1706-09-24' },
 ]
 
 // ── 수평 관계(동군연합) 정의 ──────────────────────────────────────────────────

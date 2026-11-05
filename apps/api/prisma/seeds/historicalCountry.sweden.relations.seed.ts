@@ -17,10 +17,6 @@ const TRANSITIONS: {
 }[] = [
   // 칼마르 동맹 이탈 (1523 구스타브 바사 국왕 선출) — 덴마크-노르웨이가 잔존한 것과 대칭
   { predecessor: '칼마르 동맹', successor: '스웨덴 왕국', eventType: TransitionEventType.SPLIT, transitionScope: TransitionScope.STATE_SUCCESSION },
-  // 대국 시대 진입·종료 (1611 구스타브 2세 아돌프 즉위 / 1721 니스타드 조약) —
-  // 같은 왕국의 한 시대라 REGIME_CHANGE 왕복 한 쌍으로 둔다(잉글랜드 왕국↔연방 전례)
-  { predecessor: '스웨덴 왕국', successor: '스웨덴 제국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.REGIME_CHANGE },
-  { predecessor: '스웨덴 제국', successor: '스웨덴 왕국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.REGIME_CHANGE },
   // 대북방전쟁 패전 → 발트 속령 러시아 이양 (1710 항복, 1721 니스타드 조약)
   { predecessor: '스웨덴령 에스토니아', successor: '러시아 제국', eventType: TransitionEventType.CONQUEST, transitionScope: TransitionScope.STATE_SUCCESSION },
   { predecessor: '스웨덴령 리보니아', successor: '러시아 제국', eventType: TransitionEventType.CONQUEST, transitionScope: TransitionScope.STATE_SUCCESSION },
