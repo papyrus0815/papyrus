@@ -41,6 +41,7 @@ import { notify } from '@/shared/ui/toast'
 
 import { metaText } from '@/pages/events/styles/theme'
 import * as S from '../styles'
+import { TreatyContent } from './treaty-content'
 import {
   type EventDetail,
   type EventDetailTreaty,
@@ -201,6 +202,7 @@ export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
               key={treaty.linkId}
               treaty={treaty}
               onUnlink={() => handleUnlink(treaty.linkId, treaty.name)}
+              onChanged={onInvalidate}
             />
           ))}
         </TreatyList>
@@ -306,12 +308,18 @@ function lifecycleSteps(treaty: EventDetailTreaty): LifecycleStep[] {
   return steps
 }
 
-function TreatyCard({ treaty, onUnlink }: { treaty: EventDetailTreaty; onUnlink: () => void }) {
+function TreatyCard({
+  treaty,
+  onUnlink,
+  onChanged,
+}: {
+  treaty: EventDetailTreaty
+  onUnlink: () => void
+  onChanged: () => void
+}) {
   const steps = lifecycleSteps(treaty)
   const signatories = treaty.signatories ?? []
   const hiddenSignatories = Math.max(0, treaty.signatoryCount - signatories.length)
-  const terms = treaty.termsPreview ?? []
-  const hiddenTerms = Math.max(0, treaty.termCount - terms.length)
   const detailPath = pathKeys.treaties.detail(treaty.id)
 
   return (
@@ -371,26 +379,8 @@ function TreatyCard({ treaty, onUnlink }: { treaty: EventDetailTreaty; onUnlink:
         </Facet>
       )}
 
-      {terms.length > 0 && (
-        <Facet>
-          <FacetLabel>조항</FacetLabel>
-          <TermList>
-            {terms.map((term, index) => (
-              <Term key={term.id}>
-                <TermNumber>{index + 1}</TermNumber>
-                <TermText>
-                  {term.title && <TermTitle>{term.title}</TermTitle>}
-                  {term.isSecret && <SecretBadge>비밀</SecretBadge>}
-                  {term.excerpt}
-                </TermText>
-              </Term>
-            ))}
-          </TermList>
-          {hiddenTerms > 0 && (
-            <MoreLink to={detailPath}>조항 {treaty.termCount}개 전체 보기</MoreLink>
-          )}
-        </Facet>
-      )}
+      {/* 조약 내용 — 개요 + 조항 전문(읽기·더하기·고치기). 예전엔 조항 앞 3개 발췌뿐, 개요는 그리지 않았다 */}
+      <TreatyContent treatyId={treaty.id} summary={treaty.summary} onChanged={onChanged} />
     </TreatyRow>
   )
 }
@@ -576,69 +566,6 @@ const SignatoryPerson = styled.span`
 const MoreNote = styled.li`
   font-size: 12.5px;
   color: ${metaText};
-`
-
-const TermList = styled.ol`
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`
-
-const Term = styled.li`
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
-  gap: 6px;
-  font-size: 13.5px;
-  line-height: 1.6;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const TermNumber = styled.span`
-  font-variant-numeric: tabular-nums;
-  color: ${metaText};
-`
-
-const TermText = styled.span`
-  min-width: 0;
-  word-break: keep-all;
-`
-
-const TermTitle = styled.strong`
-  margin-right: 6px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const SecretBadge = styled.span`
-  margin-right: 6px;
-  padding: 0 5px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => theme.colors.error};
-  font-size: 11px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.error};
-`
-
-const MoreLink = styled(Link)`
-  grid-column: 2;
-  justify-self: start;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-  text-decoration: none;
-
-  &:hover,
-  &:focus-visible {
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-
-  @media (max-width: 560px) {
-    grid-column: 1;
-  }
 `
 
 const EmptyNote = styled.p`
