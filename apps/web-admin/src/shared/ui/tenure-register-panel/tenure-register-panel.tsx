@@ -119,14 +119,15 @@ import {
   PersonChipThumb,
 } from '@/shared/ui/register-form-layout'
 
+/** 입력칸 — 사건 등록 폼 S.Input(FormInput)과 같은 38px·13.5px (예전 41px·13px이라 한 단 굵어 보였다) */
 const Input = styled(BaseInput)`
-  height: 41px;
+  height: 38px;
   padding: 0 12px;
   border-radius: 8px;
   border: 1px solid ${({ theme }) => kitC(theme).border};
   background: ${({ theme }) => kitC(theme).content};
   color: ${({ theme }) => kitC(theme).textPrimary};
-  font-size: 13px;
+  font-size: 13.5px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 
   &::placeholder {
@@ -143,12 +144,12 @@ const Input = styled(BaseInput)`
 
 const Textarea = styled(BaseTextarea)`
   min-height: 88px;
-  padding: 10px 12px;
+  padding: 9px 12px;
   border-radius: 8px;
   border: 1px solid ${({ theme }) => kitC(theme).border};
   background: ${({ theme }) => kitC(theme).content};
   color: ${({ theme }) => kitC(theme).textPrimary};
-  font-size: 13px;
+  font-size: 13.5px;
   line-height: 1.55;
   resize: vertical;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -255,6 +256,11 @@ const TriggerWrap = styled.div`
 /** 선택 버튼 — 사건·인물·국가 폼 kitSelectTriggerCss(41px·r8·kitC)와 동일 규격 */
 const SelectTriggerButton = styled.button<{ $hasValue?: boolean; $clearable?: boolean }>`
   ${kitSelectTriggerCss}
+  /* 사건 등록 폼 입력칸(38px·13.5px)과 같은 키 — kit 기본 41px은 옛 FormInput 기준 */
+  min-height: 38px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+  font-size: 13.5px;
   display: flex;
   align-items: center;
   justify-content: space-between;

@@ -32,10 +32,22 @@ import {
   Required,
 } from './register-form-layout.styles'
 
-/** 라벨 열 폭 — 사건 등록 폼(FormRow)·인물 등록 폼(PersonFormLayoutWrap)과 동일한 200px */
-export const LABELED_ROW_LABEL_COL = 200
-/** 라벨 열과 입력 열 사이 — 사건 등록 폼과 동일한 24px */
+/*
+ * ⚠️ 값은 사건 등록 폼의 **현재** 규격을 옮겨 적은 것이다 — 원본은
+ *   pages/events/create/event-create.styles.ts (FormRow·FormLabel·FormField·Required·DateRangeLabel)
+ *   widgets/event-form/ui/basic-info-section.tsx (FormGroup·FormGroupTitle)
+ * shared가 pages/widgets를 import할 수 없어 공유가 아니라 사본이다. 2026-11-02 사건 폼 재디자인
+ * (라벨 200→148px·회색 13px 라벨·점+구분선 머리글·38px 칸) 때 이쪽이 안 따라가서 재위·재임 모달만
+ * '다른 느낌'이 됐다(11-05 재동기화). 사건 폼 규격을 바꾸면 여기도 같이 바꿀 것.
+ */
+
+/** 라벨 열 폭 — 사건 등록 폼 FormRow와 동일한 148px(≤1024px 132px) */
+export const LABELED_ROW_LABEL_COL = 148
+/** 라벨 열과 입력 열 사이 — 사건 등록 폼과 동일한 24px(≤1024px 18px) */
 export const LABELED_ROW_GAP = 24
+
+/** 라벨·소항목 라벨 색 — 사건 폼 getC(theme).text.secondary(테마 secondary보다 한 단계 옅다) */
+const eventLabelColor = (mode: string) => (mode === 'dark' ? '#a1a1aa' : '#64748b')
 
 /**
  * 섹션 묶음 — 사건 등록 폼(BasicInfoSection FormGroup)과 동일한 규격.
@@ -44,25 +56,43 @@ export const LABELED_ROW_GAP = 24
 export const FormGroup = styled.section`
   display: flex;
   flex-direction: column;
-  padding: 0 0 4px;
+  gap: 4px;
+  padding: 0 0 12px;
 
   & + & {
-    padding-top: 14px;
+    margin-top: 28px;
+    padding-top: 6px;
   }
 
   > ${FieldRow} {
-    padding: 8px 0;
+    padding: 14px 0;
     border-bottom: none;
   }
 `
 
-/** 섹션 묶음 머리글 — 사건·인물 등록 폼 장 머리글(15px/700)과 동일 */
+/** 섹션 묶음 머리글 — 사건 등록 폼과 동일: 앞에 점, 아래 가는 선(14px/700) */
 export const FormGroupTitle = styled.h3`
-  margin: 0 0 4px;
-  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0 0 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  font-size: 14px;
   font-weight: 700;
-  line-height: 1.3;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
   color: ${({ theme }) => theme.colors.text.primary};
+
+  &::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: ${({ theme }) => theme.colors.primary};
+    flex-shrink: 0;
+  }
 `
 
 export const LabeledRowsWrap = styled.div`
@@ -74,12 +104,12 @@ export const LabeledRowsWrap = styled.div`
     grid-template-columns: ${LABELED_ROW_LABEL_COL}px minmax(0, 1fr);
     gap: 8px ${LABELED_ROW_GAP}px;
     align-items: start;
-    padding: 12px 0;
+    padding: 14px 0;
     border-bottom: none;
 
     @media (max-width: 1024px) {
-      grid-template-columns: 160px minmax(0, 1fr);
-      column-gap: 16px;
+      grid-template-columns: 132px minmax(0, 1fr);
+      column-gap: 18px;
     }
 
     @media (max-width: 768px) {
@@ -97,11 +127,12 @@ export const LabeledRowsWrap = styled.div`
   }
   ${FieldLabel} {
     display: block;
-    padding-top: 10px;
-    font-size: 14px;
+    padding-top: 9px;
+    font-size: 13px;
     font-weight: 600;
-    line-height: 1.4;
-    color: ${({ theme }) => theme.colors.text.primary};
+    line-height: 1.45;
+    letter-spacing: -0.01em;
+    color: ${({ theme }) => eventLabelColor(theme.mode)};
 
     @media (max-width: 768px) {
       padding-top: 0;
@@ -110,8 +141,8 @@ export const LabeledRowsWrap = styled.div`
   ${FieldControl} {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    max-width: 680px;
+    gap: 10px;
+    max-width: none;
     width: 100%;
     min-width: 0;
   }
@@ -130,14 +161,14 @@ export const LabeledRowsWrap = styled.div`
     display: inline;
     width: auto;
     height: auto;
-    margin-left: 4px;
+    margin-left: 2px;
     border-radius: 0;
     background: none;
     vertical-align: baseline;
     overflow: visible;
     &::after {
       content: '*';
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 400;
       color: #ef4444;
     }
@@ -147,11 +178,11 @@ export const LabeledRowsWrap = styled.div`
 /** 선택(비필수) 라벨 옆 표기 — 사건 등록 모달의 KitOptionalTag 정본 사용 */
 export const OptionalTag = KitOptionalTag
 
-/** 한 행 안의 2~4열 소항목(국가·기간·대수·기수·왕조 서수 등) — 사건 폼 DateRangeGrid(gap 16px) 규격 */
+/** 한 행 안의 2~4열 소항목(국가·기간·대수·기수·왕조 서수 등) — 사건 폼 DateRangeGrid(gap 18px) 규격 */
 export const SubFieldPair = styled.div<{ $cols?: 2 | 3 | 4 }>`
   display: grid;
   grid-template-columns: repeat(${({ $cols = 2 }) => $cols}, minmax(0, 1fr));
-  gap: 16px;
+  gap: 18px;
   @media (max-width: 560px) {
     grid-template-columns: 1fr;
     gap: 12px;
@@ -163,14 +194,12 @@ export const SubField = styled.div`
   gap: 6px;
   min-width: 0;
 `
-/** 소항목 라벨 — 사건 폼 DateRangeLabel(KitGroupLabel: 11px/700)과 동일 */
+/** 소항목 라벨('즉위일'·'왕호' 등) — 사건 폼 DateRangeLabel('시작'·'종료': 11.5px/700, 대문자·자간 없음) */
 export const SubFieldLabel = styled.label`
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 2px;
+  color: ${({ theme }) => eventLabelColor(theme.mode)};
+  letter-spacing: -0.01em;
 `
 
 /** 방식·사유 칩 — 사건 등록 폼 KitChipGroup / KitChoiceChip(36px 알약 + 안쪽 링) 정본 사용 */
