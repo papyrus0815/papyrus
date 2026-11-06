@@ -187,8 +187,8 @@ export function ParentBlock({
               <NetStyles.TextBtn type="button" onClick={onOpenParentModal} aria-label="상위 사건 변경">
                 변경
               </NetStyles.TextBtn>
-              <NetStyles.TextBtn type="button" onClick={onReleaseParent} aria-label="상위 사건 해제">
-                해제
+              <NetStyles.TextBtn type="button" onClick={onReleaseParent} aria-label="상위 사건에서 빼기">
+                상위에서 빼기
               </NetStyles.TextBtn>
               {!hasReason && !reasonEditing && (
                 <NetStyles.TextBtn

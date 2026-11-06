@@ -857,6 +857,26 @@ function EventDetailContent({
   const [trashBusy, setTrashBusy] = useState(false)
   const deleteToTrash = useDeleteEventToTrash()
   const trashTarget = { id: event.id, title: event.title, parentEventId: event.parentEventId ?? null }
+  /**
+   * 상위에서 빼기(종속 해제) — ⋯ 메뉴. 확인 뒤 parentEventId: null(되돌리기 토스트 포함).
+   * 추가 상위가 있으면 서버가 409(추가 상위는 주 상위 전제)라 대표 승격을 고르는 연관 탭 소속 줄로 보낸다.
+   */
+  const detachFromParent = async () => {
+    const parent = event.parentEvent
+    if (!parent) return
+    if ((event.extraParents?.length ?? 0) > 0) {
+      setActiveTab('links')
+      notify.info('추가 상위가 있어 연관 탭 맨 위 소속 줄에서 대표 상위를 정한 뒤 빼세요')
+      return
+    }
+    const ok = await confirm({
+      title: '상위 사건에서 빼기',
+      message: `‘${event.title}’을(를) ‘${parent.title}’의 하위에서 뺄까요?\n이 사건은 최상위 사건이 되고, ‘${parent.title}’은(는) 그대로 남습니다.`,
+      confirmLabel: '빼기',
+    })
+    if (!ok) return
+    onPatch({ parentEventId: null } as unknown as UpdateEventDto, { savedLabel: `‘${parent.title}’에서 뺌` })
+  }
   const confirmDelete = async (withChildren: boolean) => {
     setTrashBusy(true)
     const ok = await deleteToTrash(trashTarget, withChildren)
@@ -932,7 +952,15 @@ function EventDetailContent({
                 isTrashed && (event.eventImages?.length ?? 0) === 0 ? undefined : () => setActiveTab('media')
               }
               onOpenKindGuide={() => setKindGuideOpen(true)}
-              menu={isTrashed ? undefined : <EventActionsMenu onDelete={() => setDeleteOpen(true)} />}
+              menu={
+                isTrashed ? undefined : (
+                  <EventActionsMenu
+                    onDelete={() => setDeleteOpen(true)}
+                    parentTitle={event.parentEvent?.title ?? null}
+                    onDetachFromParent={() => void detachFromParent()}
+                  />
+                )
+              }
               originalTitleOpen={originalTitleOpen}
               onOriginalTitleClose={() => setOriginalTitleOpen(false)}
             />

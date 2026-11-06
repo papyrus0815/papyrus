@@ -1,16 +1,26 @@
 /**
- * 사건 상세 히어로 윗줄 끝의 ⋯ — 사건 단위 동작(지금은 '휴지통으로 옮기기').
+ * 사건 상세 히어로 윗줄 끝의 ⋯ — 사건 단위 동작('상위에서 빼기' · '휴지통으로 옮기기').
  *
  * 삭제가 사건 목록 드로어에만 있어, 상세를 보다가 지우려면 목록으로 돌아가 그 사건을 다시 찾아야 했다.
+ * 상위에서 빼기(종속 해제)는 연관 탭 소속 줄에 마우스를 올려야 보이는 '해제' 하나뿐이라 "그런 기능이 없다"로 읽혔다.
  */
 import { useEffect, useRef, useState } from 'react'
 
-import { FiMoreHorizontal, FiTrash2 } from 'react-icons/fi'
+import { FiCornerLeftUp, FiMoreHorizontal, FiTrash2 } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { ledgerAccent, ledgerBackground, ledgerHairlineStrong, RADIUS } from '@/entities/event/ui/ledger-tokens'
 
-export function EventActionsMenu({ onDelete }: { onDelete: () => void }) {
+export function EventActionsMenu({
+  onDelete,
+  parentTitle,
+  onDetachFromParent,
+}: {
+  onDelete: () => void
+  /** 상위 사건이 있으면 그 제목 — '‘폴란드 분할’에서 빼기' */
+  parentTitle?: string | null
+  onDetachFromParent?: () => void
+}) {
   const [open, setOpen] = useState(false)
   const hostRef = useRef<HTMLSpanElement>(null)
 
@@ -45,6 +55,20 @@ export function EventActionsMenu({ onDelete }: { onDelete: () => void }) {
       </Trigger>
       {open && (
         <Menu role="menu">
+          {parentTitle && onDetachFromParent && (
+            <MenuItem
+              type="button"
+              role="menuitem"
+              title="이 사건을 상위 사건의 하위에서 빼 최상위 사건으로 둡니다"
+              onClick={() => {
+                setOpen(false)
+                onDetachFromParent()
+              }}
+            >
+              <FiCornerLeftUp aria-hidden />
+              <MenuText>‘{parentTitle}’에서 빼기</MenuText>
+            </MenuItem>
+          )}
           <MenuItem
             type="button"
             role="menuitem"
@@ -62,6 +86,15 @@ export function EventActionsMenu({ onDelete }: { onDelete: () => void }) {
     </Host>
   )
 }
+
+/** 긴 상위 제목은 한 줄 말줄임(메뉴 폭 안에서) */
+const MenuText = styled.span`
+  min-width: 0;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
 
 const Host = styled.span`
   position: relative;

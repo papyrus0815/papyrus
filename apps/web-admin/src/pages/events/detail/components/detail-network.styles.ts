@@ -919,16 +919,15 @@ export const MembershipRow = styled.div<{ $reveal?: boolean }>`
     color: ${({ theme }) => theme.colors.text.primary};
   }
 
+  /*
+   * 편집 버튼은 늘 보이되 흐리게 — 숨겨 두었더니(마우스를 올려야 보임) 상위에서 빼기가 '없는 기능'으로 읽혔다.
+   * 행에 들어오면 또렷하게.
+   */
   ${TextBtn} {
-    opacity: 0;
+    opacity: 0.6;
   }
   &:hover ${TextBtn}, &:focus-within ${TextBtn}, ${TextBtn}:focus-visible {
     opacity: 1;
-  }
-  @media (hover: none) {
-    ${TextBtn} {
-      opacity: 0.55;
-    }
   }
 `
 
