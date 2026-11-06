@@ -2,7 +2,7 @@
  * 수반(재임) 등록/수정 — 우측 사이드 패널.
  * 역대 수반 섹션과 동일: 국가/직책은 트리거 버튼 → 모달 선택.
  */
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useCallback, useState, useEffect, useMemo, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiCheck, FiChevronDown, FiClock, FiPlus, FiSearch, FiUser, FiX } from 'react-icons/fi'
 import { CabinetEventAttachModal } from '@/widgets/country/country-detail/ui/cabinet-event-attach-modal'
@@ -36,6 +36,23 @@ import {
   PersonRegisterModalCancelBtn,
 } from '@/shared/ui/register-modal-shell/register-modal-shell'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
+import { confirm } from '@/shared/ui/confirm-dialog'
+import {
+  FooterActions,
+  FooterHint,
+  FooterJumpArrow,
+  FooterJumpButton,
+  FooterKbd,
+  FooterMissingCount,
+  FooterReadyBadge,
+  FooterReadyGroup,
+  FooterShortcutItem,
+  HeaderActionsBar,
+  HeaderResetBtn,
+  SectionJumpBtn,
+  SectionJumpNav,
+  useModalSubmitShortcut,
+} from '@/shared/ui/register-modal-shell/register-modal-chrome'
 import { notify } from '@/shared/ui/toast'
 import { InlineDateField } from '@/shared/ui/person-register-modal/sections/inline-date-field'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
@@ -100,8 +117,6 @@ import {
   SubFieldLabel,
   PersonChip,
   PersonChipThumb,
-  FooterMissingHint,
-  objectParticle,
 } from '@/shared/ui/register-form-layout'
 
 const Input = styled(BaseInput)`
@@ -487,9 +502,9 @@ const CheckboxLabelRow = styled.div`
   }
 `
 
-/** 스티키 푸터 좌측 삭제 — margin-right:auto로 취소·저장을 우측에 모음(재위 모달과 동일 패턴) */
+/** 스티키 푸터 좌측 삭제 — 옆의 상태줄(FooterHint)과 한 묶음, 취소·저장은 FooterActions가 우측으로 민다 */
 const FooterDeleteBtn = styled.button`
-  margin-right: auto;
+  flex-shrink: 0;
   padding: 10px 14px;
   font-size: 13px;
   font-weight: 600;
@@ -1118,6 +1133,23 @@ export interface TenureRegisterPanelProps {
 
 const FORM_ID = 'tenure-register-form'
 
+/** 헤더 섹션 이동 — 사건 등록 모달의 '기본 정보 · 참여 주체 · 맥락' 알약과 같은 문법 */
+const TENURE_SECTION_LINKS = [
+  { id: 'tenure-form-group-basic', label: '기본 정보' },
+  { id: 'tenure-form-group-link', label: '경위 및 연결' },
+] as const
+
+/** 푸터 '필수 입력' 버튼이 데려갈 칸 */
+const TENURE_FIELD_IDS = {
+  country: 'tenure-field-country',
+  position: 'tenure-field-position',
+  start: 'tenure-field-start',
+} as const
+
+const CREATE_LEAVE_MESSAGE = '입력한 내용이 저장되지 않습니다. 창을 닫으시겠습니까?'
+const EDIT_LEAVE_MESSAGE = '저장하지 않은 변경 사항이 있습니다. 닫으시겠습니까?'
+const RESET_CONFIRM_MESSAGE = '입력한 내용을 모두 지우고 처음 상태로 되돌리시겠습니까?'
+
 export function TenureRegisterPanel({
   personId,
   open,
@@ -1139,6 +1171,22 @@ export function TenureRegisterPanel({
 }: TenureRegisterPanelProps) {
   const queryClient = useQueryClient()
   const isEdit = !!tenureId
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  /** '등록 후 계속'으로 저장 중인가 — 저장 성공 시 창을 닫지 않고 다음 기록으로 잇는다 */
+  const continueAfterSaveRef = useRef(false)
+  /**
+   * '등록 후 계속'으로 저장한 기록이 있는데 호스트의 onSuccess를 아직 안 불렀는가.
+   * 호스트 대부분이 onSuccess에서 패널을 닫으므로 저장 직후엔 미루고, 창을 최종으로 닫을 때 한 번 부른다.
+   */
+  const pendingSuccessRef = useRef(false)
+  /**
+   * 미저장 변경 판정의 기준선 — 사용자가 폼을 처음 건드리는 순간(캡처 단계라 값이 바뀌기 직전)의
+   * 스냅숏. 열 때 비동기로 들어오는 기본값(국가 프리필·기본 칭호 '국왕'·수정 하이드레이트)은
+   * 그 전에 반영되므로 '변경'으로 세지 않는다. null이면 아직 아무것도 안 건드림.
+   */
+  const dirtyBaselineRef = useRef<string | null>(null)
+  const latestSnapshotRef = useRef('')
+  const [activeSectionId, setActiveSectionId] = useState<string>(TENURE_SECTION_LINKS[0].id)
 
   const [monarchicalMode, setMonarchicalMode] = useState(defaultMonarchical)
   const [countryId, setCountryId] = useState('')
@@ -1662,7 +1710,42 @@ export function TenureRegisterPanel({
     setCabinetId(null)
   }
 
+  /**
+   * '등록 후 계속' — 같은 인물의 다음 기록. 국가·직위·행정부는 남기고(분할 재위는 칭호가 같고
+   * 정체만, 연속 관직은 국가가 같고 직책만 바뀌는 게 대부분) 기간·왕호·서수·경위·비고는 비운다.
+   */
+  const prepareNextRecord = () => {
+    setStart(emptyPartialDateParts())
+    setEnd(emptyPartialDateParts())
+    setDatePickerSide(null)
+    setRegnalName('')
+    setLinkedAccessionEvent(null)
+    setOrdinalNumber('')
+    setSubTermNumber('')
+    setDynastyOrdinal('')
+    setAppointmentMethod('')
+    setAppointmentDetail('')
+    setEndReason('')
+    setEndReasonDetail('')
+    setNotes('')
+    setShowOnEvents(true)
+    dirtyBaselineRef.current = null
+    setActiveSectionId(TENURE_SECTION_LINKS[0].id)
+    scrollContainerRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' })
+    // 칭호·국가는 남았으니 바로 즉위일부터 — 렌더가 끝난 뒤에 포커스
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById(TENURE_FIELD_IDS.start)
+        ?.querySelector<HTMLElement>('input, button')
+        ?.focus()
+    })
+  }
+
   useEffect(() => {
+    dirtyBaselineRef.current = null
+    continueAfterSaveRef.current = false
+    pendingSuccessRef.current = false
+    setActiveSectionId(TENURE_SECTION_LINKS[0].id)
     if (!open) {
       resetForm()
       setPersonImageError(false)
@@ -1785,6 +1868,8 @@ export function TenureRegisterPanel({
   useEffect(() => {
     if (!open || !editingTenure) return
     const t = editingTenure as any
+    // 하이드레이트 전에 잡힌 기준선은 빈 폼이다 — 버려야 불러온 값이 '변경'으로 오인되지 않는다
+    dirtyBaselineRef.current = null
     setMonarchicalMode(t.isMonarchical === true)
     setCountryId(t.countryId ?? t.country?.id ?? '')
     setHistoricalCountryId(t.historicalCountryId ?? t.historicalCountry?.id ?? null)
@@ -1926,10 +2011,18 @@ export function TenureRegisterPanel({
         } as CreateGovernmentPositionTenureDto)
         notify.success(isReign ? '재위 기록이 추가되었습니다.' : '재임 기록이 추가되었습니다.')
       }
-      onClose()
       invalidateTenureQueries(queryClient, { personId })
+      if (continueAfterSaveRef.current && !isEdit) {
+        continueAfterSaveRef.current = false
+        pendingSuccessRef.current = true
+        prepareNextRecord()
+        return
+      }
+      onClose()
+      pendingSuccessRef.current = false
       onSuccess?.()
     } catch (err: any) {
+      continueAfterSaveRef.current = false
       notify.error(err?.message || '저장에 실패했습니다.')
     } finally {
       setSubmitting(false)
@@ -2160,13 +2253,15 @@ export function TenureRegisterPanel({
     }
   }, [personDetail])
 
-  /** 등록 버튼이 잠긴 이유 — 상단 '필수 항목' 띠 대신 버튼 옆 한 줄로(빨간 점과 중복되던 띠 제거) */
+  /**
+   * 등록 버튼이 잠긴 이유 — 푸터에서 누르면 그 칸으로 데려간다(사건 등록 모달의 '필수 입력: …' 버튼).
+   * 순서 = 화면 위→아래 순서라 '첫 번째'가 곧 가장 위의 빈칸이다.
+   */
   const missingRequired = [
-    !hasCountry && '국가',
-    !hasPosition && '직책',
-    !hasStartDate && (isReign ? '즉위일' : '취임일'),
-  ].filter(Boolean) as string[]
-  const missingParticle = objectParticle(missingRequired[missingRequired.length - 1] ?? '')
+    !hasCountry && { label: '국가', fieldId: TENURE_FIELD_IDS.country },
+    !hasPosition && { label: isReign ? '직위·칭호' : '직책', fieldId: TENURE_FIELD_IDS.position },
+    !hasStartDate && { label: isReign ? '즉위일' : '취임일', fieldId: TENURE_FIELD_IDS.start },
+  ].filter(Boolean) as Array<{ label: string; fieldId: string }>
 
   /** 행정부 탭에서 "각료 추가"로 열렸을 때 → 각료 등록 문구 사용 (수반 아님) */
   const isMinisterFlow = !isEdit && initialCabinetId != null
@@ -2189,19 +2284,161 @@ export function TenureRegisterPanel({
     (!isHeadPositionType && (countryId || historicalCountryId) && cabinetOptions.length > 0) ||
     Boolean(cabinetId || initialCabinetId)
 
+  /** 저장 대상 값 전부 — 기준선과 다르면 미저장 변경. UI 상태(드롭다운 열림 등)는 넣지 않는다. */
+  const formSnapshot = JSON.stringify([
+    countryId,
+    historicalCountryId,
+    positionDefinitionId,
+    presetPositionType,
+    title,
+    titleEn,
+    start,
+    end,
+    regnalName,
+    linkedAccessionEvent?.id ?? null,
+    ordinalNumber,
+    subTermNumber,
+    dynastyOrdinal,
+    appointmentMethod,
+    appointmentDetail,
+    endReason,
+    endReasonDetail,
+    notes,
+    showOnEvents,
+    cabinetId,
+  ])
+  latestSnapshotRef.current = formSnapshot
+  const isDirty = dirtyBaselineRef.current !== null && dirtyBaselineRef.current !== formSnapshot
+
+  /** 첫 조작 직전 값을 기준선으로 — 캡처 단계 핸들러라 아직 바뀌기 전 렌더의 스냅숏이다 */
+  const captureDirtyBaseline = () => {
+    if (dirtyBaselineRef.current !== null || isLoadingEdit) return
+    dirtyBaselineRef.current = latestSnapshotRef.current
+  }
+
+  /** 닫기(Esc·오버레이·X·취소 공통) — 미저장 변경이 있으면 확인부터. '등록 후 계속' 저장분은 여기서 통지 */
+  const requestClose = async () => {
+    if (submitting) return
+    if (
+      isDirty &&
+      !(await confirm({
+        title: '확인',
+        message: isEdit ? EDIT_LEAVE_MESSAGE : CREATE_LEAVE_MESSAGE,
+      }))
+    ) {
+      return
+    }
+    dirtyBaselineRef.current = null
+    const hadPendingSuccess = pendingSuccessRef.current
+    pendingSuccessRef.current = false
+    onClose()
+    if (hadPendingSuccess) onSuccess?.()
+  }
+
+  const handleResetForm = async () => {
+    if (submitting) return
+    if (isDirty && !(await confirm({ title: '초기화 확인', message: RESET_CONFIRM_MESSAGE }))) {
+      return
+    }
+    resetForm()
+    dirtyBaselineRef.current = null
+    setActiveSectionId(TENURE_SECTION_LINKS[0].id)
+    scrollContainerRef.current?.scrollTo?.({ top: 0, behavior: 'smooth' })
+  }
+
+  const requestSubmit = useCallback(
+    ({ continueAfterSave }: { continueAfterSave: boolean }) => {
+      continueAfterSaveRef.current = continueAfterSave && !isEdit
+      const form = document.getElementById(FORM_ID) as HTMLFormElement | null
+      form?.requestSubmit()
+    },
+    [isEdit],
+  )
+
+  useModalSubmitShortcut({
+    enabled: open && !submitDisabled && !deleteConfirmOpen,
+    scrollContainerRef,
+    onSubmit: requestSubmit,
+  })
+
+  const focusField = (fieldId: string) => {
+    const container = document.getElementById(fieldId)
+    const target =
+      container?.matches('button, input')
+        ? container
+        : container?.querySelector<HTMLElement>('input, button')
+    target?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+    ;(target as HTMLElement | null | undefined)?.focus()
+  }
+
+  const scrollToSection = (sectionId: string) => {
+    setActiveSectionId(sectionId)
+    document.getElementById(sectionId)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  }
+
+  const handleFormScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    const threshold = event.currentTarget.getBoundingClientRect().top + 96
+    let currentId: string = TENURE_SECTION_LINKS[0].id
+    TENURE_SECTION_LINKS.forEach((item) => {
+      const element = document.getElementById(item.id)
+      if (element && element.getBoundingClientRect().top <= threshold) currentId = item.id
+    })
+    setActiveSectionId((previous) => (previous === currentId ? previous : currentId))
+  }
+
   return (
     <>
       <RegisterModal
         isOpen={open}
-        onClose={onClose}
+        onClose={() => {
+          void requestClose()
+        }}
         title={panelTitle}
+        headerActions={
+          <HeaderActionsBar>
+            <SectionJumpNav aria-label="폼 섹션 이동">
+              {TENURE_SECTION_LINKS.map((item) => {
+                const isActive = activeSectionId === item.id
+                return (
+                  <SectionJumpBtn
+                    key={item.id}
+                    type="button"
+                    $active={isActive}
+                    aria-current={isActive ? 'location' : undefined}
+                    onClick={() => scrollToSection(item.id)}
+                  >
+                    {item.label}
+                  </SectionJumpBtn>
+                )
+              })}
+            </SectionJumpNav>
+            {!isEdit && isDirty && !submitting && (
+              <HeaderResetBtn
+                type="button"
+                aria-label="작성 내용 초기화"
+                title="입력한 내용을 모두 비우고 처음 상태로 되돌립니다"
+                onClick={() => {
+                  void handleResetForm()
+                }}
+              >
+                초기화
+              </HeaderResetBtn>
+            )}
+          </HeaderActionsBar>
+        }
         maxWidth="min(1040px, 96vw)"
         minHeight="min(680px, 86vh)"
         fullBleedOnMobile
         closeOnEsc={!submitting}
         closeOnOverlayClick={!submitting}
       >
-        <PersonRegisterModalFormScroll>
+        <PersonRegisterModalFormScroll
+          ref={scrollContainerRef}
+          onScroll={handleFormScroll}
+          onChangeCapture={captureDirtyBaseline}
+          onClickCapture={captureDirtyBaseline}
+          onKeyDownCapture={captureDirtyBaseline}
+        >
           {submitting && (
             <KitBusyBar role="status" aria-live="polite">
               {isEdit
@@ -2353,6 +2590,7 @@ export function TenureRegisterPanel({
                         </CountryParticipantCard>
                       ) : (
                         <SelectTriggerButton
+                          id={TENURE_FIELD_IDS.country}
                           type="button"
                           onClick={() => setCountryModalOpen(true)}
                           $hasValue={false}
@@ -2414,6 +2652,7 @@ export function TenureRegisterPanel({
                       <PositionSelectWrap ref={positionDropdownRef}>
                         <TriggerWrap>
                           <SelectTriggerButton
+                            id={TENURE_FIELD_IDS.position}
                             type="button"
                             aria-haspopup="listbox"
                             aria-expanded={positionModalOpen}
@@ -2761,7 +3000,7 @@ export function TenureRegisterPanel({
                     </FieldLabel>
                     <FieldControl>
                       <SubFieldPair>
-                        <SubField>
+                        <SubField id={TENURE_FIELD_IDS.start}>
                           <SubFieldLabel>{isReign ? '즉위일' : '취임일'}</SubFieldLabel>
                           <InlineDateField
                             appearance="field"
@@ -3103,25 +3342,73 @@ export function TenureRegisterPanel({
               삭제
             </FooterDeleteBtn>
           )}
-          {missingRequired.length > 0 && !submitting && (
-            <FooterMissingHint role="status">
-              {missingRequired.join('·')}{missingParticle} 채우면 등록할 수 있습니다
-            </FooterMissingHint>
+          {!submitting && !isLoadingEdit && (
+            <FooterHint $warning={missingRequired.length > 0}>
+              {missingRequired.length > 0 ? (
+                <FooterJumpButton
+                  type="button"
+                  onClick={() => focusField(missingRequired[0].fieldId)}
+                  title="클릭하면 해당 필수 입력 칸으로 이동합니다"
+                >
+                  <span>필수 입력: {missingRequired[0].label}</span>
+                  {missingRequired.length > 1 && (
+                    <FooterMissingCount>외 {missingRequired.length - 1}건</FooterMissingCount>
+                  )}
+                  <FooterJumpArrow aria-hidden="true">→</FooterJumpArrow>
+                </FooterJumpButton>
+              ) : (
+                <FooterReadyGroup>
+                  <FooterReadyBadge>{isEdit ? '수정 준비 완료' : '등록 준비 완료'}</FooterReadyBadge>
+                  <FooterShortcutItem>
+                    <FooterKbd>⌘↵</FooterKbd>
+                    <span>저장</span>
+                  </FooterShortcutItem>
+                  {!isEdit && (
+                    <FooterShortcutItem>
+                      <FooterKbd>⇧⌘↵</FooterKbd>
+                      <span>등록 후 계속</span>
+                    </FooterShortcutItem>
+                  )}
+                </FooterReadyGroup>
+              )}
+            </FooterHint>
           )}
-          <PersonRegisterModalCancelBtn
-            type="button"
-            onClick={onClose}
-            disabled={submitting}
-          >
-            취소
-          </PersonRegisterModalCancelBtn>
-          <PersonRegisterModalPrimaryBtn
-            type="submit"
-            form={FORM_ID}
-            disabled={submitDisabled}
-          >
-            {submitting ? '처리 중…' : submitLabelText}
-          </PersonRegisterModalPrimaryBtn>
+          <FooterActions>
+            <PersonRegisterModalCancelBtn
+              type="button"
+              onClick={() => {
+                void requestClose()
+              }}
+              disabled={submitting}
+            >
+              {pendingSuccessRef.current ? '닫기' : '취소'}
+            </PersonRegisterModalCancelBtn>
+            {!isEdit && (
+              <PersonRegisterModalCancelBtn
+                type="button"
+                disabled={submitDisabled}
+                title={`저장 후 창을 닫지 않고 같은 인물의 다음 ${recordNoun} 기록을 이어 등록합니다 — 국가·직위는 남기고 기간·경위는 비웁니다 (단축키: ⌘/Ctrl + Shift + Enter)`}
+                onClick={() => requestSubmit({ continueAfterSave: true })}
+              >
+                등록 후 계속
+              </PersonRegisterModalCancelBtn>
+            )}
+            <PersonRegisterModalPrimaryBtn
+              type="submit"
+              form={FORM_ID}
+              disabled={submitDisabled}
+              title={
+                missingRequired.length > 0
+                  ? `${missingRequired.map((item) => item.label).join('·')} 입력 필요`
+                  : '단축키: ⌘/Ctrl + Enter'
+              }
+              onClick={() => {
+                continueAfterSaveRef.current = false
+              }}
+            >
+              {submitting ? '처리 중…' : submitLabelText}
+            </PersonRegisterModalPrimaryBtn>
+          </FooterActions>
         </PersonRegisterModalStickyFooter>
       </RegisterModal>
 

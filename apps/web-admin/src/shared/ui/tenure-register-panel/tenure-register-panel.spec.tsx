@@ -137,22 +137,29 @@ jest.mock('@/shared/ui/country-picker', () => ({
   CountryPicker: () => null,
 }))
 
+const mockConfirm = jest.fn()
+jest.mock('@/shared/ui/confirm-dialog', () => ({
+  confirm: (...args: unknown[]) => mockConfirm(...args),
+}))
+
 function renderPanel(props: Partial<React.ComponentProps<typeof TenureRegisterPanel>> = {}) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   const onClose = jest.fn()
+  const onSuccess = jest.fn()
   renderWithTheme(
     <QueryClientProvider client={queryClient}>
       <TenureRegisterPanel
         personId="person-1"
         open={true}
         onClose={onClose}
+        onSuccess={onSuccess}
         {...props}
       />
     </QueryClientProvider>,
   )
-  return { onClose }
+  return { onClose, onSuccess }
 }
 
 describe('TenureRegisterPanel 사건등록 모달(EventRegisterModal) 레이아웃 정렬 & 통합 국가 선택 UX', () => {
@@ -161,7 +168,10 @@ describe('TenureRegisterPanel 사건등록 모달(EventRegisterModal) 레이아�
 
     expect(screen.getByRole('heading', { name: '기본 정보' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '경위 및 연결' })).toBeInTheDocument()
-    expect(screen.getByRole('radiogroup', { name: '기록 구분' })).toBeInTheDocument()
+    // '관직 재임/군주 재위' 구분 토글은 1f1768dd5에서 제거 — 대신 헤더에 섹션 이동 알약
+    const sectionNav = screen.getByRole('navigation', { name: '폼 섹션 이동' })
+    expect(sectionNav).toHaveTextContent('기본 정보')
+    expect(sectionNav).toHaveTextContent('경위 및 연결')
     expect(
       screen.getByRole('button', { name: /국가 선택 \(현대 국가 · 역사적 국가\)/ }),
     ).toBeInTheDocument()
@@ -227,5 +237,78 @@ describe('TenureRegisterPanel 사건등록 모달(EventRegisterModal) 레이아�
     // 선택 후 드롭다운이 닫히고 트리거에 '영의정' 표시
     expect(screen.queryByRole('textbox', { name: '직책명 검색' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /영의정/ })).toBeInTheDocument()
+  })
+})
+
+describe('TenureRegisterPanel 셸 — 사건 등록 모달과 같은 닫기 확인·필수 입력 이동·등록 후 계속', () => {
+  beforeEach(() => {
+    mockConfirm.mockReset()
+    jest.requireMock('@/shared/api/person-career').personCareerApi.addGovernmentPositionTenure.mockClear()
+  })
+
+  it('아무것도 안 건드렸으면 취소가 확인 없이 바로 닫는다', async () => {
+    const { onClose } = renderPanel()
+    fireEvent.click(screen.getByRole('button', { name: '취소' }))
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
+    expect(mockConfirm).not.toHaveBeenCalled()
+  })
+
+  it('입력한 뒤 닫으려 하면 확인을 받고, 거절하면 열린 채로 남는다', async () => {
+    mockConfirm.mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+    const { onClose } = renderPanel()
+    fireEvent.change(screen.getByPlaceholderText(/재임 관련 특이사항/), {
+      target: { value: '임진왜란 중 삼도수군통제사' },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '취소' }))
+    await waitFor(() => expect(mockConfirm).toHaveBeenCalledTimes(1))
+    expect(onClose).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: '취소' }))
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
+  })
+
+  it('푸터의 필수 입력 버튼이 가장 위의 빈칸으로 데려가고 남은 개수를 알린다', async () => {
+    renderPanel()
+    const jump = await screen.findByRole('button', { name: /필수 입력: 국가/ })
+    expect(jump).toHaveTextContent('외 2건')
+    fireEvent.click(jump)
+    expect(
+      screen.getByRole('button', { name: /국가 선택 \(현대 국가 · 역사적 국가\)/ }),
+    ).toHaveFocus()
+  })
+
+  it('등록 후 계속 — 저장하고 창을 남기며 국가·직위는 두고 기간만 비운다, 닫을 때 onSuccess', async () => {
+    const { onClose, onSuccess } = renderPanel()
+    const api = jest.requireMock('@/shared/api/person-career').personCareerApi
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '대한민국' })).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: '대한민국' }))
+    fireEvent.click(screen.getByRole('button', { name: /직책 선택/ }))
+    fireEvent.click(screen.getByRole('option', { name: /대통령/ }))
+    const startYear = screen.getAllByRole('textbox', { name: '연도' })[0]
+    fireEvent.change(startYear, { target: { value: '1592' } })
+
+    fireEvent.click(screen.getByRole('button', { name: '등록 후 계속' }))
+    await waitFor(() => expect(api.addGovernmentPositionTenure).toHaveBeenCalledTimes(1))
+    await waitFor(() => {
+      expect(screen.getAllByRole('textbox', { name: '연도' })[0]).toHaveValue('')
+    })
+    expect(onClose).not.toHaveBeenCalled()
+    expect(onSuccess).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: /^대한민국\s*현대 국가/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /대통령/ })).toBeInTheDocument()
+
+    // 저장분이 있으니 '취소'가 아니라 '닫기' — 닫으면 그제야 호스트에 성공을 알린다
+    const footerClose = screen
+      .getAllByRole('button', { name: '닫기' })
+      .find((button) => button.textContent === '닫기')
+    expect(footerClose).toBeDefined()
+    fireEvent.click(footerClose as HTMLElement)
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
+    expect(onSuccess).toHaveBeenCalledTimes(1)
+    expect(mockConfirm).not.toHaveBeenCalled()
   })
 })
