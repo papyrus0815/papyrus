@@ -42,6 +42,14 @@ const TRANSITIONS: {
   { predecessor: '폴란드 제2공화국', successor: '소비에트 사회주의 공화국 연방', eventType: TransitionEventType.CONQUEST, transitionScope: TransitionScope.STATE_SUCCESSION },
   // 전후 사회주의 국가 수립 (1944 루블린 위원회)
   { predecessor: '폴란드 제2공화국', successor: '폴란드 인민공화국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 1939-10 점령 행정 구역 설치 · 1945-01 소련군 진주로 소멸
+  { predecessor: '폴란드 제2공화국', successor: '폴란드 총독부', eventType: TransitionEventType.CONQUEST, transitionScope: TransitionScope.STATE_SUCCESSION },
+  { predecessor: '폴란드 총독부', successor: '폴란드 인민공화국', eventType: TransitionEventType.DISSOLVED, transitionScope: TransitionScope.STATE_SUCCESSION },
+  // 1939-09 정부 국외 이전 — 같은 국가의 법통(정권 단위)
+  { predecessor: '폴란드 제2공화국', successor: '폴란드 망명정부', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.REGIME_CHANGE },
+  // 1989-12 체제 전환 · 1990-12 망명정부가 대통령 휘장을 넘기며 법통 합류
+  { predecessor: '폴란드 인민공화국', successor: '폴란드 제3공화국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.REGIME_CHANGE },
+  { predecessor: '폴란드 망명정부', successor: '폴란드 제3공화국', eventType: TransitionEventType.SUCCESSION, transitionScope: TransitionScope.REGIME_CHANGE },
 ]
 
 // ── 소속 관계 정의 ────────────────────────────────────────────────────────────
@@ -65,6 +73,8 @@ const MEMBERSHIPS: {
   { parent: '러시아 제국', member: '크라쿠프 자유시', role: HistoricalMembershipRole.PROTECTORATE },
   { parent: '오스트리아 제국', member: '크라쿠프 자유시', role: HistoricalMembershipRole.PROTECTORATE },
   { parent: '프로이센 왕국', member: '크라쿠프 자유시', role: HistoricalMembershipRole.PROTECTORATE },
+  // 총독부 = 나치 독일 점령 행정체(우크라이나 제국판무관부 전례)
+  { parent: '나치 독일 (제3제국)', member: '폴란드 총독부', role: HistoricalMembershipRole.PROTECTORATE },
 ]
 
 // ── 수평 관계(동군연합) 정의 ──────────────────────────────────────────────────

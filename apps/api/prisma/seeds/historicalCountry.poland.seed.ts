@@ -7,6 +7,7 @@ const ACCOUNT_ID = '6af53fe7-d02b-4c42-b86c-f32800897b32'
 interface HistoricalCountryEntry {
   name: string
   enName?: string
+  nameOrigin?: string
   description?: string
   startEra?: 'BC' | 'AD'
   startYear?: number
@@ -155,6 +156,62 @@ const ENTRIES: HistoricalCountryEntry[] = [
     latitude: 52.23, longitude: 21.01,
     linkToIsoCodes: ['PL'],
   },
+
+  // ── 1939~1945 점령기 · 망명 정부 · 1989~ ─────────────────────────
+  // 1939~1944가 비어 있어 점령기 인물(총독 프랑크)과 망명 내각(시코르스키·미코와이치크)의
+  // 재임을 걸 정체가 없었다(2026-11-08). 망명 정부는 인민공화국과 1944~1990 겹치는 게 사실 그대로다.
+  {
+    name: '폴란드 총독부',
+    enName: 'General Government',
+    nameOrigin:
+      '독일어 Generalgouvernement(총독령)의 번역. 1940년 7월까지 정식 명칭은 "점령 폴란드 지역 총독부"였다.',
+    description:
+      '1939년 10월 26일 나치 독일이 점령한 폴란드 중부·남부 가운데 제국에 직접 병합하지 않은 지역에 세운 점령 행정 구역. ' +
+      '크라쿠프를 수도로 한스 프랑크가 총독을 맡았고, 1941년 독소전 개시 후 갈리치아 지구(르비우)가 더해졌다. ' +
+      '폴란드인 노동력 수탈과 지식인 말살(AB 작전), 게토 설치와 아우슈비츠를 제외한 트레블링카·소비부르·베우제츠 등 ' +
+      '라인하르트 작전 절멸 수용소를 통한 유대인 학살의 중심 무대였다. ' +
+      '1944년 바르샤바 봉기가 진압되었고, 1945년 1월 소련군의 비스와-오데르 공세로 크라쿠프가 함락되며 소멸했다.',
+    startEra: 'AD', startYear: 1939, startMonth: 10,
+    endEra: 'AD', endYear: 1945, endMonth: 1,
+    stateType: HistoricalStateType.OTHER,
+    // 우크라이나 제국판무관부와 같은 점령 행정체
+    entityKind: HistoricalEntityKind.REGIME,
+    latitude: 50.06, longitude: 19.94,
+    // 갈리치아 지구(1941~, 르비우 일대)가 오늘날 우크라이나
+    linkToIsoCodes: ['PL', 'UA'],
+  },
+  {
+    name: '폴란드 망명정부',
+    enName: 'Polish government-in-exile',
+    description:
+      '1939년 9월 독소 침공 후 국외로 옮겨 제2공화국의 법통을 이은 정부. 파리·앙제를 거쳐 1940년 런던에 자리 잡았고, ' +
+      '시코르스키 총리(~1943)와 미코와이치크 총리 아래 서방 연합국의 일원으로 싸웠다. 국내의 지하 국가와 국내군(AK)을 지휘해 ' +
+      '1944년 바르샤바 봉기를 일으켰다. 1945년 7월 미국·영국이 소련이 세운 임시 거국일치정부를 승인하며 국제적 승인을 잃었으나 ' +
+      '런던에서 존속했고, 1990년 12월 22일 마지막 대통령 리샤르트 카초로프스키가 자유선거로 뽑힌 레흐 바웬사에게 ' +
+      '대통령 휘장을 넘기며 해산해 제3공화국과 제2공화국의 법통을 이었다.',
+    startEra: 'AD', startYear: 1939, startMonth: 9,
+    endEra: 'AD', endYear: 1990, endMonth: 12,
+    stateType: HistoricalStateType.REPUBLIC,
+    // 영토 없는 정부 — 국가(STATE)가 아니라 정권 단위
+    entityKind: HistoricalEntityKind.REGIME,
+    latitude: 51.51, longitude: -0.13,
+    linkToIsoCodes: ['PL'],
+  },
+  {
+    name: '폴란드 제3공화국',
+    enName: 'Third Polish Republic',
+    nameOrigin:
+      '1989년 12월 29일 헌법 개정으로 국호가 폴란드 인민공화국(PRL)에서 폴란드 공화국(Rzeczpospolita Polska)으로 돌아왔다. ' +
+      '전간기 제2공화국을 잇는다는 뜻에서 "제3공화국"으로 부른다.',
+    description:
+      '1989년 원탁회의와 6월 부분 자유선거로 마조비에츠키 비공산 내각이 들어선 뒤, 12월 헌법 개정으로 국호를 되찾으며 성립했다. ' +
+      '1990년 레흐 바웬사가 직선 대통령이 되었고, 1997년 새 헌법을 제정했다. 1999년 NATO, 2004년 유럽연합에 가입했다.',
+    startEra: 'AD', startYear: 1989, startMonth: 12,
+    stateType: HistoricalStateType.REPUBLIC,
+    entityKind: HistoricalEntityKind.STATE,
+    latitude: 52.23, longitude: 21.01,
+    linkToIsoCodes: ['PL'],
+  },
 ]
 
 export async function seedPolandHistoricalCountries(
@@ -191,6 +248,7 @@ export async function seedPolandHistoricalCountries(
         data: {
           name: entry.name,
           enName: entry.enName,
+          nameOrigin: entry.nameOrigin,
           description: entry.description,
           startEra: entry.startEra as any,
           startYear: entry.startYear,
