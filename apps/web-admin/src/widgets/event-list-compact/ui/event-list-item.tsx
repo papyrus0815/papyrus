@@ -82,6 +82,8 @@ interface EventListItemProps {
   /** 상위 사건의 국면(장) 중 어디인가 — '2국면'·'2–4국면'. 국면은 목록에 행이 없어 하위 줄의 작은 표지로만 */
   chapterLabel?: string | null
   chapterTitle?: string | null
+  /** 국면 이름 — 장이 바뀌는 첫 행에만 온다(같은 장의 뒷줄은 번호만) */
+  chapterName?: string | null
   /** 트리에서의 부모 노드 id — ← 키가 부모 행으로 올라갈 때 쓴다(최상위는 null) */
   parentNodeId?: string | null
   /**
@@ -331,6 +333,7 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
   anchorParent = null,
   chapterLabel = null,
   chapterTitle = null,
+  chapterName = null,
   parentNodeId = null,
   isMatch = true,
   isActive,
@@ -823,7 +826,10 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
                 부모가 바로 위 행이면 칩은 순수한 중복이고, 1914년처럼 자식 18행이
                 이어지는 구간에서 매 행에 붙으면 밀도만 잡아먹는다(검토 IDX-7). */}
             {chapterLabel && (
-              <ChapterChip title={`상위 사건의 국면 — ${chapterTitle ?? ''}`}>{chapterLabel}</ChapterChip>
+              <ChapterChip $named={Boolean(chapterName)} title={`상위 사건의 국면 — ${chapterTitle ?? ''}`}>
+                {chapterLabel}
+                {chapterName && <ChapterName>{chapterName}</ChapterName>}
+              </ChapterChip>
             )}
             {anchorParent && (
               <AnchorChip
@@ -979,6 +985,12 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
                       width: `max(9px, ${(span.end - span.start) * 100}%)`,
                     }}
                   />
+                )}
+                {/* 해를 넘기는 막대 — 트랙은 그 해 1~12월이라 30년 전쟁과 7개월짜리 사건이 같은 막대였다.
+                    전체 길이의 큰 단위('30년', '9개월')를 막대 끝 위에 적는다. 트랙 폭은 건드리지 않는다
+                    (행마다 폭이 달라지면 같은 그룹의 연 축이 어긋난다). */}
+                {span.clippedEnd && !span.clippedStart && duration && (
+                  <SpanLength>{duration.split(' ').slice(0, duration.startsWith('약') ? 2 : 1).join(' ')} →</SpanLength>
                 )}
               </SpanTrack>
               {/* 막대는 낭독되지 않는다 — 기간 문자열이 접근성 트리의 유일한 값이다. */}
@@ -2016,8 +2028,16 @@ const RelatedTag = styled.span`
 `
 
 /** 국면 표지 — 상위 사건의 몇 번째 장인지. 앵커 칩과 같은 크기, 테두리 대신 옅은 면 */
-const ChapterChip = styled.span`
+const ChapterChip = styled.span<{ $named?: boolean }>`
   flex-shrink: 0;
+  /* 국면 이름이 붙은 칩은 제목보다 먼저 줄어든다 — 제목이 '재무장관 …'으로 잘리면 안 된다. 번호('2국면')는 남긴다 */
+  ${({ $named }) =>
+    $named &&
+    css`
+      flex-shrink: 8;
+      min-width: 4.2em;
+      overflow: hidden;
+    `}
   display: inline-flex;
   align-items: center;
   height: 16px;
@@ -2029,6 +2049,16 @@ const ChapterChip = styled.span`
   line-height: 1;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
   white-space: nowrap;
+`
+
+/** 국면 이름 — 장 첫 행의 칩 안, 번호 뒤. 길면 말줄임(전체는 칩 title) */
+const ChapterName = styled.span`
+  min-width: 0;
+  max-width: 16ch;
+  margin-left: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
 `
 
 const AnchorChipText = styled.span`
@@ -2621,6 +2651,23 @@ const SpanBar = styled.span<{
       mask-image: linear-gradient(to right, ${from}, ${to});
     `
   }}
+`
+
+/**
+ * 해를 넘기는 막대의 전체 길이 — 막대 오른쪽 끝(12월) 위에 작게. 사실이 아니라 각주라 메타 잉크.
+ * 트랙 밖에 떠 있어(절대 위치) 트랙 폭과 같은 그룹의 연 축을 바꾸지 않는다.
+ */
+const SpanLength = styled.span`
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 1px);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  color: ${metaText};
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
 `
 
 /**

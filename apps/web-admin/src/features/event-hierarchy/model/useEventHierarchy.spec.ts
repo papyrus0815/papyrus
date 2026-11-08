@@ -338,3 +338,29 @@ describe('useEventHierarchy — 평면 보기(showFlatView)에서 created·desce
     expect(ids[0]).toBe('e-old-date')
   })
 })
+
+/**
+ * 묶음 안 차례 (2026-11-08 인포그래픽 검토 C) — 루트가 최신순이어도 묶음 안은 흐름이라 과거 → 최신.
+ * 예전엔 최신순을 물려받아 1차대전을 펼치면 7월 위기가 거꾸로 읽혔다.
+ */
+describe('useEventHierarchy — 묶음 안은 시간 순서', () => {
+  const dated = (id: string, start: string) => ({ id, title: id, summary: '', period: { start }, importance: 'notable', children: [] })
+  const war = {
+    id: 'ww1',
+    title: 'ww1',
+    domain: 'MILITARY',
+    hierarchy: {
+      ...dated('ww1', '1914-07-28'),
+      children: [dated('aug6', '1914-08-06'), dated('jul7', '1914-07-07'), dated('jul23', '1914-07-23')],
+    },
+  } as unknown as AnyEvent
+  const childIdsOf = (sortBy: string, direction: 'asc' | 'desc') => {
+    const { result } = renderHook(() => useEventHierarchy([war], [war], false, sortBy, direction))
+    return result.current.flattenedHierarchy.filter((item) => item.depth > 0).map((item) => item.node.id)
+  }
+
+  it('시점 정렬은 루트 방향과 무관하게 하위가 과거 → 최신', () => {
+    expect(childIdsOf('recent', 'desc')).toEqual(['jul7', 'jul23', 'aug6'])
+    expect(childIdsOf('recent', 'asc')).toEqual(['jul7', 'jul23', 'aug6'])
+  })
+})

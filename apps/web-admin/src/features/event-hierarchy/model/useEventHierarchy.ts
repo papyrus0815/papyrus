@@ -283,13 +283,18 @@ export const useEventHierarchy = (
          * 자식을 **먼저** 확정한다 — 셰브론이 약속하는 수와 펼쳤을 때 나오는 행 수가
          * 같은 배열에서 나와야 하기 때문이다. 예전엔 행을 push한 뒤에 자식을 걸러서,
          * 배지는 원본 `node.children.length`를 말하고 렌더는 필터 통과분만 그렸다.
-         * 하위 사건도 부모와 동일한 정렬 적용 (BC·미상 안전).
+         * 하위 사건도 부모와 같은 정렬 축 (BC·미상 안전).
+         *
+         * 단, **시점 정렬이면 하위는 늘 과거 → 최신**이다. 루트의 '최신순'은 '요즘 무엇이 있었나'를 위한 것이고,
+         * 묶음 안은 흐름이다 — 최신순을 그대로 물려받아 1차대전을 펼치면 7월 위기가 8.6 선전포고 → 7.7 바트
+         * 이슐 순으로 거꾸로 읽혔다(2026-11-08 인포그래픽 검토 C). 기간·등록순 같은 다른 축은 고른 방향을 따른다.
          */
+        const childDirection = sortBy === 'recent' ? 'asc' : sortDirection
         const sortedChildren = (node.children ?? [])
           .filter(keepsNode)
           .sort((left, right) => {
             const comparison = compareNodes(left, right, sortBy, eventById)
-            return sortDirection === 'asc' ? comparison : -comparison
+            return childDirection === 'asc' ? comparison : -comparison
           })
 
         result.push({

@@ -682,6 +682,13 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
     ],
   )
 
+  /**
+   * 국면 이름은 **장이 바뀌는 첫 행에만** — 상위별로 바로 앞 행의 국면을 기억한다(렌더 차례 = 화면 차례).
+   * 예전엔 '2국면' 번호만 있어 무엇의 장인지 상세로 가야 알았고, 그렇다고 21행마다 이름을 붙이면 같은 글이 21번 선다.
+   * 렌더마다 새로 만드는 지역 상태라 이전 렌더의 값이 새지 않는다.
+   */
+  const chapterRunLast = new Map<string, string>()
+
   /** 행 하나 렌더 — 연도 섹션과 '연도 미상' 섹션이 같은 계약을 공유한다. */
   const renderRow = (
     {
@@ -754,8 +761,12 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
       /* 국면 밖은 표지를 달지 않는다 — 목록에서 '국면 전'은 소음(장 머리가 있는 전개가 말한다) */
       if (reach.from == null) return null
       const sorted = [...parentPhases].sort((left, right) => left.order - right.order)
-      const names = sorted.slice(reach.from - 1, reach.to ?? reach.from).map((phase, index) => `${(reach.from ?? 0) + index}국면 ${phase.title}`)
-      return { label: phaseReachLabel(reach), title: names.join(' → ') }
+      const covered = sorted.slice(reach.from - 1, reach.to ?? reach.from)
+      const names = covered.map((phase, index) => `${(reach.from ?? 0) + index}국면 ${phase.title}`)
+      const label = phaseReachLabel(reach)
+      const runStart = chapterRunLast.get(parentNodeId) !== label
+      chapterRunLast.set(parentNodeId, label)
+      return { label, title: names.join(' → '), name: runStart ? covered[0]?.title ?? null : null }
     })()
     return (
       <EventListItem
@@ -765,6 +776,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
         depth={depth}
         chapterLabel={chapter?.label ?? null}
         chapterTitle={chapter?.title ?? null}
+        chapterName={chapter?.name ?? null}
         isExpanded={expandedEventIds.has(node.id)}
         // 평탄화가 알려주는 값을 그대로 쓴다 — 자식 수로 추측하면 평면 모드에서
         // 눌러도 아무 일이 없는 셰브론이 그려진다.
