@@ -109,7 +109,9 @@ describe('SidesMetricsPanel — 같은 번호와 열기', () => {
   const measured = node({
     id: 'battle',
     title: '마른 전투',
-    metrics: [{ metricKey: 'casualties', metricName: '사상자', unit: '명', value: 500000, low: null, high: null, approx: true }],
+    metrics: [
+      { metricKey: 'casualties', metricName: '사상자', unit: 'person', value: 500000, low: null, high: null, approx: true, atLeast: false, scope: 'SIDE', scopeLabel: '협상국' },
+    ],
   })
   const rootWithSide = { ...root, sides: [{ id: 's0', name: '연합국', color: null }] }
 
@@ -141,6 +143,14 @@ describe('SidesMetricsPanel — 같은 번호와 열기', () => {
     fireEvent.click(screen.getByRole('button', { name: '마른 전투' }))
     expect(onOpen).toHaveBeenCalledWith('battle')
     expect(screen.queryByRole('button', { name: '1차세계대전' })).toBeNull()
+  })
+
+  it('진영에 걸린 수치도 누구의 것인지와 함께 — 단위는 원문 키(person)가 아니라 명', () => {
+    renderPanel()
+    const metricRow = screen.getAllByRole('row').find((row) => row.textContent?.includes('사상자'))
+    expect(metricRow?.textContent).toContain('협상국')
+    expect(metricRow?.textContent).toContain('약 50만명')
+    expect(metricRow?.textContent).not.toContain('person')
   })
 })
 

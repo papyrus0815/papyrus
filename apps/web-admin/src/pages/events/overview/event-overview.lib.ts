@@ -15,6 +15,7 @@ import {
   facetWeight,
 } from '@/entities/event/model/event-type-registry'
 import { eventCountryRoleLabel } from '@/entities/event/model/country-participant'
+import { formatObservationValue } from '@/entities/evidence/lib/format-observation'
 import { effectiveRangePrecision } from '@/shared/lib/iso-date'
 import type {
   EventOverviewCountry,
@@ -926,8 +927,10 @@ export interface MetricRow {
   eventId: string
   eventTitle: string
   metricName: string
-  unit: string | null
-  /** 값 또는 범위 문자열 */
+  /** 누구의 수치인가 — 진영 이름 · 참여국 이름 · 사건 전체면 null */
+  subject: string | null
+  subjectKind: 'EVENT' | 'SIDE' | 'PARTICIPANT'
+  /** 단위까지 붙인 표기 — 진영·수치 탭과 같은 포매터('약 13.9만명', '약 1.8만~2만명', '1,000명 이상') */
   display: string
 }
 
@@ -937,17 +940,29 @@ export function metricRows(nodes: EventOverviewNode[]): MetricRow[] {
   const rows: MetricRow[] = []
   for (const node of nodes) {
     for (const metric of node.metrics) {
-      const range =
-        metric.low != null && metric.high != null
-          ? `${numberFormat.format(metric.low)}~${numberFormat.format(metric.high)}`
-          : null
-      const value = metric.value != null ? numberFormat.format(metric.value) : null
+      const raw = (value: number | null) => (value == null ? null : String(value))
+      /* 옛 API 빌드는 scope·atLeast를 싣지 않는다 — 그땐 사건 전체 수치 */
+      const scoped = metric as typeof metric & {
+        atLeast?: boolean
+        scope?: MetricRow['subjectKind']
+        scopeLabel?: string | null
+      }
+      const display = formatObservationValue({
+        value: raw(metric.value),
+        low: raw(metric.low),
+        high: raw(metric.high),
+        approx: metric.approx,
+        atLeast: scoped.atLeast ?? false,
+        metric: { unit: metric.unit, valueKind: 'NUMBER' },
+        currency: null,
+      } as unknown as Parameters<typeof formatObservationValue>[0])
       rows.push({
         eventId: node.id,
         eventTitle: node.title,
         metricName: metric.metricName,
-        unit: metric.unit ?? null,
-        display: `${metric.approx ? '약 ' : ''}${value ?? range ?? '—'}`,
+        subject: scoped.scopeLabel ?? null,
+        subjectKind: scoped.scope ?? 'EVENT',
+        display: display || '—',
       })
     }
   }

@@ -360,7 +360,9 @@ describe('배치 B — 점검 신호', () => {
     const withMetric = node({
       id: 'm',
       type: 'DECLARATION',
-      metrics: [{ metricKey: 'k', metricName: '배상금', unit: null, value: 1, low: null, high: null, approx: false }],
+      metrics: [
+        { metricKey: 'k', metricName: '배상금', unit: null, value: 1, low: null, high: null, approx: false, atLeast: false, scope: 'EVENT', scopeLabel: null },
+      ],
     })
     expect(checkNode(withMetric).metrics).toBe('full')
     expect(checkScore(checkNode(sarajevo)).applicable).toBe(9)

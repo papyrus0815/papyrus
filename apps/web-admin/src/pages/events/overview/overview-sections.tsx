@@ -371,6 +371,16 @@ export function GanttPanel({
             ))}
           </S.DomainLegend>
         )}
+        {/* 국면 이름은 범례 한 줄에 — 축 위 띠는 칸 폭에 맞춰 이름이 잘렸다('3 전환점 — 스'). 띠에는 번호만, 넓으면 이름도 */}
+        {rootChapters.length > 0 && (
+          <S.DomainLegend aria-label="국면">
+            {rootChapters.map((segment) => (
+              <li key={segment.key} title={segment.label}>
+                <S.Muted>{segment.position}</S.Muted> {segment.title}
+              </li>
+            ))}
+          </S.DomainLegend>
+        )}
         {/* 날짜가 상위 기간과 동떨어진 하위 — 대개 연도 오타(1790→1890). 축에서 빼고 여기서 고치러 간다 */}
         {gantt.farOff.length > 0 && (
           <S.GapNotice role="note">
@@ -480,7 +490,8 @@ export function GanttPanel({
                       style={{ left: `${segment.left}%`, width: `${segment.width}%` }}
                     >
                       <b>{segment.position}</b>
-                      {segment.title}
+                      {/* 좁은 칸은 번호만 — 이름은 위 범례·툴팁에 */}
+                      {segment.width >= 16 && segment.title}
                     </S.ChapterSegment>
                   ))}
                 </S.ChapterLane>
@@ -1451,7 +1462,7 @@ export function SidesMetricsPanel({
         </S.Scroll>
       )}
       {sortedMetrics.length === 0 ? (
-        <S.Empty>사상자·병력 같은 수치가 기록된 사건이 아직 없습니다.</S.Empty>
+        <S.Empty>사상자·병력 같은 수치가 아직 없습니다 — 사건 전체·진영·참여국 어디에도.</S.Empty>
       ) : (
         <S.Scroll>
           <S.Table>
@@ -1459,6 +1470,7 @@ export function SidesMetricsPanel({
               <tr>
                 <th scope="col">#</th>
                 <th scope="col">사건</th>
+                <th scope="col">누구</th>
                 <th scope="col">항목</th>
                 <th scope="col">값</th>
               </tr>
@@ -1470,11 +1482,9 @@ export function SidesMetricsPanel({
                   {...rowProps(row.eventId)}
                 >
                   {renderEventCells(row.eventId, row.eventTitle)}
+                  <td>{row.subject ?? '사건 전체'}</td>
                   <td>{row.metricName}</td>
-                  <td>
-                    {row.display}
-                    {row.unit && ` ${row.unit}`}
-                  </td>
+                  <td>{row.display}</td>
                 </S.ChecklistRow>
               ))}
             </tbody>

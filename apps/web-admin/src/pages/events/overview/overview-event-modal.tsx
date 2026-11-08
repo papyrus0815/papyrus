@@ -334,11 +334,8 @@ export function OverviewEventModal({
                 )}
                 {metrics.map((row, index) => (
                   <li key={`${row.metricName}-${index}`}>
-                    <span>{row.metricName}</span>
-                    <RoleText>
-                      {row.display}
-                      {row.unit && ` ${row.unit}`}
-                    </RoleText>
+                    <span>{row.subject ? `${row.subject} · ${row.metricName}` : row.metricName}</span>
+                    <RoleText>{row.display}</RoleText>
                   </li>
                 ))}
               </FactList>
