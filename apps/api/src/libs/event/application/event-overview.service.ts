@@ -59,6 +59,15 @@ export interface EventOverviewMetric {
   low: number | null
   high: number | null
   approx: boolean
+  /** '이상' — 하한만 아는 값(1,000명 이상) */
+  atLeast: boolean
+  /**
+   * 누구의 수치인가 — 사건 전체 · 진영 · 참여국 한 줄. 실데이터 수치는 대부분 진영·참여국에 걸려 있다
+   * (보불전쟁 17개 전부). 예전엔 사건 전체만 읽어 조망이 '수치 0'이라고 말했다.
+   */
+  scope: 'EVENT' | 'SIDE' | 'PARTICIPANT'
+  /** 진영 이름 또는 참여국 이름 — 사건 전체면 null */
+  scopeLabel: string | null
 }
 
 export interface EventOverviewNode {
@@ -239,18 +248,39 @@ export class EventOverviewService {
     }
     const ids = [...depthOf.keys()]
 
-    // 2) 노드 본체 + 수치
-    const [rows, observations] = await Promise.all([
-      this.prisma.event.findMany({ where: { id: { in: ids } }, include: NODE_INCLUDE }),
-      this.prisma.observation.findMany({
-        where: { subjectType: ObservationSubjectType.EVENT, subjectId: { in: ids } },
-        orderBy: [{ sortOrder: 'asc' }],
-        include: { metric: { select: { key: true, name: true, unit: true } } },
-      }),
-    ])
+    // 2) 노드 본체 → 수치(사건 전체 · 진영 · 참여국). 진영·참여국 id는 노드를 읽어야 알아 두 번에 나눈다
+    const rows = await this.prisma.event.findMany({ where: { id: { in: ids } }, include: NODE_INCLUDE })
+    /** 수치 주체 id → 어느 사건의 무엇인가 */
+    const subjectOwner = new Map<string, { eventId: string; scope: EventOverviewMetric['scope']; label: string | null }>()
+    for (const row of rows) {
+      subjectOwner.set(row.id, { eventId: row.id, scope: 'EVENT', label: null })
+      for (const side of row.sides) subjectOwner.set(side.id, { eventId: row.id, scope: 'SIDE', label: side.name })
+      for (const relation of row.countryRelations) {
+        subjectOwner.set(relation.id, {
+          eventId: row.id,
+          scope: 'PARTICIPANT',
+          label: relation.country?.name ?? relation.historicalCountry?.name ?? null,
+        })
+      }
+    }
+    const subjectIdsOf = (scope: EventOverviewMetric['scope']) =>
+      [...subjectOwner.entries()].filter(([, owner]) => owner.scope === scope).map(([id]) => id)
+    const observations = await this.prisma.observation.findMany({
+      where: {
+        OR: [
+          { subjectType: ObservationSubjectType.EVENT, subjectId: { in: subjectIdsOf('EVENT') } },
+          { subjectType: ObservationSubjectType.EVENT_SIDE, subjectId: { in: subjectIdsOf('SIDE') } },
+          { subjectType: ObservationSubjectType.EVENT_PARTICIPANT, subjectId: { in: subjectIdsOf('PARTICIPANT') } },
+        ],
+      },
+      orderBy: [{ sortOrder: 'asc' }],
+      include: { metric: { select: { key: true, name: true, unit: true } } },
+    })
     const metricsByEvent = new Map<string, EventOverviewMetric[]>()
     for (const observation of observations) {
-      const list = metricsByEvent.get(observation.subjectId) ?? []
+      const owner = subjectOwner.get(observation.subjectId)
+      if (!owner) continue
+      const list = metricsByEvent.get(owner.eventId) ?? []
       list.push({
         metricKey: observation.metric.key,
         metricName: observation.metric.name,
@@ -259,8 +289,11 @@ export class EventOverviewService {
         low: toNumber(observation.low),
         high: toNumber(observation.high),
         approx: observation.approx,
+        atLeast: observation.atLeast,
+        scope: owner.scope,
+        scopeLabel: owner.label,
       })
-      metricsByEvent.set(observation.subjectId, list)
+      metricsByEvent.set(owner.eventId, list)
     }
 
     const nodes = rows.map((row) => this.toNode(row, depthOf.get(row.id) ?? 0, metricsByEvent))
