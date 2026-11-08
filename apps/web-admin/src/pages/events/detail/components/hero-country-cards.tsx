@@ -97,15 +97,27 @@ export function HeroCountryCards({
   const perSide = CARDS_PER_SIDE
   const flatCount = narrow ? 4 : CARDS_FLAT
 
+  /**
+   * 참여 탭 '순서 변경'의 순서(sortOrder) 그대로. 예전엔 현대 국가를 먼저 이어 붙여, 주 교전국이 역사 국가인
+   * 사건(보불전쟁의 프로이센·프랑스 제2제국)에서 덜 중요한 현대 국가 카드가 맨 앞에 섰다.
+   */
   const countries = useMemo<CardCountry[]>(
-    () => [
-      ...(event.relatedCountries ?? []).map((country) => ({ ...country, key: `m-${country.id}`, historical: false })),
-      ...(event.relatedHistoricalCountries ?? []).map((country) => ({
-        ...country,
-        key: `h-${country.id}`,
-        historical: true,
-      })),
-    ],
+    () =>
+      [
+        ...(event.relatedCountries ?? []).map((country) => ({ ...country, key: `m-${country.id}`, historical: false })),
+        ...(event.relatedHistoricalCountries ?? []).map((country) => ({
+          ...country,
+          key: `h-${country.id}`,
+          historical: true,
+        })),
+      ]
+        .map((country, index) => ({ country, index }))
+        .sort(
+          (left, right) =>
+            (left.country.sortOrder ?? Number.MAX_SAFE_INTEGER) - (right.country.sortOrder ?? Number.MAX_SAFE_INTEGER) ||
+            left.index - right.index,
+        )
+        .map(({ country }) => country),
     [event.relatedCountries, event.relatedHistoricalCountries],
   )
   const sides = useMemo(() => withSideColors(event.sides ?? []), [event.sides])
@@ -119,13 +131,66 @@ export function HeroCountryCards({
     queryFn: getOfficeHoldingTimeline,
     staleTime: 5 * 60 * 1000,
   })
-  const hasModernCards = (event.relatedCountries?.length ?? 0) > 0
+  /* 역사 국가 목록 — 현대 국가 카드의 당시 원수 찾기, 그리고 같은 나라의 정체들을 한 나라로 세기에 쓴다 */
   const { data: historicalCountryList } = useQuery({
     queryKey: ['historical-countries'],
     queryFn: getAllHistoricalCountries,
     staleTime: 5 * 60 * 1000,
-    enabled: hasModernCards,
+    enabled: countries.length > 1,
   })
+  /**
+   * 진영의 나라 수 — 정체가 바뀐 한 나라를 한 나라로 센다. 보불전쟁 '프랑스 측'의 프랑스 · 프랑스 제2제국 ·
+   * 프랑스 제3공화국은 '3개국'이 아니다. 같은 현대 국가에 이어진 역사 국가들 중 **존속 기간이 겹치지 않는 것끼리**만
+   * 이어진 정체로 본다 — 프로이센·바이에른·바덴처럼 같은 때 함께 있던 나라는 모두 독일에 이어져 있어도 각자 한 나라다.
+   * 한 현대 국가 묶음의 나라 수 = 동시에 존속한 역사 국가의 최대 수(구간 그래프 채색수), 역사 국가가 없으면 1.
+   */
+  const nationCountOf = useMemo(() => {
+    const byId = new Map(
+      ((historicalCountryList ?? []) as unknown as BridgeCountry[]).map((country) => [country.id, country]),
+    )
+    const signed = (era: string | undefined, year: number | null | undefined) =>
+      year == null ? null : era === 'BC' ? -year : year
+    return (items: ReadonlyArray<CardCountry>) => {
+      const buckets = new Map<string, { modern: boolean; spans: Array<[number, number]> }>()
+      let unbridged = 0
+      for (const country of items) {
+        if (!country.historical) {
+          const bucket = buckets.get(country.id) ?? { modern: false, spans: [] }
+          bucket.modern = true
+          buckets.set(country.id, bucket)
+          continue
+        }
+        const bridge = byId.get(country.id)
+        const parent = bridge?.parentModernCountryIds?.length === 1 ? bridge.parentModernCountryIds[0] : null
+        const from = signed(bridge?.startEra, bridge?.startYear)
+        if (!parent || from == null) {
+          unbridged += 1
+          continue
+        }
+        const to = signed(bridge?.endEra, bridge?.endYear) ?? Number.MAX_SAFE_INTEGER
+        const bucket = buckets.get(parent) ?? { modern: false, spans: [] }
+        bucket.spans.push([from, to])
+        buckets.set(parent, bucket)
+      }
+      let total = unbridged
+      for (const bucket of buckets.values()) {
+        /* 끝과 시작이 같은 해(1870 제2제국 → 제3공화국)는 이어진 것 — 겹침이 아니다 */
+        const edges = bucket.spans.flatMap(([from, to]) => [
+          [from, 1],
+          [to, -1],
+        ])
+        edges.sort((left, right) => left[0] - right[0] || left[1] - right[1])
+        let live = 0
+        let peak = 0
+        for (const [, delta] of edges) {
+          live += delta
+          peak = Math.max(peak, live)
+        }
+        total += Math.max(peak, bucket.modern ? 1 : 0)
+      }
+      return total
+    }
+  }, [historicalCountryList])
   const headsByKey = useMemo(() => {
     const result = new Map<string, CountryHeads>()
     const window = eventWindow(event)
@@ -318,7 +383,22 @@ export function HeroCountryCards({
               <ColumnHead $color={side?.color ?? null}>
                 {side && <Dot style={{ background: side.color }} aria-hidden />}
                 <span className="name">{group.label}</span>
-                <span className="count">{group.items.length}개국</span>
+                {(() => {
+                  const nations = nationCountOf(group.items)
+                  return (
+                    <span
+                      className="count"
+                      title={
+                        nations < group.items.length
+                          ? `카드 ${group.items.length}장 — 같은 나라의 다른 정체(왕국·제국·공화국)를 한 나라로 셌습니다`
+                          : undefined
+                      }
+                    >
+                      {nations}개국
+                      {nations < group.items.length && ` · 카드 ${group.items.length}`}
+                    </span>
+                  )
+                })()}
                 {side?.outcome && (
                   <Outcome title={side.outcomeNote ?? undefined}>{SIDE_OUTCOME_LABEL[side.outcome]}</Outcome>
                 )}
