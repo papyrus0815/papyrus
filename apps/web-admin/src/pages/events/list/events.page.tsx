@@ -81,6 +81,7 @@ import { CatalogDetailDrawer } from './components/catalog-detail-drawer'
 import { CatalogEntityFilterModals } from './components/catalog-entity-filter-modals'
 import { CatalogOverlayModals } from './components/catalog-overlay-modals'
 import { CatalogHeaderStats } from './components/catalog-header-stats'
+import { EraStrip } from './components/era-strip'
 import {
   CatalogToolbar,
   CatalogViewUtilities,
@@ -2242,6 +2243,9 @@ export const EventsCatalogPage: React.FC = () => {
       </PageStyles.VisuallyHiddenPageTitle>
 
       <CatalogToolbar {...toolbarProps} />
+
+      {/* 시대 띠 — 전 시대 개관 한 줄(세기별 분포·큰 사건 기간·지금 보는 해). 누르면 그 해로 */}
+      {events.length > 0 && <EraStrip events={events} />}
 
       {isError && events.length === 0 ? (
         <PageStyles.ErrorBanner role="alert">
