@@ -432,7 +432,7 @@ function StatehoodField({
   ]
   const unassigned = participants.filter((row) => row.role !== 'FOUNDED' && row.role !== 'DISSOLVED')
   return (
-    <S.FormRow>
+    <S.FormRow data-core-record="statehood">
       <S.FormLabel as="span">
         성립·소멸<RecordOptionalTag>(선택)</RecordOptionalTag>
       </S.FormLabel>
@@ -526,7 +526,8 @@ function TreatyField({
   const treaty = drafts.treaty
   const suggested = treatyNameFromEventTitle(eventTitle.trim())
   return (
-    <S.FormRow>
+    /* data-core-record — 세부 안내의 '맺어진 조약'을 누르면 여기로 온다(event-type-field) */
+    <S.FormRow data-core-record="treaty">
       <S.FormLabel as="span">
         맺어진 조약<RecordOptionalTag>(선택)</RecordOptionalTag>
       </S.FormLabel>

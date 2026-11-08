@@ -411,8 +411,16 @@ export function EventTypeField({
                 <>
                   {inlineRecords.length > 0 && (
                     <span>
-                      붙는 기록 <b>{inlineRecords.map((facet) => FACET_LABEL[facet]).join(' · ')}</b> — 아래
-                      &lsquo;기록&rsquo;에서 바로 적습니다
+                      붙는 기록{' '}
+                      {inlineRecords.map((facet, index) => (
+                        <React.Fragment key={facet}>
+                          {index > 0 && ' · '}
+                          <RecordJump type="button" onClick={() => jumpToRecord(facet)} title="그 칸으로 가기">
+                            {FACET_LABEL[facet]}
+                          </RecordJump>
+                        </React.Fragment>
+                      ))}{' '}
+                      — 아래 &lsquo;기록&rsquo;에서 바로 적습니다
                     </span>
                   )}
                   {detailOnlyRecords.length > 0 && (
@@ -484,6 +492,43 @@ const RestSection = styled.div`
 const MoreRow = styled.div`
   display: flex;
   align-items: center;
+`
+
+/**
+ * 붙는 기록 → 그 칸으로. '맺어진 조약'은 1단 화면에서 개요 설명 아래, 첫 화면 밖에 있어 "조약 연결이 없다"로 읽혔다.
+ * 칸(data-core-record)이 없으면(진영처럼 표시가 안 된 칸) 기록 묶음의 첫 칸으로. 도착하면 잠깐 물들이고 첫 버튼에 포커스.
+ */
+function jumpToRecord(facet: string) {
+  const target =
+    document.querySelector<HTMLElement>(`[data-core-record="${facet}"]`) ??
+    document.querySelector<HTMLElement>('[data-core-record]')
+  if (!target) return
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  target.animate?.(
+    [{ backgroundColor: 'rgba(99, 102, 241, 0.16)' }, { backgroundColor: 'rgba(99, 102, 241, 0)' }],
+    { duration: 1600, easing: 'ease-out' },
+  )
+  target.querySelector<HTMLElement>('button, input, textarea')?.focus({ preventScroll: true })
+}
+
+/** 안내 문구 안의 기록 이름 — 굵은 글씨 그대로, 누를 수 있다는 밑줄만 */
+const RecordJump = styled.button`
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
 `
 
 const Hint = styled.p`
