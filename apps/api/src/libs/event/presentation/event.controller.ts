@@ -360,6 +360,34 @@ const LIST_OMITTED_BODY_FIELDS = {
 } as const
 
 /**
+ * 목록 트리 — 손자 아래로 몇 단 더 싣나. 예전엔 루트 → 자식 → 손자에서 멈춰(계층 3 캡) 전쟁 › 전선 › 작전 ›
+ * 전투처럼 깊은 묶음은 넷째 단부터 목록 트리에서 사라졌다(2차대전 규모 투영: 206건 중 94건). 실데이터 최대
+ * 깊이는 3이라 그동안 드러나지 않았다. 손자와 같은 경량 include(관련국·국면)를 재귀로 쌓는다.
+ */
+const LIST_DEEP_LEVELS = 4
+
+function listDeepChildrenInclude(levels: number): Record<string, unknown> {
+  return {
+    where: { deletedAt: null },
+    omit: LIST_OMITTED_BODY_FIELDS,
+    include: {
+      historicalCountry: { select: { id: true, name: true } },
+      countryRelations: {
+        include: {
+          country: { select: { id: true, name: true, flagEmoji: true } },
+          historicalCountry: { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+      },
+      // 이 단이 묶음이면 그 아래 줄의 '2국면' 표지 근거
+      phases: { orderBy: [{ order: 'asc' }, { createdAt: 'asc' }] },
+      ...(levels > 1 ? { childEvents: listDeepChildrenInclude(levels - 1) } : {}),
+    },
+    orderBy: { startDate: 'asc' },
+  }
+}
+
+/**
  * 국가별 사건 스코프 — 참여국 표(event_country_relation) **또는** 사건 본체의 주 무대 역사국가
  * (Event.historicalCountryId).
  *
@@ -1046,13 +1074,15 @@ export class EventController {
                   },
                   // 손자(2단 하위) — 트리/목록의 3계층 표시용. 경량 include로 페이로드 팽창을 억제.
                   // 여기서 nested를 멈춰 depth 3(root→자식→손자)에서 캡한다.
-                  // toResponseDto가 childEvents를 재귀 매핑하므로 배선 불필요(손자의 childEvents는
-                  // include 안 해 undefined → 응답에서 자연히 종단).
+                  // toResponseDto가 childEvents를 재귀 매핑하므로 배선 불필요. 손자 아래는
+                  // listDeepChildrenInclude가 LIST_DEEP_LEVELS단까지 같은 경량 include로 잇는다.
                   childEvents: {
                     where: { deletedAt: null },
                     omit: LIST_OMITTED_BODY_FIELDS,
                     include: {
                       historicalCountry: { select: { id: true, name: true } },
+                      phases: { orderBy: [{ order: 'asc' as const }, { createdAt: 'asc' as const }] },
+                      childEvents: listDeepChildrenInclude(LIST_DEEP_LEVELS) as { where: { deletedAt: null } },
                       /**
                        * 손자에도 관련국을 실어야 한다 — 자식에만 넣은 수정(TF-7)이 한 계층 앞에서
                        * 멈춰 있었다. 없으면 toResponseDto가 relatedCountries를 undefined로 내려,
