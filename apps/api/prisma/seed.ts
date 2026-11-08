@@ -423,12 +423,13 @@ async function main() {
         // 7-38. 이집트 역사 국가 계승·소속 관계 시딩 (로마 제국→동로마 제국 SPLIT 보강 포함)
         await seedEgyptHistoricalCountryRelations(prisma)
 
-        // 7-39. 헝가리 1918년 이후 역사 국가 시딩 (헝가리 민주 공화국~헝가리 제3공화국 6건)
+        // 7-39. 헝가리 1918년 이후 역사 국가 시딩 (헝가리 민주 공화국~헝가리 제3공화국 7건, 살러시 정권 포함)
         //  · 의존: seedCountries(현대 HU). '헝가리 왕국'(1000~1918)은 인물 시드가 만들어 여기선 다루지 않는다
         await seedHungaryHistoricalCountries(prisma)
 
         // 7-40. 헝가리 계승 관계 시딩 (왕국·이중 제국 → 1918 공화국 → … → 1989, 트리아농 분할 보강 2건)
         //  · 의존: 헝가리 왕국(인물 시드)·austria(이중 제국·제1공화국)·유고 계열(세르브-크로아트-슬로베네 왕국)
+        //    ·나치 독일(국민통합정부 PROTECTORATE 소속 대상)
         //    — 아직 없으면 warn+skip, 재실행에서 채움(루마니아 7-24와 같은 사정)
         await seedHungaryHistoricalCountryRelations(prisma)
 
