@@ -438,31 +438,67 @@ model AdministrationDepartmentCategory {
 }
 
 // ========================
-// AdministrationDepartment
+// AdministrationDepartment (국가 기관)
 // ========================
-/// 국가별 행정 부처/기관 (국방부, 외교부, 국정원 등).
-/// 카테고리로 전세계 비교. 설립/폐지일·후신(successor)으로 개편 이력(안기부→국정원 등) 표현.
+/// 국가 기관의 종류 — 같은 '국방' 분류 안에서도 국방부와 최고사령부는 다른 것이다.
+/// 2026-11-08 재설계: OKW(국방군 최고사령부)·OHL·스타프카·대본영을 '국방부'와 구별할 칸이 없었다.
+enum AdministrationDepartmentKind {
+  /// 부처 — 부·성·조·인민위원부 (외무부, 대장성, 이조, 전쟁부)
+  MINISTRY
+  /// 외청·위원회·독립기관 — 청·처·원·위원회 (국정원, 감사원, 중앙정보국)
+  AGENCY
+  /// 군 최고사령부·참모본부 — 국가의 군령 기관 (OKW, OHL, 스타프카, 대본영). 야전 편제는 MilitaryUnit
+  MILITARY_COMMAND
+  /// 총독부·속령 통치기관 (조선총독부, 인도 정청, 폴란드 총독부의 행정청)
+  COLONIAL_GOVERNMENT
+  /// 궁내·왕실 기관 (궁내부, 궁내성, 내무반)
+  ROYAL_HOUSEHOLD
+  /// 기타
+  OTHER
+}
+
+/// 국가 기관 — 부처·외청·군 최고사령부·총독부·궁내 기관.
+///
+/// 경계 규칙(2026-11-08): **국가 기관은 여기**(최고사령부·총독부 포함). 국가 밖 단체·국제기구·군사동맹은
+/// Organization, 야전 편제(집단군·사단)는 MilitaryUnit, 특정 시점의 구성원 명단은 PersonGroup.
+///
 /// 국가 소속 — 현대(countryId)·역사(historicalCountryId) 듀얼 FK. 상호배타 아님: 둘 다 설정 가능하며
-/// countryId는 표시/그룹핑 축, historicalCountryId는 소속 축이라 의미가 다르다. 도출·표시는 역사 우선(person.prisma의 역사>현대 규약과 동일).
-/// 조선 6조 등 역사 부처는 historicalCountryId 설정(선택적으로 연결 현대 국가도 함께). 둘 다 null이면 무소속.
+/// countryId는 표시/그룹핑 축, historicalCountryId는 소속 축이라 의미가 다르다. 도출·표시는 역사 우선.
+/// 역사 기관은 historicalCountryId 필수 + 현대 국가 dual-fill(현대 국가 상세에 노출되도록).
+///
+/// 이름(name)에는 나라 이름을 넣지 않는다('미국 국방부' ✗ → '국방부' + 나라 칩). 원어명·영문명·약칭은 별도 칸.
+/// 설립·폐지일은 구조화(era/연/월/일)가 진실 — DateTime은 서기 1000~9999만 서버가 파생(정렬·레거시 호환용).
+/// 개편 이력은 successor 1칸이 아니라 AdministrationDepartmentTransition(개칭·통합·분리·개편·흡수) 그래프.
 model AdministrationDepartment {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 현대 국가 ID (표시/그룹핑용. 역사적 국가 부처도 연결된 현대 국가를 넣을 수 있음)
+  /// 현대 국가 ID (표시/그룹핑용. 역사적 국가 기관도 연결된 현대 국가를 넣는다)
   countryId String? @map("country_id") @db.Char(36)
 
-  /// 역사적 국가 ID (조선의 6조, 일본 제국 시기 부처 등). null이면 현대 국가 부처만 해당
+  /// 역사적 국가 ID (조선의 6조, 나치 독일의 OKW 등). null이면 현대 국가 기관만 해당
   historicalCountryId String? @map("historical_country_id") @db.Char(36)
 
-  /// 상위 부처 ID
+  /// 상위 기관 ID (OKW → 국방군 지휘참모부). 순환 금지(서버 검증)
   parentId String? @map("parent_id") @db.Char(36)
 
   /// 전세계 공통 카테고리 (국방·외교·재정·경제 등)
   categoryId String? @map("category_id") @db.Char(36)
 
-  /// 부처명
+  /// 기관 종류
+  kind AdministrationDepartmentKind @default(MINISTRY)
+
+  /// 기관명 (한국어, 나라 이름 없이)
   name String @db.VarChar(100)
+
+  /// 원어명 (Oberkommando der Wehrmacht, 外務省)
+  nameLocal String? @map("name_local") @db.VarChar(200)
+
+  /// 영문명 (High Command of the Armed Forces)
+  nameEn String? @map("name_en") @db.VarChar(200)
+
+  /// 약칭 (OKW, OHL, NKVD, CIA) — 검색 대상
+  abbreviation String? @db.VarChar(40)
 
   /// 썸네일 이미지 URL
   thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
@@ -470,27 +506,44 @@ model AdministrationDepartment {
   /// 일반 설명 (소개, 연혁 등 — 리치 텍스트·긴 소개 허용)
   description String? @db.Text
 
-  /// 설립/설치일 (기관이 언제 만들어졌는지)
+  /// 설립일 — 구조화(진실). 기원전·고대·연 단위 지원
+  establishedEra       Era?    @map("established_era")
+  establishedYear      Int?    @map("established_year")
+  establishedMonth     Int?    @map("established_month")
+  establishedDay       Int?    @map("established_day")
+  /// 'year' | 'month' | 'day' — 서버가 구조화 값에서 파생
+  establishedPrecision String? @map("established_precision") @db.VarChar(10)
+
+  /// 폐지일 — 구조화(진실). NULL이면 현존
+  abolishedEra       Era?    @map("abolished_era")
+  abolishedYear      Int?    @map("abolished_year")
+  abolishedMonth     Int?    @map("abolished_month")
+  abolishedDay       Int?    @map("abolished_day")
+  abolishedPrecision String? @map("abolished_precision") @db.VarChar(10)
+
+  /// 설립일 DateTime — 서기 1000~9999 완전일자만 서버가 파생(정렬·레거시 호환). 직접 쓰지 말 것
   establishedDate DateTime? @map("established_date")
 
-  /// 폐지/통폐합일 (NULL이면 현존)
+  /// 폐지일 DateTime — 서버 파생. 직접 쓰지 말 것
   abolishedDate DateTime? @map("abolished_date")
 
-  /// 후신 부처 ID (개편·통폐합으로 이어지는 기관, 예: 안기부 → 국정원)
-  successorId String? @map("successor_id") @db.Char(36)
-
   //--- 관계 필드
-  country            Country?                       @relation("Country_Department", fields: [countryId], references: [id], onDelete: Cascade)
+  /// 현대 국가가 지워져도 기관은 남긴다(역사국가 축이 있으면 그대로 보인다)
+  country            Country?                       @relation("Country_Department", fields: [countryId], references: [id], onDelete: SetNull)
   historicalCountry  HistoricalCountry?             @relation("DeptHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
-  parent             AdministrationDepartment?      @relation("DeptHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  /// 상위 기관 삭제는 하위 기관이 있으면 막는다(예전 Cascade는 하위 기관을 소리 없이 함께 지웠다)
+  parent             AdministrationDepartment?      @relation("DeptHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
   children           AdministrationDepartment[]     @relation("DeptHierarchy")
   category           AdministrationDepartmentCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  successor          AdministrationDepartment?      @relation("DeptSuccessor", fields: [successorId], references: [id], onDelete: SetNull)
-  predecessors       AdministrationDepartment[]     @relation("DeptSuccessor")
-  events             AdministrationDepartmentEvent[] @relation("DeptEvents")
-  /// 이 부처 소속으로 등록된 재임 기록 (역대 장관 조회)
+  /// 이 기관이 앞선 기관인 계보(→ 후신)
+  successorTransitions   AdministrationDepartmentTransition[] @relation("DeptTransitionPredecessor")
+  /// 이 기관이 뒤 기관인 계보(전신 →)
+  predecessorTransitions AdministrationDepartmentTransition[] @relation("DeptTransitionSuccessor")
+  /// 이 기관이 관여한 사건(발령·수령·주체·관여)
+  eventRelations     EventDepartmentRelation[]
+  /// 이 기관 소속으로 등록된 재임 기록 (역대 장관 조회)
   tenures            GovernmentPositionTenure[]     @relation("TenureDepartment")
-  /// 군사 부대(MilitaryUnit)와 1:N 연결 — 국방부 산하 부대 노드가 행정 부처 트리의 동일 기관과 매핑될 때 사용
+  /// 군사 부대(MilitaryUnit)와 1:N 연결 — 국방부·최고사령부 산하 부대
   militaryUnits      MilitaryUnit[]                 @relation("DeptMilitaryUnits")
 
   //--- 메타데이터 필드
@@ -501,67 +554,53 @@ model AdministrationDepartment {
   @@index([historicalCountryId], name: "idx_admin_dept_historicalCountryId")
   @@index([parentId], name: "idx_admin_dept_parentId")
   @@index([categoryId], name: "idx_admin_dept_categoryId")
+  @@index([kind], name: "idx_admin_dept_kind")
   @@index([establishedDate], name: "idx_admin_dept_establishedDate")
-  @@index([successorId], name: "idx_admin_dept_successorId")
   @@map("administration_department")
 }
 
 // ========================
-// AdministrationDepartmentEvent (기관 계획·조율·변경 — 사건(Event)과 동일한 구조로 시간순 기록)
+// AdministrationDepartmentTransition (국가 기관 계보)
 // ========================
-/// 기관별 계획, 조율, 정책, 개편 등을 사건처럼 기간·제목·설명으로 기록.
-enum AdministrationDepartmentEventType {
-  /// 계획 (정책 계획, 연도별 계획 등)
-  PLAN
-  /// 조율 (부처 간 조율, 협의 역할 등)
-  COORDINATION
-  /// 정책/권한 (정책 수립, 권한 변경)
-  POLICY
-  /// 개편/통폐합
-  RESTRUCTURE
-  /// 기타
-  OTHER
+/// 기관이 다른 기관으로 이어진 방식.
+enum DepartmentTransitionKind {
+  /// 개칭 — 같은 기관의 이름만 바뀜 (외무부 → 외교통상부)
+  RENAME
+  /// 통합 — 여럿이 하나로 (전쟁부 + 해군부 → 국방부). 앞 기관마다 한 줄씩
+  MERGE
+  /// 분리 — 하나가 여럿으로. 뒤 기관마다 한 줄씩
+  SPLIT
+  /// 개편 — 권한·조직이 바뀌며 새 기관으로 (전쟁부 → OKW, 안기부 → 국정원)
+  REORGANIZE
+  /// 흡수 — 폐지되며 기능이 다른 기관으로 넘어감
+  ABSORBED
 }
 
-model AdministrationDepartmentEvent {
+/// 국가 기관 계보 — A → B. successor 1칸으로는 통합·분리를 표현할 수 없어 그래프로 둔다(2026-11-08).
+model AdministrationDepartmentTransition {
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 소속 기관
-  departmentId String @map("department_id") @db.Char(36)
+  /// 앞 기관
+  predecessorId String @map("predecessor_id") @db.Char(36)
+  /// 뒤 기관
+  successorId String @map("successor_id") @db.Char(36)
 
-  /// 제목 (사건의 title과 동일)
-  title String @db.VarChar(200)
+  kind DepartmentTransitionKind
 
-  /// 내용/개요 (사건의 description과 동일)
-  description String? @db.Text
+  /// 이어진 시점(구조화) — 보통 뒤 기관의 설립일과 같지만 다를 수 있다
+  era   Era? @map("era")
+  year  Int? @map("year")
+  month Int? @map("month")
 
-  /// 기간(시작)
-  startDate DateTime? @map("start_date")
-  /// 시작일 정밀도: year(년만), month(년·월), day(년·월·일). null이면 day로 간주
-  startDatePrecision String? @map("start_date_precision") @db.VarChar(10)
+  note String? @db.Text
 
-  /// 기간(종료)
-  endDate DateTime? @map("end_date")
-  /// 종료일 정밀도: year(년만), month(년·월), day(년·월·일). null이면 day로 간주
-  endDatePrecision String? @map("end_date_precision") @db.VarChar(10)
-
-  /// 유형 (계획, 조율, 정책, 개편 등)
-  eventType AdministrationDepartmentEventType @default(OTHER) @map("event_type")
-
-  /// 배경/여파 (선택, 사건의 background/aftermath와 동일)
-  background String? @db.Text
-  aftermath  String? @db.Text
-
-  /// 대표 이미지 URL (썸네일, 목록/카드용 1장)
-  thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
-
-  //--- 관계
-  department AdministrationDepartment @relation("DeptEvents", fields: [departmentId], references: [id], onDelete: Cascade)
+  predecessor AdministrationDepartment @relation("DeptTransitionPredecessor", fields: [predecessorId], references: [id], onDelete: Cascade)
+  successor   AdministrationDepartment @relation("DeptTransitionSuccessor", fields: [successorId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@index([departmentId], name: "idx_admin_dept_event_departmentId")
-  @@index([startDate], name: "idx_admin_dept_event_startDate")
-  @@map("administration_department_event")
+  @@unique([predecessorId, successorId], name: "uniq_admin_dept_transition_pair")
+  @@index([successorId], name: "idx_admin_dept_transition_successorId")
+  @@map("administration_department_transition")
 }

@@ -6,6 +6,8 @@ import { EventRelationService } from '../application/event-relation.service'
 import { EventSideService } from '../application/event-side.service'
 import { EventTerritoryTransferService } from '../application/event-territory-transfer.service'
 import { EventTerritoryTransferController } from '../presentation/event-territory-transfer.controller'
+import { EventDepartmentService } from '../application/event-department.service'
+import { EventDepartmentController } from '../presentation/event-department.controller'
 import { EventSectionService } from '../application/event-section.service'
 import { EventSideController } from '../presentation/event-side.controller'
 import { EventOverviewController } from '../presentation/event-overview.controller'
@@ -25,6 +27,7 @@ import { NotificationModule } from '../../notification/notification.module'
     EventOverviewController,
     EventPhaseController,
     EventTerritoryTransferController,
+    EventDepartmentController,
   ],
   providers: [
     EventService,
@@ -33,6 +36,7 @@ import { NotificationModule } from '../../notification/notification.module'
     EventRelationService,
     EventSideService,
     EventTerritoryTransferService,
+    EventDepartmentService,
     EventSectionService,
     EventOverviewService,
     EventPrismaRepository,
