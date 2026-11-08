@@ -116,11 +116,14 @@ export function GanttPanel({
   rootPhases = [],
   relations = [],
   showLinks = false,
+  zoomLabel = null,
   onToggleLinks,
 }: HoverProps & {
   /** 하위 사건끼리의 관련 사건 — 주면 머리에 '연결' 토글, 켜면 막대 사이 화살표 */
   relations?: ReadonlyArray<EventOverviewRelation>
   showLinks?: boolean
+  /** 축을 시기로 확대했으면 그 시기 이름 — 머리 줄에 알린다(되돌리기는 거르기 칩 ×) */
+  zoomLabel?: string | null
   onToggleLinks?: () => void
   /** 참여국 국가원수의 즉위·취임 — 축의 왕관과 줄마다 점선 */
   accessions?: AccessionMarker[]
@@ -156,10 +159,13 @@ export function GanttPanel({
   const groupById = new Map(grouping.groups.map((group) => [group.id, group]))
   const shownRows = gantt.rows.filter((row) => {
     if (hideFiltered && visibleIds && !visibleIds.has(row.node.id)) return false
+    /* 축을 시기로 확대했으면 그 시기 밖 줄은 뺀다 — 1942년을 보는데 205줄 중 150줄이 회색 끝 표지였다 */
+    if (zoomLabel && row.offWindow) return false
     const groupId = grouping.groupIdOf.get(row.node.id)
     return !groupId || groupId === row.node.id || !foldedGroups.has(groupId)
   })
   const hiddenCount = hideFiltered && visibleIds ? gantt.rows.filter((row) => !visibleIds.has(row.node.id)).length : 0
+  const offWindowCount = zoomLabel ? gantt.rows.filter((row) => row.offWindow).length : 0
   /** 묶음 띠의 끝 — 그 묶음의 마지막으로 보이는 줄(띠 아래를 조금 띄운다) */
   const lastShownOfGroup = new Map<string, string>()
   for (const row of shownRows) {
@@ -350,6 +356,7 @@ export function GanttPanel({
             : edges.length > 0
               ? '세로 선 = 상위 사건의 시작·끝'
               : '축 전체가 상위 사건의 기간 안'}
+          {zoomLabel && ` · 축을 ${zoomLabel}로 확대 — 그 밖의 ${offWindowCount}건은 숨김(위 '시기' 칩 ×로 되돌림)`}
           {' · 점선 막대 = 연·월만 아는 날짜(그 기간 어딘가)'}
           {gantt.undated.length > 0 && ` · 날짜 없음 ${gantt.undated.length}건은 '기록 점검' 탭에`}
           {outsideCount > 0 &&
@@ -677,6 +684,21 @@ export function GanttPanel({
                     {accessionMarks.map((mark) => (
                       <S.AccessionLine key={mark.key} style={{ left: `${mark.pct}%` }} />
                     ))}
+                    {row.offWindow ? (
+                      /* 확대한 축 밖 — 막대 대신 그 쪽 끝에 날짜와 화살표만(빈 줄로 두면 '날짜 없음'과 구별이 안 된다) */
+                      <S.BarLabel
+                        $inside={false}
+                        $pinned={false}
+                        style={
+                          row.offWindow === 'before'
+                            ? { left: 0, opacity: 0.6 }
+                            : { right: 0, paddingLeft: 0, paddingRight: 4, opacity: 0.6 }
+                        }
+                      >
+                        {row.offWindow === 'before' ? `‹ ${row.dateLabel}` : `${row.dateLabel} ›`}
+                      </S.BarLabel>
+                    ) : (
+                      <>
                     <S.Bar
                       data-gantt-bar={row.node.id}
                       $color={color}
@@ -699,6 +721,8 @@ export function GanttPanel({
                     >
                       {row.dateLabel}
                     </S.BarLabel>
+                      </>
+                    )}
                   </S.GanttTrack>
                 </div>
               )

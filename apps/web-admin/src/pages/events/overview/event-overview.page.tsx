@@ -60,6 +60,7 @@ import {
   SidesMetricsPanel,
 } from './overview-sections'
 import { OverviewEventModal } from './overview-event-modal'
+import { GroupLanesPanel } from './overview-lanes'
 import { MapPanel } from './overview-map-panel'
 import { RelationsPanel } from './overview-relations-panel'
 import {
@@ -184,7 +185,8 @@ export function EventOverviewPanel({
   const selectedType = searchParams.get('type')
   const setSelectedType = (key: string | null) => setParam('type', key)
   /** 거르기 — 시기(?when=<from>_<to>, 축 값). 시기 막대를 누르면 건다 */
-  const selectedPeriod = parsePeriodParam(searchParams.get('when'))
+  const whenParam = searchParams.get('when')
+  const selectedPeriod = parsePeriodParam(whenParam)
   const setSelectedPeriod = (period: PeriodFilter | null) =>
     setParam('when', period ? periodParam(period) : null)
   /** 거르기 — 묶음(?group=<묶음 id> · 개별은 singles). 묶음 줄의 칩을 누르면 건다 */
@@ -271,13 +273,18 @@ export function EventOverviewPanel({
   const derived = useMemo(() => {
     if (!data) return null
     const { root, descendants } = data
-    const gantt = buildGantt(root, descendants, ganttFit)
+    /* 시기를 고르면(?when=) 축이 그 시기로 확대된다 — 거르기 칩의 ×가 축도 되돌린다 */
+    const zoom = parsePeriodParam(whenParam)
+    const gantt = buildGantt(root, descendants, ganttFit, zoom)
+    /* 시기 분포는 확대와 무관하게 전체 축 — 다른 시기를 골라 옮겨 가는 개관 자리다 */
+    const fullGantt = zoom ? buildGantt(root, descendants, ganttFit) : gantt
     const ordered = orderedDescendants(gantt)
     const numberById = outlineNumbers(ordered, root.id)
     const matrix = buildCountryMatrix(root, descendants)
     return {
       grouping: collectionGroups(ordered, gantt),
       gantt,
+      fullGantt,
       ordered,
       numberById,
       matrix,
@@ -295,7 +302,8 @@ export function EventOverviewPanel({
         .length,
       innerRelations: (data.relations ?? []).filter((relation) => !relation.external),
     }
-  }, [data, ganttFit])
+    // 시기는 URL 문자열로 견준다(파싱한 객체는 매 렌더 새것)
+  }, [data, ganttFit, whenParam])
   /** 전개 간트의 연결 화살표 — `?links=1` */
   const showLinks = searchParams.get('links') === '1'
   const setShowLinks = (next: boolean) => setParam('links', next ? '1' : null)
@@ -351,7 +359,7 @@ export function EventOverviewPanel({
 
   /** 시기 분포 — 거르기를 따른다(걸린 사건만 채우고 전체는 윤곽으로) */
   const histogram = useMemo(
-    () => (derived ? timeHistogram(derived.gantt, visibleIds) : []),
+    () => (derived ? timeHistogram(derived.fullGantt, visibleIds) : []),
     [derived, visibleIds],
   )
 
@@ -723,6 +731,16 @@ export function EventOverviewPanel({
       >
         {activeView === 'timeline' && (
           <>
+            {/* 묶음별 흐름 — 묶음마다 한 줄, 같은 때가 세로로 맞는다(아래 상세 간트와 같은 축) */}
+            <GroupLanesPanel
+              gantt={derived.gantt}
+              grouping={derived.grouping}
+              ordered={derived.ordered}
+              rootPhases={root.phases as EventPhase[] | undefined}
+              visibleIds={visibleIds}
+              numberById={derived.numberById}
+              onOpen={openEventById}
+            />
             <GanttPanel
               root={{ id: root.id, domain: root.domain }}
               hideFiltered={selectedGroup !== null}
@@ -743,10 +761,15 @@ export function EventOverviewPanel({
               relations={derived.innerRelations}
               showLinks={showLinks}
               onToggleLinks={() => setShowLinks(!showLinks)}
+              zoomLabel={
+                selectedPeriod
+                  ? (histogram.find((bin) => Math.abs(bin.from - selectedPeriod.from) < 1e-3)?.label ?? '고른 시기')
+                  : null
+              }
             />
             <DistributionPanel
               part="period"
-              axis={derived.gantt}
+              axis={derived.fullGantt}
               types={derived.types}
               bins={histogram}
               filtered={visibleIds !== null}

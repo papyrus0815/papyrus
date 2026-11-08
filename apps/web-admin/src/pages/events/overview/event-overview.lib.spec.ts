@@ -552,3 +552,20 @@ describe('동떨어짐 기준', () => {
     expect(buildGantt(open, [century]).farOff).toEqual([])
   })
 })
+
+describe('간트 축 확대 — 고른 시기를 축 전체로', () => {
+  it('시기 밖 사건은 offWindow, 안의 사건은 0~100% 안에 선다 — 순서·번호는 그대로', () => {
+    const full = buildGantt(root, descendants)
+    // 1914년 8월 1일 ~ 12월 31일 — 사라예보(6.28)는 밖, 마른(9.5)은 안
+    const zoomed = buildGantt(root, descendants, 'children', { from: 1914 + 7 / 12, to: 1915 })
+    const sarajevo = zoomed.rows.find((row) => row.node.id === 'sarajevo')!
+    const marne = zoomed.rows.find((row) => row.node.id === 'marne')!
+    expect(sarajevo.offWindow).toBe('before')
+    expect(marne.offWindow).toBeNull()
+    expect(marne.leftPct).toBeGreaterThan(0)
+    expect(marne.leftPct).toBeLessThan(100)
+    expect(zoomed.rows.map((row) => row.node.id)).toEqual(full.rows.map((row) => row.node.id))
+    expect(zoomed.domain).toEqual([1914 + 7 / 12, 1915])
+    expect(full.rows.every((row) => row.offWindow === null)).toBe(true)
+  })
+})

@@ -39,6 +39,8 @@ export interface GanttRow extends AxisSpan {
    * 개전일 전). 데이터 오류(상위 기간이 좁다)인지 전사(前史)인지 화면이 말하지 않았다.
    */
   outside: 'before' | 'after' | null
+  /** 확대한 축(시기 고르기) 밖 — 막대 대신 그 쪽 끝 표지만 */
+  offWindow: 'before' | 'after' | null
 }
 
 export interface GanttLayout {
@@ -254,6 +256,11 @@ export function buildGantt(
   root: EventOverviewNode,
   descendants: EventOverviewNode[],
   fit: GanttFit = 'children',
+  /**
+   * 축 확대 — 시기 분포에서 고른 시기(?when=)를 축 전체로. 6년 전쟁을 한 축에 놓으면 하루가 0.14px라 전투 절반이
+   * 2px 미만이었다(인포그래픽 검토 §4). 순서·번호는 확대와 무관하게 전체 기준 그대로(다른 보기가 같은 번호를 쓴다).
+   */
+  zoom: { from: number; to: number } | null = null,
 ): GanttLayout {
   const titleById = new Map([root, ...descendants].map((node) => [node.id, node.title]))
   const placed: Array<{ node: EventOverviewNode; span: AxisSpan }> = []
@@ -314,17 +321,23 @@ export function buildGantt(
   const padding = (high - low) * 0.02
   low -= padding
   high += padding
-  // 빈 구간은 막대 사이에서만 찾는다 — 축 양 끝(여백·상위 기간)은 접지 않는다
+  if (zoom && zoom.to > zoom.from) {
+    low = zoom.from
+    high = zoom.to
+  }
+  // 빈 구간은 막대 사이에서만 찾는다 — 축 양 끝(여백·상위 기간)은 접지 않는다. 확대한 축은 접지 않는다
   const stretches =
-    fit === 'children' ? emptyStretches(placed.map((entry) => entry.span), low, high) : []
+    fit === 'children' && !zoom ? emptyStretches(placed.map((entry) => entry.span), low, high) : []
   const toPct = brokenAxis(low, high, stretches)
+  const clampPct = (value: number) => Math.min(100, Math.max(0, value))
 
   const rows: GanttRow[] = placed.map(({ node, span }, index) => ({
     ...span,
     node,
     number: index + 1,
-    leftPct: toPct(span.from),
-    widthPct: Math.max(toPct(span.to) - toPct(span.from), 0),
+    leftPct: clampPct(toPct(span.from)),
+    widthPct: Math.max(clampPct(toPct(span.to)) - clampPct(toPct(span.from)), 0),
+    offWindow: span.to <= low ? 'before' : span.from >= high ? 'after' : null,
     dateLabel: formatSpanLabel(withEffectivePrecision(node)),
     parentTitle:
       node.depth >= 2 && node.parentEventId ? (titleById.get(node.parentEventId) ?? null) : null,
