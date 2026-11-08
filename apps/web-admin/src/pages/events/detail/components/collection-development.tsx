@@ -39,6 +39,7 @@ import {
 } from './contemporary-heads.lib'
 import { type GapInfo, type QuietSpan, quietSpansWithStart, siblingGaps, spanText, trailingQuiet } from './development-gap.lib'
 import { HeaderTextAction } from './section-collapse'
+import { ChronologicalFlow } from './chronological-flow'
 import { EventPhaseEditor } from './event-phase-editor'
 import { type EventPhase, type PhaseReach, isoToPhasePoint, phaseRangeLabel, phaseReach } from './event-phase.lib'
 import {
@@ -165,6 +166,11 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
       /* 저장 못 해도 이번 방문 동안은 접힌 그대로 */
     }
   }, [event.id, collapsedIds, foldedChapters])
+  /**
+   * 시간순 — 계층을 풀고 잎 사건 전부를 상위 국면에 자기 날짜로 놓는다. 직계가 기간 전체를 덮는 묶음(전쟁 › 전선)이면
+   * 계층 보기의 국면 장이 1·2국면에만 몰려, 흐름은 이 보기로 읽는다.
+   */
+  const [chronological, setChronological] = useState(false)
   /** 참여국 국가원수의 즉위·취임 표지 — 기본은 보인다. 머리의 단추로 숨긴다 */
   const [showAccessions, setShowAccessions] = useState(true)
   /** 국면(목차) 편집 모달 */
@@ -1192,14 +1198,28 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
                   <HeaderTextAction
                     key={level}
                     type="button"
-                    aria-pressed={foldLevel === level}
-                    data-active={foldLevel === level || undefined}
-                    onClick={() => applyFoldLevel(level)}
+                    aria-pressed={!chronological && foldLevel === level}
+                    data-active={(!chronological && foldLevel === level) || undefined}
+                    onClick={() => {
+                      setChronological(false)
+                      applyFoldLevel(level)
+                    }}
                   >
                     {label}
                   </HeaderTextAction>
                 ))}
               </FoldLevels>
+            )}
+            {totalCount > directCount && (
+              <HeaderTextAction
+                type="button"
+                aria-pressed={chronological}
+                data-active={chronological || undefined}
+                onClick={() => setChronological((on) => !on)}
+                title="묶음을 풀고 하위 전부를 시간 순서로 — 국면은 사건마다 자기 날짜로"
+              >
+                시간순
+              </HeaderTextAction>
             )}
           </S.SectionActions>
         )}
@@ -1223,6 +1243,8 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
             </TextButton>
           </EmptyActions>
         </Empty>
+      ) : chronological ? (
+        <ChronologicalFlow tree={tree} chapters={chapters} onOpen={setPreviewId} />
       ) : (
         <Phases>
           {/* 끄는 동안에만 — 여기 놓으면 이 사건 바로 밑(묶음에서 꺼내기) */}
