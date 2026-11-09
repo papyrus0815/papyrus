@@ -3,8 +3,13 @@ import { useEffect, useRef, useState } from 'react'
 import { FiCheck, FiEdit2 } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { formatDateRange } from '@/shared/lib/iso-date'
+import {
+  formatDateRange,
+  isoToDateInput,
+  isoToTimeInput,
+} from '@/shared/lib/iso-date'
 import { DateRangeField } from '@/shared/ui/form-fields/date-range-field'
+import { TimeSegmentField } from '@/shared/ui/time-segment-field/time-segment-field'
 
 import * as S from './inline.styles'
 
@@ -71,8 +76,12 @@ export function InlineDateRange({
   const [draftEnd, setDraftEnd] = useState(endDate ?? '')
   const savedStartPrecision = asPrecision(startDatePrecision)
   const savedEndPrecision = asPrecision(endDatePrecision)
+  const savedStartTime = isoToTimeInput(startDate)
+  const savedEndTime = isoToTimeInput(endDate)
   const [draftStartPrecision, setDraftStartPrecision] = useState(savedStartPrecision)
   const [draftEndPrecision, setDraftEndPrecision] = useState(savedEndPrecision)
+  const [draftStartTime, setDraftStartTime] = useState(savedStartTime)
+  const [draftEndTime, setDraftEndTime] = useState(savedEndTime)
 
   // edit 진입(false→true) 시에만 draft를 현재 server 값으로 동기화.
   const wasEditingRef = useRef(editing)
@@ -82,24 +91,66 @@ export function InlineDateRange({
       setDraftEnd(endDate ?? '')
       setDraftStartPrecision(savedStartPrecision)
       setDraftEndPrecision(savedEndPrecision)
+      setDraftStartTime(savedStartTime)
+      setDraftEndTime(savedEndTime)
     }
     wasEditingRef.current = editing
-  }, [editing, startDate, endDate, savedStartPrecision, savedEndPrecision])
+  }, [
+    editing,
+    startDate,
+    endDate,
+    savedStartPrecision,
+    savedEndPrecision,
+    savedStartTime,
+    savedEndTime,
+  ])
+
+  const composeIsoWithTime = (
+    rawDate: string,
+    precision: DatePrecision,
+    timeValue: string,
+    timeChanged: boolean,
+  ): string => {
+    if (!rawDate) return ''
+    const datePart = isoToDateInput(rawDate) || rawDate
+    const effectiveTime = precision === 'day' ? timeValue : ''
+    if (effectiveTime) return `${datePart}T${effectiveTime}:00.000Z`
+    if (timeChanged) return `${datePart}T00:00:00.000Z`
+    return rawDate
+  }
 
   const commit = () => {
     const patch: DateRangePatch = {}
     if (allowPartial) {
-      // 정밀도를 사용자가 직접 고른다 — 고른 값 그대로. 날짜가 같아도 정밀도만 바뀌면
-      // ('1950년 1월 1일' → '1950년') 저장해야 하므로 둘 중 하나라도 바뀌면 보낸다.
-      if (draftStart !== (startDate ?? '') || draftStartPrecision !== savedStartPrecision) {
-        patch.startDate = draftStart
+      const effectiveStartTime = draftStartPrecision === 'day' ? draftStartTime : ''
+      const effectiveEndTime = draftEndPrecision === 'day' ? draftEndTime : ''
+      const startTimeChanged = effectiveStartTime !== savedStartTime
+      const endTimeChanged = effectiveEndTime !== savedEndTime
+      // 정밀도·시각을 사용자가 직접 고른다 — 고른 값 그대로. 날짜가 같아도 정밀도나 시각만 바뀌면
+      // 저장해야 하므로 하나라도 바뀌면 보낸다.
+      if (
+        draftStart !== (startDate ?? '') ||
+        draftStartPrecision !== savedStartPrecision ||
+        startTimeChanged
+      ) {
+        patch.startDate = composeIsoWithTime(
+          draftStart,
+          draftStartPrecision,
+          effectiveStartTime,
+          startTimeChanged,
+        )
         patch.startDatePrecision = draftStartPrecision
       }
       if (
         draftEnd !== (endDate ?? '') ||
-        (draftEnd && draftEndPrecision !== savedEndPrecision)
+        (draftEnd && (draftEndPrecision !== savedEndPrecision || endTimeChanged))
       ) {
-        patch.endDate = draftEnd
+        patch.endDate = composeIsoWithTime(
+          draftEnd,
+          draftEndPrecision,
+          effectiveEndTime,
+          endTimeChanged,
+        )
         patch.endDatePrecision = draftEndPrecision
       }
       if (Object.keys(patch).length > 0) onSave(patch)
@@ -138,8 +189,14 @@ export function InlineDateRange({
           renderControlOnly
           startValue={draftStart}
           endValue={draftEnd}
-          onStartChange={(date) => setDraftStart(date)}
-          onEndChange={(date) => setDraftEnd(date)}
+          onStartChange={(date) => {
+            setDraftStart(date)
+            if (!date) setDraftStartTime('')
+          }}
+          onEndChange={(date) => {
+            setDraftEnd(date)
+            if (!date) setDraftEndTime('')
+          }}
           startPlaceholder={startPlaceholder}
           endPlaceholder={endPlaceholder}
           startPickerTitle="시작 일자 선택"
@@ -149,10 +206,43 @@ export function InlineDateRange({
           {...(allowPartial && {
             startPrecision: draftStartPrecision,
             endPrecision: draftEndPrecision,
-            onStartPrecisionChange: setDraftStartPrecision,
-            onEndPrecisionChange: setDraftEndPrecision,
+            onStartPrecisionChange: (nextPrecision) => {
+              setDraftStartPrecision(nextPrecision)
+              if (nextPrecision !== 'day') setDraftStartTime('')
+            },
+            onEndPrecisionChange: (nextPrecision) => {
+              setDraftEndPrecision(nextPrecision)
+              if (nextPrecision !== 'day') setDraftEndTime('')
+            },
           })}
         />
+        {allowPartial &&
+          ((draftStart && draftStartPrecision === 'day') ||
+            (draftEnd && draftEndPrecision === 'day')) && (
+            /* 시각 — 날짜처럼 칸에서 바로 친다(시 : 분). 시작·종료 날짜 칸 아래 같은 두 열 */
+            <InlineTimeRow>
+              {draftStart && draftStartPrecision === 'day' ? (
+                <TimeSegmentField
+                  value={draftStartTime}
+                  onChange={setDraftStartTime}
+                  ariaLabel="시작 시각"
+                  width="100%"
+                  height={34}
+                />
+              ) : (
+                <span />
+              )}
+              {draftEnd && draftEndPrecision === 'day' && (
+                <TimeSegmentField
+                  value={draftEndTime}
+                  onChange={setDraftEndTime}
+                  ariaLabel="종료 시각"
+                  width="100%"
+                  height={34}
+                />
+              )}
+            </InlineTimeRow>
+          )}
         <DoneButton type="button" onClick={commit} aria-label="기간 편집 완료">
           <FiCheck />
           완료
@@ -234,4 +324,12 @@ const DoneButton = styled.button`
     width: 13px;
     height: 13px;
   }
+`
+
+/** 시각 두 칸 — 위 시작·종료 날짜 칸과 같은 두 열 */
+const InlineTimeRow = styled.span`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
 `

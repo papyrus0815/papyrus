@@ -1534,7 +1534,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                   />
                   {/* 시각 — 날짜처럼 칸에서 바로 친다(시 : 분). 예전엔 버튼 → 시·분 격자 모달 → 적용 */}
                   {showStartTime && (
-                    <TimeSegmentField value={startTime} onChange={setStartTime} ariaLabel="시작 시각" />
+                    <TimeSegmentField value={startTime} onChange={setStartTime} ariaLabel="시작 시각" compact width={94} />
                   )}
                 </DateTimeLine>
               </S.DateRangeColumn>
@@ -1597,7 +1597,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     minDate={startDate || undefined}
                   />
                   {showEndTime && (
-                    <TimeSegmentField value={endTime} onChange={setEndTime} ariaLabel="종료 시각" />
+                    <TimeSegmentField value={endTime} onChange={setEndTime} ariaLabel="종료 시각" compact width={94} />
                   )}
                 </DateTimeLine>
               </S.DateRangeColumn>
