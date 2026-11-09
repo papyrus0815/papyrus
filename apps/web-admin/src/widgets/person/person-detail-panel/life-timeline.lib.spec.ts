@@ -139,4 +139,43 @@ describe('computeLifeTimeline', () => {
     })!
     expect(layout.ticks.some((tick) => tick.year === 0)).toBe(false)
   })
+
+  it('사망 연도(deathYear)가 있는 고인의 종료일 미입력 재위·재임은 사망 연도를 endYear로 채운다', () => {
+    const layout = computeLifeTimeline({
+      ...base,
+      records: [
+        {
+          key: 'reign-sejong',
+          family: 'reign',
+          title: '세종',
+          startDate: '1418-09-09',
+          endDate: null,
+        },
+      ],
+      birthYear: 1397,
+      deathYear: 1450,
+    })!
+    expect(layout.bars[0].startYear).toBe(1418)
+    expect(layout.bars[0].endYear).toBe(1450)
+  })
+
+  it('사망 연도가 미상인 고인의 종료일 미입력 구간은 열린 현직(open=true)으로 취급하지 않는다', () => {
+    const layout = computeLifeTimeline({
+      records: [
+        {
+          key: 'tenure-unknown-death',
+          family: 'office',
+          title: '재상',
+          startDate: '1900-01-01',
+          endDate: null,
+        },
+      ],
+      birthYear: 1860,
+      deathYear: null,
+      isDeceased: true,
+      nowYear: 2026,
+    })!
+    expect(layout.bars[0].open).toBe(false)
+    expect(layout.bars[0].endYear).toBeNull()
+  })
 })

@@ -26,6 +26,7 @@ import {
 } from '@/shared/api/election'
 import { personKeys } from '@/entities/person/query-keys'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { compareByDate, dateSortKey, parseIsoDateParts } from '@/shared/lib/iso-date'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import {
@@ -73,6 +74,12 @@ export type ElectionCandidacyDetail = {
 
 function formatYmdKo(ymd: string) {
   if (!ymd) return ''
+  const parsed = parseIsoDateParts(ymd)
+  if (parsed) {
+    const yearStr =
+      parsed.year < 0 ? `기원전 ${Math.abs(parsed.year)}` : `${parsed.year}`
+    return `${yearStr}. ${parsed.month}. ${parsed.day}.`
+  }
   try {
     return new Date(`${ymd}T12:00:00.000Z`).toLocaleDateString('ko-KR')
   } catch {
@@ -90,9 +97,13 @@ function membershipDateToYmd(
   }
   if (value instanceof Date) {
     if (Number.isNaN(value.getTime())) return ''
-    return value.toISOString().slice(0, 10)
+    return value.toISOString().split('T')[0] ?? ''
   }
-  if (typeof value === 'string') return value.slice(0, 10)
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return ''
+    return trimmed.split('T')[0] ?? trimmed
+  }
   return ''
 }
 
@@ -222,20 +233,31 @@ export function PersonPoliticsSection({
 
   const memberships = useMemo(() => {
     const raw = membershipsProp ?? []
-    return raw.slice().sort((a, b) => {
-      const ta = a.startDate ? new Date(a.startDate).getTime() : Number.POSITIVE_INFINITY
-      const tb = b.startDate ? new Date(b.startDate).getTime() : Number.POSITIVE_INFINITY
-      const sa = Number.isFinite(ta) ? ta : Number.POSITIVE_INFINITY
-      const sb = Number.isFinite(tb) ? tb : Number.POSITIVE_INFINITY
-      return sa - sb
-    })
+    return raw.slice().sort((a, b) =>
+      compareByDate(
+        membershipDateToYmd(a.startDate) || null,
+        membershipDateToYmd(b.startDate) || null,
+      ),
+    )
   }, [membershipsProp])
 
+  const isDateRangeReversed = useMemo(() => {
+    if (!editStart || !editEnd) return false
+    const startKey = dateSortKey(editStart)
+    const endKey = dateSortKey(editEnd)
+    if (startKey == null || endKey == null) return false
+    return startKey > endKey
+  }, [editStart, editEnd])
+
   const invalidatePerson = () => {
+    queryClient.invalidateQueries({ queryKey: personKeys.detailFull(personId) })
     queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
     queryClient.invalidateQueries({ queryKey: personKeys.all })
     queryClient.invalidateQueries({ queryKey: personKeys.infographic })
     queryClient.invalidateQueries({ queryKey: ['persons', 'compare-records'] })
+    queryClient.invalidateQueries({
+      queryKey: ['person-record-event-suggestions', personId],
+    })
   }
 
   const createMut = useMutation({
@@ -345,21 +367,13 @@ export function PersonPoliticsSection({
   const candidacySummary = useMemo(() => {
     return candidacies
       .slice()
-      .sort((a, b) => {
-        const ta = a.election?.pollDate
-          ? Date.parse(a.election.pollDate)
-          : Number.POSITIVE_INFINITY
-        const tb = b.election?.pollDate
-          ? Date.parse(b.election.pollDate)
-          : Number.POSITIVE_INFINITY
-        const sa = Number.isFinite(ta) ? ta : Number.POSITIVE_INFINITY
-        const sb = Number.isFinite(tb) ? tb : Number.POSITIVE_INFINITY
-        return sa - sb
-      })
+      .sort((a, b) =>
+        compareByDate(a.election?.pollDate ?? null, b.election?.pollDate ?? null),
+      )
       .map((candidacy) => ({
         ...candidacy,
         pollLabel: candidacy.election?.pollDate
-          ? new Date(candidacy.election.pollDate).toLocaleDateString('ko-KR', { timeZone: 'UTC' })
+          ? formatYmdKo(membershipDateToYmd(candidacy.election.pollDate)) || '—'
           : '—',
       }))
   }, [candidacies])
@@ -542,6 +556,11 @@ export function PersonPoliticsSection({
                     ) : null}
                   </SelectClearRow>
                 </DateFieldsRow>
+                {isDateRangeReversed ? (
+                  <ModalDateError role="alert">
+                    종료일이 시작일보다 빠를 수 없습니다.
+                  </ModalDateError>
+                ) : null}
               </FieldControl>
             </FieldRow>
             <FieldRow>
@@ -580,6 +599,7 @@ export function PersonPoliticsSection({
               type="button"
               disabled={
                 !editPartyId ||
+                isDateRangeReversed ||
                 (editingId ? updateMut.isPending : createMut.isPending)
               }
               onClick={() =>
@@ -1384,4 +1404,11 @@ const OverviewNotes = styled.p`
   line-height: 1.65;
   color: ${({ theme }) => theme.colors.text.secondary};
   white-space: pre-wrap;
+`
+
+const ModalDateError = styled.p`
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #e11d48;
 `

@@ -147,6 +147,8 @@ export interface PersonDetailData {
   /** 활동시기(floruit) — 생몰 전면 미상 인물의 활동 연대(생몰 폴백). 크기값(양수)+floruitEra. */
   floruitStartYear?: number | null
   floruitEndYear?: number | null
+  floruitStartEra?: string | null
+  floruitEndEra?: string | null
   floruitEra?: string | null
   influence?: number | null
   isBirthDateUnknown?: boolean | null
@@ -166,7 +168,16 @@ export interface PersonDetailData {
     affiliationType?: string | null
     priority?: number | null
     startDate?: string | null
+    startEra?: string | null
+    startYear?: number | null
+    startMonth?: number | null
+    startDay?: number | null
     endDate?: string | null
+    endEra?: string | null
+    endYear?: number | null
+    endMonth?: number | null
+    endDay?: number | null
+    note?: string | null
     countryId?: string | null
     historicalCountryId?: string | null
     country?: { id: string; name: string; isoCode?: string | null; flagEmoji?: string | null; thumbnailUrl?: string | null } | null

@@ -6,7 +6,7 @@
  * - 소속 묶음별: 메타 편집, 멤버/역할 관리, 전임(세대 계승)·중심 인물 지정, 삭제
  * - 편집 권한(canEdit) 없는 공유 묶음은 읽기 전용
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { createPortal } from 'react-dom'
 
@@ -14,6 +14,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiEdit2, FiPlus, FiTrash2, FiUserPlus, FiX } from 'react-icons/fi'
 import styled, { type DefaultTheme } from 'styled-components'
 
+import { getAllCountries } from '@/shared/api/countries'
+import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import { getAllPersons } from '@/shared/api/persons'
 import {
   PERSON_GROUP_TYPE_META,
@@ -27,6 +29,7 @@ import {
   updatePersonGroupMember,
   type PersonGroupType,
 } from '@/shared/api/person-groups'
+import { useBodyScrollLock } from '@/shared/hooks/use-body-scroll-lock.hook'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
@@ -50,6 +53,8 @@ interface EditForm {
   type: PersonGroupType
   generationOrder: string
   description: string
+  countryId: string
+  historicalCountryId: string
   predecessorGroupId: string
   centerPersonId: string
   centerName: string
@@ -69,6 +74,8 @@ export function PersonGroupManageModal({ personId, personName, onClose }: Props)
   const [type, setType] = useState<PersonGroupType>('GENERATION')
   const [generationOrder, setGenerationOrder] = useState('')
   const [description, setDescription] = useState('')
+  const [countryId, setCountryId] = useState('')
+  const [historicalCountryId, setHistoricalCountryId] = useState('')
   const [centerId, setCenterId] = useState('')
   const [centerName, setCenterName] = useState('')
 
@@ -83,6 +90,24 @@ export function PersonGroupManageModal({ personId, personName, onClose }: Props)
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<EditForm | null>(null)
 
+  useBodyScrollLock(true)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (picker) return
+      e.stopPropagation()
+      if (editingGroupId) {
+        setEditingGroupId(null)
+        setEditForm(null)
+      } else {
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [picker, editingGroupId, onClose])
+
   const myGroupsQuery = useQuery({
     queryKey: ['person-groups-by-person', personId],
     queryFn: () => getPersonGroupsByPerson(personId),
@@ -96,6 +121,16 @@ export function PersonGroupManageModal({ personId, personName, onClose }: Props)
     queryKey: ['persons', 'all'],
     queryFn: () => getAllPersons(),
   })
+  const countriesQuery = useQuery({
+    queryKey: ['all-countries'],
+    queryFn: () => getAllCountries(),
+    staleTime: 5 * 60_000,
+  })
+  const historicalCountriesQuery = useQuery({
+    queryKey: ['all-historical-countries'],
+    queryFn: () => getAllHistoricalCountries(),
+    staleTime: 5 * 60_000,
+  })
 
   const myGroups = myGroupsQuery.data ?? []
   const myGroupIds = useMemo(() => new Set(myGroups.map((g) => g.id)), [myGroups])
@@ -108,7 +143,7 @@ export function PersonGroupManageModal({ personId, personName, onClose }: Props)
 
   const invalidate = () => {
     void queryClient.invalidateQueries({
-      queryKey: ['person-groups-by-person', personId],
+      queryKey: ['person-groups-by-person'],
     })
     void queryClient.invalidateQueries({ queryKey: ['person-groups-all'] })
     void myGroupsQuery.refetch()
@@ -125,6 +160,8 @@ export function PersonGroupManageModal({ personId, personName, onClose }: Props)
           type === 'GENERATION' && generationOrder.trim()
             ? Number(generationOrder)
             : null,
+        countryId: countryId || null,
+        historicalCountryId: historicalCountryId || null,
         centerPersonId: centerId || null,
         memberPersonIds: [personId],
       }),
@@ -133,6 +170,8 @@ export function PersonGroupManageModal({ personId, personName, onClose }: Props)
       setName('')
       setGenerationOrder('')
       setDescription('')
+      setCountryId('')
+      setHistoricalCountryId('')
       setCenterId('')
       setCenterName('')
       invalidate()
@@ -162,8 +201,9 @@ export function PersonGroupManageModal({ personId, personName, onClose }: Props)
           form.type === 'GENERATION' && form.generationOrder.trim()
             ? Number(form.generationOrder)
             : null,
-        predecessorGroupId:
-          form.type === 'GENERATION' ? form.predecessorGroupId || null : null,
+        countryId: form.countryId || null,
+        historicalCountryId: form.historicalCountryId || null,
+        predecessorGroupId: form.predecessorGroupId || null,
         centerPersonId: form.centerPersonId || null,
       }),
     onSuccess: () => {
@@ -234,6 +274,8 @@ export function PersonGroupManageModal({ personId, personName, onClose }: Props)
       generationOrder:
         g.generationOrder != null ? String(g.generationOrder) : '',
       description: g.description ?? '',
+      countryId: g.countryId ?? '',
+      historicalCountryId: g.historicalCountryId ?? '',
       predecessorGroupId: g.predecessor?.id ?? '',
       centerPersonId: g.center?.id ?? '',
       centerName: g.center ? getPersonDisplayName(g.center, true) : '',
@@ -266,7 +308,12 @@ export function PersonGroupManageModal({ personId, personName, onClose }: Props)
 
   return createPortal(
     <Overlay onClick={onClose}>
-      <Modal onClick={(e) => e.stopPropagation()}>
+      <Modal
+        role="dialog"
+        aria-modal="true"
+        aria-label="소속 그룹 관리"
+        onClick={(e) => e.stopPropagation()}
+      >
         <Header>
           <div>
             <Title>소속 그룹 관리</Title>
@@ -291,9 +338,50 @@ export function PersonGroupManageModal({ personId, personName, onClose }: Props)
               <BigInput
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && name.trim() && !createMutation.isPending) {
+                    e.preventDefault()
+                    createMutation.mutate()
+                  }
+                }}
                 placeholder="예: 중국공산당 혁명 1세대"
               />
             </Field>
+
+            <CondRow>
+              <Field style={{ flex: 1, minWidth: 180 }}>
+                <FieldLabel>
+                  역사 국가 <Muted>(선택)</Muted>
+                </FieldLabel>
+                <BigSelect
+                  value={historicalCountryId}
+                  onChange={(e) => setHistoricalCountryId(e.target.value)}
+                >
+                  <option value="">미지정</option>
+                  {(historicalCountriesQuery.data ?? []).map((hc) => (
+                    <option key={hc.id} value={hc.id}>
+                      {hc.name}
+                    </option>
+                  ))}
+                </BigSelect>
+              </Field>
+              <Field style={{ flex: 1, minWidth: 180 }}>
+                <FieldLabel>
+                  현대 국가 <Muted>(선택)</Muted>
+                </FieldLabel>
+                <BigSelect
+                  value={countryId}
+                  onChange={(e) => setCountryId(e.target.value)}
+                >
+                  <option value="">미지정</option>
+                  {(countriesQuery.data ?? []).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </BigSelect>
+              </Field>
+            </CondRow>
 
             <CondRow>
               {type === 'GENERATION' && (
@@ -478,36 +566,78 @@ export function PersonGroupManageModal({ personId, personName, onClose }: Props)
                               </PickerRow>
                             </Field>
                           </CondRow>
-                          {editForm.type === 'GENERATION' && (
-                            <Field>
-                              <FieldLabel>전임 묶음 (이전 세대)</FieldLabel>
+                          <CondRow>
+                            <Field style={{ flex: 1, minWidth: 180 }}>
+                              <FieldLabel>
+                                역사 국가 <Muted>(선택)</Muted>
+                              </FieldLabel>
                               <BigSelect
-                                value={editForm.predecessorGroupId}
+                                value={editForm.historicalCountryId}
                                 onChange={(e) =>
                                   setEditForm({
                                     ...editForm,
-                                    predecessorGroupId: e.target.value,
+                                    historicalCountryId: e.target.value,
                                   })
                                 }
                               >
-                                <option value="">없음</option>
-                                {(allGroupsQuery.data ?? [])
-                                  .filter(
-                                    (cand) =>
-                                      cand.id !== g.id &&
-                                      cand.type === 'GENERATION',
-                                  )
-                                  .map((cand) => (
-                                    <option key={cand.id} value={cand.id}>
-                                      {cand.generationOrder != null
-                                        ? `${cand.generationOrder}세대 · `
-                                        : ''}
-                                      {cand.name}
+                                <option value="">미지정</option>
+                                {(historicalCountriesQuery.data ?? []).map(
+                                  (hc) => (
+                                    <option key={hc.id} value={hc.id}>
+                                      {hc.name}
                                     </option>
-                                  ))}
+                                  ),
+                                )}
                               </BigSelect>
                             </Field>
-                          )}
+                            <Field style={{ flex: 1, minWidth: 180 }}>
+                              <FieldLabel>
+                                현대 국가 <Muted>(선택)</Muted>
+                              </FieldLabel>
+                              <BigSelect
+                                value={editForm.countryId}
+                                onChange={(e) =>
+                                  setEditForm({
+                                    ...editForm,
+                                    countryId: e.target.value,
+                                  })
+                                }
+                              >
+                                <option value="">미지정</option>
+                                {(countriesQuery.data ?? []).map((c) => (
+                                  <option key={c.id} value={c.id}>
+                                    {c.name}
+                                  </option>
+                                ))}
+                              </BigSelect>
+                            </Field>
+                          </CondRow>
+                          <Field>
+                            <FieldLabel>
+                              전임 묶음 <Muted>(이전 세대·계파 계승, 선택)</Muted>
+                            </FieldLabel>
+                            <BigSelect
+                              value={editForm.predecessorGroupId}
+                              onChange={(e) =>
+                                setEditForm({
+                                  ...editForm,
+                                  predecessorGroupId: e.target.value,
+                                })
+                              }
+                            >
+                              <option value="">없음</option>
+                              {(allGroupsQuery.data ?? [])
+                                .filter((cand) => cand.id !== g.id)
+                                .map((cand) => (
+                                  <option key={cand.id} value={cand.id}>
+                                    {cand.generationOrder != null
+                                      ? `${cand.generationOrder}세대 · `
+                                      : ''}
+                                    {cand.name}
+                                  </option>
+                                ))}
+                            </BigSelect>
+                          </Field>
                           <Field>
                             <FieldLabel>설명</FieldLabel>
                             <BigTextarea
@@ -619,8 +749,15 @@ export function PersonGroupManageModal({ personId, personName, onClose }: Props)
                                   {g.canEdit ? (
                                     <>
                                       <RoleInput
+                                        key={`${m.membershipId}-${m.roleLabel ?? ''}`}
                                         defaultValue={m.roleLabel ?? ''}
                                         placeholder="역할 (예: 핵심)"
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            e.preventDefault()
+                                            e.currentTarget.blur()
+                                          }
+                                        }}
                                         onBlur={(e) => {
                                           const next = e.target.value.trim()
                                           const cur = (m.roleLabel ?? '').trim()

@@ -56,6 +56,96 @@ interface InlineDateFieldProps {
 const digits = (value: string, max: number) =>
   value.replace(/[^0-9]/g, '').slice(0, max)
 
+/**
+ * 월 입력 자동 보정:
+ * - 2~9 한 자리를 입력하면 16월·20월 등은 존재하지 않으므로 즉시 '02'~'09'로 보정한다.
+ * - '1' 뒤에 3~9를 입력해 '13'~'19'(예: 16)가 되면 13~19월은 없으므로 '03'~'09'(예: 06)로 보정한다.
+ * - 이미 2자리(예: '06')가 채워진 상태에서 새 숫자를 치면 새로 친 숫자로 덮어쓴다.
+ */
+export function normalizeMonthInput(rawValue: string, prevMonth: string): string {
+  const onlyDigits = rawValue.replace(/[^0-9]/g, '')
+  let candidate = onlyDigits.slice(0, 2)
+
+  if (prevMonth.length === 2 && onlyDigits.length > 2) {
+    if (onlyDigits.startsWith(prevMonth)) {
+      candidate = onlyDigits.slice(prevMonth.length, prevMonth.length + 1)
+    } else if (onlyDigits.endsWith(prevMonth)) {
+      candidate = onlyDigits.slice(0, 1)
+    }
+  }
+
+  if (candidate.length === 1) {
+    const singleDigit = Number(candidate)
+    const isDeletingFromPadded =
+      prevMonth.length === 2 &&
+      prevMonth.startsWith('0') &&
+      prevMonth.endsWith(candidate) &&
+      onlyDigits.length === 1
+    if (!isDeletingFromPadded && singleDigit >= 2 && singleDigit <= 9) {
+      return `0${candidate}`
+    }
+    return candidate
+  }
+
+  if (candidate.length === 2) {
+    const twoDigit = Number(candidate)
+    const secondDigit = Number(candidate[1])
+    if (twoDigit > 12 && secondDigit >= 2 && secondDigit <= 9) {
+      return `0${secondDigit}`
+    }
+    if (twoDigit === 0) {
+      return '0'
+    }
+  }
+
+  return candidate
+}
+
+/**
+ * 일 입력 자동 보정:
+ * - 4~9 한 자리를 입력하면 40일~99일은 존재하지 않으므로 즉시 '04'~'09'로 보정한다.
+ * - '3' 뒤에 2~9를 입력해 '32'~'39'(예: 35)가 되면 32~39일은 없으므로 '02'~'09'(예: 05)로 보정한다.
+ * - 이미 2자리(예: '05')가 채워진 상태에서 새 숫자를 치면 새로 친 숫자로 덮어쓴다.
+ */
+export function normalizeDayInput(rawValue: string, prevDay: string): string {
+  const onlyDigits = rawValue.replace(/[^0-9]/g, '')
+  let candidate = onlyDigits.slice(0, 2)
+
+  if (prevDay.length === 2 && onlyDigits.length > 2) {
+    if (onlyDigits.startsWith(prevDay)) {
+      candidate = onlyDigits.slice(prevDay.length, prevDay.length + 1)
+    } else if (onlyDigits.endsWith(prevDay)) {
+      candidate = onlyDigits.slice(0, 1)
+    }
+  }
+
+  if (candidate.length === 1) {
+    const singleDigit = Number(candidate)
+    const isDeletingFromPadded =
+      prevDay.length === 2 &&
+      prevDay.startsWith('0') &&
+      prevDay.endsWith(candidate) &&
+      onlyDigits.length === 1
+    if (!isDeletingFromPadded && singleDigit >= 4 && singleDigit <= 9) {
+      return `0${candidate}`
+    }
+    return candidate
+  }
+
+  if (candidate.length === 2) {
+    const twoDigit = Number(candidate)
+    const secondDigit = Number(candidate[1])
+    if (twoDigit > 31 && secondDigit >= 2 && secondDigit <= 9) {
+      return `0${secondDigit}`
+    }
+    if (twoDigit === 0) {
+      return '0'
+    }
+  }
+
+  return candidate
+}
+
 export function InlineDateField({
   era,
   year,
@@ -150,16 +240,27 @@ export function InlineDateField({
           aria-invalid={error || undefined}
           value={month}
           onChange={(event) => {
-            const next = digits(event.target.value, 2)
+            const next = normalizeMonthInput(event.target.value, month)
             onMonth(next)
-            if (next.length === 2 && month.length < 2) {
+            if (next.length === 2 && (month.length < 2 || next !== month)) {
               dayRef.current?.focus()
+            }
+          }}
+          onBlur={() => {
+            if (month === '1') {
+              onMonth('01')
             }
           }}
           onKeyDown={(event) => {
             if ((event.key === '.' || event.key === '/') && month.length > 0) {
               event.preventDefault()
+              if (month === '1') {
+                onMonth('01')
+              }
               dayRef.current?.focus()
+            } else if (event.key === 'Backspace' && /^0[1-9]$/.test(month)) {
+              event.preventDefault()
+              onMonth('')
             } else if (event.key === 'Backspace' && month === '') {
               event.preventDefault()
               yearRef.current?.focus()
@@ -175,9 +276,17 @@ export function InlineDateField({
           aria-label="일"
           aria-invalid={error || undefined}
           value={day}
-          onChange={(event) => onDay(digits(event.target.value, 2))}
+          onChange={(event) => onDay(normalizeDayInput(event.target.value, day))}
+          onBlur={() => {
+            if (day.length === 1 && Number(day) >= 1 && Number(day) <= 3) {
+              onDay(`0${day}`)
+            }
+          }}
           onKeyDown={(event) => {
-            if (event.key === 'Backspace' && day === '') {
+            if (event.key === 'Backspace' && /^0[1-9]$/.test(day)) {
+              event.preventDefault()
+              onDay('')
+            } else if (event.key === 'Backspace' && day === '') {
               event.preventDefault()
               monthRef.current?.focus()
             }
@@ -242,7 +351,12 @@ export function InlineDateField({
           aria-label="월"
           aria-invalid={error || undefined}
           value={month}
-          onChange={(event) => onMonth(digits(event.target.value, 2))}
+          onChange={(event) => onMonth(normalizeMonthInput(event.target.value, month))}
+          onBlur={() => {
+            if (month === '1') {
+              onMonth('01')
+            }
+          }}
         />
         <Sep>.</Sep>
         <DateInput
@@ -253,7 +367,12 @@ export function InlineDateField({
           aria-label="일"
           aria-invalid={error || undefined}
           value={day}
-          onChange={(event) => onDay(digits(event.target.value, 2))}
+          onChange={(event) => onDay(normalizeDayInput(event.target.value, day))}
+          onBlur={() => {
+            if (day.length === 1 && Number(day) >= 1 && Number(day) <= 3) {
+              onDay(`0${day}`)
+            }
+          }}
         />
         <PickerBtn
           type="button"

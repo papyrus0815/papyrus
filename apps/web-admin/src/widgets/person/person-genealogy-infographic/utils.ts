@@ -26,6 +26,13 @@ export {
 
 export function yearOf(value?: string | Date | null): number | null {
   if (!value) return null
+  if (typeof value === 'string') {
+    const match = /^(-?\d{1,6})-(\d{2})-(\d{2})/.exec(value.trim())
+    if (match) {
+      const parsed = Number(match[1])
+      if (!Number.isNaN(parsed)) return parsed
+    }
+  }
   const date = typeof value === 'string' ? new Date(value) : value
   const time = date.getTime?.()
   // birthDate는 UTC 자정 저장 — UTC 기준으로 읽어야 연초 경계에서 -1년이 안 된다(백엔드와 동일).

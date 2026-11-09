@@ -37,6 +37,8 @@ import {
   deletePersonLifeEvent,
   updatePersonLifeEvent,
 } from '@/shared/api/person-life-events'
+import { personKeys } from '@/entities/person/query-keys'
+import { eventKeys } from '@/shared/api/event-query-keys'
 import { personRecordsKeys } from '@/shared/api/person-records'
 import { createRichTextImageUploader } from '@/shared/api/upload'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
@@ -164,7 +166,7 @@ function toLinkedEventChoice(
         ? -event.startYear
         : event.startYear
       : event.startDate
-        ? Number(event.startDate.slice(0, 4))
+        ? (parseIsoDateParts(event.startDate)?.year ?? null)
         : null
   return { id: event.id, title: event.title, yearLabel: formatCandidateYear(signedYear) }
 }
@@ -518,16 +520,16 @@ export function PersonLifeEventFormModal({
     if (!startParts) return ''
     const normalizedStartKey =
       startParts.year * 10000 +
-      (startDatePrecision === 'year' ? 1 : startParts.month) * 100 +
-      (startDatePrecision === 'year' || startDatePrecision === 'month'
+      (startPrecision === 'year' ? 1 : startParts.month) * 100 +
+      (startPrecision === 'year' || startPrecision === 'month'
         ? 1
         : startParts.day)
-    const normalizedEndKey = dateSortKey(isoPeriodEnd(endDate, endDatePrecision))
+    const normalizedEndKey = dateSortKey(isoPeriodEnd(endDate, endPrecision))
     if (normalizedEndKey != null && normalizedEndKey < normalizedStartKey) {
       return '종료일은 시작일 이후여야 합니다.'
     }
     return ''
-  }, [startDate, endDate, startDatePrecision, endDatePrecision])
+  }, [startDate, endDate, startPrecision, endPrecision])
 
   /** 시작일이 출생 이전 / 사망 이후면 경고 — 저장은 허용하되 알림 (출생 전 / 사후 구간으로 표시됨을 안내) */
   const dateRangeWarning = useMemo(() => {
@@ -538,9 +540,9 @@ export function PersonLifeEventFormModal({
       const birthParts = parseIsoDateParts(birthDate)
       if (birthParts) {
         const isBeforeBirth =
-          startDatePrecision === 'year'
+          startPrecision === 'year'
             ? startParts.year < birthParts.year
-            : startDatePrecision === 'month'
+            : startPrecision === 'month'
               ? startParts.year < birthParts.year ||
                 (startParts.year === birthParts.year &&
                   startParts.month < birthParts.month)
@@ -554,9 +556,9 @@ export function PersonLifeEventFormModal({
       const deathParts = parseIsoDateParts(deathDate)
       if (deathParts) {
         const isAfterDeath =
-          startDatePrecision === 'year'
+          startPrecision === 'year'
             ? startParts.year > deathParts.year
-            : startDatePrecision === 'month'
+            : startPrecision === 'month'
               ? startParts.year > deathParts.year ||
                 (startParts.year === deathParts.year &&
                   startParts.month > deathParts.month)
@@ -567,7 +569,7 @@ export function PersonLifeEventFormModal({
       }
     }
     return ''
-  }, [startDate, startDatePrecision, birthDate, deathDate])
+  }, [startDate, startPrecision, birthDate, deathDate])
 
   /** 동일 제목+날짜 연보 중복 경고 (자기 자신 제외) — 저장은 허용 */
   const duplicateWarning = useMemo(() => {
@@ -585,11 +587,22 @@ export function PersonLifeEventFormModal({
   }, [title, startDate, existingLifeEvents, lifeEventId])
 
   /** 시작일이 기존 재임·재위 기간에 포함되면 경고 — 같은 직위성 사실을 재임 기록으로
-      이미 관리 중일 수 있음을 알림 (저장은 허용). 직책·임기는 재임 기록이 단일 출처. */
+      이미 관리 중일 수 있음을 알림 (저장은 허용). 직책·임기는 재임 기록이 단일 출처.
+      단, 학업·가족·건강·출판·여행·개인사 등 비직위성 카테고리를 명시 선택한 경우엔 제외. */
   const positionalOverlapWarning = useMemo(() => {
     if (!startDate) return ''
+    if (
+      category &&
+      category !== 'OTHER' &&
+      !POSITIONAL_CATEGORIES.includes(category)
+    ) {
+      return ''
+    }
     const start = dateSortKey(startDate)
     if (start == null) return ''
+    const deathEndCap = deathDate
+      ? dateSortKey(isoPeriodEnd(deathDate, 'year'))
+      : null
     const records = [
       ...(existingTenures ?? []).map((t) => ({ ...t, kind: '재임' })),
       ...(existingReigns ?? []).map((r) => ({ ...r, kind: '재위' })),
@@ -600,13 +613,13 @@ export function PersonLifeEventFormModal({
       if (recordStart == null) return false
       const recordEnd = rec.endDate
         ? (dateSortKey(rec.endDate) ?? Number.POSITIVE_INFINITY)
-        : Number.POSITIVE_INFINITY
+        : (deathEndCap ?? Number.POSITIVE_INFINITY)
       return start >= recordStart && start <= recordEnd
     })
     if (!hit) return ''
     const label = hit.title?.trim() || '직위'
     return `이 시점은 ${hit.kind} 「${label}」 기간입니다 — 직책·임기는 재임 기록으로 관리되는지 확인하세요.`
-  }, [startDate, existingTenures, existingReigns])
+  }, [startDate, category, existingTenures, existingReigns, deathDate])
 
   /** 직위성 카테고리(정치·군사·외교·경력) 선택 시 — 재임 기록/경력 등록 권장 안내 (경고-only) */
   const positionalCategoryHint = useMemo(() => {
@@ -638,11 +651,24 @@ export function PersonLifeEventFormModal({
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
+    queryClient.invalidateQueries({ queryKey: personKeys.detailFull(personId) })
     queryClient.invalidateQueries({
       queryKey: ['person-life-events', personId],
     })
+    queryClient.invalidateQueries({
+      queryKey: ['person-record-event-suggestions', personId],
+    })
     // 인물 통합 기록 비교(person-records)도 연보 변경을 즉시 반영
     queryClient.invalidateQueries({ queryKey: personRecordsKeys.all })
+    queryClient.invalidateQueries({ queryKey: ['persons', 'compare-records'] })
+    const affectedEventIds = new Set(
+      [linkedEvent?.id, lifeEvent?.event?.id].filter(
+        (id): id is string => Boolean(id),
+      ),
+    )
+    for (const evId of affectedEventIds) {
+      queryClient.invalidateQueries({ queryKey: eventKeys.detail(evId) })
+    }
   }
 
   /**
@@ -938,6 +964,7 @@ export function PersonLifeEventFormModal({
                         (lifeEvent.endDatePrecision as DatePrecision) ?? 'day',
                       )
                       setSortOrder(lifeEvent.sortOrder ?? '')
+                      setLinkedEvent(toLinkedEventChoice(lifeEvent.event))
                     } else {
                       setTitle('')
                       setCategory('')
@@ -947,6 +974,7 @@ export function PersonLifeEventFormModal({
                       setStartPrecision('day')
                       setEndPrecision('day')
                       setSortOrder('')
+                      setLinkedEvent(null)
                     }
                     setDraftRestoredFlash(false)
                   }}

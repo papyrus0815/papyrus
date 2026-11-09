@@ -56,14 +56,20 @@ export function BirthDeathCards({
   )
   const birthCountry =
     birthPlaceAff?.historicalCountry?.name ?? birthPlaceAff?.country?.name ?? null
+  // 사망 당시 국가 — DEATH_PLACE 소속(historicalCountry 우선). 출생국과 대칭 표시.
+  const deathPlaceAff = p.countryAffiliations?.find(
+    (aff) => aff.affiliationType === 'DEATH_PLACE',
+  )
+  const deathCountry =
+    deathPlaceAff?.historicalCountry?.name ?? deathPlaceAff?.country?.name ?? null
   // 활동시기(floruit) — 생몰 전면 미상 인물의 폴백. 크기값+era를 부호연도로 환산해 포맷.
   const floruitStartSigned =
     p.floruitStartYear != null
-      ? (p.floruitEra === 'BC' ? -p.floruitStartYear : p.floruitStartYear)
+      ? ((p.floruitStartEra ?? p.floruitEra) === 'BC' ? -p.floruitStartYear : p.floruitStartYear)
       : null
   const floruitEndSigned =
     p.floruitEndYear != null
-      ? (p.floruitEra === 'BC' ? -p.floruitEndYear : p.floruitEndYear)
+      ? ((p.floruitEndEra ?? p.floruitEra) === 'BC' ? -p.floruitEndYear : p.floruitEndYear)
       : null
   // floruit는 생몰의 폴백 — 생몰 일자가 하나라도 표시되면 숨긴다(formatLifespan 규약과 일치).
   const floruitLabel =
@@ -79,6 +85,7 @@ export function BirthDeathCards({
     !!p.birthNote
   const hasDeathExtra =
     !!deathPlace ||
+    !!deathCountry ||
     !!p.deathType ||
     !!p.deathCause ||
     !!p.deathNote
@@ -176,6 +183,12 @@ export function BirthDeathCards({
             <LifeCardRow>
               <LifeCardLabel>장소</LifeCardLabel>
               <LifeCardValue>{deathPlace}</LifeCardValue>
+            </LifeCardRow>
+          )}
+          {deathCountry && (
+            <LifeCardRow>
+              <LifeCardLabel>사망국</LifeCardLabel>
+              <LifeCardValue>{deathCountry}</LifeCardValue>
             </LifeCardRow>
           )}
           {(p.deathType || p.deathCause) && (

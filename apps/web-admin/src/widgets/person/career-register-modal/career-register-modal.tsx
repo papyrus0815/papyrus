@@ -397,12 +397,13 @@ export function CareerRegisterModal({
         }
       }
       setExtras(nextExtras)
-      setStartDate(
-        initialCareer.startDate ? String(initialCareer.startDate).slice(0, 10) : '',
-      )
-      setEndDate(
-        initialCareer.endDate ? String(initialCareer.endDate).slice(0, 10) : '',
-      )
+      const toIsoDateInput = (iso: string | null | undefined) => {
+        if (!iso) return ''
+        const s = String(iso)
+        return s.startsWith('-') ? s.slice(0, 11) : s.slice(0, 10)
+      }
+      setStartDate(toIsoDateInput(initialCareer.startDate))
+      setEndDate(toIsoDateInput(initialCareer.endDate))
       setNotes(initialCareer.notes ?? '')
       setSubmitting(false)
       return
@@ -457,6 +458,9 @@ export function CareerRegisterModal({
       }
       const invalidateRelatedPersonQueries = () => {
         queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
+        queryClient.invalidateQueries({
+          queryKey: ['person-record-event-suggestions', personId],
+        })
         queryClient.invalidateQueries({ queryKey: personKeys.all })
         queryClient.invalidateQueries({ queryKey: personKeys.infographic })
         queryClient.invalidateQueries({ queryKey: ['persons', 'compare-records'] })

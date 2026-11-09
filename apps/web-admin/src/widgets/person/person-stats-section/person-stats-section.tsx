@@ -413,24 +413,45 @@ const TraitChipReadRow = styled.div`
 
 const traitToneBg = (
   tone: 'positive' | 'negative' | 'neutral',
+  isDark = false,
 ): { fg: string; bg: string; border: string } => {
-  if (tone === 'positive')
-    return {
-      fg: '#0e7490',
-      bg: 'rgba(207, 250, 254, 0.7)',
-      border: 'rgba(103, 232, 249, 0.5)',
-    }
-  if (tone === 'negative')
-    return {
-      fg: '#9f1239',
-      bg: 'rgba(255, 228, 230, 0.85)',
-      border: 'rgba(251, 113, 133, 0.45)',
-    }
-  return {
-    fg: '#475569',
-    bg: 'rgba(241, 245, 249, 0.85)',
-    border: 'rgba(148, 163, 184, 0.4)',
+  if (tone === 'positive') {
+    return isDark
+      ? {
+          fg: '#67e8f9',
+          bg: 'rgba(6, 182, 212, 0.16)',
+          border: 'rgba(103, 232, 249, 0.35)',
+        }
+      : {
+          fg: '#0e7490',
+          bg: 'rgba(207, 250, 254, 0.7)',
+          border: 'rgba(103, 232, 249, 0.5)',
+        }
   }
+  if (tone === 'negative') {
+    return isDark
+      ? {
+          fg: '#fda4af',
+          bg: 'rgba(244, 63, 94, 0.16)',
+          border: 'rgba(251, 113, 133, 0.35)',
+        }
+      : {
+          fg: '#9f1239',
+          bg: 'rgba(255, 228, 230, 0.85)',
+          border: 'rgba(251, 113, 133, 0.45)',
+        }
+  }
+  return isDark
+    ? {
+        fg: '#cbd5e1',
+        bg: 'rgba(148, 163, 184, 0.14)',
+        border: 'rgba(148, 163, 184, 0.32)',
+      }
+    : {
+        fg: '#475569',
+        bg: 'rgba(241, 245, 249, 0.85)',
+        border: 'rgba(148, 163, 184, 0.4)',
+      }
 }
 
 const TraitChip = styled.span<{ $tone: 'positive' | 'negative' | 'neutral' }>`
@@ -442,9 +463,9 @@ const TraitChip = styled.span<{ $tone: 'positive' | 'negative' | 'neutral' }>`
   padding: 3px 9px;
   border-radius: 999px;
   letter-spacing: 0.01em;
-  color: ${({ $tone }) => traitToneBg($tone).fg};
-  background: ${({ $tone }) => traitToneBg($tone).bg};
-  border: 1px solid ${({ $tone }) => traitToneBg($tone).border};
+  color: ${({ $tone, theme }) => traitToneBg($tone, theme.mode === 'dark').fg};
+  background: ${({ $tone, theme }) => traitToneBg($tone, theme.mode === 'dark').bg};
+  border: 1px solid ${({ $tone, theme }) => traitToneBg($tone, theme.mode === 'dark').border};
 `
 
 const TraitIntensityBadge = styled.span<{
@@ -454,7 +475,7 @@ const TraitIntensityBadge = styled.span<{
   letter-spacing: 1px;
   line-height: 1;
   opacity: 0.8;
-  color: ${({ $tone }) => traitToneBg($tone).fg};
+  color: ${({ $tone, theme }) => traitToneBg($tone, theme.mode === 'dark').fg};
 `
 
 // #6: 메모는 인용구 스타일 — 좌측 컬러바로 평가 근거임을 시각적으로 강조

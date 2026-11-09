@@ -318,8 +318,14 @@ export function PersonHumanRelationshipsSection({
   const selectedNewPerson =
     personsExcludingSelf.find((person) => person.id === newRelatedId) ?? null
 
-  const invalidateDetail = () => {
+  const invalidateDetail = (relatedPersonId?: string | null) => {
     queryClient.invalidateQueries({ queryKey: ['person-detail', personId] })
+    if (relatedPersonId) {
+      queryClient.invalidateQueries({
+        queryKey: ['person-detail', relatedPersonId],
+      })
+    }
+    queryClient.invalidateQueries({ queryKey: ['mentor-lineage'] })
     queryClient.invalidateQueries({ queryKey: ['persons', 'all'] })
   }
 
@@ -343,6 +349,13 @@ export function PersonHumanRelationshipsSection({
   const createMut = useMutation({
     mutationFn: async () => {
       if (!newRelatedId) throw new Error('상대 인물을 선택하세요.')
+      if (
+        newStartDate &&
+        newEndDate &&
+        compareByDate(newStartDate, newEndDate, 'asc') > 0
+      ) {
+        throw new Error('시작일이 종료일보다 늦을 수 없습니다.')
+      }
       return createHumanRelationship(personId, {
         relatedPersonId: newRelatedId,
         relationshipType: newType,
@@ -360,10 +373,11 @@ export function PersonHumanRelationshipsSection({
       })
     },
     onSuccess: () => {
+      const targetRelatedId = newRelatedId
       notify.success('저장했습니다.')
       setCreateModalOpen(false)
       resetNewForm()
-      invalidateDetail()
+      invalidateDetail(targetRelatedId)
     },
     onError: (error: unknown) => {
       notify.error(formatRelationshipApiError(error))
@@ -371,8 +385,15 @@ export function PersonHumanRelationshipsSection({
   })
 
   const updateMut = useMutation({
-    mutationFn: async (rel: RelRowModel) =>
-      updateHumanRelationship(personId, rel.id, {
+    mutationFn: async (rel: RelRowModel) => {
+      if (
+        editStartDate &&
+        editEndDate &&
+        compareByDate(editStartDate, editEndDate, 'asc') > 0
+      ) {
+        throw new Error('시작일이 종료일보다 늦을 수 없습니다.')
+      }
+      return updateHumanRelationship(personId, rel.id, {
         relationshipType: editType,
         affinityLevel: editAffinity,
         trustLevel: editTrust,
@@ -386,11 +407,12 @@ export function PersonHumanRelationshipsSection({
         tags: editTags,
         isMutual: editType === 'GENERAL' ? editIsMutual : undefined,
         sourceLifeEventIds: editSourceIds,
-      }),
-    onSuccess: () => {
+      })
+    },
+    onSuccess: (_data, rel) => {
       notify.success('저장했습니다.')
       setEditingId(null)
-      invalidateDetail()
+      invalidateDetail(rel.otherPerson.id)
     },
     onError: (error: unknown) => {
       notify.error(formatRelationshipApiError(error))
@@ -406,6 +428,8 @@ export function PersonHumanRelationshipsSection({
      * humanRelationships prop으로 받으므로 그 캐시를 직접 갱신한다.
      */
     onMutate: async (relId: string) => {
+      const relatedPersonId =
+        list.find((r) => r.id === relId)?.otherPerson.id ?? null
       const detailKey = ['person-detail', personId]
       await queryClient.cancelQueries({ queryKey: detailKey })
       const previous = queryClient.getQueryData(detailKey)
@@ -420,7 +444,7 @@ export function PersonHumanRelationshipsSection({
           ),
         }
       })
-      return { previous, detailKey }
+      return { previous, detailKey, relatedPersonId }
     },
     onError: (error: unknown, _relId, context) => {
       if (context?.previous !== undefined) {
@@ -431,9 +455,9 @@ export function PersonHumanRelationshipsSection({
     onSuccess: () => {
       notify.success('삭제했습니다.')
     },
-    onSettled: () => {
+    onSettled: (_data, _error, _relId, context) => {
       // 서버 확정 상태로 최종 동기화 (목록 화면 등 포함)
-      invalidateDetail()
+      invalidateDetail(context?.relatedPersonId)
     },
   })
 
@@ -498,11 +522,11 @@ export function PersonHumanRelationshipsSection({
   const phaseSaveMut = useMutation({
     mutationFn: async () => {
       if (!phaseModal) throw new Error('phase 모달 상태 없음')
-      // 날짜 유효성 — 시작 > 종료면 거부
+      // 날짜 유효성 — 시작 > 종료면 거부 (BC 음수 ISO 안전 비교)
       if (
         phaseModal.startDate &&
         phaseModal.endDate &&
-        phaseModal.startDate > phaseModal.endDate
+        compareByDate(phaseModal.startDate, phaseModal.endDate, 'asc') > 0
       ) {
         throw new Error('시작일이 종료일보다 늦을 수 없습니다.')
       }
@@ -527,9 +551,12 @@ export function PersonHumanRelationshipsSection({
       return createRelationshipPhase(personId, phaseModal.relationshipId, body)
     },
     onSuccess: () => {
+      const relatedPersonId =
+        list.find((r) => r.id === phaseModal?.relationshipId)?.otherPerson.id ??
+        null
       notify.success('시기를 저장했습니다.')
       closePhaseModal()
-      invalidateDetail()
+      invalidateDetail(relatedPersonId)
     },
     onError: (error: unknown) => {
       notify.error(formatRelationshipApiError(error))
@@ -544,6 +571,8 @@ export function PersonHumanRelationshipsSection({
      * 타임라인 칩이 refetch 왕복 없이 바로 사라진다.
      */
     onMutate: async (args: { relationshipId: string; phaseId: string }) => {
+      const relatedPersonId =
+        list.find((r) => r.id === args.relationshipId)?.otherPerson.id ?? null
       const detailKey = ['person-detail', personId]
       await queryClient.cancelQueries({ queryKey: detailKey })
       const previous = queryClient.getQueryData(detailKey)
@@ -563,7 +592,7 @@ export function PersonHumanRelationshipsSection({
           ),
         }
       })
-      return { previous, detailKey }
+      return { previous, detailKey, relatedPersonId }
     },
     onError: (error: unknown, _args, context) => {
       if (context?.previous !== undefined) {
@@ -574,8 +603,8 @@ export function PersonHumanRelationshipsSection({
     onSuccess: () => {
       notify.success('시기를 삭제했습니다.')
     },
-    onSettled: () => {
-      invalidateDetail()
+    onSettled: (_data, _error, _args, context) => {
+      invalidateDetail(context?.relatedPersonId)
     },
   })
 
@@ -3556,6 +3585,16 @@ const DimLabel = styled.span`
   font-weight: 500;
 `
 
+/** ISO 일자 → phase 타임라인 칩용 연도 문자열 (BC 음수 ISO 안전, 네이티브 Date 금지) */
+function formatPhaseYear(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const isBce = iso.startsWith('-')
+  const body = isBce ? iso.slice(1) : iso
+  const year = parseInt(body.slice(0, 4), 10)
+  if (!Number.isFinite(year) || year <= 0) return ''
+  return isBce ? `BC ${year}` : `${year}`
+}
+
 /** phase 미니 타임라인 — 시기별 친밀도 변화 가로형. 칩 클릭=편집, X=삭제. */
 function PhaseTimeline({
   phases,
@@ -3567,14 +3606,11 @@ function PhaseTimeline({
   onDeletePhase?: (phase: RelationshipPhase) => void
 }) {
   if (phases.length === 0) return null
-  // 시간순 — startDate 오름차순(없으면 뒤로). 동률은 endDate로 보조 정렬.
+  // 시간순 — startDate 오름차순(없으면 뒤로). 동률은 endDate로 보조 정렬 (BC 안전).
   const sortedPhases = [...phases].sort((a, b) => {
-    const sa = a.startDate ? new Date(a.startDate).getTime() : Infinity
-    const sb = b.startDate ? new Date(b.startDate).getTime() : Infinity
-    if (sa !== sb) return sa - sb
-    const ea = a.endDate ? new Date(a.endDate).getTime() : Infinity
-    const eb = b.endDate ? new Date(b.endDate).getTime() : Infinity
-    return ea - eb
+    const startCmp = compareByDate(a.startDate, b.startDate, 'asc')
+    if (startCmp !== 0) return startCmp
+    return compareByDate(a.endDate, b.endDate, 'asc')
   })
   return (
     <PhaseTimelineRoot>
@@ -3590,9 +3626,11 @@ function PhaseTimeline({
                 : aff < 0
                   ? 'negative'
                   : 'neutral'
+          const startYearStr = formatPhaseYear(p.startDate)
+          const endYearStr = formatPhaseYear(p.endDate)
           const period =
-            p.startDate || p.endDate
-              ? `${p.startDate ? new Date(p.startDate).getUTCFullYear() : '?'}–${p.endDate ? new Date(p.endDate).getUTCFullYear() : '현재'}`
+            startYearStr || endYearStr
+              ? `${startYearStr || '?'}–${endYearStr || '현재'}`
               : ''
           return (
             <PhasePill
@@ -4227,9 +4265,16 @@ const SourceChipLink = styled(Link)`
   font-size: 11.5px;
   font-weight: 500;
   border-radius: 999px;
-  color: #4338ca;
-  background: rgba(238, 242, 255, 0.7);
-  border: 1px solid rgba(99, 102, 241, 0.25);
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.16)'
+      : 'rgba(238, 242, 255, 0.7)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(129, 140, 248, 0.35)'
+        : 'rgba(99, 102, 241, 0.25)'};
   text-decoration: none;
   letter-spacing: -0.01em;
   max-width: 240px;
@@ -4237,8 +4282,14 @@ const SourceChipLink = styled(Link)`
   text-overflow: ellipsis;
   white-space: nowrap;
   &:hover {
-    background: rgba(224, 231, 255, 0.85);
-    border-color: rgba(99, 102, 241, 0.45);
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.26)'
+        : 'rgba(224, 231, 255, 0.85)'};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(129, 140, 248, 0.55)'
+        : 'rgba(99, 102, 241, 0.45)'};
   }
 `
 

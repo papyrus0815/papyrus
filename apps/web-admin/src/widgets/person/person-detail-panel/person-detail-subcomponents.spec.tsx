@@ -13,6 +13,21 @@ import { PersonPoliticsSection } from '@/widgets/person/person-politics-section/
 
 jest.mock('@/shared/ui/rich-text-read-view', () => ({
   RichTextReadView: () => null,
+  RichTextProseWithEntityClicks: () => null,
+}))
+
+jest.mock('@/shared/api/persons', () => ({
+  updatePerson: jest.fn(),
+  getAllPersons: jest.fn(async () => []),
+}))
+
+jest.mock('@/shared/api/upload', () => ({
+  createRichTextImageUploader: () => jest.fn(),
+  getUploadImageUrl: (p: string) => p,
+}))
+
+jest.mock('@/shared/ui/event-picker-modal/event-picker-modal', () => ({
+  EventPickerModal: () => null,
 }))
 
 jest.mock('@/shared/hooks/use-click-sound.hook', () => ({
@@ -30,6 +45,78 @@ jest.mock('@/shared/api/person-career', () => ({
   personCareerApi: {},
 }))
 
+jest.mock('@/shared/api/person-records', () => ({
+  personRecordsKeys: { all: ['person-records'] },
+}))
+
+jest.mock('@/shared/api/person-life-events', () => ({
+  PERSON_LIFE_EVENT_CATEGORIES: [
+      'EDUCATION',
+      'TRAVEL',
+      'PUBLICATION',
+      'EXILE',
+      'AWARD',
+      'PERSONAL',
+      'CAREER',
+      'MILITARY',
+      'POLITICAL',
+      'DIPLOMATIC',
+      'RELIGIOUS',
+      'HEALTH',
+      'FAMILY',
+      'OTHER',
+    ],
+    PERSON_LIFE_EVENT_CATEGORY_LABEL: {
+      EDUCATION: '학업·유학',
+      TRAVEL: '여행·답사',
+      PUBLICATION: '집필·출판',
+      EXILE: '망명·유배',
+      AWARD: '수상·영예',
+      PERSONAL: '개인사',
+      CAREER: '경력·보직',
+      MILITARY: '군사·참전',
+      POLITICAL: '정치 활동',
+      DIPLOMATIC: '외교',
+      RELIGIOUS: '종교·사상',
+      HEALTH: '건강·투병',
+      FAMILY: '가족사',
+      OTHER: '기타',
+    },
+    PERSON_LIFE_EVENT_CATEGORY_COLOR: {
+      EDUCATION: { base: '#2563eb', soft: 'rgba(37,99,235,0.12)' },
+      TRAVEL: { base: '#0891b2', soft: 'rgba(8,145,178,0.12)' },
+      PUBLICATION: { base: '#7c3aed', soft: 'rgba(124,58,237,0.12)' },
+      EXILE: { base: '#dc2626', soft: 'rgba(220,38,38,0.12)' },
+      AWARD: { base: '#d97706', soft: 'rgba(217,119,6,0.12)' },
+      PERSONAL: { base: '#db2777', soft: 'rgba(219,39,119,0.12)' },
+      CAREER: { base: '#4f46e5', soft: 'rgba(79,70,229,0.12)' },
+      MILITARY: { base: '#b91c1c', soft: 'rgba(185,28,28,0.12)' },
+      POLITICAL: { base: '#1d4ed8', soft: 'rgba(29,78,216,0.12)' },
+      DIPLOMATIC: { base: '#0d9488', soft: 'rgba(13,148,136,0.12)' },
+      RELIGIOUS: { base: '#9333ea', soft: 'rgba(147,51,234,0.12)' },
+      HEALTH: { base: '#ea580c', soft: 'rgba(234,88,12,0.12)' },
+      FAMILY: { base: '#059669', soft: 'rgba(5,150,105,0.12)' },
+      OTHER: { base: '#64748b', soft: 'rgba(100,116,139,0.12)' },
+    },
+    createPersonLifeEvent: jest.fn(),
+    updatePersonLifeEvent: jest.fn(),
+    deletePersonLifeEvent: jest.fn(),
+}))
+
+jest.mock('@/shared/api/upload', () => ({
+  createRichTextImageUploader: () => jest.fn(),
+}))
+
+jest.mock('@/shared/api/person-event-links', () => ({
+  getPersonEventCandidates: jest.fn(async () => ({ mode: 'recommend', items: [] })),
+  linkPersonEvent: jest.fn(),
+  unlinkPersonEvent: jest.fn(),
+}))
+
+jest.mock('@/shared/ui/rich-text-editor/rich-text-editor', () => ({
+  RichTextEditor: () => null,
+}))
+
 import { BirthDeathCards } from './birth-death-cards'
 import { periodLabel, sortMembers } from './cabinet-connections'
 import {
@@ -37,11 +124,17 @@ import {
   expandCollapsibleSectionForRecordKey,
 } from './collapsible-section'
 import { deriveTenureDurationLabel } from './helpers'
+import { LifeTimeline } from './life-timeline'
+import { computeLifeTimeline } from './life-timeline.lib'
 import {
   SpouseDetailSection,
   hasVisibleSpouseDetails,
 } from './spouse-detail-section'
 import type { PersonDetailData } from './types'
+import { extractSignedYearsFromText } from './person-biography-sections'
+import { TenureAchievements } from './tenure-achievements'
+import { PersonLifeTimelineInfographic } from '@/widgets/person/person-life-timeline-infographic/person-life-timeline-infographic'
+import { PersonLifeEventFormModal } from '@/widgets/person/person-life-event-form-modal/person-life-event-form-modal'
 
 describe('BirthDeathCards', () => {
   const basePerson: PersonDetailData = {
@@ -79,6 +172,35 @@ describe('BirthDeathCards', () => {
     expect(screen.getByText('한성부 건천동')).toBeInTheDocument()
     expect(screen.getByLabelText('사망 정보')).toBeInTheDocument()
     expect(screen.getByText('노량해전 전사')).toBeInTheDocument()
+  })
+
+  it('출생국(BIRTH_PLACE)과 사망국(DEATH_PLACE) 소속을 각각 출생·사망 카드에 대칭 표시한다', () => {
+    renderWithTheme(
+      <BirthDeathCards
+        person={{
+          ...basePerson,
+          countryAffiliations: [
+            {
+              id: 'aff-birth',
+              affiliationType: 'BIRTH_PLACE',
+              historicalCountry: { id: 'hc-1', name: '독일 제국' },
+            },
+            {
+              id: 'aff-death',
+              affiliationType: 'DEATH_PLACE',
+              country: { id: 'c-1', name: '미국' },
+            },
+          ],
+        }}
+        birthDateStr="1879년 3월 14일"
+        deathDateStr="1955년 4월 18일"
+        ageAtDeath={76}
+      />,
+    )
+    expect(screen.getByText('출생국')).toBeInTheDocument()
+    expect(screen.getByText('독일 제국')).toBeInTheDocument()
+    expect(screen.getByText('사망국')).toBeInTheDocument()
+    expect(screen.getByText('미국')).toBeInTheDocument()
   })
 })
 
@@ -251,6 +373,48 @@ describe('SpouseDetailSection', () => {
     )
 
     expect(screen.getByText(/고종 \(출계·철종 입양\)/)).toBeInTheDocument()
+  })
+
+  it('기원전(BC) 자녀들을 부호 출생연도순(더 이른 기원전 연도가 먼저)으로 정렬한다', () => {
+    renderWithTheme(
+      <SpouseDetailSection
+        egoId="qin-father"
+        spouseRelations={[
+          {
+            id: 'rel-qin',
+            marriageRank: 'PRIMARY',
+            spouse: { id: 'zhao-ji', name: '조희', gender: 'FEMALE' },
+          },
+        ]}
+        childrenList={[
+          {
+            id: 'child-younger',
+            name: '성교',
+            gender: 'MALE',
+            fatherId: 'qin-father',
+            motherId: 'zhao-ji',
+            birthYear: 256,
+            birthEra: 'BC',
+          } as any,
+          {
+            id: 'child-older',
+            name: '영정',
+            gender: 'MALE',
+            fatherId: 'qin-father',
+            motherId: 'zhao-ji',
+            birthYear: 259,
+            birthEra: 'BC',
+          } as any,
+        ]}
+      />,
+    )
+
+    const elderEl = screen.getByText('영정')
+    const youngerEl = screen.getByText('성교')
+    expect(
+      elderEl.compareDocumentPosition(youngerEl) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
   })
 })
 
@@ -534,5 +698,198 @@ describe('CabinetConnections — periodLabel & sortMembers', () => {
         false,
       ),
     ).toBe('2024–현재')
+  })
+})
+
+describe('LifeTimeline & PersonLifeTimelineInfographic & PersonLifeEventFormModal', () => {
+  it('LifeTimeline은 고인 미종료 재위의 사망 연도 캡핑(1418–1450)과 생존 현직(2017–현재)을 정확히 표기한다', () => {
+    const deceasedLayout = computeLifeTimeline({
+      records: [
+        {
+          key: 'reign-1',
+          family: 'reign',
+          title: '세종',
+          startDate: '1418-09-09',
+          endDate: null,
+        },
+      ],
+      birthYear: 1397,
+      deathYear: 1450,
+      isDeceased: true,
+      nowYear: 2026,
+    })!
+    const { unmount } = renderWithTheme(
+      <LifeTimeline layout={deceasedLayout} onSelect={jest.fn()} />,
+    )
+    expect(
+      screen.getByRole('button', { name: /재위 · 세종 · 1418–1450/ }),
+    ).toBeInTheDocument()
+    unmount()
+
+    const livingLayout = computeLifeTimeline({
+      records: [
+        {
+          key: 'office-1',
+          family: 'office',
+          title: '대통령',
+          startDate: '2017-01-20',
+          endDate: null,
+        },
+      ],
+      birthYear: 1946,
+      deathYear: null,
+      isDeceased: false,
+      nowYear: 2026,
+    })!
+    renderWithTheme(
+      <LifeTimeline layout={livingLayout} onSelect={jest.fn()} />,
+    )
+    expect(
+      screen.getByRole('button', { name: /재임 · 대통령 · 2017–현재/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('PersonLifeTimelineInfographic은 BC→AD 사후 경과 연수에서 0년 부재를 보정하고 검색 무결과 안내 및 초기화 버튼을 제공한다', () => {
+    renderWithTheme(
+      <PersonLifeTimelineInfographic
+        birthDate="-0060-01-01"
+        birthEra="BC"
+        birthDatePrecision="year"
+        deathDate="-0001-01-01"
+        deathEra="BC"
+        deathDatePrecision="year"
+        isAlive={false}
+        lifeEvents={[
+          {
+            id: 'le-posthumous',
+            accountId: null,
+            personId: 'p-bc',
+            title: '사후 추존',
+            category: 'OTHER',
+            startDate: '0001-01-01',
+            startDatePrecision: 'year',
+            endDate: null,
+            endDatePrecision: null,
+            description: null,
+            sortOrder: 0,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ]}
+      />,
+    )
+
+    // BC 1년 사망 → AD 1년 사후 사건: 0년이 없으므로 사후 2년이 아니라 사후 1년이어야 함
+    expect(screen.getByText('사후 1년')).toBeInTheDocument()
+
+    const searchInput = screen.getByLabelText('타임라인 검색')
+    fireEvent.change(searchInput, { target: { value: '존재하지않는검색어' } })
+    expect(
+      screen.getByText(/검색어와 일치하는 연보 항목이 없습니다/),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '검색 초기화' }))
+    expect((searchInput as HTMLInputElement).value).toBe('')
+  })
+
+  it('PersonLifeEventFormModal은 BC 연결 사건 연도를 정확히 파싱하고 사후 연보 입력 시 미종료 재임 중복 경고를 오탐하지 않는다', () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    renderWithTheme(
+      <QueryClientProvider client={qc}>
+        <PersonLifeEventFormModal
+          open
+          personId="p-caesar"
+          birthDate="-0100-07-12"
+          deathDate="-0044-03-15"
+          existingReigns={[
+            {
+              id: 'r-1',
+              title: '종신 독재관',
+              startDate: '-0044-02-14',
+              endDate: null,
+            },
+          ]}
+          lifeEvent={{
+            id: 'le-1',
+            accountId: null,
+            personId: 'p-caesar',
+            title: '신격화 결의',
+            category: 'RELIGIOUS',
+            startDate: '-0042-01-01',
+            startDatePrecision: 'year',
+            endDate: null,
+            endDatePrecision: null,
+            description: null,
+            sortOrder: 0,
+            eventId: 'ev-bc44',
+            event: {
+              id: 'ev-bc44',
+              title: '카이사르 암살',
+              startYear: null,
+              startEra: null,
+              startDate: '-0044-03-15',
+            } as any,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          }}
+          onClose={jest.fn()}
+        />
+      </QueryClientProvider>,
+    )
+
+    // "-0044-03-15"의 slice(0,4) 오파싱('기원전 4') 대신 '기원전 44'로 표기
+    expect(screen.getByText(/기원전 44 · 카이사르 암살/)).toBeInTheDocument()
+    // 사망(-0044) 이후인 -0042 사후 연보는 미종료 재위(-0044~null)와 겹친다는 오탐 경고가 없어야 함
+    expect(
+      screen.queryByText(/이 시점은 재위 「종신 독재관」 기간입니다/),
+    ).not.toBeInTheDocument()
+  })
+
+  it('extractSignedYearsFromText는 "기원전 약 221년"·"BC  210년"을 서기(+221, +210)로 중복 오탐하지 않고 음수 연도로만 추출한다', () => {
+    expect(
+      extractSignedYearsFromText(
+        '<p>진시황은 기원전 약 221년에 천하를 통일하고 BC  210년에 사망했다. 사후 1974년에 병마용이 발굴되었다.</p>',
+      ),
+    ).toEqual([-221, -210, 1974])
+  })
+
+  it('TenureAchievements 인라인 폼은 종료일이 시작일보다 빠르면 경고 문구를 띄우고 저장 버튼을 비활성화하며 Esc로 닫힌다', () => {
+    renderWithTheme(
+      <TenureAchievements
+        hostId="reign-1"
+        hostKind="reign"
+        achievements={[
+          {
+            id: 'ach-1',
+            title: '도량형 통일',
+            startDate: '-0221-01-01',
+            endDate: '-0210-12-31',
+          },
+        ]}
+        onChanged={jest.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '추가' }))
+    const titleInput = screen.getByPlaceholderText('업적 제목 (예: 대동법 시행)')
+    fireEvent.change(titleInput, { target: { value: '군현제 실시' } })
+
+    const startLabel = screen.getByText('시작')
+    const endLabel = screen.getByText('종료')
+    const startInput = startLabel.querySelector('input')!
+    const endInput = endLabel.querySelector('input')!
+
+    fireEvent.change(startInput, { target: { value: '1995-05-01' } })
+    fireEvent.change(endInput, { target: { value: '1990-01-01' } })
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      '종료일이 시작일보다 빠릅니다.',
+    )
+    expect(screen.getByRole('button', { name: '등록' })).toBeDisabled()
+
+    fireEvent.keyDown(titleInput, { key: 'Escape' })
+    expect(
+      screen.queryByPlaceholderText('업적 제목 (예: 대동법 시행)'),
+    ).not.toBeInTheDocument()
   })
 })

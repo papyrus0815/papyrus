@@ -16,6 +16,7 @@ import {
 } from './context'
 import type { AvatarRole, FlagSource, NodePerson, PersonMetaSource } from './types'
 import {
+  birthYearOf,
   buildPersonTooltip,
   buildPersonTooltipLines,
   displayInitial,
@@ -23,7 +24,6 @@ import {
   isDeceasedOf,
   lifeSpan,
   resolvePersonThumbnailSrc,
-  signedYearFromParts,
 } from './utils'
 
 // ─── 카드 hover 부가 정보 버블 (React Portal) ─────────────────────
@@ -106,7 +106,7 @@ export function CardHoverInfo({ person }: { person: PersonMetaSource }) {
   }, [person, lookup, kinshipLookup, spouseNamesLookup])
 
   const anchorRef = useRef<HTMLSpanElement | null>(null)
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const [pos, setPos] = useState<{ top: number; left: number; above?: boolean } | null>(null)
 
   useEffect(() => {
     if (lines.length === 0) return
@@ -122,8 +122,17 @@ export function CardHoverInfo({ person }: { person: PersonMetaSource }) {
 
     const compute = () => {
       const rect = card.getBoundingClientRect()
-      // 카드 하단 + 8px gap, 카드 가로 중심. translateX(-50%)로 버블 자체 중심을 맞춤.
-      setPos({ top: rect.bottom + 8, left: rect.left + rect.width / 2 })
+      const vw = typeof window !== 'undefined' && window.innerWidth > 0 ? window.innerWidth : 1024
+      const vh = typeof window !== 'undefined' && window.innerHeight > 0 ? window.innerHeight : 768
+      const halfBubble = 128 // width 240px/2 + 8px 여백
+      const rawLeft = rect.left + rect.width / 2
+      const clampedLeft = Math.min(Math.max(rawLeft, halfBubble), Math.max(halfBubble, vw - halfBubble))
+      const placeAbove = rect.bottom + 180 > vh && rect.top > 180
+      setPos({
+        top: placeAbove ? rect.top - 8 : rect.bottom + 8,
+        left: clampedLeft,
+        above: placeAbove,
+      })
     }
     const show = () => {
       visible = true
@@ -162,7 +171,14 @@ export function CardHoverInfo({ person }: { person: PersonMetaSource }) {
       <HoverInfoAnchor ref={anchorRef} aria-hidden />
       {pos && typeof document !== 'undefined' &&
         createPortal(
-          <HoverInfoBubble role="tooltip" style={{ top: pos.top, left: pos.left }}>
+          <HoverInfoBubble
+            role="tooltip"
+            style={{
+              top: pos.top,
+              left: pos.left,
+              transform: pos.above ? 'translate(-50%, -100%)' : 'translateX(-50%)',
+            }}
+          >
             {lines.map((l) => (
               <HoverInfoLine key={l.label}>
                 <HoverInfoLabel>{l.label}</HoverInfoLabel>
@@ -216,15 +232,35 @@ export function NodeNameBlock({
 }
 
 // ─── 썸네일 + 국기 ──────────────────────────────────────────────────
-export function GeoThumbnail({ person, role }: { person: NodePerson; role: AvatarRole }) {
+export function GeoThumbnail({
+  person,
+  role,
+  flagOverride,
+}: {
+  person: NodePerson
+  role: AvatarRole
+  flagOverride?: { flag: FlagSource; countryName?: string | null }
+}) {
   const displayName = getPersonDisplayName(person, true)
   const src = resolvePersonThumbnailSrc(person)
-  const { flag, countryName } = useNodePersonFlag(person)
+  const [imageBroken, setImageBroken] = useState(false)
+  useEffect(() => {
+    setImageBroken(false)
+  }, [src])
+  const nodeFlag = useNodePersonFlag(person)
+  const { flag, countryName } = flagOverride ?? nodeFlag
+  const showImage = Boolean(src) && !imageBroken
   return (
     <AvatarFrame>
-      <NodeAvatar $role={role} $hasImage={Boolean(src)}>
-        {src ? (
-          <AvatarImage src={src} alt={`${displayName} 프로필 사진`} loading="lazy" decoding="async" />
+      <NodeAvatar $role={role} $hasImage={showImage}>
+        {showImage && src ? (
+          <AvatarImage
+            src={src}
+            alt={`${displayName} 프로필 사진`}
+            loading="lazy"
+            decoding="async"
+            onError={() => setImageBroken(true)}
+          />
         ) : (
           displayInitial(person)
         )}
@@ -248,14 +284,23 @@ export function CountryFlag({
   countryName?: string | null
   size?: number
 }) {
-  if (!flag) return null
-  const emoji = flag.flagEmoji ?? null
-  const thumb = flag.thumbnailUrl
+  const emoji = flag?.flagEmoji ?? null
+  const thumb = flag?.thumbnailUrl
     ? getUploadImageUrl(flag.thumbnailUrl) || flag.thumbnailUrl
     : null
-  const flagcdn = flag.isoCode
+  const flagcdn = flag?.isoCode
     ? `https://flagcdn.com/w40/${flag.isoCode.toLowerCase()}.png`
     : null
+  const [thumbBroken, setThumbBroken] = useState(false)
+  const [cdnBroken, setCdnBroken] = useState(false)
+  useEffect(() => {
+    setThumbBroken(false)
+  }, [thumb])
+  useEffect(() => {
+    setCdnBroken(false)
+  }, [flagcdn])
+
+  if (!flag) return null
   const title = countryName ?? undefined
   if (emoji) {
     return (
@@ -264,11 +309,22 @@ export function CountryFlag({
       </CountryFlagBadge>
     )
   }
-  const imgSrc = thumb ?? flagcdn
+  const activeThumb = thumb && !thumbBroken ? thumb : null
+  const activeCdn = flagcdn && !cdnBroken ? flagcdn : null
+  const imgSrc = activeThumb ?? activeCdn
   if (imgSrc) {
     return (
       <CountryFlagBadge $size={size} title={title} aria-label={countryName ? `${countryName} 국기` : '국기'}>
-        <img src={imgSrc} alt="" loading="lazy" decoding="async" />
+        <img
+          src={imgSrc}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onError={() => {
+            if (activeThumb) setThumbBroken(true)
+            else setCdnBroken(true)
+          }}
+        />
       </CountryFlagBadge>
     )
   }
@@ -470,12 +526,8 @@ export function DescendantNode({
 }) {
   // 생몰 한 줄 — 정본 formatLifespan에 위임하는 lifeSpan util 재사용(BC-safe·표기 통일).
   const lifespan = lifeSpan(person)
-  const src = person.profileImageUrl
-    ? getUploadImageUrl(person.profileImageUrl) || person.profileImageUrl
-    : null
   const baseName = getPersonDisplayName(person, true)
   const displayName = baseName
-  const initial = displayInitial(person)
   const openable = useNodeOpenable(person.id)
   const clickable = Boolean(onPersonClick && person.id) && openable
   const handle = () => person.id && onPersonClick?.(person.id)
@@ -506,19 +558,11 @@ export function DescendantNode({
           }
         : {})}
     >
-      <AvatarFrame>
-        <NodeAvatar $role={cardRole} $hasImage={Boolean(src)}>
-          {src ? (
-            <AvatarImage src={src} alt={`${baseName} 프로필 사진`} loading="lazy" decoding="async" />
-          ) : (
-            initial
-          )}
-        </NodeAvatar>
-        {(() => {
-          const { flag, countryName } = familyTreePersonFlag(person)
-          return <CountryFlag flag={flag} countryName={countryName} size={24} />
-        })()}
-      </AvatarFrame>
+      <GeoThumbnail
+        person={person}
+        role={cardRole}
+        flagOverride={familyTreePersonFlag(person)}
+      />
       <NodeNameWrap>
         {person.regnalName && (
           <NodeRegnalName>
@@ -550,7 +594,7 @@ export function DescendantNode({
         // 합스부르크 가계처럼 동명이인이 흔한 도메인 — 출생연도로 디스앰비
         const formatPartner = (p: FamilyTreePerson) => {
           const name = getPersonDisplayName(p, true)
-          const py = signedYearFromParts(p.birthYear ?? null, p.birthEra)
+          const py = birthYearOf(p)
           return py != null ? `${name} (${formatYear(py)})` : name
         }
         const labels = partners.map(formatPartner)

@@ -623,48 +623,64 @@ export function PersonDetailPanel({
   })
 
   // ── 타임라인 인포그래픽용 파생 데이터 (참조 안정, 친부모 미상 시 양부모 폴백) ──
+  const mapFamilyMemberForTimeline = (m: any) => {
+    const birthDate =
+      m.birthYear != null
+        ? `${m.birthEra === 'BC' ? '-' : ''}${String(Math.abs(m.birthYear)).padStart(4, '0')}-${String(m.birthMonth ?? 1).padStart(2, '0')}-${String(m.birthDay ?? 1).padStart(2, '0')}`
+        : m.birthDate
+          ? String(m.birthDate)
+          : null
+    const birthDatePrecision =
+      m.birthDatePrecision ??
+      (m.birthYear != null
+        ? m.birthMonth == null
+          ? 'year'
+          : m.birthDay == null
+            ? 'month'
+            : 'day'
+        : null)
+    const deathDate =
+      m.deathYear != null
+        ? `${m.deathEra === 'BC' ? '-' : ''}${String(Math.abs(m.deathYear)).padStart(4, '0')}-${String(m.deathMonth ?? 1).padStart(2, '0')}-${String(m.deathDay ?? 1).padStart(2, '0')}`
+        : m.deathDate
+          ? String(m.deathDate)
+          : null
+    const deathDatePrecision =
+      m.deathDatePrecision ??
+      (m.deathYear != null
+        ? m.deathMonth == null
+          ? 'year'
+          : m.deathDay == null
+            ? 'month'
+            : 'day'
+        : null)
+    return {
+      id: m.id,
+      name: getPersonDisplayName(m, true),
+      birthDate,
+      birthEra: m.birthEra ?? null,
+      birthDatePrecision,
+      deathDate,
+      deathEra: m.deathEra ?? null,
+      deathDatePrecision,
+    }
+  }
+
   const timelineFather = useMemo(() => {
     const f = ((person?.father ?? (person as PersonDetailData)?.adoptiveFather) as any) ?? null
     if (!f) return null
-    return {
-      id: f.id,
-      name: getPersonDisplayName(f, true),
-      birthDate: f.birthDate ? String(f.birthDate) : null,
-      birthEra: f.birthEra ?? null,
-      birthDatePrecision: f.birthDatePrecision ?? null,
-      deathDate: f.deathDate ? String(f.deathDate) : null,
-      deathEra: f.deathEra ?? null,
-      deathDatePrecision: f.deathDatePrecision ?? null,
-    }
+    return mapFamilyMemberForTimeline(f)
   }, [person])
 
   const timelineMother = useMemo(() => {
     const m = ((person?.mother ?? (person as PersonDetailData)?.adoptiveMother) as any) ?? null
     if (!m) return null
-    return {
-      id: m.id,
-      name: getPersonDisplayName(m, true),
-      birthDate: m.birthDate ? String(m.birthDate) : null,
-      birthEra: m.birthEra ?? null,
-      birthDatePrecision: m.birthDatePrecision ?? null,
-      deathDate: m.deathDate ? String(m.deathDate) : null,
-      deathEra: m.deathEra ?? null,
-      deathDatePrecision: m.deathDatePrecision ?? null,
-    }
+    return mapFamilyMemberForTimeline(m)
   }, [person])
 
   const timelineChildren = useMemo(() => {
     const list = (person?.children ?? []) as any[]
-    return list.map((c) => ({
-      id: c.id,
-      name: getPersonDisplayName(c, true),
-      birthDate: c.birthDate ? String(c.birthDate) : null,
-      birthEra: c.birthEra ?? null,
-      birthDatePrecision: c.birthDatePrecision ?? null,
-      deathDate: c.deathDate ? String(c.deathDate) : null,
-      deathEra: c.deathEra ?? null,
-      deathDatePrecision: c.deathDatePrecision ?? null,
-    }))
+    return list.map((c) => mapFamilyMemberForTimeline(c))
   }, [person])
 
   const timelineSpouses = useMemo(() => {
@@ -672,14 +688,7 @@ export function PersonDetailPanel({
     return list.map((rel) => {
       const sp = rel.spouse ?? rel
       return {
-        id: sp.id,
-        name: getPersonDisplayName(sp, true),
-        birthDate: sp.birthDate ? String(sp.birthDate) : null,
-        birthEra: sp.birthEra ?? null,
-        birthDatePrecision: sp.birthDatePrecision ?? null,
-        deathDate: sp.deathDate ? String(sp.deathDate) : null,
-        deathEra: sp.deathEra ?? null,
-        deathDatePrecision: sp.deathDatePrecision ?? null,
+        ...mapFamilyMemberForTimeline(sp),
         marriageStartDate: rel.marriageStartDate ?? null,
         marriageStartYear: rel.marriageStartYear ?? null,
         marriageStartMonth: rel.marriageStartMonth ?? null,
@@ -708,16 +717,7 @@ export function PersonDetailPanel({
 
   const timelineSiblings = useMemo(() => {
     const list = (person?.siblings ?? []) as any[]
-    return list.map((s) => ({
-      id: s.id,
-      name: getPersonDisplayName(s, true),
-      birthDate: s.birthDate ? String(s.birthDate) : null,
-      birthEra: s.birthEra ?? null,
-      birthDatePrecision: s.birthDatePrecision ?? null,
-      deathDate: s.deathDate ? String(s.deathDate) : null,
-      deathEra: s.deathEra ?? null,
-      deathDatePrecision: s.deathDatePrecision ?? null,
-    }))
+    return list.map((s) => mapFamilyMemberForTimeline(s))
   }, [person])
 
   const timelineReigns = useMemo(
@@ -903,6 +903,8 @@ export function PersonDetailPanel({
       SERVED: '국가 복무',
       EXILE: '망명',
       RESIDENCE: '거주·체류',
+      PRIMARY_RESIDENCE: '거주·체류',
+      OTHER: '국가 소속',
     }
     for (const ca of ((person as any)?.countryAffiliations ?? []) as any[]) {
       const affType = String(ca.affiliationType ?? '')
@@ -953,10 +955,16 @@ export function PersonDetailPanel({
 
     for (const bk of (person?.books ?? []) as any[]) {
       if (bk.publishedYear == null) continue
+      const pubYear = Number(bk.publishedYear)
+      if (!Number.isFinite(pubYear) || pubYear === 0) continue
+      const startIso =
+        pubYear < 0
+          ? `-${String(-pubYear).padStart(4, '0')}-01-01`
+          : `${String(pubYear).padStart(4, '0')}-01-01`
       items.push({
         id: `book-${bk.id}`,
         recordKey: bk.id ? `book-${bk.id}` : 'section-activities',
-        startDate: `${String(bk.publishedYear).padStart(4, '0')}-01-01`,
+        startDate: startIso,
         endDate: null,
         startDatePrecision: 'year',
         title: bk.title ?? '저서',
@@ -1262,12 +1270,12 @@ export function PersonDetailPanel({
       .map((rel) => {
         const sp = rel.spouse ?? null
         const rankLabel = resolvePerspectiveMarriageRankLabel({
-          rank: rel.marriageRank ?? null,
+          marriageRank: rel.marriageRank ?? null,
           rankHolderId: rel.rankHolderId ?? null,
-          egoId: person?.id ?? null,
+          viewerPersonId: person?.id ?? null,
           viewerGender: person?.gender ?? null,
-          partnerId: sp?.id ?? null,
-          partnerGender: sp?.gender ?? null,
+          spouseId: sp?.id ?? null,
+          spouseGender: sp?.gender ?? null,
         })
         return {
           id: sp?.id as string | undefined,
@@ -2481,12 +2489,12 @@ export function PersonDetailPanel({
     !birthLabel && !deathLabel
       ? formatFloruit(
           p.floruitStartYear != null
-            ? p.floruitEra === 'BC'
+            ? (p.floruitStartEra ?? p.floruitEra) === 'BC'
               ? -p.floruitStartYear
               : p.floruitStartYear
             : null,
           p.floruitEndYear != null
-            ? p.floruitEra === 'BC'
+            ? (p.floruitEndEra ?? p.floruitEra) === 'BC'
               ? -p.floruitEndYear
               : p.floruitEndYear
             : null,
@@ -3303,6 +3311,8 @@ export function PersonDetailPanel({
                     const TYPE_LABELS: Record<string, string> = {
                       CITIZENSHIP: '국적',
                       BIRTH_PLACE: '출생',
+                      DEATH_PLACE: '사망',
+                      RESIDENCE: '거주',
                       PRIMARY_RESIDENCE: '거주',
                       SERVED: '복무',
                       EXILE: '망명',
@@ -3334,10 +3344,31 @@ export function PersonDetailPanel({
                               ? TYPE_LABELS[aff.affiliationType] ??
                                 aff.affiliationType
                               : '소속'
-                            const start = formatIsoDateKo(aff.startDate)
-                            const end = formatIsoDateKo(aff.endDate)
+                            const start =
+                              aff.startYear != null
+                                ? formatDateKo(
+                                    aff.startYear,
+                                    aff.startMonth,
+                                    aff.startDay,
+                                    aff.startEra,
+                                  )
+                                : formatIsoDateKo(aff.startDate)
+                            const end =
+                              aff.endYear != null
+                                ? formatDateKo(
+                                    aff.endYear,
+                                    aff.endMonth,
+                                    aff.endDay,
+                                    aff.endEra,
+                                  )
+                                : formatIsoDateKo(aff.endDate)
+                            const isPointEvent =
+                              aff.affiliationType === 'BIRTH_PLACE' ||
+                              aff.affiliationType === 'DEATH_PLACE'
                             const period =
-                              formatPeriod(start, end, isDeceased ? '미상' : '현재')
+                              isPointEvent && !end
+                                ? start || null
+                                : formatPeriod(start, end, isDeceased ? '미상' : '현재')
                             return (
                               <CountryAffiliationChip
                                 key={aff.id ?? `aff-${affIdx}`}
@@ -3413,59 +3444,57 @@ export function PersonDetailPanel({
                       </OverviewSectionHeading>
                       <span ref={setBioToolbarEl} />
                     </OverviewSectionHeaderRow>
-                    {embedInModal ? (
-                      <BioClamp resetKey={person.id}>
+                    {(() => {
+                      const bioLifespanBounds = {
+                        minSigned:
+                          p.birthYear != null
+                            ? p.birthEra === 'BC'
+                              ? -p.birthYear
+                              : p.birthYear
+                            : p.floruitStartYear != null
+                              ? (p.floruitStartEra ?? p.floruitEra) === 'BC'
+                                ? -p.floruitStartYear
+                                : p.floruitStartYear
+                              : null,
+                        maxSigned:
+                          p.deathYear != null
+                            ? p.deathEra === 'BC'
+                              ? -p.deathYear
+                              : p.deathYear
+                            : p.floruitEndYear != null
+                              ? (p.floruitEndEra ?? p.floruitEra) === 'BC'
+                                ? -p.floruitEndYear
+                                : p.floruitEndYear
+                              : null,
+                      }
+                      return embedInModal ? (
+                        <BioClamp resetKey={person.id}>
+                          <PersonBiographySections
+                            personId={person.id}
+                            sections={p.biographySections ?? undefined}
+                            legacyBiography={person.biography}
+                            readOnly={embedInModal}
+                            toolbarContainer={bioToolbarEl}
+                            lifespanBounds={bioLifespanBounds}
+                            onPersonClick={(id) => onLinkedPersonClick?.(id)}
+                            setTermTooltip={setTermTooltip}
+                            setDynastyTooltip={setDynastyTooltip}
+                          />
+                        </BioClamp>
+                      ) : (
                         <PersonBiographySections
                           personId={person.id}
                           sections={p.biographySections ?? undefined}
                           legacyBiography={person.biography}
                           readOnly={embedInModal}
                           toolbarContainer={bioToolbarEl}
-                          lifespanBounds={{
-                            minSigned:
-                              p.birthYear != null
-                                ? p.birthEra === 'BC'
-                                  ? -p.birthYear
-                                  : p.birthYear
-                                : null,
-                            maxSigned:
-                              p.deathYear != null
-                                ? p.deathEra === 'BC'
-                                  ? -p.deathYear
-                                  : p.deathYear
-                                : null,
-                          }}
-                          onPersonClick={(id) => onLinkedPersonClick?.(id)}
+                          lifespanBounds={bioLifespanBounds}
+                          onPersonClick={pushPersonToModalStack}
                           setTermTooltip={setTermTooltip}
                           setDynastyTooltip={setDynastyTooltip}
                         />
-                      </BioClamp>
-                    ) : (
-                      <PersonBiographySections
-                        personId={person.id}
-                        sections={p.biographySections ?? undefined}
-                        legacyBiography={person.biography}
-                        readOnly={embedInModal}
-                        toolbarContainer={bioToolbarEl}
-                        lifespanBounds={{
-                          minSigned:
-                            p.birthYear != null
-                              ? p.birthEra === 'BC'
-                                ? -p.birthYear
-                                : p.birthYear
-                              : null,
-                          maxSigned:
-                            p.deathYear != null
-                              ? p.deathEra === 'BC'
-                                ? -p.deathYear
-                                : p.deathYear
-                              : null,
-                        }}
-                        onPersonClick={pushPersonToModalStack}
-                        setTermTooltip={setTermTooltip}
-                        setDynastyTooltip={setDynastyTooltip}
-                      />
-                    )}
+                      )
+                    })()}
                   </section>
                 </OverviewSections>
               </TabContent>
@@ -3595,7 +3624,7 @@ export function PersonDetailPanel({
                                 playClickSound()
                                 setEditingTenureId(null)
                                 setEditingReignId(null)
-                                setTenureModalOpen(true)
+                                setAddKindChooserOpen(true)
                               }}
                             >
                               <FiPlus size={12} />
@@ -4117,30 +4146,45 @@ export function PersonDetailPanel({
                                 <ActivityGroupCount>{books.length}</ActivityGroupCount>
                               </ActivityGroupTitle>
                               <SimpleEntryList>
-                                {books.map((b, bookIdx) => (
-                                  <SimpleEntryItem
-                                    key={b.id ?? `book-${bookIdx}`}
-                                    id={b.id ? `person-record-book-${b.id}` : undefined}
-                                  >
-                                    <SimpleEntryDateCol $muted={!b.publishedYear}>
-                                      {b.publishedYear
-                                        ? `${b.publishedYear}년`
-                                        : '연도 미상'}
-                                    </SimpleEntryDateCol>
-                                    <SimpleEntryMainCol>
-                                      <SimpleEntryHeader>
-                                        <SimpleEntryTitle>
-                                          {b.title ?? '제목 없음'}
-                                        </SimpleEntryTitle>
-                                      </SimpleEntryHeader>
-                                      {b.summary && (
-                                        <SimpleEntryDescription>
-                                          {b.summary}
-                                        </SimpleEntryDescription>
-                                      )}
-                                    </SimpleEntryMainCol>
-                                  </SimpleEntryItem>
-                                ))}
+                                {books
+                                  .slice()
+                                  .sort((a, b) => {
+                                    const ya =
+                                      a.publishedYear != null
+                                        ? a.publishedYear
+                                        : Number.POSITIVE_INFINITY
+                                    const yb =
+                                      b.publishedYear != null
+                                        ? b.publishedYear
+                                        : Number.POSITIVE_INFINITY
+                                    return ya - yb
+                                  })
+                                  .map((b, bookIdx) => (
+                                    <SimpleEntryItem
+                                      key={b.id ?? `book-${bookIdx}`}
+                                      id={b.id ? `person-record-book-${b.id}` : undefined}
+                                    >
+                                      <SimpleEntryDateCol $muted={b.publishedYear == null}>
+                                        {b.publishedYear != null
+                                          ? b.publishedYear < 0
+                                            ? `기원전 ${-b.publishedYear}년`
+                                            : `${b.publishedYear}년`
+                                          : '연도 미상'}
+                                      </SimpleEntryDateCol>
+                                      <SimpleEntryMainCol>
+                                        <SimpleEntryHeader>
+                                          <SimpleEntryTitle>
+                                            {b.title ?? '제목 없음'}
+                                          </SimpleEntryTitle>
+                                        </SimpleEntryHeader>
+                                        {b.summary && (
+                                          <SimpleEntryDescription>
+                                            {b.summary}
+                                          </SimpleEntryDescription>
+                                        )}
+                                      </SimpleEntryMainCol>
+                                    </SimpleEntryItem>
+                                  ))}
                               </SimpleEntryList>
                             </ActivityGroup>
                           )}
@@ -4151,35 +4195,46 @@ export function PersonDetailPanel({
                                 <ActivityGroupCount>{founded.length}</ActivityGroupCount>
                               </ActivityGroupTitle>
                               <SimpleEntryList>
-                                {founded.map((c, foundedIdx) => {
-                                  const foundedDateStr = formatIsoDateKo(
-                                    c.foundedAt,
-                                  )
-                                  return (
-                                    <SimpleEntryItem
-                                      key={c.id ?? `founded-${foundedIdx}`}
-                                      id={c.id ? `person-record-company-${c.id}` : undefined}
-                                    >
-                                      <SimpleEntryDateCol
-                                        $muted={!foundedDateStr}
+                                {founded
+                                  .slice()
+                                  .sort((a, b) => {
+                                    const ta = a.foundedAt
+                                      ? isoDateSortKey(a.foundedAt)
+                                      : Number.POSITIVE_INFINITY
+                                    const tb = b.foundedAt
+                                      ? isoDateSortKey(b.foundedAt)
+                                      : Number.POSITIVE_INFINITY
+                                    return ta - tb
+                                  })
+                                  .map((c, foundedIdx) => {
+                                    const foundedDateStr = formatIsoDateKo(
+                                      c.foundedAt,
+                                    )
+                                    return (
+                                      <SimpleEntryItem
+                                        key={c.id ?? `founded-${foundedIdx}`}
+                                        id={c.id ? `person-record-company-${c.id}` : undefined}
                                       >
-                                        {foundedDateStr || '연도 미상'}
-                                      </SimpleEntryDateCol>
-                                      <SimpleEntryMainCol>
-                                        <SimpleEntryHeader>
-                                          <SimpleEntryTitle>
-                                            {c.name ?? '이름 없음'}
-                                          </SimpleEntryTitle>
-                                        </SimpleEntryHeader>
-                                        {c.description && (
-                                          <SimpleEntryDescription>
-                                            {c.description}
-                                          </SimpleEntryDescription>
-                                        )}
-                                      </SimpleEntryMainCol>
-                                    </SimpleEntryItem>
-                                  )
-                                })}
+                                        <SimpleEntryDateCol
+                                          $muted={!foundedDateStr}
+                                        >
+                                          {foundedDateStr || '연도 미상'}
+                                        </SimpleEntryDateCol>
+                                        <SimpleEntryMainCol>
+                                          <SimpleEntryHeader>
+                                            <SimpleEntryTitle>
+                                              {c.name ?? '이름 없음'}
+                                            </SimpleEntryTitle>
+                                          </SimpleEntryHeader>
+                                          {c.description && (
+                                            <SimpleEntryDescription>
+                                              {c.description}
+                                            </SimpleEntryDescription>
+                                          )}
+                                        </SimpleEntryMainCol>
+                                      </SimpleEntryItem>
+                                    )
+                                  })}
                               </SimpleEntryList>
                             </ActivityGroup>
                           )}
@@ -4902,12 +4957,12 @@ export function PersonDetailPanel({
                                 seenCandIds.add(sp.id)
                                 const spName = getPersonDisplayName(sp, true)
                                 const rankLbl = resolvePerspectiveMarriageRankLabel({
-                                  rank: rel.marriageRank,
+                                  marriageRank: rel.marriageRank,
                                   rankHolderId: rel.rankHolderId,
-                                  egoId: person.id,
+                                  viewerPersonId: person.id,
                                   viewerGender: person.gender,
-                                  partnerId: sp.id,
-                                  partnerGender: sp.gender,
+                                  spouseId: sp.id,
+                                  spouseGender: sp.gender,
                                 })
                                 spouseCandidates.push({
                                   id: sp.id,

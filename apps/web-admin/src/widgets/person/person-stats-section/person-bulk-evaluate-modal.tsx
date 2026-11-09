@@ -62,7 +62,7 @@ export function PersonBulkEvaluateModal({ open, personIds, onClose }: Props) {
   // open 토글 시 초기화
   useEffect(() => {
     if (!open) return
-    setDraftStats(EMPTY_STATS)
+    setDraftStats({ ...EMPTY_STATS })
     setDraftTraits(new Map())
     setDraftNotes('')
     setOverrideExisting(false)
@@ -222,7 +222,9 @@ export function PersonBulkEvaluateModal({ open, personIds, onClose }: Props) {
 
         <SectionLabel>
           성격 태그 (선택적)
-          <SectionLabelHint>{draftTraits.size}개 선택됨</SectionLabelHint>
+          <SectionLabelHint>
+            {draftTraits.size}개 선택됨 · 활성 칩의 점을 눌러 강도 1~3 설정
+          </SectionLabelHint>
         </SectionLabel>
         <TraitGroups>
           {(['positive', 'neutral', 'negative'] as const).map((tone) => (
@@ -234,23 +236,54 @@ export function PersonBulkEvaluateModal({ open, personIds, onClose }: Props) {
                 {traitsByTone[tone].map((trait) => {
                   const meta = PERSON_TRAIT_META[trait]
                   const active = draftTraits.has(trait)
+                  const intensity = draftTraits.get(trait) ?? null
                   return (
-                    <TraitToggle
+                    <TraitChipShell
                       key={trait}
-                      type="button"
                       $active={active}
                       $tone={meta.tone}
-                      onClick={() =>
-                        setDraftTraits((prev) => {
-                          const next = new Map(prev)
-                          if (next.has(trait)) next.delete(trait)
-                          else next.set(trait, null)
-                          return next
-                        })
-                      }
                     >
-                      {meta.label}
-                    </TraitToggle>
+                      <TraitLabelBtn
+                        type="button"
+                        $active={active}
+                        $tone={meta.tone}
+                        onClick={() =>
+                          setDraftTraits((prev) => {
+                            const next = new Map(prev)
+                            if (next.has(trait)) next.delete(trait)
+                            else next.set(trait, null)
+                            return next
+                          })
+                        }
+                      >
+                        {meta.label}
+                      </TraitLabelBtn>
+                      {active && (
+                        <IntensityGroup>
+                          {[1, 2, 3].map((lvl) => {
+                            const isActive = intensity === lvl
+                            return (
+                              <IntensityDot
+                                key={lvl}
+                                type="button"
+                                $active={isActive}
+                                $tone={meta.tone}
+                                onClick={() =>
+                                  setDraftTraits((prev) => {
+                                    const next = new Map(prev)
+                                    next.set(trait, isActive ? null : lvl)
+                                    return next
+                                  })
+                                }
+                                title={`강도 ${lvl} (${isActive ? '클릭 시 미지정' : '선택'})`}
+                              >
+                                {lvl}
+                              </IntensityDot>
+                            )
+                          })}
+                        </IntensityGroup>
+                      )}
+                    </TraitChipShell>
                   )
                 })}
               </TraitChipRow>
@@ -415,29 +448,55 @@ const TraitGroup = styled.div`
   gap: 6px;
 `
 
-const traitToneFg: Record<'positive' | 'neutral' | 'negative', string> = {
-  positive: '#0e7490',
-  neutral: '#475569',
-  negative: '#9f1239',
+const traitToneFg = (
+  tone: 'positive' | 'neutral' | 'negative',
+  isDark = false,
+): string => {
+  if (tone === 'positive') return isDark ? '#67e8f9' : '#0e7490'
+  if (tone === 'negative') return isDark ? '#fda4af' : '#9f1239'
+  return isDark ? '#cbd5e1' : '#475569'
 }
-const traitToneBg = (tone: 'positive' | 'negative' | 'neutral') => {
-  if (tone === 'positive')
-    return {
-      fg: '#0e7490',
-      bg: 'rgba(207, 250, 254, 0.7)',
-      border: 'rgba(103, 232, 249, 0.5)',
-    }
-  if (tone === 'negative')
-    return {
-      fg: '#9f1239',
-      bg: 'rgba(255, 228, 230, 0.85)',
-      border: 'rgba(251, 113, 133, 0.45)',
-    }
-  return {
-    fg: '#475569',
-    bg: 'rgba(241, 245, 249, 0.85)',
-    border: 'rgba(148, 163, 184, 0.4)',
+const traitToneBg = (
+  tone: 'positive' | 'negative' | 'neutral',
+  isDark = false,
+) => {
+  if (tone === 'positive') {
+    return isDark
+      ? {
+          fg: '#67e8f9',
+          bg: 'rgba(6, 182, 212, 0.16)',
+          border: 'rgba(103, 232, 249, 0.35)',
+        }
+      : {
+          fg: '#0e7490',
+          bg: 'rgba(207, 250, 254, 0.7)',
+          border: 'rgba(103, 232, 249, 0.5)',
+        }
   }
+  if (tone === 'negative') {
+    return isDark
+      ? {
+          fg: '#fda4af',
+          bg: 'rgba(244, 63, 94, 0.16)',
+          border: 'rgba(251, 113, 133, 0.35)',
+        }
+      : {
+          fg: '#9f1239',
+          bg: 'rgba(255, 228, 230, 0.85)',
+          border: 'rgba(251, 113, 133, 0.45)',
+        }
+  }
+  return isDark
+    ? {
+        fg: '#cbd5e1',
+        bg: 'rgba(148, 163, 184, 0.14)',
+        border: 'rgba(148, 163, 184, 0.32)',
+      }
+    : {
+        fg: '#475569',
+        bg: 'rgba(241, 245, 249, 0.85)',
+        border: 'rgba(148, 163, 184, 0.4)',
+      }
 }
 
 const TraitGroupTitle = styled.div<{
@@ -447,7 +506,7 @@ const TraitGroupTitle = styled.div<{
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  color: ${({ $tone }) => traitToneFg[$tone]};
+  color: ${({ $tone, theme }) => traitToneFg($tone, theme.mode === 'dark')};
 `
 
 const TraitChipRow = styled.div`
@@ -456,7 +515,33 @@ const TraitChipRow = styled.div`
   gap: 6px;
 `
 
-const TraitToggle = styled.button<{
+const TraitChipShell = styled.span<{
+  $active: boolean
+  $tone: 'positive' | 'negative' | 'neutral'
+}>`
+  display: inline-flex;
+  align-items: stretch;
+  border-radius: 999px;
+  overflow: hidden;
+  background: ${({ $active, $tone, theme }) =>
+    $active
+      ? traitToneBg($tone, theme.mode === 'dark').bg
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.04)'
+        : '#fff'};
+  border: 1px solid
+    ${({ $active, $tone, theme }) =>
+      $active
+        ? traitToneBg($tone, theme.mode === 'dark').border
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.1)'
+          : '#e2e8f0'};
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
+`
+
+const TraitLabelBtn = styled.button<{
   $active: boolean
   $tone: 'positive' | 'negative' | 'neutral'
 }>`
@@ -464,28 +549,55 @@ const TraitToggle = styled.button<{
   font-size: 11.5px;
   font-weight: 600;
   padding: 5px 10px;
-  border-radius: 999px;
   cursor: pointer;
   text-align: center;
+  background: transparent;
+  border: none;
   color: ${({ $active, $tone, theme }) =>
     $active
-      ? traitToneBg($tone).fg
+      ? traitToneBg($tone, theme.mode === 'dark').fg
       : theme.mode === 'dark'
         ? 'rgba(248,250,252,0.55)'
         : '#64748b'};
+  transition: color 0.12s ease;
+`
+
+const IntensityGroup = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 0 4px 0 0;
+`
+
+const IntensityDot = styled.button<{
+  $active: boolean
+  $tone: 'positive' | 'negative' | 'neutral'
+}>`
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: ${({ $active, $tone, theme }) =>
+    $active ? traitToneBg($tone, theme.mode === 'dark').fg : 'transparent'};
+  color: ${({ $active, $tone, theme }) =>
     $active
-      ? traitToneBg($tone).bg
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.04)'
-        : '#fff'};
-  border: 1px solid
-    ${({ $active, $tone, theme }) =>
-      $active
-        ? traitToneBg($tone).border
-        : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.1)'
-          : '#e2e8f0'};
+      ? theme.mode === 'dark'
+        ? '#0f172a'
+        : '#fff'
+      : traitToneBg($tone, theme.mode === 'dark').fg};
+  opacity: ${({ $active }) => ($active ? 1 : 0.45)};
+  transition:
+    opacity 0.12s ease,
+    background 0.12s ease;
+  &:hover {
+    opacity: 1;
+  }
 `
 
 const NotesArea = styled.textarea`

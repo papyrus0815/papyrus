@@ -27,6 +27,7 @@ import {
   unlinkPersonEvent,
 } from '@/shared/api/person-event-links'
 import { eventKeys } from '@/shared/api/event-query-keys'
+import { personRecordsKeys } from '@/shared/api/person-records'
 import { FormInput } from '@/shared/ui/form-input/form-input'
 import { Modal, ModalBody } from '@/shared/ui/modal'
 import {
@@ -109,6 +110,11 @@ export function PersonEventLinkModal({
         },
     )
     void queryClient.invalidateQueries({ queryKey: personKeys.detailFullAll })
+    void queryClient.invalidateQueries({
+      queryKey: ['person-record-event-suggestions', personId],
+    })
+    void queryClient.invalidateQueries({ queryKey: personRecordsKeys.all })
+    void queryClient.invalidateQueries({ queryKey: ['persons', 'compare-records'] })
     void queryClient.invalidateQueries({ queryKey: eventKeys.detail(eventId) })
   }
 

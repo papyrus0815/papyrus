@@ -23,12 +23,14 @@ import {
   withSiblingKinshipMeta,
 } from './family-tree-derive'
 import {
+  birthYearOf,
   buildPersonTooltipLines,
   compareSiblingChronology,
   compareSiblingSeniority,
   compareSiblings,
   isDeceasedOf,
   lifeSpan,
+  yearOf,
 } from './utils'
 import {
   computeKinshipMap,
@@ -1272,5 +1274,21 @@ describe('computeKinshipMap (촌수·한국어 친족 호칭 계산)', () => {
         { id: 'a-younger-primary-son', birthYear: 1405 },
       ),
     ).toBeLessThan(0)
+  })
+
+  it('yearOf·birthYearOf·lifeSpan은 4자리 음수 ISO(-0221-01-01) BC 날짜도 NaN 없이 파싱한다', () => {
+    expect(yearOf('-0259-01-01')).toBe(-259)
+    expect(yearOf('-0210-09-10T00:00:00.000Z')).toBe(-210)
+    expect(birthYearOf({ birthDate: '-0259-01-01', birthEra: 'BC' })).toBe(-259)
+    expect(birthYearOf({ birthDate: '-0259-01-01', birthEra: null })).toBe(-259)
+    expect(
+      lifeSpan({
+        id: 'qin',
+        name: '영정',
+        birthDate: '-0259-01-01',
+        deathDate: '-0210-09-10',
+        isAlive: false,
+      }),
+    ).toBe('BC 259–BC 210')
   })
 })

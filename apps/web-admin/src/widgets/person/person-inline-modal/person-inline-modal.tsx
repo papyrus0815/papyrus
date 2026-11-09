@@ -9,11 +9,11 @@
  * 단일 책임: "인물 인라인 상세 보기 모달"
  *   - 편집 동작은 부모가 결정 (`onEdit` prop) — 페이지 이동(navigate)이거나 인라인 편집 모드 전환이거나.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
-import { FiArrowUpRight, FiX } from 'react-icons/fi'
+import { FiArrowLeft, FiArrowUpRight, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { getPersonDetailById } from '@/shared/api/persons-detail'
@@ -59,19 +59,28 @@ export function PersonInlineModal({
   }, [personId])
 
   const activeId = stack[stack.length - 1] ?? personId
+  const pop = useCallback(() => setStack((s) => s.slice(0, -1)), [])
+  const panelRef = useRef<HTMLDivElement>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
 
-  // ESC 닫기 (stack이 있으면 pop, 없으면 close)
+  useEffect(() => {
+    bodyRef.current?.scrollTo({ top: 0 })
+  }, [activeId])
+
+  // ESC 닫기 (stack이 있으면 pop, 없으면 close) — 패널 스코프로 바인딩해 자식 포털 모달과 충돌 방지
   useEffect(() => {
     if (!personId) return
+    const node = panelRef.current
+    if (!node) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (stack.length > 0) setStack((s) => s.slice(0, -1))
-        else onClose()
-      }
+      if (e.key !== 'Escape') return
+      e.stopPropagation()
+      if (stack.length > 0) pop()
+      else onClose()
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [personId, stack.length, onClose])
+    node.addEventListener('keydown', onKey)
+    return () => node.removeEventListener('keydown', onKey)
+  }, [personId, stack.length, pop, onClose])
 
   const { data: activePerson } = useQuery({
     queryKey: ['person-detail', activeId],
@@ -80,14 +89,8 @@ export function PersonInlineModal({
   })
   const titleName = activePerson ? getPersonDisplayName(activePerson) : ''
 
-  const handleHeaderClose = () => {
-    if (stack.length > 0) setStack((s) => s.slice(0, -1))
-    else onClose()
-  }
-
   // 모달 열림 동안 body 스크롤 락 + 패널 내 포커스 트랩
   const open = !!personId && !!activeId
-  const panelRef = useRef<HTMLDivElement>(null)
   useBodyScrollLock(open)
   useFocusTrap(panelRef, open)
 
@@ -116,9 +119,21 @@ export function PersonInlineModal({
             onClick={(e) => e.stopPropagation()}
           >
             <ModalHeader>
-              <ModalTitle id="person-inline-modal-title" title={titleName}>
-                {titleName || '인물'}
-              </ModalTitle>
+              <HeaderTitleRow>
+                {stack.length > 0 && (
+                  <BackButton
+                    type="button"
+                    onClick={pop}
+                    aria-label="이전 인물로"
+                  >
+                    <FiArrowLeft size={16} strokeWidth={2.25} />
+                    이전
+                  </BackButton>
+                )}
+                <ModalTitle id="person-inline-modal-title" title={titleName}>
+                  {titleName || '인물'}
+                </ModalTitle>
+              </HeaderTitleRow>
               <HeaderActions>
                 {onOpenDetail && (
                   <OpenDetailButton
@@ -134,14 +149,14 @@ export function PersonInlineModal({
                 )}
                 <ModalCloseButton
                   type="button"
-                  onClick={handleHeaderClose}
-                  aria-label={stack.length > 0 ? '뒤로' : '닫기'}
+                  onClick={onClose}
+                  aria-label="닫기"
                 >
                   <FiX size={20} strokeWidth={2.5} />
                 </ModalCloseButton>
               </HeaderActions>
             </ModalHeader>
-            <Body>
+            <Body ref={bodyRef}>
               <PersonDetailPanel
                 key={activeId}
                 personId={activeId}
@@ -194,6 +209,41 @@ const Box = styled(motion.div)`
   display: flex;
   flex-direction: column;
   overflow: hidden;
+`
+
+const HeaderTitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+`
+
+const BackButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 8px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.background.secondary};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.active};
+    outline-offset: 2px;
+  }
 `
 
 const HeaderActions = styled.div`

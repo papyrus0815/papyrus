@@ -24,6 +24,7 @@ import {
 } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
+import { personKeys } from '@/entities/person/query-keys'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { useBodyScrollLock } from '@/shared/hooks/use-body-scroll-lock.hook'
 import { useFocusTrap } from '@/shared/hooks/use-focus-trap.hook'
@@ -147,7 +148,7 @@ function PersonSidePanel({
   const activeId = stack[stack.length - 1] ?? personId
 
   const { data: activePerson } = useQuery({
-    queryKey: ['person-detail', activeId],
+    queryKey: personKeys.detailFull(activeId),
     queryFn: () => getPersonDetailById(activeId),
     enabled: !!activeId,
   })
@@ -163,7 +164,20 @@ function PersonSidePanel({
     })
   }
   const pushPerson = (id: string) => {
-    setStack((prev) => [...prev, id])
+    if (!id || id === activeId) return
+    if (id === personId) {
+      setStack([])
+      onPersonShown?.(id)
+      return
+    }
+    setStack((prev) => {
+      const existingIdx = prev.indexOf(id)
+      if (existingIdx !== -1) {
+        return prev.slice(0, existingIdx + 1)
+      }
+      const next = [...prev, id]
+      return next.length > 12 ? next.slice(next.length - 12) : next
+    })
     onPersonShown?.(id)
   }
 

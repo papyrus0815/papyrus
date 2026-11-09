@@ -24,7 +24,7 @@ import {
 } from '@/shared/lib/partial-date-string'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
-import { formatPeriod } from './helpers'
+import { formatPeriod, parseIsoDateParts } from './helpers'
 import {
   CountMuted,
   OverviewSectionHeaderRow,
@@ -102,11 +102,18 @@ function compareChildOrder(a: any, b: any): number {
   }
 
   const signedBirthYear = (p: any): number => {
+    const parsedIso =
+      typeof p?.birthDate === 'string' ? parseIsoDateParts(p.birthDate) : null
     const rawYear =
       p?.birthYear ??
-      (p?.birthDate ? new Date(p.birthDate).getUTCFullYear() : null)
+      (parsedIso
+        ? parsedIso.year
+        : p?.birthDate
+          ? new Date(p.birthDate).getUTCFullYear()
+          : null)
     if (rawYear == null || Number.isNaN(rawYear)) return Number.POSITIVE_INFINITY
-    return p?.birthEra === 'BC' ? -Math.abs(rawYear) : rawYear
+    const isBc = p?.birthEra === 'BC' || parsedIso?.era === 'BC' || rawYear < 0
+    return isBc ? -Math.abs(rawYear) : rawYear
   }
   const ay = signedBirthYear(a)
   const by = signedBirthYear(b)
@@ -118,7 +125,7 @@ function compareChildOrder(a: any, b: any): number {
 
   const signedFloruit = (p: any): number => {
     if (p?.floruitStartYear == null) return Number.POSITIVE_INFINITY
-    return p?.floruitEra === 'BC'
+    return (p?.floruitStartEra ?? p?.floruitEra) === 'BC'
       ? -Math.abs(p.floruitStartYear)
       : p.floruitStartYear
   }
@@ -170,10 +177,10 @@ function signedMarriageStartYear(
       : rel.marriageStartYear
   }
   if (rel.marriageStartDate) {
-    const dt = new Date(rel.marriageStartDate)
-    if (!Number.isNaN(dt.getTime())) {
-      const y = dt.getUTCFullYear()
-      return rel.marriageStartEra === 'BC' ? -Math.abs(y) : y
+    const parsed = parseIsoDateParts(rel.marriageStartDate)
+    if (parsed?.year != null) {
+      const isBc = rel.marriageStartEra === 'BC' || parsed.era === 'BC'
+      return isBc ? -Math.abs(parsed.year) : parsed.year
     }
   }
   return Number.POSITIVE_INFINITY
@@ -311,15 +318,29 @@ export function SpouseDetailSection({
   for (const ch of childrenList ?? []) {
     const fId = ch.fatherId ?? ch.father?.id ?? null
     const mId = ch.motherId ?? ch.mother?.id ?? null
-    const afId = ch.adoptiveFatherId ?? null
-    const amId = ch.adoptiveMotherId ?? null
+    const afId = ch.adoptiveFatherId ?? (ch as any).adoptiveFather?.id ?? null
+    const amId = ch.adoptiveMotherId ?? (ch as any).adoptiveMother?.id ?? null
     const isAdoptedToEgo = Boolean(
       egoId && (afId === egoId || amId === egoId) && fId !== egoId && mId !== egoId,
     )
     const pairs: Array<[string | null, string | null | undefined, string]> = isAdoptedToEgo
       ? [
-          [afId, ch.adoptiveFatherName, 'MALE'],
-          [amId, ch.adoptiveMotherName, 'FEMALE'],
+          [
+            afId,
+            ch.adoptiveFatherName ??
+              ((ch as any).adoptiveFather
+                ? getPersonDisplayName((ch as any).adoptiveFather, true)
+                : null),
+            'MALE',
+          ],
+          [
+            amId,
+            ch.adoptiveMotherName ??
+              ((ch as any).adoptiveMother
+                ? getPersonDisplayName((ch as any).adoptiveMother, true)
+                : null),
+            'FEMALE',
+          ],
         ]
       : [
           [

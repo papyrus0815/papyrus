@@ -28,7 +28,11 @@ import { confirm } from '@/shared/ui/confirm-dialog'
 import { EventPickerModal } from '@/shared/ui/event-picker-modal/event-picker-modal'
 import { notify } from '@/shared/ui/toast'
 
-import { compareTenureAchievementsByOrder, formatIsoDateKo } from './helpers'
+import {
+  compareTenureAchievementsByOrder,
+  formatIsoDateKo,
+  isoDateSortKey,
+} from './helpers'
 import {
   AchievementAddBtn,
   AchievementCancelBtn,
@@ -100,9 +104,11 @@ interface TenureAchievementsProps {
   onPlayClick?: () => void
 }
 
-/** ISO → input[type=date] 값(YYYY-MM-DD) */
-const toDateInput = (iso: string | null | undefined): string =>
-  iso ? iso.slice(0, 10) : ''
+/** ISO → input[type=date] 값(YYYY-MM-DD, BC는 -YYYY-MM-DD 11자 보존) */
+const toDateInput = (iso: string | null | undefined): string => {
+  if (!iso) return ''
+  return iso.startsWith('-') ? iso.slice(0, 11) : iso.slice(0, 10)
+}
 
 const collapseVariants = {
   hidden: { opacity: 0, height: 0 },
@@ -266,9 +272,17 @@ export function TenureAchievements({
     setFormOpen(true)
   }
 
+  const dateRangeInvalid =
+    Boolean(startDate && endDate) &&
+    isoDateSortKey(startDate) > isoDateSortKey(endDate)
+
   const handleSubmit = async () => {
     if (!title.trim()) {
       notify.error('제목을 입력하세요.')
+      return
+    }
+    if (dateRangeInvalid) {
+      notify.error('종료일이 시작일보다 빠를 수 없습니다.')
       return
     }
     const baseDto = { title: title.trim(), showOnEventsPage }
@@ -484,12 +498,24 @@ export function TenureAchievements({
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.18 }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape' && !eventPickerOpen) {
+                    e.stopPropagation()
+                    resetForm()
+                  }
+                }}
               >
                 <AchievementTitleInput
                   type="text"
                   placeholder="업적 제목 (예: 대동법 시행)"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                      e.preventDefault()
+                      void handleSubmit()
+                    }
+                  }}
                   maxLength={200}
                   autoFocus
                 />
@@ -516,6 +542,11 @@ export function TenureAchievements({
                     />
                   </AchievementDateField>
                 </AchievementFormRow>
+                {dateRangeInvalid && (
+                  <AchievementDateError role="alert">
+                    종료일이 시작일보다 빠릅니다.
+                  </AchievementDateError>
+                )}
                 <AchievementFormRow>
                   <AchievementLinkLabel>연결 사건</AchievementLinkLabel>
                   {linkedEvent ? (
@@ -555,7 +586,7 @@ export function TenureAchievements({
                   <AchievementSaveBtn
                     type="button"
                     onClick={handleSubmit}
-                    disabled={submitting}
+                    disabled={submitting || dateRangeInvalid}
                   >
                     {submitting ? '저장 중…' : editingId ? '수정' : '등록'}
                   </AchievementSaveBtn>
@@ -692,4 +723,11 @@ const AchievementSuggestionBadge = styled.span`
   background: transparent;
   border: 1px solid currentColor;
   border-radius: 999px;
+`
+
+const AchievementDateError = styled.p`
+  margin: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #dc2626;
 `

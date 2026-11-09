@@ -91,7 +91,8 @@ export function computeLifeTimeline(input: {
           : nowYear
   const withEnds = dated.map(({ record, start }) => {
     const end = yearFraction(record.endDate)
-    const isOpen = end == null && !record.closed
+    const isOpen =
+      end == null && !record.closed && (!isDeceased || deathYear != null)
     return {
       record,
       start,
@@ -132,7 +133,11 @@ export function computeLifeTimeline(input: {
         x0: position(start),
         x1: position(end),
         startYear: Math.floor(start),
-        endYear: hasExplicitEnd ? Math.floor(end) : null,
+        endYear: hasExplicitEnd
+          ? Math.floor(end)
+          : !record.closed && deathYear != null
+            ? Math.max(Math.floor(start), deathYear)
+            : null,
         open,
       }
     })

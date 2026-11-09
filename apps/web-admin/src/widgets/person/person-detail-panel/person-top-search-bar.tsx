@@ -69,6 +69,7 @@ export function PersonTopSearchBar({
   const [query, setQuery] = useState('')
   const [contextFilter, setContextFilter] = useState<ContextFilterMode>('all')
   const [activeIndex, setActiveIndex] = useState<number>(0)
+  const [brokenImgIds, setBrokenImgIds] = useState<Set<string>>(new Set())
 
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -407,6 +408,12 @@ export function PersonTopSearchBar({
           type="search"
           role="combobox"
           aria-expanded={isOpen}
+          aria-controls="person-top-search-listbox"
+          aria-activedescendant={
+            isOpen && flatItems[activeIndex]
+              ? `person-top-search-option-${activeIndex}`
+              : undefined
+          }
           aria-label="인물 빠른 검색"
           placeholder="인물 검색 (이름·국가·왕조·직함·분야)..."
           value={query}
@@ -481,7 +488,11 @@ export function PersonTopSearchBar({
       )}
 
       {isOpen && (
-        <Popover role="listbox" aria-label="인물 검색 결과">
+        <Popover
+          id="person-top-search-listbox"
+          role="listbox"
+          aria-label="인물 검색 결과"
+        >
           {currentPerson && (
             <ContextChipBar>
               <ContextChip
@@ -565,14 +576,16 @@ export function PersonTopSearchBar({
                     const isActive = itemIdx === activeIndex
                     const isCurrent = person.id === currentPersonId
                     const isPinned = pinnedSet.has(person.id)
-                    const thumbSrc = person.profileImageUrl
-                      ? getUploadImageUrl(person.profileImageUrl) ||
-                        person.profileImageUrl
-                      : null
+                    const thumbSrc =
+                      person.profileImageUrl && !brokenImgIds.has(person.id)
+                        ? getUploadImageUrl(person.profileImageUrl) ||
+                          person.profileImageUrl
+                        : null
 
                     return (
                       <ResultRow
                         key={`${section.id}-${person.id}`}
+                        id={`person-top-search-option-${itemIdx}`}
                         data-search-idx={itemIdx}
                         role="option"
                         aria-selected={isActive}
@@ -583,7 +596,19 @@ export function PersonTopSearchBar({
                       >
                         <AvatarThumb>
                           {thumbSrc ? (
-                            <img src={thumbSrc} alt="" loading="lazy" />
+                            <img
+                              src={thumbSrc}
+                              alt=""
+                              loading="lazy"
+                              onError={() =>
+                                setBrokenImgIds((prev) => {
+                                  if (prev.has(person.id)) return prev
+                                  const next = new Set(prev)
+                                  next.add(person.id)
+                                  return next
+                                })
+                              }
+                            />
                           ) : (
                             <span>{person.name.slice(0, 1)}</span>
                           )}

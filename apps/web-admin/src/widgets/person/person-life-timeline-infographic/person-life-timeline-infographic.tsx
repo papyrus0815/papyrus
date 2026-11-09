@@ -20,6 +20,7 @@ import {
 } from 'react-icons/fi'
 import styled, { css, keyframes } from 'styled-components'
 
+import { getRecordFamily } from '@/entities/government-position/model/record-family'
 import {
   PERSON_LIFE_EVENT_CATEGORY_COLOR,
   PERSON_LIFE_EVENT_CATEGORY_LABEL,
@@ -35,6 +36,7 @@ import {
 } from '@/widgets/person/person-detail-panel/helpers'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
+import { notify } from '@/shared/ui/toast'
 import { CATEGORY_ICON } from '@/widgets/person/person-life-event-form-modal/person-life-event-form-modal'
 
 // ───── 타입 ─────
@@ -422,6 +424,8 @@ interface TimelineNode {
   recordKey?: string | null
   /** 본인 오늘 기준 기간(일) — 긴 재위/재임에 막대 표시 기준 */
   durationDays?: number | null
+  /** 작위(ROYAL_NOBLE_TITLE) 여부 — 재임 배지를 '작위'로 구분 */
+  isNobleTitle?: boolean
 }
 
 /** 재위·재임 활성 기간 정보 — 연보/사건 카드의 spine 컨텍스트 색에 사용 */
@@ -481,7 +485,9 @@ function exportTimelineNodes(
       kindLabel:
         n.kind === 'life' && n.category
           ? PERSON_LIFE_EVENT_CATEGORY_LABEL[n.category]
-          : KIND_EXPORT_LABEL[n.kind],
+          : n.isNobleTitle
+            ? '작위'
+            : KIND_EXPORT_LABEL[n.kind],
       title: n.title,
       subtitle: n.subtitle ?? null,
       dateLabel: n.dateLabel || null,
@@ -499,7 +505,9 @@ function exportTimelineNodes(
       const badge =
         n.kind === 'life' && n.category
           ? PERSON_LIFE_EVENT_CATEGORY_LABEL[n.category]
-          : KIND_EXPORT_LABEL[n.kind]
+          : n.isNobleTitle
+            ? '작위'
+            : KIND_EXPORT_LABEL[n.kind]
       const sub = n.subtitle ? ` · ${n.subtitle}` : ''
       lines.push(`## ${n.title} _(${badge}${sub})_`)
       lines.push(`*${date}*`)
@@ -736,7 +744,8 @@ export function PersonLifeTimelineInfographic({
           [
             reign.appointmentMethod || reign.appointmentDetail
               ? `즉위: ${[
-                  reign.appointmentMethod
+                  reign.appointmentMethod &&
+                  !(reign.appointmentMethod === 'OTHER' && reign.appointmentDetail)
                     ? APPOINTMENT_METHOD_LABELS[reign.appointmentMethod] ?? reign.appointmentMethod
                     : null,
                   reign.appointmentDetail,
@@ -750,7 +759,8 @@ export function PersonLifeTimelineInfographic({
               : null,
             reign.endReason || reign.endReasonDetail
               ? `퇴위: ${[
-                  reign.endReason
+                  reign.endReason &&
+                  !(reign.endReason === 'OTHER' && reign.endReasonDetail)
                     ? endReasonLabelFor(reign.endReason, 'reign')
                     : null,
                   reign.endReasonDetail,
@@ -775,7 +785,10 @@ export function PersonLifeTimelineInfographic({
       const pos = tenure.title ?? tenure.positionDefinition?.title ?? '재임'
       const posType =
         tenure.positionType ?? tenure.positionDefinition?.positionType ?? null
-      const tenureFamily = posType === 'NOBLE_TITLE' ? 'noble' : 'office'
+      const isNobleTitle =
+        getRecordFamily({ positionType: posType }) === 'NOBLE_TITLE' ||
+        posType === 'NOBLE_TITLE'
+      const tenureFamily = isNobleTitle ? 'noble' : 'office'
       const achievementLines = (tenure.achievements ?? [])
         .map((a) => a.title?.trim())
         .filter((t): t is string => !!t)
@@ -786,6 +799,7 @@ export function PersonLifeTimelineInfographic({
       result.push({
         key: `tenure-${tenure.id}`,
         kind: 'tenure',
+        isNobleTitle,
         start: startsAt,
         end: endsAt,
         startPrecision: tenure.startDatePrecision ?? 'day',
@@ -808,7 +822,8 @@ export function PersonLifeTimelineInfographic({
           [
             tenure.appointmentMethod || tenure.appointmentDetail
               ? `${tenureFamily === 'noble' ? '수작' : '취임'}: ${[
-                  tenure.appointmentMethod
+                  tenure.appointmentMethod &&
+                  !(tenure.appointmentMethod === 'OTHER' && tenure.appointmentDetail)
                     ? APPOINTMENT_METHOD_LABELS[tenure.appointmentMethod] ?? tenure.appointmentMethod
                     : null,
                   tenure.appointmentDetail,
@@ -822,7 +837,8 @@ export function PersonLifeTimelineInfographic({
               : null,
             tenure.endReason || tenure.endReasonDetail
               ? `종료: ${[
-                  tenure.endReason
+                  tenure.endReason &&
+                  !(tenure.endReason === 'OTHER' && tenure.endReasonDetail)
                     ? endReasonLabelFor(tenure.endReason, tenureFamily)
                     : null,
                   tenure.endReasonDetail,
@@ -1342,6 +1358,10 @@ export function PersonLifeTimelineInfographic({
     nodes.length > 0 && nodes.some((n) => n.kind !== 'birth' && n.kind !== 'death')
 
   const renderedNodes = visibleNodes
+  const hasNoSearchMatches =
+    searchQuery.trim().length > 0 &&
+    renderedNodes.length > 0 &&
+    !renderedNodes.some((n) => matchesQuery(n))
 
   /** 재위·재임 활성 기간 리스트 — 연보/사건 노드 spine에 컨텍스트 색 부여 */
   const reignRanges = useMemo<ActiveRange[]>(
@@ -1473,6 +1493,21 @@ export function PersonLifeTimelineInfographic({
         </FilterAllOffNote>
       )}
 
+      {/* 검색어 무결과 안내 */}
+      {hasNoSearchMatches && (
+        <FilterAllOffNote role="status">
+          <span>
+            "{searchQuery.trim()}" 검색어와 일치하는 연보 항목이 없습니다.
+          </span>
+          <SearchResetButton
+            type="button"
+            onClick={() => setSearchQuery('')}
+          >
+            검색 초기화
+          </SearchResetButton>
+        </FilterAllOffNote>
+      )}
+
       {nodes.length === 0 ? (
         <EmptyState>
           <EmptyTitle>아직 기록된 연보가 없습니다</EmptyTitle>
@@ -1515,9 +1550,11 @@ export function PersonLifeTimelineInfographic({
                   ? year! < birthYear! ||
                     (year === birthYear && node.start.getMonth() < birth.getMonth())
                   : node.start.getTime() < birth.getTime())
+            const nodeAstroYear = astroYearOf(node.start)
+            const deathAstroYear = astroYearOf(death)
             const postYears =
-              isPosthumousNode && year != null && deathYear != null
-                ? Math.max(0, year - deathYear)
+              isPosthumousNode && nodeAstroYear != null && deathAstroYear != null
+                ? Math.max(0, nodeAstroYear - deathAstroYear)
                 : null
             const age =
               node.kind === 'birth'
@@ -1688,9 +1725,20 @@ export function PersonLifeTimelineInfographic({
                                 .soft
                             : null
                         }
-                        as={clickable ? 'button' : 'div'}
-                        type={clickable ? 'button' : undefined}
+                        role={clickable ? 'button' : undefined}
+                        tabIndex={clickable ? 0 : undefined}
                         onClick={handleClick}
+                        onKeyDown={
+                          clickable
+                            ? (e) => {
+                                if (e.target !== e.currentTarget) return
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault()
+                                  handleClick?.()
+                                }
+                              }
+                            : undefined
+                        }
                         $clickable={clickable}
                         aria-label={cardAriaLabel}
                         title={node.title}
@@ -1710,6 +1758,9 @@ export function PersonLifeTimelineInfographic({
                               const link = url.toString()
                               navigator.clipboard
                                 ?.writeText(link)
+                                .then(() => {
+                                  notify.success('연보 링크를 복사했습니다.')
+                                })
                                 .catch(() => {
                                   /* 클립보드 권한 실패 시 fallback 없음 — 단지 무시 */
                                 })
@@ -1730,7 +1781,9 @@ export function PersonLifeTimelineInfographic({
                           {node.kind === 'reign'
                             ? '재위'
                             : node.kind === 'tenure'
-                              ? '재임'
+                              ? node.isNobleTitle
+                                ? '작위'
+                                : '재임'
                               : node.kind === 'career'
                                 ? '경력'
                                 : node.kind === 'event'
@@ -1893,16 +1946,44 @@ const SearchInput = styled.input`
 `
 
 const FilterAllOffNote = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
   padding: 12px 16px;
   margin: 4px 0 8px;
   border-radius: 12px;
   font-size: 12.5px;
   font-weight: 500;
   line-height: 1.55;
-  color: #92400e;
-  background: #fffbeb;
-  border: 1px solid #fde68a;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fde68a' : '#92400e')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.12)' : '#fffbeb'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.3)' : '#fde68a'};
   letter-spacing: -0.005em;
+`
+
+const SearchResetButton = styled.button`
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.45)' : '#f59e0b'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.16)' : '#ffffff'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fde68a' : '#92400e')};
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.25)' : '#fef3c7'};
+  }
 `
 
 /** 내보내기 — JSON/Markdown 드롭다운 */

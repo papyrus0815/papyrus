@@ -11,7 +11,6 @@ import { FiLayers, FiSettings } from 'react-icons/fi'
 import styled from 'styled-components'
 import { sectionActionButtonCss, sectionHeadingCss } from '@/widgets/person/person-detail-panel/person-detail-panel.styles'
 
-import type { Person } from '@/shared/api/person'
 import {
   getPersonGroupsByPerson,
   type PersonGroup,
@@ -20,7 +19,11 @@ import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 import { PersonGroupManageModal } from '@/widgets/person/person-group-manage-modal/person-group-manage-modal'
-import { GroupTypeBadge } from '@/widgets/person/person-group-ui/group-type-ui'
+import {
+  GroupTypeBadge,
+  personLifespanLabel,
+  sortGroupMembers,
+} from '@/widgets/person/person-group-ui/group-type-ui'
 
 const isDark = (mode: 'light' | 'dark') => mode === 'dark'
 
@@ -33,63 +36,8 @@ interface Props {
   onPersonClick?: (personId: string) => void
 }
 
-function signedYear(era: 'BC' | 'AD' | null | undefined, year: number): number {
-  return era === 'BC' ? -year : year
-}
-
-function formatYearLabel(
-  era: 'BC' | 'AD' | null | undefined,
-  year: number | null | undefined,
-): string {
-  if (year == null || !Number.isFinite(year)) return ''
-  return era === 'BC' ? `BC ${year}` : `${year}`
-}
-
-function formatFloruitLabel(p: Person): string {
-  const s = p.floruitStartYear
-  const e = p.floruitEndYear
-  if (s == null && e == null) return ''
-  const era = p.floruitEra ?? 'AD'
-  const prefix = era === 'BC' ? 'BC ' : ''
-  if (s != null && e != null && s !== e) return `활동 ${prefix}${s}–${e}`
-  const single = s ?? e
-  return single != null ? `활동 ${prefix}${single}` : ''
-}
-
-function primarySortYear(p: Person): number {
-  if (p.birthYear != null) return signedYear(p.birthEra ?? null, p.birthYear)
-  const flYear = p.floruitStartYear ?? p.floruitEndYear ?? null
-  if (flYear != null) return signedYear(p.floruitEra ?? null, flYear)
-  if (p.deathYear != null) return signedYear(p.deathEra ?? null, p.deathYear)
-  return Number.POSITIVE_INFINITY
-}
-
-function lifespan(p: Person): string {
-  const b = formatYearLabel(p.birthEra ?? null, p.birthYear ?? null)
-  const d = p.isAlive
-    ? '—'
-    : formatYearLabel(p.deathEra ?? null, p.deathYear ?? null)
-  if (!b && !d) {
-    const fl = formatFloruitLabel(p)
-    return fl || '연도 미상'
-  }
-  if (!b) return `? — ${d || '?'}`
-  if (p.isAlive) return `${b} —`
-  return `${b} — ${d || '?'}`
-}
-
-/**
- * 멤버 정렬: 세대(GENERATION)는 출생순(활동연대·사망연도 폴백 포함)이 자연스럽고,
- * 그 외(계파·동기 등)는 백엔드 sortOrder(수동 정렬)를 존중.
- */
 function sortMembers(group: PersonGroup) {
-  if (group.type === 'GENERATION') {
-    return [...group.members].sort((a, b) => {
-      return primarySortYear(a.person) - primarySortYear(b.person)
-    })
-  }
-  // 백엔드가 이미 sortOrder→createdAt으로 정렬해 내려줌 — 순서 유지
-  return group.members
+  return sortGroupMembers(group.members, group.center?.id)
 }
 
 export function SamePersonGroupSection({
@@ -99,6 +47,7 @@ export function SamePersonGroupSection({
   onPersonClick,
 }: Props) {
   const [showManage, setShowManage] = useState(false)
+  const [brokenImgIds, setBrokenImgIds] = useState<Record<string, boolean>>({})
   const navigate = useNavigate()
 
   const {
@@ -180,7 +129,35 @@ export function SamePersonGroupSection({
                       <OrdinalBadge>{group.generationOrder}세대</OrdinalBadge>
                     )}
                   {group.center && (
-                    <CenterChip title="구심점">
+                    <CenterChip
+                      as={
+                        group.center.id !== currentPersonId ? 'button' : 'span'
+                      }
+                      type={
+                        group.center.id !== currentPersonId
+                          ? 'button'
+                          : undefined
+                      }
+                      $clickable={group.center.id !== currentPersonId}
+                      onClick={
+                        group.center.id !== currentPersonId
+                          ? () => {
+                              if (onPersonClick) onPersonClick(group.center!.id)
+                              else
+                                navigate(
+                                  pathKeys.personsTimelineDetail(
+                                    group.center!.id,
+                                  ),
+                                )
+                            }
+                          : undefined
+                      }
+                      title={
+                        group.center.id !== currentPersonId
+                          ? `구심점 인물(${getPersonDisplayName(group.center, true)})로 이동`
+                          : '구심점 (본인)'
+                      }
+                    >
                       ★ {getPersonDisplayName(group.center, true)}
                     </CenterChip>
                   )}
@@ -209,6 +186,7 @@ export function SamePersonGroupSection({
                     const src = p.profileImageUrl?.trim()
                       ? getUploadImageUrl(p.profileImageUrl) || p.profileImageUrl
                       : ''
+                    const hasValidImg = Boolean(src) && !brokenImgIds[p.id]
                     const initial = [...displayName][0] ?? '?'
                     return (
                       <Card
@@ -218,7 +196,7 @@ export function SamePersonGroupSection({
                         onClick={() => {
                           if (isCurrent) return
                           if (onPersonClick) onPersonClick(p.id)
-                          else window.open(`/persons-timeline/${p.id}/`, '_blank')
+                          else navigate(pathKeys.personsTimelineDetail(p.id))
                         }}
                         aria-current={isCurrent ? 'true' : undefined}
                         aria-label={
@@ -228,13 +206,19 @@ export function SamePersonGroupSection({
                         }
                       >
                         {isCurrent && <CurrentBadge>본인</CurrentBadge>}
-                        <Avatar $has={Boolean(src)}>
-                          {src ? (
+                        <Avatar $has={hasValidImg}>
+                          {hasValidImg ? (
                             <img
                               src={src}
                               alt={`${displayName} 프로필`}
                               loading="lazy"
                               decoding="async"
+                              onError={() =>
+                                setBrokenImgIds((prev) => ({
+                                  ...prev,
+                                  [p.id]: true,
+                                }))
+                              }
                             />
                           ) : (
                             <AvatarInitial aria-hidden>{initial}</AvatarInitial>
@@ -242,9 +226,17 @@ export function SamePersonGroupSection({
                         </Avatar>
                         <Name $current={isCurrent}>{displayName}</Name>
                         {m.roleLabel?.trim() && (
-                          <RoleLabel>{m.roleLabel.trim()}</RoleLabel>
+                          <RoleLabel
+                            title={
+                              [m.roleLabel.trim(), m.note?.trim()]
+                                .filter(Boolean)
+                                .join('\n\n')
+                            }
+                          >
+                            {m.roleLabel.trim()}
+                          </RoleLabel>
                         )}
-                        <Years>{lifespan(p)}</Years>
+                        <Years>{personLifespanLabel(p) || '연도 미상'}</Years>
                       </Card>
                     )
                   })}
@@ -337,15 +329,23 @@ const GroupName = styled.button`
   }
 `
 
-const CenterChip = styled.span`
+const CenterChip = styled.span<{ $clickable?: boolean }>`
   padding: 1px 8px;
   font-size: 10.5px;
   font-weight: 700;
   border-radius: 999px;
+  border: 1px solid transparent;
   background: ${({ theme }) =>
     isDark(theme.mode) ? 'rgba(255,214,10,0.16)' : 'rgba(245,158,11,0.12)'};
   color: ${({ theme }) => (isDark(theme.mode) ? '#ffd60a' : '#b45309')};
   white-space: nowrap;
+  cursor: ${({ $clickable }) => ($clickable ? 'pointer' : 'default')};
+  &:hover {
+    ${({ $clickable, theme }) =>
+      $clickable
+        ? `border-color: ${isDark(theme.mode) ? 'rgba(255,214,10,0.45)' : 'rgba(245,158,11,0.45)'};`
+        : ''}
+  }
 `
 
 const SuccessionHint = styled.button`

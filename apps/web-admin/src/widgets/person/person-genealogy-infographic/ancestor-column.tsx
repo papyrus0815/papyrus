@@ -2,15 +2,14 @@ import { type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import styled from 'styled-components'
 
 import type { FamilyTreePerson } from '@/shared/api/persons-family-tree'
-import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import { ANC_PARENTS_GAP, NODE_W } from './constants'
 import {
   CardHoverInfo,
   CardUnlinkButton,
-  CountryFlag,
   GeoNode,
+  GeoThumbnail,
   NodeBadge,
   NodeNameBlock,
   familyTreePersonFlag,
@@ -19,11 +18,7 @@ import { ftPersonToNodePerson, ftResolveParentIds, getAncestorBadgeLabel } from 
 import { ForkFromOneParent, ForkFromTwoParentsMeasured } from './forks'
 import { ancestorColumnWidth } from './geometry'
 import type { AvatarRole } from './types'
-import { buildPersonTooltip, displayInitial } from './utils'
-
-// 군주 즉위국 깃발 우선순위 보존을 위해 useNodePersonFlag 대신 familyTreePersonFlag를 직접 호출하므로
-// 카드 본문도 GeoThumbnail 대신 NodeAvatar+CountryFlag를 인라인으로 그린다.
-import { AvatarFrame, AvatarImage, NodeAvatar } from './card'
+import { buildPersonTooltip } from './utils'
 
 interface AncestorColumnProps {
   personId: string
@@ -129,11 +124,7 @@ export function AncestorColumn({
   const tooltip = buildPersonTooltip(person)
   const siblings = siblingsByPersonId?.get(person.id) ?? []
   const displayName = getPersonDisplayName(person, true)
-  const initial = displayInitial(person)
-  const src = person.profileImageUrl
-    ? getUploadImageUrl(person.profileImageUrl) || person.profileImageUrl
-    : null
-  const { flag: ancFlag, countryName: ancCountryName } = familyTreePersonFlag(person)
+  const ancFlagOverride = familyTreePersonFlag(person)
 
   return (
     <AncColumnDiv>
@@ -203,23 +194,11 @@ export function AncestorColumn({
         {depth === 1 && onUnlinkDirectParent && (
           <CardUnlinkButton label={`${label} 연결 해제`} onUnlink={onUnlinkDirectParent} />
         )}
-        {/* 인라인 아바타+국기 — 군주 카드일 때 sovereignCountry 우선 표시
-            (GeoThumbnail의 useNodePersonFlag는 country를 우선해 regnal flag를 놓침) */}
-        <AvatarFrame>
-          <NodeAvatar $role={role} $hasImage={Boolean(src)}>
-            {src ? (
-              <AvatarImage
-                src={src}
-                alt={`${displayName} 프로필 사진`}
-                loading="lazy"
-                decoding="async"
-              />
-            ) : (
-              initial
-            )}
-          </NodeAvatar>
-          <CountryFlag flag={ancFlag} countryName={ancCountryName} size={24} />
-        </AvatarFrame>
+        <GeoThumbnail
+          person={personAsNode}
+          role={role}
+          flagOverride={ancFlagOverride}
+        />
         <NodeNameBlock person={personAsNode} />
         <NodeBadge $role={badgeRole}>{label}</NodeBadge>
         <CardHoverInfo person={person} />

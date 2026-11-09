@@ -520,10 +520,13 @@ const TraitGroup = styled.div`
   gap: 6px;
 `
 
-const traitToneFg: Record<'positive' | 'neutral' | 'negative', string> = {
-  positive: '#0e7490',
-  neutral: '#475569',
-  negative: '#9f1239',
+const traitToneFg = (
+  tone: 'positive' | 'neutral' | 'negative',
+  isDark = false,
+): string => {
+  if (tone === 'positive') return isDark ? '#67e8f9' : '#0e7490'
+  if (tone === 'negative') return isDark ? '#fda4af' : '#9f1239'
+  return isDark ? '#cbd5e1' : '#475569'
 }
 
 const TraitGroupTitle = styled.div<{
@@ -533,29 +536,50 @@ const TraitGroupTitle = styled.div<{
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  color: ${({ $tone }) => traitToneFg[$tone]};
+  color: ${({ $tone, theme }) => traitToneFg($tone, theme.mode === 'dark')};
 `
 
 const traitToneBg = (
   tone: 'positive' | 'negative' | 'neutral',
+  isDark = false,
 ): { fg: string; bg: string; border: string } => {
-  if (tone === 'positive')
-    return {
-      fg: '#0e7490',
-      bg: 'rgba(207, 250, 254, 0.7)',
-      border: 'rgba(103, 232, 249, 0.5)',
-    }
-  if (tone === 'negative')
-    return {
-      fg: '#9f1239',
-      bg: 'rgba(255, 228, 230, 0.85)',
-      border: 'rgba(251, 113, 133, 0.45)',
-    }
-  return {
-    fg: '#475569',
-    bg: 'rgba(241, 245, 249, 0.85)',
-    border: 'rgba(148, 163, 184, 0.4)',
+  if (tone === 'positive') {
+    return isDark
+      ? {
+          fg: '#67e8f9',
+          bg: 'rgba(6, 182, 212, 0.16)',
+          border: 'rgba(103, 232, 249, 0.35)',
+        }
+      : {
+          fg: '#0e7490',
+          bg: 'rgba(207, 250, 254, 0.7)',
+          border: 'rgba(103, 232, 249, 0.5)',
+        }
   }
+  if (tone === 'negative') {
+    return isDark
+      ? {
+          fg: '#fda4af',
+          bg: 'rgba(244, 63, 94, 0.16)',
+          border: 'rgba(251, 113, 133, 0.35)',
+        }
+      : {
+          fg: '#9f1239',
+          bg: 'rgba(255, 228, 230, 0.85)',
+          border: 'rgba(251, 113, 133, 0.45)',
+        }
+  }
+  return isDark
+    ? {
+        fg: '#cbd5e1',
+        bg: 'rgba(148, 163, 184, 0.14)',
+        border: 'rgba(148, 163, 184, 0.32)',
+      }
+    : {
+        fg: '#475569',
+        bg: 'rgba(241, 245, 249, 0.85)',
+        border: 'rgba(148, 163, 184, 0.4)',
+      }
 }
 
 const TraitChipRow = styled.div`
@@ -575,14 +599,14 @@ const TraitChipShell = styled.span<{
   overflow: hidden;
   background: ${({ $active, $tone, theme }) =>
     $active
-      ? traitToneBg($tone).bg
+      ? traitToneBg($tone, theme.mode === 'dark').bg
       : theme.mode === 'dark'
         ? 'rgba(255,255,255,0.04)'
         : '#fff'};
   border: 1px solid
     ${({ $active, $tone, theme }) =>
       $active
-        ? traitToneBg($tone).border
+        ? traitToneBg($tone, theme.mode === 'dark').border
         : theme.mode === 'dark'
           ? 'rgba(255,255,255,0.1)'
           : '#e2e8f0'};
@@ -605,7 +629,7 @@ const TraitLabelBtn = styled.button<{
   border: none;
   color: ${({ $active, $tone, theme }) =>
     $active
-      ? traitToneBg($tone).fg
+      ? traitToneBg($tone, theme.mode === 'dark').fg
       : theme.mode === 'dark'
         ? 'rgba(248,250,252,0.55)'
         : '#64748b'};
@@ -633,9 +657,14 @@ const IntensityDot = styled.button<{
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: ${({ $active, $tone }) =>
-    $active ? traitToneBg($tone).fg : 'transparent'};
-  color: ${({ $active, $tone }) => ($active ? '#fff' : traitToneBg($tone).fg)};
+  background: ${({ $active, $tone, theme }) =>
+    $active ? traitToneBg($tone, theme.mode === 'dark').fg : 'transparent'};
+  color: ${({ $active, $tone, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '#0f172a'
+        : '#fff'
+      : traitToneBg($tone, theme.mode === 'dark').fg};
   opacity: ${({ $active }) => ($active ? 1 : 0.45)};
   transition:
     opacity 0.12s ease,

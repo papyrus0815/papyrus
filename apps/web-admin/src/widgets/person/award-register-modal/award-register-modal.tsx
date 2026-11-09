@@ -62,7 +62,11 @@ export function AwardRegisterModal({
       setCategory(initialAward.category ?? '')
       setAwardingBody(initialAward.awardingBody ?? '')
       setAwardDate(
-        initialAward.awardDate ? String(initialAward.awardDate).slice(0, 10) : '',
+        initialAward.awardDate
+          ? String(initialAward.awardDate).startsWith('-')
+            ? String(initialAward.awardDate).slice(0, 11)
+            : String(initialAward.awardDate).slice(0, 10)
+          : '',
       )
       setDescription(initialAward.description ?? '')
     } else {

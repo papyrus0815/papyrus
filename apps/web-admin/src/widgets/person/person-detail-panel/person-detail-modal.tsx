@@ -16,7 +16,7 @@ import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence } from 'framer-motion'
 import { FiArrowLeft, FiExternalLink, FiX } from 'react-icons/fi'
 
-import { personKeys } from '@/entities/person/api'
+import { personKeys } from '@/entities/person/query-keys'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { useBodyScrollLock } from '@/shared/hooks/use-body-scroll-lock.hook'
@@ -63,6 +63,11 @@ export function PersonDetailModal({
   const depth = stack.length // 0이면 루트 인물
 
   const panelRef = useRef<HTMLDivElement>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    bodyRef.current?.scrollTo({ top: 0 })
+  }, [topId])
 
   // ESC 닫기 (stack이 있으면 pop, 없으면 close). window capture 대신 이 모달 패널(panelRef)에
   // 바인딩 + stopPropagation — 포커스가 이 모달 안에 있을 때만 잡는다. 이렇게 하면 위에 뜬
@@ -161,7 +166,7 @@ export function PersonDetailModal({
                 <FiX size={20} strokeWidth={2.5} />
               </BioMentionModalClose>
             </BioMentionModalHeader>
-            <BioMentionModalBody>
+            <BioMentionModalBody ref={bodyRef}>
               <PersonDetailPanel
                 key={topId}
                 personId={topId}

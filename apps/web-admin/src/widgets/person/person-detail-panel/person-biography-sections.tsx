@@ -39,7 +39,7 @@ import styled, { css } from 'styled-components'
 
 import { sectionActionButtonCss } from './person-detail-panel.styles'
 
-import { personKeys } from '@/entities/person/api'
+import { personKeys } from '@/entities/person/query-keys'
 import type {
   RichTextDynastyTooltipState,
   RichTextTermTooltipState,
@@ -108,17 +108,24 @@ function hasVisibleContent(content: string): boolean {
  * native Date 금지 규약 준수(문자열 직접 파싱). '년' 접미가 붙은 것만 봐서
  * 페이지 번호·수량 등 오탐을 줄인다. BC는 음수.
  */
-function extractSignedYearsFromText(html: string): number[] {
+export function extractSignedYearsFromText(html: string): number[] {
   const text = html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ')
   const years: number[] = []
-  const bcRe = /(?:기원전|BC)\s*(\d{1,4})\s*년?/g
+  const bcSpans: Array<[number, number]> = []
+  const bcRe = /(?:기원전|BC)\s*(?:약\s*)?(\d{1,4})\s*년?/gi
   const adRe = /(\d{3,4})\s*년/g
   let match: RegExpExecArray | null
-  while ((match = bcRe.exec(text)) != null) years.push(-parseInt(match[1], 10))
-  // BC 매치 위치를 제외하기 위해 AD는 '년' 접미 필수 + 앞에 기원전/BC가 없는 경우만.
+  while ((match = bcRe.exec(text)) != null) {
+    years.push(-parseInt(match[1], 10))
+    bcSpans.push([match.index, match.index + match[0].length])
+  }
+  // BC 매치 구간과 겹치거나 앞에 기원전/BC 수식어가 있는 경우는 제외
   while ((match = adRe.exec(text)) != null) {
-    const before = text.slice(Math.max(0, match.index - 4), match.index)
-    if (/기원전|BC/.test(before)) continue
+    const start = match.index
+    const end = start + match[0].length
+    if (bcSpans.some(([bs, be]) => start < be && end > bs)) continue
+    const before = text.slice(Math.max(0, start - 12), start)
+    if (/(?:기원전|BC)\s*(?:약\s*)?$/i.test(before)) continue
     years.push(parseInt(match[1], 10))
   }
   return years
@@ -411,9 +418,17 @@ export function PersonBiographySections({
             // 같은 인물의 더 늦은 저장이 대기 중이면 이 응답은 stale —
             // 무효화(불필요 refetch)도 토스트도 생략.
             if (!pendingPersistRef.current.has(curPersonId)) {
-              await queryClient.invalidateQueries({
-                queryKey: personKeys.detailFull(curPersonId),
-              })
+              await Promise.all([
+                queryClient.invalidateQueries({
+                  queryKey: personKeys.detailFull(curPersonId),
+                }),
+                queryClient.invalidateQueries({
+                  queryKey: personKeys.detail(curPersonId),
+                }),
+                queryClient.invalidateQueries({
+                  queryKey: personKeys.infographic,
+                }),
+              ])
               if (!pendingPersistRef.current.has(curPersonId))
                 notify.success('전기가 저장되었습니다.')
             }

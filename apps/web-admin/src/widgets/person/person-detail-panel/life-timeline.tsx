@@ -80,9 +80,13 @@ export function LifeTimeline({
             <Gridline key={tick.year} style={{ left: `${tick.x * 100}%` }} aria-hidden />
           ))}
           {layout.bars.map((bar) => {
-            const range = `${formatYear(bar.startYear)}–${
-              bar.open ? '' : bar.endYear != null ? formatYear(bar.endYear) : ''
-            }`
+            const endText =
+              bar.endYear != null
+                ? formatYear(bar.endYear)
+                : bar.open
+                  ? '현재'
+                  : '미상'
+            const range = `${formatYear(bar.startYear)}–${endText}`
             const label = `${FAMILY_LABEL[bar.family]} · ${bar.title} · ${range}`
             return (
               <Bar

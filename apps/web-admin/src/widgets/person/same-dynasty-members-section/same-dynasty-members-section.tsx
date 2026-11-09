@@ -42,11 +42,21 @@ function formatFloruitLabel(p: Person): string {
   const s = p.floruitStartYear
   const e = p.floruitEndYear
   if (s == null && e == null) return ''
-  const era = p.floruitEra ?? 'AD'
-  const prefix = era === 'BC' ? 'BC ' : ''
-  if (s != null && e != null && s !== e) return `활동 ${prefix}${s}–${e}`
+  const ext = p as Person & {
+    floruitStartEra?: 'BC' | 'AD' | null
+    floruitEndEra?: 'BC' | 'AD' | null
+  }
+  const sEra = ext.floruitStartEra ?? p.floruitEra ?? 'AD'
+  const eEra = ext.floruitEndEra ?? p.floruitEra ?? 'AD'
+  const sPrefix = sEra === 'BC' ? 'BC ' : ''
+  const ePrefix =
+    eEra === 'BC' ? (sEra === 'BC' ? '' : 'BC ') : sEra === 'BC' ? 'AD ' : ''
+  if (s != null && e != null && (s !== e || sEra !== eEra)) {
+    return `활동 ${sPrefix}${s}–${ePrefix}${e}`
+  }
   const single = s ?? e
-  return single != null ? `활동 ${prefix}${single}` : ''
+  const singlePrefix = (s != null ? sEra : eEra) === 'BC' ? 'BC ' : ''
+  return single != null ? `활동 ${singlePrefix}${single}` : ''
 }
 
 function primarySortYear(p: Person): number {
@@ -79,6 +89,7 @@ export function SameDynastyMembersSection({
 }: Props) {
   const navigate = useNavigate()
   const [showInfographic, setShowInfographic] = useState(false)
+  const [brokenImgIds, setBrokenImgIds] = useState<Record<string, boolean>>({})
   const stripRef = useRef<HTMLDivElement>(null)
   const currentCardRef = useRef<HTMLButtonElement>(null)
 
@@ -166,6 +177,7 @@ export function SameDynastyMembersSection({
             const src = p.profileImageUrl?.trim()
               ? getUploadImageUrl(p.profileImageUrl) || p.profileImageUrl
               : ''
+            const hasValidImg = Boolean(src) && !brokenImgIds[p.id]
             const initial = [...(p.name?.trim() || displayName)][0] ?? '?'
 
             return (
@@ -190,13 +202,16 @@ export function SameDynastyMembersSection({
                   <GenerationBadge>{generation}대</GenerationBadge>
                 )}
                 {isCurrent && <CurrentBadge>본인</CurrentBadge>}
-                <Avatar $has={Boolean(src)}>
-                  {src ? (
+                <Avatar $has={hasValidImg}>
+                  {hasValidImg ? (
                     <img
                       src={src}
                       alt={`${displayName} 프로필`}
                       loading="lazy"
                       decoding="async"
+                      onError={() =>
+                        setBrokenImgIds((prev) => ({ ...prev, [p.id]: true }))
+                      }
                     />
                   ) : (
                     <AvatarInitial aria-hidden>{initial}</AvatarInitial>
