@@ -8,6 +8,8 @@ import type {
   OrganizationTreeNode,
   CreateOrganizationHierarchyData,
   OrganizationHierarchyEntity,
+  OrganizationMemberEntity,
+  AddOrganizationMemberData,
 } from '../domain/organization.repository'
 import { OrganizationPrismaRepository } from '../infrastructure/organization.prisma.repository'
 import { EventMethod } from '@prisma/client'
@@ -99,5 +101,28 @@ export class OrganizationService {
   ): Promise<OrganizationHierarchyEntity[]> {
     await this.getById(organizationId)
     return this.repository.findParents(organizationId)
+  }
+
+  async getMembers(
+    organizationId: string,
+  ): Promise<OrganizationMemberEntity[]> {
+    await this.getById(organizationId)
+    return this.repository.findMembers(organizationId)
+  }
+
+  async addMember(
+    organizationId: string,
+    data: AddOrganizationMemberData,
+  ): Promise<OrganizationMemberEntity> {
+    await this.getById(organizationId)
+    return this.repository.addMemberRole(organizationId, data)
+  }
+
+  async removeMember(
+    organizationId: string,
+    personId: string,
+  ): Promise<void> {
+    await this.getById(organizationId)
+    await this.repository.removeMemberRole(organizationId, personId)
   }
 }

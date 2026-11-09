@@ -32,6 +32,13 @@ export interface EventSide {
   color: string | null
   description: string | null
   parentSideId: string | null
+  personGroupId?: string | null
+  personGroup?: {
+    id: string
+    name: string
+    type: string
+    memberCount: number
+  } | null
   sortOrder: number
   outcome: SideOutcome | null
   /** 결과 단서 — '전략적 승리, 전술적 패배' */
@@ -48,6 +55,7 @@ export interface EventSideInput {
   color?: string | null
   description?: string | null
   parentSideId?: string | null
+  personGroupId?: string | null
   outcome?: SideOutcome | null
   outcomeNote?: string | null
 }
@@ -86,6 +94,7 @@ export function toSideInputs(sides: ReadonlyArray<EventSide>): EventSideInput[] 
     color: side.color,
     description: side.description,
     parentSideId: side.parentSideId,
+    personGroupId: side.personGroupId ?? null,
     outcome: side.outcome,
     outcomeNote: side.outcomeNote,
   }))

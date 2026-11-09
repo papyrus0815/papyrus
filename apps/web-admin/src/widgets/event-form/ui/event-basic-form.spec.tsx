@@ -186,7 +186,9 @@ jest.mock('@/widgets/event-form/ui/basic-info-section', () => ({
     setTitle: (next: string) => void
     startDate: string
     setStartDate: (next: string) => void
+    startTime: string
     endDate: string
+    endTime: string
     category: string
     setCategory: (next: string) => void
     titleSuggestionSlot?: {
@@ -291,7 +293,9 @@ jest.mock('@/widgets/event-form/ui/basic-info-section', () => ({
       {props.typeSlot}
       {props.recordsSlot?.content}
       <output data-testid="startDate">{props.startDate}</output>
+      <output data-testid="startTime">{props.startTime}</output>
       <output data-testid="endDate">{props.endDate}</output>
+      <output data-testid="endTime">{props.endTime}</output>
       <output data-testid="thumbnail">{props.thumbnail}</output>
       <output data-testid="keywords">{props.keywords.join('|')}</output>
       {props.locationSlot && (
@@ -519,7 +523,9 @@ describe('EventBasicForm — 편집 하이드레이션', () => {
       expect(screen.getByLabelText('사건명')).toHaveValue('빈 회의'),
     )
     expect(screen.getByTestId('startDate')).toHaveTextContent('1814-09-18')
+    expect(screen.getByTestId('startTime')).toHaveTextContent('10:30')
     expect(screen.getByTestId('endDate')).toHaveTextContent('1815-06-09')
+    expect(screen.getByTestId('endTime')).toHaveTextContent('')
     expect(screen.getByTestId('keywords')).toHaveTextContent('외교|회의')
     // isPrimary가 배열 첫 장이 아니어도 대표를 골라야 한다
     expect(screen.getByTestId('thumbnail')).toHaveTextContent(

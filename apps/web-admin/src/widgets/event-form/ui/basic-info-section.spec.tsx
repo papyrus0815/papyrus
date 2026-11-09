@@ -1154,4 +1154,404 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
       screen.getByText(/상위 사건 ‘제1차 세계 대전’의 종료 연도\(1918년\)보다 뒤입니다/),
     ).toBeInTheDocument()
   })
+
+  it('layoutMode="split"일 때 좌측(기본 정보 + 맥락·부가 정보)과 우측(참여 주체 · 기록) 2단 워크스페이스로 분할 렌더되고, 우측 빠른 열기 칩과 주체 요약 배지가 동작한다', () => {
+    const onQuickSelect = jest.fn()
+    const { rerender } = renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          layoutMode: 'split',
+          quickRecordTypesSlot: {
+            label: '자주 쓰는 기록 열기',
+            items: [
+              { key: 'REVOLUTION', label: '혁명·쿠데타·봉기' },
+              { key: 'WAR', label: '전쟁·전역' },
+            ],
+            onSelect: onQuickSelect,
+          },
+        })}
+      />,
+    )
+
+    const leftPane = screen.getByTestId('event-form-split-left')
+    const rightPane = screen.getByTestId('event-form-split-right')
+
+    expect(within(leftPane).getByText('기본 정보')).toBeInTheDocument()
+    expect(within(leftPane).getByText('맥락 · 부가 정보')).toBeInTheDocument()
+    expect(within(rightPane).getByText('참여 주체')).toBeInTheDocument()
+    expect(
+      within(rightPane).getByRole('note', { name: '세부 분야 맞춤 기록 안내' }),
+    ).toBeInTheDocument()
+
+    // 우측 패널에서 마우스 이동 없이 세부 분야를 원클릭으로 열 수 있다
+    fireEvent.click(
+      within(rightPane).getByRole('button', { name: '+ 혁명·쿠데타·봉기' }),
+    )
+    expect(onQuickSelect).toHaveBeenCalledWith('REVOLUTION')
+
+    // 세부 분야 기록(recordsSlot)이 주어지면 안내 박스 대신 실제 기록 슬롯과 주체 요약 배지가 우측 패널에 표시된다
+    rerender(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          layoutMode: 'split',
+          relatedCountries: [{ countryId: 'c1', role: 'INITIATOR' }],
+          recordsSlot: {
+            title: '혁명·쿠데타·봉기 기록',
+            summary: '진영 2 · 기관 1 · 인물 3',
+            content: <div data-testid="split-records-content">진영 보드 본체</div>,
+          },
+        })}
+      />,
+    )
+
+    expect(
+      within(screen.getByTestId('event-form-split-right')).getByTestId(
+        'split-records-content',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByLabelText('참여 주체 요약')).toHaveTextContent(
+      '국가 1 · 진영 2 · 기관 1 · 인물 3',
+    )
+    expect(
+      screen.queryByRole('note', { name: '세부 분야 맞춤 기록 안내' }),
+    ).not.toBeInTheDocument()
+
+    // 좌우 패널 비율 조절 토글(좌측 넓게 / 5:5 / 우측 넓게) 동작 확인
+    const splitGrid = screen.getByTestId('event-form-split-grid')
+    expect(splitGrid).toHaveAttribute('data-split-ratio', 'equal')
+
+    const ratioGroup = screen.getByRole('group', {
+      name: '좌우 패널 비율 조절',
+    })
+    fireEvent.click(within(ratioGroup).getByRole('button', { name: '좌측 넓게' }))
+    expect(splitGrid).toHaveAttribute('data-split-ratio', 'left-wide')
+
+    fireEvent.click(within(ratioGroup).getByRole('button', { name: '우측 넓게' }))
+    expect(splitGrid).toHaveAttribute('data-split-ratio', 'right-wide')
+  })
+
+  it('참여국 2단 카드에서 빠른 역할 칩 클릭 시 역할 변경 및 진영 자동 배정이 이루어지고, 추천 어구 이어붙이기·비우기가 동작한다', () => {
+    const setRelatedCountries = jest.fn()
+    const onAssignSide = jest.fn()
+
+    const { rerender } = renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          roleDescriptionPlaceholder: '참전 규모·주력 부대·전과 등 (선택)',
+          relatedCountries: [{ countryId: 'c1', role: 'PARTICIPANT' }],
+          setRelatedCountries,
+          participantSidesSlot: {
+            assignment: {},
+            sideNames: ['1진영', '2진영'],
+            onAssign: onAssignSide,
+          },
+        })}
+      />,
+    )
+
+    // 1. 드롭다운을 열지 않고 빠른 역할 칩('주도') 원클릭 → 역할 'INITIATOR' + 미배정 진영 'A'(1편) 자동 배정
+    fireEvent.click(
+      screen.getByRole('button', { name: '프랑스 역할 주도 선택' }),
+    )
+    expect(setRelatedCountries).toHaveBeenLastCalledWith([
+      { countryId: 'c1', role: 'INITIATOR' },
+    ])
+    expect(onAssignSide).toHaveBeenCalledWith('m:c1', 'A')
+
+    // 2. 이미 한 일이 입력된 상태에서 포커스 후 다른 추천 어구를 누르면 덮어쓰지 않고 이어붙임
+    rerender(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          roleDescriptionPlaceholder: '참전 규모·주력 부대·전과 등 (선택)',
+          relatedCountries: [
+            {
+              countryId: 'c1',
+              role: 'INITIATOR',
+              roleDescription: '선제 공격',
+            },
+          ],
+          setRelatedCountries,
+        })}
+      />,
+    )
+
+    const descInput = screen.getByLabelText('프랑스가 한 일')
+    fireEvent.focus(descInput)
+    const presetBar = screen.getByRole('group', {
+      name: '프랑스 한 일 빠른 입력',
+    })
+    fireEvent.click(
+      within(presetBar).getByRole('button', { name: '+ 작전 주도' }),
+    )
+    expect(setRelatedCountries).toHaveBeenLastCalledWith([
+      {
+        countryId: 'c1',
+        role: 'INITIATOR',
+        roleDescription: '선제 공격, 작전 주도',
+      },
+    ])
+
+    // 3. 한 일 비우기 버튼 클릭 시 설명 초기화
+    fireEvent.click(screen.getByRole('button', { name: '프랑스 한 일 비우기' }))
+    expect(setRelatedCountries).toHaveBeenLastCalledWith([
+      {
+        countryId: 'c1',
+        role: 'INITIATOR',
+        roleDescription: '',
+      },
+    ])
+  })
+
+  it('상위 사건 선택 카드(ParentEventCard)에서 시작일·참여국·위치를 원클릭으로 이어받을 수 있다', () => {
+    const setStartDate = jest.fn()
+    const setEndDate = jest.fn()
+    const onImportCountries = jest.fn()
+    const setLocation = jest.fn()
+
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          startDate: '',
+          endDate: '',
+          setStartDate,
+          setEndDate,
+          parentEventSlot: {
+            parent: { id: 'evt-ww1', title: '제1차 세계 대전' },
+            parentPeriod: {
+              startDate: '1914-07-28',
+              endDate: '1918-11-11',
+            },
+            onOpenPicker: jest.fn(),
+            onClear: jest.fn(),
+          },
+          parentCountriesSlot: {
+            count: 3,
+            parentTitle: '제1차 세계 대전',
+            onImport: onImportCountries,
+          },
+          locationSlot: {
+            location: '',
+            setLocation,
+            latitude: null,
+            longitude: null,
+            onOpenMapModal: jest.fn(),
+            parentLocation: {
+              parentTitle: '제1차 세계 대전',
+              location: '서부 전선',
+              latitude: null,
+              longitude: null,
+              note: null,
+            },
+          },
+        })}
+      />,
+    )
+
+    const parentCard = screen.getByRole('group', { name: '선택된 상위 사건' })
+    expect(
+      within(parentCard).getByText('1914-07-28 ~ 1918-11-11'),
+    ).toBeInTheDocument()
+
+    fireEvent.click(
+      within(parentCard).getByRole('button', {
+        name: '상위 사건 카드에서 시작일 이어받기',
+      }),
+    )
+    expect(setStartDate).toHaveBeenCalledWith('1914-07-28')
+
+    fireEvent.click(
+      within(parentCard).getByRole('button', {
+        name: '상위 사건 카드에서 참여국 이어받기',
+      }),
+    )
+    expect(onImportCountries).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(
+      within(parentCard).getByRole('button', {
+        name: '상위 사건 카드에서 위치 이어받기',
+      }),
+    )
+    expect(setLocation).toHaveBeenCalledWith('서부 전선')
+  })
+
+  it('개요 설명 입력 시 글자 수 카운터와 원클릭 비우기 버튼을 노출하고 긴 텍스트에 맞춰 줄 수를 자동 확장한다', () => {
+    const setDescription = jest.fn()
+    const longDesc = '첫째 줄\n둘째 줄\n셋째 줄\n넷째 줄\n다섯째 줄\n여섯째 줄'
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          description: longDesc,
+          setDescription,
+        })}
+      />,
+    )
+
+    const textarea = screen.getByPlaceholderText('사건의 개요 설명을 입력하세요.')
+    expect(Number(textarea.getAttribute('rows'))).toBeGreaterThanOrEqual(6)
+    expect(screen.getByLabelText('개요 설명 글자 수')).toHaveTextContent(
+      `${longDesc.length}자`,
+    )
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '개요 설명 비우기' }),
+    )
+    expect(setDescription).toHaveBeenCalledWith('')
+  })
+
+  it('첫 참여국 추가 후에도 남은 시대별 추천 참여국 칩이 유지되고, 연관 사건 관계 설명의 비우기 버튼이 동작한다', () => {
+    const setRelatedCountries = jest.fn()
+    const onChangeRelatedEvents = jest.fn()
+
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          startDate: '1592-04-13',
+          relatedCountries: [
+            { historicalCountryId: 'h-joseon', role: 'TARGET' },
+          ],
+          availableHistoricalCountries: [
+            {
+              id: 'h-joseon',
+              name: '조선',
+              startYear: 1392,
+              endYear: 1897,
+            } as never,
+            {
+              id: 'h-ming',
+              name: '명나라',
+              startYear: 1368,
+              endYear: 1644,
+            } as never,
+          ],
+          setRelatedCountries,
+          relatedEventsSlot: {
+            items: [
+              {
+                relatedEventId: 'evt-prev',
+                title: '도요토미 히데요시의 일본 통일',
+                relationType: 'LED_TO',
+                direction: 'incoming',
+                description: '대륙 침략 준비 완료',
+              },
+            ],
+            onChange: onChangeRelatedEvents,
+            onOpenPicker: jest.fn(),
+          },
+        })}
+      />,
+    )
+
+    // 이미 추가된 '조선'을 제외하고 남은 시대 추천 국가('명나라') 칩이 계속 노출된다
+    const eraBar = screen.getByLabelText('시대별 추천 참여국')
+    expect(
+      within(eraBar).queryByRole('button', { name: '+ 조선' }),
+    ).not.toBeInTheDocument()
+    fireEvent.click(within(eraBar).getByRole('button', { name: '+ 명나라' }))
+    expect(setRelatedCountries).toHaveBeenCalledWith([
+      { historicalCountryId: 'h-joseon', role: 'TARGET' },
+      { historicalCountryId: 'h-ming', role: 'PARTICIPANT' },
+    ])
+
+    // 연관 사건 카드의 관계 설명 비우기 버튼 동작
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: '도요토미 히데요시의 일본 통일 관계 설명 비우기',
+      }),
+    )
+    expect(onChangeRelatedEvents).toHaveBeenCalledWith([
+      expect.objectContaining({
+        relatedEventId: 'evt-prev',
+        description: '',
+      }),
+    ])
+  })
+
+  it('상위 사건이 비어 있을 때 동시대 추천 상위 사건 칩을 표시하고 원클릭으로 상위 사건을 지정할 수 있다', () => {
+    const onSelectParentCandidate = jest.fn()
+
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          startDate: '1592-07-08',
+          parentEventSlot: {
+            parent: null,
+            onOpenPicker: jest.fn(),
+            onClear: jest.fn(),
+            quickSearch: {
+              query: '',
+              onQueryChange: jest.fn(),
+              candidates: [],
+              onSelectCandidate: onSelectParentCandidate,
+            },
+            contemporarySuggestions: [
+              {
+                id: 'evt-imjin-war',
+                title: '임진왜란',
+                dateLabel: '1592 ~ 1598',
+                startYear: 1592,
+              },
+            ],
+          },
+        })}
+      />,
+    )
+
+    const parentSuggestionBar = screen.getByLabelText('동시대 추천 상위 사건')
+    fireEvent.click(
+      within(parentSuggestionBar).getByRole('button', {
+        name: '+ 임진왜란 (1592 ~ 1598)',
+      }),
+    )
+    expect(onSelectParentCandidate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'evt-imjin-war',
+        title: '임진왜란',
+      }),
+    )
+  })
+
+  it('상위 사건 기간 내 위치 미니 타임라인 인포그래픽과 인과·파생 흐름 보드가 표시된다', () => {
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          title: '한산도 대첩',
+          startDate: '1592-08-14',
+          endDate: '1592-08-14',
+          parentEventSlot: {
+            parent: {
+              id: 'evt-imjin',
+              title: '임진왜란',
+            },
+            parentPeriod: {
+              startDate: '1592-05-23',
+              endDate: '1598-12-16',
+            },
+            onOpenPicker: jest.fn(),
+            onClear: jest.fn(),
+          },
+          relatedEventsSlot: {
+            items: [
+              {
+                relatedEventId: 'evt-okpo',
+                title: '옥포 해전',
+                relationType: 'LED_TO',
+                direction: 'incoming',
+                description: '선행 해전',
+              },
+            ],
+            onOpenPicker: jest.fn(),
+            onChange: jest.fn(),
+          },
+        })}
+      />,
+    )
+
+    expect(
+      screen.getByLabelText('상위 사건 기간 속 위치 인포그래픽'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('초반')).toBeInTheDocument()
+    expect(
+      screen.getByLabelText('연관 사건 인과 흐름도'),
+    ).toBeInTheDocument()
+  })
 })

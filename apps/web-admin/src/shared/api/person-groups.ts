@@ -66,8 +66,8 @@ export const PERSON_GROUP_TYPE_META: Record<
   FACTION: {
     label: '계파·파벌',
     tone: 'rose',
-    desc: '내부 노선 분파',
-    example: '예: 하나회, 당내 계파',
+    desc: '내부 노선 분파·정파·붕당',
+    example: '예: 지롱드파, 산악파, 노론·소론, 하나회',
   },
   SCHOOL: {
     label: '학파·사조',
@@ -122,6 +122,45 @@ export interface PersonGroupRef {
   generationOrder: number | null
 }
 
+export interface PersonGroupEventSide {
+  sideId: string
+  sideName: string
+  sideColor: string | null
+  outcome: string | null
+  outcomeNote: string | null
+  eventId: string
+  eventTitle: string
+  eventDomain: string
+  eventType: string | null
+  startDate: string | null
+  startEra: string | null
+  startYear: number | null
+  opposingSides: Array<{
+    id: string
+    name: string
+    color: string | null
+    outcome: string | null
+    personGroupId: string | null
+    personGroupName: string | null
+  }>
+}
+
+/** 소속 인물들이 개별 참여한 사건 요약 (person_event 기반) */
+export interface PersonGroupMemberEvent {
+  eventId: string
+  eventTitle: string
+  eventDomain: string
+  eventType: string | null
+  startDate: string | null
+  startEra: string | null
+  startYear: number | null
+  participants: Array<{
+    personId: string
+    personName: string
+    role: string | null
+  }>
+}
+
 export interface PersonGroup {
   id: string
   name: string
@@ -130,8 +169,11 @@ export interface PersonGroup {
   generationOrder: number | null
   countryId: string | null
   countryName: string | null
+  historicalCountryId?: string | null
+  historicalCountryName?: string | null
   sortOrder: number | null
   memberCount: number
+  eventSideCount?: number
   /** 요청 계정이 이 묶음을 편집할 수 있는지 (생성자이거나 공유 묶음) */
   canEdit: boolean
   /** 전임(이전) 묶음 — 세대 계승 */
@@ -141,6 +183,10 @@ export interface PersonGroup {
   /** 중심 인물 (구심점) */
   center: Person | null
   members: PersonGroupMember[]
+  /** 상세 조회 시 이 묶음이 진영으로 참여한 사건 목록 */
+  eventSides?: PersonGroupEventSide[]
+  /** 상세 조회 시 소속 인물이 관여한 사건 목록 */
+  memberEvents?: PersonGroupMemberEvent[]
   createdAt: string
   updatedAt: string
 }
@@ -151,6 +197,7 @@ export interface CreatePersonGroupBody {
   description?: string | null
   generationOrder?: number | null
   countryId?: string | null
+  historicalCountryId?: string | null
   predecessorGroupId?: string | null
   centerPersonId?: string | null
   sortOrder?: number | null
@@ -163,6 +210,7 @@ export interface UpdatePersonGroupBody {
   description?: string | null
   generationOrder?: number | null
   countryId?: string | null
+  historicalCountryId?: string | null
   predecessorGroupId?: string | null
   centerPersonId?: string | null
   sortOrder?: number | null
@@ -212,14 +260,17 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>
 }
 
-/** 묶음 목록 (멤버 미포함). type/countryId 필터 */
+/** 묶음 목록 (멤버 미포함). type/countryId/historicalCountryId 필터 */
 export function listPersonGroups(filter?: {
   type?: PersonGroupType
   countryId?: string
+  historicalCountryId?: string
 }): Promise<PersonGroup[]> {
   const params = new URLSearchParams()
   if (filter?.type) params.set('type', filter.type)
   if (filter?.countryId) params.set('countryId', filter.countryId)
+  if (filter?.historicalCountryId)
+    params.set('historicalCountryId', filter.historicalCountryId)
   const qs = params.toString()
   return requestJson<PersonGroup[]>(
     `/person-groups${qs ? `?${qs}` : ''}`,

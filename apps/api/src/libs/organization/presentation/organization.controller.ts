@@ -15,13 +15,17 @@ import { ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
 import { OrganizationType } from '@prisma/client'
 import { OrganizationService } from '../application/organization.service'
-import { CreateOrganizationDto } from './dto/create-organization.dto'
+import {
+  CreateOrganizationDto,
+  CreateOrganizationMemberDto,
+} from './dto/create-organization.dto'
 import { UpdateOrganizationDto } from './dto/update-organization.dto'
 import { CreateOrganizationHierarchyDto } from './dto/create-organization-hierarchy.dto'
 import type {
   OrganizationResponseDto,
   OrganizationHierarchyResponseDto,
   OrganizationTreeNodeResponseDto,
+  OrganizationMemberResponseDto,
 } from './dto/organization.response'
 import type { OrganizationListFilter } from '../domain/organization.repository'
 
@@ -148,6 +152,34 @@ export class OrganizationController {
     return toResponseDto(org)
   }
 
+  @Get(':id/members')
+  async getMembers(
+    @Param('id') id: string,
+  ): Promise<OrganizationMemberResponseDto[]> {
+    return this.organizationService.getMembers(id)
+  }
+
+  @Post(':id/members')
+  async addMember(
+    @Param('id') id: string,
+    @Body() dto: CreateOrganizationMemberDto,
+  ): Promise<OrganizationMemberResponseDto> {
+    return this.organizationService.addMember(id, {
+      personId: dto.personId,
+      roleTitle: dto.roleTitle ?? null,
+      notes: dto.notes ?? null,
+    })
+  }
+
+  @Delete(':id/members/:personId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async removeMember(
+    @Param('id') id: string,
+    @Param('personId') personId: string,
+  ): Promise<void> {
+    await this.organizationService.removeMember(id, personId)
+  }
+
   @Post()
   async create(
     @Body() dto: CreateOrganizationDto,
@@ -168,6 +200,17 @@ export class OrganizationController {
       countryId: dto.countryId ?? null,
       historicalCountryId: dto.historicalCountryId ?? null,
     })
+    if (dto.members && dto.members.length > 0) {
+      await Promise.all(
+        dto.members.map((member) =>
+          this.organizationService.addMember(org.id, {
+            personId: member.personId,
+            roleTitle: member.roleTitle ?? null,
+            notes: member.notes ?? null,
+          }),
+        ),
+      )
+    }
     return toResponseDto(org)
   }
 

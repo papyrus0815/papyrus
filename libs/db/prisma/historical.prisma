@@ -303,6 +303,9 @@ model HistoricalCountry {
   /// 법령(`Law`) — 역사 국가 소속 법제
   laws Law[] @relation("LawHistoricalCountry")
 
+  /// 인물 묶음·계파(`PersonGroup`) — 이 역사 국가 소속 계파·파벌·세대 등
+  personGroups PersonGroup[] @relation("HistoricalCountryPersonGroups")
+
   /// 이 역사 국가의 연도별 교역 자료 (수출·수입)
   exportsImports     ExportImport[]     @relation("HistoricalCountryTrade")
   /// 교역 흐름에서 '상대'로 지목된 행들 (자국의 교역 자료가 아니다)

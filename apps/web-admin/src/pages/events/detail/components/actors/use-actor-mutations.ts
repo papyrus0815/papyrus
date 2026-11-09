@@ -45,14 +45,18 @@ export function useActorMutations({
   const patchPersons = (next: PersonPayload[], options?: PatchOptions) =>
     onPatch({ relatedPersons: next }, options)
 
-  /** 한 인물의 역할·비고 — 빈 값은 null(비움) */
-  const updatePerson = (personId: string, patch: { role?: string; note?: string }) =>
+  /** 한 인물의 역할·비고·진영 — 빈 값은 null(비움) */
+  const updatePerson = (
+    personId: string,
+    patch: { role?: string; note?: string; sideId?: string | null },
+  ) =>
     onPatch({
       relatedPersonsPatch: [
         {
           personId,
           ...(patch.role !== undefined && { role: patch.role.trim() || null }),
           ...(patch.note !== undefined && { note: patch.note.trim() || null }),
+          ...(patch.sideId !== undefined && { sideId: patch.sideId || null }),
         },
       ],
     })

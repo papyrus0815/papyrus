@@ -46,6 +46,15 @@ export interface EventDateFieldProps {
   anchorId?: string
 }
 
+function withPaddedMonth(rawParts: EventDateParts): EventDateParts {
+  if (!rawParts.month && !rawParts.day) return rawParts
+  return {
+    ...rawParts,
+    month: rawParts.month ? rawParts.month.padStart(2, '0') : '',
+    day: rawParts.day ? rawParts.day.padStart(2, '0') : '',
+  }
+}
+
 export function EventDateField({
   value,
   precision,
@@ -64,7 +73,9 @@ export function EventDateField({
   const generatedId = useId()
   const anchorId = anchorIdProp ?? generatedId
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [parts, setParts] = useState<EventDateParts>(() => partsFromIso(value, precision))
+  const [parts, setParts] = useState<EventDateParts>(() =>
+    withPaddedMonth(partsFromIso(value, precision)),
+  )
   const [inputError, setInputError] = useState<string | null>(null)
   /** 마지막으로 내보낸 값 — 바깥 값이 이것과 다르면(편집 로드·초기화) 칸을 다시 채운다 */
   const lastEmittedRef = useRef(`${value}|${precision}`)
@@ -73,7 +84,7 @@ export function EventDateField({
     const incoming = `${value}|${precision}`
     if (incoming === lastEmittedRef.current) return
     lastEmittedRef.current = incoming
-    setParts((current) => partsFromIso(value, precision, current.era))
+    setParts((current) => withPaddedMonth(partsFromIso(value, precision, current.era)))
     setInputError(null)
     onInputErrorChange(null)
     // 바깥 값이 바뀔 때만 돈다(콜백은 의존성에서 일부러 뺐다 — 정체성이 바뀔 때마다 칸을 덮지 않게)
@@ -116,7 +127,7 @@ export function EventDateField({
           isOpen={pickerOpen}
           onClose={() => setPickerOpen(false)}
           onSelect={(date, pickedPrecision) => {
-            apply(partsFromIso(date, pickedPrecision))
+            apply(withPaddedMonth(partsFromIso(date, pickedPrecision)))
             setPickerOpen(false)
             onPickedFromCalendar?.()
           }}

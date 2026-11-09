@@ -38,6 +38,11 @@ export class CreatePersonGroupDto {
   @IsUUID()
   countryId?: string | null
 
+  /** 연관 역사 국가 ID (예: 프랑스 제1공화국, 조선) */
+  @IsOptional()
+  @IsUUID()
+  historicalCountryId?: string | null
+
   /** 전임(이전) 묶음 ID — 세대 계승 (예: 2세대→1세대) */
   @IsOptional()
   @IsUUID()
@@ -82,6 +87,11 @@ export class UpdatePersonGroupDto {
   @IsOptional()
   @IsUUID()
   countryId?: string | null
+
+  /** 연관 역사 국가 ID (예: 프랑스 제1공화국, 조선) */
+  @IsOptional()
+  @IsUUID()
+  historicalCountryId?: string | null
 
   /** 전임(이전) 묶음 ID. null 전달 시 연결 해제 */
   @IsOptional()
@@ -155,6 +165,46 @@ export interface PersonGroupRefDto {
   generationOrder: number | null
 }
 
+/** 이 묶음이 사건의 진영(편)으로 참여한 기록 */
+export interface PersonGroupEventSideDto {
+  sideId: string
+  sideName: string
+  sideColor: string | null
+  outcome: string | null
+  outcomeNote: string | null
+  eventId: string
+  eventTitle: string
+  eventDomain: string
+  eventType: string | null
+  startDate: string | null
+  startEra: string | null
+  startYear: number | null
+  opposingSides: Array<{
+    id: string
+    name: string
+    color: string | null
+    outcome: string | null
+    personGroupId: string | null
+    personGroupName: string | null
+  }>
+}
+
+/** 이 묶음의 소속 인물이 참여한 사건 기록 (person_event 기반) */
+export interface PersonGroupMemberEventDto {
+  eventId: string
+  eventTitle: string
+  eventDomain: string
+  eventType: string | null
+  startDate: string | null
+  startEra: string | null
+  startYear: number | null
+  participants: Array<{
+    personId: string
+    personName: string
+    role: string | null
+  }>
+}
+
 export interface PersonGroupResponseDto {
   id: string
   name: string
@@ -163,8 +213,12 @@ export interface PersonGroupResponseDto {
   generationOrder: number | null
   countryId: string | null
   countryName: string | null
+  historicalCountryId: string | null
+  historicalCountryName: string | null
   sortOrder: number | null
   memberCount: number
+  /** 이 묶음이 진영으로 참여한 사건 수 */
+  eventSideCount?: number
   /** 전임(이전) 묶음 — 세대 계승 */
   predecessor: PersonGroupRefDto | null
   /** 후임(다음) 묶음들 — 보통 0~1개 */
@@ -173,8 +227,12 @@ export interface PersonGroupResponseDto {
   center: PersonResponseDto | null
   /** 요청 계정이 이 묶음을 편집할 수 있는지 (생성자이거나, 생성자 미지정 공유 묶음) */
   canEdit: boolean
-  /** 상세 조회 시에만 채워짐 (목록에서는 빈 배열) */
+  /** 멤버 인물 목록 */
   members: PersonGroupMemberDto[]
+  /** 상세 조회 시 이 묶음이 진영으로 참여한 사건 목록 */
+  eventSides?: PersonGroupEventSideDto[]
+  /** 상세 조회 시 소속 인물이 참여한 사건 목록 (person_event 기반) */
+  memberEvents?: PersonGroupMemberEventDto[]
   createdAt: string
   updatedAt: string
 }

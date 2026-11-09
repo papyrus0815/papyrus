@@ -42,8 +42,24 @@ export interface OrganizationResponseDto {
   headquartersCityId: string | null
   countryId: string | null
   historicalCountryId: string | null
+  country?: { id: string; name: string } | null
+  historicalCountry?: { id: string; name: string } | null
   createdAt: string
   updatedAt: string
+}
+
+export interface OrganizationMemberDto {
+  id?: string
+  personId: string
+  roleTitle: string | null
+  source: 'TENURE' | 'ROLE'
+  person: {
+    id: string
+    name: string
+    surname: string | null
+    originalName: string | null
+    profileImageUrl: string | null
+  }
 }
 
 export interface OrganizationTreeNodeDto extends OrganizationResponseDto {
@@ -55,6 +71,12 @@ export interface OrganizationListParams {
   countryId?: string
   historicalCountryId?: string
   type?: OrganizationType
+}
+
+export interface CreateOrganizationMemberBody {
+  personId: string
+  roleTitle?: string | null
+  notes?: string | null
 }
 
 export interface CreateOrganizationBody {
@@ -72,6 +94,7 @@ export interface CreateOrganizationBody {
   headquartersCityId?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
+  members?: CreateOrganizationMemberBody[]
 }
 
 const base = (conn: IConnection) => conn.host.replace(/\/$/, '')
@@ -114,6 +137,49 @@ export async function getOrganizationById(
   })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
+}
+
+export async function getOrganizationMembers(
+  conn: IConnection,
+  id: string,
+): Promise<OrganizationMemberDto[]> {
+  const res = await fetch(`${base(conn)}/organizations/${id}/members`, {
+    headers: (conn.headers ?? {}) as HeadersInit,
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export async function addOrganizationMember(
+  conn: IConnection,
+  organizationId: string,
+  body: CreateOrganizationMemberBody,
+): Promise<OrganizationMemberDto> {
+  const res = await fetch(`${base(conn)}/organizations/${organizationId}/members`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(conn.headers ?? {}) },
+    body: JSON.stringify(body),
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export async function removeOrganizationMember(
+  conn: IConnection,
+  organizationId: string,
+  personId: string,
+): Promise<void> {
+  const res = await fetch(
+    `${base(conn)}/organizations/${organizationId}/members/${personId}`,
+    {
+      method: 'DELETE',
+      headers: (conn.headers ?? {}) as HeadersInit,
+      credentials: 'include',
+    },
+  )
+  if (!res.ok) throw new Error(await res.text())
 }
 
 export async function createOrganization(

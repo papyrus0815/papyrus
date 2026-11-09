@@ -49,6 +49,12 @@ export class EventSideInputDto {
   @IsString()
   parentSideId?: string | null
 
+  @ApiProperty({ required: false, nullable: true, description: '영구 등록된 집단·계파(PersonGroup) id' })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  personGroupId?: string | null
+
   @ApiProperty({
     required: false,
     nullable: true,

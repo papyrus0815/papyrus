@@ -23,23 +23,29 @@ import { eventKeys } from '@/shared/api/event-query-keys'
 import {
   type EventOrganization,
   type EventOrganizationRole,
+  type UpdateEventDto,
   addEventOrganization,
   removeEventOrganization,
+  updateEventOrganization,
 } from '@/shared/api/events'
-import { getOrganizations } from '@/shared/api/organizations'
+import { getOrganizationMembers, getOrganizations } from '@/shared/api/organizations'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { notify } from '@/shared/ui/toast'
+import { OrganizationQuickCreateModal } from '@/widgets/organization/organization-quick-create-modal'
 
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
+import { InlineSelect } from './inline'
+import { withSideColors } from './side-colors'
 import { ORGANIZATION_ROLE_OPTIONS as ROLE_OPTIONS } from '@/features/event-facets/model/organization-roles'
 
 interface DetailOrganizationsProps {
   event: EventDetail
   /** 경제 사건 — 비어 있어도 섹션을 띄워 연결을 안내한다 */
   expectOrganizations: boolean
+  onPatch?: (dto: UpdateEventDto) => void
 }
 
 
@@ -65,12 +71,42 @@ function formatPrice(raw: string | null, currency: string | null): string | null
   return currency ? `${text} ${currency}` : text
 }
 
-export function DetailOrganizations({ event, expectOrganizations }: DetailOrganizationsProps) {
+export function DetailOrganizations({
+  event,
+  expectOrganizations,
+  onPatch,
+}: DetailOrganizationsProps) {
   const queryClient = useQueryClient()
   const organizations = useMemo(() => event.organizations ?? [], [event.organizations])
+  const coloredSides = useMemo(() => withSideColors(event.sides ?? []), [event.sides])
+  const sideById = useMemo(
+    () =>
+      new Map(
+        coloredSides.map(
+          (side) => [side.id, { name: side.name, color: side.color }] as const,
+        ),
+      ),
+    [coloredSides],
+  )
+  const sideOptions = useMemo(
+    () =>
+      coloredSides.length === 0
+        ? []
+        : [
+            { value: 'none', label: '진영 미지정' },
+            ...coloredSides.map((side) => ({ value: side.id, label: side.name })),
+          ],
+    [coloredSides],
+  )
 
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [creatingOrgOpen, setCreatingOrgOpen] = useState(false)
   const [pendingOrganizationId, setPendingOrganizationId] = useState<string | null>(null)
+
+  const defaultCountryId =
+    (event.relatedCountries ?? [])[0]?.id ?? undefined
+  const defaultHistoricalCountryId =
+    (event.relatedHistoricalCountries ?? [])[0]?.id ?? undefined
 
   const { data: allOrganizations = [], isLoading } = useQuery({
     queryKey: ['organizations', 'event-link-candidates'],
@@ -120,6 +156,78 @@ export function DetailOrganizations({ event, expectOrganizations }: DetailOrgani
     onError: () => notify.error('연결 해제에 실패했습니다'),
   })
 
+  const handleUpdateSide = async (relationId: string, sideId: string | null) => {
+    try {
+      await updateEventOrganization(event.id, relationId, { sideId })
+      refresh()
+    } catch (error) {
+      notify.error(
+        error instanceof Error ? error.message : '조직 진영 변경에 실패했습니다',
+      )
+    }
+  }
+
+  const handleImportMembers = async (relation: EventOrganization) => {
+    if (!onPatch) return
+    try {
+      const members = await getOrganizationMembers(
+        getApiConnection(),
+        relation.organizationId,
+      )
+      if (members.length === 0) {
+        notify.info(`‘${relation.name}’에 등록된 소속 인물이 없습니다.`)
+        return
+      }
+      const currentPersons = event.relatedPersons ?? []
+      const existingById = new Map(
+        currentPersons.map((person) => [person.personId, person]),
+      )
+      const nextPersons = [
+        ...currentPersons.map((person) => ({
+          personId: person.personId,
+          role: person.role ?? undefined,
+          note: person.note ?? undefined,
+          sideId: person.sideId ?? undefined,
+        })),
+      ]
+      let addedCount = 0
+      for (const member of members) {
+        const pid = member.person.id
+        const existing = existingById.get(pid)
+        if (existing) {
+          if (relation.sideId && existing.sideId !== relation.sideId) {
+            const idx = nextPersons.findIndex((np) => np.personId === pid)
+            if (idx >= 0) {
+              nextPersons[idx] = { ...nextPersons[idx], sideId: relation.sideId }
+              addedCount += 1
+            }
+          }
+        } else {
+          nextPersons.push({
+            personId: pid,
+            role: member.roleTitle ?? relation.name,
+            ...(relation.sideId ? { sideId: relation.sideId } : {}),
+          })
+          addedCount += 1
+        }
+      }
+      if (addedCount > 0) {
+        onPatch({ relatedPersons: nextPersons } as UpdateEventDto)
+        notify.success(
+          `‘${relation.name}’ 소속 인물 ${addedCount}명을 이 사건의 참여 인물로 반영했습니다`,
+        )
+      } else {
+        notify.info('이미 모든 소속 인물이 이 사건에 참여하고 있습니다')
+      }
+    } catch (error) {
+      notify.error(
+        error instanceof Error
+          ? error.message
+          : '기관·조직 소속 인물을 불러오지 못했습니다',
+      )
+    }
+  }
+
   const handleRemove = async (relation: EventOrganization) => {
     const ok = await confirm({
       title: '연결 해제',
@@ -130,12 +238,10 @@ export function DetailOrganizations({ event, expectOrganizations }: DetailOrgani
     if (ok) removeMutation.mutate(relation.relationId)
   }
 
-  if (!expectOrganizations && organizations.length === 0) return null
-
   return (
     <S.Section id="organizations">
       <S.SectionHeader>
-        <S.SectionTitle>관련 기업·조직</S.SectionTitle>
+        <S.SectionTitle>관련 기관·조직·기업</S.SectionTitle>
         {organizations.length > 1 && <S.SectionSubtitle>{organizations.length}곳</S.SectionSubtitle>}
       </S.SectionHeader>
 
@@ -145,20 +251,28 @@ export function DetailOrganizations({ event, expectOrganizations }: DetailOrgani
             <OrganizationRow
               key={relation.relationId}
               relation={relation}
+              side={relation.sideId ? sideById.get(relation.sideId) ?? null : null}
+              sideOptions={sideOptions}
+              onUpdateSide={(sideId) => void handleUpdateSide(relation.relationId, sideId)}
+              onImportMembers={onPatch ? () => void handleImportMembers(relation) : undefined}
               onRemove={() => void handleRemove(relation)}
             />
           ))}
         </Rows>
       ) : (
         <S.HelperText>
-          상장·설립·인수처럼 기업이 주체인 사건이면 그 기업을 연결하세요. 기업이면 최신 시가총액이 함께
-          보입니다.
+          {expectOrganizations
+            ? '상장·설립·인수처럼 기업·기관이 주체인 사건이면 연결하세요. 기업이면 최신 시가총액이 함께 보입니다.'
+            : '공안위원회·의회 같은 권력기구나 사건에 관여한 기관·조직·기업을 연결할 수 있습니다.'}
         </S.HelperText>
       )}
 
       <Actions>
         <ActionButton type="button" onClick={() => setPickerOpen(true)}>
-          <FiPlus size={14} /> 기업·조직 연결
+          <FiPlus size={14} /> 기관·조직 연결
+        </ActionButton>
+        <ActionButton type="button" onClick={() => setCreatingOrgOpen(true)}>
+          <FiPlus size={14} /> 새 기관·조직 등록
         </ActionButton>
       </Actions>
 
@@ -176,6 +290,23 @@ export function DetailOrganizations({ event, expectOrganizations }: DetailOrgani
         }}
       />
 
+      {creatingOrgOpen && (
+        <OrganizationQuickCreateModal
+          defaultCountryId={defaultCountryId}
+          defaultHistoricalCountryId={defaultHistoricalCountryId}
+          candidatePersons={(event.persons ?? []).map((person) => ({
+            id: person.id,
+            name: [person.name, person.surname].filter(Boolean).join(' '),
+            role: person.role ?? undefined,
+          }))}
+          onClose={() => setCreatingOrgOpen(false)}
+          onCreated={(created) => {
+            setCreatingOrgOpen(false)
+            setPendingOrganizationId(created.id)
+          }}
+        />
+      )}
+
       <SelectModal
         isOpen={pendingOrganizationId !== null}
         onClose={() => setPendingOrganizationId(null)}
@@ -191,7 +322,21 @@ export function DetailOrganizations({ event, expectOrganizations }: DetailOrgani
   )
 }
 
-function OrganizationRow({ relation, onRemove }: { relation: EventOrganization; onRemove: () => void }) {
+function OrganizationRow({
+  relation,
+  side,
+  sideOptions,
+  onUpdateSide,
+  onImportMembers,
+  onRemove,
+}: {
+  relation: EventOrganization
+  side: { name: string; color: string } | null
+  sideOptions: Array<{ value: string; label: string }>
+  onUpdateSide: (sideId: string | null) => void
+  onImportMembers?: () => void
+  onRemove: () => void
+}) {
   const stock = relation.latestStock
   const marketCap = stock ? formatCompactMoney(stock.marketCap, stock.currency) : null
   const price = stock ? formatPrice(stock.price, stock.currency) : null
@@ -210,9 +355,36 @@ function OrganizationRow({ relation, onRemove }: { relation: EventOrganization; 
               <FiExternalLink size={12} aria-hidden />
             </NameLink>
           ) : (
-            <Name>{relation.name}</Name>
+            <NameLink
+              to={`/organizations?selected=${relation.organizationId}&tab=members`}
+              title="기관·조직 상세 및 소속 인물·위원 관리"
+            >
+              {relation.name}
+              <FiExternalLink size={12} aria-hidden />
+            </NameLink>
           )}
           <RoleBadge>{ROLE_LABEL[relation.role] ?? relation.role}</RoleBadge>
+          {sideOptions.length > 0 && (
+            <SideBadge $color={side?.color}>
+              {side && <SideDot $color={side.color} aria-hidden />}
+              <InlineSelect
+                value={relation.sideId ?? 'none'}
+                options={sideOptions}
+                onSave={(next) => onUpdateSide(next === 'none' ? null : next)}
+                placeholder="진영 지정"
+                label={`${relation.name}의 소속 진영`}
+              />
+            </SideBadge>
+          )}
+          {onImportMembers && (
+            <ImportMembersBtn
+              type="button"
+              title={`${relation.name} 소속 인물(위원·역할)을 사건 참여 인물로 불러오기`}
+              onClick={onImportMembers}
+            >
+              👥 소속 인물 불러오기
+            </ImportMembersBtn>
+          )}
         </NameLine>
         {relation.roleDescription && <Meta>{relation.roleDescription}</Meta>}
         {stockLine && (
@@ -371,5 +543,48 @@ const RemoveButton = styled.button`
 
   &:hover {
     color: ${({ theme }) => theme.colors.error};
+  }
+`
+
+const SideBadge = styled.span<{ $color?: string }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 7px;
+  border-radius: ${RADIUS.PILL};
+  border: 1px solid
+    ${({ theme, $color }) => $color ? `${$color}55` : theme.colors.border};
+  background: ${({ $color }) => ($color ? `${$color}14` : 'transparent')};
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme, $color }) => $color ?? theme.colors.text.secondary};
+`
+
+const SideDot = styled.span<{ $color: string }>`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: ${({ $color }) => $color};
+  flex-shrink: 0;
+`
+
+const ImportMembersBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.text.secondary};
   }
 `

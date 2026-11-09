@@ -292,6 +292,7 @@ export const FormRow = styled.div<{ $noBorder?: boolean; $compact?: boolean }>`
   grid-template-columns: 148px minmax(0, 1fr);
   gap: 24px;
   align-items: start;
+  min-width: 0;
   padding: ${(props) => (props.$compact ? '0' : '14px 0')};
   margin-top: 0;
   border-bottom: ${(props) =>
@@ -361,14 +362,16 @@ export const PeriodBadge = styled.div`
 
 export const DateRangeRow = styled.div`
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 18px;
+  min-width: 0;
 `
 
 export const DateRangeColumn = styled.div`
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;
 `
 
 export const DateRangeLabel = styled.div`

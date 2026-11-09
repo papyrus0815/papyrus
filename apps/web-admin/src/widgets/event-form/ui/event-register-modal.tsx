@@ -20,6 +20,7 @@
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
+import { FiColumns } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -68,6 +69,18 @@ const FORM_SECTION_LINKS = [
   { id: 'event-form-group-participants', label: '참여 주체' },
   { id: 'event-form-group-context', label: '맥락·부가' },
 ] as const
+
+const LAYOUT_STORAGE_KEY = 'papyrus:event-register-layout'
+
+function readInitialLayoutMode(): 'split' | 'single' {
+  if (typeof window === 'undefined') return 'split'
+  try {
+    const saved = window.localStorage.getItem(LAYOUT_STORAGE_KEY)
+    return saved === 'single' ? 'single' : 'split'
+  } catch {
+    return 'split'
+  }
+}
 
 export interface EventRegisterModalProps {
   isOpen: boolean
@@ -161,11 +174,28 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
     draftSavedAt,
     parentEventTitle,
     relatedEventsCount,
+    participantsSectionCount,
+    contextSectionCount,
   } = formState
   const busy = isLoading || isSubmitting
   const [activeSectionId, setActiveSectionId] = useState<string>(
     FORM_SECTION_LINKS[0].id,
   )
+  const [layoutMode, setLayoutMode] = useState<'split' | 'single'>(
+    readInitialLayoutMode,
+  )
+
+  const toggleLayoutMode = useCallback(() => {
+    setLayoutMode((prev) => {
+      const next = prev === 'split' ? 'single' : 'split'
+      try {
+        window.localStorage.setItem(LAYOUT_STORAGE_KEY, next)
+      } catch {
+        // storage disabled
+      }
+      return next
+    })
+  }, [])
 
   const activeParentTitle =
     !isEditMode
@@ -186,6 +216,16 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
       scrollContainerRef.current.scrollTo?.({ top: 0, behavior: 'smooth' })
       scrollContainerRef.current.scrollTop = 0
     }
+    const leftPane = document.getElementById('event-form-split-left')
+    if (leftPane) {
+      leftPane.scrollTo?.({ top: 0, behavior: 'smooth' })
+      leftPane.scrollTop = 0
+    }
+    const rightPane = document.getElementById('event-form-split-right')
+    if (rightPane) {
+      rightPane.scrollTo?.({ top: 0, behavior: 'smooth' })
+      rightPane.scrollTop = 0
+    }
     const titleInput = document.getElementById('event-form-title')
     titleInput?.focus()
   }, [])
@@ -193,11 +233,43 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
   const scrollToSection = useCallback((sectionId: string) => {
     setActiveSectionId(sectionId)
     const section = document.getElementById(sectionId)
-    section?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    if (!section) return
+    const leftPane = document.getElementById('event-form-split-left')
+    const rightPane = document.getElementById('event-form-split-right')
+    if (sectionId === 'event-form-group-participants' && rightPane) {
+      rightPane.scrollTo?.({ top: 0, behavior: 'smooth' })
+      rightPane.scrollTop = 0
+      return
+    }
+    if (sectionId === 'event-form-group-basic' && leftPane) {
+      leftPane.scrollTo?.({ top: 0, behavior: 'smooth' })
+      leftPane.scrollTop = 0
+      return
+    }
+    section.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
   }, [])
 
   const handleFormScroll = useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
+      const target = event.target as HTMLElement | null
+      if (target?.id === 'event-form-split-right') {
+        setActiveSectionId((prev) =>
+          prev === 'event-form-group-participants'
+            ? prev
+            : 'event-form-group-participants',
+        )
+        return
+      }
+      if (target?.id === 'event-form-split-left') {
+        const leftRect = target.getBoundingClientRect()
+        const contextEl = document.getElementById('event-form-group-context')
+        const nextId =
+          contextEl && contextEl.getBoundingClientRect().top <= leftRect.top + 96
+            ? 'event-form-group-context'
+            : 'event-form-group-basic'
+        setActiveSectionId((prev) => (prev === nextId ? prev : nextId))
+        return
+      }
       const container = event.currentTarget
       const containerRect = container.getBoundingClientRect()
       const threshold = containerRect.top + 96
@@ -384,19 +456,60 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
             <SectionJumpNav aria-label="폼 섹션 이동">
               {FORM_SECTION_LINKS.map((item) => {
                 const isActive = activeSectionId === item.id
+                const badgeText =
+                  item.id === 'event-form-group-basic'
+                    ? isValid && !isLoading
+                      ? '✓'
+                      : null
+                    : item.id === 'event-form-group-participants'
+                      ? (participantsSectionCount ?? 0) > 0
+                        ? String(participantsSectionCount)
+                        : null
+                      : (contextSectionCount ?? 0) > 0
+                        ? String(contextSectionCount)
+                        : null
                 return (
                   <SectionJumpBtn
                     key={item.id}
                     type="button"
                     $active={isActive}
+                    aria-label={item.label}
                     aria-current={isActive ? 'location' : undefined}
                     onClick={() => scrollToSection(item.id)}
                   >
-                    {item.label}
+                    <span>{item.label}</span>
+                    {badgeText && (
+                      <SectionJumpBadge
+                        $done={badgeText === '✓'}
+                        aria-hidden="true"
+                        data-section-badge={item.id}
+                      >
+                        {badgeText}
+                      </SectionJumpBadge>
+                    )}
                   </SectionJumpBtn>
                 )
               })}
             </SectionJumpNav>
+            <LayoutModeToggleBtn
+              type="button"
+              $active={layoutMode === 'split'}
+              aria-pressed={layoutMode === 'split'}
+              aria-label={
+                layoutMode === 'split'
+                  ? '1단 세로 보기로 전환'
+                  : '2단 좌우 분할 보기로 전환'
+              }
+              title={
+                layoutMode === 'split'
+                  ? '좌우 2단 분할 보기 중 (클릭 시 1단 세로 보기로 전환)'
+                  : '1단 세로 보기 중 (클릭 시 좌우 2단 분할 보기로 전환)'
+              }
+              onClick={toggleLayoutMode}
+            >
+              <FiColumns size={13} />
+              <span>{layoutMode === 'split' ? '2단 분할' : '1단 보기'}</span>
+            </LayoutModeToggleBtn>
             {!isEditMode && isDirty && !busy && (
               <HeaderResetBtn
                 type="button"
@@ -411,16 +524,21 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
             )}
           </HeaderActionsBar>
         }
-        maxWidth="min(1040px, 96vw)"
+        maxWidth={
+          layoutMode === 'split' ? 'min(1440px, 96vw)' : 'min(1040px, 96vw)'
+        }
         minHeight="90vh"
+        height={layoutMode === 'split' ? '90vh' : undefined}
         fullBleedOnMobile
         // 저장 중에는 Esc·오버레이로 닫히지 않게 — 요청이 날아간 뒤 UI만 사라지는 상태 방지
         closeOnEsc={!isSubmitting}
         closeOnOverlayClick={!isSubmitting}
       >
-        <PersonRegisterModalFormScroll
+        <EventModalFormScroll
           ref={scrollContainerRef}
+          $layoutMode={layoutMode}
           onScroll={handleFormScroll}
+          onScrollCapture={handleFormScroll}
         >
           {isSubmitting && (
             <BusyBar role="status" aria-live="polite">
@@ -440,6 +558,7 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
                   initialEventType={initialEventType}
                   initialCountries={initialCountries}
                   initialRelatedEvents={initialRelatedEvents}
+                  layoutMode={layoutMode}
                   formRef={formRef}
                   onDirtyChange={markDirty}
                   onStateChange={setFormState}
@@ -450,7 +569,7 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
               </FormReveal>
             )}
           </Suspense>
-        </PersonRegisterModalFormScroll>
+        </EventModalFormScroll>
 
         <PersonRegisterModalStickyFooter>
           <FooterHint $warning={!isValid && Boolean(firstError)}>
@@ -633,6 +752,9 @@ const SectionJumpNav = styled.nav`
 `
 
 const SectionJumpBtn = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   height: 24px;
   padding: 0 10px;
   border: none;
@@ -664,6 +786,78 @@ const SectionJumpBtn = styled.button<{ $active?: boolean }>`
   }
 `
 
+const SectionJumpBadge = styled.span<{ $done?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  background: ${({ $done, theme }) =>
+    $done
+      ? theme.mode === 'dark'
+        ? 'rgba(16, 185, 129, 0.2)'
+        : 'rgba(16, 185, 129, 0.14)'
+      : theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.24)'
+        : 'rgba(99, 102, 241, 0.12)'};
+  color: ${({ $done, theme }) =>
+    $done
+      ? theme.mode === 'dark'
+        ? '#6ee7b7'
+        : '#047857'
+      : theme.colors.primary};
+`
+
+const LayoutModeToggleBtn = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.35)'
+          : 'rgba(99, 102, 241, 0.28)'
+        : theme.colors.border.light};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.14)'
+        : 'rgba(99, 102, 241, 0.06)'
+      : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '#c7d2fe'
+        : theme.colors.primary
+      : theme.colors.text.secondary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease, background-color 0.14s ease;
+
+  @media (max-width: 1180px) {
+    display: none;
+  }
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+    outline: none;
+  }
+`
+
 const HeaderResetBtn = styled.button`
   height: 28px;
   padding: 0 10px;
@@ -686,6 +880,22 @@ const HeaderResetBtn = styled.button`
       theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.1)' : '#fef2f2'};
     outline: none;
   }
+`
+
+const EventModalFormScroll = styled(PersonRegisterModalFormScroll)<{
+  $layoutMode: 'split' | 'single'
+}>`
+  overflow-x: hidden;
+
+  ${({ $layoutMode }) =>
+    $layoutMode === 'split'
+      ? `
+    @media (min-width: 1180px) {
+      overflow-y: hidden;
+      padding: 22px 28px;
+    }
+  `
+      : ''}
 `
 
 const BusyBar = styled.div`

@@ -4,8 +4,24 @@ import {
   IsEnum,
   IsDateString,
   IsUUID,
+  IsArray,
+  ValidateNested,
 } from 'class-validator'
+import { Type } from 'class-transformer'
 import { OrganizationType, OrganizationScope } from '@prisma/client'
+
+export class CreateOrganizationMemberDto {
+  @IsUUID()
+  personId!: string
+
+  @IsOptional()
+  @IsString()
+  roleTitle?: string | null
+
+  @IsOptional()
+  @IsString()
+  notes?: string | null
+}
 
 export class CreateOrganizationDto {
   @IsString()
@@ -61,4 +77,10 @@ export class CreateOrganizationDto {
   @IsOptional()
   @IsUUID()
   historicalCountryId?: string | null
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateOrganizationMemberDto)
+  members?: CreateOrganizationMemberDto[]
 }

@@ -2,7 +2,7 @@
  * 인물 묶음 생성 모달 — 인물 컨텍스트 없이(허브/상세에서) 새 묶음을 만든다.
  * 유형 칩 그리드 + 이름 + (세대순번/중심인물) + 설명 + 초기 멤버 다중 선택.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { createPortal } from 'react-dom'
 
@@ -10,6 +10,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiPlus, FiX } from 'react-icons/fi'
 import styled, { type DefaultTheme } from 'styled-components'
 
+import { getAllCountries } from '@/shared/api/countries'
+import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import { getAllPersons } from '@/shared/api/persons'
 import {
   PERSON_GROUP_TYPE_META,
@@ -17,6 +19,7 @@ import {
   type PersonGroup,
   type PersonGroupType,
 } from '@/shared/api/person-groups'
+import { useBodyScrollLock } from '@/shared/hooks/use-body-scroll-lock.hook'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import { notify } from '@/shared/ui/toast'
@@ -26,8 +29,18 @@ import { Z_INDEX } from '@/shared/styles/z-index'
 const isDark = (mode: 'light' | 'dark') => mode === 'dark'
 
 interface Props {
-  /** 기본 국가 (국가 상세에서 생성 시) */
+  /** 기본 현대 국가 (국가 상세에서 생성 시) */
   defaultCountryId?: string
+  /** 기본 역사 국가 (사건·역사 국가에서 생성 시) */
+  defaultHistoricalCountryId?: string
+  /** 기본 유형 (사건 진영에서 생성 시 'FACTION') */
+  defaultType?: PersonGroupType
+  /** 기본 이름 */
+  defaultName?: string
+  /** 초기 멤버 목록 */
+  defaultMembers?: Array<{ id: string; name: string }>
+  /** 현재 사건·진영에 추가되어 있는 추천 인물 목록 */
+  candidatePersons?: Array<{ id: string; name: string }>
   onCreated: (group: PersonGroup) => void
   onClose: () => void
 }
@@ -39,23 +52,55 @@ interface MemberDraft {
 
 export function PersonGroupCreateModal({
   defaultCountryId,
+  defaultHistoricalCountryId,
+  defaultType = 'GENERATION',
+  defaultName = '',
+  defaultMembers = [],
+  candidatePersons = [],
   onCreated,
   onClose,
 }: Props) {
-  const [name, setName] = useState('')
-  const [type, setType] = useState<PersonGroupType>('GENERATION')
+  const [name, setName] = useState(defaultName)
+  const [type, setType] = useState<PersonGroupType>(defaultType)
   const [generationOrder, setGenerationOrder] = useState('')
   const [description, setDescription] = useState('')
+  const [countryId, setCountryId] = useState(defaultCountryId ?? '')
+  const [historicalCountryId, setHistoricalCountryId] = useState(
+    defaultHistoricalCountryId ?? '',
+  )
   const [centerId, setCenterId] = useState('')
   const [centerName, setCenterName] = useState('')
-  const [members, setMembers] = useState<MemberDraft[]>([])
+  const [members, setMembers] = useState<MemberDraft[]>(defaultMembers)
   const [picker, setPicker] = useState<'member' | 'center' | null>(null)
 
   const queryClient = useQueryClient()
 
+  useBodyScrollLock(true)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (picker) return
+      e.stopPropagation()
+      onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [picker, onClose])
+
   const allPersonsQuery = useQuery({
     queryKey: ['persons', 'all'],
     queryFn: () => getAllPersons(),
+  })
+  const countriesQuery = useQuery({
+    queryKey: ['all-countries'],
+    queryFn: () => getAllCountries(),
+    staleTime: 5 * 60_000,
+  })
+  const historicalCountriesQuery = useQuery({
+    queryKey: ['all-historical-countries'],
+    queryFn: () => getAllHistoricalCountries(),
+    staleTime: 5 * 60_000,
   })
 
   const createMutation = useMutation({
@@ -68,13 +113,15 @@ export function PersonGroupCreateModal({
           type === 'GENERATION' && generationOrder.trim()
             ? Number(generationOrder)
             : null,
-        countryId: defaultCountryId || null,
+        countryId: countryId || null,
+        historicalCountryId: historicalCountryId || null,
         centerPersonId: centerId || null,
-        memberPersonIds: members.map((m) => m.id),
+        memberPersonIds: members.map((member) => member.id),
       }),
     onSuccess: (group) => {
       notify.success('묶음을 만들었습니다.')
       void queryClient.invalidateQueries({ queryKey: ['person-groups-all'] })
+      void queryClient.invalidateQueries({ queryKey: ['person-groups-by-person'] })
       onCreated(group)
     },
     onError: () => notify.error('묶음 생성에 실패했습니다.'),
@@ -83,7 +130,7 @@ export function PersonGroupCreateModal({
   const handleSelect = (id: string, pname: string) => {
     if (picker === 'member') {
       setMembers((prev) =>
-        prev.some((m) => m.id === id) ? prev : [...prev, { id, name: pname }],
+        prev.some((member) => member.id === id) ? prev : [...prev, { id, name: pname }],
       )
     } else if (picker === 'center') {
       setCenterId(id)
@@ -94,7 +141,12 @@ export function PersonGroupCreateModal({
 
   return createPortal(
     <Overlay onClick={onClose}>
-      <Modal onClick={(e) => e.stopPropagation()}>
+      <Modal
+        role="dialog"
+        aria-modal="true"
+        aria-label="새 묶음 만들기"
+        onClick={(event) => event.stopPropagation()}
+      >
         <Header>
           <Title>새 묶음 만들기</Title>
           <CloseBtn type="button" onClick={onClose} aria-label="닫기">
@@ -111,11 +163,56 @@ export function PersonGroupCreateModal({
             <FieldLabel>이름</FieldLabel>
             <BigInput
               value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="예: 중국공산당 혁명 1세대"
+              onChange={(event) => setName(event.target.value)}
+              onKeyDown={(event) => {
+                if (
+                  event.key === 'Enter' &&
+                  name.trim() &&
+                  !createMutation.isPending
+                ) {
+                  event.preventDefault()
+                  createMutation.mutate()
+                }
+              }}
+              placeholder="예: 지롱드파, 산악파, 중국공산당 혁명 1세대"
               autoFocus
             />
           </Field>
+
+          <CondRow>
+            <Field style={{ flex: 1, minWidth: 180 }}>
+              <FieldLabel>
+                역사 국가 <Muted>(예: 프랑스 제1공화국, 조선)</Muted>
+              </FieldLabel>
+              <BigSelect
+                value={historicalCountryId}
+                onChange={(event) => setHistoricalCountryId(event.target.value)}
+              >
+                <option value="">미지정</option>
+                {(historicalCountriesQuery.data ?? []).map((hc) => (
+                  <option key={hc.id} value={hc.id}>
+                    {hc.name}
+                  </option>
+                ))}
+              </BigSelect>
+            </Field>
+            <Field style={{ flex: 1, minWidth: 180 }}>
+              <FieldLabel>
+                현대 국가 <Muted>(선택)</Muted>
+              </FieldLabel>
+              <BigSelect
+                value={countryId}
+                onChange={(event) => setCountryId(event.target.value)}
+              >
+                <option value="">미지정</option>
+                {(countriesQuery.data ?? []).map((country) => (
+                  <option key={country.id} value={country.id}>
+                    {country.name}
+                  </option>
+                ))}
+              </BigSelect>
+            </Field>
+          </CondRow>
 
           <CondRow>
             {type === 'GENERATION' && (
@@ -124,7 +221,7 @@ export function PersonGroupCreateModal({
                 <BigInput
                   type="number"
                   value={generationOrder}
-                  onChange={(e) => setGenerationOrder(e.target.value)}
+                  onChange={(event) => setGenerationOrder(event.target.value)}
                   placeholder="1"
                 />
               </Field>
@@ -161,7 +258,7 @@ export function PersonGroupCreateModal({
             </FieldLabel>
             <BigTextarea
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(event) => setDescription(event.target.value)}
               rows={2}
               placeholder="맥락·시기·계기 등 자유 서술"
             />
@@ -171,14 +268,63 @@ export function PersonGroupCreateModal({
             <FieldLabel>
               초기 멤버 <Muted>(선택, 나중에 추가 가능)</Muted>
             </FieldLabel>
+            {candidatePersons.some(
+              (candidate) => !members.some((member) => member.id === candidate.id),
+            ) && (
+              <CandidateQuickBox>
+                <CandidateQuickLabel>
+                  현재 사건 인물에서 빠른 추가:
+                </CandidateQuickLabel>
+                {candidatePersons
+                  .filter(
+                    (candidate) =>
+                      !members.some((member) => member.id === candidate.id),
+                  )
+                  .map((candidate) => (
+                    <CandidateQuickChip
+                      key={candidate.id}
+                      type="button"
+                      onClick={() =>
+                        setMembers((prev) =>
+                          prev.some((item) => item.id === candidate.id)
+                            ? prev
+                            : [...prev, { id: candidate.id, name: candidate.name }],
+                        )
+                      }
+                    >
+                      + {candidate.name}
+                    </CandidateQuickChip>
+                  ))}
+                {candidatePersons.filter(
+                  (candidate) =>
+                    !members.some((member) => member.id === candidate.id),
+                ).length > 1 && (
+                  <CandidateQuickChip
+                    type="button"
+                    $accent
+                    onClick={() =>
+                      setMembers((prev) => {
+                        const existingIds = new Set(prev.map((item) => item.id))
+                        const additions = candidatePersons.filter(
+                          (candidate) => !existingIds.has(candidate.id),
+                        )
+                        return [...prev, ...additions]
+                      })
+                    }
+                  >
+                    + 전체 담기
+                  </CandidateQuickChip>
+                )}
+              </CandidateQuickBox>
+            )}
             <MemberChips>
-              {members.map((m) => (
-                <MemberChip key={m.id}>
-                  {m.name}
+              {members.map((member) => (
+                <MemberChip key={member.id}>
+                  {member.name}
                   <ChipX
                     type="button"
                     onClick={() =>
-                      setMembers((prev) => prev.filter((x) => x.id !== m.id))
+                      setMembers((prev) => prev.filter((item) => item.id !== member.id))
                     }
                   >
                     <FiX size={12} />
@@ -207,7 +353,7 @@ export function PersonGroupCreateModal({
           persons={allPersonsQuery.data ?? []}
           selectedPersonId=""
           title={picker === 'center' ? '중심 인물 선택' : '멤버 추가'}
-          excludeIds={picker === 'member' ? members.map((m) => m.id) : []}
+          excludeIds={picker === 'member' ? members.map((member) => member.id) : []}
           onSelect={handleSelect}
           onClose={() => setPicker(null)}
         />
@@ -331,6 +477,9 @@ const inputStyles = ({ theme }: { theme: DefaultTheme }) => `
 const BigInput = styled.input`
   ${inputStyles}
 `
+const BigSelect = styled.select`
+  ${inputStyles}
+`
 const BigTextarea = styled.textarea`
   ${inputStyles}
   resize: vertical;
@@ -442,5 +591,42 @@ const PrimaryBtn = styled.button`
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+`
+
+const CandidateQuickBox = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.secondary};
+`
+
+const CandidateQuickLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-right: 2px;
+`
+
+const CandidateQuickChip = styled.button<{ $accent?: boolean }>`
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid
+    ${({ theme, $accent }) =>
+      $accent ? theme.colors.primary : theme.colors.border.default};
+  background: ${({ theme, $accent }) =>
+    $accent ? `${theme.colors.primary}18` : theme.colors.background.primary};
+  color: ${({ theme, $accent }) =>
+    $accent ? theme.colors.primary : theme.colors.text.secondary};
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => theme.colors.primary};
   }
 `

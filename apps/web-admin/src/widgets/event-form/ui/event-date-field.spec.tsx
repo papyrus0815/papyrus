@@ -56,3 +56,43 @@ it('바깥 값이 바뀌면(편집 로드) 칸을 다시 채운다', () => {
   expect(screen.getByRole('textbox', { name: '연도' })).toHaveValue('44')
   expect(screen.getByRole('button', { name: /기원전/ })).toBeInTheDocument()
 })
+
+it('월에 6을 입력하면 16월 등은 없으므로 자동으로 06이 되고 일 칸으로 포커스가 이동한다', () => {
+  const { onChange } = setup({ value: '1950-01-01', precision: 'year' })
+  const monthInput = screen.getByRole('textbox', { name: '월' })
+  const dayInput = screen.getByRole('textbox', { name: '일' })
+
+  fireEvent.change(monthInput, { target: { value: '6' } })
+  expect(monthInput).toHaveValue('06')
+  expect(dayInput).toHaveFocus()
+  expect(onChange).toHaveBeenLastCalledWith('1950-06-01', 'month')
+})
+
+it('월이 1인 상태에서 6을 입력해 16이 되어도 자동으로 06으로 보정하고 일 칸으로 포커스가 이동한다', () => {
+  const { onChange } = setup({ value: '1950-01-01', precision: 'year' })
+  const monthInput = screen.getByRole('textbox', { name: '월' })
+  const dayInput = screen.getByRole('textbox', { name: '일' })
+
+  fireEvent.change(monthInput, { target: { value: '1' } })
+  expect(monthInput).toHaveValue('1')
+
+  fireEvent.change(monthInput, { target: { value: '16' } })
+  expect(monthInput).toHaveValue('06')
+  expect(dayInput).toHaveFocus()
+  expect(onChange).toHaveBeenLastCalledWith('1950-06-01', 'month')
+})
+
+it('일에 5를 입력하면 40일~99일 등은 없으므로 자동으로 05가 되고, 3 뒤에 5를 쳐 35가 되어도 05로 보정한다', () => {
+  const { onChange } = setup({ value: '1950-06-01', precision: 'month' })
+  const dayInput = screen.getByRole('textbox', { name: '일' })
+
+  fireEvent.change(dayInput, { target: { value: '5' } })
+  expect(dayInput).toHaveValue('05')
+  expect(onChange).toHaveBeenLastCalledWith('1950-06-05', 'day')
+
+  fireEvent.change(dayInput, { target: { value: '3' } })
+  expect(dayInput).toHaveValue('3')
+  fireEvent.change(dayInput, { target: { value: '35' } })
+  expect(dayInput).toHaveValue('05')
+  expect(onChange).toHaveBeenLastCalledWith('1950-06-05', 'day')
+})

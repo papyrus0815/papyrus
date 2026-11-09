@@ -17,6 +17,7 @@ export interface EventSideInput {
   color?: string | null
   description?: string | null
   parentSideId?: string | null
+  personGroupId?: string | null
   outcome?: SideOutcome | null
   outcomeNote?: string | null
 }
@@ -41,6 +42,13 @@ export interface EventSideView {
   color: string | null
   description: string | null
   parentSideId: string | null
+  personGroupId: string | null
+  personGroup: {
+    id: string
+    name: string
+    type: string
+    memberCount: number
+  } | null
   sortOrder: number
   /** 이 진영에게 사건이 어떻게 끝났나 — 승리·패배·무승부·철수·결론 없음 */
   outcome: SideOutcome | null
@@ -70,6 +78,14 @@ export class EventSideService {
       where: { eventId },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
       include: {
+        personGroup: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            _count: { select: { members: true } },
+          },
+        },
         participants: {
           orderBy: { sortOrder: 'asc' },
           include: {
@@ -91,6 +107,15 @@ export class EventSideService {
       color: side.color,
       description: side.description,
       parentSideId: side.parentSideId,
+      personGroupId: side.personGroupId ?? null,
+      personGroup: side.personGroup
+        ? {
+            id: side.personGroup.id,
+            name: side.personGroup.name,
+            type: side.personGroup.type,
+            memberCount: side.personGroup._count.members,
+          }
+        : null,
       sortOrder: side.sortOrder,
       outcome: side.outcome,
       outcomeNote: side.outcomeNote,
@@ -165,6 +190,19 @@ export class EventSideService {
         }
       }
 
+      const groupIds = [
+        ...new Set(inputs.map((input) => input.personGroupId).filter((id): id is string => !!id)),
+      ]
+      if (groupIds.length > 0) {
+        const groups = await tx.personGroup.findMany({
+          where: { id: { in: groupIds } },
+          select: { id: true },
+        })
+        if (groups.length !== groupIds.length) {
+          throw new BadRequestException('연결할 집단·계파를 찾을 수 없습니다')
+        }
+      }
+
       for (const [index, input] of inputs.entries()) {
         if (input.id && input.parentSideId === input.id) {
           throw new BadRequestException('진영이 자기 자신을 상위로 가질 수 없습니다')
@@ -175,6 +213,7 @@ export class EventSideService {
           ...(input.color !== undefined && { color: input.color }),
           ...(input.description !== undefined && { description: input.description?.trim() || null }),
           ...(input.parentSideId !== undefined && { parentSideId: input.parentSideId }),
+          ...(input.personGroupId !== undefined && { personGroupId: input.personGroupId || null }),
           ...(input.outcome !== undefined && { outcome: input.outcome }),
           ...(input.outcomeNote !== undefined && { outcomeNote: input.outcomeNote?.trim() || null }),
           sortOrder: index,

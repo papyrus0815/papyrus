@@ -117,14 +117,27 @@ export const useBasicInfoForm = (overrides?: BasicInfoInitialOverrides) => {
     }
   }, [initial])
 
+  const hasSameDayTimeInversion = (): boolean =>
+    Boolean(
+      startDate &&
+        endDate &&
+        startDatePrecision === 'day' &&
+        endDatePrecision === 'day' &&
+        startTime &&
+        endTime &&
+        compareByDate(startDate, endDate) === 0 &&
+        startTime > endTime,
+    )
+
   // 유효성 검증 — BC/고대 날짜는 네이티브 Date 비교 시 NaN이 되므로 iso-date 유틸 사용.
   const isValid = () => {
     const hasTitle = title.trim().length > 0
     const hasStartDate = startDate.length > 0
     const isDateValid =
-      !endDate ||
-      !startDate ||
-      compareByDate(startDate, isoPeriodEnd(endDate, endDatePrecision)) <= 0
+      (!endDate ||
+        !startDate ||
+        compareByDate(startDate, isoPeriodEnd(endDate, endDatePrecision)) <= 0) &&
+      !hasSameDayTimeInversion()
     return hasTitle && hasStartDate && isDateValid
   }
 
@@ -136,6 +149,9 @@ export const useBasicInfoForm = (overrides?: BasicInfoInitialOverrides) => {
       compareByDate(startDate, isoPeriodEnd(endDate, endDatePrecision)) > 0
     ) {
       return '종료일은 시작일보다 이후여야 합니다'
+    }
+    if (hasSameDayTimeInversion()) {
+      return '종료 시각은 시작 시각보다 이후여야 합니다'
     }
     return null
   }

@@ -201,6 +201,7 @@ const EVENT_ORGANIZATION_SELECT = {
   id: true,
   role: true,
   roleDescription: true,
+  sideId: true,
   organization: {
     select: {
       id: true,
@@ -226,6 +227,7 @@ export interface EventOrganizationDto {
   relationId: string
   role: string
   roleDescription: string | null
+  sideId: string | null
   organizationId: string
   name: string
   shortName: string | null
@@ -272,6 +274,7 @@ const toEventOrganizationDto = (row: any): EventOrganizationDto => {
     relationId: row.id,
     role: row.role,
     roleDescription: row.roleDescription ?? null,
+    sideId: row.sideId ?? null,
     organizationId: row.organization.id,
     name: row.organization.name,
     shortName: row.organization.shortName ?? null,
@@ -1399,7 +1402,13 @@ export class EventController {
   @Post(':id/organizations')
   async addEventOrganization(
     @Param('id') id: string,
-    @Body() body: { organizationId: string; role: string; roleDescription?: string | null },
+    @Body()
+    body: {
+      organizationId: string
+      role: string
+      roleDescription?: string | null
+      sideId?: string | null
+    },
     @Request() req?: any,
   ): Promise<EventOrganizationDto> {
     const userId = req.user?.id || req.user?.sub
@@ -1425,10 +1434,54 @@ export class EventController {
         organizationId: body.organizationId,
         role: body.role as EventOrganizationRole,
         roleDescription: body.roleDescription?.trim() || null,
+        sideId: body.sideId ?? null,
       },
       select: EVENT_ORGANIZATION_SELECT,
     })
     return toEventOrganizationDto(row)
+  }
+
+  /**
+   * 관련 조직 연결 수정(진영 소속·역할·설명 변경)
+   * @tag events
+   */
+  @Patch(':id/organizations/:relationId')
+  async updateEventOrganization(
+    @Param('id') id: string,
+    @Param('relationId') relationId: string,
+    @Body()
+    body: {
+      role?: string
+      roleDescription?: string | null
+      sideId?: string | null
+    },
+    @Request() req?: any,
+  ): Promise<EventOrganizationDto> {
+    const userId = req.user?.id || req.user?.sub
+    await assertEventOwnership(this.prisma, id, userId, { action: '수정', deleted: 'conflict' })
+    const existing = await this.prisma.eventOrganizationRelation.findFirst({
+      where: { id: relationId, eventId: id },
+      select: { id: true },
+    })
+    if (!existing) throw new NotFoundException('연결을 찾을 수 없습니다.')
+    if (
+      body.role !== undefined &&
+      !(EVENT_ORGANIZATION_ROLES as readonly string[]).includes(body.role)
+    ) {
+      throw new BadRequestException(`역할은 ${EVENT_ORGANIZATION_ROLES.join(', ')} 중 하나여야 합니다.`)
+    }
+    const updated = await this.prisma.eventOrganizationRelation.update({
+      where: { id: relationId },
+      data: {
+        ...(body.role !== undefined ? { role: body.role as EventOrganizationRole } : {}),
+        ...(body.roleDescription !== undefined
+          ? { roleDescription: body.roleDescription?.trim() || null }
+          : {}),
+        ...(body.sideId !== undefined ? { sideId: body.sideId || null } : {}),
+      },
+      select: EVENT_ORGANIZATION_SELECT,
+    })
+    return toEventOrganizationDto(updated)
   }
 
   /**

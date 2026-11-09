@@ -214,7 +214,7 @@ const OPTIONAL_OF_DOMAIN: Partial<Record<EventDomainKey, EventFacetKey[]>> = {
   MILITARY: ['military', 'metrics'],
   ECONOMY: ['organizations', 'metrics'],
   SOCIETY: ['metrics'],
-  POLITICS: ['cabinets'],
+  POLITICS: ['cabinets', 'organizations'],
 }
 
 const domainKey = (domain?: string | null): EventDomainKey | null => (isEventDomainKey(domain) ? domain : null)
@@ -233,7 +233,7 @@ export const EVENT_TYPES: Record<EventTypeKey, EventTypeDef> = {
   },
   UPRISING: {
     key: 'UPRISING', short: '봉기', label: '봉기·혁명·정변', examples: '우창봉기 · 청년 튀르크 혁명 · 5월정변', defaultDomain: 'POLITICS',
-    core: ['sides', 'participants'], optional: ['persons', 'metrics'],
+    core: ['sides', 'participants', 'persons'], optional: ['metrics'],
     metrics: SOCIETY_METRICS,
   },
   ATTACK: {

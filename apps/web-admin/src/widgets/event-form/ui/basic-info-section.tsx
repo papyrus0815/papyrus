@@ -65,7 +65,7 @@ import { isoPeriodEnd } from '@/shared/lib/iso-date'
 import { AlertBox } from '@/shared/ui/alert-box/alert-box'
 import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
 import { type DatePickerPrecision } from '@/shared/ui/date-picker/date-picker-modal'
-import { TimePickerModal } from '@/shared/ui/time-picker-modal/time-picker-modal'
+import { TimeSegmentField } from '@/shared/ui/time-segment-field/time-segment-field'
 import {
   KitUploadActions,
   KitUploadFilled,
@@ -199,6 +199,19 @@ interface BasicInfoSectionProps {
         startYear?: number | null
       }) => void
     }
+    /** 동시대 추천 상위 묶음 사건 목록 */
+    contemporarySuggestions?: Array<{
+      id: string
+      title: string
+      dateLabel?: string
+      startYear?: number | null
+    }>
+    onSelectCandidate?: (candidate: {
+      id: string
+      title: string
+      dateLabel?: string
+      startYear?: number | null
+    }) => void
   }
 
   /**
@@ -227,7 +240,30 @@ interface BasicInfoSectionProps {
   /** 세부 분야 칸 — 분야 바로 아래, 분야 › 세부의 2단계(붙는 기록을 정한다) */
   typeSlot?: React.ReactNode
   /** 세부의 핵심 기록 묶음 — '연결' 묶음 뒤 */
-  recordsSlot?: { title: string; content: React.ReactNode }
+  recordsSlot?: {
+    title: string
+    /** 현재 입력된 핵심 기록 요약 문구 (예: '진영 2 · 기관 1 · 인물 3') */
+    summary?: string
+    content: React.ReactNode
+  }
+  /**
+   * 2단 분할 우측 패널에서 세부 분야를 아직 고르지 않았을 때,
+   * 마우스를 좌측으로 옮기지 않고도 즉시 주요 세부 분야를 열 수 있는 빠른 선택 슬롯
+   */
+  quickRecordTypesSlot?: {
+    label?: string
+    items: ReadonlyArray<{
+      key: string
+      label: string
+      domainLabel?: string
+    }>
+    onSelect: (key: string) => void
+    parentRecordsSlot?: {
+      parentTitle: string
+      summaryLabel: string
+      onImport: () => void
+    }
+  }
   /** 참여국이 고른 세부의 핵심 기록이면 그 세부 이름 — 라벨의 '(선택)'을 대신한다 */
   participantsCoreOf?: string
   /** 참여국 '한 일(roleDescription)' 입력칸 placeholder — 세부 분야별로 맥락화 */
@@ -247,9 +283,9 @@ interface BasicInfoSectionProps {
    * 아래 '기록 › 진영' 보드와 실시간 동기화하는 슬롯
    */
   participantSidesSlot?: {
-    assignment: Partial<Record<string, 'A' | 'B'>>
-    sideNames: [string, string]
-    onAssign: (participantKey: string, slot: 'A' | 'B' | null) => void
+    assignment: Partial<Record<string, 'A' | 'B' | 'C' | 'D'>>
+    sideNames: ReadonlyArray<string>
+    onAssign: (participantKey: string, slot: 'A' | 'B' | 'C' | 'D' | null) => void
     onReplaceKey?: (oldKey: string, newKey: string) => void
   }
 
@@ -307,6 +343,11 @@ interface BasicInfoSectionProps {
   endDateError?: string
   /** 날짜 칸 직접 입력이 날짜가 못 될 때(2월 30일·연도 없는 월 등) — 폼이 저장을 막는 데 쓴다 */
   onDateInputErrorChange?: (which: 'start' | 'end', message: string | null) => void
+  /**
+   * 레이아웃 모드 — 'split'이면 좌측(기본 정보 + 맥락·부가 정보)과
+   * 우측(참여 주체 · 핵심 기록) 2단 워크스페이스로 분할 렌더한다.
+   */
+  layoutMode?: 'single' | 'split'
 }
 
 export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
@@ -347,6 +388,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   titleSuggestionSlot,
   typeSlot,
   recordsSlot,
+  quickRecordTypesSlot,
   participantsCoreOf,
   roleDescriptionPlaceholder = '이 나라가 한 일 (선택)',
   recentParticipants,
@@ -359,6 +401,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   startDateError,
   onDateInputErrorChange,
   endDateError,
+  layoutMode = 'single',
 }) => {
   const theme = useTheme()
   const isDark = theme.mode === 'dark'
@@ -419,10 +462,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   const [endFollowsStart, setEndFollowsStart] = useState(false)
   const startDateAnchorId = useId()
   const endDateAnchorId = useId()
-  const [isStartTimeModalOpen, setIsStartTimeModalOpen] = useState(false)
-  const [isEndTimeModalOpen, setIsEndTimeModalOpen] = useState(false)
-  const startTimeTriggerRef = useRef<HTMLDivElement>(null)
-  const endTimeTriggerRef = useRef<HTMLDivElement>(null)
   /**
    * 날짜·시간 칸은 div라 키보드로 닿지 않았다(시작일·시간 칸은 탭 정지점조차 없었고,
    * 종료일은 tabIndex -1로 프로그램 포커스만 받았다) — 키보드만으로는 날짜를 넣을 수 없었다.
@@ -652,7 +691,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
 
   const eraParticipantSuggestions = useMemo(() => {
     if (
-      relatedCountries.length > 0 ||
       titleSuggestedCountries.length > 0 ||
       recentParticipantSuggestions.length > 0
     ) {
@@ -669,7 +707,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       5,
     )
   }, [
-    relatedCountries.length,
     titleSuggestedCountries.length,
     recentParticipantSuggestions.length,
     startDate,
@@ -702,6 +739,164 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
     }
     return null
   }, [parentEventSlot, startDate, endDate])
+
+  const parentPeriodTimeline = useMemo(() => {
+    const parentPeriod = parentEventSlot?.parentPeriod
+    const parentTitle = parentEventSlot?.parent?.title
+    if (!parentPeriod?.startDate || !parentTitle || !startDate) return null
+
+    const toDecimalDate = (iso: string, isEnd: boolean): number | null => {
+      const matched = /^(-?\d{1,6})(?:-(\d{2}))?(?:-(\d{2}))?/.exec(iso.trim())
+      if (!matched) return null
+      const year = Number(matched[1])
+      if (!Number.isFinite(year)) return null
+      const month = matched[2] ? Number(matched[2]) : isEnd ? 12 : 1
+      const day = matched[3] ? Number(matched[3]) : isEnd ? 28 : 1
+      return (
+        year +
+        (Math.min(12, Math.max(1, month)) - 1) / 12 +
+        (Math.min(31, Math.max(1, day)) - 1) / 365
+      )
+    }
+
+    const parentStartDec = toDecimalDate(parentPeriod.startDate, false)
+    const parentEndDec = toDecimalDate(
+      parentPeriod.endDate || parentPeriod.startDate,
+      true,
+    )
+    const childStartDec = toDecimalDate(startDate, false)
+    const childEndDec = toDecimalDate(endDate || startDate, true)
+    if (
+      parentStartDec == null ||
+      parentEndDec == null ||
+      childStartDec == null ||
+      childEndDec == null
+    ) {
+      return null
+    }
+    const span = Math.max(0.05, parentEndDec - parentStartDec)
+    const isOutOfBounds =
+      childStartDec < parentStartDec - 0.05 ||
+      childEndDec > parentEndDec + 0.05
+    const rawLeft = ((childStartDec - parentStartDec) / span) * 100
+    const rawRight = ((childEndDec - parentStartDec) / span) * 100
+    const leftPct = Math.min(92, Math.max(0, rawLeft))
+    const widthPct = Math.min(
+      100 - leftPct,
+      Math.max(8, rawRight - leftPct),
+    )
+    const centerPct = leftPct + widthPct / 2
+    const positionLabel = isOutOfBounds
+      ? '상위 기간 밖'
+      : widthPct >= 75
+        ? '전 기간'
+        : centerPct < 33.4
+          ? '초반'
+          : centerPct < 66.7
+            ? '중반'
+            : '후반'
+    const startText = parentPeriod.startDate.slice(0, 10)
+    const endText = (parentPeriod.endDate || parentPeriod.startDate).slice(0, 10)
+    return {
+      parentTitle,
+      startText,
+      endText,
+      leftPct,
+      widthPct,
+      isOutOfBounds,
+      positionLabel,
+    }
+  }, [parentEventSlot, startDate, endDate])
+
+  const [draggingParticipantKey, setDraggingParticipantKey] = useState<
+    string | null
+  >(null)
+  const [dragOverParticipantKey, setDragOverParticipantKey] = useState<
+    string | null
+  >(null)
+
+  const handleParticipantDrop = (
+    dragEvent: React.DragEvent<HTMLDivElement>,
+    targetKey: string,
+  ) => {
+    dragEvent.preventDefault()
+    const rawData = dragEvent.dataTransfer?.getData('text/plain') ?? ''
+    const sourceKey =
+      draggingParticipantKey ||
+      (rawData.startsWith('participant-order:')
+        ? rawData.slice('participant-order:'.length)
+        : '')
+    setDraggingParticipantKey(null)
+    setDragOverParticipantKey(null)
+    if (!sourceKey || sourceKey === targetKey) return
+    const fromIdx = relatedCountries.findIndex(
+      (item) => participantKey(item) === sourceKey,
+    )
+    const toIdx = relatedCountries.findIndex(
+      (item) => participantKey(item) === targetKey,
+    )
+    if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return
+    playClickSound()
+    const reordered = [...relatedCountries]
+    const [moved] = reordered.splice(fromIdx, 1)
+    if (!moved) return
+    reordered.splice(toIdx, 0, moved)
+    setRelatedCountries(reordered)
+  }
+
+  type ModalCausalLane = 'cause' | 'effect' | 'concurrent'
+  const [draggingRelatedId, setDraggingRelatedId] = useState<string | null>(
+    null,
+  )
+  const [dragOverCausalLane, setDragOverCausalLane] =
+    useState<ModalCausalLane | null>(null)
+
+  const getModalCausalLane = (item: EventRelatedDraft): ModalCausalLane => {
+    if (item.relationType === 'CONCURRENT' || item.relationType === 'RELATED') {
+      return 'concurrent'
+    }
+    return item.direction === 'incoming' ? 'cause' : 'effect'
+  }
+
+  const handleRelatedDropToLane = (
+    dragEvent: React.DragEvent<HTMLElement>,
+    lane: ModalCausalLane,
+  ) => {
+    dragEvent.preventDefault()
+    if (!relatedEventsSlot) return
+    const rawData = dragEvent.dataTransfer?.getData('text/plain') ?? ''
+    const sourceId =
+      draggingRelatedId ||
+      (rawData.startsWith('related-event:')
+        ? rawData.slice('related-event:'.length)
+        : '')
+    setDraggingRelatedId(null)
+    setDragOverCausalLane(null)
+    if (!sourceId) return
+    playClickSound()
+    relatedEventsSlot.onChange(
+      relatedEventsSlot.items.map((item) => {
+        if (item.relatedEventId !== sourceId) return item
+        if (lane === 'concurrent') {
+          return {
+            ...item,
+            relationType: 'CONCURRENT',
+            direction: 'outgoing',
+          }
+        }
+        const nextDirection = lane === 'cause' ? 'incoming' : 'outgoing'
+        const nextType =
+          item.relationType === 'CONCURRENT' || item.relationType === 'RELATED'
+            ? 'LED_TO'
+            : item.relationType
+        return {
+          ...item,
+          relationType: nextType,
+          direction: nextDirection,
+        }
+      }),
+    )
+  }
 
   const suggestedKeywords = useMemo(() => {
     const existingSet = new Set(keywords.map((item) => item.trim().toLowerCase()))
@@ -1073,29 +1268,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
     return () => window.removeEventListener('paste', handlePaste)
   }, [playClickSound])
 
-  return (
-    <S.FormSection
-      as={motion.div}
-      initial={{ opacity: 0, x: 20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.3 }}
-      style={
-        activeDomainTone
-          ? {
-              '--active-domain-rgb': activeDomainTone.soft.rgb,
-              '--active-domain-accent': isDark
-                ? activeDomainTone.dark
-                : activeDomainTone.badge,
-              '--active-domain-text': isDark
-                ? activeDomainTone.soft.textDark
-                : activeDomainTone.soft.text,
-              '--chip-rgb': activeDomainTone.soft.rgb,
-              '--chip-text': activeDomainTone.soft.text,
-              '--chip-text-dark': activeDomainTone.soft.textDark,
-            }
-          : undefined
-      }
-    >
+  const basicGroup = (
       <FormGroup
         id="event-form-group-basic"
         aria-labelledby="event-form-group-basic-title"
@@ -1359,25 +1532,9 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     }
                     onPickedFromCalendar={focusEndDateField}
                   />
+                  {/* 시각 — 날짜처럼 칸에서 바로 친다(시 : 분). 예전엔 버튼 → 시·분 격자 모달 → 적용 */}
                   {showStartTime && (
-                    <TimeTrigger
-                      ref={startTimeTriggerRef}
-                      aria-haspopup="dialog"
-                      {...keyboardTrigger}
-                      aria-label={`시작 시각${startTime ? ` ${startTime}` : ' (선택)'}`}
-                      aria-expanded={isStartTimeModalOpen}
-                      data-open={isStartTimeModalOpen || undefined}
-                      data-empty={!startTime || undefined}
-                      onClick={() => {
-                        playClickSound()
-                        setIsStartTimeModalOpen(true)
-                      }}
-                    >
-                      <FiClock size={14} />
-                      <S.DateInputDisplay>
-                        {startTime || '시각'}
-                      </S.DateInputDisplay>
-                    </TimeTrigger>
+                    <TimeSegmentField value={startTime} onChange={setStartTime} ariaLabel="시작 시각" />
                   )}
                 </DateTimeLine>
               </S.DateRangeColumn>
@@ -1440,24 +1597,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     minDate={startDate || undefined}
                   />
                   {showEndTime && (
-                    <TimeTrigger
-                      ref={endTimeTriggerRef}
-                      aria-haspopup="dialog"
-                      {...keyboardTrigger}
-                      aria-label={`종료 시각${endTime ? ` ${endTime}` : ' (선택)'}`}
-                      aria-expanded={isEndTimeModalOpen}
-                      data-open={isEndTimeModalOpen || undefined}
-                      data-empty={!endTime || undefined}
-                      onClick={() => {
-                        playClickSound()
-                        setIsEndTimeModalOpen(true)
-                      }}
-                    >
-                      <FiClock size={14} />
-                      <S.DateInputDisplay>
-                        {endTime || '시각'}
-                      </S.DateInputDisplay>
-                    </TimeTrigger>
+                    <TimeSegmentField value={endTime} onChange={setEndTime} ariaLabel="종료 시각" />
                   )}
                 </DateTimeLine>
               </S.DateRangeColumn>
@@ -1470,6 +1610,41 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     ? `종료: ${endInputError}`
                     : (startDateError ?? endDateError ?? getDateError())}
               </S.ErrorMessage>
+            )}
+            {parentPeriodTimeline && (
+              <ParentPeriodTimelineStrip
+                role="region"
+                aria-label="상위 사건 기간 속 위치 인포그래픽"
+                $warning={parentPeriodTimeline.isOutOfBounds}
+              >
+                <ParentPeriodTopRow>
+                  <ParentPeriodLabel>
+                    상위 사건 ‘{parentPeriodTimeline.parentTitle}’ 기간 내 위치
+                  </ParentPeriodLabel>
+                  <ParentPeriodPositionBadge
+                    $warning={parentPeriodTimeline.isOutOfBounds}
+                  >
+                    {parentPeriodTimeline.positionLabel}
+                  </ParentPeriodPositionBadge>
+                </ParentPeriodTopRow>
+                <ParentPeriodTrackRow>
+                  <ParentPeriodAxisText>
+                    {parentPeriodTimeline.startText}
+                  </ParentPeriodAxisText>
+                  <ParentPeriodTrack aria-hidden>
+                    <ParentPeriodFill
+                      $warning={parentPeriodTimeline.isOutOfBounds}
+                      style={{
+                        left: `${parentPeriodTimeline.leftPct}%`,
+                        width: `${parentPeriodTimeline.widthPct}%`,
+                      }}
+                    />
+                  </ParentPeriodTrack>
+                  <ParentPeriodAxisText>
+                    {parentPeriodTimeline.endText}
+                  </ParentPeriodAxisText>
+                </ParentPeriodTrackRow>
+              </ParentPeriodTimelineStrip>
             )}
             {parentPeriodMismatchWarning && (
               <AlertBox variant="warning" style={{ marginTop: 6 }}>
@@ -1574,20 +1749,98 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             <OverviewTextarea
               placeholder="사건의 개요 설명을 입력하세요."
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={4}
+              onChange={(changeEvent) =>
+                setDescription(changeEvent.target.value)
+              }
+              rows={Math.max(
+                4,
+                Math.min(
+                  12,
+                  description
+                    .split('\n')
+                    .reduce(
+                      (acc, line) =>
+                        acc + Math.max(1, Math.ceil(line.length / 54)),
+                      0,
+                    ),
+                ),
+              )}
             />
+            {Boolean(description.trim()) && (
+              <OverviewFooterRow>
+                <OverviewCharCount aria-label="개요 설명 글자 수">
+                  {description.length.toLocaleString()}자
+                </OverviewCharCount>
+                <ParticipantDescClearBtn
+                  type="button"
+                  aria-label="개요 설명 비우기"
+                  onClick={() => {
+                    playClickSound()
+                    setDescription('')
+                  }}
+                >
+                  비우기
+                </ParticipantDescClearBtn>
+              </OverviewFooterRow>
+            )}
           </S.FormField>
         </S.FormRow>
       </FormGroup>
+  )
 
-      {(onOpenCountryModal || recordsSlot) && (
+  const [splitRatio, setSplitRatio] = useState<'left-wide' | 'equal' | 'right-wide'>('equal')
+  const participantsSummaryParts: string[] = []
+  if (relatedCountries.length > 0) {
+    participantsSummaryParts.push(`국가 ${relatedCountries.length}`)
+  }
+  if (recordsSlot?.summary) {
+    participantsSummaryParts.push(recordsSlot.summary)
+  }
+  const participantsSummaryText = participantsSummaryParts.join(' · ')
+
+  const participantsGroup = (onOpenCountryModal || recordsSlot) ? (
         <FormGroup
           id="event-form-group-participants"
           aria-labelledby="event-form-group-participants-title"
         >
           <FormGroupTitle id="event-form-group-participants-title">
-            {recordsSlot ? `참여 주체 · ${recordsSlot.title}` : '참여 주체'}
+            <span>
+              {recordsSlot?.title ? `참여 주체 · ${recordsSlot.title}` : '참여 주체'}
+            </span>
+            <FormGroupRightCluster>
+              {participantsSummaryText && (
+                <FormGroupSummaryBadge aria-label="참여 주체 요약">
+                  {participantsSummaryText}
+                </FormGroupSummaryBadge>
+              )}
+              {layoutMode === 'split' && (
+                <SplitRatioGroup role="group" aria-label="좌우 패널 비율 조절">
+                  {(
+                    [
+                      { key: 'left-wide', label: '좌측 넓게' },
+                      { key: 'equal', label: '5:5' },
+                      { key: 'right-wide', label: '우측 넓게' },
+                    ] as const
+                  ).map((option) => {
+                    const active = splitRatio === option.key
+                    return (
+                      <SplitRatioBtn
+                        key={option.key}
+                        type="button"
+                        aria-pressed={active}
+                        $active={active}
+                        onClick={() => {
+                          playClickSound()
+                          setSplitRatio(option.key)
+                        }}
+                      >
+                        {option.label}
+                      </SplitRatioBtn>
+                    )
+                  })}
+                </SplitRatioGroup>
+              )}
+            </FormGroupRightCluster>
           </FormGroupTitle>
           {/* 참여국 */}
           {onOpenCountryModal && (
@@ -1625,67 +1878,285 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                             rowIndex === index ? { ...row, ...next } : row,
                           ),
                         )
+                      const selectRoleWithAutoSide = (
+                        nextRole: EventCountryRole,
+                      ) => {
+                        patch({ role: nextRole })
+                        if (
+                          participantSidesSlot &&
+                          !participantSidesSlot.assignment[key]
+                        ) {
+                          if (nextRole === 'INITIATOR') {
+                            participantSidesSlot.onAssign(key, 'A')
+                          } else if (
+                            nextRole === 'TARGET' ||
+                            nextRole === 'VICTIM'
+                          ) {
+                            participantSidesSlot.onAssign(key, 'B')
+                          }
+                        }
+                      }
+                      const currentDesc = participant.roleDescription ?? ''
+                      const presets = quickRoleDescriptionPresets(
+                        currentRole,
+                        roleDescriptionPlaceholder,
+                      )
+                      const coreRoleChipOptions: ReadonlyArray<{
+                        value: EventCountryRole
+                        shortLabel: string
+                        fullLabel: string
+                        hint: string
+                      }> = [
+                        {
+                          value: 'PARTICIPANT',
+                          shortLabel: '참여',
+                          fullLabel: '참여국',
+                          hint: '사건에 관여한 일반 당사국',
+                        },
+                        {
+                          value: 'INITIATOR',
+                          shortLabel: '주도',
+                          fullLabel: '주도국',
+                          hint: '사건을 일으키거나 이끈 쪽',
+                        },
+                        {
+                          value: 'TARGET',
+                          shortLabel: '대상',
+                          fullLabel: '대상국',
+                          hint: '행위가 겨냥한 쪽',
+                        },
+                        {
+                          value: 'MEDIATOR',
+                          shortLabel: '중재',
+                          fullLabel: '중재국',
+                          hint: '조정·중개를 맡은 쪽',
+                        },
+                        {
+                          value: 'VICTIM',
+                          shortLabel: '피해',
+                          fullLabel: '피해국',
+                          hint: '손해를 입은 쪽',
+                        },
+                      ]
+                      const isCoreRoleSelected = coreRoleChipOptions.some(
+                        (roleOption) => roleOption.value === currentRole,
+                      )
                       return (
-                        <ParticipantRow key={key}>
-                          <ParticipantName>{country.name}</ParticipantName>
-                          <RoleSelect
-                            value={currentRole}
-                            aria-label={`${country.name} 역할`}
-                            title={
-                              eventCountryRoleHint(currentRole) ?? undefined
+                        <ParticipantRow
+                          key={key}
+                          $role={currentRole}
+                          $dragOver={dragOverParticipantKey === key}
+                          draggable={relatedCountries.length > 1}
+                          onDragStart={(dragEvent) => {
+                            setDraggingParticipantKey(key)
+                            dragEvent.dataTransfer?.setData(
+                              'text/plain',
+                              `participant-order:${key}`,
+                            )
+                          }}
+                          onDragOver={(dragEvent) => {
+                            if (relatedCountries.length <= 1) return
+                            dragEvent.preventDefault()
+                            if (dragOverParticipantKey !== key) {
+                              setDragOverParticipantKey(key)
                             }
-                            onChange={(changeEvent) =>
-                              patch({
-                                role: changeEvent.target
-                                  .value as EventCountryParticipant['role'],
-                              })
+                          }}
+                          onDragLeave={(dragEvent) => {
+                            if (
+                              !dragEvent.currentTarget.contains(
+                                dragEvent.relatedTarget as Node | null,
+                              )
+                            ) {
+                              setDragOverParticipantKey((current) =>
+                                current === key ? null : current,
+                              )
                             }
-                          >
-                            {EVENT_COUNTRY_ROLE_OPTIONS.filter(
-                              (option) =>
-                                !option.deprecated ||
-                                option.value === participant.role,
-                            ).map((option) => (
-                              <option
-                                key={option.value}
-                                value={option.value}
-                                title={option.hint}
-                              >
-                                {option.label}
-                              </option>
-                            ))}
-                          </RoleSelect>
-                          {participantSidesSlot && (
-                            <ParticipantSideGroup
+                          }}
+                          onDrop={(dragEvent) =>
+                            handleParticipantDrop(dragEvent, key)
+                          }
+                          onDragEnd={() => {
+                            setDraggingParticipantKey(null)
+                            setDragOverParticipantKey(null)
+                          }}
+                        >
+                          <ParticipantHeaderRow>
+                            <ParticipantNameWrap>
+                              {relatedCountries.length > 1 && (
+                                <ParticipantDragHandle
+                                  aria-hidden
+                                  title="드래그하여 참여국 순서 변경"
+                                >
+                                  ⠿
+                                </ParticipantDragHandle>
+                              )}
+                              <ParticipantName>{country.name}</ParticipantName>
+                            </ParticipantNameWrap>
+                            <ParticipantHeaderRight>
+                              {participantSidesSlot && (
+                                <ParticipantSideGroup
+                                  role="group"
+                                  aria-label={`${country.name} 진영 배정`}
+                                >
+                                  {(['A', 'B', 'C', 'D'] as const)
+                                    .slice(
+                                      0,
+                                      Math.max(
+                                        2,
+                                        participantSidesSlot.sideNames.length,
+                                      ),
+                                    )
+                                    .map((slot, slotIdx) => {
+                                      const currentSlot =
+                                        participantSidesSlot.assignment[key] ??
+                                        null
+                                      const active = currentSlot === slot
+                                      return (
+                                        <ParticipantSideBtn
+                                          key={slot}
+                                          type="button"
+                                          aria-pressed={active}
+                                          $active={active}
+                                          title={`${slotIdx + 1}번 진영 (${participantSidesSlot.sideNames[slotIdx] ?? `진영 ${slotIdx + 1}`})`}
+                                          aria-label={`${country.name} ${slotIdx + 1}편`}
+                                          onClick={() => {
+                                            playClickSound()
+                                            participantSidesSlot.onAssign(
+                                              key,
+                                              active ? null : slot,
+                                            )
+                                          }}
+                                        >
+                                          {slotIdx + 1}편
+                                        </ParticipantSideBtn>
+                                      )
+                                    })}
+                                </ParticipantSideGroup>
+                              )}
+                              <ParticipantActions>
+                                {relatedCountries.length > 1 && (
+                                  <>
+                                    <ParticipantMoveButton
+                                      type="button"
+                                      disabled={index === 0}
+                                      aria-label={`${country.name} 위로 이동`}
+                                      title="위로 이동"
+                                      onClick={() => {
+                                        playClickSound()
+                                        setRelatedCountries(
+                                          moveParticipant(
+                                            relatedCountries,
+                                            index,
+                                            'up',
+                                          ),
+                                        )
+                                      }}
+                                    >
+                                      <FiArrowUp size={13} />
+                                    </ParticipantMoveButton>
+                                    <ParticipantMoveButton
+                                      type="button"
+                                      disabled={
+                                        index === relatedCountries.length - 1
+                                      }
+                                      aria-label={`${country.name} 아래로 이동`}
+                                      title="아래로 이동"
+                                      onClick={() => {
+                                        playClickSound()
+                                        setRelatedCountries(
+                                          moveParticipant(
+                                            relatedCountries,
+                                            index,
+                                            'down',
+                                          ),
+                                        )
+                                      }}
+                                    >
+                                      <FiArrowDown size={13} />
+                                    </ParticipantMoveButton>
+                                  </>
+                                )}
+                                <ParticipantRemove
+                                  type="button"
+                                  aria-label={`${country.name} 제거`}
+                                  onClick={() => {
+                                    playClickSound()
+                                    setRelatedCountries(
+                                      relatedCountries.filter(
+                                        (row) => participantKey(row) !== key,
+                                      ),
+                                    )
+                                    participantSidesSlot?.onAssign(key, null)
+                                  }}
+                                >
+                                  <FiX size={14} />
+                                </ParticipantRemove>
+                              </ParticipantActions>
+                            </ParticipantHeaderRight>
+                          </ParticipantHeaderRow>
+
+                          <ParticipantRoleBar>
+                            <ParticipantRoleBarLabel>역할</ParticipantRoleBarLabel>
+                            <ParticipantRoleChipGroup
                               role="group"
-                              aria-label={`${country.name} 진영 배정`}
+                              aria-label={`${country.name} 빠른 역할 선택`}
                             >
-                              {(['A', 'B'] as const).map((slot, slotIdx) => {
-                                const currentSlot =
-                                  participantSidesSlot.assignment[key] ?? null
-                                const active = currentSlot === slot
+                              {coreRoleChipOptions.map((roleOption) => {
+                                const isRoleActive =
+                                  currentRole === roleOption.value
                                 return (
-                                  <ParticipantSideBtn
-                                    key={slot}
+                                  <ParticipantRoleChipBtn
+                                    key={roleOption.value}
                                     type="button"
-                                    aria-pressed={active}
-                                    $active={active}
-                                    title={`${slotIdx + 1}번 진영 (${participantSidesSlot.sideNames[slotIdx]})`}
-                                    aria-label={`${country.name} ${slotIdx + 1}편`}
+                                    aria-pressed={isRoleActive}
+                                    aria-label={`${country.name} 역할 ${roleOption.shortLabel} 선택`}
+                                    title={`${roleOption.fullLabel} — ${roleOption.hint}`}
+                                    $active={isRoleActive}
                                     onClick={() => {
                                       playClickSound()
-                                      participantSidesSlot.onAssign(
-                                        key,
-                                        active ? null : slot,
-                                      )
+                                      selectRoleWithAutoSide(roleOption.value)
                                     }}
                                   >
-                                    {slotIdx + 1}편
-                                  </ParticipantSideBtn>
+                                    {roleOption.shortLabel}
+                                  </ParticipantRoleChipBtn>
                                 )
                               })}
-                            </ParticipantSideGroup>
-                          )}
+                            </ParticipantRoleChipGroup>
+                            <RoleSelect
+                              value={currentRole}
+                              aria-label={`${country.name} 역할`}
+                              title={
+                                eventCountryRoleHint(currentRole) ?? undefined
+                              }
+                              $highlighted={!isCoreRoleSelected}
+                              onChange={(changeEvent) =>
+                                selectRoleWithAutoSide(
+                                  changeEvent.target
+                                    .value as EventCountryRole,
+                                )
+                              }
+                            >
+                              {EVENT_COUNTRY_ROLE_OPTIONS.filter(
+                                (option) =>
+                                  !option.deprecated ||
+                                  option.value === participant.role,
+                              ).map((option) => (
+                                <option
+                                  key={option.value}
+                                  value={option.value}
+                                  title={option.hint}
+                                >
+                                  {option.label}
+                                </option>
+                              ))}
+                            </RoleSelect>
+                            {eventCountryRoleHint(currentRole) && (
+                              <ParticipantRoleHintText>
+                                {eventCountryRoleHint(currentRole)}
+                              </ParticipantRoleHintText>
+                            )}
+                          </ParticipantRoleBar>
+
                           <RoleDescriptionWrap
                             onBlur={(blurEvent) => {
                               if (
@@ -1699,9 +2170,9 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                               }
                             }}
                           >
-                            <RoleDescriptionInput
-                              type="text"
-                              value={participant.roleDescription ?? ''}
+                            <RoleDescriptionTextarea
+                              rows={2}
+                              value={currentDesc}
                               aria-label={`${country.name}가 한 일`}
                               placeholder={roleDescriptionPlaceholder}
                               onFocus={() => setFocusedRoleDescKey(key)}
@@ -1711,93 +2182,60 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                                 })
                               }
                             />
-                            {focusedRoleDescKey === key &&
-                              !participant.roleDescription?.trim() && (
+                            <ParticipantDescFooterRow>
+                              {(!currentDesc.trim() ||
+                                focusedRoleDescKey === key) && (
                                 <RolePresetBar
                                   role="group"
                                   aria-label={`${country.name} 한 일 빠른 입력`}
                                 >
-                                  {quickRoleDescriptionPresets(
-                                    currentRole,
-                                    roleDescriptionPlaceholder,
-                                  ).map((preset) => (
-                                    <RolePresetChip
-                                      key={preset}
-                                      type="button"
-                                      onMouseDown={(mouseEvent) =>
-                                        mouseEvent.preventDefault()
-                                      }
-                                      onClick={() => {
-                                        playClickSound()
-                                        patch({ roleDescription: preset })
-                                        setFocusedRoleDescKey(null)
-                                      }}
-                                    >
-                                      + {preset}
-                                    </RolePresetChip>
-                                  ))}
+                                  {presets.map((preset) => {
+                                    const trimmedDesc = currentDesc.trim()
+                                    const alreadyHas =
+                                      trimmedDesc
+                                        .split(/[,·]/)
+                                        .map((token) => token.trim())
+                                        .includes(preset)
+                                    return (
+                                      <RolePresetChip
+                                        key={preset}
+                                        type="button"
+                                        $active={alreadyHas}
+                                        onMouseDown={(mouseEvent) =>
+                                          mouseEvent.preventDefault()
+                                        }
+                                        onClick={() => {
+                                          playClickSound()
+                                          if (!trimmedDesc) {
+                                            patch({ roleDescription: preset })
+                                          } else if (!alreadyHas) {
+                                            patch({
+                                              roleDescription: `${trimmedDesc}, ${preset}`,
+                                            })
+                                          }
+                                          setFocusedRoleDescKey(null)
+                                        }}
+                                      >
+                                        + {preset}
+                                      </RolePresetChip>
+                                    )
+                                  })}
                                 </RolePresetBar>
                               )}
+                              {currentDesc.trim().length > 0 && (
+                                <ParticipantDescClearBtn
+                                  type="button"
+                                  aria-label={`${country.name} 한 일 비우기`}
+                                  onClick={() => {
+                                    playClickSound()
+                                    patch({ roleDescription: '' })
+                                  }}
+                                >
+                                  비우기
+                                </ParticipantDescClearBtn>
+                              )}
+                            </ParticipantDescFooterRow>
                           </RoleDescriptionWrap>
-                          <ParticipantActions>
-                            {relatedCountries.length > 1 && (
-                              <>
-                                <ParticipantMoveButton
-                                  type="button"
-                                  disabled={index === 0}
-                                  aria-label={`${country.name} 위로 이동`}
-                                  title="위로 이동"
-                                  onClick={() => {
-                                    playClickSound()
-                                    setRelatedCountries(
-                                      moveParticipant(
-                                        relatedCountries,
-                                        index,
-                                        'up',
-                                      ),
-                                    )
-                                  }}
-                                >
-                                  <FiArrowUp size={13} />
-                                </ParticipantMoveButton>
-                                <ParticipantMoveButton
-                                  type="button"
-                                  disabled={
-                                    index === relatedCountries.length - 1
-                                  }
-                                  aria-label={`${country.name} 아래로 이동`}
-                                  title="아래로 이동"
-                                  onClick={() => {
-                                    playClickSound()
-                                    setRelatedCountries(
-                                      moveParticipant(
-                                        relatedCountries,
-                                        index,
-                                        'down',
-                                      ),
-                                    )
-                                  }}
-                                >
-                                  <FiArrowDown size={13} />
-                                </ParticipantMoveButton>
-                              </>
-                            )}
-                            <ParticipantRemove
-                              type="button"
-                              aria-label={`${country.name} 제거`}
-                              onClick={() => {
-                                playClickSound()
-                                setRelatedCountries(
-                                  relatedCountries.filter(
-                                    (row) => participantKey(row) !== key,
-                                  ),
-                                )
-                                participantSidesSlot?.onAssign(key, null)
-                              }}
-                            >
-                              <FiX size={14} />
-                            </ParticipantRemove>
-                          </ParticipantActions>
                         </ParticipantRow>
                       )
                     })}
@@ -2011,8 +2449,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                         </SuggestAllChip>
                       )}
                     </RecentParticipantBar>
-                  ) : relatedCountries.length === 0 &&
-                    recentParticipantSuggestions.length > 0 ? (
+                  ) : recentParticipantSuggestions.length > 0 ? (
                     <RecentParticipantBar aria-label="최근 사용한 참여국">
                       <RecentParticipantLabel>최근</RecentParticipantLabel>
                       {recentParticipantSuggestions.map((entry) => (
@@ -2031,7 +2468,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       ))}
                     </RecentParticipantBar>
                   ) : (
-                    relatedCountries.length === 0 &&
                     eraParticipantSuggestions.length > 0 && (
                       <RecentParticipantBar aria-label="시대별 추천 참여국">
                         <RecentParticipantLabel>시대 추천</RecentParticipantLabel>
@@ -2082,10 +2518,57 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             </S.FormRow>
           )}
           {/* 세부 분야의 핵심 기록 — 참여국 바로 아래에 이어서 배치 */}
-          {recordsSlot && recordsSlot.content}
+          {recordsSlot?.content}
+          {layoutMode === 'split' && (Boolean(quickRecordTypesSlot) || !recordsSlot) ? (
+            <SplitRecordsGuideBox
+              role="note"
+              aria-label="세부 분야 맞춤 기록 안내"
+            >
+              {quickRecordTypesSlot?.parentRecordsSlot && (
+                <SplitQuickTypeRow
+                  role="group"
+                  aria-label="상위 사건 기록 이어받기"
+                >
+                  <SplitQuickTypeChip
+                    type="button"
+                    aria-label="상위 사건 기록 불러오기"
+                    onClick={() => {
+                      playClickSound()
+                      quickRecordTypesSlot.parentRecordsSlot?.onImport()
+                    }}
+                  >
+                    📥 상위 사건 ‘{quickRecordTypesSlot.parentRecordsSlot.parentTitle}’ 기록 불러오기 ({quickRecordTypesSlot.parentRecordsSlot.summaryLabel})
+                  </SplitQuickTypeChip>
+                </SplitQuickTypeRow>
+              )}
+              {quickRecordTypesSlot && quickRecordTypesSlot.items.length > 0 && (
+                <SplitQuickTypeRow
+                  role="group"
+                  aria-label={quickRecordTypesSlot.label ?? '세부 분야 빠른 열기'}
+                >
+                  <SplitQuickTypeLabel>
+                    {quickRecordTypesSlot.label ?? '빠른 열기'}
+                  </SplitQuickTypeLabel>
+                  {quickRecordTypesSlot.items.map((item) => (
+                    <SplitQuickTypeChip
+                      key={item.key}
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        quickRecordTypesSlot.onSelect(item.key)
+                      }}
+                    >
+                      + {item.domainLabel ? `${item.domainLabel} › ${item.label}` : item.label}
+                    </SplitQuickTypeChip>
+                  ))}
+                </SplitQuickTypeRow>
+              )}
+            </SplitRecordsGuideBox>
+          ) : null}
         </FormGroup>
-      )}
+  ) : null
 
+  const contextGroup = (
       <FormGroup
         id="event-form-group-context"
         aria-labelledby="event-form-group-context-title"
@@ -2102,32 +2585,152 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             </S.FormLabel>
             <S.FormField>
               {parentEventSlot.parent ? (
-                <InlineControlRow>
-                  <S.SelectedItemsContainer>
-                    <S.SelectedItem>
-                      <span>{parentEventSlot.parent.title}</span>
-                      <S.RemoveButton
-                        type="button"
-                        onClick={() => {
-                          playClickSound()
-                          parentEventSlot.onClear()
-                        }}
-                        aria-label={`상위 사건 '${parentEventSlot.parent.title}' 해제`}
+                <ParentEventCard role="group" aria-label="선택된 상위 사건">
+                  <ParticipantHeaderRow>
+                    <ParentEventBadge>상위 묶음</ParentEventBadge>
+                    <ParticipantName>
+                      {parentEventSlot.parent.title}
+                    </ParticipantName>
+                    {parentEventSlot.parentPeriod?.startDate && (
+                      <RelatedEventDateMeta>
+                        {parentEventSlot.parentPeriod.startDate.slice(0, 10)}
+                        {parentEventSlot.parentPeriod.endDate &&
+                        parentEventSlot.parentPeriod.endDate.slice(0, 10) !==
+                          parentEventSlot.parentPeriod.startDate.slice(0, 10)
+                          ? ` ~ ${parentEventSlot.parentPeriod.endDate.slice(0, 10)}`
+                          : ''}
+                      </RelatedEventDateMeta>
+                    )}
+                    <ParticipantHeaderRight>
+                      <ParticipantActions>
+                        <S.AddButton
+                          type="button"
+                          onClick={() => {
+                            playClickSound()
+                            parentEventSlot.onOpenPicker()
+                          }}
+                        >
+                          변경
+                        </S.AddButton>
+                        <ParticipantRemove
+                          type="button"
+                          onClick={() => {
+                            playClickSound()
+                            parentEventSlot.onClear()
+                          }}
+                          aria-label={`상위 사건 '${parentEventSlot.parent.title}' 해제`}
+                        >
+                          <FiX size={14} />
+                        </ParticipantRemove>
+                      </ParticipantActions>
+                    </ParticipantHeaderRight>
+                  </ParticipantHeaderRow>
+                  {((!startDate &&
+                    Boolean(parentEventSlot.parentPeriod?.startDate)) ||
+                    Boolean(
+                      parentCountriesSlot && parentCountriesSlot.count > 0,
+                    ) ||
+                    Boolean(
+                      locationSlot?.parentLocation &&
+                        !locationSlot.location.trim() &&
+                        locationSlot.latitude == null &&
+                        locationSlot.longitude == null,
+                    )) && (
+                    <ParticipantRoleBar>
+                      <ParticipantRoleBarLabel>이어받기</ParticipantRoleBarLabel>
+                      <ParticipantRoleChipGroup
+                        role="group"
+                        aria-label="상위 사건 정보 이어받기"
                       >
-                        <FiX size={14} />
-                      </S.RemoveButton>
-                    </S.SelectedItem>
-                    <S.AddButton
-                      type="button"
-                      onClick={() => {
-                        playClickSound()
-                        parentEventSlot.onOpenPicker()
-                      }}
-                    >
-                      변경
-                    </S.AddButton>
-                  </S.SelectedItemsContainer>
-                </InlineControlRow>
+                        {!startDate &&
+                          parentEventSlot.parentPeriod?.startDate && (
+                            <ParticipantRoleChipBtn
+                              type="button"
+                              $active={false}
+                              aria-label="상위 사건 카드에서 시작일 이어받기"
+                              onClick={() => {
+                                const parentStart =
+                                  parentEventSlot.parentPeriod?.startDate
+                                if (!parentStart) return
+                                playClickSound()
+                                const inferredPrecision: DatePickerPrecision =
+                                  /^-?\d{1,6}-\d{2}-\d{2}/.test(parentStart)
+                                    ? 'day'
+                                    : /^-?\d{1,6}-\d{2}$/.test(parentStart)
+                                      ? 'month'
+                                      : 'year'
+                                const normalizedStart =
+                                  inferredPrecision === 'year'
+                                    ? `${parentStart.replace(/-.*$/, '')}-01-01`
+                                    : inferredPrecision === 'month'
+                                      ? `${parentStart}-01`
+                                      : parentStart.slice(0, 10)
+                                setStartDate(normalizedStart)
+                                setStartDatePrecision?.(inferredPrecision)
+                                setStartTime('')
+                                if (!endDate) {
+                                  setEndFollowsStart(true)
+                                  setEndDate(normalizedStart)
+                                  setEndDatePrecision?.(inferredPrecision)
+                                  setEndTime('')
+                                }
+                              }}
+                            >
+                              + 시작일 맞춤
+                            </ParticipantRoleChipBtn>
+                          )}
+                        {parentCountriesSlot &&
+                          parentCountriesSlot.count > 0 && (
+                            <ParticipantRoleChipBtn
+                              type="button"
+                              $active={false}
+                              aria-label="상위 사건 카드에서 참여국 이어받기"
+                              onClick={() => {
+                                playClickSound()
+                                parentCountriesSlot.onImport()
+                              }}
+                            >
+                              + 참여국 {parentCountriesSlot.count}곳 불러오기
+                            </ParticipantRoleChipBtn>
+                          )}
+                        {locationSlot?.parentLocation &&
+                          !locationSlot.location.trim() &&
+                          locationSlot.latitude == null &&
+                          locationSlot.longitude == null && (
+                            <ParticipantRoleChipBtn
+                              type="button"
+                              $active={false}
+                              aria-label="상위 사건 카드에서 위치 이어받기"
+                              onClick={() => {
+                                const parentLoc = locationSlot.parentLocation
+                                if (!parentLoc) return
+                                playClickSound()
+                                locationSlot.setLocation(parentLoc.location)
+                                if (
+                                  parentLoc.latitude != null &&
+                                  parentLoc.longitude != null
+                                ) {
+                                  locationSlot.onSelectCoordinates?.(
+                                    parentLoc.latitude,
+                                    parentLoc.longitude,
+                                  )
+                                }
+                                if (parentLoc.note) {
+                                  locationSlot.setLocationNote?.(parentLoc.note)
+                                  setIsLocationNoteOpen(true)
+                                }
+                              }}
+                            >
+                              + 위치 불러오기
+                              {locationSlot.parentLocation.location
+                                ? ` (${locationSlot.parentLocation.location})`
+                                : ''}
+                            </ParticipantRoleChipBtn>
+                          )}
+                      </ParticipantRoleChipGroup>
+                    </ParticipantRoleBar>
+                  )}
+                </ParentEventCard>
               ) : (
                 <CountryQuickSearchRow>
                   {parentEventSlot.quickSearch && (
@@ -2259,6 +2862,38 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     <FiPlus size={15} />
                     상위 사건 선택
                   </S.AddButton>
+                  {(() => {
+                    const selectParentCandidate =
+                      parentEventSlot.onSelectCandidate ??
+                      parentEventSlot.quickSearch?.onSelectCandidate
+                    const parentSuggestions =
+                      parentEventSlot.contemporarySuggestions ??
+                      relatedEventsSlot?.contemporarySuggestions ??
+                      []
+                    if (!selectParentCandidate || parentSuggestions.length === 0) {
+                      return null
+                    }
+                    return (
+                      <RecentParticipantBar aria-label="동시대 추천 상위 사건">
+                        <RecentParticipantLabel>동시대</RecentParticipantLabel>
+                        {parentSuggestions.slice(0, 4).map((candidate) => (
+                          <RecentParticipantChip
+                            key={candidate.id}
+                            type="button"
+                            onClick={() => {
+                              playClickSound()
+                              selectParentCandidate(candidate)
+                            }}
+                          >
+                            + {candidate.title}
+                            {candidate.dateLabel
+                              ? ` (${candidate.dateLabel})`
+                              : ''}
+                          </RecentParticipantChip>
+                        ))}
+                      </RecentParticipantBar>
+                    )
+                  })()}
                 </CountryQuickSearchRow>
               )}
             </S.FormField>
@@ -2273,79 +2908,414 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
             </S.FormLabel>
             <S.FormField>
               {relatedEventsSlot.items.length > 0 && (
-                <ParticipantList>
-                  {relatedEventsSlot.items.map((item, index) => {
-                    const roleKey = toRelationRoleKey(
-                      item.relationType,
-                      item.direction,
+                <>
+                  {(() => {
+                    const causeItems = relatedEventsSlot.items.filter(
+                      (item) => getModalCausalLane(item) === 'cause',
                     )
-                    const patchItem = (next: Partial<EventRelatedDraft>) =>
-                      relatedEventsSlot.onChange(
-                        relatedEventsSlot.items.map((row, rowIndex) =>
-                          rowIndex === index ? { ...row, ...next } : row,
-                        ),
-                      )
+                    const effectItems = relatedEventsSlot.items.filter(
+                      (item) => getModalCausalLane(item) === 'effect',
+                    )
+                    const concurrentItems = relatedEventsSlot.items.filter(
+                      (item) => getModalCausalLane(item) === 'concurrent',
+                    )
                     return (
-                      <ParticipantRow key={item.relatedEventId}>
-                        <ParticipantName>{item.title}</ParticipantName>
-                        {item.dateLabel && (
-                          <RelatedEventDateMeta>
-                            {item.dateLabel}
-                          </RelatedEventDateMeta>
+                      <ModalCausalFlowBoard
+                        role="region"
+                        aria-label="연관 사건 인과 흐름도"
+                      >
+                        <ModalCausalGrid>
+                          <ModalCausalLaneBox
+                            data-modal-causal-lane="cause"
+                            $dragOver={dragOverCausalLane === 'cause'}
+                            onDragOver={(dragEvent) => {
+                              dragEvent.preventDefault()
+                              if (dragOverCausalLane !== 'cause') {
+                                setDragOverCausalLane('cause')
+                              }
+                            }}
+                            onDragLeave={(dragEvent) => {
+                              if (
+                                !dragEvent.currentTarget.contains(
+                                  dragEvent.relatedTarget as Node | null,
+                                )
+                              ) {
+                                setDragOverCausalLane((current) =>
+                                  current === 'cause' ? null : current,
+                                )
+                              }
+                            }}
+                            onDrop={(dragEvent) =>
+                              handleRelatedDropToLane(dragEvent, 'cause')
+                            }
+                          >
+                            <ModalCausalLaneHead>
+                              <span>← 원인 · 배경</span>
+                              <ModalCausalLaneCount>
+                                {causeItems.length}
+                              </ModalCausalLaneCount>
+                            </ModalCausalLaneHead>
+                            {causeItems.length === 0 ? (
+                              <ModalCausalEmpty>
+                                사건을 끌어 놓아 원인 지정
+                              </ModalCausalEmpty>
+                            ) : (
+                              <ModalCausalPillWrap>
+                                {causeItems.map((causeItem) => (
+                                  <ModalCausalPill
+                                    key={causeItem.relatedEventId}
+                                    draggable
+                                    title="드래그하여 결과·동시대로 전환"
+                                    onDragStart={(dragEvent) => {
+                                      setDraggingRelatedId(
+                                        causeItem.relatedEventId,
+                                      )
+                                      dragEvent.dataTransfer?.setData(
+                                        'text/plain',
+                                        `related-event:${causeItem.relatedEventId}`,
+                                      )
+                                    }}
+                                    onDragEnd={() => {
+                                      setDraggingRelatedId(null)
+                                      setDragOverCausalLane(null)
+                                    }}
+                                  >
+                                    {causeItem.title}
+                                  </ModalCausalPill>
+                                ))}
+                              </ModalCausalPillWrap>
+                            )}
+                          </ModalCausalLaneBox>
+
+                          <ModalCausalArrow aria-hidden>──▶</ModalCausalArrow>
+
+                          <ModalCausalSelfBox>
+                            <ModalCausalSelfBadge>
+                              ★ 현재 사건
+                            </ModalCausalSelfBadge>
+                            <ModalCausalSelfTitle>
+                              {title.trim() || '입력 중인 사건'}
+                            </ModalCausalSelfTitle>
+                            {startDate && (
+                              <ModalCausalSelfDate>
+                                {startDate.slice(0, 10)}
+                              </ModalCausalSelfDate>
+                            )}
+                          </ModalCausalSelfBox>
+
+                          <ModalCausalArrow aria-hidden>──▶</ModalCausalArrow>
+
+                          <ModalCausalLaneBox
+                            data-modal-causal-lane="effect"
+                            $dragOver={dragOverCausalLane === 'effect'}
+                            onDragOver={(dragEvent) => {
+                              dragEvent.preventDefault()
+                              if (dragOverCausalLane !== 'effect') {
+                                setDragOverCausalLane('effect')
+                              }
+                            }}
+                            onDragLeave={(dragEvent) => {
+                              if (
+                                !dragEvent.currentTarget.contains(
+                                  dragEvent.relatedTarget as Node | null,
+                                )
+                              ) {
+                                setDragOverCausalLane((current) =>
+                                  current === 'effect' ? null : current,
+                                )
+                              }
+                            }}
+                            onDrop={(dragEvent) =>
+                              handleRelatedDropToLane(dragEvent, 'effect')
+                            }
+                          >
+                            <ModalCausalLaneHead>
+                              <span>결과 · 파생 →</span>
+                              <ModalCausalLaneCount>
+                                {effectItems.length}
+                              </ModalCausalLaneCount>
+                            </ModalCausalLaneHead>
+                            {effectItems.length === 0 ? (
+                              <ModalCausalEmpty>
+                                사건을 끌어 놓아 결과 지정
+                              </ModalCausalEmpty>
+                            ) : (
+                              <ModalCausalPillWrap>
+                                {effectItems.map((effectItem) => (
+                                  <ModalCausalPill
+                                    key={effectItem.relatedEventId}
+                                    draggable
+                                    title="드래그하여 원인·동시대로 전환"
+                                    onDragStart={(dragEvent) => {
+                                      setDraggingRelatedId(
+                                        effectItem.relatedEventId,
+                                      )
+                                      dragEvent.dataTransfer?.setData(
+                                        'text/plain',
+                                        `related-event:${effectItem.relatedEventId}`,
+                                      )
+                                    }}
+                                    onDragEnd={() => {
+                                      setDraggingRelatedId(null)
+                                      setDragOverCausalLane(null)
+                                    }}
+                                  >
+                                    {effectItem.title}
+                                  </ModalCausalPill>
+                                ))}
+                              </ModalCausalPillWrap>
+                            )}
+                          </ModalCausalLaneBox>
+                        </ModalCausalGrid>
+
+                        {(concurrentItems.length > 0 ||
+                          draggingRelatedId !== null) && (
+                          <ModalCausalConcurrentRow
+                            data-modal-causal-lane="concurrent"
+                            $dragOver={dragOverCausalLane === 'concurrent'}
+                            onDragOver={(dragEvent) => {
+                              dragEvent.preventDefault()
+                              if (dragOverCausalLane !== 'concurrent') {
+                                setDragOverCausalLane('concurrent')
+                              }
+                            }}
+                            onDragLeave={(dragEvent) => {
+                              if (
+                                !dragEvent.currentTarget.contains(
+                                  dragEvent.relatedTarget as Node | null,
+                                )
+                              ) {
+                                setDragOverCausalLane((current) =>
+                                  current === 'concurrent' ? null : current,
+                                )
+                              }
+                            }}
+                            onDrop={(dragEvent) =>
+                              handleRelatedDropToLane(dragEvent, 'concurrent')
+                            }
+                          >
+                            <ModalCausalConcurrentLabel>
+                              ↔ 동시대 · 관련 ({concurrentItems.length})
+                            </ModalCausalConcurrentLabel>
+                            {concurrentItems.length === 0 ? (
+                              <ModalCausalEmpty>
+                                여기에 놓으면 동시대 관계로 전환
+                              </ModalCausalEmpty>
+                            ) : (
+                              concurrentItems.map((concItem) => (
+                                <ModalCausalPill
+                                  key={concItem.relatedEventId}
+                                  draggable
+                                  title="드래그하여 원인·결과로 전환"
+                                  onDragStart={(dragEvent) => {
+                                    setDraggingRelatedId(
+                                      concItem.relatedEventId,
+                                    )
+                                    dragEvent.dataTransfer?.setData(
+                                      'text/plain',
+                                      `related-event:${concItem.relatedEventId}`,
+                                    )
+                                  }}
+                                  onDragEnd={() => {
+                                    setDraggingRelatedId(null)
+                                    setDragOverCausalLane(null)
+                                  }}
+                                >
+                                  {concItem.title}
+                                </ModalCausalPill>
+                              ))
+                            )}
+                          </ModalCausalConcurrentRow>
                         )}
-                        <RoleSelect
-                          value={roleKey}
-                          aria-label={`${item.title} 관계 역할`}
-                          onChange={(changeEvent) => {
-                            const parsed = parseRelationRoleKey(
-                              changeEvent.target
-                                .value as EventRelationRoleKey,
+                      </ModalCausalFlowBoard>
+                    )
+                  })()}
+                  <ParticipantList>
+                    {relatedEventsSlot.items.map((item, index) => {
+                      const roleKey = toRelationRoleKey(
+                        item.relationType,
+                        item.direction,
+                      )
+                      const patchItem = (next: Partial<EventRelatedDraft>) =>
+                        relatedEventsSlot.onChange(
+                          relatedEventsSlot.items.map((row, rowIndex) =>
+                            rowIndex === index ? { ...row, ...next } : row,
+                          ),
+                        )
+                      const coreRelationPills: ReadonlyArray<{
+                        key: EventRelationRoleKey
+                        shortLabel: string
+                        fullLabel: string
+                      }> = [
+                        {
+                          key: 'LED_TO:incoming',
+                          shortLabel: '계기(원인)',
+                          fullLabel: '계기가 된 사건 (상대 → 이 사건)',
+                        },
+                        {
+                          key: 'INFLUENCED:incoming',
+                          shortLabel: '배경',
+                          fullLabel: '배경이 된 사건 (상대 → 이 사건)',
+                        },
+                        {
+                          key: 'LED_TO:outgoing',
+                          shortLabel: '파생(결과)',
+                          fullLabel: '이 사건으로 일어난 사건 (이 사건 → 상대)',
+                        },
+                        {
+                          key: 'CONCURRENT:outgoing',
+                          shortLabel: '동시대',
+                          fullLabel: '같은 국면의 사건 (동시 진행)',
+                        },
+                      ]
+                      const isCoreRelation = coreRelationPills.some(
+                        (pill) => pill.key === roleKey,
+                      )
+                      return (
+                        <ParticipantRow
+                          key={item.relatedEventId}
+                          draggable
+                          onDragStart={(dragEvent) => {
+                            setDraggingRelatedId(item.relatedEventId)
+                            dragEvent.dataTransfer?.setData(
+                              'text/plain',
+                              `related-event:${item.relatedEventId}`,
                             )
-                            patchItem({
-                              relationType: parsed.relationType,
-                              direction: parsed.direction,
-                            })
+                          }}
+                          onDragEnd={() => {
+                            setDraggingRelatedId(null)
+                            setDragOverCausalLane(null)
                           }}
                         >
-                          {EVENT_RELATION_ROLE_OPTIONS.map((option) => (
-                            <option key={option.key} value={option.key}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </RoleSelect>
-                        <RelatedDescriptionInput
-                          type="text"
-                          value={item.description ?? ''}
-                          aria-label={`${item.title} 관계 설명`}
-                          placeholder="어떻게 이어지는지 한 줄 설명 (선택)"
-                          onChange={(changeEvent) =>
-                            patchItem({
-                              description: changeEvent.target.value,
-                            })
-                          }
-                        />
-                        <ParticipantActions>
-                          <ParticipantRemove
-                            type="button"
-                            aria-label={`${item.title} 연관 해제`}
-                            onClick={() => {
-                              playClickSound()
-                              relatedEventsSlot.onChange(
-                                relatedEventsSlot.items.filter(
-                                  (row) =>
-                                    row.relatedEventId !==
-                                    item.relatedEventId,
-                                ),
+                          <ParticipantHeaderRow>
+                            <ParticipantNameWrap>
+                              <ParticipantDragHandle
+                                aria-hidden
+                                title="위 인과 흐름도로 드래그하여 원인·결과 전환"
+                              >
+                                ⠿
+                              </ParticipantDragHandle>
+                              <ParticipantName>{item.title}</ParticipantName>
+                            </ParticipantNameWrap>
+                            {item.dateLabel && (
+                              <RelatedEventDateMeta>
+                                {item.dateLabel}
+                              </RelatedEventDateMeta>
+                            )}
+                          <ParticipantHeaderRight>
+                            <ParticipantActions>
+                              <ParticipantRemove
+                                type="button"
+                                aria-label={`${item.title} 연관 해제`}
+                                onClick={() => {
+                                  playClickSound()
+                                  relatedEventsSlot.onChange(
+                                    relatedEventsSlot.items.filter(
+                                      (row) =>
+                                        row.relatedEventId !==
+                                        item.relatedEventId,
+                                    ),
+                                  )
+                                }}
+                              >
+                                <FiX size={14} />
+                              </ParticipantRemove>
+                            </ParticipantActions>
+                          </ParticipantHeaderRight>
+                        </ParticipantHeaderRow>
+                        <ParticipantRoleBar>
+                          <ParticipantRoleBarLabel>관계</ParticipantRoleBarLabel>
+                          <ParticipantRoleChipGroup
+                            role="group"
+                            aria-label={`${item.title} 빠른 관계 선택`}
+                          >
+                            {coreRelationPills.map((pill) => {
+                              const isActive = roleKey === pill.key
+                              return (
+                                <ParticipantRoleChipBtn
+                                  key={pill.key}
+                                  type="button"
+                                  aria-pressed={isActive}
+                                  aria-label={`${item.title} 관계 ${pill.shortLabel} 선택`}
+                                  title={pill.fullLabel}
+                                  $active={isActive}
+                                  onClick={() => {
+                                    playClickSound()
+                                    const parsed = parseRelationRoleKey(
+                                      pill.key,
+                                    )
+                                    patchItem({
+                                      relationType: parsed.relationType,
+                                      direction: parsed.direction,
+                                    })
+                                  }}
+                                >
+                                  {pill.shortLabel}
+                                </ParticipantRoleChipBtn>
                               )
+                            })}
+                          </ParticipantRoleChipGroup>
+                          <RoleSelect
+                            value={roleKey}
+                            aria-label={`${item.title} 관계 역할`}
+                            $highlighted={!isCoreRelation}
+                            onChange={(changeEvent) => {
+                              const parsed = parseRelationRoleKey(
+                                changeEvent.target
+                                  .value as EventRelationRoleKey,
+                              )
+                              patchItem({
+                                relationType: parsed.relationType,
+                                direction: parsed.direction,
+                              })
                             }}
                           >
-                            <FiX size={14} />
-                          </ParticipantRemove>
-                        </ParticipantActions>
+                            {EVENT_RELATION_ROLE_OPTIONS.map((option) => (
+                              <option key={option.key} value={option.key}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </RoleSelect>
+                        </ParticipantRoleBar>
+                        <RoleDescriptionWrap>
+                          <RoleDescriptionTextarea
+                            rows={Math.max(
+                              2,
+                              Math.min(
+                                6,
+                                (item.description ?? '').split('\n').length,
+                                (item.description ?? '').length > 56 ? 3 : 2,
+                              ),
+                            )}
+                            value={item.description ?? ''}
+                            aria-label={`${item.title} 관계 설명`}
+                            placeholder="어떻게 이어지는지 한 줄 설명 (선택 · 줄바꿈 가능)"
+                            onChange={(changeEvent) =>
+                              patchItem({
+                                description: changeEvent.target.value,
+                              })
+                            }
+                          />
+                          {Boolean((item.description ?? '').trim()) && (
+                            <ParticipantDescFooterRow>
+                              <ParticipantDescClearBtn
+                                type="button"
+                                aria-label={`${item.title} 관계 설명 비우기`}
+                                onClick={() => {
+                                  playClickSound()
+                                  patchItem({ description: '' })
+                                }}
+                              >
+                                비우기
+                              </ParticipantDescClearBtn>
+                            </ParticipantDescFooterRow>
+                          )}
+                        </RoleDescriptionWrap>
                       </ParticipantRow>
                     )
                   })}
-                </ParticipantList>
+                  </ParticipantList>
+                </>
               )}
               <CountryQuickSearchRow>
                 {relatedEventsSlot.quickSearch && (
@@ -3116,24 +4086,61 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           </S.FormField>
         </S.FormRow>
       </FormGroup>
+  )
 
-      {/* 날짜/시간 선택 모달 */}
-      <TimePickerModal
-        isOpen={isStartTimeModalOpen}
-        onClose={() => setIsStartTimeModalOpen(false)}
-        onSelect={(time) => setStartTime(time)}
-        initialTime={startTime}
-        title="시작 시간 선택"
-        anchorEl={startTimeTriggerRef.current}
-      />
-      <TimePickerModal
-        isOpen={isEndTimeModalOpen}
-        onClose={() => setIsEndTimeModalOpen(false)}
-        onSelect={(time) => setEndTime(time)}
-        initialTime={endTime}
-        title="종료 시간 선택"
-        anchorEl={endTimeTriggerRef.current}
-      />
+  return (
+    <S.FormSection
+      as={motion.div}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.2 }}
+      data-layout-mode={layoutMode}
+      style={
+        activeDomainTone
+          ? {
+              '--active-domain-rgb': activeDomainTone.soft.rgb,
+              '--active-domain-accent': isDark
+                ? activeDomainTone.dark
+                : activeDomainTone.badge,
+              '--active-domain-text': isDark
+                ? activeDomainTone.soft.textDark
+                : activeDomainTone.soft.text,
+              '--chip-rgb': activeDomainTone.soft.rgb,
+              '--chip-text': activeDomainTone.soft.text,
+              '--chip-text-dark': activeDomainTone.soft.textDark,
+            }
+          : undefined
+      }
+    >
+      {layoutMode === 'split' && participantsGroup ? (
+        <SplitColumnsGrid
+          data-testid="event-form-split-grid"
+          data-split-ratio={splitRatio}
+          $ratio={splitRatio}
+        >
+          <SplitColumnLeft
+            id="event-form-split-left"
+            data-testid="event-form-split-left"
+          >
+            {basicGroup}
+            {contextGroup}
+          </SplitColumnLeft>
+          <SplitColumnRight
+            id="event-form-split-right"
+            data-testid="event-form-split-right"
+          >
+            {participantsGroup}
+          </SplitColumnRight>
+        </SplitColumnsGrid>
+      ) : (
+        <>
+          {basicGroup}
+          {participantsGroup}
+          {contextGroup}
+        </>
+      )}
+
+
     </S.FormSection>
   )
 }
@@ -3149,26 +4156,386 @@ const OptionalTag = styled.span`
 const ParticipantList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0;
-  margin-bottom: 6px;
+  gap: 10px;
+  margin-bottom: 10px;
 `
 
-const ParticipantRow = styled.div`
+const ParentPeriodTimelineStrip = styled.div<{ $warning?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  border: 1px solid
+    ${({ $warning, theme }) =>
+      $warning
+        ? theme.mode === 'dark'
+          ? 'rgba(251, 191, 36, 0.38)'
+          : 'rgba(217, 119, 6, 0.35)'
+        : S.getC(theme).border.light};
+  background: ${({ $warning, theme }) =>
+    $warning
+      ? theme.mode === 'dark'
+        ? 'rgba(251, 191, 36, 0.08)'
+        : 'rgba(254, 243, 199, 0.45)'
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.025)'
+        : '#f8fafc'};
+`
+
+const ParentPeriodTopRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+`
+
+const ParentPeriodLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const ParentPeriodPositionBadge = styled.span<{ $warning?: boolean }>`
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: ${({ $warning, theme }) =>
+    $warning
+      ? theme.mode === 'dark'
+        ? 'rgba(251, 191, 36, 0.22)'
+        : 'rgba(217, 119, 6, 0.14)'
+      : `${theme.colors.primary}18`};
+  color: ${({ $warning, theme }) =>
+    $warning
+      ? theme.mode === 'dark'
+        ? '#fbbf24'
+        : '#b45309'
+      : theme.colors.primary};
+`
+
+const ParentPeriodTrackRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`
+
+const ParentPeriodAxisText = styled.span`
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  flex-shrink: 0;
+`
+
+const ParentPeriodTrack = styled.div`
+  position: relative;
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(15, 23, 42, 0.08)'};
+  overflow: hidden;
+`
+
+const ParentPeriodFill = styled.div<{ $warning?: boolean }>`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: ${({ $warning, theme }) =>
+    $warning
+      ? theme.mode === 'dark'
+        ? '#fbbf24'
+        : '#d97706'
+      : theme.colors.primary};
+  transition: left 0.2s ease, width 0.2s ease;
+`
+
+const ModalCausalFlowBoard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.02)' : '#f8fafc'};
+`
+
+const ModalCausalGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(120px, 0.85fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 8px;
+
+  @media (max-width: 600px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+const ModalCausalLaneBox = styled.div<{ $dragOver?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px dashed
+    ${({ $dragOver, theme }) =>
+      $dragOver ? theme.colors.primary : S.getC(theme).border.default};
+  background: ${({ $dragOver, theme }) =>
+    $dragOver
+      ? `${theme.colors.primary}12`
+      : S.getC(theme).background.content};
+  min-width: 0;
+  transition: border-color 0.14s ease, background 0.14s ease;
+`
+
+const ModalCausalLaneHead = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const ModalCausalLaneCount = styled.span`
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ModalCausalEmpty = styled.span`
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ModalCausalPillWrap = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+`
+
+const ModalCausalPill = styled.span`
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  background: ${({ theme }) => S.getC(theme).background.section};
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: grab;
+
+  &:active {
+    cursor: grabbing;
+  }
+`
+
+const ModalCausalArrow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.primary};
+  user-select: none;
+
+  @media (max-width: 600px) {
+    display: none;
+  }
+`
+
+const ModalCausalSelfBox = styled.div`
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 2px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1.5px solid ${({ theme }) => theme.colors.primary};
+  background: ${({ theme }) => `${theme.colors.primary}10`};
+  text-align: center;
+  min-width: 0;
+`
+
+const ModalCausalSelfBadge = styled.span`
+  font-size: 10px;
+  font-weight: 800;
+  color: ${({ theme }) => theme.colors.primary};
+`
+
+const ModalCausalSelfTitle = styled.span`
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const ModalCausalSelfDate = styled.span`
+  font-size: 10.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ModalCausalConcurrentRow = styled.div<{ $dragOver?: boolean }>`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  border: 1px dashed
+    ${({ $dragOver, theme }) =>
+      $dragOver ? theme.colors.primary : S.getC(theme).border.default};
+  background: ${({ $dragOver, theme }) =>
+    $dragOver ? `${theme.colors.primary}12` : 'transparent'};
+`
+
+const ModalCausalConcurrentLabel = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const ParticipantRow = styled.div<{ $role?: EventCountryRole; $dragOver?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid
+    ${({ $dragOver, theme }) =>
+      $dragOver ? theme.colors.primary : S.getC(theme).border.light};
+  background: ${({ $dragOver, theme }) =>
+    $dragOver
+      ? `${theme.colors.primary}10`
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.025)'
+        : '#ffffff'};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark' ? 'none' : '0 1px 3px rgba(15, 23, 42, 0.04)'};
+  min-width: 0;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+
+  &:focus-within {
+    border-color: ${({ theme }) => S.getC(theme).border.default};
+    box-shadow: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? '0 2px 8px rgba(0, 0, 0, 0.22)'
+        : '0 2px 8px rgba(15, 23, 42, 0.06)'};
+  }
+`
+
+const ParticipantNameWrap = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+`
+
+const ParticipantDragHandle = styled.span`
+  font-size: 13px;
+  line-height: 1;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: grab;
+  user-select: none;
+`
+
+const ParticipantHeaderRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+`
+
+const ParticipantHeaderRight = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+`
+
+const ParticipantRoleBar = styled.div`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 10px;
-  padding: 9px 0;
-  border-bottom: 1px solid ${({ theme }) => S.getC(theme).border.light};
-  background: transparent;
+  gap: 6px 8px;
+  min-width: 0;
+`
 
-  &:first-child {
-    padding-top: 2px;
-  }
+const ParticipantRoleBarLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  flex-shrink: 0;
+`
 
-  &:last-child {
-    padding-bottom: 4px;
-    border-bottom: none;
+const ParticipantRoleHintText = styled.span`
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ParticipantRoleChipGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2.5px;
+  border-radius: 9px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f1f5f9'};
+`
+
+const ParticipantRoleChipBtn = styled.button<{ $active: boolean }>`
+  height: 25px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 6px;
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? theme.colors.activeLight
+        : '#ffffff'
+      : 'transparent'};
+  box-shadow: ${({ $active, theme }) =>
+    $active && theme.mode !== 'dark'
+      ? '0 1px 2px rgba(15, 23, 42, 0.08)'
+      : 'none'};
+  color: ${({ $active, theme }) =>
+    $active
+      ? `var(--active-domain-text, ${theme.colors.primary})`
+      : theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: ${({ $active }) => ($active ? 700 : 600)};
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
@@ -3176,7 +4543,7 @@ const ParticipantSideGroup = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  height: 34px;
+  height: 30px;
   padding: 2px;
   border-radius: 8px;
   border: 1px solid ${({ theme }) => S.getC(theme).border.light};
@@ -3186,8 +4553,8 @@ const ParticipantSideGroup = styled.div`
 `
 
 const ParticipantSideBtn = styled.button<{ $active: boolean }>`
-  height: 28px;
-  padding: 0 9px;
+  height: 24px;
+  padding: 0 8px;
   border-radius: 6px;
   border: none;
   background: ${({ $active, theme }) =>
@@ -3380,8 +4747,8 @@ const CountryQuickResultBox = styled.div`
   flex-direction: column;
   gap: 2px;
   min-width: 100%;
-  width: max-content;
-  max-width: min(440px, 85vw);
+  width: 100%;
+  max-width: min(440px, 100%);
   max-height: 200px;
   overflow-y: auto;
   padding: 6px;
@@ -3493,18 +4860,17 @@ const ParticipantRemove = styled.button`
 `
 
 const ParticipantName = styled.span`
-  min-width: 64px;
-  font-size: 13.5px;
-  font-weight: 600;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
   letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.primary};
-  white-space: nowrap;
-  margin-right: 2px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 `
 
 /* 행 안 입력칸 공통 — 폼의 다른 입력칸과 같은 테·모서리·포커스 헤일로 */
 const participantControl = ({ theme }: { theme: DefaultTheme }) => `
-  height: 34px;
   border: 1px solid ${S.getC(theme).border.default};
   border-radius: 8px;
   background-color: ${S.getC(theme).background.content};
@@ -3525,36 +4891,88 @@ const participantControl = ({ theme }: { theme: DefaultTheme }) => `
   }
 `
 
-/* 네이티브 화살표 대신 자체 셰브론 — 다른 선택칸과 같은 모양 */
-const RoleSelect = styled.select`
+const RoleSelect = styled.select<{ $highlighted?: boolean }>`
   ${participantControl}
   appearance: none;
   flex-shrink: 0;
-  padding: 0 28px 0 11px;
-  font-weight: 600;
+  height: 30px;
+  padding: 0 24px 0 9px;
+  border-color: ${({ $highlighted, theme }) =>
+    $highlighted ? theme.colors.primary : S.getC(theme).border.default};
+  background-color: ${({ $highlighted, theme }) =>
+    $highlighted
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.14)'
+        : 'rgba(99, 102, 241, 0.06)'
+      : S.getC(theme).background.content};
+  color: ${({ $highlighted, theme }) =>
+    $highlighted ? theme.colors.primary : theme.colors.text.primary};
+  font-size: 12px;
+  font-weight: ${({ $highlighted }) => ($highlighted ? 700 : 600)};
   cursor: pointer;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 10px center;
+  background-position: right 8px center;
 `
 
 const RoleDescriptionWrap = styled.div`
   position: relative;
   display: flex;
   flex-direction: column;
-  flex: 1 1 180px;
-  min-width: 140px;
-  gap: 5px;
+  width: 100%;
+  min-width: 0;
+  gap: 6px;
 `
 
-const RoleDescriptionInput = styled.input`
+const RoleDescriptionTextarea = styled.textarea`
   ${participantControl}
   width: 100%;
-  height: 34px;
-  padding: 0 11px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 9px 12px;
+  background-color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(0, 0, 0, 0.18)' : '#f8fafc'};
+  line-height: 1.5;
+  resize: vertical;
+
+  &:focus,
+  &:focus-visible {
+    background-color: ${({ theme }) => S.getC(theme).background.content};
+  }
 
   &::placeholder {
     color: ${({ theme }) => S.getC(theme).text.muted};
+  }
+`
+
+const ParticipantDescFooterRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+`
+
+const ParticipantDescClearBtn = styled.button`
+  height: 24px;
+  padding: 0 8px;
+  margin-left: auto;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  border-radius: 6px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.error};
+    border-color: ${({ theme }) => theme.colors.error};
   }
 `
 
@@ -3565,15 +4983,23 @@ const RolePresetBar = styled.div`
   gap: 4px;
 `
 
-const RolePresetChip = styled.button`
+const RolePresetChip = styled.button<{ $active?: boolean }>`
   display: inline-flex;
   align-items: center;
   height: 22px;
   padding: 0 8px;
   border-radius: 999px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active ? theme.colors.primary : theme.colors.border.light};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.16)'
+        : 'rgba(99, 102, 241, 0.08)'
+      : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.primary : theme.colors.text.tertiary};
   font: inherit;
   font-size: 11px;
   font-weight: 600;
@@ -3603,6 +5029,20 @@ const OverviewTextarea = styled(S.Textarea)`
   line-height: 1.6;
 `
 
+const OverviewFooterRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+`
+
+const OverviewCharCount = styled.span`
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
 /* ─── 묶음 ───
  * 행마다 그어 두던 구분선(8개)을 걷고, 성격이 같은 행끼리 묶어 섹션 헤더 바로 구획을 나눈다.
  * 기본 정보(필수 둘 + 카테고리) → 연결(참여국·상위) → 소개(글·키워드·이미지) 순 —
@@ -3628,6 +5068,7 @@ const FormGroup = styled.section`
 const FormGroupTitle = styled.h3`
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   width: 100%;
   margin: 0 0 12px;
@@ -3652,6 +5093,21 @@ const FormGroupTitle = styled.h3`
   }
 `
 
+const FormGroupSummaryBadge = styled.span`
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => `var(--active-domain-text, ${theme.colors.primary})`};
+  background: ${({ theme }) =>
+    `rgba(var(--active-domain-rgb, 99, 102, 241), ${theme.mode === 'dark' ? 0.16 : 0.08})`};
+  border: 1px solid rgba(var(--active-domain-rgb, 99, 102, 241), 0.22);
+`
+
 const InlineControlRow = styled.div`
   display: flex;
   align-items: center;
@@ -3662,11 +5118,12 @@ const InlineControlRow = styled.div`
 /* ─── 기간 ─── */
 const DateRangeGrid = styled.div`
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 18px;
+  min-width: 0;
 
   @media (max-width: 560px) {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 14px;
   }
 `
@@ -3674,19 +5131,11 @@ const DateRangeGrid = styled.div`
 const DateTimeLine = styled.div`
   display: flex;
   gap: 8px;
+  min-width: 0;
 
   > :first-child {
     flex: 1;
     min-width: 0;
-  }
-`
-
-/** 시각 — 날짜 옆 좁은 칸. 비어 있으면 자리표시 글자만 흐리게 */
-const TimeTrigger = styled(S.DateInputWrapper)`
-  flex: 0 0 104px;
-
-  &[data-empty] ${S.DateInputDisplay} {
-    color: ${({ theme }) => S.getC(theme).text.muted};
   }
 `
 
@@ -3827,6 +5276,36 @@ const SimilarEventsBar = styled.div`
   font-size: 12px;
 `
 
+const ParentEventCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 13px;
+  border-radius: 11px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.025)' : '#ffffff'};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark' ? 'none' : '0 1px 2px rgba(15, 23, 42, 0.03)'};
+`
+
+const ParentEventBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.2)'
+      : 'rgba(99, 102, 241, 0.1)'};
+  color: ${({ theme }) => theme.colors.primary};
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+`
+
 const SimilarEventsLabel = styled.span`
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -3881,18 +5360,6 @@ const RelatedEventDateMeta = styled.span`
   font-size: 12px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const RelatedDescriptionInput = styled.input`
-  ${participantControl}
-  flex: 1 1 180px;
-  min-width: 140px;
-  height: 34px;
-  padding: 0 11px;
-
-  &::placeholder {
-    color: ${({ theme }) => S.getC(theme).text.muted};
-  }
 `
 
 const DateColumnHeaderRow = styled.div`
@@ -4035,6 +5502,182 @@ const LocationCoordClearBtn = styled.button`
   &:focus-visible {
     color: ${({ theme }) => theme.colors.error};
     text-decoration: underline;
+    outline: none;
+  }
+`
+
+const FormGroupRightCluster = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+`
+
+const SplitRatioGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f1f5f9'};
+`
+
+const SplitRatioBtn = styled.button<{ $active: boolean }>`
+  height: 22px;
+  padding: 0 7px;
+  border: none;
+  border-radius: 5px;
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? theme.colors.activeLight
+        : '#ffffff'
+      : 'transparent'};
+  box-shadow: ${({ $active, theme }) =>
+    $active && theme.mode !== 'dark'
+      ? '0 1px 2px rgba(15, 23, 42, 0.08)'
+      : 'none'};
+  color: ${({ $active, theme }) =>
+    $active
+      ? `var(--active-domain-text, ${theme.colors.primary})`
+      : theme.colors.text.tertiary};
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const SplitColumnsGrid = styled.div<{
+  $ratio?: 'left-wide' | 'equal' | 'right-wide'
+}>`
+  display: grid;
+  grid-template-columns: ${({ $ratio }) =>
+    $ratio === 'left-wide'
+      ? 'minmax(0, 1.2fr) minmax(0, 0.85fr)'
+      : $ratio === 'right-wide'
+        ? 'minmax(0, 0.85fr) minmax(0, 1.2fr)'
+        : 'minmax(0, 1fr) minmax(0, 1fr)'};
+  gap: 0;
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+
+  @media (min-width: 1180px) {
+    ${S.FormRow} {
+      grid-template-columns: 104px minmax(0, 1fr);
+      gap: 16px;
+    }
+
+    ${DateRangeGrid} {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 10px;
+    }
+  }
+
+  @media (max-width: 1179px) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+`
+
+const splitPaneScrollStyles = ({ theme }: { theme: DefaultTheme }) => `
+  min-width: 0;
+  overflow-x: hidden;
+
+  @media (min-width: 1180px) {
+    max-height: calc(90vh - 172px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: 56px;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: ${theme.colors.border.default};
+      border-radius: 2px;
+    }
+  }
+`
+
+const SplitColumnLeft = styled.div`
+  ${splitPaneScrollStyles}
+
+  @media (min-width: 1180px) {
+    padding-left: 3px;
+    padding-right: 26px;
+  }
+`
+
+const SplitColumnRight = styled.div`
+  ${splitPaneScrollStyles}
+
+  @media (min-width: 1180px) {
+    padding-left: 26px;
+    padding-right: 3px;
+    border-left: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  }
+`
+
+const SplitRecordsGuideBox = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px dashed ${({ theme }) => S.getC(theme).border.default};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.02)'
+      : 'rgba(248, 250, 252, 0.8)'};
+`
+
+const SplitQuickTypeRow = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const SplitQuickTypeLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-right: 2px;
+`
+
+const SplitQuickTypeChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) => S.getC(theme).background.content};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease, background-color 0.14s ease;
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => `var(--active-domain-text, ${theme.colors.primary})`};
+    border-color: rgba(var(--active-domain-rgb, 99, 102, 241), 0.5);
+    background: rgba(var(--active-domain-rgb, 99, 102, 241), 0.08);
     outline: none;
   }
 `

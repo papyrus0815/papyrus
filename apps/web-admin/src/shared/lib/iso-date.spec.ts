@@ -205,6 +205,18 @@ describe('formatDateWithPrecision — BC(음수 연도) 기원전 표기 (P3-4)'
   it('precision 미지정은 day로 간주', () => {
     expect(formatDateWithPrecision('-0044-03-15')).toBe('기원전 44년 3월 15일')
   })
+
+  it('일(day) 정밀도에 시각(00:00 외)이 있으면 HH:MM을 함께 표시한다', () => {
+    expect(
+      formatDateWithPrecision('1950-06-25T04:00:00.000Z', 'day'),
+    ).toBe('1950년 6월 25일 04:00')
+    expect(
+      formatDateWithPrecision('1950-06-25T00:00:00.000Z', 'day'),
+    ).toBe('1950년 6월 25일')
+    expect(
+      formatDateWithPrecision('1950-06-25T04:00:00.000Z', 'month'),
+    ).toBe('1950년 6월')
+  })
 })
 
 describe('formatDateRange — 하루짜리', () => {
@@ -212,6 +224,28 @@ describe('formatDateRange — 하루짜리', () => {
     expect(
       formatDateRange('2025-02-04', '2025-02-04', 'day', 'day'),
     ).toBe(formatDateWithPrecision('2025-02-04', 'day'))
+  })
+
+  it('같은 날에 시작 시각만 있고 종료일이 자정(00:00)이면 시작 시각만 한 번 쓴다', () => {
+    expect(
+      formatDateRange(
+        '1950-06-25T04:00:00.000Z',
+        '1950-06-25T00:00:00.000Z',
+        'day',
+        'day',
+      ),
+    ).toBe('1950년 6월 25일 04:00')
+  })
+
+  it('같은 날에 시작·종료 시각이 모두 있으면 날짜를 반복하지 않고 시각 범위를 표시한다', () => {
+    expect(
+      formatDateRange(
+        '1950-06-25T04:00:00.000Z',
+        '1950-06-25T15:30:00.000Z',
+        'day',
+        'day',
+      ),
+    ).toBe('1950년 6월 25일 04:00 ~ 15:30')
   })
 
   it('끝이 없으면 시작만', () => {

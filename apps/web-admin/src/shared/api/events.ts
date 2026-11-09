@@ -271,6 +271,7 @@ export interface EventOrganization {
   relationId: string
   role: EventOrganizationRole
   roleDescription: string | null
+  sideId?: string | null
   organizationId: string
   name: string
   shortName: string | null
@@ -309,12 +310,36 @@ async function eventOrganizationRequest<T>(path: string, init: RequestInit): Pro
 /** POST /events/:id/organizations — 같은 조직·같은 역할 중복은 409 */
 export function addEventOrganization(
   eventId: string,
-  body: { organizationId: string; role: EventOrganizationRole; roleDescription?: string | null },
+  body: {
+    organizationId: string
+    role: EventOrganizationRole
+    roleDescription?: string | null
+    sideId?: string | null
+  },
 ): Promise<EventOrganization> {
   return eventOrganizationRequest(`/events/${encodeURIComponent(eventId)}/organizations`, {
     method: 'POST',
     body: JSON.stringify(body),
   })
+}
+
+/** PATCH /events/:id/organizations/:relationId — 진영 소속·역할·설명 변경 */
+export function updateEventOrganization(
+  eventId: string,
+  relationId: string,
+  body: {
+    role?: EventOrganizationRole
+    roleDescription?: string | null
+    sideId?: string | null
+  },
+): Promise<EventOrganization> {
+  return eventOrganizationRequest(
+    `/events/${encodeURIComponent(eventId)}/organizations/${encodeURIComponent(relationId)}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    },
+  )
 }
 
 /** DELETE /events/:id/organizations/:relationId — 조직 자체는 남는다 */

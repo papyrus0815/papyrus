@@ -1,22 +1,43 @@
 import React, { useEffect, useState } from 'react'
-import { FiPlus, FiEdit2, FiTrash2, FiGlobe, FiBriefcase, FiAward, FiX, FiChevronRight } from 'react-icons/fi'
-import { useNavigate } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  FiPlus,
+  FiEdit2,
+  FiTrash2,
+  FiGlobe,
+  FiBriefcase,
+  FiAward,
+  FiUsers,
+  FiX,
+  FiChevronRight,
+} from 'react-icons/fi'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
 import { apiConnection } from '@/shared/api/client'
-import type { OrganizationResponseDto, OrganizationType } from '@/shared/api/organizations'
+import type {
+  OrganizationMemberDto,
+  OrganizationResponseDto,
+  OrganizationType,
+} from '@/shared/api/organizations'
 import {
   getOrganizations,
   getOrganizationsTree,
+  getOrganizationMembers,
+  addOrganizationMember,
+  removeOrganizationMember,
   deleteOrganization,
   updateOrganization,
 } from '@/shared/api/organizations'
 import { getAllCountries } from '@/shared/api/countries'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
+import { getAllPersons } from '@/shared/api/persons'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import { notify } from '@/shared/ui/toast'
 import { PositionDefinitionsSection } from '@/widgets/country/country-detail/ui/position-definitions-section.widget'
 
@@ -457,6 +478,8 @@ const TreeMeta = styled.span`
 
 export const OrganizationsListPage: React.FC = () => {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const queryClient = useQueryClient()
   const playClickSound = useClickSound()
   const [list, setList] = useState<OrganizationResponseDto[]>([])
   const [tree, setTree] = useState<any[]>([])
@@ -472,7 +495,9 @@ export const OrganizationsListPage: React.FC = () => {
 
   // 선택된 조직 & 상세 패널 탭
   const [selectedOrg, setSelectedOrg] = useState<OrganizationResponseDto | null>(null)
-  const [detailTab, setDetailTab] = useState<'edit' | 'positions'>('edit')
+  const [detailTab, setDetailTab] = useState<'edit' | 'members' | 'positions'>('edit')
+  const [memberRoleTitle, setMemberRoleTitle] = useState('위원')
+  const [memberPickerOpen, setMemberPickerOpen] = useState(false)
 
   // 수정 폼
   const [editForm, setEditForm] = useState({
@@ -480,6 +505,21 @@ export const OrganizationsListPage: React.FC = () => {
     shortName: '',
     description: '',
     logoUrl: '',
+  })
+
+  const membersQuery = useQuery({
+    queryKey: ['organization-members', selectedOrg?.id],
+    queryFn: () =>
+      selectedOrg
+        ? getOrganizationMembers(apiConnection, selectedOrg.id)
+        : Promise.resolve([] as OrganizationMemberDto[]),
+    enabled: Boolean(selectedOrg?.id),
+  })
+
+  const allPersonsQuery = useQuery({
+    queryKey: ['persons', 'all'],
+    queryFn: () => getAllPersons(),
+    enabled: memberPickerOpen,
   })
 
   const load = async () => {
@@ -526,7 +566,10 @@ export const OrganizationsListPage: React.FC = () => {
     loadOrganizations()
   }, [filterCountryId, filterHistoricalCountryId, filterType])
 
-  const openDetail = (org: OrganizationResponseDto, tab: 'edit' | 'positions' = 'edit') => {
+  const openDetail = (
+    org: OrganizationResponseDto,
+    tab: 'edit' | 'members' | 'positions' = 'edit',
+  ) => {
     setSelectedOrg(org)
     setDetailTab(tab)
     setEditForm({
@@ -536,6 +579,59 @@ export const OrganizationsListPage: React.FC = () => {
       logoUrl: org.logoUrl ?? '',
     })
     playClickSound()
+  }
+
+  useEffect(() => {
+    const selectedId = searchParams.get('selected')
+    const tabParam = searchParams.get('tab')
+    if (!selectedId || list.length === 0) return
+    const target = list.find((item) => item.id === selectedId)
+    if (target && selectedOrg?.id !== target.id) {
+      const nextTab =
+        tabParam === 'members' || tabParam === 'positions' ? tabParam : 'edit'
+      setSelectedOrg(target)
+      setDetailTab(nextTab)
+      setEditForm({
+        name: target.name,
+        shortName: target.shortName ?? '',
+        description: target.description ?? '',
+        logoUrl: target.logoUrl ?? '',
+      })
+    }
+  }, [list, searchParams, selectedOrg?.id])
+
+  const handleAddMember = async (personId: string, personName: string) => {
+    if (!selectedOrg) return
+    try {
+      await addOrganizationMember(apiConnection, selectedOrg.id, {
+        personId,
+        roleTitle: memberRoleTitle.trim() || '위원',
+      })
+      notify.success(`‘${personName}’ 인물을 ${selectedOrg.name}에 추가했습니다.`)
+      setMemberPickerOpen(false)
+      void queryClient.invalidateQueries({
+        queryKey: ['organization-members', selectedOrg.id],
+      })
+    } catch (error) {
+      notify.error(
+        error instanceof Error ? error.message : '소속 인물 추가에 실패했습니다.',
+      )
+    }
+  }
+
+  const handleRemoveMember = async (personId: string, personName: string) => {
+    if (!selectedOrg) return
+    try {
+      await removeOrganizationMember(apiConnection, selectedOrg.id, personId)
+      notify.success(`‘${personName}’ 인물을 조직에서 제거했습니다.`)
+      void queryClient.invalidateQueries({
+        queryKey: ['organization-members', selectedOrg.id],
+      })
+    } catch (error) {
+      notify.error(
+        error instanceof Error ? error.message : '소속 인물 제거에 실패했습니다.',
+      )
+    }
   }
 
   const handleDelete = async (id: string, name: string) => {
@@ -742,6 +838,13 @@ export const OrganizationsListPage: React.FC = () => {
                 기본 정보 수정
               </DetailTabBtn>
               <DetailTabBtn
+                $active={detailTab === 'members'}
+                onClick={() => setDetailTab('members')}
+              >
+                <FiUsers size={13} />
+                소속 인물·위원 ({(membersQuery.data ?? []).length})
+              </DetailTabBtn>
+              <DetailTabBtn
                 $active={detailTab === 'positions'}
                 onClick={() => setDetailTab('positions')}
               >
@@ -806,6 +909,125 @@ export const OrganizationsListPage: React.FC = () => {
                     </DeleteBtn>
                   </div>
                 </>
+              )}
+
+              {detailTab === 'members' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <FormInput
+                      aria-label="추가할 인물 역할명"
+                      value={memberRoleTitle}
+                      onChange={(event) => setMemberRoleTitle(event.target.value)}
+                      placeholder="기본 역할명 (예: 위원, 의장)"
+                      style={{ width: 200 }}
+                    />
+                    <PrimaryBtn
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        setMemberPickerOpen(true)
+                      }}
+                    >
+                      <FiPlus size={14} /> 소속 인물 추가
+                    </PrimaryBtn>
+                  </div>
+
+                  {(membersQuery.data ?? []).length === 0 ? (
+                    <div
+                      style={{
+                        padding: '24px 16px',
+                        textAlign: 'center',
+                        color: '#64748b',
+                        fontSize: 13.5,
+                        borderRadius: 12,
+                        border: '1px dashed rgba(148, 163, 184, 0.4)',
+                      }}
+                    >
+                      아직 등록된 소속 인물이 없습니다. 위 <strong>+ 소속 인물 추가</strong> 버튼으로
+                      위원·구성원을 등록하면 사건 화면에서도 한 번에 불러올 수 있습니다.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {(membersQuery.data ?? []).map((member) => {
+                        const displayName = getPersonDisplayName(member.person, true)
+                        return (
+                          <div
+                            key={`${member.source}:${member.personId}`}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: 10,
+                              padding: '10px 14px',
+                              borderRadius: 11,
+                              border: '1px solid rgba(148, 163, 184, 0.28)',
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                flexWrap: 'wrap',
+                              }}
+                            >
+                              <Link
+                                to={`/persons/${member.personId}`}
+                                style={{
+                                  fontWeight: 700,
+                                  fontSize: 14,
+                                  color: 'inherit',
+                                  textDecoration: 'none',
+                                }}
+                              >
+                                👤 {displayName}
+                              </Link>
+                              {member.roleTitle && (
+                                <TypeBadge>{member.roleTitle}</TypeBadge>
+                              )}
+                              <TypeBadge
+                                $bg={member.source === 'TENURE' ? '#eff6ff' : '#f0fdf4'}
+                                $color={member.source === 'TENURE' ? '#1d4ed8' : '#15803d'}
+                              >
+                                {member.source === 'TENURE' ? '관직 재임' : '조직 역할'}
+                              </TypeBadge>
+                            </div>
+                            {member.source === 'ROLE' && (
+                              <IconBtn
+                                type="button"
+                                onClick={() =>
+                                  void handleRemoveMember(member.personId, displayName)
+                                }
+                              >
+                                <FiTrash2 size={13} /> 제거
+                              </IconBtn>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {memberPickerOpen && (
+                    <PersonSelectModal
+                      persons={allPersonsQuery.data ?? []}
+                      selectedPersonId=""
+                      title={`${selectedOrg.name} 소속 인물 추가`}
+                      excludeIds={(membersQuery.data ?? []).map((item) => item.personId)}
+                      onSelect={(personId, personName) => {
+                        void handleAddMember(personId, personName)
+                      }}
+                      onClose={() => setMemberPickerOpen(false)}
+                    />
+                  )}
+                </div>
               )}
 
               {detailTab === 'positions' && (

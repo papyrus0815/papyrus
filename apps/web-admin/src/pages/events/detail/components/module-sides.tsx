@@ -1,23 +1,33 @@
 import { useMemo, useState } from 'react'
 
-import { useQueryClient } from '@tanstack/react-query'
-import { FiPlus, FiX } from 'react-icons/fi'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { FiExternalLink, FiPlus, FiX } from 'react-icons/fi'
+import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { toParticipants, participantKey } from '@/entities/event/model'
 import { RADIUS } from '@/entities/event/ui/ledger-tokens'
+import { getApiConnection } from '@/shared/api/client'
 import { type EventSide, type SideOutcome, syncEventSides, toSideInputs } from '@/shared/api/event-sides'
-import { type UpdateEventDto } from '@/shared/api/events'
+import { type UpdateEventDto, updateEventOrganization } from '@/shared/api/events'
+import { getOrganizationMembers } from '@/shared/api/organizations'
+import {
+  getPersonGroup,
+  listPersonGroups,
+  type PersonGroup,
+} from '@/shared/api/person-groups'
+import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
 import { PersonPickerModal } from '@/shared/ui/person-picker'
 import { notify } from '@/shared/ui/toast'
+import { PersonGroupCreateModal } from '@/widgets/person/person-group-create-modal/person-group-create-modal'
 
 import * as S from '../styles'
 import { type EventDetail, eventKeys } from '../use-event-detail'
 import { InlineSelect, InlineText } from './inline'
 import { MODULE_COLOR } from './module-colors'
 import { SIDE_PALETTE, withSideColors } from './side-colors'
-import { SIDE_OUTCOME_OPTIONS } from './side-outcome'
+import { SIDE_OUTCOME_LABEL, SIDE_OUTCOME_OPTIONS } from './side-outcome'
 
 interface ModuleSidesProps {
   event: EventDetail
@@ -35,6 +45,44 @@ function formatPoint(point: { era: 'BC' | 'AD'; year: number; month: number | nu
   if (!point) return null
   const year = point.era === 'BC' ? `기원전 ${point.year}` : String(point.year)
   return point.month ? `${year}.${point.month}` : year
+}
+
+function isoToDecimalYear(iso: string | null | undefined, isEnd = false): number | null {
+  if (!iso) return null
+  const matched = /^(-?\d{1,6})(?:-(\d{2}))?/.exec(iso.trim())
+  if (!matched) return null
+  const year = Number(matched[1])
+  if (!Number.isFinite(year)) return null
+  const month = matched[2] ? Number(matched[2]) : isEnd ? 12 : 1
+  return year + (Math.min(12, Math.max(1, month)) - (isEnd ? 0 : 1)) / 12
+}
+
+function pointToDecimalYear(
+  point: { era: 'BC' | 'AD'; year: number; month: number | null } | null,
+  isEnd = false,
+): number | null {
+  if (!point) return null
+  const signedYear = point.era === 'BC' ? -point.year : point.year
+  const month = point.month ?? (isEnd ? 12 : 1)
+  return signedYear + (Math.min(12, Math.max(1, month)) - (isEnd ? 0 : 1)) / 12
+}
+
+function computeJoinSpanRatio(
+  eventStartIso: string | null | undefined,
+  eventEndIso: string | null | undefined,
+  joinPoint: { era: 'BC' | 'AD'; year: number; month: number | null } | null,
+  withdrawPoint: { era: 'BC' | 'AD'; year: number; month: number | null } | null,
+): { leftPct: number; widthPct: number } | null {
+  if (!joinPoint && !withdrawPoint) return null
+  const startDec = isoToDecimalYear(eventStartIso, false)
+  const endDec = isoToDecimalYear(eventEndIso ?? eventStartIso, true)
+  if (startDec == null || endDec == null || endDec <= startDec) return null
+  const totalSpan = endDec - startDec
+  const joinDec = pointToDecimalYear(joinPoint, false) ?? startDec
+  const withdrawDec = pointToDecimalYear(withdrawPoint, true) ?? endDec
+  const leftPct = Math.min(92, Math.max(0, ((joinDec - startDec) / totalSpan) * 100))
+  const rightPct = Math.min(100, Math.max(leftPct + 8, ((withdrawDec - startDec) / totalSpan) * 100))
+  return { leftPct, widthPct: Math.max(8, rightPct - leftPct) }
 }
 
 /**
@@ -71,6 +119,7 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
   }, [event.relatedCountries, event.relatedHistoricalCountries])
 
   const persons = useMemo(() => event.relatedPersons ?? [], [event.relatedPersons])
+  const organizations = useMemo(() => event.organizations ?? [], [event.organizations])
 
   /**
    * 인물 넣기 — 예전엔 **이 사건의 참여 인물** 중에서만 고를 수 있어, 사건에 없는 지휘관은 넣을 길이 없었다
@@ -78,6 +127,33 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
    * 전체 인물에서 찾되 이 사건의 참여 인물을 맨 위에 고정하고, 사건에 없던 인물은 참여 인물로 함께 넣는다.
    */
   const [personPickerSide, setPersonPickerSide] = useState<EventSide | null>(null)
+  const [creatingGroupSide, setCreatingGroupSide] = useState<EventSide | null>(null)
+
+  const groupsQuery = useQuery({
+    queryKey: ['person-groups-all', 'module-sides'],
+    queryFn: () => listPersonGroups().catch(() => [] as PersonGroup[]),
+    staleTime: 30_000,
+  })
+
+  const sortedGroups = useMemo(() => {
+    const all = groupsQuery.data ?? []
+    const countryIds = new Set(
+      (event.relatedCountries ?? []).map((country) => country.id).filter(Boolean),
+    )
+    const histCountryIds = new Set(
+      (event.relatedHistoricalCountries ?? []).map((country) => country.id).filter(Boolean),
+    )
+    return [...all].sort((left, right) => {
+      const score = (group: PersonGroup) => {
+        let points = 0
+        if (group.historicalCountryId && histCountryIds.has(group.historicalCountryId)) points += 4
+        if (group.countryId && countryIds.has(group.countryId)) points += 2
+        if (group.type === 'FACTION' || group.type === 'MOVEMENT') points += 1
+        return points
+      }
+      return score(right) - score(left) || left.name.localeCompare(right.name)
+    })
+  }, [groupsQuery.data, event.relatedCountries, event.relatedHistoricalCountries])
 
   const refresh = async () => {
     await Promise.all([
@@ -132,6 +208,147 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
     )
   }
 
+  /** 영구 집단·계파(PersonGroup) 연결/해제 및 소속 인물 불러오기 */
+  const importGroupMembersToSide = async (sideId: string, groupId: string) => {
+    try {
+      const detailed = await getPersonGroup(groupId)
+      const members = detailed.members ?? []
+      if (members.length === 0) return
+      const existingById = new Map(persons.map((person) => [person.personId, person]))
+      const nextPersons = [...persons.map((person) => ({
+        personId: person.personId,
+        role: person.role ?? undefined,
+        note: person.note ?? undefined,
+        sideId: person.sideId ?? undefined,
+      }))]
+      let addedCount = 0
+      for (const member of members) {
+        const pid = member.person.id
+        const existing = existingById.get(pid)
+        if (existing) {
+          if (existing.sideId !== sideId) {
+            const idx = nextPersons.findIndex((np) => np.personId === pid)
+            if (idx >= 0) nextPersons[idx] = { ...nextPersons[idx], sideId }
+            addedCount += 1
+          }
+        } else {
+          nextPersons.push({
+            personId: pid,
+            role: member.roleLabel ?? undefined,
+            sideId,
+          })
+          addedCount += 1
+        }
+      }
+      if (addedCount > 0) {
+        onPatch({ relatedPersons: nextPersons } as UpdateEventDto)
+        notify.success(`집단 소속 인물 ${addedCount}명을 이 진영에 반영했습니다`)
+      } else {
+        notify.success('이미 모든 소속 인물이 이 진영에 들어 있습니다')
+      }
+    } catch (error) {
+      notify.error(
+        error instanceof Error ? error.message : '집단 소속 인물을 불러오지 못했습니다',
+      )
+    }
+  }
+
+  const linkPersonGroup = async (side: EventSide, groupId: string | null) => {
+    const picked = groupId ? sortedGroups.find((group) => group.id === groupId) : null
+    const shouldRename =
+      picked && (/^진영\s*\d+$/.test(side.name.trim()) || !side.name.trim())
+    await saveSides(
+      toSideInputs(sides).map((input) =>
+        input.id === side.id
+          ? {
+              ...input,
+              personGroupId: groupId,
+              ...(shouldRename ? { name: picked.name } : {}),
+            }
+          : input,
+      ),
+      picked ? `‘${picked.name}’ 계파를 연결했습니다` : '계파 연결을 해제했습니다',
+    )
+    if (groupId) {
+      await importGroupMembersToSide(side.id, groupId)
+    }
+  }
+
+  const assignOrganization = async (relationId: string, sideId: string | null) => {
+    setBusy(true)
+    try {
+      await updateEventOrganization(event.id, relationId, { sideId })
+      await refresh()
+    } catch (error) {
+      notify.error(
+        error instanceof Error ? error.message : '조직 진영 배정에 실패했습니다',
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const importOrganizationMembersToSide = async (
+    sideId: string,
+    organizationId: string,
+    organizationName: string,
+  ) => {
+    try {
+      const members = await getOrganizationMembers(
+        getApiConnection(),
+        organizationId,
+      )
+      if (members.length === 0) {
+        notify.info(`‘${organizationName}’에 등록된 소속 인물이 없습니다`)
+        return
+      }
+      const existingById = new Map(
+        persons.map((person) => [person.personId, person]),
+      )
+      const nextPersons = [
+        ...persons.map((person) => ({
+          personId: person.personId,
+          role: person.role ?? undefined,
+          note: person.note ?? undefined,
+          sideId: person.sideId ?? undefined,
+        })),
+      ]
+      let addedCount = 0
+      for (const member of members) {
+        const pid = member.person.id
+        const existing = existingById.get(pid)
+        if (existing) {
+          if (existing.sideId !== sideId) {
+            const idx = nextPersons.findIndex((np) => np.personId === pid)
+            if (idx >= 0) nextPersons[idx] = { ...nextPersons[idx], sideId }
+            addedCount += 1
+          }
+        } else {
+          nextPersons.push({
+            personId: pid,
+            role: member.roleTitle ?? organizationName,
+            sideId,
+          })
+          addedCount += 1
+        }
+      }
+      if (addedCount > 0) {
+        onPatch({ relatedPersons: nextPersons } as UpdateEventDto)
+        notify.success(
+          `‘${organizationName}’ 소속 인물 ${addedCount}명을 이 진영에 반영했습니다`,
+        )
+      } else {
+        notify.success('이미 모든 소속 인물이 이 진영에 들어 있습니다')
+      }
+    } catch (error) {
+      notify.error(
+        error instanceof Error
+          ? error.message
+          : '기관·조직 소속 인물을 불러오지 못했습니다',
+      )
+    }
+  }
+
   const removeSide = async (side: EventSide) => {
     const memberCount = side.participants.length + side.persons.length
     const ok = await confirm({
@@ -174,8 +391,71 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
     } as UpdateEventDto)
   }
 
+  const swapFirstTwoSides = () => {
+    if (sides.length < 2) return
+    const inputs = toSideInputs(sides)
+    const first = inputs[0]
+    const second = inputs[1]
+    if (!first || !second) return
+    inputs[0] = second
+    inputs[1] = first
+    void saveSides(inputs, '진영 순서를 맞바꿨습니다')
+  }
+
+  type DraggedDetailMember = {
+    kind: 'country' | 'person' | 'organization'
+    key: string
+    fromSideId: string | null
+  }
+  const [draggedMember, setDraggedMember] = useState<DraggedDetailMember | null>(null)
+  const [dragOverTarget, setDragOverTarget] = useState<string | 'UNASSIGNED' | null>(null)
+
+  const encodeDetailDrag = (member: DraggedDetailMember) =>
+    `${member.kind}:${member.key}`
+
+  const decodeDetailDrag = (raw: string): DraggedDetailMember | null => {
+    const colonIdx = raw.indexOf(':')
+    if (colonIdx <= 0) return null
+    const kind = raw.slice(0, colonIdx)
+    const key = raw.slice(colonIdx + 1)
+    if (!key) return null
+    if (kind === 'country' || kind === 'person' || kind === 'organization') {
+      return { kind, key, fromSideId: null }
+    }
+    return null
+  }
+
+  const handleMemberDrop = (
+    dragEvent: React.DragEvent<HTMLElement>,
+    targetSideId: string | null,
+  ) => {
+    dragEvent.preventDefault()
+    const payload =
+      draggedMember ??
+      decodeDetailDrag(dragEvent.dataTransfer?.getData('text/plain') ?? '')
+    setDraggedMember(null)
+    setDragOverTarget(null)
+    if (!payload) return
+    if (payload.fromSideId !== null && payload.fromSideId === targetSideId) return
+    if (payload.kind === 'country') {
+      assignCountry(payload.key, targetSideId)
+    } else if (payload.kind === 'person') {
+      assignPerson(payload.key, targetSideId)
+    } else {
+      void assignOrganization(payload.key, targetSideId)
+    }
+  }
+
   const unassignedCountries = participants.filter(
     (participant) => !participantInfo.get(participantKey(participant))?.sideId,
+  )
+  const totalAssignedAcrossSides = sides.reduce(
+    (sum, side) =>
+      sum +
+      side.participants.length +
+      side.persons.length +
+      side.organizations.length,
+    0,
   )
 
   return (
@@ -189,8 +469,71 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
         {sides.length > 0 && <S.SectionSubtitle>{sides.length}</S.SectionSubtitle>}
       </S.SectionHeader>
 
+      {sides.length >= 2 && (
+        <VsBanner role="region" aria-label="진영 대결 구도 요약">
+          <VsTopRow>
+            <VsTeamsWrap>
+              {coloredSides.map((side, index) => {
+                const countParts = [
+                  side.participants.length > 0 ? `국가 ${side.participants.length}` : '',
+                  side.persons.length > 0 ? `인물 ${side.persons.length}` : '',
+                  side.organizations.length > 0 ? `조직 ${side.organizations.length}` : '',
+                ].filter(Boolean)
+                return (
+                  <VsTeamGroup key={side.id}>
+                    {index > 0 && <VsDividerBadge aria-hidden>VS</VsDividerBadge>}
+                    <VsTeamDot $color={side.color} />
+                    <VsTeamName>{side.name}</VsTeamName>
+                    {side.outcome && (
+                      <VsOutcomeBadge $outcome={side.outcome}>
+                        {SIDE_OUTCOME_LABEL[side.outcome]}
+                      </VsOutcomeBadge>
+                    )}
+                    <VsTeamMeta>
+                      ({countParts.length > 0 ? countParts.join(' · ') : '소속 0'})
+                    </VsTeamMeta>
+                  </VsTeamGroup>
+                )
+              })}
+            </VsTeamsWrap>
+            <VsActionsWrap>
+              <VsDragHint>⠿ 항목을 끌어 진영 이동</VsDragHint>
+              <VsSwapButton
+                type="button"
+                disabled={busy}
+                aria-label="1번·2번 진영 순서 맞바꾸기"
+                onClick={swapFirstTwoSides}
+              >
+                ⇄ 순서 바꾸기
+              </VsSwapButton>
+            </VsActionsWrap>
+          </VsTopRow>
+          <VsGaugeTrack aria-hidden>
+            {coloredSides.map((side) => {
+              const memberCount =
+                side.participants.length +
+                side.persons.length +
+                side.organizations.length
+              const weight =
+                totalAssignedAcrossSides > 0 ? Math.max(memberCount, 0.25) : 1
+              return (
+                <VsGaugeSegment
+                  key={side.id}
+                  $color={side.color}
+                  $empty={memberCount === 0}
+                  style={{ flexGrow: weight }}
+                />
+              )
+            })}
+          </VsGaugeTrack>
+        </VsBanner>
+      )}
+
       <SideGrid>
         {sides.map((side) => {
+          const sideColor =
+            coloredSides.find((colored) => colored.id === side.id)?.color ??
+            SIDE_PALETTE[0]
           const countryOptions = participants
             .filter((participant) => participantInfo.get(participantKey(participant))?.sideId !== side.id)
             .map((participant) => {
@@ -201,9 +544,53 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
                 label: elsewhere ? `${info?.name ?? ''} (${elsewhere}에서 옮김)` : (info?.name ?? ''),
               }
             })
+          const orgOptions = organizations
+            .filter((org) => !side.organizations.some((member) => member.relationId === org.relationId))
+            .map((org) => {
+              const elsewhere = sides.find((other) =>
+                other.organizations.some((member) => member.relationId === org.relationId),
+              )?.name
+              return {
+                value: org.relationId,
+                label: elsewhere
+                  ? `${org.name} (${elsewhere}에서 옮김)`
+                  : org.name,
+              }
+            })
+          const groupOptions = sortedGroups.map((group) => ({
+            value: group.id,
+            label: `${group.name}${
+              group.historicalCountryName
+                ? ` (${group.historicalCountryName})`
+                : group.countryName
+                  ? ` (${group.countryName})`
+                  : ''
+            }`,
+          }))
           return (
-            <SideCard key={side.id}>
-              <SideHead $color={coloredSides.find((colored) => colored.id === side.id)?.color ?? SIDE_PALETTE[0]}>
+            <SideCard
+              key={side.id}
+              data-side-dropzone={side.id}
+              $dragOver={dragOverTarget === side.id}
+              $color={sideColor}
+              onDragOver={(dragEvent) => {
+                dragEvent.preventDefault()
+                if (dragOverTarget !== side.id) setDragOverTarget(side.id)
+              }}
+              onDragLeave={(dragEvent) => {
+                if (
+                  !dragEvent.currentTarget.contains(
+                    dragEvent.relatedTarget as Node | null,
+                  )
+                ) {
+                  setDragOverTarget((current) =>
+                    current === side.id ? null : current,
+                  )
+                }
+              }}
+              onDrop={(dragEvent) => handleMemberDrop(dragEvent, side.id)}
+            >
+              <SideHead $color={sideColor}>
                 <SideName>
                   <InlineText value={side.name} onSave={(next) => renameSide(side, next)} as="span" />
                 </SideName>
@@ -211,6 +598,57 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
                   <FiX />
                 </RemoveButton>
               </SideHead>
+
+              <FactionLinkRow aria-label={`${side.name} 영구 계파 연결`}>
+                {side.personGroupId ? (
+                  <>
+                    <FactionBadgeLink
+                      to={pathKeys.personGroupDetail(side.personGroupId)}
+                      title="영구 등록된 집단·계파 상세 보기"
+                    >
+                      계파: {side.personGroup?.name ?? side.name}{' '}
+                      <FiExternalLink size={11} />
+                    </FactionBadgeLink>
+                    <PersonPickButton
+                      type="button"
+                      onClick={() =>
+                        void importGroupMembersToSide(
+                          side.id,
+                          side.personGroupId!,
+                        )
+                      }
+                    >
+                      소속 인물 불러오기
+                    </PersonPickButton>
+                    <PersonPickButton
+                      type="button"
+                      onClick={() => void linkPersonGroup(side, null)}
+                    >
+                      연결 해제
+                    </PersonPickButton>
+                  </>
+                ) : (
+                  <>
+                    {groupOptions.length > 0 && (
+                      <InlineSelect
+                        value=""
+                        options={groupOptions}
+                        onSave={(groupId) =>
+                          void linkPersonGroup(side, groupId || null)
+                        }
+                        placeholder="영구 계파 연결"
+                        label={`${side.name}에 연결할 영구 집단·계파`}
+                      />
+                    )}
+                    <PersonPickButton
+                      type="button"
+                      onClick={() => setCreatingGroupSide(side)}
+                    >
+                      + 영구 계파로 등록
+                    </PersonPickButton>
+                  </>
+                )}
+              </FactionLinkRow>
 
               <OutcomeRow aria-label={`${side.name}의 결과`}>
                 <OutcomeLabel>결과</OutcomeLabel>
@@ -240,14 +678,54 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
                     : participantKey({ countryId: member.countryId })
                   const join = formatPoint(member.join)
                   const withdraw = formatPoint(member.withdraw)
+                  const spanRatio = computeJoinSpanRatio(
+                    event.startDate,
+                    event.endDate,
+                    member.join,
+                    member.withdraw,
+                  )
+                  const dragPayload: DraggedDetailMember = {
+                    kind: 'country',
+                    key,
+                    fromSideId: side.id,
+                  }
                   return (
-                    <Member key={member.participantId}>
+                    <Member
+                      key={member.participantId}
+                      draggable
+                      title="드래그하여 다른 진영이나 미지정으로 이동"
+                      onDragStart={(dragEvent) => {
+                        setDraggedMember(dragPayload)
+                        dragEvent.dataTransfer?.setData(
+                          'text/plain',
+                          encodeDetailDrag(dragPayload),
+                        )
+                      }}
+                      onDragEnd={() => {
+                        setDraggedMember(null)
+                        setDragOverTarget(null)
+                      }}
+                    >
                       <MemberName>{member.name}</MemberName>
                       {member.participation && member.participation !== 'FULL' && (
                         <MemberTag>{PARTICIPATION_LABEL[member.participation] ?? member.participation}</MemberTag>
                       )}
                       {(join || withdraw) && (
                         <MemberMeta title={[member.joinReason, member.withdrawReason].filter(Boolean).join(' / ')}>
+                          {spanRatio && (
+                            <MemberTimelineTrack
+                              aria-label={`${member.name} 참전 기간 비율`}
+                              title={`사건 기간 대비 참전 구간 (${join ? `${join} 가담` : '개전부터'} ~ ${withdraw ? `${withdraw} 이탈` : '종전까지'})`}
+                            >
+                              <MemberTimelineFill
+                                $color={sideColor}
+                                style={{
+                                  left: `${spanRatio.leftPct}%`,
+                                  width: `${spanRatio.widthPct}%`,
+                                }}
+                              />
+                            </MemberTimelineTrack>
+                          )}
                           {join ? `${join} 가담` : ''}
                           {join && withdraw ? ' · ' : ''}
                           {withdraw ? `${withdraw} 이탈` : ''}
@@ -263,20 +741,99 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
                     </Member>
                   )
                 })}
-                {side.persons.map((member) => (
-                  <Member key={member.personEventId} $person>
-                    <MemberName>{[member.name, member.surname].filter(Boolean).join(' ')}</MemberName>
-                    <MemberRemove
-                      type="button"
-                      onClick={() => assignPerson(member.personId, null)}
-                      aria-label={`${member.name}을(를) 진영에서 빼기`}
+                {side.persons.map((member) => {
+                  const dragPayload: DraggedDetailMember = {
+                    kind: 'person',
+                    key: member.personId,
+                    fromSideId: side.id,
+                  }
+                  return (
+                    <Member
+                      key={member.personEventId}
+                      $person
+                      draggable
+                      title="드래그하여 다른 진영이나 미지정으로 이동"
+                      onDragStart={(dragEvent) => {
+                        setDraggedMember(dragPayload)
+                        dragEvent.dataTransfer?.setData(
+                          'text/plain',
+                          encodeDetailDrag(dragPayload),
+                        )
+                      }}
+                      onDragEnd={() => {
+                        setDraggedMember(null)
+                        setDragOverTarget(null)
+                      }}
                     >
-                      <FiX />
-                    </MemberRemove>
-                  </Member>
-                ))}
-                {side.participants.length + side.persons.length === 0 && (
-                  <EmptyLine>아직 소속이 없습니다 — 이 사건의 참여국·인물에서 고르세요</EmptyLine>
+                      <MemberName>{[member.name, member.surname].filter(Boolean).join(' ')}</MemberName>
+                      <MemberRemove
+                        type="button"
+                        onClick={() => assignPerson(member.personId, null)}
+                        aria-label={`${member.name}을(를) 진영에서 빼기`}
+                      >
+                        <FiX />
+                      </MemberRemove>
+                    </Member>
+                  )
+                })}
+                {side.organizations.map((org) => {
+                  const dragPayload: DraggedDetailMember = {
+                    kind: 'organization',
+                    key: org.relationId,
+                    fromSideId: side.id,
+                  }
+                  return (
+                    <Member
+                      key={org.relationId}
+                      $person
+                      draggable
+                      title="드래그하여 다른 진영이나 미지정으로 이동"
+                      onDragStart={(dragEvent) => {
+                        setDraggedMember(dragPayload)
+                        dragEvent.dataTransfer?.setData(
+                          'text/plain',
+                          encodeDetailDrag(dragPayload),
+                        )
+                      }}
+                      onDragEnd={() => {
+                        setDraggedMember(null)
+                        setDragOverTarget(null)
+                      }}
+                    >
+                      <MemberName>
+                        <Link
+                          to={`/organizations?selected=${org.organizationId}&tab=members`}
+                          title="기관·조직 상세 및 소속 인물 관리"
+                          style={{ color: 'inherit', textDecoration: 'none' }}
+                        >
+                          🏢 {org.name}
+                        </Link>
+                      </MemberName>
+                      <FactionTinyBtn
+                        type="button"
+                        title={`${org.name} 소속 인물(위원·역할)을 이 진영으로 불러오기`}
+                        onClick={() =>
+                          void importOrganizationMembersToSide(
+                            side.id,
+                            org.organizationId,
+                            org.name,
+                          )
+                        }
+                      >
+                        소속 인물 불러오기
+                      </FactionTinyBtn>
+                      <MemberRemove
+                        type="button"
+                        onClick={() => void assignOrganization(org.relationId, null)}
+                        aria-label={`${org.name}을(를) 진영에서 빼기`}
+                      >
+                        <FiX />
+                      </MemberRemove>
+                    </Member>
+                  )
+                })}
+                {side.participants.length + side.persons.length + side.organizations.length === 0 && (
+                  <EmptyLine>아직 소속이 없습니다 — 이 사건의 참여국·인물·계파에서 고르거나 칩을 끌어 놓으세요</EmptyLine>
                 )}
               </MemberList>
 
@@ -293,6 +850,15 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
                 <PersonPickButton type="button" onClick={() => setPersonPickerSide(side)}>
                   인물 넣기
                 </PersonPickButton>
+                {orgOptions.length > 0 && (
+                  <InlineSelect
+                    value=""
+                    options={orgOptions}
+                    onSave={(relationId) => void assignOrganization(relationId, side.id)}
+                    placeholder="조직 넣기"
+                    label={`${side.name}에 넣을 조직`}
+                  />
+                )}
               </Pickers>
 
               <SideDescription>
@@ -309,16 +875,58 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
         })}
       </SideGrid>
 
-      {sides.length > 0 && unassignedCountries.length > 0 && (
-        /* 진영 밖 참여국 — 예전엔 읽기만 하는 글줄이라, 넣으려면 진영 카드마다 '국가 넣기'를 열어 찾아야 했다.
-           이름을 누르면 그 자리에서 진영을 고른다 */
-        <Unassigned aria-label="진영 미지정 참여국">
-          <UnassignedLabel>진영 미지정</UnassignedLabel>
+      {sides.length > 0 && (unassignedCountries.length > 0 || (draggedMember && draggedMember.fromSideId !== null)) && (
+        /* 진영 밖 참여국 — 이름을 누르면 진영을 고르거나 진영 카드로 드래그해 넣는다 */
+        <Unassigned
+          aria-label="진영 미지정 참여국"
+          $dragOver={dragOverTarget === 'UNASSIGNED'}
+          onDragOver={(dragEvent) => {
+            dragEvent.preventDefault()
+            if (dragOverTarget !== 'UNASSIGNED') setDragOverTarget('UNASSIGNED')
+          }}
+          onDragLeave={(dragEvent) => {
+            if (
+              !dragEvent.currentTarget.contains(
+                dragEvent.relatedTarget as Node | null,
+              )
+            ) {
+              setDragOverTarget((current) =>
+                current === 'UNASSIGNED' ? null : current,
+              )
+            }
+          }}
+          onDrop={(dragEvent) => handleMemberDrop(dragEvent, null)}
+        >
+          <UnassignedLabel>
+            {unassignedCountries.length > 0
+              ? '진영 미지정'
+              : '여기에 놓으면 진영 배정이 해제됩니다'}
+          </UnassignedLabel>
           {unassignedCountries.map((participant) => {
             const key = participantKey(participant)
             const name = participantInfo.get(key)?.name ?? ''
+            const dragPayload: DraggedDetailMember = {
+              kind: 'country',
+              key,
+              fromSideId: null,
+            }
             return (
-              <UnassignedChip key={key}>
+              <UnassignedChip
+                key={key}
+                draggable
+                title="원하는 진영 카드로 드래그하여 배정"
+                onDragStart={(dragEvent) => {
+                  setDraggedMember(dragPayload)
+                  dragEvent.dataTransfer?.setData(
+                    'text/plain',
+                    encodeDetailDrag(dragPayload),
+                  )
+                }}
+                onDragEnd={() => {
+                  setDraggedMember(null)
+                  setDragOverTarget(null)
+                }}
+              >
                 <InlineSelect
                   value=""
                   options={sides.map((side) => ({ value: side.id, label: `${side.name}에 넣기` }))}
@@ -348,9 +956,177 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
           title={`${personPickerSide.name}에 넣을 인물`}
         />
       )}
+
+      {creatingGroupSide && (
+        <PersonGroupCreateModal
+          defaultType="FACTION"
+          defaultName={creatingGroupSide.name}
+          defaultCountryId={event.relatedCountries?.[0]?.id}
+          defaultHistoricalCountryId={event.relatedHistoricalCountries?.[0]?.id}
+          defaultMembers={creatingGroupSide.persons.map((member) => ({
+            id: member.personId,
+            name: [member.name, member.surname].filter(Boolean).join(' '),
+          }))}
+          candidatePersons={(event.persons ?? []).map((person) => ({
+            id: person.id,
+            name: [person.name, person.surname].filter(Boolean).join(' '),
+          }))}
+          onClose={() => setCreatingGroupSide(null)}
+          onCreated={(createdGroup) => {
+            const targetSide = creatingGroupSide
+            setCreatingGroupSide(null)
+            void linkPersonGroup(targetSide, createdGroup.id)
+          }}
+        />
+      )}
     </S.Section>
   )
 }
+
+const VsBanner = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border-radius: ${RADIUS.MD};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(15,23,42,0.025)'};
+`
+
+const VsTopRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+`
+
+const VsTeamsWrap = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+`
+
+const VsTeamGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  min-width: 0;
+`
+
+const VsTeamDot = styled.span<{ $color: string }>`
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background: ${({ $color }) => $color};
+  flex-shrink: 0;
+`
+
+const VsTeamName = styled.span`
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const VsOutcomeBadge = styled.span<{ $outcome: SideOutcome }>`
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: ${({ $outcome, theme }) =>
+    $outcome === 'VICTORY'
+      ? theme.mode === 'dark'
+        ? 'rgba(16, 185, 129, 0.2)'
+        : 'rgba(16, 185, 129, 0.14)'
+      : $outcome === 'DEFEAT'
+        ? theme.mode === 'dark'
+          ? 'rgba(244, 63, 94, 0.2)'
+          : 'rgba(244, 63, 94, 0.12)'
+        : theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.1)'
+          : 'rgba(15, 23, 42, 0.08)'};
+  color: ${({ $outcome, theme }) =>
+    $outcome === 'VICTORY'
+      ? theme.mode === 'dark'
+        ? '#34d399'
+        : '#047857'
+      : $outcome === 'DEFEAT'
+        ? theme.mode === 'dark'
+          ? '#fb7185'
+          : '#be123c'
+        : theme.colors.text.secondary};
+`
+
+const VsTeamMeta = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const VsDividerBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.08)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const VsActionsWrap = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+`
+
+const VsDragHint = styled.span`
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const VsSwapButton = styled.button`
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.14)' : 'rgba(15,23,42,0.14)'};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.text.secondary};
+  }
+`
+
+const VsGaugeTrack = styled.div`
+  display: flex;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  gap: 2px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.06)'};
+`
+
+const VsGaugeSegment = styled.div<{ $color: string; $empty?: boolean }>`
+  height: 100%;
+  border-radius: 999px;
+  background: ${({ $color }) => $color};
+  opacity: ${({ $empty }) => ($empty ? 0.25 : 0.85)};
+  transition: flex-grow 0.22s ease, opacity 0.18s ease;
+`
 
 const SideGrid = styled.div`
   display: grid;
@@ -361,15 +1137,24 @@ const SideGrid = styled.div`
 /**
  * 진영 카드 — 선 없이 면으로(참여 탭과 같은 문법). 진영 색은 위 테두리가 아니라 머리 띠의 옅은 바탕으로.
  */
-const SideCard = styled.section`
+const SideCard = styled.section<{ $dragOver?: boolean; $color?: string }>`
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 0 16px 14px;
   border-radius: ${RADIUS.MD};
-  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.035)' : 'rgba(15,23,42,0.03)')};
+  background: ${({ theme, $dragOver, $color }) =>
+    $dragOver && $color
+      ? `color-mix(in srgb, ${$color} ${theme.mode === 'dark' ? 14 : 8}%, transparent)`
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.035)'
+        : 'rgba(15,23,42,0.03)'};
+  outline: ${({ $dragOver, $color }) =>
+    $dragOver && $color ? `2px dashed ${$color}` : 'none'};
+  outline-offset: -2px;
   overflow: hidden;
   min-width: 0;
+  transition: background 0.14s ease, outline-color 0.14s ease;
 `
 
 const SideHead = styled.div<{ $color: string }>`
@@ -434,6 +1219,32 @@ const OutcomeRow = styled.div`
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
+const FactionLinkRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  font-size: 12.5px;
+`
+
+const FactionBadgeLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  background: ${({ theme }) => `${theme.colors.primary}16`};
+  color: ${({ theme }) => theme.colors.primary};
+  border: 1px solid ${({ theme }) => `${theme.colors.primary}38`};
+
+  &:hover {
+    filter: brightness(0.92);
+  }
+`
+
 const OutcomeLabel = styled.span`
   font-size: 11.5px;
   font-weight: 600;
@@ -459,11 +1270,16 @@ const MemberList = styled.ul`
 
 const Member = styled.li<{ $person?: boolean }>`
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
   min-width: 0;
   font-size: ${({ $person }) => ($person ? '12.5px' : '13.5px')};
   color: ${({ theme, $person }) => ($person ? theme.colors.text.secondary : theme.colors.text.primary)};
+  cursor: grab;
+
+  &:active {
+    cursor: grabbing;
+  }
 `
 
 const MemberName = styled.span`
@@ -483,10 +1299,33 @@ const MemberTag = styled.span`
 `
 
 const MemberMeta = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   flex-shrink: 0;
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const MemberTimelineTrack = styled.span`
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 5px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
+  overflow: hidden;
+  flex-shrink: 0;
+`
+
+const MemberTimelineFill = styled.span<{ $color: string }>`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: ${({ $color }) => $color};
 `
 
 const MemberRemove = styled.button`
@@ -540,14 +1379,21 @@ const SideDescription = styled.div`
   white-space: pre-line;
 `
 
-const Unassigned = styled.div`
+const Unassigned = styled.div<{ $dragOver?: boolean }>`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 8px;
   margin: 12px 0 0;
+  padding: ${({ $dragOver }) => ($dragOver ? '8px 10px' : '4px 0')};
+  border-radius: ${RADIUS.SM};
+  outline: ${({ $dragOver, theme }) =>
+    $dragOver ? `2px dashed ${theme.colors.primary}` : 'none'};
+  background: ${({ $dragOver, theme }) =>
+    $dragOver ? `${theme.colors.primary}12` : 'transparent'};
   font-size: 12.5px;
   color: ${({ theme }) => theme.colors.text.secondary};
+  transition: padding 0.14s ease, background 0.14s ease;
 `
 
 const UnassignedLabel = styled.span`
@@ -563,6 +1409,11 @@ const UnassignedChip = styled.span`
   border-radius: 999px;
   background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : 'rgba(15,23,42,0.06)')};
   color: ${({ theme }) => theme.colors.text.primary};
+  cursor: grab;
+
+  &:active {
+    cursor: grabbing;
+  }
 
   /* 인라인 피커의 빈 값 자리표시(기울임·흐림)를 칩 안에선 평범한 이름처럼 */
   [data-empty='true'] {
@@ -620,4 +1471,8 @@ const PersonPickButton = styled.button`
     outline-offset: 2px;
     border-radius: 2px;
   }
+`
+
+const FactionTinyBtn = styled(PersonPickButton)`
+  font-size: 11.5px;
 `

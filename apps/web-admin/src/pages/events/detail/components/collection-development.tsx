@@ -186,6 +186,7 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
   /** 끌어다 놓기 — 끄는 중인 사건, 지금 가리키는 자리와 그 결과 */
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dropHint, setDropHint] = useState<{ targetId: string; action: DropAction } | null>(null)
+  const [chapterDropKey, setChapterDropKey] = useState<string | null>(null)
   /** 개별 위에 놓아 새 묶음을 만들 때 — 이름을 받는 줄이 놓인 사건 아래에 열린다 */
   const [groupPrompt, setGroupPrompt] = useState<{ draggedId: string; withId: string; parentId: string } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -481,6 +482,7 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
     clearSpring()
     setDraggingId(null)
     setDropHint(null)
+    setChapterDropKey(null)
   }
 
   /**
@@ -534,6 +536,26 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
       notify.error(`옮기지 못했습니다 — ${crossPatchErrorMessage(error)}`)
     } finally {
       refreshAround([id, parentId, previousParent])
+      setBusy(false)
+    }
+  }
+
+  /** 국면(장) 머리 위에 놓기 — 하위 사건의 phaseId를 해당 국면(또는 국면 해제)으로 바로 바꾼다 */
+  const assignChapterPhase = async (
+    id: string,
+    nextPhaseId: string | null,
+    chapterLabel: string,
+    ownerId: string,
+  ) => {
+    setBusy(true)
+    try {
+      await updateEvent(id, { phaseId: nextPhaseId } as UpdateEventDto)
+      markDragHintSeen()
+      notify.success(`'${titleOf(id)}'을(를) ${chapterLabel}(으)로 배정했습니다`)
+    } catch (error) {
+      notify.error(`국면 배정에 실패했습니다 — ${crossPatchErrorMessage(error)}`)
+    } finally {
+      refreshAround([id, ownerId])
       setBusy(false)
     }
   }
@@ -1055,12 +1077,41 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
         : head.reach.outside === 'after' && last
           ? `${chapters.length}국면(–${phaseRangeLabel(last).split('–')[1] ?? ''}) 이후`
           : ''
+    const canDropToChapter = Boolean(
+      draggingId && !index.get(draggingId)?.viaExtraLink && (index.get(draggingId)?.parentEventId ?? event.id) === ownerId,
+    )
     return (
       <ChapterHead
         key={`chapter-${firstNodeId}`}
         $depth={depth}
         data-outside={!chapter || undefined}
+        data-drop-chapter={chapterDropKey === foldKey || undefined}
         aria-label={`${kicker}${chapter ? ` ${chapter.title}` : ''}${range ? `, ${range}` : ''}, ${head.count}건`}
+        onDragOver={(dragEvent) => {
+          if (!canDropToChapter) return
+          dragEvent.preventDefault()
+          dragEvent.stopPropagation()
+          dragEvent.dataTransfer.dropEffect = 'move'
+          if (chapterDropKey !== foldKey) setChapterDropKey(foldKey)
+        }}
+        onDragLeave={(dragEvent) => {
+          if (dragEvent.currentTarget.contains(dragEvent.relatedTarget as globalThis.Node | null)) return
+          if (chapterDropKey === foldKey) setChapterDropKey(null)
+        }}
+        onDrop={(dragEvent) => {
+          if (!canDropToChapter) return
+          dragEvent.preventDefault()
+          dragEvent.stopPropagation()
+          const draggedId = draggingId
+          endDrag()
+          if (!draggedId) return
+          void assignChapterPhase(
+            draggedId,
+            chapter ? chapter.id : null,
+            chapter ? `${position}국면 '${chapter.title}'` : '국면 밖',
+            ownerId,
+          )
+        }}
       >
         <ChapterMark aria-hidden $depth={depth}>
           {position ?? '·'}
@@ -2320,6 +2371,11 @@ const ChapterHead = styled.li<{ $depth: number }>`
 
   &[data-outside] {
     background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.045)')};
+  }
+
+  &[data-drop-chapter] {
+    box-shadow: inset 0 0 0 2px ${({ theme }) => ledgerAccent(theme.mode)};
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
   }
 `
 

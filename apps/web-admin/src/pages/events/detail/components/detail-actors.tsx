@@ -187,6 +187,16 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
       (side) => [side.id, { name: side.name, color: side.color, outcome: side.outcome, outcomeNote: side.outcomeNote }] as const,
     ),
   )
+  const sideOptions = useMemo(
+    () =>
+      coloredSides.length === 0
+        ? []
+        : [
+            { value: 'none', label: '진영 미지정' },
+            ...coloredSides.map((side) => ({ value: side.id, label: side.name })),
+          ],
+    [coloredSides],
+  )
 
   /**
    * 대표단 보기 — 나라 줄 밑에 그 나라 자격으로 참여한 인물을 매단다(진영 → 나라 → 인물).
@@ -209,6 +219,8 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
       key={entry.personId}
       compact={compact}
       entry={entry}
+      side={entry.sideId && sideById.get(entry.sideId) ? sideById.get(entry.sideId) : null}
+      sideOptions={sideOptions}
       participationOptions={participationOptions}
       manageMode={manageMode}
       isFirst={position.isFirst}

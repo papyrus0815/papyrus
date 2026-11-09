@@ -121,6 +121,29 @@ export interface OrganizationTreeNode extends OrganizationEntity {
   parentIds: string[]
 }
 
+/**
+ * 조직 소속 인물(관직 재임 GovernmentPositionTenure 또는 조직 역할 OrganizationPersonRole)
+ */
+export interface OrganizationMemberEntity {
+  id?: string
+  personId: string
+  roleTitle: string | null
+  source: 'TENURE' | 'ROLE'
+  person: {
+    id: string
+    name: string
+    surname: string | null
+    originalName: string | null
+    profileImageUrl: string | null
+  }
+}
+
+export interface AddOrganizationMemberData {
+  personId: string
+  roleTitle?: string | null
+  notes?: string | null
+}
+
 export interface IOrganizationRepository {
   findById(id: string): Promise<OrganizationEntity | null>
   findMany(filter: OrganizationListFilter): Promise<OrganizationEntity[]>
@@ -133,4 +156,10 @@ export interface IOrganizationRepository {
   findChildren(organizationId: string): Promise<OrganizationHierarchyEntity[]>
   findParents(organizationId: string): Promise<OrganizationHierarchyEntity[]>
   findTree(filter: OrganizationListFilter): Promise<OrganizationTreeNode[]>
+  findMembers(organizationId: string): Promise<OrganizationMemberEntity[]>
+  addMemberRole(
+    organizationId: string,
+    data: AddOrganizationMemberData,
+  ): Promise<OrganizationMemberEntity>
+  removeMemberRole(organizationId: string, personId: string): Promise<void>
 }

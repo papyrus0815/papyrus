@@ -498,17 +498,57 @@ const MoreRow = styled.div`
  * 붙는 기록 → 그 칸으로. '맺어진 조약'은 1단 화면에서 개요 설명 아래, 첫 화면 밖에 있어 "조약 연결이 없다"로 읽혔다.
  * 칸(data-core-record)이 없으면(진영처럼 표시가 안 된 칸) 기록 묶음의 첫 칸으로. 도착하면 잠깐 물들이고 첫 버튼에 포커스.
  */
-function jumpToRecord(facet: string) {
-  const target =
-    document.querySelector<HTMLElement>(`[data-core-record="${facet}"]`) ??
-    document.querySelector<HTMLElement>('[data-core-record]')
-  if (!target) return
-  target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+function scrollAndHighlightTarget(target: HTMLElement) {
+  const rightPane = document.getElementById('event-form-split-right')
+  if (rightPane && rightPane.contains(target) && rightPane.clientHeight > 0) {
+    const paneRect = rightPane.getBoundingClientRect()
+    const targetRect = target.getBoundingClientRect()
+    const nextTop =
+      rightPane.scrollTop +
+      (targetRect.top - paneRect.top) -
+      Math.max(24, (rightPane.clientHeight - targetRect.height) / 2)
+    rightPane.scrollTo?.({ top: Math.max(0, nextTop), behavior: 'smooth' })
+  } else {
+    target.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+  }
   target.animate?.(
-    [{ backgroundColor: 'rgba(99, 102, 241, 0.16)' }, { backgroundColor: 'rgba(99, 102, 241, 0)' }],
+    [
+      { backgroundColor: 'rgba(99, 102, 241, 0.16)' },
+      { backgroundColor: 'rgba(99, 102, 241, 0)' },
+    ],
     { duration: 1600, easing: 'ease-out' },
   )
-  target.querySelector<HTMLElement>('button, input, textarea')?.focus({ preventScroll: true })
+  target
+    .querySelector<HTMLElement>('button, input, textarea')
+    ?.focus({ preventScroll: true })
+}
+
+function jumpToRecord(facet: string) {
+  window.dispatchEvent(
+    new CustomEvent('papyrus:jump-core-record', { detail: { facet } }),
+  )
+  const directTarget = document.querySelector<HTMLElement>(
+    `[data-core-record="${facet}"]`,
+  )
+  if (directTarget) {
+    scrollAndHighlightTarget(directTarget)
+    return
+  }
+  if (facet === 'organizations' || facet === 'persons') {
+    setTimeout(() => {
+      const expandedTarget =
+        document.querySelector<HTMLElement>(`[data-core-record="${facet}"]`) ??
+        document.querySelector<HTMLElement>('[data-core-record]')
+      if (expandedTarget) {
+        scrollAndHighlightTarget(expandedTarget)
+      }
+    }, 0)
+    return
+  }
+  const fallbackTarget = document.querySelector<HTMLElement>('[data-core-record]')
+  if (fallbackTarget) {
+    scrollAndHighlightTarget(fallbackTarget)
+  }
 }
 
 /** 안내 문구 안의 기록 이름 — 굵은 글씨 그대로, 누를 수 있다는 밑줄만 */

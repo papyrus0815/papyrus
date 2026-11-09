@@ -28,6 +28,7 @@ import {
 import { updateElection } from '@/shared/api/election'
 import { personCareerApi } from '@/shared/api/person-career'
 import { treatyApi } from '@/shared/api/treaty'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 
 import {
   guessTreatyType,
@@ -167,15 +168,22 @@ export interface PickedPerson {
   role?: string
 }
 
-export type SideSlot = 'A' | 'B'
+export const SIDE_SLOTS = ['A', 'B', 'C', 'D'] as const
+export type SideSlot = (typeof SIDE_SLOTS)[number]
 
 export interface RegisterFacetDrafts {
   /** 참여 인물 */
   persons: PickedPerson[]
   /** 취임·즉위한 인물 — 참여 인물로도 들어가고, 재임·재위 기록을 이 사건에 잇는다 */
   power: PickedPerson[]
-  /** 진영 — 이름 두 개와 참여국 줄(participantKey)별 소속 */
-  sides: { names: [string, string]; assignment: Record<string, SideSlot> }
+  /** 진영 — 기본 2편(최대 4편), 영구 집단(PersonGroup) 연결, 참여국·참여 인물·조직별 소속 */
+  sides: {
+    names: string[]
+    assignment: Record<string, SideSlot>
+    personGroupIds?: Array<string | null>
+    personAssignment?: Record<string, SideSlot>
+    organizationAssignment?: Record<string, SideSlot>
+  }
   /** 맺어진 조약 */
   treaty:
     | { mode: 'none' }
@@ -208,13 +216,29 @@ export function pruneFacetDraftsForType(
   type: EventTypeKey | null | undefined,
   domain?: string | null,
 ): RegisterFacetDrafts {
-  const core = new Set(typeFacets(type ?? null, domain).core)
+  const facets = typeFacets(type ?? null, domain)
+  const core = new Set(facets.core)
+  const optional = new Set(facets.optional)
+  const hasSidePersonAssignment =
+    core.has('sides') &&
+    Object.keys(drafts.sides.personAssignment ?? {}).length > 0
+  const hasSideOrgAssignment =
+    core.has('sides') &&
+    Object.keys(drafts.sides.organizationAssignment ?? {}).length > 0
   return {
-    persons: core.has('persons') ? drafts.persons : [],
+    persons:
+      core.has('persons') || optional.has('persons') || hasSidePersonAssignment
+        ? drafts.persons
+        : [],
     power: core.has('power') ? drafts.power : [],
     sides: core.has('sides') ? drafts.sides : { names: ['', ''], assignment: {} },
     treaty: core.has('treaty') ? drafts.treaty : { mode: 'none' },
-    organizations: core.has('organizations') ? drafts.organizations : [],
+    organizations:
+      core.has('organizations') ||
+      optional.has('organizations') ||
+      hasSideOrgAssignment
+        ? drafts.organizations
+        : [],
     election: core.has('election') ? drafts.election : null,
   }
 }
@@ -242,11 +266,271 @@ export function hasAnyFacetDraft(drafts: RegisterFacetDrafts): boolean {
   return (
     drafts.persons.length > 0 ||
     drafts.power.length > 0 ||
+    drafts.sides.names.some((name) => name.trim().length > 0) ||
+    (drafts.sides.personGroupIds ?? []).some((id) => !!id) ||
     Object.keys(drafts.sides.assignment).length > 0 ||
+    Object.keys(drafts.sides.personAssignment ?? {}).length > 0 ||
+    Object.keys(drafts.sides.organizationAssignment ?? {}).length > 0 ||
     drafts.treaty.mode !== 'none' ||
     drafts.organizations.length > 0 ||
     drafts.election !== null
   )
+}
+
+export interface ParentEventRecordsSource {
+  title: string
+  type?: EventTypeKey | null
+  sides?: ReadonlyArray<{
+    id: string
+    name: string
+    sortOrder?: number | null
+    personGroupId?: string | null
+    participants?: ReadonlyArray<{
+      countryId?: string | null
+      historicalCountryId?: string | null
+    }>
+    persons?: ReadonlyArray<{
+      personId: string
+      name?: string | null
+      surname?: string | null
+      role?: string | null
+    }>
+    organizations?: ReadonlyArray<{
+      organizationId: string
+      name: string
+      role?: string | null
+    }>
+  }>
+  relatedPersons?: ReadonlyArray<{
+    personId: string
+    role?: string | null
+    sideId?: string | null
+    person?: {
+      id: string
+      name?: string | null
+      surname?: string | null
+      middleName?: string | null
+      nameDisplayOrder?: string | null
+      country?: { defaultNameDisplayOrder?: string | null } | null
+    } | null
+  }>
+  organizations?: ReadonlyArray<{
+    organizationId: string
+    name: string
+    role: EventOrganizationRole
+    sideId?: string | null
+  }>
+}
+
+/**
+ * 상위 사건(예: 프랑스 혁명)에서 아직 하위 사건 초안에 반영되지 않은 진영·인물·조직 구도를 계산해
+ * 원클릭 이어받기 계획을 만든다.
+ */
+export function buildParentRecordsImportPlan(
+  parentSource: ParentEventRecordsSource | null | undefined,
+  currentDrafts: RegisterFacetDrafts,
+): {
+  parentTitle: string
+  summaryLabel: string
+  nextDrafts: RegisterFacetDrafts
+  hasSidesInParent: boolean
+} | null {
+  if (!parentSource) return null
+
+  const sortedSides = [...(parentSource.sides ?? [])]
+    .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0))
+    .slice(0, SIDE_SLOTS.length)
+
+  const sideIdToSlot = new Map<string, SideSlot>()
+  sortedSides.forEach((side, idx) => {
+    const slot = SIDE_SLOTS[idx]
+    if (side.id && slot) {
+      sideIdToSlot.set(side.id, slot)
+    }
+  })
+
+  const currentSidesEmpty =
+    currentDrafts.sides.names.every((name) => !name.trim()) &&
+    !(currentDrafts.sides.personGroupIds ?? []).some(Boolean)
+
+  let nextSideNames = [...currentDrafts.sides.names]
+  let nextPersonGroupIds = currentDrafts.sides.personGroupIds
+    ? [...currentDrafts.sides.personGroupIds]
+    : undefined
+  let newSidesCount = 0
+
+  if (sortedSides.length > 0 && currentSidesEmpty) {
+    nextSideNames = sortedSides.map((side) => side.name)
+    while (nextSideNames.length < 2) nextSideNames.push('')
+    nextPersonGroupIds = sortedSides.map((side) => side.personGroupId ?? null)
+    while (nextPersonGroupIds.length < 2) nextPersonGroupIds.push(null)
+    newSidesCount = sortedSides.length
+  }
+
+  const nextCountryAssignment: Record<string, SideSlot> = {
+    ...currentDrafts.sides.assignment,
+  }
+  sortedSides.forEach((side, idx) => {
+    const slot = SIDE_SLOTS[idx]
+    if (!slot) return
+    for (const pt of side.participants ?? []) {
+      const key = pt.historicalCountryId
+        ? `h:${pt.historicalCountryId}`
+        : pt.countryId
+          ? `m:${pt.countryId}`
+          : ''
+      if (key && !nextCountryAssignment[key]) {
+        nextCountryAssignment[key] = slot
+      }
+    }
+  })
+
+  // 인물 수집
+  const existingPersonIds = new Set(
+    currentDrafts.persons.map((item) => item.personId),
+  )
+  const nextPersons: PickedPerson[] = [...currentDrafts.persons]
+  const nextPersonAssignment: Record<string, SideSlot> = {
+    ...(currentDrafts.sides.personAssignment ?? {}),
+  }
+  let newPersonsCount = 0
+
+  for (const relPerson of parentSource.relatedPersons ?? []) {
+    const pid = relPerson.personId
+    if (!pid) continue
+    const displayName = relPerson.person
+      ? getPersonDisplayName(
+          {
+            ...relPerson.person,
+            name: relPerson.person.name ?? '',
+          },
+          true,
+        )
+      : ''
+    if (!existingPersonIds.has(pid) && displayName) {
+      existingPersonIds.add(pid)
+      nextPersons.push({
+        personId: pid,
+        name: displayName,
+        ...(relPerson.role ? { role: relPerson.role } : {}),
+      })
+      newPersonsCount += 1
+    }
+    const assignedSlot = relPerson.sideId
+      ? sideIdToSlot.get(relPerson.sideId)
+      : undefined
+    if (assignedSlot && !nextPersonAssignment[pid]) {
+      nextPersonAssignment[pid] = assignedSlot
+    }
+  }
+
+  sortedSides.forEach((side, idx) => {
+    const slot = SIDE_SLOTS[idx]
+    if (!slot) return
+    for (const sidePerson of side.persons ?? []) {
+      const pid = sidePerson.personId
+      if (!pid) continue
+      const displayName = getPersonDisplayName(
+        { name: sidePerson.name ?? '', surname: sidePerson.surname },
+        true,
+      )
+      if (!existingPersonIds.has(pid) && displayName) {
+        existingPersonIds.add(pid)
+        nextPersons.push({
+          personId: pid,
+          name: displayName,
+          ...(sidePerson.role ? { role: sidePerson.role } : {}),
+        })
+        newPersonsCount += 1
+      }
+      if (!nextPersonAssignment[pid]) {
+        nextPersonAssignment[pid] = slot
+      }
+    }
+  })
+
+  // 기업·조직 수집
+  const existingOrgIds = new Set(
+    currentDrafts.organizations.map((item) => item.id),
+  )
+  const nextOrgs = [...currentDrafts.organizations]
+  const nextOrgAssignment: Record<string, SideSlot> = {
+    ...(currentDrafts.sides.organizationAssignment ?? {}),
+  }
+  let newOrgsCount = 0
+
+  for (const relOrg of parentSource.organizations ?? []) {
+    const orgId = relOrg.organizationId
+    if (!orgId) continue
+    if (!existingOrgIds.has(orgId) && relOrg.name) {
+      existingOrgIds.add(orgId)
+      nextOrgs.push({
+        id: orgId,
+        name: relOrg.name,
+        role: relOrg.role || 'PRINCIPAL',
+      })
+      newOrgsCount += 1
+    }
+    const assignedSlot = relOrg.sideId
+      ? sideIdToSlot.get(relOrg.sideId)
+      : undefined
+    if (assignedSlot && !nextOrgAssignment[orgId]) {
+      nextOrgAssignment[orgId] = assignedSlot
+    }
+  }
+
+  sortedSides.forEach((side, idx) => {
+    const slot = SIDE_SLOTS[idx]
+    if (!slot) return
+    for (const sideOrg of side.organizations ?? []) {
+      const orgId = sideOrg.organizationId
+      if (!orgId) continue
+      if (!existingOrgIds.has(orgId) && sideOrg.name) {
+        existingOrgIds.add(orgId)
+        nextOrgs.push({
+          id: orgId,
+          name: sideOrg.name,
+          role: (sideOrg.role as EventOrganizationRole) || 'PRINCIPAL',
+        })
+        newOrgsCount += 1
+      }
+      if (!nextOrgAssignment[orgId]) {
+        nextOrgAssignment[orgId] = slot
+      }
+    }
+  })
+
+  if (newSidesCount === 0 && newPersonsCount === 0 && newOrgsCount === 0) {
+    return null
+  }
+
+  const summaryParts: string[] = []
+  if (newSidesCount > 0) summaryParts.push(`진영 ${newSidesCount}`)
+  if (newOrgsCount > 0) summaryParts.push(`조직 ${newOrgsCount}곳`)
+  if (newPersonsCount > 0) summaryParts.push(`인물 ${newPersonsCount}명`)
+
+  return {
+    parentTitle: parentSource.title,
+    summaryLabel: summaryParts.join(' · '),
+    hasSidesInParent: sortedSides.length > 0,
+    nextDrafts: {
+      ...currentDrafts,
+      persons: nextPersons,
+      organizations: nextOrgs,
+      sides: {
+        ...currentDrafts.sides,
+        names: nextSideNames,
+        ...(nextPersonGroupIds ? { personGroupIds: nextPersonGroupIds } : {}),
+        assignment: nextCountryAssignment,
+        ...(Object.keys(nextPersonAssignment).length > 0
+          ? { personAssignment: nextPersonAssignment }
+          : {}),
+        ...(Object.keys(nextOrgAssignment).length > 0
+          ? { organizationAssignment: nextOrgAssignment }
+          : {}),
+      },
+    },
+  }
 }
 
 const POWER_ROLE = '취임·즉위'
@@ -279,6 +563,14 @@ export function suggestSideAssignment(
   participants: ReadonlyArray<EventCountryParticipant>,
   current: Record<string, SideSlot>,
 ): Record<string, SideSlot> {
+  // 참여국이 1개국뿐이고 적대/대상 역할이 아닌 경우(예: 프랑스 혁명의 '프랑스')는
+  // 국가 자체가 특정 내부 파벌(1편)로 자동 배정되지 않도록 미배정 상태로 둔다.
+  if (
+    participants.length <= 1 &&
+    !participants.some((row) => SIDE_B_ROLES.has(row.role ?? ''))
+  ) {
+    return { ...current }
+  }
   const next = { ...current }
   for (const row of participants) {
     const key = participantKey(row)
@@ -289,7 +581,12 @@ export function suggestSideAssignment(
   return next
 }
 
-const SIDE_COLORS: [string, string] = ['#1d4ed8', '#b91c1c']
+const SIDE_COLORS: ReadonlyArray<string> = [
+  '#1d4ed8',
+  '#b91c1c',
+  '#047857',
+  '#7c3aed',
+]
 
 export interface CommitInput {
   eventId: string
@@ -331,27 +628,70 @@ export async function commitRegisterFacets(input: CommitInput): Promise<CommitRe
     }
   }
 
-  // 진영 — 소속을 하나라도 정했을 때만. 두 편을 만들고 참여국 줄에 진영을 건다.
-  const assigned = Object.entries(drafts.sides.assignment)
-  if (assigned.length > 0) {
+  // 진영 — 진영 이름·영구 집단(계파)·참여국·참여 인물·참여 조직 중 하나라도 지정됐을 때 두 편을 만든다.
+  const countryAssigned = Object.entries(drafts.sides.assignment)
+  const personAssigned = Object.entries(drafts.sides.personAssignment ?? {})
+  const orgAssigned = Object.entries(drafts.sides.organizationAssignment ?? {})
+  const hasNamedSides = drafts.sides.names.some((name) => name.trim().length > 0)
+  const hasLinkedGroups = (drafts.sides.personGroupIds ?? []).some((id) => !!id)
+  const shouldCreateSides =
+    countryAssigned.length > 0 ||
+    personAssigned.length > 0 ||
+    orgAssigned.length > 0 ||
+    hasNamedSides ||
+    hasLinkedGroups
+
+  let createdSideIdOf: ((slot: SideSlot) => string | undefined) | null = null
+
+  if (shouldCreateSides) {
     await attempt('진영', async () => {
-      const names = drafts.sides.names.map((name, index) => name.trim() || `진영 ${index + 1}`)
-      const sides: EventSide[] = await syncEventSides(eventId, [
-        { name: names[0], level: 'COALITION', color: SIDE_COLORS[0] },
-        { name: names[1], level: 'COALITION', color: SIDE_COLORS[1] },
-      ])
-      const sideIdOf = (slot: SideSlot): string | undefined => (slot === 'A' ? sides[0]?.id : sides[1]?.id)
-      /* 참여국은 전체 목록 계약 — 키만 보내 역할·서술은 그대로 두고(생략=유지) 진영만 건다 */
-      await updateEvent(eventId, {
-        relatedCountries: input.participants.map((row) => {
+      const slotCount = Math.min(
+        SIDE_SLOTS.length,
+        Math.max(2, drafts.sides.names.length),
+      )
+      const names = Array.from({ length: slotCount }, (_, index) => {
+        const raw = drafts.sides.names[index]?.trim()
+        return raw || `진영 ${index + 1}`
+      })
+      const groupIds = drafts.sides.personGroupIds ?? []
+      const sides: EventSide[] = await syncEventSides(
+        eventId,
+        names.map((sideName, index) => ({
+          name: sideName,
+          level: 'COALITION' as const,
+          color: SIDE_COLORS[index] ?? SIDE_COLORS[0],
+          ...(groupIds[index] ? { personGroupId: groupIds[index] } : {}),
+        })),
+      )
+      const sideIdOf = (slot: SideSlot): string | undefined => {
+        const slotIdx = SIDE_SLOTS.indexOf(slot)
+        return slotIdx >= 0 ? sides[slotIdx]?.id : undefined
+      }
+      createdSideIdOf = sideIdOf
+
+      const updatePayload: Record<string, unknown> = {}
+      if (countryAssigned.length > 0) {
+        /* 참여국은 전체 목록 계약 — 키만 보내 역할·서술은 그대로 두고(생략=유지) 진영만 건다 */
+        updatePayload.relatedCountries = input.participants.map((row) => {
           const slot = drafts.sides.assignment[participantKey(row)]
           const key = row.historicalCountryId
             ? { historicalCountryId: row.historicalCountryId }
             : { countryId: row.countryId ?? undefined }
           const sideId = slot ? sideIdOf(slot) : undefined
           return sideId ? { ...key, sideId } : key
-        }),
-      } as Parameters<typeof updateEvent>[1])
+        })
+      }
+      if (personAssigned.length > 0) {
+        const allPersons = relatedPersonsPayload(drafts)
+        updatePayload.relatedPersons = allPersons.map((p) => {
+          const slot = drafts.sides.personAssignment?.[p.personId]
+          const sideId = slot ? sideIdOf(slot) : undefined
+          return sideId ? { ...p, sideId } : p
+        })
+      }
+      if (Object.keys(updatePayload).length > 0) {
+        await updateEvent(eventId, updatePayload as Parameters<typeof updateEvent>[1])
+      }
       return `진영 ${names.join(' · ')}`
     })
   }
@@ -383,7 +723,13 @@ export async function commitRegisterFacets(input: CommitInput): Promise<CommitRe
   // 기업·조직
   for (const organization of drafts.organizations) {
     await attempt(`조직 ${organization.name}`, async () => {
-      await addEventOrganization(eventId, { organizationId: organization.id, role: organization.role })
+      const orgSlot = drafts.sides.organizationAssignment?.[organization.id]
+      const sideId = orgSlot && createdSideIdOf ? createdSideIdOf(orgSlot) : undefined
+      await addEventOrganization(eventId, {
+        organizationId: organization.id,
+        role: organization.role,
+        ...(sideId ? { sideId } : {}),
+      })
       return `조직 ${organization.name}`
     })
   }

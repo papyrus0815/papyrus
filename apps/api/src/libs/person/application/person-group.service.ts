@@ -11,7 +11,9 @@ import { PersonPrismaRepository } from '../infrastructure/person.prisma.reposito
 import {
   AddPersonGroupMemberDto,
   CreatePersonGroupDto,
+  PersonGroupEventSideDto,
   PersonGroupMemberDto,
+  PersonGroupMemberEventDto,
   PersonGroupResponseDto,
   UpdatePersonGroupDto,
   UpdatePersonGroupMemberDto,
@@ -28,10 +30,11 @@ const GROUP_REF_SELECT = {
 type GroupWithRelations = Prisma.PersonGroupGetPayload<{
   include: {
     country: { select: { id: true; name: true } }
+    historicalCountry: { select: { id: true; name: true } }
     members: true
     predecessor: { select: typeof GROUP_REF_SELECT }
     successors: { select: typeof GROUP_REF_SELECT }
-    _count: { select: { members: true } }
+    _count: { select: { members: true; eventSides: true } }
   }
 }>
 
@@ -51,13 +54,14 @@ export class PersonGroupService {
 
   private static readonly GROUP_INCLUDE = {
     country: { select: { id: true, name: true } },
+    historicalCountry: { select: { id: true, name: true } },
     members: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] },
     predecessor: { select: GROUP_REF_SELECT },
     successors: {
       select: GROUP_REF_SELECT,
       orderBy: [{ generationOrder: 'asc' }, { name: 'asc' }],
     },
-    _count: { select: { members: true } },
+    _count: { select: { members: true, eventSides: true } },
   } as const satisfies Prisma.PersonGroupInclude
 
   /**
@@ -107,8 +111,11 @@ export class PersonGroupService {
         generationOrder: group.generationOrder,
         countryId: group.countryId,
         countryName: group.country?.name ?? null,
+        historicalCountryId: group.historicalCountryId,
+        historicalCountryName: group.historicalCountry?.name ?? null,
         sortOrder: group.sortOrder,
         memberCount: group._count.members,
+        eventSideCount: group._count.eventSides,
         canEdit: !group.accountId || group.accountId === viewerAccountId,
         predecessor: group.predecessor
           ? {
@@ -134,26 +141,54 @@ export class PersonGroupService {
     })
   }
 
-  /** 묶음 목록 (멤버 미포함). type·countryId로 필터 가능 */
+  /** 묶음 목록 (멤버 미리보기 포함). type·countryId·historicalCountryId로 필터 가능 */
   async listGroups(
     filter?: {
       type?: PersonGroupType
       countryId?: string
+      historicalCountryId?: string
     },
     accountId?: string,
   ): Promise<PersonGroupResponseDto[]> {
+    const andFilters: Prisma.PersonGroupWhereInput[] = []
+    if (filter?.type) {
+      andFilters.push({ type: filter.type })
+    }
+    if (filter?.countryId) {
+      andFilters.push({
+        OR: [
+          { countryId: filter.countryId },
+          {
+            members: {
+              some: { person: { countryId: filter.countryId } },
+            },
+          },
+        ],
+      })
+    }
+    if (filter?.historicalCountryId) {
+      andFilters.push({
+        OR: [
+          { historicalCountryId: filter.historicalCountryId },
+          {
+            members: {
+              some: {
+                person: { historicalCountryId: filter.historicalCountryId },
+              },
+            },
+          },
+        ],
+      })
+    }
     const groups = await this.prisma.personGroup.findMany({
-      where: {
-        ...(filter?.type ? { type: filter.type } : {}),
-        ...(filter?.countryId ? { countryId: filter.countryId } : {}),
-      },
+      where: andFilters.length > 0 ? { AND: andFilters } : {},
       include: PersonGroupService.GROUP_INCLUDE,
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     })
-    return this.mapGroups(groups, false, accountId)
+    return this.mapGroups(groups, true, accountId)
   }
 
-  /** 묶음 상세 (멤버 인물 카드 포함) */
+  /** 묶음 상세 (멤버 인물 카드 + 진영 참여 사건 + 소속 인물 참여 사건 포함) */
   async getGroup(
     groupId: string,
     accountId?: string,
@@ -164,7 +199,130 @@ export class PersonGroupService {
     })
     if (!group) throw new NotFoundException('묶음을 찾을 수 없습니다.')
     const [mapped] = await this.mapGroups([group], true, accountId)
-    return mapped
+
+    const sideRows = await this.prisma.eventSide.findMany({
+      where: {
+        personGroupId: groupId,
+        event: { deletedAt: null },
+      },
+      include: {
+        event: {
+          select: {
+            id: true,
+            title: true,
+            domain: true,
+            type: true,
+            startDate: true,
+            startEra: true,
+            startYear: true,
+            sides: {
+              orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+              select: {
+                id: true,
+                name: true,
+                color: true,
+                outcome: true,
+                personGroupId: true,
+                personGroup: { select: { name: true } },
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ event: { startYear: 'asc' } }, { createdAt: 'asc' }],
+    })
+
+    const eventSides: PersonGroupEventSideDto[] = sideRows.map((row) => ({
+      sideId: row.id,
+      sideName: row.name,
+      sideColor: row.color ?? null,
+      outcome: row.outcome ?? null,
+      outcomeNote: row.outcomeNote ?? null,
+      eventId: row.event.id,
+      eventTitle: row.event.title,
+      eventDomain: row.event.domain,
+      eventType: row.event.type ?? null,
+      startDate: row.event.startDate ? row.event.startDate.toISOString() : null,
+      startEra: row.event.startEra ?? null,
+      startYear: row.event.startYear ?? null,
+      opposingSides: row.event.sides
+        .filter((side) => side.id !== row.id)
+        .map((side) => ({
+          id: side.id,
+          name: side.name,
+          color: side.color ?? null,
+          outcome: side.outcome ?? null,
+          personGroupId: side.personGroupId ?? null,
+          personGroupName: side.personGroup?.name ?? null,
+        })),
+    }))
+
+    const memberPersonIds = group.members.map((m) => m.personId)
+    const memberEventMap = new Map<string, PersonGroupMemberEventDto>()
+    if (memberPersonIds.length > 0) {
+      const personNameById = new Map(
+        mapped.members.map((m) => [
+          m.person.id,
+          [m.person.surname, m.person.name].filter(Boolean).join(' ').trim() ||
+            m.person.name,
+        ]),
+      )
+      const peRows = await this.prisma.personEvent.findMany({
+        where: {
+          personId: { in: memberPersonIds },
+          event: { deletedAt: null },
+        },
+        include: {
+          event: {
+            select: {
+              id: true,
+              title: true,
+              domain: true,
+              type: true,
+              startDate: true,
+              startEra: true,
+              startYear: true,
+            },
+          },
+        },
+        orderBy: [{ event: { startYear: 'asc' } }, { sortOrder: 'asc' }],
+      })
+      for (const pe of peRows) {
+        const existing = memberEventMap.get(pe.event.id)
+        const participant = {
+          personId: pe.personId,
+          personName: personNameById.get(pe.personId) ?? '',
+          role: pe.role ?? null,
+        }
+        if (existing) {
+          if (!existing.participants.some((p) => p.personId === pe.personId)) {
+            existing.participants.push(participant)
+          }
+        } else {
+          memberEventMap.set(pe.event.id, {
+            eventId: pe.event.id,
+            eventTitle: pe.event.title,
+            eventDomain: pe.event.domain,
+            eventType: pe.event.type ?? null,
+            startDate: pe.event.startDate
+              ? pe.event.startDate.toISOString()
+              : null,
+            startEra: pe.event.startEra ?? null,
+            startYear: pe.event.startYear ?? null,
+            participants: [participant],
+          })
+        }
+      }
+    }
+
+    const memberEvents = [...memberEventMap.values()].sort(
+      (a, b) =>
+        b.participants.length - a.participants.length ||
+        (a.startYear ?? Number.MAX_SAFE_INTEGER) -
+          (b.startYear ?? Number.MAX_SAFE_INTEGER),
+    )
+
+    return { ...mapped, eventSides, memberEvents }
   }
 
   /** 특정 인물이 속한 묶음들 (각 묶음의 동료 멤버 포함 — 인물 상세 섹션용) */
@@ -196,6 +354,7 @@ export class PersonGroupService {
         description: dto.description ?? null,
         generationOrder: dto.generationOrder ?? null,
         countryId: dto.countryId ?? null,
+        historicalCountryId: dto.historicalCountryId ?? null,
         predecessorGroupId: dto.predecessorGroupId ?? null,
         centerPersonId: dto.centerPersonId ?? null,
         sortOrder: dto.sortOrder ?? 0,
@@ -262,6 +421,9 @@ export class PersonGroupService {
           ? { generationOrder: dto.generationOrder }
           : {}),
         ...(dto.countryId !== undefined ? { countryId: dto.countryId } : {}),
+        ...(dto.historicalCountryId !== undefined
+          ? { historicalCountryId: dto.historicalCountryId }
+          : {}),
         ...(dto.predecessorGroupId !== undefined
           ? { predecessorGroupId: dto.predecessorGroupId }
           : {}),

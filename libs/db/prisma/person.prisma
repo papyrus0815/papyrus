@@ -1674,6 +1674,10 @@ model PersonGroup {
   countryId String?  @map("country_id") @db.Char(36)
   country   Country? @relation("CountryPersonGroups", fields: [countryId], references: [id], onDelete: SetNull)
 
+  /// 연관 역사 국가 (선택, 필터링용 — 예: 프랑스 제1공화국의 지롱드파·산악파, 조선의 노론·소론)
+  historicalCountryId String?            @map("historical_country_id") @db.Char(36)
+  historicalCountry   HistoricalCountry? @relation("HistoricalCountryPersonGroups", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+
   /// 목록 표시 정렬 (낮을수록 우선)
   sortOrder Int? @default(0) @map("sort_order")
 
@@ -1684,12 +1688,16 @@ model PersonGroup {
   /// 멤버십
   members PersonGroupMembership[]
 
+  /// 이 묶음이 진영(편)으로 참여한 사건 진영들
+  eventSides EventSide[] @relation("EventSidePersonGroup")
+
   //--- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([type], name: "idx_person_group_type")
   @@index([countryId], name: "idx_person_group_countryId")
+  @@index([historicalCountryId], name: "idx_person_group_historicalCountryId")
   @@index([accountId], name: "idx_person_group_accountId")
   @@index([predecessorGroupId], name: "idx_person_group_predecessorId")
   @@index([centerPersonId], name: "idx_person_group_centerPersonId")

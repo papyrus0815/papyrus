@@ -21,6 +21,7 @@ import {
   PersonMetaLine,
   PersonNameBtn,
   EditToggle,
+  FactTag,
   PersonNoteLine,
   PersonRoleLine,
   PersonRow,
@@ -38,6 +39,8 @@ import { ClampedProse } from './clamped-prose'
 export function ActorPersonRow({
   compact = false,
   entry,
+  side = null,
+  sideOptions = [],
   participationOptions,
   manageMode,
   isFirst,
@@ -51,13 +54,20 @@ export function ActorPersonRow({
   /** 대표단 줄 — 나라 줄 밑에 들여 놓는 작은 모양(아바타 28px) */
   compact?: boolean
   entry: EventPersonEntry
+  /** 이 인물이 속한 진영(예: 산악파, 지롱드파) */
+  side?: { name: string; color: string } | null
+  /** 진영 선택지 — 사건에 진영이 있을 때 진영 지정/변경 */
+  sideOptions?: Array<{ value: string; label: string }>
   /** 참여 자격 국가 선택지 — 2개 미만이면 고를 게 없어 줄을 감춘다 */
   participationOptions: Array<{ value: string; label: string }>
   manageMode: boolean
   isFirst: boolean
   isLast: boolean
   onOpen: (personId: string) => void
-  onUpdate: (personId: string, patch: { role?: string; note?: string }) => void
+  onUpdate: (
+    personId: string,
+    patch: { role?: string; note?: string; sideId?: string | null },
+  ) => void
   onParticipation: (personId: string, value: string) => void
   onMove: (personId: string, direction: -1 | 1) => void
   onRemove: (personId: string) => void
@@ -66,12 +76,18 @@ export function ActorPersonRow({
   const avatarUrl = entry.person?.profileImageUrl ?? undefined
   const hasNote = Boolean(entry.note && entry.note.trim())
   const offices = entry.officesAtEvent ?? []
-  /** 빈 칸(역할·비고·대표단 줄의 참여 국가) 편집 — ✎로 연다. hover로 펼치면 행이 덜컹거렸다 */
+  /** 빈 칸(역할·비고·대표단 줄의 참여 국가·진영) 편집 — ✎로 연다. hover로 펼치면 행이 덜컹거렸다 */
   const [editing, setEditing] = useState(false)
   const hasRole = Boolean(entry.role && entry.role.trim())
   /* 대표단 줄에선 참여 국가가 곧 위의 나라 — 다른 나라로 옮길 때(편집 중)만 고르기를 보인다 */
   const showParticipation = participationOptions.length > 1 && (!compact || editing)
-  const showMeta = showParticipation || offices.length > 0 || Boolean(entry.lifespanWarning)
+  const showSidePicker = sideOptions.length > 1 && editing
+  const showMeta =
+    Boolean(side) ||
+    showSidePicker ||
+    showParticipation ||
+    offices.length > 0 ||
+    Boolean(entry.lifespanWarning)
 
   return (
     <PersonRow $compact={compact}>
@@ -91,6 +107,22 @@ export function ActorPersonRow({
         </PersonNameBtn>
         {showMeta && (
           <PersonMetaLine>
+            {side && !showSidePicker && (
+              <FactTag $color={side.color}>{side.name}</FactTag>
+            )}
+            {showSidePicker && (
+              <InlineSelect
+                value={entry.sideId ?? 'none'}
+                options={sideOptions}
+                onSave={(next) =>
+                  onUpdate(entry.personId, {
+                    sideId: next === 'none' || !next ? null : next,
+                  })
+                }
+                placeholder={side?.name ?? '진영 지정'}
+                label={`${fullName}의 소속 진영`}
+              />
+            )}
             {showParticipation && (
               <InlineSelect
                 value={participationValueOf(entry)}

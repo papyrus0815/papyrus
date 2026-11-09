@@ -30,24 +30,24 @@ export function parseIsoDateParts(value?: string | null): IsoDateParts | null {
   if (!value) return null
   const neg = value.startsWith('-')
   const body = neg ? value.slice(1) : value
-  const m = body.match(/^(\d{1,6})-(\d{1,2})-(\d{1,2})(?:T(\d{2}):(\d{2}))?/)
-  if (m) {
+  const matched = body.match(/^(\d{1,6})-(\d{1,2})-(\d{1,2})(?:T(\d{2}):(\d{2}))?/)
+  if (matched) {
     return {
-      year: parseInt(m[1], 10) * (neg ? -1 : 1),
-      month: parseInt(m[2], 10),
-      day: parseInt(m[3], 10),
-      hour: m[4] ? parseInt(m[4], 10) : 0,
-      minute: m[5] ? parseInt(m[5], 10) : 0,
+      year: parseInt(matched[1], 10) * (neg ? -1 : 1),
+      month: parseInt(matched[2], 10),
+      day: parseInt(matched[3], 10),
+      hour: matched[4] ? parseInt(matched[4], 10) : 0,
+      minute: matched[5] ? parseInt(matched[5], 10) : 0,
     }
   }
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return null
+  const parsedDate = new Date(value)
+  if (Number.isNaN(parsedDate.getTime())) return null
   return {
-    year: d.getUTCFullYear(),
-    month: d.getUTCMonth() + 1,
-    day: d.getUTCDate(),
-    hour: d.getUTCHours(),
-    minute: d.getUTCMinutes(),
+    year: parsedDate.getUTCFullYear(),
+    month: parsedDate.getUTCMonth() + 1,
+    day: parsedDate.getUTCDate(),
+    hour: parsedDate.getUTCHours(),
+    minute: parsedDate.getUTCMinutes(),
   }
 }
 
@@ -67,9 +67,9 @@ export function getCentury(year: number): number {
 
 /** ISO 문자열 → 세기(BC 음수). 파싱 불가면 null. TZ 안전. */
 export function getCenturyFromIso(value?: string | null): number | null {
-  const p = parseIsoDateParts(value)
-  if (!p) return null
-  return getCentury(p.year)
+  const parts = parseIsoDateParts(value)
+  if (!parts) return null
+  return getCentury(parts.year)
 }
 
 /** 부호 있는 연도 → 10년대(decade) 시작 연도. 예: 1995 → 1990, -44 → -50. */
@@ -125,9 +125,9 @@ export function stepCentury(century: number, delta: 1 | -1): number {
  * 내 정렬을 뒤섞었다. 정수 키 비교로 대체한다.
  */
 export function dateSortKey(value?: string | null): number | null {
-  const p = parseIsoDateParts(value)
-  if (!p) return null
-  return p.year * 10000 + p.month * 100 + p.day
+  const parts = parseIsoDateParts(value)
+  if (!parts) return null
+  return parts.year * 10000 + parts.month * 100 + parts.day
 }
 
 /**
@@ -140,12 +140,12 @@ export function compareByDate(
   bIso?: string | null,
   direction: 'asc' | 'desc' = 'asc',
 ): number {
-  const a = dateSortKey(aIso)
-  const b = dateSortKey(bIso)
-  if (a === null && b === null) return 0
-  if (a === null) return 1 // 미상은 항상 뒤
-  if (b === null) return -1
-  const cmp = a - b
+  const leftKey = dateSortKey(aIso)
+  const rightKey = dateSortKey(bIso)
+  if (leftKey === null && rightKey === null) return 0
+  if (leftKey === null) return 1 // 미상은 항상 뒤
+  if (rightKey === null) return -1
+  const cmp = leftKey - rightKey
   return direction === 'asc' ? cmp : -cmp
 }
 
@@ -178,10 +178,10 @@ export function isoYearSpan(
   start?: string | null,
   end?: string | null,
 ): number {
-  const s = parseIsoDateParts(start)
-  const e = parseIsoDateParts(end)
-  if (!s || !e) return 0
-  return e.year - s.year
+  const startParts = parseIsoDateParts(start)
+  const endParts = parseIsoDateParts(end)
+  if (!startParts || !endParts) return 0
+  return endParts.year - startParts.year
 }
 
 /**
@@ -212,12 +212,12 @@ export function isoDaySpan(
 
 /** ISO 문자열 → "YYYY-MM-DD"(BC는 "-YYYY-MM-DD"). 파싱 불가면 ''. 타임존 무관. */
 export function isoToDateInput(value?: string | null): string {
-  const p = parseIsoDateParts(value)
-  if (!p) return ''
-  const sign = p.year < 0 ? '-' : ''
-  const yyyy = String(Math.abs(p.year)).padStart(4, '0')
-  const mm = String(p.month).padStart(2, '0')
-  const dd = String(p.day).padStart(2, '0')
+  const parts = parseIsoDateParts(value)
+  if (!parts) return ''
+  const sign = parts.year < 0 ? '-' : ''
+  const yyyy = String(Math.abs(parts.year)).padStart(4, '0')
+  const mm = String(parts.month).padStart(2, '0')
+  const dd = String(parts.day).padStart(2, '0')
   return `${sign}${yyyy}-${mm}-${dd}`
 }
 
@@ -238,10 +238,10 @@ export function signedDateFromParts(
 
 /** ISO 문자열 → "HH:MM". 자정(00:00)이면 ''(시간 미입력 취급). 타임존 무관. */
 export function isoToTimeInput(value?: string | null): string {
-  const p = parseIsoDateParts(value)
-  if (!p) return ''
-  if (p.hour === 0 && p.minute === 0) return ''
-  return `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}`
+  const parts = parseIsoDateParts(value)
+  if (!parts) return ''
+  if (parts.hour === 0 && parts.minute === 0) return ''
+  return `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`
 }
 
 /**
@@ -257,7 +257,7 @@ export function formatDateWithPrecision(
 ): string {
   const parts = parseIsoDateParts(dateStr)
   if (!parts) return dateStr
-  const { year, month, day } = parts
+  const { year, month, day, hour, minute } = parts
   // BC(음수 연도)는 '기원전 N년'으로 — parseIsoDateParts가 부호 연도를 돌려주므로 그대로
   // `${year}년`을 쓰면 '-44년'으로 표기된다(하위 사건 카드·타임라인 등 이 함수를 쓰는 모든 곳).
   // 단일 출처 보정이라 피커(candidateDateLabel)의 startYear 분기와 이중 접두 위험은 없다
@@ -266,7 +266,11 @@ export function formatDateWithPrecision(
   const prec = precision === 'year' || precision === 'month' ? precision : 'day'
   if (prec === 'year') return yearLabel
   if (prec === 'month') return `${yearLabel} ${month}월`
-  return `${yearLabel} ${month}월 ${day}일`
+  const timeLabel =
+    hour !== 0 || minute !== 0
+      ? ` ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+      : ''
+  return `${yearLabel} ${month}월 ${day}일${timeLabel}`
 }
 
 /**
@@ -279,14 +283,18 @@ export function formatDateRange(
   endPrecision?: string | null,
 ): string {
   const startSentinel = isJanuaryFirstSentinel(start, startPrecision)
+  const effectiveStartPrecision = startSentinel ? 'year' : startPrecision
   const startStr = formatDateWithPrecision(
     start,
-    startSentinel ? 'year' : startPrecision,
+    effectiveStartPrecision,
   )
   if (!end) return startStr
+  const effectiveEndPrecision = isYearEndSentinel(end, endPrecision, startSentinel)
+    ? 'year'
+    : endPrecision
   const endStr = formatDateWithPrecision(
     end,
-    isYearEndSentinel(end, endPrecision, startSentinel) ? 'year' : endPrecision,
+    effectiveEndPrecision,
   )
   /* 하루짜리 사건은 **한 번만** 쓴다. 종료일을 시작일과 같게 저장하는 게 기본값이라
      실데이터의 63%(57/91)가 여기 걸렸고, 그 지면들은 모두 '2025년 2월 4일 ~ 2025년
@@ -294,6 +302,32 @@ export function formatDateRange(
      문자열로 비교하는 건 **정밀도까지 같아야** 한 날로 볼 수 있기 때문이다 — 시작이
      '2025년 2월'(월 정밀도)이고 끝이 '2025년 2월 4일'이면 서로 다른 정보라 범위로 남긴다. */
   if (startStr === endStr) return startStr
+
+  const startParts = parseIsoDateParts(start)
+  const endParts = parseIsoDateParts(end)
+  const isStartDay =
+    effectiveStartPrecision !== 'year' && effectiveStartPrecision !== 'month'
+  const isEndDay =
+    effectiveEndPrecision !== 'year' && effectiveEndPrecision !== 'month'
+  if (
+    startParts &&
+    endParts &&
+    isStartDay &&
+    isEndDay &&
+    startParts.year === endParts.year &&
+    startParts.month === endParts.month &&
+    startParts.day === endParts.day
+  ) {
+    // 같은 날인데 시작 시각만 등록되고 종료 시각이 미입력(00:00)이면 시작 시각만 한 번 표시
+    if (endParts.hour === 0 && endParts.minute === 0) {
+      return startStr
+    }
+    // 같은 날이고 시작·종료 시각이 모두 있으면 날짜를 반복하지 않고 시각만 잇는다
+    if (startParts.hour !== 0 || startParts.minute !== 0) {
+      const endTimeLabel = `${String(endParts.hour).padStart(2, '0')}:${String(endParts.minute).padStart(2, '0')}`
+      return `${startStr} ~ ${endTimeLabel}`
+    }
+  }
   return `${startStr} ~ ${endStr}`
 }
 

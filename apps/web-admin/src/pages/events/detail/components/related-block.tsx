@@ -295,6 +295,68 @@ export function RelatedBlock({
     onError: () => notify.error('연결을 해제하지 못했습니다'),
   })
 
+  const [draggingRelationId, setDraggingRelationId] = useState<string | null>(null)
+  const [dragOverSide, setDragOverSide] = useState<GroupSide | null>(null)
+
+  const sideOfRelation = (relation: EventRelationItem): GroupSide =>
+    !DIRECTED_RELATION_TYPES.has(relation.relationType)
+      ? 'beside'
+      : relation.direction === 'incoming'
+        ? 'before'
+        : 'after'
+
+  const roleSwitchMutation = useMutation({
+    mutationFn: async ({
+      relation,
+      targetSide,
+    }: {
+      relation: EventRelationItem
+      targetSide: GroupSide
+    }) => {
+      if (targetSide === 'beside') {
+        return updateEventRelation(eventId, relation.id, {
+          relationType: 'CONCURRENT',
+        })
+      }
+      const nextType = DIRECTED_RELATION_TYPES.has(relation.relationType)
+        ? relation.relationType
+        : 'LED_TO'
+      const nextDirection: EventRelationDirection =
+        targetSide === 'before' ? 'incoming' : 'outgoing'
+      return updateEventRelation(eventId, relation.id, {
+        relationType: nextType,
+        direction: nextDirection,
+      })
+    },
+    onSuccess: (_saved, variables) => {
+      notify.success(
+        `‘${variables.relation.event.title}’을(를) ‘${SIDE_LABEL[variables.targetSide]}’(으)로 옮겼습니다`,
+      )
+      void invalidate()
+    },
+    onError: () => notify.error('관계 방향을 바꾸지 못했습니다'),
+  })
+
+  const handleDropToSide = (
+    dragEvent: React.DragEvent<HTMLElement>,
+    targetSide: GroupSide,
+  ) => {
+    dragEvent.preventDefault()
+    const rawId =
+      draggingRelationId ||
+      (dragEvent.dataTransfer?.getData('text/plain') ?? '').replace(
+        /^relation:/,
+        '',
+      )
+    setDraggingRelationId(null)
+    setDragOverSide(null)
+    if (!rawId) return
+    const matched = relations.find((item) => item.id === rawId)
+    if (!matched) return
+    if (sideOfRelation(matched) === targetSide) return
+    roleSwitchMutation.mutate({ relation: matched, targetSide })
+  }
+
   const openEdit = (relation: EventRelationItem) => {
     setInitialDraft({
       relationId: relation.id,
@@ -333,19 +395,42 @@ export function RelatedBlock({
    * 칸 안은 날짜순(원인 쪽은 앞선 일부터 읽힌다).
    */
   const groups = useMemo(() => {
-    const sideOf = (relation: EventRelationItem): GroupSide =>
-      !DIRECTED_RELATION_TYPES.has(relation.relationType)
-        ? 'beside'
-        : relation.direction === 'incoming'
-          ? 'before'
-          : 'after'
     return SIDE_ORDER.flatMap((side) => {
       const items = relations
-        .filter((relation) => sideOf(relation) === side)
+        .filter((relation) => sideOfRelation(relation) === side)
         .sort((left, right) => compareEventStart(left.event.startDate, right.event.startDate))
       return items.length > 0 ? [{ key: side, label: SIDE_LABEL[side], hint: SIDE_HINT[side], side, items }] : []
     })
   }, [relations])
+
+  const beforeItems = useMemo(
+    () =>
+      relations
+        .filter((relation) => sideOfRelation(relation) === 'before')
+        .sort((left, right) =>
+          compareEventStart(left.event.startDate, right.event.startDate),
+        ),
+    [relations],
+  )
+  const afterItems = useMemo(
+    () =>
+      relations
+        .filter((relation) => sideOfRelation(relation) === 'after')
+        .sort((left, right) =>
+          compareEventStart(left.event.startDate, right.event.startDate),
+        ),
+    [relations],
+  )
+  const besideItems = useMemo(
+    () =>
+      relations
+        .filter((relation) => sideOfRelation(relation) === 'beside')
+        .sort((left, right) =>
+          compareEventStart(left.event.startDate, right.event.startDate),
+        ),
+    [relations],
+  )
+  const selfDateText = candidateDateLabel(self)
 
   return (
     <NetStyles.HierBlock
@@ -361,11 +446,211 @@ export function RelatedBlock({
         </NetStyles.HelperNote>
       )}
 
+      {relations.length > 0 && (
+        <CausalFlowBoard role="region" aria-label="인과 흐름 인포그래픽">
+          <CausalFlowMainGrid>
+            <CausalFlowNode
+              data-causal-dropzone="before"
+              $dragOver={dragOverSide === 'before'}
+              onDragOver={(dragEvent) => {
+                dragEvent.preventDefault()
+                if (dragOverSide !== 'before') setDragOverSide('before')
+              }}
+              onDragLeave={(dragEvent) => {
+                if (
+                  !dragEvent.currentTarget.contains(
+                    dragEvent.relatedTarget as Node | null,
+                  )
+                ) {
+                  setDragOverSide((current) =>
+                    current === 'before' ? null : current,
+                  )
+                }
+              }}
+              onDrop={(dragEvent) => handleDropToSide(dragEvent, 'before')}
+            >
+              <CausalFlowHead>
+                <span>← 원인 · 배경</span>
+                <CausalFlowCount>{beforeItems.length}</CausalFlowCount>
+              </CausalFlowHead>
+              {beforeItems.length === 0 ? (
+                <CausalFlowEmpty>사건을 여기로 끌어 원인 지정</CausalFlowEmpty>
+              ) : (
+                <CausalFlowPillList>
+                  {beforeItems.slice(0, 3).map((relation) => (
+                    <CausalFlowPill
+                      key={relation.id}
+                      draggable
+                      title="드래그하여 결과·곁으로 이동"
+                      onDragStart={(dragEvent) => {
+                        setDraggingRelationId(relation.id)
+                        dragEvent.dataTransfer?.setData(
+                          'text/plain',
+                          `relation:${relation.id}`,
+                        )
+                      }}
+                      onDragEnd={() => {
+                        setDraggingRelationId(null)
+                        setDragOverSide(null)
+                      }}
+                    >
+                      {relation.event.title}
+                    </CausalFlowPill>
+                  ))}
+                  {beforeItems.length > 3 && (
+                    <CausalFlowMore>+{beforeItems.length - 3}</CausalFlowMore>
+                  )}
+                </CausalFlowPillList>
+              )}
+            </CausalFlowNode>
+
+            <CausalFlowArrow aria-hidden>──▶</CausalFlowArrow>
+
+            <CausalFlowSelfNode>
+              <CausalFlowSelfBadge>★ 현재 사건</CausalFlowSelfBadge>
+              <CausalFlowSelfTitle>{eventTitle}</CausalFlowSelfTitle>
+              {selfDateText && (
+                <CausalFlowSelfDate>{selfDateText}</CausalFlowSelfDate>
+              )}
+            </CausalFlowSelfNode>
+
+            <CausalFlowArrow aria-hidden>──▶</CausalFlowArrow>
+
+            <CausalFlowNode
+              data-causal-dropzone="after"
+              $dragOver={dragOverSide === 'after'}
+              onDragOver={(dragEvent) => {
+                dragEvent.preventDefault()
+                if (dragOverSide !== 'after') setDragOverSide('after')
+              }}
+              onDragLeave={(dragEvent) => {
+                if (
+                  !dragEvent.currentTarget.contains(
+                    dragEvent.relatedTarget as Node | null,
+                  )
+                ) {
+                  setDragOverSide((current) =>
+                    current === 'after' ? null : current,
+                  )
+                }
+              }}
+              onDrop={(dragEvent) => handleDropToSide(dragEvent, 'after')}
+            >
+              <CausalFlowHead>
+                <span>결과 · 파생 →</span>
+                <CausalFlowCount>{afterItems.length}</CausalFlowCount>
+              </CausalFlowHead>
+              {afterItems.length === 0 ? (
+                <CausalFlowEmpty>사건을 여기로 끌어 결과 지정</CausalFlowEmpty>
+              ) : (
+                <CausalFlowPillList>
+                  {afterItems.slice(0, 3).map((relation) => (
+                    <CausalFlowPill
+                      key={relation.id}
+                      draggable
+                      title="드래그하여 원인·곁으로 이동"
+                      onDragStart={(dragEvent) => {
+                        setDraggingRelationId(relation.id)
+                        dragEvent.dataTransfer?.setData(
+                          'text/plain',
+                          `relation:${relation.id}`,
+                        )
+                      }}
+                      onDragEnd={() => {
+                        setDraggingRelationId(null)
+                        setDragOverSide(null)
+                      }}
+                    >
+                      {relation.event.title}
+                    </CausalFlowPill>
+                  ))}
+                  {afterItems.length > 3 && (
+                    <CausalFlowMore>+{afterItems.length - 3}</CausalFlowMore>
+                  )}
+                </CausalFlowPillList>
+              )}
+            </CausalFlowNode>
+          </CausalFlowMainGrid>
+
+          {(besideItems.length > 0 || draggingRelationId !== null) && (
+            <CausalFlowBesideBar
+              data-causal-dropzone="beside"
+              $dragOver={dragOverSide === 'beside'}
+              onDragOver={(dragEvent) => {
+                dragEvent.preventDefault()
+                if (dragOverSide !== 'beside') setDragOverSide('beside')
+              }}
+              onDragLeave={(dragEvent) => {
+                if (
+                  !dragEvent.currentTarget.contains(
+                    dragEvent.relatedTarget as Node | null,
+                  )
+                ) {
+                  setDragOverSide((current) =>
+                    current === 'beside' ? null : current,
+                  )
+                }
+              }}
+              onDrop={(dragEvent) => handleDropToSide(dragEvent, 'beside')}
+            >
+              <CausalFlowBesideLabel>
+                ↔ 병렬 · 동시대 ({besideItems.length})
+              </CausalFlowBesideLabel>
+              {besideItems.length === 0 ? (
+                <CausalFlowEmpty>여기에 놓으면 동시대 관계로 전환</CausalFlowEmpty>
+              ) : (
+                besideItems.map((relation) => (
+                  <CausalFlowPill
+                    key={relation.id}
+                    draggable
+                    title="드래그하여 원인·결과로 이동"
+                    onDragStart={(dragEvent) => {
+                      setDraggingRelationId(relation.id)
+                      dragEvent.dataTransfer?.setData(
+                        'text/plain',
+                        `relation:${relation.id}`,
+                      )
+                    }}
+                    onDragEnd={() => {
+                      setDraggingRelationId(null)
+                      setDragOverSide(null)
+                    }}
+                  >
+                    {relation.event.title}
+                  </CausalFlowPill>
+                ))
+              )}
+            </CausalFlowBesideBar>
+          )}
+        </CausalFlowBoard>
+      )}
+
       {groups.map((group) => {
         const folded = relations.length > LONG_LIST && group.items.length > GROUP_PREVIEW + 1 && !expandedGroups.has(group.key)
         const shownItems = folded ? group.items.slice(0, GROUP_PREVIEW) : group.items
         return (
-        <Group key={group.key} role="group" aria-label={group.label}>
+        <Group
+          key={group.key}
+          role="group"
+          aria-label={group.label}
+          $dragOver={dragOverSide === group.side}
+          onDragOver={(dragEvent) => {
+            dragEvent.preventDefault()
+            if (dragOverSide !== group.side) setDragOverSide(group.side)
+          }}
+          onDragLeave={(dragEvent) => {
+            if (
+              !dragEvent.currentTarget.contains(
+                dragEvent.relatedTarget as Node | null,
+              )
+            ) {
+              setDragOverSide((current) =>
+                current === group.side ? null : current,
+              )
+            }
+          }}
+          onDrop={(dragEvent) => handleDropToSide(dragEvent, group.side)}
+        >
           <GroupHead>
             <GroupArrow aria-hidden>
               {SIDE_GLYPH[group.side]}
@@ -386,7 +671,19 @@ export function RelatedBlock({
               return (
                 <NetStyles.ChildRow
                   key={relation.id}
+                  draggable
                   data-hot={hotEventId === other.id ? '' : undefined}
+                  onDragStart={(dragEvent) => {
+                    setDraggingRelationId(relation.id)
+                    dragEvent.dataTransfer?.setData(
+                      'text/plain',
+                      `relation:${relation.id}`,
+                    )
+                  }}
+                  onDragEnd={() => {
+                    setDraggingRelationId(null)
+                    setDragOverSide(null)
+                  }}
                   onMouseEnter={() => onHoverEvent?.(other.id)}
                   onMouseLeave={() => onHoverEvent?.(null)}
                 >
@@ -544,10 +841,195 @@ export function RelatedBlock({
 
 
 
-const Group = styled.div`
+const CausalFlowBoard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(15,23,42,0.025)'};
+`
+
+const CausalFlowMainGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(140px, 0.9fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 8px;
+
+  @media (max-width: 680px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+const CausalFlowNode = styled.div<{ $dragOver?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px dashed
+    ${({ $dragOver, theme }) =>
+      $dragOver
+        ? ledgerAccent(theme.mode)
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.14)'
+          : 'rgba(15,23,42,0.14)'};
+  background: ${({ $dragOver, theme }) =>
+    $dragOver
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.14)'
+        : 'rgba(99, 102, 241, 0.08)'
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.02)'
+        : '#ffffff'};
+  min-width: 0;
+  transition: border-color 0.14s ease, background 0.14s ease;
+`
+
+const CausalFlowHead = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const CausalFlowCount = styled.span`
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: ${metaText};
+`
+
+const CausalFlowEmpty = styled.span`
+  font-size: 11.5px;
+  color: ${metaText};
+`
+
+const CausalFlowPillList = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+`
+
+const CausalFlowPill = styled.span`
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: grab;
+
+  &:active {
+    cursor: grabbing;
+  }
+`
+
+const CausalFlowMore = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${metaText};
+  align-self: center;
+`
+
+const CausalFlowArrow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  user-select: none;
+
+  @media (max-width: 680px) {
+    display: none;
+  }
+`
+
+const CausalFlowSelfNode = styled.div`
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1.5px solid ${({ theme }) => ledgerAccent(theme.mode)};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.12)' : 'rgba(99, 102, 241, 0.06)'};
+  text-align: center;
+  min-width: 0;
+`
+
+const CausalFlowSelfBadge = styled.span`
+  font-size: 10.5px;
+  font-weight: 800;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+`
+
+const CausalFlowSelfTitle = styled.span`
+  font-size: 12.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const CausalFlowSelfDate = styled.span`
+  font-size: 11px;
+  color: ${metaText};
+`
+
+const CausalFlowBesideBar = styled.div<{ $dragOver?: boolean }>`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px dashed
+    ${({ $dragOver, theme }) =>
+      $dragOver
+        ? ledgerAccent(theme.mode)
+        : theme.mode === 'dark'
+          ? 'rgba(255,255,255,0.12)'
+          : 'rgba(15,23,42,0.12)'};
+  background: ${({ $dragOver, theme }) =>
+    $dragOver
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.14)'
+        : 'rgba(99, 102, 241, 0.08)'
+      : 'transparent'};
+`
+
+const CausalFlowBesideLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  margin-right: 2px;
+`
+
+const Group = styled.div<{ $dragOver?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 2px;
+  border-radius: 8px;
+  outline: ${({ $dragOver, theme }) =>
+    $dragOver ? `2px dashed ${ledgerAccent(theme.mode)}` : 'none'};
+  outline-offset: 2px;
 `
 
 /** 묶음 머리 — 화살표(이 사건과의 선후) + 이 사건을 주어로 한 문장 + 유형 뜻풀이 */

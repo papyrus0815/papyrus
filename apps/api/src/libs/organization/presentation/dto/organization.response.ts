@@ -44,3 +44,17 @@ export interface OrganizationTreeNodeResponseDto extends OrganizationResponseDto
   children: OrganizationTreeNodeResponseDto[]
   parentIds: string[]
 }
+
+export interface OrganizationMemberResponseDto {
+  id?: string
+  personId: string
+  roleTitle: string | null
+  source: 'TENURE' | 'ROLE'
+  person: {
+    id: string
+    name: string
+    surname: string | null
+    originalName: string | null
+    profileImageUrl: string | null
+  }
+}

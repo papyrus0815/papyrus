@@ -65,6 +65,7 @@ jest.mock('./event-basic-form', () => ({
     return (
       <div>
         <span data-testid="notifyOnLoad">{String(props.notifyOnLoad)}</span>
+        <span data-testid="layoutMode">{props.layoutMode ?? 'default'}</span>
         <span data-testid="initialParent">
           {props.initialParent
             ? `${props.initialParent.id}:${props.initialParent.title}`
@@ -125,6 +126,21 @@ jest.mock('./event-basic-form', () => ({
           }
         >
           _invalidWithMissing3
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            onStateChange?.({
+              isEditMode: false,
+              isLoading: false,
+              isSubmitting: false,
+              isValid: true,
+              participantsSectionCount: 4,
+              contextSectionCount: 2,
+            })
+          }
+        >
+          _withSectionCounts
         </button>
       </div>
     )
@@ -432,4 +448,46 @@ it('하위 피커 모달(nested dialog)이 열려 있거나 이미 처리된(def
   // 하위 다이얼로그가 닫힌 뒤에는 다시 정상적으로 제출된다
   fireEvent.keyDown(window, { key: 'Enter', metaKey: true })
   expect(submitSpy).toHaveBeenCalledTimes(1)
+})
+
+it('기본적으로 좌우 2단 분할(split) 모드로 열리며, 헤더 토글 버튼으로 1단 세로 보기와 전환·저장할 수 있다', async () => {
+  window.localStorage.removeItem('papyrus:event-register-layout')
+  setup()
+  await waitForBody()
+
+  expect(screen.getByTestId('layoutMode')).toHaveTextContent('split')
+  const toggleBtn = screen.getByRole('button', {
+    name: '1단 세로 보기로 전환',
+  })
+  expect(toggleBtn).toHaveAttribute('aria-pressed', 'true')
+
+  fireEvent.click(toggleBtn)
+  expect(screen.getByTestId('layoutMode')).toHaveTextContent('single')
+  expect(window.localStorage.getItem('papyrus:event-register-layout')).toBe(
+    'single',
+  )
+
+  const toggleBackBtn = screen.getByRole('button', {
+    name: '2단 좌우 분할 보기로 전환',
+  })
+  fireEvent.click(toggleBackBtn)
+  expect(screen.getByTestId('layoutMode')).toHaveTextContent('split')
+  expect(window.localStorage.getItem('papyrus:event-register-layout')).toBe(
+    'split',
+  )
+})
+
+it('헤더 섹션 이동 탭에 기본 정보 완료(✓) 및 참여 주체·맥락 건수 배지를 표시한다', async () => {
+  setup()
+  await waitForBody()
+
+  fireEvent.click(screen.getByText('_withSectionCounts'))
+
+  const basicTab = screen.getByRole('button', { name: '기본 정보' })
+  const participantsTab = screen.getByRole('button', { name: '참여 주체' })
+  const contextTab = screen.getByRole('button', { name: '맥락·부가' })
+
+  expect(basicTab).toHaveTextContent('✓')
+  expect(participantsTab).toHaveTextContent('4')
+  expect(contextTab).toHaveTextContent('2')
 })

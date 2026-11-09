@@ -52,8 +52,10 @@ import {
 import {
   type EventRelatedDraft,
   type RegisterFacetDrafts,
+  buildParentRecordsImportPlan,
   commitRegisterFacets,
   emptyRegisterFacetDrafts,
+  hasAnyFacetDraft,
   inferDefaultRelationRole,
   pruneFacetDraftsForType,
   relatedPersonsPayload,
@@ -82,7 +84,11 @@ import {
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { signedYearFromIsoLike } from '@/shared/lib/country-period'
-import { formatDateRange } from '@/shared/lib/iso-date'
+import {
+  formatDateRange,
+  isoToDateInput,
+  isoToTimeInput,
+} from '@/shared/lib/iso-date'
 import { CountryPicker } from '@/shared/ui/country-picker'
 import {
   SelectModal,
@@ -148,6 +154,10 @@ export interface EventBasicFormState {
   parentEventTitle?: string | null
   /** 현재 연결된 연관 사건 건수 (신규 등록 헤더 배지 표시용) */
   relatedEventsCount?: number
+  /** 참여 주체 섹션에 입력된 항목 수 (헤더 섹션 탭 배지 표시용) */
+  participantsSectionCount?: number
+  /** 맥락·부가 섹션에 입력된 항목 수 (헤더 섹션 탭 배지 표시용) */
+  contextSectionCount?: number
 }
 
 export interface EventBasicFormProps {
@@ -180,6 +190,8 @@ export interface EventBasicFormProps {
   initialCountries?: EventCountryParticipant[]
   /** 상세 '새 관련 사건 등록' 등 진입 지면의 연관 사건 프리필(신규 등록 전용) */
   initialRelatedEvents?: EventRelatedDraft[]
+  /** 모달 셸에서 전달하는 레이아웃 모드 ('split': 좌우 2단 분할, 'single': 1단 세로) */
+  layoutMode?: 'single' | 'split'
 }
 
 /**
@@ -255,6 +267,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   initialEventType,
   initialCountries,
   initialRelatedEvents,
+  layoutMode,
 }) => {
   const queryClient = useQueryClient()
   const playClickSound = useClickSound()
@@ -467,14 +480,19 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       : availableCountries.find((country) => country.id === row.countryId)?.name) ?? '이름 모를 나라'
 
   /** 진영 이름 — 비워 두면 그 편의 첫 나라로 '○○ 측' */
-  const effectiveSideNames = (drafts: RegisterFacetDrafts): [string, string] => {
-    const nameFor = (slot: 'A' | 'B', index: 0 | 1) => {
-      const typed = drafts.sides.names[index].trim()
+  const effectiveSideNames = (drafts: RegisterFacetDrafts): string[] => {
+    const slots = (['A', 'B', 'C', 'D'] as const).slice(
+      0,
+      Math.max(2, drafts.sides.names.length),
+    )
+    return slots.map((slot, index) => {
+      const typed = drafts.sides.names[index]?.trim() ?? ''
       if (typed) return typed
-      const first = relatedCountries.find((row) => drafts.sides.assignment[participantKey(row)] === slot)
+      const first = relatedCountries.find(
+        (row) => drafts.sides.assignment[participantKey(row)] === slot,
+      )
       return first ? `${participantName(first)} 측` : `진영 ${index + 1}`
-    }
-    return [nameFor('A', 0), nameFor('B', 1)]
+    })
   }
 
   // ===== 상위 사건(트리 등록) =====
@@ -593,6 +611,133 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       note: parentDetail.locationNote?.trim() || null,
     }
   }, [parentDetail, isEditMode])
+
+  const parentRecordsImportPlan = useMemo(
+    () =>
+      !isEditMode && parentDetail
+        ? buildParentRecordsImportPlan(parentDetail, facetDrafts)
+        : null,
+    [isEditMode, parentDetail, facetDrafts],
+  )
+  const [lastSavedFacets, setLastSavedFacets] = useState<{
+    title: string
+    type: EventTypeKey | null
+    domain: EventDomainKey | ''
+    drafts: RegisterFacetDrafts
+  } | null>(null)
+
+  const handleImportParentRecords = useCallback(() => {
+    if (!parentRecordsImportPlan || !parentDetail) return
+    let targetType = eventType
+    let targetDomain = category
+    if (!targetType) {
+      if (isEventTypeKey(parentDetail.type)) {
+        targetType = parentDetail.type
+      } else if (parentRecordsImportPlan.hasSidesInParent) {
+        targetType = category === 'MILITARY' ? 'BATTLE' : 'UPRISING'
+      } else {
+        targetType = 'UPRISING'
+      }
+      if (!targetDomain) {
+        const inferred =
+          (isEventDomainKey(parentDetail.domain)
+            ? parentDetail.domain
+            : defaultDomainForType(targetType)) ?? 'POLITICS'
+        categoryTouchedRef.current = true
+        setCategory(inferred)
+        targetDomain = inferred
+      }
+      setEventType(targetType)
+    }
+    if (parentCountriesToImport.length > 0) {
+      setRelatedCountries((previous) => [
+        ...previous,
+        ...parentCountriesToImport,
+      ])
+    }
+    setFacetDrafts(
+      pruneFacetDraftsForType(
+        parentRecordsImportPlan.nextDrafts,
+        targetType,
+        targetDomain || null,
+      ),
+    )
+    notify.success(
+      `상위 사건 ‘${parentRecordsImportPlan.parentTitle}’의 기록(${parentRecordsImportPlan.summaryLabel})을 불러왔습니다`,
+    )
+  }, [
+    parentRecordsImportPlan,
+    parentDetail,
+    eventType,
+    category,
+    parentCountriesToImport,
+    setCategory,
+    setRelatedCountries,
+  ])
+
+  const lastSavedFacetSlot = useMemo(() => {
+    if (isEditMode || !lastSavedFacets || hasAnyFacetDraft(facetDrafts)) {
+      return undefined
+    }
+    const parts: string[] = []
+    const sideNamesCount = lastSavedFacets.drafts.sides.names.filter((name) =>
+      name.trim(),
+    ).length
+    if (sideNamesCount > 0) parts.push(`진영 ${sideNamesCount}`)
+    if (lastSavedFacets.drafts.organizations.length > 0) {
+      parts.push(`기관 ${lastSavedFacets.drafts.organizations.length}`)
+    }
+    const personCount =
+      lastSavedFacets.drafts.persons.length +
+      lastSavedFacets.drafts.power.length
+    if (personCount > 0) {
+      parts.push(`인물 ${personCount}`)
+    }
+    return {
+      parentTitle: `직전 사건: ${lastSavedFacets.title}`,
+      summaryLabel: parts.join(' · ') || '기록 이어쓰기',
+      onImport: () => {
+        const targetType = eventType ?? lastSavedFacets.type ?? 'UPRISING'
+        const targetDomain = category || lastSavedFacets.domain || 'POLITICS'
+        if (!category) {
+          categoryTouchedRef.current = true
+          setCategory(targetDomain)
+        }
+        if (!eventType && targetType) {
+          setEventType(targetType)
+        }
+        setFacetDrafts(
+          pruneFacetDraftsForType(
+            lastSavedFacets.drafts,
+            targetType,
+            targetDomain || null,
+          ),
+        )
+        notify.success(
+          `직전 사건 ‘${lastSavedFacets.title}’의 기록을 이어받았습니다`,
+        )
+      },
+    }
+  }, [
+    isEditMode,
+    lastSavedFacets,
+    facetDrafts,
+    eventType,
+    category,
+    setCategory,
+  ])
+
+  const parentRecordsSlot = useMemo(
+    () =>
+      parentRecordsImportPlan
+        ? {
+            parentTitle: parentRecordsImportPlan.parentTitle,
+            summaryLabel: parentRecordsImportPlan.summaryLabel,
+            onImport: handleImportParentRecords,
+          }
+        : lastSavedFacetSlot,
+    [parentRecordsImportPlan, handleImportParentRecords, lastSavedFacetSlot],
+  )
 
   const parentSearchPending =
     parentCandidatesFetching || parentSearchTerm !== debouncedParentTerm
@@ -802,25 +947,20 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         setTitle(event.title)
         setDescription(event.description || '')
 
-        const splitDateTime = (iso: string): { date: string; time: string } => {
-          const date = iso.split('T')[0] || ''
-          const matched = iso.match(/T(\d{2}):(\d{2})/)
-          return { date, time: matched ? `${matched[1]}:${matched[2]}` : '' }
-        }
         // 저장된 정밀도를 되살린다 — 없으면(null) 서버 규약대로 day
         const asPrecision = (value?: string | null) =>
           value === 'year' || value === 'month' ? value : 'day'
         if (event.startDate) {
-          const { date, time } = splitDateTime(event.startDate)
-          setStartDate(date)
-          setStartDatePrecision(asPrecision(event.startDatePrecision))
-          if (time) setStartTime(time)
+          const precision = asPrecision(event.startDatePrecision)
+          setStartDate(isoToDateInput(event.startDate) || event.startDate.split('T')[0] || '')
+          setStartDatePrecision(precision)
+          setStartTime(precision === 'day' ? isoToTimeInput(event.startDate) : '')
         }
         if (event.endDate) {
-          const { date, time } = splitDateTime(event.endDate)
-          setEndDate(date)
-          setEndDatePrecision(asPrecision(event.endDatePrecision))
-          if (time) setEndTime(time)
+          const precision = asPrecision(event.endDatePrecision)
+          setEndDate(isoToDateInput(event.endDate) || event.endDate.split('T')[0] || '')
+          setEndDatePrecision(precision)
+          setEndTime(precision === 'day' ? isoToTimeInput(event.endDate) : '')
         }
 
         setKeywords(Array.isArray(event.keywords) ? event.keywords : [])
@@ -1123,6 +1263,20 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     (title.trim() ? 0 : 1) +
     (startDate && !dateInputErrors.start && !validation.fields.startDate ? 0 : 1) +
     (category ? 0 : 1)
+  const participantsSectionCount =
+    relatedCountries.length +
+    (isEditMode
+      ? 0
+      : facetDrafts.persons.length +
+        facetDrafts.power.length +
+        facetDrafts.organizations.length +
+        (facetDrafts.treaty.mode !== 'none' ? 1 : 0) +
+        (facetDrafts.election ? 1 : 0))
+  const contextSectionCount =
+    (isEditMode ? 0 : (parentEvent ? 1 : 0) + relatedEvents.length) +
+    (location.trim() ? 1 : 0) +
+    (keywords.length > 0 ? 1 : 0) +
+    (thumbnail ? 1 : 0)
   useEffect(() => {
     onStateChange?.({
       isEditMode,
@@ -1134,6 +1288,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
       ...(draftSavedAt !== null && { draftSavedAt }),
       parentEventTitle: parentEvent?.title ?? null,
       relatedEventsCount: relatedEvents.length,
+      participantsSectionCount,
+      contextSectionCount,
     })
   }, [
     isEditMode,
@@ -1146,6 +1302,8 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     draftSavedAt,
     parentEvent?.title,
     relatedEvents.length,
+    participantsSectionCount,
+    contextSectionCount,
     onStateChange,
   ])
 
@@ -1266,6 +1424,14 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
           title: title.trim(),
           startYear: currentSignedStartYear,
         })
+        if (hasAnyFacetDraft(facetDrafts)) {
+          setLastSavedFacets({
+            title: title.trim(),
+            type: eventType,
+            domain: category,
+            drafts: facetDrafts,
+          })
+        }
         notify.success('사건이 등록되었습니다. 상세에서 내용을 이어서 등록하세요.')
       }
 
@@ -1523,17 +1689,60 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
             : undefined
         }
         recordsSlot={
-          eventType &&
-          !isEditMode &&
-          facets.core.some(
-            (facet) =>
-              facet !== 'participants' &&
-              facet !== 'metrics' &&
-              facet !== 'military' &&
-              facet !== 'cabinets',
-          )
+          !isEditMode
             ? {
-                title: `${EVENT_TYPES[eventType].label} 기록`,
+                title:
+                  eventType &&
+                  facets.core.some(
+                    (facet) =>
+                      facet !== 'participants' &&
+                      facet !== 'metrics' &&
+                      facet !== 'military' &&
+                      facet !== 'cabinets',
+                  )
+                    ? `${EVENT_TYPES[eventType].label} 기록`
+                    : '',
+                summary: (() => {
+                  const summaryParts: string[] = []
+                  const activeSideSet = new Set(
+                    Object.values(facetDrafts.sides.assignment).filter(Boolean),
+                  )
+                  if (facetDrafts.sides.personAssignment) {
+                    for (const sideSlot of Object.values(
+                      facetDrafts.sides.personAssignment,
+                    )) {
+                      if (sideSlot) activeSideSet.add(sideSlot)
+                    }
+                  }
+                  if (facetDrafts.sides.organizationAssignment) {
+                    for (const sideSlot of Object.values(
+                      facetDrafts.sides.organizationAssignment,
+                    )) {
+                      if (sideSlot) activeSideSet.add(sideSlot)
+                    }
+                  }
+                  if (facetDrafts.sides.personGroupIds) {
+                    const slots = ['A', 'B', 'C', 'D'] as const
+                    facetDrafts.sides.personGroupIds.forEach((groupId, idx) => {
+                      const slot = slots[idx]
+                      if (groupId && slot) activeSideSet.add(slot)
+                    })
+                  }
+                  if (activeSideSet.size > 0) {
+                    summaryParts.push(`진영 ${activeSideSet.size}`)
+                  }
+                  if (facetDrafts.organizations.length > 0) {
+                    summaryParts.push(`기관 ${facetDrafts.organizations.length}`)
+                  }
+                  const totalPersons =
+                    facetDrafts.persons.length + facetDrafts.power.length
+                  if (totalPersons > 0) {
+                    summaryParts.push(`인물 ${totalPersons}`)
+                  }
+                  return summaryParts.length > 0
+                    ? summaryParts.join(' · ')
+                    : undefined
+                })(),
                 content: (
                   <CoreRecordsGroup
                     type={eventType}
@@ -1554,6 +1763,34 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
                         ),
                       )
                     }
+                    onQuickAddCountryWithRole={(target, role) => {
+                      const key = target.historicalCountryId
+                        ? `h:${target.historicalCountryId}`
+                        : `m:${target.countryId}`
+                      const already = relatedCountries.some(
+                        (participant) => participantKey(participant) === key,
+                      )
+                      setRelatedCountries(
+                        already
+                          ? relatedCountries.map((participant) =>
+                              participantKey(participant) === key
+                                ? { ...participant, role }
+                                : participant,
+                            )
+                          : [
+                              ...relatedCountries,
+                              target.historicalCountryId
+                                ? {
+                                    historicalCountryId:
+                                      target.historicalCountryId,
+                                    role,
+                                  }
+                                : { countryId: target.countryId, role },
+                            ],
+                      )
+                    }}
+                    availableCountries={availableCountries}
+                    availableHistoricalCountries={availableHistoricalCountries}
                     onRemoveParticipant={(key) => {
                       setRelatedCountries(relatedCountries.filter((row) => participantKey(row) !== key))
                       setFacetDrafts((previous) => {
@@ -1569,9 +1806,47 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
                     eventTitle={title}
                     startDate={startDate}
                     endDate={endDate}
+                    parentRecordsSlot={parentRecordsSlot}
                     playClickSound={playClickSound}
                   />
                 ),
+              }
+            : undefined
+        }
+        quickRecordTypesSlot={
+          !isEditMode && !eventType
+            ? {
+                label: isEventDomainKey(domainName)
+                  ? '세부 분야 선택'
+                  : '자주 쓰는 기록 열기',
+                items: isEventDomainKey(domainName)
+                  ? subtypesForDomain(domainName).primary.map((key) => ({
+                      key,
+                      label: EVENT_TYPES[key].label,
+                    }))
+                  : (
+                      [
+                        'BATTLE',
+                        'WAR',
+                        'UPRISING',
+                        'TREATY',
+                        'POWER_CHANGE',
+                      ] as const
+                    ).map((key) => ({
+                      key,
+                      label: EVENT_TYPES[key].label,
+                    })),
+                onSelect: (selectedKey) => {
+                  if (!isEventTypeKey(selectedKey)) return
+                  const targetDomain = isEventDomainKey(domainName)
+                    ? domainName
+                    : (defaultDomainForType(selectedKey) ?? 'POLITICS')
+                  handleApplySuggestion({
+                    domain: targetDomain,
+                    type: selectedKey,
+                  })
+                },
+                parentRecordsSlot,
               }
             : undefined
         }
@@ -1657,6 +1932,10 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
                     setParentQuickQuery('')
                   },
                 },
+                contemporarySuggestions: contemporaryRaw
+                  .filter((candidate) => !linkedRelatedIdSet.has(candidate.id))
+                  .slice(0, 4)
+                  .map(toSimpleCandidate),
               }
         }
         relatedEventsSlot={
@@ -1722,6 +2001,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         startDateError={submitAttempted ? validation.fields.startDate : undefined}
         endDateError={validation.fields.endDate}
         onDateInputErrorChange={handleDateInputErrorChange}
+        layoutMode={layoutMode}
       />
 
       {/*

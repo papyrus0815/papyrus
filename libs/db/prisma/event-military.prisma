@@ -45,6 +45,10 @@ model EventSide {
   parentSide   EventSide? @relation("SideHierarchy", fields: [parentSideId], references: [id], onDelete: SetNull)
   childSides   EventSide[] @relation("SideHierarchy")
 
+  /// 영구 등록된 인물 묶음·계파 FK (예: 지롱드파, 산악파, 노론, 소론 등 PersonGroup 연결)
+  personGroupId String?      @map("person_group_id") @db.Char(36)
+  personGroup   PersonGroup? @relation("EventSidePersonGroup", fields: [personGroupId], references: [id], onDelete: SetNull)
+
   /// 색상 코드 (UI용)
   color String? @db.VarChar(7)
 
@@ -70,6 +74,7 @@ model EventSide {
 
   @@index([eventId, sortOrder], name: "idx_event_side_eventId")
   @@index([parentSideId], name: "idx_event_side_parentSideId")
+  @@index([personGroupId], name: "idx_event_side_personGroupId")
   @@map("event_side")
 }
 

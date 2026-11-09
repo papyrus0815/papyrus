@@ -35,15 +35,19 @@ import {
 export class PersonGroupController {
   constructor(private readonly personGroupService: PersonGroupService) {}
 
-  /** 묶음 목록 (멤버 미포함). ?type=&countryId= 필터 */
+  /** 묶음 목록 (멤버 미포함). ?type=&countryId=&historicalCountryId= 필터 */
   @Get()
   async list(
     @Request() req: any,
     @Query('type') type?: PersonGroupType,
     @Query('countryId') countryId?: string,
+    @Query('historicalCountryId') historicalCountryId?: string,
   ): Promise<PersonGroupResponseDto[]> {
     const accountId = req.user?.id ?? req.user?.sub
-    return this.personGroupService.listGroups({ type, countryId }, accountId)
+    return this.personGroupService.listGroups(
+      { type, countryId, historicalCountryId },
+      accountId,
+    )
   }
 
   /** 특정 인물이 속한 묶음들 (인물 상세 섹션용). 경로: person-groups/by-person/:personId */

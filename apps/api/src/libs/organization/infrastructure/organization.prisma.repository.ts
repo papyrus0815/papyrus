@@ -10,6 +10,8 @@ import type {
   CreateOrganizationHierarchyData,
   OrganizationHierarchyEntity,
   OrganizationTreeNode,
+  OrganizationMemberEntity,
+  AddOrganizationMemberData,
 } from '../domain/organization.repository'
 import { resolveCountryScopeOr } from '../../country/domain/country-scope.util'
 
@@ -209,6 +211,133 @@ export class OrganizationPrismaRepository implements IOrganizationRepository {
       }
     }
     return roots.map((r) => buildNode(r, []))
+  }
+
+  async findMembers(organizationId: string): Promise<OrganizationMemberEntity[]> {
+    const personSelect = {
+      id: true,
+      name: true,
+      surname: true,
+      originalName: true,
+      profileImageUrl: true,
+    } as const
+
+    const [tenures, roles] = await Promise.all([
+      this.prisma.governmentPositionTenure.findMany({
+        where: { positionDefinition: { organizationId } },
+        select: {
+          id: true,
+          personId: true,
+          title: true,
+          positionDefinition: { select: { title: true } },
+          person: { select: personSelect },
+        },
+        orderBy: [{ startKey: 'asc' }, { createdAt: 'asc' }],
+      }),
+      this.prisma.organizationPersonRole.findMany({
+        where: { organizationId },
+        select: {
+          id: true,
+          personId: true,
+          roleTitle: true,
+          person: { select: personSelect },
+        },
+        orderBy: [{ startDate: 'asc' }, { createdAt: 'asc' }],
+      }),
+    ])
+
+    const byPersonId = new Map<string, OrganizationMemberEntity>()
+    for (const tenure of tenures) {
+      if (!byPersonId.has(tenure.personId)) {
+        byPersonId.set(tenure.personId, {
+          id: tenure.id,
+          personId: tenure.personId,
+          roleTitle:
+            tenure.title?.trim() ||
+            tenure.positionDefinition.title?.trim() ||
+            null,
+          source: 'TENURE',
+          person: tenure.person,
+        })
+      }
+    }
+    for (const role of roles) {
+      if (!byPersonId.has(role.personId)) {
+        byPersonId.set(role.personId, {
+          id: role.id,
+          personId: role.personId,
+          roleTitle: role.roleTitle?.trim() || null,
+          source: 'ROLE',
+          person: role.person,
+        })
+      }
+    }
+    return [...byPersonId.values()]
+  }
+
+  async addMemberRole(
+    organizationId: string,
+    data: AddOrganizationMemberData,
+  ): Promise<OrganizationMemberEntity> {
+    const personSelect = {
+      id: true,
+      name: true,
+      surname: true,
+      originalName: true,
+      profileImageUrl: true,
+    } as const
+
+    const normalizedTitle = data.roleTitle?.trim() || '소속 위원'
+    const existing = await this.prisma.organizationPersonRole.findFirst({
+      where: { organizationId, personId: data.personId },
+      select: { id: true },
+    })
+
+    const saved = existing
+      ? await this.prisma.organizationPersonRole.update({
+          where: { id: existing.id },
+          data: {
+            roleTitle: normalizedTitle,
+            ...(data.notes !== undefined ? { notes: data.notes } : {}),
+          },
+          select: {
+            id: true,
+            personId: true,
+            roleTitle: true,
+            person: { select: personSelect },
+          },
+        })
+      : await this.prisma.organizationPersonRole.create({
+          data: {
+            organizationId,
+            personId: data.personId,
+            roleTitle: normalizedTitle,
+            notes: data.notes ?? null,
+          },
+          select: {
+            id: true,
+            personId: true,
+            roleTitle: true,
+            person: { select: personSelect },
+          },
+        })
+
+    return {
+      id: saved.id,
+      personId: saved.personId,
+      roleTitle: saved.roleTitle?.trim() || null,
+      source: 'ROLE',
+      person: saved.person,
+    }
+  }
+
+  async removeMemberRole(
+    organizationId: string,
+    personId: string,
+  ): Promise<void> {
+    await this.prisma.organizationPersonRole.deleteMany({
+      where: { organizationId, personId },
+    })
   }
 
   private toEntity(row: {
