@@ -55,6 +55,7 @@ import { DetailNetwork } from './components/detail-network'
 import { DetailTreaties } from './components/detail-treaties'
 import { EventKindGuideModal } from './components/event-kind-guide-modal'
 import { DetailFacts } from './components/detail-facts'
+import { DetailDepartments } from './components/detail-departments'
 import { DetailOrganizations } from './components/detail-organizations'
 import { DetailPower, hasPowerData } from './components/detail-power'
 import { DetailRail } from './components/detail-rail'
@@ -1113,6 +1114,8 @@ function EventDetailContent({
                       onPersonClick={onPersonClick}
                     />
                   )}
+                  {/* 국가 기관(부처·최고사령부·총독부) — 조직(정당·기업·국제기구)과 다른 표라 칸을 나눈다 */}
+                  <DetailDepartments event={event} readOnly={trashedView} />
                   {showOrganizations && (
                     <DetailOrganizations event={event} expectOrganizations={features.expectOrganizations} />
                   )}
