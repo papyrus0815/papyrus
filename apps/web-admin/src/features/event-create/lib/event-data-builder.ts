@@ -156,6 +156,19 @@ export const buildEventSubmitData = (params: {
           ]
         : undefined
 
+  /**
+   * 종료가 시작과 같은 날이고 종료 시각만 비었으면 시작 시각을 따른다. 등록 폼은 시작 날짜를 쓰면 종료 날짜를
+   * 따라 채우는데 시각은 따라오지 않아, 시작 03:15 · 종료 '00:00'(시작보다 앞선 끝)으로 저장됐다.
+   */
+  const endTime =
+    params.endTime ||
+    (params.endDate &&
+    params.endDate === params.startDate &&
+    params.startTime &&
+    (params.endDatePrecision ?? 'day') === 'day'
+      ? params.startTime
+      : '')
+
   return {
     title: params.title,
     description: params.description || undefined,
@@ -164,8 +177,8 @@ export const buildEventSubmitData = (params: {
       : `${params.startDate}T00:00:00.000Z`,
     startDatePrecision: params.startDatePrecision ?? undefined,
     endDate: params.endDate
-      ? params.endTime
-        ? `${params.endDate}T${params.endTime}:00.000Z`
+      ? endTime
+        ? `${params.endDate}T${endTime}:00.000Z`
         : `${params.endDate}T00:00:00.000Z`
       : undefined,
     endDatePrecision: params.endDatePrecision ?? undefined,
