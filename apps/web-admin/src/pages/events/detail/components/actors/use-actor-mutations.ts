@@ -26,7 +26,12 @@ import {
   toPersonPayload,
 } from './actors.lib'
 
-export type CountryPatch = { role?: EventCountryRole; roleDescription?: string; note?: string }
+export type CountryPatch = {
+  role?: EventCountryRole
+  roleDescription?: string
+  note?: string
+  sideId?: string | null
+}
 
 export function useActorMutations({
   event,
@@ -97,6 +102,18 @@ export function useActorMutations({
     patchPersons(next.map(toPersonPayload))
   }
 
+  /** 드래그 앤 드롭 순서 이동 — draggedPersonId를 targetPersonId 자리로 옮긴다 */
+  const reorderPerson = (draggedPersonId: string, targetPersonId: string) => {
+    if (draggedPersonId === targetPersonId) return
+    const fromIndex = persons.findIndex((person) => person.personId === draggedPersonId)
+    const toIndex = persons.findIndex((person) => person.personId === targetPersonId)
+    if (fromIndex < 0 || toIndex < 0) return
+    const next = persons.slice()
+    const [moved] = next.splice(fromIndex, 1)
+    next.splice(toIndex, 0, moved)
+    patchPersons(next.map(toPersonPayload))
+  }
+
   /** 인물 추가 — 중복은 모달이 거르지만 한 번 더 막는다. @returns 실제로 더했는가 */
   const addPerson = (personId: string): boolean => {
     if (persons.some((person) => person.personId === personId)) return false
@@ -109,7 +126,7 @@ export function useActorMutations({
   const patchCountries = (next: CountryRowData[], options?: PatchOptions) =>
     onPatch({ relatedCountries: next.map(toCountryPayload) }, options)
 
-  /** 한 나라의 역할·한 일·비고 — 빈 글은 null(비움) */
+  /** 한 나라의 역할·한 일·비고·진영 — 빈 글은 null(비움) */
   const updateCountry = (rowKey: string, patch: CountryPatch) => {
     const row = countryRows.find((candidate) => countryRowKey(candidate) === rowKey)
     if (!row) return
@@ -120,6 +137,7 @@ export function useActorMutations({
           ...(patch.role !== undefined && { role: patch.role }),
           ...(patch.roleDescription !== undefined && { roleDescription: patch.roleDescription.trim() || null }),
           ...(patch.note !== undefined && { note: patch.note.trim() || null }),
+          ...(patch.sideId !== undefined && { sideId: patch.sideId || null }),
         },
       ],
     })
@@ -140,6 +158,17 @@ export function useActorMutations({
     const next = countryRows.slice()
     const [moved] = next.splice(index, 1)
     next.splice(target, 0, moved)
+    patchCountries(next)
+  }
+
+  const reorderCountry = (draggedRowKey: string, targetRowKey: string) => {
+    if (draggedRowKey === targetRowKey) return
+    const fromIndex = countryRows.findIndex((row) => countryRowKey(row) === draggedRowKey)
+    const toIndex = countryRows.findIndex((row) => countryRowKey(row) === targetRowKey)
+    if (fromIndex < 0 || toIndex < 0) return
+    const next = countryRows.slice()
+    const [moved] = next.splice(fromIndex, 1)
+    next.splice(toIndex, 0, moved)
     patchCountries(next)
   }
 
@@ -187,10 +216,12 @@ export function useActorMutations({
     setParticipationCountry,
     removePerson,
     movePerson,
+    reorderPerson,
     addPerson,
     updateCountry,
     removeCountry,
     moveCountry,
+    reorderCountry,
     addCountries,
   }
 }

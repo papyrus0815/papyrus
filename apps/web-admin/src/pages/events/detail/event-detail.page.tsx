@@ -1097,6 +1097,7 @@ function EventDetailContent({
                       expectStatehood={features.expectStatehood}
                       onCountryClick={onCountryClick}
                       onPersonClick={onPersonClick}
+                      onPatch={onPatch}
                     />
                   )}
                   {showTerritory && (
@@ -1116,9 +1117,11 @@ function EventDetailContent({
                   )}
                   {/* 국가 기관(부처·최고사령부·총독부) — 조직(정당·기업·국제기구)과 다른 표라 칸을 나눈다 */}
                   <DetailDepartments event={event} readOnly={trashedView} />
-                  {showOrganizations && (
-                    <DetailOrganizations event={event} expectOrganizations={features.expectOrganizations} />
-                  )}
+                  <DetailOrganizations
+                    event={event}
+                    expectOrganizations={features.expectOrganizations}
+                    onPatch={onPatch}
+                  />
                 </>
               )}
 

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiEdit2, FiPlus, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { ledgerAccent, ledgerHairlineStrong } from '@/entities/event/ui/ledger-tokens'
+import { ledgerAccent, ledgerAccentSubtle, ledgerHairlineStrong, RADIUS } from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import {
@@ -129,13 +129,71 @@ export function DetailTerritory({ event, expectTerritory, readOnly = false, onCo
       note: row.note ?? '',
     })
 
-  /* 새 줄 — 직전 줄의 내준 나라·방식·근거 조약을 이어받는다(분할은 한 나라가 여러 줄을 내준다) */
+  /* 새 줄 — 직전 줄의 내준 나라·방식·근거 조약을 이어받는다(분할은 한 나라가 여러 줄을 내준다). 첫 줄이면 패전국/피해국 → 승전국/수혜국 자동 추론 */
   const addRow = () => {
     const last = rows[rows.length - 1]
+    if (last) {
+      setEditing(
+        emptyTerritoryDraft({
+          from: last.from,
+          method: last.method,
+          treatyId: last.treaty?.id ?? null,
+        }),
+      )
+      return
+    }
+    const sides = event.sides ?? []
+    const defeatSideIds = new Set(
+      sides.filter((side) => side.outcome === 'DEFEAT').map((side) => side.id),
+    )
+    const victorySideIds = new Set(
+      sides.filter((side) => side.outcome === 'VICTORY').map((side) => side.id),
+    )
+    const allCountryEntries = [
+      ...(event.relatedHistoricalCountries ?? []).map((country) => ({
+        party: {
+          countryId: null,
+          historicalCountryId: country.id,
+          name: country.name,
+        } satisfies TerritoryParty,
+        role: country.role,
+        sideId: country.sideId,
+      })),
+      ...(event.relatedCountries ?? []).map((country) => ({
+        party: {
+          countryId: country.id,
+          historicalCountryId: null,
+          name: country.name ?? null,
+        } satisfies TerritoryParty,
+        role: country.role,
+        sideId: country.sideId,
+      })),
+    ]
+    const inferredFrom =
+      allCountryEntries.find(
+        (entry) => entry.sideId && defeatSideIds.has(entry.sideId),
+      )?.party ??
+      allCountryEntries.find(
+        (entry) => entry.role === 'TARGET' || entry.role === 'VICTIM',
+      )?.party
+    const inferredTo =
+      allCountryEntries.find(
+        (entry) =>
+          entry.sideId &&
+          victorySideIds.has(entry.sideId) &&
+          partyKey(entry.party) !== (inferredFrom ? partyKey(inferredFrom) : ''),
+      )?.party ??
+      allCountryEntries.find(
+        (entry) =>
+          (entry.role === 'INITIATOR' || entry.role === 'BENEFICIARY') &&
+          partyKey(entry.party) !== (inferredFrom ? partyKey(inferredFrom) : ''),
+      )?.party
     setEditing(
-      emptyTerritoryDraft(
-        last ? { from: last.from, method: last.method, treatyId: last.treaty?.id ?? null } : undefined,
-      ),
+      emptyTerritoryDraft({
+        ...(inferredFrom ? { from: inferredFrom } : {}),
+        ...(inferredTo ? { to: inferredTo } : {}),
+        treatyId: treaties[0]?.id ?? null,
+      }),
     )
   }
 
@@ -192,29 +250,46 @@ export function DetailTerritory({ event, expectTerritory, readOnly = false, onCo
         </S.HelperText>
       ) : (
         <>
-          {/* 합계 — 받은 쪽은 면적 막대(가장 큰 쪽 기준), 내준 쪽은 한 줄 */}
-          <Summary aria-label="나라별 합계">
-            {lost.map((total) => (
-              <LostLine key={total.key}>
-                <strong>{partyLink(total.party)}</strong>
-                <span>
-                  잃음 {total.hasArea ? formatArea(total.areaKm2) : '면적 미상'}
-                  {total.hasPopulation ? ` · 인구 ${formatPopulation(total.population)}` : ''}
-                </span>
-              </LostLine>
-            ))}
-            {gained.map((total) => (
-              <GainLine key={total.key}>
-                <GainName>{partyLink(total.party)}</GainName>
-                <Bar aria-hidden>
-                  <span style={{ width: total.hasArea ? `${Math.max(2, (total.areaKm2 / maxGained) * 100)}%` : 0 }} />
-                </Bar>
-                <GainValue>
-                  {total.hasArea ? formatArea(total.areaKm2) : '면적 미상'}
-                  {total.hasPopulation ? ` · ${formatPopulation(total.population)}` : ''}
-                </GainValue>
-              </GainLine>
-            ))}
+          {/* 양방향 영토 이동 플로우 인포그래픽 + 나라별 합계 */}
+          <Summary role="region" aria-label="영토 이전 흐름 인포그래픽">
+            <FlowGrid>
+              <FlowCol>
+                <FlowColLabel $lost>내준 쪽 · 상실</FlowColLabel>
+                {lost.map((total) => (
+                  <LostLine key={total.key}>
+                    <strong>{partyLink(total.party)}</strong>
+                    <span>
+                      -{total.hasArea ? formatArea(total.areaKm2) : '면적 미상'}
+                      {total.hasPopulation ? ` · 인구 ${formatPopulation(total.population)}` : ''}
+                    </span>
+                  </LostLine>
+                ))}
+              </FlowCol>
+
+              <FlowArrowBox aria-hidden>
+                <FlowArrowBadge>
+                  {rows.length}개 지역
+                  {totalArea > 0 ? ` · ${formatArea(totalArea)}` : ''}
+                </FlowArrowBadge>
+                <FlowArrowLine>───▶</FlowArrowLine>
+              </FlowArrowBox>
+
+              <FlowCol>
+                <FlowColLabel>받은 쪽 · 획득</FlowColLabel>
+                {gained.map((total) => (
+                  <GainLine key={total.key}>
+                    <GainName>{partyLink(total.party)}</GainName>
+                    <Bar aria-hidden>
+                      <span style={{ width: total.hasArea ? `${Math.max(4, (total.areaKm2 / maxGained) * 100)}%` : 0 }} />
+                    </Bar>
+                    <GainValue>
+                      +{total.hasArea ? formatArea(total.areaKm2) : '면적 미상'}
+                      {total.hasPopulation ? ` · ${formatPopulation(total.population)}` : ''}
+                    </GainValue>
+                  </GainLine>
+                ))}
+              </FlowCol>
+            </FlowGrid>
           </Summary>
 
           {groups.map((group) => (
@@ -280,20 +355,81 @@ export function DetailTerritory({ event, expectTerritory, readOnly = false, onCo
 const Summary = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  max-width: 720px;
+  gap: 8px;
+  max-width: 780px;
   margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: ${RADIUS.MD};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.025)' : 'rgba(15,23,42,0.02)'};
+`
+
+const FlowGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(140px, 0.9fr) auto minmax(180px, 1.3fr);
+  align-items: center;
+  gap: 12px;
+
+  @media (max-width: 640px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+const FlowCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+`
+
+const FlowColLabel = styled.span<{ $lost?: boolean }>`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme, $lost }) =>
+    $lost
+      ? theme.mode === 'dark'
+        ? '#fca5a5'
+        : '#b91c1c'
+      : ledgerAccent(theme.mode)};
+`
+
+const FlowArrowBox = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 0 4px;
+
+  @media (max-width: 640px) {
+    flex-direction: row;
+    justify-content: center;
+  }
+`
+
+const FlowArrowBadge = styled.span`
+  padding: 2px 8px;
+  border-radius: ${RADIUS.PILL};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+`
+
+const FlowArrowLine = styled.span`
+  font-size: 12px;
+  font-weight: 700;
+  color: ${metaText};
 `
 
 const LostLine = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 10px;
+  gap: 4px 8px;
   align-items: baseline;
-  padding-bottom: 6px;
-  margin-bottom: 2px;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  font-size: 13.5px;
+  font-size: 13px;
 
   strong {
     font-weight: 700;
@@ -302,6 +438,7 @@ const LostLine = styled.div`
   > span {
     color: ${({ theme }) => (theme.mode === 'dark' ? '#fca5a5' : '#b91c1c')};
     font-weight: 600;
+    font-variant-numeric: tabular-nums;
   }
 `
 

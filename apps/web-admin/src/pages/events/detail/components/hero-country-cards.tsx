@@ -148,7 +148,7 @@ export function HeroCountryCards({
     const byId = new Map(
       ((historicalCountryList ?? []) as unknown as BridgeCountry[]).map((country) => [country.id, country]),
     )
-    const signed = (era: string | undefined, year: number | null | undefined) =>
+    const signed = (era: string | null | undefined, year: number | null | undefined) =>
       year == null ? null : era === 'BC' ? -year : year
     return (items: ReadonlyArray<CardCountry>) => {
       const buckets = new Map<string, { modern: boolean; spans: Array<[number, number]> }>()

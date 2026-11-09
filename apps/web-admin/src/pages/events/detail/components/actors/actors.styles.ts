@@ -162,7 +162,7 @@ export const PersonList = styled.ol`
   ${twoColumnRows}
 `
 
-export const PersonRow = styled.li<{ $compact?: boolean }>`
+export const PersonRow = styled.li<{ $compact?: boolean; $dragOver?: boolean }>`
   position: relative;
   display: grid;
   grid-template-columns: ${({ $compact }) => ($compact ? '28px' : '48px')} minmax(0, 1fr);
@@ -172,7 +172,15 @@ export const PersonRow = styled.li<{ $compact?: boolean }>`
   padding: ${({ $compact }) => ($compact ? '8px 10px' : '14px 14px')};
   border-radius: ${RADIUS.MD};
   background: ${({ theme, $compact }) => ($compact ? surface.nested(theme.mode) : surface.card(theme.mode))};
-  transition: background 0.15s;
+  outline: ${({ $dragOver, theme }) => ($dragOver ? `2px dashed ${ledgerAccent(theme.mode)}` : 'none')};
+  outline-offset: -2px;
+  transition: background 0.15s, outline-color 0.15s;
+  &[draggable='true'] {
+    cursor: grab;
+  }
+  &[draggable='true']:active {
+    cursor: grabbing;
+  }
 
   &:hover {
     background: ${({ theme, $compact }) => ($compact ? surface.nested(theme.mode) : surface.cardHover(theme.mode))};
@@ -586,8 +594,12 @@ export const SideColumns = styled.div<{ $stack?: boolean }>`
   margin-top: 6px;
 `
 
-export const SideGroup = styled.div<{ $rest?: boolean }>`
+export const SideGroup = styled.div<{ $rest?: boolean; $dragOver?: boolean }>`
   min-width: 0;
+  border-radius: ${RADIUS.MD};
+  outline: ${({ $dragOver, theme }) => ($dragOver ? `2px dashed ${ledgerAccent(theme.mode)}` : 'none')};
+  outline-offset: 4px;
+  transition: outline-color 0.14s, background 0.14s;
   /* '그 밖'은 진영 칸 아래 한 줄 전체 */
   ${({ $rest }) => ($rest ? 'grid-column: 1 / -1;' : '')}
 `
@@ -683,7 +695,7 @@ export const CountryRoleLine = styled.div<{ $hasContent: boolean }>`
 `
 
 /* 인물 행과 같은 골격 — 아바타 열만 없다(국기 이모지는 이름 옆이 자연스러워 생략). */
-export const CountryRow = styled.li`
+export const CountryRow = styled.li<{ $dragOver?: boolean }>`
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -694,7 +706,15 @@ export const CountryRow = styled.li`
   padding: 10px 14px;
   border-radius: ${RADIUS.MD};
   background: ${({ theme }) => surface.card(theme.mode)};
-  transition: background 0.15s;
+  outline: ${({ $dragOver, theme }) => ($dragOver ? `2px dashed ${ledgerAccent(theme.mode)}` : 'none')};
+  outline-offset: -2px;
+  transition: background 0.15s, outline-color 0.15s;
+  &[draggable='true'] {
+    cursor: grab;
+  }
+  &[draggable='true']:active {
+    cursor: grabbing;
+  }
   &:hover {
     background: ${({ theme }) => surface.cardHover(theme.mode)};
   }

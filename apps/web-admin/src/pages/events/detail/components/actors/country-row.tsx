@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react'
+import { type DragEvent, type ReactNode, useState } from 'react'
 
 import { FiArrowDown, FiArrowUp, FiEdit2, FiX } from 'react-icons/fi'
 
@@ -55,6 +55,13 @@ export function ActorCountryRow({
   onUpdate,
   onMove,
   onRemove,
+  draggable = true,
+  isDragOver = false,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onDragEnd,
   children,
 }: {
   row: CountryRowData
@@ -69,6 +76,13 @@ export function ActorCountryRow({
   onUpdate: (rowKey: string, patch: CountryPatch) => void
   onMove: (rowKey: string, direction: -1 | 1) => void
   onRemove: (rowKey: string) => void
+  draggable?: boolean
+  isDragOver?: boolean
+  onDragStart?: (dragEvent: DragEvent<HTMLLIElement>) => void
+  onDragOver?: (dragEvent: DragEvent<HTMLLIElement>) => void
+  onDragLeave?: (dragEvent: DragEvent<HTMLLIElement>) => void
+  onDrop?: (dragEvent: DragEvent<HTMLLIElement>) => void
+  onDragEnd?: () => void
   /** 행 아래에 매다는 것 — 대표단(그 나라 인물) 등 */
   children?: ReactNode
 }) {
@@ -83,7 +97,15 @@ export function ActorCountryRow({
   const hasFacts = Boolean(period || participation || side)
 
   return (
-    <CountryRow>
+    <CountryRow
+      draggable={draggable && !editing}
+      $dragOver={isDragOver}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+    >
       <CountryBody>
         <CountryNameLine>
           <NameLink

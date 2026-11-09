@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { type DragEvent, useState } from 'react'
 
 import { FiArrowDown, FiArrowUp, FiEdit2, FiX } from 'react-icons/fi'
 
@@ -50,6 +50,13 @@ export function ActorPersonRow({
   onParticipation,
   onMove,
   onRemove,
+  draggable = true,
+  isDragOver = false,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onDragEnd,
 }: {
   /** 대표단 줄 — 나라 줄 밑에 들여 놓는 작은 모양(아바타 28px) */
   compact?: boolean
@@ -71,6 +78,13 @@ export function ActorPersonRow({
   onParticipation: (personId: string, value: string) => void
   onMove: (personId: string, direction: -1 | 1) => void
   onRemove: (personId: string) => void
+  draggable?: boolean
+  isDragOver?: boolean
+  onDragStart?: (dragEvent: DragEvent<HTMLLIElement>) => void
+  onDragOver?: (dragEvent: DragEvent<HTMLLIElement>) => void
+  onDragLeave?: (dragEvent: DragEvent<HTMLLIElement>) => void
+  onDrop?: (dragEvent: DragEvent<HTMLLIElement>) => void
+  onDragEnd?: () => void
 }) {
   const fullName = personNameOf(entry)
   const avatarUrl = entry.person?.profileImageUrl ?? undefined
@@ -90,7 +104,16 @@ export function ActorPersonRow({
     Boolean(entry.lifespanWarning)
 
   return (
-    <PersonRow $compact={compact}>
+    <PersonRow
+      $compact={compact}
+      draggable={draggable && !editing}
+      $dragOver={isDragOver}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+    >
       <PersonAvatarBtn type="button" onClick={() => onOpen(entry.personId)} aria-label={`${fullName} 상세 보기`}>
         <PersonAvatar $hasImage={Boolean(avatarUrl)} $compact={compact}>
           {avatarUrl ? (

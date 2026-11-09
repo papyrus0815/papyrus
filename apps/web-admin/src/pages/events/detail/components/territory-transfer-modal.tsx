@@ -204,6 +204,17 @@ export function TerritoryTransferModal({
             }}
           >
             {partyField('from', '내준 나라')}
+            {(fromKey || toKey) && (
+              <SwapPartyRow>
+                <SwapPartyBtn
+                  type="button"
+                  onClick={() => update({ from: draft.to, to: draft.from })}
+                  aria-label="내준 나라와 받은 나라 맞바꾸기"
+                >
+                  ⇄ 내준 나라 · 받은 나라 맞바꾸기
+                </SwapPartyBtn>
+              </SwapPartyRow>
+            )}
             {partyField('to', '받은 나라')}
             {sameParty && <Warn role="alert">내준 나라와 받은 나라가 같습니다</Warn>}
 
@@ -474,5 +485,28 @@ const FooterButton = styled.button`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
+  }
+`
+
+const SwapPartyRow = styled.div`
+  display: flex;
+  align-items: center;
+  margin: -4px 0;
+`
+
+const SwapPartyBtn = styled.button`
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  background: transparent;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 `

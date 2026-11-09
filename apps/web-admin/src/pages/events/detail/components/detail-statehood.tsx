@@ -12,11 +12,14 @@
  * 국가 기록의 건국·멸망 연도와 사건 연도가 어긋나면 작게 알린다 — 시드 오류를 사건을 읽다가
  * 발견하게 하려는 것이다(고치는 곳은 국가 상세).
  */
+import { type DragEvent, useState } from 'react'
+
 import { useQueries } from '@tanstack/react-query'
 import styled from 'styled-components'
 
-import { ledgerHairlineStrong } from '@/entities/event/ui/ledger-tokens'
+import { ledgerAccent, ledgerAccentSubtle, ledgerHairlineStrong, RADIUS } from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
+import { type UpdateEventDto } from '@/shared/api/events'
 import {
   type FirstRuler,
   type FoundingLinkedCountry,
@@ -48,6 +51,7 @@ interface DetailStatehoodProps {
   expectStatehood: boolean
   onCountryClick: (countryId: string) => void
   onPersonClick: (personId: string) => void
+  onPatch?: (patch: UpdateEventDto) => void
 }
 
 const RULER_TITLE: Record<FirstRuler['kind'], string> = {
@@ -95,8 +99,60 @@ export function statehoodEntries(event: EventDetail): StatehoodEntry[] {
   return entries.sort((left, right) => (left.role === right.role ? 0 : left.role === 'FOUNDED' ? -1 : 1))
 }
 
-export function DetailStatehood({ event, expectStatehood, onCountryClick, onPersonClick }: DetailStatehoodProps) {
+export function DetailStatehood({
+  event,
+  expectStatehood,
+  onCountryClick,
+  onPersonClick,
+  onPatch,
+}: DetailStatehoodProps) {
   const entries = statehoodEntries(event)
+  const dissolvedEntries = entries.filter((entry) => entry.role === 'DISSOLVED')
+  const foundedEntries = entries.filter((entry) => entry.role === 'FOUNDED')
+  const otherParticipants = [
+    ...(event.relatedHistoricalCountries ?? [])
+      .filter((country) => country.role !== 'FOUNDED' && country.role !== 'DISSOLVED')
+      .map((country) => ({ id: country.id, name: country.name, historical: true })),
+    ...(event.relatedCountries ?? [])
+      .filter((country) => country.role !== 'FOUNDED' && country.role !== 'DISSOLVED')
+      .map((country) => ({ id: country.id, name: country.name, historical: false })),
+  ]
+
+  const [dragCountry, setDragCountry] = useState<{ id: string; historical: boolean } | null>(null)
+  const [dragOverRole, setDragOverRole] = useState<StatehoodRole | null>(null)
+
+  const assignStatehoodRole = (
+    target: { id: string; historical: boolean },
+    nextRole: StatehoodRole | 'PARTICIPANT',
+  ) => {
+    if (!onPatch) return
+    onPatch({
+      relatedCountriesPatch: [
+        {
+          ...(target.historical ? { historicalCountryId: target.id } : { countryId: target.id }),
+          role: nextRole,
+        },
+      ],
+    })
+  }
+
+  const encodeDragPayload = (item: { id: string; historical: boolean }) =>
+    `${item.historical ? 'h' : 'c'}:${item.id}`
+  const decodeDragPayload = (raw: string): { id: string; historical: boolean } | null => {
+    if (raw.startsWith('h:')) return { id: raw.slice(2), historical: true }
+    if (raw.startsWith('c:')) return { id: raw.slice(2), historical: false }
+    return null
+  }
+
+  const handleDropToRole = (dragEvent: DragEvent<HTMLElement>, targetRole: StatehoodRole) => {
+    dragEvent.preventDefault()
+    const payload = dragCountry ?? decodeDragPayload(dragEvent.dataTransfer.getData('text/plain'))
+    setDragCountry(null)
+    setDragOverRole(null)
+    if (!payload) return
+    assignStatehoodRole(payload, targetRole)
+  }
+
   const historicalEntries = entries.filter((entry) => entry.historical)
   const summaries = useQueries({
     queries: historicalEntries.map((entry) => ({
@@ -119,6 +175,180 @@ export function DetailStatehood({ event, expectStatehood, onCountryClick, onPers
         <S.SectionTitle>국가 성립·소멸</S.SectionTitle>
         {entries.length > 1 && <S.SectionSubtitle>{entries.length}곳</S.SectionSubtitle>}
       </S.SectionHeader>
+
+      {(entries.length > 0 || otherParticipants.length > 0) && (
+        <TransitionBoard role="region" aria-label="체제 전환 흐름 인포그래픽">
+          <TransitionGrid>
+            <TransitionLane
+              $dragOver={dragOverRole === 'DISSOLVED'}
+              data-statehood-lane="DISSOLVED"
+              onDragOver={(dragEvent) => {
+                if (!onPatch) return
+                dragEvent.preventDefault()
+                if (dragOverRole !== 'DISSOLVED') setDragOverRole('DISSOLVED')
+              }}
+              onDragLeave={(dragEvent) => {
+                if (!dragEvent.currentTarget.contains(dragEvent.relatedTarget as globalThis.Node | null)) {
+                  setDragOverRole((current) => (current === 'DISSOLVED' ? null : current))
+                }
+              }}
+              onDrop={(dragEvent) => handleDropToRole(dragEvent, 'DISSOLVED')}
+            >
+              <TransitionLaneHead $founded={false}>
+                <span>소멸 · 구체제</span>
+                <span>{dissolvedEntries.length}곳</span>
+              </TransitionLaneHead>
+              {dissolvedEntries.length > 0 ? (
+                <TransitionPillList>
+                  {dissolvedEntries.map((entry) => (
+                    <TransitionPill
+                      key={entry.id}
+                      $founded={false}
+                      draggable={Boolean(onPatch)}
+                      onDragStart={(dragEvent) => {
+                        const item = { id: entry.id, historical: entry.historical }
+                        setDragCountry(item)
+                        dragEvent.dataTransfer.effectAllowed = 'move'
+                        dragEvent.dataTransfer.setData('text/plain', encodeDragPayload(item))
+                      }}
+                      onDragEnd={() => {
+                        setDragCountry(null)
+                        setDragOverRole(null)
+                      }}
+                    >
+                      <TransitionPillName type="button" onClick={() => onCountryClick(entry.id)}>
+                        {entry.name}
+                      </TransitionPillName>
+                      {onPatch && (
+                        <TransitionPillClear
+                          type="button"
+                          onClick={() => assignStatehoodRole(entry, 'PARTICIPANT')}
+                          title="소멸 역할 해제"
+                          aria-label={`${entry.name} 소멸 역할 해제`}
+                        >
+                          ×
+                        </TransitionPillClear>
+                      )}
+                    </TransitionPill>
+                  ))}
+                </TransitionPillList>
+              ) : (
+                <TransitionEmpty>
+                  {onPatch ? '나라를 이리로 끌어 놓으면 소멸(멸망)로 지정' : '소멸 국가 없음'}
+                </TransitionEmpty>
+              )}
+            </TransitionLane>
+
+            <TransitionArrow aria-hidden>──▶</TransitionArrow>
+
+            <TransitionCenterNode>
+              <TransitionCenterKicker>
+                {eventYear != null ? formatCountryYearShort(eventYear) : '체제 전환'}
+              </TransitionCenterKicker>
+              <TransitionCenterTitle>{event.title}</TransitionCenterTitle>
+            </TransitionCenterNode>
+
+            <TransitionArrow aria-hidden>──▶</TransitionArrow>
+
+            <TransitionLane
+              $dragOver={dragOverRole === 'FOUNDED'}
+              data-statehood-lane="FOUNDED"
+              onDragOver={(dragEvent) => {
+                if (!onPatch) return
+                dragEvent.preventDefault()
+                if (dragOverRole !== 'FOUNDED') setDragOverRole('FOUNDED')
+              }}
+              onDragLeave={(dragEvent) => {
+                if (!dragEvent.currentTarget.contains(dragEvent.relatedTarget as globalThis.Node | null)) {
+                  setDragOverRole((current) => (current === 'FOUNDED' ? null : current))
+                }
+              }}
+              onDrop={(dragEvent) => handleDropToRole(dragEvent, 'FOUNDED')}
+            >
+              <TransitionLaneHead $founded>
+                <span>성립 · 신생국</span>
+                <span>{foundedEntries.length}곳</span>
+              </TransitionLaneHead>
+              {foundedEntries.length > 0 ? (
+                <TransitionPillList>
+                  {foundedEntries.map((entry) => (
+                    <TransitionPill
+                      key={entry.id}
+                      $founded
+                      draggable={Boolean(onPatch)}
+                      onDragStart={(dragEvent) => {
+                        const item = { id: entry.id, historical: entry.historical }
+                        setDragCountry(item)
+                        dragEvent.dataTransfer.effectAllowed = 'move'
+                        dragEvent.dataTransfer.setData('text/plain', encodeDragPayload(item))
+                      }}
+                      onDragEnd={() => {
+                        setDragCountry(null)
+                        setDragOverRole(null)
+                      }}
+                    >
+                      <TransitionPillName type="button" onClick={() => onCountryClick(entry.id)}>
+                        {entry.name}
+                      </TransitionPillName>
+                      {onPatch && (
+                        <TransitionPillClear
+                          type="button"
+                          onClick={() => assignStatehoodRole(entry, 'PARTICIPANT')}
+                          title="성립 역할 해제"
+                          aria-label={`${entry.name} 성립 역할 해제`}
+                        >
+                          ×
+                        </TransitionPillClear>
+                      )}
+                    </TransitionPill>
+                  ))}
+                </TransitionPillList>
+              ) : (
+                <TransitionEmpty>
+                  {onPatch ? '나라를 이리로 끌어 놓으면 성립(건국)으로 지정' : '성립 국가 없음'}
+                </TransitionEmpty>
+              )}
+            </TransitionLane>
+          </TransitionGrid>
+
+          {onPatch && otherParticipants.length > 0 && (
+            <QuickAssignBar aria-label="참여국 성립·소멸 빠른 지정">
+              <QuickAssignLabel>참여국 빠른 배정</QuickAssignLabel>
+              {otherParticipants.map((participant) => (
+                <QuickAssignChip
+                  key={`${participant.historical ? 'h' : 'c'}:${participant.id}`}
+                  draggable
+                  onDragStart={(dragEvent) => {
+                    setDragCountry(participant)
+                    dragEvent.dataTransfer.effectAllowed = 'move'
+                    dragEvent.dataTransfer.setData('text/plain', encodeDragPayload(participant))
+                  }}
+                  onDragEnd={() => {
+                    setDragCountry(null)
+                    setDragOverRole(null)
+                  }}
+                >
+                  <span>⠿ {participant.name}</span>
+                  <QuickAssignBtn
+                    type="button"
+                    $founded
+                    onClick={() => assignStatehoodRole(participant, 'FOUNDED')}
+                  >
+                    + 성립
+                  </QuickAssignBtn>
+                  <QuickAssignBtn
+                    type="button"
+                    $founded={false}
+                    onClick={() => assignStatehoodRole(participant, 'DISSOLVED')}
+                  >
+                    + 소멸
+                  </QuickAssignBtn>
+                </QuickAssignChip>
+              ))}
+            </QuickAssignBar>
+          )}
+        </TransitionBoard>
+      )}
 
       {entries.length === 0 ? (
         <S.HelperText>
@@ -472,4 +702,193 @@ const ActorsLink = styled.a`
   color: inherit;
   text-decoration: underline;
   text-underline-offset: 2px;
+`
+
+const TransitionBoard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: ${RADIUS.MD};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.025)' : 'rgba(15,23,42,0.02)'};
+`
+
+const TransitionGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(120px, 0.8fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 8px;
+
+  @media (max-width: 680px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+const TransitionLane = styled.div<{ $dragOver?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: ${RADIUS.SM};
+  border: 1px dashed
+    ${({ theme, $dragOver }) =>
+      $dragOver ? ledgerAccent(theme.mode) : ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme, $dragOver }) =>
+    $dragOver
+      ? ledgerAccentSubtle(theme.mode)
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.02)'
+        : 'rgba(255,255,255,0.75)'};
+  transition: border-color 0.14s, background 0.14s;
+`
+
+const TransitionLaneHead = styled.div<{ $founded: boolean }>`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme, $founded }) =>
+    $founded ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+`
+
+const TransitionPillList = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const TransitionPill = styled.span<{ $founded: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: ${RADIUS.PILL};
+  border: 1px solid
+    ${({ theme, $founded }) =>
+      $founded ? ledgerAccent(theme.mode) : ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme, $founded }) =>
+    $founded ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: grab;
+`
+
+const TransitionPillName = styled.button`
+  ${buttonReset}
+  font-weight: 600;
+  color: inherit;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+`
+
+const TransitionPillClear = styled.button`
+  ${buttonReset}
+  font-size: 13px;
+  line-height: 1;
+  color: ${metaText};
+  opacity: 0.75;
+
+  &:hover {
+    opacity: 1;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const TransitionEmpty = styled.span`
+  font-size: 12px;
+  color: ${metaText};
+`
+
+const TransitionArrow = styled.span`
+  align-self: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${metaText};
+
+  @media (max-width: 680px) {
+    display: none;
+  }
+`
+
+const TransitionCenterNode = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 8px 10px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerAccent(theme.mode)};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  text-align: center;
+`
+
+const TransitionCenterKicker = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+`
+
+const TransitionCenterTitle = styled.span`
+  font-size: 12.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  line-height: 1.3;
+`
+
+const QuickAssignBar = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding-top: 8px;
+  border-top: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+`
+
+const QuickAssignLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${metaText};
+`
+
+const QuickAssignChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: ${RADIUS.PILL};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  background: ${({ theme }) => theme.colors.background.primary};
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: grab;
+`
+
+const QuickAssignBtn = styled.button<{ $founded: boolean }>`
+  ${buttonReset}
+  padding: 1px 6px;
+  border-radius: ${RADIUS.XS};
+  background: ${({ theme, $founded }) =>
+    $founded
+      ? ledgerAccentSubtle(theme.mode)
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.08)'
+        : 'rgba(15,23,42,0.06)'};
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme, $founded }) =>
+    $founded ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+
+  &:hover {
+    opacity: 0.85;
+  }
 `

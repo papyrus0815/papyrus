@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { type DragEvent, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { FiSettings } from 'react-icons/fi'
@@ -210,32 +210,81 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
   const personsCollapsed = personsCollapsedBase && listedPersons.length > PERSON_PREVIEW_COUNT
   const sideCount = (event.sides ?? []).filter((side) => !side.parentSideId).length
 
+  type ActorDragItem = { kind: 'country' | 'person'; key: string }
+  const [dragItem, setDragItem] = useState<ActorDragItem | null>(null)
+  const [dragOverTarget, setDragOverTarget] = useState<string | null>(null)
+
+  const encodeDrag = (item: ActorDragItem) => `${item.kind}|${item.key}`
+  const decodeDrag = (raw: string): ActorDragItem | null => {
+    const sep = raw.indexOf('|')
+    if (sep <= 0) return null
+    const kind = raw.slice(0, sep)
+    const key = raw.slice(sep + 1)
+    if ((kind === 'country' || kind === 'person') && key) return { kind, key }
+    return null
+  }
+  const clearDrag = () => {
+    setDragItem(null)
+    setDragOverTarget(null)
+  }
+
   const renderPersonRow = (
     entry: (typeof persons)[number],
     position: { isFirst: boolean; isLast: boolean },
     compact = false,
-  ) => (
-    <ActorPersonRow
-      key={entry.personId}
-      compact={compact}
-      entry={entry}
-      side={entry.sideId && sideById.get(entry.sideId) ? sideById.get(entry.sideId) : null}
-      sideOptions={sideOptions}
-      participationOptions={participationOptions}
-      manageMode={manageMode}
-      isFirst={position.isFirst}
-      isLast={position.isLast}
-      onOpen={onPersonClick}
-      onUpdate={actors.updatePerson}
-      onParticipation={actors.setParticipationCountry}
-      onMove={actors.movePerson}
-      onRemove={actors.removePerson}
-    />
-  )
+  ) => {
+    const targetKey = `person:${entry.personId}`
+    return (
+      <ActorPersonRow
+        key={entry.personId}
+        compact={compact}
+        entry={entry}
+        side={entry.sideId && sideById.get(entry.sideId) ? sideById.get(entry.sideId) : null}
+        sideOptions={sideOptions}
+        participationOptions={participationOptions}
+        manageMode={manageMode}
+        isFirst={position.isFirst}
+        isLast={position.isLast}
+        onOpen={onPersonClick}
+        onUpdate={actors.updatePerson}
+        onParticipation={actors.setParticipationCountry}
+        onMove={actors.movePerson}
+        onRemove={actors.removePerson}
+        isDragOver={dragOverTarget === targetKey}
+        onDragStart={(dragEvent) => {
+          dragEvent.stopPropagation()
+          const item: ActorDragItem = { kind: 'person', key: entry.personId }
+          setDragItem(item)
+          dragEvent.dataTransfer.effectAllowed = 'move'
+          dragEvent.dataTransfer.setData('text/plain', encodeDrag(item))
+        }}
+        onDragOver={(dragEvent) => {
+          dragEvent.preventDefault()
+          dragEvent.stopPropagation()
+          if (dragOverTarget !== targetKey) setDragOverTarget(targetKey)
+        }}
+        onDragLeave={(dragEvent) => {
+          if (!dragEvent.currentTarget.contains(dragEvent.relatedTarget as globalThis.Node | null)) {
+            setDragOverTarget((current) => (current === targetKey ? null : current))
+          }
+        }}
+        onDrop={(dragEvent) => {
+          dragEvent.preventDefault()
+          dragEvent.stopPropagation()
+          const payload = dragItem ?? decodeDrag(dragEvent.dataTransfer.getData('text/plain'))
+          clearDrag()
+          if (!payload || payload.kind !== 'person') return
+          actors.reorderPerson(payload.key, entry.personId)
+        }}
+        onDragEnd={clearDrag}
+      />
+    )
+  }
 
   const renderCountryRow = (row: (typeof countryRows)[number]) => {
     const index = countryRows.indexOf(row)
     const rowKey = countryRowKey(row)
+    const targetKey = `country:${rowKey}`
     const delegates = delegationMode ? (delegations.byCountry.get(rowKey) ?? []) : []
     const delegationOpen = openDelegations.has(rowKey)
     const shownDelegates = delegationOpen ? delegates : delegates.slice(0, DELEGATION_PREVIEW_COUNT)
@@ -264,6 +313,48 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
         onUpdate={actors.updateCountry}
         onMove={actors.moveCountry}
         onRemove={actors.removeCountry}
+        isDragOver={dragOverTarget === targetKey}
+        onDragStart={(dragEvent) => {
+          dragEvent.stopPropagation()
+          const item: ActorDragItem = { kind: 'country', key: rowKey }
+          setDragItem(item)
+          dragEvent.dataTransfer.effectAllowed = 'move'
+          dragEvent.dataTransfer.setData('text/plain', encodeDrag(item))
+        }}
+        onDragOver={(dragEvent) => {
+          dragEvent.preventDefault()
+          dragEvent.stopPropagation()
+          if (dragOverTarget !== targetKey) setDragOverTarget(targetKey)
+        }}
+        onDragLeave={(dragEvent) => {
+          if (!dragEvent.currentTarget.contains(dragEvent.relatedTarget as globalThis.Node | null)) {
+            setDragOverTarget((current) => (current === targetKey ? null : current))
+          }
+        }}
+        onDrop={(dragEvent) => {
+          dragEvent.preventDefault()
+          dragEvent.stopPropagation()
+          const payload = dragItem ?? decodeDrag(dragEvent.dataTransfer.getData('text/plain'))
+          clearDrag()
+          if (!payload) return
+          if (payload.kind === 'person') {
+            actors.setParticipationCountry(
+              payload.key,
+              `${row.isHistorical ? 'h' : 'c'}:${row.id}`,
+            )
+            return
+          }
+          if (payload.key !== rowKey) {
+            actors.reorderCountry(payload.key, rowKey)
+          }
+          if (!manageMode) {
+            const draggedCountry = countryRows.find((candidate) => countryRowKey(candidate) === payload.key)
+            if (draggedCountry && draggedCountry.sideId !== row.sideId) {
+              actors.updateCountry(payload.key, { sideId: row.sideId ?? null })
+            }
+          }
+        }}
+        onDragEnd={clearDrag}
       >
         {delegates.length > 0 && (
           <DelegationList aria-label={`${row.name} 대표·인물`}>
@@ -315,8 +406,34 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
             <SideColumns $stack={delegationMode}>
               {countrySideGroups.map((group) => {
                 const color = group.sideId ? sideColorById.get(group.sideId) : undefined
+                const groupTargetKey = `side:${group.sideId ?? 'rest'}`
                 return (
-                  <SideGroup key={group.sideId ?? 'rest'} $rest={!group.sideId}>
+                  <SideGroup
+                    key={group.sideId ?? 'rest'}
+                    $rest={!group.sideId}
+                    $dragOver={dragOverTarget === groupTargetKey}
+                    data-side-group={group.sideId ?? 'rest'}
+                    onDragOver={(dragEvent: DragEvent<HTMLDivElement>) => {
+                      dragEvent.preventDefault()
+                      if (dragOverTarget !== groupTargetKey) setDragOverTarget(groupTargetKey)
+                    }}
+                    onDragLeave={(dragEvent: DragEvent<HTMLDivElement>) => {
+                      if (!dragEvent.currentTarget.contains(dragEvent.relatedTarget as globalThis.Node | null)) {
+                        setDragOverTarget((current) => (current === groupTargetKey ? null : current))
+                      }
+                    }}
+                    onDrop={(dragEvent: DragEvent<HTMLDivElement>) => {
+                      dragEvent.preventDefault()
+                      const payload = dragItem ?? decodeDrag(dragEvent.dataTransfer.getData('text/plain'))
+                      clearDrag()
+                      if (!payload) return
+                      if (payload.kind === 'country') {
+                        actors.updateCountry(payload.key, { sideId: group.sideId ?? null })
+                      } else {
+                        actors.updatePerson(payload.key, { sideId: group.sideId ?? null })
+                      }
+                    }}
+                  >
                     <SideHead $color={color}>
                       {color && <SideSwatch $color={color} aria-hidden />}
                       {group.label}
@@ -339,7 +456,28 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
   )
   /** 인물 무리 — 대표단 보기면 참여 국가가 없는 인물만 */
   const personsBlock = (
-      <ActorsBlock $divided={delegationMode}>
+      <ActorsBlock
+        $divided={delegationMode}
+        onDragOver={(dragEvent: DragEvent<HTMLDivElement>) => {
+          if (!delegationMode) return
+          dragEvent.preventDefault()
+          if (dragOverTarget !== 'unassigned-persons') setDragOverTarget('unassigned-persons')
+        }}
+        onDragLeave={(dragEvent: DragEvent<HTMLDivElement>) => {
+          if (!dragEvent.currentTarget.contains(dragEvent.relatedTarget as globalThis.Node | null)) {
+            setDragOverTarget((current) => (current === 'unassigned-persons' ? null : current))
+          }
+        }}
+        onDrop={(dragEvent: DragEvent<HTMLDivElement>) => {
+          if (!delegationMode) return
+          dragEvent.preventDefault()
+          const payload = dragItem ?? decodeDrag(dragEvent.dataTransfer.getData('text/plain'))
+          clearDrag()
+          if (payload?.kind === 'person') {
+            actors.setParticipationCountry(payload.key, 'none')
+          }
+        }}
+      >
         <GroupHead>
           <GroupLabel>
             {delegationMode && listedPersons.length > 0 ? '나라 없이 참여한 인물' : '인물'}
