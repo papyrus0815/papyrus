@@ -9,26 +9,46 @@
  * - 거르기(묶음·나라·세부·시기)는 흐리기로 따른다 — 다른 탭과 같은 규칙.
  * - 옆 목록 '아직 핀 없는 하위' — 행마다 '지도에 찍기'(상세와 같은 위치 모달). 지도를 채우는 작업대.
  */
-import { Suspense, lazy, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
 import { FiMapPin } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { ledgerBackground } from '@/entities/event/ui/ledger-tokens'
+import { cityApi } from '@/shared/api/city'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import { type EventOverviewNode } from '@/shared/api/event-overview'
 import { updateEvent, type UpdateEventDto } from '@/shared/api/events'
 import { invalidateEventQueries } from '@/shared/api/invalidate-events'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 import { metaText } from '@/pages/events/styles/theme'
 
 import { LocationPickerModal } from '../detail/components/location-picker-modal'
+import { extractPlaceFromEventTitle, placeQueryFromText } from '../detail/components/location-text.lib'
 import { type OverviewGrouping } from './event-overview.lib'
 import { type MapPin } from './overview-map-canvas'
 import * as S from './overview.styles'
 
 const OverviewMapCanvas = lazy(() => import('./overview-map-canvas'))
+
+type PlaceCandidate = Awaited<ReturnType<typeof cityApi.searchPlaces>>[number]
+
+/** OpenStreetMap 이용 정책 — 초당 1건 이하. 서버 프록시에 줄 세우는 장치가 없어 여기서 간격을 둔다 */
+const SEARCH_INTERVAL_MS = 1100
+const wait = (milliseconds: number) => new Promise((resolve) => window.setTimeout(resolve, milliseconds))
+
+/**
+ * 찾을 말 — 위치 글의 첫 장소, 글이 없으면 제목의 지명('그라블로트-생프리바 전투' → '그라블로트-생프리바').
+ * 보불전쟁 하위 13건 중 위치 글은 2건뿐이었고 나머지 전투는 제목이 곧 장소였다.
+ */
+function placeQueryOf(node: EventOverviewNode): { query: string; from: 'text' | 'title' } | null {
+  const fromText = placeQueryFromText(node.location)
+  if (fromText.length >= 2) return { query: fromText, from: 'text' }
+  const fromTitle = extractPlaceFromEventTitle(node.title)
+  return fromTitle ? { query: fromTitle, from: 'title' } : null
+}
 
 /**
  * 지도 위 묶음 색 — 지도 바탕(OSM)은 테마와 무관하게 밝아서 늘 밝은 쪽 단계를 쓴다. 간트 묶음 팔레트의 앞 다섯
@@ -98,6 +118,8 @@ export function MapPanel({
   const unpinned = ordered.filter((node) => node.locationLatitude == null || node.locationLongitude == null)
   const withText = unpinned.filter((node) => node.location?.trim())
   const withoutText = unpinned.filter((node) => !node.location?.trim())
+  /** 좌표 후보를 찾을 수 있는 하위 — 위치 글이 있거나 제목에 지명이 있는 것 */
+  const searchable = unpinned.filter((node) => placeQueryOf(node) !== null)
   const legendGroups = grouping.groups.filter((group) =>
     pins.some((pin) => grouping.groupIdOf.get(pin.id) === group.id),
   )
@@ -114,6 +136,66 @@ export function MapPanel({
     }
   }
 
+  /**
+   * 위치 글 → 좌표 후보 일괄 — 글만 있고 핀이 없는 하위(실측 608건 중 94건)를 하나씩 '지도에 찍기'로 여는 대신,
+   * 글의 첫 장소(위치 모달의 미리 검색과 같은 규칙)로 OpenStreetMap 후보를 한 번에 찾아 행마다 보인다.
+   * **자동 저장은 없다** — 행의 '이 자리로'나 '후보 모두 꽂기'(확인 후)로만 저장한다. 위치 글은 그대로 둔다.
+   */
+  const [candidates, setCandidates] = useState<
+    ReadonlyMap<string, { place: PlaceCandidate; from: 'text' | 'title' } | null>
+  >(() => new Map())
+  const [searching, setSearching] = useState<{ done: number; total: number } | null>(null)
+  const searchRun = useRef(0)
+  useEffect(
+    () => () => {
+      searchRun.current += 1
+    },
+    [],
+  )
+  const findCandidates = async () => {
+    const run = ++searchRun.current
+    const targets = searchable.filter((node) => !candidates.has(node.id))
+    setSearching({ done: 0, total: targets.length })
+    for (const [index, node] of targets.entries()) {
+      if (searchRun.current !== run) return
+      const target = placeQueryOf(node)!
+      const results = await cityApi.searchPlaces(target.query, undefined, { anyPlace: true })
+      if (searchRun.current !== run) return
+      setCandidates((previous) =>
+        new Map(previous).set(node.id, results[0] ? { place: results[0], from: target.from } : null),
+      )
+      setSearching({ done: index + 1, total: targets.length })
+      if (index < targets.length - 1) await wait(SEARCH_INTERVAL_MS)
+    }
+    setSearching(null)
+  }
+  const pinValue = (candidate: PlaceCandidate): UpdateEventDto =>
+    ({ locationLatitude: candidate.lat, locationLongitude: candidate.lng }) as UpdateEventDto
+  const acceptAll = async () => {
+    const ready = unpinned.filter((node) => candidates.get(node.id))
+    const ok = await confirm({
+      title: `후보 ${ready.length}곳을 모두 꽂을까요?`,
+      message:
+        '후보는 위치 글의 첫 장소(글이 없으면 제목의 지명)를 검색한 첫 결과라 틀릴 수 있습니다(같은 이름의 다른 곳). 꽂은 뒤 지도에서 보고 각 사건의 위치에서 고칠 수 있습니다. 위치 글은 바뀌지 않습니다.',
+      confirmLabel: '모두 꽂기',
+    })
+    if (!ok) return
+    let saved = 0
+    for (const node of ready) {
+      try {
+        await updateEvent(node.id, pinValue(candidates.get(node.id)!.place))
+        invalidateEventQueries(queryClient, { eventId: node.id })
+        saved += 1
+      } catch {
+        /* 하나 실패해도 나머지는 꽂는다 — 끝에 건수로 알린다 */
+      }
+    }
+    await queryClient.invalidateQueries({ queryKey: eventKeys.overview(rootId) })
+    if (saved === ready.length) notify.success(`${saved}곳에 핀을 꽂았습니다`)
+    else notify.error(`${ready.length}곳 중 ${saved}곳만 꽂았습니다`)
+  }
+  const readyCount = unpinned.filter((node) => candidates.get(node.id)).length
+
   const unpinnedRow = (node: EventOverviewNode) => (
     <UnpinnedRow key={node.id} data-dim={visibleIds !== null && !visibleIds.has(node.id) ? '' : undefined}>
       <span className="number">{numberById.get(node.id)}</span>
@@ -124,6 +206,24 @@ export function MapPanel({
       <S.TextButton type="button" onClick={() => setPinning(node)}>
         지도에 찍기
       </S.TextButton>
+      {candidates.has(node.id) && (
+        <Candidate>
+          {candidates.get(node.id) ? (
+            <>
+              <span title={candidates.get(node.id)!.place.displayName}>
+                {candidates.get(node.id)!.from === 'title' ? '제목에서 찾은 후보' : '후보'} ·{' '}
+                {candidates.get(node.id)!.place.shortName}
+                {candidates.get(node.id)!.place.country && ` (${candidates.get(node.id)!.place.country})`}
+              </span>
+              <S.TextButton type="button" onClick={() => void savePin(node, pinValue(candidates.get(node.id)!.place))}>
+                이 자리로
+              </S.TextButton>
+            </>
+          ) : (
+            <span className="none">후보 없음 — '지도에 찍기'로 직접</span>
+          )}
+        </Candidate>
+      )}
     </UnpinnedRow>
   )
 
@@ -178,9 +278,35 @@ export function MapPanel({
 
         {unpinned.length > 0 && (
           <UnpinnedList aria-label="아직 핀 없는 하위 사건">
+            {searchable.length > 0 && (
+              <CandidateBar>
+                <HeadActions>
+                  {searching ? (
+                    <span>
+                      후보 찾는 중 {searching.done}/{searching.total}
+                    </span>
+                  ) : (
+                    searchable.some((node) => !candidates.has(node.id)) && (
+                      <S.TextButton
+                        type="button"
+                        onClick={() => void findCandidates()}
+                        title="위치 글의 첫 장소(글이 없으면 제목의 지명)로 OpenStreetMap에서 찾는다 — 저장은 확인 후"
+                      >
+                        좌표 후보 찾기 ({searchable.filter((node) => !candidates.has(node.id)).length}건)
+                      </S.TextButton>
+                    )
+                  )}
+                  {!searching && readyCount > 0 && (
+                    <S.TextButton type="button" onClick={() => void acceptAll()}>
+                      후보 {readyCount}곳 모두 꽂기
+                    </S.TextButton>
+                  )}
+                </HeadActions>
+              </CandidateBar>
+            )}
             {withText.length > 0 && (
               <>
-                <UnpinnedHead>위치 글만 있음 {withText.length}</UnpinnedHead>
+<UnpinnedHead>위치 글만 있음 {withText.length}</UnpinnedHead>
                 {withText.map(unpinnedRow)}
               </>
             )}
@@ -303,6 +429,43 @@ const UnpinnedHead = styled.div`
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
   background: ${({ theme }) => ledgerBackground(theme.mode)};
+`
+
+/** 후보 줄 — 행 아래 둘째 줄, 제목 열부터 */
+const Candidate = styled.div`
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4338ca')};
+
+  > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .none {
+    color: ${metaText};
+  }
+`
+
+const HeadActions = styled.span`
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: ${metaText};
+`
+
+/** 후보 찾기 줄 — 목록 맨 위(위치 글·제목 지명 모두 대상) */
+const CandidateBar = styled.div`
+  padding: 6px 0 2px;
 `
 
 const UnpinnedRow = styled.div`
