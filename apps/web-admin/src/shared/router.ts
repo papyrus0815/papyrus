@@ -31,10 +31,16 @@ export const pathKeys = {
     `/${ROUTES.PROFILE}/${encodeURIComponent(accountId)}`,
 
   /** 인물 묶음(세대·계파·사단) 허브 목록 */
-  personGroups: (params?: { type?: string; countryId?: string }) => {
+  personGroups: (params?: {
+    type?: string
+    countryId?: string
+    historicalCountryId?: string
+  }) => {
     const qs = new URLSearchParams()
     if (params?.type) qs.set('type', params.type)
     if (params?.countryId) qs.set('countryId', params.countryId)
+    if (params?.historicalCountryId)
+      qs.set('historicalCountryId', params.historicalCountryId)
     const queryString = qs.toString()
     return `/${ROUTES.PERSON_GROUPS}/${queryString ? `?${queryString}` : ''}`
   },

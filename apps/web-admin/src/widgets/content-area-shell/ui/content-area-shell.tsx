@@ -109,22 +109,34 @@ function specFor(pathname: string): DomainSpec | null {
     }
   }
   if (pathname.startsWith('/treaties')) {
+    const selectedTreatyId = idFromPath(pathname, 'treaties')
+    /*
+     * 목록(/treaties)에는 사이드바를 두지 않는다 — 사건·인물 집단과 같은 규약. 본문이 이미 전체
+     * 조약 목록이라 좌측에 같은 23행·검색창·유형 필터가 한 벌 더 섰고, 키보드는 사이드바 필터와
+     * 세기 4개를 지나서야 본문 검색에 닿았다. 조약 사이를 오가는 길이 필요한 상세에만 둔다.
+     */
+    if (!selectedTreatyId) return null
     return {
       storageKey: 'treaties-list-collapsed',
+      defaultCollapsed: false,
       render: (context) => (
-        <TreatyListSidebar
-          selectedId={idFromPath(pathname, 'treaties')}
-          {...context}
-        />
+        <TreatyListSidebar selectedId={selectedTreatyId} {...context} />
       ),
     }
   }
   if (pathname.startsWith('/person-groups')) {
+    const selectedGroupId = idFromPath(pathname, 'person-groups')
+    /*
+     * 목록(/person-groups)에는 사이드바를 두지 않는다. 본문이 이미 전체 집단 목록·필터·검색이라
+     * 좌측에 같은 목록이 한 벌 더 서는 중복을 막고, 집단 간 이동이 필요한 상세(/person-groups/:groupId)에만 둔다.
+     */
+    if (!selectedGroupId) return null
     return {
       storageKey: 'person-groups-list-collapsed',
+      defaultCollapsed: false,
       render: (context) => (
         <PersonGroupListSidebar
-          selectedId={idFromPath(pathname, 'person-groups')}
+          selectedId={selectedGroupId}
           {...context}
         />
       ),
