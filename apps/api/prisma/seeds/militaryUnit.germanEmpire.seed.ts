@@ -20,7 +20,8 @@ import { PrismaService } from '../prisma.service'
 const HISTORICAL_COUNTRY_NAME = '독일 제국'
 const MODERN_COUNTRY_ISO = 'DE'
 const DEFENSE_CATEGORY_NAME = '국방'
-const HIGH_COMMAND_NAME = '독일 제국 육군 최고사령부'
+// 기관 이름에 나라 이름을 넣지 않는다(2026-11-08 규칙) — 독일 제국은 historicalCountryId가 말한다
+const HIGH_COMMAND_NAME = '육군 최고사령부'
 const FIRST_ARMY_NAME = '제1군'
 
 /** 1914년 8월 2일 동원령과 함께 제1군·최고사령부가 함께 편성됐다. */
@@ -67,8 +68,9 @@ export async function seedGermanEmpireMilitaryUnits(
   }
 
   // --- 1. 상위 기관: 육군 최고사령부(OHL)
+  // 같은 이름의 다른 나라 기관과 섞이지 않게 역사국가로 좁힌다
   let highCommand = await prisma.administrationDepartment.findFirst({
-    where: { name: HIGH_COMMAND_NAME },
+    where: { name: HIGH_COMMAND_NAME, historicalCountryId: historicalCountry.id },
     select: { id: true },
   })
   if (highCommand) {
@@ -80,7 +82,22 @@ export async function seedGermanEmpireMilitaryUnits(
         historicalCountryId: historicalCountry.id,
         countryId: modernCountry?.id ?? null,
         categoryId: defenseCategory?.id ?? null,
+        kind: 'MILITARY_COMMAND',
+        abbreviation: 'OHL',
+        nameLocal: 'Oberste Heeresleitung',
+        nameEn: 'Supreme Army Command',
+        // 구조화 날짜가 정본 — DATETIME은 서기 1000~9999 파생값
+        establishedEra: 'AD',
+        establishedYear: 1914,
+        establishedMonth: 8,
+        establishedDay: 2,
+        establishedPrecision: 'day',
         establishedDate: MOBILISATION_DATE,
+        abolishedEra: 'AD',
+        abolishedYear: 1919,
+        abolishedMonth: 7,
+        abolishedPrecision: 'month',
+        abolishedDate: new Date('1919-07-01T00:00:00Z'),
         description:
           'Oberste Heeresleitung(OHL). 1914년 8월 동원과 함께 참모본부를 기반으로 설치되어 ' +
           '서부·동부 전선의 야전군을 통할한 독일 제국 육군 최고 지휘기구. ' +

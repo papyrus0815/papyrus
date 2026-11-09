@@ -132,6 +132,7 @@ import {
   seedUsaGeography,
   seedChinaGeography,
   seedGermanEmpireMilitaryUnits,
+  seedNaziGermanyDepartments,
   seedDimitrijevic,
   seedJoffre,
   seedTisza,
@@ -781,6 +782,10 @@ async function main() {
         //  · 초대 사령관 알렉산더 폰 클루크는 시드가 아니라 UI로 등록된 인물이라
         //    fresh reset 직후에는 없다 — 그때는 warn 후 지휘관 연결만 건너뛴다
         await seedGermanEmpireMilitaryUnits(prisma)
+
+        // 15-1. 나치 독일 국가 기관 — 전쟁부 → 국방군 최고사령부(OKW) + OKH·OKL·OKM·지휘참모부, 총통 지령 제21호 연결
+        //  · 의존: 나치 독일 HC + 현대 DE + 국방 카테고리 + '총통 지령 제21호(바르바로사 작전) 하달' 사건(없으면 연결만 건너뜀)
+        await seedNaziGermanyDepartments(prisma)
 
         // 11-12. 드라구틴 디미트리예비치 «아피스» — 세르비아 참모본부 정보부장·흑수단 창립자
         //  · 의존: seedSerbiaHistoricalCountries('세르비아 왕국 (근대)' HC)

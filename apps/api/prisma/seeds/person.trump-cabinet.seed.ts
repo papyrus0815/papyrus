@@ -20,7 +20,7 @@
  * 등록 항목:
  *  - Person x18 (+ 트럼프 본인은 기존 행 재사용/보강)
  *  - PersonCountryAffiliation x18 (전원 CITIZENSHIP → 미국, 현대 국가 FK)
- *  - AdministrationDepartment x15 (미국 국무부 등) — 재임의 「소속 부처」 표시는 title이 아니라
+ *  - AdministrationDepartment x15 (국무부 등, 나라 이름은 이름에 넣지 않음 — countryId=미국) — 재임의 「소속 부처」 표시는 title이 아니라
  *    이 FK(administrationDepartmentId)로 채워진다. 없으면 어드민에 "부처 미지정"으로 뜬다.
  *  - GovernmentPositionTenure x18 (전원 CABINET_MINISTER, countryId=미국 — 역사국가가 아닌
  *    현대 Country FK를 쓰는 최초의 구조화 재임 시드) + 대통령 재임 x1
@@ -472,21 +472,21 @@ interface DepartmentSpec {
 }
 
 const DEPARTMENTS: DepartmentSpec[] = [
-  { defTitle: '국무장관', deptName: '미국 국무부', categoryName: '외교', description: '외교·조약·여권 등 대외 관계를 총괄하는 미국 연방행정부 최선임 부처(1789 설치).' },
-  { defTitle: '재무장관', deptName: '미국 재무부', categoryName: '재정·경제', description: '조세·국채·통화 정책과 연방 재정을 총괄하는 부처(1789 설치).' },
-  { defTitle: '국방장관', deptName: '미국 국방부', categoryName: '국방', description: '육·해·공군·해병대·우주군을 총괄하는 국방 부처. 1947년 국가안보법으로 통합 설치.' },
-  { defTitle: '법무장관', deptName: '미국 법무부', categoryName: '법무', description: '연방 검찰·FBI 등을 관할하며 법무장관이 검찰총장을 겸하는 부처(1870 설치).' },
-  { defTitle: '내무장관', deptName: '미국 내무부', categoryName: '환경', description: '연방 공유지·국립공원·야생동물·원주민 관련 업무를 관할하는 부처(1849 설치).' },
-  { defTitle: '농무장관', deptName: '미국 농무부', categoryName: '농림·해양', description: '농업 정책·식품안전·산림청 등을 관할하는 부처.' },
-  { defTitle: '상무장관', deptName: '미국 상무부', categoryName: '산업·에너지', description: '무역·통계(센서스)·특허·해양대기청(NOAA) 등을 관할하는 부처.' },
-  { defTitle: '노동장관', deptName: '미국 노동부', categoryName: '고용·노동', description: '고용·임금·산업안전·노동통계를 관할하는 부처.' },
-  { defTitle: '보건복지장관', deptName: '미국 보건복지부', categoryName: '보건·복지', description: '공중보건·메디케어·메디케이드·식품의약국(FDA)을 관할하는 부처.' },
-  { defTitle: '주택도시개발장관', deptName: '미국 주택도시개발부', categoryName: '국토·교통', description: '주택 정책·공정주거·도시개발을 관할하는 부처(1965 설치).' },
-  { defTitle: '교통장관', deptName: '미국 교통부', categoryName: '국토·교통', description: '연방항공청·연방고속도로청 등 교통 인프라 전반을 관할하는 부처(1966 설치).' },
-  { defTitle: '에너지장관', deptName: '미국 에너지부', categoryName: '산업·에너지', description: '핵무기 관리·에너지 정책·국립연구소를 관할하는 부처(1977 설치).' },
-  { defTitle: '교육장관', deptName: '미국 교육부', categoryName: '교육', description: '연방 교육 정책·학자금 지원을 관할하는 부처(1979 설치).' },
-  { defTitle: '보훈장관', deptName: '미국 보훈부', categoryName: '보건·복지', description: '참전용사 의료·연금·복지를 관할하는 부처(1989 내각급 승격).' },
-  { defTitle: '국토안보장관', deptName: '미국 국토안보부', categoryName: '행정·안전', description: '테러 대응·국경 관리·재난 대응(FEMA)·이민 등을 관할하는 부처(2002 9·11 이후 신설).' },
+  { defTitle: '국무장관', deptName: '국무부', categoryName: '외교', description: '외교·조약·여권 등 대외 관계를 총괄하는 미국 연방행정부 최선임 부처(1789 설치).' },
+  { defTitle: '재무장관', deptName: '재무부', categoryName: '재정·경제', description: '조세·국채·통화 정책과 연방 재정을 총괄하는 부처(1789 설치).' },
+  { defTitle: '국방장관', deptName: '국방부', categoryName: '국방', description: '육·해·공군·해병대·우주군을 총괄하는 국방 부처. 1947년 국가안보법으로 통합 설치.' },
+  { defTitle: '법무장관', deptName: '법무부', categoryName: '법무', description: '연방 검찰·FBI 등을 관할하며 법무장관이 검찰총장을 겸하는 부처(1870 설치).' },
+  { defTitle: '내무장관', deptName: '내무부', categoryName: '환경', description: '연방 공유지·국립공원·야생동물·원주민 관련 업무를 관할하는 부처(1849 설치).' },
+  { defTitle: '농무장관', deptName: '농무부', categoryName: '농림·해양', description: '농업 정책·식품안전·산림청 등을 관할하는 부처.' },
+  { defTitle: '상무장관', deptName: '상무부', categoryName: '산업·에너지', description: '무역·통계(센서스)·특허·해양대기청(NOAA) 등을 관할하는 부처.' },
+  { defTitle: '노동장관', deptName: '노동부', categoryName: '고용·노동', description: '고용·임금·산업안전·노동통계를 관할하는 부처.' },
+  { defTitle: '보건복지장관', deptName: '보건복지부', categoryName: '보건·복지', description: '공중보건·메디케어·메디케이드·식품의약국(FDA)을 관할하는 부처.' },
+  { defTitle: '주택도시개발장관', deptName: '주택도시개발부', categoryName: '국토·교통', description: '주택 정책·공정주거·도시개발을 관할하는 부처(1965 설치).' },
+  { defTitle: '교통장관', deptName: '교통부', categoryName: '국토·교통', description: '연방항공청·연방고속도로청 등 교통 인프라 전반을 관할하는 부처(1966 설치).' },
+  { defTitle: '에너지장관', deptName: '에너지부', categoryName: '산업·에너지', description: '핵무기 관리·에너지 정책·국립연구소를 관할하는 부처(1977 설치).' },
+  { defTitle: '교육장관', deptName: '교육부', categoryName: '교육', description: '연방 교육 정책·학자금 지원을 관할하는 부처(1979 설치).' },
+  { defTitle: '보훈장관', deptName: '보훈부', categoryName: '보건·복지', description: '참전용사 의료·연금·복지를 관할하는 부처(1989 내각급 승격).' },
+  { defTitle: '국토안보장관', deptName: '국토안보부', categoryName: '행정·안전', description: '테러 대응·국경 관리·재난 대응(FEMA)·이민 등을 관할하는 부처(2002 9·11 이후 신설).' },
 ]
 
 // ── 대통령 본인 (Cabinet의 head) ─────────────────────────────────────────────
