@@ -1,4 +1,5 @@
-import { useCallback, useId, useMemo, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -114,6 +115,8 @@ export function CountryLawsSection({
 
   const [searchQuery, setSearchQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('ALL')
+  const [searchParams] = useSearchParams()
+  const highlightedLawId = searchParams.get('lawId')?.trim() || ''
 
   const reactFormId = useId()
   const formId = `country-law-form-${reactFormId.replace(/:/g, '')}`
@@ -145,6 +148,20 @@ export function CountryLawsSection({
       ),
     [rows],
   )
+
+  useEffect(() => {
+    if (!highlightedLawId || sorted.length === 0) return
+    const targetLaw = sorted.find((row) => row.id === highlightedLawId)
+    if (!targetLaw) return
+    setTypeFilter('ALL')
+    setSearchQuery('')
+    const timer = window.setTimeout(() => {
+      document
+        .getElementById(`country-law-row-${highlightedLawId}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 60)
+    return () => window.clearTimeout(timer)
+  }, [highlightedLawId, sorted])
 
   const withTypeList = useMemo(
     () =>
@@ -633,7 +650,11 @@ export function CountryLawsSection({
                     const summaryText = row.summary?.trim() || ''
 
                     return (
-                      <LawsLedgerRow key={row.id}>
+                      <LawsLedgerRow
+                        key={row.id}
+                        id={`country-law-row-${row.id}`}
+                        $highlighted={row.id === highlightedLawId}
+                      >
                         <LawsLedgerMain>
                           <LawsTitleLine>
                             <LawName>{row.name}</LawName>
@@ -1186,13 +1207,17 @@ const LawsLedgerGrid = styled.div`
   }
 `
 
-const LawsLedgerRow = styled.div`
+const LawsLedgerRow = styled.div<{ $highlighted?: boolean }>`
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
   padding: 14px 16px;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ $highlighted, theme }) =>
+    $highlighted ? theme.colors.activeLight : 'transparent'};
+  box-shadow: ${({ $highlighted, theme }) =>
+    $highlighted ? `inset 3px 0 0 ${theme.colors.primary}` : 'none'};
   transition: background 0.14s ease;
 
   &:nth-child(odd) {

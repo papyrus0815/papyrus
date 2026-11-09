@@ -13,6 +13,7 @@ export interface SectionHelpInfo {
 }
 
 export type DashboardSectionHelpKey =
+  | 'geography'
   | 'lineage'
   | 'politicalSystem'
   | 'cabinet'
@@ -33,6 +34,14 @@ export const DASHBOARD_SECTION_HELP: Record<
   DashboardSectionHelpKey,
   SectionHelpInfo
 > = {
+  geography: {
+    title: '지리 · 국가 구글 지도',
+    summary:
+      '국가의 지리적 위치, 수도, 중심 위·경도 좌표 및 등록된 행정구역 분포를 구글 지도와 핀 지도 위에서 즉시 확인합니다.',
+    condition:
+      '국가 기본 정보에 위도·경도 또는 수도가 입력되어 있으면 해당 위치로 정확히 표시되며, 좌표가 아직 없더라도 국가명 검색 기준으로 구글 지도가 자동 렌더링됩니다.',
+    tip: '상단 칩(국가 전체 · 수도 · 1차 행정구역)을 클릭하면 해당 지역으로 지도가 즉시 이동하며, 「행정구역 핀 지도」로 전환해 등록된 행정구역 마커를 탐색할 수 있습니다.',
+  },
   lineage: {
     title: '계보 (역사적 시간축)',
     summary:

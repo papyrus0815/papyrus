@@ -4,6 +4,7 @@
  * 부처 카테고리 설정 모달(`GovernmentCategoryModal`), 중앙부처 탭에서 열리는 군부대 등록 모달을 포함한다.
  */
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 import { useQueryClient } from '@tanstack/react-query'
 
@@ -51,8 +52,10 @@ export function GovernmentInfoSection({
   initialContentTab,
 }: GovernmentInfoSectionProps) {
   const queryClient = useQueryClient()
+  const [searchParams] = useSearchParams()
+  const cabinetIdQuery = searchParams.get('cabinetId')?.trim() || ''
   const [contentTab, setContentTab] = useState<GovernmentContentTab>(
-    initialContentTab ?? 'heads',
+    initialContentTab ?? (cabinetIdQuery ? 'cabinets' : 'heads'),
   )
   const effectiveCountryId = countryId ?? country?.id
   const isDark = useThemeStore((state) => state.mode === 'dark')
@@ -60,8 +63,10 @@ export function GovernmentInfoSection({
   useEffect(() => {
     if (initialContentTab != null) {
       setContentTab(initialContentTab)
+    } else if (cabinetIdQuery) {
+      setContentTab('cabinets')
     }
-  }, [initialContentTab])
+  }, [initialContentTab, cabinetIdQuery])
 
   const [cabinetMinistryIntent, setCabinetMinistryIntent] = useState<{
     categoryId: string

@@ -21,6 +21,7 @@ import { pathKeys } from '@/shared/router'
 import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 
 import * as DashboardStyles from './country-detail-dashboard.styles'
+import { CountryPersonGroupsBlock } from './country-person-groups-block.widget'
 import { ChartSkeleton } from './dashboard-panels/chart-skeleton'
 import { PersonCard } from './person/person-card'
 
@@ -344,6 +345,8 @@ export function CountryPersonsSection({ country }: CountryPersonsSectionProps) {
             </DashboardStyles.SectionHeadlineSub>
           </DashboardStyles.SectionHeadlineCell>
         </DashboardStyles.SectionHeadlineStrip>
+
+        <CountryPersonGroupsBlock countryId={country.id} />
 
         {isLoading ? (
           <ChartSkeleton variant="bars" rows={5} />

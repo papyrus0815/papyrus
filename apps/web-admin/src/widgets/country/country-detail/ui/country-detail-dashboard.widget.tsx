@@ -39,6 +39,7 @@ import {
   IconLandmark,
   IconMilitary,
   IconPercent,
+  IconPin,
   IconRefresh,
   IconScroll,
   IconTrade,
@@ -48,6 +49,7 @@ import {
 } from './country-detail-dashboard.icons'
 import * as S from './country-detail-dashboard.styles'
 import { ActivityFeed } from './dashboard-panels/activity-feed'
+import { CountryMapDashboardPanel } from './dashboard-panels/country-map-dashboard-panel'
 import {
   RecordLedger,
   type RecordLedgerRow,
@@ -228,10 +230,24 @@ export function CountryDetailDashboard({
     const qs = params.toString()
     navigate(`${pathKeys.countryGovernment(country.id)}${qs ? `?${qs}` : ''}`)
   }
-  const goRegions = () => navigate(pathKeys.countryRegions(country.id))
+  const goRegions = (divisionId?: string) => {
+    const base = pathKeys.countryRegions(country.id)
+    navigate(
+      typeof divisionId === 'string' && divisionId
+        ? `${base}?division_id=${encodeURIComponent(divisionId)}`
+        : base,
+    )
+  }
   // 인물은 이제 국가 지면 안에 탭이 있다 — 대시보드에서 밖으로 내보내지 않는다
   const goPersons = () => navigate(pathKeys.countryPersons(country.id))
-  const goElections = () => navigate(pathKeys.countryElections(country.id))
+  const goElections = (electionId?: string) => {
+    const base = pathKeys.countryElections(country.id)
+    navigate(
+      typeof electionId === 'string' && electionId
+        ? `${base}?electionId=${encodeURIComponent(electionId)}`
+        : base,
+    )
+  }
   const goTreaty = () => navigate(pathKeys.countryTreaty(country.id))
   const goLaws = () => navigate(pathKeys.countryLaws(country.id))
   const goEthnicity = () => navigate(pathKeys.countryEthnicity(country.id))
@@ -1226,6 +1242,30 @@ export function CountryDetailDashboard({
         붙어 따라오며 지금 장을 표시한다(장 목록은 지면의 <section>에서 읽는다).
       */}
       <SectionNav rootRef={rootRef} />
+
+      {/* 지리 · 국가 구글 지도 — 국가의 지리적 위치·수도·행정구역 분포를 대시보드에서 즉시 탐색 */}
+      <S.Section>
+        <S.SectionTitleRow>
+          <S.SectionTitleIcon>
+            <IconPin />
+          </S.SectionTitleIcon>
+          <S.SectionTitleText>지리 · 국가 구글 지도</S.SectionTitleText>
+          <SectionHelpPopover sectionKey="geography" />
+          {stats.cityCount > 0 && (
+            <S.SectionCountChip>
+              행정구역 {stats.cityCount.toLocaleString('ko-KR')}곳
+            </S.SectionCountChip>
+          )}
+          <S.SectionLink type="button" onClick={() => goRegions()}>
+            행정구역 관리
+          </S.SectionLink>
+        </S.SectionTitleRow>
+        <CountryMapDashboardPanel
+          country={country}
+          onEdit={onEdit}
+          onOpenRegionsTab={(divisionId) => goRegions(divisionId)}
+        />
+      </S.Section>
 
       {/* 2. 계보 — 이 국가의 시간축. 예전엔 맨 아래에 있어 사실상 보이지 않았다. */}
       {lineageAll.length === 0 ? (

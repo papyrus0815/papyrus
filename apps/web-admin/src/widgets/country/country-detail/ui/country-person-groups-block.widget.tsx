@@ -18,14 +18,18 @@ import { pathKeys } from '@/shared/router'
 const isDark = (mode: 'light' | 'dark') => mode === 'dark'
 
 interface Props {
-  countryId: string
+  countryId?: string
+  historicalCountryId?: string
 }
 
-export function CountryPersonGroupsBlock({ countryId }: Props) {
+export function CountryPersonGroupsBlock({
+  countryId,
+  historicalCountryId,
+}: Props) {
   const { data: groups = [], isLoading } = useQuery({
-    queryKey: ['person-groups-all', countryId],
-    queryFn: () => listPersonGroups({ countryId }),
-    enabled: Boolean(countryId),
+    queryKey: ['person-groups-by-country', countryId, historicalCountryId],
+    queryFn: () => listPersonGroups({ countryId, historicalCountryId }),
+    enabled: Boolean(countryId || historicalCountryId),
     staleTime: 30_000,
   })
 
@@ -39,7 +43,9 @@ export function CountryPersonGroupsBlock({ countryId }: Props) {
           이 나라의 집단
           <Count>{groups.length}</Count>
         </Title>
-        <AllLink to={pathKeys.personGroups({ countryId })}>
+        <AllLink
+          to={pathKeys.personGroups({ countryId, historicalCountryId })}
+        >
           전체 보기 <FiChevronRight size={13} />
         </AllLink>
       </Head>

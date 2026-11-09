@@ -16,13 +16,22 @@ import {
   FiPlus,
   FiTrash2,
   FiUpload,
-  FiUsers,
   FiX,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
-import { getPartyLaws } from '@/shared/api/election'
+import { usePersons } from '@/entities/person/api'
+import {
+  type PartyMembershipLeadershipTier,
+  type PartyMembershipRoleCategory,
+  addPartyLaw,
+  createPartyMembership,
+  deletePartyMembership,
+  getLaws,
+  getPartyLaws,
+  removePartyLaw,
+} from '@/shared/api/election'
 import {
   type CreatePoliticalPartyInput,
   type PartyTopLeaderTenure,
@@ -45,10 +54,6 @@ import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
-import {
-  EmptyStateFeatureCard,
-  EmptyStateFill,
-} from '@/shared/ui/empty-state/empty-state'
 import { FormSelectNative } from '@/shared/ui/form-select-native'
 import {
   PersonRegisterModalCancelBtn,
@@ -72,6 +77,7 @@ import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { SidePanel } from '@/shared/ui/side-panel'
 import { PoliticalPartyRegisterViewModal } from '@/widgets/country/country-list/ui/political-party-register-view-modal'
 
+import * as DashboardStyles from './country-detail-dashboard.styles'
 import {
   DetailHeaderIconBtn,
   EmptyHint,
@@ -153,9 +159,17 @@ import {
   PartyTopLeaderRow,
   PartyTopLeadersHint,
   PartyTopLeadersList,
-  SectionHeaderRow,
-  SectionKicker,
-  SectionLead,
+  PoliticsEmptySpecCell,
+  PoliticsEmptySpecCellDesc,
+  PoliticsEmptySpecCellLabel,
+  PoliticsEmptySpecCellTitle,
+  PoliticsEmptySpecGrid,
+  PoliticsEmptySpecHead,
+  PoliticsEmptySpecHeadSub,
+  PoliticsEmptySpecHeadText,
+  PoliticsEmptySpecHeadTitle,
+  PoliticsEmptySpecWrap,
+  RowIconBtn,
   SubsectionAddBtn,
   ToolbarGhostBtnSm,
 } from './country-politics-tab.styles'
@@ -335,11 +349,11 @@ const PartyFilterBar = styled.div`
   flex-direction: column;
   gap: 8px;
   margin: 12px 0 16px;
-  padding: 10px 12px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 10px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f8fafc'};
+  padding: 10px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 0;
+  background: transparent;
 `
 
 const PartyFilterRow = styled.div`
@@ -517,13 +531,12 @@ const PartyRelationShowMoreRow = styled.div`
   justify-content: space-between;
   gap: 10px;
   margin-top: 6px;
-  padding: 8px 10px;
+  padding: 8px 2px;
   font-size: 11.5px;
   color: ${({ theme }) => theme.colors.text.tertiary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fafbfc'};
-  border: 1px dashed ${({ theme }) => theme.colors.border.light};
-  border-radius: 8px;
+  background: transparent;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 0;
 `
 
 const PartyRelationShowMoreBtn = styled.button`
@@ -546,11 +559,10 @@ const PartyLineageEmptyRow = styled.div`
   justify-content: space-between;
   gap: 10px;
   margin: 0 0 16px;
-  padding: 10px 12px;
-  border: 1px dashed ${({ theme }) => theme.colors.border.light};
-  border-radius: 10px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fafbfc'};
+  padding: 10px 2px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 0;
+  background: transparent;
 `
 
 const PartyStatusBadge = styled.span<{ $dissolved?: boolean }>`
@@ -873,28 +885,297 @@ function PartyElectionResultsBlock({
   )
 }
 
+const PARTY_MEMBERSHIP_ROLE_CATEGORY_OPTIONS: {
+  value: PartyMembershipRoleCategory
+  label: string
+}[] = [
+  { value: 'GENERAL_MEMBER', label: '일반 당원' },
+  { value: 'LEADERSHIP', label: '지도부' },
+  { value: 'PARLIAMENTARY', label: '원내·의회직' },
+  { value: 'LOCAL_ORGANIZATION', label: '지역·시도당' },
+  { value: 'WING_ORGAN', label: '청년·여성·부문위' },
+  { value: 'POLICY_STAFF', label: '정책·당직자' },
+  { value: 'HONORARY', label: '명예직·고문' },
+  { value: 'OTHER', label: '기타' },
+]
+
+const PARTY_MEMBERSHIP_LEADERSHIP_TIER_OPTIONS: {
+  value: PartyMembershipLeadershipTier
+  label: string
+}[] = [
+  { value: 'UNSPECIFIED', label: '위계 미지정' },
+  { value: 'TOP', label: '최고대표 (당대표·총재)' },
+  { value: 'SECOND', label: '2인자 (원내대표·부대표)' },
+  { value: 'SENIOR', label: '고위 지도부 (최고위원 등)' },
+  { value: 'ORDINARY', label: '일반 지도부' },
+  { value: 'JUNIOR', label: '청년·초선 지도부' },
+]
+
+function labelMembershipRoleCategory(value?: string | null): string {
+  if (!value) return ''
+  return (
+    PARTY_MEMBERSHIP_ROLE_CATEGORY_OPTIONS.find((opt) => opt.value === value)
+      ?.label ?? value
+  )
+}
+
+function labelMembershipLeadershipTier(value?: string | null): string {
+  if (!value || value === 'UNSPECIFIED') return ''
+  return (
+    PARTY_MEMBERSHIP_LEADERSHIP_TIER_OPTIONS.find((opt) => opt.value === value)
+      ?.label ?? value
+  )
+}
+
+const PartyInlineFormStrip = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 0;
+  margin-bottom: 12px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const PartyInlineFormRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+`
+
+const PartyInlineFormActions = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+`
+
 function PartyMembershipsBlock({ partyId }: { partyId: string }) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [showAll, setShowAll] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
+  const [personSearch, setPersonSearch] = useState('')
+  const [selectedPersonId, setSelectedPersonId] = useState('')
+  const [roleTitle, setRoleTitle] = useState('')
+  const [roleCategory, setRoleCategory] =
+    useState<PartyMembershipRoleCategory>('GENERAL_MEMBER')
+  const [leadershipTier, setLeadershipTier] =
+    useState<PartyMembershipLeadershipTier>('UNSPECIFIED')
+  const [startDateYmd, setStartDateYmd] = useState('')
+  const [endDateYmd, setEndDateYmd] = useState('')
+  const [notes, setNotes] = useState('')
+
+  const { data: persons = [] } = usePersons()
   const { data = [], isLoading, isError } = useQuery({
     queryKey: ['political-parties', partyId, 'memberships'],
     queryFn: () => politicalPartyApi.getMemberships(partyId),
     enabled: !!partyId,
   })
+
+  const filteredPersons = useMemo(() => {
+    const query = personSearch.trim().toLowerCase()
+    const baseList = persons.map((personItem) => ({
+      id: personItem.id,
+      displayName: getPersonDisplayName({
+        name: personItem.name,
+        surname: personItem.surname,
+        middleName: personItem.middleName,
+        nameDisplayOrder: personItem.nameDisplayOrder ?? null,
+        country: personItem.country ?? null,
+      }),
+    }))
+    if (!query) return baseList.slice(0, 200)
+    return baseList
+      .filter((item) => item.displayName.toLowerCase().includes(query))
+      .slice(0, 200)
+  }, [persons, personSearch])
+
+  const resetAddForm = () => {
+    setPersonSearch('')
+    setSelectedPersonId('')
+    setRoleTitle('')
+    setRoleCategory('GENERAL_MEMBER')
+    setLeadershipTier('UNSPECIFIED')
+    setStartDateYmd('')
+    setEndDateYmd('')
+    setNotes('')
+  }
+
+  const createMembershipMut = useMutation({
+    mutationFn: () =>
+      createPartyMembership(selectedPersonId, {
+        partyId,
+        roleTitle: roleTitle.trim() || null,
+        roleCategory,
+        leadershipTier:
+          roleCategory === 'LEADERSHIP' ? leadershipTier : 'UNSPECIFIED',
+        startDate: startDateYmd ? `${startDateYmd}T12:00:00.000Z` : null,
+        endDate: endDateYmd ? `${endDateYmd}T12:00:00.000Z` : null,
+        notes: notes.trim() || null,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['political-parties', partyId, 'memberships'],
+      })
+      void queryClient.invalidateQueries({
+        queryKey: ['political-parties', partyId, 'top-leaders'],
+      })
+      resetAddForm()
+      setAddOpen(false)
+      notify.success('소속 인물을 등록했습니다.')
+    },
+    onError: (err: Error) => notify.error(err.message),
+  })
+
+  const deleteMembershipMut = useMutation({
+    mutationFn: (payload: { personId: string; membershipId: string }) =>
+      deletePartyMembership(payload.personId, payload.membershipId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['political-parties', partyId, 'memberships'],
+      })
+      void queryClient.invalidateQueries({
+        queryKey: ['political-parties', partyId, 'top-leaders'],
+      })
+      notify.success('소속 인물을 해제했습니다.')
+    },
+    onError: (err: Error) => notify.error(err.message),
+  })
+
   const visible = showAll ? data : data.slice(0, PARTY_RELATION_DEFAULT_LIMIT)
   const hiddenCount = Math.max(0, data.length - visible.length)
   return (
     <PartyDetailDescSection aria-label="소속 인물">
       <PartyDescSectionLabelRow style={{ marginBottom: 10 }}>
         <PartyDescSectionLabel>소속 인물</PartyDescSectionLabel>
+        <PartyDescOutlineBtn
+          type="button"
+          onClick={() => setAddOpen((prev) => !prev)}
+        >
+          <FiPlus size={14} />
+          {addOpen ? '닫기' : '소속 인물 추가'}
+        </PartyDescOutlineBtn>
       </PartyDescSectionLabelRow>
+      {addOpen ? (
+        <PartyInlineFormStrip>
+          <PartyInlineFormRow>
+            <Input
+              value={personSearch}
+              onChange={(event) => setPersonSearch(event.target.value)}
+              placeholder="인물 이름 검색…"
+              aria-label="소속 인물 검색"
+              style={{ flex: '1 1 160px', minWidth: 140, maxWidth: 220 }}
+            />
+            <FormSelectNative
+              value={selectedPersonId}
+              onChange={(event) => setSelectedPersonId(event.target.value)}
+              aria-label="인물 선택"
+              style={{ flex: '2 1 220px', minWidth: 180 }}
+            >
+              <option value="">인물 선택 ({filteredPersons.length}명)…</option>
+              {filteredPersons.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.displayName}
+                </option>
+              ))}
+            </FormSelectNative>
+            <Input
+              value={roleTitle}
+              onChange={(event) => setRoleTitle(event.target.value)}
+              placeholder="직책·호칭 (예: 당대표, 최고위원)"
+              aria-label="직책·호칭"
+              style={{ flex: '1 1 180px', minWidth: 150 }}
+            />
+          </PartyInlineFormRow>
+          <PartyInlineFormRow>
+            <FormSelectNative
+              value={roleCategory}
+              onChange={(event) =>
+                setRoleCategory(
+                  event.target.value as PartyMembershipRoleCategory,
+                )
+              }
+              aria-label="역할 분류"
+              style={{ flex: '1 1 150px', minWidth: 140 }}
+            >
+              {PARTY_MEMBERSHIP_ROLE_CATEGORY_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </FormSelectNative>
+            {roleCategory === 'LEADERSHIP' ? (
+              <FormSelectNative
+                value={leadershipTier}
+                onChange={(event) =>
+                  setLeadershipTier(
+                    event.target.value as PartyMembershipLeadershipTier,
+                  )
+                }
+                aria-label="지도부 위계"
+                style={{ flex: '1 1 170px', minWidth: 150 }}
+              >
+                {PARTY_MEMBERSHIP_LEADERSHIP_TIER_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </FormSelectNative>
+            ) : null}
+            <Input
+              type="date"
+              value={startDateYmd}
+              onChange={(event) => setStartDateYmd(event.target.value)}
+              aria-label="가입·취임일"
+              title="가입·취임일 (선택)"
+              style={{ flex: '0 1 150px', minWidth: 135 }}
+            />
+            <Input
+              type="date"
+              value={endDateYmd}
+              onChange={(event) => setEndDateYmd(event.target.value)}
+              aria-label="탈당·퇴임일"
+              title="탈당·퇴임일 (비워두면 재직 중)"
+              style={{ flex: '0 1 150px', minWidth: 135 }}
+            />
+            <Input
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              placeholder="비고 (선택)"
+              aria-label="비고"
+              style={{ flex: '1 1 160px', minWidth: 140 }}
+            />
+          </PartyInlineFormRow>
+          <PartyInlineFormActions>
+            <PartyDescOutlineBtn
+              type="button"
+              disabled={createMembershipMut.isPending}
+              onClick={() => {
+                resetAddForm()
+                setAddOpen(false)
+              }}
+            >
+              취소
+            </PartyDescOutlineBtn>
+            <PartyDescPrimaryBtn
+              type="button"
+              disabled={!selectedPersonId || createMembershipMut.isPending}
+              onClick={() => createMembershipMut.mutate()}
+            >
+              {createMembershipMut.isPending ? '저장 중…' : '등록'}
+            </PartyDescPrimaryBtn>
+          </PartyInlineFormActions>
+        </PartyInlineFormStrip>
+      ) : null}
       {isLoading ? (
         <PartyDescEmptyHint>불러오는 중…</PartyDescEmptyHint>
       ) : isError ? (
         <PartyDescEmptyHint>목록을 불러오지 못했습니다.</PartyDescEmptyHint>
       ) : data.length === 0 ? (
         <PartyDescEmptyHint>
-          연결된 당원·소속이 없습니다. 인물 상세의 "정당 소속"에서 연결하세요.
+          연결된 당원·소속이 없습니다. 우측 상단「소속 인물 추가」버튼으로 바로 등록할 수 있습니다.
         </PartyDescEmptyHint>
       ) : (
         <>
@@ -904,6 +1185,9 @@ function PartyMembershipsBlock({ partyId }: { partyId: string }) {
               <PartyRelationTh>인물</PartyRelationTh>
               <PartyRelationTh>역할</PartyRelationTh>
               <PartyRelationTh>기간</PartyRelationTh>
+              <PartyRelationTh style={{ width: 48, textAlign: 'right' }}>
+                작업
+              </PartyRelationTh>
             </tr>
           </thead>
           <tbody>
@@ -926,9 +1210,9 @@ function PartyMembershipsBlock({ partyId }: { partyId: string }) {
               const roleParts: string[] = []
               if (row.roleTitle?.trim()) roleParts.push(row.roleTitle.trim())
               if (row.roleCategory && row.roleCategory !== 'OTHER')
-                roleParts.push(row.roleCategory)
+                roleParts.push(labelMembershipRoleCategory(row.roleCategory))
               if (row.leadershipTier && row.leadershipTier !== 'UNSPECIFIED')
-                roleParts.push(row.leadershipTier)
+                roleParts.push(labelMembershipLeadershipTier(row.leadershipTier))
               const goto = () =>
                 navigate(pathKeys.personsTimelineDetail(person.id))
               return (
@@ -937,21 +1221,53 @@ function PartyMembershipsBlock({ partyId }: { partyId: string }) {
                   onClick={goto}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
                       goto()
                     }
                   }}
                   aria-label={`${name} 인물 상세`}
                 >
                   <PartyRelationTd>
-                    <strong>{name}</strong>
+                    <strong style={{ color: '#2563eb' }}>{name}</strong>
+                    {row.notes?.trim() ? (
+                      <PartyRelationMeta>{row.notes.trim()}</PartyRelationMeta>
+                    ) : null}
                   </PartyRelationTd>
                   <PartyRelationTd>
                     {roleParts.length > 0 ? roleParts.join(' · ') : '—'}
                   </PartyRelationTd>
                   <PartyRelationTd>{period}</PartyRelationTd>
+                  <PartyRelationTd
+                    style={{ textAlign: 'right' }}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <RowIconBtn
+                      type="button"
+                      $variant="danger"
+                      disabled={deleteMembershipMut.isPending}
+                      aria-label={`${name} 소속 해제`}
+                      title="소속 해제"
+                      onClick={async (event) => {
+                        event.stopPropagation()
+                        if (
+                          await confirm({
+                            title: '소속 인물 해제',
+                            message: `「${name}」의 정당 소속 기록을 삭제할까요?`,
+                            danger: true,
+                          })
+                        ) {
+                          deleteMembershipMut.mutate({
+                            personId: person.id,
+                            membershipId: row.id,
+                          })
+                        }
+                      }}
+                    >
+                      <FiTrash2 size={14} strokeWidth={2} />
+                    </RowIconBtn>
+                  </PartyRelationTd>
                 </PartyRelationTr>
               )
             })}
@@ -964,7 +1280,7 @@ function PartyMembershipsBlock({ partyId }: { partyId: string }) {
             </span>
             <PartyRelationShowMoreBtn
               type="button"
-              onClick={() => setShowAll((v) => !v)}
+              onClick={() => setShowAll((prev) => !prev)}
             >
               {showAll ? '접기' : `${hiddenCount}건 더 보기`}
             </PartyRelationShowMoreBtn>
@@ -976,7 +1292,14 @@ function PartyMembershipsBlock({ partyId }: { partyId: string }) {
   )
 }
 
-function PartyCabinetAffiliationsBlock({ partyId }: { partyId: string }) {
+function PartyCabinetAffiliationsBlock({
+  partyId,
+  routeCountryId,
+}: {
+  partyId: string
+  routeCountryId: string
+}) {
+  const navigate = useNavigate()
   const [showAll, setShowAll] = useState(false)
   const { data = [], isLoading, isError } = useQuery({
     queryKey: ['political-parties', partyId, 'cabinet-affiliations'],
@@ -985,12 +1308,12 @@ function PartyCabinetAffiliationsBlock({ partyId }: { partyId: string }) {
   })
   const visible = showAll ? data : data.slice(0, PARTY_RELATION_DEFAULT_LIMIT)
   const hiddenCount = Math.max(0, data.length - visible.length)
-  const labelRole = (r: string) => {
-    if (r === 'LEADING') return '집권(단독)'
-    if (r === 'COALITION_PARTNER') return '연정 파트너'
-    if (r === 'SUPPORTING_MINOR') return '지원·소수'
-    if (r === 'OPPOSITION') return '야당'
-    return r
+  const labelRole = (roleVal: string) => {
+    if (roleVal === 'LEADING') return '집권(단독)'
+    if (roleVal === 'COALITION_PARTNER') return '연정 파트너'
+    if (roleVal === 'SUPPORTING_MINOR') return '지원·소수'
+    if (roleVal === 'OPPOSITION') return '야당'
+    return roleVal
   }
   return (
     <PartyDetailDescSection aria-label="내각 참여">
@@ -1015,18 +1338,36 @@ function PartyCabinetAffiliationsBlock({ partyId }: { partyId: string }) {
           </thead>
           <tbody>
             {visible.map((row) => {
-              const c = row.cabinet
-              const tenure = c?.headTenure
+              const cabinet = row.cabinet
+              const tenure = cabinet?.headTenure
               const period =
                 tenure?.startDate || tenure?.endDate
                   ? `${tenure?.startDate ? formatDate(tenure.startDate) : '—'} — ${
                       tenure?.endDate ? formatDate(tenure.endDate) : '유효'
                     }`
                   : '—'
+              const goToCabinet = () =>
+                navigate(
+                  `${pathKeys.countryGovernment(routeCountryId)}?cabinetId=${encodeURIComponent(row.cabinetId)}`,
+                )
               return (
-                <PartyRelationTr key={row.id}>
+                <PartyRelationTr
+                  key={row.id}
+                  onClick={goToCabinet}
+                  role="button"
+                  tabIndex={0}
+                  style={{ cursor: 'pointer' }}
+                  onKeyDown={(ev) => {
+                    if (ev.key === 'Enter' || ev.key === ' ') {
+                      ev.preventDefault()
+                      goToCabinet()
+                    }
+                  }}
+                >
                   <PartyRelationTd>
-                    <strong>{c?.name?.trim() || row.cabinetId}</strong>
+                    <strong style={{ color: '#2563eb' }}>
+                      {cabinet?.name?.trim() || row.cabinetId}
+                    </strong>
                     {row.notes?.trim() ? (
                       <PartyRelationMeta>{row.notes.trim()}</PartyRelationMeta>
                     ) : null}
@@ -1045,7 +1386,7 @@ function PartyCabinetAffiliationsBlock({ partyId }: { partyId: string }) {
             </span>
             <PartyRelationShowMoreBtn
               type="button"
-              onClick={() => setShowAll((v) => !v)}
+              onClick={() => setShowAll((prev) => !prev)}
             >
               {showAll ? '접기' : `${hiddenCount}건 더 보기`}
             </PartyRelationShowMoreBtn>
@@ -1057,26 +1398,161 @@ function PartyCabinetAffiliationsBlock({ partyId }: { partyId: string }) {
   )
 }
 
-function PartyLawsBlock({ partyId }: { partyId: string }) {
+function PartyLawsBlock({
+  partyId,
+  routeCountryId,
+  countryId,
+  historicalCountryId,
+}: {
+  partyId: string
+  routeCountryId: string
+  countryId?: string
+  historicalCountryId?: string
+}) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [showAll, setShowAll] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
+  const [selectedLawId, setSelectedLawId] = useState('')
+  const [relevanceNote, setRelevanceNote] = useState('')
+
+  const lawScopeKey = historicalCountryId
+    ? `h:${historicalCountryId}`
+    : countryId
+      ? `c:${countryId}`
+      : ''
+  const lawListParams = useMemo(() => {
+    if (historicalCountryId) return { historicalCountryId }
+    if (countryId) return { countryId }
+    return {}
+  }, [countryId, historicalCountryId])
+
+  const { data: countryLaws = [] } = useQuery({
+    queryKey: ['laws', lawScopeKey],
+    queryFn: () => getLaws(lawListParams as Record<string, string>),
+    enabled: Boolean(lawScopeKey),
+  })
+
   const { data = [], isLoading, isError } = useQuery({
     queryKey: ['political-parties', partyId, 'laws'],
     queryFn: () => getPartyLaws(partyId),
     enabled: !!partyId,
   })
+
+  const linkedLawIds = useMemo(
+    () => new Set(data.map((row) => row.lawId)),
+    [data],
+  )
+  const availableLaws = useMemo(
+    () =>
+      countryLaws
+        .filter((lawItem) => !linkedLawIds.has(lawItem.id))
+        .sort((left, right) => left.name.localeCompare(right.name, 'ko')),
+    [countryLaws, linkedLawIds],
+  )
+
+  const addLawMut = useMutation({
+    mutationFn: () =>
+      addPartyLaw(partyId, {
+        lawId: selectedLawId,
+        relevanceNote: relevanceNote.trim() || null,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['political-parties', partyId, 'laws'],
+      })
+      setSelectedLawId('')
+      setRelevanceNote('')
+      setAddOpen(false)
+      notify.success('관련 법률을 연결했습니다.')
+    },
+    onError: (err: Error) => notify.error(err.message),
+  })
+
+  const removeLawMut = useMutation({
+    mutationFn: (linkId: string) => removePartyLaw(partyId, linkId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['political-parties', partyId, 'laws'],
+      })
+      notify.success('법률 연결을 해제했습니다.')
+    },
+    onError: (err: Error) => notify.error(err.message),
+  })
+
   const visible = showAll ? data : data.slice(0, PARTY_RELATION_DEFAULT_LIMIT)
   const hiddenCount = Math.max(0, data.length - visible.length)
   return (
     <PartyDetailDescSection aria-label="관련 법률">
       <PartyDescSectionLabelRow style={{ marginBottom: 10 }}>
         <PartyDescSectionLabel>관련 법률</PartyDescSectionLabel>
+        <PartyDescOutlineBtn
+          type="button"
+          onClick={() => setAddOpen((prev) => !prev)}
+        >
+          <FiPlus size={14} />
+          {addOpen ? '닫기' : '법률 연결'}
+        </PartyDescOutlineBtn>
       </PartyDescSectionLabelRow>
+      {addOpen ? (
+        <PartyInlineFormStrip>
+          <PartyInlineFormRow>
+            <FormSelectNative
+              value={selectedLawId}
+              onChange={(event) => setSelectedLawId(event.target.value)}
+              aria-label="연결할 법률 선택"
+              style={{ flex: '1 1 220px', minWidth: 180 }}
+            >
+              <option value="">
+                {availableLaws.length > 0
+                  ? `법률 선택 (${availableLaws.length}건)…`
+                  : '연결 가능한 미연결 법령 없음'}
+              </option>
+              {availableLaws.map((lawItem) => (
+                <option key={lawItem.id} value={lawItem.id}>
+                  {lawItem.name}
+                  {lawItem.lawType?.name ? ` (${lawItem.lawType.name})` : ''}
+                </option>
+              ))}
+            </FormSelectNative>
+            <Input
+              value={relevanceNote}
+              onChange={(event) => setRelevanceNote(event.target.value)}
+              placeholder="관련 메모 (예: 정당 설립 근거법, 당론 발의 핵심 법안)"
+              aria-label="관련 메모"
+              style={{ flex: '2 1 260px', minWidth: 200 }}
+            />
+          </PartyInlineFormRow>
+          <PartyInlineFormActions>
+            <PartyDescOutlineBtn
+              type="button"
+              disabled={addLawMut.isPending}
+              onClick={() => {
+                setSelectedLawId('')
+                setRelevanceNote('')
+                setAddOpen(false)
+              }}
+            >
+              취소
+            </PartyDescOutlineBtn>
+            <PartyDescPrimaryBtn
+              type="button"
+              disabled={!selectedLawId || addLawMut.isPending}
+              onClick={() => addLawMut.mutate()}
+            >
+              {addLawMut.isPending ? '연결 중…' : '연결'}
+            </PartyDescPrimaryBtn>
+          </PartyInlineFormActions>
+        </PartyInlineFormStrip>
+      ) : null}
       {isLoading ? (
         <PartyDescEmptyHint>불러오는 중…</PartyDescEmptyHint>
       ) : isError ? (
         <PartyDescEmptyHint>목록을 불러오지 못했습니다.</PartyDescEmptyHint>
       ) : data.length === 0 ? (
-        <PartyDescEmptyHint>연결된 법률이 없습니다.</PartyDescEmptyHint>
+        <PartyDescEmptyHint>
+          연결된 법률이 없습니다. 우측 상단「법률 연결」버튼으로 국가 법령을 연결할 수 있습니다.
+        </PartyDescEmptyHint>
       ) : (
         <>
         <PartyRelationTable>
@@ -1084,22 +1560,72 @@ function PartyLawsBlock({ partyId }: { partyId: string }) {
             <tr>
               <PartyRelationTh>법률</PartyRelationTh>
               <PartyRelationTh>관련 메모</PartyRelationTh>
+              <PartyRelationTh style={{ width: 48, textAlign: 'right' }}>
+                작업
+              </PartyRelationTh>
             </tr>
           </thead>
           <tbody>
-            {visible.map((row) => (
-              <PartyRelationTr key={row.id}>
-                <PartyRelationTd>
-                  <strong>{row.law?.name ?? row.lawId}</strong>
-                  {row.law?.summary ? (
-                    <PartyRelationMeta>{row.law.summary}</PartyRelationMeta>
-                  ) : null}
-                </PartyRelationTd>
-                <PartyRelationTd>
-                  {row.relevanceNote?.trim() || '—'}
-                </PartyRelationTd>
-              </PartyRelationTr>
-            ))}
+            {visible.map((row) => {
+              const lawDisplayName = row.law?.name ?? row.lawId
+              const goToLaw = () =>
+                navigate(
+                  `${pathKeys.countryLaws(routeCountryId)}?lawId=${encodeURIComponent(row.lawId)}`,
+                )
+              return (
+                <PartyRelationTr
+                  key={row.id}
+                  onClick={goToLaw}
+                  role="button"
+                  tabIndex={0}
+                  style={{ cursor: 'pointer' }}
+                  onKeyDown={(ev) => {
+                    if (ev.key === 'Enter' || ev.key === ' ') {
+                      ev.preventDefault()
+                      goToLaw()
+                    }
+                  }}
+                >
+                  <PartyRelationTd>
+                    <strong style={{ color: '#2563eb' }}>
+                      {lawDisplayName}
+                    </strong>
+                    {row.law?.summary ? (
+                      <PartyRelationMeta>{row.law.summary}</PartyRelationMeta>
+                    ) : null}
+                  </PartyRelationTd>
+                  <PartyRelationTd>
+                    {row.relevanceNote?.trim() || '—'}
+                  </PartyRelationTd>
+                  <PartyRelationTd
+                    style={{ textAlign: 'right' }}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <RowIconBtn
+                      type="button"
+                      $variant="danger"
+                      disabled={removeLawMut.isPending}
+                      aria-label={`${lawDisplayName} 연결 해제`}
+                      title="연결 해제"
+                      onClick={async (event) => {
+                        event.stopPropagation()
+                        if (
+                          await confirm({
+                            title: '법률 연결 해제',
+                            message: `「${lawDisplayName}」을(를) 이 정당의 관련 법률에서 해제할까요?`,
+                            danger: true,
+                          })
+                        ) {
+                          removeLawMut.mutate(row.id)
+                        }
+                      }}
+                    >
+                      <FiTrash2 size={14} strokeWidth={2} />
+                    </RowIconBtn>
+                  </PartyRelationTd>
+                </PartyRelationTr>
+              )
+            })}
           </tbody>
         </PartyRelationTable>
         {hiddenCount > 0 || showAll ? (
@@ -1109,7 +1635,7 @@ function PartyLawsBlock({ partyId }: { partyId: string }) {
             </span>
             <PartyRelationShowMoreBtn
               type="button"
-              onClick={() => setShowAll((v) => !v)}
+              onClick={() => setShowAll((prev) => !prev)}
             >
               {showAll ? '접기' : `${hiddenCount}건 더 보기`}
             </PartyRelationShowMoreBtn>
@@ -1241,11 +1767,14 @@ function PartyLineageBlock({
   partyId,
   partyName,
   parties,
+  routeCountryId,
 }: {
   partyId: string
   partyName: string
   parties: PoliticalParty[]
+  routeCountryId: string
 }) {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const playClickSound = useClickSound()
   const [lineageModal, setLineageModal] = useState<
@@ -1364,14 +1893,37 @@ function PartyLineageBlock({
             <PartyDetailLineageList>
               {lineage.predecessors.map((row) => {
                 const metaParts: string[] = []
-                const d = formatLineageDate(row.effectiveDate)
-                if (d) metaParts.push(`기준일: ${d}`)
+                const dateLabel = formatLineageDate(row.effectiveDate)
+                if (dateLabel) metaParts.push(`기준일: ${dateLabel}`)
                 if (row.notes?.trim()) metaParts.push(row.notes.trim())
                 return (
                   <PartyDetailLineageItem key={row.id}>
                     <PartyDetailLineageItemMain>
                       <span>
-                        <strong>{row.fromParty?.name ?? '(정당)'}</strong>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (row.fromPartyId) {
+                              navigate(
+                                pathKeys.countryElectionPartyDetail(
+                                  routeCountryId,
+                                  row.fromPartyId,
+                                ),
+                              )
+                            }
+                          }}
+                          style={{
+                            border: 'none',
+                            background: 'none',
+                            padding: 0,
+                            font: 'inherit',
+                            fontWeight: 700,
+                            color: row.fromPartyId ? '#2563eb' : 'inherit',
+                            cursor: row.fromPartyId ? 'pointer' : 'default',
+                          }}
+                        >
+                          {row.fromParty?.name ?? '(정당)'}
+                        </button>
                         {transitionKindTag(row.kind) ? (
                           <span style={{ color: '#94a3b8', marginLeft: 8 }}>
                             {transitionKindTag(row.kind)}
@@ -1460,14 +2012,37 @@ function PartyLineageBlock({
             <PartyDetailLineageList>
               {lineage.successors.map((row) => {
                 const metaParts: string[] = []
-                const d = formatLineageDate(row.effectiveDate)
-                if (d) metaParts.push(`기준일: ${d}`)
+                const dateLabel = formatLineageDate(row.effectiveDate)
+                if (dateLabel) metaParts.push(`기준일: ${dateLabel}`)
                 if (row.notes?.trim()) metaParts.push(row.notes.trim())
                 return (
                   <PartyDetailLineageItem key={row.id}>
                     <PartyDetailLineageItemMain>
                       <span>
-                        <strong>{row.toParty?.name ?? '(정당)'}</strong>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (row.toPartyId) {
+                              navigate(
+                                pathKeys.countryElectionPartyDetail(
+                                  routeCountryId,
+                                  row.toPartyId,
+                                ),
+                              )
+                            }
+                          }}
+                          style={{
+                            border: 'none',
+                            background: 'none',
+                            padding: 0,
+                            font: 'inherit',
+                            fontWeight: 700,
+                            color: row.toPartyId ? '#2563eb' : 'inherit',
+                            cursor: row.toPartyId ? 'pointer' : 'default',
+                          }}
+                        >
+                          {row.toParty?.name ?? '(정당)'}
+                        </button>
                         {transitionKindTag(row.kind) ? (
                           <span style={{ color: '#94a3b8', marginLeft: 8 }}>
                             {transitionKindTag(row.kind)}
@@ -1898,10 +2473,12 @@ export function CountryPoliticalPartiesBlock({
   countryId,
   historicalCountryId,
   selectedPartyId,
+  createRequestTick = 0,
 }: {
   countryId?: string
   historicalCountryId?: string
   selectedPartyId: string | null
+  createRequestTick?: number
 }) {
   const navigate = useNavigate()
   const { handleProseClick } = useRichTextProseClick({
@@ -1914,6 +2491,13 @@ export function CountryPoliticalPartiesBlock({
   const [modal, setModal] = useState<
     { mode: 'create' } | { mode: 'edit'; id: string } | null
   >(null)
+  const prevCreateTickRef = useRef(createRequestTick)
+  useEffect(() => {
+    if (createRequestTick > prevCreateTickRef.current) {
+      prevCreateTickRef.current = createRequestTick
+      setModal({ mode: 'create' })
+    }
+  }, [createRequestTick])
   const [editingPartyDescription, setEditingPartyDescription] = useState(false)
   const [partyDescriptionDraft, setPartyDescriptionDraft] = useState('')
 
@@ -2042,7 +2626,64 @@ export function CountryPoliticalPartiesBlock({
       queryKey: ['political-parties', scopeKey],
     })
     queryClient.invalidateQueries({ queryKey: ['political-parties'] })
+    queryClient.invalidateQueries({ queryKey: ['elections'] })
   }
+
+  /** 정당 요약 KPI (4칸 헤어라인 스트립용) */
+  const partyKpiSummary = useMemo(() => {
+    const totalCount = parties.length
+    const activeCount = parties.filter((party) => !party.dissolvedDate).length
+    const dissolvedCount = totalCount - activeCount
+    const posSet = new Set<string>()
+    let leftCount = 0
+    let centerCount = 0
+    let rightCount = 0
+    let earliestYear: number | null = null
+    let latestYear: number | null = null
+
+    for (const party of parties) {
+      if (party.position) {
+        posSet.add(party.position)
+        if (
+          party.position === 'FAR_LEFT' ||
+          party.position === 'LEFT' ||
+          party.position === 'CENTER_LEFT'
+        ) {
+          leftCount += 1
+        } else if (
+          party.position === 'CENTER' ||
+          party.position === 'BIG_TENT'
+        ) {
+          centerCount += 1
+        } else if (
+          party.position === 'CENTER_RIGHT' ||
+          party.position === 'RIGHT' ||
+          party.position === 'FAR_RIGHT'
+        ) {
+          rightCount += 1
+        }
+      }
+      if (party.foundedDate) {
+        const y = new Date(party.foundedDate).getUTCFullYear()
+        if (Number.isFinite(y)) {
+          if (earliestYear == null || y < earliestYear) earliestYear = y
+          if (latestYear == null || y > latestYear) latestYear = y
+        }
+      }
+    }
+
+    return {
+      totalCount,
+      activeCount,
+      dissolvedCount,
+      positionSetSize: posSet.size,
+      leftCount,
+      centerCount,
+      rightCount,
+      earliestYear,
+      latestYear,
+    }
+  }, [parties])
 
   const createMut = useMutation({
     mutationFn: (body: CreatePoliticalPartyInput) =>
@@ -2079,9 +2720,9 @@ export function CountryPoliticalPartiesBlock({
     onSuccess: () => {
       notify.success('삭제했습니다.')
       invalidate()
-      navigate(pathKeys.countryElections(routeCountryId))
+      navigate(`${pathKeys.countryElections(routeCountryId)}?subtab=parties`)
     },
-    onError: (e: Error) => notify.error(e.message),
+    onError: (err: Error) => notify.error(err.message),
   })
 
   const saveDescriptionMut = useMutation({
@@ -2099,7 +2740,7 @@ export function CountryPoliticalPartiesBlock({
       }
       setEditingPartyDescription(false)
     },
-    onError: (e: Error) => notify.error(e.message),
+    onError: (err: Error) => notify.error(err.message),
   })
 
   useEffect(() => {
@@ -2108,7 +2749,7 @@ export function CountryPoliticalPartiesBlock({
   }, [selectedPartyId, detailParty?.id])
 
   const goToList = () =>
-    navigate(pathKeys.countryElections(routeCountryId))
+    navigate(`${pathKeys.countryElections(routeCountryId)}?subtab=parties`)
 
   // 현대 국가는 연결된 역사 국가 소속 정당도 허용해야 하므로,
   // 이미 올바른 범위로 로드된 parties 목록에 포함 여부로 판단한다.
@@ -2120,23 +2761,81 @@ export function CountryPoliticalPartiesBlock({
   return (
     <>
       <PartyBlockRoot>
-        <SectionHeaderRow>
-          <div>
-            <SectionKicker>
-              {historicalCountryId ? '역사 국가 정당' : '이 국가 정당'}
-            </SectionKicker>
-            <SectionLead style={{ marginTop: 6 }}>
-              후보·선거에서 선택할 정당 목록
-            </SectionLead>
-          </div>
-          <SubsectionAddBtn
-            type="button"
-            onClick={() => setModal({ mode: 'create' })}
-          >
-            <FiPlus size={15} strokeWidth={2.25} />
-            정당 등록
-          </SubsectionAddBtn>
-        </SectionHeaderRow>
+        {!selectedPartyId && !isLoading && parties.length > 0 ? (
+          <DashboardStyles.SectionHeadlineStrip aria-label="정당 현황 요약">
+            <DashboardStyles.SectionHeadlineCell>
+              <DashboardStyles.SectionHeadlineLabel>
+                전체 등록 정당
+              </DashboardStyles.SectionHeadlineLabel>
+              <DashboardStyles.SectionHeadlineValue>
+                {partyKpiSummary.totalCount}
+                <DashboardStyles.SectionHeadlineUnit>
+                  곳
+                </DashboardStyles.SectionHeadlineUnit>
+              </DashboardStyles.SectionHeadlineValue>
+              <DashboardStyles.SectionHeadlineSub>
+                {historicalCountryId ? '역사 국가 소속 정당' : '현대·연결 역사 국가 정당'}
+              </DashboardStyles.SectionHeadlineSub>
+            </DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineCell>
+              <DashboardStyles.SectionHeadlineLabel>
+                활동 중 · 해산
+              </DashboardStyles.SectionHeadlineLabel>
+              <DashboardStyles.SectionHeadlineValue>
+                {partyKpiSummary.activeCount}
+                <DashboardStyles.SectionHeadlineUnit>
+                  곳 활동
+                </DashboardStyles.SectionHeadlineUnit>
+              </DashboardStyles.SectionHeadlineValue>
+              <DashboardStyles.SectionHeadlineSub>
+                해산 {partyKpiSummary.dissolvedCount}곳
+              </DashboardStyles.SectionHeadlineSub>
+            </DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineCell>
+              <DashboardStyles.SectionHeadlineLabel>
+                이념 스펙트럼 분포
+              </DashboardStyles.SectionHeadlineLabel>
+              <DashboardStyles.SectionHeadlineValue>
+                {partyKpiSummary.positionSetSize > 0
+                  ? `${partyKpiSummary.positionSetSize}`
+                  : '—'}
+                {partyKpiSummary.positionSetSize > 0 ? (
+                  <DashboardStyles.SectionHeadlineUnit>
+                    개 유형
+                  </DashboardStyles.SectionHeadlineUnit>
+                ) : null}
+              </DashboardStyles.SectionHeadlineValue>
+              <DashboardStyles.SectionHeadlineSub>
+                {partyKpiSummary.positionSetSize > 0
+                  ? `좌파권 ${partyKpiSummary.leftCount} · 중도/빅텐트 ${partyKpiSummary.centerCount} · 우파권 ${partyKpiSummary.rightCount}`
+                  : '스펙트럼 미지정'}
+              </DashboardStyles.SectionHeadlineSub>
+            </DashboardStyles.SectionHeadlineCell>
+            <DashboardStyles.SectionHeadlineCell>
+              <DashboardStyles.SectionHeadlineLabel>
+                창당 연도 범위
+              </DashboardStyles.SectionHeadlineLabel>
+              <DashboardStyles.SectionHeadlineValue>
+                {partyKpiSummary.earliestYear != null
+                  ? partyKpiSummary.latestYear != null &&
+                    partyKpiSummary.latestYear !== partyKpiSummary.earliestYear
+                    ? `${partyKpiSummary.earliestYear}–${partyKpiSummary.latestYear}`
+                    : `${partyKpiSummary.earliestYear}`
+                  : '—'}
+                {partyKpiSummary.earliestYear != null ? (
+                  <DashboardStyles.SectionHeadlineUnit>
+                    년
+                  </DashboardStyles.SectionHeadlineUnit>
+                ) : null}
+              </DashboardStyles.SectionHeadlineValue>
+              <DashboardStyles.SectionHeadlineSub>
+                {partyKpiSummary.earliestYear != null
+                  ? `최초 창당 ${partyKpiSummary.earliestYear}년`
+                  : '창당일 미입력'}
+              </DashboardStyles.SectionHeadlineSub>
+            </DashboardStyles.SectionHeadlineCell>
+          </DashboardStyles.SectionHeadlineStrip>
+        ) : null}
 
         {selectedPartyId ? (
           detailLoading || !detailParty ? (
@@ -2354,6 +3053,7 @@ export function CountryPoliticalPartiesBlock({
                 partyId={detailParty.id}
                 partyName={detailParty.name}
                 parties={parties}
+                routeCountryId={routeCountryId}
               />
               <PartyTopLeadersBlock partyId={detailParty.id} />
               <PartyElectionResultsBlock
@@ -2361,8 +3061,16 @@ export function CountryPoliticalPartiesBlock({
                 routeCountryId={routeCountryId}
               />
               <PartyMembershipsBlock partyId={detailParty.id} />
-              <PartyCabinetAffiliationsBlock partyId={detailParty.id} />
-              <PartyLawsBlock partyId={detailParty.id} />
+              <PartyCabinetAffiliationsBlock
+                partyId={detailParty.id}
+                routeCountryId={routeCountryId}
+              />
+              <PartyLawsBlock
+                partyId={detailParty.id}
+                routeCountryId={routeCountryId}
+                countryId={countryId}
+                historicalCountryId={historicalCountryId}
+              />
               <PartyDetailDescSection aria-label="정당 설명">
                 <PartyDescSectionLabelRow>
                   <PartyDescSectionLabel>설명</PartyDescSectionLabel>
@@ -2460,20 +3168,71 @@ export function CountryPoliticalPartiesBlock({
           </PartyListAreaBody>
         ) : parties.length === 0 ? (
           <PartyListAreaBody>
-            <EmptyStateFill>
-              <EmptyStateFeatureCard
-                flat
-                cardBorder={false}
-                icon={<FiUsers size={28} strokeWidth={1.75} aria-hidden />}
-                title="등록된 정당이 없습니다"
-                description="정당을 등록하면 선거·후보·집계에서 선택할 수 있습니다."
-                primaryAction={{
-                  label: '정당 등록',
-                  onClick: () => setModal({ mode: 'create' }),
-                  icon: <FiPlus size={16} strokeWidth={2.25} aria-hidden />,
-                }}
-              />
-            </EmptyStateFill>
+            <PoliticsEmptySpecWrap>
+              <PoliticsEmptySpecHead>
+                <PoliticsEmptySpecHeadText>
+                  <PoliticsEmptySpecHeadTitle>
+                    등록된 정당이 없습니다
+                  </PoliticsEmptySpecHeadTitle>
+                  <PoliticsEmptySpecHeadSub>
+                    정당을 등록하면 선거·후보·집계 및 배출 최고권력자·계보를 연결할 수 있습니다.
+                  </PoliticsEmptySpecHeadSub>
+                </PoliticsEmptySpecHeadText>
+                <SubsectionAddBtn
+                  type="button"
+                  onClick={() => setModal({ mode: 'create' })}
+                >
+                  <FiPlus size={15} strokeWidth={2.25} />
+                  정당 등록
+                </SubsectionAddBtn>
+              </PoliticsEmptySpecHead>
+              <PoliticsEmptySpecGrid>
+                <PoliticsEmptySpecCell>
+                  <PoliticsEmptySpecCellLabel>
+                    01 · 스펙트럼 & 당색
+                  </PoliticsEmptySpecCellLabel>
+                  <PoliticsEmptySpecCellTitle>
+                    정치 스펙트럼 위치와 브랜드 색
+                  </PoliticsEmptySpecCellTitle>
+                  <PoliticsEmptySpecCellDesc>
+                    극좌~극우·빅텐트 성향과 공식 당색(HEX)·로고를 등록해 스펙트럼 막대와 도넛 차트 색상에 반영합니다.
+                  </PoliticsEmptySpecCellDesc>
+                </PoliticsEmptySpecCell>
+                <PoliticsEmptySpecCell>
+                  <PoliticsEmptySpecCellLabel>
+                    02 · 이념 & 존속 기간
+                  </PoliticsEmptySpecCellLabel>
+                  <PoliticsEmptySpecCellTitle>
+                    주요 이념 태그와 창당·해산일
+                  </PoliticsEmptySpecCellTitle>
+                  <PoliticsEmptySpecCellDesc>
+                    자유주의·보수주의·사회민주주의 등 핵심 노선과 설립일·해산일을 기록해 활동 상태를 구분합니다.
+                  </PoliticsEmptySpecCellDesc>
+                </PoliticsEmptySpecCell>
+                <PoliticsEmptySpecCell>
+                  <PoliticsEmptySpecCellLabel>
+                    03 · 정당 계보
+                  </PoliticsEmptySpecCellLabel>
+                  <PoliticsEmptySpecCellTitle>
+                    창당·합당·분당·개명 전신/후신 연결
+                  </PoliticsEmptySpecCellTitle>
+                  <PoliticsEmptySpecCellDesc>
+                    정당 간 승계·합당·분당·개명 이력을 기준일과 함께 연결해 정당사 흐름을 추적합니다.
+                  </PoliticsEmptySpecCellDesc>
+                </PoliticsEmptySpecCell>
+                <PoliticsEmptySpecCell>
+                  <PoliticsEmptySpecCellLabel>
+                    04 · 선거 성적 & 최고권력자
+                  </PoliticsEmptySpecCellLabel>
+                  <PoliticsEmptySpecCellTitle>
+                    역대 선거 득표·의석 및 배출 수반 연동
+                  </PoliticsEmptySpecCellTitle>
+                  <PoliticsEmptySpecCellDesc>
+                    선거별 정당 집계·출마 후보·소속 당원 및 국가원수·정부수반 배출 이력이 정당 상세에 자동 집계됩니다.
+                  </PoliticsEmptySpecCellDesc>
+                </PoliticsEmptySpecCell>
+              </PoliticsEmptySpecGrid>
+            </PoliticsEmptySpecWrap>
           </PartyListAreaBody>
         ) : (
           <PartyInfographicSection>
@@ -2691,9 +3450,6 @@ export function CountryPoliticalPartiesBlock({
                     aria-label={`${p.name} 정당 상세`}
                   >
                     <PartyInfographicCardHero $tint={accent}>
-                      <PartyInfographicStatusPill $dissolved={dissolved}>
-                        {dissolved ? '해산' : '활동 중'}
-                      </PartyInfographicStatusPill>
                       <PartyInfographicLogo $ring={accent}>
                         {p.logoUrl ? (
                           <PartyInfographicLogoImg
@@ -2701,26 +3457,32 @@ export function CountryPoliticalPartiesBlock({
                             alt=""
                           />
                         ) : (
-                          <FiImage size={22} />
+                          <FiImage size={18} />
                         )}
                       </PartyInfographicLogo>
                     </PartyInfographicCardHero>
                     <PartyInfographicCardBody>
-                      <PartyInfographicPartyName>
-                        {p.name}
-                      </PartyInfographicPartyName>
-                      {p.shortName?.trim() ? (
-                        <PartyInfographicShortRow>
+                      <PartyInfographicShortRow>
+                        <PartyInfographicPartyName>
+                          {p.name}
+                        </PartyInfographicPartyName>
+                        {p.shortName?.trim() ? (
                           <PartyInfographicShortBadge>
                             {p.shortName.trim()}
                           </PartyInfographicShortBadge>
-                        </PartyInfographicShortRow>
-                      ) : null}
+                        ) : null}
+                        <PartyInfographicStatusPill $dissolved={dissolved}>
+                          {dissolved ? '해산' : '활동 중'}
+                        </PartyInfographicStatusPill>
+                      </PartyInfographicShortRow>
                       <PartyInfographicMetaRow>
                         {p.position ? (
                           <PartyInfographicPositionChip>
                             {labelPoliticalPosition(p.position)}
                           </PartyInfographicPositionChip>
+                        ) : null}
+                        {p.ideology?.trim() ? (
+                          <span>{p.ideology.trim()}</span>
                         ) : null}
                         <span>
                           설립 {formatDate(p.foundedDate)}
@@ -2729,11 +3491,11 @@ export function CountryPoliticalPartiesBlock({
                             : ''}
                         </span>
                       </PartyInfographicMetaRow>
-                      <PartyInfographicFootHint>
-                        상세 보기
-                        <FiChevronRight size={14} strokeWidth={2} aria-hidden />
-                      </PartyInfographicFootHint>
                     </PartyInfographicCardBody>
+                    <PartyInfographicFootHint>
+                      상세
+                      <FiChevronRight size={14} strokeWidth={2} aria-hidden />
+                    </PartyInfographicFootHint>
                   </PartyInfographicCard>
                 )
               })}

@@ -9,7 +9,7 @@ export interface ElectionCardProps {
   next: ElectionSummary | null
   recent: ElectionSummary | null
   isLoading: boolean
-  onOpen: () => void
+  onOpen: (electionId?: string) => void
   /**
    * 위 「이 정권을 낳은 선거」에 이미 떠 있는 선거 id. 같은 선거면 이 카드는 그리지
    * 않는다 — 한 화면에 같은 선거가 두 번 나오면 둘 다 흐려진다.
@@ -51,7 +51,7 @@ export function ElectionCard({
         <Card
           key={`${upcoming ? 'next' : 'recent'}-${summary.id}`}
           type="button"
-          onClick={onOpen}
+          onClick={() => onOpen(summary.id)}
           $upcoming={upcoming}
         >
           <CardLabel $upcoming={upcoming}>

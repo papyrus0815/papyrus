@@ -3,6 +3,14 @@
  */
 import styled, { css } from 'styled-components'
 
+import {
+  DIGIT_DISPLAY,
+  ledgerAccent,
+  ledgerExpandedFill,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerRowWash,
+} from '@/entities/event/ui/ledger-tokens'
 import { glassOrSolidMixin } from '@/shared/styles/mixins'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
 import { MapRegionTabNav } from './map-region-section.styles'
@@ -76,30 +84,30 @@ export const SectionLead = styled.p`
 export const SplitMainRow = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 28px;
   align-items: stretch;
   flex: 1;
   min-height: 0;
 `
 
-export const ListColumn = styled.div`
+export const ListColumn = styled.div<{ $collapsed?: boolean }>`
   width: 100%;
-  max-width: 360px;
+  max-width: 300px;
   flex-shrink: 0;
   padding-right: 20px;
-  margin-right: 4px;
-  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
-  display: flex;
+  margin-right: 0;
+  border-right: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  display: ${({ $collapsed }) => ($collapsed ? 'none' : 'flex')};
   flex-direction: column;
   min-height: 0;
 
-  @media (max-width: 900px) {
+  @media (max-width: 960px) {
     max-width: none;
     border-right: none;
     padding-right: 0;
     margin-right: 0;
     padding-bottom: 16px;
-    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   }
 `
 
@@ -107,7 +115,7 @@ export const ListColumn = styled.div`
 export const PoliticsTabSubsection = styled.section`
   margin-top: 28px;
   padding-top: 22px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
 export const SubsectionHeaderBlock = styled.div`
@@ -126,7 +134,7 @@ export const SubsectionHeading = styled.h2`
 export const ElectionListScrollArea = styled.div`
   flex: 1;
   min-height: 120px;
-  max-height: min(520px, calc(100vh - 280px));
+  max-height: min(640px, calc(100vh - 240px));
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 4px;
@@ -134,7 +142,7 @@ export const ElectionListScrollArea = styled.div`
   -webkit-overflow-scrolling: touch;
 
   &::-webkit-scrollbar {
-    width: 7px;
+    width: 6px;
   }
   &::-webkit-scrollbar-thumb {
     border-radius: 8px;
@@ -146,11 +154,12 @@ export const ElectionListScrollArea = styled.div`
   }
 `
 
-/** 선거 목록 — 항목 간 간격 */
+/** 선거 목록 — 무박스 헤어라인 원장 */
 export const ElectionListStack = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
 export const DetailColumn = styled.div`
@@ -159,14 +168,14 @@ export const DetailColumn = styled.div`
   min-height: 280px;
 `
 
-/** 선거 상세 본문 — 목록 옆 패널에 은은한 프레임 */
+/** 선거 상세 본문 — 무박스 플랫 영역 */
 export const ElectionDetailSurface = styled.div`
-  padding: 20px 20px 22px;
-  border-radius: 16px;
+  padding: 0 0 28px;
+  border-radius: 0;
   min-height: 0;
 `
 
-/** 선거 미선택·로딩 안내 */
+/** 선거 미선택·로딩 안내 — 무박스 헤어라인 */
 export const ElectionDetailEmptyCard = styled.div`
   display: flex;
   flex-direction: column;
@@ -175,12 +184,10 @@ export const ElectionDetailEmptyCard = styled.div`
   gap: 10px;
   min-height: 220px;
   padding: 28px 20px;
-  border-radius: 16px;
-  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.02)'
-      : 'rgba(248, 250, 252, 0.65)'};
+  border-radius: 0;
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: transparent;
   text-align: center;
 `
 
@@ -199,90 +206,75 @@ export const ElectionDetailEmptyHint = styled.p`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-/** 선거 목록 항목 — 카드형 · 선택 시 강조 */
+/** 선거 목록 항목 — 사건 장부 행 톤 · 선택 시 좌측 액센트 바 */
 export const ElectionNavButton = styled.button<{ $active: boolean }>`
   display: block;
   width: 100%;
   text-align: left;
-  padding: 14px 16px;
-  border-radius: 16px;
+  padding: 11px 12px;
+  border-radius: 0;
   cursor: pointer;
   font-size: 13px;
-  transition:
-    border-color 0.18s ease,
-    background 0.18s ease,
-    box-shadow 0.2s ease,
-    transform 0.16s ease;
-
-  border: 1px solid
-    ${({ $active, theme }) =>
-      $active ? 'rgba(99, 102, 241, 0.42)' : theme.colors.border.default};
+  border: none;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? 'linear-gradient(145deg, rgba(99, 102, 241, 0.2) 0%, rgba(99, 102, 241, 0.05) 100%)'
-        : 'linear-gradient(145deg, rgba(99, 102, 241, 0.14) 0%, rgba(255, 255, 255, 0.95) 100%)'
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.03)'
-        : 'rgba(248, 250, 252, 0.85)'};
+    $active ? ledgerExpandedFill(theme.mode) : 'transparent'};
   box-shadow: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? '0 0 0 1px rgba(99, 102, 241, 0.2), 0 10px 28px rgba(0, 0, 0, 0.35)'
-        : '0 6px 20px rgba(99, 102, 241, 0.12), 0 1px 0 rgba(255, 255, 255, 0.8) inset'
-      : '0 1px 2px rgba(15, 23, 42, 0.04)'};
+    $active ? `inset 2px 0 0 ${ledgerAccent(theme.mode)}` : 'none'};
+  transition:
+    background 0.14s ease,
+    box-shadow 0.14s ease;
 
   &:hover {
-    border-color: ${({ theme }) => theme.colors.border.medium};
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#f1f5f9'};
-    transform: translateY(-1px);
+    background: ${({ $active, theme }) =>
+      $active ? ledgerExpandedFill(theme.mode) : ledgerRowWash(theme.mode)};
   }
 
   &:focus {
     outline: none;
   }
   &:focus-visible {
-    outline: 2px solid rgba(99, 102, 241, 0.65);
-    outline-offset: 2px;
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: -2px;
   }
 `
 
 export const ElectionNavTitle = styled.div`
   font-weight: 600;
+  font-size: 13.5px;
+  letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.primary};
-  margin-bottom: 4px;
+  margin-bottom: 3px;
+  line-height: 1.35;
 `
 
 export const ElectionNavMeta = styled.div`
+  ${DIGIT_DISPLAY}
   font-size: 11px;
   color: ${({ theme }) => theme.colors.text.secondary};
-  font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
   margin-top: 2px;
 `
 
 /** 선거 목록 — 종료일(실제·투표·임기) 한 줄 */
 export const ElectionNavEndLine = styled.div`
+  ${DIGIT_DISPLAY}
   font-size: 11px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
-  font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
-  margin-top: 4px;
+  margin-top: 3px;
   line-height: 1.35;
 `
 
-/** 정당 집계 — 득표율 인포그래픽(원·도넛) */
+/** 정당 집계 — 득표율 인포그래픽(원·도넛) 무박스 헤어라인 */
 export const PartyShareInfographic = styled.div`
   margin-bottom: 14px;
-  padding: 16px 18px;
-  border-radius: 16px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'linear-gradient(180deg, rgba(99, 102, 241, 0.09) 0%, rgba(0, 0, 0, 0) 55%)'
-      : 'linear-gradient(180deg, #f8fafc 0%, #ffffff 45%)'};
+  padding: 14px 0 16px;
+  border-radius: 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
 `
 
 export const PartyShareInfographicTitle = styled.div`
@@ -738,13 +730,13 @@ export const RowIconBtn = styled.button<{ $variant?: 'default' | 'danger' }>`
   }
 `
 
-/** 데이터 테이블 카드 */
+/** 데이터 테이블 — 무박스 상·하단 헤어라인 (사건 상세 장부 톤) */
 export const DataTableCard = styled.div`
   overflow: auto;
-  border-radius: 12px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#fff'};
+  border-radius: 0;
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: transparent;
 `
 
 export const DataTable = styled.table`
@@ -753,14 +745,15 @@ export const DataTable = styled.table`
 `
 
 export const DataTh = styled.th`
-  padding: 10px 12px;
-  font-size: 12px;
+  padding: 9px 10px;
+  font-family: ${({ theme }) => theme.fonts.mono};
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0.03em;
   text-align: left;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
 `
 
 /** 정렬 가능한 테이블 헤더 */
@@ -775,7 +768,7 @@ export const DataThSortButton = styled.button<{ $active?: boolean }>`
   font: inherit;
   font-weight: 600;
   color: ${({ theme, $active }) =>
-    $active ? theme.colors.text.primary : theme.colors.text.secondary};
+    $active ? theme.colors.text.primary : theme.colors.text.tertiary};
   background: none;
   border: none;
   cursor: pointer;
@@ -784,18 +777,19 @@ export const DataThSortButton = styled.button<{ $active?: boolean }>`
     color: ${({ theme }) => theme.colors.text.primary};
   }
   &:focus-visible {
-    outline: 2px solid #6366f1;
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
     border-radius: 4px;
   }
 `
 
 export const DataTd = styled.td`
-  padding: 10px 12px;
+  padding: 11px 10px;
   font-size: 13px;
+  font-variant-numeric: tabular-nums;
   text-align: left;
   color: ${({ theme }) => theme.colors.text.primary};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   vertical-align: middle;
 `
 
@@ -833,15 +827,15 @@ export const CandidacyNameStrong = styled.div`
 `
 
 export const CandidacyPartyMeta = styled.div`
-  font-size: 11px;
-  opacity: 0.85;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  margin-top: 2px;
 `
 
 export const DataTr = styled.tr`
   transition: background 0.12s ease;
   &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f8fafc'};
+    background: ${({ theme }) => ledgerRowWash(theme.mode)};
   }
   &:last-child td {
     border-bottom: none;
@@ -889,20 +883,15 @@ export const BallotAddRow = styled.div`
   margin-bottom: 10px;
 `
 
-/** 국민투표·주민투표 — 투표 안 블록 */
+/** 국민투표·주민투표 — 투표 안 블록 (무박스 헤어라인) */
 export const ReferendumBallotPanel = styled.div`
   margin-top: 20px;
-  padding: 16px 18px 18px;
-  border-radius: 16px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'linear-gradient(180deg, rgba(14, 165, 233, 0.08) 0%, rgba(0, 0, 0, 0) 52%)'
-      : 'linear-gradient(180deg, #f0f9ff 0%, #ffffff 48%)'};
-  box-shadow: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'inset 0 1px 0 rgba(255, 255, 255, 0.05)'
-      : 'inset 0 1px 0 rgba(255, 255, 255, 0.85)'};
+  padding: 16px 0 18px;
+  border-radius: 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  box-shadow: none;
 `
 
 export const ReferendumBallotPanelHead = styled.div`
@@ -1436,11 +1425,12 @@ export const PartyCoalitionSegment = styled.div<{ $color: string }>`
 
 export const PartyInfographicGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(228px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
   width: 100%;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
 
-  @media (max-width: 520px) {
+  @media (max-width: 720px) {
     grid-template-columns: 1fr;
   }
 `
@@ -1448,38 +1438,39 @@ export const PartyInfographicGrid = styled.div`
 export const PartyInfographicCard = styled.button`
   position: relative;
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
   text-align: left;
   width: 100%;
-  min-height: 176px;
-  padding: 0;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 20px;
+  min-height: 0;
+  padding: 14px 16px;
+  border: none;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: 0;
   overflow: hidden;
   cursor: pointer;
   font: inherit;
   color: inherit;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'linear-gradient(180deg, rgba(30, 41, 59, 0.55) 0%, rgba(15, 23, 42, 0.98) 100%)'
-      : 'linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%)'};
-  box-shadow: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? '0 10px 32px rgba(0, 0, 0, 0.38), 0 0 0 1px rgba(255, 255, 255, 0.04)'
-      : '0 4px 18px rgba(15, 23, 42, 0.07), 0 1px 0 rgba(255, 255, 255, 0.9) inset'};
-  transition:
-    border-color 0.18s ease,
-    box-shadow 0.2s ease,
-    transform 0.16s ease;
+  background: transparent;
+  box-shadow: none;
+  transition: background 0.14s ease;
+
+  @media (min-width: 721px) {
+    &:nth-child(odd) {
+      border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+    &:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+      border-right: none;
+    }
+  }
 
   &:hover {
-    border-color: ${({ theme }) => theme.colors.border.medium};
-    transform: translateY(-2px);
-    box-shadow: ${({ theme }) =>
+    background: ${({ theme }) =>
       theme.mode === 'dark'
-        ? '0 14px 40px rgba(0, 0, 0, 0.48)'
-        : '0 12px 32px rgba(15, 23, 42, 0.1)'};
+        ? 'rgba(255, 255, 255, 0.04)'
+        : 'rgba(15, 23, 42, 0.025)'};
   }
 
   &:focus {
@@ -1488,30 +1479,36 @@ export const PartyInfographicCard = styled.button`
 
   &:focus-visible {
     outline: 2px solid rgba(99, 102, 241, 0.65);
-    outline-offset: 2px;
+    outline-offset: -2px;
   }
 `
 
 export const PartyInfographicCardHero = styled.div<{ $tint?: string | null }>`
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 18px 16px 10px;
-  min-height: 96px;
+  gap: 10px;
+  padding: 0;
+  min-height: 0;
+  flex-shrink: 0;
   position: relative;
-  z-index: 0;
-  background: ${({ $tint, theme }) =>
-    $tint
-      ? theme.mode === 'dark'
-        ? `radial-gradient(ellipse 95% 85% at 50% 20%, ${$tint}40 0%, transparent 68%)`
-        : `radial-gradient(ellipse 95% 85% at 50% 18%, ${$tint}30 0%, transparent 65%)`
-      : 'transparent'};
+
+  &::before {
+    content: '';
+    display: block;
+    width: 4px;
+    height: 40px;
+    border-radius: 2px;
+    background: ${({ $tint, theme }) =>
+      $tint ||
+      (theme.mode === 'dark' ? 'rgba(148, 163, 184, 0.35)' : '#cbd5e1')};
+    flex-shrink: 0;
+  }
 `
 
 export const PartyInfographicLogo = styled.div<{ $ring?: string | null }>`
-  width: 58px;
-  height: 58px;
-  border-radius: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -1519,14 +1516,10 @@ export const PartyInfographicLogo = styled.div<{ $ring?: string | null }>`
   overflow: hidden;
   border: 1px solid
     ${({ theme, $ring }) => ($ring ? `${$ring}55` : theme.colors.border.light)};
-  box-shadow: ${({ $ring }) =>
-    $ring
-      ? `0 0 0 3px ${$ring}26, 0 10px 22px rgba(15, 23, 42, 0.2)`
-      : '0 8px 18px rgba(15, 23, 42, 0.1)'};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#fff'};
   color: ${({ theme }) => theme.colors.text.tertiary};
-  font-size: 22px;
+  font-size: 18px;
 `
 
 export const PartyInfographicLogoImg = styled.img`
@@ -1537,15 +1530,12 @@ export const PartyInfographicLogoImg = styled.img`
 `
 
 export const PartyInfographicStatusPill = styled.span<{ $dissolved: boolean }>`
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 2;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.02em;
-  padding: 4px 8px;
+  padding: 2px 7px;
   border-radius: 999px;
+  flex-shrink: 0;
   ${({ $dissolved, theme }) =>
     $dissolved
       ? `
@@ -1559,26 +1549,23 @@ export const PartyInfographicStatusPill = styled.span<{ $dissolved: boolean }>`
 `
 
 export const PartyInfographicCardBody = styled.div`
-  padding: 0 14px 14px;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 5px;
   flex: 1;
   min-width: 0;
-  position: relative;
-  z-index: 0;
 `
 
 export const PartyInfographicPartyName = styled.div`
-  font-size: 15px;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.3;
   color: ${({ theme }) => theme.colors.text.primary};
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `
 
 export const PartyInfographicShortRow = styled.div`
@@ -1591,8 +1578,8 @@ export const PartyInfographicShortRow = styled.div`
 export const PartyInfographicShortBadge = styled.span`
   font-size: 11px;
   font-weight: 600;
-  padding: 3px 8px;
-  border-radius: 8px;
+  padding: 2px 7px;
+  border-radius: 6px;
   background: ${({ theme }) =>
     theme.mode === 'dark'
       ? 'rgba(255, 255, 255, 0.07)'
@@ -1608,16 +1595,16 @@ export const PartyInfographicMetaRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
-  font-size: 11px;
+  gap: 5px 8px;
+  font-size: 11.5px;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 export const PartyInfographicPositionChip = styled.span`
   font-size: 10px;
   font-weight: 700;
-  padding: 3px 7px;
-  border-radius: 6px;
+  padding: 2px 6px;
+  border-radius: 5px;
   background: ${({ theme }) =>
     theme.mode === 'dark'
       ? 'rgba(129, 140, 248, 0.22)'
@@ -1629,12 +1616,11 @@ export const PartyInfographicFootHint = styled.div`
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  margin-top: auto;
-  padding-top: 6px;
-  font-size: 11px;
+  flex-shrink: 0;
+  font-size: 11.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
-  gap: 4px;
+  gap: 3px;
 `
 
 /**
@@ -1880,26 +1866,29 @@ export const PartyDetailSub = styled.div`
 `
 
 export const PartyDetailMetaSection = styled.div`
-  padding: 20px 0 4px;
-  margin-top: 0;
-  border-top: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : '#eef2f7'};
+  padding: 0;
+  margin-top: 12px;
 `
 
-/** 메타 — 패널 안에 또 박스를 두지 않고 라벨·값만 그리드로 배치 */
+/** 메타 — 무박스 상·하단·수직 헤어라인 원장 그리드 */
 export const PartyDetailMetaGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px 20px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 export const PartyDetailMetaTile = styled.div`
   min-width: 0;
-  padding: 0;
-  border: none;
+  padding: 12px 14px;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   border-radius: 0;
   background: transparent;
+
+  &:last-child {
+    border-right: none;
+  }
 `
 
 export const PartyDetailMetaTileLabel = styled.div`
@@ -2020,71 +2009,30 @@ export const ElectionDetailStatusBadge = styled.span`
   border: 1px solid ${({ theme }) => theme.colors.border.default};
 `
 
-/** 통계 가로 스크롤 — 우측 페이드로 이어짐 힌트 */
+/** 선거 상세 상단 통계 — 무박스 상·하단·수직 헤어라인 원장 그리드 */
 export const ElectionDetailStatsScrollWrap = styled.div`
-  position: relative;
-  margin-right: -2px;
-  padding-right: 2px;
-
-  &::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 8px;
-    width: 40px;
-    pointer-events: none;
-    background: linear-gradient(
-      to left,
-      ${({ theme }) => theme.colors.background.primary} 42%,
-      transparent
-    );
-  }
+  width: 100%;
+  margin-top: 6px;
 `
 
-/** 한 줄에 최대한 유지 — 좁은 폭에서는 가로 스크롤 */
 export const ElectionDetailStatsGrid = styled.div`
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 12px 14px;
-  overflow-x: auto;
-  padding-bottom: 6px;
-  margin-bottom: -2px;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: ${({ theme }) =>
-    `${theme.mode === 'dark' ? 'rgba(148, 163, 184, 0.35)' : '#cbd5e1'} ${
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#f1f5f9'
-    }`};
-
-  &::-webkit-scrollbar {
-    height: 7px;
-  }
-  &::-webkit-scrollbar-track {
-    border-radius: 999px;
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#f1f5f9'};
-  }
-  &::-webkit-scrollbar-thumb {
-    border-radius: 999px;
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(148, 163, 184, 0.4)' : '#cbd5e1'};
-  }
-
-  & > * {
-    flex: 0 0 auto;
-    min-width: 152px;
-    max-width: 240px;
-  }
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(144px, 1fr));
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 export const ElectionDetailStatCard = styled.div`
   min-width: 0;
-  padding: 0;
-  border: none;
+  padding: 10px 12px;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   border-radius: 0;
   background: transparent;
+
+  &:last-child {
+    border-right: none;
+  }
 `
 
 export const ElectionDetailStatLabel = styled.div`
@@ -2175,7 +2123,8 @@ export const PartyTopLeadersList = styled.ul`
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 export const PartyTopLeaderRow = styled.button`
@@ -2185,24 +2134,20 @@ export const PartyTopLeaderRow = styled.button`
   gap: 4px;
   width: 100%;
   margin: 0;
-  padding: 12px 14px;
+  padding: 10px 6px;
   text-align: left;
   cursor: pointer;
-  border-radius: 10px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc'};
+  border-radius: 0;
+  border: none;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
   color: ${({ theme }) => theme.colors.text.primary};
-  transition:
-    background 0.15s,
-    border-color 0.15s;
+  transition: background 0.15s;
   &:hover {
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.12)' : '#eef2ff'};
-    border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(129, 140, 248, 0.35)' : '#c7d2fe'};
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.1)'
+        : 'rgba(99, 102, 241, 0.05)'};
   }
 `
 
@@ -2397,13 +2342,11 @@ export const PartyDetailLineageMeta = styled.div`
 /** 전신/후신 연결 직전 — 기준일·메모 */
 export const PartyLineageConfirmPanel = styled.div`
   margin-top: 14px;
-  padding: 16px;
-  border-radius: 14px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc'};
+  padding: 14px 0;
+  border-radius: 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
 `
 
 export const PartyLineageConfirmSummary = styled.div`
@@ -2457,9 +2400,7 @@ export const PartyDetailLineageAddRow = styled.div`
   gap: 8px;
   padding-top: 12px;
   margin-top: 4px;
-  border-top: 1px dashed
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0'};
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 /** 계보 추가 — 안쪽에 또 프레임을 두지 않고 여백만 */
@@ -2479,41 +2420,50 @@ export const PartyDetailLineageHint = styled.p`
 `
 
 export const PartyDetailLineageBtnPair = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 580px) {
+    grid-template-columns: 1fr;
+  }
 `
 
 export const PartyDetailLineageActionBtn = styled.button`
-  flex: 1;
-  min-width: min(100%, 240px);
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
   padding: 12px 14px;
-  border-radius: 14px;
+  border-radius: 0;
+  border: none;
   cursor: pointer;
   font: inherit;
   text-align: left;
   transition:
-    border-color 0.15s ease,
     background 0.15s ease,
-    box-shadow 0.15s ease;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.12)' : '#e2e8f0'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#fff'};
+    color 0.15s ease;
+  background: transparent;
   color: ${({ theme }) => theme.colors.text.primary};
 
+  @media (min-width: 581px) {
+    &:first-child {
+      border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+  @media (max-width: 580px) {
+    &:first-child {
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+  }
+
   &:hover:not(:disabled) {
-    border-color: rgba(99, 102, 241, 0.45);
     background: ${({ theme }) =>
       theme.mode === 'dark'
         ? 'rgba(99, 102, 241, 0.1)'
-        : 'rgba(99, 102, 241, 0.06)'};
-    box-shadow: 0 1px 0 rgba(99, 102, 241, 0.08);
+        : 'rgba(99, 102, 241, 0.05)'};
   }
   &:disabled {
     opacity: 0.42;
@@ -2594,3 +2544,95 @@ export const EmptyHint = styled.p`
   font-size: 13px;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
+
+/** 빈 상태 — 무박스 2열 헤어라인 스펙 원장 */
+export const PoliticsEmptySpecWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+`
+
+export const PoliticsEmptySpecHead = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 0;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+export const PoliticsEmptySpecHeadText = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+`
+
+export const PoliticsEmptySpecHeadTitle = styled.div`
+  font-size: 14px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  letter-spacing: -0.02em;
+`
+
+export const PoliticsEmptySpecHeadSub = styled.div`
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  line-height: 1.5;
+`
+
+export const PoliticsEmptySpecGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 680px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+export const PoliticsEmptySpecCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (min-width: 681px) {
+    &:nth-child(odd) {
+      border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+    }
+    &:nth-last-child(-n + 2) {
+      border-bottom: none;
+    }
+  }
+
+  @media (max-width: 680px) {
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+`
+
+export const PoliticsEmptySpecCellLabel = styled.div`
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  text-transform: uppercase;
+`
+
+export const PoliticsEmptySpecCellTitle = styled.div`
+  font-size: 13px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+export const PoliticsEmptySpecCellDesc = styled.div`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  line-height: 1.5;
+`
+

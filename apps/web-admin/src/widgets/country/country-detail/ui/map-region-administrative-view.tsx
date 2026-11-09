@@ -588,6 +588,42 @@ export function MapRegionAdministrativeView({
     return chain
   }, [selectedDivision, divisions])
 
+  // 외부 딥링크(?division_id=...)로 2·3차 하위 구역에 직접 진입했을 때,
+  // division_path가 비어 있으면 상위 부모 경로를 자동으로 채워 리스트에서 해당 구역이 보이게 한다.
+  useEffect(() => {
+    if (mode !== 'drill' || isLoading) return
+    if (
+      selectedDivision &&
+      selectedParentChain.length > 0 &&
+      pathIds.length === 0
+    ) {
+      setPath(selectedParentChain.map((p) => p.id))
+    }
+  }, [
+    mode,
+    isLoading,
+    selectedDivision,
+    selectedParentChain,
+    pathIds.length,
+    setPath,
+  ])
+
+  const selectedDivisionQuery = useMemo(() => {
+    if (!selectedDivision) return null
+    return [
+      ...selectedParentChain.map((p) => p.name),
+      selectedDivision.name,
+    ].join(' ')
+  }, [selectedDivision, selectedParentChain])
+
+  const selectedDivisionDisplayName = useMemo(() => {
+    if (!selectedDivision) return null
+    return [
+      ...selectedParentChain.map((p) => p.name),
+      selectedDivision.name,
+    ].join(' › ')
+  }, [selectedDivision, selectedParentChain])
+
   /** 디테일 → breadcrumb 클릭 시 그 노드까지 drill */
   const drillToNode = (id: string) => {
     const chain: string[] = []
@@ -1187,6 +1223,8 @@ export function MapRegionAdministrativeView({
         mapLocation={mapLocation}
         markers={mapMarkers}
         selectedMarkerId={selectedId}
+        selectedDivisionQuery={selectedDivisionQuery}
+        selectedDivisionName={selectedDivisionDisplayName}
         onMarkerClick={(id) => {
           const row = sortedRows.find((r) => r.id === id)
           if (row) handleItemClick(row)

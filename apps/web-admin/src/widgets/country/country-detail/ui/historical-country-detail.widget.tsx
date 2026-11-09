@@ -99,6 +99,7 @@ import {
   IconVote,
 } from './country-detail-dashboard.icons'
 import { ActivityFeed } from './dashboard-panels/activity-feed'
+import { CountryMapDashboardPanel } from './dashboard-panels/country-map-dashboard-panel'
 import { ChartSkeleton } from './dashboard-panels/chart-skeleton'
 import { CountryCompaniesSection } from './dashboard-panels/country-companies-section'
 import { CurrentCabinetPanel } from './dashboard-panels/current-cabinet-panel'
@@ -1630,6 +1631,54 @@ function HistoricalOverviewSection({
             </OverviewCol>
           </OverviewLedgerGrid>
         )}
+      </DashboardStyles.Section>
+
+      {/* 지리 · 강역 구글 지도 */}
+      <DashboardStyles.Section
+        id="section-geography"
+        aria-labelledby="historical-geography-heading"
+        data-section-count={stats.divisionCount > 0 ? String(stats.divisionCount) : undefined}
+      >
+        <DashboardStyles.SectionTitleRow>
+          <DashboardStyles.SectionTitleIcon>
+            <IconPin />
+          </DashboardStyles.SectionTitleIcon>
+          <DashboardStyles.SectionTitleText id="historical-geography-heading">
+            지리 · 강역 구글 지도
+          </DashboardStyles.SectionTitleText>
+          <SectionHelpPopover sectionKey="geography" />
+          {stats.divisionCount > 0 && (
+            <DashboardStyles.SectionCountChip>
+              행정구역 {stats.divisionCount.toLocaleString('ko-KR')}곳
+            </DashboardStyles.SectionCountChip>
+          )}
+          <DashboardStyles.SectionLink
+            type="button"
+            onClick={() => onGoToTab('regions')}
+          >
+            행정구역 관리
+          </DashboardStyles.SectionLink>
+        </DashboardStyles.SectionTitleRow>
+        <CountryMapDashboardPanel
+          country={{
+            ...country,
+            enName:
+              country.enName ??
+              (fullRecordQuery.data as { enName?: string | null } | undefined)
+                ?.enName,
+          }}
+          linkedModernCountries={linkedModernCountries}
+          onEdit={onEdit}
+          onOpenRegionsTab={(divisionId) => {
+            if (divisionId) {
+              navigate(
+                `${pathKeys.countryRegions(country.id)}?division_id=${encodeURIComponent(divisionId)}`,
+              )
+            } else {
+              onGoToTab('regions')
+            }
+          }}
+        />
       </DashboardStyles.Section>
 
       {/* 건국·멸망 — 존속 기간의 양 끝이 '어떻게' 열리고 닫혔나(배경·사건·초대·전신/후신) */}

@@ -161,6 +161,10 @@ export type ElectionListRow = {
   pollEndDate?: string | null
   /** 법정·예정 임기 만료(선택) */
   legislatureTermEnd?: string | null
+  /** 유권자 대비 실제 투표 참여율 (%) */
+  voterTurnoutPercent?: string | number | null
+  /** 선거로 선출되는 의회 총 의석 */
+  totalSeats?: number | null
   /** 회차(대수) */
   convocationOrdinal?: number | null
   candidacies?: { id: string }[]
