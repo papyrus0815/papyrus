@@ -51,51 +51,10 @@ import { EventCountryRole, EventOrganizationRole, PrismaClient } from '@prisma/c
 import { resolveLinkedHistoricalCountryIds } from '../../country/domain/country-scope.util'
 import { toEventPhaseDto } from './event-phase.controller'
 import { assertEventOwnership, ensureEventOwnership } from '../domain/event-ownership'
-import { formatEventDate } from '../domain/event-date'
+import { formatEventDate, parseEventDate } from '../domain/event-date'
 import { parseEventDomain, type EventDomainValue } from '../domain/event-domain'
 import { parseEventTypes } from '../domain/event-type'
 import { displayPersonName } from '../../shared/person-display-name'
-
-/** 사건 날짜 구조화 파싱 결과 */
-interface ParsedEventDate {
-  /** 저장가능 DateTime — AD 1000~9999일 때만, 그 외(BC·고대)는 null */
-  date: Date | null
-  era: 'BC' | 'AD'
-  year: number
-  month: number
-  day: number
-}
-
-/**
- * ISO(음수 BC 포함) 날짜 문자열 → 구조화 표현.
- * MySQL DATETIME은 1000~9999년만 저장 가능하므로, BC·고대(연<1000)는 date=null로 두고
- * 구조화 필드(era/year/month/day)만 채운다(응답에서 이 필드로 재구성).
- * 입력이 없거나 파싱 불가면 undefined(필드 미변경 의미).
- */
-function parseEventDate(iso?: string | null): ParsedEventDate | undefined {
-  if (!iso) return undefined
-  const neg = iso.startsWith('-')
-  const body = neg ? iso.slice(1) : iso
-  const m = body.match(/^(\d{1,6})-(\d{1,2})-(\d{1,2})/)
-  let year: number
-  let month: number
-  let day: number
-  if (m) {
-    year = parseInt(m[1], 10)
-    month = parseInt(m[2], 10)
-    day = parseInt(m[3], 10)
-  } else {
-    const d = new Date(iso)
-    if (Number.isNaN(d.getTime())) return undefined
-    year = Math.abs(d.getUTCFullYear())
-    month = d.getUTCMonth() + 1
-    day = d.getUTCDate()
-  }
-  const era: 'BC' | 'AD' = neg ? 'BC' : 'AD'
-  const date =
-    !neg && year >= 1000 && year <= 9999 ? new Date(Date.UTC(year, month - 1, day)) : null
-  return { date, era, year, month, day }
-}
 
 /** 방문(놀러가기)용 사건 카드 — 제목·날짜·카테고리만(상세·본문·하위사건·이미지 미개방, 읽기전용) */
 export interface VisitedEventCardDto {
@@ -2119,8 +2078,8 @@ export class EventController {
     
     console.log(`👤 사건 등록 사용자: ${userId}`)
     
-    const startParts = parseEventDate(dto.startDate)
-    const endParts = parseEventDate(dto.endDate)
+    const startParts = parseEventDate(dto.startDate, dto.startDatePrecision)
+    const endParts = parseEventDate(dto.endDate, dto.endDatePrecision)
     const event = await this.eventService.createEvent(
       {
         title: dto.title,
@@ -2208,8 +2167,8 @@ export class EventController {
       deleted: 'conflict',
     })
 
-    const startPartsU = parseEventDate(dto.startDate)
-    const endPartsU = parseEventDate(dto.endDate)
+    const startPartsU = parseEventDate(dto.startDate, dto.startDatePrecision)
+    const endPartsU = parseEventDate(dto.endDate, dto.endDatePrecision)
     const phasePatch = await this.resolvePhasePatch(id, dto)
     const event = await this.eventService.updateEvent(
       id,
