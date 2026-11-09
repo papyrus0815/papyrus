@@ -620,12 +620,43 @@ export class PersonController {
     ])
 
     // 출생 서열(birthOrder) 1차(양쪽 보유 시) → 동성 서열(genderBirthOrder) → 부호 출생연도(BC 음수) → 활동연대(floruit) 정렬 유틸
+    const extractDateParts = (
+      d: any,
+    ): { year: number; month: number; day: number } | null => {
+      if (!d) return null
+      if (d instanceof Date) {
+        if (Number.isNaN(d.getTime())) return null
+        return {
+          year: Math.abs(d.getUTCFullYear()),
+          month: d.getUTCMonth() + 1,
+          day: d.getUTCDate(),
+        }
+      }
+      if (typeof d === 'string') {
+        const m = d.trim().match(/^-?(\d{1,6})-(\d{1,2})-(\d{1,2})/)
+        if (m) {
+          return {
+            year: parseInt(m[1], 10),
+            month: parseInt(m[2], 10),
+            day: parseInt(m[3], 10),
+          }
+        }
+      }
+      const dt = new Date(d)
+      if (Number.isNaN(dt.getTime())) return null
+      return {
+        year: Math.abs(dt.getUTCFullYear()),
+        month: dt.getUTCMonth() + 1,
+        day: dt.getUTCDate(),
+      }
+    }
     const signedBirthYearOf = (p: any): number | null => {
-      if (!p?.birthDate) return null
-      const d = p.birthDate instanceof Date ? p.birthDate : new Date(p.birthDate)
-      const y = d.getUTCFullYear()
-      if (Number.isNaN(y)) return null
-      return p.birthEra === 'BC' ? -Math.abs(y) : y
+      const y = p?.birthYear ?? extractDateParts(p?.birthDate)?.year ?? null
+      if (y == null || Number.isNaN(y)) return null
+      const isBc =
+        p?.birthEra === 'BC' ||
+        (typeof p?.birthDate === 'string' && p.birthDate.trim().startsWith('-'))
+      return isBc ? -Math.abs(y) : y
     }
     const signedFloruitStartOf = (p: any): number | null => {
       if (p?.floruitStartYear == null) return null
@@ -678,20 +709,14 @@ export class PersonController {
 
     const extractRegnalName = (m: any): string | null =>
       m?.regnalName ?? m?.GovernmentTenures?.[0]?.regnalName ?? null
-    const extractYear = (d: any): number | null => {
-      if (!d) return null
-      const dt = d instanceof Date ? d : new Date(d)
-      return Number.isNaN(dt.getTime()) ? null : dt.getUTCFullYear()
-    }
+    const extractYear = (d: any): number | null => extractDateParts(d)?.year ?? null
     const extractMonth = (d: any, precision?: string | null): number | null => {
       if (!d || precision === 'year') return null
-      const dt = d instanceof Date ? d : new Date(d)
-      return Number.isNaN(dt.getTime()) ? null : dt.getUTCMonth() + 1
+      return extractDateParts(d)?.month ?? null
     }
     const extractDay = (d: any, precision?: string | null): number | null => {
       if (!d || precision === 'year' || precision === 'month') return null
-      const dt = d instanceof Date ? d : new Date(d)
-      return Number.isNaN(dt.getTime()) ? null : dt.getUTCDate()
+      return extractDateParts(d)?.day ?? null
     }
     const formatMemberName = (m: any): string | null => {
       if (!m) return null
