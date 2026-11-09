@@ -8,41 +8,60 @@
 import React, { useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
+
 import { FiFileText } from 'react-icons/fi'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { useTheme } from 'styled-components'
 
 import {
   TREATY_TYPE_LABELS,
-  treatyApi,
   type TreatyDto,
   type TreatyType,
+  treatyApi,
+  treatyTypeTone,
 } from '@/shared/api/treaty'
 import {
   formatCenturyLabel,
   getCenturyFromIso,
   parseIsoDateParts,
 } from '@/shared/lib/iso-date'
+import {
+  type TreatyListReturnState,
+  parseTreatyListState,
+  readListSearch,
+  treatyListSearchOf,
+} from '@/shared/lib/treaty-list-state'
 import { pathKeys } from '@/shared/router'
 import {
   EntityListSidebar,
-  filterSidebarItems,
-  useSidebarPins,
   type EntitySidebarGroup,
   type EntitySidebarItem,
+  filterSidebarItems,
+  useSidebarPins,
 } from '@/widgets/entity-list-sidebar'
 
 /** 서명일이 없거나 파싱 불가한 조약이 떨어지지 않도록 받는 그룹 */
 const NO_CENTURY = '__no-century__'
 
-const PALETTE = [
-  '#3b82f6',
-  '#8b5cf6',
-  '#14b8a6',
-  '#f59e0b',
-  '#ef4444',
-  '#10b981',
-  '#ec4899',
-]
+/**
+ * 세기 점 색 — 사건 사이드바와 같은 **단조 감쇠 ramp**(최신 인디고 → 먼 과거 바랜 슬레이트).
+ * 예전엔 7색 순환(파랑·보라·청록·주황…)이라 색이 아무것도 말하지 않으면서, 행마다 붙은 유형 색
+ * 배지(평·동·군…)와 한 줄에서 경쟁했다. 색은 이제 '얼마나 오래됐나' 하나만 말한다.
+ */
+const RAMP_NEW: [number, number, number] = [0x63, 0x66, 0xf1]
+const RAMP_OLD: [number, number, number] = [0x94, 0xa3, 0xb8]
+
+function centuryRampColor(index: number, total: number): string {
+  const ratio = total <= 1 ? 0 : index / (total - 1)
+  const channel = (from: number, to: number) =>
+    Math.round(from + (to - from) * ratio)
+      .toString(16)
+      .padStart(2, '0')
+  return `#${channel(RAMP_NEW[0], RAMP_OLD[0])}${channel(
+    RAMP_NEW[1],
+    RAMP_OLD[1],
+  )}${channel(RAMP_NEW[2], RAMP_OLD[2])}`
+}
 
 /** 서명국 요약 — 앞 2개까지만 이름을 쓰고 나머지는 '외 N' */
 export function summarizeSignatories(treaty: TreatyDto): string | null {
@@ -78,6 +97,8 @@ export function TreatyListSidebar({
   onAdd,
 }: TreatyListSidebarProps) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const themeMode = useTheme().mode
   /* 카탈로그 본문과 같은 키 — 같은 응답을 두 번 받지 않는다 */
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['treaties', 'all'],
@@ -85,8 +106,16 @@ export function TreatyListSidebar({
     staleTime: 60_000,
   })
   const { pinnedIds, togglePin } = useSidebarPins('treaty-sidebar-pins')
-  const [query, setQuery] = useState('')
-  const [typeFilter, setTypeFilter] = useState('')
+  /*
+   * 처음 필터는 **들어온 목록**에서 — `?type=PEACE`로 7건을 보다 상세에 들어오면 사이드바도
+   * 7건으로 시작한다(예전엔 늘 '유형 전체' 23건이라 방금 걸어 둔 필터가 왼쪽에서 풀렸다).
+   * 사이드바는 목록(/treaties)엔 없고 상세에서만 마운트되므로 마운트 시점의 state가 곧 그 목록이다.
+   */
+  const [entryState] = useState(() =>
+    parseTreatyListState(new URLSearchParams(readListSearch(location.state))),
+  )
+  const [query, setQuery] = useState(entryState.query)
+  const [typeFilter, setTypeFilter] = useState<string>(entryState.type)
 
   const { items, groups, typeOptions } = useMemo(() => {
     const list = data?.items ?? []
@@ -105,16 +134,20 @@ export function TreatyListSidebar({
         return {
           id: treaty.id,
           name: treaty.name,
+          /* 유형은 배지(평·동·불…)가 이미 말한다 — 같은 줄에 '평화 조약'을 또 쓰면 서명국이
+             밀려 '오스트리아 ㄷ'처럼 글자 중간에서 잘렸다. 서명국은 shrink로 말줄임. */
           meta: [
             signYearLabel(treaty.signDate),
-            TREATY_TYPE_LABELS[treaty.type] ?? treaty.type,
-            parties,
+            parties ? { text: parties, shrink: true } : null,
           ],
           thumbnailUrl:
             treaty.images.find((image) => image.isPrimary)?.imageUrl ??
             treaty.images[0]?.imageUrl ??
             null,
-          badgeIcon: <FiFileText size={14} />,
+          /* 사건 목록과 같은 행 문법 — 이미지가 없으면 **유형 첫 글자**(평·동·불·무…)를
+             유형 색으로 칠한다. 예전엔 20행 전부 같은 문서 아이콘이라 배지가 아무것도 말하지 않았다. */
+          badgeText: (TREATY_TYPE_LABELS[treaty.type] ?? '조').slice(0, 1),
+          accentColor: treatyTypeTone(treaty.type, themeMode),
           searchText: [treaty.name, treaty.alias, parties, treaty.location]
             .filter(Boolean)
             .join(' ')
@@ -140,7 +173,7 @@ export function TreatyListSidebar({
       .map((century, index) => ({
         id: String(century),
         name: formatCenturyLabel(century),
-        accent: PALETTE[index % PALETTE.length],
+        accent: centuryRampColor(index, centuries.size),
       }))
     if (hasUndated) {
       ordered.push({ id: NO_CENTURY, name: '서명일 미상', accent: '#a1a1aa' })
@@ -156,7 +189,7 @@ export function TreatyListSidebar({
         ),
       ),
     }
-  }, [data, query, typeFilter])
+  }, [data, query, typeFilter, themeMode])
 
   return (
     <EntityListSidebar
@@ -167,7 +200,20 @@ export function TreatyListSidebar({
       totalCount={data?.total ?? data?.items.length ?? 0}
       groups={groups}
       selectedId={selectedId}
-      onSelect={(id) => navigate(pathKeys.treaties.detail(id))}
+      onSelect={(id) => {
+        /* 지금 사이드바 필터를 들고 간다 — 상세의 '목록' 브레드크럼이 이 필터의 목록으로 돌아간다 */
+        const returnState: TreatyListReturnState = {
+          treatyListSearch: treatyListSearchOf({
+            query: query.trim(),
+            type:
+              typeFilter in TREATY_TYPE_LABELS
+                ? (typeFilter as TreatyType)
+                : '',
+            sort: entryState.sort,
+          }),
+        }
+        navigate(pathKeys.treaties.detail(id), { state: returnState })
+      }}
       query={query}
       onQueryChange={setQuery}
       selects={[

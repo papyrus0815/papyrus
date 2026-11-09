@@ -1,4 +1,11 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import { createPortal } from 'react-dom'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -9,6 +16,7 @@ import {
   FiFileText,
   FiGlobe,
   FiImage,
+  FiMapPin,
   FiPlus,
   FiSearch,
   FiTrash2,
@@ -16,19 +24,7 @@ import {
   FiX,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
-import styled, {
-  keyframes,
-  ThemeProvider,
-  useTheme,
-} from 'styled-components'
-
-import { parseIsoDateParts } from '@/shared/lib/iso-date'
-import { pathKeys } from '@/shared/router'
-import { getTreatySectionPalette } from '@/shared/styles/country-detail-palette'
-import { useThemeStore } from '@/shared/styles/theme.store'
-import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
-
-import * as DashboardStyles from './country-detail-dashboard.styles'
+import styled, { ThemeProvider, keyframes, useTheme } from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import type { CountryResponseDto } from '@/shared/api/countries'
@@ -36,29 +32,47 @@ import { getAllCountries } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import {
+  type CabinetListItemDto,
+  personCareerApi,
+} from '@/shared/api/person-career'
+import { getAllPersons } from '@/shared/api/persons'
+import {
   type AddTreatyImageDto,
   type CreateTreatyDto,
   type CreateTreatyTermDto,
+  TREATY_EVENT_LINK_LABELS,
   TREATY_PARTICIPATION_LABELS,
   TREATY_TYPE_LABELS,
   type TreatyDto,
+  type TreatyEventLinkType,
+  type TreatyEventLinkWithEventDto,
   type TreatyParticipationType,
   type TreatySignatoryDto,
   type TreatyType,
   treatyApi,
+  treatyTypeTone,
 } from '@/shared/api/treaty'
-import {
-  personCareerApi,
-  type CabinetListItemDto,
-} from '@/shared/api/person-career'
 import { uploadImage } from '@/shared/api/upload'
-import { confirm } from '@/shared/ui/confirm-dialog'
-import { notify } from '@/shared/ui/toast'
-import { CountryPicker } from '@/shared/ui/country-picker'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
-import { getAllPersons } from '@/shared/api/persons'
+import { pathKeys } from '@/shared/router'
+import { getTreatySectionPalette } from '@/shared/styles/country-detail-palette'
+import { useThemeStore } from '@/shared/styles/theme.store'
+import { confirm } from '@/shared/ui/confirm-dialog'
+import { CountryPicker } from '@/shared/ui/country-picker'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
+import { notify } from '@/shared/ui/toast'
+
+import {
+  CountryInlineModal,
+  type CountryInlineModalTarget,
+  shouldInterceptEntityClick,
+} from '@/widgets/country/country-inline-modal'
+
+import * as DashboardStyles from './country-detail-dashboard.styles'
+import * as TD from './treaty-detail.styles'
 
 const fadeIn = keyframes`from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; }`
 
@@ -500,301 +514,7 @@ const SignatoryChip = styled.div`
   color: ${({ theme }) => theme.ts!.main};
 `
 
-// ─── 상세 뷰 ───
-
-const DetailWrap = styled.div`
-  animation: ${fadeIn} 0.18s ease;
-`
-
-const BackBtn = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  background: none;
-  border: none;
-  color: ${({ theme }) => theme.ts!.textSub};
-  font-size: 13px;
-  cursor: pointer;
-  padding: 0;
-  margin-bottom: 16px;
-  &:hover {
-    color: ${({ theme }) => theme.ts!.main};
-  }
-`
-
-const DetailCard = styled.div`
-  background: ${({ theme }) => theme.ts!.card};
-  border: 1px solid ${({ theme }) => theme.ts!.border};
-  border-radius: 16px;
-  overflow: hidden;
-`
-
-const DetailHero = styled.div<{ $url?: string | null }>`
-  width: 100%;
-  height: 200px;
-  background: ${({ $url }) =>
-    $url
-      ? `url(${$url}) center/cover no-repeat`
-      : `linear-gradient(135deg, #667eea 0%, #764ba2 100%)`};
-  position: relative;
-  display: flex;
-  align-items: flex-end;
-`
-
-const DetailHeroOverlay = styled.div`
-  width: 100%;
-  padding: 16px 20px;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
-`
-
-const DetailHeroTitle = styled.h1`
-  font-size: 20px;
-  font-weight: 800;
-  color: #fff;
-  margin: 0 0 2px;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
-`
-
-const DetailHeroAlias = styled.p`
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.8);
-  margin: 0;
-`
-
-const DetailBody = styled.div`
-  padding: 20px;
-`
-
-const Section = styled.div`
-  margin-bottom: 24px;
-`
-
-const SectionTitle = styled.h3`
-  font-size: 13px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.ts!.textMuted};
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin: 0 0 12px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-`
-
-const InfoGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 10px;
-`
-
-const InfoItem = styled.div`
-  background: ${({ theme }) => theme.ts!.bg};
-  border: 1px solid ${({ theme }) => theme.ts!.border};
-  border-radius: 10px;
-  padding: 10px 12px;
-`
-
-const InfoLabel = styled.div`
-  font-size: 11px;
-  color: ${({ theme }) => theme.ts!.textMuted};
-  margin-bottom: 3px;
-`
-const InfoValue = styled.div`
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.ts!.text};
-`
-
-const TextBlock = styled.p`
-  font-size: 13px;
-  line-height: 1.7;
-  color: ${({ theme }) => theme.ts!.textSub};
-  margin: 0;
-  white-space: pre-wrap;
-`
-
-const SignatoryRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-`
-
-const SignatoryCard = styled.div`
-  background: ${({ theme }) => theme.ts!.bg};
-  border: 1px solid ${({ theme }) => theme.ts!.border};
-  border-radius: 12px;
-  padding: 12px 14px;
-  min-width: 180px;
-  flex: 1;
-  max-width: 260px;
-`
-
-const SignatoryCountry = styled.div`
-  font-size: 13px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.ts!.text};
-  margin-bottom: 4px;
-`
-
-const SignatoryPerson = styled.div`
-  font-size: 12px;
-  color: ${({ theme }) => theme.ts!.textSub};
-  margin-bottom: 2px;
-`
-const SignatoryRole = styled.div`
-  font-size: 11px;
-  color: ${({ theme }) => theme.ts!.textMuted};
-`
-const SignatoryBadge = styled.span<{ $type: TreatyParticipationType }>`
-  display: inline-block;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 1px 6px;
-  border-radius: 4px;
-  margin-top: 4px;
-  background: ${({ theme, $type }) => {
-    const p = theme.ts!
-    if ($type === 'SIGNATORY') return p.mainLight
-    if ($type === 'GUARANTOR') return p.badgeGuarantorBg
-    if ($type === 'MEDIATOR') return p.badgeMediatorBg
-    return p.badgeObserverBg
-  }};
-  color: ${({ theme, $type }) => {
-    const p = theme.ts!
-    if ($type === 'SIGNATORY') return p.main
-    if ($type === 'GUARANTOR') return p.badgeGuarantorText
-    if ($type === 'MEDIATOR') return p.badgeMediatorText
-    return p.badgeObserverText
-  }};
-`
-
-const TermList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-`
-
-const TermItem = styled.div<{ $secret?: boolean }>`
-  background: ${({ theme, $secret }) =>
-    $secret ? theme.ts!.termSecretBg : theme.ts!.bg};
-  border: 1px solid
-    ${({ theme, $secret }) =>
-      $secret ? theme.ts!.termSecretBorder : theme.ts!.border};
-  border-left: 3px solid
-    ${({ theme, $secret }) =>
-      $secret ? theme.ts!.danger : theme.ts!.main};
-  border-radius: 0 10px 10px 0;
-  padding: 10px 14px;
-`
-
-const TermTitle = styled.div`
-  font-size: 12px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.ts!.text};
-  margin-bottom: 4px;
-`
-const TermContent = styled.div`
-  font-size: 13px;
-  color: ${({ theme }) => theme.ts!.textSub};
-  line-height: 1.6;
-  /* 평문 입력(textarea)이라 줄바꿈을 보존. 긴 토큰은 줄바꿈 허용. */
-  white-space: pre-wrap;
-  word-break: break-word;
-`
-const SecretBadge = styled.span`
-  font-size: 10px;
-  color: ${({ theme }) => theme.ts!.danger};
-  font-weight: 600;
-  margin-left: 6px;
-`
-
-const ImageGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 10px;
-`
-
-const ImgThumb = styled.div<{ $url: string }>`
-  aspect-ratio: 4/3;
-  background: url(${({ $url }) => $url}) center/cover no-repeat;
-  border-radius: 10px;
-  border: 1px solid ${({ theme }) => theme.ts!.border};
-  position: relative;
-  cursor: pointer;
-  &:hover > div {
-    opacity: 1;
-  }
-`
-
-const ImgOverlay = styled.div`
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  border-radius: 10px;
-  opacity: 0;
-  transition: opacity 0.15s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-`
-
-const ActionBar = styled.div`
-  display: flex;
-  gap: 8px;
-  margin-top: 16px;
-  flex-wrap: wrap;
-`
-
-const ActionBtn = styled.button<{ $variant?: 'danger' | 'ghost' }>`
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 7px 14px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-  border: 1px solid
-    ${({ theme, $variant }) => {
-      const p = theme.ts!
-      return $variant === 'danger'
-        ? p.danger
-        : $variant === 'ghost'
-          ? p.border
-          : p.main
-    }};
-  background: ${({ theme, $variant }) => {
-    const p = theme.ts!
-    return $variant === 'danger'
-      ? p.dangerLight
-      : $variant === 'ghost'
-        ? p.card
-        : p.mainLight
-  }};
-  color: ${({ theme, $variant }) => {
-    const p = theme.ts!
-    return $variant === 'danger'
-      ? p.danger
-      : $variant === 'ghost'
-        ? p.textSub
-        : p.main
-  }};
-  &:hover {
-    background: ${({ theme, $variant }) => {
-      const p = theme.ts!
-      return $variant === 'danger'
-        ? p.danger
-        : $variant === 'ghost'
-          ? p.bg
-          : p.main
-    }};
-    color: ${({ theme, $variant }) => {
-      const p = theme.ts!
-      return $variant === 'ghost' ? p.text : '#fff'
-    }};
-  }
-`
+// ─── 상세 뷰 ─── 스타일은 ./treaty-detail.styles (사건 상세 문법)
 
 // ─── 모달 ───
 
@@ -998,6 +718,70 @@ const Required = styled.span`
  * 날짜가 뷰어의 시간대에 따라 하루 밀린다(UTC-N 지역에서 1939-08-23이 8월 22일로 보였다).
  * 조약 날짜는 시각이 아니라 달력상의 날이므로 ISO 문자열을 그대로 읽는다.
  */
+/** 연도 — 기원전은 '기원전 N'(목록·상세·장부 공통 표기) */
+function formatYear(year: number): string {
+  return year < 0 ? `기원전 ${-year}` : String(year)
+}
+
+/** 사건 연도 — 구조화 연도(BC 포함)가 정본, 없으면 startDate */
+function eventYearLabel(
+  event: NonNullable<TreatyEventLinkWithEventDto['event']>,
+): string | null {
+  if (event.startYear !== null && event.startYear !== undefined) {
+    return formatYear(
+      event.startEra === 'BC' ? -event.startYear : event.startYear,
+    )
+  }
+  const parts = parseIsoDateParts(event.startDate)
+  return parts ? formatYear(parts.year) : null
+}
+
+/* 체결 → 비준 → 파기 → 관련 — 조약의 일생 순서 */
+const EVENT_LINK_ORDER: Record<TreatyEventLinkType, number> = {
+  SIGNING: 0,
+  RATIFICATION: 1,
+  VIOLATION: 2,
+  RELATED: 3,
+}
+
+/**
+ * 서명국 비고 — 3줄에서 접고, 실제로 넘칠 때만 '더 보기'를 단다.
+ * 글자 수로 어림하면 카드 폭(3열 245px ↔ 모바일 2열 170px)마다 틀려서 실측한다.
+ */
+function SignatoryNote({ note }: { note: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const [overflowing, setOverflowing] = useState(false)
+  const textRef = useRef<HTMLParagraphElement>(null)
+
+  useLayoutEffect(() => {
+    const element = textRef.current
+    if (!element || expanded) return undefined
+    const measure = () =>
+      setOverflowing(element.scrollHeight > element.clientHeight + 1)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [note, expanded])
+
+  return (
+    <TD.PartyNote>
+      <TD.PartyNoteText ref={textRef} $expanded={expanded}>
+        {note}
+      </TD.PartyNoteText>
+      {(overflowing || expanded) && (
+        <TD.NoteToggle
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((previous) => !previous)}
+        >
+          {expanded ? '접기' : '더 보기'}
+        </TD.NoteToggle>
+      )}
+    </TD.PartyNote>
+  )
+}
+
 function fmtDate(value: string | null | undefined) {
   if (!value) return '—'
   const parts = parseIsoDateParts(value)
@@ -1528,11 +1312,15 @@ function cabinetListLabel(c: CabinetListItemDto): string {
   return [nm, term, pn].filter(Boolean).join(' · ') || '행정부'
 }
 
-const TreatyCreateModal: React.FC<{
-  country: UnifiedCountry
+/**
+ * 조약 등록 — 국가 상세 조약 탭(그 나라가 첫 서명국으로 미리 채워짐)과 조약 카탈로그
+ * (`/treaties`, 국가 없이 시작)가 함께 쓴다. ⚠️ {@link TreatySectionThemeProvider} 안에서 렌더할 것.
+ */
+export const TreatyCreateModal: React.FC<{
+  country?: UnifiedCountry | null
   onClose: () => void
   onCreated: (id: string) => void
-}> = ({ country, onClose, onCreated }) => {
+}> = ({ country = null, onClose, onCreated }) => {
   const [name, setName] = useState('')
   const [alias, setAlias] = useState('')
   const [type, setType] = useState<TreatyType>('NON_AGGRESSION')
@@ -1546,18 +1334,20 @@ const TreatyCreateModal: React.FC<{
   const [submitting, setSubmitting] = useState(false)
   const [countryPickerOpen, setCountryPickerOpen] = useState(false)
   const [sigCountryId, setSigCountryId] = useState<string | null>(() =>
-    country.type === 'modern' ? country.id : null,
+    country?.type === 'modern' ? country.id : null,
   )
   const [sigHistoricalCountryId, setSigHistoricalCountryId] = useState<
     string | null
-  >(() => (country.type === 'historical' ? country.id : null))
-  const [sigCountryLabel, setSigCountryLabel] = useState(() => country.name)
+  >(() => (country?.type === 'historical' ? country.id : null))
+  const [sigCountryLabel, setSigCountryLabel] = useState(
+    () => country?.name ?? '',
+  )
   const [linkCabinetId, setLinkCabinetId] = useState('')
 
-  const countryIdForCabinets =
-    country.type === 'modern' ? country.id : undefined
-  const historicalCountryIdForCabinets =
-    country.type === 'historical' ? country.id : undefined
+  /* 행정부 후보는 **고른 첫 서명국**을 따른다 — 예전엔 진입한 국가 탭에 고정돼 있어서,
+     서명국을 다른 나라로 바꿔도 원래 나라의 행정부가 그대로 후보로 남았다. */
+  const countryIdForCabinets = sigCountryId ?? undefined
+  const historicalCountryIdForCabinets = sigHistoricalCountryId ?? undefined
 
   const { data: modernCountries = [] } = useQuery({
     queryKey: ['treaty-modal-countries'],
@@ -1580,6 +1370,7 @@ const TreatyCreateModal: React.FC<{
         countryId: countryIdForCabinets,
         historicalCountryId: historicalCountryIdForCabinets,
       }),
+    enabled: Boolean(countryIdForCabinets || historicalCountryIdForCabinets),
     staleTime: 60_000,
   })
 
@@ -1661,6 +1452,7 @@ const TreatyCreateModal: React.FC<{
                       setSigCountryId(null)
                       setSigHistoricalCountryId(null)
                       setSigCountryLabel('')
+                      setLinkCabinetId('')
                     }}
                     style={{
                       fontSize: 12,
@@ -1826,6 +1618,7 @@ const TreatyCreateModal: React.FC<{
           setSigCountryId(c.isHistorical ? null : c.id)
           setSigHistoricalCountryId(c.isHistorical ? c.id : null)
           setSigCountryLabel(c.name)
+          setLinkCabinetId('')
           setCountryPickerOpen(false)
         }}
       />
@@ -1845,7 +1638,9 @@ const TreatyEditModal: React.FC<{
   const [name, setName] = useState(treaty.name)
   const [alias, setAlias] = useState(treaty.alias ?? '')
   const [type, setType] = useState<TreatyType>(treaty.type)
-  const [signDate, setSignDate] = useState(() => toDateInputValue(treaty.signDate))
+  const [signDate, setSignDate] = useState(() =>
+    toDateInputValue(treaty.signDate),
+  )
   const [effectiveDate, setEffectiveDate] = useState(() =>
     toDateInputValue(treaty.effectiveDate),
   )
@@ -2069,7 +1864,8 @@ export const TreatyDetail: React.FC<{
   onInvalidate: () => void
 }> = ({ treatyId, onBack, onInvalidate }) => {
   const qc = useQueryClient()
-  const ts = useTheme().ts!
+  const navigate = useNavigate()
+  const themeMode = useTheme().mode
 
   const { data: treaty, isLoading } = useQuery({
     queryKey: ['treaty', treatyId],
@@ -2083,6 +1879,10 @@ export const TreatyDetail: React.FC<{
   const [addTermOpen, setAddTermOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
+  /* 서명국 카드 → 국가 정보 창(사건 상세 참여국 카드와 같은 퀵뷰). 국가 탭 안에서도 뜨므로
+     URL(?country=)이 아니라 로컬 상태 — 국가 상세의 자체 파라미터와 섞이지 않게. */
+  const [countryTarget, setCountryTarget] =
+    useState<CountryInlineModalTarget | null>(null)
 
   const invalidateTreaty = useCallback(() => {
     qc.invalidateQueries({ queryKey: ['treaty', treatyId] })
@@ -2197,407 +1997,679 @@ export const TreatyDetail: React.FC<{
   const thumb =
     treaty.images.find((i) => i.isPrimary)?.imageUrl ??
     treaty.images[0]?.imageUrl
+  const typeColor = treatyTypeTone(treaty.type, themeMode)
+  const signParts = parseIsoDateParts(treaty.signDate)
+  const endParts = parseIsoDateParts(treaty.violationDate ?? treaty.expiryDate)
+  /*
+   * 효력 기간 — '서명 연도–파기(없으면 만료) 연도'로 **구간만** 적는다.
+   * 예전엔 연도 차를 'N년'으로 셌는데 1939.8→1941.6이 '2년'이 되고, 파기일이 실제 효력
+   * 상실이 아니라 '무효 확인' 날인 행(제2차 한일협약 1965)에선 '존속 60년'이라는 틀린
+   * 사실을 지어냈다. 구간은 기록된 두 날짜만 말한다. 끝이 없으면 '유효'라고 단정하지 않고 비운다.
+   */
+  const periodLabel =
+    signParts && endParts
+      ? `${formatYear(signParts.year)}–${formatYear(endParts.year)}`
+      : null
+  const signLine = treaty.signDate
+    ? `${fmtDate(treaty.signDate)} 서명`
+    : '서명일 미상'
+
+  const eventLinks = (treaty.eventLinks ?? [])
+    .filter(
+      (
+        link,
+      ): link is TreatyEventLinkWithEventDto & {
+        event: NonNullable<TreatyEventLinkWithEventDto['event']>
+      } => !!link.event,
+    )
+    .sort(
+      (left, right) =>
+        EVENT_LINK_ORDER[left.linkType] - EVENT_LINK_ORDER[right.linkType],
+    )
+  const signingLink = eventLinks.find((link) => link.linkType === 'SIGNING')
+
+  const anchorId = (slug: string) => `treaty-${treaty.id}-${slug}`
+  const scrollToAnchor = (slug: string) =>
+    document
+      .getElementById(anchorId(slug))
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+
+  /* 사건 상세 '비어 있는 항목 N개 · 채우기'와 같은 장치 — 빈 칸은 접고, 채울 길은 한 줄로 남긴다 */
+  const missing = [
+    !treaty.summary && '개요',
+    !treaty.background && '배경',
+    !treaty.aftermath && '결과·여파',
+    !treaty.location && '서명 장소',
+    !treaty.effectiveDate && '발효일',
+  ].filter((label): label is string => !!label)
+
+  /* 본문에서 접힌 섹션 → 본문 끝 '더 채울 수 있는 것' 칩. 글 칸은 수정 창, 조항은 조항 추가 창. */
+  const openEdit = () => setEditOpen(true)
+  const fillItems = [
+    !treaty.summary && { key: 'summary', label: '개요', onFill: openEdit },
+    !treaty.background && {
+      key: 'background',
+      label: '배경',
+      onFill: openEdit,
+    },
+    !treaty.aftermath && {
+      key: 'aftermath',
+      label: '결과·여파',
+      onFill: openEdit,
+    },
+    treaty.terms.length === 0 && {
+      key: 'terms',
+      label: '조항',
+      onFill: () => setAddTermOpen(true),
+    },
+  ].filter(
+    (item): item is { key: string; label: string; onFill: () => void } =>
+      !!item,
+  )
+
+  const signatoryTarget = (
+    signatory: TreatySignatoryDto,
+  ): CountryInlineModalTarget | null =>
+    signatory.country
+      ? {
+          id: signatory.country.id,
+          kind: 'modern',
+          name: signatory.country.name,
+        }
+      : signatory.historicalCountry
+        ? {
+            id: signatory.historicalCountry.id,
+            kind: 'historical',
+            name: signatory.historicalCountry.name,
+          }
+        : null
+  const countryPeers = treaty.signatories
+    .map(signatoryTarget)
+    .filter((target): target is CountryInlineModalTarget => !!target)
+
+  const tocEntries = [
+    treaty.background && { slug: 'background', label: '배경' },
+    treaty.aftermath && { slug: 'aftermath', label: '결과 · 여파' },
+    eventLinks.length > 0 && {
+      slug: 'events',
+      label: '연결된 사건',
+      count: eventLinks.length,
+    },
+    treaty.terms.length > 0 && {
+      slug: 'terms',
+      label: '조항',
+      count: treaty.terms.length,
+    },
+    treaty.images.length > 0 && {
+      slug: 'images',
+      label: '이미지',
+      count: treaty.images.length,
+    },
+  ].filter(
+    (entry): entry is { slug: string; label: string; count?: number } =>
+      !!entry,
+  )
+
+  const personLabel = (signatory: TreatySignatoryDto) =>
+    signatory.person
+      ? getPersonDisplayName({
+          name: signatory.person.name ?? '',
+          surname: signatory.person.surname,
+          middleName: (signatory.person as { middleName?: string | null })
+            .middleName,
+          nameDisplayOrder: (
+            signatory.person as { nameDisplayOrder?: string | null }
+          ).nameDisplayOrder,
+          country: (
+            signatory.person as {
+              country?: { defaultNameDisplayOrder?: string | null } | null
+            }
+          ).country,
+        })
+      : null
+
+  const cabinetLabelOf = (signatory: TreatySignatoryDto) => {
+    if (!signatory.cabinet) return null
+    if (signatory.cabinet.name) return signatory.cabinet.name
+    const headTenure = signatory.cabinet.headTenure
+    const headName = headTenure?.person
+      ? getPersonDisplayName({
+          name: headTenure.person.name ?? '',
+          surname: headTenure.person.surname,
+          middleName: (headTenure.person as { middleName?: string | null })
+            .middleName,
+          nameDisplayOrder: (
+            headTenure.person as { nameDisplayOrder?: string | null }
+          ).nameDisplayOrder,
+          country: (
+            headTenure.person as {
+              country?: { defaultNameDisplayOrder?: string | null } | null
+            }
+          ).country,
+        })
+      : ''
+    const term = headTenure?.ordinal ?? headTenure?.subTermNumber
+    return term ? `제${term}대 ${headName} 행정부` : `${headName} 행정부`
+  }
 
   return (
-    <Wrap>
-      <BackBtn onClick={onBack}>
-        <FiChevronLeft size={14} /> 목록으로
-      </BackBtn>
+    <TD.Page>
+      <TD.Layout>
+        <TD.TopRow>
+          <TD.Breadcrumb aria-label="위치">
+            <button type="button" onClick={onBack}>
+              <FiChevronLeft size={13} aria-hidden /> 목록
+            </button>
+            <TD.CrumbSep aria-hidden>·</TD.CrumbSep>
+            {/* '목록'은 들어온 자리(필터 그대로)로, '조약'은 전체 카탈로그로, 유형은 그 유형만 —
+                예전엔 앞의 둘이 같은 /treaties로 가는 중복이었다. */}
+            <button
+              type="button"
+              onClick={() => navigate(pathKeys.treaties.list())}
+            >
+              조약
+            </button>
+            <TD.CrumbSep aria-hidden>›</TD.CrumbSep>
+            <TD.TypeCrumb
+              type="button"
+              $color={typeColor}
+              onClick={() =>
+                navigate(`${pathKeys.treaties.list()}?type=${treaty.type}`)
+              }
+              title={`${TREATY_TYPE_LABELS[treaty.type] ?? treaty.type}만 보기`}
+            >
+              {TREATY_TYPE_LABELS[treaty.type] ?? treaty.type}
+            </TD.TypeCrumb>
+          </TD.Breadcrumb>
+          <TD.TopActions>
+            <TD.QuietButton type="button" onClick={() => setEditOpen(true)}>
+              <FiEdit2 size={12} aria-hidden /> 수정
+            </TD.QuietButton>
+            <TD.QuietButton type="button" $danger onClick={handleDeleteTreaty}>
+              <FiTrash2 size={12} aria-hidden /> 삭제
+            </TD.QuietButton>
+          </TD.TopActions>
+        </TD.TopRow>
 
-      <DetailWrap>
-        <DetailCard>
-          <DetailHero $url={thumb}>
-            <DetailHeroOverlay>
-              <DetailHeroTitle>{treaty.name}</DetailHeroTitle>
-              {treaty.alias && (
-                <DetailHeroAlias>{treaty.alias}</DetailHeroAlias>
+        <TD.Hero>
+          {thumb ? (
+            <TD.HeroImage>
+              <img src={thumb} alt={`${treaty.name} 대표 이미지`} />
+            </TD.HeroImage>
+          ) : (
+            <TD.ImagePill $busy={uploadingImage}>
+              <FiImage size={12} aria-hidden />
+              {uploadingImage ? '업로드 중…' : '대표 이미지 추가'}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                disabled={uploadingImage}
+              />
+            </TD.ImagePill>
+          )}
+
+          <TD.TitleBlock>
+            <TD.Title>{treaty.name}</TD.Title>
+            {treaty.alias && <TD.Alias>{treaty.alias}</TD.Alias>}
+            {/* 한 칸 배치 전용 — 장부가 서명국 카드 아래로 내려가면 서명일이 첫 화면에서
+                사라졌다(390px에서 카드 6장 ≈600px 아래). 두 칸에선 우측 장부가 말하므로 숨긴다. */}
+            <TD.HeroDateLine>
+              <span>{signLine}</span>
+              {treaty.location && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span>{treaty.location}</span>
+                </>
               )}
-            </DetailHeroOverlay>
-          </DetailHero>
+            </TD.HeroDateLine>
+          </TD.TitleBlock>
 
-          <DetailBody>
-            {/* 기본 정보 */}
-            <Section>
-              <SectionTitle>기본 정보</SectionTitle>
-              <InfoGrid>
-                <InfoItem>
-                  <InfoLabel>유형</InfoLabel>
-                  <InfoValue>{TREATY_TYPE_LABELS[treaty.type]}</InfoValue>
-                </InfoItem>
-                <InfoItem>
-                  <InfoLabel>서명일</InfoLabel>
-                  <InfoValue>{fmtDate(treaty.signDate)}</InfoValue>
-                </InfoItem>
-                {treaty.effectiveDate && (
-                  <InfoItem>
-                    <InfoLabel>발효일</InfoLabel>
-                    <InfoValue>{fmtDate(treaty.effectiveDate)}</InfoValue>
-                  </InfoItem>
-                )}
-                {treaty.expiryDate && (
-                  <InfoItem>
-                    <InfoLabel>만료일</InfoLabel>
-                    <InfoValue>{fmtDate(treaty.expiryDate)}</InfoValue>
-                  </InfoItem>
-                )}
-                {treaty.violationDate && (
-                  <InfoItem>
-                    <InfoLabel>파기일</InfoLabel>
-                    <InfoValue style={{ color: ts.danger }}>
-                      {fmtDate(treaty.violationDate)}
-                    </InfoValue>
-                  </InfoItem>
-                )}
-                {treaty.location && (
-                  <InfoItem>
-                    <InfoLabel>서명 장소</InfoLabel>
-                    <InfoValue>{treaty.location}</InfoValue>
-                  </InfoItem>
-                )}
-              </InfoGrid>
-              {treaty.violationReason && (
-                <div
-                  style={{
-                    marginTop: 10,
-                    padding: '10px 14px',
-                    background: ts.dangerLight,
-                    borderRadius: 10,
-                    fontSize: 13,
-                    color: ts.danger,
-                  }}
-                >
-                  파기 사유: {treaty.violationReason}
-                </div>
-              )}
-            </Section>
+          {treaty.summary && <TD.Lead>{treaty.summary}</TD.Lead>}
 
-            {/* 개요 */}
-            {treaty.summary && (
-              <Section>
-                <SectionTitle>개요</SectionTitle>
-                <TextBlock>{treaty.summary}</TextBlock>
-              </Section>
-            )}
+          {treaty.violationReason && (
+            <TD.Broken>
+              <b>파기 사유</b>
+              <span>{treaty.violationReason}</span>
+            </TD.Broken>
+          )}
 
-            {/* 배경 */}
-            {treaty.background && (
-              <Section>
-                <SectionTitle>배경</SectionTitle>
-                <TextBlock>{treaty.background}</TextBlock>
-              </Section>
-            )}
-
-            {/* 여파 */}
-            {treaty.aftermath && (
-              <Section>
-                <SectionTitle>결과 · 여파</SectionTitle>
-                <TextBlock>{treaty.aftermath}</TextBlock>
-              </Section>
-            )}
-
-            {/* 서명국 */}
-            <Section>
-              <SectionTitle>
-                <FiUsers size={13} />
-                서명국 · 참여국 ({treaty.signatories.length})
-              </SectionTitle>
-              <SignatoryRow>
-                {treaty.signatories.map((signatory) => {
-                  const countryName =
-                    signatory.country?.name ?? signatory.historicalCountry?.name ?? '알 수 없음'
-                  const flag = signatory.country?.flagEmoji ?? ''
-                  const personName = signatory.person
-                    ? getPersonDisplayName({
-                        name: signatory.person.name ?? '',
-                        surname: signatory.person.surname,
-                        middleName: (signatory.person as { middleName?: string | null }).middleName,
-                        nameDisplayOrder: (signatory.person as { nameDisplayOrder?: string | null })
-                          .nameDisplayOrder,
-                        country: (signatory.person as { country?: { defaultNameDisplayOrder?: string | null } | null })
-                          .country,
-                      })
-                    : null
-                  const cabinetLabel = signatory.cabinet
-                    ? (signatory.cabinet.name ??
-                      (() => {
-                        const ht = signatory.cabinet.headTenure
-                        const pName = ht?.person
-                          ? getPersonDisplayName({
-                              name: ht.person.name ?? '',
-                              surname: ht.person.surname,
-                              middleName: (ht.person as { middleName?: string | null }).middleName,
-                              nameDisplayOrder: (
-                                ht.person as { nameDisplayOrder?: string | null }
-                              ).nameDisplayOrder,
-                              country: (
-                                ht.person as {
-                                  country?: { defaultNameDisplayOrder?: string | null } | null
-                                }
-                              ).country,
-                            })
-                          : ''
-                        const term = ht?.ordinal ?? ht?.subTermNumber
-                        return term
-                          ? `제${term}대 ${pName} 행정부`
-                          : `${pName} 행정부`
-                      })())
-                    : null
-                  return (
-                    <SignatoryCard key={signatory.id}>
-                      <SignatoryCountry>
-                        {flag} {countryName}
-                      </SignatoryCountry>
-                      {personName && (
-                        <SignatoryPerson>서명자: {personName}</SignatoryPerson>
+          <TD.PartiesHead>
+            서명국 · 참여국 <b>{treaty.signatories.length}</b>
+          </TD.PartiesHead>
+          <TD.PartiesGrid>
+            {treaty.signatories.map((signatory) => {
+              const countryName =
+                signatory.country?.name ??
+                signatory.historicalCountry?.name ??
+                '알 수 없음'
+              const historical =
+                !signatory.country && !!signatory.historicalCountry
+              const emblemImage =
+                signatory.country?.thumbnailUrl ??
+                signatory.historicalCountry?.thumbnailUrl ??
+                null
+              const personName = personLabel(signatory)
+              const cabinetLabel = cabinetLabelOf(signatory)
+              const partyTarget = signatoryTarget(signatory)
+              return (
+                <TD.PartyCard key={signatory.id}>
+                  <TD.PartyHead>
+                    <TD.Emblem $historical={historical} aria-hidden>
+                      {signatory.country?.flagEmoji ? (
+                        signatory.country.flagEmoji
+                      ) : emblemImage ? (
+                        <img src={emblemImage} alt="" />
+                      ) : (
+                        countryName.slice(0, 1)
                       )}
-                      {signatory.role && <SignatoryRole>직책: {signatory.role}</SignatoryRole>}
-                      {cabinetLabel && (
-                        <SignatoryRole>행정부: {cabinetLabel}</SignatoryRole>
-                      )}
-                      {signatory.signedAt && (
-                        <SignatoryRole>
-                          {fmtDate(signatory.signedAt)} 서명
-                        </SignatoryRole>
-                      )}
-                      <SignatoryBadge $type={signatory.participationType}>
-                        {TREATY_PARTICIPATION_LABELS[signatory.participationType]}
-                      </SignatoryBadge>
-                      <div
-                        style={{
-                          float: 'right',
-                          display: 'flex',
-                          gap: 6,
-                          alignItems: 'center',
-                        }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => setEditSignatory(signatory)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: ts.textMuted,
-                            padding: 0,
+                    </TD.Emblem>
+                    <TD.PartyName title={countryName}>
+                      {partyTarget ? (
+                        <TD.PartyNameLink
+                          data-party-link
+                          to={pathKeys.countryDetail(partyTarget.id)}
+                          onClick={(clickEvent) => {
+                            if (!shouldInterceptEntityClick(clickEvent)) return
+                            clickEvent.preventDefault()
+                            setCountryTarget(partyTarget)
                           }}
-                          title="서명국 수정"
                         >
-                          <FiEdit2 size={12} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteSignatory(signatory.id)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: ts.textMuted,
-                            padding: 0,
-                          }}
-                          title="삭제"
-                        >
-                          <FiTrash2 size={12} />
-                        </button>
-                      </div>
-                    </SignatoryCard>
-                  )
-                })}
-              </SignatoryRow>
-              <ActionBar>
-                <ActionBtn
-                  $variant="ghost"
-                  onClick={() => setAddSignatoryOpen(true)}
-                >
-                  <FiPlus size={12} /> 서명국 추가
-                </ActionBtn>
-              </ActionBar>
-            </Section>
-
-            {/* 조항 */}
-            <Section>
-              <SectionTitle>
-                <FiFileText size={13} />
-                조약 조항 ({treaty.terms.length})
-              </SectionTitle>
-              <TermList>
-                {treaty.terms.map((term, idx) => (
-                  <TermItem key={term.id} $secret={term.isSecret}>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                      }}
+                          {countryName}
+                        </TD.PartyNameLink>
+                      ) : (
+                        countryName
+                      )}
+                    </TD.PartyName>
+                  </TD.PartyHead>
+                  <TD.PartyTags>
+                    <TD.Tag
+                      $strong={signatory.participationType === 'SIGNATORY'}
                     >
-                      <TermTitle>
-                        제{idx + 1}조{term.title ? ` — ${term.title}` : ''}
-                        {term.isSecret && <SecretBadge>비밀</SecretBadge>}
-                      </TermTitle>
-                      <button
-                        onClick={() => handleDeleteTerm(term.id)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: ts.textMuted,
-                          padding: 0,
-                        }}
-                      >
-                        <FiTrash2 size={12} />
-                      </button>
-                    </div>
-                    <TermContent>{term.content}</TermContent>
-                  </TermItem>
-                ))}
-              </TermList>
-              <ActionBar>
-                <ActionBtn
-                  $variant="ghost"
-                  onClick={() => setAddTermOpen(true)}
-                >
-                  <FiPlus size={12} /> 조항 추가
-                </ActionBtn>
-              </ActionBar>
-            </Section>
-
-            {/* 이미지 */}
-            <Section>
-              <SectionTitle>
-                <FiImage size={13} />
-                이미지 ({treaty.images.length})
-              </SectionTitle>
-              {treaty.images.length > 0 && (
-                <ImageGrid>
-                  {treaty.images.map((img) => (
-                    <ImgThumb key={img.id} $url={img.imageUrl}>
-                      {img.isPrimary && (
-                        <span
-                          style={{
-                            position: 'absolute',
-                            top: 5,
-                            left: 5,
-                            background: ts.gold,
-                            color: '#fff',
-                            fontSize: 10,
-                            fontWeight: 700,
-                            padding: '2px 6px',
-                            borderRadius: 4,
-                          }}
-                        >
-                          대표
+                      {TREATY_PARTICIPATION_LABELS[signatory.participationType]}
+                    </TD.Tag>
+                    {signatory.signedAt && (
+                      <TD.Tag>{fmtDate(signatory.signedAt)} 서명</TD.Tag>
+                    )}
+                  </TD.PartyTags>
+                  {(personName || signatory.role) && (
+                    <TD.PartyLine>
+                      {personName &&
+                        (signatory.person ? (
+                          <TD.PersonLink
+                            to={pathKeys.personsTimelineDetail(
+                              signatory.person.id,
+                            )}
+                          >
+                            {personName}
+                          </TD.PersonLink>
+                        ) : (
+                          <b>{personName}</b>
+                        ))}
+                      {personName && signatory.role && ' · '}
+                      {signatory.role && (
+                        <span className={personName ? 'meta' : undefined}>
+                          {signatory.role}
                         </span>
                       )}
-                      <ImgOverlay>
-                        <button
-                          onClick={() => handleDeleteImage(img.id)}
-                          style={{
-                            background: 'rgba(239,68,68,0.9)',
-                            border: 'none',
-                            color: '#fff',
-                            borderRadius: 8,
-                            padding: '6px 10px',
-                            cursor: 'pointer',
-                            fontSize: 12,
-                          }}
+                    </TD.PartyLine>
+                  )}
+                  {cabinetLabel && (
+                    <TD.PartyLine>
+                      <span className="meta">{cabinetLabel}</span>
+                    </TD.PartyLine>
+                  )}
+                  {signatory.note?.trim() && (
+                    <SignatoryNote note={signatory.note.trim()} />
+                  )}
+                  <TD.PartyActions data-party-actions>
+                    <TD.IconButton
+                      type="button"
+                      onClick={() => setEditSignatory(signatory)}
+                      title="서명국 수정"
+                      aria-label={`${countryName} 서명국 수정`}
+                    >
+                      <FiEdit2 size={12} />
+                    </TD.IconButton>
+                    <TD.IconButton
+                      type="button"
+                      onClick={() => handleDeleteSignatory(signatory.id)}
+                      title="서명국 삭제"
+                      aria-label={`${countryName} 서명국 삭제`}
+                    >
+                      <FiTrash2 size={12} />
+                    </TD.IconButton>
+                  </TD.PartyActions>
+                </TD.PartyCard>
+              )
+            })}
+            <TD.AddCard type="button" onClick={() => setAddSignatoryOpen(true)}>
+              <FiPlus size={13} aria-hidden /> 서명국 추가
+            </TD.AddCard>
+          </TD.PartiesGrid>
+        </TD.Hero>
+
+        <TD.Aside aria-label="조약 정보">
+          <TD.YearDisplay>
+            {signParts ? `${formatYear(signParts.year)}년` : '연도 미상'}
+          </TD.YearDisplay>
+          <TD.AsideLine data-wide-only>{signLine}</TD.AsideLine>
+          {treaty.location && (
+            <TD.AsideLine data-wide-only>
+              <FiMapPin size={13} aria-hidden />
+              <span>{treaty.location}</span>
+            </TD.AsideLine>
+          )}
+
+          <TD.FactRows>
+            <TD.FactRow>
+              <TD.FactLabel>유형</TD.FactLabel>
+              <TD.FactValue $tone="type" $color={typeColor}>
+                {TREATY_TYPE_LABELS[treaty.type] ?? treaty.type}
+              </TD.FactValue>
+            </TD.FactRow>
+            {treaty.effectiveDate && (
+              <TD.FactRow>
+                <TD.FactLabel>발효</TD.FactLabel>
+                <TD.FactValue>{fmtDate(treaty.effectiveDate)}</TD.FactValue>
+              </TD.FactRow>
+            )}
+            {treaty.expiryDate && (
+              <TD.FactRow>
+                <TD.FactLabel>만료</TD.FactLabel>
+                <TD.FactValue>{fmtDate(treaty.expiryDate)}</TD.FactValue>
+              </TD.FactRow>
+            )}
+            {treaty.violationDate && (
+              <TD.FactRow>
+                <TD.FactLabel>파기</TD.FactLabel>
+                <TD.FactValue $tone="danger">
+                  {fmtDate(treaty.violationDate)}
+                </TD.FactValue>
+              </TD.FactRow>
+            )}
+            {periodLabel && (
+              <TD.FactRow>
+                <TD.FactLabel>효력</TD.FactLabel>
+                <TD.FactValue>{periodLabel}</TD.FactValue>
+              </TD.FactRow>
+            )}
+            {signingLink && (
+              <TD.FactRow>
+                <TD.FactLabel>체결 사건</TD.FactLabel>
+                <TD.FactValue>
+                  <TD.FactLink to={pathKeys.events.detail(signingLink.eventId)}>
+                    {signingLink.event.title}
+                  </TD.FactLink>
+                </TD.FactValue>
+              </TD.FactRow>
+            )}
+            <TD.FactRow>
+              <TD.FactLabel>서명국</TD.FactLabel>
+              <TD.FactValue>{treaty.signatories.length}개국</TD.FactValue>
+            </TD.FactRow>
+            <TD.FactRow>
+              <TD.FactLabel>조항</TD.FactLabel>
+              <TD.FactValue>{treaty.terms.length}개</TD.FactValue>
+            </TD.FactRow>
+          </TD.FactRows>
+
+          {missing.length > 0 && (
+            <TD.FillHint
+              type="button"
+              onClick={() => setEditOpen(true)}
+              title={`비어 있음: ${missing.join(', ')}`}
+            >
+              비어 있는 항목 {missing.length}개 · <b>채우기</b>
+            </TD.FillHint>
+          )}
+
+          <TD.Toc aria-label="목차">
+            <TD.TocLabel>목차</TD.TocLabel>
+            <TD.TocList>
+              {tocEntries.map((entry) => (
+                <li key={entry.slug}>
+                  <TD.TocItem
+                    type="button"
+                    onClick={() => scrollToAnchor(entry.slug)}
+                  >
+                    {entry.label}
+                    {entry.count !== undefined && <span>{entry.count}</span>}
+                  </TD.TocItem>
+                </li>
+              ))}
+            </TD.TocList>
+          </TD.Toc>
+        </TD.Aside>
+
+        <TD.Main>
+          {treaty.background && (
+            <TD.Section id={anchorId('background')}>
+              <TD.SectionHeader>
+                <TD.SectionTitle>배경</TD.SectionTitle>
+              </TD.SectionHeader>
+              <TD.Prose>{treaty.background}</TD.Prose>
+            </TD.Section>
+          )}
+
+          {treaty.aftermath && (
+            <TD.Section id={anchorId('aftermath')}>
+              <TD.SectionHeader>
+                <TD.SectionTitle>결과 · 여파</TD.SectionTitle>
+              </TD.SectionHeader>
+              <TD.Prose>{treaty.aftermath}</TD.Prose>
+            </TD.Section>
+          )}
+
+          {eventLinks.length > 0 && (
+            <TD.Section id={anchorId('events')}>
+              <TD.SectionHeader>
+                <TD.SectionTitle>연결된 사건</TD.SectionTitle>
+                <TD.SectionMeta>{eventLinks.length}건</TD.SectionMeta>
+              </TD.SectionHeader>
+              <TD.EventLinkList>
+                {eventLinks.map((link) => (
+                  <TD.EventLinkRow key={link.id}>
+                    <TD.EventLinkYear data-event-year>
+                      {eventYearLabel(link.event) ?? '연도 미상'}
+                    </TD.EventLinkYear>
+                    <TD.EventLinkTitle
+                      to={pathKeys.events.detail(link.eventId)}
+                    >
+                      {link.event.title}
+                      <FiExternalLink size={12} aria-hidden />
+                    </TD.EventLinkTitle>
+                    <TD.EventLinkKind>
+                      {TREATY_EVENT_LINK_LABELS[link.linkType]}
+                    </TD.EventLinkKind>
+                    {link.note?.trim() && (
+                      <TD.EventLinkNote>{link.note.trim()}</TD.EventLinkNote>
+                    )}
+                  </TD.EventLinkRow>
+                ))}
+              </TD.EventLinkList>
+            </TD.Section>
+          )}
+
+          {treaty.terms.length > 0 && (
+            <TD.Section id={anchorId('terms')}>
+              <TD.SectionHeader>
+                <TD.SectionTitle>조항</TD.SectionTitle>
+                <TD.SectionMeta>{treaty.terms.length}개</TD.SectionMeta>
+                <TD.SectionActions>
+                  <TD.QuietButton
+                    type="button"
+                    onClick={() => setAddTermOpen(true)}
+                  >
+                    <FiPlus size={12} aria-hidden /> 조항 추가
+                  </TD.QuietButton>
+                </TD.SectionActions>
+              </TD.SectionHeader>
+              <TD.TermList>
+                {treaty.terms.map((term, index) => {
+                  /*
+                   * 제목을 그대로 쓴다. 예전엔 앞에 '제{순번}조'를 붙였는데 제목에 이미 조약문의
+                   * 실제 번호가 있어 '제1조 — 제1조', '제2조 — 제4조'(독소), '제1조 — 제1관'
+                   * (조일수호조규)처럼 없는 번호를 지어냈다. 순번은 원 안 숫자가 말한다.
+                   */
+                  const termLabel = term.title?.trim() || `조항 ${index + 1}`
+                  return (
+                    <TD.TermItem key={term.id}>
+                      <TD.TermIndex $secret={term.isSecret} aria-hidden>
+                        {index + 1}
+                      </TD.TermIndex>
+                      <TD.TermBody>
+                        <TD.TermTitle>
+                          {termLabel}
+                          {term.isSecret && (
+                            <TD.SecretTag>비밀 조항</TD.SecretTag>
+                          )}
+                        </TD.TermTitle>
+                        <TD.TermContent>{term.content}</TD.TermContent>
+                      </TD.TermBody>
+                      <TD.TermActions data-term-actions>
+                        <TD.IconButton
+                          type="button"
+                          onClick={() => handleDeleteTerm(term.id)}
+                          title="조항 삭제"
+                          aria-label={`${termLabel} 삭제`}
                         >
-                          삭제
-                        </button>
-                      </ImgOverlay>
-                    </ImgThumb>
-                  ))}
-                </ImageGrid>
-              )}
-              <ActionBar>
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 5,
-                    padding: '7px 14px',
-                    borderRadius: 8,
-                    border: `1px solid ${ts.border}`,
-                    background: ts.card,
-                    color: ts.textSub,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: uploadingImage ? 'not-allowed' : 'pointer',
-                    opacity: uploadingImage ? 0.5 : 1,
-                  }}
-                >
-                  <FiImage size={12} />
-                  {uploadingImage ? '업로드 중…' : '이미지 추가'}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    style={{ display: 'none' }}
-                    onChange={handleImageUpload}
-                    disabled={uploadingImage}
-                  />
-                </label>
-              </ActionBar>
-            </Section>
+                          <FiTrash2 size={12} />
+                        </TD.IconButton>
+                      </TD.TermActions>
+                    </TD.TermItem>
+                  )
+                })}
+              </TD.TermList>
+            </TD.Section>
+          )}
 
-            {/* 액션 */}
-            <ActionBar>
-              <ActionBtn $variant="ghost" onClick={() => setEditOpen(true)}>
-                <FiEdit2 size={12} /> 조약 수정
-              </ActionBtn>
-              <ActionBtn $variant="danger" onClick={handleDeleteTreaty}>
-                <FiTrash2 size={12} /> 조약 삭제
-              </ActionBtn>
-            </ActionBar>
-          </DetailBody>
-        </DetailCard>
-      </DetailWrap>
+          {treaty.images.length > 0 && (
+            <TD.Section id={anchorId('images')}>
+              <TD.SectionHeader>
+                <TD.SectionTitle>이미지</TD.SectionTitle>
+                <TD.SectionMeta>{treaty.images.length}장</TD.SectionMeta>
+                <TD.SectionActions>
+                  <TD.UploadLabel $busy={uploadingImage}>
+                    <FiImage size={12} aria-hidden />
+                    {uploadingImage ? '업로드 중…' : '이미지 추가'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      disabled={uploadingImage}
+                    />
+                  </TD.UploadLabel>
+                </TD.SectionActions>
+              </TD.SectionHeader>
+              <TD.ImageGrid>
+                {treaty.images.map((image) => (
+                  <TD.ImageTile key={image.id}>
+                    <img src={image.imageUrl} alt={image.caption ?? ''} />
+                    {image.isPrimary && <span data-primary>대표</span>}
+                    <TD.IconButton
+                      type="button"
+                      data-remove
+                      onClick={() => handleDeleteImage(image.id)}
+                      title="이미지 삭제"
+                      aria-label="이미지 삭제"
+                    >
+                      <FiTrash2 size={12} />
+                    </TD.IconButton>
+                  </TD.ImageTile>
+                ))}
+              </TD.ImageGrid>
+            </TD.Section>
+          )}
 
-      {/* 서명국 추가 모달 */}
-      {addSignatoryOpen && (
-        <AddSignatoryModal
-          treatyId={treatyId}
-          onClose={() => setAddSignatoryOpen(false)}
-          onAdded={() => {
-            setAddSignatoryOpen(false)
-            invalidateTreaty()
-          }}
-        />
+          {fillItems.length > 0 && (
+            <TD.FillStrip aria-labelledby={anchorId('fill-title')}>
+              <TD.FillStripTitle id={anchorId('fill-title')}>
+                더 채울 수 있는 것
+              </TD.FillStripTitle>
+              <TD.FillChips>
+                {fillItems.map((item) => (
+                  <TD.FillChip
+                    key={item.key}
+                    type="button"
+                    onClick={item.onFill}
+                  >
+                    <FiPlus size={12} aria-hidden />
+                    {item.label}
+                  </TD.FillChip>
+                ))}
+              </TD.FillChips>
+            </TD.FillStrip>
+          )}
+        </TD.Main>
+      </TD.Layout>
+
+      {/*
+       * 모달은 body로 포털한다. TD.Page가 컨테이너 쿼리(container-type: inline-size)를 쓰는데,
+       * 이게 position:fixed의 기준 상자가 되어 오버레이가 화면이 아니라 지면 높이에서 잘렸다
+       * (실측: 1000px 창에서 어두운 막이 752px에서 끊김). 테마 context는 포털을 넘어 그대로 온다.
+       */}
+      {createPortal(
+        <>
+          {/* 서명국 추가 모달 */}
+          {addSignatoryOpen && (
+            <AddSignatoryModal
+              treatyId={treatyId}
+              onClose={() => setAddSignatoryOpen(false)}
+              onAdded={() => {
+                setAddSignatoryOpen(false)
+                invalidateTreaty()
+              }}
+            />
+          )}
+
+          {editSignatory && (
+            <EditSignatoryModal
+              key={editSignatory.id}
+              signatory={editSignatory}
+              onClose={() => setEditSignatory(null)}
+              onSaved={() => {
+                setEditSignatory(null)
+                invalidateTreaty()
+              }}
+            />
+          )}
+
+          {/* 조항 추가 모달 */}
+          {addTermOpen && (
+            <AddTermModal
+              treatyId={treatyId}
+              nextOrder={treaty.terms.length}
+              onClose={() => setAddTermOpen(false)}
+              onAdded={() => {
+                setAddTermOpen(false)
+                invalidateTreaty()
+              }}
+            />
+          )}
+
+          {editOpen && (
+            <TreatyEditModal
+              treaty={treaty}
+              onClose={() => setEditOpen(false)}
+              onSaved={() => {
+                setEditOpen(false)
+                invalidateTreaty()
+              }}
+            />
+          )}
+
+          <CountryInlineModal
+            target={countryTarget}
+            onClose={() => setCountryTarget(null)}
+            onSwitch={setCountryTarget}
+            peers={countryPeers}
+            peersLabel="이 조약의 다른 서명국"
+          />
+        </>,
+        document.body,
       )}
-
-      {editSignatory && (
-        <EditSignatoryModal
-          key={editSignatory.id}
-          signatory={editSignatory}
-          onClose={() => setEditSignatory(null)}
-          onSaved={() => {
-            setEditSignatory(null)
-            invalidateTreaty()
-          }}
-        />
-      )}
-
-      {/* 조항 추가 모달 */}
-      {addTermOpen && (
-        <AddTermModal
-          treatyId={treatyId}
-          nextOrder={treaty.terms.length}
-          onClose={() => setAddTermOpen(false)}
-          onAdded={() => {
-            setAddTermOpen(false)
-            invalidateTreaty()
-          }}
-        />
-      )}
-
-      {editOpen && (
-        <TreatyEditModal
-          treaty={treaty}
-          onClose={() => setEditOpen(false)}
-          onSaved={() => {
-            setEditOpen(false)
-            invalidateTreaty()
-          }}
-        />
-      )}
-    </Wrap>
+    </TD.Page>
   )
 }
 
@@ -3218,7 +3290,7 @@ const AddTermModal: React.FC<{
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="예: 상호 불가침"
+                placeholder="예: 제1조 — 상호 불가침 (조약문의 번호 그대로)"
               />
             </Field>
             <Field>

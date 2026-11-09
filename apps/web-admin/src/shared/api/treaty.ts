@@ -37,6 +37,33 @@ export const TREATY_TYPE_LABELS: Record<TreatyType, string> = {
   OTHER: '기타',
 }
 
+/**
+ * 조약 유형 글자색 — 사건 분야색(정치·경제·외교…)과 같은 역할: 목록의 유형 열·좌측 목록의
+ * 대체 배지·상세 브레드크럼이 **한 벌**을 쓴다. 면이 아니라 글자에 입히는 색이라
+ * 라이트는 600~700(흰 바탕 4.5:1↑), 다크는 300(어두운 바탕 4.5:1↑) 단계다.
+ */
+export const TREATY_TYPE_TONE: Record<
+  TreatyType,
+  { light: string; dark: string }
+> = {
+  PEACE: { light: '#15803d', dark: '#86efac' },
+  ALLIANCE: { light: '#1d4ed8', dark: '#93c5fd' },
+  NON_AGGRESSION: { light: '#0f766e', dark: '#5eead4' },
+  TRADE: { light: '#b45309', dark: '#fcd34d' },
+  TERRITORIAL: { light: '#7c3aed', dark: '#c4b5fd' },
+  BORDER: { light: '#4338ca', dark: '#a5b4fc' },
+  FRIENDSHIP: { light: '#be185d', dark: '#f9a8d4' },
+  DISARMAMENT: { light: '#475569', dark: '#cbd5e1' },
+  SECRET: { light: '#b91c1c', dark: '#fca5a5' },
+  MULTILATERAL: { light: '#0e7490', dark: '#67e8f9' },
+  OTHER: { light: '#6b7280', dark: '#a1a1aa' },
+}
+
+export function treatyTypeTone(type: TreatyType, mode: string): string {
+  const tone = TREATY_TYPE_TONE[type] ?? TREATY_TYPE_TONE.OTHER
+  return mode === 'dark' ? tone.dark : tone.light
+}
+
 export type TreatyParticipationType =
   | 'SIGNATORY'
   | 'GUARANTOR'
@@ -133,6 +160,11 @@ export interface TreatyDto {
   signatories: TreatySignatoryDto[]
   terms: TreatyTermDto[]
   images: TreatyImageDto[]
+  /**
+   * 이 조약에 걸린 사건 — 상세 응답(`GET /treaties/:id`)에 실린다. 사건 상세는 조약을
+   * 보여 주는데 조약 상세는 사건을 안 보여 줘서 연결이 한 방향뿐이었다.
+   */
+  eventLinks?: TreatyEventLinkWithEventDto[]
   createdAt: string
   updatedAt: string
 }
@@ -198,6 +230,18 @@ export interface TreatyEventLinkDto {
   eventId: string
   linkType: TreatyEventLinkType
   note?: string | null
+}
+
+/** 조약 상세 응답의 사건 연결 — 사건 요약이 함께 온다 */
+export interface TreatyEventLinkWithEventDto extends TreatyEventLinkDto {
+  event: {
+    id: string
+    title: string
+    startDate: string | null
+    startEra?: 'AD' | 'BC' | null
+    startYear?: number | null
+    domain?: string | null
+  } | null
 }
 
 export interface CreateTreatyTermDto {
