@@ -45,6 +45,11 @@ export class CreateGovernmentPositionDefinitionDto {
   @IsUUID()
   categoryId?: string | null
 
+  /** 국가 기관(부처) 직접 연결 (특정 기관 전용 직위) */
+  @IsOptional()
+  @IsUUID()
+  administrationDepartmentId?: string | null
+
   /** 행정기구 연결 (사용자 등록 직위) */
   @IsOptional()
   @IsUUID()
@@ -119,6 +124,11 @@ export class UpdateGovernmentPositionDefinitionDto {
   @IsOptional()
   @IsUUID()
   categoryId?: string | null
+
+  /** 국가 기관(부처) 직접 연결 (특정 기관 전용 직위) */
+  @IsOptional()
+  @IsUUID()
+  administrationDepartmentId?: string | null
 
   /** 행정기구 연결 (사용자 등록 직위) */
   @IsOptional()

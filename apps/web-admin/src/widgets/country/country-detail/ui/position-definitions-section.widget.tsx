@@ -89,6 +89,9 @@ export interface PositionDefinitionsSectionProps {
   /** 중앙부처 카테고리 페이지에서 고정 주입 — 이 카테고리 소속 직위만 표시·등록 */
   fixedCategoryId?: string
   fixedCategoryName?: string
+  /** 중앙부처 상세 페이지에서 고정 주입 — 이 부처 소속 직위만 표시·등록 */
+  fixedAdministrationDepartmentId?: string
+  fixedAdministrationDepartmentName?: string
   /** 행정기구 페이지에서 고정 주입 — 이 기구 소속 직위만 표시·등록 */
   fixedOrganizationId?: string
   fixedOrganizationName?: string
@@ -604,6 +607,7 @@ const FormActions = styled.div`
 const emptyForm = (
   categoryId?: string | null,
   organizationId?: string | null,
+  administrationDepartmentId?: string | null,
 ): CreateGovernmentPositionDefinitionDto => ({
   title: '',
   titleEn: null,
@@ -613,6 +617,7 @@ const emptyForm = (
   rank: null,
   isMonarchical: false,
   categoryId: categoryId ?? null,
+  administrationDepartmentId: administrationDepartmentId ?? null,
   organizationId: organizationId ?? null,
   establishedDate: null,
   abolishedDate: null,
@@ -632,6 +637,8 @@ export function PositionDefinitionsSection({
   country,
   fixedCategoryId,
   fixedCategoryName,
+  fixedAdministrationDepartmentId,
+  fixedAdministrationDepartmentName,
   fixedOrganizationId,
   fixedOrganizationName,
 }: PositionDefinitionsSectionProps) {
@@ -647,7 +654,11 @@ export function PositionDefinitionsSection({
   const [categoryModalOpen, setCategoryModalOpen] = useState(false)
   const [scopeCountryModalOpen, setScopeCountryModalOpen] = useState(false)
   const [form, setForm] = useState<CreateGovernmentPositionDefinitionDto>(
-    emptyForm(fixedCategoryId, fixedOrganizationId),
+    emptyForm(
+      fixedCategoryId,
+      fixedOrganizationId,
+      fixedAdministrationDepartmentId,
+    ),
   )
 
   /* 전체 직위 목록 조회 — categoryId / organizationId / 국가 스코프로 클라이언트 필터 */
@@ -687,11 +698,24 @@ export function PositionDefinitionsSection({
   const baseDefinitions = useMemo(
     () =>
       (allDefinitions as GovernmentPositionDefinition[]).filter((d) => {
+        if (fixedAdministrationDepartmentId) {
+          return (
+            d.administrationDepartmentId === fixedAdministrationDepartmentId ||
+            (!d.administrationDepartmentId &&
+              Boolean(fixedCategoryId) &&
+              d.categoryId === fixedCategoryId)
+          )
+        }
         if (fixedCategoryId) return d.categoryId === fixedCategoryId
         if (fixedOrganizationId) return d.organizationId === fixedOrganizationId
         return true
       }),
-    [allDefinitions, fixedCategoryId, fixedOrganizationId],
+    [
+      allDefinitions,
+      fixedAdministrationDepartmentId,
+      fixedCategoryId,
+      fixedOrganizationId,
+    ],
   )
 
   const scopeCounts = useMemo(() => {
@@ -754,6 +778,7 @@ export function PositionDefinitionsSection({
           d.titleEn ?? '',
           d.titleLocal ?? '',
           d.category?.name ?? '',
+          d.administrationDepartment?.name ?? '',
           d.organization?.name ?? '',
         ]
           .join(' ')
@@ -837,13 +862,23 @@ export function PositionDefinitionsSection({
         rank: def.rank ?? null,
         isMonarchical: def.isMonarchical ?? false,
         categoryId: def.categoryId ?? fixedCategoryId ?? null,
+        administrationDepartmentId:
+          def.administrationDepartmentId ??
+          fixedAdministrationDepartmentId ??
+          null,
         organizationId: def.organizationId ?? fixedOrganizationId ?? null,
         establishedDate: def.establishedDate ?? null,
         abolishedDate: def.abolishedDate ?? null,
       })
     } else {
       setEditingId(null)
-      setForm(emptyForm(fixedCategoryId, fixedOrganizationId))
+      setForm(
+        emptyForm(
+          fixedCategoryId,
+          fixedOrganizationId,
+          fixedAdministrationDepartmentId,
+        ),
+      )
       setScopeToCurrentCountryOnCreate(
         Boolean(
           country &&
@@ -907,11 +942,13 @@ export function PositionDefinitionsSection({
     POSITION_TYPE_OPTIONS.find((o) => o.value === form.positionType)?.label ?? form.positionType
   const selectedCategory = categories.find((c) => c.id === form.categoryId)
 
-  const contextLabel = fixedCategoryName
-    ? `"${fixedCategoryName}" 카테고리`
-    : fixedOrganizationName
-      ? `"${fixedOrganizationName}"`
-      : '전체'
+  const contextLabel = fixedAdministrationDepartmentName
+    ? `"${fixedAdministrationDepartmentName}" 부처`
+    : fixedCategoryName
+      ? `"${fixedCategoryName}" 카테고리`
+      : fixedOrganizationName
+        ? `"${fixedOrganizationName}"`
+        : '전체'
 
   return (
     <Section>
@@ -1107,7 +1144,11 @@ export function PositionDefinitionsSection({
                 const typeLabel =
                   POSITION_TYPE_OPTIONS.find((option) => option.value === def.positionType)?.label ??
                   def.positionType
-                const parentLabel = def.category?.name ?? def.organization?.name ?? null
+                const parentLabel =
+                  def.administrationDepartment?.name ??
+                  def.category?.name ??
+                  def.organization?.name ??
+                  null
                 const scopeLabels = describeScopes(def)
 
                 return (
@@ -1377,12 +1418,25 @@ export function PositionDefinitionsSection({
                   )}
 
                   {/* 고정된 컨텍스트 표시 */}
-                  {(fixedCategoryId || fixedOrganizationId) && (
+                  {(fixedAdministrationDepartmentId ||
+                    fixedCategoryId ||
+                    fixedOrganizationId) && (
                     <FieldRow>
-                      <FieldLabel>{fixedCategoryId ? '부처 카테고리' : '소속 기구'}</FieldLabel>
+                      <FieldLabel>
+                        {fixedAdministrationDepartmentId
+                          ? '소속 부처'
+                          : fixedCategoryId
+                            ? '부처 카테고리'
+                            : '소속 기구'}
+                      </FieldLabel>
                       <FieldControl>
                         <Input
-                          value={fixedCategoryName ?? fixedOrganizationName ?? ''}
+                          value={
+                            fixedAdministrationDepartmentName ??
+                            fixedCategoryName ??
+                            fixedOrganizationName ??
+                            ''
+                          }
                           disabled
                           style={{ background: '#f8fafc', color: '#64748b' }}
                         />

@@ -543,6 +543,8 @@ model AdministrationDepartment {
   eventRelations     EventDepartmentRelation[]
   /// 이 기관 소속으로 등록된 재임 기록 (역대 장관 조회)
   tenures            GovernmentPositionTenure[]     @relation("TenureDepartment")
+  /// 이 기관에 직접 연결된 직위 정의 (예: OKW 총장, 해군대신 등)
+  positionDefinitions GovernmentPositionDefinition[] @relation("DepartmentPositionDefinitions")
   /// 군사 부대(MilitaryUnit)와 1:N 연결 — 국방부·최고사령부 산하 부대
   militaryUnits      MilitaryUnit[]                 @relation("DeptMilitaryUnits")
 

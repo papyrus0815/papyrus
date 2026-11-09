@@ -324,6 +324,13 @@ export interface PickerPositionDefinition {
   positionType?: string | null
   isMonarchical?: boolean | null
   rank?: number | null
+  categoryId?: string | null
+  administrationDepartmentId?: string | null
+  administrationDepartment?: {
+    id: string
+    name: string
+    categoryId?: string | null
+  } | null
   scopes?: GovernmentPositionDefinitionScope[] | null
   /** 이 국가 컨텍스트의 재임·재위에서 쓰인 횟수 */
   usedCount?: number
@@ -359,6 +366,8 @@ export interface CreateGovernmentPositionDefinitionDto {
   isMonarchical?: boolean | null
   /** 중앙부처 카테고리 연결 (관리자 등록 직위) */
   categoryId?: string | null
+  /** 소속 중앙부처 인스턴스 연결 */
+  administrationDepartmentId?: string | null
   /** 행정기구 연결 (사용자 등록 직위) */
   organizationId?: string | null
   establishedDate?: string | null
@@ -379,6 +388,8 @@ export interface UpdateGovernmentPositionDefinitionDto {
   isMonarchical?: boolean | null
   /** 중앙부처 카테고리 연결 (관리자 등록 직위) */
   categoryId?: string | null
+  /** 소속 중앙부처 인스턴스 연결 */
+  administrationDepartmentId?: string | null
   /** 행정기구 연결 (사용자 등록 직위) */
   organizationId?: string | null
   establishedDate?: string | null
@@ -521,9 +532,11 @@ export type RegnalEraDto = {
   tenureId?: string | null
   eraName: string
   eraNameEn?: string | null
+  startEra?: 'BC' | 'AD' | null
   startYear: number
   startMonth?: number | null
   startDay?: number | null
+  endEra?: 'BC' | 'AD' | null
   endYear?: number | null
   endMonth?: number | null
   endDay?: number | null
@@ -533,9 +546,11 @@ export type RegnalEraDto = {
 export type CreateRegnalEraDto = {
   eraName: string
   eraNameEn?: string | null
+  startEra?: 'BC' | 'AD' | null
   startYear: number
   startMonth?: number | null
   startDay?: number | null
+  endEra?: 'BC' | 'AD' | null
   endYear?: number | null
   endMonth?: number | null
   endDay?: number | null

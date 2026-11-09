@@ -26,6 +26,8 @@ export interface PositionDefinitionLike {
   /** 일반 정의(유형마다 하나) — 고르면 구체 직함을 직접 입력한다 */
   isGeneric?: boolean | null
   rank?: number | null
+  categoryId?: string | null
+  administrationDepartmentId?: string | null
   /** 이 국가 컨텍스트의 재임·재위에서 쓰인 횟수 (피커 전용 API가 붙여 준다) */
   usedCount?: number | null
   usedInThisCountry?: boolean | null

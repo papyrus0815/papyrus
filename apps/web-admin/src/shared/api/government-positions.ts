@@ -41,6 +41,15 @@ export interface GovernmentPositionDefinition {
   /** 중앙부처 카테고리 연결 */
   categoryId?: string | null
   category?: { id: string; name: string; nameEn?: string } | null
+  /** 중앙부처 인스턴스 연결 */
+  administrationDepartmentId?: string | null
+  administrationDepartment?: {
+    id: string
+    name: string
+    categoryId?: string | null
+    countryId?: string | null
+    historicalCountryId?: string | null
+  } | null
   /** 행정기구 연결 */
   organizationId?: string | null
   organization?: {

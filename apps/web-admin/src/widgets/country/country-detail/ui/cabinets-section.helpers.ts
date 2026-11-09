@@ -3,6 +3,7 @@ import type {
   RegnalEraDto,
 } from '@/shared/api/person-career'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { parseSignedDateParts } from '@/shared/lib/tenure-person-utils'
 
 import {
   CABINET_PARTY_ROLE_OPTIONS,
@@ -90,31 +91,33 @@ export function formatCabinetHeadBreadcrumbLabel(
   return `제${t}대${sub} ${n}`
 }
 
-/** 퇴임일 기준 나이 계산 (birthDate/birthYear 기반) */
+/** 퇴임일 기준 나이 계산 (birthDate/birthYear 기반, 기원전·서기 모두 지원) */
 export function calcAgeAtEndTenure(
   person: {
     birthDate?: string | null
     birthYear?: number | null
+    birthEra?: 'BC' | 'AD' | string | null
   } | null,
   tenureEndDate: string | null | undefined,
 ): number | null {
   if (!person || !tenureEndDate) return null
-  const endYear = new Date(tenureEndDate).getUTCFullYear()
-  const endMonth = new Date(tenureEndDate).getUTCMonth() + 1
-  const endDay = new Date(tenureEndDate).getUTCDate()
+  const endParts = parseSignedDateParts(tenureEndDate)
+  if (!endParts) return null
 
-  if (person.birthDate) {
-    const birth = new Date(person.birthDate)
-    let age = endYear - birth.getUTCFullYear()
+  const birthParts = parseSignedDateParts(person.birthDate, person.birthEra)
+  if (birthParts) {
+    let age = endParts.signedYear - birthParts.signedYear
     if (
-      endMonth < birth.getUTCMonth() + 1 ||
-      (endMonth === birth.getUTCMonth() + 1 && endDay < birth.getUTCDate())
+      endParts.month < birthParts.month ||
+      (endParts.month === birthParts.month && endParts.day < birthParts.day)
     )
       age -= 1
     return age >= 0 ? age : null
   }
   if (person.birthYear != null) {
-    const age = endYear - person.birthYear
+    const signedBirthYear =
+      person.birthEra === 'BC' ? -Math.abs(person.birthYear) : person.birthYear
+    const age = endParts.signedYear - signedBirthYear
     return age >= 0 ? age : null
   }
   return null
@@ -125,11 +128,11 @@ export function compareTenureAchievementsChronological(
   a: { startDate?: string | null },
   b: { startDate?: string | null },
 ): number {
-  const as = a.startDate ? String(a.startDate).slice(0, 10) : ''
-  const bs = b.startDate ? String(b.startDate).slice(0, 10) : ''
-  if (as && bs) return as.localeCompare(bs)
-  if (as) return -1
-  if (bs) return 1
+  const ka = a.startDate ? parseIsoChronologyKey(String(a.startDate)) : null
+  const kb = b.startDate ? parseIsoChronologyKey(String(b.startDate)) : null
+  if (ka != null && kb != null) return ka - kb
+  if (ka != null) return -1
+  if (kb != null) return 1
   return 0
 }
 
@@ -138,18 +141,19 @@ export function tenureAchievementPrimaryYearLabel(
   startDate: string | null | undefined,
 ): string {
   if (!startDate) return '기간 미정'
-  const y = String(startDate).slice(0, 4)
-  return /^\d{4}$/.test(y) ? y : '기간'
+  const parts = parseSignedDateParts(startDate)
+  if (!parts) return '기간'
+  return parts.era === 'BC' ? `BC ${parts.absYear}` : String(parts.absYear)
 }
 
 export function formatDate(value: string | Date | null | undefined): string {
   if (!value) return '—'
-  const date = typeof value === 'string' ? new Date(value) : value
-  if (Number.isNaN(date.getTime())) return '—'
-  const y = date.getUTCFullYear()
-  const m = String(date.getUTCMonth() + 1).padStart(2, '0')
-  const d = String(date.getUTCDate()).padStart(2, '0')
-  return `${y}.${m}.${d}`
+  const parts = parseSignedDateParts(value)
+  if (!parts) return '—'
+  const yPrefix = parts.era === 'BC' ? 'BC ' : ''
+  const m = String(parts.month).padStart(2, '0')
+  const d = String(parts.day).padStart(2, '0')
+  return `${yPrefix}${parts.absYear}.${m}.${d}`
 }
 
 /** 다국 행정부 묶음으로 병합되어, 현재 재임 화면에 끌어온 소스 재임의 업적인지 */
@@ -228,28 +232,33 @@ export const END_REASON_LABEL: Record<string, string> = {
   OTHER: '기타',
 }
 
-/** 두 날짜 사이 재임기간을 "N년 M개월 D일" 형태로 반환 */
+/** 두 날짜 사이 재임기간을 "N년 M개월 D일" 형태로 반환 (기원전·서기 모두 지원) */
 export function calcTenureDuration(
   startDate: string | null | undefined,
   endDate: string | null | undefined,
 ): string | null {
   if (!startDate) return null
-  const start = new Date(startDate)
-  const end = endDate ? new Date(endDate) : new Date()
+  const start = parseSignedDateParts(startDate)
+  const end = endDate
+    ? parseSignedDateParts(endDate)
+    : parseSignedDateParts(new Date())
+  if (!start || !end) return null
 
-  let years = end.getUTCFullYear() - start.getUTCFullYear()
-  let months = end.getUTCMonth() - start.getUTCMonth()
-  let days = end.getUTCDate() - start.getUTCDate()
+  let years = end.signedYear - start.signedYear
+  let months = end.month - start.month
+  let days = end.day - start.day
 
   if (days < 0) {
     months -= 1
-    const prevMonth = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 0))
+    const approxYear = end.era === 'AD' && end.absYear >= 100 ? end.absYear : 2001
+    const prevMonth = new Date(Date.UTC(approxYear, end.month - 1, 0))
     days += prevMonth.getUTCDate()
   }
   if (months < 0) {
     years -= 1
     months += 12
   }
+  if (years < 0) return null
 
   const parts: string[] = []
   if (years > 0) parts.push(`${years}년`)
@@ -733,21 +742,45 @@ export function isSovereignMonarchTenureForCabinetTimeline(
   return isLegacyTenureMonarchForCabinetTimeline(head)
 }
 
-function lastUtcDayInMonth(year: number, month1to12: number): number {
-  return new Date(Date.UTC(year, month1to12, 0)).getUTCDate()
+function toSignedChronologyKey(
+  era: 'BC' | 'AD' | string | null | undefined,
+  year: number,
+  month: number,
+  day: number,
+): number {
+  const signedYear = era === 'BC' ? -Math.abs(year) : Math.abs(year)
+  return signedYear * 10000 + month * 100 + day
 }
 
-function eraUtcBounds(era: RegnalEraDto): { start: number; end: number } {
-  const sm = (era.startMonth ?? 1) - 1
-  const sd = era.startDay ?? 1
-  const startMs = Date.UTC(era.startYear, sm, sd)
-  if (era.endYear == null) {
-    return { start: startMs, end: Date.UTC(9999, 11, 31, 23, 59, 59, 999) }
+function parseIsoChronologyKey(isoDate: string): number | null {
+  const trimmed = isoDate.trim()
+  const match = /^([+-]?\d{1,6})(?:-(\d{1,2}))?(?:-(\d{1,2}))?/.exec(trimmed)
+  if (match) {
+    const rawYear = Number(match[1])
+    const month = match[2] ? Number(match[2]) : 1
+    const day = match[3] ? Number(match[3]) : 1
+    if (Number.isFinite(rawYear) && rawYear !== 0) {
+      return rawYear * 10000 + month * 100 + day
+    }
   }
-  const em = (era.endMonth ?? 12) - 1
-  const ed = era.endDay ?? lastUtcDayInMonth(era.endYear, era.endMonth ?? 12)
-  const endMs = Date.UTC(era.endYear, em, ed, 23, 59, 59, 999)
-  return { start: startMs, end: endMs }
+  const d = new Date(trimmed)
+  if (Number.isNaN(d.getTime())) return null
+  return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate()
+}
+
+function eraChronologyBounds(era: RegnalEraDto): { start: number; end: number } {
+  const startEra = era.startEra ?? 'AD'
+  const sm = era.startMonth ?? 1
+  const sd = era.startDay ?? 1
+  const startKey = toSignedChronologyKey(startEra, era.startYear, sm, sd)
+  if (era.endYear == null) {
+    return { start: startKey, end: 99991231 }
+  }
+  const endEra = era.endEra ?? startEra
+  const em = era.endMonth ?? 12
+  const ed = era.endDay ?? 31
+  const endKey = toSignedChronologyKey(endEra, era.endYear, em, ed)
+  return { start: startKey, end: endKey }
 }
 
 export function pickRegnalEraForDate(
@@ -755,12 +788,14 @@ export function pickRegnalEraForDate(
   isoDate: string,
 ): RegnalEraDto | null {
   if (!eras?.length || !isoDate) return null
-  const t = new Date(isoDate).getTime()
-  if (Number.isNaN(t)) return null
-  const sorted = [...eras].sort((a, b) => a.startYear - b.startYear)
+  const targetKey = parseIsoChronologyKey(isoDate)
+  if (targetKey == null) return null
+  const sorted = [...eras].sort(
+    (a, b) => eraChronologyBounds(a).start - eraChronologyBounds(b).start,
+  )
   for (const era of sorted) {
-    const { start, end } = eraUtcBounds(era)
-    if (t >= start && t <= end) return era
+    const { start, end } = eraChronologyBounds(era)
+    if (targetKey >= start && targetKey <= end) return era
   }
   return null
 }
@@ -795,15 +830,21 @@ function cabinetHeadSameTerritoryAsTenure(
   )
 }
 
+function toMonotonicDays(raw: string | Date): number | null {
+  const parts = parseSignedDateParts(raw)
+  if (!parts) return null
+  return parts.signedYear * 372 + (parts.month - 1) * 31 + parts.day
+}
+
 function headTenureDateRangeMs(tenure: {
   startDate?: string | null
   endDate?: string | null
 }): { start: number; end: number } | null {
   if (!tenure.startDate) return null
-  const start = new Date(tenure.startDate).getTime()
-  if (Number.isNaN(start)) return null
-  const end = tenure.endDate ? new Date(tenure.endDate).getTime() : Date.now()
-  if (Number.isNaN(end)) return { start, end: Date.now() }
+  const start = toMonotonicDays(tenure.startDate)
+  if (start == null) return null
+  const nowDays = toMonotonicDays(new Date()) ?? 2026 * 372
+  const end = tenure.endDate ? (toMonotonicDays(tenure.endDate) ?? nowDays) : nowDays
   return { start, end: Math.max(start, end) }
 }
 
@@ -1128,11 +1169,20 @@ export function monarchReignLegendForCabinetTimeline(
     if (seen.has(m.id)) continue
     seen.add(m.id)
     const cap = monarchCaptionFromTenure(m, m.startDate)
-    const sy = new Date(m.startDate).getUTCFullYear()
-    const ey = m.endDate ? new Date(m.endDate).getUTCFullYear() : nowY
+    const sParts = parseSignedDateParts(m.startDate)
+    if (!sParts) continue
+    const eParts = m.endDate ? parseSignedDateParts(m.endDate) : null
+    const sy = sParts.signedYear
+    const ey = eParts ? eParts.signedYear : nowY
+    const syLabel = sParts.era === 'BC' ? `BC ${sParts.absYear}` : String(sParts.absYear)
+    const eyLabel = eParts
+      ? eParts.era === 'BC'
+        ? `BC ${eParts.absYear}`
+        : String(eParts.absYear)
+      : String(nowY)
     out.push({
       id: m.id,
-      label: `${cap} ${sy}–${ey}`,
+      label: `${cap} ${syLabel}–${eyLabel}`,
       startYear: sy,
       endYear: ey,
     })
@@ -1158,10 +1208,10 @@ export function cabinetTimelineHeaderYearRange(
   for (const c of timelineCabinets) {
     const h = c.headTenure
     if (!h?.startDate) continue
-    const sy = new Date(h.startDate).getUTCFullYear()
-    if (!Number.isNaN(sy)) years.push(sy)
-    const ey = h.endDate ? new Date(h.endDate).getUTCFullYear() : nowY
-    if (!Number.isNaN(ey)) years.push(ey)
+    const sy = parseSignedDateParts(h.startDate)?.signedYear
+    if (sy != null) years.push(sy)
+    const ey = h.endDate ? parseSignedDateParts(h.endDate)?.signedYear : nowY
+    if (ey != null) years.push(ey)
   }
 
   if (allCountryTenures?.length) {
@@ -1179,10 +1229,10 @@ export function cabinetTimelineHeaderYearRange(
         const mRange = headTenureDateRangeMs(m)
         if (!mRange) continue
         if (execRange.start <= mRange.end && mRange.start <= execRange.end) {
-          const ms = new Date(m.startDate).getUTCFullYear()
-          if (!Number.isNaN(ms)) years.push(ms)
-          const me = m.endDate ? new Date(m.endDate).getUTCFullYear() : nowY
-          if (!Number.isNaN(me)) years.push(me)
+          const ms = m.startDate ? parseSignedDateParts(m.startDate)?.signedYear : null
+          if (ms != null) years.push(ms)
+          const me = m.endDate ? parseSignedDateParts(m.endDate)?.signedYear : nowY
+          if (me != null) years.push(me)
         }
       }
     }
@@ -1197,11 +1247,12 @@ function tenureCoversIsoDate(
   isoDate: string,
 ): boolean {
   if (!tenure.startDate || !isoDate) return false
-  const t = new Date(isoDate).getTime()
-  const start = new Date(tenure.startDate).getTime()
+  const t = parseIsoChronologyKey(isoDate)
+  const start = parseIsoChronologyKey(tenure.startDate)
+  if (t == null || start == null) return false
   const end = tenure.endDate
-    ? new Date(tenure.endDate).getTime()
-    : Date.UTC(9999, 11, 31)
+    ? (parseIsoChronologyKey(tenure.endDate) ?? 99991231)
+    : 99991231
   return t >= start && t <= end
 }
 

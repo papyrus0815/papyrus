@@ -82,21 +82,9 @@ export function useMinistriesTab({
     useState<AdministrationDepartment | null>(null)
   const [editingMinistry, setEditingMinistry] =
     useState<AdministrationDepartment | null>(null)
-  const [ministryForm, setMinistryForm] = useState<MinistryFormFields>({
-    name: '',
-    parentId: '',
-    categoryId: '',
-    thumbnailUrl: '',
-    description: '',
-    establishedDate: '',
-    abolishedDate: '',
-    successorId: '',
-    defenseOfficialNameEn: '',
-    defenseMissionScope: '',
-    defenseHeadquarters: '',
-    defenseOrgStructure: '',
-    defenseBudgetOrForcesNote: '',
-  })
+  const [ministryForm, setMinistryForm] = useState<MinistryFormFields>(() =>
+    emptyMinistryFormFields('', ''),
+  )
   const [categoriesList, setCategoriesList] = useState<
     AdministrationDepartmentCategory[]
   >([])
@@ -171,19 +159,49 @@ export function useMinistriesTab({
       defensePayload,
       defenseCat,
     )
+    const effectiveNameEn =
+      ministryForm.nameEn.trim() ||
+      (defenseCat ? ministryForm.defenseOfficialNameEn.trim() : '')
     const payload = {
       name: ministryForm.name.trim(),
+      nameLocal: ministryForm.nameLocal.trim() || null,
+      nameEn: effectiveNameEn || null,
+      abbreviation: ministryForm.abbreviation.trim() || null,
+      kind: ministryForm.kind || 'MINISTRY',
       parentId: ministryForm.parentId || null,
       categoryId: ministryForm.categoryId || null,
       thumbnailUrl: ministryForm.thumbnailUrl.trim() || null,
       description: descriptionCombined || null,
       establishedDate: ministryForm.establishedDate.trim() || null,
       abolishedDate: ministryForm.abolishedDate.trim() || null,
-      successorId: ministryForm.successorId.trim() || null,
+    }
+    const nextSuccessorId = ministryForm.successorId.trim() || null
+    const syncSuccessor = async (
+      deptId: string,
+      prevTransitions: AdministrationDepartment['successors'] = [],
+    ) => {
+      const prevPrimary = prevTransitions[0] ?? null
+      if (prevPrimary && prevPrimary.department.id !== nextSuccessorId) {
+        await administrationDepartmentApi.deleteTransition(
+          prevPrimary.transitionId,
+        )
+      }
+      if (
+        nextSuccessorId &&
+        (!prevPrimary || prevPrimary.department.id !== nextSuccessorId)
+      ) {
+        await administrationDepartmentApi.addTransition(deptId, {
+          successorId: nextSuccessorId,
+          kind: 'REORGANIZE',
+        })
+      }
     }
     if (editingMinistry) {
       administrationDepartmentApi
         .update(editingMinistry.id, payload)
+        .then((updated) =>
+          syncSuccessor(updated.id, editingMinistry.successors ?? []),
+        )
         .then(() => {
           closeMinistryFormModal()
           loadMinistries()
@@ -199,6 +217,7 @@ export function useMinistriesTab({
             ? { historicalCountryId: effectiveCountryId }
             : { countryId: effectiveCountryId }),
         })
+        .then((created) => syncSuccessor(created.id, []))
         .then(() => {
           closeMinistryFormModal()
           loadMinistries()
@@ -220,17 +239,27 @@ export function useMinistriesTab({
   const handleMinistryDelete = useCallback(
     async (dept: AdministrationDepartment) => {
       const sub = countDescendantsInDepartmentTree(dept.id, ministriesList)
-      const msg =
-        sub > 0
-          ? `"${dept.name}"을(를) 삭제하면 하위 기관 ${sub}개도 함께 삭제됩니다. 계속하시겠습니까?`
-          : `"${dept.name}" 부처를 삭제하시겠습니까?`
+      if (sub > 0) {
+        notify.error(
+          `「${dept.name}」에 하위 기관 ${sub}개가 연결되어 있어 바로 삭제할 수 없습니다. 하위 기관을 먼저 이동하거나 삭제해 주세요.`,
+        )
+        return
+      }
+      const msg = `"${dept.name}" 부처를 삭제하시겠습니까?`
       if (await confirm({ title: '삭제 확인', message: msg, danger: true })) {
-        void administrationDepartmentApi.delete(dept.id).then(() => {
-          setMinistryBrowseDepartment((prev) =>
-            prev?.id === dept.id ? null : prev,
-          )
-          loadMinistries()
-        })
+        void administrationDepartmentApi
+          .delete(dept.id)
+          .then(() => {
+            setMinistryBrowseDepartment((prev) =>
+              prev?.id === dept.id ? null : prev,
+            )
+            loadMinistries()
+          })
+          .catch((err) => {
+            notify.error(
+              err instanceof Error ? err.message : '삭제에 실패했습니다.',
+            )
+          })
       }
     },
     [ministriesList, loadMinistries],

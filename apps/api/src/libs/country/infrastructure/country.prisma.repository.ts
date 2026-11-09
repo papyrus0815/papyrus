@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { ConflictException, Injectable } from '@nestjs/common'
 import { PrismaService } from '@prisma/prisma.service'
 import { Country } from '../domain/country.entity'
 import {
@@ -217,8 +217,96 @@ export class CountryPrismaRepository implements CountryRepository {
   }
 
   async delete(id: string): Promise<void> {
-    await this.prisma.country.delete({
-      where: { id },
+    const [tenureCount, deptCount, psCount, scopeCount] = await Promise.all([
+      this.prisma.governmentPositionTenure.count({
+        where: { countryId: id, historicalCountryId: null },
+      }),
+      this.prisma.administrationDepartment.count({
+        where: { countryId: id, historicalCountryId: null },
+      }),
+      this.prisma.politicalSystem.count({
+        where: { countryId: id, historicalCountryId: null },
+      }),
+      this.prisma.governmentPositionDefinitionScope.count({
+        where: { countryId: id, historicalCountryId: null },
+      }),
+    ])
+    const refs: string[] = []
+    if (tenureCount > 0) refs.push(`공직 재임 ${tenureCount}건`)
+    if (deptCount > 0) refs.push(`행정부처 ${deptCount}건`)
+    if (psCount > 0) refs.push(`정체(정치체제) ${psCount}건`)
+    if (scopeCount > 0) refs.push(`직위 스코프 ${scopeCount}건`)
+    if (refs.length > 0) {
+      throw new ConflictException(
+        `해당 현대 국가에 직접 귀속된 기록(${refs.join(', ')})이 존재하여 삭제할 수 없습니다. 관련 기록을 먼저 정리하거나 다른 국가로 이전해 주세요.`,
+      )
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const affectedLinks = await tx.historicalCountryModernCountry.findMany({
+        where: { modernCountryId: id },
+        select: { historicalCountryId: true },
+      })
+      const affectedHistIds = [
+        ...new Set(affectedLinks.map((l) => l.historicalCountryId).filter(Boolean)),
+      ]
+
+      // 역사적 국가 소속으로 dual-fill되어 있던 행들의 countryId를 먼저 분리하여
+      // Country 삭제 시 onDelete: Cascade(PoliticalSystem, GovernmentPositionDefinitionScope)로
+      // 역사적 국가 데이터까지 연쇄 삭제되는 사고를 방지한다.
+      const dualFilledWhere = { countryId: id, historicalCountryId: { not: null } }
+      await Promise.all([
+        tx.governmentPositionTenure.updateMany({
+          where: dualFilledWhere,
+          data: { countryId: null },
+        }),
+        tx.administrationDepartment.updateMany({
+          where: dualFilledWhere,
+          data: { countryId: null },
+        }),
+        tx.politicalSystem.updateMany({
+          where: dualFilledWhere,
+          data: { countryId: null },
+        }),
+        tx.governmentPositionDefinitionScope.updateMany({
+          where: dualFilledWhere,
+          data: { countryId: null },
+        }),
+      ])
+
+      await tx.country.delete({
+        where: { id },
+      })
+
+      // 삭제된 현대 국가와 함께 다중 현대국으로 묶여 있던 역사적 국가가 이제 단일 현대국(1:1)이 된 경우 dual-fill 재동기화
+      for (const hcId of affectedHistIds) {
+        const remaining = await tx.historicalCountryModernCountry.findMany({
+          where: { historicalCountryId: hcId },
+          select: { modernCountryId: true },
+          take: 2,
+        })
+        if (remaining.length === 1 && remaining[0].modernCountryId) {
+          const nextCountryId = remaining[0].modernCountryId
+          await Promise.all([
+            tx.governmentPositionTenure.updateMany({
+              where: { historicalCountryId: hcId, countryId: null },
+              data: { countryId: nextCountryId },
+            }),
+            tx.administrationDepartment.updateMany({
+              where: { historicalCountryId: hcId, countryId: null },
+              data: { countryId: nextCountryId },
+            }),
+            tx.politicalSystem.updateMany({
+              where: { historicalCountryId: hcId, countryId: null },
+              data: { countryId: nextCountryId },
+            }),
+            tx.governmentPositionDefinitionScope.updateMany({
+              where: { historicalCountryId: hcId, countryId: null },
+              data: { countryId: nextCountryId },
+            }),
+          ])
+        }
+      }
     })
   }
 

@@ -141,7 +141,4 @@ export interface CreatePoliticalSystemDto {
 }
 
 /** 수정 입력 — 전 필드 선택. 보내지 않은 키는 그대로 둔다. */
-export type UpdatePoliticalSystemDto = Omit<
-  CreatePoliticalSystemDto,
-  'countryId' | 'historicalCountryId'
->
+export type UpdatePoliticalSystemDto = Partial<CreatePoliticalSystemDto>

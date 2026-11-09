@@ -33,6 +33,10 @@ import { NotificationService } from '../../notification/application/notification
 import { PointService } from '../../gamification/application/point.service'
 import { completenessBonus } from '../../gamification/domain/point.policy'
 import { UploadService } from '../../shared/upload/upload.service'
+import {
+  structuredDateEndKey,
+  structuredDateKey,
+} from '../../person/domain/structured-date.util'
 
 /** 역사적 국가 완성도 신호: 썸네일 / 설명 / 명칭 유래 (각 1신호) */
 function historicalCompletenessBonus(country: {
@@ -149,6 +153,29 @@ export class HistoricalCountryService {
     return this.repository.findTransitionMetaByPredecessorId(predecessorId)
   }
 
+  private assertValidPeriod(
+    start: {
+      era?: string | null
+      year?: number | null
+      month?: number | null
+      day?: number | null
+    },
+    end: {
+      era?: string | null
+      year?: number | null
+      month?: number | null
+      day?: number | null
+    },
+  ): void {
+    const startKey = structuredDateKey(start.era, start.year, start.month, start.day)
+    const endKey = structuredDateEndKey(end.era ?? start.era, end.year, end.month, end.day)
+    if (startKey != null && endKey != null && startKey > endKey) {
+      throw new BadRequestException(
+        '소멸(종료) 시점이 건국(시작) 시점보다 앞설 수 없습니다.',
+      )
+    }
+  }
+
   /**
    * 역사적 국가 생성 (accountId 있으면 소유자로 저장). entityKind 선택 시 정권/시대 구분 가능.
    */
@@ -156,6 +183,20 @@ export class HistoricalCountryService {
     data: CreateHistoricalCountryData,
     accountId?: string,
   ): Promise<HistoricalCountry> {
+    this.assertValidPeriod(
+      {
+        era: data.startEra,
+        year: data.startYear,
+        month: data.startMonth,
+        day: data.startDay,
+      },
+      {
+        era: data.endEra,
+        year: data.endYear,
+        month: data.endMonth,
+        day: data.endDay,
+      },
+    )
     const createData = accountId != null
       ? { ...data, accountId }
       : { ...data }
@@ -192,6 +233,20 @@ export class HistoricalCountryService {
     if (!current) {
       throw await this.buildAccessError(id, accountId, '수정')
     }
+    this.assertValidPeriod(
+      {
+        era: data.startEra !== undefined ? data.startEra : current.startEra,
+        year: data.startYear !== undefined ? data.startYear : current.startYear,
+        month: data.startMonth !== undefined ? data.startMonth : current.startMonth,
+        day: data.startDay !== undefined ? data.startDay : current.startDay,
+      },
+      {
+        era: data.endEra !== undefined ? data.endEra : current.endEra,
+        year: data.endYear !== undefined ? data.endYear : current.endYear,
+        month: data.endMonth !== undefined ? data.endMonth : current.endMonth,
+        day: data.endDay !== undefined ? data.endDay : current.endDay,
+      },
+    )
     if (data.thumbnailUrl !== undefined) {
       const newThumbnail = data.thumbnailUrl ?? null
       const isClearingOrReplacing =

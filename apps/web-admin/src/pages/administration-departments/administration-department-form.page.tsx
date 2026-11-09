@@ -143,17 +143,7 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
   const [historyDateModalOpen, setHistoryDateModalOpen] = useState(false)
   const [historyTypeModalOpen, setHistoryTypeModalOpen] = useState(false)
 
-  // TODO: 부처 목록 로드
-  const [departments] = useState<Array<{ id: string; name: string }>>([
-    { id: '1', name: '국무총리실' },
-    { id: '2', name: '기획재정부' },
-    { id: '3', name: '교육부' },
-    { id: '4', name: '과학기술정보통신부' },
-    { id: '5', name: '외교부' },
-    { id: '6', name: '통일부' },
-    { id: '7', name: '법무부' },
-    { id: '8', name: '국방부' },
-  ])
+  const [departments, setDepartments] = useState<Array<{ id: string; name: string }>>([])
 
   // 직위 목록
   const positions = [
@@ -219,6 +209,7 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
         countryId: dept.countryId ?? '',
         historicalCountryId: dept.historicalCountryId ?? '',
         parentId: dept.parentId ?? '',
+        parentName: dept.parent?.name ?? '',
         description: dept.description ?? '',
       }))
     })
@@ -229,6 +220,47 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
 
   // 선택된 국가 — 역사 우선(두 축이 함께 채워진 레거시 행도 역사 부처로 인식)
   const selectedCountryId = formData.historicalCountryId || formData.countryId
+
+  // 선택된 국가에 맞춰 상위 부처 후보 목록 로드 (자기 자신 제외)
+  useEffect(() => {
+    if (!selectedCountryId) {
+      setDepartments([])
+      return
+    }
+    let cancelled = false
+    const loader = formData.historicalCountryId
+      ? administrationDepartmentApi.getByHistoricalCountryId(
+          formData.historicalCountryId,
+        )
+      : administrationDepartmentApi.getByCountryId(formData.countryId)
+    loader
+      .then((list) => {
+        if (cancelled) return
+        const filtered = list
+          .filter((department) => !isEditMode || department.id !== id)
+          .map((department) => ({ id: department.id, name: department.name }))
+        setDepartments(filtered)
+        setFormData((prev) => {
+          if (!prev.parentId || prev.parentName) return prev
+          const matchedParent = list.find((department) => department.id === prev.parentId)
+          return matchedParent
+            ? { ...prev, parentName: matchedParent.name }
+            : prev
+        })
+      })
+      .catch(() => {
+        if (!cancelled) setDepartments([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    selectedCountryId,
+    formData.countryId,
+    formData.historicalCountryId,
+    isEditMode,
+    id,
+  ])
 
   // 수정 모드: 국가 목록 로드 후 countryName 보정
   useEffect(() => {
@@ -634,6 +666,8 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
                                 historicalCountryId: '',
                                 countryName: '',
                                 countryFlag: '',
+                                parentId: '',
+                                parentName: '',
                               })
                             }}
                           >
@@ -1329,13 +1363,22 @@ export const AdministrationDepartmentFormPage: React.FC = () => {
               : modernCountries.find(
                   (modernCountry) => modernCountry.id === country.id,
                 )
-            // 상호배타 — 선택한 축만 채우고 반대편은 비운다
+            // 상호배타 — 선택한 축만 채우고 반대편은 비운다. 국가가 바뀌면 상위 부처 선택도 초기화한다.
+            const nextCountryId = country.isHistorical ? '' : country.id
+            const nextHistoricalCountryId = country.isHistorical
+              ? country.id
+              : ''
+            const countryChanged =
+              formData.countryId !== nextCountryId ||
+              formData.historicalCountryId !== nextHistoricalCountryId
             setFormData({
               ...formData,
-              countryId: country.isHistorical ? '' : country.id,
-              historicalCountryId: country.isHistorical ? country.id : '',
+              countryId: nextCountryId,
+              historicalCountryId: nextHistoricalCountryId,
               countryName: country.name,
               countryFlag: matched?.flagEmoji || '🌏',
+              parentId: countryChanged ? '' : formData.parentId,
+              parentName: countryChanged ? '' : formData.parentName,
             })
             setCountryModalOpen(false)
           }}

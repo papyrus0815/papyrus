@@ -28,6 +28,7 @@ import {
   suggestFrameItems,
 } from '@/shared/lib/ministry-department/department-name-frames'
 import {
+  compareCabinetsNewestFirst,
   dateRangesOverlapIso,
   doesMemberMatchDepartment,
   filterDepartmentsForCabinet,
@@ -67,7 +68,7 @@ interface Props {
   historicalCountryId?: string
   onOpen: (cabinetId?: string | null, isFallbackHead?: boolean) => void
   /** 선거 지면으로 — 모달의 '자세히'에서 쓴다 */
-  onOpenElections: () => void
+  onOpenElections: (electionId?: string) => void
   /** 인물 미리보기 모달(상위 대시보드 단일 인스턴스) 열기 */
   onSelectPerson: (personId: string) => void
   /**
@@ -97,8 +98,14 @@ interface TenureRow {
   regnalEras?: Array<{
     id: string
     eraName?: string | null
+    startEra?: 'BC' | 'AD' | string | null
     startYear?: number | null
+    startMonth?: number | null
+    startDay?: number | null
+    endEra?: 'BC' | 'AD' | string | null
     endYear?: number | null
+    endMonth?: number | null
+    endDay?: number | null
     startDate?: string | null
     endDate?: string | null
   }> | null
@@ -218,6 +225,20 @@ function resolveTenureDisplayName(
   return regnal || '이름 미상'
 }
 
+function formatStructuredIso(
+  era: string | null | undefined,
+  year: number | null | undefined,
+  month: number,
+  day: number,
+): string | null {
+  if (year == null || !Number.isFinite(year) || year <= 0) return null
+  const prefix = era === 'BC' ? '-' : ''
+  const y = String(Math.abs(year)).padStart(4, '0')
+  const m = String(month).padStart(2, '0')
+  const d = String(day).padStart(2, '0')
+  return `${prefix}${y}-${m}-${d}`
+}
+
 function resolveRegnalEraLabel(
   row:
     | {
@@ -225,8 +246,14 @@ function resolveRegnalEraLabel(
           eraName?: string | null
           startDate?: string | null
           endDate?: string | null
+          startEra?: string | null
           startYear?: number | null
+          startMonth?: number | null
+          startDay?: number | null
+          endEra?: string | null
           endYear?: number | null
+          endMonth?: number | null
+          endDay?: number | null
         }> | null
       }
     | null
@@ -237,14 +264,30 @@ function resolveRegnalEraLabel(
   const eras = (row?.regnalEras ?? []).filter((e) => e.eraName?.trim())
   if (eras.length === 0) return null
   if (pivotStartIso) {
-    const matched = eras.find((e) =>
-      dateRangesOverlapIso(
-        e.startDate,
-        e.endDate,
+    const matched = eras.find((e) => {
+      const startIso =
+        e.startDate ??
+        formatStructuredIso(
+          e.startEra,
+          e.startYear,
+          e.startMonth ?? 1,
+          e.startDay ?? 1,
+        )
+      const endIso =
+        e.endDate ??
+        formatStructuredIso(
+          e.endEra ?? e.startEra,
+          e.endYear,
+          e.endMonth ?? 12,
+          e.endDay ?? 28,
+        )
+      return dateRangesOverlapIso(
+        startIso,
+        endIso,
         pivotStartIso,
         pivotEndIso ?? null,
-      ),
-    )
+      )
+    })
     if (matched?.eraName) return `${matched.eraName.trim()} 시대`
   }
   const names = eras.map((e) => e.eraName!.trim())
@@ -265,13 +308,12 @@ function resolveTenureStartIso(
 ): string | null {
   if (!row) return null
   if (row.startDate) return row.startDate
-  if (row.startYear != null && row.startEra !== 'BC') {
-    const y = String(row.startYear).padStart(4, '0')
-    const m = String(row.startMonth ?? 1).padStart(2, '0')
-    const d = String(row.startDay ?? 1).padStart(2, '0')
-    return `${y}-${m}-${d}`
-  }
-  return null
+  return formatStructuredIso(
+    row.startEra,
+    row.startYear,
+    row.startMonth ?? 1,
+    row.startDay ?? 1,
+  )
 }
 
 function resolveTenureEndIso(
@@ -288,13 +330,12 @@ function resolveTenureEndIso(
 ): string | null {
   if (!row) return null
   if (row.endDate) return row.endDate
-  if (row.endYear != null && row.endEra !== 'BC') {
-    const y = String(row.endYear).padStart(4, '0')
-    const m = String(row.endMonth ?? 12).padStart(2, '0')
-    const d = String(row.endDay ?? 28).padStart(2, '0')
-    return `${y}-${m}-${d}`
-  }
-  return null
+  return formatStructuredIso(
+    row.endEra,
+    row.endYear,
+    row.endMonth ?? 12,
+    row.endDay ?? 28,
+  )
 }
 
 function tenuresOverlap(
@@ -574,12 +615,8 @@ export function CurrentCabinetPanel({
 
   const cabinets = useMemo(() => {
     const rows = cabinetsQuery.data ?? []
-    return [...rows].sort((left, right) => {
-      const leftStart = left.headTenure?.startDate ?? ''
-      const rightStart = right.headTenure?.startDate ?? ''
-      // 최신 정권이 먼저 — 첫 질문은 늘 '지금'이다
-      return rightStart.localeCompare(leftStart)
-    })
+    // 최신 정권이 먼저 — 기원전(BC)·고대 연대도 역전되지 않도록 부호 정수 연대기 키 기준 정렬
+    return [...rows].sort(compareCabinetsNewestFirst)
   }, [cabinetsQuery.data])
 
   const [selectedCabinetId, setSelectedCabinetId] = useState<string | null>(null)
@@ -1759,14 +1796,14 @@ export function CurrentCabinetPanel({
             >
               + 선거 연결 ({elections.length}건)
             </ElectionLink>
-            <ElectionUnlink type="button" onClick={onOpenElections}>
+            <ElectionUnlink type="button" onClick={() => onOpenElections()}>
               선거 탭에서 보기
             </ElectionUnlink>
           </>
         ) : (
           <>
             <ElectionMuted>—</ElectionMuted>
-            <ElectionLink type="button" onClick={onOpenElections}>
+            <ElectionLink type="button" onClick={() => onOpenElections()}>
               + 선거 등록
             </ElectionLink>
           </>
@@ -1802,7 +1839,10 @@ export function CurrentCabinetPanel({
                 </DetailValue>
               </ElectionFact>
             )}
-            <ElectionMore type="button" onClick={onOpenElections}>
+            <ElectionMore
+              type="button"
+              onClick={() => onOpenElections(linkedElection.id)}
+            >
               선거 탭에서 자세히
             </ElectionMore>
           </ElectionFacts>
@@ -1904,7 +1944,10 @@ export function CurrentCabinetPanel({
                   {unregisteredShare != null &&
                     ` · 나머지 ${unregisteredShare.toFixed(1)}% 미등록`}
                 </span>
-                <ElectionLink type="button" onClick={onOpenElections}>
+                <ElectionLink
+                  type="button"
+                  onClick={() => onOpenElections(linkedElection.id)}
+                >
                   상대 후보 추가
                 </ElectionLink>
               </CandidacyGap>

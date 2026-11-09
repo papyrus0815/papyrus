@@ -91,6 +91,17 @@ function toRef(row: { id: string; name: string; abbreviation: string | null; kin
   }
 }
 
+function transitionSortKey(transition: {
+  era: Era | null
+  year: number | null
+  month: number | null
+}): number {
+  return (
+    structuredDateKey(transition.era, transition.year, transition.month, 1) ??
+    Number.POSITIVE_INFINITY
+  )
+}
+
 function toResponse(row: DepartmentRow): AdministrationDepartmentResponseDto {
   const lineage = (
     transition: { id: string; kind: string; era: Era | null; year: number | null; month: number | null; note: string | null },
@@ -104,6 +115,12 @@ function toResponse(row: DepartmentRow): AdministrationDepartmentResponseDto {
     note: transition.note ?? null,
     department: toRef(other),
   })
+  const sortedPredecessors = [...(row.predecessorTransitions ?? [])].sort(
+    (a, b) => transitionSortKey(a) - transitionSortKey(b),
+  )
+  const sortedSuccessors = [...(row.successorTransitions ?? [])].sort(
+    (a, b) => transitionSortKey(a) - transitionSortKey(b),
+  )
   return {
     id: row.id,
     name: row.name,
@@ -118,7 +135,7 @@ function toResponse(row: DepartmentRow): AdministrationDepartmentResponseDto {
     historicalCountry: row.historicalCountry ?? null,
     parentId: row.parentId ?? null,
     parent: row.parent ? toRef(row.parent) : null,
-    children: row.children.map(toRef),
+    children: (row.children ?? []).map(toRef),
     categoryId: row.categoryId ?? null,
     category: row.category
       ? { id: row.category.id, name: row.category.name, nameEn: row.category.nameEn ?? null }
@@ -145,9 +162,9 @@ function toResponse(row: DepartmentRow): AdministrationDepartmentResponseDto {
       row.establishedDay,
     ),
     abolishedDate: toSignedDateString(row.abolishedEra, row.abolishedYear, row.abolishedMonth, row.abolishedDay),
-    predecessors: row.predecessorTransitions.map((transition) => lineage(transition, transition.predecessor)),
-    successors: row.successorTransitions.map((transition) => lineage(transition, transition.successor)),
-    militaryUnits: row.militaryUnits.map((unit) => ({
+    predecessors: sortedPredecessors.map((transition) => lineage(transition, transition.predecessor)),
+    successors: sortedSuccessors.map((transition) => lineage(transition, transition.successor)),
+    militaryUnits: (row.militaryUnits ?? []).map((unit) => ({
       id: unit.id,
       name: unit.name,
       unitType: unit.unitType ?? null,
@@ -212,7 +229,8 @@ export class AdministrationDepartmentService {
   // ─── 조회 ───────────────────────────────────────────────────────────────
 
   /**
-   * 목록 — 국가 축은 AND(둘 다 주면 dual-fill 기관만). search는 이름·원어명·영문명·약칭.
+   * 목록 — 역사적 국가 우선(historicalCountryId가 있으면 해당 역사국가 소속만, 없으면 countryId 기준 + 연결된 역사국가 확장).
+   * search는 이름·원어명·영문명·약칭.
    */
   async list(params: {
     countryId?: string
@@ -222,20 +240,51 @@ export class AdministrationDepartmentService {
     take?: number
   }): Promise<AdministrationDepartmentResponseDto[]> {
     const search = params.search?.trim()
-    const where: Prisma.AdministrationDepartmentWhereInput = {
-      ...(params.countryId ? { countryId: params.countryId } : {}),
-      ...(params.historicalCountryId ? { historicalCountryId: params.historicalCountryId } : {}),
-      ...(params.kind ? { kind: params.kind as AdministrationDepartmentKindValue } : {}),
-      ...(search
+    let linkedHistoricalIds: string[] = []
+    if (!params.historicalCountryId && params.countryId) {
+      linkedHistoricalIds = await this.prisma.historicalCountryModernCountry
+        .findMany({
+          where: { modernCountryId: params.countryId },
+          select: { historicalCountryId: true },
+        })
+        .then((rows) => rows.map((row) => row.historicalCountryId))
+    }
+
+    const countryOrClause =
+      !params.historicalCountryId && params.countryId && linkedHistoricalIds.length > 0
         ? {
             OR: [
-              { name: { contains: search } },
-              { nameLocal: { contains: search } },
-              { nameEn: { contains: search } },
-              { abbreviation: { contains: search } },
+              { countryId: params.countryId },
+              { historicalCountryId: { in: linkedHistoricalIds } },
             ],
           }
-        : {}),
+        : null
+
+    const searchOrClause = search
+      ? {
+          OR: [
+            { name: { contains: search } },
+            { nameLocal: { contains: search } },
+            { nameEn: { contains: search } },
+            { abbreviation: { contains: search } },
+          ],
+        }
+      : null
+
+    const where: Prisma.AdministrationDepartmentWhereInput = {
+      ...(params.historicalCountryId
+        ? { historicalCountryId: params.historicalCountryId }
+        : params.countryId && !countryOrClause
+          ? { countryId: params.countryId }
+          : {}),
+      ...(params.kind ? { kind: params.kind as AdministrationDepartmentKindValue } : {}),
+      ...(countryOrClause && searchOrClause
+        ? { AND: [countryOrClause, searchOrClause] }
+        : countryOrClause
+          ? countryOrClause
+          : searchOrClause
+            ? searchOrClause
+            : {}),
     }
     const list = await this.prisma.administrationDepartment.findMany({
       where,
@@ -282,6 +331,15 @@ export class AdministrationDepartmentService {
       },
       orderBy: [{ event: { startYear: 'asc' } }, { createdAt: 'asc' }],
     })
+    rows.sort((a, b) => {
+      const ka =
+        structuredDateKey(a.event.startEra, a.event.startYear, a.event.startMonth, a.event.startDay) ??
+        Number.POSITIVE_INFINITY
+      const kb =
+        structuredDateKey(b.event.startEra, b.event.startYear, b.event.startMonth, b.event.startDay) ??
+        Number.POSITIVE_INFINITY
+      return ka - kb
+    })
     return rows.map((row) => ({
       relationId: row.id,
       role: row.role,
@@ -324,21 +382,39 @@ export class AdministrationDepartmentService {
             },
           },
         },
-        positionDefinition: { select: { id: true, title: true, positionType: true } },
+        positionDefinition: {
+          select: { id: true, title: true, positionType: true, isMonarchical: true },
+        },
         country: { select: { id: true, name: true } },
         historicalCountry: { select: { id: true, name: true } },
       },
     })
     return list.map((row) => ({
       id: row.id,
+      personId: row.personId,
       ordinal: row.ordinal,
-      startDate: row.startDate?.toISOString() ?? null,
-      endDate: row.endDate?.toISOString() ?? null,
+      subTermNumber: row.subTermNumber ?? null,
+      isMonarchical: Boolean((row as any).positionDefinition?.isMonarchical),
+      startDate:
+        toSignedDateString(row.startEra, row.startYear, row.startMonth, row.startDay) ??
+        row.startDate?.toISOString() ??
+        null,
+      endDate:
+        toSignedDateString(row.endEra, row.endYear, row.endMonth, row.endDay) ??
+        row.endDate?.toISOString() ??
+        null,
+      startDatePrecision: row.startDatePrecision ?? null,
       startEra: row.startEra ?? null,
       startYear: row.startYear ?? null,
+      startMonth: row.startMonth ?? null,
+      startDay: row.startDay ?? null,
       endEra: row.endEra ?? null,
       endYear: row.endYear ?? null,
+      endMonth: row.endMonth ?? null,
+      endDay: row.endDay ?? null,
       title: row.title,
+      cabinetId: row.cabinetId ?? null,
+      administrationDepartmentId: row.administrationDepartmentId ?? null,
       positionDefinition: (row as any).positionDefinition,
       person: (row as any).person,
       country: (row as any).country,
@@ -350,10 +426,17 @@ export class AdministrationDepartmentService {
 
   async create(body: CreateAdministrationDepartmentDto): Promise<AdministrationDepartmentResponseDto> {
     this.assertCountryAxis(body.countryId, body.historicalCountryId)
+    const resolvedCountryId = await this.resolveDualFillCountryId(body.countryId, body.historicalCountryId)
     const established = dateColumns(body.establishedInfo, body.establishedDate)
     const abolished = dateColumns(body.abolishedInfo, body.abolishedDate)
     this.assertDateOrder(established, abolished)
-    if (body.parentId) await this.requireDepartment(body.parentId, '상위 기관을 찾을 수 없습니다.')
+    if (body.parentId) {
+      await this.assertCompatibleParentDepartment(
+        body.parentId,
+        resolvedCountryId,
+        body.historicalCountryId ?? null,
+      )
+    }
 
     const row = await this.prisma.administrationDepartment.create({
       data: {
@@ -362,7 +445,7 @@ export class AdministrationDepartmentService {
         nameEn: body.nameEn?.trim() || null,
         abbreviation: body.abbreviation?.trim() || null,
         kind: body.kind ?? 'MINISTRY',
-        countryId: body.countryId ?? null,
+        countryId: resolvedCountryId,
         historicalCountryId: body.historicalCountryId ?? null,
         parentId: body.parentId ?? null,
         categoryId: body.categoryId ?? null,
@@ -387,12 +470,45 @@ export class AdministrationDepartmentService {
     if (!current) throw new NotFoundException('기관을 찾을 수 없습니다.')
 
     // 부분 수정 — 병합 결과로 검증(한 축만 비우는 요청이 무소속 기관을 만들지 않게)
-    this.assertCountryAxis(
-      body.countryId !== undefined ? body.countryId : current.countryId,
-      body.historicalCountryId !== undefined ? body.historicalCountryId : current.historicalCountryId,
-    )
-    if (body.parentId !== undefined && body.parentId !== null) {
-      await this.assertNoParentCycle(id, body.parentId)
+    // historicalCountryId만 새로 변경(non-null)하고 countryId는 미전달인 경우,
+    // 이전 dual-fill countryId를 그대로 쓰지 않고 새 historicalCountryId 기준으로 재계산한다.
+    const nextHistoricalCountryId =
+      body.historicalCountryId !== undefined ? body.historicalCountryId : current.historicalCountryId
+    const nextCountryId =
+      body.countryId !== undefined
+        ? body.countryId
+        : body.historicalCountryId !== undefined && body.historicalCountryId !== null
+          ? null
+          : current.countryId
+    this.assertCountryAxis(nextCountryId, nextHistoricalCountryId)
+    const resolvedCountryId =
+      body.countryId !== undefined || body.historicalCountryId !== undefined
+        ? await this.resolveDualFillCountryId(nextCountryId, nextHistoricalCountryId)
+        : undefined
+    const effectiveCountryId = resolvedCountryId !== undefined ? resolvedCountryId : current.countryId
+    const effectiveParentId = body.parentId !== undefined ? body.parentId : current.parentId
+    if (effectiveParentId) {
+      if (body.parentId !== undefined) {
+        await this.assertNoParentCycle(id, effectiveParentId)
+      }
+      if (
+        body.parentId !== undefined ||
+        body.countryId !== undefined ||
+        body.historicalCountryId !== undefined
+      ) {
+        await this.assertCompatibleParentDepartment(
+          effectiveParentId,
+          effectiveCountryId,
+          nextHistoricalCountryId,
+        )
+      }
+    }
+    if (body.countryId !== undefined || body.historicalCountryId !== undefined) {
+      await this.assertCompatibleDependentsOnCountryChange(
+        id,
+        effectiveCountryId,
+        nextHistoricalCountryId,
+      )
     }
 
     const establishedTouched = body.establishedInfo !== undefined || body.establishedDate !== undefined
@@ -427,7 +543,7 @@ export class AdministrationDepartmentService {
         ...(body.nameEn !== undefined && { nameEn: body.nameEn?.trim() || null }),
         ...(body.abbreviation !== undefined && { abbreviation: body.abbreviation?.trim() || null }),
         ...(body.kind !== undefined && { kind: body.kind }),
-        ...(body.countryId !== undefined && { countryId: body.countryId }),
+        ...(resolvedCountryId !== undefined && { countryId: resolvedCountryId }),
         ...(body.historicalCountryId !== undefined && { historicalCountryId: body.historicalCountryId }),
         ...(body.parentId !== undefined && { parentId: body.parentId }),
         ...(body.categoryId !== undefined && { categoryId: body.categoryId }),
@@ -438,6 +554,23 @@ export class AdministrationDepartmentService {
       },
       include: DEPARTMENT_INCLUDE,
     })
+
+    // 부처의 국가 축 또는 분류(categoryId)가 변경된 경우, 이 부처에 귀속된 직위 정의(GovernmentPositionDefinition)의 스코프 및 분류도 동기화
+    const countryChanged =
+      effectiveCountryId !== current.countryId ||
+      nextHistoricalCountryId !== current.historicalCountryId
+    const categoryChanged =
+      body.categoryId !== undefined && body.categoryId !== current.categoryId
+    if (countryChanged || categoryChanged) {
+      await this.syncDependentPositionDefinitions(id, {
+        countryChanged,
+        effectiveCountryId: effectiveCountryId ?? null,
+        effectiveHistoricalCountryId: nextHistoricalCountryId ?? null,
+        categoryChanged,
+        prevCategoryId: current.categoryId ?? null,
+        nextCategoryId: body.categoryId !== undefined ? (body.categoryId ?? null) : (current.categoryId ?? null),
+      })
+    }
     await this.notificationService.notifyAdministrationDepartment(
       row.name,
       EventMethod.UPDATE,
@@ -456,13 +589,22 @@ export class AdministrationDepartmentService {
       where: { id },
       include: {
         category: true,
-        _count: { select: { children: true, tenures: true, militaryUnits: true, eventRelations: true } },
+        _count: {
+          select: {
+            children: true,
+            tenures: true,
+            positionDefinitions: true,
+            militaryUnits: true,
+            eventRelations: true,
+          },
+        },
       },
     })
     if (!row) throw new NotFoundException('기관을 찾을 수 없습니다.')
     const blockers = [
       row._count.children > 0 && `하위 기관 ${row._count.children}곳`,
       row._count.tenures > 0 && `재임 기록 ${row._count.tenures}건`,
+      row._count.positionDefinitions > 0 && `직위 정의 ${row._count.positionDefinitions}개`,
       row._count.militaryUnits > 0 && `군 부대 ${row._count.militaryUnits}개`,
       row._count.eventRelations > 0 && `사건 연결 ${row._count.eventRelations}건`,
     ].filter(Boolean)
@@ -486,8 +628,7 @@ export class AdministrationDepartmentService {
     if (predecessorId === body.successorId) {
       throw new BadRequestException('같은 기관을 자기 후신으로 둘 수 없습니다.')
     }
-    await this.requireDepartment(predecessorId)
-    await this.requireDepartment(body.successorId, '뒤 기관을 찾을 수 없습니다.')
+    await this.assertCompatibleTransitionDepartments(predecessorId, body.successorId)
     await this.assertNoLineageCycle(predecessorId, body.successorId)
     const exists = await this.prisma.administrationDepartmentTransition.findFirst({
       where: { predecessorId, successorId: body.successorId },
@@ -558,6 +699,84 @@ export class AdministrationDepartmentService {
     }
   }
 
+  /**
+   * 역사적 국가 기관은 연결된 현대 국가가 단일(1개)일 때만 countryId도 함께 채운다(dual-fill).
+   * 두 축이 동시에 전달된 경우에는 브리지(HistoricalCountryModernCountry) 연결 여부를 검증한다.
+   */
+  private async resolveDualFillCountryId(
+    countryId?: string | null,
+    historicalCountryId?: string | null,
+  ): Promise<string | null> {
+    if (!historicalCountryId) return countryId ?? null
+    const links = await this.prisma.historicalCountryModernCountry.findMany({
+      where: { historicalCountryId },
+      select: { modernCountryId: true },
+    })
+    const modernIds = links.map((l) => l.modernCountryId)
+    if (countryId) {
+      if (!modernIds.includes(countryId)) {
+        throw new BadRequestException(
+          '선택한 역사적 국가와 현대 국가가 서로 연결되어 있지 않습니다.',
+        )
+      }
+      return countryId
+    }
+    return modernIds.length === 1 ? modernIds[0] : null
+  }
+
+  /**
+   * 부처의 소속 국가 축 또는 분류가 변경되었을 때, 이 부처에 귀속된 직위 정의(GovernmentPositionDefinition)들의
+   * 스코프(GovernmentPositionDefinitionScope) 및 상속 분류(categoryId)를 부처와 일치하도록 동기화한다.
+   */
+  private async syncDependentPositionDefinitions(
+    departmentId: string,
+    opts: {
+      countryChanged: boolean
+      effectiveCountryId: string | null
+      effectiveHistoricalCountryId: string | null
+      categoryChanged: boolean
+      prevCategoryId: string | null
+      nextCategoryId: string | null
+    },
+  ): Promise<void> {
+    if (!this.prisma.governmentPositionDefinition) return
+    const definitions = await this.prisma.governmentPositionDefinition.findMany({
+      where: { administrationDepartmentId: departmentId },
+      select: { id: true, categoryId: true },
+    })
+    if (definitions.length === 0) return
+
+    if (opts.categoryChanged) {
+      const targetDefIds = definitions
+        .filter((d) => d.categoryId == null || d.categoryId === opts.prevCategoryId)
+        .map((d) => d.id)
+      if (targetDefIds.length > 0) {
+        await this.prisma.governmentPositionDefinition.updateMany({
+          where: { id: { in: targetDefIds } },
+          data: { categoryId: opts.nextCategoryId },
+        })
+      }
+    }
+
+    if (
+      opts.countryChanged &&
+      this.prisma.governmentPositionDefinitionScope &&
+      (opts.effectiveCountryId || opts.effectiveHistoricalCountryId)
+    ) {
+      const defIds = definitions.map((d) => d.id)
+      await this.prisma.governmentPositionDefinitionScope.deleteMany({
+        where: { definitionId: { in: defIds } },
+      })
+      await this.prisma.governmentPositionDefinitionScope.createMany({
+        data: defIds.map((definitionId) => ({
+          definitionId,
+          countryId: opts.effectiveCountryId,
+          historicalCountryId: opts.effectiveHistoricalCountryId,
+        })),
+      })
+    }
+  }
+
   private assertDateOrder(
     established: { era: Era | null; year: number | null; month: number | null; day: number | null },
     abolished: { era: Era | null; year: number | null; month: number | null; day: number | null },
@@ -573,6 +792,140 @@ export class AdministrationDepartmentService {
     const row = await this.prisma.administrationDepartment.findUnique({ where: { id }, select: { id: true } })
     if (!row) throw new NotFoundException(message)
     return row
+  }
+
+  /**
+   * 두 기관의 국가 축(countryId / historicalCountryId)이 같은 국가(또는 브리지로 연결된 계보)에 속하는지 확인한다.
+   */
+  private async areCountryAxesCompatible(
+    a: { countryId: string | null; historicalCountryId: string | null },
+    b: { countryId: string | null; historicalCountryId: string | null },
+    options?: { allowSiblingHistoricalEras?: boolean },
+  ): Promise<boolean> {
+    if (!a.countryId && !a.historicalCountryId) return true
+    if (!b.countryId && !b.historicalCountryId) return true
+
+    if (a.historicalCountryId && b.historicalCountryId) {
+      if (a.historicalCountryId === b.historicalCountryId) return true
+      if (!options?.allowSiblingHistoricalEras) return false
+    }
+
+    if (a.countryId && b.countryId && a.countryId === b.countryId) {
+      return true
+    }
+
+    const resolveModerns = async (axis: {
+      countryId: string | null
+      historicalCountryId: string | null
+    }): Promise<Set<string>> => {
+      const set = new Set<string>()
+      if (axis.countryId) set.add(axis.countryId)
+      if (axis.historicalCountryId) {
+        const links = await this.prisma.historicalCountryModernCountry.findMany({
+          where: { historicalCountryId: axis.historicalCountryId },
+          select: { modernCountryId: true },
+        })
+        for (const l of links) {
+          if (l.modernCountryId) set.add(l.modernCountryId)
+        }
+      }
+      return set
+    }
+
+    const [modernsA, modernsB] = await Promise.all([resolveModerns(a), resolveModerns(b)])
+    for (const m of modernsA) {
+      if (modernsB.has(m)) return true
+    }
+    return false
+  }
+
+  private async assertCompatibleParentDepartment(
+    parentId: string,
+    countryId: string | null | undefined,
+    historicalCountryId: string | null | undefined,
+  ): Promise<void> {
+    const parent = await this.prisma.administrationDepartment.findUnique({
+      where: { id: parentId },
+      select: { id: true, name: true, countryId: true, historicalCountryId: true },
+    })
+    if (!parent) throw new NotFoundException('상위 기관을 찾을 수 없습니다.')
+    const compatible = await this.areCountryAxesCompatible(
+      { countryId: countryId ?? null, historicalCountryId: historicalCountryId ?? null },
+      parent,
+      { allowSiblingHistoricalEras: false },
+    )
+    if (!compatible) {
+      throw new BadRequestException(
+        `상위 기관(${parent.name})의 소속 국가·시대와 현재 기관의 소속 국가·시대가 일치하지 않습니다.`,
+      )
+    }
+  }
+
+  private async assertCompatibleDependentsOnCountryChange(
+    id: string,
+    countryId: string | null | undefined,
+    historicalCountryId: string | null | undefined,
+  ): Promise<void> {
+    const targetAxis = {
+      countryId: countryId ?? null,
+      historicalCountryId: historicalCountryId ?? null,
+    }
+    const [children, tenures] = await Promise.all([
+      this.prisma.administrationDepartment.findMany({
+        where: { parentId: id },
+        select: { id: true, name: true, countryId: true, historicalCountryId: true },
+      }),
+      this.prisma.governmentPositionTenure.findMany({
+        where: { administrationDepartmentId: id },
+        select: { id: true, countryId: true, historicalCountryId: true },
+      }),
+    ])
+    for (const child of children) {
+      const compatible = await this.areCountryAxesCompatible(targetAxis, child, {
+        allowSiblingHistoricalEras: false,
+      })
+      if (!compatible) {
+        throw new BadRequestException(
+          `하위 기관(${child.name})의 소속 국가·시대와 변경하려는 소속 국가·시대가 일치하지 않습니다. 하위 기관을 먼저 옮겨 주세요.`,
+        )
+      }
+    }
+    for (const tenure of tenures) {
+      const compatible = await this.areCountryAxesCompatible(targetAxis, tenure, {
+        allowSiblingHistoricalEras: false,
+      })
+      if (!compatible) {
+        throw new BadRequestException(
+          '이미 이 기관에 연결된 재임 기록이 변경하려는 소속 국가·시대와 일치하지 않습니다. 재임 기록을 먼저 정리해 주세요.',
+        )
+      }
+    }
+  }
+
+  private async assertCompatibleTransitionDepartments(
+    predecessorId: string,
+    successorId: string,
+  ): Promise<void> {
+    const [predecessor, successor] = await Promise.all([
+      this.prisma.administrationDepartment.findUnique({
+        where: { id: predecessorId },
+        select: { id: true, name: true, countryId: true, historicalCountryId: true },
+      }),
+      this.prisma.administrationDepartment.findUnique({
+        where: { id: successorId },
+        select: { id: true, name: true, countryId: true, historicalCountryId: true },
+      }),
+    ])
+    if (!predecessor) throw new NotFoundException('기관을 찾을 수 없습니다.')
+    if (!successor) throw new NotFoundException('뒤 기관을 찾을 수 없습니다.')
+    const compatible = await this.areCountryAxesCompatible(predecessor, successor, {
+      allowSiblingHistoricalEras: true,
+    })
+    if (!compatible) {
+      throw new BadRequestException(
+        `서로 다른 국가의 기관(${predecessor.name} → ${successor.name})끼리는 계보를 연결할 수 없습니다.`,
+      )
+    }
   }
 
   /** 새 상위(parentId)에서 위로 올라가다 자기 자신을 만나면 순환 */

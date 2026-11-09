@@ -6,6 +6,8 @@ import React, { useMemo } from 'react'
 import { FiUser } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { parseSignedDateParts } from '@/shared/lib/tenure-person-utils'
+
 
 const TIMELINE_WIDTH = 88
 /** 타임라인 막대와 카드 영역 사이 여백(px) */
@@ -204,11 +206,9 @@ export function LineageTree({
     return Math.min(MAX_YEAR_BASED_HEIGHT, Math.max(760, range * 20))
   }, [useYearBasedLayout, yearRange])
 
-  /** 재임 기간–막대 연도 일치: 날짜 문자열에서 연도만 추출(타임존 영향 제거) */
+  /** 재임 기간–막대 연도 일치: 날짜 문자열에서 부호 있는 연도만 추출(기원전·타임존 안전) */
   const getYearFromDate = (s: string | null | undefined): number | null => {
-    if (!s) return null
-    const y = parseInt(String(s).slice(0, 4), 10)
-    return Number.isNaN(y) ? null : y
+    return parseSignedDateParts(s)?.signedYear ?? null
   }
 
   /**
@@ -535,8 +535,8 @@ export function LineageTree({
     const PX_PER_YEAR = 5
     const map = new Map<string, number>()
     rows.flat().forEach((t: any) => {
-      const start = t.startDate ? new Date(t.startDate).getUTCFullYear() : null
-      const end = t.endDate ? new Date(t.endDate).getUTCFullYear() : null
+      const start = getYearFromDate(t.startDate)
+      const end = getYearFromDate(t.endDate)
       const endYear = end ?? (start != null ? new Date().getFullYear() : null)
       const years =
         start != null && endYear != null ? yearSpan(start, endYear) : 0
@@ -716,7 +716,8 @@ export function LineageTree({
     rows.forEach((row, idx) => {
       const t = row[0]
       if (!t?.startDate) return
-      const yr = new Date(t.startDate).getUTCFullYear()
+      const yr = getYearFromDate(t.startDate)
+      if (yr == null) return
       const century = Math.floor(yr / 100) + (yr >= 0 ? 1 : 0)
       if (current?.century === century) return
       if (current)
@@ -890,15 +891,27 @@ export function LineageTree({
     return map
   }, [rows, parentToChildren])
 
-  /** 재위 연도·기간 문자열 "YYYY~YYYY, N년" (연도 먼저, 재임 년수는 뒤에) */
+  /** 재위 연도·기간 문자열 "YYYY~YYYY, N년" (기원전·서기 모두 지원) */
   const getReignLabel = (t: any) => {
-    const start = t.startDate ? new Date(t.startDate).getUTCFullYear() : null
-    const end = t.endDate ? new Date(t.endDate).getUTCFullYear() : null
+    const startParts = parseSignedDateParts(t.startDate, t.startEra)
+    const endParts = parseSignedDateParts(t.endDate, t.endEra)
+    const start = startParts?.signedYear ?? null
+    const end = endParts?.signedYear ?? null
     const endYear = end ?? (start != null ? new Date().getFullYear() : null)
     const years =
       start != null && endYear != null ? yearSpan(start, endYear) : null
     if (start == null && endYear == null) return '재위 기간 미상'
-    const range = end == null ? `${start}~현재` : `${start}~${endYear}`
+    const startLabel = startParts
+      ? startParts.era === 'BC'
+        ? `BC ${startParts.absYear}`
+        : String(startParts.absYear)
+      : '—'
+    const endLabel = endParts
+      ? endParts.era === 'BC'
+        ? `BC ${endParts.absYear}`
+        : String(endParts.absYear)
+      : '현재'
+    const range = `${startLabel}~${endLabel}`
     return years != null ? `(${range}, ${years}년)` : `(${range})`
   }
 

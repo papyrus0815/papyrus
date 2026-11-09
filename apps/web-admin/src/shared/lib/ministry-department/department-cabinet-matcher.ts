@@ -24,6 +24,10 @@ export type CabinetScopeForDepartment = {
   historicalCountryId?: string | null
   startDate?: string | null
   endDate?: string | null
+  startEra?: string | null
+  startYear?: number | null
+  endEra?: string | null
+  endYear?: number | null
 }
 
 export type MatchableCabinetMember = {
@@ -44,36 +48,63 @@ export type MatchableCabinetMember = {
   } | null
 }
 
-function toIsoDateSlice(dateStr: string | null | undefined): string | null {
+/**
+ * ISO·부호화 날짜 문자열(예: '1948-08-15', '0918-06', '-0202-01-01', 'BC 202')을
+ * 비교 가능한 부호 정수 키(YYYYMMDD)로 변환한다.
+ * 기원전(BC)·서기 1000년 미만 고대 날짜도 손실 없이 비교한다.
+ */
+function parseDateKeyFromString(
+  dateStr: string | null | undefined,
+  isEnd: boolean,
+): number | null {
   if (!dateStr || typeof dateStr !== 'string') return null
   const trimmed = dateStr.trim()
-  if (!trimmed || trimmed.startsWith('-')) return null
-  const matched = /^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?/.exec(trimmed)
-  if (!matched) return null
-  const y = matched[1]
-  const m = matched[2] ?? '01'
-  const d = matched[3] ?? '01'
-  return `${y}-${m}-${d}`
+  if (!trimmed) return null
+
+  const bcPrefix = /^BC\s*(\d{1,6})(?:[-./](\d{1,2}))?(?:[-./](\d{1,2}))?/i.exec(trimmed)
+  if (bcPrefix) {
+    const year = -Number(bcPrefix[1])
+    const month = bcPrefix[2] ? Number(bcPrefix[2]) : isEnd ? 12 : 1
+    const day = bcPrefix[3] ? Number(bcPrefix[3]) : isEnd ? 31 : 1
+    return year * 10000 + month * 100 + day
+  }
+
+  const signedMatch = /^(-?\d{1,6})(?:-(\d{1,2}))?(?:-(\d{1,2}))?/.exec(trimmed)
+  if (!signedMatch) return null
+  const year = Number(signedMatch[1])
+  if (!Number.isFinite(year)) return null
+  const month = signedMatch[2] ? Number(signedMatch[2]) : isEnd ? 12 : 1
+  const day = signedMatch[3] ? Number(signedMatch[3]) : isEnd ? 31 : 1
+  return year * 10000 + month * 100 + day
 }
 
-function toIsoEndDateSlice(dateStr: string | null | undefined): string | null {
-  if (!dateStr || typeof dateStr !== 'string') return null
-  const trimmed = dateStr.trim()
-  if (!trimmed || trimmed.startsWith('-')) return null
-  const matched = /^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?/.exec(trimmed)
-  if (!matched) return null
-  const y = matched[1]
-  const m = matched[2] ?? '12'
-  const d = matched[3] ?? '31'
-  return `${y}-${m}-${d}`
+function structuredPartsToKey(
+  parts:
+    | {
+        era?: string | null
+        year?: number | null
+        month?: number | null
+        day?: number | null
+      }
+    | null
+    | undefined,
+  isEnd: boolean,
+): number | null {
+  if (!parts || parts.year == null || !Number.isFinite(parts.year)) return null
+  const signedYear = parts.era === 'BC' ? -Math.abs(parts.year) : parts.year
+  const month = parts.month != null ? parts.month : isEnd ? 12 : 1
+  const day = parts.day != null ? parts.day : isEnd ? 31 : 1
+  return signedYear * 10000 + month * 100 + day
 }
 
 function extractSignedYear(dateStr: string | null | undefined): number | null {
   if (!dateStr || typeof dateStr !== 'string') return null
   const trimmed = dateStr.trim()
+  const bcPrefix = /^BC\s*(\d{1,6})/i.exec(trimmed)
+  if (bcPrefix) return -Number(bcPrefix[1])
   const bcMatch = /^-(\d{1,6})/.exec(trimmed)
   if (bcMatch) return -Number(bcMatch[1])
-  const adMatch = /^(\d{4})/.exec(trimmed)
+  const adMatch = /^(\d{1,6})/.exec(trimmed)
   if (adMatch) return Number(adMatch[1])
   return null
 }
@@ -88,14 +119,97 @@ export function dateRangesOverlapIso(
   startB: string | null | undefined,
   endB: string | null | undefined,
 ): boolean {
-  const sA = toIsoDateSlice(startA)
-  const eA = toIsoEndDateSlice(endA)
-  const sB = toIsoDateSlice(startB)
-  const eB = toIsoEndDateSlice(endB)
+  const sA = parseDateKeyFromString(startA, false)
+  const eA = parseDateKeyFromString(endA, true)
+  const sB = parseDateKeyFromString(startB, false)
+  const eB = parseDateKeyFromString(endB, true)
 
-  if (sA && eB && sA > eB) return false
-  if (sB && eA && sB > eA) return false
+  if (sA != null && eB != null && sA > eB) return false
+  if (sB != null && eA != null && sB > eA) return false
   return true
+}
+
+/**
+ * 재임(수반·각료)의 시작일 기준 부호 정수 정렬 키(YYYYMMDD)를 산출한다.
+ * 구조화 파츠(startEra/startYear/startMonth/startDay) 또는 startKey가 있으면 우선하고,
+ * 없으면 startDate 문자열('-0202-01-01', 'BC 202', '0918-06-15', '1948-08-15' 등)에서 파싱한다.
+ * 기원전(BC)과 서기 1000년 미만 고대 연대에서도 정확한 연대기 순서를 보장한다.
+ */
+export function getTenureChronologyKey(
+  tenure:
+    | {
+        startKey?: number | null
+        startEra?: string | null
+        startYear?: number | null
+        startMonth?: number | null
+        startDay?: number | null
+        startDate?: string | null
+      }
+    | null
+    | undefined,
+): number | null {
+  if (!tenure) return null
+  if (typeof tenure.startKey === 'number' && Number.isFinite(tenure.startKey)) {
+    return tenure.startKey
+  }
+  if (tenure.startYear != null && Number.isFinite(tenure.startYear)) {
+    return structuredPartsToKey(
+      {
+        era: tenure.startEra,
+        year: tenure.startYear,
+        month: tenure.startMonth,
+        day: tenure.startDay,
+      },
+      false,
+    )
+  }
+  return parseDateKeyFromString(tenure.startDate, false)
+}
+
+/**
+ * 행정부(Cabinet) 목록을 최신 정권 우선(내림차순)으로 비교한다.
+ * 문자열 localeCompare 대신 부호 정수 연대기 키를 사용하여 기원전(BC) 및 고대 연대 역전을 방지한다.
+ */
+export function compareCabinetsNewestFirst(
+  left: {
+    headTenure?: {
+      startKey?: number | null
+      startEra?: string | null
+      startYear?: number | null
+      startMonth?: number | null
+      startDay?: number | null
+      startDate?: string | null
+      ordinal?: number | null
+    } | null
+  },
+  right: {
+    headTenure?: {
+      startKey?: number | null
+      startEra?: string | null
+      startYear?: number | null
+      startMonth?: number | null
+      startDay?: number | null
+      startDate?: string | null
+      ordinal?: number | null
+    } | null
+  },
+): number {
+  const leftKey = getTenureChronologyKey(left.headTenure)
+  const rightKey = getTenureChronologyKey(right.headTenure)
+  if (leftKey != null && rightKey != null && leftKey !== rightKey) {
+    return rightKey - leftKey
+  }
+  if (leftKey != null && rightKey == null) return -1
+  if (leftKey == null && rightKey != null) return 1
+
+  const leftOrd = left.headTenure?.ordinal
+  const rightOrd = right.headTenure?.ordinal
+  if (leftOrd != null && rightOrd != null && leftOrd !== rightOrd) {
+    return rightOrd - leftOrd
+  }
+  return (right.headTenure?.startDate ?? '').localeCompare(
+    left.headTenure?.startDate ?? '',
+  )
 }
 
 /**
@@ -103,45 +217,70 @@ export function dateRangesOverlapIso(
  *
  * - 정권이 특정 역사국가(`historicalCountryId`) 소속일 때:
  *   1) 부처에 `historicalCountryId`가 있으면 같은 역사국가인 부처만 통과.
- *   2) 부처에 `historicalCountryId`가 없고(현대국가 부처) `establishedDate`가 있으면
+ *   2) 부처에 `historicalCountryId`가 없고(현대국가 부처) 설립일이 있으면
  *      정권 기간과 겹칠 때만 통과.
- *   3) 부처에 `historicalCountryId`도 없고 `establishedDate`도 없는 경우:
- *      해당 역사국가 전용 부처가 하나라도 등록돼 있으면 미지정 현대 부처는 제외하고,
- *      하나도 없으면(아직 구분 전) 날짜 조건으로만 통과시킨다.
+ *   3) 부처에 `historicalCountryId`도 없고 설립일도 없는 미지정 현대 부처는
+ *      과거 역사국가 정권(조선·고려 등)에 노출되지 않도록 제외한다.
  * - 정권이 현대국가(`historicalCountryId == null`) 소속일 때:
- *   1) 부처에 `historicalCountryId`가 박혀 있으면(과거 역사국가 부처) 제외하되,
- *      폐지일이 없고 설립일이 정권 기간과 겹치는 특수 케이스만 예외.
+ *   1) 부처에 `historicalCountryId`가 박혀 있으면(과거 역사국가 부처) 제외.
  *   2) 설립일·폐지일이 정권 임기와 어긋나면(폐지일 < 정권 시작일, 설립일 > 정권 종료일) 제외.
  */
 export function filterDepartmentsForCabinet<
   T extends Pick<
     AdministrationDepartment,
     'id' | 'name' | 'countryId' | 'historicalCountryId' | 'establishedDate' | 'abolishedDate'
-  >,
+  > & {
+    established?: {
+      era?: string | null
+      year?: number | null
+      month?: number | null
+      day?: number | null
+    } | null
+    abolished?: {
+      era?: string | null
+      year?: number | null
+      month?: number | null
+      day?: number | null
+    } | null
+  },
 >(
   departments: readonly T[],
   cabinetScope?: CabinetScopeForDepartment | null,
 ): T[] {
   if (!cabinetScope) return [...departments]
   const cabHistId = cabinetScope.historicalCountryId || null
-  const cabStart = cabinetScope.startDate ?? null
-  const cabEnd = cabinetScope.endDate ?? null
-
-  const hasExplicitHistDeptsForCab =
-    cabHistId != null &&
-    departments.some((d) => d.historicalCountryId === cabHistId)
+  const cabStartKey =
+    structuredPartsToKey(
+      cabinetScope.startYear != null
+        ? { era: cabinetScope.startEra, year: cabinetScope.startYear }
+        : null,
+      false,
+    ) ?? parseDateKeyFromString(cabinetScope.startDate, false)
+  const cabEndKey =
+    structuredPartsToKey(
+      cabinetScope.endYear != null
+        ? { era: cabinetScope.endEra, year: cabinetScope.endYear }
+        : null,
+      true,
+    ) ?? parseDateKeyFromString(cabinetScope.endDate, true)
 
   const filtered = departments.filter((dept) => {
     const deptHistId = dept.historicalCountryId || null
-    const deptEst = dept.establishedDate ?? null
-    const deptAbo = dept.abolishedDate ?? null
+    const deptStartKey =
+      structuredPartsToKey(dept.established, false) ??
+      parseDateKeyFromString(dept.establishedDate, false)
+    const deptEndKey =
+      structuredPartsToKey(dept.abolished, true) ??
+      parseDateKeyFromString(dept.abolishedDate, true)
+
+    const hasDeptPeriod = deptStartKey != null || deptEndKey != null
+    const hasCabPeriod = cabStartKey != null || cabEndKey != null
+    const overlapsPeriod =
+      !(deptStartKey != null && cabEndKey != null && deptStartKey > cabEndKey) &&
+      !(cabStartKey != null && deptEndKey != null && cabStartKey > deptEndKey)
 
     // 1. 설립일·폐지일과 정권 임기 교차 검사
-    if (
-      (deptEst || deptAbo) &&
-      (cabStart || cabEnd) &&
-      !dateRangesOverlapIso(deptEst, deptAbo, cabStart, cabEnd)
-    ) {
+    if (hasDeptPeriod && hasCabPeriod && !overlapsPeriod) {
       return false
     }
 
@@ -150,15 +289,12 @@ export function filterDepartmentsForCabinet<
       if (deptHistId) {
         return deptHistId === cabHistId
       }
-      // 현대국가 소속으로만 등록된 부처인데 설립일이 정권 기간과 겹치면 허용
-      if (deptEst && (cabStart || cabEnd)) {
-        return dateRangesOverlapIso(deptEst, deptAbo, cabStart, cabEnd)
+      // 현대국가 소속으로만 등록된 부처는 설립일이 명시되어 정권 기간과 겹칠 때만 허용
+      // (설립일 미입력 현대 부처가 과거 역사국가 내각에 섞여 나오는 현상 방지)
+      if (deptStartKey != null && hasCabPeriod) {
+        return overlapsPeriod
       }
-      // 해당 역사국가 전용 부처가 이미 있으면, 날짜 없는 현대 부처는 섞이지 않게 제외
-      if (hasExplicitHistDeptsForCab) {
-        return false
-      }
-      return true
+      return false
     }
 
     // 3. 현대국가 소속 정권일 때: 역사국가 전용 부처(예: 조선 6조, 일본 제국 육군성)는 제외

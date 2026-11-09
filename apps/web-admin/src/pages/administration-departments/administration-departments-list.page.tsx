@@ -144,18 +144,23 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
   const uniqueCountries = Array.from(
     new Set(
       departmentsWithCountryName
-        .map((d) => ({ id: d.countryId, name: d.countryName }))
-        .map((c) => JSON.stringify(c)),
+        .map((department) => ({
+          id: department.historicalCountryId ?? department.countryId,
+          name: department.countryName,
+        }))
+        .filter((country) => Boolean(country.id))
+        .map((country) => JSON.stringify(country)),
     ),
   ).map((c) => JSON.parse(c))
 
   const activeFilterCount = [filterCountry, searchQuery].filter(Boolean).length
 
-  // 국가별 통계
+  // 국가별 통계 (역사적 국가 우선)
   const departmentsByCountry = departmentsWithCountryName.reduce(
     (acc, dept) => {
-      if (dept.countryId) {
-        acc[dept.countryId] = (acc[dept.countryId] || 0) + 1
+      const targetCountryId = dept.historicalCountryId ?? dept.countryId
+      if (targetCountryId) {
+        acc[targetCountryId] = (acc[targetCountryId] || 0) + 1
       }
       return acc
     },
@@ -549,7 +554,13 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
                             {selectedDept.parentId && (
                               <InfoCard>
                                 <InfoCardLabel>상위 부처</InfoCardLabel>
-                                <InfoCardValue>국무총리실</InfoCardValue>
+                                <InfoCardValue>
+                                  {selectedDept.parent?.name ??
+                                    departments.find(
+                                      (candidate) => candidate.id === selectedDept.parentId,
+                                    )?.name ??
+                                    '상위 기관'}
+                                </InfoCardValue>
                               </InfoCard>
                             )}
                             <InfoCard>
@@ -819,26 +830,32 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
                                 <HierarchyLabel>상위 부처</HierarchyLabel>
                                 <HierarchyValue>
                                   <FiBriefcase size={16} />
-                                  국무총리실
+                                  {selectedDept.parent?.name ??
+                                    departments.find(
+                                      (candidate) => candidate.id === selectedDept.parentId,
+                                    )?.name ??
+                                    '상위 기관'}
                                 </HierarchyValue>
                               </HierarchyItem>
                             )}
                             <HierarchyItem>
-                              <HierarchyLabel>하위 부처 (3개)</HierarchyLabel>
-                              <HierarchyList>
-                                <HierarchyListItem>
-                                  <FiBriefcase size={14} />
-                                  외교정책실
-                                </HierarchyListItem>
-                                <HierarchyListItem>
-                                  <FiBriefcase size={14} />
-                                  통상교섭본부
-                                </HierarchyListItem>
-                                <HierarchyListItem>
-                                  <FiBriefcase size={14} />
-                                  영사서비스국
-                                </HierarchyListItem>
-                              </HierarchyList>
+                              <HierarchyLabel>
+                                하위 부처 ({selectedDept.children?.length ?? 0}개)
+                              </HierarchyLabel>
+                              {(selectedDept.children?.length ?? 0) > 0 ? (
+                                <HierarchyList>
+                                  {(selectedDept.children ?? []).map((child) => (
+                                    <HierarchyListItem key={child.id}>
+                                      <FiBriefcase size={14} />
+                                      {child.name}
+                                    </HierarchyListItem>
+                                  ))}
+                                </HierarchyList>
+                              ) : (
+                                <InfoBoxText style={{ marginTop: 4 }}>
+                                  등록된 하위 부처가 없습니다.
+                                </InfoBoxText>
+                              )}
                             </HierarchyItem>
                           </HierarchySection>
                         </DetailCard>
@@ -963,29 +980,63 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
                         <DetailCard>
                           <CardSectionTitle>
                             <FiCalendar size={16} />
-                            주요 연혁
+                            주요 연혁 및 전신·후신
                           </CardSectionTitle>
                           <HistorySection>
-                            <HistoryItem>
-                              <HistoryYear>2024</HistoryYear>
-                              <HistoryContent>
-                                조직 개편 및 신규 부서 신설
-                              </HistoryContent>
-                            </HistoryItem>
-                            <HistoryItem>
-                              <HistoryYear>2020</HistoryYear>
-                              <HistoryContent>
-                                청사 이전 (서울 → 세종)
-                              </HistoryContent>
-                            </HistoryItem>
-                            <HistoryItem>
-                              <HistoryYear>2010</HistoryYear>
-                              <HistoryContent>부처 명칭 변경</HistoryContent>
-                            </HistoryItem>
-                            <HistoryItem>
-                              <HistoryYear>1998</HistoryYear>
-                              <HistoryContent>부처 설립</HistoryContent>
-                            </HistoryItem>
+                            {selectedDept.abolishedDate && (
+                              <HistoryItem>
+                                <HistoryYear>
+                                  {selectedDept.abolishedDate}
+                                </HistoryYear>
+                                <HistoryContent>부처 폐지·개편</HistoryContent>
+                              </HistoryItem>
+                            )}
+                            {(selectedDept.successors ?? []).map((tr) => (
+                              <HistoryItem key={tr.transitionId}>
+                                <HistoryYear>
+                                  {tr.year != null
+                                    ? tr.era === 'BC'
+                                      ? `BC ${tr.year}`
+                                      : `${tr.year}`
+                                    : '후신'}
+                                </HistoryYear>
+                                <HistoryContent>
+                                  후신 기관: {tr.department.name}
+                                  {tr.note ? ` (${tr.note})` : ''}
+                                </HistoryContent>
+                              </HistoryItem>
+                            ))}
+                            {(selectedDept.predecessors ?? []).map((tr) => (
+                              <HistoryItem key={tr.transitionId}>
+                                <HistoryYear>
+                                  {tr.year != null
+                                    ? tr.era === 'BC'
+                                      ? `BC ${tr.year}`
+                                      : `${tr.year}`
+                                    : '전신'}
+                                </HistoryYear>
+                                <HistoryContent>
+                                  전신 기관: {tr.department.name}
+                                  {tr.note ? ` (${tr.note})` : ''}
+                                </HistoryContent>
+                              </HistoryItem>
+                            ))}
+                            {selectedDept.establishedDate && (
+                              <HistoryItem>
+                                <HistoryYear>
+                                  {selectedDept.establishedDate}
+                                </HistoryYear>
+                                <HistoryContent>부처 설립</HistoryContent>
+                              </HistoryItem>
+                            )}
+                            {!selectedDept.establishedDate &&
+                              !selectedDept.abolishedDate &&
+                              (selectedDept.predecessors?.length ?? 0) === 0 &&
+                              (selectedDept.successors?.length ?? 0) === 0 && (
+                                <InfoBoxText>
+                                  등록된 설립·폐지일 또는 전신·후신 연혁이 없습니다.
+                                </InfoBoxText>
+                              )}
                           </HistorySection>
                         </DetailCard>
                       </motion.div>
@@ -1055,8 +1106,13 @@ export const AdministrationDepartmentsListPage: React.FC = () => {
                         <DetailCard>
                           <div style={{ padding: '24px' }}>
                             <PositionDefinitionsSection
-                              fixedOrganizationId={selectedDept?.id}
-                              fixedOrganizationName={selectedDept?.name}
+                              fixedAdministrationDepartmentId={selectedDept?.id}
+                              fixedAdministrationDepartmentName={
+                                selectedDept?.name
+                              }
+                              fixedCategoryId={
+                                selectedDept?.categoryId ?? undefined
+                              }
                             />
                           </div>
                         </DetailCard>

@@ -163,14 +163,18 @@ model GovernmentPositionDefinition {
   /// 중앙부처 카테고리 연결 — 외교부 장관, 국방부 장관 등 일반 직위 (관리자 등록)
   categoryId String? @map("category_id") @db.Char(36)
 
-  /// 행정기구(Organization) 연결 — 조선총독, 만철 총재 등 특정 기구 직위 (사용자 등록)
+  /// 국가 기관(부처) 직접 연결 — 동일 카테고리 내 여러 부처(예: 육군성 vs 해군성 vs OKW)를 구분해야 하는 특정 기관 직위
+  administrationDepartmentId String? @map("administration_department_id") @db.Char(36)
+
+  /// 행정기구(Organization) 연결 — 만철 총재 등 국가 밖/별도 기구 직위 (사용자 등록)
   organizationId String? @map("organization_id") @db.Char(36)
 
   establishedDate DateTime? @map("established_date")
   abolishedDate   DateTime? @map("abolished_date")
 
-  category     AdministrationDepartmentCategory? @relation("CategoryPositionDefinitions", fields: [categoryId], references: [id], onDelete: SetNull)
-  organization Organization?                     @relation("GovernmentPositionOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
+  category                 AdministrationDepartmentCategory? @relation("CategoryPositionDefinitions", fields: [categoryId], references: [id], onDelete: SetNull)
+  administrationDepartment AdministrationDepartment?         @relation("DepartmentPositionDefinitions", fields: [administrationDepartmentId], references: [id], onDelete: SetNull)
+  organization             Organization?                     @relation("GovernmentPositionOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
 
   /// 적용 범위 — 행이 0개면 전역(어느 국가에서나 노출), 1개 이상이면 그 국가에서만 노출
   scopes GovernmentPositionDefinitionScope[] @relation("PositionDefinitionScopes")
@@ -186,6 +190,7 @@ model GovernmentPositionDefinition {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([categoryId], name: "idx_gov_pos_def_categoryId")
+  @@index([administrationDepartmentId], name: "idx_gov_pos_def_adminDeptId")
   @@index([organizationId], name: "idx_gov_pos_def_organizationId")
   @@index([positionType], name: "idx_gov_pos_def_positionType")
   @@index([rank], name: "idx_gov_pos_def_rank")

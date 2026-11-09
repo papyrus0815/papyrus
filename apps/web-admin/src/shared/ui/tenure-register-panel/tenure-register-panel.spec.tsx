@@ -92,6 +92,17 @@ jest.mock('@/shared/api/person-career', () => ({
   },
 }))
 
+jest.mock('@/shared/api/administration-department', () => ({
+  administrationDepartmentApi: {
+    getByCountryId: jest.fn().mockResolvedValue([
+      { id: 'dept-mnd', name: '국방부', abbreviation: '국방부' },
+    ]),
+    getByHistoricalCountryId: jest.fn().mockResolvedValue([
+      { id: 'dept-byeongjo', name: '병조', abbreviation: null },
+    ]),
+  },
+}))
+
 jest.mock('@/shared/api/persons-detail', () => ({
   getPersonDetailById: jest.fn().mockResolvedValue({
     id: 'person-1',

@@ -10,9 +10,11 @@ import {
   uploadImage,
   validateImageFile,
 } from '@/shared/api/upload'
-import type {
-  AdministrationDepartment,
-  AdministrationDepartmentCategory,
+import {
+  type AdministrationDepartment,
+  type AdministrationDepartmentCategory,
+  type AdministrationDepartmentKind,
+  DEPARTMENT_KIND_OPTIONS,
 } from '@/shared/api/administration-department'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import {
@@ -87,7 +89,7 @@ export function MinistryFormModal({
   successorSelectOpen,
   setSuccessorSelectOpen,
 }: MinistryFormModalProps) {
-  const C = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
+  const palette = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
 
   if (!effectiveCountryId || !isOpen) return null
 
@@ -125,7 +127,7 @@ export function MinistryFormModal({
                   onClick={submitMinistryForm}
                   style={{
                     padding: '10px 20px',
-                    background: C.accent,
+                    background: palette.accent,
                     color: '#fff',
                     border: 'none',
                     borderRadius: 10,
@@ -207,10 +209,10 @@ export function MinistryFormModal({
                         maxWidth: 280,
                         aspectRatio: '16/10',
                         borderRadius: 14,
-                        border: `2px dashed ${C.borderMid}`,
+                        border: `2px dashed ${palette.borderMid}`,
                         background: ministryForm.thumbnailUrl
                           ? 'transparent'
-                          : C.bgSubtle,
+                          : palette.bgSubtle,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -219,7 +221,7 @@ export function MinistryFormModal({
                       }}
                     >
                       {thumbnailUploading ? (
-                        <span style={{ fontSize: 13, color: C.textMuted }}>
+                        <span style={{ fontSize: 13, color: palette.textMuted }}>
                           업로드 중…
                         </span>
                       ) : ministryForm.thumbnailUrl ? (
@@ -238,7 +240,7 @@ export function MinistryFormModal({
                           }}
                         />
                       ) : (
-                        <span style={{ fontSize: 13, color: C.textMuted }}>
+                        <span style={{ fontSize: 13, color: palette.textMuted }}>
                           이미지 선택
                         </span>
                       )}
@@ -258,10 +260,10 @@ export function MinistryFormModal({
                           marginTop: 4,
                           padding: '6px 12px',
                           fontSize: 12,
-                          border: `1px solid ${C.borderMid}`,
+                          border: `1px solid ${palette.borderMid}`,
                           borderRadius: 10,
-                          background: C.btnBg,
-                          color: C.textMuted,
+                          background: palette.btnBg,
+                          color: palette.textMuted,
                           cursor: 'pointer',
                         }}
                       >
@@ -273,7 +275,7 @@ export function MinistryFormModal({
 
                 <FormFieldRow>
                   <FieldLabel>
-                    부처명 <span style={{ color: C.danger }}>*</span>
+                    부처명 <span style={{ color: palette.danger }}>*</span>
                   </FieldLabel>
                   <div
                     style={{
@@ -296,8 +298,89 @@ export function MinistryFormModal({
                 </FormFieldRow>
 
                 <FormFieldRow>
+                  <FieldLabel>기관 종류</FieldLabel>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 8,
+                    }}
+                  >
+                    {DEPARTMENT_KIND_OPTIONS.map((opt) => {
+                      const active = (ministryForm.kind || 'MINISTRY') === opt.value
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() =>
+                            setMinistryForm((prev) => ({
+                              ...prev,
+                              kind: opt.value as AdministrationDepartmentKind,
+                            }))
+                          }
+                          style={{
+                            padding: '7px 13px',
+                            borderRadius: 10,
+                            border: `1px solid ${active ? palette.accent : palette.borderMid}`,
+                            background: active ? palette.accentBg : palette.inputBg,
+                            color: active ? palette.accent : palette.text,
+                            fontSize: 12.5,
+                            fontWeight: active ? 700 : 500,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </FormFieldRow>
+
+                <FormFieldRow>
+                  <FieldLabel>원어명 · 영문명 · 약칭</FieldLabel>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr 120px',
+                      gap: 8,
+                    }}
+                  >
+                    <FormInputField
+                      value={ministryForm.nameLocal}
+                      onChange={(event) =>
+                        setMinistryForm((prev) => ({
+                          ...prev,
+                          nameLocal: event.target.value,
+                        }))
+                      }
+                      placeholder="원어명 (예: 吏曹, OKW)"
+                    />
+                    <FormInputField
+                      value={ministryForm.nameEn}
+                      onChange={(event) =>
+                        setMinistryForm((prev) => ({
+                          ...prev,
+                          nameEn: event.target.value,
+                        }))
+                      }
+                      placeholder="영문명 (예: Ministry of Economy)"
+                    />
+                    <FormInputField
+                      value={ministryForm.abbreviation}
+                      onChange={(event) =>
+                        setMinistryForm((prev) => ({
+                          ...prev,
+                          abbreviation: event.target.value,
+                        }))
+                      }
+                      placeholder="약칭 (기재부)"
+                    />
+                  </div>
+                </FormFieldRow>
+
+                <FormFieldRow>
                   <FieldLabel>
-                    카테고리 <span style={{ color: C.danger }}>*</span>
+                    카테고리 <span style={{ color: palette.danger }}>*</span>
                   </FieldLabel>
                   <div
                     style={{
@@ -335,7 +418,7 @@ export function MinistryFormModal({
                         <path d="M6 9l6 6 6-6" />
                       </svg>
                     </FormSelectBtn>
-                    <span style={{ fontSize: 12, color: C.textMuted }}>
+                    <span style={{ fontSize: 12, color: palette.textMuted }}>
                       같은 카테고리에 여러 부처 등록 가능 (예: 전쟁부·국방부)
                     </span>
                   </div>
@@ -396,15 +479,15 @@ export function MinistryFormModal({
                       onClick={() => setEstablishedDateModalOpen(true)}
                       style={{
                         padding: '10px 18px',
-                        border: `1px solid ${C.borderMid}`,
+                        border: `1px solid ${palette.borderMid}`,
                         borderRadius: 12,
                         fontSize: 13,
                         color: ministryForm.establishedDate
-                          ? C.text
-                          : C.placeholderText,
+                          ? palette.text
+                          : palette.placeholderText,
                         background: ministryForm.establishedDate
-                          ? C.accentBg
-                          : C.inputBg,
+                          ? palette.accentBg
+                          : palette.inputBg,
                         cursor: 'pointer',
                         minWidth: 140,
                       }}
@@ -418,15 +501,15 @@ export function MinistryFormModal({
                       onClick={() => setAbolishedDateModalOpen(true)}
                       style={{
                         padding: '10px 18px',
-                        border: `1px solid ${C.borderMid}`,
+                        border: `1px solid ${palette.borderMid}`,
                         borderRadius: 12,
                         fontSize: 13,
                         color: ministryForm.abolishedDate
-                          ? C.text
-                          : C.placeholderText,
+                          ? palette.text
+                          : palette.placeholderText,
                         background: ministryForm.abolishedDate
-                          ? C.dangerBg
-                          : C.inputBg,
+                          ? palette.dangerBg
+                          : palette.inputBg,
                         cursor: 'pointer',
                         minWidth: 140,
                       }}
@@ -511,7 +594,7 @@ export function MinistryFormModal({
                       style={{
                         marginTop: 8,
                         paddingTop: 22,
-                        borderTop: `1px solid ${C.divider}`,
+                        borderTop: `1px solid ${palette.divider}`,
                       }}
                     >
                       <div
@@ -526,7 +609,7 @@ export function MinistryFormModal({
                           style={{
                             fontSize: 15,
                             fontWeight: 700,
-                            color: C.sectionHeading,
+                            color: palette.sectionHeading,
                             letterSpacing: '-0.02em',
                           }}
                         >
@@ -538,11 +621,11 @@ export function MinistryFormModal({
                             fontWeight: 700,
                             letterSpacing: '0.04em',
                             textTransform: 'uppercase',
-                            color: isDark ? '#a5b4fc' : C.accent,
+                            color: isDark ? '#a5b4fc' : palette.accent,
                             padding: '4px 10px',
                             borderRadius: 8,
-                            background: C.accentBg,
-                            border: `1px solid ${C.accentBorder}`,
+                            background: palette.accentBg,
+                            border: `1px solid ${palette.accentBorder}`,
                           }}
                         >
                           선택
@@ -552,7 +635,7 @@ export function MinistryFormModal({
                         style={{
                           margin: '0 0 18px',
                           fontSize: 12.5,
-                          color: C.textMuted,
+                          color: palette.textMuted,
                           lineHeight: 1.55,
                         }}
                       >

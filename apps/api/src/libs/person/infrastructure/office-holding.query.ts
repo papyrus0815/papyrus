@@ -51,6 +51,24 @@ export function precisionOf(
 }
 
 /**
+ * 연호(RegnalEra) 배열을 부호 연·월·일 기준 시간순(오름차순)으로 정렬한다.
+ * startYear는 양수 크기값으로 저장되므로 DB의 단순 startYear ASC는 기원전(BC) 연호를 역순으로 정렬한다.
+ */
+export function sortRegnalErasChronologically<T extends Record<string, any>>(
+  eras: T[] | null | undefined,
+): T[] | undefined {
+  if (!Array.isArray(eras)) return eras ?? undefined
+  const keyOf = (era: Record<string, any>): number => {
+    const year = typeof era.startYear === 'number' ? era.startYear : 0
+    const sign = era.startEra === 'BC' ? -1 : 1
+    const month = typeof era.startMonth === 'number' ? era.startMonth : 1
+    const day = typeof era.startDay === 'number' ? era.startDay : 1
+    return sign * year * 10000 + month * 100 + day
+  }
+  return [...eras].sort((a, b) => keyOf(a) - keyOf(b))
+}
+
+/**
  * 직위 보유 행 응답 — 재위·재임 모두 같은 모양으로 내보낸다(직위 보유 단일 모델).
  *
  * - `isMonarchical`: 이 행이 재위(군주직)인가. 직위 정의의 isMonarchical이 진실이고, 군주직 조건으로
@@ -77,6 +95,9 @@ export function asOfficeHolding<T extends Record<string, any>>(
     ...row,
     startDate,
     endDate,
+    ...(Array.isArray(row.regnalEras)
+      ? { regnalEras: sortRegnalErasChronologically(row.regnalEras) }
+      : {}),
     isMonarchical: isMonarchical ?? row.positionDefinition?.isMonarchical === true,
     endDatePrecision: row.endYear !== undefined ? (derived === 'day' ? null : derived) : null,
   }

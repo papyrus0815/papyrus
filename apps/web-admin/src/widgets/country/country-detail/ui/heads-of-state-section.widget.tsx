@@ -38,6 +38,7 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import {
   calcAgeAtTenure,
   formatPersonLifespan,
+  parseSignedDateParts,
 } from '@/shared/lib/tenure-person-utils'
 import { useThemeStore } from '@/shared/styles/theme.store'
 import { confirm } from '@/shared/ui/confirm-dialog'
@@ -85,25 +86,33 @@ const POSITION_TYPE_ORDER: Record<string, number> = {
 }
 
 function formatRegnalEraDatePart(
+  era?: 'BC' | 'AD' | null,
   year?: number | null,
   monthValue?: number | null,
   dayValue?: number | null,
 ): string {
   if (year == null) return ''
+  const prefix = era === 'BC' ? 'BC ' : ''
   if (monthValue != null && dayValue != null)
-    return `${year}-${String(monthValue).padStart(2, '0')}-${String(dayValue).padStart(2, '0')}`
+    return `${prefix}${year}-${String(monthValue).padStart(2, '0')}-${String(dayValue).padStart(2, '0')}`
   if (monthValue != null)
-    return `${year}-${String(monthValue).padStart(2, '0')}`
-  return String(year)
+    return `${prefix}${year}-${String(monthValue).padStart(2, '0')}`
+  return `${prefix}${year}`
 }
 
 function formatRegnalEraRangeLabel(era: RegnalEraDto): string {
   const start = formatRegnalEraDatePart(
+    era.startEra,
     era.startYear,
     era.startMonth,
     era.startDay,
   )
-  const end = formatRegnalEraDatePart(era.endYear, era.endMonth, era.endDay)
+  const end = formatRegnalEraDatePart(
+    era.endEra ?? era.startEra,
+    era.endYear,
+    era.endMonth,
+    era.endDay,
+  )
   if (start && end) return `${start} ~ ${end}`
   if (start) return `${start} ~ (종료 미입력)`
   return ''
@@ -423,9 +432,11 @@ export function HeadsOfStateSection({
   )
   const [regnalEraName, setRegnalEraName] = useState('')
   const [regnalEraNameEn, setRegnalEraNameEn] = useState('')
+  const [regnalEraStartEra, setRegnalEraStartEra] = useState<'BC' | 'AD'>('AD')
   const [regnalEraStartYear, setRegnalEraStartYear] = useState('')
   const [regnalEraStartMonth, setRegnalEraStartMonth] = useState('')
   const [regnalEraStartDay, setRegnalEraStartDay] = useState('')
+  const [regnalEraEndEra, setRegnalEraEndEra] = useState<'BC' | 'AD'>('AD')
   const [regnalEraEndYear, setRegnalEraEndYear] = useState('')
   const [regnalEraEndMonth, setRegnalEraEndMonth] = useState('')
   const [regnalEraEndDay, setRegnalEraEndDay] = useState('')
@@ -675,13 +686,10 @@ export function HeadsOfStateSection({
 
   const formatDate = (d: string) => {
     if (!d) return '—'
-    const date = new Date(d)
-    return date.toLocaleDateString('ko-KR', {
-      timeZone: 'UTC',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
+    const parts = parseSignedDateParts(d)
+    if (!parts) return '—'
+    const prefix = parts.era === 'BC' ? 'BC ' : ''
+    return `${prefix}${parts.absYear}년 ${parts.month}월 ${parts.day}일`
   }
 
   const formatDateForInput = (iso: string) => {
@@ -841,9 +849,11 @@ export function HeadsOfStateSection({
     setEditingRegnalEraId(null)
     setRegnalEraName('')
     setRegnalEraNameEn('')
+    setRegnalEraStartEra('AD')
     setRegnalEraStartYear('')
     setRegnalEraStartMonth('')
     setRegnalEraStartDay('')
+    setRegnalEraEndEra('AD')
     setRegnalEraEndYear('')
     setRegnalEraEndMonth('')
     setRegnalEraEndDay('')
@@ -854,9 +864,12 @@ export function HeadsOfStateSection({
     setEditingRegnalEraId(era.id)
     setRegnalEraName(era.eraName ?? '')
     setRegnalEraNameEn(era.eraNameEn ?? '')
+    const sEra = era.startEra === 'BC' ? 'BC' : 'AD'
+    setRegnalEraStartEra(sEra)
     setRegnalEraStartYear(era.startYear != null ? String(era.startYear) : '')
     setRegnalEraStartMonth(era.startMonth != null ? String(era.startMonth) : '')
     setRegnalEraStartDay(era.startDay != null ? String(era.startDay) : '')
+    setRegnalEraEndEra(era.endEra === 'BC' ? 'BC' : sEra)
     setRegnalEraEndYear(era.endYear != null ? String(era.endYear) : '')
     setRegnalEraEndMonth(era.endMonth != null ? String(era.endMonth) : '')
     setRegnalEraEndDay(era.endDay != null ? String(era.endDay) : '')
@@ -925,13 +938,16 @@ export function HeadsOfStateSection({
       return
     }
 
+    const hasEndYear = regnalEraEndYear.trim() !== '' && ey != null
     const base: CreateRegnalEraDto = {
       eraName: regnalEraName.trim(),
       eraNameEn: regnalEraNameEn.trim() || null,
+      startEra: regnalEraStartEra,
       startYear: sy,
       startMonth: regnalEraStartMonth.trim() === '' ? null : (sm ?? null),
       startDay: regnalEraStartDay.trim() === '' ? null : (sd ?? null),
-      endYear: regnalEraEndYear.trim() === '' ? null : (ey ?? null),
+      endEra: hasEndYear ? regnalEraEndEra : null,
+      endYear: hasEndYear ? ey : null,
       endMonth: regnalEraEndMonth.trim() === '' ? null : (em ?? null),
       endDay: regnalEraEndDay.trim() === '' ? null : (ed ?? null),
       changeReason: regnalEraChangeReason.trim() || null,
@@ -943,9 +959,11 @@ export function HeadsOfStateSection({
         const patch: Partial<CreateRegnalEraDto> = {
           eraName: base.eraName,
           eraNameEn: base.eraNameEn,
+          startEra: base.startEra,
           startYear: base.startYear,
           startMonth: base.startMonth,
           startDay: base.startDay,
+          endEra: base.endEra,
           endYear: base.endYear,
           endMonth: base.endMonth,
           endDay: base.endDay,
@@ -994,6 +1012,12 @@ export function HeadsOfStateSection({
   const effectivePositionLabel =
     selectedPositionFilter ?? selectedLineagePositionLabel
 
+  const getChronoKey = (d: string | null | undefined): number => {
+    const p = parseSignedDateParts(d)
+    if (!p) return 0
+    return p.signedYear * 10000 + p.month * 100 + p.day
+  }
+
   /** 계보도에서 선택된 직책의 재임만 사용. 대수/세 없어도 포함(변경백 등은 대수 없음). 정렬: 대수·세 → 재임 시작일 */
   const lineageTenures = React.useMemo(() => {
     const source =
@@ -1005,9 +1029,7 @@ export function HeadsOfStateSection({
       const orderA = a.ordinal ?? 0
       const orderB = b.ordinal ?? 0
       if (orderA !== orderB) return orderA - orderB
-      const startA = a.startDate ? new Date(a.startDate).getTime() : 0
-      const startB = b.startDate ? new Date(b.startDate).getTime() : 0
-      return startA - startB
+      return getChronoKey(a.startDate) - getChronoKey(b.startDate)
     })
   }, [tenures, tenuresByPosition, effectivePositionLabel])
 
@@ -1200,14 +1222,12 @@ export function HeadsOfStateSection({
       const oa = a.ordinal ?? 0
       const ob = b.ordinal ?? 0
       if (oa !== ob) return oa - ob
-      const startA = a.startDate ? new Date(a.startDate).getTime() : 0
-      const startB = b.startDate ? new Date(b.startDate).getTime() : 0
-      return startA - startB
+      return getChronoKey(a.startDate) - getChronoKey(b.startDate)
     })
     if (sorted.length === 0) return null
     const getCentury = (t: any) => {
-      if (!t?.startDate) return 0
-      const y = new Date(t.startDate).getUTCFullYear()
+      const y = parseSignedDateParts(t?.startDate)?.signedYear
+      if (y == null) return 0
       return Math.floor(y / 100) + (y >= 0 ? 1 : 0)
     }
     const getPosition = (t: any) =>
@@ -1231,9 +1251,7 @@ export function HeadsOfStateSection({
       const oa = a.ordinal ?? 0
       const ob = b.ordinal ?? 0
       if (oa !== ob) return oa - ob
-      const startA = a.startDate ? new Date(a.startDate).getTime() : 0
-      const startB = b.startDate ? new Date(b.startDate).getTime() : 0
-      return startA - startB
+      return getChronoKey(a.startDate) - getChronoKey(b.startDate)
     }
     const getPersonId = (t: any) =>
       normId(t?.person?.id ?? (t as any)?.personId)
@@ -1266,8 +1284,7 @@ export function HeadsOfStateSection({
       const orderToRowIndex = (order: number) =>
         order <= 1 ? 0 : Math.floor((order - 2) / 2) + 1
       const subRowByTenureId = new Map<string, number>()
-      const startTime = (t: any) =>
-        t?.startDate ? new Date(t.startDate).getTime() : 0
+      const startTime = (t: any) => getChronoKey(t?.startDate)
       positionsOrder.forEach((pos) => {
         const list = (byPos.get(pos) ?? []).sort(
           (a: any, b: any) =>
@@ -1303,9 +1320,7 @@ export function HeadsOfStateSection({
       }
       const minStart = (row: any[]) =>
         Math.min(
-          ...row.map((t: any) =>
-            t.startDate ? new Date(t.startDate).getTime() : 0,
-          ),
+          ...row.map((t: any) => getChronoKey(t.startDate)),
         )
       rowGroups.sort((a, b) => minStart(a) - minStart(b))
       rowGroups.forEach((r) => allRows.push(r))
@@ -1363,9 +1378,7 @@ export function HeadsOfStateSection({
     }))
     const allTenures = rows.flat()
     const getYear = (s: string | null | undefined): number | null => {
-      if (!s) return null
-      const y = parseInt(String(s).slice(0, 4), 10)
-      return Number.isNaN(y) ? null : y
+      return parseSignedDateParts(s)?.signedYear ?? null
     }
     let minYear = Infinity
     let maxYear = -Infinity
@@ -1449,8 +1462,7 @@ export function HeadsOfStateSection({
       byRow.set(rowIdx, list)
     })
     const rowIndexes = Array.from(byRow.keys()).sort((a, b) => a - b)
-    const startTime = (t: any) =>
-      t?.startDate ? new Date(t.startDate).getTime() : 0
+    const startTime = (t: any) => getChronoKey(t?.startDate)
     const rows = rowIndexes.map((r) =>
       (byRow.get(r) ?? []).sort(
         (a: any, b: any) =>
@@ -1797,11 +1809,17 @@ export function HeadsOfStateSection({
                                   t.title ||
                                   ''
                                 ).toLowerCase()
-                                const startYear = t.startDate
-                                  ? String(t.startDate).slice(0, 4)
+                                const sParts = parseSignedDateParts(t.startDate, t.startEra)
+                                const eParts = parseSignedDateParts(t.endDate, t.endEra)
+                                const startYear = sParts
+                                  ? sParts.era === 'BC'
+                                    ? `bc ${sParts.absYear}`
+                                    : String(sParts.absYear)
                                   : ''
-                                const endYear = t.endDate
-                                  ? String(t.endDate).slice(0, 4)
+                                const endYear = eParts
+                                  ? eParts.era === 'BC'
+                                    ? `bc ${eParts.absYear}`
+                                    : String(eParts.absYear)
                                   : ''
                                 return (
                                   name.includes(q) ||
@@ -1837,10 +1855,11 @@ export function HeadsOfStateSection({
                                 {(() => {
                                   const years = filteredTenures.flatMap(
                                     (t: any) => {
-                                      const s = t.startDate
-                                        ? new Date(t.startDate).getUTCFullYear()
-                                        : null
-                                      return s ? [s] : []
+                                      const s = parseSignedDateParts(
+                                        t.startDate,
+                                        t.startEra,
+                                      )?.signedYear
+                                      return s != null ? [s] : []
                                     },
                                   )
                                   const minY = years.length
@@ -1849,6 +1868,12 @@ export function HeadsOfStateSection({
                                   const maxY = years.length
                                     ? Math.max(...years)
                                     : null
+                                  const fmtY = (y: number | null) =>
+                                    y == null
+                                      ? null
+                                      : y < 0
+                                        ? `BC ${Math.abs(y)}`
+                                        : String(y)
                                   return (
                                     <div
                                       style={{
@@ -1878,7 +1903,7 @@ export function HeadsOfStateSection({
                                           {filteredTenures.length}명
                                         </span>
                                       </div>
-                                      {minY && (
+                                      {minY != null && (
                                         <>
                                           <div
                                             style={{
@@ -1904,7 +1929,7 @@ export function HeadsOfStateSection({
                                                 color: '#64748b',
                                               }}
                                             >
-                                              {minY} – {maxY ?? '현재'}
+                                              {fmtY(minY)} – {fmtY(maxY) ?? '현재'}
                                             </span>
                                           </div>
                                         </>
@@ -2057,15 +2082,23 @@ export function HeadsOfStateSection({
                                               t.person,
                                               t.startDate,
                                             )
-                                            const startYear = t.startDate
-                                              ? new Date(
-                                                  t.startDate,
-                                                ).getUTCFullYear()
+                                            const sParts = parseSignedDateParts(
+                                              t.startDate,
+                                              t.startEra,
+                                            )
+                                            const eParts = parseSignedDateParts(
+                                              t.endDate,
+                                              t.endEra,
+                                            )
+                                            const startYear = sParts
+                                              ? sParts.era === 'BC'
+                                                ? `BC ${sParts.absYear}`
+                                                : String(sParts.absYear)
                                               : null
-                                            const endYear = t.endDate
-                                              ? new Date(
-                                                  t.endDate,
-                                                ).getUTCFullYear()
+                                            const endYear = eParts
+                                              ? eParts.era === 'BC'
+                                                ? `BC ${eParts.absYear}`
+                                                : String(eParts.absYear)
                                               : null
                                             const range = startYear
                                               ? `${startYear}–${endYear ?? '현재'}`
@@ -2762,8 +2795,21 @@ export function HeadsOfStateSection({
                                     </AchievementTitleInputWrap>
                                   </AchievementField>
                                   <AchievementField>
-                                    <label>시작: 연도(필수) · 월 · 일</label>
+                                    <label>시작: 기원 · 연도(필수) · 월 · 일</label>
                                     <RegnalEraYmdRow>
+                                      <select
+                                        value={regnalEraStartEra}
+                                        onChange={(e) => {
+                                          const next = e.target.value as 'BC' | 'AD'
+                                          setRegnalEraStartEra(next)
+                                          if (!regnalEraEndYear.trim()) {
+                                            setRegnalEraEndEra(next)
+                                          }
+                                        }}
+                                      >
+                                        <option value="AD">AD</option>
+                                        <option value="BC">BC</option>
+                                      </select>
                                       <RegisterInput
                                         type="number"
                                         min={1}
@@ -2796,8 +2842,19 @@ export function HeadsOfStateSection({
                                     </RegnalEraYmdRow>
                                   </AchievementField>
                                   <AchievementField>
-                                    <label>종료: 연도 · 월 · 일 (선택)</label>
+                                    <label>종료: 기원 · 연도 · 월 · 일 (선택)</label>
                                     <RegnalEraYmdRow>
+                                      <select
+                                        value={regnalEraEndEra}
+                                        onChange={(e) =>
+                                          setRegnalEraEndEra(
+                                            e.target.value as 'BC' | 'AD',
+                                          )
+                                        }
+                                      >
+                                        <option value="AD">AD</option>
+                                        <option value="BC">BC</option>
+                                      </select>
                                       <RegisterInput
                                         type="number"
                                         min={1}
@@ -4118,8 +4175,17 @@ const RegnalEraYmdRow = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  max-width: 520px;
+  max-width: 580px;
 
+  select {
+    width: 72px;
+    padding: 10px 8px;
+    font-size: 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+    box-sizing: border-box;
+  }
   input {
     width: 96px;
     min-width: 0;

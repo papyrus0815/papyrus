@@ -167,6 +167,10 @@ export function ministryFormFieldsFromDepartment(
   const d = defense ?? emptyDefenseFields()
   return {
     name: dept.name,
+    nameLocal: dept.nameLocal ?? '',
+    nameEn: dept.nameEn ?? d.officialNameEn ?? '',
+    abbreviation: dept.abbreviation ?? '',
+    kind: dept.kind ?? 'MINISTRY',
     parentId: dept.parentId ?? '',
     categoryId: dept.categoryId ?? '',
     thumbnailUrl: dept.thumbnailUrl ?? '',
@@ -175,8 +179,8 @@ export function ministryFormFieldsFromDepartment(
       ? dept.establishedDate.slice(0, 10)
       : '',
     abolishedDate: dept.abolishedDate ? dept.abolishedDate.slice(0, 10) : '',
-    successorId: dept.successorId ?? '',
-    defenseOfficialNameEn: d.officialNameEn,
+    successorId: dept.successors?.[0]?.department.id ?? '',
+    defenseOfficialNameEn: dept.nameEn ?? d.officialNameEn,
     defenseMissionScope: d.missionScope,
     defenseHeadquarters: d.headquarters,
     defenseOrgStructure: d.orgStructure,
@@ -187,6 +191,10 @@ export function ministryFormFieldsFromDepartment(
 export function emptyMinistryFormFields(categoryId: string, parentId = '') {
   return {
     name: '',
+    nameLocal: '',
+    nameEn: '',
+    abbreviation: '',
+    kind: 'MINISTRY' as const,
     parentId,
     categoryId,
     thumbnailUrl: '',
@@ -202,7 +210,7 @@ export function emptyMinistryFormFields(categoryId: string, parentId = '') {
   }
 }
 
-/** 부처 이름·소속 카테고리 표기(한/영)로 검색 */
+/** 부처 이름·원어명·영문명·약칭·소속 카테고리 표기(한/영)로 검색 */
 export function filterDepartmentsBySearchQuery(
   departments: AdministrationDepartment[],
   query: string,
@@ -211,6 +219,9 @@ export function filterDepartmentsBySearchQuery(
   if (!q) return departments
   return departments.filter((d) => {
     if (d.name.toLowerCase().includes(q)) return true
+    if (d.nameLocal && d.nameLocal.toLowerCase().includes(q)) return true
+    if (d.nameEn && d.nameEn.toLowerCase().includes(q)) return true
+    if (d.abbreviation && d.abbreviation.toLowerCase().includes(q)) return true
     const c = d.category
     if (c?.name && c.name.toLowerCase().includes(q)) return true
     if (c?.nameEn && c.nameEn.toLowerCase().includes(q)) return true

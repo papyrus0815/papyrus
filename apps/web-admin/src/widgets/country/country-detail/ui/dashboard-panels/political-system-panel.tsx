@@ -294,11 +294,11 @@ export function PoliticalSystemPanel({
     }>
     const targetTitle = action.positionTitle.trim().replace(/\s+/g, '')
     return rows.filter((row) => {
-      if (
-        action.historicalCountryId &&
-        row.historicalCountryId &&
-        row.historicalCountryId !== action.historicalCountryId
-      ) {
+      if (action.historicalCountryId) {
+        if (row.historicalCountryId !== action.historicalCountryId) {
+          return false
+        }
+      } else if (row.historicalCountryId) {
         return false
       }
       if (

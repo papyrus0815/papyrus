@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable } from '@nestjs/common'
 import { PrismaService } from '@prisma/prisma.service'
 import type {
   IHistoricalCountryMembershipRepository,
@@ -12,6 +12,10 @@ import {
   pointToLegacyDateTime,
   type StructuredPoint,
 } from '../../shared/structured-point'
+import {
+  structuredDateEndKey,
+  structuredDateKey,
+} from '../../person/domain/structured-date.util'
 
 @Injectable()
 export class HistoricalCountryMembershipPrismaRepository
@@ -70,7 +74,55 @@ export class HistoricalCountryMembershipPrismaRepository
     return row ? this.toRecord(row) : null
   }
 
+  private assertValidMembershipPeriod(
+    start: StructuredPoint | null | undefined,
+    end: StructuredPoint | null | undefined,
+  ): void {
+    if (!start || !end) return
+    const startKey = structuredDateKey(start.era, start.year, start.month, start.day)
+    const endKey = structuredDateEndKey(end.era ?? start.era, end.year, end.month, end.day)
+    if (startKey != null && endKey != null && startKey > endKey) {
+      throw new BadRequestException(
+        '소속 종료 시점이 소속 시작 시점보다 앞설 수 없습니다.',
+      )
+    }
+  }
+
+  private async assertNoMembershipCycle(
+    historicalCountryId: string,
+    memberCountryId: string,
+  ): Promise<void> {
+    if (historicalCountryId === memberCountryId) {
+      throw new BadRequestException(
+        '자기 자신을 소속·구성 관계로 지정할 수 없습니다.',
+      )
+    }
+    const queue = [memberCountryId]
+    const visited = new Set<string>()
+    while (queue.length > 0) {
+      const current = queue.shift()!
+      if (current === historicalCountryId) {
+        throw new BadRequestException(
+          '상위·하위 소속 관계가 순환(Cycle)합니다. 소속 방향을 확인해 주세요.',
+        )
+      }
+      if (visited.has(current)) continue
+      visited.add(current)
+      const nextRows = await this.prisma.historicalCountryMembership.findMany({
+        where: { historicalCountryId: current },
+        select: { memberCountryId: true },
+      })
+      for (const row of nextRows) {
+        if (!visited.has(row.memberCountryId)) {
+          queue.push(row.memberCountryId)
+        }
+      }
+    }
+  }
+
   async create(data: CreateMembershipData): Promise<HistoricalCountryMembershipRecord> {
+    this.assertValidMembershipPeriod(data.start, data.end)
+    await this.assertNoMembershipCycle(data.historicalCountryId, data.memberCountryId)
     const row = await this.prisma.historicalCountryMembership.create({
       data: {
         historicalCountryId: data.historicalCountryId,
@@ -92,6 +144,14 @@ export class HistoricalCountryMembershipPrismaRepository
     id: string,
     data: UpdateMembershipData,
   ): Promise<HistoricalCountryMembershipRecord> {
+    if (data.start !== undefined || data.end !== undefined) {
+      const existing = await this.findById(id)
+      if (existing) {
+        const nextStart = data.start !== undefined ? data.start : existing.start
+        const nextEnd = data.end !== undefined ? data.end : existing.end
+        this.assertValidMembershipPeriod(nextStart, nextEnd)
+      }
+    }
     const row = await this.prisma.historicalCountryMembership.update({
       where: { id },
       data: {

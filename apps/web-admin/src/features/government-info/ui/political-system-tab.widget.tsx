@@ -348,6 +348,7 @@ export function PoliticalSystemTab({
           const hos = headOfStateTitleOf(saved)
           const rows = (tenuresQuery.data ?? []) as Array<{
             title?: string | null
+            historicalCountryId?: string | null
             positionDefinition?: { id?: string | null; title?: string | null } | null
           }>
           const hasTenureForTitle = (
@@ -356,13 +357,21 @@ export function PoliticalSystemTab({
           ) => {
             if (!titleText) return true
             const norm = titleText.trim().replace(/\s+/g, '')
-            return rows.some(
-              (r) =>
-                (posId && r.positionDefinition?.id === posId) ||
+            return rows.some((r) => {
+              if (saved.historicalCountryId) {
+                if (r.historicalCountryId !== saved.historicalCountryId) {
+                  return false
+                }
+              } else if (r.historicalCountryId) {
+                return false
+              }
+              return (
+                Boolean(posId && r.positionDefinition?.id === posId) ||
                 (r.title ?? r.positionDefinition?.title ?? '')
                   .trim()
-                  .replace(/\s+/g, '') === norm,
-            )
+                  .replace(/\s+/g, '') === norm
+              )
+            })
           }
 
           if (hog && !hasTenureForTitle(saved.headOfGovernmentPositionId, hog)) {

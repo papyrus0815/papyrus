@@ -17,7 +17,9 @@ import {
   personCareerApi,
   type CreateGovernmentPositionTenureDto,
 } from '@/shared/api/person-career'
+import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
+import { personKeys } from '@/entities/person/query-keys'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import {
@@ -1241,6 +1243,7 @@ export function TenureRegisterPanel({
   const [notes, setNotes] = useState('')
   const [showOnEvents, setShowOnEvents] = useState(true)
   const [cabinetId, setCabinetId] = useState<string | null>(null)
+  const [administrationDepartmentId, setAdministrationDepartmentId] = useState<string | null>(null)
   const [eventAttachModalOpen, setEventAttachModalOpen] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -1409,7 +1412,7 @@ export function TenureRegisterPanel({
   }, [cabinets])
 
   const { data: personDetail } = useQuery({
-    queryKey: ['person-detail', personId],
+    queryKey: personKeys.detailFull(personId),
     queryFn: () => getPersonDetailById(personId),
     enabled: open && !!personId,
   })
@@ -1426,6 +1429,43 @@ export function TenureRegisterPanel({
   const editingTenure = tenureId
     ? (personTenures as any[]).find((t: any) => t.id === tenureId)
     : null
+
+  const { data: departments = [] } = useQuery({
+    queryKey: [
+      'administration-departments',
+      historicalCountryId ? 'by-historical-country' : 'by-country',
+      historicalCountryId || countryId,
+    ],
+    queryFn: () =>
+      historicalCountryId
+        ? administrationDepartmentApi.getByHistoricalCountryId(historicalCountryId)
+        : administrationDepartmentApi.getByCountryId(countryId),
+    enabled: open && (!!countryId || !!historicalCountryId),
+  })
+
+  const departmentOptions: SelectOption<string>[] = useMemo(() => {
+    const opts = (
+      departments as Array<{ id: string; name: string; abbreviation?: string | null }>
+    ).map((d) => ({
+      value: d.id,
+      label: d.abbreviation?.trim()
+        ? `${d.name} (${d.abbreviation.trim()})`
+        : d.name,
+    }))
+    const pinnedDept = (editingTenure as any)?.administrationDepartment as
+      | { id: string; name: string; abbreviation?: string | null }
+      | null
+      | undefined
+    if (pinnedDept?.id && !opts.some((o) => o.value === pinnedDept.id)) {
+      opts.push({
+        value: pinnedDept.id,
+        label: pinnedDept.abbreviation?.trim()
+          ? `${pinnedDept.name} (${pinnedDept.abbreviation.trim()})`
+          : pinnedDept.name,
+      })
+    }
+    return opts
+  }, [departments, editingTenure])
 
   /** 재위로 연 경우(재위 추가·재위 수정) — 피커를 군주 칭호 우선으로 */
   const reignEntry = isEdit ? (editingTenure as any)?.isMonarchical === true : monarchicalMode
@@ -1628,6 +1668,26 @@ export function TenureRegisterPanel({
         setTitle('')
         setTitleEn(def.titleEn ?? '')
         setPresetPositionType(null)
+        // 직위 정의에 소속 중앙부처(또는 부처 카테고리)가 연결되어 있고 아직 부처가 미선택이면 자동 매칭
+        if (!administrationDepartmentId) {
+          const deptList = departments as Array<{
+            id: string
+            categoryId?: string | null
+          }>
+          if (
+            def.administrationDepartmentId &&
+            deptList.some((d) => d.id === def.administrationDepartmentId)
+          ) {
+            setAdministrationDepartmentId(def.administrationDepartmentId)
+          } else if (def.categoryId) {
+            const matchingDepts = deptList.filter(
+              (d) => d.categoryId === def.categoryId,
+            )
+            if (matchingDepts.length === 1) {
+              setAdministrationDepartmentId(matchingDepts[0].id)
+            }
+          }
+        }
       }
     }
   }
@@ -1687,6 +1747,8 @@ export function TenureRegisterPanel({
       setTitleEn('')
       setPresetPositionType(null)
     }
+    setCabinetId(null)
+    setAdministrationDepartmentId(null)
   }
 
   const resetForm = () => {
@@ -1714,6 +1776,7 @@ export function TenureRegisterPanel({
     setNotes('')
     setShowOnEvents(true)
     setCabinetId(null)
+    setAdministrationDepartmentId(null)
   }
 
   /**
@@ -1761,7 +1824,7 @@ export function TenureRegisterPanel({
     }
   }, [open, isEdit, defaultMonarchical])
 
-  /** 행정부 탭 등에서 열 때 국가·행정부 미리 채우기 (추가 모드 전용) */
+  /** 행정부·부처 탭 등에서 열 때 국가·행정부·부처 미리 채우기 (추가 모드 전용) */
   useEffect(() => {
     if (
       open &&
@@ -1769,7 +1832,8 @@ export function TenureRegisterPanel({
       (initialCountryId != null ||
         initialHistoricalCountryId != null ||
         initialCabinetId != null ||
-        defaultCabinetId != null)
+        defaultCabinetId != null ||
+        initialAdministrationDepartmentId != null)
     ) {
       if (initialCountryId != null) setCountryId(initialCountryId)
       if (initialHistoricalCountryId !== undefined)
@@ -1777,6 +1841,8 @@ export function TenureRegisterPanel({
       if (initialCabinetId !== undefined) setCabinetId(initialCabinetId ?? null)
       else if (defaultCabinetId !== undefined)
         setCabinetId(defaultCabinetId ?? null)
+      if (initialAdministrationDepartmentId !== undefined)
+        setAdministrationDepartmentId(initialAdministrationDepartmentId ?? null)
     }
   }, [
     open,
@@ -1785,6 +1851,7 @@ export function TenureRegisterPanel({
     initialHistoricalCountryId,
     initialCabinetId,
     defaultCabinetId,
+    initialAdministrationDepartmentId,
   ])
 
   useEffect(() => {
@@ -1930,6 +1997,9 @@ export function TenureRegisterPanel({
     setNotes(t.notes ?? '')
     setShowOnEvents(t.showPositionInfo !== false)
     setCabinetId(t.cabinetId ?? t.cabinet?.id ?? null)
+    setAdministrationDepartmentId(
+      t.administrationDepartmentId ?? t.administrationDepartment?.id ?? null,
+    )
   }, [open, editingTenure])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -2000,9 +2070,9 @@ export function TenureRegisterPanel({
       notes: notes.trim() || emptyAs,
       showPositionInfo: showOnEvents,
       cabinetId: cabinetId || emptyAs,
-      // 부처 지면에서 연 경우에만 실린다. 그 밖에는 undefined라 기존 값이 보존된다.
-      administrationDepartmentId:
-        initialAdministrationDepartmentId ?? undefined,
+      administrationDepartmentId: isReign
+        ? emptyAs
+        : (administrationDepartmentId || emptyAs),
     }
     setSubmitting(true)
     try {
@@ -2290,6 +2360,11 @@ export function TenureRegisterPanel({
     (!isHeadPositionType && (countryId || historicalCountryId) && cabinetOptions.length > 0) ||
     Boolean(cabinetId || initialCabinetId)
 
+  const showDepartmentField =
+    !isReign &&
+    ((Boolean(countryId || historicalCountryId) && departmentOptions.length > 0) ||
+      Boolean(administrationDepartmentId || initialAdministrationDepartmentId))
+
   /** 저장 대상 값 전부 — 기준선과 다르면 미저장 변경. UI 상태(드롭다운 열림 등)는 넣지 않는다. */
   const formSnapshot = JSON.stringify([
     countryId,
@@ -2312,6 +2387,7 @@ export function TenureRegisterPanel({
     notes,
     showOnEvents,
     cabinetId,
+    administrationDepartmentId,
   ])
   latestSnapshotRef.current = formSnapshot
   const isDirty = dirtyBaselineRef.current !== null && dirtyBaselineRef.current !== formSnapshot
@@ -3304,6 +3380,31 @@ export function TenureRegisterPanel({
                             이 행정부에 사건 등록·연결
                           </KitAddButton>
                         )}
+                      </FieldControl>
+                    </FieldRow>
+                  )}
+
+                  {/* 소속 기관·부처 — 커스텀 Dropbox */}
+                  {showDepartmentField && (
+                    <FieldRow>
+                      <FieldLabel as="span">
+                        소속 기관·부처<OptionalTag>(선택)</OptionalTag>
+                      </FieldLabel>
+                      <FieldControl>
+                        <CustomDropbox
+                          ariaLabel="소속 기관·부처"
+                          value={administrationDepartmentId ?? ''}
+                          placeholder="기관·부처 선택 (장관·지휘관 등)"
+                          options={[
+                            { value: '', label: '선택 안 함 (특정 기관 미지정)' },
+                            ...departmentOptions,
+                          ]}
+                          onChange={(next) =>
+                            setAdministrationDepartmentId(next || null)
+                          }
+                          searchable={departmentOptions.length >= 6}
+                          searchPlaceholder="기관·부처 검색..."
+                        />
                       </FieldControl>
                     </FieldRow>
                   )}

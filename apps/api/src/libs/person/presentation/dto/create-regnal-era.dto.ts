@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator'
+import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator'
 
 /** 재임에 연호·시대명(동아시아 연호, 유럽식 재위 시대명 등) 추가 */
 export class CreateRegnalEraDto {
@@ -10,6 +10,10 @@ export class CreateRegnalEraDto {
   @IsString()
   @MaxLength(50)
   eraNameEn?: string | null
+
+  @IsOptional()
+  @IsIn(['BC', 'AD'])
+  startEra?: 'BC' | 'AD' | null
 
   @IsInt()
   @Min(1)
@@ -24,6 +28,10 @@ export class CreateRegnalEraDto {
   @IsInt()
   @Min(1)
   startDay?: number | null
+
+  @IsOptional()
+  @IsIn(['BC', 'AD'])
+  endEra?: 'BC' | 'AD' | null
 
   @IsOptional()
   @IsInt()
@@ -58,6 +66,10 @@ export class UpdateRegnalEraDto {
   eraNameEn?: string | null
 
   @IsOptional()
+  @IsIn(['BC', 'AD'])
+  startEra?: 'BC' | 'AD' | null
+
+  @IsOptional()
   @IsInt()
   @Min(1)
   startYear?: number
@@ -71,6 +83,10 @@ export class UpdateRegnalEraDto {
   @IsInt()
   @Min(1)
   startDay?: number | null
+
+  @IsOptional()
+  @IsIn(['BC', 'AD'])
+  endEra?: 'BC' | 'AD' | null
 
   @IsOptional()
   @IsInt()
@@ -92,3 +108,4 @@ export class UpdateRegnalEraDto {
   @MaxLength(200)
   changeReason?: string | null
 }
+

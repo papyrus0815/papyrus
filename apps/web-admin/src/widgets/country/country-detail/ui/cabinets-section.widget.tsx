@@ -1434,9 +1434,9 @@ export function CabinetsSection({
     e.stopPropagation()
     if (
       !(await confirm({
-        title: '삭제 확인',
+        title: '행정부 삭제 확인',
         message:
-          '이 행정부와 수반 재임, 소속 각료 재임을 모두 삭제합니다. 계속할까요?',
+          '이 행정부(내각) 구성을 삭제합니다. 수반 재임과 소속 각료 재임 기록 자체는 삭제되지 않고 행정부 연결만 해제됩니다. 계속할까요?',
         danger: true,
       }))
     )

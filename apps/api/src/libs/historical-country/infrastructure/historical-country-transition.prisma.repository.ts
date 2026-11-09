@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { BadRequestException, Injectable } from '@nestjs/common'
 import { Era } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 import type {
@@ -113,7 +113,40 @@ export class HistoricalCountryTransitionPrismaRepository
     return toRecord(row)
   }
 
+  private async assertNoCycle(
+    predecessorId: string,
+    successorId: string,
+  ): Promise<void> {
+    if (predecessorId === successorId) {
+      throw new BadRequestException(
+        '자기 자신을 계승(전임·후임) 관계로 지정할 수 없습니다.',
+      )
+    }
+    const queue = [successorId]
+    const visited = new Set<string>()
+    while (queue.length > 0) {
+      const current = queue.shift()!
+      if (current === predecessorId) {
+        throw new BadRequestException(
+          '계승(전임·후임) 관계가 순환(Cycle)합니다. 계승 방향을 확인해 주세요.',
+        )
+      }
+      if (visited.has(current)) continue
+      visited.add(current)
+      const nextRows = await this.prisma.historicalCountryTransition.findMany({
+        where: { predecessorId: current },
+        select: { successorId: true },
+      })
+      for (const row of nextRows) {
+        if (!visited.has(row.successorId)) {
+          queue.push(row.successorId)
+        }
+      }
+    }
+  }
+
   async create(data: CreateTransitionData): Promise<HistoricalCountryTransitionRecord> {
+    await this.assertNoCycle(data.predecessorId, data.successorId)
     const row = await this.prisma.historicalCountryTransition.create({
       data: {
         predecessorId: data.predecessorId,

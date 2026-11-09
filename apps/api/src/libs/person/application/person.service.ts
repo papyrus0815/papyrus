@@ -351,14 +351,31 @@ export class PersonService {
   }
 
   /**
-   * 가문에 소속된 인물 목록 (person.dynastyId 일치, 출생년 오름차순·미상은 뒤)
+   * 가문에 소속된 인물 목록 (person.dynastyId 일치, 출생년·활동연대 부호 오름차순·미상은 뒤)
    */
   async findPersonsByDynasty(dynastyId: string): Promise<PersonResponseDto[]> {
     const list = await this.personRepository.findPersonsByDynastyId(dynastyId)
-    const rank = (y: number | null | undefined) =>
-      y != null && Number.isFinite(y) ? y : Number.MAX_SAFE_INTEGER
+    const signedYear = (
+      year: number | null | undefined,
+      era: string | null | undefined,
+    ): number | null => {
+      if (year == null || !Number.isFinite(year)) return null
+      return era === 'BC' ? -year : year
+    }
+    const rank = (p: PersonResponseDto): number => {
+      const birth = signedYear(p.birthYear, p.birthEra)
+      if (birth != null) return birth
+      const floruit = signedYear(
+        p.floruitStartYear ?? p.floruitEndYear,
+        p.floruitEra,
+      )
+      if (floruit != null) return floruit
+      const death = signedYear(p.deathYear, p.deathEra)
+      if (death != null) return death
+      return Number.MAX_SAFE_INTEGER
+    }
     return [...list].sort((a, b) => {
-      const d = rank(a.birthYear) - rank(b.birthYear)
+      const d = rank(a) - rank(b)
       if (d !== 0) return d
       return (a.name || '').localeCompare(b.name || '', 'ko')
     })
@@ -2981,10 +2998,11 @@ export class PersonService {
     if (!head) {
       throw new NotFoundException('수반 재임을 찾을 수 없습니다.')
     }
-    // 가드: head는 국가원수(HEAD_OF_STATE) 또는 정부수반(HEAD_OF_GOVERNMENT)이어야 함
-    const headType = (head as any).positionType
-    if (headType !== 'HEAD_OF_STATE' && headType !== 'HEAD_OF_GOVERNMENT') {
-      throw new BadRequestException('행정부의 수반은 국가원수 또는 정부수반 임기여야 합니다.')
+    // 가드: head는 비군주 국가원수(HEAD_OF_STATE) 또는 정부수반(HEAD_OF_GOVERNMENT)이어야 함
+    const headType = (head as any).positionDefinition?.positionType ?? (head as any).positionType
+    const isMonarchical = Boolean((head as any).positionDefinition?.isMonarchical)
+    if (isMonarchical || (headType !== 'HEAD_OF_STATE' && headType !== 'HEAD_OF_GOVERNMENT')) {
+      throw new BadRequestException('행정부의 수반은 비군주 국가원수 또는 정부수반 임기여야 합니다.')
     }
     return this.personRepository.createCabinet(dto, requireActorId(accountId))
   }

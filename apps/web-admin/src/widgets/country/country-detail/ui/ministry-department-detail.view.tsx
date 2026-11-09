@@ -15,7 +15,10 @@ import {
 } from 'react-icons/fi'
 
 import { getUploadImageUrl } from '@/shared/api/upload'
-import type { AdministrationDepartment } from '@/shared/api/administration-department'
+import {
+  type AdministrationDepartment,
+  DEPARTMENT_KIND_LABEL,
+} from '@/shared/api/administration-department'
 import { militaryUnitTypeLabelKo } from '@/shared/lib/military-unit-type-label'
 
 import {
@@ -42,8 +45,29 @@ type MinistryDepartmentDetailViewProps = {
   onGoToPositions: () => void
 }
 
-function formatDeptDate(iso: string | null | undefined): string | null {
+const DEPT_KIND_LABEL_KO: Record<string, string> = DEPARTMENT_KIND_LABEL
+
+function formatDeptDate(
+  parts: AdministrationDepartment['established'] | undefined,
+  iso: string | null | undefined,
+): string | null {
+  if (parts && typeof parts.year === 'number' && parts.year > 0) {
+    const prefix = parts.era === 'BC' ? 'BC ' : ''
+    const monthStr =
+      parts.month != null ? `.${String(parts.month).padStart(2, '0')}` : ''
+    const dayStr =
+      parts.month != null && parts.day != null
+        ? `.${String(parts.day).padStart(2, '0')}`
+        : ''
+    return `${prefix}${parts.year}${monthStr}${dayStr}`
+  }
   if (!iso) return null
+  if (iso.startsWith('-')) {
+    const bcMatch = iso.match(/^-(\d{1,6})-(\d{2})-(\d{2})/)
+    if (bcMatch) {
+      return `BC ${Number(bcMatch[1])}`
+    }
+  }
   return iso.slice(0, 10).replace(/-/g, '.')
 }
 
@@ -69,14 +93,32 @@ export function MinistryDepartmentDetailView({
     isDefenseRelated && defense && hasDefenseExtensionContent(defense),
   )
   const militaryUnits = department.militaryUnits ?? []
-  const est = formatDeptDate(department.establishedDate)
-  const abol = formatDeptDate(department.abolishedDate)
-  const successorName = department.successor?.name
+  const est = formatDeptDate(department.established, department.establishedDate)
+  const abol = formatDeptDate(department.abolished, department.abolishedDate)
+  const predecessorNames = (department.predecessors ?? [])
+    .map((p) => p.department?.name)
+    .filter(Boolean)
+    .join(', ')
+  const successorNames = (department.successors ?? [])
+    .map((lineage) => lineage.department?.name)
+    .filter(Boolean)
+    .join(', ')
 
   const dateBits: string[] = []
   if (est) dateBits.push(`설립 ${est}`)
   if (abol) dateBits.push(`폐지 ${abol}`)
-  if (successorName) dateBits.push(`후신 ${successorName}`)
+  if (predecessorNames) dateBits.push(`전신 ${predecessorNames}`)
+  if (successorNames) dateBits.push(`후신 ${successorNames}`)
+
+  const subNameBits = [
+    department.nameLocal?.trim(),
+    department.nameEn?.trim() ||
+      (hasDefense ? defense?.officialNameEn?.trim() : undefined),
+  ].filter(Boolean)
+  const kindLabel =
+    department.kind && department.kind !== 'MINISTRY'
+      ? DEPT_KIND_LABEL_KO[department.kind]
+      : null
 
   return (
     <S.DetailRoot>
@@ -132,14 +174,22 @@ export function MinistryDepartmentDetailView({
         </S.DeptProfileAvatar>
         <S.DeptProfileMeta>
           <S.DeptProfileNameRow>
+            {kindLabel ? (
+              <S.DeptCategoryBadge>{kindLabel}</S.DeptCategoryBadge>
+            ) : null}
             {categoryLabel ? (
               <S.DeptCategoryBadge>{categoryLabel}</S.DeptCategoryBadge>
             ) : null}
-            <S.DeptProfileName>{department.name}</S.DeptProfileName>
+            <S.DeptProfileName>
+              {department.name}
+              {department.abbreviation?.trim()
+                ? ` (${department.abbreviation.trim()})`
+                : ''}
+            </S.DeptProfileName>
           </S.DeptProfileNameRow>
-          {hasDefense && defense?.officialNameEn?.trim() ? (
+          {subNameBits.length > 0 ? (
             <S.DeptPosBadge style={{ alignSelf: 'center' }}>
-              {defense.officialNameEn.trim()}
+              {subNameBits.join(' · ')}
             </S.DeptPosBadge>
           ) : null}
           <S.DeptTenureRow>
