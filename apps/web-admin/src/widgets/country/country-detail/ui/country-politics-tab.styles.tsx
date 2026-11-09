@@ -746,7 +746,7 @@ export const DataTable = styled.table`
 
 export const DataTh = styled.th`
   padding: 9px 10px;
-  font-family: ${({ theme }) => theme.fonts.mono};
+  ${DIGIT_DISPLAY}
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.03em;

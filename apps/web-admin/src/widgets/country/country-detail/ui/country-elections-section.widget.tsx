@@ -10437,7 +10437,6 @@ const ElectionListYearCol = styled.div`
 `
 
 const ElectionListYearNum = styled.span`
-  font-family: ${({ theme }) => theme.fonts.mono};
   font-size: 13px;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -10446,7 +10445,6 @@ const ElectionListYearNum = styled.span`
 `
 
 const ElectionListOrdinalSub = styled.span`
-  font-family: ${({ theme }) => theme.fonts.mono};
   font-size: 10.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -10485,14 +10483,14 @@ const ElectionLedgerMain = styled.div`
 
 const ElectionLedgerAside = styled.aside`
   position: static;
-  border-top: 1px solid ${({ theme }) => ledgerHairline(theme)};
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   padding-top: 18px;
 
   @container (min-width: 820px) {
     position: sticky;
     top: 12px;
     border-top: none;
-    border-left: 1px solid ${({ theme }) => ledgerHairline(theme)};
+    border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
     padding-top: 0;
     padding-left: 22px;
   }
@@ -10503,7 +10501,7 @@ const ElectionHero = styled.header`
   flex-direction: column;
   gap: 10px;
   padding-bottom: 14px;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
 const ElectionHeroTopRow = styled.div`
@@ -10528,7 +10526,7 @@ const ElectionListToggleChip = styled.button`
   gap: 5px;
   padding: 3px 8px;
   border-radius: 5px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme)};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   font-size: 11.5px;
@@ -10541,8 +10539,8 @@ const ElectionListToggleChip = styled.button`
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => ledgerAccent(theme)};
-    background: ${({ theme }) => ledgerRowWash(theme)};
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    background: ${({ theme }) => ledgerRowWash(theme.mode)};
   }
 `
 
@@ -10556,7 +10554,6 @@ const ElectionCategoryChip = styled.span`
   letter-spacing: -0.01em;
 
   .mono {
-    font-family: ${({ theme }) => theme.fonts.mono};
     ${DIGIT_DISPLAY}
   }
 `
@@ -10580,7 +10577,7 @@ const ElectionChainBtn = styled.button`
   gap: 2px;
   padding: 2px 7px;
   border-radius: 4px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme)};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   font-size: 11px;
@@ -10592,9 +10589,9 @@ const ElectionChainBtn = styled.button`
     background 0.12s ease;
 
   &:hover:not(:disabled) {
-    color: ${({ theme }) => ledgerAccent(theme)};
-    border-color: ${({ theme }) => ledgerAccent(theme)};
-    background: ${({ theme }) => ledgerRowWash(theme)};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    background: ${({ theme }) => ledgerRowWash(theme.mode)};
   }
 
   &:disabled {
@@ -10617,7 +10614,7 @@ const ElectionHeroActionBtn = styled.button`
   height: 28px;
   padding: 0 10px;
   border-radius: 5px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme)};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   font-size: 12px;
@@ -10630,8 +10627,8 @@ const ElectionHeroActionBtn = styled.button`
 
   &:hover:not(:disabled) {
     color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => ledgerAccent(theme)};
-    background: ${({ theme }) => ledgerRowWash(theme)};
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    background: ${({ theme }) => ledgerRowWash(theme.mode)};
   }
 
   &:disabled {
@@ -10647,10 +10644,10 @@ const ElectionHeroIconBtn = styled.button<{ $danger?: boolean }>`
   width: 28px;
   height: 28px;
   border-radius: 5px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme)};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   background: transparent;
   color: ${({ theme, $danger }) =>
-    $danger ? theme.colors.status.error : theme.colors.text.secondary};
+    $danger ? theme.colors.error : theme.colors.text.secondary};
   cursor: pointer;
   transition:
     color 0.12s ease,
@@ -10659,10 +10656,10 @@ const ElectionHeroIconBtn = styled.button<{ $danger?: boolean }>`
 
   &:hover {
     color: ${({ theme, $danger }) =>
-      $danger ? theme.colors.status.error : theme.colors.text.primary};
+      $danger ? theme.colors.error : theme.colors.text.primary};
     border-color: ${({ theme, $danger }) =>
-      $danger ? theme.colors.status.error : ledgerAccent(theme)};
-    background: ${({ theme }) => ledgerRowWash(theme)};
+      $danger ? theme.colors.error : ledgerAccent(theme.mode)};
+    background: ${({ theme }) => ledgerRowWash(theme.mode)};
   }
 `
 
@@ -10694,7 +10691,7 @@ const ElectionHeroOutcomeStrip = styled.div`
   gap: 8px;
   margin-top: 2px;
   padding-top: 10px;
-  border-top: 1px solid ${({ theme }) => ledgerHairline(theme)};
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const ElectionWinnerLine = styled.div`
@@ -10707,11 +10704,11 @@ const ElectionWinnerLine = styled.div`
 `
 
 const ElectionWinnerKicker = styled.span`
-  font-family: ${({ theme }) => theme.fonts.mono};
+  ${DIGIT_DISPLAY}
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.03em;
-  color: ${({ theme }) => ledgerAccent(theme)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
 `
 
 const ElectionWinnerNames = styled.div`
@@ -10727,7 +10724,7 @@ const ElectionHeroPartyBar = styled.div`
   height: 10px;
   border-radius: 4px;
   overflow: hidden;
-  background: ${({ theme }) => ledgerHairline(theme)};
+  background: ${({ theme }) => ledgerHairline(theme.mode)};
   gap: 1px;
 `
 
@@ -10759,7 +10756,6 @@ const ElectionHeroPartyLegendItem = styled.span<{ $clickable?: boolean }>`
   cursor: ${({ $clickable }) => ($clickable ? 'pointer' : 'default')};
 
   .mono {
-    font-family: ${({ theme }) => theme.fonts.mono};
     font-size: 11.5px;
     color: ${({ theme }) => theme.colors.text.tertiary};
     ${DIGIT_DISPLAY}
@@ -10781,7 +10777,7 @@ const ElectionTabBar = styled.nav`
   flex-wrap: wrap;
   padding: 6px 0;
   background: ${({ theme }) => theme.colors.background.primary};
-  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
 const ElectionTabBtn = styled.button<{ $active?: boolean }>`
@@ -10793,7 +10789,7 @@ const ElectionTabBtn = styled.button<{ $active?: boolean }>`
   border: none;
   border-radius: 5px;
   background: ${({ theme, $active }) =>
-    $active ? ledgerExpandedFill(theme) : 'transparent'};
+    $active ? ledgerExpandedFill(theme.mode) : 'transparent'};
   color: ${({ theme, $active }) =>
     $active ? theme.colors.text.primary : theme.colors.text.secondary};
   font-size: 13px;
@@ -10812,22 +10808,21 @@ const ElectionTabBtn = styled.button<{ $active?: boolean }>`
     height: 2px;
     border-radius: 1px;
     background: ${({ theme, $active }) =>
-      $active ? ledgerAccent(theme) : 'transparent'};
+      $active ? ledgerAccent(theme.mode) : 'transparent'};
   }
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
     background: ${({ theme, $active }) =>
-      $active ? ledgerExpandedFill(theme) : ledgerRowWash(theme)};
+      $active ? ledgerExpandedFill(theme.mode) : ledgerRowWash(theme.mode)};
   }
 `
 
 const ElectionTabCount = styled.span<{ $active?: boolean }>`
-  font-family: ${({ theme }) => theme.fonts.mono};
   font-size: 11px;
   font-weight: 600;
   color: ${({ theme, $active }) =>
-    $active ? ledgerAccent(theme) : theme.colors.text.tertiary};
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
   ${DIGIT_DISPLAY}
 `
 
@@ -10840,18 +10835,18 @@ const ElectionTabViewModeBtn = styled.button<{ $active?: boolean }>`
   border-radius: 4px;
   border: 1px solid
     ${({ theme, $active }) =>
-      $active ? ledgerAccent(theme) : ledgerHairline(theme)};
+      $active ? ledgerAccent(theme.mode) : ledgerHairline(theme.mode)};
   background: ${({ theme, $active }) =>
-    $active ? ledgerExpandedFill(theme) : 'transparent'};
+    $active ? ledgerExpandedFill(theme.mode) : 'transparent'};
   color: ${({ theme, $active }) =>
-    $active ? ledgerAccent(theme) : theme.colors.text.tertiary};
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => ledgerAccent(theme)};
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 `
 
@@ -10860,7 +10855,7 @@ const ElectionLedgerSection = styled.section`
   flex-direction: column;
   gap: 12px;
   padding-bottom: 18px;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
   &:last-child {
     border-bottom: none;
@@ -10911,7 +10906,7 @@ const ElectionSectionActionBtn = styled.button`
   height: 27px;
   padding: 0 9px;
   border-radius: 5px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme)};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   font-size: 12px;
@@ -10924,8 +10919,8 @@ const ElectionSectionActionBtn = styled.button`
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => ledgerAccent(theme)};
-    background: ${({ theme }) => ledgerRowWash(theme)};
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    background: ${({ theme }) => ledgerRowWash(theme.mode)};
   }
 `
 
@@ -10937,7 +10932,7 @@ const ElectionTabEmptyBox = styled.div`
   flex-wrap: wrap;
   padding: 14px 16px;
   border-radius: 6px;
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme)};
+  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
 `
 
@@ -10954,7 +10949,7 @@ const ElectionAddLineBtn = styled.button`
   padding: 4px 2px;
   border: none;
   background: transparent;
-  color: ${({ theme }) => ledgerAccent(theme)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
@@ -10981,7 +10976,7 @@ const ElectionOverviewCard = styled.div`
   gap: 10px;
   padding: 14px 16px;
   border-radius: 6px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme)};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
 `
 
@@ -10991,7 +10986,7 @@ const ElectionOverviewRow = styled.div`
   justify-content: space-between;
   gap: 10px;
   padding: 5px 0;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   font-size: 13px;
 
   &:last-child {
@@ -11005,7 +11000,7 @@ const ElectionFactsHead = styled.div`
   flex-direction: column;
   gap: 4px;
   padding-bottom: 12px;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
 const ElectionFactsHeadTop = styled.div`
@@ -11016,7 +11011,6 @@ const ElectionFactsHeadTop = styled.div`
 `
 
 const ElectionYearDisplay = styled.div`
-  font-family: ${({ theme }) => theme.fonts.mono};
   font-size: 26px;
   font-weight: 700;
   letter-spacing: -0.03em;
@@ -11026,7 +11020,6 @@ const ElectionYearDisplay = styled.div`
 `
 
 const ElectionDateLine = styled.div`
-  font-family: ${({ theme }) => theme.fonts.mono};
   font-size: 12px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
@@ -11045,7 +11038,7 @@ const ElectionFactRow = styled.div`
   gap: 10px;
   align-items: baseline;
   padding: 8px 0;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
   &:last-child {
     border-bottom: none;
@@ -11071,7 +11064,6 @@ const ElectionFactDesc = styled.dd`
   color: ${({ theme }) => theme.colors.text.primary};
 
   .mono {
-    font-family: ${({ theme }) => theme.fonts.mono};
     ${DIGIT_DISPLAY}
   }
 
@@ -11087,7 +11079,7 @@ const ElectionFactChip = styled.button`
   gap: 3px;
   padding: 2px 7px;
   border-radius: 4px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme)};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.primary};
   font-size: 11.5px;
@@ -11103,9 +11095,9 @@ const ElectionFactChip = styled.button`
     background 0.12s ease;
 
   &:hover {
-    color: ${({ theme }) => ledgerAccent(theme)};
-    border-color: ${({ theme }) => ledgerAccent(theme)};
-    background: ${({ theme }) => ledgerRowWash(theme)};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    background: ${({ theme }) => ledgerRowWash(theme.mode)};
   }
 `
 

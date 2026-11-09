@@ -33,6 +33,9 @@ const BASE_THEME = {
     semibold: '600',
     bold: '700',
   },
+  fonts: {
+    mono: "'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace",
+  },
   zIndex: {
     dropdown: 1000,
     modal: 1050,
@@ -219,6 +222,7 @@ declare module 'styled-components' {
     borderRadius: typeof BASE_THEME.borderRadius
     fontSize: typeof BASE_THEME.fontSize
     fontWeight: typeof BASE_THEME.fontWeight
+    fonts: typeof BASE_THEME.fonts
     zIndex: typeof BASE_THEME.zIndex
   }
 }
