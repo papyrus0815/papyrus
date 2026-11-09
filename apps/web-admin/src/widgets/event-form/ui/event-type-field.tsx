@@ -76,7 +76,7 @@ export function EventTypeField({
   const [storedRecents] = useState<RecentClassificationCombo[]>(() => readRecentClassifications())
   const buttonsRef = useRef<Array<HTMLButtonElement | null>>([])
 
-  const effectiveRecents = recentCombos ?? storedRecents
+  const effectiveRecents = (recentCombos ?? storedRecents).slice(0, 3)
   const searchMatches = searchQuery.trim() ? searchClassifications(searchQuery, domain) : []
 
   /* 분야가 바뀌면 펼쳐 둔 '더 보기'를 접는다 */

@@ -285,6 +285,45 @@ function formatTreatyDate(iso: string | null | undefined): string | null {
   return `${Number(match[1])}. ${Number(match[2])}. ${Number(match[3])}`
 }
 
+function parseTreatyYmd(
+  iso: string | null | undefined,
+): { year: number; month: number; day: number } | null {
+  if (!iso) return null
+  const match = /^(-?\d{1,6})-(\d{2})-(\d{2})/.exec(iso)
+  if (!match) return null
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+  }
+}
+
+/** 체결(또는 발효)부터 파기·만료까지 유지된 기간 요약 */
+function formatTreatyActiveSpan(treaty: EventDetailTreaty): {
+  label: string
+  tone: 'normal' | 'ended' | 'broken'
+} | null {
+  const start = parseTreatyYmd(treaty.effectiveDate ?? treaty.signDate)
+  const endIso = treaty.violationDate ?? treaty.expiryDate
+  const end = parseTreatyYmd(endIso)
+  if (!start || !end) return null
+  const totalDays =
+    (end.year - start.year) * 365.25 +
+    (end.month - start.month) * 30.4375 +
+    (end.day - start.day)
+  if (totalDays < 0) return null
+  const spanText =
+    totalDays < 60
+      ? `${Math.max(1, Math.round(totalDays))}일`
+      : totalDays < 365
+        ? `약 ${Math.max(1, Math.round(totalDays / 30.4375))}개월`
+        : `약 ${(totalDays / 365.25).toFixed(1).replace(/\.0$/, '')}년`
+  if (treaty.violationDate) {
+    return { label: `${spanText} 만에 파기`, tone: 'broken' }
+  }
+  return { label: `${spanText} 유지 후 만료`, tone: 'ended' }
+}
+
 interface LifecycleStep {
   key: string
   label: string
@@ -318,6 +357,7 @@ function TreatyCard({
   onChanged: () => void
 }) {
   const steps = lifecycleSteps(treaty)
+  const activeSpan = formatTreatyActiveSpan(treaty)
   const signatories = treaty.signatories ?? []
   const hiddenSignatories = Math.max(0, treaty.signatoryCount - signatories.length)
   const detailPath = pathKeys.treaties.detail(treaty.id)
@@ -348,14 +388,22 @@ function TreatyCard({
       </TreatyMeta>
 
       {steps.length > 0 && (
-        <Lifecycle aria-label="조약 수명">
-          {steps.map((step) => (
-            <LifecycleStepItem key={step.key} $tone={step.tone}>
-              <StepLabel>{step.label}</StepLabel>
-              <StepDate>{step.date}</StepDate>
-            </LifecycleStepItem>
-          ))}
-        </Lifecycle>
+        <LifecycleBar>
+          <Lifecycle aria-label="조약 수명">
+            {steps.map((step) => (
+              <LifecycleStepItem key={step.key} $tone={step.tone}>
+                <StepDot $tone={step.tone} aria-hidden />
+                <StepLabel>{step.label}</StepLabel>
+                <StepDate>{step.date}</StepDate>
+              </LifecycleStepItem>
+            ))}
+          </Lifecycle>
+          {activeSpan && (
+            <LifecycleSpanBadge $tone={activeSpan.tone}>
+              {activeSpan.label}
+            </LifecycleSpanBadge>
+          )}
+        </LifecycleBar>
       )}
       {treaty.violationDate && treaty.violationReason && (
         <ViolationReason>{treaty.violationReason}</ViolationReason>
@@ -459,13 +507,25 @@ const TreatyMeta = styled.div`
 `
 
 /* 수명 — 단계 사이를 가는 선으로 잇는다. 파기는 오류색, 만료는 흐린 잉크. */
+const LifecycleBar = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  background: ${({ theme }) => theme.colors.background.secondary};
+`
+
 const Lifecycle = styled.ol`
   list-style: none;
-  margin: 2px 0 0;
+  margin: 0;
   padding: 0;
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   row-gap: 6px;
 
   /*
@@ -475,7 +535,7 @@ const Lifecycle = styled.ol`
   > li + li::before {
     content: '';
     align-self: center;
-    width: 20px;
+    width: 24px;
     height: 1px;
     margin: 0 10px;
     background: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
@@ -484,7 +544,7 @@ const Lifecycle = styled.ol`
 
 const LifecycleStepItem = styled.li<{ $tone: LifecycleStep['tone'] }>`
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
   color: ${({ theme, $tone }) =>
     $tone === 'broken'
@@ -492,6 +552,37 @@ const LifecycleStepItem = styled.li<{ $tone: LifecycleStep['tone'] }>`
       : $tone === 'ended'
         ? theme.colors.text.tertiary
         : theme.colors.text.primary};
+`
+
+const StepDot = styled.span<{ $tone: LifecycleStep['tone'] }>`
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: ${({ theme, $tone }) =>
+    $tone === 'broken'
+      ? theme.colors.error
+      : $tone === 'ended'
+        ? theme.colors.text.tertiary
+        : theme.colors.accent};
+`
+
+const LifecycleSpanBadge = styled.span<{ $tone: LifecycleStep['tone'] }>`
+  padding: 2px 8px;
+  border-radius: ${RADIUS.PILL};
+  border: 1px solid
+    ${({ theme, $tone }) =>
+      $tone === 'broken'
+        ? `${theme.colors.error}55`
+        : ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme, $tone }) =>
+    $tone === 'broken'
+      ? `${theme.colors.error}12`
+      : theme.colors.background.primary};
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme, $tone }) =>
+    $tone === 'broken' ? theme.colors.error : theme.colors.text.secondary};
 `
 
 const StepLabel = styled.span`

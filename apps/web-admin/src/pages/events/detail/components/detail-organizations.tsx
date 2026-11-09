@@ -102,18 +102,63 @@ export function DetailOrganizations({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [creatingOrgOpen, setCreatingOrgOpen] = useState(false)
   const [pendingOrganizationId, setPendingOrganizationId] = useState<string | null>(null)
+  const [dragRelationId, setDragRelationId] = useState<string | null>(null)
+  const [dragOverSideKey, setDragOverSideKey] = useState<string | null>(null)
 
   const defaultCountryId =
     (event.relatedCountries ?? [])[0]?.id ?? undefined
   const defaultHistoricalCountryId =
     (event.relatedHistoricalCountries ?? [])[0]?.id ?? undefined
 
+  const hasParticipantCountries =
+    (event.relatedCountries?.length ?? 0) +
+      (event.relatedHistoricalCountries?.length ?? 0) >
+    0
+
   const { data: allOrganizations = [], isLoading } = useQuery({
     queryKey: ['organizations', 'event-link-candidates'],
     queryFn: () => getOrganizations(getApiConnection()),
-    enabled: pickerOpen,
+    enabled: pickerOpen || hasParticipantCountries,
     staleTime: 60_000,
   })
+
+  const participantCountrySideMap = useMemo(() => {
+    const map = new Map<string, { name: string; sideId: string | null }>()
+    for (const country of event.relatedCountries ?? []) {
+      map.set(`C:${country.id}`, {
+        name: country.name,
+        sideId: country.sideId ?? null,
+      })
+    }
+    for (const country of event.relatedHistoricalCountries ?? []) {
+      map.set(`H:${country.id}`, {
+        name: country.name,
+        sideId: country.sideId ?? null,
+      })
+    }
+    return map
+  }, [event.relatedCountries, event.relatedHistoricalCountries])
+
+  const recommendedOrganizations = useMemo(() => {
+    if (participantCountrySideMap.size === 0 || allOrganizations.length === 0) {
+      return []
+    }
+    const linkedOrgIds = new Set(
+      organizations.map((relation) => relation.organizationId),
+    )
+    return allOrganizations
+      .filter((organization) => {
+        if (linkedOrgIds.has(organization.id)) return false
+        const countryMatch =
+          organization.countryId &&
+          participantCountrySideMap.has(`C:${organization.countryId}`)
+        const histMatch =
+          organization.historicalCountryId &&
+          participantCountrySideMap.has(`H:${organization.historicalCountryId}`)
+        return Boolean(countryMatch || histMatch)
+      })
+      .slice(0, 8)
+  }, [allOrganizations, organizations, participantCountrySideMap])
 
   const organizationOptions = allOrganizations
     .map((organization) => ({
@@ -138,8 +183,30 @@ export function DetailOrganizations({
   const refresh = () => void queryClient.invalidateQueries({ queryKey: eventKeys.detail(event.id) })
 
   const addMutation = useMutation({
-    mutationFn: (body: { organizationId: string; role: EventOrganizationRole }) =>
-      addEventOrganization(event.id, body),
+    mutationFn: async (body: { organizationId: string; role: EventOrganizationRole }) => {
+      const relation = await addEventOrganization(event.id, body)
+      const matchedOrg = allOrganizations.find(
+        (candidate) => candidate.id === body.organizationId,
+      )
+      const inferredSideId =
+        (matchedOrg?.countryId
+          ? participantCountrySideMap.get(`C:${matchedOrg.countryId}`)?.sideId
+          : null) ??
+        (matchedOrg?.historicalCountryId
+          ? participantCountrySideMap.get(`H:${matchedOrg.historicalCountryId}`)?.sideId
+          : null) ??
+        null
+      if (inferredSideId && !relation.sideId) {
+        try {
+          await updateEventOrganization(event.id, relation.relationId, {
+            sideId: inferredSideId,
+          })
+        } catch {
+          // 진영 자동 지정 실패 시 기본 연결은 유지
+        }
+      }
+      return relation
+    },
     onSuccess: (relation) => {
       notify.success(`${relation.name}을(를) ${ROLE_LABEL[relation.role]}(으)로 연결했습니다`)
       refresh()
@@ -245,6 +312,70 @@ export function DetailOrganizations({
         {organizations.length > 1 && <S.SectionSubtitle>{organizations.length}곳</S.SectionSubtitle>}
       </S.SectionHeader>
 
+      {organizations.length > 0 && coloredSides.length > 0 && (
+        <SideDropZoneBar aria-label="조직 진영 드래그 배정 바">
+          <SideDropHint>드래그하여 진영 배정:</SideDropHint>
+          {coloredSides.map((side) => {
+            const count = organizations.filter(
+              (relation) => relation.sideId === side.id,
+            ).length
+            return (
+              <SideDropPill
+                key={side.id}
+                $color={side.color}
+                $dragOver={dragOverSideKey === side.id}
+                onDragOver={(dragEvent) => {
+                  if (!dragRelationId) return
+                  dragEvent.preventDefault()
+                  dragEvent.dataTransfer.dropEffect = 'move'
+                  if (dragOverSideKey !== side.id) setDragOverSideKey(side.id)
+                }}
+                onDragLeave={() => {
+                  if (dragOverSideKey === side.id) setDragOverSideKey(null)
+                }}
+                onDrop={(dragEvent) => {
+                  dragEvent.preventDefault()
+                  setDragOverSideKey(null)
+                  if (dragRelationId) {
+                    void handleUpdateSide(dragRelationId, side.id)
+                    setDragRelationId(null)
+                  }
+                }}
+              >
+                <SideDot $color={side.color} aria-hidden />
+                <span>{side.name}</span>
+                <SideDropCount>{count}</SideDropCount>
+              </SideDropPill>
+            )
+          })}
+          <SideDropPill
+            $dragOver={dragOverSideKey === 'none'}
+            onDragOver={(dragEvent) => {
+              if (!dragRelationId) return
+              dragEvent.preventDefault()
+              dragEvent.dataTransfer.dropEffect = 'move'
+              if (dragOverSideKey !== 'none') setDragOverSideKey('none')
+            }}
+            onDragLeave={() => {
+              if (dragOverSideKey === 'none') setDragOverSideKey(null)
+            }}
+            onDrop={(dragEvent) => {
+              dragEvent.preventDefault()
+              setDragOverSideKey(null)
+              if (dragRelationId) {
+                void handleUpdateSide(dragRelationId, null)
+                setDragRelationId(null)
+              }
+            }}
+          >
+            <span>진영 미지정</span>
+            <SideDropCount>
+              {organizations.filter((relation) => !relation.sideId).length}
+            </SideDropCount>
+          </SideDropPill>
+        </SideDropZoneBar>
+      )}
+
       {organizations.length > 0 ? (
         <Rows>
           {organizations.map((relation) => (
@@ -253,6 +384,15 @@ export function DetailOrganizations({
               relation={relation}
               side={relation.sideId ? sideById.get(relation.sideId) ?? null : null}
               sideOptions={sideOptions}
+              draggable={coloredSides.length > 0}
+              onDragStart={(dragEvent) => {
+                setDragRelationId(relation.relationId)
+                dragEvent.dataTransfer.effectAllowed = 'move'
+              }}
+              onDragEnd={() => {
+                setDragRelationId(null)
+                setDragOverSideKey(null)
+              }}
               onUpdateSide={(sideId) => void handleUpdateSide(relation.relationId, sideId)}
               onImportMembers={onPatch ? () => void handleImportMembers(relation) : undefined}
               onRemove={() => void handleRemove(relation)}
@@ -265,6 +405,41 @@ export function DetailOrganizations({
             ? '상장·설립·인수처럼 기업·기관이 주체인 사건이면 연결하세요. 기업이면 최신 시가총액이 함께 보입니다.'
             : '공안위원회·의회 같은 권력기구나 사건에 관여한 기관·조직·기업을 연결할 수 있습니다.'}
         </S.HelperText>
+      )}
+
+      {recommendedOrganizations.length > 0 && (
+        <RecommendBar aria-label="참여국 소속 추천 기관·조직">
+          <RecommendLabel>참여국 소속 기관·조직 빠른 연결</RecommendLabel>
+          <RecommendChips>
+            {recommendedOrganizations.map((organization) => {
+              const ownerCountry =
+                (organization.countryId
+                  ? participantCountrySideMap.get(`C:${organization.countryId}`)
+                  : null) ??
+                (organization.historicalCountryId
+                  ? participantCountrySideMap.get(
+                      `H:${organization.historicalCountryId}`,
+                    )
+                  : null)
+              return (
+                <RecommendChipBtn
+                  key={organization.id}
+                  type="button"
+                  disabled={addMutation.isPending}
+                  onClick={() => setPendingOrganizationId(organization.id)}
+                >
+                  <strong>{organization.name}</strong>
+                  {ownerCountry && (
+                    <RecommendChipCountry>
+                      · {ownerCountry.name}
+                    </RecommendChipCountry>
+                  )}
+                  <RecommendChipPlus>+ 연결</RecommendChipPlus>
+                </RecommendChipBtn>
+              )
+            })}
+          </RecommendChips>
+        </RecommendBar>
       )}
 
       <Actions>
@@ -326,6 +501,9 @@ function OrganizationRow({
   relation,
   side,
   sideOptions,
+  draggable,
+  onDragStart,
+  onDragEnd,
   onUpdateSide,
   onImportMembers,
   onRemove,
@@ -333,6 +511,9 @@ function OrganizationRow({
   relation: EventOrganization
   side: { name: string; color: string } | null
   sideOptions: Array<{ value: string; label: string }>
+  draggable?: boolean
+  onDragStart?: (dragEvent: React.DragEvent<HTMLLIElement>) => void
+  onDragEnd?: (dragEvent: React.DragEvent<HTMLLIElement>) => void
   onUpdateSide: (sideId: string | null) => void
   onImportMembers?: () => void
   onRemove: () => void
@@ -345,7 +526,11 @@ function OrganizationRow({
     .join(' · ')
 
   return (
-    <Row>
+    <Row
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+    >
       {relation.logoUrl ? <Logo src={relation.logoUrl} alt="" /> : <LogoFallback aria-hidden>{relation.name.slice(0, 1)}</LogoFallback>}
       <Body>
         <NameLine>
@@ -418,6 +603,14 @@ const Row = styled.li`
   gap: 12px;
   padding: 12px 0;
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+
+  &[draggable='true'] {
+    cursor: grab;
+  }
+
+  &[draggable='true']:active {
+    cursor: grabbing;
+  }
 
   &:first-child {
     padding-top: 4px;
@@ -587,4 +780,119 @@ const ImportMembersBtn = styled.button`
     color: ${({ theme }) => theme.colors.text.primary};
     border-color: ${({ theme }) => theme.colors.text.secondary};
   }
+`
+
+const SideDropZoneBar = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  border-radius: ${RADIUS.SM};
+  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => theme.colors.background.secondary};
+`
+
+const SideDropHint = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${metaText};
+  margin-right: 2px;
+`
+
+const SideDropPill = styled.span<{ $color?: string; $dragOver?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: ${RADIUS.PILL};
+  border: 1px solid
+    ${({ theme, $color, $dragOver }) =>
+      $dragOver
+        ? $color ?? theme.colors.accent
+        : $color
+          ? `${$color}55`
+          : theme.colors.border};
+  background: ${({ theme, $color, $dragOver }) =>
+    $dragOver
+      ? $color
+        ? `${$color}28`
+        : `${theme.colors.accent}18`
+      : $color
+        ? `${$color}12`
+        : theme.colors.background.primary};
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme, $color }) => $color ?? theme.colors.text.secondary};
+  transition: border-color 0.14s, background 0.14s;
+`
+
+const SideDropCount = styled.span`
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+`
+
+const RecommendBar = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px 12px;
+  margin-top: 8px;
+  margin-bottom: 10px;
+  border-radius: ${RADIUS.SM};
+  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => theme.colors.background.secondary};
+`
+
+const RecommendLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${metaText};
+`
+
+const RecommendChips = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const RecommendChipBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: ${RADIUS.PILL};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color 0.14s, background 0.14s;
+
+  &:hover:not(:disabled) {
+    border-color: ${({ theme }) => theme.colors.accent};
+    background: ${({ theme }) => `${theme.colors.accent}0e`};
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+`
+
+const RecommendChipCountry = styled.span`
+  font-size: 11.5px;
+  color: ${metaText};
+`
+
+const RecommendChipPlus = styled.span`
+  margin-left: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.accent};
 `

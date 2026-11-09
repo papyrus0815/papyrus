@@ -87,6 +87,7 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
 
   const [accessionPickerOpen, setAccessionPickerOpen] = useState(false)
   const [electionPickerOpen, setElectionPickerOpen] = useState(false)
+  const shouldShowPower = expectPower || accessions.length > 0 || elections.length > 0
 
   const refreshEvent = () => void queryClient.invalidateQueries({ queryKey: eventKeys.detail(event.id) })
 
@@ -94,9 +95,18 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
   const { data: accessionCandidates = [], isLoading: accessionCandidatesLoading } = useQuery({
     queryKey: [...eventKeys.detail(event.id), 'accession-candidates'],
     queryFn: () => getEventAccessionCandidates(event.id),
-    enabled: accessionPickerOpen,
+    enabled:
+      accessionPickerOpen ||
+      (shouldShowPower && (event.relatedPersons?.length ?? 0) > 0),
     staleTime: 30_000,
   })
+
+  const unlinkedAccessionCandidates = useMemo(() => {
+    const linkedIds = new Set(accessions.map((record) => record.recordId))
+    return accessionCandidates.filter(
+      (candidate) => !linkedIds.has(candidate.recordId) && !candidate.accessionEventId,
+    )
+  }, [accessionCandidates, accessions])
 
   const setAccessionMutation = useMutation({
     mutationFn: async ({ record, eventId }: { record: EventAccession; eventId: string | null }) => {
@@ -276,6 +286,35 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
         </S.HelperText>
       )}
 
+      {unlinkedAccessionCandidates.length > 0 && (
+        <CandidateRecommendBar aria-label="추천 취임·즉위 후보">
+          <CandidateRecommendLabel>
+            참여 인물의 취임·즉위 후보 원클릭 연결
+          </CandidateRecommendLabel>
+          <CandidateRecommendChips>
+            {unlinkedAccessionCandidates.map((candidate) => {
+              const span = spanLabel(candidate.startYear, candidate.endYear)
+              return (
+                <CandidateChipBtn
+                  key={candidate.recordId}
+                  type="button"
+                  disabled={setAccessionMutation.isPending}
+                  onClick={() =>
+                    setAccessionMutation.mutate({ record: candidate, eventId: event.id })
+                  }
+                >
+                  <span>{candidate.isMonarchical ? '♛' : '⚡'}</span>
+                  <strong>{candidate.regnalName ?? candidate.personName}</strong>
+                  {candidate.title && <span>· {candidate.title}</span>}
+                  {span && <CandidateChipSub>({span})</CandidateChipSub>}
+                  <CandidateChipPlus>+ 연결</CandidateChipPlus>
+                </CandidateChipBtn>
+              )
+            })}
+          </CandidateRecommendChips>
+        </CandidateRecommendBar>
+      )}
+
       <Actions>
         <ActionButton type="button" onClick={() => setAccessionPickerOpen(true)}>
           <FiPlus size={14} /> 취임·즉위 연결
@@ -357,21 +396,48 @@ function AccessionRow({
   return (
     <Row>
       <Head>
-        <Handover>
-          {direct ? (
-            <>
-              {nearest.map((neighbor) => (
-                <PredecessorName key={neighbor.record.recordId} neighbor={neighbor} onPersonClick={onPersonClick} />
-              ))}
-              <Arrow aria-hidden>→</Arrow>
-            </>
-          ) : entry ? (
-            <NoPredecessor>직전 전임 기록 없음 →</NoPredecessor>
-          ) : null}
-          <SubjectButton type="button" onClick={() => onPersonClick(record.personId)}>
-            {record.regnalName ?? record.personName}
-          </SubjectButton>
-        </Handover>
+        <HandoverBoard aria-label="권력 승계 흐름">
+          <HandoverSlot $role="predecessor">
+            <HandoverRoleTag>전임</HandoverRoleTag>
+            <HandoverBody>
+              {direct ? (
+                nearest.map((neighbor) => (
+                  <PredecessorName
+                    key={neighbor.record.recordId}
+                    neighbor={neighbor}
+                    onPersonClick={onPersonClick}
+                  />
+                ))
+              ) : entry ? (
+                <NoPredecessor>직전 전임 기록 없음</NoPredecessor>
+              ) : (
+                <NoPredecessor>전임 확인 중…</NoPredecessor>
+              )}
+            </HandoverBody>
+          </HandoverSlot>
+          <HandoverBridge aria-hidden>
+            <HandoverEventBadge>
+              {record.isMonarchical ? '♛ 즉위' : '⚡ 취임'}
+            </HandoverEventBadge>
+            <Arrow>──▶</Arrow>
+            {record.countryName && (
+              <HandoverCountrySub>{record.countryName}</HandoverCountrySub>
+            )}
+          </HandoverBridge>
+          <HandoverSlot $role="successor">
+            <HandoverRoleTag $highlight>
+              신임{record.title ? ` · ${record.title}` : ''}
+            </HandoverRoleTag>
+            <HandoverBody>
+              <SubjectButton type="button" onClick={() => onPersonClick(record.personId)}>
+                {record.regnalName ?? record.personName}
+              </SubjectButton>
+              {spanLabel(record.startYear, record.endYear) && (
+                <Sub>{spanLabel(record.startYear, record.endYear)}</Sub>
+              )}
+            </HandoverBody>
+          </HandoverSlot>
+        </HandoverBoard>
         <UnlinkButton type="button" onClick={onUnlink} aria-label={`${record.personName} 취임 연결 해제`}>
           <FiX />
         </UnlinkButton>
@@ -597,13 +663,139 @@ const Head = styled.div`
   gap: 12px;
 `
 
-const Handover = styled.div`
+const HandoverBoard = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.15fr);
+  align-items: stretch;
+  gap: 8px;
+  font-size: 14px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  @media (max-width: 560px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+const HandoverSlot = styled.div<{ $role: 'predecessor' | 'successor' }>`
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 9px 12px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid
+    ${({ theme, $role }) =>
+      $role === 'successor'
+        ? ledgerHairlineStrong(theme.mode)
+        : theme.colors.border};
+  background: ${({ theme, $role }) =>
+    $role === 'successor'
+      ? `${theme.colors.accent}09`
+      : theme.colors.background.secondary};
+`
+
+const HandoverRoleTag = styled.span<{ $highlight?: boolean }>`
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: ${({ theme, $highlight }) =>
+    $highlight ? theme.colors.accent : metaText};
+`
+
+const HandoverBody = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 4px 10px;
-  font-size: 14px;
+`
+
+const HandoverBridge = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 4px;
+`
+
+const HandoverEventBadge = styled.span`
+  padding: 1px 7px;
+  border-radius: ${RADIUS.PILL};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => theme.colors.background.primary};
+  font-size: 10.5px;
+  font-weight: 700;
   color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: nowrap;
+`
+
+const HandoverCountrySub = styled.span`
+  font-size: 10.5px;
+  font-weight: 600;
+  color: ${metaText};
+  white-space: nowrap;
+`
+
+const CandidateRecommendBar = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  border-radius: ${RADIUS.SM};
+  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => theme.colors.background.secondary};
+`
+
+const CandidateRecommendLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${metaText};
+`
+
+const CandidateRecommendChips = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const CandidateChipBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: ${RADIUS.PILL};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color 0.14s, background 0.14s;
+
+  &:hover:not(:disabled) {
+    border-color: ${({ theme }) => theme.colors.accent};
+    background: ${({ theme }) => `${theme.colors.accent}0e`};
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+`
+
+const CandidateChipSub = styled.span`
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: ${metaText};
+`
+
+const CandidateChipPlus = styled.span`
+  margin-left: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.accent};
 `
 
 const buttonReset = `

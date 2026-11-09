@@ -515,6 +515,7 @@ const FieldBox = styled.div<{ $error?: boolean; $disabled?: boolean }>`
   ${kitDateTriggerCss}
   gap: 2px;
   width: 100%;
+  min-width: 196px;
   height: 38px;
   padding: 0 10px 0 6px;
   cursor: ${({ $disabled }) => ($disabled ? 'default' : 'text')};

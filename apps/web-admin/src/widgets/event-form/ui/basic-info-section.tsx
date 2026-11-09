@@ -503,8 +503,12 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   const [isCountryQuickDismissed, setIsCountryQuickDismissed] = useState(false)
   const [activeParentResultIndex, setActiveParentResultIndex] = useState(0)
   const [isParentQuickDismissed, setIsParentQuickDismissed] = useState(false)
+  const [isParentSuggestionsExpanded, setIsParentSuggestionsExpanded] =
+    useState(false)
   const [activeRelatedResultIndex, setActiveRelatedResultIndex] = useState(0)
   const [isRelatedQuickDismissed, setIsRelatedQuickDismissed] = useState(false)
+  const [isRelatedSuggestionsExpanded, setIsRelatedSuggestionsExpanded] =
+    useState(false)
   const [activeLocationResultIndex, setActiveLocationResultIndex] = useState(0)
   const [isLocationQuickDismissed, setIsLocationQuickDismissed] = useState(true)
   const [isLocationNoteOpen, setIsLocationNoteOpen] = useState(false)
@@ -530,7 +534,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
     readRecentLocations(),
   )
   const recentLocationSuggestions = useMemo(
-    () => locationSlot?.recentLocations ?? storedRecentLocations,
+    () => (locationSlot?.recentLocations ?? storedRecentLocations).slice(0, 3),
     [locationSlot?.recentLocations, storedRecentLocations],
   )
   const titleYearSuggestion = useMemo(
@@ -635,6 +639,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         return null
       })
       .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+      .slice(0, 3)
   }, [
     recentParticipants,
     storedRecentParticipants,
@@ -704,7 +709,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
       availableHistoricalCountries,
       { startYear, endYear },
       existingParticipantKeys,
-      5,
+      3,
     )
   }, [
     titleSuggestedCountries.length,
@@ -949,7 +954,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
     if (parentEventSlot?.parent?.title) {
       pushCandidate(parentEventSlot.parent.title)
     }
-    return candidates.slice(0, 6)
+    return candidates.slice(0, 4)
   }, [
     keywords,
     KEYWORD_MAX_LENGTH,
@@ -1534,7 +1539,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                   />
                   {/* 시각 — 날짜처럼 칸에서 바로 친다(시 : 분). 예전엔 버튼 → 시·분 격자 모달 → 적용 */}
                   {showStartTime && (
-                    <TimeSegmentField value={startTime} onChange={setStartTime} ariaLabel="시작 시각" compact width={94} />
+                    <TimeSegmentField value={startTime} onChange={setStartTime} ariaLabel="시작 시각" width={120} />
                   )}
                 </DateTimeLine>
               </S.DateRangeColumn>
@@ -1597,7 +1602,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     minDate={startDate || undefined}
                   />
                   {showEndTime && (
-                    <TimeSegmentField value={endTime} onChange={setEndTime} ariaLabel="종료 시각" compact width={94} />
+                    <TimeSegmentField value={endTime} onChange={setEndTime} ariaLabel="종료 시각" width={120} />
                   )}
                 </DateTimeLine>
               </S.DateRangeColumn>
@@ -1753,7 +1758,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                 setDescription(changeEvent.target.value)
               }
               rows={Math.max(
-                4,
+                3,
                 Math.min(
                   12,
                   description
@@ -2171,7 +2176,12 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                             }}
                           >
                             <RoleDescriptionTextarea
-                              rows={2}
+                              rows={
+                                currentDesc.includes('\n') ||
+                                currentDesc.length > 52
+                                  ? 2
+                                  : 1
+                              }
                               value={currentDesc}
                               aria-label={`${country.name}가 한 일`}
                               placeholder={roleDescriptionPlaceholder}
@@ -2182,59 +2192,61 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                                 })
                               }
                             />
-                            <ParticipantDescFooterRow>
-                              {(!currentDesc.trim() ||
-                                focusedRoleDescKey === key) && (
-                                <RolePresetBar
-                                  role="group"
-                                  aria-label={`${country.name} 한 일 빠른 입력`}
-                                >
-                                  {presets.map((preset) => {
-                                    const trimmedDesc = currentDesc.trim()
-                                    const alreadyHas =
-                                      trimmedDesc
-                                        .split(/[,·]/)
-                                        .map((token) => token.trim())
-                                        .includes(preset)
-                                    return (
-                                      <RolePresetChip
-                                        key={preset}
-                                        type="button"
-                                        $active={alreadyHas}
-                                        onMouseDown={(mouseEvent) =>
-                                          mouseEvent.preventDefault()
-                                        }
-                                        onClick={() => {
-                                          playClickSound()
-                                          if (!trimmedDesc) {
-                                            patch({ roleDescription: preset })
-                                          } else if (!alreadyHas) {
-                                            patch({
-                                              roleDescription: `${trimmedDesc}, ${preset}`,
-                                            })
+                            {(focusedRoleDescKey === key ||
+                              currentDesc.trim().length > 0) && (
+                              <ParticipantDescFooterRow>
+                                {focusedRoleDescKey === key && (
+                                  <RolePresetBar
+                                    role="group"
+                                    aria-label={`${country.name} 한 일 빠른 입력`}
+                                  >
+                                    {presets.map((preset) => {
+                                      const trimmedDesc = currentDesc.trim()
+                                      const alreadyHas =
+                                        trimmedDesc
+                                          .split(/[,·]/)
+                                          .map((token) => token.trim())
+                                          .includes(preset)
+                                      return (
+                                        <RolePresetChip
+                                          key={preset}
+                                          type="button"
+                                          $active={alreadyHas}
+                                          onMouseDown={(mouseEvent) =>
+                                            mouseEvent.preventDefault()
                                           }
-                                          setFocusedRoleDescKey(null)
-                                        }}
-                                      >
-                                        + {preset}
-                                      </RolePresetChip>
-                                    )
-                                  })}
-                                </RolePresetBar>
-                              )}
-                              {currentDesc.trim().length > 0 && (
-                                <ParticipantDescClearBtn
-                                  type="button"
-                                  aria-label={`${country.name} 한 일 비우기`}
-                                  onClick={() => {
-                                    playClickSound()
-                                    patch({ roleDescription: '' })
-                                  }}
-                                >
-                                  비우기
-                                </ParticipantDescClearBtn>
-                              )}
-                            </ParticipantDescFooterRow>
+                                          onClick={() => {
+                                            playClickSound()
+                                            if (!trimmedDesc) {
+                                              patch({ roleDescription: preset })
+                                            } else if (!alreadyHas) {
+                                              patch({
+                                                roleDescription: `${trimmedDesc}, ${preset}`,
+                                              })
+                                            }
+                                            setFocusedRoleDescKey(null)
+                                          }}
+                                        >
+                                          + {preset}
+                                        </RolePresetChip>
+                                      )
+                                    })}
+                                  </RolePresetBar>
+                                )}
+                                {currentDesc.trim().length > 0 && (
+                                  <ParticipantDescClearBtn
+                                    type="button"
+                                    aria-label={`${country.name} 한 일 비우기`}
+                                    onClick={() => {
+                                      playClickSound()
+                                      patch({ roleDescription: '' })
+                                    }}
+                                  >
+                                    비우기
+                                  </ParticipantDescClearBtn>
+                                )}
+                              </ParticipantDescFooterRow>
+                            )}
                           </RoleDescriptionWrap>
                         </ParticipantRow>
                       )
@@ -2867,19 +2879,26 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       parentEventSlot.onSelectCandidate ??
                       parentEventSlot.quickSearch?.onSelectCandidate
                     const parentSuggestions =
-                      parentEventSlot.contemporarySuggestions ??
-                      relatedEventsSlot?.contemporarySuggestions ??
-                      []
+                      parentEventSlot.contemporarySuggestions ?? []
                     if (!selectParentCandidate || parentSuggestions.length === 0) {
                       return null
                     }
+                    const visibleParentSuggestions = isParentSuggestionsExpanded
+                      ? parentSuggestions.slice(0, 6)
+                      : parentSuggestions.slice(0, 2)
+                    const hiddenParentCount = Math.max(
+                      0,
+                      Math.min(6, parentSuggestions.length) -
+                        visibleParentSuggestions.length,
+                    )
                     return (
                       <RecentParticipantBar aria-label="동시대 추천 상위 사건">
                         <RecentParticipantLabel>동시대</RecentParticipantLabel>
-                        {parentSuggestions.slice(0, 4).map((candidate) => (
+                        {visibleParentSuggestions.map((candidate) => (
                           <RecentParticipantChip
                             key={candidate.id}
                             type="button"
+                            title={`${candidate.title}${candidate.dateLabel ? ` (${candidate.dateLabel})` : ''}`}
                             onClick={() => {
                               playClickSound()
                               selectParentCandidate(candidate)
@@ -2891,6 +2910,29 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                               : ''}
                           </RecentParticipantChip>
                         ))}
+                        {hiddenParentCount > 0 && (
+                          <RecentMoreChip
+                            type="button"
+                            aria-label={`동시대 추천 상위 사건 ${hiddenParentCount}건 더 보기`}
+                            onClick={() =>
+                              setIsParentSuggestionsExpanded(true)
+                            }
+                          >
+                            +{hiddenParentCount} 더보기
+                          </RecentMoreChip>
+                        )}
+                        {isParentSuggestionsExpanded &&
+                          parentSuggestions.length > 2 && (
+                            <RecentMoreChip
+                              type="button"
+                              aria-label="동시대 추천 상위 사건 접기"
+                              onClick={() =>
+                                setIsParentSuggestionsExpanded(false)
+                              }
+                            >
+                              접기
+                            </RecentMoreChip>
+                          )}
                       </RecentParticipantBar>
                     )
                   })()}
@@ -3280,11 +3322,13 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                         <RoleDescriptionWrap>
                           <RoleDescriptionTextarea
                             rows={Math.max(
-                              2,
+                              1,
                               Math.min(
-                                6,
-                                (item.description ?? '').split('\n').length,
-                                (item.description ?? '').length > 56 ? 3 : 2,
+                                5,
+                                Math.max(
+                                  (item.description ?? '').split('\n').length,
+                                  (item.description ?? '').length > 56 ? 2 : 1,
+                                ),
                               ),
                             )}
                             value={item.description ?? ''}
@@ -3441,54 +3485,128 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     ? '사건 더 추가'
                     : '사건 찾아서 추가'}
                 </S.AddButton>
-                {relatedEventsSlot.lastSavedEvent &&
-                  !relatedEventsSlot.items.some(
-                    (item) =>
-                      item.relatedEventId ===
-                      relatedEventsSlot.lastSavedEvent?.id,
-                  ) &&
-                  parentEventSlot?.parent?.id !==
-                    relatedEventsSlot.lastSavedEvent.id && (
-                    <RecentParticipantBar aria-label="방금 등록한 사건 연결">
-                      <RecentParticipantLabel>연속 연결</RecentParticipantLabel>
-                      <RecentParticipantChip
-                        type="button"
-                        onClick={() =>
-                          addRelatedEventCandidate(
-                            relatedEventsSlot.lastSavedEvent!,
-                            {
-                              relationType: 'LED_TO',
-                              direction: 'incoming',
-                            },
-                          )
-                        }
-                      >
-                        + 방금 등록한 &lsquo;
-                        {relatedEventsSlot.lastSavedEvent.title}&rsquo; 계기
-                        사건으로 연결
-                      </RecentParticipantChip>
-                    </RecentParticipantBar>
-                  )}
-                {relatedEventsSlot.contemporarySuggestions &&
-                  relatedEventsSlot.contemporarySuggestions.length > 0 && (
-                    <RecentParticipantBar aria-label="동시대 추천 연관 사건">
-                      <RecentParticipantLabel>동시대</RecentParticipantLabel>
-                      {relatedEventsSlot.contemporarySuggestions
-                        .slice(0, 4)
-                        .map((candidate) => (
+                {(() => {
+                  const hasLastSavedChip = Boolean(
+                    relatedEventsSlot.lastSavedEvent &&
+                      !relatedEventsSlot.items.some(
+                        (item) =>
+                          item.relatedEventId ===
+                          relatedEventsSlot.lastSavedEvent?.id,
+                      ) &&
+                      parentEventSlot?.parent?.id !==
+                        relatedEventsSlot.lastSavedEvent?.id,
+                  )
+                  const relatedSuggestions = (
+                    relatedEventsSlot.contemporarySuggestions ?? []
+                  ).filter(
+                    (candidate) =>
+                      candidate.id !== parentEventSlot?.parent?.id &&
+                      candidate.id !== relatedEventsSlot.lastSavedEvent?.id &&
+                      !relatedEventsSlot.items.some(
+                        (item) => item.relatedEventId === candidate.id,
+                      ),
+                  )
+                  if (!hasLastSavedChip && relatedSuggestions.length === 0) {
+                    return null
+                  }
+                  const defaultVisibleLimit =
+                    relatedEventsSlot.items.length >= 2
+                      ? 0
+                      : hasLastSavedChip
+                        ? 1
+                        : 2
+                  const visibleRelatedSuggestions = isRelatedSuggestionsExpanded
+                    ? relatedSuggestions.slice(0, 6)
+                    : relatedSuggestions.slice(0, defaultVisibleLimit)
+                  const hiddenRelatedCount = Math.max(
+                    0,
+                    Math.min(6, relatedSuggestions.length) -
+                      visibleRelatedSuggestions.length,
+                  )
+                  return (
+                    <SuggestedLinksInlineWrap>
+                      {hasLastSavedChip && relatedEventsSlot.lastSavedEvent && (
+                        <RecentParticipantBar
+                          $inline
+                          aria-label="방금 등록한 사건 연결"
+                        >
+                          <RecentParticipantLabel>
+                            연속 연결
+                          </RecentParticipantLabel>
                           <RecentParticipantChip
-                            key={candidate.id}
                             type="button"
-                            onClick={() => addRelatedEventCandidate(candidate)}
+                            title={`방금 등록한 '${relatedEventsSlot.lastSavedEvent.title}' 계기 사건으로 연결`}
+                            onClick={() =>
+                              addRelatedEventCandidate(
+                                relatedEventsSlot.lastSavedEvent!,
+                                {
+                                  relationType: 'LED_TO',
+                                  direction: 'incoming',
+                                },
+                              )
+                            }
                           >
-                            + {candidate.title}
-                            {candidate.dateLabel
-                              ? ` (${candidate.dateLabel})`
-                              : ''}
+                            + 방금 등록한 &lsquo;
+                            {relatedEventsSlot.lastSavedEvent.title}&rsquo; 계기
+                            사건으로 연결
                           </RecentParticipantChip>
-                        ))}
-                    </RecentParticipantBar>
-                  )}
+                        </RecentParticipantBar>
+                      )}
+                      {relatedSuggestions.length > 0 && (
+                        <RecentParticipantBar
+                          $inline
+                          aria-label="동시대 추천 연관 사건"
+                        >
+                          {visibleRelatedSuggestions.length > 0 && (
+                            <RecentParticipantLabel>
+                              동시대
+                            </RecentParticipantLabel>
+                          )}
+                          {visibleRelatedSuggestions.map((candidate) => (
+                            <RecentParticipantChip
+                              key={candidate.id}
+                              type="button"
+                              title={`${candidate.title}${candidate.dateLabel ? ` (${candidate.dateLabel})` : ''}`}
+                              onClick={() =>
+                                addRelatedEventCandidate(candidate)
+                              }
+                            >
+                              + {candidate.title}
+                              {candidate.dateLabel
+                                ? ` (${candidate.dateLabel})`
+                                : ''}
+                            </RecentParticipantChip>
+                          ))}
+                          {hiddenRelatedCount > 0 && (
+                            <RecentMoreChip
+                              type="button"
+                              aria-label={`동시대 추천 연관 사건 ${hiddenRelatedCount}건 더 보기`}
+                              onClick={() =>
+                                setIsRelatedSuggestionsExpanded(true)
+                              }
+                            >
+                              {visibleRelatedSuggestions.length === 0
+                                ? `동시대 추천 +${hiddenRelatedCount}`
+                                : `+${hiddenRelatedCount} 더보기`}
+                            </RecentMoreChip>
+                          )}
+                          {isRelatedSuggestionsExpanded &&
+                            relatedSuggestions.length > defaultVisibleLimit && (
+                              <RecentMoreChip
+                                type="button"
+                                aria-label="동시대 추천 연관 사건 접기"
+                                onClick={() =>
+                                  setIsRelatedSuggestionsExpanded(false)
+                                }
+                              >
+                                접기
+                              </RecentMoreChip>
+                            )}
+                        </RecentParticipantBar>
+                      )}
+                    </SuggestedLinksInlineWrap>
+                  )
+                })()}
               </CountryQuickSearchRow>
             </S.FormField>
           </S.FormRow>
@@ -4415,9 +4533,9 @@ const ModalCausalConcurrentLabel = styled.span`
 const ParticipantRow = styled.div<{ $role?: EventCountryRole; $dragOver?: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  border-radius: 12px;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 11px;
   border: 1px solid
     ${({ $dragOver, theme }) =>
       $dragOver ? theme.colors.primary : S.getC(theme).border.light};
@@ -4615,33 +4733,47 @@ const ParticipantMoveButton = styled.button`
   }
 `
 
-const RecentParticipantBar = styled.div`
-  display: inline-flex;
+const SuggestedLinksInlineWrap = styled.div`
+  display: flex;
   align-items: center;
   flex-wrap: wrap;
   flex-basis: 100%;
-  gap: 6px 8px;
+  gap: 6px 12px;
   margin-top: 2px;
-  font-size: 12px;
+`
+
+const RecentParticipantBar = styled.div<{ $inline?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  flex-basis: ${({ $inline }) => ($inline ? 'auto' : '100%')};
+  gap: 5px 6px;
+  margin-top: ${({ $inline }) => ($inline ? '0' : '2px')};
+  font-size: 11.5px;
 `
 
 const RecentParticipantLabel = styled.span`
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
 `
 
 const RecentParticipantChip = styled.button`
   display: inline-flex;
   align-items: center;
-  height: 26px;
-  padding: 0 9px;
+  height: 24px;
+  max-width: 240px;
+  padding: 0 8px;
   border-radius: 999px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   font: inherit;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
 
   &:hover {
@@ -4652,6 +4784,27 @@ const RecentParticipantChip = styled.button`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.primary};
     outline-offset: 2px;
+  }
+`
+
+const RecentMoreChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
   }
 `
 
@@ -4928,11 +5081,11 @@ const RoleDescriptionTextarea = styled.textarea`
   ${participantControl}
   width: 100%;
   min-width: 0;
-  min-height: 56px;
-  padding: 9px 12px;
+  min-height: 36px;
+  padding: 7px 11px;
   background-color: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(0, 0, 0, 0.18)' : '#f8fafc'};
-  line-height: 1.5;
+  line-height: 1.45;
   resize: vertical;
 
   &:focus,
@@ -5024,9 +5177,9 @@ const TitleInput = styled(S.Input)`
 `
 
 const OverviewTextarea = styled(S.Textarea)`
-  min-height: 112px;
-  padding: 11px 13px;
-  line-height: 1.6;
+  min-height: 82px;
+  padding: 9px 12px;
+  line-height: 1.55;
 `
 
 const OverviewFooterRow = styled.div`
@@ -5051,16 +5204,16 @@ const FormGroup = styled.section`
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 0 0 12px;
+  padding: 0 0 8px;
 
   & + & {
-    margin-top: 28px;
-    padding-top: 6px;
+    margin-top: 20px;
+    padding-top: 4px;
     border-top: none;
   }
 
   > ${S.FormRow} {
-    padding: 14px 0;
+    padding: 10px 0;
     border-bottom: none;
   }
 `
@@ -5118,23 +5271,24 @@ const InlineControlRow = styled.div`
 /* ─── 기간 ─── */
 const DateRangeGrid = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+  gap: 12px 18px;
   min-width: 0;
 
   @media (max-width: 560px) {
     grid-template-columns: minmax(0, 1fr);
-    gap: 14px;
+    gap: 12px;
   }
 `
 
 const DateTimeLine = styled.div`
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
 
   > :first-child {
-    flex: 1;
+    flex: 1 1 200px;
     min-width: 0;
   }
 `
@@ -5577,8 +5731,8 @@ const SplitColumnsGrid = styled.div<{
     }
 
     ${DateRangeGrid} {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 10px;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
     }
   }
 

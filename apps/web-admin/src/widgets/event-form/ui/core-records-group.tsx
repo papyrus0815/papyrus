@@ -154,6 +154,7 @@ export function CoreRecordsGroup({
   const [orgQuickQuery, setOrgQuickQuery] = useState('')
   const [activeOrgResultIndex, setActiveOrgResultIndex] = useState(0)
   const [isOrgQuickDismissed, setIsOrgQuickDismissed] = useState(false)
+  const [isOrgSuggestionsExpanded, setIsOrgSuggestionsExpanded] = useState(false)
   const [electionQuickQuery, setElectionQuickQuery] = useState('')
   const [activeElectionResultIndex, setActiveElectionResultIndex] = useState(0)
   const [isElectionQuickDismissed, setIsElectionQuickDismissed] = useState(false)
@@ -938,7 +939,10 @@ export function CoreRecordsGroup({
             {suggestedOrganizations.length > 0 && (
               <PersonSuggestionBar role="group" aria-label="참여국 추천 조직">
                 <OrgRoleLabel>추천 조직</OrgRoleLabel>
-                {suggestedOrganizations.map((candidate) => (
+                {(isOrgSuggestionsExpanded
+                  ? suggestedOrganizations
+                  : suggestedOrganizations.slice(0, 3)
+                ).map((candidate) => (
                   <PersonRolePresetChip
                     key={candidate.id}
                     type="button"
@@ -947,6 +951,24 @@ export function CoreRecordsGroup({
                     + 🏢 {candidate.name}
                   </PersonRolePresetChip>
                 ))}
+                {suggestedOrganizations.length > 3 && (
+                  <SuggestionMoreChip
+                    type="button"
+                    aria-label={
+                      isOrgSuggestionsExpanded
+                        ? '추천 조직 접기'
+                        : `추천 조직 ${suggestedOrganizations.length - 3}건 더 보기`
+                    }
+                    onClick={() => {
+                      playClickSound()
+                      setIsOrgSuggestionsExpanded((previous) => !previous)
+                    }}
+                  >
+                    {isOrgSuggestionsExpanded
+                      ? '접기'
+                      : `+${suggestedOrganizations.length - 3} 더 보기`}
+                  </SuggestionMoreChip>
+                )}
               </PersonSuggestionBar>
             )}
           </S.FormField>
@@ -2943,6 +2965,11 @@ function PersonListField({
   const [quickQuery, setQuickQuery] = useState('')
   const [activeResultIndex, setActiveResultIndex] = useState(0)
   const [isQuickDismissed, setIsQuickDismissed] = useState(false)
+  const [focusedPersonRoleId, setFocusedPersonRoleId] = useState<string | null>(
+    null,
+  )
+  const [isPersonSuggestionsExpanded, setIsPersonSuggestionsExpanded] =
+    useState(false)
   const [draggingPersonId, setDraggingPersonId] = useState<string | null>(null)
   const [dragOverPersonId, setDragOverPersonId] = useState<string | null>(null)
 
@@ -3132,62 +3159,19 @@ function PersonListField({
                   </PersonRowActions>
                 </PersonRowHeader>
                 {withRole && (
-                  <RowRoleWrap>
-                    <PersonRolePresetBar
-                      role="group"
-                      aria-label={`${person.name} 한 일 빠른 입력`}
-                    >
-                      <OrgRoleLabel>역할</OrgRoleLabel>
-                      {PERSON_ROLE_PRESETS.map((preset) => {
-                        const isPresetActive =
-                          (person.role ?? '').trim() === preset
-                        return (
-                          <PersonRolePresetChip
-                            key={preset}
-                            type="button"
-                            $active={isPresetActive}
-                            aria-pressed={isPresetActive}
-                            aria-label={`${person.name} 역할 ${preset} 지정`}
-                            onMouseDown={(mouseEvent) =>
-                              mouseEvent.preventDefault()
-                            }
-                            onClick={() => {
-                              playClickSound?.()
-                              onChange(
-                                people.map((item) =>
-                                  item.personId === person.personId
-                                    ? {
-                                        ...item,
-                                        role: isPresetActive ? '' : preset,
-                                      }
-                                    : item,
-                                ),
-                              )
-                            }}
-                          >
-                            {isPresetActive ? `✓ ${preset}` : `+ ${preset}`}
-                          </PersonRolePresetChip>
+                  <RowRoleWrap
+                    onBlur={(blurEvent) => {
+                      if (
+                        !blurEvent.currentTarget.contains(
+                          blurEvent.relatedTarget as Node | null,
                         )
-                      })}
-                      {Boolean((person.role ?? '').trim()) && (
-                        <PersonRoleClearBtn
-                          type="button"
-                          aria-label={`${person.name} 역할 비우기`}
-                          onClick={() => {
-                            playClickSound?.()
-                            onChange(
-                              people.map((item) =>
-                                item.personId === person.personId
-                                  ? { ...item, role: '' }
-                                  : item,
-                              ),
-                            )
-                          }}
-                        >
-                          비우기
-                        </PersonRoleClearBtn>
-                      )}
-                    </PersonRolePresetBar>
+                      ) {
+                        setFocusedPersonRoleId((previous) =>
+                          previous === person.personId ? null : previous,
+                        )
+                      }
+                    }}
+                  >
                     <RowRoleTextarea
                       aria-label={`${person.name}이(가) 한 일`}
                       placeholder="이 사건에서 한 일 (선택 · 줄바꿈 가능)"
@@ -3200,6 +3184,7 @@ function PersonListField({
                         ),
                       )}
                       value={person.role ?? ''}
+                      onFocus={() => setFocusedPersonRoleId(person.personId)}
                       onChange={(change) =>
                         onChange(
                           people.map((item) =>
@@ -3210,32 +3195,78 @@ function PersonListField({
                         )
                       }
                     />
+                    {(focusedPersonRoleId === person.personId ||
+                      Boolean((person.role ?? '').trim())) && (
+                      <PersonRolePresetBar
+                        role="group"
+                        aria-label={`${person.name} 한 일 빠른 입력`}
+                      >
+                        {focusedPersonRoleId === person.personId && (
+                          <>
+                            <OrgRoleLabel>역할</OrgRoleLabel>
+                            {PERSON_ROLE_PRESETS.map((preset) => {
+                              const isPresetActive =
+                                (person.role ?? '').trim() === preset
+                              return (
+                                <PersonRolePresetChip
+                                  key={preset}
+                                  type="button"
+                                  $active={isPresetActive}
+                                  aria-pressed={isPresetActive}
+                                  aria-label={`${person.name} 역할 ${preset} 지정`}
+                                  onMouseDown={(mouseEvent) =>
+                                    mouseEvent.preventDefault()
+                                  }
+                                  onClick={() => {
+                                    playClickSound?.()
+                                    onChange(
+                                      people.map((item) =>
+                                        item.personId === person.personId
+                                          ? {
+                                              ...item,
+                                              role: isPresetActive
+                                                ? ''
+                                                : preset,
+                                            }
+                                          : item,
+                                      ),
+                                    )
+                                    setFocusedPersonRoleId(null)
+                                  }}
+                                >
+                                  {isPresetActive
+                                    ? `✓ ${preset}`
+                                    : `+ ${preset}`}
+                                </PersonRolePresetChip>
+                              )
+                            })}
+                          </>
+                        )}
+                        {Boolean((person.role ?? '').trim()) && (
+                          <PersonRoleClearBtn
+                            type="button"
+                            aria-label={`${person.name} 역할 비우기`}
+                            onClick={() => {
+                              playClickSound?.()
+                              onChange(
+                                people.map((item) =>
+                                  item.personId === person.personId
+                                    ? { ...item, role: '' }
+                                    : item,
+                                ),
+                              )
+                            }}
+                          >
+                            비우기
+                          </PersonRoleClearBtn>
+                        )}
+                      </PersonRolePresetBar>
+                    )}
                   </RowRoleWrap>
                 )}
               </Row>
             ))}
           </RowList>
-        )}
-        {contextualPersonSuggestions.length > 0 && (
-          <PersonSuggestionBar
-            role="group"
-            aria-label={`${label} 추천`}
-          >
-            <OrgRoleLabel>추천 인물</OrgRoleLabel>
-            {contextualPersonSuggestions.map((person) => {
-              const displayName = getPersonDisplayName(person)
-              return (
-                <PersonRolePresetChip
-                  key={person.id}
-                  type="button"
-                  aria-label={`추천 인물 ${displayName} 추가`}
-                  onClick={() => addQuickPerson(person)}
-                >
-                  + 👤 {displayName}
-                </PersonRolePresetChip>
-              )
-            })}
-          </PersonSuggestionBar>
         )}
         <OrgActionRow>
           <QuickSearchAnchor
@@ -3351,6 +3382,48 @@ function PersonListField({
             {addLabel}
           </KitAddButton>
         </OrgActionRow>
+        {contextualPersonSuggestions.length > 0 && (
+          <PersonSuggestionBar
+            role="group"
+            aria-label={`${label} 추천`}
+          >
+            <OrgRoleLabel>추천 인물</OrgRoleLabel>
+            {(isPersonSuggestionsExpanded
+              ? contextualPersonSuggestions
+              : contextualPersonSuggestions.slice(0, 3)
+            ).map((person) => {
+              const displayName = getPersonDisplayName(person)
+              return (
+                <PersonRolePresetChip
+                  key={person.id}
+                  type="button"
+                  aria-label={`추천 인물 ${displayName} 추가`}
+                  onClick={() => addQuickPerson(person)}
+                >
+                  + 👤 {displayName}
+                </PersonRolePresetChip>
+              )
+            })}
+            {contextualPersonSuggestions.length > 3 && (
+              <SuggestionMoreChip
+                type="button"
+                aria-label={
+                  isPersonSuggestionsExpanded
+                    ? '추천 인물 접기'
+                    : `추천 인물 ${contextualPersonSuggestions.length - 3}건 더 보기`
+                }
+                onClick={() => {
+                  playClickSound?.()
+                  setIsPersonSuggestionsExpanded((previous) => !previous)
+                }}
+              >
+                {isPersonSuggestionsExpanded
+                  ? '접기'
+                  : `+${contextualPersonSuggestions.length - 3} 더 보기`}
+              </SuggestionMoreChip>
+            )}
+          </PersonSuggestionBar>
+        )}
       </S.FormField>
     </S.FormRow>
   )
@@ -3626,9 +3699,9 @@ const OrgRoleChipBtn = styled.button<{ $active: boolean }>`
 const Row = styled.div<{ $role?: string; $dragOver?: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
-  padding: 11px 13px;
+  padding: 10px 12px;
   border-radius: 11px;
   border: 1px solid
     ${({ $dragOver, theme }) =>
@@ -3679,7 +3752,7 @@ const PersonRowActions = styled.div`
 const RowRoleWrap = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 6px;
   width: 100%;
   min-width: 0;
 
@@ -3700,15 +3773,30 @@ const PersonSuggestionBar = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
-  margin-bottom: 8px;
-  padding: 6px 10px;
-  border-radius: 9px;
-  border: 1px dashed ${({ theme }) => S.getC(theme).border.default};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.02)'
-      : 'rgba(248, 250, 252, 0.85)'};
+  gap: 5px 6px;
+  margin-top: 2px;
+  font-size: 11.5px;
+`
+
+const SuggestionMoreChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
 `
 
 const PersonRoleClearBtn = styled.button`

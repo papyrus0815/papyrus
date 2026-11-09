@@ -288,15 +288,15 @@ const ReadValue = styled.span`
 `
 
 const EditRow = styled.span`
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
-  flex-wrap: wrap;
-  /* DateRangeField(grid)가 좁은 메타 영역에서 과대해지지 않도록 폭 제한. */
+  width: 100%;
   max-width: 100%;
 
   & > div {
-    flex: 1 1 280px;
+    width: 100%;
     min-width: 0;
   }
 `
@@ -304,6 +304,7 @@ const EditRow = styled.span`
 const DoneButton = styled.button`
   display: inline-flex;
   align-items: center;
+  align-self: flex-end;
   gap: 4px;
   flex-shrink: 0;
   padding: 7px 12px;
@@ -326,10 +327,10 @@ const DoneButton = styled.button`
   }
 `
 
-/** 시각 두 칸 — 위 시작·종료 날짜 칸과 같은 두 열 */
+/** 시각 두 칸 — 위 시작·종료 날짜 칸과 같은 격자 */
 const InlineTimeRow = styled.span`
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
   width: 100%;
 `

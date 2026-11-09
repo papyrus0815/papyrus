@@ -1933,8 +1933,12 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
                   },
                 },
                 contemporarySuggestions: contemporaryRaw
-                  .filter((candidate) => !linkedRelatedIdSet.has(candidate.id))
-                  .slice(0, 4)
+                  .filter(
+                    (candidate) =>
+                      candidate.kind === 'COLLECTION' &&
+                      !linkedRelatedIdSet.has(candidate.id),
+                  )
+                  .slice(0, 3)
                   .map(toSimpleCandidate),
               }
         }
@@ -1956,10 +1960,26 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
                     relatedQuickFetching ||
                     relatedQuickQuery !== debouncedRelatedQuickQuery,
                 },
-                contemporarySuggestions: contemporaryRaw
-                  .filter((candidate) => !linkedRelatedIdSet.has(candidate.id))
-                  .slice(0, 4)
-                  .map(toSimpleCandidate),
+                contemporarySuggestions: (() => {
+                  const parentSuggestedIds = new Set(
+                    contemporaryRaw
+                      .filter(
+                        (candidate) =>
+                          candidate.kind === 'COLLECTION' &&
+                          !linkedRelatedIdSet.has(candidate.id),
+                      )
+                      .slice(0, 3)
+                      .map((candidate) => candidate.id),
+                  )
+                  return contemporaryRaw
+                    .filter(
+                      (candidate) =>
+                        !linkedRelatedIdSet.has(candidate.id) &&
+                        !parentSuggestedIds.has(candidate.id),
+                    )
+                    .slice(0, 4)
+                    .map(toSimpleCandidate)
+                })(),
                 lastSavedEvent,
                 currentStartYear: currentSignedStartYear,
               }
@@ -2169,18 +2189,17 @@ function candidateSignedStartYear(candidate: EventLinkCandidate): number | null 
 }
 
 function candidateDateLabel(candidate: EventLinkCandidate): string | undefined {
-  if (candidate.startDate) {
-    return formatDateRange(
-      candidate.startDate,
-      candidate.endDate ?? undefined,
-      candidate.startDatePrecision,
-      candidate.endDatePrecision,
-    )
+  const startYear = candidateSignedStartYear(candidate)
+  if (startYear == null) return undefined
+  const formatCompactYear = (signedYear: number) =>
+    signedYear < 0 ? `기원전 ${Math.abs(signedYear)}년` : `${signedYear}`
+  const endYear = candidate.endDate
+    ? signedYearFromIsoLike(candidate.endDate)
+    : null
+  if (endYear != null && endYear !== startYear) {
+    return `${formatCompactYear(startYear)} ~ ${formatCompactYear(endYear)}`
   }
-  if (candidate.startYear != null) {
-    return `${candidate.startEra === 'BC' ? '기원전 ' : ''}${candidate.startYear}년`
-  }
-  return undefined
+  return formatCompactYear(startYear)
 }
 
 function toSimpleCandidate(candidate: EventLinkCandidate) {

@@ -1202,4 +1202,105 @@ describe('CoreRecordsGroup — 2열 진영 보드(SidesField) 및 성립·소멸
       }),
     )
   })
+
+  it('참여 인물 역할 빠른 프리셋은 포커스 시에만 노출되고, 추천 인물·추천 조직은 기본 3개까지만 보인 뒤 더 보기/접기로 토글된다', async () => {
+    const { getAllPersons } = jest.requireMock('@/shared/api/persons') as {
+      getAllPersons: jest.Mock
+    }
+    getAllPersons.mockResolvedValue([
+      {
+        id: 'p-1',
+        name: '인물1',
+        birthEra: 'AD',
+        birthYear: 1880,
+        deathEra: 'AD',
+        deathYear: 1950,
+        countryId: 'c-fr',
+      },
+      {
+        id: 'p-2',
+        name: '인물2',
+        birthEra: 'AD',
+        birthYear: 1882,
+        deathEra: 'AD',
+        deathYear: 1952,
+        countryId: 'c-fr',
+      },
+      {
+        id: 'p-3',
+        name: '인물3',
+        birthEra: 'AD',
+        birthYear: 1885,
+        deathEra: 'AD',
+        deathYear: 1955,
+        countryId: 'c-fr',
+      },
+      {
+        id: 'p-4',
+        name: '인물4',
+        birthEra: 'AD',
+        birthYear: 1890,
+        deathEra: 'AD',
+        deathYear: 1960,
+        countryId: 'c-fr',
+      },
+    ])
+
+    let drafts = {
+      ...emptyRegisterFacetDrafts(),
+      persons: [{ personId: 'p-added', name: '드골', role: '' }],
+    }
+    const onDraftsChange = jest.fn((next) => {
+      drafts = next
+    })
+
+    renderGroup(
+      <CoreRecordsGroup
+        type="TREATY"
+        domain="DIPLOMACY"
+        drafts={drafts}
+        onDraftsChange={onDraftsChange}
+        participants={[{ countryId: 'c-fr', role: 'PARTICIPANT' }]}
+        participantName={() => '프랑스'}
+        onAddCountryWithRole={jest.fn()}
+        onRemoveParticipant={jest.fn()}
+        eventTitle="파리 협약"
+        startDate="1919-01-18"
+        playClickSound={jest.fn()}
+      />,
+    )
+
+    // 1. 포커스 전에는 인물 역할 프리셋 바가 숨겨져 있다가 포커스 시 노출된다
+    expect(
+      screen.queryByRole('group', { name: '드골 한 일 빠른 입력' }),
+    ).not.toBeInTheDocument()
+
+    const roleInput = screen.getByLabelText('드골이(가) 한 일')
+    fireEvent.focus(roleInput)
+    expect(
+      screen.getByRole('group', { name: '드골 한 일 빠른 입력' }),
+    ).toBeInTheDocument()
+
+    // 2. 추천 인물은 기본 3개만 노출되고 '+1 더 보기' 클릭 시 4번째 추천이 나타난다
+    await screen.findByRole('button', { name: /추천 인물 인물1 추가/ })
+    expect(
+      screen.getByRole('button', { name: /추천 인물 인물3 추가/ }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /추천 인물 인물4 추가/ }),
+    ).not.toBeInTheDocument()
+
+    const expandPersonsBtn = screen.getByRole('button', {
+      name: '추천 인물 1건 더 보기',
+    })
+    fireEvent.click(expandPersonsBtn)
+    expect(
+      screen.getByRole('button', { name: /추천 인물 인물4 추가/ }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '추천 인물 접기' }))
+    expect(
+      screen.queryByRole('button', { name: /추천 인물 인물4 추가/ }),
+    ).not.toBeInTheDocument()
+  })
 })

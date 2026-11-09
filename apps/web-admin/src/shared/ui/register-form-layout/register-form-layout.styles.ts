@@ -165,8 +165,8 @@ export const FieldControl = styled.div<{ $variant?: 'person' | 'datePair' }>`
 
 export const DateFieldsRow = styled.div`
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px 12px;
   max-width: 480px;
   & > button {
     max-width: 100%;

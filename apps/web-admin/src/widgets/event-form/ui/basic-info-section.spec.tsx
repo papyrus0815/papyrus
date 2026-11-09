@@ -1554,4 +1554,75 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
       screen.getByLabelText('연관 사건 인과 흐름도'),
     ).toBeInTheDocument()
   })
+
+  it('연관 사건 추천 칩이 많을 때 기본 2개만 노출하고 +더보기/접기로 깔끔하게 제어하며 상위 사건으로 중복 폴백하지 않는다', () => {
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          startDate: '1914-07-28',
+          parentEventSlot: {
+            parent: null,
+            onOpenPicker: jest.fn(),
+            onClear: jest.fn(),
+            quickSearch: {
+              query: '',
+              onQueryChange: jest.fn(),
+              candidates: [],
+              onSelectCandidate: jest.fn(),
+            },
+          },
+          relatedEventsSlot: {
+            items: [],
+            onOpenPicker: jest.fn(),
+            onChange: jest.fn(),
+            contemporarySuggestions: [
+              { id: 'e1', title: '사라예보 사건', dateLabel: '1914' },
+              { id: 'e2', title: '7월 위기', dateLabel: '1914' },
+              { id: 'e3', title: '마른 전투', dateLabel: '1914' },
+              { id: 'e4', title: '탄넨베르크 전투', dateLabel: '1914' },
+            ],
+          },
+        })}
+      />,
+    )
+
+    // 상위 사건 슬롯에 contemporarySuggestions가 없으면 연관 사건 추천을 중복 표시하지 않는다
+    expect(
+      screen.queryByLabelText('동시대 추천 상위 사건'),
+    ).not.toBeInTheDocument()
+
+    // 연관 사건 추천은 기본 2개만 노출되고 나머지는 +2 더보기로 접혀 있다
+    const relatedSuggestionBar = screen.getByLabelText('동시대 추천 연관 사건')
+    expect(
+      within(relatedSuggestionBar).getByRole('button', {
+        name: '+ 사라예보 사건 (1914)',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      within(relatedSuggestionBar).getByRole('button', {
+        name: '+ 7월 위기 (1914)',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      within(relatedSuggestionBar).queryByRole('button', {
+        name: '+ 마른 전투 (1914)',
+      }),
+    ).not.toBeInTheDocument()
+
+    fireEvent.click(
+      within(relatedSuggestionBar).getByRole('button', {
+        name: '동시대 추천 연관 사건 2건 더 보기',
+      }),
+    )
+    expect(
+      within(relatedSuggestionBar).getByRole('button', {
+        name: '+ 마른 전투 (1914)',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      within(relatedSuggestionBar).getByRole('button', {
+        name: '+ 탄넨베르크 전투 (1914)',
+      }),
+    ).toBeInTheDocument()
+  })
 })
