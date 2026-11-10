@@ -32,6 +32,10 @@ import {
 import { metaText } from '@/pages/events/styles/theme'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { formatYearLabel, parseIsoDateParts } from '@/shared/lib/iso-date'
+import {
+  type CityWithHistoricalNames,
+  formatHistoricalCityName,
+} from '@/shared/lib/historical-city-name'
 import { commentsQueryOptions } from '@/entities/comment/comment.api'
 import { getEventOverview } from '@/shared/api/event-overview'
 import { eventKeys } from '@/shared/api/event-query-keys'
@@ -257,6 +261,11 @@ export function DetailFacts({
               <span>{formatCoordinate(locationPoint as LatLng)}</span>
             )}
             {/* 위치 메모 — 장소 이름과 따로, 작게(두 줄까지, 전체는 마우스를 올리면) */}
+            {(() => {
+              const eventCity = (event as { city?: CityWithHistoricalNames | null }).city
+              const cityLabel = formatHistoricalCityName(eventCity, year)
+              return cityLabel ? <LocationNote title="연결 도시(당시 지명 포함)">🏙️ {cityLabel}</LocationNote> : null
+            })()}
             {event.locationNote?.trim() && (
               <LocationNote title={event.locationNote}>{event.locationNote}</LocationNote>
             )}

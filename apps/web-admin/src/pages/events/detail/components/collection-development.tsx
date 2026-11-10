@@ -73,6 +73,7 @@ import {
   dropActionFor,
   indexTree,
   subtreeIds,
+  summarizeBattleRow,
 } from './development-tree.lib'
 
 const LazyEventRegisterModal = lazy(() =>
@@ -280,6 +281,9 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
           kind: node.kind ?? null,
           phaseId: node.phaseId ?? null,
           phases: (node.phases ?? []) as EventPhase[],
+          location: node.location ?? null,
+          sides: node.sides ?? [],
+          metrics: node.metrics ?? [],
         }))
       : (event.childEvents ?? []).map((child) => ({
           id: child.id,
@@ -787,6 +791,31 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
                 )}
               </StepHead>
             </StepRowLine>
+            {(() => {
+              const summary = summarizeBattleRow(node)
+              if (!summary) return null
+              return (
+                <BattleBriefingRow>
+                  {summary.locationLabel && <BattleLocationChip>📍 {summary.locationLabel}</BattleLocationChip>}
+                  {summary.outcomeBadges.map((badge, badgeIndex) => (
+                    <BattleOutcomeChip key={`o-${badgeIndex}`} $color={badge.sideColor} $outcome={badge.outcome}>
+                      🏆 {badge.sideName} · {badge.outcomeLabel}
+                    </BattleOutcomeChip>
+                  ))}
+                  {summary.unitBadges.map((unitBadge) => (
+                    <BattleUnitChip key={unitBadge.unitId} $color={unitBadge.sideColor} title={`${unitBadge.sideName} 소속 참전 부대`}>
+                      ⚔️ {unitBadge.unitName}
+                    </BattleUnitChip>
+                  ))}
+                  {summary.extraUnitCount > 0 && <BattleUnitMore>+{summary.extraUnitCount}개 부대</BattleUnitMore>}
+                  {summary.metricBadges.map((metricBadge, metricIndex) => (
+                    <BattleMetricChip key={`m-${metricIndex}`}>
+                      📉 {metricBadge.typeLabel} {metricBadge.valueLabel}
+                    </BattleMetricChip>
+                  ))}
+                </BattleBriefingRow>
+              )
+            })()}
             {owned && !selecting && !draggingId && (
               <StepTools>
                 <KindSwitch
@@ -2527,4 +2556,55 @@ const NoticeActions = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 4px 14px;
+`
+
+const BattleBriefingRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin-top: 3px;
+`
+
+const BattleChipBase = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+`
+
+const BattleLocationChip = styled(BattleChipBase)`
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) => theme.colors.background.secondary};
+`
+
+const BattleOutcomeChip = styled(BattleChipBase)<{ $color: string | null; $outcome: string }>`
+  font-weight: 600;
+  color: ${({ $color, theme }) => $color ?? theme.colors.text.primary};
+  background: ${({ $outcome }) =>
+    $outcome === 'VICTORY' || $outcome === 'PYRRHIC_VICTORY'
+      ? 'rgba(16, 185, 129, 0.12)'
+      : $outcome === 'DEFEAT'
+        ? 'rgba(239, 68, 68, 0.12)'
+        : 'rgba(107, 114, 128, 0.12)'};
+`
+
+const BattleUnitChip = styled(BattleChipBase)<{ $color: string | null }>`
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border-left: 2.5px solid ${({ $color, theme }) => $color ?? theme.colors.border.primary};
+`
+
+const BattleUnitMore = styled.span`
+  font-size: 10.5px;
+  color: ${metaText};
+`
+
+const BattleMetricChip = styled(BattleChipBase)`
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: rgba(245, 158, 11, 0.1);
 `

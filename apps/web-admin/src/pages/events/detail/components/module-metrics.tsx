@@ -30,6 +30,8 @@ import {
 import { eventTypeFeatures } from '@/entities/event/model'
 import { RADIUS } from '@/entities/event/ui/ledger-tokens'
 import { deleteObservation, listMetricDefinitions, type Observation } from '@/shared/api/evidence'
+import { getEventOverview } from '@/shared/api/event-overview'
+import { listEventSideUnits, type SideUnitView } from '@/shared/api/event-sides'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
 import { notify } from '@/shared/ui/toast'
@@ -45,6 +47,7 @@ import {
   alternativesOf,
   buildMemberCells,
   buildSideMetricRows,
+  buildUnitCells,
   centerOf,
   formatRate,
   lossRate,
@@ -127,7 +130,21 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
   /* 지표 추천·첫 대상·빈 안내는 형식이, 형식이 정하지 않으면 분야가 정한다(경제 사건에 '병력·사상자'를 권하지 않게) */
   const features = eventTypeFeatures(event.type, event.domain)
 
-  /** 측정값 대상 선택지 — 사건 전체 · 진영 · 참여국 줄 */
+  const { data: sideUnits = [] } = useQuery({
+    queryKey: eventKeys.sideUnits(event.id),
+    queryFn: () => listEventSideUnits(event.id).catch(() => [] as SideUnitView[]),
+    staleTime: 30_000,
+    enabled: sides.length > 0,
+  })
+
+  const { data: overviewData } = useQuery({
+    queryKey: eventKeys.overview(event.id),
+    queryFn: () => getEventOverview(event.id),
+    staleTime: 30_000,
+    enabled: event.kind === 'COLLECTION',
+  })
+
+  /** 측정값 대상 선택지 — 사건 전체 · 진영 · 참여국 줄 · 투입 부대 줄 */
   const subjects = useMemo<ObservationSubjectOption[]>(() => {
     const options: ObservationSubjectOption[] = [
       { subjectType: 'EVENT', subjectId: event.id, label: '사건 전체', color: null },
@@ -144,8 +161,17 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
         color: sides.find((side) => side.id === country.sideId)?.color ?? null,
       })
     }
+    for (const sideUnit of sideUnits) {
+      const parentSide = sides.find((side) => side.id === sideUnit.sideId)
+      options.push({
+        subjectType: 'EVENT_SIDE_UNIT',
+        subjectId: sideUnit.id,
+        label: parentSide ? `⚔️ ${parentSide.name} · ${sideUnit.unit.name}` : `⚔️ ${sideUnit.unit.name}`,
+        color: parentSide?.color ?? null,
+      })
+    }
     return options
-  }, [event.id, event.relatedCountries, event.relatedHistoricalCountries, sides])
+  }, [event.id, event.relatedCountries, event.relatedHistoricalCountries, sides, sideUnits])
 
   const subjectOf = (observation: Observation) =>
     subjects.find(
@@ -168,16 +194,29 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
     return map
   }, [event.relatedCountries, event.relatedHistoricalCountries, sides])
   const memberCells = useMemo(() => buildMemberCells(observations, participantSide), [observations, participantSide])
-  /** 비교표 행 — 진영 값 지표 + 나라 몫만 있는 지표(진영 값이 아직 없어도 나라 합으로 비교된다) */
+  const unitSide = useMemo(() => {
+    const map = new Map<string, { sideId: string; name: string }>()
+    for (const sideUnit of sideUnits) {
+      if (sides.some((side) => side.id === sideUnit.sideId)) {
+        map.set(sideUnit.id, { sideId: sideUnit.sideId, name: sideUnit.unit.name })
+      }
+    }
+    return map
+  }, [sideUnits, sides])
+  const unitCells = useMemo(() => buildUnitCells(observations, unitSide), [observations, unitSide])
+  /** 비교표 행 — 진영 값 지표 + 나라/부대 몫만 있는 지표(진영 값이 아직 없어도 합으로 비교된다) */
   const comparedRows = useMemo(() => {
-    const extra = [...memberCells.keys()]
+    const extraKeys = new Set<string>([...memberCells.keys(), ...unitCells.keys()])
+    const extra = [...extraKeys]
       .filter((key) => !sideRows.some((row) => row.key === key))
       .map((key) => {
-        const any = [...(memberCells.get(key)?.values() ?? [])].flat()[0]
-        return { key, name: any?.observation.metric.name ?? key, cells: new Map<string, Observation[]>() }
+        const anyMember = [...(memberCells.get(key)?.values() ?? [])].flat()[0]
+        const anyUnit = [...(unitCells.get(key)?.values() ?? [])].flat()[0]
+        const sample = anyMember ?? anyUnit
+        return { key, name: sample?.observation.metric.name ?? key, cells: new Map<string, Observation[]>() }
       })
     return [...sideRows, ...extra]
-  }, [sideRows, memberCells])
+  }, [sideRows, memberCells, unitCells])
   /**
    * 빈 비교표 — 진영은 있는데 값이 하나도 없으면 추천 지표(형식이 권하는 앞 3개) 행 × 모든 진영 열을 빈 칸으로 세운다.
    * 예전엔 수치 모듈 자체가 숨어 '모듈 추가 ▾'를 찾아야 했다(1차대전: 진영 2·수치 0).
@@ -195,10 +234,15 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
     () =>
       comparedRows.length > 0
         ? sides.filter((side) =>
-            comparedRows.some((row) => row.cells.has(side.id) || memberCells.get(row.key)?.has(side.id)),
+            comparedRows.some(
+              (row) =>
+                row.cells.has(side.id) ||
+                memberCells.get(row.key)?.has(side.id) ||
+                unitCells.get(row.key)?.has(side.id),
+            ),
           )
         : sides,
-    [sides, comparedRows, memberCells],
+    [sides, comparedRows, memberCells, unitCells],
   )
   /** 해설 — 진영 둘의 병력·손실·손실률을 문장으로(side-metrics-commentary.lib) */
   const commentary = useMemo(
@@ -232,8 +276,9 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
     const groups = new Map<string, Observation[]>()
     for (const observation of observations) {
       if (observation.subjectType === 'EVENT_SIDE' && sides.some((side) => side.id === observation.subjectId)) continue
-      // 진영에 든 나라 몫은 비교표 진영 칸 아래에 있다
+      // 진영에 든 나라·부대 몫은 비교표 진영 칸 아래에 있다
       if (observation.subjectType === 'EVENT_PARTICIPANT' && participantSide.has(observation.subjectId)) continue
+      if (observation.subjectType === 'EVENT_SIDE_UNIT' && unitSide.has(observation.subjectId)) continue
       const key = `${observation.subjectType}:${observation.subjectId}`
       groups.set(key, [...(groups.get(key) ?? []), observation])
     }
@@ -408,7 +453,11 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
                       const members = [...(memberCells.get(row.key)?.get(side.id) ?? [])].sort(
                         (left, right) => (centerOf(right.observation) ?? 0) - (centerOf(left.observation) ?? 0),
                       )
+                      const units = [...(unitCells.get(row.key)?.get(side.id) ?? [])].sort(
+                        (left, right) => (centerOf(right.observation) ?? 0) - (centerOf(left.observation) ?? 0),
+                      )
                       const sum = memberSum(members)
+                      const unitSumVal = memberSum(units)
                       /* 경합 추정치 — 채택값 하나를 앞에, 나머지는 '다른 추정 N'으로 접는다 */
                       const representative = representativeOf(cell)
                       const alternatives = alternativesOf(cell)
@@ -416,7 +465,8 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
                       const alternativesKey = `${row.key}:${side.id}`
                       const sideValue = representative && !representative.atLeast ? centerOf(representative) : null
                       const gap = sumMismatch(sideValue, sum)
-                      const unit = members[0]?.observation ?? cell[0]
+                      const unitGap = sumMismatch(sideValue, unitSumVal)
+                      const unit = members[0]?.observation ?? units[0]?.observation ?? cell[0]
                       /** 나라 몫 — 진영 칸 아래 '그 진영 나라들'(진영 값과 견주게 합·어긋남) */
                       const memberBlock =
                         members.length > 0 ? (
@@ -447,17 +497,53 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
                             )}
                           </MemberFigures>
                         ) : null
-                      if (cell.length === 0 && members.length > 0) {
-                        /* 진영 값이 없고 나라 몫만 있으면 — 나라 합을 계산 값으로 세운다 */
+                      const unitBlock =
+                        units.length > 0 ? (
+                          <MemberFigures>
+                            {units.map((unitEntry) => (
+                              <li key={unitEntry.observation.id}>
+                                <span>⚔️ {unitEntry.name}</span>
+                                <span className="value" title={formatObservationExact(unitEntry.observation)}>
+                                  {formatObservationValue(unitEntry.observation)}
+                                </span>
+                                <MemberActions>
+                                  <IconButton
+                                    type="button"
+                                    onClick={() => setEditing(unitEntry.observation)}
+                                    aria-label={`${unitEntry.name} ${row.name} 수정`}
+                                  >
+                                    <FiEdit2 />
+                                  </IconButton>
+                                </MemberActions>
+                              </li>
+                            ))}
+                            {unitSumVal !== null && cell.length > 0 && units.length > 1 && (
+                              <li className={unitGap !== null ? 'sum mismatch' : 'sum'}>
+                                <span>부대 합</span>
+                                <span className="value">{formatObservationValue(syntheticOf(unit, unitSumVal))}</span>
+                                {unitGap !== null && (
+                                  <span className="gap" title="진영 값과 산하 부대별 값의 합이 5% 넘게 다릅니다">
+                                    진영 값과 {formatObservationValue(syntheticOf(unit, Math.abs(unitGap)))} {unitGap > 0 ? '모자람' : '넘침'}
+                                  </span>
+                                )}
+                              </li>
+                            )}
+                          </MemberFigures>
+                        ) : null
+                      if (cell.length === 0 && (members.length > 0 || units.length > 0)) {
+                        /* 진영 값이 없고 나라·부대 몫만 있으면 — 합을 계산 값으로 세운다 */
+                        const derivedSum = sum ?? unitSumVal
+                        const derivedLabel = sum !== null ? '나라 합' : '부대 합'
                         return (
                           <td key={side.id}>
-                            {sum !== null && (
+                            {derivedSum !== null && (
                               <CellTop>
-                                <CellValue>{formatObservationValue(syntheticOf(unit, sum))}</CellValue>
-                                <DerivedHint title="진영 값이 없어 나라별 값을 더했습니다">나라 합</DerivedHint>
+                                <CellValue>{formatObservationValue(syntheticOf(unit, derivedSum))}</CellValue>
+                                <DerivedHint title="진영 값이 없어 하위 항목 값을 더했습니다">{derivedLabel}</DerivedHint>
                               </CellTop>
                             )}
                             {memberBlock}
+                            {unitBlock}
                           </td>
                         )
                       }
@@ -578,6 +664,7 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
                             </AlternativeBlock>
                           )}
                           {memberBlock}
+                          {unitBlock}
                         </td>
                       )
                     })}
@@ -607,6 +694,60 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
           </SideTable>
         </TableScroll>
       )}
+
+      {event.kind === 'COLLECTION' && (() => {
+        const descendants = overviewData?.descendants ?? []
+        const byMetricAndScope = new Map<
+          string,
+          { metricName: string; unit: string | null; scopeLabel: string; total: number; battleCount: number }
+        >()
+        for (const childNode of descendants) {
+          for (const metric of childNode.metrics ?? []) {
+            const numericVal =
+              metric.value ??
+              (metric.low != null && metric.high != null
+                ? (metric.low + metric.high) / 2
+                : (metric.low ?? metric.high ?? null))
+            if (numericVal == null || !Number.isFinite(numericVal)) continue
+            const scopeName = metric.scopeLabel ?? '사건 전체'
+            const groupKey = `${metric.metricKey}::${scopeName}`
+            const existing = byMetricAndScope.get(groupKey)
+            if (existing) {
+              existing.total += numericVal
+              existing.battleCount += 1
+            } else {
+              byMetricAndScope.set(groupKey, {
+                metricName: metric.metricName,
+                unit: metric.unit,
+                scopeLabel: scopeName,
+                total: numericVal,
+                battleCount: 1,
+              })
+            }
+          }
+        }
+        const entries = [...byMetricAndScope.values()]
+        if (entries.length === 0) return null
+        return (
+          <SubjectBlock>
+            <SubjectName $color={NEUTRAL}>📊 하위 사건 수치 합산 (하위 전투 {descendants.length}건 기준)</SubjectName>
+            <Rows>
+              {entries.map((entry) => (
+                <Row key={`${entry.metricName}-${entry.scopeLabel}`}>
+                  <RowMetric>{entry.scopeLabel} · {entry.metricName}</RowMetric>
+                  <RowValue>
+                    {Math.round(entry.total).toLocaleString()}
+                    {entry.unit ? ` ${entry.unit}` : ''}
+                  </RowValue>
+                  <RowDetail>
+                    <DerivedHint>하위 {entry.battleCount}개 사건 합산</DerivedHint>
+                  </RowDetail>
+                </Row>
+              ))}
+            </Rows>
+          </SubjectBlock>
+        )
+      })()}
 
       {grouped.map(({ option, rows }) => (
         <SubjectBlock key={`${option.subjectType}:${option.subjectId}`}>

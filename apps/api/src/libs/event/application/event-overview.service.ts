@@ -92,6 +92,20 @@ export interface EventOverviewMetric {
   scopeLabel: string | null
 }
 
+export interface EventOverviewMapFeature {
+  id: string
+  eventId: string
+  geometryType: 'POINT' | 'ARROW' | 'LINE' | 'POLYGON'
+  title: string
+  description: string | null
+  color: string | null
+  sideId: string | null
+  sideName: string | null
+  deployedUnitId: string | null
+  deployedUnitName: string | null
+  coordinates: Array<[number, number]>
+}
+
 export interface EventOverviewNode {
   id: string
   title: string
@@ -134,6 +148,7 @@ export interface EventOverviewNode {
   persons: EventOverviewPerson[]
   sides: EventOverviewSide[]
   metrics: EventOverviewMetric[]
+  mapFeatures?: EventOverviewMapFeature[]
   /** 기록 점검용 — 무엇이 채워졌나 */
   sectionCount: number
   imageCount: number
@@ -247,6 +262,13 @@ const NODE_INCLUDE = {
           },
         },
       },
+    },
+  },
+  mapFeatures: {
+    orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
+    include: {
+      side: { select: { id: true, name: true, color: true } },
+      deployedUnit: { select: { id: true, militaryUnit: { select: { name: true } } } },
     },
   },
   _count: { select: { eventSections: true, eventImages: true } },
@@ -630,6 +652,23 @@ export class EventOverviewService {
         })),
       })),
       metrics: metricsByEvent.get(row.id) ?? [],
+      mapFeatures: (row.mapFeatures ?? []).map((feature) => ({
+        id: feature.id,
+        eventId: feature.eventId,
+        geometryType: feature.geometryType,
+        title: feature.title,
+        description: feature.description ?? null,
+        color: feature.color ?? feature.side?.color ?? null,
+        sideId: feature.sideId ?? null,
+        sideName: feature.side?.name ?? null,
+        deployedUnitId: feature.deployedUnitId ?? null,
+        deployedUnitName: feature.deployedUnit?.militaryUnit.name ?? null,
+        coordinates: Array.isArray(feature.coordinates)
+          ? feature.coordinates
+              .filter((pt): pt is [number, number] => Array.isArray(pt) && pt.length >= 2)
+              .map((pt) => [Number(pt[0]), Number(pt[1])] as [number, number])
+          : [],
+      })),
       sectionCount: row._count.eventSections,
       imageCount: row._count.eventImages,
       hasBackground: hasText(row.background),

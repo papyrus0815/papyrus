@@ -16,6 +16,36 @@ function compareStart(first?: string | null, second?: string | null): number {
   return left.year - right.year || left.month - right.month || left.day - right.day
 }
 
+export interface TreeSourceDeployedUnit {
+  id: string
+  militaryUnitId: string
+  name: string
+  unitType: string | null
+  role: string | null
+}
+
+export interface TreeSourceSide {
+  id: string
+  name: string
+  color: string | null
+  outcome?: string | null
+  outcomeNote?: string | null
+  deployedUnits?: ReadonlyArray<TreeSourceDeployedUnit>
+}
+
+export interface TreeSourceMetric {
+  metricKey: string
+  metricName: string
+  unit: string | null
+  value: number | null
+  low: number | null
+  high: number | null
+  approx: boolean
+  atLeast: boolean
+  scope: string
+  scopeLabel: string | null
+}
+
 export interface TreeSource {
   id: string
   title: string
@@ -26,12 +56,112 @@ export interface TreeSource {
   endDate?: string | null
   endDatePrecision?: string | null
   domain?: string | null
+  location?: string | null
   /** 응답에 종류가 실려 오면 그것이 정본. 없으면 하위가 있는지로 판별(단일은 하위를 가질 수 없다) */
   kind?: 'SINGLE' | 'COLLECTION' | null
   /** 손으로 넣은 상위의 국면 — 비면 날짜로 자동 */
   phaseId?: string | null
   /** 이 묶음의 국면 — 최상위 전개에서도 펼친 묶음 안에 장 머리를 세운다 */
   phases?: ReadonlyArray<import('./event-phase.lib').EventPhase>
+  /** 조망 API에서 실려 오는 진영·승패·참전 부대 요약 */
+  sides?: ReadonlyArray<TreeSourceSide>
+  /** 조망 API에서 실려 오는 핵심 수치 요약 */
+  metrics?: ReadonlyArray<TreeSourceMetric>
+}
+
+export interface BattleRowSummary {
+  outcomeBadge: { label: string; color: string | null; outcome: string } | null
+  unitSummary: string | null
+  unitNames: string[]
+  metricSummary: string | null
+  locationLabel: string | null
+}
+
+function formatCompactCount(val: number, unit: string | null): string {
+  const suffix = unit ?? ''
+  if (val >= 10000) {
+    const man = val / 10000
+    const formatted = man >= 10 ? Math.round(man).toLocaleString('ko-KR') : man.toFixed(1).replace(/\.0$/, '')
+    return `${formatted}만${suffix}`
+  }
+  return `${Math.round(val).toLocaleString('ko-KR')}${suffix}`
+}
+
+/**
+ * 하위 전투·작전 한 줄의 전황 요약 배지 계산 (승패 · 주력 참전부대 · 핵심 피해 · 장소)
+ */
+export function summarizeBattleRow(node: TreeSource): BattleRowSummary {
+  const sides = node.sides ?? []
+  let outcomeBadge: BattleRowSummary['outcomeBadge'] = null
+  const victor = sides.find((side) => side.outcome === 'VICTORY')
+  const draw = sides.find((side) => side.outcome === 'DRAW')
+  const inconclusive = sides.find((side) => side.outcome === 'INCONCLUSIVE')
+  if (victor) {
+    outcomeBadge = {
+      label: victor.outcomeNote ? `${victor.name} 승리 (${victor.outcomeNote})` : `${victor.name} 승리`,
+      color: victor.color,
+      outcome: 'VICTORY',
+    }
+  } else if (draw) {
+    outcomeBadge = {
+      label: draw.outcomeNote || '무승부·교착',
+      color: draw.color,
+      outcome: 'DRAW',
+    }
+  } else if (inconclusive) {
+    outcomeBadge = {
+      label: inconclusive.outcomeNote || '결론 없음',
+      color: inconclusive.color,
+      outcome: 'INCONCLUSIVE',
+    }
+  }
+
+  const allUnitNames = new Set<string>()
+  const sideUnitParts: string[] = []
+  for (const side of sides) {
+    const units = side.deployedUnits ?? []
+    for (const unitItem of units) {
+      if (unitItem.name) allUnitNames.add(unitItem.name)
+    }
+    if (units.length > 0) {
+      const topNames = units.slice(0, 2).map((unitItem) => unitItem.name)
+      const extra = units.length > 2 ? ` 외 ${units.length - 2}` : ''
+      sideUnitParts.push(`${topNames.join('·')}${extra}`)
+    }
+  }
+  const unitSummary = sideUnitParts.length > 0 ? sideUnitParts.join(' vs ') : null
+
+  const metrics = node.metrics ?? []
+  let metricSummary: string | null = null
+  if (metrics.length > 0) {
+    const priorityKeys = [
+      'military.prisoners',
+      'military.casualties_total',
+      'military.deaths_total',
+      'military.killed_in_action',
+      'military.personnel',
+    ]
+    const picked =
+      priorityKeys
+        .map((key) => metrics.find((metricItem) => metricItem.metricKey === key))
+        .find((metricItem) => metricItem !== undefined) ?? metrics[0]
+    if (picked) {
+      const center =
+        picked.value ?? (picked.low != null && picked.high != null ? (picked.low + picked.high) / 2 : (picked.low ?? picked.high))
+      if (center != null && center > 0) {
+        const prefix = picked.scopeLabel ? `${picked.scopeLabel} ` : ''
+        metricSummary = `${prefix}${picked.metricName} ${picked.approx ? '약 ' : ''}${formatCompactCount(center, picked.unit)}`
+      }
+    }
+  }
+
+  return {
+    outcomeBadge,
+    unitSummary,
+    unitNames: [...allUnitNames],
+    metricSummary,
+    locationLabel: node.location?.trim() || null,
+  }
 }
 
 export interface TreeNode extends TreeSource {

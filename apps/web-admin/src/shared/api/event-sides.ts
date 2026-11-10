@@ -43,6 +43,12 @@ export interface EventSide {
   outcome: SideOutcome | null
   /** 결과 단서 — '전략적 승리, 전술적 패배' */
   outcomeNote: string | null
+  /** 진영별 작전 목표·전략·전술·첩보·보급 대칭 서술 */
+  objective?: string | null
+  strategy?: string | null
+  tactics?: string | null
+  intelligence?: string | null
+  logistics?: string | null
   participants: EventSideMemberCountry[]
   persons: Array<{ personEventId: string; personId: string; name: string; surname: string | null; role: string | null }>
   organizations: Array<{ relationId: string; organizationId: string; name: string; role: string }>
@@ -58,6 +64,11 @@ export interface EventSideInput {
   personGroupId?: string | null
   outcome?: SideOutcome | null
   outcomeNote?: string | null
+  objective?: string | null
+  strategy?: string | null
+  tactics?: string | null
+  intelligence?: string | null
+  logistics?: string | null
 }
 
 /** 진영 목록 동기화 — 배열 순서 = 표시 순서. 빠진 진영은 지워지고(그 진영의 측정값도) 소속만 풀린다 */
@@ -97,6 +108,11 @@ export function toSideInputs(sides: ReadonlyArray<EventSide>): EventSideInput[] 
     personGroupId: side.personGroupId ?? null,
     outcome: side.outcome,
     outcomeNote: side.outcomeNote,
+    objective: side.objective ?? null,
+    strategy: side.strategy ?? null,
+    tactics: side.tactics ?? null,
+    intelligence: side.intelligence ?? null,
+    logistics: side.logistics ?? null,
   }))
 }
 
@@ -246,4 +262,85 @@ export async function removeEventSideUnit(eventId: string, id: string): Promise<
     },
   )
   return parseSideUnitResponse(res, '투입 부대를 제외하지 못했습니다')
+}
+
+export type SideWeaponKind = 'WEAPON' | 'GROUND_VEHICLE' | 'AIRCRAFT' | 'NAVAL_VESSEL'
+
+export interface SideWeaponView {
+  id: string
+  sideId: string
+  deployedUnitId: string | null
+  deployedUnitName: string | null
+  kind: SideWeaponKind
+  itemId: string
+  name: string
+  categoryLabel: string | null
+  countryName: string | null
+  manufacturerName: string | null
+  quantity: number | null
+  note: string | null
+  sortOrder: number
+}
+
+export interface SideWeaponInput {
+  kind: SideWeaponKind
+  itemId: string
+  deployedUnitId?: string | null
+  quantity?: number | null
+  note?: string | null
+}
+
+export interface WeaponCatalogItem {
+  id: string
+  kind: SideWeaponKind
+  name: string
+  categoryLabel: string | null
+  countryId: string | null
+  historicalCountryId: string | null
+  countryName: string | null
+  manufacturerName: string | null
+}
+
+export async function listEventSideWeapons(eventId: string): Promise<Record<string, SideWeaponView[]>> {
+  const conn = getApiConnection()
+  const res = await fetch(`${conn.host}/events/${encodeURIComponent(eventId)}/side-weapons`, {
+    method: 'GET',
+    headers: conn.headers as HeadersInit,
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error(`투입 병기 목록을 불러오지 못했습니다 (${res.status})`)
+  const data = (await res.json()) as { data?: Record<string, SideWeaponView[]> } & Record<string, SideWeaponView[]>
+  return data?.data ?? data
+}
+
+export async function getWeaponCatalog(eventId: string): Promise<WeaponCatalogItem[]> {
+  const conn = getApiConnection()
+  const res = await fetch(`${conn.host}/events/${encodeURIComponent(eventId)}/weapon-catalog`, {
+    method: 'GET',
+    headers: conn.headers as HeadersInit,
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error(`병기 카탈로그를 불러오지 못했습니다 (${res.status})`)
+  const data = (await res.json()) as { data?: WeaponCatalogItem[] } & WeaponCatalogItem[]
+  return data?.data ?? data
+}
+
+export async function syncEventSideWeapons(
+  eventId: string,
+  sideId: string,
+  weapons: SideWeaponInput[],
+): Promise<SideWeaponView[]> {
+  const conn = getApiConnection()
+  const res = await fetch(
+    `${conn.host}/events/${encodeURIComponent(eventId)}/sides/${encodeURIComponent(sideId)}/weapons`,
+    {
+      method: 'PUT',
+      headers: { ...conn.headers, 'Content-Type': 'application/json' } as HeadersInit,
+      body: JSON.stringify({ weapons }),
+      credentials: 'include',
+    },
+  )
+  if (!res.ok) throw new Error(`투입 병기를 저장하지 못했습니다 (${res.status})`)
+  const data = (await res.json()) as { data?: SideWeaponView[] } & SideWeaponView[]
+  return data?.data ?? data
 }

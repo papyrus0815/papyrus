@@ -35,6 +35,12 @@ import { type EventDetail, eventKeys } from '../use-event-detail'
 import { InlineSelect, InlineText } from './inline'
 import { MODULE_COLOR } from './module-colors'
 import { SIDE_PALETTE, withSideColors } from './side-colors'
+import {
+  type DoctrineFieldKey,
+  SideDoctrineComparison,
+  SideWeaponsSection,
+  SubEventSidesRollupPanel,
+} from './side-doctrine-and-weapons'
 import { type AvailableMilitaryUnitItem, SideOrbatSection } from './side-orbat-tree'
 import { SIDE_OUTCOME_LABEL, SIDE_OUTCOME_OPTIONS } from './side-outcome'
 
@@ -226,6 +232,18 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
     void saveSides(
       toSideInputs(sides).map((input) =>
         input.id === side.id ? { ...input, description: description.trim() || null } : input,
+      ),
+    )
+  }
+
+  const updateDoctrineField = (
+    side: EventSide,
+    field: DoctrineFieldKey,
+    value: string | null,
+  ) => {
+    void saveSides(
+      toSideInputs(sides).map((input) =>
+        input.id === side.id ? { ...input, [field]: value } : input,
       ),
     )
   }
@@ -571,6 +589,18 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
             })}
           </VsGaugeTrack>
         </VsBanner>
+      )}
+
+      {sides.length > 0 && (
+        <SideDoctrineComparison
+          sides={coloredSides}
+          disabled={busy}
+          onSaveField={updateDoctrineField}
+        />
+      )}
+
+      {event.kind === 'COLLECTION' && (
+        <SubEventSidesRollupPanel eventId={event.id} />
       )}
 
       <SideGrid>
@@ -961,6 +991,14 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
                 }
                 candidatePersonIds={persons.map((person) => person.personId)}
                 onRefresh={refresh}
+              />
+
+              <SideWeaponsSection
+                eventId={event.id}
+                sideId={side.id}
+                sideName={side.name}
+                sideColor={sideColor}
+                sideUnits={sideUnitsBySideId.get(side.id) ?? []}
               />
 
               <SideDescription>

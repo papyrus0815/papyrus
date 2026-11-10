@@ -5,6 +5,9 @@ import { EventCountryParticipantService } from '../application/event-country-par
 import { EventRelationService } from '../application/event-relation.service'
 import { EventSideService } from '../application/event-side.service'
 import { EventSideUnitService } from '../application/event-side-unit.service'
+import { EventSideWeaponService } from '../application/event-side-weapon.service'
+import { EventContextLinkService } from '../application/event-context-link.service'
+import { EventMapFeatureService } from '../application/event-map-feature.service'
 import { EventTerritoryTransferService } from '../application/event-territory-transfer.service'
 import { EventTerritoryTransferController } from '../presentation/event-territory-transfer.controller'
 import { EventDepartmentService } from '../application/event-department.service'
@@ -12,6 +15,9 @@ import { EventDepartmentController } from '../presentation/event-department.cont
 import { EventSectionService } from '../application/event-section.service'
 import { EventSideController } from '../presentation/event-side.controller'
 import { EventSideUnitController } from '../presentation/event-side-unit.controller'
+import { EventSideWeaponController } from '../presentation/event-side-weapon.controller'
+import { EventContextLinkController } from '../presentation/event-context-link.controller'
+import { EventMapFeatureController } from '../presentation/event-map-feature.controller'
 import { EventOverviewController } from '../presentation/event-overview.controller'
 import { EventOverviewService } from '../application/event-overview.service'
 import { EventPrismaRepository } from './event.prisma.repository'
@@ -27,6 +33,9 @@ import { NotificationModule } from '../../notification/notification.module'
     EventController,
     EventSideController,
     EventSideUnitController,
+    EventSideWeaponController,
+    EventContextLinkController,
+    EventMapFeatureController,
     EventOverviewController,
     EventPhaseController,
     EventTerritoryTransferController,
@@ -39,6 +48,9 @@ import { NotificationModule } from '../../notification/notification.module'
     EventRelationService,
     EventSideService,
     EventSideUnitService,
+    EventSideWeaponService,
+    EventContextLinkService,
+    EventMapFeatureService,
     EventTerritoryTransferService,
     EventDepartmentService,
     EventSectionService,

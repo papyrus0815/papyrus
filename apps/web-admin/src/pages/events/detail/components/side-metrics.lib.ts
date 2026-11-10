@@ -159,3 +159,25 @@ export function sumMismatch(sideValue: number | null, sum: number | null): numbe
   const gap = sideValue - sum
   return Math.abs(gap) / sideValue > 0.05 ? gap : null
 }
+
+/**
+ * 진영 소속 투입 부대(EVENT_SIDE_UNIT)들의 측정값 — 지표 → 진영 → [부대·값].
+ */
+export function buildUnitCells<Entry extends MetricObservationLike>(
+  observations: ReadonlyArray<Entry>,
+  unitSide: ReadonlyMap<string, { sideId: string; name: string }>,
+): Map<string, Map<string, MemberEntry<Entry>[]>> {
+  const byMetric = new Map<string, Map<string, MemberEntry<Entry>[]>>()
+  for (const observation of observations) {
+    if (observation.subjectType !== 'EVENT_SIDE_UNIT') continue
+    const unitInfo = unitSide.get(observation.subjectId)
+    if (!unitInfo) continue
+    const bySide = byMetric.get(observation.metric.key) ?? new Map<string, MemberEntry<Entry>[]>()
+    bySide.set(unitInfo.sideId, [
+      ...(bySide.get(unitInfo.sideId) ?? []),
+      { name: unitInfo.name, observation },
+    ])
+    byMetric.set(observation.metric.key, bySide)
+  }
+  return byMetric
+}

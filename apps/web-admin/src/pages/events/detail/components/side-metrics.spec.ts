@@ -1,6 +1,7 @@
 import {
   buildMemberCells,
   buildSideMetricRows,
+  buildUnitCells,
   formatRate,
   lossRate,
   memberSum,
@@ -152,5 +153,24 @@ describe('representativeOf — 경합 추정치', () => {
       observation: { ...obs(name + value, 'P', 'military.personnel', value), estimateRole },
     })
     expect(memberSum([member('작센', '100', 'PREFERRED'), member('작센', '300', 'ALTERNATIVE'), member('바이에른', '50', null)])).toBe(150)
+  })
+})
+
+describe('buildUnitCells — 진영 산하 부대별 측정값', () => {
+  it('EVENT_SIDE_UNIT 측정값을 진영별로 묶고 합산·오차를 검증한다', () => {
+    const unitSide = new Map([
+      ['su-north', { sideId: 'axis', name: '북부집단군' }],
+      ['su-center', { sideId: 'axis', name: '중부집단군' }],
+    ])
+    const cells = buildUnitCells(
+      [
+        obs('u1', 'su-north', 'military.personnel', '655000', { subjectType: 'EVENT_SIDE_UNIT' }),
+        obs('u2', 'su-center', 'military.personnel', '1308000', { subjectType: 'EVENT_SIDE_UNIT' }),
+      ],
+      unitSide,
+    )
+    const axisUnits = cells.get('military.personnel')?.get('axis') ?? []
+    expect(axisUnits.map((entry) => entry.name)).toEqual(['북부집단군', '중부집단군'])
+    expect(memberSum(axisUnits)).toBe(1963000)
   })
 })

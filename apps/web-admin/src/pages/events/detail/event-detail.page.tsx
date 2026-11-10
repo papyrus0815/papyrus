@@ -54,6 +54,7 @@ import {
 import { DetailNarrative } from './components/detail-narrative'
 import { EventActionsMenu } from './components/event-actions-menu'
 import { DetailNetwork } from './components/detail-network'
+import { DetailContextLinks } from './components/detail-context-links'
 import { DetailTreaties } from './components/detail-treaties'
 import { EventKindGuideModal } from './components/event-kind-guide-modal'
 import { DetailFacts } from './components/detail-facts'
@@ -1211,6 +1212,7 @@ function EventDetailContent({
                       onAddTreaty={!promoteTreaties && !isVisible('treaties') ? () => revealSection('treaties') : undefined}
                     />
                   )}
+                  <DetailContextLinks event={event} readOnly={trashedView} />
                 </>
               )}
 

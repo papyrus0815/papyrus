@@ -24,6 +24,8 @@ export type ObservationSubjectType =
   | 'EVENT'
   | 'EVENT_SIDE'
   | 'EVENT_PARTICIPANT'
+  | 'EVENT_SIDE_UNIT'
+  | 'MILITARY_UNIT'
   | 'COUNTRY'
   | 'HISTORICAL_COUNTRY'
   | 'ORGANIZATION'

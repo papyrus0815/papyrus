@@ -65,4 +65,14 @@ export const eventKeys = {
   observations: (eventId: string) => ['event-detail', eventId, 'observations'] as const,
   /** 사건 진영별 투입 부대(전투서열 ORBAT) */
   sideUnits: (eventId: string) => ['event-detail', eventId, 'side-units'] as const,
+  /** 사건 진영별 투입 병기·장비 */
+  sideWeapons: (eventId: string) => ['event-detail', eventId, 'side-weapons'] as const,
+  /** 병기·장비 마스터 카탈로그 */
+  weaponCatalog: () => ['event-detail', 'weapon-catalog'] as const,
+  /** 사건 타 도메인 초유기체 맥락 연결 */
+  contextLinks: (eventId: string) => ['event-detail', eventId, 'context-links'] as const,
+  /** 타 도메인 맥락 카탈로그 */
+  contextCatalog: () => ['event-detail', 'context-catalog'] as const,
+  /** 사건 지도 벡터 피처(기동 화살표·포위망·전선) */
+  mapFeatures: (eventId: string) => ['event-detail', eventId, 'map-features'] as const,
 }

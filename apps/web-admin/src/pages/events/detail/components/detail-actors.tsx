@@ -63,6 +63,7 @@ import { useActorMutations } from './actors/use-actor-mutations'
 import { groupBySide } from './hero-countries.lib'
 import { toAxisSpan } from './development-timeline.lib'
 import { withSideColors } from './side-colors'
+import { SubEventSidesRollupPanel } from './side-doctrine-and-weapons'
 import { SIDE_OUTCOME_LABEL } from './side-outcome'
 
 interface DetailActorsProps {
@@ -729,6 +730,10 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
             </S.SectionActions>
           )}
         </ActorsHeader>
+
+        {event.kind === 'COLLECTION' && (
+          <SubEventSidesRollupPanel eventId={event.id} />
+        )}
 
         {/* 비어 있을 때 통일 안내 — 인물·국가 모두 없을 때만 */}
         {!hasAnything && (

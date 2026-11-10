@@ -9,7 +9,7 @@ import 'leaflet/dist/leaflet.css'
 import { useEffect, useMemo } from 'react'
 
 import Leaflet from 'leaflet'
-import { MapContainer, Marker, Polyline, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet'
+import { MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet'
 
 export interface MapPin {
   id: string
@@ -22,8 +22,21 @@ export interface MapPin {
   dimmed: boolean
 }
 
+export interface MapVectorFeature {
+  id: string
+  eventId: string
+  geometryType: 'POINT' | 'ARROW' | 'LINE' | 'POLYGON'
+  title: string
+  description: string | null
+  color: string
+  sideName: string | null
+  deployedUnitName: string | null
+  coordinates: Array<[number, number]>
+}
+
 interface OverviewMapCanvasProps {
   pins: ReadonlyArray<MapPin>
+  features?: ReadonlyArray<MapVectorFeature>
   /** 시간 순으로 잇기 — 핀 순서(전개 번호 순)대로 한 줄 */
   route: boolean
   hotId: string | null
@@ -43,6 +56,21 @@ const clusterKey = (pin: MapPin) => `${pin.lat.toFixed(4)},${pin.lng.toFixed(4)}
 
 function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`)
+}
+
+function computeBearingDeg(fromPt: [number, number], toPt: [number, number]): number {
+  const deltaLat = toPt[0] - fromPt[0]
+  const deltaLng = (toPt[1] - fromPt[1]) * Math.cos(((fromPt[0] + toPt[0]) / 2) * (Math.PI / 180))
+  const angleRad = Math.atan2(deltaLng, deltaLat)
+  return (angleRad * 180) / Math.PI
+}
+
+function arrowHeadIcon(color: string, bearingDeg: number): Leaflet.DivIcon {
+  const html =
+    `<div style="width:18px;height:18px;display:flex;align-items:center;justify-content:center;` +
+    `transform:rotate(${bearingDeg.toFixed(1)}deg);color:${escapeHtml(color)};` +
+    `text-shadow:0 0 2px #fff,0 0 4px #fff;font-size:15px;line-height:1;">▲</div>`
+  return Leaflet.divIcon({ html, className: '', iconSize: [18, 18], iconAnchor: [9, 9] })
 }
 
 /** 핀 모양 — divIcon HTML(지도 위 DOM이라 styled-components가 닿지 않아 인라인) */
@@ -75,7 +103,15 @@ function FitToPins({ points }: { points: Array<[number, number]> }) {
   return null
 }
 
-export default function OverviewMapCanvas({ pins, route, hotId, onOpen, onHover, height }: OverviewMapCanvasProps) {
+export default function OverviewMapCanvas({
+  pins,
+  features = [],
+  route,
+  hotId,
+  onOpen,
+  onHover,
+  height,
+}: OverviewMapCanvasProps) {
   const clusters = useMemo<PinCluster[]>(() => {
     const byKey = new Map<string, PinCluster>()
     for (const pin of pins) {
@@ -86,7 +122,11 @@ export default function OverviewMapCanvas({ pins, route, hotId, onOpen, onHover,
     }
     return [...byKey.values()]
   }, [pins])
-  const points = useMemo(() => clusters.map((cluster) => [cluster.lat, cluster.lng] as [number, number]), [clusters])
+  const points = useMemo(() => {
+    const pinPts = clusters.map((cluster) => [cluster.lat, cluster.lng] as [number, number])
+    const featurePts = features.flatMap((feature) => feature.coordinates)
+    return [...pinPts, ...featurePts]
+  }, [clusters, features])
   const routePoints = useMemo(() => pins.filter((pin) => !pin.dimmed).map((pin) => [pin.lat, pin.lng] as [number, number]), [pins])
 
   return (
@@ -102,6 +142,80 @@ export default function OverviewMapCanvas({ pins, route, hotId, onOpen, onHover,
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <FitToPins points={points} />
+        {features.map((feature) => {
+          const metaLine = [feature.sideName, feature.deployedUnitName ? `⚔️ ${feature.deployedUnitName}` : null]
+            .filter(Boolean)
+            .join(' · ')
+          if (feature.geometryType === 'POLYGON' && feature.coordinates.length >= 3) {
+            return (
+              <Polygon
+                key={feature.id}
+                positions={feature.coordinates}
+                pathOptions={{
+                  color: feature.color,
+                  fillColor: feature.color,
+                  fillOpacity: 0.18,
+                  weight: 2,
+                  dashArray: '4 4',
+                }}
+              >
+                <Tooltip sticky>
+                  <strong>🕸️ {feature.title}</strong>
+                  {metaLine && <div>{metaLine}</div>}
+                  {feature.description && <div>{feature.description}</div>}
+                </Tooltip>
+              </Polygon>
+            )
+          }
+          if (feature.geometryType === 'LINE' && feature.coordinates.length >= 2) {
+            return (
+              <Polyline
+                key={feature.id}
+                positions={feature.coordinates}
+                pathOptions={{
+                  color: feature.color,
+                  weight: 3,
+                  opacity: 0.85,
+                  dashArray: '8 6',
+                }}
+              >
+                <Tooltip sticky>
+                  <strong>➖ {feature.title}</strong>
+                  {metaLine && <div>{metaLine}</div>}
+                  {feature.description && <div>{feature.description}</div>}
+                </Tooltip>
+              </Polyline>
+            )
+          }
+          if (feature.geometryType === 'ARROW' && feature.coordinates.length >= 2) {
+            const lastCoord = feature.coordinates[feature.coordinates.length - 1]
+            const prevCoord = feature.coordinates[feature.coordinates.length - 2]
+            const bearing = computeBearingDeg(prevCoord, lastCoord)
+            return (
+              <Polyline
+                key={feature.id}
+                positions={feature.coordinates}
+                pathOptions={{
+                  color: feature.color,
+                  weight: 3.5,
+                  opacity: 0.9,
+                }}
+              >
+                <Tooltip sticky>
+                  <strong>➔ {feature.title}</strong>
+                  {metaLine && <div>{metaLine}</div>}
+                  {feature.description && <div>{feature.description}</div>}
+                </Tooltip>
+                <Marker
+                  position={lastCoord}
+                  icon={arrowHeadIcon(feature.color, bearing)}
+                  interactive={false}
+                />
+              </Polyline>
+            )
+          }
+          return null
+        })}
         {route && routePoints.length >= 2 && (
           <Polyline positions={routePoints} pathOptions={{ color: '#334155', weight: 2, opacity: 0.55, dashArray: '4 6' }} />
         )}
