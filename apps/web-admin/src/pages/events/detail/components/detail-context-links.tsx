@@ -2,10 +2,12 @@ import { useMemo, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiPlus, FiTrash2 } from 'react-icons/fi'
+import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { RADIUS, ledgerHairline } from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
+import { getEventOverview } from '@/shared/api/event-overview'
 import {
   type EventContextCatalog,
   type EventContextEntityKind,
@@ -17,6 +19,7 @@ import {
   syncEventContextLinks,
 } from '@/shared/api/event-context-links'
 import { eventKeys } from '@/shared/api/event-query-keys'
+import { pathKeys } from '@/shared/router'
 import { notify } from '@/shared/ui/toast'
 
 import * as S from '../styles'
@@ -136,6 +139,60 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
 
   const links = linksQuery.data ?? []
 
+  const hasSubEvents =
+    event.kind === 'COLLECTION' || (event.childEvents?.length ?? 0) > 0
+
+  const overviewQuery = useQuery({
+    queryKey: eventKeys.overview(event.id),
+    queryFn: () => getEventOverview(event.id),
+    enabled: hasSubEvents,
+    staleTime: 30_000,
+  })
+
+  const subEventContextRollup = useMemo(() => {
+    const descendants = overviewQuery.data?.descendants ?? []
+    const byKey = new Map<
+      string,
+      {
+        key: string
+        entityKind: EventContextEntityKind
+        entityName: string
+        events: Array<{
+          eventId: string
+          eventTitle: string
+          role: EventContextRole
+          sideName: string | null
+          description: string | null
+        }>
+      }
+    >()
+    for (const node of descendants) {
+      for (const ctxLink of node.contextLinks ?? []) {
+        const key = `${ctxLink.entityKind}:${ctxLink.entityName}`
+        let entry = byKey.get(key)
+        if (!entry) {
+          entry = {
+            key,
+            entityKind: ctxLink.entityKind,
+            entityName: ctxLink.entityName,
+            events: [],
+          }
+          byKey.set(key, entry)
+        }
+        entry.events.push({
+          eventId: node.id,
+          eventTitle: node.title,
+          role: (ctxLink.role as EventContextRole) ?? 'OTHER',
+          sideName: ctxLink.sideName,
+          description: ctxLink.description,
+        })
+      }
+    }
+    return [...byKey.values()].sort(
+      (left, right) => right.events.length - left.events.length,
+    )
+  }, [overviewQuery.data])
+
   const catalogOptions = useMemo(() => {
     const catalog = catalogQuery.data
     if (!catalog) return []
@@ -225,7 +282,7 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
         )}
       </S.SectionHeader>
 
-      {links.length === 0 && !adding && (
+      {links.length === 0 && subEventContextRollup.length === 0 && !adding && (
         <EmptyHint>
           이 사건에 작용한 법령·작전지침, 자연지형·하천, 기후(라스푸티차·한파), 철도·방어선 인프라, 전략 자원(유전·곡창), 군수공장, 사회현상을 연결해 초유기체 맥락을 완성할 수 있습니다.
         </EmptyHint>
@@ -271,6 +328,50 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
             )
           })}
         </LinksGrid>
+      )}
+
+      {subEventContextRollup.length > 0 && (
+        <SubRollupBox>
+          <SubRollupTitle>
+            ↳ 하위 사건에 작용한 다차원 맥락 롤업 ({subEventContextRollup.length}건)
+          </SubRollupTitle>
+          <LinksGrid>
+            {subEventContextRollup.map((rollupItem) => {
+              const kindMeta = ENTITY_KIND_META[rollupItem.entityKind]
+              return (
+                <LinkCard key={rollupItem.key}>
+                  <CardTop>
+                    <KindTag title={kindMeta.label}>
+                      {kindMeta.icon} {kindMeta.label}
+                    </KindTag>
+                    <RoleTag>하위 {rollupItem.events.length}건</RoleTag>
+                  </CardTop>
+                  <EntityTitleRow>
+                    <EntityTitle>{rollupItem.entityName}</EntityTitle>
+                  </EntityTitleRow>
+                  <SubRollupEventList>
+                    {rollupItem.events.map((evItem, idx) => {
+                      const roleMeta = CONTEXT_ROLE_META[evItem.role] ?? CONTEXT_ROLE_META.OTHER
+                      return (
+                        <li key={`${evItem.eventId}-${idx}`}>
+                          <SubEventLink to={pathKeys.events.detail(evItem.eventId)}>
+                            {evItem.eventTitle}
+                          </SubEventLink>
+                          <span>
+                            {' · '}
+                            {roleMeta.icon} {roleMeta.label}
+                            {evItem.sideName ? ` (${evItem.sideName})` : ''}
+                            {evItem.description ? ` — ${evItem.description}` : ''}
+                          </span>
+                        </li>
+                      )
+                    })}
+                  </SubRollupEventList>
+                </LinkCard>
+              )
+            })}
+          </LinksGrid>
+        </SubRollupBox>
       )}
 
       {adding && !readOnly && (
@@ -461,6 +562,41 @@ const DescriptionText = styled.p`
   font-size: 12px;
   line-height: 1.5;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const SubRollupBox = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const SubRollupTitle = styled.div`
+  font-size: 12px;
+  font-weight: 700;
+  color: ${metaText};
+`
+
+const SubRollupEventList = styled.ul`
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11.5px;
+  color: ${metaText};
+`
+
+const SubEventLink = styled(Link)`
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-weight: 600;
+  text-decoration: none;
+  &:hover {
+    text-decoration: underline;
+  }
 `
 
 const AddFormBox = styled.div`

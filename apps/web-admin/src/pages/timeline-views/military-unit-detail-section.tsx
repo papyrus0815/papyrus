@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { FiArrowRight, FiCalendar, FiMapPin, FiShield, FiUser, FiUsers } from 'react-icons/fi'
@@ -92,6 +92,14 @@ interface UnitDetailResponse {
       aircraft?: { id: string; name: string; aircraftType?: string | null } | null
       navalVessel?: { id: string; name: string; vesselType?: string | null } | null
     }>
+    mapFeatures?: Array<{
+      id: string
+      eventId: string
+      geometryType: 'POINT' | 'ARROW' | 'LINE' | 'POLYGON'
+      title: string
+      description?: string | null
+      color?: string | null
+    }>
     metrics?: Array<{
       id: string
       metricKey: string
@@ -157,6 +165,47 @@ export function MilitaryUnitDetailSection() {
     [allUnitsQuery.data],
   )
 
+  const [searchQuery, setSearchQuery] = useState('')
+  const [countryFilter, setCountryFilter] = useState('')
+  const [unitTypeFilter, setUnitTypeFilter] = useState('')
+  const [branchFilter, setBranchFilter] = useState('')
+
+  const countryOptions = useMemo(() => {
+    const names = new Set<string>()
+    for (const unitItem of allUnits) {
+      const countryName = unitItem.historicalCountry?.name ?? unitItem.country?.name
+      if (countryName) names.add(countryName)
+    }
+    return [...names].sort((left, right) => left.localeCompare(right, 'ko'))
+  }, [allUnits])
+
+  const unitTypeOptions = useMemo(() => {
+    const types = new Set<string>()
+    for (const unitItem of allUnits) {
+      if (unitItem.unitType) types.add(unitItem.unitType)
+    }
+    return [...types]
+  }, [allUnits])
+
+  const filteredOverviewUnits = useMemo(() => {
+    const queryLower = searchQuery.trim().toLowerCase()
+    return allUnits.filter((unitItem) => {
+      const countryName =
+        unitItem.historicalCountry?.name ?? unitItem.country?.name ?? '국가 미지정'
+      if (countryFilter && countryName !== countryFilter) return false
+      if (unitTypeFilter && unitItem.unitType !== unitTypeFilter) return false
+      if (branchFilter && unitItem.branch !== branchFilter) return false
+      if (queryLower) {
+        const hay = [unitItem.name, unitItem.nickname, countryName]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+        if (!hay.includes(queryLower)) return false
+      }
+      return true
+    })
+  }, [allUnits, searchQuery, countryFilter, unitTypeFilter, branchFilter])
+
   if (!selectedUnitId) {
     return (
       <PageWrap>
@@ -168,21 +217,72 @@ export function MilitaryUnitDetailSection() {
                   <FiShield size={12} /> 군사 부대 편제 · 전투서열 도메인
                 </PrimaryBadge>
               </BadgeRow>
-              <HeroTitle>군사 부대 총람 ({allUnits.length}개 부대)</HeroTitle>
+              <HeroTitle>
+                군사 부대 총람 ({filteredOverviewUnits.length} / {allUnits.length}개 부대)
+              </HeroTitle>
               <HeroSubtitle>
                 좌측 목록이나 아래 카드에서 부대를 선택하면 상급·예하 편제 트리, 역대 지휘관 임기, 참전 작전·전투 타임라인을 한눈에 볼 수 있습니다.
               </HeroSubtitle>
             </HeroTitleGroup>
           </HeroTopRow>
+
+          {allUnits.length > 0 && (
+            <OverviewFilterRow>
+              <OverviewFilterInput
+                type="search"
+                placeholder="부대명·별칭·국가 검색 (예: 제2기갑집단, 중부집단군)"
+                value={searchQuery}
+                onChange={(changeEvent) => setSearchQuery(changeEvent.target.value)}
+              />
+              <OverviewFilterSelect
+                value={countryFilter}
+                onChange={(changeEvent) => setCountryFilter(changeEvent.target.value)}
+                aria-label="국가 필터"
+              >
+                <option value="">전체 국가 ({countryOptions.length})</option>
+                {countryOptions.map((nameItem) => (
+                  <option key={nameItem} value={nameItem}>
+                    {nameItem}
+                  </option>
+                ))}
+              </OverviewFilterSelect>
+              <OverviewFilterSelect
+                value={unitTypeFilter}
+                onChange={(changeEvent) => setUnitTypeFilter(changeEvent.target.value)}
+                aria-label="부대 규모 필터"
+              >
+                <option value="">전체 규모</option>
+                {unitTypeOptions.map((typeItem) => (
+                  <option key={typeItem} value={typeItem}>
+                    {militaryUnitTypeLabelKo(typeItem)}
+                  </option>
+                ))}
+              </OverviewFilterSelect>
+              <OverviewFilterSelect
+                value={branchFilter}
+                onChange={(changeEvent) => setBranchFilter(changeEvent.target.value)}
+                aria-label="병종 필터"
+              >
+                <option value="">전체 병종</option>
+                {Object.entries(BRANCH_LABELS).map(([branchKey, branchName]) => (
+                  <option key={branchKey} value={branchKey}>
+                    {branchName}
+                  </option>
+                ))}
+              </OverviewFilterSelect>
+            </OverviewFilterRow>
+          )}
         </HeroCard>
 
         {allUnits.length === 0 ? (
           <EmptyCard>
             아직 등록된 군사 부대가 없습니다. 국가 상세 → 행정조직 → 군사 탭에서 부대를 등록하세요.
           </EmptyCard>
+        ) : filteredOverviewUnits.length === 0 ? (
+          <EmptyCard>검색·필터 조건에 맞는 군사 부대가 없습니다.</EmptyCard>
         ) : (
           <UnitGrid>
-            {allUnits.slice(0, 48).map((unitItem) => {
+            {filteredOverviewUnits.map((unitItem) => {
               const countryName =
                 unitItem.historicalCountry?.name ?? unitItem.country?.name ?? '국가 미지정'
               const typeLabel = unitItem.unitType
@@ -432,6 +532,7 @@ export function MilitaryUnitDetailSection() {
                   ? [dep.commander.name, dep.commander.surname].filter(Boolean).join(' ')
                   : null
                 const weapons = dep.deployedWeapons ?? []
+                const mapFeatures = dep.mapFeatures ?? []
                 const unitMetrics = dep.metrics ?? []
                 return (
                   <tr key={dep.id}>
@@ -498,7 +599,27 @@ export function MilitaryUnitDetailSection() {
                             </SmallBadge>
                           )
                         })}
-                        {unitMetrics.length === 0 && weapons.length === 0 && <span>—</span>}
+                        {mapFeatures.map((featItem) => {
+                          const geomIcon =
+                            featItem.geometryType === 'ARROW'
+                              ? '➔'
+                              : featItem.geometryType === 'POLYGON'
+                                ? '🕸️'
+                                : featItem.geometryType === 'LINE'
+                                  ? '➖'
+                                  : '📍'
+                          return (
+                            <EventLink
+                              key={featItem.id}
+                              to={`${pathKeys.events.detail(featItem.eventId)}?tab=survey&sv=map&unit=${encodeURIComponent(unit.id)}`}
+                              title={featItem.description ?? '조망 지도에서 기동 축선·포위망 보기'}
+                              style={{ fontSize: 11.5 }}
+                            >
+                              {geomIcon} {featItem.title} ↗
+                            </EventLink>
+                          )
+                        })}
+                        {unitMetrics.length === 0 && weapons.length === 0 && mapFeatures.length === 0 && <span>—</span>}
                       </DeploymentDetailStack>
                     </td>
                   </tr>
@@ -573,6 +694,33 @@ const HeroTopRow = styled.div`
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+`
+
+const OverviewFilterRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+`
+
+const OverviewFilterInput = styled.input`
+  flex: 2 1 220px;
+  padding: 6px 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 6px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 12.5px;
+`
+
+const OverviewFilterSelect = styled.select`
+  flex: 1 1 130px;
+  padding: 6px 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 6px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 12.5px;
 `
 
 const HeroTitleGroup = styled.div`

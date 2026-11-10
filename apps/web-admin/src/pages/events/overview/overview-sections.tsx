@@ -16,8 +16,10 @@ import { pathKeys } from '@/shared/router'
 
 import {
   CHECK_COLUMNS,
+  type ContextLinkAggregate,
   type CountBar,
   type CoverageGap,
+  type DeployedWeaponAggregate,
   type GanttFit,
   type GanttLayout,
   type MatrixCountry,
@@ -1524,25 +1526,35 @@ export function DistributionPanel({
 export function PersonsPanel({
   persons,
   numberById,
+  visibleIds = null,
   wide = false,
   onOpen,
   onPersonClick,
 }: {
   persons: PersonAggregate[]
   numberById: Map<string, string>
+  visibleIds?: Set<string> | null
   onOpen: (id: string) => void
   /** 이름 → 인물 모달. 없으면 이름은 글자로만 */
   onPersonClick?: (personId: string) => void
   /** 짝(진영·수치)이 접혀 혼자 설 때는 한 줄을 다 쓴다 — 오른쪽 반이 비지 않게 */
   wide?: boolean
 }) {
+  const shownPersons = visibleIds
+    ? persons
+        .map((item) => ({
+          ...item,
+          events: item.events.filter((ev) => !numberById.has(ev.id) || visibleIds.has(ev.id)),
+        }))
+        .filter((item) => item.events.length > 0)
+    : persons
   return (
     <S.Panel $wide={wide} id="overview-people" aria-labelledby="overview-persons-title">
       <S.PanelHead>
         <S.PanelTitle id="overview-persons-title">인물</S.PanelTitle>
-        <S.PanelNote>{persons.length > 0 ? `${persons.length}명 · 많이 나오는 순` : ''}</S.PanelNote>
+        <S.PanelNote>{shownPersons.length > 0 ? `${shownPersons.length}명 · 많이 나오는 순` : ''}</S.PanelNote>
       </S.PanelHead>
-      {persons.length === 0 ? (
+      {shownPersons.length === 0 ? (
         <S.Empty>하위 사건에 참여 인물이 아직 없습니다.</S.Empty>
       ) : (
         <S.Scroll>
@@ -1554,7 +1566,7 @@ export function PersonsPanel({
               </tr>
             </thead>
             <tbody>
-              {persons.map(({ person, events }) => {
+              {shownPersons.map(({ person, events }) => {
                 const displayName = getPersonDisplayName({
                   name: person.name ?? '',
                   surname: person.surname,
@@ -1607,6 +1619,7 @@ export function PersonsPanel({
 export function MilitaryUnitsPanel({
   units,
   numberById,
+  visibleIds = null,
   selectedUnitId = null,
   onSelectUnit,
   onOpen,
@@ -1614,22 +1627,31 @@ export function MilitaryUnitsPanel({
 }: {
   units: MilitaryUnitAggregate[]
   numberById: Map<string, string>
+  visibleIds?: Set<string> | null
   selectedUnitId?: string | null
   onSelectUnit?: (unitId: string | null) => void
   onOpen: (id: string) => void
   wide?: boolean
 }) {
+  const shownUnits = visibleIds
+    ? units
+        .map((unitItem) => ({
+          ...unitItem,
+          events: unitItem.events.filter((ev) => !numberById.has(ev.id) || visibleIds.has(ev.id)),
+        }))
+        .filter((unitItem) => unitItem.events.length > 0 || unitItem.militaryUnitId === selectedUnitId)
+    : units
   return (
     <S.Panel $wide={wide} id="overview-units" aria-labelledby="overview-units-title">
       <S.PanelHead>
         <S.PanelTitle id="overview-units-title">참전 군사 부대</S.PanelTitle>
         <S.PanelNote>
-          {units.length > 0
-            ? `${units.length}개 부대 · 부대명을 누르면 그 부대가 참전한 전투만 거르고, ↗를 누르면 부대 총람 상세로 이동합니다`
+          {shownUnits.length > 0
+            ? `${shownUnits.length}개 부대 · 부대명을 누르면 그 부대가 참전한 전투만 거르고, ↗를 누르면 부대 총람 상세로 이동합니다`
             : ''}
         </S.PanelNote>
       </S.PanelHead>
-      {units.length === 0 ? (
+      {shownUnits.length === 0 ? (
         <S.Empty>하위 사건에 등록된 참전 군사 부대가 아직 없습니다.</S.Empty>
       ) : (
         <S.Scroll>
@@ -1638,11 +1660,11 @@ export function MilitaryUnitsPanel({
               <tr>
                 <th scope="col">부대 · 편제</th>
                 <th scope="col">소속 진영</th>
-                <th scope="col">참전 전투 ({units.reduce((sum, item) => sum + item.events.length, 0)})</th>
+                <th scope="col">참전 전투 ({shownUnits.reduce((sum, item) => sum + item.events.length, 0)})</th>
               </tr>
             </thead>
             <tbody>
-              {units.map((unitItem) => {
+              {shownUnits.map((unitItem) => {
                 const isSelected = selectedUnitId === unitItem.militaryUnitId
                 const typeLabel = unitItem.unitType
                   ? militaryUnitTypeLabelKo(unitItem.unitType)
@@ -1726,6 +1748,7 @@ export function SidesMetricsPanel({
   descendants,
   metrics,
   numberById,
+  visibleIds = null,
   wide = false,
   hotId,
   onHover,
@@ -1735,14 +1758,19 @@ export function SidesMetricsPanel({
   descendants: EventOverviewNode[]
   metrics: MetricRow[]
   numberById: Map<string, string>
+  visibleIds?: Set<string> | null
   wide?: boolean
 }) {
   /** 상위 = 0, 하위 = 전개 번호, 번호 없는 것(이론상 없음)은 맨 뒤 */
   const orderOf = (id: string) => (id === root.id ? '0' : (numberById.get(id) ?? '99999'))
-  const withSides = [root, ...descendants]
+  const filteredDescendants = visibleIds
+    ? descendants.filter((node) => visibleIds.has(node.id))
+    : descendants
+  const withSides = [root, ...filteredDescendants]
     .filter((node) => node.sides.length > 0)
     .sort((left, right) => compareOutline(orderOf(left.id), orderOf(right.id)))
   const sortedMetrics = metrics
+    .filter((row) => !visibleIds || row.eventId === root.id || visibleIds.has(row.eventId))
     .map((row, index) => ({ row, index }))
     .sort(
       (left, right) =>
@@ -1947,6 +1975,205 @@ export function SidesMetricsPanel({
                   <td>{row.display}</td>
                 </S.ChecklistRow>
               ))}
+            </tbody>
+          </S.Table>
+        </S.Scroll>
+      )}
+    </S.Panel>
+  )
+}
+
+const CONTEXT_KIND_LABELS: Record<
+  ContextLinkAggregate['entityKind'],
+  { icon: string; label: string }
+> = {
+  LAW: { icon: '📜', label: '법령·작전지침' },
+  SOCIAL_PHENOMENON: { icon: '🌀', label: '사회현상·사상' },
+  NATURAL_FEATURE: { icon: '⛰️', label: '자연지형·하천' },
+  INFRASTRUCTURE: { icon: '🛤️', label: '인프라·방어선' },
+  CLIMATE: { icon: '❄️', label: '기후·기상' },
+  RESOURCE: { icon: '🛢️', label: '자원·전략물자' },
+  COMPANY_FACILITY: { icon: '🏭', label: '군수공장·시설' },
+}
+
+const CONTEXT_ROLE_LABELS: Record<string, string> = {
+  OBJECTIVE: '목표',
+  OBSTACLE: '제약·장애',
+  INSTRUMENT: '수단·도구',
+  CAUSE: '원인',
+  BACKGROUND: '배경',
+  OUTCOME: '결과',
+  OTHER: '맥락',
+}
+
+const WEAPON_KIND_LABELS: Record<
+  DeployedWeaponAggregate['assetKind'],
+  { icon: string; label: string }
+> = {
+  GROUND_VEHICLE: { icon: '🛡️', label: '기갑·차량' },
+  AIRCRAFT: { icon: '✈️', label: '항공기' },
+  WEAPON: { icon: '🔫', label: '화포·보병화기' },
+  NAVAL_VESSEL: { icon: '🚢', label: '함선' },
+}
+
+export function ContextAndWeaponsPanel({
+  contextLinks,
+  weapons,
+  rootId,
+  numberById,
+  visibleIds = null,
+  onOpen,
+  wide = false,
+}: {
+  contextLinks: ContextLinkAggregate[]
+  weapons: DeployedWeaponAggregate[]
+  rootId: string
+  numberById: Map<string, string>
+  visibleIds?: Set<string> | null
+  onOpen: (id: string) => void
+  wide?: boolean
+}) {
+  const shownContexts = visibleIds
+    ? contextLinks
+        .map((item) => ({
+          ...item,
+          events: item.events.filter((ev) => ev.id === rootId || visibleIds.has(ev.id)),
+        }))
+        .filter((item) => item.events.length > 0)
+    : contextLinks
+
+  const shownWeapons = visibleIds
+    ? weapons
+        .map((item) => ({
+          ...item,
+          events: item.events.filter((ev) => ev.id === rootId || visibleIds.has(ev.id)),
+        }))
+        .filter((item) => item.events.length > 0)
+    : weapons
+
+  if (shownContexts.length === 0 && shownWeapons.length === 0) return null
+
+  return (
+    <S.Panel $wide={wide} id="overview-context-weapons" aria-labelledby="overview-context-weapons-title">
+      <S.PanelHead>
+        <S.PanelTitle id="overview-context-weapons-title">
+          다차원 초유기체 맥락 · 핵심 투입 병기
+        </S.PanelTitle>
+        <S.PanelNote>
+          {[
+            shownContexts.length > 0 ? `7대 도메인 맥락 ${shownContexts.length}건` : null,
+            shownWeapons.length > 0 ? `투입 병기·장비 ${shownWeapons.length}종` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </S.PanelNote>
+      </S.PanelHead>
+
+      {shownContexts.length > 0 && (
+        <S.Scroll>
+          <S.Table>
+            <thead>
+              <tr>
+                <th scope="col">도메인</th>
+                <th scope="col">맥락 항목</th>
+                <th scope="col">작용한 사건 · 역할</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shownContexts.map((item) => {
+                const kindMeta = CONTEXT_KIND_LABELS[item.entityKind]
+                return (
+                  <tr key={item.key}>
+                    <td>
+                      <S.Muted>
+                        {kindMeta.icon} {kindMeta.label}
+                      </S.Muted>
+                    </td>
+                    <td>
+                      <strong>{item.entityName}</strong>
+                    </td>
+                    <td>
+                      {item.events.map((ev, index) => {
+                        const roleText = CONTEXT_ROLE_LABELS[ev.role] ?? ev.role
+                        return (
+                          <span key={`${ev.id}-${ev.role}-${index}`}>
+                            {index > 0 && ', '}
+                            {ev.id === rootId ? (
+                              <span>[상위] {ev.title}</span>
+                            ) : (
+                              <S.RowTitleButton
+                                type="button"
+                                onClick={() => onOpen(ev.id)}
+                                style={{ whiteSpace: 'normal' }}
+                              >
+                                {numberById.has(ev.id) ? `${numberById.get(ev.id)}. ` : ''}
+                                {ev.title}
+                              </S.RowTitleButton>
+                            )}
+                            <S.Muted>
+                              {' '}
+                              ({roleText}
+                              {ev.sideName ? ` · ${ev.sideName}` : ''})
+                            </S.Muted>
+                          </span>
+                        )
+                      })}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </S.Table>
+        </S.Scroll>
+      )}
+
+      {shownWeapons.length > 0 && (
+        <S.Scroll>
+          <S.Table>
+            <thead>
+              <tr>
+                <th scope="col">병기·장비</th>
+                <th scope="col">운용 진영</th>
+                <th scope="col">투입 사건 · 수량</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shownWeapons.map((item) => {
+                const kindMeta = WEAPON_KIND_LABELS[item.assetKind]
+                return (
+                  <tr key={item.key}>
+                    <td>
+                      {kindMeta.icon} <strong>{item.assetName}</strong>{' '}
+                      <S.Muted>({kindMeta.label})</S.Muted>
+                    </td>
+                    <td>
+                      <S.SideChip $color={item.sideColor ?? '#64748b'}>{item.sideName}</S.SideChip>
+                    </td>
+                    <td>
+                      {item.events.map((ev, index) => (
+                        <span key={`${ev.id}-${index}`}>
+                          {index > 0 && ', '}
+                          {ev.id === rootId ? (
+                            <span>[상위] {ev.title}</span>
+                          ) : (
+                            <S.RowTitleButton
+                              type="button"
+                              onClick={() => onOpen(ev.id)}
+                              style={{ whiteSpace: 'normal' }}
+                            >
+                              {numberById.has(ev.id) ? `${numberById.get(ev.id)}. ` : ''}
+                              {ev.title}
+                            </S.RowTitleButton>
+                          )}
+                          {ev.quantity != null && (
+                            <S.Muted> ({ev.quantity.toLocaleString()}기)</S.Muted>
+                          )}
+                        </span>
+                      ))}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </S.Table>
         </S.Scroll>

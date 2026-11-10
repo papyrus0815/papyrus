@@ -325,7 +325,24 @@ export function SideWeaponsSection({
                   <WeaponKindBadge title={kindMeta.label}>{kindMeta.icon}</WeaponKindBadge>
                   <WeaponName>{item.assetName}</WeaponName>
                   {item.assetCategory && <WeaponCategoryTag>{item.assetCategory}</WeaponCategoryTag>}
-                  {item.sideUnitName && <WeaponUnitTag>⚔️ {item.sideUnitName}</WeaponUnitTag>}
+                  {item.sideUnitName &&
+                    (() => {
+                      const matchedSideUnit = sideUnits.find(
+                        (su) => su.id === item.sideUnitId,
+                      )
+                      return matchedSideUnit ? (
+                        <WeaponUnitTag
+                          as={Link}
+                          to={pathKeys.militaryUnitDetail(matchedSideUnit.unit.id)}
+                          title={`${item.sideUnitName} 부대 상세 대시보드 열기`}
+                          style={{ textDecoration: 'none' }}
+                        >
+                          ⚔️ {item.sideUnitName}
+                        </WeaponUnitTag>
+                      ) : (
+                        <WeaponUnitTag>⚔️ {item.sideUnitName}</WeaponUnitTag>
+                      )
+                    })()}
                   {item.role && <WeaponRoleTag>{item.role}</WeaponRoleTag>}
                 </WeaponMain>
                 <WeaponStats>

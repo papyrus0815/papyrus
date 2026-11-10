@@ -410,6 +410,17 @@ export class MilitaryUnitRepository {
                 navalVessel: { select: { id: true, name: true, vesselType: true } },
               },
             },
+            mapFeatures: {
+              orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+              select: {
+                id: true,
+                eventId: true,
+                geometryType: true,
+                title: true,
+                description: true,
+                color: true,
+              },
+            },
             side: {
               select: {
                 id: true,

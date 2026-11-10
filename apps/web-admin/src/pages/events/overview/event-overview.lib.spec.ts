@@ -1,6 +1,8 @@
 import type { EventOverviewNode } from '@/shared/api/event-overview'
 
 import {
+  aggregateContextLinks,
+  aggregateDeployedWeapons,
   aggregateMilitaryUnits,
   aggregatePersons,
   buildCountryMatrix,
@@ -702,5 +704,77 @@ describe('buildWarDeclarationFlow — 선전포고 하위 사건 + 가담·이�
     expect(units[0].sideName).toBe('추축국')
     expect(units[1].militaryUnitId).toBe('unit-pg3')
     expect(units[1].events).toHaveLength(1)
+  })
+
+  it('aggregateContextLinks와 aggregateDeployedWeapons는 하위 사건의 7대 맥락과 투입 병기를 집계한다', () => {
+    const firstBattle = node({
+      id: 'smolensk',
+      title: '스몰렌스크 전투',
+      contextLinks: [
+        {
+          id: 'ctx-1',
+          role: 'OBSTACLE',
+          entityKind: 'CLIMATE',
+          entityName: '라스푸티차',
+          description: '추계 진흙탕으로 기동 지연',
+          sideName: '추축국',
+        },
+      ],
+      sides: [
+        {
+          id: 'side-axis-1',
+          name: '추축국',
+          color: '#dc2626',
+          deployedWeapons: [
+            {
+              id: 'wp-1',
+              assetKind: 'GROUND_VEHICLE',
+              assetName: 'III호 전차',
+              quantity: 450,
+              note: '주력 중형전차',
+            },
+          ],
+        },
+      ],
+    })
+    const secondBattle = node({
+      id: 'moscow',
+      title: '모스크바 공방전',
+      contextLinks: [
+        {
+          id: 'ctx-2',
+          role: 'OBSTACLE',
+          entityKind: 'CLIMATE',
+          entityName: '라스푸티차',
+          description: '10월 진흙탕으로 보급 마비',
+          sideName: '추축국',
+        },
+      ],
+      sides: [
+        {
+          id: 'side-axis-2',
+          name: '추축국',
+          color: '#dc2626',
+          deployedWeapons: [
+            {
+              id: 'wp-2',
+              assetKind: 'GROUND_VEHICLE',
+              assetName: 'III호 전차',
+              quantity: 320,
+              note: null,
+            },
+          ],
+        },
+      ],
+    })
+    const contexts = aggregateContextLinks([firstBattle, secondBattle])
+    expect(contexts).toHaveLength(1)
+    expect(contexts[0].entityName).toBe('라스푸티차')
+    expect(contexts[0].events).toHaveLength(2)
+
+    const weapons = aggregateDeployedWeapons([firstBattle, secondBattle])
+    expect(weapons).toHaveLength(1)
+    expect(weapons[0].assetName).toBe('III호 전차')
+    expect(weapons[0].events).toHaveLength(2)
   })
 })

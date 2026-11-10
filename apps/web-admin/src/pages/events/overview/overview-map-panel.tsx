@@ -72,6 +72,7 @@ interface MapPanelProps {
   dateLabelById: Map<string, string>
   grouping: OverviewGrouping
   visibleIds: Set<string> | null
+  selectedUnitId?: string | null
   hotId: string | null
   onHover: (id: string | null) => void
   onOpen: (id: string) => void
@@ -85,6 +86,7 @@ export function MapPanel({
   dateLabelById,
   grouping,
   visibleIds,
+  selectedUnitId = null,
   hotId,
   onHover,
   onOpen,
@@ -121,30 +123,43 @@ export function MapPanel({
     // colorOf는 grouping·groupIndex에서 나온다
   }, [root, ordered, numberById, dateLabelById, visibleIds, grouping, groupIndex])
 
+  const allNodesForMap = useMemo(() => [root, ...ordered], [root, ordered])
+
   const vectorFeatures = useMemo<MapVectorFeature[]>(() => {
-    const allNodes = [root, ...ordered]
     const list: MapVectorFeature[] = []
-    for (const node of allNodes) {
+    for (const node of allNodesForMap) {
       if (visibleIds !== null && node.id !== root.id && !visibleIds.has(node.id)) continue
+      const numLabel = node.id === root.id ? '상위' : (numberById.get(node.id) ?? '')
+      const eventLabel = numLabel ? `${numLabel}. ${node.title}` : node.title
       for (const feat of node.mapFeatures ?? []) {
+        const extFeat = feat as typeof feat & { militaryUnitId?: string | null }
+        if (selectedUnitId && extFeat.militaryUnitId && extFeat.militaryUnitId !== selectedUnitId) {
+          continue
+        }
         list.push({
           id: feat.id,
           eventId: feat.eventId,
+          eventLabel,
           geometryType: feat.geometryType,
           title: feat.title,
           description: feat.description,
           color: feat.color ?? (node.id === root.id ? '#dc2626' : colorOf(node.id)),
+          sideId: feat.sideId,
           sideName: feat.sideName,
+          deployedUnitId: feat.deployedUnitId,
+          militaryUnitId: extFeat.militaryUnitId ?? null,
           deployedUnitName: feat.deployedUnitName,
           coordinates: feat.coordinates,
         })
       }
     }
     return list
-  }, [root, ordered, visibleIds, grouping, groupIndex])
+  }, [allNodesForMap, root.id, numberById, visibleIds, selectedUnitId, grouping, groupIndex])
 
   const [vectorEditorOpen, setVectorEditorOpen] = useState(false)
   const [vectorSaving, setVectorSaving] = useState(false)
+  const [editingFeatureId, setEditingFeatureId] = useState<string | null>(null)
+  const [vectorTargetEventId, setVectorTargetEventId] = useState<string>(rootId)
   const [vectorType, setVectorType] = useState<EventMapGeometryType>('ARROW')
   const [vectorTitle, setVectorTitle] = useState('')
   const [vectorSideId, setVectorSideId] = useState('')
@@ -152,6 +167,11 @@ export function MapPanel({
   const [vectorColor, setVectorColor] = useState('#dc2626')
   const [vectorCoordsText, setVectorCoordsText] = useState('')
   const [vectorDesc, setVectorDesc] = useState('')
+
+  const targetNodeForVector = useMemo(
+    () => allNodesForMap.find((node) => node.id === vectorTargetEventId) ?? root,
+    [allNodesForMap, vectorTargetEventId, root],
+  )
 
   const parseCoordsInput = (rawText: string): Array<[number, number]> => {
     return rawText
@@ -198,7 +218,31 @@ export function MapPanel({
     setVectorCoordsText(nextCoords.map((pt) => `${pt[0].toFixed(4)},${pt[1].toFixed(4)}`).join('; '))
   }
 
-  const handleAddVectorFeature = async () => {
+  const resetVectorEditor = () => {
+    setEditingFeatureId(null)
+    setVectorTitle('')
+    setVectorCoordsText('')
+    setVectorDesc('')
+    setVectorSideId('')
+    setVectorUnitId('')
+  }
+
+  const handleStartEditVectorFeature = (feat: MapVectorFeature) => {
+    setVectorEditorOpen(true)
+    setEditingFeatureId(feat.id)
+    setVectorTargetEventId(feat.eventId)
+    setVectorType(feat.geometryType)
+    setVectorTitle(feat.title)
+    setVectorSideId(feat.sideId ?? '')
+    setVectorUnitId(feat.deployedUnitId ?? '')
+    setVectorColor(feat.color || '#dc2626')
+    setVectorCoordsText(
+      feat.coordinates.map((pt) => `${pt[0].toFixed(4)},${pt[1].toFixed(4)}`).join('; '),
+    )
+    setVectorDesc(feat.description ?? '')
+  }
+
+  const handleSaveVectorFeature = async () => {
     const coords = parseCoordsInput(vectorCoordsText)
     const minPts = vectorType === 'POLYGON' ? 3 : vectorType === 'POINT' ? 1 : 2
     if (!vectorTitle.trim()) {
@@ -211,35 +255,56 @@ export function MapPanel({
     }
     setVectorSaving(true)
     try {
-      const currentRootFeatures = await listEventMapFeatures(rootId)
-      const nextInputs: EventMapFeatureInput[] = [
-        ...currentRootFeatures.map((existing) => ({
-          geometryType: existing.geometryType,
-          title: existing.title,
-          description: existing.description,
-          color: existing.color,
-          sideId: existing.sideId,
-          deployedUnitId: existing.deployedUnitId,
-          coordinates: existing.coordinates,
-          sortOrder: existing.sortOrder,
-        })),
-        {
-          geometryType: vectorType,
-          title: vectorTitle.trim(),
-          description: vectorDesc.trim() || null,
-          color: vectorColor || null,
-          sideId: vectorSideId || null,
-          deployedUnitId: vectorUnitId || null,
-          coordinates: coords,
-          sortOrder: currentRootFeatures.length,
-        },
-      ]
-      await syncEventMapFeatures(rootId, nextInputs)
+      const targetEventId = vectorTargetEventId || rootId
+      const currentTargetFeatures = await listEventMapFeatures(targetEventId)
+      const payloadItem: EventMapFeatureInput = {
+        geometryType: vectorType,
+        title: vectorTitle.trim(),
+        description: vectorDesc.trim() || null,
+        color: vectorColor || null,
+        sideId: vectorSideId || null,
+        deployedUnitId: vectorUnitId || null,
+        coordinates: coords,
+      }
+      const nextInputs: EventMapFeatureInput[] = editingFeatureId
+        ? currentTargetFeatures.map((existing, idx) =>
+            existing.id === editingFeatureId
+              ? { ...payloadItem, sortOrder: idx }
+              : {
+                  geometryType: existing.geometryType,
+                  title: existing.title,
+                  description: existing.description,
+                  color: existing.color,
+                  sideId: existing.sideId,
+                  deployedUnitId: existing.deployedUnitId,
+                  coordinates: existing.coordinates,
+                  sortOrder: idx,
+                },
+          )
+        : [
+            ...currentTargetFeatures.map((existing, idx) => ({
+              geometryType: existing.geometryType,
+              title: existing.title,
+              description: existing.description,
+              color: existing.color,
+              sideId: existing.sideId,
+              deployedUnitId: existing.deployedUnitId,
+              coordinates: existing.coordinates,
+              sortOrder: idx,
+            })),
+            {
+              ...payloadItem,
+              sortOrder: currentTargetFeatures.length,
+            },
+          ]
+      await syncEventMapFeatures(targetEventId, nextInputs)
       await queryClient.invalidateQueries({ queryKey: eventKeys.overview(rootId) })
-      setVectorTitle('')
-      setVectorCoordsText('')
-      setVectorDesc('')
-      notify.success('전선·진격로·포위망 도형을 추가했습니다')
+      resetVectorEditor()
+      notify.success(
+        editingFeatureId
+          ? '전선·진격로·포위망 도형을 수정했습니다'
+          : '전선·진격로·포위망 도형을 추가했습니다',
+      )
     } catch (error) {
       notify.error(error instanceof Error ? error.message : '도형 저장에 실패했습니다')
     } finally {
@@ -426,7 +491,11 @@ export function MapPanel({
           <Suspense fallback={<MapLoading style={{ height: 460 }}>지도를 싣는 중…</MapLoading>}>
             <OverviewMapCanvas
               pins={pins}
-              features={vectorFeatures}
+              features={
+                editingFeatureId
+                  ? vectorFeatures.filter((feat) => feat.id !== editingFeatureId)
+                  : vectorFeatures
+              }
               draftFeature={draftFeature}
               onMapClick={vectorEditorOpen ? handleMapClickForVector : null}
               route={route}
@@ -503,7 +572,15 @@ export function MapPanel({
             {vectorFeatures.length > 0 && (
               <VectorChipList>
                 {vectorFeatures.map((feat) => (
-                  <VectorChip key={feat.id} $color={feat.color}>
+                  <VectorChip
+                    key={feat.id}
+                    $color={feat.color}
+                    style={
+                      editingFeatureId === feat.id
+                        ? { outline: `2px solid ${feat.color}`, outlineOffset: 1 }
+                        : undefined
+                    }
+                  >
                     <span>
                       {feat.geometryType === 'ARROW'
                         ? '➔'
@@ -512,6 +589,7 @@ export function MapPanel({
                           : feat.geometryType === 'LINE'
                             ? '➖'
                             : '📍'}{' '}
+                      {feat.eventLabel && <S.Muted>[{feat.eventLabel}] </S.Muted>}
                       <strong>{feat.title}</strong>
                       {feat.sideName && ` · ${feat.sideName}`}
                       {feat.deployedUnitName && ` · ⚔️ ${feat.deployedUnitName}`}
@@ -519,7 +597,16 @@ export function MapPanel({
                     <VectorRemoveBtn
                       type="button"
                       disabled={vectorSaving}
+                      onClick={() => handleStartEditVectorFeature(feat)}
+                      title="이 도형 수정"
+                    >
+                      수정
+                    </VectorRemoveBtn>
+                    <VectorRemoveBtn
+                      type="button"
+                      disabled={vectorSaving}
                       onClick={() => void handleRemoveVectorFeature(feat.eventId, feat.id)}
+                      title="이 도형 삭제"
                     >
                       ✕
                     </VectorRemoveBtn>
@@ -529,6 +616,24 @@ export function MapPanel({
             )}
 
             <VectorFormRow>
+              <VectorSelect
+                value={vectorTargetEventId}
+                disabled={Boolean(editingFeatureId)}
+                onChange={(changeEvent) => {
+                  setVectorTargetEventId(changeEvent.target.value)
+                  setVectorSideId('')
+                  setVectorUnitId('')
+                }}
+                aria-label="귀속 사건"
+              >
+                <option value={root.id}>★ 상위 전체: {root.title}</option>
+                {ordered.map((subNode) => (
+                  <option key={subNode.id} value={subNode.id}>
+                    {numberById.get(subNode.id) ?? '·'}. {subNode.title}
+                  </option>
+                ))}
+              </VectorSelect>
+
               <VectorSelect
                 value={vectorType}
                 onChange={(changeEvent) => setVectorType(changeEvent.target.value as EventMapGeometryType)}
@@ -546,20 +651,20 @@ export function MapPanel({
                 onChange={(changeEvent) => setVectorTitle(changeEvent.target.value)}
               />
 
-              {(root.sides ?? []).length > 0 && (
+              {(targetNodeForVector.sides ?? []).length > 0 && (
                 <VectorSelect
                   value={vectorSideId}
                   onChange={(changeEvent) => {
                     const nextSideId = changeEvent.target.value
                     setVectorSideId(nextSideId)
                     setVectorUnitId('')
-                    const matchedSide = (root.sides ?? []).find((side) => side.id === nextSideId)
+                    const matchedSide = (targetNodeForVector.sides ?? []).find((side) => side.id === nextSideId)
                     if (matchedSide?.color) setVectorColor(matchedSide.color)
                   }}
                   aria-label="소속 진영"
                 >
                   <option value="">진영 선택 (선택)</option>
-                  {(root.sides ?? []).map((side) => (
+                  {(targetNodeForVector.sides ?? []).map((side) => (
                     <option key={side.id} value={side.id}>
                       {side.name}
                     </option>
@@ -574,7 +679,7 @@ export function MapPanel({
                   aria-label="기동 부대"
                 >
                   <option value="">부대 선택 (선택)</option>
-                  {((root.sides ?? []).find((side) => side.id === vectorSideId)?.deployedUnits ?? []).map(
+                  {((targetNodeForVector.sides ?? []).find((side) => side.id === vectorSideId)?.deployedUnits ?? []).map(
                     (unitItem) => (
                       <option key={unitItem.id} value={unitItem.id}>
                         ⚔️ {unitItem.name}
@@ -617,12 +722,17 @@ export function MapPanel({
                 value={vectorDesc}
                 onChange={(changeEvent) => setVectorDesc(changeEvent.target.value)}
               />
+              {editingFeatureId && (
+                <S.TextButton type="button" onClick={resetVectorEditor}>
+                  수정 취소
+                </S.TextButton>
+              )}
               <VectorSubmitBtn
                 type="button"
                 disabled={vectorSaving}
-                onClick={() => void handleAddVectorFeature()}
+                onClick={() => void handleSaveVectorFeature()}
               >
-                도형 추가
+                {editingFeatureId ? '도형 수정 저장' : '도형 추가'}
               </VectorSubmitBtn>
             </VectorFormRow>
           </VectorEditorBody>

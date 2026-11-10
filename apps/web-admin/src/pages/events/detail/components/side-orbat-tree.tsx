@@ -1,15 +1,19 @@
 import { useMemo, useState } from 'react'
 
+import { useQuery } from '@tanstack/react-query'
 import { FiChevronDown, FiChevronRight, FiPlus, FiShield, FiUser, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { RADIUS } from '@/entities/event/ui/ledger-tokens'
+import { eventKeys } from '@/shared/api/event-query-keys'
 import {
   addEventSideUnit,
+  listEventSideWeapons,
   removeEventSideUnit,
   type SideUnitRole,
   type SideUnitView,
+  type SideWeaponView,
   updateEventSideUnit,
 } from '@/shared/api/event-sides'
 import { militaryUnitTypeLabelKo } from '@/shared/lib/military-unit-type-label'
@@ -70,6 +74,23 @@ export function SideOrbatSection({
 
   const tree = useMemo(() => buildSideOrbatTree(sideUnits), [sideUnits])
   const summaryByType = useMemo(() => summarizeOrbatByType(sideUnits), [sideUnits])
+
+  const sideWeaponsQuery = useQuery({
+    queryKey: eventKeys.sideWeapons(eventId),
+    queryFn: () => listEventSideWeapons(eventId).catch(() => [] as SideWeaponView[]),
+    staleTime: 30_000,
+  })
+
+  const weaponsBySideUnitId = useMemo(() => {
+    const map = new Map<string, SideWeaponView[]>()
+    for (const weaponItem of sideWeaponsQuery.data ?? []) {
+      if (weaponItem.sideId !== sideId || !weaponItem.sideUnitId) continue
+      const list = map.get(weaponItem.sideUnitId) ?? []
+      list.push(weaponItem)
+      map.set(weaponItem.sideUnitId, list)
+    }
+    return map
+  }, [sideWeaponsQuery.data, sideId])
 
   /** 최고사령부·기관(OKH, 스타프카 등)별 루트 노드 묶음 */
   const departmentGroups = useMemo(() => {
@@ -351,6 +372,13 @@ export function SideOrbatSection({
               {deployed.metrics.map((metric) => (
                 <UnitMetricPill key={metric.id} title={metric.qualifier ?? undefined}>
                   {formatSideUnitMetric(metric)}
+                </UnitMetricPill>
+              ))}
+
+              {(weaponsBySideUnitId.get(deployed.id) ?? []).map((weaponItem) => (
+                <UnitMetricPill key={`weapon-${weaponItem.id}`} title={weaponItem.note ?? undefined}>
+                  🛡️ {weaponItem.assetName}
+                  {weaponItem.deployed != null ? ` ${weaponItem.deployed.toLocaleString()}` : ''}
                 </UnitMetricPill>
               ))}
 

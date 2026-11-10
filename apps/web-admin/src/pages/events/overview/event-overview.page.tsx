@@ -28,6 +28,8 @@ import { notify } from '@/shared/ui/toast'
 import { eventKeys } from '@/shared/api/event-query-keys'
 
 import {
+  aggregateContextLinks,
+  aggregateDeployedWeapons,
   aggregateMilitaryUnits,
   aggregatePersons,
   buildCountryMatrix,
@@ -55,6 +57,7 @@ import {
 } from './event-overview.lib'
 import {
   ChecklistPanel,
+  ContextAndWeaponsPanel,
   CountryMatrixPanel,
   DistributionPanel,
   GanttPanel,
@@ -299,6 +302,8 @@ export function EventOverviewPanel({
       types: typeBreakdown(descendants),
       persons: aggregatePersons([root, ...descendants]),
       units: aggregateMilitaryUnits([root, ...descendants]),
+      contextLinks: aggregateContextLinks([root, ...descendants]),
+      weapons: aggregateDeployedWeapons([root, ...descendants]),
       metrics: metricRows([root, ...descendants]),
       coverage: coverageRatio(descendants),
       gaps: coverageGaps(root, descendants),
@@ -834,6 +839,7 @@ export function EventOverviewPanel({
               <MilitaryUnitsPanel
                 units={derived.units}
                 numberById={derived.numberById}
+                visibleIds={visibleIds}
                 selectedUnitId={selectedUnitId}
                 onSelectUnit={setSelectedUnitId}
                 onOpen={openEventById}
@@ -844,6 +850,7 @@ export function EventOverviewPanel({
               <PersonsPanel
                 persons={derived.persons}
                 numberById={derived.numberById}
+                visibleIds={visibleIds}
                 onOpen={openEventById}
                 onPersonClick={onPersonClick}
                 wide
@@ -873,10 +880,22 @@ export function EventOverviewPanel({
                 descendants={descendants}
                 metrics={derived.metrics}
                 numberById={derived.numberById}
+                visibleIds={visibleIds}
                 wide
                 hotId={highlightId}
                 onHover={setHotId}
                 onOpen={openEventById}
+              />
+            )}
+            {(derived.contextLinks.length > 0 || derived.weapons.length > 0) && (
+              <ContextAndWeaponsPanel
+                contextLinks={derived.contextLinks}
+                weapons={derived.weapons}
+                rootId={root.id}
+                numberById={derived.numberById}
+                visibleIds={visibleIds}
+                onOpen={openEventById}
+                wide
               />
             )}
             {/* 진영이 있으면 패널이 서서 '수치 없음'을 직접 말한다 — 두 번 말하지 않게 */}
@@ -897,6 +916,7 @@ export function EventOverviewPanel({
             dateLabelById={derived.dateLabelById}
             grouping={derived.grouping}
             visibleIds={visibleIds}
+            selectedUnitId={selectedUnitId}
             hotId={highlightId}
             onHover={setHotId}
             onOpen={openEventById}

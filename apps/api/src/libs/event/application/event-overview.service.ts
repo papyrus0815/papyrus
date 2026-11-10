@@ -128,6 +128,7 @@ export interface EventOverviewMapFeature {
   sideId: string | null
   sideName: string | null
   deployedUnitId: string | null
+  militaryUnitId?: string | null
   deployedUnitName: string | null
   coordinates: Array<[number, number]>
 }
@@ -326,7 +327,9 @@ const NODE_INCLUDE = {
     orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
     include: {
       side: { select: { id: true, name: true, color: true } },
-      deployedUnit: { select: { id: true, militaryUnit: { select: { name: true } } } },
+      deployedUnit: {
+        select: { id: true, militaryUnitId: true, militaryUnit: { select: { name: true } } },
+      },
     },
   },
   _count: { select: { eventSections: true, eventImages: true } },
@@ -787,6 +790,7 @@ export class EventOverviewService {
         sideId: feature.sideId ?? null,
         sideName: feature.side?.name ?? null,
         deployedUnitId: feature.deployedUnitId ?? null,
+        militaryUnitId: feature.deployedUnit?.militaryUnitId ?? null,
         deployedUnitName: feature.deployedUnit?.militaryUnit.name ?? null,
         coordinates: Array.isArray(feature.coordinates)
           ? feature.coordinates

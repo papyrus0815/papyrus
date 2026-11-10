@@ -1120,6 +1120,109 @@ export function aggregateMilitaryUnits(nodes: EventOverviewNode[]): MilitaryUnit
   )
 }
 
+export interface ContextLinkAggregate {
+  key: string
+  entityKind:
+    | 'LAW'
+    | 'SOCIAL_PHENOMENON'
+    | 'NATURAL_FEATURE'
+    | 'INFRASTRUCTURE'
+    | 'CLIMATE'
+    | 'RESOURCE'
+    | 'COMPANY_FACILITY'
+  entityName: string
+  events: Array<{
+    id: string
+    title: string
+    role: string
+    sideName: string | null
+    description: string | null
+  }>
+}
+
+/** 하위(와 상위) 사건에 걸친 7대 도메인 맥락 연결 — 많이 나온 항목부터 */
+export function aggregateContextLinks(nodes: EventOverviewNode[]): ContextLinkAggregate[] {
+  const byKey = new Map<string, ContextLinkAggregate>()
+  for (const node of nodes) {
+    for (const link of node.contextLinks ?? []) {
+      const key = `${link.entityKind}:${link.entityName}`
+      let entry = byKey.get(key)
+      if (!entry) {
+        entry = {
+          key,
+          entityKind: link.entityKind,
+          entityName: link.entityName,
+          events: [],
+        }
+        byKey.set(key, entry)
+      }
+      if (!entry.events.some((ev) => ev.id === node.id && ev.role === link.role)) {
+        entry.events.push({
+          id: node.id,
+          title: node.title,
+          role: link.role,
+          sideName: link.sideName,
+          description: link.description,
+        })
+      }
+    }
+  }
+  return [...byKey.values()].sort(
+    (left, right) =>
+      right.events.length - left.events.length || left.entityName.localeCompare(right.entityName),
+  )
+}
+
+export interface DeployedWeaponAggregate {
+  key: string
+  assetKind: 'WEAPON' | 'GROUND_VEHICLE' | 'AIRCRAFT' | 'NAVAL_VESSEL'
+  assetName: string
+  sideName: string
+  sideColor: string | null
+  events: Array<{
+    id: string
+    title: string
+    quantity: number | null
+    note: string | null
+  }>
+}
+
+/** 하위(와 상위) 사건에 걸친 투입 병기·장비 — 많이 나온 병기부터 */
+export function aggregateDeployedWeapons(nodes: EventOverviewNode[]): DeployedWeaponAggregate[] {
+  const byKey = new Map<string, DeployedWeaponAggregate>()
+  for (const node of nodes) {
+    for (const side of node.sides ?? []) {
+      for (const weapon of side.deployedWeapons ?? []) {
+        const key = `${weapon.assetKind}:${weapon.assetName}:${side.name}`
+        let entry = byKey.get(key)
+        if (!entry) {
+          entry = {
+            key,
+            assetKind: weapon.assetKind,
+            assetName: weapon.assetName,
+            sideName: side.name,
+            sideColor: side.color,
+            events: [],
+          }
+          byKey.set(key, entry)
+        }
+        if (!entry.events.some((ev) => ev.id === node.id)) {
+          entry.events.push({
+            id: node.id,
+            title: node.title,
+            quantity: weapon.quantity,
+            note: weapon.note,
+          })
+        }
+      }
+    }
+  }
+  return [...byKey.values()].sort(
+    (left, right) =>
+      right.events.length - left.events.length || left.assetName.localeCompare(right.assetName),
+  )
+}
+
 export interface MetricRow {
   eventId: string
   eventTitle: string

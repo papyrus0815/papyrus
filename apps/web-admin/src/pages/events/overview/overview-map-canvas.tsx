@@ -25,11 +25,15 @@ export interface MapPin {
 export interface MapVectorFeature {
   id: string
   eventId: string
+  eventLabel?: string | null
   geometryType: 'POINT' | 'ARROW' | 'LINE' | 'POLYGON'
   title: string
   description: string | null
   color: string
+  sideId?: string | null
   sideName: string | null
+  deployedUnitId?: string | null
+  militaryUnitId?: string | null
   deployedUnitName: string | null
   coordinates: Array<[number, number]>
 }
@@ -163,7 +167,11 @@ export default function OverviewMapCanvas({
         <FitToPins points={points} />
         <MapClickListener onMapClick={onMapClick} />
         {allFeatures.map((feature) => {
-          const metaLine = [feature.sideName, feature.deployedUnitName ? `⚔️ ${feature.deployedUnitName}` : null]
+          const metaLine = [
+            feature.eventLabel,
+            feature.sideName,
+            feature.deployedUnitName ? `⚔️ ${feature.deployedUnitName}` : null,
+          ]
             .filter(Boolean)
             .join(' · ')
           if (feature.geometryType === 'POLYGON' && feature.coordinates.length >= 3) {
