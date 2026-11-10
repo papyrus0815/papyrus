@@ -84,10 +84,10 @@ export function SideOrbatSection({
   const weaponsBySideUnitId = useMemo(() => {
     const map = new Map<string, SideWeaponView[]>()
     for (const weaponItem of sideWeaponsQuery.data ?? []) {
-      if (weaponItem.sideId !== sideId || !weaponItem.sideUnitId) continue
-      const list = map.get(weaponItem.sideUnitId) ?? []
+      if (weaponItem.sideId !== sideId || !weaponItem.deployedUnitId) continue
+      const list = map.get(weaponItem.deployedUnitId) ?? []
       list.push(weaponItem)
-      map.set(weaponItem.sideUnitId, list)
+      map.set(weaponItem.deployedUnitId, list)
     }
     return map
   }, [sideWeaponsQuery.data, sideId])
@@ -369,7 +369,8 @@ export function SideOrbatSection({
                 />
               </ParentOverrideWrap>
 
-              {deployed.metrics.map((metric) => (
+              {/* 옛 API 빌드는 metrics를 싣지 않는다 — 없으면 빈 줄(예전엔 여기서 탭 전체가 깨졌다) */}
+              {(deployed.metrics ?? []).map((metric) => (
                 <UnitMetricPill key={metric.id} title={metric.qualifier ?? undefined}>
                   {formatSideUnitMetric(metric)}
                 </UnitMetricPill>
@@ -377,8 +378,8 @@ export function SideOrbatSection({
 
               {(weaponsBySideUnitId.get(deployed.id) ?? []).map((weaponItem) => (
                 <UnitMetricPill key={`weapon-${weaponItem.id}`} title={weaponItem.note ?? undefined}>
-                  🛡️ {weaponItem.assetName}
-                  {weaponItem.deployed != null ? ` ${weaponItem.deployed.toLocaleString()}` : ''}
+                  🛡️ {weaponItem.name}
+                  {weaponItem.quantity != null ? ` ${weaponItem.quantity.toLocaleString()}` : ''}
                 </UnitMetricPill>
               ))}
 

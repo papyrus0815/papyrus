@@ -11,11 +11,11 @@ import { getEventOverview } from '@/shared/api/event-overview'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import {
   type EventSide,
-  type SideAssetKind,
   type SideUnitView,
   type SideWeaponInput,
+  type SideWeaponKind,
   type SideWeaponView,
-  type WeaponCatalog,
+  type WeaponCatalogItem,
   getWeaponCatalog,
   listEventSideWeapons,
   syncEventSideWeapons,
@@ -65,7 +65,7 @@ const DOCTRINE_FIELDS: ReadonlyArray<{
   },
 ]
 
-const ASSET_KIND_LABELS: Record<SideAssetKind, { icon: string; label: string }> = {
+const ASSET_KIND_LABELS: Record<SideWeaponKind, { icon: string; label: string }> = {
   GROUND_VEHICLE: { icon: '🛡️', label: '기갑·차량' },
   AIRCRAFT: { icon: '✈️', label: '항공기' },
   WEAPON: { icon: '🔫', label: '화포·보병화기' },
@@ -168,16 +168,15 @@ interface SideWeaponsSectionProps {
   sideUnits: ReadonlyArray<SideUnitView>
 }
 
+/** 저장된 줄 → 동기화 입력(서버 계약: kind·itemId·deployedUnitId·quantity·lost·role·note) */
 function toWeaponInput(item: SideWeaponView): SideWeaponInput {
   return {
-    sideUnitId: item.sideUnitId,
-    weaponId: item.assetKind === 'WEAPON' ? item.assetId : null,
-    groundVehicleId: item.assetKind === 'GROUND_VEHICLE' ? item.assetId : null,
-    aircraftId: item.assetKind === 'AIRCRAFT' ? item.assetId : null,
-    navalVesselId: item.assetKind === 'NAVAL_VESSEL' ? item.assetId : null,
-    role: item.role,
-    deployed: item.deployed,
+    kind: item.kind,
+    itemId: item.itemId,
+    deployedUnitId: item.deployedUnitId,
+    quantity: item.quantity,
     lost: item.lost,
+    role: item.role,
     note: item.note,
   }
 }
@@ -195,7 +194,7 @@ export function SideWeaponsSection({
   const queryClient = useQueryClient()
   const [adding, setAdding] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [assetKind, setAssetKind] = useState<SideAssetKind>('GROUND_VEHICLE')
+  const [assetKind, setAssetKind] = useState<SideWeaponKind>('GROUND_VEHICLE')
   const [assetId, setAssetId] = useState('')
   const [sideUnitId, setSideUnitId] = useState('')
   const [roleText, setRoleText] = useState('')
@@ -210,17 +209,8 @@ export function SideWeaponsSection({
   })
 
   const catalogQuery = useQuery({
-    queryKey: eventKeys.weaponCatalog(eventId),
-    queryFn: () =>
-      getWeaponCatalog(eventId).catch(
-        () =>
-          ({
-            weapons: [],
-            groundVehicles: [],
-            aircraft: [],
-            navalVessels: [],
-          }) satisfies WeaponCatalog,
-      ),
+    queryKey: eventKeys.weaponCatalog(),
+    queryFn: () => getWeaponCatalog(eventId).catch(() => [] as WeaponCatalogItem[]),
     enabled: adding,
     staleTime: 60_000,
   })
@@ -230,14 +220,11 @@ export function SideWeaponsSection({
     [sideWeaponsQuery.data, sideId],
   )
 
-  const catalogOptions = useMemo(() => {
-    const catalog = catalogQuery.data
-    if (!catalog) return []
-    if (assetKind === 'GROUND_VEHICLE') return catalog.groundVehicles
-    if (assetKind === 'AIRCRAFT') return catalog.aircraft
-    if (assetKind === 'NAVAL_VESSEL') return catalog.navalVessels
-    return catalog.weapons
-  }, [catalogQuery.data, assetKind])
+  /* 카탈로그는 서버가 한 줄 배열(kind 표지)로 준다 — 고른 분류만 */
+  const catalogOptions = useMemo(
+    () => (catalogQuery.data ?? []).filter((option) => option.kind === assetKind),
+    [catalogQuery.data, assetKind],
+  )
 
   const refreshWeapons = async () => {
     await queryClient.invalidateQueries({ queryKey: eventKeys.sideWeapons(eventId) })
@@ -251,14 +238,12 @@ export function SideWeaponsSection({
     const deployedVal = deployedText.trim() ? Number(deployedText.trim()) : null
     const lostVal = lostText.trim() ? Number(lostText.trim()) : null
     const newEntry: SideWeaponInput = {
-      sideUnitId: sideUnitId || null,
-      weaponId: assetKind === 'WEAPON' ? assetId : null,
-      groundVehicleId: assetKind === 'GROUND_VEHICLE' ? assetId : null,
-      aircraftId: assetKind === 'AIRCRAFT' ? assetId : null,
-      navalVesselId: assetKind === 'NAVAL_VESSEL' ? assetId : null,
-      role: roleText.trim() || null,
-      deployed: deployedVal !== null && Number.isFinite(deployedVal) ? deployedVal : null,
+      kind: assetKind,
+      itemId: assetId,
+      deployedUnitId: sideUnitId || null,
+      quantity: deployedVal !== null && Number.isFinite(deployedVal) ? deployedVal : null,
       lost: lostVal !== null && Number.isFinite(lostVal) ? lostVal : null,
+      role: roleText.trim() || null,
       note: noteText.trim() || null,
     }
     setSaving(true)
@@ -318,37 +303,37 @@ export function SideWeaponsSection({
       {weaponsForSide.length > 0 && (
         <WeaponsList>
           {weaponsForSide.map((item) => {
-            const kindMeta = ASSET_KIND_LABELS[item.assetKind]
+            const kindMeta = ASSET_KIND_LABELS[item.kind]
             return (
               <WeaponRow key={item.id}>
                 <WeaponMain>
                   <WeaponKindBadge title={kindMeta.label}>{kindMeta.icon}</WeaponKindBadge>
-                  <WeaponName>{item.assetName}</WeaponName>
-                  {item.assetCategory && <WeaponCategoryTag>{item.assetCategory}</WeaponCategoryTag>}
-                  {item.sideUnitName &&
+                  <WeaponName>{item.name}</WeaponName>
+                  {item.categoryLabel && <WeaponCategoryTag>{item.categoryLabel}</WeaponCategoryTag>}
+                  {item.deployedUnitName &&
                     (() => {
                       const matchedSideUnit = sideUnits.find(
-                        (su) => su.id === item.sideUnitId,
+                        (su) => su.id === item.deployedUnitId,
                       )
                       return matchedSideUnit ? (
                         <WeaponUnitTag
                           as={Link}
                           to={pathKeys.militaryUnitDetail(matchedSideUnit.unit.id)}
-                          title={`${item.sideUnitName} 부대 상세 대시보드 열기`}
+                          title={`${item.deployedUnitName} 부대 상세 대시보드 열기`}
                           style={{ textDecoration: 'none' }}
                         >
-                          ⚔️ {item.sideUnitName}
+                          ⚔️ {item.deployedUnitName}
                         </WeaponUnitTag>
                       ) : (
-                        <WeaponUnitTag>⚔️ {item.sideUnitName}</WeaponUnitTag>
+                        <WeaponUnitTag>⚔️ {item.deployedUnitName}</WeaponUnitTag>
                       )
                     })()}
                   {item.role && <WeaponRoleTag>{item.role}</WeaponRoleTag>}
                 </WeaponMain>
                 <WeaponStats>
-                  {item.deployed != null && (
+                  {item.quantity != null && (
                     <WeaponStatBadge $tone="deployed">
-                      투입 {item.deployed.toLocaleString()}
+                      투입 {item.quantity.toLocaleString()}
                     </WeaponStatBadge>
                   )}
                   {item.lost != null && (
@@ -361,7 +346,7 @@ export function SideWeaponsSection({
                     type="button"
                     disabled={saving}
                     onClick={() => void handleRemoveWeapon(item.id)}
-                    aria-label={`${item.assetName} 제외`}
+                    aria-label={`${item.name} 제외`}
                   >
                     <FiTrash2 size={11} />
                   </WeaponRemoveBtn>
@@ -378,7 +363,7 @@ export function SideWeaponsSection({
             <FormSelect
               value={assetKind}
               onChange={(changeEvent) => {
-                setAssetKind(changeEvent.target.value as SideAssetKind)
+                setAssetKind(changeEvent.target.value as SideWeaponKind)
                 setAssetId('')
               }}
               aria-label="병기·장비 분류"
@@ -398,7 +383,8 @@ export function SideWeaponsSection({
               {catalogOptions.map((option) => (
                 <option key={option.id} value={option.id}>
                   {option.name}
-                  {option.category ? ` (${option.category})` : ''}
+                  {option.categoryLabel ? ` (${option.categoryLabel})` : ''}
+                  {option.countryName ? ` · ${option.countryName}` : ''}
                 </option>
               ))}
             </FormSelect>
@@ -670,7 +656,7 @@ export function SubEventSidesRollupPanel({ eventId }: SubEventSidesRollupPanelPr
 const DoctrineContainer = styled.div`
   margin-bottom: 12px;
   border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-radius: ${RADIUS.md};
+  border-radius: ${RADIUS.MD};
   background: ${({ theme }) => theme.colors.background.secondary};
   overflow: hidden;
 `
@@ -772,7 +758,7 @@ const DoctrineValueCell = styled.td`
 const WeaponsBox = styled.div<{ $color: string }>`
   margin-top: 8px;
   padding: 8px 10px;
-  border-radius: ${RADIUS.sm};
+  border-radius: ${RADIUS.SM};
   border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   border-left: 2.5px solid ${({ $color }) => $color};
   background: ${({ theme }) => theme.colors.background.primary};
@@ -808,7 +794,7 @@ const AddWeaponToggleBtn = styled.button`
   gap: 3px;
   padding: 2px 7px;
   border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-radius: ${RADIUS.sm};
+  border-radius: ${RADIUS.SM};
   background: ${({ theme }) => theme.colors.background.secondary};
   color: ${({ theme }) => theme.colors.text.secondary};
   font-size: 11px;
@@ -833,7 +819,7 @@ const WeaponRow = styled.div`
   justify-content: space-between;
   gap: 6px 10px;
   padding: 4px 6px;
-  border-radius: ${RADIUS.sm};
+  border-radius: ${RADIUS.SM};
   background: ${({ theme }) => theme.colors.background.secondary};
   font-size: 11.5px;
 `
@@ -937,7 +923,7 @@ const FormSelect = styled.select`
   flex: 1 1 140px;
   padding: 4px 6px;
   border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-radius: ${RADIUS.sm};
+  border-radius: ${RADIUS.SM};
   background: ${({ theme }) => theme.colors.background.secondary};
   color: ${({ theme }) => theme.colors.text.primary};
   font-size: 11.5px;
@@ -947,7 +933,7 @@ const FormInput = styled.input`
   flex: 1 1 110px;
   padding: 4px 7px;
   border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-radius: ${RADIUS.sm};
+  border-radius: ${RADIUS.SM};
   background: ${({ theme }) => theme.colors.background.secondary};
   color: ${({ theme }) => theme.colors.text.primary};
   font-size: 11.5px;
@@ -956,7 +942,7 @@ const FormInput = styled.input`
 const SubmitWeaponBtn = styled.button`
   padding: 4px 10px;
   border: none;
-  border-radius: ${RADIUS.sm};
+  border-radius: ${RADIUS.SM};
   background: ${({ theme }) => theme.colors.text.primary};
   color: ${({ theme }) => theme.colors.background.primary};
   font-size: 11.5px;
@@ -972,7 +958,7 @@ const SubmitWeaponBtn = styled.button`
 const RollupWrap = styled.div`
   margin-bottom: 12px;
   border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-radius: ${RADIUS.md};
+  border-radius: ${RADIUS.MD};
   background: ${({ theme }) => theme.colors.background.secondary};
 `
 
@@ -1009,9 +995,9 @@ const RollupGrid = styled.div`
 
 const RollupSideCard = styled.div<{ $color: string | null }>`
   padding: 8px 10px;
-  border-radius: ${RADIUS.sm};
+  border-radius: ${RADIUS.SM};
   border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-top: 2.5px solid ${({ $color, theme }) => $color ?? theme.colors.border.primary};
+  border-top: 2.5px solid ${({ $color, theme }) => $color ?? theme.colors.border.medium};
   background: ${({ theme }) => theme.colors.background.primary};
 `
 

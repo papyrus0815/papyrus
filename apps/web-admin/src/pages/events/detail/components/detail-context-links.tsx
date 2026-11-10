@@ -9,8 +9,8 @@ import { RADIUS, ledgerHairline } from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { getEventOverview } from '@/shared/api/event-overview'
 import {
-  type EventContextCatalog,
-  type EventContextEntityKind,
+  type EventContextCatalogItem,
+  type EventContextDomain,
   type EventContextLinkInput,
   type EventContextLinkView,
   type EventContextRole,
@@ -27,7 +27,7 @@ import { type EventDetail } from '../use-event-detail'
 import { withSideColors } from './side-colors'
 
 const ENTITY_KIND_META: Record<
-  EventContextEntityKind,
+  EventContextDomain,
   { icon: string; label: string; hint: string }
 > = {
   LAW: {
@@ -77,18 +77,14 @@ const CONTEXT_ROLE_META: Record<EventContextRole, { icon: string; label: string 
   OTHER: { icon: '📎', label: '기타 맥락' },
 }
 
+/** 저장된 줄 → 동기화 입력(서버 계약: domain·entityId·role·sideId·note) */
 function toLinkInput(item: EventContextLinkView): EventContextLinkInput {
   return {
+    domain: item.domain,
+    entityId: item.entityId,
     role: item.role,
     sideId: item.sideId,
-    description: item.description,
-    lawId: item.entityKind === 'LAW' ? item.entityId : null,
-    socialPhenomenonId: item.entityKind === 'SOCIAL_PHENOMENON' ? item.entityId : null,
-    naturalFeatureId: item.entityKind === 'NATURAL_FEATURE' ? item.entityId : null,
-    infrastructureId: item.entityKind === 'INFRASTRUCTURE' ? item.entityId : null,
-    climateId: item.entityKind === 'CLIMATE' ? item.entityId : null,
-    resourceId: item.entityKind === 'RESOURCE' ? item.entityId : null,
-    companyFacilityId: item.entityKind === 'COMPANY_FACILITY' ? item.entityId : null,
+    note: item.note,
   }
 }
 
@@ -104,7 +100,7 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
   const queryClient = useQueryClient()
   const [adding, setAdding] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [entityKind, setEntityKind] = useState<EventContextEntityKind>('LAW')
+  const [entityKind, setEntityKind] = useState<EventContextDomain>('LAW')
   const [entityId, setEntityId] = useState('')
   const [role, setRole] = useState<EventContextRole>('BACKGROUND')
   const [sideId, setSideId] = useState('')
@@ -119,20 +115,8 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
   })
 
   const catalogQuery = useQuery({
-    queryKey: eventKeys.contextCatalog(event.id),
-    queryFn: () =>
-      getEventContextCatalog(event.id).catch(
-        () =>
-          ({
-            laws: [],
-            socialPhenomena: [],
-            naturalFeatures: [],
-            infrastructures: [],
-            climates: [],
-            resources: [],
-            companyFacilities: [],
-          }) satisfies EventContextCatalog,
-      ),
+    queryKey: eventKeys.contextCatalog(),
+    queryFn: () => getEventContextCatalog(event.id).catch(() => [] as EventContextCatalogItem[]),
     enabled: adding,
     staleTime: 60_000,
   })
@@ -155,7 +139,7 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
       string,
       {
         key: string
-        entityKind: EventContextEntityKind
+        entityKind: EventContextDomain
         entityName: string
         events: Array<{
           eventId: string
@@ -193,26 +177,11 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
     )
   }, [overviewQuery.data])
 
-  const catalogOptions = useMemo(() => {
-    const catalog = catalogQuery.data
-    if (!catalog) return []
-    switch (entityKind) {
-      case 'LAW':
-        return catalog.laws
-      case 'SOCIAL_PHENOMENON':
-        return catalog.socialPhenomena
-      case 'NATURAL_FEATURE':
-        return catalog.naturalFeatures
-      case 'INFRASTRUCTURE':
-        return catalog.infrastructures
-      case 'CLIMATE':
-        return catalog.climates
-      case 'RESOURCE':
-        return catalog.resources
-      case 'COMPANY_FACILITY':
-        return catalog.companyFacilities
-    }
-  }, [catalogQuery.data, entityKind])
+  /* 카탈로그는 서버가 한 줄 배열(domain 표지)로 준다 — 고른 분류만 */
+  const catalogOptions = useMemo(
+    () => (catalogQuery.data ?? []).filter((option) => option.domain === entityKind),
+    [catalogQuery.data, entityKind],
+  )
 
   const refreshLinks = async () => {
     await queryClient.invalidateQueries({ queryKey: eventKeys.contextLinks(event.id) })
@@ -224,16 +193,11 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
       return
     }
     const newItem: EventContextLinkInput = {
+      domain: entityKind,
+      entityId,
       role,
       sideId: sideId || null,
-      description: descriptionText.trim() || null,
-      lawId: entityKind === 'LAW' ? entityId : null,
-      socialPhenomenonId: entityKind === 'SOCIAL_PHENOMENON' ? entityId : null,
-      naturalFeatureId: entityKind === 'NATURAL_FEATURE' ? entityId : null,
-      infrastructureId: entityKind === 'INFRASTRUCTURE' ? entityId : null,
-      climateId: entityKind === 'CLIMATE' ? entityId : null,
-      resourceId: entityKind === 'RESOURCE' ? entityId : null,
-      companyFacilityId: entityKind === 'COMPANY_FACILITY' ? entityId : null,
+      note: descriptionText.trim() || null,
     }
     setSaving(true)
     try {
@@ -291,7 +255,7 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
       {links.length > 0 && (
         <LinksGrid>
           {links.map((item) => {
-            const kindMeta = ENTITY_KIND_META[item.entityKind]
+            const kindMeta = ENTITY_KIND_META[item.domain] ?? ENTITY_KIND_META.LAW
             const roleMeta = CONTEXT_ROLE_META[item.role] ?? CONTEXT_ROLE_META.OTHER
             const sideColor = sides.find((side) => side.id === item.sideId)?.color ?? null
             return (
@@ -311,19 +275,17 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
                       type="button"
                       disabled={saving}
                       onClick={() => void handleRemove(item.id)}
-                      aria-label={`${item.entityName} 연결 해제`}
+                      aria-label={`${item.title} 연결 해제`}
                     >
                       <FiTrash2 size={12} />
                     </RemoveBtn>
                   )}
                 </CardTop>
                 <EntityTitleRow>
-                  <EntityTitle>{item.entityName}</EntityTitle>
-                  {item.entityCategory && (
-                    <EntityCategory>{item.entityCategory}</EntityCategory>
-                  )}
+                  <EntityTitle>{item.title}</EntityTitle>
+                  {item.subtitle && <EntityCategory>{item.subtitle}</EntityCategory>}
                 </EntityTitleRow>
-                {item.description && <DescriptionText>{item.description}</DescriptionText>}
+                {item.note && <DescriptionText>{item.note}</DescriptionText>}
               </LinkCard>
             )
           })}
@@ -380,12 +342,12 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
             <FormSelect
               value={entityKind}
               onChange={(changeEvent) => {
-                setEntityKind(changeEvent.target.value as EventContextEntityKind)
+                setEntityKind(changeEvent.target.value as EventContextDomain)
                 setEntityId('')
               }}
               aria-label="연결 도메인 분류"
             >
-              {(Object.keys(ENTITY_KIND_META) as EventContextEntityKind[]).map((kindKey) => (
+              {(Object.keys(ENTITY_KIND_META) as EventContextDomain[]).map((kindKey) => (
                 <option key={kindKey} value={kindKey}>
                   {ENTITY_KIND_META[kindKey].icon} {ENTITY_KIND_META[kindKey].label}
                 </option>
@@ -402,8 +364,8 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
               </option>
               {catalogOptions.map((option) => (
                 <option key={option.id} value={option.id}>
-                  {option.name}
-                  {option.category ? ` (${option.category})` : ''}
+                  {option.title}
+                  {option.subtitle ? ` (${option.subtitle})` : ''}
                 </option>
               ))}
             </FormSelect>
@@ -463,7 +425,7 @@ const AddToggleButton = styled.button`
   gap: 4px;
   padding: 4px 9px;
   border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-radius: ${RADIUS.sm};
+  border-radius: ${RADIUS.SM};
   background: ${({ theme }) => theme.colors.background.secondary};
   color: ${({ theme }) => theme.colors.text.primary};
   font-size: 11.5px;
@@ -488,7 +450,7 @@ const LinksGrid = styled.div`
 const LinkCard = styled.div`
   padding: 10px 12px;
   border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-radius: ${RADIUS.md};
+  border-radius: ${RADIUS.MD};
   background: ${({ theme }) => theme.colors.background.secondary};
 `
 
@@ -606,7 +568,7 @@ const AddFormBox = styled.div`
   margin-top: 10px;
   padding: 10px 12px;
   border: 1px dashed ${({ theme }) => ledgerHairline(theme.mode)};
-  border-radius: ${RADIUS.md};
+  border-radius: ${RADIUS.MD};
   background: ${({ theme }) => theme.colors.background.secondary};
 `
 
@@ -620,7 +582,7 @@ const FormSelect = styled.select`
   flex: 1 1 150px;
   padding: 5px 8px;
   border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-radius: ${RADIUS.sm};
+  border-radius: ${RADIUS.SM};
   background: ${({ theme }) => theme.colors.background.primary};
   color: ${({ theme }) => theme.colors.text.primary};
   font-size: 12px;
@@ -630,7 +592,7 @@ const FormInput = styled.input`
   flex: 1 1 240px;
   padding: 5px 8px;
   border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-radius: ${RADIUS.sm};
+  border-radius: ${RADIUS.SM};
   background: ${({ theme }) => theme.colors.background.primary};
   color: ${({ theme }) => theme.colors.text.primary};
   font-size: 12px;
@@ -639,7 +601,7 @@ const FormInput = styled.input`
 const SubmitBtn = styled.button`
   padding: 5px 12px;
   border: none;
-  border-radius: ${RADIUS.sm};
+  border-radius: ${RADIUS.SM};
   background: ${({ theme }) => theme.colors.text.primary};
   color: ${({ theme }) => theme.colors.background.primary};
   font-size: 12px;

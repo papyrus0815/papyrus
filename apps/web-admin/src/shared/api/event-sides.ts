@@ -278,6 +278,10 @@ export interface SideWeaponView {
   countryName: string | null
   manufacturerName: string | null
   quantity: number | null
+  /** 이 작전에서 잃은 수 */
+  lost: number | null
+  /** 역할 한 줄 — '주력 중형전차' */
+  role: string | null
   note: string | null
   sortOrder: number
 }
@@ -287,6 +291,8 @@ export interface SideWeaponInput {
   itemId: string
   deployedUnitId?: string | null
   quantity?: number | null
+  lost?: number | null
+  role?: string | null
   note?: string | null
 }
 
@@ -301,7 +307,11 @@ export interface WeaponCatalogItem {
   manufacturerName: string | null
 }
 
-export async function listEventSideWeapons(eventId: string): Promise<Record<string, SideWeaponView[]>> {
+/**
+ * 사건의 투입 병기 전부 — 한 줄 배열로. 서버는 진영 id를 키로 묶은 객체를 준다({ [sideId]: [...] }).
+ * 화면은 둘 다 배열로 걸렀는데(filter·for…of) 이 함수가 객체를 그대로 넘겨 진영·수치 탭이 통째로 깨졌다.
+ */
+export async function listEventSideWeapons(eventId: string): Promise<SideWeaponView[]> {
   const conn = getApiConnection()
   const res = await fetch(`${conn.host}/events/${encodeURIComponent(eventId)}/side-weapons`, {
     method: 'GET',
@@ -309,8 +319,11 @@ export async function listEventSideWeapons(eventId: string): Promise<Record<stri
     credentials: 'include',
   })
   if (!res.ok) throw new Error(`투입 병기 목록을 불러오지 못했습니다 (${res.status})`)
-  const data = (await res.json()) as { data?: Record<string, SideWeaponView[]> } & Record<string, SideWeaponView[]>
-  return data?.data ?? data
+  const payload = (await res.json()) as unknown
+  const body = (payload as { data?: unknown })?.data ?? payload
+  if (Array.isArray(body)) return body as SideWeaponView[]
+  if (body && typeof body === 'object') return Object.values(body as Record<string, SideWeaponView[]>).flat()
+  return []
 }
 
 export async function getWeaponCatalog(eventId: string): Promise<WeaponCatalogItem[]> {
