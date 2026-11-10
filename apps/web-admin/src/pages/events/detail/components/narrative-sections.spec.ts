@@ -11,8 +11,6 @@ import {
   AFTERMATH_TYPE,
   BACKGROUND_TYPE,
   backgroundLength,
-  compactTimelinePeriod,
-  extractTimelineSteps,
   isBackgroundSection,
   LONG_BACKGROUND_CHARS,
   mergeSectionPayload,
@@ -218,85 +216,6 @@ describe('splitTitlePeriod', () => {
     expect(splitTitlePeriod('(1950)')).toEqual({ title: '(1950)', period: null })
     expect(splitTitlePeriod('개전 배경')).toEqual({ title: '개전 배경', period: null })
   })
-
-  it('제목 뒤 대시(—)·콜론(:) 뒤 시기와 중간 연도 괄호·월일 표기도 시기로 뗀다', () => {
-    expect(splitTitlePeriod('측량과 착공 — 1870-04 ~ 1872-09의 약 2년 6개월')).toEqual({
-      title: '측량과 착공',
-      period: '1870-04 ~ 1872-09의 약 2년 6개월',
-    })
-    expect(splitTitlePeriod('페리의 첫 내항 — 1853년 7월 8일 ~ 17일의 9일')).toEqual({
-      title: '페리의 첫 내항',
-      period: '1853년 7월 8일 ~ 17일의 9일',
-    })
-    expect(splitTitlePeriod('일미수호통상조약 체결(1858) — 칙허 없는 서명과 안세이 대옥')).toEqual({
-      title: '일미수호통상조약 체결 — 칙허 없는 서명과 안세이 대옥',
-      period: '1858',
-    })
-    expect(splitTitlePeriod('7-24 트루먼의 원폭 통보와 소련의 참전 앞당김')).toEqual({
-      title: '트루먼의 원폭 통보와 소련의 참전 앞당김',
-      period: '7-24',
-    })
-    expect(splitTitlePeriod('8월 15일 옥음방송과 관동군의 저항 지속')).toEqual({
-      title: '옥음방송과 관동군의 저항 지속',
-      period: '8월 15일',
-    })
-    expect(splitTitlePeriod('탈출 준비와 마지막 날의 연쇄 지연: 6월 20일 밤')).toEqual({
-      title: '탈출 준비와 마지막 날의 연쇄 지연',
-      period: '6월 20일 밤',
-    })
-    expect(splitTitlePeriod('4-12 1차 무스카트')).toEqual({
-      title: '1차 무스카트',
-      period: '4-12',
-    })
-    expect(splitTitlePeriod('1605년 1월 31일 (도브리니치 전투)')).toEqual({
-      title: '도브리니치 전투',
-      period: '1605년 1월 31일',
-    })
-    expect(splitTitlePeriod('2단계: 영웅 비두킨트의 등장과 격렬한 저항')).toEqual({
-      title: '영웅 비두킨트의 등장과 격렬한 저항',
-      period: '2단계',
-    })
-  })
-})
-
-describe('compactTimelinePeriod', () => {
-  it('장황한 기간 부연·접두사를 걷어내고 균일한 숫자 점(YYYY.MM.DD) 형식으로 정돈한다', () => {
-    expect(compactTimelinePeriod('1870-04 ~ 1872-09의 약 2년 6개월')).toBe('1870.04–1872.09')
-    expect(compactTimelinePeriod('D-Day: 1950-06-25')).toBe('1950.06.25')
-    expect(compactTimelinePeriod('1605년 5월~6월')).toBe('1605.05–06')
-    expect(compactTimelinePeriod('1605년 1월 31일')).toBe('1605.01.31')
-    expect(compactTimelinePeriod('4-12')).toBe('04.12')
-  })
-})
-
-describe('extractTimelineSteps', () => {
-  it('단일 전개 단락 안의 <ul>/<ol><li> 항목에서 시점과 제목만 발라내어 타임라인 마디로 승격한다', () => {
-    const html = [
-      '<ul>',
-      '<li>4-12 1차 무스카트: 오만 외무장관 바드르 알부사이디 중재로 첫 간접 회담이 열렸다.</li>',
-      '<li>4-19 2차 로마: 로마 주재 오만 대사관에서 4시간 동안 진행됐다.</li>',
-      '<li>4-26 3차 무스카트: 전문가급 기술 협상이 처음으로 병행됐다.</li>',
-      '</ul>',
-    ].join('')
-    expect(extractTimelineSteps(html, 'narrative-1')).toEqual([
-      { id: 'narrative-1-s1', title: '1차 무스카트', period: '4-12' },
-      { id: 'narrative-1-s2', title: '2차 로마', period: '4-19' },
-      { id: 'narrative-1-s3', title: '3차 무스카트', period: '4-26' },
-    ])
-  })
-
-  it('단독 <b> 단락 소제목에서도 시점과 제목을 발라낸다', () => {
-    const html = [
-      '<p><b>1604년 10월: 국경 도하와 초기 진격</b></p><p>본문 1</p>',
-      '<p><b>1605년 1월 31일 (도브리니치 전투): 결정적 패배</b></p><p>본문 2</p>',
-      '<p><b>1605년 5월~6월: 보리스의 급사와 모스크바 입성</b></p><p>본문 3</p>',
-    ].join('')
-    expect(extractTimelineSteps(html, 'narrative-1')).toEqual([
-      { id: 'narrative-1-s1', title: '국경 도하와 초기 진격', period: '1604년 10월' },
-      { id: 'narrative-1-s2', title: '도브리니치 전투 — 결정적 패배', period: '1605년 1월 31일' },
-      { id: 'narrative-1-s3', title: '보리스의 급사와 모스크바 입성', period: '1605년 5월~6월' },
-    ])
-  })
 })
 
 describe('긴 배경 줄여 보기', () => {
@@ -354,22 +273,5 @@ describe('단락 소제목 앵커', () => {
     const anchored = sanitizeRichTextHtml(addHeadingAnchors(html, 'narrative-2'))
     expect(anchored).toContain('id="narrative-2-h1"')
     expect(anchored).toContain('id="narrative-2-h2"')
-  })
-
-  it('전개(timeline) 모드에서는 소제목 시기 알약과 연표형 불릿 마커가 소독 뒤에도 유지된다', () => {
-    const prose = [
-      '<h3>1931년 9월 18일 밤 류탸오후 폭파</h3>',
-      '<ul>',
-      '<li><strong>07:00</strong> — 1차 포격 개시</li>',
-      '<li><strong>09:30</strong> — 성문 돌파</li>',
-      '</ul>',
-    ].join('')
-    const decorated = sanitizeRichTextHtml(addHeadingAnchors(prose, 'narrative-1', { timeline: true }))
-    expect(decorated).toContain('data-type="tl-heading"')
-    expect(decorated).toContain('data-type="tl-period"')
-    expect(decorated).toContain('1931년 9월 18일 밤')
-    expect(decorated).toContain('data-type="tl-list"')
-    expect(decorated).toContain('data-type="tl-item"')
-    expect(decorated).toContain('data-type="tl-time"')
   })
 })

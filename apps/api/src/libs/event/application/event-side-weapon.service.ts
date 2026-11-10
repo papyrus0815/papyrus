@@ -9,6 +9,10 @@ export interface SideWeaponInput {
   itemId: string
   deployedUnitId?: string | null
   quantity?: number | null
+  /** 이 작전에서 잃은 수 */
+  lost?: number | null
+  /** 역할 한 줄 — '주력 중형전차' */
+  role?: string | null
   note?: string | null
 }
 
@@ -24,6 +28,8 @@ export interface SideWeaponView {
   countryName: string | null
   manufacturerName: string | null
   quantity: number | null
+  lost: number | null
+  role: string | null
   note: string | null
   sortOrder: number
 }
@@ -154,6 +160,8 @@ export class EventSideWeaponService {
         countryName,
         manufacturerName,
         quantity: row.quantity ?? null,
+        lost: row.lost ?? null,
+        role: row.role ?? null,
         note: row.note ?? null,
         sortOrder: row.sortOrder,
       }
@@ -300,6 +308,8 @@ export class EventSideWeaponService {
             aircraftId: input.kind === 'AIRCRAFT' ? input.itemId : null,
             navalVesselId: input.kind === 'NAVAL_VESSEL' ? input.itemId : null,
             quantity: input.quantity ?? null,
+            lost: input.lost ?? null,
+            role: input.role?.trim() || null,
             note: input.note?.trim() || null,
             sortOrder: index,
           },

@@ -559,6 +559,12 @@ model SideWeapon {
 
   /// 투입 수량 (선택, 예: 3350)
   quantity  Int?
+
+  /// 이 작전에서 잃은 수(격파·노획·고장 포기 포함) — 정의가 다르면 메모에 밝힌다
+  lost      Int?
+
+  /// 역할 한 줄 — '주력 중형전차', '근접 항공지원'
+  role      String? @db.VarChar(100)
   /// 운용 메모·비고 (예: '중부집단군 제2기갑집단 주력 전차')
   note      String? @db.Text
   /// 표시 순서

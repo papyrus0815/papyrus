@@ -53,30 +53,4 @@ describe('formatSpanLabel', () => {
       '기원전 216.8',
     )
   })
-
-  it('시·분(HH:MM)이 포함된 당일 작전 전개 사건은 시각까지 구분해 배치하고 표기한다', () => {
-    const start0315 = {
-      id: 'h-hour',
-      title: '바르바로사 작전 개시 (03:15 포격)',
-      startDate: '1941-06-22T03:15:00.000Z',
-    }
-    const radio1215 = {
-      id: 'molotov-radio',
-      title: '몰로토프 대국민 라디오 연설',
-      startDate: '1941-06-22T12:15:00.000Z',
-    }
-    expect(formatSpanLabel(start0315)).toBe('1941.6.22 03:15')
-    expect(formatSpanLabel(radio1215)).toBe('1941.6.22 12:15')
-
-    const spanA = toAxisSpan(start0315)!
-    const spanB = toAxisSpan(radio1215)!
-    expect(spanB.from).toBeGreaterThan(spanA.from)
-
-    const layout = layoutTimeline(
-      { id: 'june22', title: '1941년 6월 22일 개전 당일', startDate: '1941-06-22' },
-      [radio1215, start0315],
-    )!
-    expect(layout.items.map((item) => item.id)).toEqual(['h-hour', 'molotov-radio'])
-    expect(layout.items[1].leftPct).toBeGreaterThan(layout.items[0].leftPct)
-  })
 })

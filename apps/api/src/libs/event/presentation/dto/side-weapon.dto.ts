@@ -37,6 +37,20 @@ export class SideWeaponInputDto {
   @Min(0)
   quantity?: number | null
 
+  @ApiProperty({ required: false, nullable: true, description: '이 작전에서 잃은 수(격파·노획·고장 포기)' })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsInt()
+  @Min(0)
+  lost?: number | null
+
+  @ApiProperty({ required: false, nullable: true, description: "역할 한 줄 — '주력 중형전차'" })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(100)
+  role?: string | null
+
   @ApiProperty({ required: false, nullable: true, description: '운용 메모·비고' })
   @IsOptional()
   @ValidateIf((_, value) => value !== null)
