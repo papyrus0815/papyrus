@@ -59,7 +59,16 @@ export interface EventOverviewDeployedUnit {
   branch: string | null
   /** 작전 당시 상급 부대 오버라이드 우선, 없으면 기본 상위 부대 */
   parentUnitId: string | null
+  commanderName?: string | null
   role: string | null
+  note: string | null
+}
+
+export interface EventOverviewDeployedWeapon {
+  id: string
+  assetKind: 'WEAPON' | 'GROUND_VEHICLE' | 'AIRCRAFT' | 'NAVAL_VESSEL'
+  assetName: string
+  quantity: number | null
   note: string | null
 }
 
@@ -71,6 +80,23 @@ export interface EventOverviewSide {
   outcomeNote?: string | null
   parentSideId?: string | null
   deployedUnits?: EventOverviewDeployedUnit[]
+  deployedWeapons?: EventOverviewDeployedWeapon[]
+}
+
+export interface EventOverviewContextLink {
+  id: string
+  role: string
+  entityKind:
+    | 'LAW'
+    | 'SOCIAL_PHENOMENON'
+    | 'NATURAL_FEATURE'
+    | 'INFRASTRUCTURE'
+    | 'CLIMATE'
+    | 'RESOURCE'
+    | 'COMPANY_FACILITY'
+  entityName: string
+  description: string | null
+  sideName: string | null
 }
 
 export interface EventOverviewMetric {
@@ -149,6 +175,7 @@ export interface EventOverviewNode {
   sides: EventOverviewSide[]
   metrics: EventOverviewMetric[]
   mapFeatures?: EventOverviewMapFeature[]
+  contextLinks?: EventOverviewContextLink[]
   /** 기록 점검용 — 무엇이 채워졌나 */
   sectionCount: number
   imageCount: number
@@ -251,6 +278,12 @@ const NODE_INCLUDE = {
           parentUnitId: true,
           role: true,
           note: true,
+          commander: {
+            select: {
+              name: true,
+              surname: true,
+            },
+          },
           militaryUnit: {
             select: {
               id: true,
@@ -262,6 +295,31 @@ const NODE_INCLUDE = {
           },
         },
       },
+      weaponsUsed: {
+        orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
+        select: {
+          id: true,
+          quantity: true,
+          note: true,
+          weapon: { select: { name: true } },
+          groundVehicle: { select: { name: true } },
+          aircraft: { select: { name: true } },
+          navalVessel: { select: { name: true } },
+        },
+      },
+    },
+  },
+  contextLinks: {
+    orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
+    include: {
+      side: { select: { name: true } },
+      law: { select: { name: true } },
+      socialPhenomenon: { select: { title: true } },
+      naturalFeature: { select: { name: true } },
+      infrastructure: { select: { name: true } },
+      climate: { select: { name: true } },
+      resource: { select: { name: true } },
+      companyFacility: { select: { name: true } },
     },
   },
   mapFeatures: {
@@ -640,18 +698,85 @@ export class EventOverviewService {
         outcome: side.outcome ?? null,
         outcomeNote: side.outcomeNote ?? null,
         parentSideId: side.parentSideId ?? null,
-        deployedUnits: side.deployedUnits.map((du) => ({
-          id: du.id,
-          militaryUnitId: du.militaryUnitId,
-          name: du.militaryUnit.name,
-          unitType: du.militaryUnit.unitType ?? null,
-          branch: du.militaryUnit.branch ?? null,
-          parentUnitId: du.parentUnitId ?? du.militaryUnit.parentUnitId ?? null,
-          role: du.role ?? null,
-          note: du.note ?? null,
+        deployedUnits: side.deployedUnits.map((deployedUnit) => ({
+          id: deployedUnit.id,
+          militaryUnitId: deployedUnit.militaryUnitId,
+          name: deployedUnit.militaryUnit.name,
+          unitType: deployedUnit.militaryUnit.unitType ?? null,
+          branch: deployedUnit.militaryUnit.branch ?? null,
+          parentUnitId: deployedUnit.parentUnitId ?? deployedUnit.militaryUnit.parentUnitId ?? null,
+          commanderName: deployedUnit.commander
+            ? [deployedUnit.commander.name, deployedUnit.commander.surname].filter(Boolean).join(' ')
+            : null,
+          role: deployedUnit.role ?? null,
+          note: deployedUnit.note ?? null,
         })),
+        deployedWeapons: (side.weaponsUsed ?? []).flatMap((sideWeapon): EventOverviewDeployedWeapon[] => {
+          const assetKind = sideWeapon.groundVehicle
+            ? 'GROUND_VEHICLE'
+            : sideWeapon.aircraft
+              ? 'AIRCRAFT'
+              : sideWeapon.navalVessel
+                ? 'NAVAL_VESSEL'
+                : sideWeapon.weapon
+                  ? 'WEAPON'
+                  : null
+          const assetName =
+            sideWeapon.groundVehicle?.name ??
+            sideWeapon.aircraft?.name ??
+            sideWeapon.navalVessel?.name ??
+            sideWeapon.weapon?.name ??
+            null
+          if (!assetKind || !assetName) return []
+          return [
+            {
+              id: sideWeapon.id,
+              assetKind,
+              assetName,
+              quantity: sideWeapon.quantity ?? null,
+              note: sideWeapon.note ?? null,
+            },
+          ]
+        }),
       })),
       metrics: metricsByEvent.get(row.id) ?? [],
+      contextLinks: (row.contextLinks ?? []).flatMap((contextLink): EventOverviewContextLink[] => {
+        const entityKind = contextLink.law
+          ? 'LAW'
+          : contextLink.socialPhenomenon
+            ? 'SOCIAL_PHENOMENON'
+            : contextLink.naturalFeature
+              ? 'NATURAL_FEATURE'
+              : contextLink.infrastructure
+                ? 'INFRASTRUCTURE'
+                : contextLink.climate
+                  ? 'CLIMATE'
+                  : contextLink.resource
+                    ? 'RESOURCE'
+                    : contextLink.companyFacility
+                      ? 'COMPANY_FACILITY'
+                      : null
+        const entityName =
+          contextLink.law?.name ??
+          contextLink.socialPhenomenon?.title ??
+          contextLink.naturalFeature?.name ??
+          contextLink.infrastructure?.name ??
+          contextLink.climate?.name ??
+          contextLink.resource?.name ??
+          contextLink.companyFacility?.name ??
+          null
+        if (!entityKind || !entityName) return []
+        return [
+          {
+            id: contextLink.id,
+            role: contextLink.role,
+            entityKind,
+            entityName,
+            description: contextLink.note ?? null,
+            sideName: contextLink.side?.name ?? null,
+          },
+        ]
+      }),
       mapFeatures: (row.mapFeatures ?? []).map((feature) => ({
         id: feature.id,
         eventId: feature.eventId,

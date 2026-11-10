@@ -6,6 +6,7 @@
  */
 import { Fragment, type ReactNode, useEffect, useRef, useState } from 'react'
 
+import { Link } from 'react-router-dom'
 import { useTheme } from 'styled-components'
 
 import { domainAccent, domainLabel } from '@/entities/event/model/event-domain'
@@ -21,6 +22,7 @@ import {
   type GanttLayout,
   type MatrixCountry,
   type MetricRow,
+  type MilitaryUnitAggregate,
   type MissingRootCountry,
   type OverviewGrouping,
   SINGLES_GROUP_KEY,
@@ -1602,6 +1604,118 @@ export function PersonsPanel({
   )
 }
 
+export function MilitaryUnitsPanel({
+  units,
+  numberById,
+  selectedUnitId = null,
+  onSelectUnit,
+  onOpen,
+  wide = false,
+}: {
+  units: MilitaryUnitAggregate[]
+  numberById: Map<string, string>
+  selectedUnitId?: string | null
+  onSelectUnit?: (unitId: string | null) => void
+  onOpen: (id: string) => void
+  wide?: boolean
+}) {
+  return (
+    <S.Panel $wide={wide} id="overview-units" aria-labelledby="overview-units-title">
+      <S.PanelHead>
+        <S.PanelTitle id="overview-units-title">참전 군사 부대</S.PanelTitle>
+        <S.PanelNote>
+          {units.length > 0
+            ? `${units.length}개 부대 · 부대명을 누르면 그 부대가 참전한 전투만 거르고, ↗를 누르면 부대 총람 상세로 이동합니다`
+            : ''}
+        </S.PanelNote>
+      </S.PanelHead>
+      {units.length === 0 ? (
+        <S.Empty>하위 사건에 등록된 참전 군사 부대가 아직 없습니다.</S.Empty>
+      ) : (
+        <S.Scroll>
+          <S.Table>
+            <thead>
+              <tr>
+                <th scope="col">부대 · 편제</th>
+                <th scope="col">소속 진영</th>
+                <th scope="col">참전 전투 ({units.reduce((sum, item) => sum + item.events.length, 0)})</th>
+              </tr>
+            </thead>
+            <tbody>
+              {units.map((unitItem) => {
+                const isSelected = selectedUnitId === unitItem.militaryUnitId
+                const typeLabel = unitItem.unitType
+                  ? militaryUnitTypeLabelKo(unitItem.unitType)
+                  : null
+                return (
+                  <tr
+                    key={unitItem.militaryUnitId}
+                    style={
+                      isSelected
+                        ? { background: 'rgba(59, 130, 246, 0.08)' }
+                        : undefined
+                    }
+                  >
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <S.RowTitleButton
+                          type="button"
+                          onClick={() =>
+                            onSelectUnit?.(isSelected ? null : unitItem.militaryUnitId)
+                          }
+                          title="이 부대가 참전한 전투만 조망 전체에서 거르기"
+                          style={{ fontWeight: isSelected ? 700 : 600 }}
+                        >
+                          ⚔️ {unitItem.name}
+                        </S.RowTitleButton>
+                        {typeLabel && <S.Muted>({typeLabel})</S.Muted>}
+                        <Link
+                          to={pathKeys.militaryUnitDetail(unitItem.militaryUnitId)}
+                          title={`${unitItem.name} 부대 상세 대시보드 열기`}
+                          style={{ fontSize: 11, textDecoration: 'none' }}
+                        >
+                          상세 ↗
+                        </Link>
+                      </div>
+                    </td>
+                    <td>
+                      <S.SideChip $color={unitItem.sideColor ?? '#64748b'}>
+                        {unitItem.sideName}
+                      </S.SideChip>
+                    </td>
+                    <td>
+                      {unitItem.events.map((ev, index) => {
+                        const roleText =
+                          ev.role && ev.role in SIDE_UNIT_ROLE_LABEL
+                            ? SIDE_UNIT_ROLE_LABEL[ev.role as keyof typeof SIDE_UNIT_ROLE_LABEL]
+                            : null
+                        return (
+                          <span key={ev.id}>
+                            {index > 0 && ', '}
+                            <S.RowTitleButton
+                              type="button"
+                              onClick={() => onOpen(ev.id)}
+                              style={{ whiteSpace: 'normal' }}
+                            >
+                              {numberById.has(ev.id) ? `${numberById.get(ev.id)}. ` : ''}
+                              {ev.title}
+                            </S.RowTitleButton>
+                            {roleText && <S.Muted> ({roleText})</S.Muted>}
+                          </span>
+                        )
+                      })}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </S.Table>
+        </S.Scroll>
+      )}
+    </S.Panel>
+  )
+}
+
 /**
  * 진영 · 수치 — 다른 패널과 **같은 번호**를 달고, 제목을 누르면 사건 모달이 열리며, 마우스를 올리면
  * 세 패널이 함께 칠해진다. 예전엔 제목 글자뿐이라 이 패널만 번호 체계 밖에 있었다.
@@ -1754,6 +1868,52 @@ export function SidesMetricsPanel({
                         )
                       })}
                     </S.SideChips>
+                    {(() => {
+                      const allUnits = node.sides.flatMap((side) => {
+                        const extSide = side as typeof side & {
+                          deployedUnits?: Array<{ id: string; militaryUnitId: string; name: string }>
+                        }
+                        return extSide.deployedUnits ?? []
+                      })
+                      const allWeapons = node.sides.flatMap((side) => {
+                        const extSide = side as typeof side & {
+                          deployedWeapons?: Array<{ id: string; assetName: string; quantity: number | null }>
+                        }
+                        return extSide.deployedWeapons ?? []
+                      })
+                      const extNode = node as typeof node & {
+                        contextLinks?: Array<{ id: string; entityName: string }>
+                      }
+                      const ctxLinks = extNode.contextLinks ?? []
+                      if (allUnits.length === 0 && allWeapons.length === 0 && ctxLinks.length === 0) {
+                        return null
+                      }
+                      return (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 6px', marginTop: 4, fontSize: 11 }}>
+                          {allUnits.slice(0, 6).map((unitItem) => (
+                            <Link
+                              key={unitItem.id}
+                              to={pathKeys.militaryUnitDetail(unitItem.militaryUnitId)}
+                              onClick={(clickEvent) => clickEvent.stopPropagation()}
+                              style={{ textDecoration: 'none', color: 'inherit', opacity: 0.85 }}
+                              title="부대 상세로 이동"
+                            >
+                              ⚔️ {unitItem.name}
+                            </Link>
+                          ))}
+                          {allUnits.length > 6 && <S.Muted>+{allUnits.length - 6}부대</S.Muted>}
+                          {allWeapons.slice(0, 4).map((weaponItem) => (
+                            <S.Muted key={weaponItem.id}>
+                              🛡️ {weaponItem.assetName}
+                              {weaponItem.quantity != null ? `(${weaponItem.quantity.toLocaleString()})` : ''}
+                            </S.Muted>
+                          ))}
+                          {ctxLinks.slice(0, 3).map((ctxItem) => (
+                            <S.Muted key={ctxItem.id}>🌐 {ctxItem.entityName}</S.Muted>
+                          ))}
+                        </div>
+                      )
+                    })()}
                   </td>
                 </S.ChecklistRow>
               ))}

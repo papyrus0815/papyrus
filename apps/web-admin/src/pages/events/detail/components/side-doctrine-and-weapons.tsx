@@ -594,7 +594,7 @@ export function SubEventSidesRollupPanel({ eventId }: SubEventSidesRollupPanelPr
                         {[...group.units.values()].map((unitItem) => (
                           <RollupChipLink
                             key={unitItem.militaryUnitId}
-                            to={pathKeys.militaryUnits.detail(unitItem.militaryUnitId)}
+                            to={pathKeys.militaryUnitDetail(unitItem.militaryUnitId)}
                             title={`참전 하위 사건: ${[...unitItem.battleTitles].join(', ')}`}
                           >
                             ⚔️ {unitItem.name}
@@ -612,7 +612,7 @@ export function SubEventSidesRollupPanel({ eventId }: SubEventSidesRollupPanelPr
                         {[...group.persons.values()].map((personItem) => (
                           <RollupChipLink
                             key={personItem.personId}
-                            to={pathKeys.persons.detail(personItem.personId)}
+                            to={pathKeys.personsTimelineDetail(personItem.personId)}
                             title={`참전 하위 사건: ${[...personItem.battleTitles].join(', ')}`}
                           >
                             👤 {personItem.name}

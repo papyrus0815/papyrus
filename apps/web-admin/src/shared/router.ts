@@ -166,6 +166,9 @@ export const pathKeys = {
   legislatureTimeline: () => `/${ROUTES.LEGISLATURE}/`,
   /** 군사 타임라인 */
   militaryTimeline: () => `/${ROUTES.MILITARY}/`,
+  /** 군사 부대 상세 (군사 타임라인 내 부대 선택 뷰) */
+  militaryUnitDetail: (unitId: string) =>
+    `/${ROUTES.MILITARY}/?unitId=${encodeURIComponent(unitId)}`,
 
   // --- 대륙·수장 ---
   continents: () => `/${ROUTES.CONTINENTS}/`,

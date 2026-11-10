@@ -65,6 +65,29 @@ interface OverviewEventModalProps {
   onSaveDescription: (eventId: string, next: string) => void
 }
 
+const SIDE_OUTCOME_LABEL: Record<string, string> = {
+  DECISIVE_VICTORY: '결정적 승리',
+  TACTICAL_VICTORY: '전술적 승리',
+  STRATEGIC_VICTORY: '전략적 승리',
+  PYRRHIC_VICTORY: '피로스 승리',
+  STALEMATE: '교착 / 무승부',
+  INCONCLUSIVE: '미결',
+  TACTICAL_DEFEAT: '전술적 패배',
+  STRATEGIC_DEFEAT: '전략적 패배',
+  ROUT: '궤멸 / 완패',
+  CAPITULATION: '항복',
+}
+
+const CONTEXT_KIND_ICON: Record<string, string> = {
+  LAW: '📜',
+  SOCIAL_PHENOMENON: '🌀',
+  NATURAL_FEATURE: '⛰️',
+  INFRASTRUCTURE: '🛤️',
+  CLIMATE: '❄️',
+  RESOURCE: '🛢️',
+  COMPANY_FACILITY: '🏭',
+}
+
 /** 입력 중인 칸에서는 화살표를 가로채지 않는다 */
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLElement &&
@@ -327,15 +350,71 @@ export function OverviewEventModal({
                 <BlockTitle id={`${titleId}-sides`}>진영 · 수치</BlockTitle>
               </AsideHead>
               <FactList>
-                {event.sides.length > 0 && (
-                  <li>
-                    <span>{event.sides.map((side) => side.name).join(' ↔ ')}</span>
+                {event.sides.map((side) => (
+                  <li key={side.id}>
+                    <span>
+                      <strong>{side.name}</strong>
+                      {side.outcomeNote ? ` — ${side.outcomeNote}` : ''}
+                    </span>
+                    {side.outcome && (
+                      <RoleText>{SIDE_OUTCOME_LABEL[side.outcome] ?? side.outcome}</RoleText>
+                    )}
                   </li>
-                )}
+                ))}
                 {metrics.map((row, index) => (
                   <li key={`${row.metricName}-${index}`}>
                     <span>{row.subject ? `${row.subject} · ${row.metricName}` : row.metricName}</span>
                     <RoleText>{row.display}</RoleText>
+                  </li>
+                ))}
+              </FactList>
+            </AsideBlock>
+          )}
+
+          {(event.sides.some(
+            (side) =>
+              (side.deployedUnits?.length ?? 0) > 0 || (side.deployedWeapons?.length ?? 0) > 0,
+          ) ||
+            (event.contextLinks?.length ?? 0) > 0) && (
+            <AsideBlock aria-labelledby={`${titleId}-doctrine`}>
+              <AsideHead>
+                <BlockTitle id={`${titleId}-doctrine`}>참전 부대 · 병기 · 맥락</BlockTitle>
+              </AsideHead>
+              <FactList>
+                {event.sides.flatMap((side) =>
+                  (side.deployedUnits ?? []).map((deployedUnit) => (
+                    <li key={`${side.id}-unit-${deployedUnit.militaryUnitId}`}>
+                      <span>
+                        <UnitModalLink to={pathKeys.militaryUnitDetail(deployedUnit.militaryUnitId)}>
+                          ⚔️ {deployedUnit.name}
+                        </UnitModalLink>
+                        {deployedUnit.commanderName ? ` (${deployedUnit.commanderName})` : ''}
+                      </span>
+                      <RoleText>{side.name}</RoleText>
+                    </li>
+                  )),
+                )}
+                {event.sides.flatMap((side) =>
+                  (side.deployedWeapons ?? []).map((weapon) => (
+                    <li key={`${side.id}-weapon-${weapon.id}`}>
+                      <span>
+                        🛡️ {weapon.assetName}
+                        {weapon.quantity != null
+                          ? ` · ${weapon.quantity.toLocaleString()}기`
+                          : ''}
+                        {weapon.note ? ` (${weapon.note})` : ''}
+                      </span>
+                      <RoleText>{side.name}</RoleText>
+                    </li>
+                  )),
+                )}
+                {(event.contextLinks ?? []).map((contextLink) => (
+                  <li key={`ctx-${contextLink.id}`}>
+                    <span>
+                      {CONTEXT_KIND_ICON[contextLink.entityKind] ?? '📌'} {contextLink.entityName}
+                      {contextLink.description ? ` — ${contextLink.description}` : ''}
+                    </span>
+                    <RoleText>{contextLink.sideName ?? contextLink.role}</RoleText>
                   </li>
                 ))}
               </FactList>
@@ -692,6 +771,15 @@ const RoleText = styled.span`
   flex-shrink: 0;
   font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const UnitModalLink = styled(Link)`
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-weight: 600;
+  text-decoration: none;
+  &:hover {
+    text-decoration: underline;
+  }
 `
 
 const Foot = styled(ModalFooter)`

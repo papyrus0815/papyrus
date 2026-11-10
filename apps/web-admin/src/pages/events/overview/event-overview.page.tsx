@@ -28,6 +28,7 @@ import { notify } from '@/shared/ui/toast'
 import { eventKeys } from '@/shared/api/event-query-keys'
 
 import {
+  aggregateMilitaryUnits,
   aggregatePersons,
   buildCountryMatrix,
   buildGantt,
@@ -57,6 +58,7 @@ import {
   CountryMatrixPanel,
   DistributionPanel,
   GanttPanel,
+  MilitaryUnitsPanel,
   PersonsPanel,
   SidesMetricsPanel,
   WarDeclarationFlowPanel,
@@ -194,18 +196,21 @@ export function EventOverviewPanel({
   /** 거르기 — 묶음(?group=<묶음 id> · 개별은 singles). 묶음 줄의 칩을 누르면 건다 */
   const selectedGroup = searchParams.get('group')
   const setSelectedGroup = (key: string | null) => setParam('group', key)
+  /** 거르기 — 참전 군사 부대(?unit=<militaryUnitId>) */
+  const selectedUnitId = searchParams.get('unit')
+  const setSelectedUnitId = (unitId: string | null) => setParam('unit', unitId)
   const ganttFit: GanttFit = searchParams.get('fit') === 'parent' ? 'parent' : 'children'
   const setGanttFit = (fit: GanttFit) => setParam('fit', fit === 'parent' ? 'parent' : null)
   const checklistOrder = searchParams.get('order') === 'gaps' ? 'gaps' : 'number'
   const setChecklistOrder = (order: 'number' | 'gaps') =>
     setParam('order', order === 'gaps' ? 'gaps' : null)
   const theme = useTheme()
-  /** 거르기 전부 풀기 — 나라·세부·시기·묶음 */
+  /** 거르기 전부 풀기 — 나라·세부·시기·묶음·부대 */
   const clearFilters = () =>
     setSearchParams(
       (previous) => {
         const next = new URLSearchParams(previous)
-        for (const key of ['country', 'type', 'when', 'group']) next.delete(key)
+        for (const key of ['country', 'type', 'when', 'group', 'unit']) next.delete(key)
         return next
       },
       { replace: true },
@@ -293,6 +298,7 @@ export function EventOverviewPanel({
       warDeclarationFlow: buildWarDeclarationFlow(root, descendants),
       types: typeBreakdown(descendants),
       persons: aggregatePersons([root, ...descendants]),
+      units: aggregateMilitaryUnits([root, ...descendants]),
       metrics: metricRows([root, ...descendants]),
       coverage: coverageRatio(descendants),
       gaps: coverageGaps(root, descendants),
@@ -311,7 +317,7 @@ export function EventOverviewPanel({
   const showLinks = searchParams.get('links') === '1'
   const setShowLinks = (next: boolean) => setParam('links', next ? '1' : null)
 
-  /** 거르기 — 나라·세부·시기가 여럿 걸리면 교집합. 없으면 null(아무것도 흐리지 않음) */
+  /** 거르기 — 나라·세부·시기·묶음·부대가 여럿 걸리면 교집합. 없으면 null(아무것도 흐리지 않음) */
   const periodKey = searchParams.get('when')
   const visibleIds = useMemo(() => {
     const period = parsePeriodParam(periodKey)
@@ -321,7 +327,7 @@ export function EventOverviewPanel({
         derived?.grouping.groups.some((group) => group.id === selectedGroup))
         ? selectedGroup
         : null
-    if (!data || !derived || (!selectedCountryKey && !selectedType && !period && !groupKey)) return null
+    if (!data || !derived || (!selectedCountryKey && !selectedType && !period && !groupKey && !selectedUnitId)) return null
     const rowById = new Map(derived.gantt.rows.map((row) => [row.node.id, row]))
     return new Set(
       data.descendants
@@ -332,13 +338,19 @@ export function EventOverviewPanel({
               node.countries.some((country) => country.key === selectedCountryKey)) &&
             (!selectedType || subtypeKeyOf(node) === selectedType) &&
             (!groupKey || inGroupFilter(derived.grouping, node.id, groupKey)) &&
+            (!selectedUnitId ||
+              node.sides.some((side) =>
+                (side.deployedUnits ?? []).some(
+                  (deployedUnit) => deployedUnit.militaryUnitId === selectedUnitId,
+                ),
+              )) &&
             // 날짜 없는 사건은 어느 시기에도 걸리지 않는다
             (!period || (row !== undefined && overlapsPeriod(row, period)))
           )
         })
         .map((node) => node.id),
     )
-  }, [data, derived, selectedCountryKey, selectedType, periodKey, selectedGroup])
+  }, [data, derived, selectedCountryKey, selectedType, periodKey, selectedGroup, selectedUnitId])
 
   /**
    * 거르기를 따르는 숫자 — 숫자 줄(KPI)·세부 분야. 예전엔 묶음을 골라 12/20건만 남겨도 숫자 줄과
@@ -402,6 +414,7 @@ export function EventOverviewPanel({
     )
   }
   const selectedCountry = derived.matrix.find((country) => country.key === selectedCountryKey)
+  const selectedUnit = derived.units.find((unit) => unit.militaryUnitId === selectedUnitId)
   const { groups, singleIds } = derived.grouping
   const selectedGroupLabel =
     selectedGroup === SINGLES_GROUP_KEY
@@ -690,7 +703,7 @@ export function EventOverviewPanel({
         </S.GroupStrip>
       )}
 
-      {(selectedCountry || selectedType || selectedPeriod || selectedGroupLabel) && (
+      {(selectedCountry || selectedType || selectedPeriod || selectedGroupLabel || selectedUnit) && (
         <S.FilterBar role="status">
           {/* 'N/M건만'은 탭 줄 오른쪽 끝이 늘 말한다 — 여기선 무엇으로 걸렀는지만 */}
           <span>거르는 중</span>
@@ -703,6 +716,12 @@ export function EventOverviewPanel({
           {selectedCountry && (
             <S.FilterChip type="button" onClick={() => setSelectedCountryKey(null)}>
               나라: {selectedCountry.name}
+              <FiX size={12} aria-label="거르기 풀기" />
+            </S.FilterChip>
+          )}
+          {selectedUnit && (
+            <S.FilterChip type="button" onClick={() => setSelectedUnitId(null)}>
+              부대: {selectedUnit.name}
               <FiX size={12} aria-label="거르기 풀기" />
             </S.FilterChip>
           )}
@@ -811,6 +830,16 @@ export function EventOverviewPanel({
               onHover={setHotId}
               onOpen={openEventById}
             />
+            {derived.units.length > 0 && (
+              <MilitaryUnitsPanel
+                units={derived.units}
+                numberById={derived.numberById}
+                selectedUnitId={selectedUnitId}
+                onSelectUnit={setSelectedUnitId}
+                onOpen={openEventById}
+                wide
+              />
+            )}
             {hasPersons ? (
               <PersonsPanel
                 persons={derived.persons}

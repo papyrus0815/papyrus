@@ -9,7 +9,7 @@ import 'leaflet/dist/leaflet.css'
 import { useEffect, useMemo } from 'react'
 
 import Leaflet from 'leaflet'
-import { MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet'
+import { CircleMarker, MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 
 export interface MapPin {
   id: string
@@ -37,6 +37,8 @@ export interface MapVectorFeature {
 interface OverviewMapCanvasProps {
   pins: ReadonlyArray<MapPin>
   features?: ReadonlyArray<MapVectorFeature>
+  draftFeature?: MapVectorFeature | null
+  onMapClick?: ((lat: number, lng: number) => void) | null
   /** 시간 순으로 잇기 — 핀 순서(전개 번호 순)대로 한 줄 */
   route: boolean
   hotId: string | null
@@ -103,9 +105,22 @@ function FitToPins({ points }: { points: Array<[number, number]> }) {
   return null
 }
 
+function MapClickListener({ onMapClick }: { onMapClick?: ((lat: number, lng: number) => void) | null }) {
+  useMapEvents({
+    click(clickEvent) {
+      if (onMapClick) {
+        onMapClick(clickEvent.latlng.lat, clickEvent.latlng.lng)
+      }
+    },
+  })
+  return null
+}
+
 export default function OverviewMapCanvas({
   pins,
   features = [],
+  draftFeature = null,
+  onMapClick = null,
   route,
   hotId,
   onOpen,
@@ -128,21 +143,26 @@ export default function OverviewMapCanvas({
     return [...pinPts, ...featurePts]
   }, [clusters, features])
   const routePoints = useMemo(() => pins.filter((pin) => !pin.dimmed).map((pin) => [pin.lat, pin.lng] as [number, number]), [pins])
+  const allFeatures = useMemo(
+    () => (draftFeature && draftFeature.coordinates.length > 0 ? [...features, draftFeature] : features),
+    [features, draftFeature],
+  )
 
   return (
-    <div style={{ height, width: '100%', isolation: 'isolate' }}>
+    <div style={{ height, width: '100%', isolation: 'isolate', cursor: onMapClick ? 'crosshair' : undefined }}>
       <MapContainer
         center={points[0] ?? [48.85, 2.35]}
         zoom={5}
         scrollWheelZoom={false}
-        style={{ width: '100%', height: '100%', borderRadius: 12 }}
+        style={{ width: '100%', height: '100%', borderRadius: 12, cursor: onMapClick ? 'crosshair' : undefined }}
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <FitToPins points={points} />
-        {features.map((feature) => {
+        <MapClickListener onMapClick={onMapClick} />
+        {allFeatures.map((feature) => {
           const metaLine = [feature.sideName, feature.deployedUnitName ? `⚔️ ${feature.deployedUnitName}` : null]
             .filter(Boolean)
             .join(' · ')
@@ -216,6 +236,24 @@ export default function OverviewMapCanvas({
           }
           return null
         })}
+        {draftFeature &&
+          draftFeature.coordinates.map((coord, pointIdx) => (
+            <CircleMarker
+              key={`draft-pt-${pointIdx}`}
+              center={coord}
+              radius={5}
+              pathOptions={{
+                color: '#ffffff',
+                weight: 2,
+                fillColor: draftFeature.color,
+                fillOpacity: 1,
+              }}
+            >
+              <Tooltip direction="top" offset={[0, -6]}>
+                점 #{pointIdx + 1}: {coord[0].toFixed(4)}, {coord[1].toFixed(4)}
+              </Tooltip>
+            </CircleMarker>
+          ))}
         {route && routePoints.length >= 2 && (
           <Polyline positions={routePoints} pathOptions={{ color: '#334155', weight: 2, opacity: 0.55, dashArray: '4 6' }} />
         )}

@@ -1056,6 +1056,70 @@ export function aggregatePersons(nodes: EventOverviewNode[]): PersonAggregate[] 
   return [...byId.values()].sort((left, right) => right.events.length - left.events.length)
 }
 
+export interface MilitaryUnitAggregate {
+  militaryUnitId: string
+  name: string
+  unitType: string | null
+  branch: string | null
+  sideName: string
+  sideColor: string | null
+  events: Array<{
+    id: string
+    title: string
+    role: string | null
+    sideName: string
+    outcome: string | null
+  }>
+}
+
+/** 하위(와 상위) 사건에 걸친 참전 군사 부대 — 많이 나온 부대부터 */
+export function aggregateMilitaryUnits(nodes: EventOverviewNode[]): MilitaryUnitAggregate[] {
+  const byUnitId = new Map<string, MilitaryUnitAggregate>()
+  for (const node of nodes) {
+    for (const side of node.sides ?? []) {
+      const extSide = side as typeof side & {
+        outcome?: string | null
+        deployedUnits?: Array<{
+          id: string
+          militaryUnitId: string
+          name: string
+          unitType: string | null
+          branch: string | null
+          role: string | null
+        }>
+      }
+      for (const deployed of extSide.deployedUnits ?? []) {
+        let entry = byUnitId.get(deployed.militaryUnitId)
+        if (!entry) {
+          entry = {
+            militaryUnitId: deployed.militaryUnitId,
+            name: deployed.name,
+            unitType: deployed.unitType,
+            branch: deployed.branch,
+            sideName: side.name,
+            sideColor: side.color,
+            events: [],
+          }
+          byUnitId.set(deployed.militaryUnitId, entry)
+        }
+        if (!entry.events.some((ev) => ev.id === node.id)) {
+          entry.events.push({
+            id: node.id,
+            title: node.title,
+            role: deployed.role,
+            sideName: side.name,
+            outcome: extSide.outcome ?? null,
+          })
+        }
+      }
+    }
+  }
+  return [...byUnitId.values()].sort(
+    (left, right) =>
+      right.events.length - left.events.length || left.name.localeCompare(right.name),
+  )
+}
+
 export interface MetricRow {
   eventId: string
   eventTitle: string

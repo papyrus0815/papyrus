@@ -168,6 +168,36 @@ export function MapPanel({
       .filter((coord): coord is [number, number] => coord !== null)
   }
 
+  const draftCoords = useMemo(() => parseCoordsInput(vectorCoordsText), [vectorCoordsText])
+
+  const draftFeature = useMemo<MapVectorFeature | null>(() => {
+    if (!vectorEditorOpen || draftCoords.length === 0) return null
+    return {
+      id: '__draft__',
+      eventId: rootId,
+      geometryType: vectorType,
+      title: vectorTitle.trim() || '작성 중인 도형 미리보기',
+      description: vectorDesc.trim() || null,
+      color: vectorColor || '#dc2626',
+      sideName: null,
+      deployedUnitName: null,
+      coordinates: draftCoords,
+    }
+  }, [vectorEditorOpen, draftCoords, rootId, vectorType, vectorTitle, vectorDesc, vectorColor])
+
+  const handleMapClickForVector = (lat: number, lng: number) => {
+    const formattedPoint = `${lat.toFixed(4)},${lng.toFixed(4)}`
+    setVectorCoordsText((prevText) => {
+      const trimmed = prevText.trim()
+      return trimmed ? `${trimmed}; ${formattedPoint}` : formattedPoint
+    })
+  }
+
+  const handleUndoLastVectorPoint = () => {
+    const nextCoords = draftCoords.slice(0, -1)
+    setVectorCoordsText(nextCoords.map((pt) => `${pt[0].toFixed(4)},${pt[1].toFixed(4)}`).join('; '))
+  }
+
   const handleAddVectorFeature = async () => {
     const coords = parseCoordsInput(vectorCoordsText)
     const minPts = vectorType === 'POLYGON' ? 3 : vectorType === 'POINT' ? 1 : 2
@@ -392,11 +422,13 @@ export function MapPanel({
       </S.PanelHead>
 
       <Layout $withList={unpinned.length > 0}>
-        {pins.length > 0 || vectorFeatures.length > 0 ? (
+        {pins.length > 0 || vectorFeatures.length > 0 || vectorEditorOpen ? (
           <Suspense fallback={<MapLoading style={{ height: 460 }}>지도를 싣는 중…</MapLoading>}>
             <OverviewMapCanvas
               pins={pins}
               features={vectorFeatures}
+              draftFeature={draftFeature}
+              onMapClick={vectorEditorOpen ? handleMapClickForVector : null}
               route={route}
               hotId={hotId}
               onOpen={onOpen}
@@ -564,11 +596,21 @@ export function MapPanel({
             <VectorFormRow>
               <VectorInput
                 type="text"
-                placeholder="위도,경도 좌표 목록 (세미콜론 구분 — 예: 52.23,21.01; 53.90,27.56; 54.78,32.04)"
+                placeholder="위 지도를 클릭해 좌표를 찍거나 직접 입력 (세미콜론 구분 — 예: 52.23,21.01; 53.90,27.56)"
                 value={vectorCoordsText}
                 onChange={(changeEvent) => setVectorCoordsText(changeEvent.target.value)}
                 style={{ flex: '2 1 320px' }}
               />
+              {draftCoords.length > 0 && (
+                <>
+                  <S.TextButton type="button" onClick={handleUndoLastVectorPoint}>
+                    마지막 점 지우기 ({draftCoords.length}점)
+                  </S.TextButton>
+                  <S.TextButton type="button" onClick={() => setVectorCoordsText('')}>
+                    초기화
+                  </S.TextButton>
+                </>
+              )}
               <VectorInput
                 type="text"
                 placeholder="설명 (선택 — 예: 60만 포위 섬멸)"

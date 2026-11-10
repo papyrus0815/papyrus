@@ -83,50 +83,28 @@ export class MilitaryUnitRepository {
   }
 
   private async areAxesCompatible(
-    a: { countryId: string | null; historicalCountryId: string | null },
-    b: { countryId: string | null; historicalCountryId: string | null },
+    firstAxis: { countryId: string | null; historicalCountryId: string | null },
+    secondAxis: { countryId: string | null; historicalCountryId: string | null },
   ): Promise<boolean> {
     if (
-      (!a.countryId && !a.historicalCountryId) ||
-      (!b.countryId && !b.historicalCountryId)
+      (!firstAxis.countryId && !firstAxis.historicalCountryId) ||
+      (!secondAxis.countryId && !secondAxis.historicalCountryId)
     ) {
       return true
     }
-    if (a.historicalCountryId && b.historicalCountryId) {
-      return a.historicalCountryId === b.historicalCountryId
+    if (firstAxis.historicalCountryId || secondAxis.historicalCountryId) {
+      return (
+        Boolean(
+          firstAxis.historicalCountryId && secondAxis.historicalCountryId,
+        ) && firstAxis.historicalCountryId === secondAxis.historicalCountryId
+      )
     }
-    if (a.countryId && b.countryId && a.countryId === b.countryId) {
+    if (
+      firstAxis.countryId &&
+      secondAxis.countryId &&
+      firstAxis.countryId === secondAxis.countryId
+    ) {
       return true
-    }
-    if (
-      a.historicalCountryId &&
-      b.countryId &&
-      this.prisma.historicalCountryModernCountry?.findFirst
-    ) {
-      const link =
-        await this.prisma.historicalCountryModernCountry.findFirst({
-          where: {
-            historicalCountryId: a.historicalCountryId,
-            modernCountryId: b.countryId,
-          },
-          select: { modernCountryId: true },
-        })
-      if (link) return true
-    }
-    if (
-      b.historicalCountryId &&
-      a.countryId &&
-      this.prisma.historicalCountryModernCountry?.findFirst
-    ) {
-      const link =
-        await this.prisma.historicalCountryModernCountry.findFirst({
-          where: {
-            historicalCountryId: b.historicalCountryId,
-            modernCountryId: a.countryId,
-          },
-          select: { modernCountryId: true },
-        })
-      if (link) return true
     }
     return false
   }
@@ -322,7 +300,7 @@ export class MilitaryUnitRepository {
   }
 
   async findById(id: string) {
-    return this.prisma.militaryUnit.findUnique({
+    const unitRecord = await this.prisma.militaryUnit.findUnique({
       where: { id },
       include: {
         country: {
@@ -406,10 +384,37 @@ export class MilitaryUnitRepository {
             note: true,
             parentUnitId: true,
             commanderId: true,
+            parentUnit: {
+              select: {
+                id: true,
+                name: true,
+                unitType: true,
+              },
+            },
+            commander: {
+              select: {
+                id: true,
+                name: true,
+                surname: true,
+              },
+            },
+            weaponsUsed: {
+              orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+              select: {
+                id: true,
+                quantity: true,
+                note: true,
+                weapon: { select: { id: true, name: true, weaponType: true } },
+                groundVehicle: { select: { id: true, name: true, vehicleType: true } },
+                aircraft: { select: { id: true, name: true, aircraftType: true } },
+                navalVessel: { select: { id: true, name: true, vesselType: true } },
+              },
+            },
             side: {
               select: {
                 id: true,
                 name: true,
+                color: true,
                 outcome: true,
                 event: {
                   select: {
@@ -430,6 +435,69 @@ export class MilitaryUnitRepository {
         },
       },
     })
+
+    if (!unitRecord) return null
+
+    const sideUnitIds = unitRecord.sideDeployedUnits.map((deployed) => deployed.id)
+    const observations =
+      sideUnitIds.length > 0 && this.prisma.observation?.findMany
+        ? await this.prisma.observation.findMany({
+            where: {
+              subjectType: 'EVENT_SIDE_UNIT',
+              subjectId: { in: sideUnitIds },
+            },
+            include: {
+              metric: {
+                select: {
+                  key: true,
+                  name: true,
+                  unit: true,
+                },
+              },
+            },
+            orderBy: { createdAt: 'asc' },
+          })
+        : []
+
+    const metricsBySideUnitId = new Map<
+      string,
+      Array<{
+        id: string
+        metricKey: string
+        metricName: string
+        unit: string | null
+        value: string | null
+        low: string | null
+        high: string | null
+        approx: boolean
+        atLeast: boolean
+      }>
+    >()
+
+    for (const obsRow of observations) {
+      const list = metricsBySideUnitId.get(obsRow.subjectId) ?? []
+      list.push({
+        id: obsRow.id,
+        metricKey: obsRow.metric.key,
+        metricName: obsRow.metric.name,
+        unit: obsRow.metric.unit,
+        value: obsRow.value != null ? String(obsRow.value) : null,
+        low: obsRow.low != null ? String(obsRow.low) : null,
+        high: obsRow.high != null ? String(obsRow.high) : null,
+        approx: obsRow.approx,
+        atLeast: obsRow.atLeast,
+      })
+      metricsBySideUnitId.set(obsRow.subjectId, list)
+    }
+
+    return {
+      ...unitRecord,
+      sideDeployedUnits: unitRecord.sideDeployedUnits.map((deployed) => ({
+        ...deployed,
+        deployedWeapons: deployed.weaponsUsed,
+        metrics: metricsBySideUnitId.get(deployed.id) ?? [],
+      })),
+    }
   }
 
   async create(data: CreateMilitaryUnitDto) {

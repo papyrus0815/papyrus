@@ -1,6 +1,7 @@
 import type { EventOverviewNode } from '@/shared/api/event-overview'
 
 import {
+  aggregateMilitaryUnits,
   aggregatePersons,
   buildCountryMatrix,
   buildWarDeclarationFlow,
@@ -628,5 +629,78 @@ describe('buildWarDeclarationFlow — 선전포고 하위 사건 + 가담·이�
     expect(flow.milestones[0].dateLabel).toBe('1914.8.1')
     expect(flow.milestones[0].sideName).toBe('협상국')
     expect(flow.milestones[1].reason).toBe('브레스트-리토프스크 조약')
+  })
+
+  it('aggregateMilitaryUnits는 하위 사건에 참전한 군사 부대를 출현 사건 수 순으로 집계한다', () => {
+    const firstBattle = node({
+      id: 'minsk',
+      title: '민스크 포위전',
+      sides: [
+        {
+          id: 'side-axis-1',
+          name: '추축국',
+          color: '#dc2626',
+          outcome: 'DECISIVE_VICTORY',
+          outcomeNote: null,
+          deployedUnits: [
+            {
+              id: 'du-1',
+              militaryUnitId: 'unit-pg2',
+              name: '제2기갑집단',
+              unitType: 'ARMY',
+              branch: 'ARMOR',
+              parentUnitId: null,
+              role: 'SPEARHEAD',
+              note: null,
+              commanderName: '하인츠 구데리안',
+            },
+          ],
+        },
+      ],
+    })
+    const secondBattle = node({
+      id: 'smolensk',
+      title: '스몰렌스크 전투',
+      sides: [
+        {
+          id: 'side-axis-2',
+          name: '추축국',
+          color: '#dc2626',
+          outcome: 'TACTICAL_VICTORY',
+          outcomeNote: null,
+          deployedUnits: [
+            {
+              id: 'du-2',
+              militaryUnitId: 'unit-pg2',
+              name: '제2기갑집단',
+              unitType: 'ARMY',
+              branch: 'ARMOR',
+              parentUnitId: null,
+              role: 'MAIN_FORCE',
+              note: null,
+              commanderName: '하인츠 구데리안',
+            },
+            {
+              id: 'du-3',
+              militaryUnitId: 'unit-pg3',
+              name: '제3기갑집단',
+              unitType: 'ARMY',
+              branch: 'ARMOR',
+              parentUnitId: null,
+              role: 'FLANK_SUPPORT',
+              note: null,
+              commanderName: '헤르만 호트',
+            },
+          ],
+        },
+      ],
+    })
+    const units = aggregateMilitaryUnits([firstBattle, secondBattle])
+    expect(units).toHaveLength(2)
+    expect(units[0].militaryUnitId).toBe('unit-pg2')
+    expect(units[0].events).toHaveLength(2)
+    expect(units[0].sideName).toBe('추축국')
+    expect(units[1].militaryUnitId).toBe('unit-pg3')
+    expect(units[1].events).toHaveLength(1)
   })
 })

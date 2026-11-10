@@ -73,6 +73,36 @@ interface UnitDetailResponse {
     id: string
     role?: string | null
     note?: string | null
+    parentUnit?: {
+      id: string
+      name: string
+      unitType?: string | null
+    } | null
+    commander?: {
+      id: string
+      name: string
+      surname?: string | null
+    } | null
+    deployedWeapons?: Array<{
+      id: string
+      quantity?: number | null
+      note?: string | null
+      weapon?: { id: string; name: string; weaponType?: string | null } | null
+      groundVehicle?: { id: string; name: string; vehicleType?: string | null } | null
+      aircraft?: { id: string; name: string; aircraftType?: string | null } | null
+      navalVessel?: { id: string; name: string; vesselType?: string | null } | null
+    }>
+    metrics?: Array<{
+      id: string
+      metricKey: string
+      metricName: string
+      unit?: string | null
+      value?: string | null
+      low?: string | null
+      high?: string | null
+      approx?: boolean
+      atLeast?: boolean
+    }>
     side?: {
       id: string
       name: string
@@ -373,7 +403,8 @@ export function MilitaryUnitDetailSection() {
                 <th>시기</th>
                 <th>작전 · 전투(사건)</th>
                 <th>소속 진영 · 결과</th>
-                <th>작전 역할 · 비고</th>
+                <th>작전 편제 · 지휘관 · 역할</th>
+                <th>부대 수치 · 투입 병기</th>
               </tr>
             </thead>
             <tbody>
@@ -397,6 +428,11 @@ export function MilitaryUnitDetailSection() {
                   side.outcome && side.outcome in SIDE_OUTCOME_LABEL
                     ? SIDE_OUTCOME_LABEL[side.outcome as keyof typeof SIDE_OUTCOME_LABEL]
                     : null
+                const commanderName = dep.commander
+                  ? [dep.commander.name, dep.commander.surname].filter(Boolean).join(' ')
+                  : null
+                const weapons = dep.deployedWeapons ?? []
+                const unitMetrics = dep.metrics ?? []
                 return (
                   <tr key={dep.id}>
                     <td>{dateLabel}</td>
@@ -408,7 +444,62 @@ export function MilitaryUnitDetailSection() {
                       {outcomeLabel ? ` (${outcomeLabel})` : ''}
                     </td>
                     <td>
-                      {[roleLabel, dep.note].filter(Boolean).join(' — ') || '—'}
+                      <DeploymentDetailStack>
+                        {dep.parentUnit && (
+                          <InlineActionLink
+                            type="button"
+                            onClick={() => selectUnit(dep.parentUnit!.id)}
+                            title="작전 당시 배속 상급 부대로 이동"
+                          >
+                            상급: ⚔️ {dep.parentUnit.name}
+                          </InlineActionLink>
+                        )}
+                        {dep.commander && commanderName && (
+                          <PersonLink to={pathKeys.personsTimelineDetail(dep.commander.id)}>
+                            🎖️ {commanderName}
+                          </PersonLink>
+                        )}
+                        {([roleLabel, dep.note].filter(Boolean).join(' — ') || (!dep.parentUnit && !dep.commander ? '—' : '')) && (
+                          <span>{[roleLabel, dep.note].filter(Boolean).join(' — ')}</span>
+                        )}
+                      </DeploymentDetailStack>
+                    </td>
+                    <td>
+                      <DeploymentDetailStack>
+                        {unitMetrics.map((metricItem) => {
+                          const rawVal = metricItem.value ?? metricItem.low ?? metricItem.high
+                          const formattedVal =
+                            rawVal != null && Number.isFinite(Number(rawVal))
+                              ? Number(rawVal).toLocaleString()
+                              : rawVal ?? ''
+                          return (
+                            <SmallBadge key={metricItem.id}>
+                              📉 {metricItem.metricName}: {metricItem.approx ? '약 ' : ''}
+                              {formattedVal}
+                              {metricItem.unit ? ` ${metricItem.unit}` : ''}
+                            </SmallBadge>
+                          )
+                        })}
+                        {weapons.map((weaponEntry) => {
+                          const assetName =
+                            weaponEntry.groundVehicle?.name ??
+                            weaponEntry.aircraft?.name ??
+                            weaponEntry.navalVessel?.name ??
+                            weaponEntry.weapon?.name ??
+                            '병기'
+                          const countParts = [
+                            weaponEntry.quantity != null ? `${weaponEntry.quantity.toLocaleString()}기` : null,
+                            weaponEntry.note ? weaponEntry.note : null,
+                          ].filter(Boolean)
+                          return (
+                            <SmallBadge key={weaponEntry.id}>
+                              🛡️ {assetName}
+                              {countParts.length > 0 ? ` (${countParts.join(' · ')})` : ''}
+                            </SmallBadge>
+                          )
+                        })}
+                        {unitMetrics.length === 0 && weapons.length === 0 && <span>—</span>}
+                      </DeploymentDetailStack>
                     </td>
                   </tr>
                 )
@@ -443,6 +534,28 @@ const PageWrap = styled.div`
   padding: 24px;
   max-width: 1120px;
   margin: 0 auto;
+`
+
+const DeploymentDetailStack = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+`
+
+const InlineActionLink = styled.button`
+  padding: 1px 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.primary};
+  border-radius: 999px;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
 `
 
 const HeroCard = styled.section`
