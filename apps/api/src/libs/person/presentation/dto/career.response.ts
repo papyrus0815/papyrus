@@ -13,7 +13,8 @@ export interface MilitaryCareerResponseDto {
   showPositionInfo: boolean
   rankId: string
   jobCategoryId: string | null
-  organizationId: string
+  organizationId: string | null
+  militaryUnitId?: string | null
   branch: string | null
   position: string | null
   termNumber: number | null

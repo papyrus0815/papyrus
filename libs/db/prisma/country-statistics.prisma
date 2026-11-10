@@ -37,8 +37,11 @@ model CountryEconomicIndicator {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 국가 ID
+  /// 국가 ID (현대 국가)
   countryId String @map("country_id") @db.Char(36)
+
+  /// 역사적 국가 ID (선택 — 나치 독일·소련·조선 등 과거 정치체 시점의 경제 지표)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
 
   /// 연도
   year Int
@@ -95,7 +98,8 @@ model CountryEconomicIndicator {
   foreignReserves Decimal? @map("foreign_reserves") @db.Decimal(20, 2)
 
   //--- 관계 필드
-  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  country           Country            @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  historicalCountry HistoricalCountry? @relation("HistoricalCountryEconomicIndicators", fields: [historicalCountryId], references: [id], onDelete: SetNull)
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
@@ -103,6 +107,7 @@ model CountryEconomicIndicator {
 
   @@unique([countryId, year], name: "uniq_economic_indicator_country_year")
   @@index([countryId], name: "idx_economic_indicator_countryId")
+  @@index([historicalCountryId, year], name: "idx_economic_indicator_historicalCountry_year")
   @@index([year], name: "idx_economic_indicator_year")
   @@index([countryId, year], name: "idx_economic_indicator_country_year")
   @@map("country_economic_indicator")
@@ -115,8 +120,11 @@ model CountryDemographicIndicator {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 국가 ID
+  /// 국가 ID (현대 국가)
   countryId String @map("country_id") @db.Char(36)
+
+  /// 역사적 국가 ID (선택 — 나치 독일·소련·조선 등 과거 정치체 시점의 경제 지표)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
 
   /// 연도
   year Int
@@ -234,7 +242,8 @@ model CountryDemographicIndicator {
   netMigration Int? @map("net_migration")
 
   //--- 관계 필드
-  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  country           Country            @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  historicalCountry HistoricalCountry? @relation("HistoricalCountryDemographicIndicators", fields: [historicalCountryId], references: [id], onDelete: SetNull)
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
@@ -242,6 +251,7 @@ model CountryDemographicIndicator {
 
   @@unique([countryId, year], name: "uniq_demographic_indicator_country_year")
   @@index([countryId], name: "idx_demographic_indicator_countryId")
+  @@index([historicalCountryId, year], name: "idx_demographic_indicator_historicalCountry_year")
   @@index([year], name: "idx_demographic_indicator_year")
   @@index([countryId, year], name: "idx_demographic_indicator_country_year")
   @@map("country_demographic_indicator")
@@ -254,8 +264,11 @@ model CountryDevelopmentIndicator {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 국가 ID
+  /// 국가 ID (현대 국가)
   countryId String @map("country_id") @db.Char(36)
+
+  /// 역사적 국가 ID (선택 — 나치 독일·소련·조선 등 과거 정치체 시점의 경제 지표)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
 
   /// 연도
   year Int
@@ -327,7 +340,8 @@ model CountryDevelopmentIndicator {
   mobilePenetration Decimal? @map("mobile_penetration") @db.Decimal(6, 2)
 
   //--- 관계 필드
-  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  country           Country            @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  historicalCountry HistoricalCountry? @relation("HistoricalCountryDevelopmentIndicators", fields: [historicalCountryId], references: [id], onDelete: SetNull)
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
@@ -335,6 +349,7 @@ model CountryDevelopmentIndicator {
 
   @@unique([countryId, year], name: "uniq_development_indicator_country_year")
   @@index([countryId], name: "idx_development_indicator_countryId")
+  @@index([historicalCountryId, year], name: "idx_development_indicator_historicalCountry_year")
   @@index([year], name: "idx_development_indicator_year")
   @@index([countryId, year], name: "idx_development_indicator_country_year")
   @@map("country_development_indicator")
@@ -388,8 +403,11 @@ model CountryBondYield {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 국가 ID
+  /// 국가 ID (현대 국가)
   countryId String @map("country_id") @db.Char(36)
+
+  /// 역사적 국가 ID (선택 — 나치 독일·소련·조선 등 과거 정치체 시점의 경제 지표)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
 
   /// 연도
   year Int
@@ -416,7 +434,8 @@ model CountryBondYield {
   note String? @db.Text
 
   //--- 관계 필드
-  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  country           Country            @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  historicalCountry HistoricalCountry? @relation("HistoricalCountryBondYields", fields: [historicalCountryId], references: [id], onDelete: SetNull)
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
@@ -424,6 +443,7 @@ model CountryBondYield {
 
   @@unique([countryId, year, maturity], name: "uniq_bond_yield_country_year_maturity")
   @@index([countryId], name: "idx_bond_yield_countryId")
+  @@index([historicalCountryId, year], name: "idx_bond_yield_historicalCountry_year")
   @@index([countryId, year], name: "idx_bond_yield_country_year")
   @@index([countryId, maturity], name: "idx_bond_yield_country_maturity")
   @@map("country_bond_yield")

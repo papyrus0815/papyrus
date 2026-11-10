@@ -119,4 +119,18 @@ describe('quietSpansWithStart', () => {
     const quiets = quietSpansWithStart([day('1690-08-24'), day('1746-09-04', '1763-02-10')])
     expect(quiets[1]).toEqual({ label: '56년 공백', fromKey: 16900824 })
   })
+
+  it('상위 사건이 6개월~5년 규모면 3개월 이상 빈 구간도 공백으로 짚는다', () => {
+    const parent = day('1950-06-25', '1953-07-27')
+    const quiets = quietSpansWithStart([day('1950-09-15', '1950-09-28'), day('1951-04-22')], parent)
+    expect(quiets[1]).toEqual({ label: '6개월 공백', fromKey: 19500928 })
+  })
+})
+
+describe('gapText pace', () => {
+  it('시간차에 따라 fast / medium / slow 보폭을 함께 낸다', () => {
+    expect(gapText(day('1914-07-23'), day('1914-07-28'))?.pace).toBe('fast')
+    expect(gapText(day('1914-07-28'), day('1914-11-02'))?.pace).toBe('medium')
+    expect(gapText(day('1914-07-28'), day('1916-02-21'))?.pace).toBe('slow')
+  })
 })

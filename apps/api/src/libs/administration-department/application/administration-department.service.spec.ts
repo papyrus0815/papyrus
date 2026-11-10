@@ -1,4 +1,8 @@
-import { BadRequestException, ConflictException } from '@nestjs/common'
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common'
 import { AdministrationDepartmentService } from './administration-department.service'
 
 describe('AdministrationDepartmentService', () => {
@@ -10,10 +14,19 @@ describe('AdministrationDepartmentService', () => {
       update: jest.fn(),
       delete: jest.fn(),
     },
+    administrationDepartmentCategory: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue({ id: 'mock-cat', name: '기본분류' }),
+      findFirst: jest.fn().mockResolvedValue(null),
+      create: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+    },
     governmentPositionTenure: {
       findMany: jest.fn().mockResolvedValue([]),
     },
     administrationDepartmentTransition: {
+      findMany: jest.fn().mockResolvedValue([]),
       create: jest.fn(),
     },
     historicalCountryModernCountry: {
@@ -24,14 +37,19 @@ describe('AdministrationDepartmentService', () => {
       updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
     governmentPositionDefinitionScope: {
+      findMany: jest.fn().mockResolvedValue([]),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
       createMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
+    politicalSystem: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     country: {
-      findUnique: jest.fn(),
+      findUnique: jest.fn().mockResolvedValue({ id: 'mock-country' }),
     },
     historicalCountry: {
-      findUnique: jest.fn(),
+      findUnique: jest.fn().mockResolvedValue({ id: 'mock-hist-country' }),
     },
   })
 
@@ -338,6 +356,15 @@ describe('AdministrationDepartmentService', () => {
     })
     prisma.governmentPositionDefinition.findMany.mockResolvedValue([
       { id: 'def-1', categoryId: 'cat-old' },
+      { id: 'def-2', categoryId: 'cat-old' },
+    ])
+    prisma.governmentPositionDefinitionScope.findMany.mockResolvedValue([
+      {
+        id: 'scope-1',
+        definitionId: 'def-1',
+        countryId: null,
+        historicalCountryId: 'hist-goryeo',
+      },
     ])
 
     const service = new AdministrationDepartmentService(
@@ -350,17 +377,23 @@ describe('AdministrationDepartmentService', () => {
       categoryId: 'cat-new',
     })
 
+    // 기존 스코프(scope-1)는 localTitle·note 등 메타데이터 보존을 위해 updateMany로 갱신
     expect(
-      prisma.governmentPositionDefinitionScope.deleteMany,
+      prisma.governmentPositionDefinitionScope.updateMany,
     ).toHaveBeenCalledWith({
-      where: { definitionId: { in: ['def-1'] } },
+      where: { id: { in: ['scope-1'] } },
+      data: {
+        countryId: 'kr',
+        historicalCountryId: 'hist-joseon',
+      },
     })
+    // 스코프가 없던 def-2는 새로 createMany
     expect(
       prisma.governmentPositionDefinitionScope.createMany,
     ).toHaveBeenCalledWith({
       data: [
         {
-          definitionId: 'def-1',
+          definitionId: 'def-2',
           countryId: 'kr',
           historicalCountryId: 'hist-joseon',
         },
@@ -369,8 +402,208 @@ describe('AdministrationDepartmentService', () => {
     expect(
       prisma.governmentPositionDefinition.updateMany,
     ).toHaveBeenCalledWith({
-      where: { id: { in: ['def-1'] } },
+      where: { id: { in: ['def-1', 'def-2'] } },
       data: { categoryId: 'cat-new' },
+    })
+  })
+
+  it('update: 계보(Transition)로 연결된 타 기관과 국가가 호환되지 않으면 국가 변경을 차단한다', async () => {
+    const prisma = createMockPrisma()
+    prisma.administrationDepartment.findUnique.mockResolvedValue({
+      id: 'dept-kr',
+      name: '외무부',
+      countryId: 'kr',
+      historicalCountryId: null,
+      parentId: null,
+    })
+    prisma.administrationDepartmentTransition.findMany.mockResolvedValue([
+      {
+        predecessorId: 'dept-kr',
+        successorId: 'dept-kr-2',
+        predecessor: {
+          id: 'dept-kr',
+          name: '외무부',
+          countryId: 'kr',
+          historicalCountryId: null,
+        },
+        successor: {
+          id: 'dept-kr-2',
+          name: '외교통상부',
+          countryId: 'kr',
+          historicalCountryId: null,
+        },
+      },
+    ])
+    const service = new AdministrationDepartmentService(
+      prisma as any,
+      createMockNotification() as any,
+    )
+
+    await expect(
+      service.update('dept-kr', {
+        countryId: 'us',
+      }),
+    ).rejects.toThrow(BadRequestException)
+  })
+
+  it('create / updateCategory: 존재하지 않는 국가 참조 시 NotFoundException, 분류 이름 중복 시 ConflictException을 던진다', async () => {
+    const prisma = createMockPrisma()
+    prisma.country.findUnique.mockResolvedValue(null)
+    const service = new AdministrationDepartmentService(
+      prisma as any,
+      createMockNotification() as any,
+    )
+
+    await expect(
+      service.create({
+        name: '외교부',
+        countryId: 'non-existent-country',
+      }),
+    ).rejects.toThrow(NotFoundException)
+
+    prisma.administrationDepartmentCategory.findUnique.mockResolvedValue({
+      id: 'cat-1',
+      name: '기존분류',
+    })
+    prisma.administrationDepartmentCategory.findFirst.mockResolvedValue({
+      id: 'cat-2',
+      name: '중복분류',
+    })
+
+    await expect(
+      service.updateCategory('cat-1', { name: '중복분류' }),
+    ).rejects.toThrow(ConflictException)
+  })
+
+  it('deleteCategory: 소속 기관이나 직위 정의가 연결된 분류 삭제 시 ConflictException을 던진다', async () => {
+    const prisma = createMockPrisma()
+    ;(prisma.administrationDepartment as any).count = jest
+      .fn()
+      .mockResolvedValue(3)
+    ;(prisma.governmentPositionDefinition as any).count = jest
+      .fn()
+      .mockResolvedValue(1)
+    const service = new AdministrationDepartmentService(
+      prisma as any,
+      createMockNotification() as any,
+    )
+
+    await expect(service.deleteCategory('cat-1')).rejects.toThrow(
+      ConflictException,
+    )
+    expect(prisma.administrationDepartmentCategory.delete).not.toHaveBeenCalled()
+  })
+
+  it('create: dual-fill된 countryId가 같더라도 역사국가 소속 상위 기관 아래에 현대국가 직속 기관을 두면 BadRequestException을 던진다', async () => {
+    const prisma = createMockPrisma()
+    prisma.administrationDepartment.findUnique.mockResolvedValue({
+      id: 'dept-joseon-ijo',
+      name: '이조',
+      countryId: 'kr',
+      historicalCountryId: 'hist-joseon',
+    })
+    const service = new AdministrationDepartmentService(
+      prisma as any,
+      createMockNotification() as any,
+    )
+
+    await expect(
+      service.create({
+        name: '인사혁신처',
+        countryId: 'kr',
+        historicalCountryId: null,
+        parentId: 'dept-joseon-ijo',
+      }),
+    ).rejects.toThrow(BadRequestException)
+  })
+
+  it('create: 동일 국가·시대·상위 기관 내에 존속기간이 겹치는 동명 기관이 있으면 ConflictException을 던진다', async () => {
+    const prisma = createMockPrisma()
+    prisma.administrationDepartment.findMany.mockResolvedValue([
+      {
+        id: 'existing-dept',
+        name: '외교부',
+        establishedEra: 'AD',
+        establishedYear: 2013,
+        establishedMonth: 3,
+        establishedDay: 23,
+        abolishedEra: null,
+        abolishedYear: null,
+        abolishedMonth: null,
+        abolishedDay: null,
+      },
+    ])
+    const service = new AdministrationDepartmentService(
+      prisma as any,
+      createMockNotification() as any,
+    )
+
+    await expect(
+      service.create({
+        name: '외교부',
+        countryId: 'kr',
+      }),
+    ).rejects.toThrow(ConflictException)
+  })
+
+  it('update: 같은 국가 계보 내에서 상위 기관의 역사국가를 변경하면 동일 축을 공유하던 하위 기관도 함께 이동시킨다(데드락 방지)', async () => {
+    const prisma = createMockPrisma()
+    ;(prisma.administrationDepartment as any).updateMany = jest
+      .fn()
+      .mockResolvedValue({ count: 1 })
+    prisma.administrationDepartment.findUnique.mockResolvedValue({
+      id: 'parent-dept',
+      name: '이조',
+      countryId: 'kr',
+      historicalCountryId: null,
+      parentId: null,
+      categoryId: 'cat-1',
+    })
+    prisma.historicalCountryModernCountry.findMany.mockResolvedValue([
+      { modernCountryId: 'kr' },
+    ])
+    prisma.administrationDepartment.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 'child-dept',
+          name: '문선사',
+          countryId: 'kr',
+          historicalCountryId: null,
+        },
+      ])
+      .mockResolvedValueOnce([])
+    prisma.administrationDepartment.update.mockResolvedValue({
+      id: 'parent-dept',
+      name: '이조',
+      countryId: 'kr',
+      historicalCountryId: 'hist-joseon',
+      parentId: null,
+      categoryId: 'cat-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+
+    const service = new AdministrationDepartmentService(
+      prisma as any,
+      createMockNotification() as any,
+    )
+
+    await service.update('parent-dept', {
+      historicalCountryId: 'hist-joseon',
+    })
+
+    expect(
+      (prisma.administrationDepartment as any).updateMany,
+    ).toHaveBeenCalledWith({
+      where: {
+        parentId: 'parent-dept',
+        countryId: 'kr',
+        historicalCountryId: null,
+      },
+      data: {
+        countryId: 'kr',
+        historicalCountryId: 'hist-joseon',
+      },
     })
   })
 })

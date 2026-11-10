@@ -1303,4 +1303,114 @@ describe('CoreRecordsGroup — 2열 진영 보드(SidesField) 및 성립·소멸
       screen.queryByRole('button', { name: /추천 인물 인물4 추가/ }),
     ).not.toBeInTheDocument()
   })
+
+  it('진영 카드 내부 빠른 검색창에서 아직 참여국에 없는 나라를 검색·선택하면 참여국 추가와 진영 배정이 동시에 수행된다', async () => {
+    let drafts = emptyRegisterFacetDrafts()
+    const onDraftsChange = jest.fn((next) => {
+      drafts = next
+    })
+    const onQuickAddCountryWithRole = jest.fn()
+
+    renderGroup(
+      <CoreRecordsGroup
+        type="BATTLE"
+        domain="MILITARY"
+        drafts={drafts}
+        onDraftsChange={onDraftsChange}
+        participants={[{ countryId: 'c-fr', role: 'INITIATOR' }]}
+        participantName={(row) =>
+          row.countryId === 'c-fr' ? '프랑스' : '프로이센 왕국'
+        }
+        availableHistoricalCountries={[
+          {
+            id: 'hc-prussia',
+            name: '프로이센 왕국',
+            foundedYear: 1701,
+            dissolvedYear: 1918,
+          },
+        ]}
+        onAddCountryWithRole={jest.fn()}
+        onQuickAddCountryWithRole={onQuickAddCountryWithRole}
+        onRemoveParticipant={jest.fn()}
+        eventTitle="보불전쟁"
+        startDate="1870-07-19"
+        playClickSound={jest.fn()}
+      />,
+    )
+
+    const side2QuickInput = screen.getByLabelText(
+      '2번 진영 인물·조직 빠른 추가',
+    )
+    fireEvent.focus(side2QuickInput)
+    fireEvent.change(side2QuickInput, { target: { value: '프로이센' } })
+
+    const listbox = await screen.findByRole('listbox', {
+      name: '2번 진영 빠른 추가 후보',
+    })
+    expect(await within(listbox).findByText(/프로이센 왕국/)).toBeInTheDocument()
+    fireEvent.keyDown(side2QuickInput, { key: 'Enter' })
+
+    expect(onQuickAddCountryWithRole).toHaveBeenCalledWith(
+      { countryId: undefined, historicalCountryId: 'hc-prussia' },
+      'ADVERSARY',
+    )
+    expect(drafts.sides.assignment['h:hc-prussia']).toBe('B')
+  })
+
+  it('선거(ELECTION) 세부 분야일 때 동시대·참여국 추천 선거 칩이 노출되고 원클릭으로 연결되며, 인물 역할 프리셋에 국가원수·협상 대표가 제공된다', async () => {
+    const { getElections } = jest.requireMock('@/shared/api/election') as {
+      getElections: jest.Mock
+    }
+    getElections.mockResolvedValue([
+      {
+        id: 'el-fr-1848',
+        name: '1848년 프랑스 대통령 선거',
+        pollDate: '1848-12-10',
+        countryId: 'c-fr',
+        historicalCountryId: null,
+      },
+    ])
+
+    let drafts = {
+      ...emptyRegisterFacetDrafts(),
+      persons: [{ personId: 'p-bonaparte', name: '루이나폴레옹', role: '' }],
+    }
+    const onDraftsChange = jest.fn((next) => {
+      drafts = next
+    })
+
+    renderGroup(
+      <CoreRecordsGroup
+        type="ELECTION"
+        domain="POLITICS"
+        drafts={drafts}
+        onDraftsChange={onDraftsChange}
+        participants={[{ countryId: 'c-fr', role: 'PARTICIPANT' }]}
+        participantName={() => '프랑스'}
+        onAddCountryWithRole={jest.fn()}
+        onRemoveParticipant={jest.fn()}
+        eventTitle="1848년 프랑스 대선"
+        startDate="1848-12-10"
+        playClickSound={jest.fn()}
+      />,
+    )
+
+    // 1. 동시대·참여국 추천 선거 칩 클릭 시 즉시 연결
+    const electionChip = await screen.findByRole('button', {
+      name: '+ 🗳️ 1848년 프랑스 대통령 선거',
+    })
+    fireEvent.click(electionChip)
+    expect(drafts.election).toEqual({
+      id: 'el-fr-1848',
+      name: '1848년 프랑스 대통령 선거',
+    })
+
+    // 2. 인물 역할 입력창 포커스 시 '국가원수' 프리셋 선택 가능
+    const roleInput = screen.getByLabelText('루이나폴레옹이(가) 한 일')
+    fireEvent.focus(roleInput)
+    fireEvent.click(
+      screen.getByRole('button', { name: '루이나폴레옹 역할 국가원수 지정' }),
+    )
+    expect(drafts.persons[0].role).toBe('국가원수')
+  })
 })

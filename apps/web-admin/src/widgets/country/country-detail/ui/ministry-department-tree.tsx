@@ -324,6 +324,10 @@ function FlatDeptRow({
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            flexWrap: 'wrap',
             fontSize: 15,
             fontWeight: 600,
             color: C.text,
@@ -331,7 +335,21 @@ function FlatDeptRow({
             lineHeight: 1.35,
           }}
         >
-          {dept.name}
+          <span>{dept.name}</span>
+          {dept.historicalCountry?.name ? (
+            <span
+              style={{
+                padding: '2px 7px',
+                borderRadius: 6,
+                fontSize: 11,
+                fontWeight: 600,
+                background: C.btnHover,
+                color: C.textMuted,
+              }}
+            >
+              {dept.historicalCountry.name}
+            </span>
+          ) : null}
         </div>
         {cross ? (
           <div
@@ -532,6 +550,10 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
               style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                flexWrap: 'wrap',
                 fontSize: 15,
                 fontWeight: 600,
                 color: C.text,
@@ -539,7 +561,21 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
                 lineHeight: 1.35,
               }}
             >
-              {dept.name}
+              <span>{dept.name}</span>
+              {dept.historicalCountry?.name ? (
+                <span
+                  style={{
+                    padding: '2px 7px',
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    background: C.btnHover,
+                    color: C.textMuted,
+                  }}
+                >
+                  {dept.historicalCountry.name}
+                </span>
+              ) : null}
             </div>
             {isRootInForest && cross ? (
               <div

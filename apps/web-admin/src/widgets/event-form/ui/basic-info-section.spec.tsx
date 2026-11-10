@@ -502,7 +502,12 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
       }),
     ])
 
-    // 5. 관계 설명 1줄 입력
+    // 5. 관계 설명 1줄 입력 ('+ 설명 메모' 토글로 펼친 뒤 입력)
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: '사라예보 사건 관계 설명 입력 열기',
+      }),
+    )
     fireEvent.change(screen.getByLabelText('사라예보 사건 관계 설명'), {
       target: { value: '오스트리아-헝가리의 선전포고 촉발' },
     })
@@ -1624,5 +1629,66 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
         name: '+ 탄넨베르크 전투 (1914)',
       }),
     ).toBeInTheDocument()
+  })
+
+  it('연속 등록 시 직전 사건 날짜 이어받기 칩과 수정 모드 2단 레이아웃 안내 문구, 인과 흐름 보드 인라인 삭제가 동작한다', () => {
+    const setStartDate = jest.fn()
+    const setStartDatePrecision = jest.fn()
+    const onRelatedChange = jest.fn()
+
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          layoutMode: 'split',
+          startDate: '',
+          setStartDate,
+          setStartDatePrecision,
+          relatedEventsSlot: {
+            items: [
+              {
+                relatedEventId: 'evt-prev',
+                title: '사라예보 사건',
+                relationType: 'LED_TO',
+                direction: 'incoming',
+              },
+            ],
+            onOpenPicker: jest.fn(),
+            onChange: onRelatedChange,
+            lastSavedEvent: {
+              id: 'evt-last',
+              title: '7월 위기',
+              startDate: '1914-07-01',
+              endDate: '1914-07-28',
+              datePrecision: 'day',
+            },
+          },
+        })}
+      />,
+    )
+
+    // 1. 수정 모드(recordsSlot & quickRecordTypesSlot 모두 없음)에서 2단 레이아웃 우측에 빈 점선 대신 안내 문구가 표시된다
+    expect(
+      screen.getByText(
+        '진영 · 인물 · 조약 · 하위 사건 등 세부 기록은 사건 상세 화면에서 편집할 수 있습니다.',
+      ),
+    ).toBeInTheDocument()
+
+    // 2. 직전 사건 날짜 이어받기 칩 클릭 시 endDate('1914-07-28')와 datePrecision('day')가 채워진다
+    fireEvent.click(
+      screen.getByRole('button', { name: '직전 사건 날짜 이어받기' }),
+    )
+    expect(setStartDate).toHaveBeenCalledWith('1914-07-28')
+    expect(setStartDatePrecision).toHaveBeenCalledWith('day')
+
+    // 3. 인과 흐름 보드 알약 내부의 × 버튼으로 즉시 연결 해제할 수 있다
+    const flowBoard = screen.getByRole('region', {
+      name: '연관 사건 인과 흐름도',
+    })
+    fireEvent.click(
+      within(flowBoard).getByRole('button', {
+        name: '사라예보 사건 인과 흐름도에서 연결 해제',
+      }),
+    )
+    expect(onRelatedChange).toHaveBeenCalledWith([])
   })
 })

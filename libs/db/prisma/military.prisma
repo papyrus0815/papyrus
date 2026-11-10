@@ -197,8 +197,18 @@ enum NavalPropulsionType {
 
 /// 부대의 규모 및 종류를 정의합니다.
 enum MilitaryUnitType {
+  // --- 전략·전역 사령부 / 상급 야전 편제 ---
+  /// 전구·전역사령부 (Theater Command)
+  THEATER
+  /// 집단군 (Army Group — 예: 북부집단군·중부집단군·남부집단군)
+  ARMY_GROUP
+  /// 전선군·방면군 (Front — 소련군 서부전선군·남서전선군 등 집단군 급)
+  FRONT
+  /// 군관구 (Military District — 소련군 서부특별군관구·키예프특별군관구 등)
+  MILITARY_DISTRICT
+
   // --- 지상군 ---
-  /// 야전군 (Field Army)
+  /// 야전군·기갑집단 (Field Army / Panzer Group)
   FIELD_ARMY
   /// 군단 (Corps)
   CORPS
@@ -224,6 +234,10 @@ enum MilitaryUnitType {
   SQUADRON
 
   // --- 공군 ---
+  /// 항공함대 (Air Fleet / Luftflotte)
+  AIR_FLEET
+  /// 항공군단 (Air Corps / Fliegerkorps)
+  AIR_CORPS
   /// 비행단 (Wing)
   WING
   // 공군 Squadron은 해군과 중복되므로 추가하지 않음
@@ -274,11 +288,26 @@ model Weapon {
   /// 퇴역 연도
   retiredYear    Int?     @map("retired_year")
 
+  /// 제조국·운용국 (현대 국가 FK)
+  countryId             String? @map("country_id") @db.Char(36)
+  /// 제조국·운용국 (역사적 국가 FK — 나치 독일·소련 등)
+  historicalCountryId   String? @map("historical_country_id") @db.Char(36)
+  /// 제조 기업 FK (마우저·크루프·칼라시니코프 등)
+  manufacturerCompanyId String? @map("manufacturer_company_id") @db.Char(36)
+
   // --- 관계 필드
+  /// 소속 국가 (현대)
+  country             Country?           @relation("WeaponCountry", fields: [countryId], references: [id], onDelete: SetNull)
+  /// 소속 국가 (역사)
+  historicalCountry   HistoricalCountry? @relation("WeaponHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+  /// 제조 기업
+  manufacturerCompany Company?           @relation("WeaponManufacturerCompany", fields: [manufacturerCompanyId], references: [id], onDelete: SetNull)
   /// 무기에 대한 상세 설명들
   descriptions WeaponDescription[]
   /// 무기가 사용된 전쟁 기록
   wars         WarHistoryWeapon[]
+  /// 사건 진영·투입 부대 사용 무기 기록
+  sideWeapons  SideWeapon[]       @relation("SideWeaponToWeapon")
 
   // --- 메타데이터
   /// 생성 일시
@@ -286,6 +315,9 @@ model Weapon {
   /// 마지막 수정 일시
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([countryId], name: "idx_weapon_countryId")
+  @@index([historicalCountryId], name: "idx_weapon_historicalCountryId")
+  @@index([manufacturerCompanyId], name: "idx_weapon_manufacturerCompanyId")
   @@map("weapons")
 }
 
@@ -339,7 +371,11 @@ model GroundVehicle {
   vehicleType GroundVehicleType? @map("vehicle_type")
 
   /// 제조국 또는 운용국의 외래 키 (FK)
-  countryId String? @map("country_id") @db.Char(36)
+  countryId             String? @map("country_id") @db.Char(36)
+  /// 역사적 국가 외래 키 (FK — 나치 독일·소련 등)
+  historicalCountryId   String? @map("historical_country_id") @db.Char(36)
+  /// 제조 기업 FK (크루프·헨셸·포르쉐·하르코프 기관차 공장 등)
+  manufacturerCompanyId String? @map("manufacturer_company_id") @db.Char(36)
 
   // --- 제원
   /// 장갑 두께 (mm)
@@ -385,15 +421,23 @@ model GroundVehicle {
 
   // --- 관계 필드
   /// 소속 국가
-  country Country?                  @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  country             Country?                  @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  /// 소속 역사적 국가
+  historicalCountry   HistoricalCountry?        @relation("GroundVehicleHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+  /// 제조 기업
+  manufacturerCompany Company?                  @relation("GroundVehicleManufacturerCompany", fields: [manufacturerCompanyId], references: [id], onDelete: SetNull)
   /// 참전 기록
-  wars    WarHistoryGroundVehicle[]
+  wars                WarHistoryGroundVehicle[]
+  /// 사건 진영·투입 부대 사용 장비 기록
+  sideWeapons         SideWeapon[]              @relation("SideWeaponToGroundVehicle")
 
   // --- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([countryId])
+  @@index([historicalCountryId], name: "idx_ground_vehicle_historicalCountryId")
+  @@index([manufacturerCompanyId], name: "idx_ground_vehicle_manufacturerCompanyId")
   @@map("ground_vehicles")
 }
 
@@ -408,7 +452,11 @@ model Aircraft {
   aircraftType AircraftType? @map("aircraft_type")
 
   /// 제조국 또는 운용국의 외래 키 (FK)
-  countryId String? @map("country_id") @db.Char(36)
+  countryId             String? @map("country_id") @db.Char(36)
+  /// 역사적 국가 외래 키 (FK — 나치 독일·소련 등)
+  historicalCountryId   String? @map("historical_country_id") @db.Char(36)
+  /// 제조 기업 FK (크루프·헨셸·포르쉐·하르코프 기관차 공장 등)
+  manufacturerCompanyId String? @map("manufacturer_company_id") @db.Char(36)
 
   // --- 제원
   /// 엔진 수
@@ -458,15 +506,23 @@ model Aircraft {
 
   // --- 관계 필드
   /// 소속 국가
-  country Country?             @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  country             Country?             @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  /// 소속 역사적 국가
+  historicalCountry   HistoricalCountry?   @relation("AircraftHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+  /// 제조 기업
+  manufacturerCompany Company?             @relation("AircraftManufacturerCompany", fields: [manufacturerCompanyId], references: [id], onDelete: SetNull)
   /// 참전 기록
-  wars    WarHistoryAircraft[]
+  wars                WarHistoryAircraft[]
+  /// 사건 진영·투입 부대 사용 항공기 기록
+  sideWeapons         SideWeapon[]         @relation("SideWeaponToAircraft")
 
   // --- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([countryId])
+  @@index([historicalCountryId], name: "idx_aircraft_historicalCountryId")
+  @@index([manufacturerCompanyId], name: "idx_aircraft_manufacturerCompanyId")
   @@map("aircraft")
 }
 
@@ -481,7 +537,11 @@ model NavalVessel {
   vesselType NavalVesselType? @map("vessel_type")
 
   /// 제조국 또는 운용국의 외래 키 (FK)
-  countryId String? @map("country_id") @db.Char(36)
+  countryId             String? @map("country_id") @db.Char(36)
+  /// 역사적 국가 외래 키 (FK — 나치 독일·소련 등)
+  historicalCountryId   String? @map("historical_country_id") @db.Char(36)
+  /// 제조 기업 FK (크루프·헨셸·포르쉐·하르코프 기관차 공장 등)
+  manufacturerCompanyId String? @map("manufacturer_company_id") @db.Char(36)
 
   // --- 제원
   /// 추진 방식 (NavalPropulsionType Enum 참조)
@@ -533,17 +593,25 @@ model NavalVessel {
 
   // --- 관계 필드
   /// 소속 국가
-  country         Country?                @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  country             Country?                @relation(fields: [countryId], references: [id], onDelete: SetNull)
+  /// 소속 역사적 국가
+  historicalCountry   HistoricalCountry?      @relation("NavalVesselHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+  /// 제조 기업
+  manufacturerCompany Company?                @relation("NavalVesselManufacturerCompany", fields: [manufacturerCompanyId], references: [id], onDelete: SetNull)
   /// 건조 시설
-  builtAtFacility CompanyFacility?        @relation(fields: [builtAtFacilityId], references: [id], onDelete: SetNull)
+  builtAtFacility     CompanyFacility?        @relation(fields: [builtAtFacilityId], references: [id], onDelete: SetNull)
   /// 참전 기록
-  wars            WarHistoryNavalVessel[]
+  wars                WarHistoryNavalVessel[]
+  /// 사건 진영·투입 부대 사용 함선 기록
+  sideWeapons         SideWeapon[]            @relation("SideWeaponToNavalVessel")
 
   // --- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([countryId])
+  @@index([historicalCountryId], name: "idx_naval_vessel_historicalCountryId")
+  @@index([manufacturerCompanyId], name: "idx_naval_vessel_manufacturerCompanyId")
   @@index([militaryUnitId], name: "idx_naval_vessel_military_unit_id")
   @@map("naval_vessels")
 }
@@ -794,6 +862,10 @@ model MilitaryUnit {
 
   // 🆕 정규화된 군사 사건 관계
   sideDeployedUnits    SideDeployedUnit[]
+  /// 작전 당시 상급 부대 오버라이드로 이 부대를 가리키는 투입 행들
+  subDeployedUnits     SideDeployedUnit[] @relation("SideDeployedUnitParent")
+  /// 인물 군 경력(MilitaryCareer)에서 이 부대를 소속으로 가리키는 행들
+  militaryCareers      MilitaryCareer[]   @relation("MilitaryCareerUnit")
 
   // --- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")

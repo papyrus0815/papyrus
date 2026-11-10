@@ -49,7 +49,6 @@ export interface ContemporaryRulerPerson {
   /** 주 국적의 이름 순서 기본값 — 개인 오버라이드 없을 때 서양식(이름·성) 폴백 */
   country: { defaultNameDisplayOrder: string | null } | null
   profileImageUrl: string | null
-  templeName: string | null
   isAlive: boolean
   deathYear: number | null
   /** 요청 계정 소유 인물인지 — false면 상세(:id)가 소유자 게이트라 열 수 없음(칩 비활성) */

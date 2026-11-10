@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Get,
   Post,
@@ -36,6 +37,15 @@ export class LawTypeController {
   ): Promise<any> {
     const name = body.name?.trim()
     if (!name) throw new BadRequestException('법 유형 이름을 입력하세요.')
+    if (this.prisma.lawType?.findFirst) {
+      const existing = await this.prisma.lawType.findFirst({
+        where: { name },
+        select: { id: true },
+      })
+      if (existing) {
+        throw new ConflictException('이미 동일한 이름의 법 유형이 존재합니다.')
+      }
+    }
     const row = await this.prisma.lawType.create({
       data: {
         name,

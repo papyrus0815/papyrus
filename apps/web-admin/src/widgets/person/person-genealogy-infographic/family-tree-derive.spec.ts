@@ -390,7 +390,6 @@ describe('compareSiblings / lifeSpan / isDeceasedOf / buildPersonTooltipLines', 
 
   it('buildPersonTooltipLines: 출생 서열·혼인 형태·혼인 기간·혼인 비고 포함', () => {
     const lines = buildPersonTooltipLines({
-      posthumousName: '소헌왕후',
       birthOrder: 1,
       marriageRank: 'PRIMARY',
       marriageStartYear: 1408,

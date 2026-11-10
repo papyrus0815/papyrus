@@ -95,7 +95,7 @@ export function ActorPersonRow({
   const hasRole = Boolean(entry.role && entry.role.trim())
   /* 대표단 줄에선 참여 국가가 곧 위의 나라 — 다른 나라로 옮길 때(편집 중)만 고르기를 보인다 */
   const showParticipation = participationOptions.length > 1 && (!compact || editing)
-  const showSidePicker = sideOptions.length > 1 && editing
+  const showSidePicker = sideOptions.length > 1 && (!compact || Boolean(side) || editing)
   const showMeta =
     Boolean(side) ||
     showSidePicker ||
@@ -134,17 +134,19 @@ export function ActorPersonRow({
               <FactTag $color={side.color}>{side.name}</FactTag>
             )}
             {showSidePicker && (
-              <InlineSelect
-                value={entry.sideId ?? 'none'}
-                options={sideOptions}
-                onSave={(next) =>
-                  onUpdate(entry.personId, {
-                    sideId: next === 'none' || !next ? null : next,
-                  })
-                }
-                placeholder={side?.name ?? '진영 지정'}
-                label={`${fullName}의 소속 진영`}
-              />
+              <FactTag $color={side?.color}>
+                <InlineSelect
+                  value={entry.sideId ?? 'none'}
+                  options={sideOptions}
+                  onSave={(next) =>
+                    onUpdate(entry.personId, {
+                      sideId: next === 'none' || !next ? null : next,
+                    })
+                  }
+                  placeholder={side?.name ?? '진영 지정'}
+                  label={`${fullName}의 소속 진영`}
+                />
+              </FactTag>
             )}
             {showParticipation && (
               <InlineSelect

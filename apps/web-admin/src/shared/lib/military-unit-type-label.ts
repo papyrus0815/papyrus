@@ -1,5 +1,9 @@
 /** Prisma `MilitaryUnitType` → 한글 라벨 (관리자 UI 표시용) */
-const MILITARY_UNIT_TYPE_KO: Record<string, string> = {
+export const MILITARY_UNIT_TYPE_KO: Record<string, string> = {
+  THEATER: '전구·총사령부',
+  ARMY_GROUP: '집단군',
+  FRONT: '전선군·방면군',
+  MILITARY_DISTRICT: '군관구',
   FIELD_ARMY: '야전군',
   CORPS: '군단',
   DIVISION: '사단',
@@ -10,6 +14,8 @@ const MILITARY_UNIT_TYPE_KO: Record<string, string> = {
   PLATOON: '소대',
   SQUAD: '분대',
   FLEET: '함대',
+  AIR_FLEET: '항공함대',
+  AIR_CORPS: '항공군단',
   SQUADRON: '비행대대',
   WING: '비행단',
   SPECIAL_FORCES: '특수부대',
@@ -29,10 +35,26 @@ export function militaryUnitIconVariant(
   unitType: string | null | undefined,
 ): 'army' | 'navy' | 'air-force' | 'marines' | 'default' {
   if (!unitType) return 'default'
-  const u = unitType.toUpperCase()
-  if (u === 'FLEET') return 'navy'
-  if (u === 'WING' || u === 'SQUADRON') return 'air-force'
-  if (u === 'SPECIAL_FORCES' || u === 'FIELD_ARMY' || u === 'CORPS')
+  const upper = unitType.toUpperCase()
+  if (upper === 'FLEET') return 'navy'
+  if (
+    upper === 'AIR_FLEET' ||
+    upper === 'AIR_CORPS' ||
+    upper === 'WING' ||
+    upper === 'SQUADRON'
+  ) {
+    return 'air-force'
+  }
+  if (
+    upper === 'THEATER' ||
+    upper === 'ARMY_GROUP' ||
+    upper === 'FRONT' ||
+    upper === 'MILITARY_DISTRICT' ||
+    upper === 'SPECIAL_FORCES' ||
+    upper === 'FIELD_ARMY' ||
+    upper === 'CORPS'
+  ) {
     return 'army'
+  }
   return 'army'
 }

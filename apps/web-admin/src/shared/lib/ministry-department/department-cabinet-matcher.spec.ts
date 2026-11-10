@@ -5,6 +5,17 @@ import {
   findDepartmentForMember,
   getTenureChronologyKey,
 } from './department-cabinet-matcher'
+import {
+  getDepartmentNameFrame,
+  inferDepartmentCategoryName,
+  inferDepartmentKind,
+} from './department-name-frames'
+import {
+  UNCATEGORIZED_CATEGORY_ID,
+  countDepartmentsByCategoryId,
+  isDefenseRelatedCategory,
+  ministryFormFieldsFromDepartment,
+} from './ministry-department-utils'
 import type { AdministrationDepartment } from '@/shared/api/administration-department'
 
 function makeDept(
@@ -232,6 +243,47 @@ describe('department-cabinet-matcher', () => {
         'cab-bc-141',
         'cab-bc-202',
       ])
+    })
+  })
+
+  describe('ministry-department-utils & department-name-frames', () => {
+    it('ministryFormFieldsFromDepartment: 기원전(BC) 부호 포함 ISO 날짜(-0221-01-01)가 잘리지 않고 historicalCountryId가 보존된다', () => {
+      const dept = makeDept({
+        id: 'dept-qin',
+        name: '승상부',
+        historicalCountryId: 'hc-qin',
+        establishedDate: '-0221-01-01T00:00:00.000Z',
+        abolishedDate: '-0206-10-01',
+      })
+      const fields = ministryFormFieldsFromDepartment(dept)
+      expect(fields.establishedDate).toBe('-0221-01-01')
+      expect(fields.abolishedDate).toBe('-0206-10-01')
+      expect(fields.historicalCountryId).toBe('hc-qin')
+    })
+
+    it('countDepartmentsByCategoryId: categoryId가 null인 부처를 UNCATEGORIZED_CATEGORY_ID로 집계한다', () => {
+      const counts = countDepartmentsByCategoryId([
+        makeDept({ id: 'd1', name: '외교부', categoryId: 'cat-foreign' }),
+        makeDept({ id: 'd2', name: '승상부', categoryId: null }),
+        makeDept({ id: 'd3', name: '어사대', categoryId: null }),
+      ])
+      expect(counts.get('cat-foreign')).toBe(1)
+      expect(counts.get(UNCATEGORIZED_CATEGORY_ID)).toBe(2)
+    })
+
+    it('isDefenseRelatedCategory: 카테고리가 없거나 일반 카테고리여도 kind가 MILITARY_COMMAND이면 true를 반환한다', () => {
+      const etcCat = { id: 'cat-etc', name: '기타', nameEn: null }
+      expect(isDefenseRelatedCategory(null, 'MILITARY_COMMAND')).toBe(true)
+      expect(isDefenseRelatedCategory(etcCat, 'MILITARY_COMMAND')).toBe(true)
+      expect(isDefenseRelatedCategory(etcCat, 'MINISTRY')).toBe(false)
+    })
+
+    it('inferDepartmentCategoryName & inferDepartmentKind: 부처 이름으로 카테고리와 기관 성격을 추론한다', () => {
+      const jpImperial = getDepartmentNameFrame('jp-imperial')
+      expect(inferDepartmentCategoryName('외무성', jpImperial)).toBe('외교')
+      expect(inferDepartmentCategoryName('참모본부')).toBe('국방')
+      expect(inferDepartmentKind('궁내성', jpImperial)).toBe('ROYAL_HOUSEHOLD')
+      expect(inferDepartmentKind('종친부')).toBe('ROYAL_HOUSEHOLD')
     })
   })
 })

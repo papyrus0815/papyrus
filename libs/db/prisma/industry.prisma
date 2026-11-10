@@ -129,6 +129,11 @@ model Company {
   outlooks                CompanyOutlook[]
   /// 이 기업이 실어 나른 교역 흐름 (동인도회사 ↔ 차·아편)
   tradeFlows              ExportImportItem[]        @relation("TradeFlowCompany")
+  /// 이 기업이 제조한 무기·군사 장비 (크루프, 포르쉐, 헨셸, 마우저 등)
+  manufacturedWeapons        Weapon[]        @relation("WeaponManufacturerCompany")
+  manufacturedGroundVehicles GroundVehicle[] @relation("GroundVehicleManufacturerCompany")
+  manufacturedAircraft       Aircraft[]      @relation("AircraftManufacturerCompany")
+  manufacturedNavalVessels   NavalVessel[]   @relation("NavalVesselManufacturerCompany")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
@@ -185,6 +190,7 @@ model CompanyFacility {
   company                Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   facilityHistories      CompanyFacilityHistory[]
   builtNavalVessels      NavalVessel[]
+  eventContextLinks      EventContextLink[]       @relation("EventContextCompanyFacility")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")

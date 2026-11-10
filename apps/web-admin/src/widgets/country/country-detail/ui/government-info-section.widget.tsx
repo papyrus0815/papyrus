@@ -21,7 +21,10 @@ import { GovernmentOrganizationsTab } from '@/features/government-info/ui/govern
 import { PoliticalSystemTab } from '@/features/government-info/ui/political-system-tab.widget'
 import { GovernmentStatisticsTab } from '@/features/government-info/ui/government-statistics-tab.widget'
 import { MinistriesTabSection } from '@/features/government-info/ui/ministries-tab-section.widget'
-import { administrationDepartmentsByCountryQueryKey } from '@/shared/lib/ministry-department/ministry-department-query-keys'
+import {
+  administrationDepartmentsByCountryQueryKey,
+  administrationDepartmentsByHistoricalCountryQueryKey,
+} from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { useThemeStore } from '@/shared/styles/theme.store'
 import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
 import {
@@ -70,6 +73,12 @@ export function GovernmentInfoSection({
 
   const [cabinetMinistryIntent, setCabinetMinistryIntent] = useState<{
     categoryId: string
+  } | null>(null)
+  const [positionFilterContext, setPositionFilterContext] = useState<{
+    departmentId?: string
+    departmentName?: string
+    categoryId?: string
+    categoryName?: string
   } | null>(null)
   const [militaryUnitModalOpen, setMilitaryUnitModalOpen] = useState(false)
   const [militaryUnitEditingId, setMilitaryUnitEditingId] = useState<
@@ -134,7 +143,12 @@ export function GovernmentInfoSection({
                 role="tab"
                 aria-selected={contentTab === tabKey}
                 $active={contentTab === tabKey}
-                onClick={() => setContentTab(tabKey)}
+                onClick={() => {
+                  if (tabKey === 'positions') {
+                    setPositionFilterContext(null)
+                  }
+                  setContentTab(tabKey)
+                }}
                 title={GOV_TAB_META[tabKey].hint}
               >
                 {GOV_TAB_META[tabKey].label}
@@ -184,7 +198,10 @@ export function GovernmentInfoSection({
               onConsumedCabinetOpenMinistryIntent={() =>
                 setCabinetMinistryIntent(null)
               }
-              onNavigateToPositions={() => setContentTab('positions')}
+              onNavigateToPositions={(ctx) => {
+                setPositionFilterContext(ctx ?? null)
+                setContentTab('positions')
+              }}
               onRegisterMilitaryUnit={(departmentId) => {
                 setMilitaryDeptDefaultId(departmentId)
                 setMilitaryUnitEditingId(null)
@@ -202,7 +219,22 @@ export function GovernmentInfoSection({
 
         {contentTab === 'positions' && (
           <section aria-label="직위 정의">
-            <PositionDefinitionsSection country={country} />
+            <PositionDefinitionsSection
+              country={country}
+              fixedAdministrationDepartmentId={
+                positionFilterContext?.departmentId
+              }
+              fixedAdministrationDepartmentName={
+                positionFilterContext?.departmentName
+              }
+              fixedCategoryId={positionFilterContext?.categoryId}
+              fixedCategoryName={positionFilterContext?.categoryName}
+              onClearFixedFilter={
+                positionFilterContext
+                  ? () => setPositionFilterContext(null)
+                  : undefined
+              }
+            />
           </section>
         )}
 
@@ -279,7 +311,13 @@ export function GovernmentInfoSection({
         onSaved={() => {
           void queryClient.invalidateQueries({
             queryKey:
-              administrationDepartmentsByCountryQueryKey(effectiveCountryId),
+              country?.type === 'historical'
+                ? administrationDepartmentsByHistoricalCountryQueryKey(
+                    effectiveCountryId,
+                  )
+                : administrationDepartmentsByCountryQueryKey(
+                    effectiveCountryId,
+                  ),
           })
           void queryClient.invalidateQueries({
             queryKey: ['military-units'],

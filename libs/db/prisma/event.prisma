@@ -107,6 +107,7 @@ enum EventOrganizationRole {
 enum EventType {
   // 충돌
   WAR // 전쟁
+  WAR_DECLARATION // 선전포고·참전 — 선포국(INITIATOR) → 대상국(TARGET)
   BATTLE // 전투·작전
   UPRISING // 봉기·혁명·정변
   ATTACK // 암살·테러·학살
@@ -477,6 +478,12 @@ model Event {
   /// 이 사건을 계기로 기록된 교역 흐름 (아편전쟁 ↔ 아편 수입)
   tradeFlows ExportImportItem[] @relation("TradeFlowEvent")
 
+  /// 사건 공간(지도) 기동 축선·포위망·전선 피처 (단일 점 좌표를 넘어 진격 화살표·포위 다각형·전선 표현)
+  mapFeatures EventMapFeature[] @relation("EventMapFeatures")
+
+  /// 타 도메인 초유기체 맥락 연결 (자연지리·인프라·기후·자원·시설·법령·사회현상)
+  contextLinks EventContextLink[] @relation("EventContextLinks")
+
   /// 등록자 
   createdById String @map("created_by") @db.Char(36)
 
@@ -599,12 +606,17 @@ model GlossaryTerm {
   eventId String? @map("event_id") @db.Char(36)
   event   Event?  @relation("GlossaryTermEvent", fields: [eventId], references: [id], onDelete: Cascade)
 
+  /// 정본 엔티티 하이퍼링크(선택) — 용어가 단순 텍스트 툴팁을 넘어 실제 엔티티(사건·인물·부대·조약·기관 등)를 가리킬 때
+  linkedType AggregateType? @map("linked_type")
+  linkedId   String?        @map("linked_id") @db.Char(36)
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([countryId], name: "idx_glossary_term_countryId")
   @@index([historicalCountryId], name: "idx_glossary_term_historicalCountryId")
   @@index([eventId], name: "idx_glossary_term_eventId")
+  @@index([linkedType, linkedId], name: "idx_glossary_term_linked")
   @@map("glossary_term")
 }
 
@@ -1084,4 +1096,125 @@ enum CalendarSystem {
   ISLAMIC
   /// 그 밖(로마 집정관력·올림피아드 등) — 원문 표기에 적는다
   OTHER
+}
+
+// ========================
+// 사건 지도 피처 (기동 축선·포위망·전선·지점)
+// ========================
+/// 사건 지도 피처 도형 종류
+enum EventMapGeometryType {
+  /// 거점·전투 발생 지점
+  POINT
+  /// 기동·진격·후퇴 축선 화살표 (예: 북부·중부·남부집단군 진격 방향)
+  ARROW
+  /// 시점별 전선·방어선 (예: 스탈린 라인, A-A 라인, 1941.12.05 동부전선)
+  LINE
+  /// 포위망·점령 지역 다각형 (예: 민스크 포위망, 키예프 포위망)
+  POLYGON
+}
+
+/// 사건의 공간 기동·전선·포위망을 표현하는 지도 벡터 레이어.
+/// 진영(sideId) 또는 투입 부대(deployedUnitId)와 연결하여 부대별 기동 화살표·포위망을 시각화한다.
+model EventMapFeature {
+  id String @id @default(uuid()) @db.Char(36)
+
+  eventId String @map("event_id") @db.Char(36)
+  event   Event  @relation("EventMapFeatures", fields: [eventId], references: [id], onDelete: Cascade)
+
+  /// 어느 진영의 기동·전선인가 (선택)
+  sideId String?    @map("side_id") @db.Char(36)
+  side   EventSide? @relation("EventSideMapFeatures", fields: [sideId], references: [id], onDelete: SetNull)
+
+  /// 어느 투입 부대의 기동 축선인가 (선택 — 예: 제2기갑집단 돌파 축선)
+  deployedUnitId String?           @map("deployed_unit_id") @db.Char(36)
+  deployedUnit   SideDeployedUnit? @relation("SideDeployedUnitMapFeatures", fields: [deployedUnitId], references: [id], onDelete: SetNull)
+
+  geometryType EventMapGeometryType @default(POINT) @map("geometry_type")
+
+  /// 표시 이름 (예: '중부집단군 민스크-스몰렌스크 진격 축선', '키예프 포위망')
+  title       String  @db.VarChar(200)
+  description String? @db.Text
+  color       String? @db.VarChar(7)
+
+  /// 좌표 배열 JSON — [[lat, lng], ...] (POINT는 1점, ARROW/LINE은 경로 점열, POLYGON은 폐곡선 점열)
+  coordinates Json @db.Json
+
+  sortOrder Int @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([eventId, sortOrder], name: "idx_event_map_feature_eventId")
+  @@index([sideId], name: "idx_event_map_feature_sideId")
+  @@index([deployedUnitId], name: "idx_event_map_feature_deployedUnitId")
+  @@map("event_map_feature")
+}
+
+// ========================
+// 사건 ↔ 타 도메인 초유기체 맥락 연결 (지리·인프라·기후·자원·공장·법령·사회현상)
+// ========================
+/// 타 도메인 엔티티가 사건에서 수행한 맥락·역할
+enum EventContextRole {
+  /// 배경·전제 조건
+  BACKGROUND
+  /// 직접 원인·촉발 요인
+  CAUSE
+  /// 전략적 목표·쟁탈 대상 (예: 바쿠 유전, 우크라이나 곡창지대, 군수공장)
+  OBJECTIVE
+  /// 자연·보급 장애물 (예: 프리퍄티 습지, 라스푸티차 진흙탕, 소련 광궤 철도)
+  OBSTACLE
+  /// 수단·근거 법령·제도 (예: 정치장교 처형 명령, 무기대여법)
+  INSTRUMENT
+  /// 결과·파생 현상 (예: 독소전쟁 포로 집단 아사, 홀로코스트)
+  OUTCOME
+  /// 기타 연관
+  OTHER
+}
+
+/// 사건과 지리(NaturalFeature)·인프라(Infrastructure)·기후(Climate)·자원(Resource)·
+/// 기업시설(CompanyFacility)·법령(Law)·사회현상(SocialPhenomenon)을 초유기체로 연결하는 통합 맥락 링크.
+model EventContextLink {
+  id String @id @default(uuid()) @db.Char(36)
+
+  eventId String @map("event_id") @db.Char(36)
+  event   Event  @relation("EventContextLinks", fields: [eventId], references: [id], onDelete: Cascade)
+
+  /// 특정 진영에 귀속되는 맥락인 경우 연결 (선택 — 예: 독일군 보급 장애물 vs 소련 무기대여법)
+  sideId String?    @map("side_id") @db.Char(36)
+  side   EventSide? @relation("EventSideContextLinks", fields: [sideId], references: [id], onDelete: SetNull)
+
+  role EventContextRole @default(OTHER)
+
+  /// 연결 대상 FK (7개 도메인 엔티티 중 해당하는 항목 연결)
+  lawId              String?           @map("law_id") @db.Char(36)
+  law                Law?              @relation("EventContextLaw", fields: [lawId], references: [id], onDelete: Cascade)
+  socialPhenomenonId String?           @map("social_phenomenon_id") @db.Char(36)
+  socialPhenomenon   SocialPhenomenon? @relation("EventContextSocialPhenomenon", fields: [socialPhenomenonId], references: [id], onDelete: Cascade)
+  naturalFeatureId   String?           @map("natural_feature_id") @db.Char(36)
+  naturalFeature     NaturalFeature?   @relation("EventContextNaturalFeature", fields: [naturalFeatureId], references: [id], onDelete: Cascade)
+  infrastructureId   String?           @map("infrastructure_id") @db.Char(36)
+  infrastructure     Infrastructure?   @relation("EventContextInfrastructure", fields: [infrastructureId], references: [id], onDelete: Cascade)
+  climateId          String?           @map("climate_id") @db.Char(36)
+  climate            Climate?          @relation("EventContextClimate", fields: [climateId], references: [id], onDelete: Cascade)
+  resourceId         String?           @map("resource_id") @db.Char(36)
+  resource           Resource?         @relation("EventContextResource", fields: [resourceId], references: [id], onDelete: Cascade)
+  companyFacilityId  String?           @map("company_facility_id") @db.Char(36)
+  companyFacility    CompanyFacility?  @relation("EventContextCompanyFacility", fields: [companyFacilityId], references: [id], onDelete: Cascade)
+
+  note      String? @db.Text
+  sortOrder Int     @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([eventId, sortOrder], name: "idx_event_context_link_eventId")
+  @@index([sideId], name: "idx_event_context_link_sideId")
+  @@index([lawId], name: "idx_event_context_link_lawId")
+  @@index([socialPhenomenonId], name: "idx_event_context_link_phenomenonId")
+  @@index([naturalFeatureId], name: "idx_event_context_link_naturalFeatureId")
+  @@index([infrastructureId], name: "idx_event_context_link_infrastructureId")
+  @@index([climateId], name: "idx_event_context_link_climateId")
+  @@index([resourceId], name: "idx_event_context_link_resourceId")
+  @@index([companyFacilityId], name: "idx_event_context_link_facilityId")
+  @@map("event_context_link")
 }

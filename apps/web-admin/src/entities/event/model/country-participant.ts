@@ -92,8 +92,10 @@ const ROLE_HINT_BY_VALUE = new Map(
 
 export function eventCountryRoleLabel(
   role: string | null | undefined,
+  eventType?: string | null,
 ): string | null {
   if (!role) return null
+  if (eventType === 'WAR_DECLARATION' && role === 'INITIATOR') return '선포국'
   return ROLE_LABEL_BY_VALUE.get(role as EventCountryRole) ?? null
 }
 
@@ -122,6 +124,8 @@ export function roleDescriptionPlaceholderForType(
       return '독립 선포·병합·해체 경위 등 (선택)'
     case 'TERRITORY':
       return '내준·받은 땅과 그 경위 — 면적·인구는 영토 이전 줄에 (선택)'
+    case 'WAR_DECLARATION':
+      return '선전포고 명분·최후통첩 경위·전달 방식 등 (선택)'
     case 'SUMMIT':
     case 'ALLIANCE_BREAK':
       return '대표단 입장·합의·외교 조치 등 (선택)'

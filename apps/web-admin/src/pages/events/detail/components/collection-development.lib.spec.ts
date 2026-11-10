@@ -1,4 +1,10 @@
-import { groupByPhase, phaseOf, spanOfChildren } from './collection-development.lib'
+import {
+  groupByPhase,
+  phaseOf,
+  plainStepSummary,
+  spanOfChildren,
+  stepTimeMarkers,
+} from './collection-development.lib'
 
 const ww1 = { startDate: '1914-07-28', startDatePrecision: 'day', endDate: '1918-11-11', endDatePrecision: 'day' }
 
@@ -89,5 +95,41 @@ describe('spanOfChildren', () => {
 
   it('날짜 있는 하위가 없으면 null', () => {
     expect(spanOfChildren([{ startDate: null }, {}])).toBeNull()
+  })
+})
+
+describe('stepTimeMarkers', () => {
+  it('여러 해에 걸친 형제들은 해가 바뀌는 첫 행마다 연도 마커를 낸다', () => {
+    const markers = stepTimeMarkers([
+      { startDate: '1789-05-05', startDatePrecision: 'day' },
+      { startDate: '1789-07-14', startDatePrecision: 'day' },
+      { startDate: '1791-06-20', startDatePrecision: 'day' },
+    ])
+    expect(markers).toEqual(['1789년', null, '1791년'])
+  })
+
+  it('같은 해 안에서 여러 달에 걸치면 달이 바뀌는 첫 행마다 연·월 마커를 낸다', () => {
+    const markers = stepTimeMarkers([
+      { startDate: '1914-06-28', startDatePrecision: 'day' },
+      { startDate: '1914-07-23', startDatePrecision: 'day' },
+      { startDate: '1914-07-28', startDatePrecision: 'day' },
+    ])
+    expect(markers).toEqual(['1914년 6월', '1914년 7월', null])
+  })
+
+  it('모두 같은 해·같은 달이면 마커를 생략한다', () => {
+    const markers = stepTimeMarkers([
+      { startDate: '1914-07-23', startDatePrecision: 'day' },
+      { startDate: '1914-07-28', startDatePrecision: 'day' },
+    ])
+    expect(markers).toEqual([null, null])
+  })
+})
+
+describe('plainStepSummary', () => {
+  it('HTML 태그·엔티티·마크다운 강조를 걷어 한 줄 요약 문자열로 만든다', () => {
+    expect(plainStepSummary('<p><strong>바스티유</strong> 함락 &amp; 봉기</p>')).toBe('바스티유 함락 & 봉기')
+    expect(plainStepSummary(null)).toBeNull()
+    expect(plainStepSummary('   ')).toBeNull()
   })
 })

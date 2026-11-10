@@ -82,7 +82,8 @@ model Resource {
   categoryId String @map("category_id") @db.Char(36)
 
   //--- 관계 필드
-  category ResourceCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  category          ResourceCategory   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  eventContextLinks EventContextLink[] @relation("EventContextResource")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")

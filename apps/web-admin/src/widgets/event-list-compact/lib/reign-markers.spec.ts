@@ -108,22 +108,16 @@ describe('toReignMarkers', () => {
     expect(markers.map((item) => item.id)).toEqual(['dup-a', 'restored'])
   })
 
-  it('표시명 폴백: 왕호(regnalName) → 묘호 → 인물 이름', () => {
-    const [fromNotes, fromTemple, fromName] = toReignMarkers(
+  it('표시명 폴백: 왕호(regnalName) → 인물 이름', () => {
+    const [fromNotes, fromName] = toReignMarkers(
       [
         reign({ id: 'a', startYear: 1400, regnalName: '정종' }),
-        reign({
-          id: 'b',
-          startYear: 1401,
-          person: { id: 'p', name: '이방원', templeName: '태종' },
-        }),
         reign({ id: 'c', startYear: 1402 }),
       ],
       new Set([JOSEON]),
       personName,
     )
     expect(fromNotes.name).toBe('정종')
-    expect(fromTemple.name).toBe('태종')
     expect(fromName.name).toBe('이도')
   })
 

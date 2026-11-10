@@ -20,6 +20,11 @@ export interface EventSideInput {
   personGroupId?: string | null
   outcome?: SideOutcome | null
   outcomeNote?: string | null
+  objective?: string | null
+  strategy?: string | null
+  tactics?: string | null
+  intelligence?: string | null
+  logistics?: string | null
 }
 
 export interface EventSideMemberCountry {
@@ -54,6 +59,12 @@ export interface EventSideView {
   outcome: SideOutcome | null
   /** 결과 한 줄 — '전략적 승리, 전술적 패배' 같은 단서 */
   outcomeNote: string | null
+  /** 진영별 작전 목표·전략·전술·첩보·보급 대칭 서술 */
+  objective: string | null
+  strategy: string | null
+  tactics: string | null
+  intelligence: string | null
+  logistics: string | null
   participants: EventSideMemberCountry[]
   persons: Array<{ personEventId: string; personId: string; name: string; surname: string | null; role: string | null }>
   organizations: Array<{ relationId: string; organizationId: string; name: string; role: string }>
@@ -119,6 +130,11 @@ export class EventSideService {
       sortOrder: side.sortOrder,
       outcome: side.outcome,
       outcomeNote: side.outcomeNote,
+      objective: side.objective ?? null,
+      strategy: side.strategy ?? null,
+      tactics: side.tactics ?? null,
+      intelligence: side.intelligence ?? null,
+      logistics: side.logistics ?? null,
       participants: side.participants.map((row) => ({
         participantId: row.id,
         countryId: row.countryId,
@@ -173,6 +189,16 @@ export class EventSideService {
       const removedIds = existing.map((row) => row.id).filter((id) => !keepIds.has(id))
       if (removedIds.length > 0) {
         await removeObservationsForSubjects(tx, ObservationSubjectType.EVENT_SIDE, removedIds)
+        /* 진영이 지워지면 투입 부대 줄은 FK Cascade로 사라진다 — 그 줄에 달린 측정값(다형, FK 없음)은 먼저 지운다 */
+        const removedUnits = await tx.sideDeployedUnit.findMany({
+          where: { sideId: { in: removedIds } },
+          select: { id: true },
+        })
+        await removeObservationsForSubjects(
+          tx,
+          ObservationSubjectType.EVENT_SIDE_UNIT,
+          removedUnits.map((row) => row.id),
+        )
         await tx.eventSide.deleteMany({ where: { id: { in: removedIds } } })
       }
 
@@ -216,6 +242,11 @@ export class EventSideService {
           ...(input.personGroupId !== undefined && { personGroupId: input.personGroupId || null }),
           ...(input.outcome !== undefined && { outcome: input.outcome }),
           ...(input.outcomeNote !== undefined && { outcomeNote: input.outcomeNote?.trim() || null }),
+          ...(input.objective !== undefined && { objective: input.objective?.trim() || null }),
+          ...(input.strategy !== undefined && { strategy: input.strategy?.trim() || null }),
+          ...(input.tactics !== undefined && { tactics: input.tactics?.trim() || null }),
+          ...(input.intelligence !== undefined && { intelligence: input.intelligence?.trim() || null }),
+          ...(input.logistics !== undefined && { logistics: input.logistics?.trim() || null }),
           sortOrder: index,
         }
         if (input.id) await tx.eventSide.update({ where: { id: input.id }, data })

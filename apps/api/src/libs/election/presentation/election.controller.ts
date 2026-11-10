@@ -28,6 +28,7 @@ import { assertEventOwnership } from '../../event/domain/event-ownership'
 import { resolveCountryScopeOr } from '../../country/domain/country-scope.util'
 import { buildPartyResultComparisonVsPrevious } from '../domain/election-party-comparison.util'
 import { findPreviousComparableElection } from '../domain/find-previous-election.util'
+import { areJurisdictionsCompatible } from '../domain/law-jurisdiction.util'
 import { serializeElectionBigInt } from '../election-serialize.util'
 
 const electionInclude = {
@@ -205,14 +206,14 @@ export class ElectionController {
   ): Promise<any> {
     let where: Prisma.ElectionWhereInput = {}
 
-    if (countryId) {
+    if (historicalCountryId) {
+      where.historicalCountryId = historicalCountryId
+    } else if (countryId) {
       // 현대 국가 → 연결된 역사 국가까지 OR 포함(브리지 스코프 공용 헬퍼)
       where = (await resolveCountryScopeOr(
         this.prisma,
         countryId,
       )) as Prisma.ElectionWhereInput
-    } else if (historicalCountryId) {
-      where.historicalCountryId = historicalCountryId
     }
 
     if (hasPartyResults === 'true' || hasPartyResults === '1') {
@@ -250,7 +251,9 @@ export class ElectionController {
         event: { select: { id: true, title: true, deletedAt: true } },
       },
     })
-    return serializeElectionBigInt(rows)
+    return serializeElectionBigInt(
+      rows.map((r) => this.sanitizeElectionEvent(r)),
+    )
   }
 
   @Get(':electionId/candidacies')
@@ -275,7 +278,16 @@ export class ElectionController {
     @Body()
     body: CreateCandidacyBody,
   ): Promise<any> {
-    await this.ensureElectionOwner(electionId, this.actorAccountId(req))
+    const election = await this.ensureElectionOwner(
+      electionId,
+      this.actorAccountId(req),
+    )
+    await this.validateCandidacyReferences(election, {
+      personId: body.personId,
+      partyId: body.partyId,
+      electoralDistrictId: body.electoralDistrictId,
+    })
+
     const row = await this.prisma.electionCandidacy.create({
       data: {
         electionId,
@@ -285,7 +297,9 @@ export class ElectionController {
         nominationType: body.nominationType as any,
         ballotOrder: body.ballotOrder ?? undefined,
         listRank: body.listRank ?? undefined,
-        withdrawnDate: body.withdrawnDate ? new Date(body.withdrawnDate) : undefined,
+        withdrawnDate: body.withdrawnDate
+          ? this.parseDateOrThrow(body.withdrawnDate, '사퇴일')
+          : undefined,
         notes: body.notes ?? undefined,
       },
       include: {
@@ -306,11 +320,21 @@ export class ElectionController {
     @Body()
     body: UpdateCandidacyBody,
   ): Promise<any> {
-    await this.ensureElectionOwner(electionId, this.actorAccountId(req))
+    const election = await this.ensureElectionOwner(
+      electionId,
+      this.actorAccountId(req),
+    )
     const existing = await this.prisma.electionCandidacy.findFirst({
       where: { id: candidacyId, electionId },
     })
     if (!existing) throw new NotFoundException('후보 정보를 찾을 수 없습니다.')
+
+    await this.validateCandidacyReferences(election, {
+      personId: body.personId,
+      partyId: body.partyId,
+      electoralDistrictId: body.electoralDistrictId,
+    })
+
     const data: Record<string, unknown> = {}
     if (body.personId !== undefined) data.personId = body.personId
     if (body.partyId !== undefined) data.partyId = body.partyId
@@ -319,7 +343,9 @@ export class ElectionController {
     if (body.ballotOrder !== undefined) data.ballotOrder = body.ballotOrder
     if (body.listRank !== undefined) data.listRank = body.listRank
     if (body.withdrawnDate !== undefined)
-      data.withdrawnDate = body.withdrawnDate ? new Date(body.withdrawnDate) : null
+      data.withdrawnDate = body.withdrawnDate
+        ? this.parseDateOrThrow(body.withdrawnDate, '사퇴일')
+        : null
     if (body.notes !== undefined) data.notes = body.notes
 
     const row = await this.prisma.electionCandidacy.update({
@@ -363,18 +389,24 @@ export class ElectionController {
     })
     if (!existing) throw new NotFoundException('후보 정보를 찾을 수 없습니다.')
 
-    const votes =
-      body.votes != null && body.votes !== '' ? BigInt(body.votes) : undefined
+    const votes = this.parseOptionalNonNegativeBigInt(body.votes)
+    const voteShareDecimal = this.parseOptionalPercentageDecimal(
+      body.voteSharePercent,
+      '득표율',
+    )
+    if (body.seatsWon != null && body.seatsWon < 0) {
+      throw new BadRequestException('의석수는 0 이상이어야 합니다.')
+    }
+    if (body.resultRank != null && body.resultRank < 1) {
+      throw new BadRequestException('순위는 1 이상이어야 합니다.')
+    }
 
     const row = await this.prisma.electionResult.upsert({
       where: { candidacyId },
       create: {
         candidacyId,
         votes: votes ?? undefined,
-        voteSharePercent:
-          body.voteSharePercent != null && body.voteSharePercent !== ''
-            ? new Prisma.Decimal(body.voteSharePercent)
-            : undefined,
+        voteSharePercent: voteShareDecimal ?? undefined,
         resultRank: body.resultRank ?? undefined,
         elected: body.elected ?? false,
         seatsWon: body.seatsWon ?? undefined,
@@ -383,11 +415,7 @@ export class ElectionController {
       update: {
         votes: votes !== undefined ? votes : undefined,
         voteSharePercent:
-          body.voteSharePercent !== undefined
-            ? body.voteSharePercent != null && body.voteSharePercent !== ''
-              ? new Prisma.Decimal(body.voteSharePercent)
-              : null
-            : undefined,
+          body.voteSharePercent !== undefined ? voteShareDecimal : undefined,
         resultRank: body.resultRank !== undefined ? body.resultRank : undefined,
         elected: body.elected !== undefined ? body.elected : undefined,
         seatsWon: body.seatsWon !== undefined ? body.seatsWon : undefined,
@@ -482,28 +510,24 @@ export class ElectionController {
       where: { id: optionId, electionId },
     })
     if (!opt) throw new NotFoundException('투표 안을 찾을 수 없습니다.')
-    const votes =
-      body.votes != null && body.votes !== '' ? BigInt(body.votes) : undefined
+    const votes = this.parseOptionalNonNegativeBigInt(body.votes)
+    const voteShareDecimal = this.parseOptionalPercentageDecimal(
+      body.voteSharePercent,
+      '득표율',
+    )
 
     const row = await this.prisma.electionBallotOptionResult.upsert({
       where: { ballotOptionId: optionId },
       create: {
         ballotOptionId: optionId,
         votes: votes ?? undefined,
-        voteSharePercent:
-          body.voteSharePercent != null && body.voteSharePercent !== ''
-            ? new Prisma.Decimal(body.voteSharePercent)
-            : undefined,
+        voteSharePercent: voteShareDecimal ?? undefined,
         notes: body.notes ?? undefined,
       },
       update: {
         votes: votes !== undefined ? votes : undefined,
         voteSharePercent:
-          body.voteSharePercent !== undefined
-            ? body.voteSharePercent != null && body.voteSharePercent !== ''
-              ? new Prisma.Decimal(body.voteSharePercent)
-              : null
-            : undefined,
+          body.voteSharePercent !== undefined ? voteShareDecimal : undefined,
         notes: body.notes !== undefined ? body.notes : undefined,
       },
     })
@@ -518,12 +542,38 @@ export class ElectionController {
     @Body()
     body: UpsertPartyResultBody,
   ): Promise<any> {
-    await this.ensureElectionOwner(electionId, this.actorAccountId(req))
+    const election = await this.ensureElectionOwner(
+      electionId,
+      this.actorAccountId(req),
+    )
     const party = await this.prisma.politicalParty.findUnique({ where: { id: partyId } })
     if (!party) throw new NotFoundException('정당을 찾을 수 없습니다.')
 
-    const votes =
-      body.votes != null && body.votes !== '' ? BigInt(body.votes) : undefined
+    const partyCompatible = await areJurisdictionsCompatible(
+      this.prisma,
+      {
+        countryId: election.countryId ?? null,
+        historicalCountryId: election.historicalCountryId ?? null,
+      },
+      {
+        countryId: party.countryId ?? null,
+        historicalCountryId: party.historicalCountryId ?? null,
+      },
+    )
+    if (!partyCompatible) {
+      throw new BadRequestException(
+        '정당의 소속 국가가 이 선거의 소속 국가와 일치하지 않습니다.',
+      )
+    }
+
+    const votes = this.parseOptionalNonNegativeBigInt(body.votes)
+    const voteShareDecimal = this.parseOptionalPercentageDecimal(
+      body.voteSharePercent,
+      '득표율',
+    )
+    if (body.seatsWon != null && body.seatsWon < 0) {
+      throw new BadRequestException('의석수는 0 이상이어야 합니다.')
+    }
 
     const row = await this.prisma.electionPartyResult.upsert({
       where: {
@@ -533,26 +583,17 @@ export class ElectionController {
         electionId,
         partyId,
         votes: votes ?? undefined,
-        voteSharePercent:
-          body.voteSharePercent != null && body.voteSharePercent !== ''
-            ? new Prisma.Decimal(body.voteSharePercent)
-            : undefined,
+        voteSharePercent: voteShareDecimal ?? undefined,
         seatsWon: body.seatsWon ?? undefined,
         notes: body.notes ?? undefined,
       },
       update: {
         votes:
           body.votes !== undefined
-            ? body.votes != null && body.votes !== ''
-              ? BigInt(body.votes)
-              : null
+            ? votes ?? null
             : undefined,
         voteSharePercent:
-          body.voteSharePercent !== undefined
-            ? body.voteSharePercent != null && body.voteSharePercent !== ''
-              ? new Prisma.Decimal(body.voteSharePercent)
-              : null
-            : undefined,
+          body.voteSharePercent !== undefined ? voteShareDecimal : undefined,
         seatsWon: body.seatsWon !== undefined ? body.seatsWon : undefined,
         notes: body.notes !== undefined ? body.notes : undefined,
       },
@@ -626,7 +667,7 @@ export class ElectionController {
     }
 
     return serializeElectionBigInt({
-      ...row,
+      ...this.sanitizeElectionEvent(row),
       partyResultComparisonVsPrevious,
     })
   }
@@ -638,35 +679,58 @@ export class ElectionController {
     body: CreateElectionBody,
   ): Promise<any> {
     const accountId = this.actorAccountId(req)
+    const pollDate = this.parseDateOrThrow(body.pollDate, '투표일')
+    const pollEndDate = body.pollEndDate
+      ? this.parseDateOrThrow(body.pollEndDate, '투표 종료일')
+      : null
+    const legislatureTermStart = body.legislatureTermStart
+      ? this.parseDateOrThrow(body.legislatureTermStart, '의회 임기 시작일')
+      : null
+    const legislatureTermEnd = body.legislatureTermEnd
+      ? this.parseDateOrThrow(body.legislatureTermEnd, '의회 임기 만료일')
+      : null
+    const resultingLegislatureClosureDate = body.resultingLegislatureClosureDate
+      ? this.parseDateOrThrow(
+          body.resultingLegislatureClosureDate,
+          '의회 실제 종료일',
+        )
+      : null
+
+    this.assertElectionDateAndNumberRules({
+      pollDate,
+      pollEndDate,
+      legislatureTermStart,
+      legislatureTermEnd,
+      resultingLegislatureClosureDate,
+      totalSeats: body.totalSeats,
+      convocationOrdinal: body.convocationOrdinal,
+    })
+    const turnoutDecimal = this.parseOptionalPercentageDecimal(
+      body.voterTurnoutPercent,
+      '투표율',
+    )
+
     const row = await this.prisma.election.create({
       data: {
         name: body.name,
         shortName: body.shortName ?? undefined,
         electionType: body.electionType as any,
         status: (body.status as any) ?? undefined,
-        pollDate: new Date(body.pollDate),
-        pollEndDate: body.pollEndDate ? new Date(body.pollEndDate) : undefined,
-        legislatureTermStart: body.legislatureTermStart
-          ? new Date(body.legislatureTermStart)
-          : undefined,
-        legislatureTermEnd: body.legislatureTermEnd
-          ? new Date(body.legislatureTermEnd)
-          : undefined,
+        pollDate,
+        pollEndDate: pollEndDate ?? undefined,
+        legislatureTermStart: legislatureTermStart ?? undefined,
+        legislatureTermEnd: legislatureTermEnd ?? undefined,
         resultingLegislatureClosureKind:
           body.resultingLegislatureClosureKind === undefined
             ? undefined
             : body.resultingLegislatureClosureKind === null
               ? null
               : this.parseClosureKind(body.resultingLegislatureClosureKind),
-        resultingLegislatureClosureDate: body.resultingLegislatureClosureDate
-          ? new Date(body.resultingLegislatureClosureDate)
-          : undefined,
+        resultingLegislatureClosureDate:
+          resultingLegislatureClosureDate ?? undefined,
         resultingLegislatureDissolutionNotes:
           body.resultingLegislatureDissolutionNotes ?? undefined,
-        voterTurnoutPercent:
-          body.voterTurnoutPercent != null && body.voterTurnoutPercent !== ''
-            ? new Prisma.Decimal(String(body.voterTurnoutPercent))
-            : undefined,
+        voterTurnoutPercent: turnoutDecimal ?? undefined,
         totalSeats: body.totalSeats ?? undefined,
         countryId: body.countryId ?? undefined,
         historicalCountryId: body.historicalCountryId ?? undefined,
@@ -679,7 +743,7 @@ export class ElectionController {
       },
       include: electionInclude,
     })
-    return serializeElectionBigInt(row)
+    return serializeElectionBigInt(this.sanitizeElectionEvent(row))
   }
 
   @Patch(':id')
@@ -689,22 +753,25 @@ export class ElectionController {
     @Body()
     body: UpdateElectionBody,
   ): Promise<any> {
-    await this.ensureElectionOwner(id, this.actorAccountId(req))
+    const existing = await this.ensureElectionOwner(id, this.actorAccountId(req))
     const data: Record<string, unknown> = {}
     if (body.name !== undefined) data.name = body.name
     if (body.shortName !== undefined) data.shortName = body.shortName
     if (body.electionType !== undefined) data.electionType = body.electionType
     if (body.status !== undefined) data.status = body.status
-    if (body.pollDate !== undefined) data.pollDate = new Date(body.pollDate)
+    if (body.pollDate !== undefined)
+      data.pollDate = this.parseDateOrThrow(body.pollDate, '투표일')
     if (body.pollEndDate !== undefined)
-      data.pollEndDate = body.pollEndDate ? new Date(body.pollEndDate) : null
+      data.pollEndDate = body.pollEndDate
+        ? this.parseDateOrThrow(body.pollEndDate, '투표 종료일')
+        : null
     if (body.legislatureTermStart !== undefined)
       data.legislatureTermStart = body.legislatureTermStart
-        ? new Date(body.legislatureTermStart)
+        ? this.parseDateOrThrow(body.legislatureTermStart, '의회 임기 시작일')
         : null
     if (body.legislatureTermEnd !== undefined)
       data.legislatureTermEnd = body.legislatureTermEnd
-        ? new Date(body.legislatureTermEnd)
+        ? this.parseDateOrThrow(body.legislatureTermEnd, '의회 임기 만료일')
         : null
     if (body.resultingLegislatureClosureKind !== undefined) {
       data.resultingLegislatureClosureKind =
@@ -715,16 +782,19 @@ export class ElectionController {
     }
     if (body.resultingLegislatureClosureDate !== undefined)
       data.resultingLegislatureClosureDate = body.resultingLegislatureClosureDate
-        ? new Date(body.resultingLegislatureClosureDate)
+        ? this.parseDateOrThrow(
+            body.resultingLegislatureClosureDate,
+            '의회 실제 종료일',
+          )
         : null
     if (body.resultingLegislatureDissolutionNotes !== undefined)
       data.resultingLegislatureDissolutionNotes =
         body.resultingLegislatureDissolutionNotes
     if (body.voterTurnoutPercent !== undefined)
-      data.voterTurnoutPercent =
-        body.voterTurnoutPercent != null && body.voterTurnoutPercent !== ''
-          ? new Prisma.Decimal(String(body.voterTurnoutPercent))
-          : null
+      data.voterTurnoutPercent = this.parseOptionalPercentageDecimal(
+        body.voterTurnoutPercent,
+        '투표율',
+      )
     if (body.totalSeats !== undefined) data.totalSeats = body.totalSeats
     if (body.countryId !== undefined) data.countryId = body.countryId
     if (body.historicalCountryId !== undefined) data.historicalCountryId = body.historicalCountryId
@@ -736,12 +806,49 @@ export class ElectionController {
       data.eventId = await this.checkLinkableEvent(body.eventId, this.actorAccountId(req))
     }
 
+    const nextPollDate =
+      body.pollDate !== undefined
+        ? (data.pollDate as Date)
+        : existing.pollDate
+    const nextPollEndDate =
+      body.pollEndDate !== undefined
+        ? (data.pollEndDate as Date | null)
+        : existing.pollEndDate
+    const nextTermStart =
+      body.legislatureTermStart !== undefined
+        ? (data.legislatureTermStart as Date | null)
+        : existing.legislatureTermStart
+    const nextTermEnd =
+      body.legislatureTermEnd !== undefined
+        ? (data.legislatureTermEnd as Date | null)
+        : existing.legislatureTermEnd
+    const nextClosureDate =
+      body.resultingLegislatureClosureDate !== undefined
+        ? (data.resultingLegislatureClosureDate as Date | null)
+        : existing.resultingLegislatureClosureDate
+    const nextTotalSeats =
+      body.totalSeats !== undefined ? body.totalSeats : existing.totalSeats
+    const nextConvocationOrdinal =
+      body.convocationOrdinal !== undefined
+        ? body.convocationOrdinal
+        : existing.convocationOrdinal
+
+    this.assertElectionDateAndNumberRules({
+      pollDate: nextPollDate,
+      pollEndDate: nextPollEndDate,
+      legislatureTermStart: nextTermStart,
+      legislatureTermEnd: nextTermEnd,
+      resultingLegislatureClosureDate: nextClosureDate,
+      totalSeats: nextTotalSeats,
+      convocationOrdinal: nextConvocationOrdinal,
+    })
+
     const row = await this.prisma.election.update({
       where: { id },
       data: data as any,
       include: electionInclude,
     })
-    return serializeElectionBigInt(row)
+    return serializeElectionBigInt(this.sanitizeElectionEvent(row))
   }
 
   /**
@@ -862,12 +969,182 @@ export class ElectionController {
   private async ensureElectionOwner(id: string, accountId?: string) {
     const election = await this.prisma.election.findUnique({
       where: { id },
-      select: { id: true, accountId: true },
+      select: {
+        id: true,
+        accountId: true,
+        countryId: true,
+        historicalCountryId: true,
+        pollDate: true,
+        pollEndDate: true,
+        legislatureTermStart: true,
+        legislatureTermEnd: true,
+        resultingLegislatureClosureDate: true,
+        totalSeats: true,
+        convocationOrdinal: true,
+      },
     })
     if (!election) throw new NotFoundException('선거를 찾을 수 없습니다.')
     // 주체를 특정할 수 없으면(토큰에 sub 없음) 통과시키지 않는다 — 우회 경로 차단
     if (accountId == null || election.accountId !== accountId) {
       throw new ForbiddenException('본인이 등록한 선거만 수정·삭제할 수 있습니다.')
+    }
+    return election
+  }
+
+  private sanitizeElectionEvent<T extends { event?: { deletedAt?: Date | null } | null }>(
+    row: T,
+  ): T {
+    if (!row || row.event == null) return row
+    if (row.event.deletedAt != null) {
+      return { ...row, event: null }
+    }
+    return row
+  }
+
+  private parseDateOrThrow(raw: string, label: string): Date {
+    const d = new Date(raw)
+    if (Number.isNaN(d.getTime())) {
+      throw new BadRequestException(`${label} 날짜 형식이 올바르지 않습니다.`)
+    }
+    return d
+  }
+
+  private parseOptionalNonNegativeBigInt(
+    raw: string | number | null | undefined,
+  ): bigint | null | undefined {
+    if (raw === undefined) return undefined
+    if (raw === null || raw === '') return null
+    try {
+      const val = BigInt(raw)
+      if (val < 0n) {
+        throw new BadRequestException('득표수는 0 이상의 정수여야 합니다.')
+      }
+      return val
+    } catch (e) {
+      if (e instanceof BadRequestException) throw e
+      throw new BadRequestException('득표수는 0 이상의 정수여야 합니다.')
+    }
+  }
+
+  private parseOptionalPercentageDecimal(
+    raw: string | number | null | undefined,
+    label: string,
+  ): Prisma.Decimal | null | undefined {
+    if (raw === undefined) return undefined
+    if (raw === null || raw === '') return null
+    const num = Number(raw)
+    if (!Number.isFinite(num) || num < 0 || num > 100) {
+      throw new BadRequestException(
+        `${label}은(는) 0 이상 100 이하의 값이어야 합니다.`,
+      )
+    }
+    return new Prisma.Decimal(String(raw))
+  }
+
+  private assertElectionDateAndNumberRules(input: {
+    pollDate?: Date | null
+    pollEndDate?: Date | null
+    legislatureTermStart?: Date | null
+    legislatureTermEnd?: Date | null
+    resultingLegislatureClosureDate?: Date | null
+    totalSeats?: number | null
+    convocationOrdinal?: number | null
+  }): void {
+    if (
+      input.pollDate != null &&
+      input.pollEndDate != null &&
+      input.pollEndDate.getTime() < input.pollDate.getTime()
+    ) {
+      throw new BadRequestException('투표 종료일은 투표 시작일 이후여야 합니다.')
+    }
+    if (
+      input.legislatureTermStart != null &&
+      input.legislatureTermEnd != null &&
+      input.legislatureTermEnd.getTime() < input.legislatureTermStart.getTime()
+    ) {
+      throw new BadRequestException(
+        '의회 임기 만료일은 임기 시작일 이후여야 합니다.',
+      )
+    }
+    if (
+      input.legislatureTermStart != null &&
+      input.resultingLegislatureClosureDate != null &&
+      input.resultingLegislatureClosureDate.getTime() <
+        input.legislatureTermStart.getTime()
+    ) {
+      throw new BadRequestException(
+        '의회 실제 종료일은 임기 시작일 이후여야 합니다.',
+      )
+    }
+    if (input.totalSeats != null && input.totalSeats < 0) {
+      throw new BadRequestException('총 의석수는 0 이상이어야 합니다.')
+    }
+    if (input.convocationOrdinal != null && input.convocationOrdinal < 1) {
+      throw new BadRequestException('대수(회차)는 1 이상이어야 합니다.')
+    }
+  }
+
+  private async validateCandidacyReferences(
+    election: {
+      countryId?: string | null
+      historicalCountryId?: string | null
+    },
+    refs: {
+      personId?: string | null
+      partyId?: string | null
+      electoralDistrictId?: string | null
+    },
+  ): Promise<void> {
+    const electionScope = {
+      countryId: election.countryId ?? null,
+      historicalCountryId: election.historicalCountryId ?? null,
+    }
+    if (refs.personId && this.prisma.person?.findUnique) {
+      const person = await this.prisma.person.findUnique({
+        where: { id: refs.personId },
+        select: { id: true },
+      })
+      if (!person) throw new NotFoundException('인물을 찾을 수 없습니다.')
+    }
+    if (refs.partyId && this.prisma.politicalParty?.findUnique) {
+      const party = await this.prisma.politicalParty.findUnique({
+        where: { id: refs.partyId },
+        select: { id: true, countryId: true, historicalCountryId: true },
+      })
+      if (!party) throw new NotFoundException('정당을 찾을 수 없습니다.')
+      const compatible = await areJurisdictionsCompatible(
+        this.prisma,
+        electionScope,
+        {
+          countryId: party.countryId ?? null,
+          historicalCountryId: party.historicalCountryId ?? null,
+        },
+      )
+      if (!compatible) {
+        throw new BadRequestException(
+          '정당의 소속 국가가 이 선거의 소속 국가와 일치하지 않습니다.',
+        )
+      }
+    }
+    if (refs.electoralDistrictId && this.prisma.electoralDistrict?.findUnique) {
+      const district = await this.prisma.electoralDistrict.findUnique({
+        where: { id: refs.electoralDistrictId },
+        select: { id: true, countryId: true, historicalCountryId: true },
+      })
+      if (!district) throw new NotFoundException('선거구를 찾을 수 없습니다.')
+      const compatible = await areJurisdictionsCompatible(
+        this.prisma,
+        electionScope,
+        {
+          countryId: district.countryId ?? null,
+          historicalCountryId: district.historicalCountryId ?? null,
+        },
+      )
+      if (!compatible) {
+        throw new BadRequestException(
+          '선거구의 소속 국가가 이 선거의 소속 국가와 일치하지 않습니다.',
+        )
+      }
     }
   }
 

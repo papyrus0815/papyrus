@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -16,6 +17,7 @@ import { ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
 import { Prisma } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
+import { resolveCountryScopeOr } from '../../country/domain/country-scope.util'
 
 const GLOSSARY_TERM_NAME_MAX_LENGTH = 1000
 
@@ -102,6 +104,77 @@ function toResponse(row: {
 export class GlossaryController {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async resolveCountryAxis(
+    countryId?: string | null,
+    historicalCountryId?: string | null,
+  ): Promise<{ countryId: string | null; historicalCountryId: string | null }> {
+    let cid = countryId && countryId.trim() !== '' ? countryId.trim() : null
+    const hid =
+      historicalCountryId && historicalCountryId.trim() !== ''
+        ? historicalCountryId.trim()
+        : null
+
+    if (cid && this.prisma.country?.findUnique) {
+      const c = await this.prisma.country.findUnique({
+        where: { id: cid },
+        select: { id: true },
+      })
+      if (!c) {
+        throw new NotFoundException('소속 국가(countryId)를 찾을 수 없습니다.')
+      }
+    }
+
+    if (hid) {
+      if (this.prisma.historicalCountry?.findUnique) {
+        const hc = await this.prisma.historicalCountry.findUnique({
+          where: { id: hid },
+          select: { id: true },
+        })
+        if (!hc) {
+          throw new NotFoundException(
+            '소속 역사적 국가(historicalCountryId)를 찾을 수 없습니다.',
+          )
+        }
+      }
+      if (this.prisma.historicalCountryModernCountry?.findMany) {
+        const links =
+          await this.prisma.historicalCountryModernCountry.findMany({
+            where: { historicalCountryId: hid },
+            select: { modernCountryId: true },
+          })
+        const modernIds = [
+          ...new Set(links.map((l) => l.modernCountryId).filter(Boolean)),
+        ]
+        if (cid && modernIds.length > 0 && !modernIds.includes(cid)) {
+          throw new BadRequestException(
+            '선택한 역사적 국가가 지정한 현대 국가와 연결되어 있지 않습니다.',
+          )
+        }
+        if (!cid && modernIds.length === 1) {
+          cid = modernIds[0]
+        }
+      }
+    }
+
+    return { countryId: cid, historicalCountryId: hid }
+  }
+
+  private async assertEventExistsIfProvided(
+    eventId?: string | null,
+  ): Promise<string | null> {
+    const trimmed = eventId?.trim() || null
+    if (trimmed && this.prisma.event?.findFirst) {
+      const ev = await this.prisma.event.findFirst({
+        where: { id: trimmed, deletedAt: null },
+        select: { id: true },
+      })
+      if (!ev) {
+        throw new NotFoundException('연결할 사건(eventId)을 찾을 수 없습니다.')
+      }
+    }
+    return trimmed
+  }
+
   /**
    * 용어 목록 (선택: countryId / historicalCountryId / q 검색, eventId로 전역+문서전용 함께 조회)
    */
@@ -112,29 +185,30 @@ export class GlossaryController {
     @Query('eventId') eventId?: string,
     @Query('q') q?: string,
   ): Promise<GlossaryTermResponseDto[]> {
-    const where: {
-      countryId?: string | null
-      historicalCountryId?: string | null
-      name?: { contains: string }
-      eventId?: string | null
-      OR?: Array<{ eventId: null } | { eventId: string }>
-    } = {}
-    if (countryId) where.countryId = countryId
-    if (historicalCountryId) where.historicalCountryId = historicalCountryId
-    if (q && q.trim()) where.name = { contains: q.trim() }
+    const andFilters: Prisma.GlossaryTermWhereInput[] = []
+    if (countryId) {
+      andFilters.push(await resolveCountryScopeOr(this.prisma, countryId))
+    } else if (historicalCountryId) {
+      andFilters.push({ historicalCountryId })
+    }
+    if (q && q.trim()) {
+      andFilters.push({ name: { contains: q.trim() } })
+    }
     if (eventId?.trim()) {
       // 사건 저작: 전역 + 그 사건 전용 용어
-      where.OR = [
-        { eventId: null },
-        { eventId: eventId.trim() },
-      ]
+      andFilters.push({
+        OR: [{ eventId: null }, { eventId: eventId.trim() }],
+      })
     } else {
       // 비-사건 문맥(인물 전기·신규 사건 저작 등)에서는 **전역 용어만** 노출한다.
       // 미지정 시 eventId 무제약이면 특정 사건 전용 용어가 무관한 문서 검색으로 새어 나오고,
       // 그 용어를 링크한 뒤 원 사건이 삭제되면 eventId onDelete:Cascade로 용어가 함께 삭제돼
       // 본문 .term 이 dangling(설명 불러오기 실패)이 된다.
-      where.eventId = null
+      andFilters.push({ eventId: null })
     }
+
+    const where: Prisma.GlossaryTermWhereInput =
+      andFilters.length === 1 ? andFilters[0] : { AND: andFilters }
 
     const list = await this.prisma.glossaryTerm.findMany({
       where,
@@ -159,13 +233,23 @@ export class GlossaryController {
 
   @Post()
   async create(@Body() dto: CreateGlossaryTermDto): Promise<GlossaryTermResponseDto> {
+    const name = truncateName(dto.name ?? '')
+    if (!name) {
+      throw new BadRequestException('용어 이름을 입력해 주세요.')
+    }
+    const axis = await this.resolveCountryAxis(
+      dto.countryId,
+      dto.historicalCountryId,
+    )
+    const eventId = await this.assertEventExistsIfProvided(dto.eventId)
+
     const row = await this.prisma.glossaryTerm.create({
       data: {
-        name: truncateName(dto.name),
+        name,
         description: dto.description?.trim() || null,
-        countryId: dto.countryId || null,
-        historicalCountryId: dto.historicalCountryId || null,
-        eventId: dto.eventId?.trim() || null,
+        countryId: axis.countryId,
+        historicalCountryId: axis.historicalCountryId,
+        eventId,
       },
       include: GLOSSARY_COUNTRY_INCLUDE,
     })
@@ -180,16 +264,43 @@ export class GlossaryController {
     const existing = await this.prisma.glossaryTerm.findUnique({ where: { id } })
     if (!existing) throw new NotFoundException(`Glossary term with id ${id} not found`)
 
+    let resolvedName: string | undefined
+    if (dto.name !== undefined) {
+      resolvedName = truncateName(dto.name)
+      if (!resolvedName) {
+        throw new BadRequestException('용어 이름을 입력해 주세요.')
+      }
+    }
+
+    let resolvedAxis: {
+      countryId: string | null
+      historicalCountryId: string | null
+    } | null = null
+    if (dto.countryId !== undefined || dto.historicalCountryId !== undefined) {
+      const nextCid =
+        dto.countryId !== undefined ? dto.countryId : existing.countryId
+      const nextHid =
+        dto.historicalCountryId !== undefined
+          ? dto.historicalCountryId
+          : existing.historicalCountryId
+      resolvedAxis = await this.resolveCountryAxis(nextCid, nextHid)
+    }
+
+    let resolvedEventId: string | null | undefined
+    if (dto.eventId !== undefined) {
+      resolvedEventId = await this.assertEventExistsIfProvided(dto.eventId)
+    }
+
     const row = await this.prisma.glossaryTerm.update({
       where: { id },
       data: {
-        ...(dto.name !== undefined && { name: truncateName(dto.name) }),
+        ...(resolvedName !== undefined && { name: resolvedName }),
         ...(dto.description !== undefined && { description: dto.description?.trim() || null }),
-        ...(dto.countryId !== undefined && { countryId: dto.countryId || null }),
-        ...(dto.historicalCountryId !== undefined && {
-          historicalCountryId: dto.historicalCountryId || null,
+        ...(resolvedAxis && {
+          countryId: resolvedAxis.countryId,
+          historicalCountryId: resolvedAxis.historicalCountryId,
         }),
-        ...(dto.eventId !== undefined && { eventId: dto.eventId?.trim() || null }),
+        ...(resolvedEventId !== undefined && { eventId: resolvedEventId }),
       },
       include: GLOSSARY_COUNTRY_INCLUDE,
     })

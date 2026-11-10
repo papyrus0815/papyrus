@@ -21,6 +21,7 @@ import {
   DIGIT_DISPLAY,
   MOTION,
   ledgerAccent,
+  ledgerAccentSubtle,
   ledgerBackground,
   ledgerHairlineStrong,
   RADIUS,
@@ -32,7 +33,15 @@ import { tidyProseHtml } from '@/shared/lib/prose-tidy'
 
 import * as S from '../styles'
 import { InlineRichText, InlineText } from './inline'
-import { addHeadingAnchors, plainTextLength, type SectionKind, type SectionRow, splitTitlePeriod } from './narrative-sections.lib'
+import {
+  addHeadingAnchors,
+  compactTimelinePeriod,
+  extractTimelineSteps,
+  plainTextLength,
+  type SectionKind,
+  type SectionRow,
+  splitTitlePeriod,
+} from './narrative-sections.lib'
 import { REVEAL_ANCHOR_EVENT, revealAnchor } from './scroll-to-anchor'
 
 export * from './narrative-sections.lib'
@@ -81,6 +90,11 @@ interface NarrativeSectionListProps {
    */
   moveTargets?: ReadonlyArray<{ kind: SectionKind; label: string }>
   onMoveToSection?: (index: number, kind: SectionKind) => void
+  /**
+   * 전개 타임라인 조판 — 켜면 세로 척추·시점 배지·본문 내 시간 소제목(h2~h4)·시간순 불릿(li)을
+   * 타임라인 마디로 연결해 1단락 산문에서도 시간의 흐름이 드러나게 한다.
+   */
+  timeline?: boolean
 }
 
 export function NarrativeSectionList({
@@ -100,6 +114,7 @@ export function NarrativeSectionList({
   onRequestExpand,
   moveTargets,
   onMoveToSection,
+  timeline = false,
 }: NarrativeSectionListProps) {
   /** 메뉴가 열리면 첫 항목으로 — 키보드 사용자가 바로 고를 수 있게(마운트 때 한 번) */
   const focusFirstMenuItem = useCallback((menu: HTMLDivElement | null) => {
@@ -157,6 +172,7 @@ export function NarrativeSectionList({
     <SectionStack
       ref={stackRef}
       $compact={collapsed}
+      $timeline={timeline}
       onFocusCapture={(focusEvent) => {
         if (!collapsed || !onRequestExpand) return
         /* 단락(제목 버튼·하나씩 연 본문)은 제자리에서 다룬다 — 섹션 전체를 펴는 건 잘린 요약을 편집할 때뿐 */
@@ -171,44 +187,53 @@ export function NarrativeSectionList({
           {collapsed && clampLead ? <LeadClamp>{lead}</LeadClamp> : lead}
         </SectionItem>
       )}
-      {rows.map((row, index) => {
-        const hasTitle = row.title.trim().length > 0
-        const titleOpen =
-          hasTitle || row.key === autoEditKey || titleOpenKeys.includes(row.key)
-        const ordinal = index + 1
-        const { period, title: titleText } = splitTitlePeriod(row.title)
-        const anchorId = `${anchorPrefix}-${ordinal}`
-        const bodyLength = plainTextLength(row.content)
-        const rowOpen = !collapsed || openKeys.has(row.key)
-        return (
-          <SectionItem
-            key={row.key}
-            id={anchorId}
-            data-row-key={row.key}
-            data-open={collapsed && rowOpen ? 'true' : undefined}
-          >
-            {/* 타임라인 노드 — 선 위의 번호. 시기가 있으면 노드는 그 날짜 줄과 나란히 선다(연혁과 같은 문법) */}
-            <SectionIndex aria-hidden>{ordinal}</SectionIndex>
-            {period && <SectionPeriod>{period}</SectionPeriod>}
-            {collapsed ? (
-              /* 줄인 단락 — 누르면 이 단락만 제자리에서 열고 닫는다. 펼친 제목과 같은 크기·굵기 */
+      {(() => {
+        const hasAnyRowPeriod = timeline && rows.some((r) => Boolean(splitTitlePeriod(r.title).period))
+        return rows.map((row, index) => {
+          const hasTitle = row.title.trim().length > 0
+          const isAutoEditing =
+            row.key === autoEditKey || row.key === bodyOpenKey || titleOpenKeys.includes(row.key)
+          const titleOpen = hasTitle || isAutoEditing
+          const ordinal = index + 1
+          const { period, title: titleText } = splitTitlePeriod(row.title)
+          const periodLabel = compactTimelinePeriod(period)
+          const anchorId = `${anchorPrefix}-${ordinal}`
+          const bodyLength = plainTextLength(row.content)
+          const rowOpen = !collapsed || openKeys.has(row.key) || isAutoEditing
+          const timelineSteps =
+            timeline && rows.length === 1 && !rowOpen ? extractTimelineSteps(row.content, anchorId) : []
+          const promoteSubSteps = rows.length === 1 && timelineSteps.length >= 2
+          const hasAnyStepPeriod = promoteSubSteps && timelineSteps.some((s) => Boolean(s.period))
+
+          const headContent =
+            collapsed && !isAutoEditing ? (
+              /* 줄인 단락 — 누르면 이 단락만 제자리에서 열고 닫는다. 전개(timeline)는 [시점] [제목] 한 줄만 깔끔하게 노출 */
               <CollapsedHead
                 type="button"
                 aria-expanded={rowOpen}
                 aria-controls={`${anchorId}-body`}
                 onClick={() => toggleRow(row.key)}
                 aria-label={`${labelPrefix} ${ordinal}단락 — ${hasTitle ? titleText : '제목 없음'}`}
+                $timeline={timeline}
+                $hasDateCol={timeline && hasAnyRowPeriod}
               >
-                {hasTitle ? (
-                  titleText
-                ) : (
-                  /* 제목 없는 단락은 본문 첫머리로 — '제목 없음'만 늘어서면 무엇인지 모른다 */
-                  <CollapsedPreview>{bodyPreview(row.content) || '빈 단락'}</CollapsedPreview>
+                {timeline && hasAnyRowPeriod && (
+                  <TimelineDateBadge title={period ?? undefined}>{periodLabel ?? ''}</TimelineDateBadge>
                 )}
-                <CollapsedTail aria-hidden>
-                  {bodyLength > 0 && `${bodyLength.toLocaleString('ko-KR')}자`}
-                  <FiChevronDown />
-                </CollapsedTail>
+                <CollapsedTitleText>
+                  {hasTitle ? (
+                    titleText
+                  ) : (
+                    /* 제목 없는 단락은 본문 첫머리로 — '제목 없음'만 늘어서면 무엇인지 모른다 */
+                    <CollapsedPreview>{bodyPreview(row.content) || '빈 단락'}</CollapsedPreview>
+                  )}
+                </CollapsedTitleText>
+                {!timeline && (
+                  <CollapsedTail aria-hidden>
+                    {bodyLength > 0 && `${bodyLength.toLocaleString('ko-KR')}자`}
+                    <FiChevronDown />
+                  </CollapsedTail>
+                )}
               </CollapsedHead>
             ) : (
               <SectionHead>
@@ -322,32 +347,83 @@ export function NarrativeSectionList({
                   </RowActionBtn>
                 </RowActions>
               </SectionHead>
-            )}
-            {/* 줄여 보기에도 본문은 같은 자리에 둔 채 숨긴다 — 모드가 바뀌어도 이 노드가 살아 있어야
-                찾기(Ctrl+F)가 펼친 뒤에도 그 글자를 가리킨다. 찾기가 닿으면 브라우저가 beforematch를 쏜다 */}
-            <UntilFound id={`${anchorId}-body`} active={!rowOpen} onBeforeMatch={revealAnchor}>
-              <SectionBodyHost>
-                <InlineRichText
-                  value={row.content}
-                  onSave={(next) => onFieldChange(index, { content: next })}
-                  placeholder={bodyPlaceholder}
-                  label={`${labelPrefix} ${ordinal}단락 본문`}
-                  onPersonClick={onPersonClick}
-                  onEntityLink={onEntityLink}
-                  transformReadHtml={(html) => readProseHtml(addHeadingAnchors(html, anchorId))}
-                  autoOpen={row.key === bodyOpenKey}
-                  /**
-                   * sticky ✎ 금지 — sticky는 '개요'처럼 페이지를 통째로 차지하는 긴 본문
-                   * 하나를 위한 것이다. 단락이 여럿 쌓인 목록에서 켜 두면 각 단락의 버튼이
-                   * 제 블록을 벗어나 **다음 단락 위로 떠다닌다**(InlineRichText 주석 참고).
-                   */
-                  stickyEditButton={false}
-                />
-              </SectionBodyHost>
-            </UntilFound>
-          </SectionItem>
-        )
-      })}
+            )
+
+          return (
+            <SectionItem
+              key={row.key}
+              id={anchorId}
+              $timeline={timeline}
+              data-row-key={row.key}
+              data-open={collapsed && rowOpen ? 'true' : undefined}
+            >
+              {timeline ? (
+                promoteSubSteps ? (
+                  <TimelineSubSteps>
+                    {timelineSteps.map((step) => {
+                      const subPeriod = compactTimelinePeriod(step.period)
+                      return (
+                        <TimelineSubStepItem key={step.id}>
+                          <TimelineDot aria-hidden $dated={Boolean(subPeriod)} />
+                          <CollapsedHead
+                            type="button"
+                            $timeline
+                            $hasDateCol={hasAnyStepPeriod}
+                            onClick={() => {
+                              flushSync(() => setOpenKeys((prev) => new Set(prev).add(row.key)))
+                              document.getElementById(step.id)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                            }}
+                          >
+                            {hasAnyStepPeriod && (
+                              <TimelineDateBadge title={step.period ?? undefined}>
+                                {subPeriod ?? ''}
+                              </TimelineDateBadge>
+                            )}
+                            <CollapsedTitleText>{step.title}</CollapsedTitleText>
+                          </CollapsedHead>
+                        </TimelineSubStepItem>
+                      )
+                    })}
+                  </TimelineSubSteps>
+                ) : (
+                  <>
+                    <TimelineDot aria-hidden $dated={Boolean(periodLabel)} />
+                    {(!collapsed || isAutoEditing) && period && (
+                      <SectionPeriod $timeline>{periodLabel ?? period}</SectionPeriod>
+                    )}
+                    {headContent}
+                  </>
+                )
+              ) : (
+                <>
+                  <SectionIndex aria-hidden $dated={Boolean(period)}>
+                    {ordinal}
+                  </SectionIndex>
+                  {period && <SectionPeriod>{period}</SectionPeriod>}
+                  {headContent}
+                </>
+              )}
+              {/* 줄여 보기에도 본문은 같은 자리에 둔 채 숨긴다 — 모드가 바뀌어도 이 노드가 살아 있어야
+                  찾기(Ctrl+F)가 펼친 뒤에도 그 글자를 가리킨다. 찾기가 닿으면 브라우저가 beforematch를 쏜다 */}
+              <UntilFound id={`${anchorId}-body`} active={!rowOpen} onBeforeMatch={revealAnchor}>
+                <SectionBodyHost $timeline={timeline}>
+                  <InlineRichText
+                    value={row.content}
+                    onSave={(next) => onFieldChange(index, { content: next })}
+                    placeholder={bodyPlaceholder}
+                    label={`${labelPrefix} ${ordinal}단락 본문`}
+                    onPersonClick={onPersonClick}
+                    onEntityLink={onEntityLink}
+                    transformReadHtml={(html) => readProseHtml(addHeadingAnchors(html, anchorId, { timeline }))}
+                    autoOpen={row.key === bodyOpenKey}
+                    stickyEditButton={false}
+                  />
+                </SectionBodyHost>
+              </UntilFound>
+            </SectionItem>
+          )
+        })
+      })()}
     </SectionStack>
   )
 }
@@ -405,18 +481,20 @@ function hasBodyText(html: string): boolean {
 
 /**
  * 타임라인 — 기업 상세 연혁과 같은 문법(2026-10-15 사용자: "연혁처럼 타임라인 느낌").
- * 좌측 세로선 하나에 단락마다 번호 노드가 꿰이고, 시기가 있으면 노드 옆 날짜 줄이 먼저 온다.
- * 본문은 선 오른쪽으로 들여 쓴다(TIMELINE_INSET).
+ * 왼쪽 세로 척추선(`left: 10px`) 위에 원형 마디(`TimelineDot`)만 깔끔하게 꿰고,
+ * 오른쪽에는 `[고정 폭 숫자 시점(112px)]  [단락 제목]` 한 줄만 나란히 세운다(가로 눈금선·알약 배경·화살표 등 군더더기 제거).
  */
-const TIMELINE_INSET = 38
+const TIMELINE_INSET = 32
 const NODE_SIZE = 22
+const TL_DATE_WIDTH = 112
+const TL_DATE_WIDTH_MOBILE = 84
 
-export const SectionStack = styled.div<{ $compact?: boolean }>`
+export const SectionStack = styled.div<{ $compact?: boolean; $timeline?: boolean }>`
   position: relative;
   display: flex;
   flex-direction: column;
-  /* 줄여 보기는 목차처럼 촘촘히 — 단락마다 본문 자리였던 32px을 다 띄우면 줄인 보람이 없다 */
-  gap: ${({ $compact }) => ($compact ? 14 : 32)}px;
+  /* 줄여 보기는 목차처럼 촘촘히 — 전개 타임라인은 마디 사이를 10px로 두어 깔끔한 연혁 리듬을 만든다 */
+  gap: ${({ $compact, $timeline }) => ($compact ? ($timeline ? 10 : 14) : 32)}px;
 
   /* 세로선 — 첫 노드 가운데에서 시작해 마지막 노드 아래로 조금 흘러내린다 */
   &::before {
@@ -424,27 +502,31 @@ export const SectionStack = styled.div<{ $compact?: boolean }>`
     position: absolute;
     left: ${NODE_SIZE / 2 - 1}px;
     top: ${NODE_SIZE / 2}px;
-    bottom: 0;
+    bottom: 4px;
     width: 2px;
     border-radius: 1px;
-    /* border.default는 이 지면 배경에서 거의 안 보였다(실측) — 장부 hairline(strong)으로 */
-    background: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+    background: ${({ theme, $timeline }) =>
+      $timeline
+        ? theme.mode === 'dark'
+          ? 'rgba(129, 140, 248, 0.34)'
+          : 'rgba(79, 70, 229, 0.24)'
+        : ledgerHairlineStrong(theme.mode)};
   }
 
   @media (max-width: 640px) {
-    gap: ${({ $compact }) => ($compact ? 12 : 26)}px;
+    gap: ${({ $compact, $timeline }) => ($compact ? ($timeline ? 8 : 12) : 26)}px;
   }
 `
 
-const SectionItem = styled.div`
+const SectionItem = styled.div<{ $timeline?: boolean }>`
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: ${({ $timeline }) => ($timeline ? 4 : 8)}px;
   padding-left: ${TIMELINE_INSET}px;
 
   @media (max-width: 640px) {
-    padding-left: ${TIMELINE_INSET - 8}px;
+    padding-left: ${TIMELINE_INSET - 4}px;
   }
   /* 단락 하나를 직접 가리키는 앵커(#background-2) — 헤더 아래로 파묻히지 않게. */
   scroll-margin-top: 24px;
@@ -460,7 +542,6 @@ const SectionHead = styled.div`
   display: flex;
   align-items: baseline;
   gap: 10px;
-  /* 우측 액션이 제목 위로 올라타지 않도록 비워 두는 폭(3 × 24 + 간격). */
   /* 오른쪽 도구가 제목 위로 올라타지 않도록 비워 두는 폭(4 × 24 + 간격) */
   padding-right: 112px;
   min-height: 23px;
@@ -468,13 +549,8 @@ const SectionHead = styled.div`
 
 /**
  * 순번 — **제목의 서수**다.
- *
- * 예전엔 좌측 거터에 12.5px로 앉혀 두었는데, 본문을 52px 들여쓰는 값을 치르고도 정작
- * 제목(17.5px 볼드)보다 작아 "여기서부터 새 단락"을 제 힘으로 말하지 못했다. 제목과 같은
- * 크기의 mono 숫자로 제목 앞에 세우면 들여쓰기 없이도 경계가 선다. 색은 한 단 낮춰
- * 제목보다 앞서지 않게 하고, 색상(accent)은 쓰지 않는다 — 단락 수만큼 색 토큰이 늘어난다.
  */
-const SectionIndex = styled.span`
+const SectionIndex = styled.span<{ $timeline?: boolean; $dated?: boolean }>`
   ${DIGIT_DISPLAY}
   position: absolute;
   left: 0;
@@ -486,17 +562,84 @@ const SectionIndex = styled.span`
   height: ${NODE_SIZE}px;
   border-radius: 50%;
   box-sizing: border-box;
-  border: 2px solid ${({ theme }) => theme.colors.text.tertiary};
+  border: 2px solid
+    ${({ theme, $timeline, $dated }) =>
+      $timeline && $dated
+        ? ledgerAccent(theme.mode)
+        : $timeline
+          ? theme.mode === 'dark'
+            ? 'rgba(129, 140, 248, 0.65)'
+            : 'rgba(79, 70, 229, 0.55)'
+          : theme.colors.text.tertiary};
   /* 지면색으로 채워 선을 끊는다 + 바깥 후광으로 선과 노드 사이를 띄운다(연혁 노드와 같은 처리) */
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  background: ${({ theme, $timeline, $dated }) =>
+    $timeline && $dated ? ledgerAccentSubtle(theme.mode) : ledgerBackground(theme.mode)};
   box-shadow: 0 0 0 3px ${({ theme }) => ledgerBackground(theme.mode)};
   font-size: 11.5px;
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.01em;
   /* 이 번호가 단락의 유일한 표지일 때가 있다 — text.tertiary는 AA 미달(라이트 2.54:1). */
-  color: ${metaText};
+  color: ${({ theme, $timeline }) => ($timeline ? ledgerAccent(theme.mode) : metaText({ theme }))};
   user-select: none;
+`
+
+const TimelineDateBadge = styled.span`
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+/** 전개(timeline) 전용 노드 — 왼쪽 세로 척추선 위의 깔끔한 원형 마디 */
+const TimelineDot = styled.span<{ $dated?: boolean }>`
+  position: absolute;
+  left: ${NODE_SIZE / 2 - 5}px;
+  top: 7px;
+  z-index: 1;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+  background: ${({ theme, $dated }) =>
+    $dated ? ledgerAccent(theme.mode) : ledgerBackground(theme.mode)};
+  box-shadow: 0 0 0 3px ${({ theme }) => ledgerBackground(theme.mode)};
+  transition: transform ${MOTION.fast}, background ${MOTION.fast};
+`
+
+const CollapsedTitleText = styled.span`
+  min-width: 0;
+  flex: 1;
+`
+
+const TimelineSubSteps = styled.ol`
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+const TimelineSubStepItem = styled.li`
+  position: relative;
+  min-height: 24px;
+
+  & > ${TimelineDot} {
+    left: -${TIMELINE_INSET - (NODE_SIZE / 2 - 5)}px;
+  }
+
+  @media (max-width: 640px) {
+    & > ${TimelineDot} {
+      left: -${TIMELINE_INSET - 4 - (NODE_SIZE / 2 - 5)}px;
+    }
+  }
 `
 
 /** 요약 마디의 노드 — 번호 노드와 같은 중심선 위의 작은 채운 점(번호가 아니라 '들머리'라서) */
@@ -521,19 +664,22 @@ const LeadClamp = styled.div`
   mask-image: linear-gradient(to bottom, #000 55%, transparent);
 `
 
-/** 줄인 단락의 머리 — 누르면 펼치고 그 단락으로 간다. 우측 글자수는 '얼마나 긴 단락인가'의 귀띔 */
-const CollapsedHead = styled.button`
-  display: flex;
+/** 줄인 단락의 머리 — 누르면 펼치고 그 단락으로 간다. */
+const CollapsedHead = styled.button<{ $timeline?: boolean; $hasDateCol?: boolean }>`
+  display: ${({ $timeline, $hasDateCol }) => ($timeline && $hasDateCol ? 'grid' : 'flex')};
+  grid-template-columns: ${({ $timeline, $hasDateCol }) =>
+    $timeline && $hasDateCol ? `${TL_DATE_WIDTH}px minmax(0, 1fr)` : undefined};
+  column-gap: ${({ $timeline, $hasDateCol }) => ($timeline && $hasDateCol ? '14px' : undefined)};
   align-items: baseline;
-  gap: 10px;
-  min-height: 23px;
+  gap: ${({ $timeline, $hasDateCol }) => ($timeline && $hasDateCol ? undefined : '10px')};
+  min-height: 24px;
   width: 100%;
-  padding: 0;
+  padding: 1px 0;
   border: none;
   background: transparent;
   font: inherit;
-  font-size: 16px;
-  font-weight: 700;
+  font-size: ${({ $timeline }) => ($timeline ? '15.5px' : '16px')};
+  font-weight: ${({ $timeline }) => ($timeline ? 600 : 700)};
   line-height: 1.45;
   letter-spacing: -0.01em;
   text-align: left;
@@ -553,6 +699,9 @@ const CollapsedHead = styled.button`
 
   @media (max-width: 640px) {
     font-size: 15px;
+    grid-template-columns: ${({ $timeline, $hasDateCol }) =>
+      $timeline && $hasDateCol ? `${TL_DATE_WIDTH_MOBILE}px minmax(0, 1fr)` : undefined};
+    column-gap: ${({ $timeline, $hasDateCol }) => ($timeline && $hasDateCol ? '10px' : undefined)};
   }
 `
 
@@ -584,18 +733,19 @@ const CollapsedTail = styled.span`
 `
 
 /** 시기 줄 — 연혁의 날짜 줄(TLDate)과 같은 크기·굵기. 노드와 같은 높이에서 시작한다. */
-const SectionPeriod = styled.div`
-  /* '1912년 2월'처럼 한글이 섞여 mono(DIGIT_DISPLAY)는 쓰지 않는다 — 숫자 폭만 맞춘다 */
+const SectionPeriod = styled.div<{ $timeline?: boolean }>`
   font-variant-numeric: tabular-nums;
-  margin-top: 1px;
-  font-size: 13px;
+  align-self: flex-start;
+  margin-top: 0;
+  padding: 0;
+  font-size: 12.5px;
   font-weight: 700;
   line-height: 20px;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme, $timeline }) => ($timeline ? ledgerAccent(theme.mode) : theme.colors.text.secondary)};
 
   /* 시기가 첫 줄이면 제목은 바로 아래에 붙는다 */
   & + * {
-    margin-top: -4px;
+    margin-top: -2px;
   }
 `
 
@@ -769,7 +919,7 @@ const RowActionBtn = styled.button<{ $danger?: boolean }>`
 `
 
 /** 단락 본문 — 섹션 리드 문단과 **같은 좌측 기준선·같은 가독폭**. */
-const SectionBodyHost = styled.div`
+const SectionBodyHost = styled.div<{ $timeline?: boolean }>`
   ${S.longFormEditAffordance}
   ${S.proseTableBreakout}
   ${S.proseHeadingRhythm}
@@ -787,6 +937,106 @@ const SectionBodyHost = styled.div`
   &:has(table) {
     max-width: none;
   }
+
+  /*
+   * 전개 타임라인 본문 — 1단락 산문 안에서도 소제목(h2~h4)과 시간순 불릿(ul[data-type='tl-list'])이
+   * 왼쪽 타임라인 척추의 마디로 읽히게 한다. 소제목 점이 바깥 세로선(left: -27px)에 찍혀야 하므로
+   * RichTextReadView의 paint containment(content-visibility: auto)를 해제한다.
+   */
+  ${({ $timeline, theme }) =>
+    $timeline &&
+    `
+    [role='region'] {
+      content-visibility: visible;
+    }
+
+    [role='region'] :is(h2, h3, h4)[data-type='tl-heading'] {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+      margin: 1.5em 0 0.45em;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: -${TIMELINE_INSET - (NODE_SIZE / 2 - 4)}px;
+        top: 6px;
+        width: 8px;
+        height: 8px;
+        box-sizing: border-box;
+        border-radius: 50%;
+        border: 2px solid ${ledgerAccent(theme.mode)};
+        background: ${ledgerBackground(theme.mode)};
+        box-shadow: 0 0 0 3px ${ledgerBackground(theme.mode)};
+      }
+
+      @media (max-width: 640px) {
+        &::before {
+          left: -${TIMELINE_INSET - 4 - (NODE_SIZE / 2 - 4)}px;
+        }
+      }
+    }
+
+    [role='region'] > :is(h2, h3, h4)[data-type='tl-heading']:first-child {
+      margin-top: 0.4em;
+    }
+
+    [role='region'] span[data-type='tl-period'] {
+      display: inline-block;
+      color: ${ledgerAccent(theme.mode)};
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 18px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    [role='region'] :is(ul, ol)[data-type='tl-list'] {
+      list-style: none;
+      margin: 10px 0 14px 4px;
+      padding: 2px 0 2px 16px;
+      border-left: 2px solid ${
+        theme.mode === 'dark' ? 'rgba(129, 140, 248, 0.28)' : 'rgba(79, 70, 229, 0.22)'
+      };
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    [role='region'] li[data-type='tl-item'] {
+      position: relative;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: -20px;
+        top: 8px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: ${ledgerAccent(theme.mode)};
+        box-shadow: 0 0 0 3px ${ledgerBackground(theme.mode)};
+      }
+    }
+
+    [role='region'] span[data-type='tl-time'] {
+      display: inline-block;
+      margin-right: 7px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: ${ledgerAccentSubtle(theme.mode)};
+      color: ${ledgerAccent(theme.mode)};
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 18px;
+      font-variant-numeric: tabular-nums;
+      vertical-align: baseline;
+    }
+  `}
 `
 
 /**

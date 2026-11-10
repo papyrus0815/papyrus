@@ -3,6 +3,7 @@ import {
   BadRequestException,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   NotFoundException,
   Patch,
@@ -104,14 +105,16 @@ export class GovernmentPositionController {
     })
     if (!cabinet) throw new NotFoundException('행정부를 찾을 수 없습니다.')
     if (cabinet.accountId && cabinet.accountId !== requireActorId(accountId)) {
-      throw new BadRequestException('이 행정부에 대한 권한이 없습니다.')
+      throw new ForbiddenException('이 행정부에 대한 권한이 없습니다.')
     }
     const rows = await this.prisma.cabinetEvent.findMany({
-      where: { cabinetId },
+      where: { cabinetId, event: { deletedAt: null } },
       include: { event: true },
       orderBy: { createdAt: 'asc' },
     })
-    return rows.map(serializeBigInt)
+    return rows
+      .filter((r) => !r.event?.deletedAt)
+      .map(serializeBigInt)
   }
 
   /**
@@ -193,7 +196,6 @@ export class GovernmentPositionController {
             surname: true,
             middleName: true,
             nameDisplayOrder: true,
-            templeName: true,
             profileImageUrl: true,
             isAlive: true,
             deathDate: true,
@@ -386,6 +388,7 @@ export class GovernmentPositionController {
   /**
    * 행정부 등록 — 수반 재임을 지정해 행정부 생성. 로그인 시 현재 계정 소유로 저장.
    */
+  @UseGuards(AuthGuard('jwt'))
   @Post('cabinets')
   async createCabinet(
     @Req() req: Request,
@@ -453,6 +456,7 @@ export class GovernmentPositionController {
   /**
    * 행정부 수정 (이름 등)
    */
+  @UseGuards(AuthGuard('jwt'))
   @Patch('cabinets/:cabinetId')
   async updateCabinet(
     @Req() req: Request,
@@ -468,6 +472,7 @@ export class GovernmentPositionController {
   /**
    * 행정부 삭제 — 소속 각료·수반 재임 포함 관련 데이터 모두 삭제.
    */
+  @UseGuards(AuthGuard('jwt'))
   @Delete('cabinets/:cabinetId')
   async deleteCabinet(
     @Req() req: Request,
@@ -480,6 +485,7 @@ export class GovernmentPositionController {
   /**
    * 행정부 ID로 소속 각료(재임) 목록. 로그인 시 해당 계정 소유 행정부만 접근 가능.
    */
+  @UseGuards(AuthGuard('jwt'))
   @Get('cabinets/:cabinetId/tenures')
   async getTenuresByCabinetId(
     @Req() req: Request,
@@ -494,6 +500,7 @@ export class GovernmentPositionController {
    * 행정부 한눈에 보기 — 수반·각료·여당을 한 번에. (인물 상세의 "같은 행정부 동료" 표시용)
    * 비공개(계정 소유) 행정부는 소유 계정만 접근 가능 — 그 외에는 null.
    */
+  @UseGuards(AuthGuard('jwt'))
   @Get('cabinets/:cabinetId/overview')
   async getCabinetOverview(
     @Req() req: Request,
@@ -568,6 +575,7 @@ export class GovernmentPositionController {
   /**
    * 국가원수/왕위 재임 기록 추가. 로그인 시 현재 계정 소유로 저장.
    */
+  @UseGuards(AuthGuard('jwt'))
   @Post('tenures')
   async addTenure(@Req() req: Request, @Body() dto: CreateGovernmentPositionTenureDto): Promise<any> {
     assertNoBcTenureDates(dto)
@@ -579,6 +587,7 @@ export class GovernmentPositionController {
   /**
    * 국가원수/왕위 재임 기록 수정
    */
+  @UseGuards(AuthGuard('jwt'))
   @Put('tenures/:id')
   async updateTenure(
     @Req() req: Request,
@@ -594,6 +603,7 @@ export class GovernmentPositionController {
   /**
    * 국가원수/왕위 재임 기록 삭제
    */
+  @UseGuards(AuthGuard('jwt'))
   @Delete('tenures/:id')
   async deleteTenure(@Req() req: Request, @Param('id') id: string): Promise<void> {
     const accountId = (req as any).user?.id ?? (req as any).user?.sub
@@ -609,6 +619,7 @@ export class GovernmentPositionController {
   /**
    * 재임 업적·한일 추가 (사건과 별도 개념, 재위 기간 중 한 일)
    */
+  @UseGuards(AuthGuard('jwt'))
   @Post('tenures/:tenureId/achievements')
   async addTenureAchievement(
     @Req() req: Request,
@@ -643,6 +654,7 @@ export class GovernmentPositionController {
   /**
    * 재임 업적 수정
    */
+  @UseGuards(AuthGuard('jwt'))
   @Patch('tenures/:tenureId/achievements/:achievementId')
   async updateTenureAchievement(
     @Req() req: Request,
@@ -663,6 +675,7 @@ export class GovernmentPositionController {
   /**
    * 재임 업적 삭제
    */
+  @UseGuards(AuthGuard('jwt'))
   @Delete('tenures/:tenureId/achievements/:achievementId')
   async deleteTenureAchievement(
     @Req() req: Request,
@@ -676,6 +689,7 @@ export class GovernmentPositionController {
   /**
    * 수반 재임에 연호·시대명 추가 (일본 연호, 유럽식 재위 시대명 등)
    */
+  @UseGuards(AuthGuard('jwt'))
   @Post('tenures/:tenureId/regnal-eras')
   async addRegnalEra(
     @Req() req: Request,
@@ -687,6 +701,7 @@ export class GovernmentPositionController {
     return serializeBigInt(result)
   }
 
+  @UseGuards(AuthGuard('jwt'))
   @Patch('regnal-eras/:id')
   async patchRegnalEra(
     @Req() req: Request,
@@ -698,6 +713,7 @@ export class GovernmentPositionController {
     return serializeBigInt(result)
   }
 
+  @UseGuards(AuthGuard('jwt'))
   @Delete('regnal-eras/:id')
   async deleteRegnalEra(@Req() req: Request, @Param('id') id: string): Promise<void> {
     const accountId = (req as any).user?.id ?? (req as any).user?.sub

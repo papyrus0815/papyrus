@@ -278,9 +278,6 @@ export function formatPersonSubLabel(
   const parts: string[] = []
   const honorific =
     person?.regnalName?.trim() ||
-    person?.templeName?.trim() ||
-    person?.posthumousName?.trim() ||
-    person?.preEnthronementTitle?.trim() ||
     person?.job?.name?.trim() ||
     person?.dynasty?.name?.trim() ||
     null

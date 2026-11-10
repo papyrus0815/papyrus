@@ -119,10 +119,6 @@ export type CreatePersonInput = {
   profileImageUrl?: string | null
   // 왕/군주 관련 필드
   regnalName?: string | null
-  templeName?: string | null
-  posthumousName?: string | null
-  /** 즉위 전 작호/봉호 (예: 수양대군, 충녕대군) */
-  preEnthronementTitle?: string | null
   // 관계
   countryId?: string | null
   /** 주 국적이 역사(과거) 국가일 때의 first-class FK (HistoricalCountry PK). countryId와 상호배타. */

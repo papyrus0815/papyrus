@@ -5,7 +5,11 @@ import { FiBriefcase, FiGrid, FiPlus, FiSearch } from 'react-icons/fi'
 
 import type { GovernmentContentTab } from '@/features/government-info/model/government-content-tab'
 import { useMinistriesTab } from '@/features/government-info/model/use-ministries-tab'
-import { emptyMinistryFormFields } from '@/shared/lib/ministry-department/ministry-department-utils'
+import {
+  UNCATEGORIZED_CATEGORY_ID,
+  emptyMinistryFormFields,
+  isDefenseRelatedCategory,
+} from '@/shared/lib/ministry-department/ministry-department-utils'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import {
   EmptyStateFeatureCard,
@@ -31,7 +35,12 @@ export type MinistriesTabSectionProps = {
   isDark: boolean
   cabinetOpenMinistryIntent: { categoryId: string } | null
   onConsumedCabinetOpenMinistryIntent: () => void
-  onNavigateToPositions: () => void
+  onNavigateToPositions: (context?: {
+    departmentId?: string
+    departmentName?: string
+    categoryId?: string
+    categoryName?: string
+  }) => void
   /** 군부대 등록 시 기본 연결 부처 ID */
   onRegisterMilitaryUnit: (departmentId: string) => void
   onEditMilitaryUnit: (unitId: string) => void
@@ -74,6 +83,7 @@ export function MinistriesTabSection({
     ministryForm,
     setMinistryForm,
     categoriesList,
+    displayCategoriesList,
     openMinistryEdit,
     openMinistryCreateChild,
     openMinistryCreateRootInCategory,
@@ -244,7 +254,7 @@ export function MinistriesTabSection({
             <EmptyStateFill>
               <EmptyStateSimple border="solid">불러오는 중…</EmptyStateSimple>
             </EmptyStateFill>
-          ) : categoriesList.length === 0 ? (
+          ) : displayCategoriesList.length === 0 ? (
             <EmptyStateFill>
               <EmptyStateFeatureCard
                 flat
@@ -292,17 +302,12 @@ export function MinistriesTabSection({
                           category.id === ministryBrowseResolved.categoryId,
                       )?.name ?? null
                     }
-                    isDefenseRelated={(() => {
-                      const categoryRow = categoriesList.find(
+                    isDefenseRelated={isDefenseRelatedCategory(
+                      categoriesList.find(
                         (row) => row.id === ministryBrowseResolved.categoryId,
-                      )
-                      const ko = categoryRow?.name ?? ''
-                      const en = categoryRow?.nameEn ?? ''
-                      return (
-                        /국방|군사|국군|전쟁|합참/i.test(ko) ||
-                        /defense|military|armed|forces|war/i.test(en)
-                      )
-                    })()}
+                      ),
+                      ministryBrowseResolved.kind,
+                    )}
                     onRegisterMilitaryUnit={
                       effectiveCountryId
                         ? () =>
@@ -325,9 +330,19 @@ export function MinistriesTabSection({
                       )
                     }
                     onGoToPositions={() => {
+                      const dept = ministryBrowseResolved
+                      const catName =
+                        categoriesList.find(
+                          (category) => category.id === dept.categoryId,
+                        )?.name ?? undefined
                       setMinistrySearchQuery('')
                       setMinistryBrowseDepartment(null)
-                      onNavigateToPositions()
+                      onNavigateToPositions({
+                        departmentId: dept.id,
+                        departmentName: dept.name,
+                        categoryId: dept.categoryId ?? undefined,
+                        categoryName: catName,
+                      })
                     }}
                     tenuresSlot={
                       <DepartmentTenuresBlock
@@ -363,7 +378,7 @@ export function MinistriesTabSection({
                   }}
                 >
                   <MinistryCategoryTabBar
-                    categories={categoriesList}
+                    categories={displayCategoriesList}
                     counts={ministryCategoryDeptCounts}
                     selectedCategoryId={ministryTreeCategoryId}
                     onSelectCategory={setMinistryTreeCategoryId}
@@ -371,12 +386,14 @@ export function MinistriesTabSection({
                   />
                   {(() => {
                     const cat =
-                      categoriesList.find(
+                      displayCategoriesList.find(
                         (category) => category.id === ministryTreeCategoryId,
-                      ) ?? categoriesList[0]
+                      ) ?? displayCategoriesList[0]
                     if (!cat) return null
-                    const deptsInCat = ministriesList.filter(
-                      (dept) => dept.categoryId === cat.id,
+                    const deptsInCat = ministriesList.filter((dept) =>
+                      cat.id === UNCATEGORIZED_CATEGORY_ID
+                        ? !dept.categoryId
+                        : dept.categoryId === cat.id,
                     )
                     const deptsInCatFiltered = filterDepartmentsBySearchQuery(
                       deptsInCat,
@@ -440,7 +457,14 @@ export function MinistriesTabSection({
                                 openMinistryCreateRootInCategory(cat.id)
                               }
                               onGoToPositionDefinitions={() =>
-                                onNavigateToPositions()
+                                onNavigateToPositions(
+                                  cat.id !== UNCATEGORIZED_CATEGORY_ID
+                                    ? {
+                                        categoryId: cat.id,
+                                        categoryName: cat.name,
+                                      }
+                                    : undefined,
+                                )
                               }
                             />
                           )}
@@ -456,6 +480,7 @@ export function MinistriesTabSection({
       </section>
       <MinistryFormModal
         effectiveCountryId={effectiveCountryId}
+        isHistorical={isHistorical}
         isOpen={ministryFormModalOpen}
         isDark={isDark}
         editingMinistry={editingMinistry}

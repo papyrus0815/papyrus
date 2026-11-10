@@ -79,6 +79,8 @@ export function spanText(node: DatedNode): string | null {
   return years <= 1 ? null : `약 ${years}년`
 }
 
+export type GapPace = 'fast' | 'medium' | 'slow'
+
 export interface GapInfo {
   /** '9일 뒤'·'같은 날'·'1년 2개월 뒤'·'약 3개월 뒤' — 두 행 사이에 놓여 '위 사건에서 아래 사건까지'로 읽힌다 */
   text: string
@@ -88,6 +90,8 @@ export interface GapInfo {
   ongoing: boolean
   /** 툴팁 — 무엇으로부터 센 간격인지 */
   title: string
+  /** 시간 간격에 따른 행 사이 호흡 단계 (당일~1주: fast, 1주~2개월: medium, 2개월 초과: slow) */
+  pace?: GapPace
 }
 
 /** 바로 앞 사건(같은 상위 아래 화면 차례) 시작부터 이 사건 시작까지 */
@@ -98,16 +102,20 @@ export function gapText(previous: DatedNode, next: DatedNode): GapInfo | null {
   const precision = coarser(from.precision, to.precision)
 
   let text: string
+  let pace: GapPace = 'medium'
   if (precision === 'day') {
     const days = to.serial - from.serial
     text = days === 0 ? '같은 날' : days < 60 ? `${days}일 뒤` : `${monthsText(monthsBetween(from, to, true))} 뒤`
+    pace = days <= 14 ? 'fast' : days <= 180 ? 'medium' : 'slow'
   } else if (precision === 'month') {
     const months = monthsBetween(from, to, false)
     text = months === 0 ? '같은 달' : `약 ${monthsText(months)} 뒤`
+    pace = months === 0 ? 'fast' : months <= 6 ? 'medium' : 'slow'
   } else {
     const years = to.year - from.year
     if (years === 0) return null
     text = `약 ${years}년 뒤`
+    pace = 'slow'
   }
 
   const previousEnd = pointOf(previous.endDate, previous.endDatePrecision)
@@ -119,7 +127,7 @@ export function gapText(previous: DatedNode, next: DatedNode): GapInfo | null {
   )
   /* 제목이 들어갈 자리('앞 사건')에 조사를 붙이지 않는다 — 제목 끝 글자에 따라 이/가·과/와가 틀린다 */
   const title = text === '같은 날' || text === '같은 달' ? `앞 사건 — ${text} 시작` : `앞 사건 시작 ${text}`
-  return { text, ongoing, title: ongoing ? `${title} (그 사건이 아직 진행 중)` : title }
+  return { text, ongoing, title: ongoing ? `${title} (그 사건이 아직 진행 중)` : title, pace }
 }
 
 /**
@@ -189,16 +197,34 @@ const signedYearOf = (astronomical: number) => (astronomical <= 0 ? astronomical
 /**
  * quietSpans + 공백이 시작된 시점 — 공백 줄을 그 사이에 든 즉위 표지보다 **앞에** 세우려면 시작점이 필요하다
  * (동인도회사: 1690년 6번 뒤 56년 공백 안에 1707·1714·1727 즉위가 있다).
+ *
+ * 상위 사건(parent)이 주어지고 그 전체 기간이 6개월~5년 사이인 중기 사건이면 3개월(90일) 이상 기록이 빈 구간도
+ * 공백 줄로 드러내 전쟁·혁명 내부의 소강 국면이 읽히게 한다.
  */
-export function quietSpansWithStart(siblings: ReadonlyArray<DatedNode>): Array<QuietSpan | null> {
+export function quietSpansWithStart(
+  siblings: ReadonlyArray<DatedNode>,
+  parent?: DatedNode,
+): Array<QuietSpan | null> {
+  let minDays = QUIET_DAYS
+  let minMonths = 12
+  if (parent) {
+    const parentStart = pointOf(parent.startDate, parent.startDatePrecision)
+    const parentEnd = endPointOf(parent.endDate, parent.endDatePrecision)
+    const parentSpanDays = parentStart && parentEnd ? parentEnd.serial - parentStart.serial : null
+    if (parentSpanDays != null && parentSpanDays >= 180 && parentSpanDays <= 365 * 5) {
+      minDays = 90
+      minMonths = 3
+    }
+  }
+
   let lastEnd: Point | null = null
   return siblings.map((node, position) => {
     const start = pointOf(node.startDate, node.startDatePrecision)
     let quiet: QuietSpan | null = null
-    if (position > 0 && start && lastEnd && start.serial - lastEnd.serial >= QUIET_DAYS) {
+    if (position > 0 && start && lastEnd && start.serial - lastEnd.serial >= minDays) {
       const precision = coarser(lastEnd.precision, start.precision)
       const months = monthsBetween(lastEnd, start, precision === 'day')
-      if (months >= 12) {
+      if (months >= minMonths) {
         quiet = {
           label: `${precision === 'day' ? '' : '약 '}${monthsText(months)} 공백`,
           fromKey: signedYearOf(lastEnd.year) * 10000 + lastEnd.month * 100 + lastEnd.day,

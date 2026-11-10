@@ -112,7 +112,6 @@ export const RULER_PERSON_SELECT = {
   /** 서양식 이름 순서 폴백 — 개인 오버라이드 없으면 국가 기본이 결정 */
   country: { select: { defaultNameDisplayOrder: true } },
   profileImageUrl: true,
-  templeName: true,
   isAlive: true,
   isDeathDateUnknown: true,
   deathEra: true,

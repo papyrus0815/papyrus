@@ -160,7 +160,14 @@ export class HistoricalCountryController {
    * ⚠️ 라우트는 @Get(':id')보다 먼저 선언한다(구체 경로 우선).
    */
   @Get(':id/founding-summary')
-  async getFoundingSummary(@Param('id') id: string): Promise<FoundingSummaryDto> {
+  async getFoundingSummary(
+    @Param('id') id: string,
+    @Request() req?: any,
+  ): Promise<FoundingSummaryDto> {
+    const accountId = req?.user?.id ?? req?.user?.sub
+    if (accountId && this.historicalCountryService?.getHistoricalCountryById) {
+      await this.historicalCountryService.getHistoricalCountryById(id, accountId)
+    }
     const country = await this.prisma.historicalCountry.findUnique({
       where: { id },
       select: {
@@ -184,6 +191,53 @@ export class HistoricalCountryController {
     } as const
     const signed = (era: string | null | undefined, year: number | null | undefined) =>
       year == null ? Number.POSITIVE_INFINITY : era === 'BC' ? -year : year
+    const structuredStartKey = (row: {
+      startEra?: string | null
+      startYear?: number | null
+      startMonth?: number | null
+      startDay?: number | null
+      startDate?: Date | null
+    }) => {
+      if (row.startYear != null) {
+        const signedYear =
+          row.startEra === 'BC' ? -Math.abs(row.startYear) : Math.abs(row.startYear)
+        return signedYear * 10000 + (row.startMonth ?? 1) * 100 + (row.startDay ?? 1)
+      }
+      if (row.startDate) {
+        return (
+          row.startDate.getUTCFullYear() * 10000 +
+          (row.startDate.getUTCMonth() + 1) * 100 +
+          row.startDate.getUTCDate()
+        )
+      }
+      return Number.POSITIVE_INFINITY
+    }
+    const compareRulersAsc = (
+      left: {
+        ordinal?: number | null
+        startEra?: string | null
+        startYear?: number | null
+        startMonth?: number | null
+        startDay?: number | null
+        startDate?: Date | null
+      },
+      right: {
+        ordinal?: number | null
+        startEra?: string | null
+        startYear?: number | null
+        startMonth?: number | null
+        startDay?: number | null
+        startDate?: Date | null
+      },
+    ) => {
+      const lk = structuredStartKey(left)
+      const rk = structuredStartKey(right)
+      if (lk !== rk) return lk - rk
+      if (left.ordinal != null && right.ordinal != null && left.ordinal !== right.ordinal) {
+        return left.ordinal - right.ordinal
+      }
+      return 0
+    }
 
     const firstRulers: FirstRulerDto[] = []
 
@@ -197,25 +251,23 @@ export class HistoricalCountryController {
         ordinal: true,
         startEra: true,
         startYear: true,
+        startMonth: true,
+        startDay: true,
         startDate: true,
         endEra: true,
         endYear: true,
+        endMonth: true,
+        endDay: true,
         endDate: true,
         positionDefinition: { select: { title: true } },
         person: { select: personSelect },
       },
     })
     const reigns = reignRows
-    const reignStart = (reign: (typeof reigns)[number]) =>
-      reign.startYear != null
-        ? signed(reign.startEra, reign.startYear)
-        : reign.startDate
-          ? reign.startDate.getUTCFullYear()
-          : Number.POSITIVE_INFINITY
     const numberedReign = reigns.find((reign) => reign.ordinal === 1)
     const reignsByStart = [...reigns]
-      .filter((reign) => Number.isFinite(reignStart(reign)))
-      .sort((left, right) => reignStart(left) - reignStart(right))
+      .filter((reign) => Number.isFinite(structuredStartKey(reign)))
+      .sort(compareRulersAsc)
     const firstReign = numberedReign ?? reignsByStart[0] ?? reigns[0]
     const toReignRuler = (
       reign: (typeof reigns)[number],
@@ -254,21 +306,19 @@ export class HistoricalCountryController {
         positionType: true,
         startEra: true,
         startYear: true,
+        startMonth: true,
+        startDay: true,
         startDate: true,
         endEra: true,
         endYear: true,
+        endMonth: true,
+        endDay: true,
         endDate: true,
         positionDefinition: { select: { title: true, positionType: true } },
         person: { select: personSelect },
       },
       orderBy: { startDate: 'asc' },
     })
-    const tenureStart = (tenure: (typeof tenures)[number]) =>
-      tenure.startYear != null
-        ? signed(tenure.startEra, tenure.startYear)
-        : tenure.startDate
-          ? tenure.startDate.getUTCFullYear()
-          : Number.POSITIVE_INFINITY
     for (const [type, kind] of [
       ['HEAD_OF_STATE', 'headOfState'],
       ['HEAD_OF_GOVERNMENT', 'headOfGovernment'],
@@ -277,7 +327,7 @@ export class HistoricalCountryController {
         .filter(
           (tenure) => (tenure.positionDefinition?.positionType ?? tenure.positionType) === type,
         )
-        .sort((left, right) => tenureStart(left) - tenureStart(right))
+        .sort(compareRulersAsc)
       const numbered = ofType.find((tenure) => tenure.ordinal === 1)
       const first = numbered ?? ofType[0]
       if (!first) continue
@@ -299,8 +349,8 @@ export class HistoricalCountryController {
         person: tenure.person,
       })
       firstRulers.push(toTenureRuler(first, numbered ? 'numbered' : 'earliest'))
-      // 시작 연도 오름차순(시점 있는 행 중 가장 늦은 행)이 마지막 재임
-      const withStart = ofType.filter((tenure) => Number.isFinite(tenureStart(tenure)))
+      // 시작 연·월·일 및 대수 오름차순(시점 있는 행 중 가장 늦은 행)이 마지막 재임
+      const withStart = ofType.filter((tenure) => Number.isFinite(structuredStartKey(tenure)))
       const last = withStart[withStart.length - 1] ?? ofType[ofType.length - 1]
       if (last && last.id !== first.id) lastRulers.push(toTenureRuler(last, 'latest'))
     }

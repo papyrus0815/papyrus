@@ -155,6 +155,15 @@ export class PersonGroupService {
       andFilters.push({ type: filter.type })
     }
     if (filter?.countryId) {
+      const bridgeRows = this.prisma.historicalCountryModernCountry?.findMany
+        ? await this.prisma.historicalCountryModernCountry.findMany({
+            where: { modernCountryId: filter.countryId },
+            select: { historicalCountryId: true },
+          })
+        : []
+      const linkedHistoricalIds = [
+        ...new Set(bridgeRows.map((r) => r.historicalCountryId).filter(Boolean)),
+      ]
       andFilters.push({
         OR: [
           { countryId: filter.countryId },
@@ -163,6 +172,20 @@ export class PersonGroupService {
               some: { person: { countryId: filter.countryId } },
             },
           },
+          ...(linkedHistoricalIds.length > 0
+            ? [
+                { historicalCountryId: { in: linkedHistoricalIds } },
+                {
+                  members: {
+                    some: {
+                      person: {
+                        historicalCountryId: { in: linkedHistoricalIds },
+                      },
+                    },
+                  },
+                },
+              ]
+            : []),
         ],
       })
     }
@@ -343,18 +366,96 @@ export class PersonGroupService {
     return this.mapGroups(groups, true, accountId)
   }
 
+  private async resolveCountryAxis(
+    countryId?: string | null,
+    historicalCountryId?: string | null,
+  ): Promise<{ countryId: string | null; historicalCountryId: string | null }> {
+    let cid = countryId && countryId.trim() !== '' ? countryId.trim() : null
+    const hid =
+      historicalCountryId && historicalCountryId.trim() !== ''
+        ? historicalCountryId.trim()
+        : null
+
+    if (cid && this.prisma.country?.findUnique) {
+      const c = await this.prisma.country.findUnique({
+        where: { id: cid },
+        select: { id: true },
+      })
+      if (!c) {
+        throw new NotFoundException('소속 국가(countryId)를 찾을 수 없습니다.')
+      }
+    }
+
+    if (hid) {
+      if (this.prisma.historicalCountry?.findUnique) {
+        const hc = await this.prisma.historicalCountry.findUnique({
+          where: { id: hid },
+          select: { id: true },
+        })
+        if (!hc) {
+          throw new NotFoundException(
+            '소속 역사적 국가(historicalCountryId)를 찾을 수 없습니다.',
+          )
+        }
+      }
+      if (this.prisma.historicalCountryModernCountry?.findMany) {
+        const links =
+          await this.prisma.historicalCountryModernCountry.findMany({
+            where: { historicalCountryId: hid },
+            select: { modernCountryId: true },
+          })
+        const modernIds = [
+          ...new Set(links.map((l) => l.modernCountryId).filter(Boolean)),
+        ]
+        if (cid && modernIds.length > 0 && !modernIds.includes(cid)) {
+          throw new BadRequestException(
+            '선택한 역사적 국가가 지정한 현대 국가와 연결되어 있지 않습니다.',
+          )
+        }
+        if (!cid && modernIds.length === 1) {
+          cid = modernIds[0]
+        }
+      }
+    }
+
+    return { countryId: cid, historicalCountryId: hid }
+  }
+
   async createGroup(
     dto: CreatePersonGroupDto,
     accountId?: string,
   ): Promise<PersonGroupResponseDto> {
+    const axis = await this.resolveCountryAxis(
+      dto.countryId,
+      dto.historicalCountryId,
+    )
+    if (dto.predecessorGroupId && this.prisma.personGroup?.findUnique) {
+      const pred = await this.prisma.personGroup.findUnique({
+        where: { id: dto.predecessorGroupId },
+        select: { id: true },
+      })
+      if (!pred) {
+        throw new NotFoundException('전임 묶음을 찾을 수 없습니다.')
+      }
+    }
+    if (dto.centerPersonId && this.prisma.person?.findUnique) {
+      const center = await this.prisma.person.findUnique({
+        where: { id: dto.centerPersonId },
+        select: { id: true },
+      })
+      if (!center) {
+        throw new NotFoundException('중심 인물을 찾을 수 없습니다.')
+      }
+    }
+
     const created = await this.prisma.personGroup.create({
       data: {
         name: dto.name,
         type: dto.type,
         description: dto.description ?? null,
         generationOrder: dto.generationOrder ?? null,
-        countryId: dto.countryId ?? null,
-        historicalCountryId: dto.historicalCountryId ?? null,
+        countryId: axis.countryId,
+        historicalCountryId: axis.historicalCountryId,
         predecessorGroupId: dto.predecessorGroupId ?? null,
         centerPersonId: dto.centerPersonId ?? null,
         sortOrder: dto.sortOrder ?? 0,
@@ -379,7 +480,7 @@ export class PersonGroupService {
     dto: UpdatePersonGroupDto,
     accountId?: string,
   ): Promise<PersonGroupResponseDto> {
-    await this.assertCanMutate(groupId, accountId)
+    const existing = await this.assertCanMutate(groupId, accountId)
     if (dto.predecessorGroupId) {
       if (dto.predecessorGroupId === groupId) {
         throw new BadRequestException('자기 자신을 전임 묶음으로 지정할 수 없습니다.')
@@ -409,6 +510,32 @@ export class PersonGroupService {
         cursor = node.predecessorGroupId
       }
     }
+    if (dto.centerPersonId && this.prisma.person?.findUnique) {
+      const center = await this.prisma.person.findUnique({
+        where: { id: dto.centerPersonId },
+        select: { id: true },
+      })
+      if (!center) {
+        throw new NotFoundException('중심 인물을 찾을 수 없습니다.')
+      }
+    }
+
+    let resolvedAxis: {
+      countryId: string | null
+      historicalCountryId: string | null
+    } | null = null
+    if (dto.countryId !== undefined || dto.historicalCountryId !== undefined) {
+      const nextCid =
+        dto.countryId !== undefined
+          ? dto.countryId
+          : (existing.countryId ?? null)
+      const nextHid =
+        dto.historicalCountryId !== undefined
+          ? dto.historicalCountryId
+          : (existing.historicalCountryId ?? null)
+      resolvedAxis = await this.resolveCountryAxis(nextCid, nextHid)
+    }
+
     await this.prisma.personGroup.update({
       where: { id: groupId },
       data: {
@@ -420,9 +547,11 @@ export class PersonGroupService {
         ...(dto.generationOrder !== undefined
           ? { generationOrder: dto.generationOrder }
           : {}),
-        ...(dto.countryId !== undefined ? { countryId: dto.countryId } : {}),
-        ...(dto.historicalCountryId !== undefined
-          ? { historicalCountryId: dto.historicalCountryId }
+        ...(resolvedAxis
+          ? {
+              countryId: resolvedAxis.countryId,
+              historicalCountryId: resolvedAxis.historicalCountryId,
+            }
           : {}),
         ...(dto.predecessorGroupId !== undefined
           ? { predecessorGroupId: dto.predecessorGroupId }
@@ -510,15 +639,26 @@ export class PersonGroupService {
   private async assertCanMutate(
     groupId: string,
     accountId?: string,
-  ): Promise<void> {
+  ): Promise<{
+    id: string
+    accountId: string | null
+    countryId?: string | null
+    historicalCountryId?: string | null
+  }> {
     const group = await this.prisma.personGroup.findUnique({
       where: { id: groupId },
-      select: { id: true, accountId: true },
+      select: {
+        id: true,
+        accountId: true,
+        countryId: true,
+        historicalCountryId: true,
+      },
     })
     if (!group) throw new NotFoundException('묶음을 찾을 수 없습니다.')
     if (group.accountId && group.accountId !== accountId) {
       throw new ForbiddenException('이 묶음을 만든 사용자만 편집할 수 있습니다.')
     }
+    return group
   }
 
   private async assertMembershipInGroup(

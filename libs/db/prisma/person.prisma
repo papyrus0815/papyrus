@@ -238,18 +238,6 @@ model Person {
   /// null이면 미상 또는 단일 배우자 케이스로 모호성 없음.
   parentMarriageId String? @map("parent_marriage_id") @db.Char(36)
 
-  //--- 왕/군주 관련 필드 (인물 고유)
-  /// 왕호는 사람이 아니라 재직(재위)의 속성 — GovernmentPositionTenure.regnalName (제임스 6세/1세처럼 재위마다 다르다)
-
-  /// 묘호 (동아시아 군주, 예: 세종, 태종, 고종)
-  templeName String? @map("temple_name") @db.VarChar(50)
-
-  /// 시호 (예: 문종, 무열왕, 효종)
-  posthumousName String? @map("posthumous_name") @db.VarChar(100)
-
-  /// 즉위 전 작호/봉호 (예: 수양대군, 충녕대군, 양녕대군)
-  preEnthronementTitle String? @map("pre_enthronement_title") @db.VarChar(100)
-
   //--- 외래키
   dynastyId        String? @map("dynasty_id") @db.Char(36)
   religionId       String? @map("religion_id") @db.Char(36)
@@ -347,6 +335,7 @@ model Person {
 
   PersonEvent              PersonEvent[]
   MilitaryUnitCommander    MilitaryUnitCommander[]
+  commandedDeployedUnits   SideDeployedUnit[]         @relation("SideDeployedUnitCommander")
   Book                     Book[]
   OrganizationPersonRole   OrganizationPersonRole[]   @relation("OrganizationPersonRoles")
   PoliticalPartyLeadership PoliticalPartyLeadership[] @relation("PoliticalPartyLeadership")
@@ -957,8 +946,11 @@ model MilitaryCareer {
   /// 군종 (육군, 해군, 공군, 해병대)
   branch String @db.VarChar(50)
 
-  /// 소속 부대/조직 ID
-  organizationId String @map("organization_id") @db.Char(36)
+  /// 소속 부대/조직 ID (일반 조직으로 등록된 경우)
+  organizationId String? @map("organization_id") @db.Char(36)
+
+  /// 소속 군부대 ID (MilitaryUnit 정본으로 직접 연결할 때 — 집단군·군·군단·사단 등)
+  militaryUnitId String? @map("military_unit_id") @db.Char(36)
 
   /// 보직 (군단장, 사단장, 참모총장 등)
   position String? @db.VarChar(100)
@@ -978,7 +970,8 @@ model MilitaryCareer {
   //--- 관계 필드
   person       Person                @relation("PersonMilitaryCareers", fields: [personId], references: [id], onDelete: Cascade)
   rank         Job                   @relation("MilitaryRank", fields: [rankId], references: [id], onDelete: Restrict)
-  organization Organization          @relation("MilitaryOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  organization Organization?         @relation("MilitaryOrganization", fields: [organizationId], references: [id], onDelete: Restrict)
+  militaryUnit MilitaryUnit?         @relation("MilitaryCareerUnit", fields: [militaryUnitId], references: [id], onDelete: SetNull)
   images       MilitaryCareerImage[]
 
   //--- 메타데이터
@@ -988,6 +981,7 @@ model MilitaryCareer {
   @@index([personId], name: "idx_military_career_personId")
   @@index([rankId], name: "idx_military_career_rankId")
   @@index([organizationId], name: "idx_military_career_orgId")
+  @@index([militaryUnitId], name: "idx_military_career_unitId")
   @@map("military_career")
 }
 

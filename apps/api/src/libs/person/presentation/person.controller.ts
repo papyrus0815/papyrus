@@ -544,8 +544,6 @@ export class PersonController {
     }>
     profileImageUrl: string | null
     regnalName: string | null
-    templeName: string | null
-    posthumousName: string | null
     sovereignReigns: any[]
     dynastyId: string | null
     countryId: string | null
@@ -602,7 +600,6 @@ export class PersonController {
     floruitEndYear: number | null
     floruitEra: any
     influence: number | null
-    preEnthronementTitle: string | null
     educations: any[]
     awards: any[]
     careers: any[]
@@ -936,9 +933,6 @@ export class PersonController {
           middleName: s.middleName ?? null,
           nameDisplayOrder: s.nameDisplayOrder,
           regnalName: extractRegnalName(s),
-          templeName: s.templeName ?? null,
-          posthumousName: s.posthumousName ?? null,
-          preEnthronementTitle: s.preEnthronementTitle ?? null,
           country: s.country ?? null,
           gender: s.gender,
           dynasty: s.dynasty,
@@ -1034,8 +1028,6 @@ export class PersonController {
       profileImageUrl: person.profileImageUrl,
       // 대표 왕호 — 재위 기록에서 파생(가장 최근 재위)
       regnalName: person.sovereignReigns?.[0]?.regnalName ?? null,
-      templeName: person.templeName ?? null,
-      posthumousName: person.posthumousName ?? null,
       sovereignReigns: serializeBigInt(person.sovereignReigns ?? []),
       dynasty: serializeBigInt(person.dynasty),
       religion: serializeBigInt(person.religion),
@@ -1259,7 +1251,6 @@ export class PersonController {
       floruitEndYear: (person as any).floruitEndYear ?? null,
       floruitEra: (person as any).floruitEra ?? null,
       influence: (person as any).influence ?? null,
-      preEnthronementTitle: (person as any).preEnthronementTitle ?? null,
       educations: serializeBigInt(person.educations ?? []),
       awards: serializeBigInt(person.awards ?? []),
       foundedDynasties: serializeBigInt(person.foundedDynasties ?? []),
@@ -1419,9 +1410,6 @@ export class PersonController {
       biography: dto.biography,
       profileImageUrl: dto.profileImageUrl,
       showLifespanOnEventList: dto.showLifespanOnEventList,
-      templeName: dto.templeName,
-      posthumousName: dto.posthumousName,
-      preEnthronementTitle: dto.preEnthronementTitle,
       dynastyId: dto.dynastyId,
       religionId: dto.religionId,
       denominationId: dto.denominationId,
@@ -1580,9 +1568,6 @@ export class PersonController {
       biography: dto.biography,
       profileImageUrl: dto.profileImageUrl,
       showLifespanOnEventList: dto.showLifespanOnEventList,
-      templeName: dto.templeName,
-      posthumousName: dto.posthumousName,
-      preEnthronementTitle: dto.preEnthronementTitle,
       dynastyId: dto.dynastyId,
       religionId: dto.religionId,
       denominationId: dto.denominationId,

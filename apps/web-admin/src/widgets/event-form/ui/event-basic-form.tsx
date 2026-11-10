@@ -90,6 +90,7 @@ import {
   isoToTimeInput,
 } from '@/shared/lib/iso-date'
 import { CountryPicker } from '@/shared/ui/country-picker'
+import type { DatePickerPrecision } from '@/shared/ui/date-picker/date-picker-modal'
 import {
   SelectModal,
   type SelectOption,
@@ -386,8 +387,10 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   const categoryTouchedRef = useRef(false)
   /** 세부의 핵심 기록 초안 — 사건이 생긴 뒤 각 정본 API로 잇는다(신규 등록 전용) */
   const [facetDrafts, setFacetDrafts] = useState<RegisterFacetDrafts>(emptyRegisterFacetDrafts)
-  /** 성립·소멸 칸에서 국가 모달을 열면 고른 나라를 이 역할로 넣는다 */
-  const [pendingCountryRole, setPendingCountryRole] = useState<'FOUNDED' | 'DISSOLVED' | null>(null)
+  /** 성립·소멸 또는 선전포고 칸에서 국가 모달을 열면 고른 나라를 이 역할로 넣는다 */
+  const [pendingCountryRole, setPendingCountryRole] = useState<
+    'FOUNDED' | 'DISSOLVED' | 'INITIATOR' | 'TARGET' | null
+  >(null)
   const closeCountryPicker = () => {
     setShowCountryModal(false)
     setPendingCountryRole(null)
@@ -772,7 +775,23 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
     id: string
     title: string
     startYear?: number | null
-  } | null>(null)
+    startDate?: string
+    endDate?: string
+    datePrecision?: DatePickerPrecision
+  } | null>(() => {
+    if (!isEditMode && initialRelatedEvents && initialRelatedEvents.length > 0) {
+      const firstRelated = initialRelatedEvents[0]
+      if (firstRelated.dateLabel && /^\d{4}-\d{2}-\d{2}$/.test(firstRelated.dateLabel)) {
+        return {
+          id: firstRelated.relatedEventId,
+          title: firstRelated.title,
+          startYear: firstRelated.startYear ?? null,
+          startDate: firstRelated.dateLabel,
+        }
+      }
+    }
+    return null
+  })
   const [relatedPickerOpen, setRelatedPickerOpen] = useState(false)
   const [relatedSearchTerm, setRelatedSearchTerm] = useState('')
   const [relatedQuickQuery, setRelatedQuickQuery] = useState('')
@@ -1423,6 +1442,9 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
           id: saved.id,
           title: title.trim(),
           startYear: currentSignedStartYear,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          datePrecision: endDate ? endDatePrecision : startDatePrecision,
         })
         if (hasAnyFacetDraft(facetDrafts)) {
           setLastSavedFacets({
@@ -2037,7 +2059,15 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
           isOpen={showCountryModal}
           onClose={closeCountryPicker}
           mode="single"
-          title={pendingCountryRole === 'FOUNDED' ? '세워진 나라 선택' : '무너진 나라 선택'}
+          title={
+            pendingCountryRole === 'FOUNDED'
+              ? '세워진 나라 선택'
+              : pendingCountryRole === 'DISSOLVED'
+                ? '무너진 나라 선택'
+                : pendingCountryRole === 'INITIATOR'
+                  ? '선포국 선택'
+                  : '대상국 선택'
+          }
           modernCountries={availableCountries}
           historicalCountries={availableHistoricalCountries}
           hintYearRange={countryHintYearRange}

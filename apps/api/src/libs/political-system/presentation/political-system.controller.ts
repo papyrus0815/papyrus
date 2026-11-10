@@ -197,12 +197,40 @@ export class PoliticalSystemController {
     this.assertPeriodOrder({
       startEra: effectiveStartEra,
       startYear: effectiveStartYear,
-      startMonth: dto.startMonth !== undefined ? dto.startMonth : existing.startMonth,
-      startDay: dto.startDay !== undefined ? dto.startDay : existing.startDay,
+      startMonth:
+        dto.startYear === null
+          ? null
+          : dto.startMonth !== undefined
+            ? dto.startMonth
+            : existing.startMonth,
+      startDay:
+        dto.startYear === null || dto.startMonth === null
+          ? null
+          : dto.startDay !== undefined
+            ? dto.startDay
+            : existing.startDay,
       endEra: effectiveEndEra,
       endYear: effectiveEndYear,
-      endMonth: dto.endMonth !== undefined ? dto.endMonth : existing.endMonth,
-      endDay: dto.endDay !== undefined ? dto.endDay : existing.endDay,
+      endMonth:
+        dto.endYear === null
+          ? null
+          : dto.endMonth !== undefined
+            ? dto.endMonth
+            : existing.endMonth,
+      endDay:
+        dto.endYear === null || dto.endMonth === null
+          ? null
+          : dto.endDay !== undefined
+            ? dto.endDay
+            : existing.endDay,
+      lowerHouseSeats:
+        dto.lowerHouseSeats !== undefined
+          ? dto.lowerHouseSeats
+          : existing.lowerHouseSeats,
+      upperHouseSeats:
+        dto.upperHouseSeats !== undefined
+          ? dto.upperHouseSeats
+          : existing.upperHouseSeats,
     })
     await this.assertPositionRefs(
       {
@@ -225,6 +253,12 @@ export class PoliticalSystemController {
     const writeData = this.writable(dto)
     if (effectiveStartYear != null && dto.startEra === undefined && !existing.startEra) {
       writeData.startEra = effectiveStartEra
+    } else if (dto.startYear === null && dto.startEra === undefined) {
+      writeData.startEra = null
+      if (dto.startMonth === undefined) writeData.startMonth = null
+      if (dto.startDay === undefined) writeData.startDay = null
+    } else if (dto.startMonth === null && dto.startDay === undefined) {
+      writeData.startDay = null
     }
     if (effectiveEndYear != null && dto.endEra === undefined && !existing.endEra) {
       writeData.endEra = effectiveEndEra
@@ -232,6 +266,8 @@ export class PoliticalSystemController {
       writeData.endEra = null
       if (dto.endMonth === undefined) writeData.endMonth = null
       if (dto.endDay === undefined) writeData.endDay = null
+    } else if (dto.endMonth === null && dto.endDay === undefined) {
+      writeData.endDay = null
     }
     if (axisChanged) {
       writeData.countryId = resolvedAxis.countryId
@@ -275,6 +311,8 @@ export class PoliticalSystemController {
         endYear: true,
         endMonth: true,
         endDay: true,
+        lowerHouseSeats: true,
+        upperHouseSeats: true,
       },
     })
     if (!existing) throw new NotFoundException('정체를 찾을 수 없습니다')
@@ -453,8 +491,47 @@ export class PoliticalSystemController {
     }
   }
 
-  /** 시작이 끝보다 뒤면 거른다 — BC 및 같은 해 내 월·일 순서까지 부호 키로 비교한다. */
+  /** 시작이 끝보다 뒤면 거른다 — BC 및 같은 해 내 월·일 순서, 연·월·일 및 의석수 범위까지 함께 검증한다. */
   private assertPeriodOrder(dto: UpdatePoliticalSystemDto) {
+    const validateEdge = (
+      label: string,
+      year: number | null | undefined,
+      month: number | null | undefined,
+      day: number | null | undefined,
+    ) => {
+      if (year != null && (!Number.isInteger(year) || year < 1)) {
+        throw new BadRequestException(`${label} 연도는 1 이상의 정수여야 합니다`)
+      }
+      if (month != null && (!Number.isInteger(month) || month < 1 || month > 12)) {
+        throw new BadRequestException(`${label} 월은 1~12 사이여야 합니다`)
+      }
+      if (day != null && (!Number.isInteger(day) || day < 1 || day > 31)) {
+        throw new BadRequestException(`${label} 일은 1~31 사이여야 합니다`)
+      }
+      if (year == null && (month != null || day != null)) {
+        throw new BadRequestException(`${label} 연도 없이 월·일만 입력할 수 없습니다`)
+      }
+      if (month == null && day != null) {
+        throw new BadRequestException(`${label} 월 없이 일만 입력할 수 없습니다`)
+      }
+    }
+
+    validateEdge('시작', dto.startYear, dto.startMonth, dto.startDay)
+    validateEdge('종료', dto.endYear, dto.endMonth, dto.endDay)
+
+    if (
+      dto.lowerHouseSeats != null &&
+      (!Number.isInteger(dto.lowerHouseSeats) || dto.lowerHouseSeats < 0)
+    ) {
+      throw new BadRequestException('하원(단원) 의석수는 0 이상의 정수여야 합니다')
+    }
+    if (
+      dto.upperHouseSeats != null &&
+      (!Number.isInteger(dto.upperHouseSeats) || dto.upperHouseSeats < 0)
+    ) {
+      throw new BadRequestException('상원 의석수는 0 이상의 정수여야 합니다')
+    }
+
     const start = signedDateKey(
       dto.startEra ?? 'AD',
       dto.startYear ?? null,
@@ -509,6 +586,15 @@ export class PoliticalSystemController {
     ]
     for (const key of keys) {
       if (dto[key] !== undefined) data[key] = dto[key]
+    }
+    if (dto.legislatureType === 'UNICAMERAL') {
+      data.upperHouseName = null
+      data.upperHouseSeats = null
+    } else if (dto.legislatureType === 'NONE') {
+      data.lowerHouseName = null
+      data.lowerHouseSeats = null
+      data.upperHouseName = null
+      data.upperHouseSeats = null
     }
     /*
      * 한 직함에 두 진실을 두지 않는다. 카탈로그에서 고른 정의가 오면 같은 축의

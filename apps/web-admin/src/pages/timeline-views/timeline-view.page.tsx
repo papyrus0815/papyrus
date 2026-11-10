@@ -17,6 +17,8 @@ import styled, { css } from 'styled-components'
 import { EthnicityDashboardSection } from '@/widgets/country/country-detail/ui/ethnicity-dashboard-section.widget'
 import { type DashboardContentView } from '@/widgets/content-shell'
 
+import { MilitaryUnitDetailSection } from './military-unit-detail-section'
+
 const PLACEHOLDERS: Partial<
   Record<
     DashboardContentView,
@@ -49,6 +51,7 @@ export default function TimelineViewPage({ view }: Props) {
 
   const renderRight = () => {
     if (view === 'ethnicity') return <EthnicityDashboardSection />
+    if (view === 'military') return <MilitaryUnitDetailSection />
     const ph = PLACEHOLDERS[view]
     if (!ph) return null
     return (

@@ -15,6 +15,8 @@
  * 중앙부처」의 어느 카테고리 탭에도 안 나타났다.
  */
 
+import type { AdministrationDepartmentKind } from '@/shared/api/administration-department'
+
 export type DepartmentFrameItem = {
   /** 명칭 체계가 달라도 같은 자리를 가리키는 키 (외교·국방…) */
   slot: string
@@ -23,6 +25,8 @@ export type DepartmentFrameItem = {
   categoryName: string
   /** 이 부처의 장관·수장 직함 예시 (예: 국무장관, 대장대신, 이조판서) */
   headPositionTitle?: string
+  /** 기관 성격 (미지정 시 MINISTRY) */
+  kind?: AdministrationDepartmentKind
 }
 
 export type DepartmentNameFrame = {
@@ -174,7 +178,13 @@ export const DEPARTMENT_NAME_FRAMES: DepartmentNameFrame[] = [
       { slot: 'communications', name: '체신성', categoryName: '정보·통신', headPositionTitle: '체신대신' },
       { slot: 'industry', name: '농상무성', categoryName: '농림·해양', headPositionTitle: '농상무대신' },
       { slot: 'colonial', name: '척무성', categoryName: '기타', headPositionTitle: '척무대신' },
-      { slot: 'court', name: '궁내성', categoryName: '기타', headPositionTitle: '궁내대신' },
+      {
+        slot: 'court',
+        name: '궁내성',
+        categoryName: '기타',
+        headPositionTitle: '궁내대신',
+        kind: 'ROYAL_HOUSEHOLD',
+      },
     ],
   },
   {
@@ -229,7 +239,13 @@ export const DEPARTMENT_NAME_FRAMES: DepartmentNameFrame[] = [
       { slot: 'justice', name: '법부', categoryName: '법무', headPositionTitle: '법부대신' },
       { slot: 'education', name: '학부', categoryName: '교육', headPositionTitle: '학부대신' },
       { slot: 'industry', name: '농상공부', categoryName: '산업·에너지', headPositionTitle: '농상공부대신' },
-      { slot: 'court', name: '궁내부', categoryName: '기타', headPositionTitle: '궁내부대신' },
+      {
+        slot: 'court',
+        name: '궁내부',
+        categoryName: '기타',
+        headPositionTitle: '궁내부대신',
+        kind: 'ROYAL_HOUSEHOLD',
+      },
     ],
   },
   {
@@ -383,4 +399,87 @@ export function suggestFrameItems(
     }
   }
   return frame.items.filter((item) => !takenSlots.has(item.slot))
+}
+
+const KEYWORD_CATEGORY_RULES: Array<{ pattern: RegExp; categoryName: string }> = [
+  { pattern: /외교|외무|국무부|통일|예조|예부|외부/, categoryName: '외교' },
+  { pattern: /국방|방위|전쟁|육군|해군|공군|군부|병조|병부|참모본부|군령/, categoryName: '국방' },
+  { pattern: /재무|재정|기획재정|대장|탁지|호조|호부|국고/, categoryName: '재정·경제' },
+  { pattern: /법무|사법|법부|형조|형부|검찰/, categoryName: '법무' },
+  { pattern: /내무|행정|안전|총무|공안|내부|이조|이부|보훈|국토안보/, categoryName: '행정·안전' },
+  { pattern: /교육|문부|학부/, categoryName: '교육' },
+  { pattern: /보건|복지|후생|위생/, categoryName: '보건·복지' },
+  { pattern: /고용|노동|연금/, categoryName: '고용·노동' },
+  { pattern: /산업|상무|경제|공업|통상|에너지|농상공/, categoryName: '산업·에너지' },
+  { pattern: /농림|농업|농무|해양|수산|농상무|축산|식량/, categoryName: '농림·해양' },
+  { pattern: /국토|교통|주택|공공사업|공조|공부|철도|체신/, categoryName: '국토·교통' },
+  { pattern: /정보|통신|과학기술|우정/, categoryName: '정보·통신' },
+  { pattern: /문화|체육|관광|선전/, categoryName: '문화·체육' },
+  { pattern: /환경|기후/, categoryName: '환경' },
+  { pattern: /궁내|식민|척무|인도부|종친/, categoryName: '기타' },
+]
+
+/**
+ * 부처 이름으로부터 전역 카테고리 이름(예: '외교', '국방', '기타')을 추론한다.
+ * 대시보드에서 직접 이름을 입력해 부처를 만들 때도 카테고리가 비지 않도록 돕는다.
+ */
+export function inferDepartmentCategoryName(
+  departmentName: string,
+  preferredFrame?: DepartmentNameFrame,
+): string | null {
+  const normalized = stripSpace(departmentName)
+  if (!normalized) return null
+
+  const framesToCheck = preferredFrame
+    ? [
+        preferredFrame,
+        ...DEPARTMENT_NAME_FRAMES.filter((f) => f.id !== preferredFrame.id),
+      ]
+    : DEPARTMENT_NAME_FRAMES
+
+  for (const frame of framesToCheck) {
+    const exact = frame.items.find((item) => stripSpace(item.name) === normalized)
+    if (exact) return exact.categoryName
+  }
+  for (const frame of framesToCheck) {
+    const partial = frame.items.find((item) =>
+      normalized.includes(stripSpace(item.name)),
+    )
+    if (partial) return partial.categoryName
+  }
+  for (const rule of KEYWORD_CATEGORY_RULES) {
+    if (rule.pattern.test(normalized)) return rule.categoryName
+  }
+  return '기타'
+}
+
+/**
+ * 부처 이름으로부터 기본 기관 성격(kind)을 추론한다.
+ */
+export function inferDepartmentKind(
+  departmentName: string,
+  preferredFrame?: DepartmentNameFrame,
+): AdministrationDepartmentKind | undefined {
+  const normalized = stripSpace(departmentName)
+  if (!normalized) return undefined
+
+  const framesToCheck = preferredFrame
+    ? [
+        preferredFrame,
+        ...DEPARTMENT_NAME_FRAMES.filter((f) => f.id !== preferredFrame.id),
+      ]
+    : DEPARTMENT_NAME_FRAMES
+
+  for (const frame of framesToCheck) {
+    const matched = frame.items.find(
+      (item) =>
+        stripSpace(item.name) === normalized ||
+        normalized.includes(stripSpace(item.name)),
+    )
+    if (matched?.kind) return matched.kind
+  }
+  if (/궁내성|궁내부|종친부|내수사|시종원|장악원|황실|왕실/.test(normalized)) {
+    return 'ROYAL_HOUSEHOLD'
+  }
+  return undefined
 }

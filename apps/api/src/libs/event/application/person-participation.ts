@@ -159,7 +159,7 @@ export async function resolveOfficesAtEvent(
     return startRange[0] <= eventRange[1] && endKey >= eventRange[0]
   }
 
-  const [reigns, tenures] = await Promise.all([
+  const [reigns, tenures, unitCommands, militaryCareers] = await Promise.all([
     // 재위 = 군주직 재임 행 (직위 보유 단일 모델 이행 2단계)
     db.governmentPositionTenure.findMany({
       where: reignWhere({ personId: { in: personIds } }),
@@ -186,7 +186,15 @@ export async function resolveOfficesAtEvent(
       where: tenureWhere({ personId: { in: personIds } }),
       select: {
         personId: true,
+        startEra: true,
+        startYear: true,
+        startMonth: true,
+        startDay: true,
         startDate: true,
+        endEra: true,
+        endYear: true,
+        endMonth: true,
+        endDay: true,
         endDate: true,
         title: true,
         positionDefinition: { select: { title: true } },
@@ -194,11 +202,46 @@ export async function resolveOfficesAtEvent(
         historicalCountry: { select: { name: true } },
       },
     }),
+    db.militaryUnitCommander.findMany({
+      where: { personId: { in: personIds } },
+      select: {
+        personId: true,
+        rank: true,
+        role: true,
+        startDate: true,
+        endDate: true,
+        unit: {
+          select: {
+            name: true,
+            country: { select: { name: true } },
+            historicalCountry: { select: { name: true } },
+          },
+        },
+      },
+    }),
+    db.militaryCareer.findMany({
+      where: { personId: { in: personIds } },
+      select: {
+        personId: true,
+        position: true,
+        startDate: true,
+        endDate: true,
+        rank: { select: { title: true } },
+        militaryUnit: {
+          select: {
+            name: true,
+            country: { select: { name: true } },
+            historicalCountry: { select: { name: true } },
+          },
+        },
+        organization: { select: { name: true } },
+      },
+    }),
   ])
 
   const push = (personId: string, label: string) => {
     const list = result.get(personId) ?? []
-    if (!list.includes(label) && list.length < 2) list.push(label)
+    if (!list.includes(label) && list.length < 3) list.push(label)
     result.set(personId, list)
   }
 
@@ -212,13 +255,36 @@ export async function resolveOfficesAtEvent(
     push(reign.personId, `${countryName} ${office}${name}`.trim())
   }
   for (const tenure of tenures) {
-    const start = partsOf(null, null, null, null, tenure.startDate)
-    const end = partsOf(null, null, null, null, tenure.endDate)
+    const start = partsOf(tenure.startEra, tenure.startYear, tenure.startMonth, tenure.startDay, tenure.startDate)
+    const end = partsOf(tenure.endEra, tenure.endYear, tenure.endMonth, tenure.endDay, tenure.endDate)
     if (!overlaps(start, end)) continue
     const countryName = tenure.historicalCountry?.name ?? tenure.country?.name ?? ''
     const office = tenure.title ?? tenure.positionDefinition?.title
     if (!office) continue
     push(tenure.personId, `${countryName} ${office}`.trim())
+  }
+  for (const cmd of unitCommands) {
+    const start = partsOf(null, null, null, null, cmd.startDate)
+    const end = partsOf(null, null, null, null, cmd.endDate)
+    if (!overlaps(start, end)) continue
+    const countryName = cmd.unit.historicalCountry?.name ?? cmd.unit.country?.name ?? ''
+    const roleLabel = cmd.role ?? '지휘관'
+    const rankSuffix = cmd.rank ? ` (${cmd.rank})` : ''
+    push(cmd.personId, `${countryName} ${cmd.unit.name} ${roleLabel}${rankSuffix}`.trim())
+  }
+  for (const career of militaryCareers) {
+    const start = partsOf(null, null, null, null, career.startDate)
+    const end = partsOf(null, null, null, null, career.endDate)
+    if (!overlaps(start, end)) continue
+    const countryName =
+      career.militaryUnit?.historicalCountry?.name ??
+      career.militaryUnit?.country?.name ??
+      ''
+    const orgName = career.militaryUnit?.name ?? career.organization?.name ?? ''
+    const posLabel = career.position ?? ''
+    const rankSuffix = career.rank?.title ? ` (${career.rank.title})` : ''
+    const full = [countryName, orgName, posLabel].filter(Boolean).join(' ') + rankSuffix
+    if (full.trim()) push(career.personId, full.trim())
   }
   return result
 }

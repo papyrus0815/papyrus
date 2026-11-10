@@ -17,6 +17,7 @@ import { Prisma } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 import { serializeElectionBigInt } from '../election-serialize.util'
 import { resolveCountryScopeOr } from '../../country/domain/country-scope.util'
+import { assertLawMatchesPoliticalPartyJurisdictionAsync } from '../domain/law-jurisdiction.util'
 
 /** 응답에 연결 국가/역사국가 요약({id,name})을 실어주는 공용 include */
 const LAW_COUNTRY_INCLUDE = {
@@ -61,6 +62,8 @@ export interface UpdateLawBody {
   articleNumber?: number | null
   paragraphNumber?: number | null
   lawTypeId?: string | null
+  countryId?: string | null
+  historicalCountryId?: string | null
 }
 
 /**
@@ -77,14 +80,13 @@ export class LawController {
     @Query('countryId') countryId?: string,
     @Query('historicalCountryId') historicalCountryId?: string,
   ): Promise<any> {
-    // 현대 국가 필터는 브리지로 연결된 역사국가 소속까지 OR 확장(검토서 F14 —
-    // person·election·party와 동일 소속 정의). 역사국가 단독 필터는 정확 일치.
-    // (현재 law 0행이라 관측 효과는 없으나 계약 정합·미래 데이터 대비.)
+    // 역사국가 필터가 지정되면 해당 시대를 우선 조회하고, 현대 국가 단독 필터일 때만
+    // 브리지로 연결된 역사국가 소속까지 OR 확장(검토서 F14 — person·election·party와 동일 소속 정의).
     const where: Prisma.LawWhereInput = {
-      ...(countryId
-        ? await resolveCountryScopeOr(this.prisma, countryId)
-        : historicalCountryId
-          ? { historicalCountryId }
+      ...(historicalCountryId
+        ? { historicalCountryId }
+        : countryId
+          ? await resolveCountryScopeOr(this.prisma, countryId)
           : {}),
     }
     const rows = await this.prisma.law.findMany({
@@ -158,6 +160,43 @@ export class LawController {
       data.lawType = body.lawTypeId
         ? { connect: { id: body.lawTypeId } }
         : { disconnect: true }
+    }
+    if (body.countryId !== undefined || body.historicalCountryId !== undefined) {
+      const nextLawJurisdiction = {
+        countryId:
+          body.countryId !== undefined ? body.countryId : existing.countryId,
+        historicalCountryId:
+          body.historicalCountryId !== undefined
+            ? body.historicalCountryId
+            : existing.historicalCountryId,
+      }
+      if (this.prisma.politicalPartyLaw?.findMany) {
+        const linkedParties = await this.prisma.politicalPartyLaw.findMany({
+          where: { lawId: id },
+          include: {
+            party: {
+              select: { countryId: true, historicalCountryId: true },
+            },
+          },
+        })
+        for (const link of linkedParties) {
+          await assertLawMatchesPoliticalPartyJurisdictionAsync(
+            this.prisma,
+            nextLawJurisdiction,
+            link.party,
+          )
+        }
+      }
+      if (body.countryId !== undefined) {
+        data.country = body.countryId
+          ? { connect: { id: body.countryId } }
+          : { disconnect: true }
+      }
+      if (body.historicalCountryId !== undefined) {
+        data.historicalCountry = body.historicalCountryId
+          ? { connect: { id: body.historicalCountryId } }
+          : { disconnect: true }
+      }
     }
     const row = await this.prisma.law.update({
       where: { id },

@@ -1,7 +1,7 @@
 import { type DragEvent, Fragment, type ReactNode, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiChevronDown, FiChevronRight, FiLayers, FiLink2, FiMapPin, FiPlus } from 'react-icons/fi'
+import { FiChevronDown, FiChevronRight, FiLayers, FiLink2, FiPlus } from 'react-icons/fi'
 import { Link, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -10,10 +10,8 @@ import {
   ledgerAccent,
   ledgerAccentSubtle,
   ledgerBackground,
-  ledgerHairline,
   ledgerHairlineStrong,
 } from '@/entities/event/ui/ledger-tokens'
-import { eventDomainDef } from '@/entities/event/model/event-domain'
 import { metaText } from '@/pages/events/styles/theme'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
 import { type EventPhaseInput, type UpdateEventDto, deleteEvent, putEventPhases, updateEvent } from '@/shared/api/events'
@@ -29,7 +27,14 @@ import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inlin
 
 import * as S from '../styles'
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
-import { type DevelopmentPhase, PHASE_LABEL, groupByPhase, phaseOf, spanOfChildren } from './collection-development.lib'
+import {
+  type DevelopmentPhase,
+  PHASE_LABEL,
+  groupByPhase,
+  phaseOf,
+  spanOfChildren,
+  stepTimeMarkers,
+} from './collection-development.lib'
 import {
   type AccessionMarker,
   type BridgeCountry,
@@ -37,9 +42,18 @@ import {
   accessionMarkers,
   eventWindow,
 } from './contemporary-heads.lib'
-import { type GapInfo, type QuietSpan, quietSpansWithStart, siblingGaps, spanText, trailingQuiet } from './development-gap.lib'
+import {
+  type DatedNode,
+  type GapInfo,
+  type GapPace,
+  type QuietSpan,
+  quietSpansWithStart,
+  siblingGaps,
+  trailingQuiet,
+} from './development-gap.lib'
 import { HeaderTextAction } from './section-collapse'
 import { ChronologicalFlow } from './chronological-flow'
+import { formatSpanLabel } from './development-timeline.lib'
 import { EventPhaseEditor } from './event-phase-editor'
 import { type EventPhase, type PhaseReach, isoToPhasePoint, phaseRangeLabel, phaseReach } from './event-phase.lib'
 import {
@@ -231,24 +245,6 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
     queryFn: () => getEventOverview(event.id),
     staleTime: 0,
   })
-  /**
-   * 행 표지 — 어디서(위치)·무엇과 이어지나(연결 수). 조망 응답이 하위 전부의 위치·관련 사건을 실어 준다.
-   * 누르면 조망의 지도·연결 보기로(하위 전부를 한 지도·한 목록에서).
-   */
-  const rowSignals = useMemo(() => {
-    const place = new Map<string, { label: string; pinned: boolean }>()
-    const links = new Map<string, number>()
-    if (!overview) return { place, links }
-    for (const node of [overview.root, ...overview.descendants]) {
-      const pinned = node.locationLatitude != null && node.locationLongitude != null
-      const label = node.location?.trim() ?? ''
-      if (pinned || label) place.set(node.id, { label: label || '핀', pinned })
-    }
-    for (const relation of overview.relations ?? []) {
-      for (const id of [relation.fromId, relation.toId]) links.set(id, (links.get(id) ?? 0) + 1)
-    }
-    return { place, links }
-  }, [overview])
 
   /**
    * 이 화면에서 바꾼 종류 — 조망 응답에 종류가 안 실려 오는 동안(옛 API 빌드) 하위의 하위는 '하위가 있나'로만
@@ -337,13 +333,18 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
    * 앞 사건 시작 며칠 뒤인지 — 같은 상위 아래 화면 차례에서 앞에 나온 형제 중 가장 늦게 시작한 사건과 견준다(직계는 구획을 넘어 이어지는 차례,
    * 하위 묶음 안은 그 안에서). 첫 행은 비운다 — 상위 시작과의 관계는 구획(시작 이전·기간 중)이 이미 말한다.
    */
-  const { gapById, quietById } = useMemo(() => {
+  const { gapById, quietById, timeMarkerById } = useMemo(() => {
     const gaps = new Map<string, GapInfo & { anchorRef: string | null }>()
     const quiets = new Map<string, QuietSpan>()
+    const markers = new Map<string, string>()
     /* 번호는 renderRow와 같은 규칙 — 직계는 화면 차례(ordinalById), 하위는 '상위 번호-자리' */
-    const visit = (siblings: TreeRow[], ordinalOf: (node: TreeRow, position: number) => string) => {
+    const visit = (
+      siblings: TreeRow[],
+      parentNode: DatedNode,
+      ordinalOf: (node: TreeRow, position: number) => string,
+    ) => {
       const siblingGapList = siblingGaps(siblings)
-      const quietList = quietSpansWithStart(siblings)
+      const quietList = quietSpansWithStart(siblings, parentNode)
       siblings.forEach((node, position) => {
         const gap = siblingGapList[position]
         if (gap) {
@@ -357,13 +358,27 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
         }
         const quiet = quietList[position]
         if (quiet) quiets.set(node.id, quiet)
+        if (node.children.length >= 2) {
+          const childMarkers = stepTimeMarkers(node.children)
+          node.children.forEach((child, childIndex) => {
+            if (childMarkers[childIndex]) markers.set(child.id, childMarkers[childIndex]!)
+          })
+        }
         const own = ordinalOf(node, position)
-        visit(node.children, (_child, childPosition) => `${own}-${childPosition + 1}`)
+        visit(node.children, node, (_child, childPosition) => `${own}-${childPosition + 1}`)
       })
     }
-    visit(groups.flatMap((group) => group.items), (node) => String(ordinalById.get(node.id) ?? 0))
-    return { gapById: gaps, quietById: quiets }
-  }, [groups, ordinalById])
+    visit(groups.flatMap((group) => group.items), event, (node) => String(ordinalById.get(node.id) ?? 0))
+    for (const group of groups) {
+      if (group.items.length < 2) continue
+      const groupMarkers = stepTimeMarkers(group.items)
+      group.items.forEach((node, index) => {
+        if (groupMarkers[index]) markers.set(node.id, groupMarkers[index]!)
+      })
+    }
+    return { gapById: gaps, quietById: quiets, timeMarkerById: markers }
+  }, [groups, ordinalById, event])
+
   /**
    * 하위가 끝난 뒤 상위가 끝나기까지 1년 넘게 빈 시간 — '기간 중' 구획 끝에 공백 줄로 단다.
    * 하위가 상위 끝 뒤까지 있으면(끝난 뒤 구획) 비어 있지 않으므로 직계 전체(추가 상위 연결 포함)로 잰다.
@@ -700,12 +715,10 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
     const collapsed = collapsedIds.has(node.id)
     const checked = selectedIds.has(node.id)
     const hint = dropHint?.targetId === node.id ? dropHint.action : null
-    const dateLabel = node.startDate
+    const fullDateLabel = node.startDate
       ? formatDateRange(node.startDate, node.endDate ?? undefined, node.startDatePrecision, node.endDatePrecision)
       : null
-    const domain = node.domain ? eventDomainDef(node.domain) : null
-    /** 진행 기간·앞 사건과의 간격 — 날짜 줄에 붙인다(행 높이를 늘리지 않게) */
-    const span = spanText(node)
+    const compactDateLabel = formatSpanLabel(node) || fullDateLabel
     const gap = gapById.get(node.id) ?? null
     const quiet = quietById.get(node.id) ?? null
     const nested = node.depth > 1
@@ -716,6 +729,7 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
       <Step
         id={`narrative-${node.id}`}
         $depth={node.depth}
+        $pace={!quiet ? gap?.pace : undefined}
         data-selected={checked || undefined}
         data-drop={hint?.type}
         data-dragging={draggingId === node.id || undefined}
@@ -736,112 +750,43 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
             data-grab={canDrag || undefined}
             title={canDrag ? '끌어서 다른 묶음 밑으로 옮기거나, 개별 사건 위에 놓아 함께 묶기' : undefined}
           >
-            <Node $collection={node.isCollection} $depth={node.depth} aria-hidden>
-              {ordinal}
-            </Node>
+            <Node $collection={node.isCollection} $depth={node.depth} aria-hidden />
           </NodeCol>
         )}
         <StepBody>
           <Grab {...(canDrag ? dragSourceProps(node) : {})} data-grab={canDrag || undefined}>
-            {/* 날짜가 먼저 — 타임라인은 '언제'로 읽힌다(연혁·단락 타임라인과 같은 문법) */}
-            <StepPeriod>
-              <span>{dateLabel ?? '날짜 미상'}</span>
-              {span && <StepSpan>{span}</StepSpan>}
-              {domain && (
-                <DomainMeta>
-                  <domain.Icon aria-hidden />
-                  {domain.label}
-                </DomainMeta>
-              )}
-              {node.viaExtraLink && <span>추가 상위로 연결</span>}
-              {(() => {
-                const place = rowSignals.place.get(node.id)
-                const linkCount = rowSignals.links.get(node.id) ?? 0
-                return (
-                  <>
-                    {place && (
-                      <SignalLink
-                        to={{ search: '?tab=survey&sv=map' }}
-                        title={place.pinned ? `${place.label} — 조망 지도에서 보기` : `${place.label} — 아직 핀 없음, 조망 지도에서 찍기`}
-                        data-unpinned={place.pinned ? undefined : ''}
-                      >
-                        <FiMapPin aria-hidden />
-                        <span className="text">{place.label}</span>
-                      </SignalLink>
-                    )}
-                    {linkCount > 0 && (
-                      <SignalLink to={{ search: '?tab=survey&sv=links' }} title={`관련 사건 연결 ${linkCount} — 조망 연결 보기에서`}>
-                        <FiLink2 aria-hidden />
-                        연결 {linkCount}
-                      </SignalLink>
-                    )}
-                  </>
-                )
-              })()}
-              {/* 여러 국면에 걸친 하위 — 장 머리는 시작 국면에 서니, 끝 국면까지 간다고 적는다 */}
-              {(() => {
-                const reach = node.depth === 1 ? reachById.get(node.id) : undefined
-                return reach && reach.from != null && reach.to != null && reach.to > reach.from ? (
-                  <span title={`${reach.from}국면에 시작해 ${reach.to}국면까지 이어진다`}>{reach.to}국면까지 걸침</span>
-                ) : null
-              })()}
-              {/*
-                * 앞 사건과의 간격 — 그 행 자신의 날짜 줄 끝에 문장으로('앞 사건 9일 뒤'). 행 사이 선 위 알약은 위·아래
-                * 어느 행의 말인지 맞춰 읽어야 했고, '+9일'만으로는 무엇과 견준 값인지 읽히지 않았다.
-                * 위에 공백 줄이 서면 그 줄이 같은 말을 하므로 비운다.
-                */}
-              {gap && !quiet && <StepGap title={gap.title}>{gapPhrase(gap)}</StepGap>}
-            </StepPeriod>
-            <StepHead>
-              <StepTitle
-                to={pathKeys.events.detail(node.id)}
-                viewTransition
-                draggable={false}
-                $nested={nested}
-                aria-haspopup="dialog"
-                onMouseEnter={() => prefetchEvent(node.id)}
-                onFocus={() => prefetchEvent(node.id)}
-                onClick={(clickEvent) => {
-                  /* 보통 클릭 = 미리보기 모달. 새 탭(⌘/Ctrl·가운데 버튼)은 링크 그대로 */
-                  if (!shouldInterceptEntityClick(clickEvent)) return
-                  clickEvent.preventDefault()
-                  setPreviewId(node.id)
-                }}
-              >
-                {node.title}
-              </StepTitle>
-              {node.isCollection && (
-                <ExpandToggle
-                  expanded={!collapsed}
-                  count={node.children.length}
-                  title={node.title}
-                  onToggle={() => setCollapsedIds((prev) => toggleIn(prev, node.id))}
-                />
-              )}
-            </StepHead>
-            {/* 접힌 묶음 — 안의 국면 차례를 한 줄로(무엇이 접혀 있는지). 누르면 펼친다 */}
-            {node.isCollection && collapsed && (nestedRuns.get(node.id)?.heads.size ?? 0) > 0 && (
-              <ChapterSummary
-                type="button"
-                onClick={() => setCollapsedIds((prev) => toggleIn(prev, node.id))}
-                aria-label={`${node.title} 펼치기`}
-              >
-                {(() => {
-                  /* 같은 국면은 합쳐 센다 — 구간이 끊겨도(사이에 국면 밖 사건) '3국면'이 두 번 서지 않게. 국면 순, 밖은 끝 */
-                  const totals = new Map<string, { label: string; count: number; order: number }>()
-                  for (const run of nestedRuns.get(node.id)?.heads.values() ?? []) {
-                    const label = run.reach.from != null ? `${run.reach.from}국면` : '국면 밖'
-                    const entry = totals.get(label) ?? { label, count: 0, order: run.reach.from ?? Number.MAX_SAFE_INTEGER }
-                    entry.count += run.count
-                    totals.set(label, entry)
-                  }
-                  return [...totals.values()]
-                    .sort((left, right) => left.order - right.order)
-                    .map((entry) => `${entry.label} ${entry.count}`)
-                    .join(' · ')
-                })()}
-              </ChapterSummary>
-            )}
+            <StepRowLine $nested={nested}>
+              <StepDate $nested={nested} title={fullDateLabel ?? undefined}>
+                {compactDateLabel ?? ''}
+              </StepDate>
+              <StepHead>
+                <StepTitle
+                  to={pathKeys.events.detail(node.id)}
+                  viewTransition
+                  draggable={false}
+                  $nested={nested}
+                  aria-haspopup="dialog"
+                  onMouseEnter={() => prefetchEvent(node.id)}
+                  onFocus={() => prefetchEvent(node.id)}
+                  onClick={(clickEvent) => {
+                    /* 보통 클릭 = 미리보기 모달. 새 탭(⌘/Ctrl·가운데 버튼)은 링크 그대로 */
+                    if (!shouldInterceptEntityClick(clickEvent)) return
+                    clickEvent.preventDefault()
+                    setPreviewId(node.id)
+                  }}
+                >
+                  {node.title}
+                </StepTitle>
+                {node.isCollection && (
+                  <ExpandToggle
+                    expanded={!collapsed}
+                    count={node.children.length}
+                    title={node.title}
+                    onToggle={() => setCollapsedIds((prev) => toggleIn(prev, node.id))}
+                  />
+                )}
+              </StepHead>
+            </StepRowLine>
             {owned && !selecting && !draggingId && (
               <StepTools>
                 <KindSwitch
@@ -903,24 +848,34 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
   }
 
   /** 즉위·취임 표지 한 줄 — 하위 사건과 같은 선 위, 번호 대신 왕관 노드. 번호·간격 계산에는 끼지 않는다 */
-  const renderAccession = (marker: AccessionMarker): ReactNode => (
-    <AccessionStep key={`accession-${marker.key}`} aria-label={`${marker.countries.join('·')} ${marker.name} ${marker.verb}`}>
-      <AccessionNode aria-hidden $verb={marker.verb}>
-        {marker.verb === '즉위' ? '♛' : '★'}
-      </AccessionNode>
-      <AccessionBody>
-        <AccessionDate>
-          {formatDateRange(marker.startDate, undefined, marker.startPrecision, undefined)}
-          {marker.countries.length > 0 && <span>{marker.countries.join(' · ')}</span>}
-        </AccessionDate>
-        <AccessionTitle>
-          <b>{marker.name}</b>
-          {marker.title ? ` ${marker.title}` : ''} {marker.verb}
-          {marker.predecessor && <span className="prev"> · {marker.predecessor} 다음</span>}
-        </AccessionTitle>
-      </AccessionBody>
-    </AccessionStep>
-  )
+  const renderAccession = (marker: AccessionMarker): ReactNode => {
+    const fullDate = formatDateRange(marker.startDate, undefined, marker.startPrecision, undefined)
+    const compactDate =
+      formatSpanLabel({
+        id: marker.key,
+        title: marker.name,
+        startDate: marker.startDate,
+        startDatePrecision: marker.startPrecision,
+      }) || fullDate
+    return (
+      <AccessionStep key={`accession-${marker.key}`} aria-label={`${marker.countries.join('·')} ${marker.name} ${marker.verb}`}>
+        <AccessionNode aria-hidden $verb={marker.verb}>
+          {marker.verb === '즉위' ? '♛' : '★'}
+        </AccessionNode>
+        <AccessionBody>
+          <StepRowLine>
+            <AccessionDate title={fullDate}>{compactDate}</AccessionDate>
+            <AccessionTitle>
+              <b>{marker.name}</b>
+              {marker.title ? ` ${marker.title}` : ''} {marker.verb}
+              {marker.countries.length > 0 && <span className="prev"> · {marker.countries.join(' · ')}</span>}
+              {marker.predecessor && <span className="prev"> · {marker.predecessor} 다음</span>}
+            </AccessionTitle>
+          </StepRowLine>
+        </AccessionBody>
+      </AccessionStep>
+    )
+  }
 
   /*
    * 국면(목차) — 이 묶음을 시간으로 나눈 장. 사건이 아니라 구획이라 하위 사건은 이 묶음 바로 아래 그대로 두고,
@@ -1145,7 +1100,6 @@ export function CollectionDevelopment({ event, onPatch, onGatherExisting }: Coll
             )}
           </ChapterKicker>
           <ChapterTitle $depth={depth}>{title}</ChapterTitle>
-          {chapter?.description && <ChapterDescription $depth={depth}>{chapter.description}</ChapterDescription>}
         </ChapterText>
       </ChapterHead>
     )
@@ -1721,12 +1675,7 @@ const TextButton = styled.button`
  */
 const NODE = 24
 const NESTED_NODE = 20
-/**
- * 노드 열 폭 — 깊이마다 번호가 길어진다(3 → 3-1 → 3-1-2). 노드는 번호 길이만큼 늘어나는 알약이라,
- * 열을 그 길이에 맞춰 넓혀야 세로선(열 가운데)이 노드 가운데를 지난다.
- */
-const columnOf = (depth: number) => (depth <= 1 ? 28 : depth === 2 ? 40 : 52)
-const nodeSizeOf = (depth: number) => (depth <= 1 ? NODE : NESTED_NODE)
+const columnOf = (depth: number) => (depth <= 1 ? 28 : 24)
 /** 세로선 x — 노드 가운데(선 2px) */
 const lineLeft = (size: number) => size / 2 - 1
 
@@ -1735,8 +1684,7 @@ const Steps = styled.ol`
   position: relative;
   display: flex;
   flex-direction: column;
-  /* 요약 줄을 뺀 뒤 행이 날짜+제목 두 줄이라 간격도 한 단 좁힌다 */
-  gap: 14px;
+  gap: 8px;
   max-width: ${S.PROSE_WIDTH}px;
   margin: 0;
   padding: 0;
@@ -1763,13 +1711,15 @@ const Steps = styled.ol`
   }
 `
 
-const Step = styled.li<{ $depth: number }>`
+const Step = styled.li<{ $depth: number; $pace?: GapPace }>`
   position: relative;
   /* 목차에서 왔을 때 sticky 구획 머리 아래로 파묻히지 않게 */
   scroll-margin-top: 72px;
   display: grid;
   grid-template-columns: ${({ $depth }) => columnOf($depth)}px minmax(0, 1fr);
-  column-gap: ${({ $depth }) => ($depth > 1 ? 10 : 12)}px;
+  column-gap: ${({ $depth }) => ($depth > 1 ? 8 : 10)}px;
+  /* 앞 사건과의 시간차에 따른 세로 리듬 차등 — 당일·수일(fast)은 촘촘히, 수개월 이상(slow)은 한 호흡 띄운다 */
+  margin-top: ${({ $pace }) => ($pace === 'slow' ? '8px' : $pace === 'fast' ? '-2px' : '0')};
   border-radius: ${RADIUS.SM};
   transition:
     background 0.12s,
@@ -1804,7 +1754,8 @@ const Step = styled.li<{ $depth: number }>`
 const NodeCol = styled.div`
   display: flex;
   justify-content: center;
-  align-items: flex-start;
+  align-items: center;
+  height: 24px;
 
   &[data-grab] {
     cursor: grab;
@@ -1815,45 +1766,32 @@ const NodeCol = styled.div`
 `
 
 /**
- * 노드 — 개별은 원, 묶음은 둥근 사각(강조색 테두리·옅은 면). 지면색 후광이 세로선을 끊어 노드가 선 위에 꿰인 것처럼.
- * 손이 닿으면(가장 안쪽 행만) 강조색으로 차서 '잡을 수 있다'를 말한다.
+ * 타임라인 노드 — 번호나 가로 눈금선 없이 깔끔한 점(개별 = 원, 묶음 = 둥근 사각).
+ * 지면색 후광이 세로선을 끊어 노드가 시간축 위에 꿰인 것처럼 보인다.
  */
 const Node = styled.span<{ $collection: boolean; $depth: number }>`
   position: relative;
   z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-block;
   box-sizing: border-box;
-  /* 알약 — 한 자리 번호는 원, 3-1처럼 길어지면 옆으로 늘어난다 */
-  min-width: ${({ $depth }) => nodeSizeOf($depth)}px;
-  height: ${({ $depth }) => nodeSizeOf($depth)}px;
-  padding: 0 ${({ $depth }) => ($depth > 1 ? 5 : 4)}px;
-  white-space: nowrap;
-  border-radius: ${({ $collection }) => ($collection ? '7px' : '999px')};
-  border: 2px solid
-    ${({ theme, $collection }) => ($collection ? ledgerAccent(theme.mode) : ledgerHairlineStrong(theme.mode))};
+  width: ${({ $collection, $depth }) => ($collection ? ($depth > 1 ? 10 : 12) : $depth > 1 ? 8 : 10)}px;
+  height: ${({ $collection, $depth }) => ($collection ? ($depth > 1 ? 10 : 12) : $depth > 1 ? 8 : 10)}px;
+  border-radius: ${({ $collection }) => ($collection ? '3px' : '50%')};
+  border: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
   background: ${({ theme, $collection }) =>
-    $collection ? ledgerAccentSubtle(theme.mode) : ledgerBackground(theme.mode)};
-  box-shadow: 0 0 0 4px ${({ theme }) => ledgerBackground(theme.mode)};
-  font-size: ${({ $depth }) => ($depth > 1 ? 10.5 : 11.5)}px;
-  letter-spacing: -0.02em;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  color: ${({ theme, $collection }) => ($collection ? ledgerAccent(theme.mode) : metaText)};
+    $collection ? ledgerAccent(theme.mode) : ledgerBackground(theme.mode)};
+  box-shadow: 0 0 0 3px ${({ theme }) => ledgerBackground(theme.mode)};
   user-select: none;
   transition:
     background 0.12s,
-    color 0.12s,
+    transform 0.12s,
     border-color 0.12s;
 
   li:hover:not(:has(li:hover)) > [data-grab] > &,
   li[data-drop='move'] > div > & {
+    transform: scale(1.18);
     border-color: ${({ theme }) => ledgerAccent(theme.mode)};
     background: ${({ theme }) => ledgerAccent(theme.mode)};
-    /* 채운 면의 전경은 지면색 — 다크 강조색은 밝은 인디고라 흰 글자가 묻힌다 */
-    color: ${({ theme }) => ledgerBackground(theme.mode)};
   }
 `
 
@@ -1878,9 +1816,9 @@ const StepCheck = styled.label`
 const StepBody = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
-  padding: 2px 0 4px;
+  padding: 1px 0 2px;
 `
 
 /** 날짜·제목 줄 묶음 — 끌기 손잡이(노드보다 넓은 잡을 자리) */
@@ -1898,24 +1836,38 @@ const Grab = styled.div`
   }
 `
 
-/** 날짜 줄 — 노드와 같은 높이에서 시작(연혁 날짜 줄과 같은 크기·굵기) */
-const StepPeriod = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px 10px;
-  min-height: 20px;
-  font-size: 12.5px;
+/** 한 줄 타임라인 행 — [고정 폭 날짜(112px)]  [제목]이 같은 가로선 위에 깔끔하게 정렬된다 */
+const StepRowLine = styled.div<{ $nested?: boolean }>`
+  display: grid;
+  grid-template-columns: ${({ $nested }) => ($nested ? '96px' : '112px')} minmax(0, 1fr);
+  column-gap: 14px;
+  align-items: baseline;
+  min-height: 24px;
+
+  @container eventdetail (max-width: 560px) {
+    grid-template-columns: 80px minmax(0, 1fr);
+    column-gap: 8px;
+  }
+`
+
+/** 고정 폭 숫자형 날짜 칸 — 알약 배경 없이 담백하게 세로축 옆을 지킨다 */
+const StepDate = styled.span<{ $nested?: boolean }>`
+  font-size: ${({ $nested }) => ($nested ? 12 : 12.5)}px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  line-height: 1.45;
+  letter-spacing: -0.02em;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `
 
 /** 1년 넘는 공백 — 행 사이 한 줄. 선 위에 지면색+점선을 덮어 실선을 끊는다 */
 const QuietGap = styled.li<{ $depth: number }>`
   position: relative;
   list-style: none;
-  padding: 0 0 6px ${({ $depth }) => columnOf($depth) + ($depth > 1 ? 10 : 12)}px;
+  padding: 0 0 6px ${({ $depth }) => columnOf($depth) + ($depth > 1 ? 8 : 10)}px;
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -1939,7 +1891,8 @@ const AccessionStep = styled.li`
   position: relative;
   display: grid;
   grid-template-columns: ${columnOf(1)}px minmax(0, 1fr);
-  column-gap: 12px;
+  column-gap: 10px;
+  align-items: center;
   list-style: none;
 `
 
@@ -1971,12 +1924,10 @@ const AccessionBody = styled.div`
 `
 
 const AccessionDate = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 10px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
 
   span {
@@ -2005,36 +1956,6 @@ const CoveredRange = styled.span`
   font-variant-numeric: tabular-nums;
 `
 
-/** 진행 기간 — 날짜 바로 뒤, 한 단 흐리게 */
-const StepSpan = styled.span`
-  font-weight: 500;
-  color: ${metaText};
-`
-
-/**
- * '앞 사건 9일 뒤'·'앞 사건과 같은 날'·'10번 사건 3일 뒤 · 기간 겹침'(뒷말 = 견준 사건이 끝나기 전에 시작).
- * 예전 뒷말 '아직 진행 중'은 이 사건 얘기인지 앞 사건 얘기인지 읽히지 않았다. 자세한 말은 title이 든다.
- */
-function gapPhrase(gap: GapInfo & { anchorRef: string | null }): string {
-  const reference = gap.anchorRef ? `${gap.anchorRef}번 사건` : '앞 사건'
-  const sameTime = gap.text === '같은 날' || gap.text === '같은 달'
-  const base = sameTime ? `${reference}과 ${gap.text}` : `${reference} ${gap.text}`
-  return gap.ongoing ? `${base} · 기간 겹침` : base
-}
-
-/** 앞 사건과의 간격 — 날짜 줄 끝, 한 단 흐리게(날짜보다 앞서지 않게) */
-const StepGap = styled.span`
-  margin-left: auto;
-  font-weight: 500;
-  color: ${metaText};
-
-  /* 휴대폰 폭 — 오른쪽 끝에 홀로 떨어지지 않게 날짜 아래 한 줄로(왼쪽 정렬) */
-  @container eventdetail (max-width: 639px) {
-    flex-basis: 100%;
-    margin-left: 0;
-  }
-`
-
 /** 제목 + 하위 펼침 — 좁으면 펼침 단추가 다음 줄로 */
 const StepHead = styled.div`
   display: flex;
@@ -2043,64 +1964,8 @@ const StepHead = styled.div`
   gap: 2px 10px;
 `
 
-/** 분야 — 아이콘 + 이름. 예전 글자 글리프(⚔·✚)는 12px에서 '✕'·'+'로 읽혀 지우기·추가 버튼처럼 보였다 */
-/** 행 표지(위치·연결) — 날짜 줄의 조용한 링크. 핀 없는 위치 글은 한 단 흐리게 */
-const SignalLink = styled(Link)`
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  min-width: 0;
-  max-width: 220px;
-  font-weight: 500;
-  color: ${metaText};
-  text-decoration: none;
-
-  &[data-unpinned] {
-    opacity: 0.75;
-  }
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
-    outline-offset: 2px;
-    border-radius: 3px;
-  }
-
-  svg {
-    flex-shrink: 0;
-    width: 11px;
-    height: 11px;
-  }
-  .text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-`
-
-const DomainMeta = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-weight: 500;
-  color: ${metaText};
-
-  /* 휴대폰 폭 — 분야까지 서면 간격(+9일)이 둘째 줄로 밀린다. 분야는 제목·목록에서도 읽힌다 */
-  @container eventdetail (max-width: 639px) {
-    display: none;
-  }
-
-  svg {
-    width: 11px;
-    height: 11px;
-  }
-`
-
 const StepTitle = styled(Link)<{ $nested?: boolean }>`
-  font-size: ${({ $nested }) => ($nested ? 14 : 15.5)}px;
+  font-size: ${({ $nested }) => ($nested ? 14 : 15)}px;
   font-weight: 700;
   line-height: 1.45;
   letter-spacing: -0.01em;
@@ -2118,9 +1983,6 @@ const StepTitle = styled(Link)<{ $nested?: boolean }>`
     border-radius: 2px;
   }
 `
-
-
-
 
 /**
  * 행 도구(개별|묶음) — 날짜 줄 오른쪽 끝에 겹쳐 뜬다. 가장 안쪽 행에 손이 닿을 때만(손자에 닿으면 부모도
@@ -2171,8 +2033,8 @@ const NestedSteps = styled.ol<{ $depth: number }>`
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin: 10px 0 2px;
+  gap: 8px;
+  margin: 8px 0 2px;
   padding: 0;
   list-style: none;
 
@@ -2190,7 +2052,7 @@ const NestedSteps = styled.ol<{ $depth: number }>`
 
 /** 묶음 끝 줄 — 하위 타임라인의 마지막 마디(노드 열만큼 들여서 제목 열에 맞춘다) */
 const NestedFooterItem = styled.li<{ $depth: number }>`
-  padding: 0 0 0 ${({ $depth }) => columnOf($depth) + 10}px;
+  padding: 0 0 0 ${({ $depth }) => columnOf($depth) + 8}px;
 `
 
 /** 끄는 동안 지면 위쪽에 붙는 띠 — 여기 놓으면 이 사건 바로 밑(묶음에서 꺼내기) */
@@ -2449,27 +2311,6 @@ const ChapterFold = styled.button`
   }
 `
 
-/** 접힌 묶음의 국면 차례 — 제목 아래 작은 한 줄 */
-const ChapterSummary = styled.button`
-  align-self: flex-start;
-  margin-top: 2px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  text-align: left;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-  cursor: pointer;
-
-  &:hover {
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
-`
-
 /** 펼침 단계 — 고른 단계는 굵게 */
 const FoldLevels = styled.span`
   display: inline-flex;
@@ -2502,18 +2343,6 @@ const ChapterAdd = styled.button`
     text-decoration: underline;
     text-underline-offset: 3px;
   }
-`
-
-/** 국면 설명 — 장 머리 아래 한두 줄(펼친 하위 묶음 안은 한 줄) */
-const ChapterDescription = styled.p<{ $depth: number }>`
-  margin: 2px 0 0;
-  display: -webkit-box;
-  -webkit-line-clamp: ${({ $depth }) => ($depth > 1 ? 1 : 3)};
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  font-size: ${({ $depth }) => ($depth > 1 ? 12.5 : 13.5)}px;
-  line-height: 1.55;
-  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const ChapterTitle = styled.span<{ $depth: number }>`

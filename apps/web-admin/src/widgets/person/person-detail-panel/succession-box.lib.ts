@@ -20,14 +20,13 @@ export function neighborCategory(record: AdjacencyRecord): PositionCategory {
 }
 
 /**
- * 수장 라벨 — 묘호(세종)·기록 왕호(에드워드 7세) 우선, 없으면 인물 표시명.
+ * 수장 라벨 — 기록 왕호(에드워드 7세) 우선, 없으면 인물 표시명.
  * person.regnalName은 라벨로 쓰지 않는다 — 원문 표기('Nicholas')·칭호('쇼군')·
  * 맨 서수('4세')가 섞인 오염 필드 (contemporaries-strip.lib chipLabelOf와 동일 규약).
  */
 export function neighborLabel(neighbor: AdjacencyNeighbor): string {
   const { person, record } = neighbor
   const label =
-    person.templeName?.trim() ||
     record.regnalName?.trim() ||
     getPersonDisplayName({ ...person, name: person.name ?? '' })
   return label || '(이름 미상)'

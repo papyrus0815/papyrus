@@ -2,6 +2,10 @@ import { tags } from 'typia'
 
 // MilitaryUnitType enum
 export type MilitaryUnitType =
+  | 'THEATER'
+  | 'ARMY_GROUP'
+  | 'FRONT'
+  | 'MILITARY_DISTRICT'
   | 'FIELD_ARMY'
   | 'CORPS'
   | 'DIVISION'
@@ -13,6 +17,8 @@ export type MilitaryUnitType =
   | 'SQUAD'
   | 'FLEET'
   | 'SQUADRON'
+  | 'AIR_FLEET'
+  | 'AIR_CORPS'
   | 'WING'
   | 'SPECIAL_FORCES'
   | 'DETACHMENT'
@@ -120,6 +126,27 @@ export interface MilitaryUnitDto {
       id: string
       name: string
       surname?: string | null
+    }
+  }>
+  /** 이 부대가 참전·투입된 사건(전쟁·전투·작전) 목록 — 조회 전용 */
+  sideDeployedUnits?: Array<{
+    id: string
+    role?: string | null
+    note?: string | null
+    parentUnitId?: string | null
+    commanderId?: string | null
+    side: {
+      id: string
+      name: string
+      outcome?: string | null
+      event: {
+        id: string
+        title: string
+        startDate?: string | null
+        endDate?: string | null
+        kind?: string | null
+        type?: string | null
+      }
     }
   }>
 }

@@ -3,6 +3,7 @@ import type { EventTypeValue } from '../domain/event-type'
 import { Injectable } from '@nestjs/common'
 import { ObservationSubjectType, Prisma, PrismaClient } from '@prisma/client'
 
+import { columnsToPoint, type StructuredPoint } from '../../shared/structured-point'
 import { formatEventDate } from '../domain/event-date'
 import { assertEventOwnership } from '../domain/event-ownership'
 
@@ -30,7 +31,12 @@ export interface EventOverviewCountry {
   name: string
   flagEmoji: string | null
   role: string | null
+  roleDescription?: string | null
   sideId: string | null
+  join?: StructuredPoint | null
+  joinReason?: string | null
+  withdraw?: StructuredPoint | null
+  withdrawReason?: string | null
 }
 
 export interface EventOverviewPerson {
@@ -45,10 +51,26 @@ export interface EventOverviewPerson {
   sideId: string | null
 }
 
+export interface EventOverviewDeployedUnit {
+  id: string
+  militaryUnitId: string
+  name: string
+  unitType: string | null
+  branch: string | null
+  /** 작전 당시 상급 부대 오버라이드 우선, 없으면 기본 상위 부대 */
+  parentUnitId: string | null
+  role: string | null
+  note: string | null
+}
+
 export interface EventOverviewSide {
   id: string
   name: string
   color: string | null
+  outcome?: string | null
+  outcomeNote?: string | null
+  parentSideId?: string | null
+  deployedUnits?: EventOverviewDeployedUnit[]
 }
 
 export interface EventOverviewMetric {
@@ -62,11 +84,11 @@ export interface EventOverviewMetric {
   /** '이상' — 하한만 아는 값(1,000명 이상) */
   atLeast: boolean
   /**
-   * 누구의 수치인가 — 사건 전체 · 진영 · 참여국 한 줄. 실데이터 수치는 대부분 진영·참여국에 걸려 있다
-   * (보불전쟁 17개 전부). 예전엔 사건 전체만 읽어 조망이 '수치 0'이라고 말했다.
+   * 누구의 수치인가 — 사건 전체 · 진영 · 참여국 한 줄 · 투입 부대 한 줄.
+   * 실데이터 수치는 대부분 진영·참여국·부대에 걸려 있다.
    */
-  scope: 'EVENT' | 'SIDE' | 'PARTICIPANT'
-  /** 진영 이름 또는 참여국 이름 — 사건 전체면 null */
+  scope: 'EVENT' | 'SIDE' | 'PARTICIPANT' | 'UNIT'
+  /** 진영 이름·참여국 이름·투입 부대 이름 — 사건 전체면 null */
   scopeLabel: string | null
 }
 
@@ -199,7 +221,33 @@ const NODE_INCLUDE = {
   },
   sides: {
     orderBy: [{ sortOrder: 'asc' as const }],
-    select: { id: true, name: true, color: true },
+    select: {
+      id: true,
+      name: true,
+      color: true,
+      outcome: true,
+      outcomeNote: true,
+      parentSideId: true,
+      deployedUnits: {
+        orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
+        select: {
+          id: true,
+          militaryUnitId: true,
+          parentUnitId: true,
+          role: true,
+          note: true,
+          militaryUnit: {
+            select: {
+              id: true,
+              name: true,
+              unitType: true,
+              branch: true,
+              parentUnitId: true,
+            },
+          },
+        },
+      },
+    },
   },
   _count: { select: { eventSections: true, eventImages: true } },
 } satisfies Prisma.EventInclude
@@ -226,35 +274,54 @@ export class EventOverviewService {
       deleted: 'not-found',
     })
 
-    // 1) 계보 수집 — 너비 우선, 깊이·노드 상한
+    // 1) 계보 수집 — 너비 우선, 깊이·노드 상한 (주 상위 parentEventId + 추가 상위 EventParentLink)
     const depthOf = new Map<string, number>([[eventId, 0]])
     let frontier = [eventId]
     let truncated = false
     for (let depth = 1; depth <= MAX_DEPTH && frontier.length > 0; depth += 1) {
-      const children = await this.prisma.event.findMany({
-        where: { parentEventId: { in: frontier }, deletedAt: null },
-        select: { id: true },
-      })
+      const [children, extraLinks] = await Promise.all([
+        this.prisma.event.findMany({
+          where: { parentEventId: { in: frontier }, deletedAt: null },
+          select: { id: true },
+        }),
+        this.prisma.eventParentLink.findMany({
+          where: { parentEventId: { in: frontier }, childEvent: { deletedAt: null } },
+          select: { childEventId: true },
+        }),
+      ])
+      const candidateIds = [
+        ...children.map((child) => child.id),
+        ...extraLinks.map((link) => link.childEventId),
+      ]
       frontier = []
-      for (const child of children) {
-        if (depthOf.has(child.id)) continue
+      for (const candidateId of candidateIds) {
+        if (depthOf.has(candidateId)) continue
         if (depthOf.size >= MAX_NODES) {
           truncated = true
           break
         }
-        depthOf.set(child.id, depth)
-        frontier.push(child.id)
+        depthOf.set(candidateId, depth)
+        frontier.push(candidateId)
       }
     }
     const ids = [...depthOf.keys()]
 
-    // 2) 노드 본체 → 수치(사건 전체 · 진영 · 참여국). 진영·참여국 id는 노드를 읽어야 알아 두 번에 나눈다
+    // 2) 노드 본체 → 수치(사건 전체 · 진영 · 참여국 · 투입 부대). 진영·참여국·부대 id는 노드를 읽어야 알아 두 번에 나눈다
     const rows = await this.prisma.event.findMany({ where: { id: { in: ids } }, include: NODE_INCLUDE })
     /** 수치 주체 id → 어느 사건의 무엇인가 */
     const subjectOwner = new Map<string, { eventId: string; scope: EventOverviewMetric['scope']; label: string | null }>()
     for (const row of rows) {
       subjectOwner.set(row.id, { eventId: row.id, scope: 'EVENT', label: null })
-      for (const side of row.sides) subjectOwner.set(side.id, { eventId: row.id, scope: 'SIDE', label: side.name })
+      for (const side of row.sides) {
+        subjectOwner.set(side.id, { eventId: row.id, scope: 'SIDE', label: side.name })
+        for (const du of side.deployedUnits) {
+          subjectOwner.set(du.id, {
+            eventId: row.id,
+            scope: 'UNIT',
+            label: `${side.name} · ${du.militaryUnit.name}`,
+          })
+        }
+      }
       for (const relation of row.countryRelations) {
         subjectOwner.set(relation.id, {
           eventId: row.id,
@@ -271,6 +338,7 @@ export class EventOverviewService {
           { subjectType: ObservationSubjectType.EVENT, subjectId: { in: subjectIdsOf('EVENT') } },
           { subjectType: ObservationSubjectType.EVENT_SIDE, subjectId: { in: subjectIdsOf('SIDE') } },
           { subjectType: ObservationSubjectType.EVENT_PARTICIPANT, subjectId: { in: subjectIdsOf('PARTICIPANT') } },
+          { subjectType: ObservationSubjectType.EVENT_SIDE_UNIT, subjectId: { in: subjectIdsOf('UNIT') } },
         ],
       },
       orderBy: [{ sortOrder: 'asc' }],
@@ -435,6 +503,18 @@ export class EventOverviewService {
   ): EventOverviewNode {
     const countries: EventOverviewCountry[] = []
     for (const relation of row.countryRelations) {
+      const join = columnsToPoint({
+        era: relation.joinEra ?? null,
+        year: relation.joinYear ?? null,
+        month: relation.joinMonth ?? null,
+        day: relation.joinDay ?? null,
+      })
+      const withdraw = columnsToPoint({
+        era: relation.withdrawEra ?? null,
+        year: relation.withdrawYear ?? null,
+        month: relation.withdrawMonth ?? null,
+        day: relation.withdrawDay ?? null,
+      })
       if (relation.country) {
         countries.push({
           key: `c:${relation.country.id}`,
@@ -443,7 +523,12 @@ export class EventOverviewService {
           name: relation.country.name,
           flagEmoji: relation.country.flagEmoji ?? null,
           role: relation.role ?? null,
+          roleDescription: relation.roleDescription ?? null,
           sideId: relation.sideId ?? null,
+          join,
+          joinReason: relation.joinReason ?? null,
+          withdraw,
+          withdrawReason: relation.withdrawReason ?? null,
         })
       } else if (relation.historicalCountry) {
         countries.push({
@@ -453,7 +538,12 @@ export class EventOverviewService {
           name: relation.historicalCountry.name,
           flagEmoji: null,
           role: relation.role ?? null,
+          roleDescription: relation.roleDescription ?? null,
           sideId: relation.sideId ?? null,
+          join,
+          joinReason: relation.joinReason ?? null,
+          withdraw,
+          withdrawReason: relation.withdrawReason ?? null,
         })
       }
     }
@@ -469,7 +559,12 @@ export class EventOverviewService {
         name: row.historicalCountry.name,
         flagEmoji: null,
         role: null,
+        roleDescription: null,
         sideId: null,
+        join: null,
+        joinReason: null,
+        withdraw: null,
+        withdrawReason: null,
       })
     }
 
@@ -516,7 +611,24 @@ export class EventOverviewService {
         role: participation.role ?? null,
         sideId: participation.sideId ?? null,
       })),
-      sides: row.sides.map((side) => ({ id: side.id, name: side.name, color: side.color ?? null })),
+      sides: row.sides.map((side) => ({
+        id: side.id,
+        name: side.name,
+        color: side.color ?? null,
+        outcome: side.outcome ?? null,
+        outcomeNote: side.outcomeNote ?? null,
+        parentSideId: side.parentSideId ?? null,
+        deployedUnits: side.deployedUnits.map((du) => ({
+          id: du.id,
+          militaryUnitId: du.militaryUnitId,
+          name: du.militaryUnit.name,
+          unitType: du.militaryUnit.unitType ?? null,
+          branch: du.militaryUnit.branch ?? null,
+          parentUnitId: du.parentUnitId ?? du.militaryUnit.parentUnitId ?? null,
+          role: du.role ?? null,
+          note: du.note ?? null,
+        })),
+      })),
       metrics: metricsByEvent.get(row.id) ?? [],
       sectionCount: row._count.eventSections,
       imageCount: row._count.eventImages,

@@ -1,9 +1,16 @@
-import { useMemo, type Dispatch, type RefObject, type SetStateAction } from 'react'
+import {
+  useMemo,
+  useState,
+  type Dispatch,
+  type RefObject,
+  type SetStateAction,
+} from 'react'
 import { createPortal } from 'react-dom'
 
 import { motion } from 'framer-motion'
 import { FiX } from 'react-icons/fi'
 
+import { useHistoricalCountriesByModernCountry } from '@/features/country/api/use-historical-countries-by-modern-country.hook'
 import type { MinistryFormFields } from '@/features/government-info/model/ministry-form-fields'
 import {
   getUploadImageUrl,
@@ -40,6 +47,7 @@ import {
 
 export type MinistryFormModalProps = {
   effectiveCountryId: string | undefined
+  isHistorical?: boolean
   isOpen: boolean
   isDark: boolean
   editingMinistry: AdministrationDepartment | null
@@ -66,6 +74,7 @@ export type MinistryFormModalProps = {
 
 export function MinistryFormModal({
   effectiveCountryId,
+  isHistorical = false,
   isOpen,
   isDark,
   editingMinistry,
@@ -90,6 +99,12 @@ export function MinistryFormModal({
   setSuccessorSelectOpen,
 }: MinistryFormModalProps) {
   const palette = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
+  const [historicalCountrySelectOpen, setHistoricalCountrySelectOpen] =
+    useState(false)
+  const { data: linkedHistoricalCountries = [] } =
+    useHistoricalCountriesByModernCountry(
+      isOpen && !isHistorical && effectiveCountryId ? effectiveCountryId : '',
+    )
 
   if (!effectiveCountryId || !isOpen) return null
 
@@ -424,6 +439,54 @@ export function MinistryFormModal({
                   </div>
                 </FormFieldRow>
 
+                {!isHistorical && linkedHistoricalCountries.length > 0 && (
+                  <FormFieldRow>
+                    <FieldLabel>소속 시대 · 정체</FieldLabel>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6,
+                      }}
+                    >
+                      <FormSelectBtn
+                        type="button"
+                        $hasValue={true}
+                        onClick={() => setHistoricalCountrySelectOpen(true)}
+                      >
+                        <span>
+                          {ministryForm.historicalCountryId
+                            ? (linkedHistoricalCountries.find(
+                                (hc) =>
+                                  hc.id === ministryForm.historicalCountryId,
+                              )?.name ??
+                              editingMinistry?.historicalCountry?.name ??
+                              '역사적 국가')
+                            : '현대 국가 직속 (현재 체제)'}
+                        </span>
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          style={{
+                            flexShrink: 0,
+                            marginLeft: 8,
+                            opacity: 0.5,
+                          }}
+                        >
+                          <path d="M6 9l6 6 6-6" />
+                        </svg>
+                      </FormSelectBtn>
+                      <span style={{ fontSize: 12, color: palette.textMuted }}>
+                        과거 왕조·제국 시대의 기관(예: 조선 6조, 일본 제국 성)이면 해당 역사적 국가를 선택하세요
+                      </span>
+                    </div>
+                  </FormFieldRow>
+                )}
+
                 <FormFieldRow>
                   <FieldLabel>상위 부처</FieldLabel>
                   <div
@@ -588,6 +651,7 @@ export function MinistryFormModal({
                   categoriesList.find(
                     (category) => category.id === ministryForm.categoryId,
                   ) ?? null,
+                  ministryForm.kind,
                 ) ? (
                   <>
                     <div
@@ -771,7 +835,6 @@ export function MinistryFormModal({
         onSelect={(date) => {
           setMinistryForm((prev) => ({ ...prev, establishedDate: date }))
           setEstablishedDateModalOpen(false)
-          setAbolishedDateModalOpen(true)
         }}
         initialDate={ministryForm.establishedDate || undefined}
         title="설립일 선택"
@@ -786,6 +849,30 @@ export function MinistryFormModal({
         initialDate={ministryForm.abolishedDate || undefined}
         title="폐지일 선택"
       />
+      {!isHistorical && linkedHistoricalCountries.length > 0 && (
+        <SelectModal
+          isOpen={historicalCountrySelectOpen}
+          onClose={() => setHistoricalCountrySelectOpen(false)}
+          title="소속 시대 · 정체 선택"
+          options={
+            [
+              { value: '', label: '현대 국가 직속 (현재 체제)' },
+              ...linkedHistoricalCountries.map((hc) => ({
+                value: hc.id,
+                label: hc.name,
+              })),
+            ] as SelectOption[]
+          }
+          selectedValue={ministryForm.historicalCountryId}
+          onSelect={(selectedId) => {
+            setMinistryForm((prev) => ({
+              ...prev,
+              historicalCountryId: selectedId,
+            }))
+            setHistoricalCountrySelectOpen(false)
+          }}
+        />
+      )}
       <SelectModal
         isOpen={categorySelectOpen}
         onClose={() => setCategorySelectOpen(false)}
@@ -811,9 +898,18 @@ export function MinistryFormModal({
             { value: '', label: '없음' },
             ...ministriesList
               .filter(
-                (dept) => !editingMinistry || dept.id !== editingMinistry.id,
+                (dept) =>
+                  (!editingMinistry || dept.id !== editingMinistry.id) &&
+                  (isHistorical ||
+                    (dept.historicalCountryId ?? '') ===
+                      (ministryForm.historicalCountryId ?? '')),
               )
-              .map((dept) => ({ value: dept.id, label: dept.name })),
+              .map((dept) => ({
+                value: dept.id,
+                label: dept.historicalCountry?.name
+                  ? `${dept.name} (${dept.historicalCountry.name})`
+                  : dept.name,
+              })),
           ] as SelectOption[]
         }
         selectedValue={ministryForm.parentId}
@@ -833,7 +929,12 @@ export function MinistryFormModal({
               .filter(
                 (dept) => !editingMinistry || dept.id !== editingMinistry.id,
               )
-              .map((dept) => ({ value: dept.id, label: dept.name })),
+              .map((dept) => ({
+                value: dept.id,
+                label: dept.historicalCountry?.name
+                  ? `${dept.name} (${dept.historicalCountry.name})`
+                  : dept.name,
+              })),
           ] as SelectOption[]
         }
         selectedValue={ministryForm.successorId}

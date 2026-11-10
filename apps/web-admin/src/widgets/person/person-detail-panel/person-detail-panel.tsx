@@ -2425,11 +2425,9 @@ export function PersonDetailPanel({
   const firstReign = p.sovereignReigns?.[0]
   const findNicknameValue = (type: string) =>
     p.nicknames?.find((n) => n.type === type && n.nickname?.trim())?.nickname?.trim() || null
-  const effectiveTempleName = p.templeName?.trim() || findNicknameValue('TEMPLE_NAME')
-  const effectivePosthumousName =
-    p.posthumousName?.trim() || findNicknameValue('POSTHUMOUS_NAME')
-  const effectivePreEnthronementTitle =
-    p.preEnthronementTitle?.trim() || findNicknameValue('COURT_TITLE')
+  const effectiveTempleName = findNicknameValue('TEMPLE_NAME')
+  const effectivePosthumousName = findNicknameValue('POSTHUMOUS_NAME')
+  const effectivePreEnthronementTitle = findNicknameValue('COURT_TITLE')
   const monarchName =
     effectiveTempleName ||
     p.regnalName ||

@@ -101,6 +101,7 @@ model Country {
   /// 건국·멸망 주체로 지목된 역사 국가 (예: 대한민국이 세운 임시정부 등)
   statehoodAgentOf          HistoricalCountryStatehoodAgent[] @relation("StatehoodAgentCountry")
   Law                       Law[]
+  weapons                   Weapon[]                         @relation("WeaponCountry")
   groundVehicles            GroundVehicle[]
   aircraft                  Aircraft[]
   navalVessels              NavalVessel[]
@@ -387,14 +388,29 @@ model City {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 국가 ID
+  /// 국가 ID (현대 국가)
   countryId String @map("country_id") @db.Char(36)
+
+  /// 역사적 국가 ID (선택 — 소련·나치 독일·조선 등 과거 정치체 소속 도시)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
 
   /// 행정구역 ID
   administrativeDivisionId String? @map("administrative_division_id") @db.Char(36)
 
   /// 도시명
   name String @db.VarChar(100)
+
+  /// 현지어 명칭 (예: Санкт-Петербург, Минск)
+  localName String? @map("local_name") @db.VarChar(100)
+
+  /// 시대별 당대 지명·역사 지명 목록 JSON (예: [{"name": "레닌그라드", "startYear": 1924, "endYear": 1991}])
+  historicalNames Json? @map("historical_names") @db.Json
+
+  /// 위도 (WGS84)
+  latitude Decimal? @db.Decimal(10, 7)
+
+  /// 경도 (WGS84)
+  longitude Decimal? @db.Decimal(10, 7)
 
   /// 인구
   population BigInt?
@@ -403,6 +419,7 @@ model City {
   areaSqKm Decimal? @map("area_sq_km") @db.Decimal(15, 2)
 
   //--- 관계 필드
+  historicalCountry      HistoricalCountry?      @relation("HistoricalCountryCities", fields: [historicalCountryId], references: [id], onDelete: SetNull)
   administrativeDivision AdministrativeDivision? @relation(fields: [administrativeDivisionId], references: [id], onDelete: Cascade)
   hometown               HomeTown[]
   CompanyFacility        CompanyFacility[]
@@ -417,6 +434,7 @@ model City {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([countryId], name: "idx_city_countryId")
+  @@index([historicalCountryId], name: "idx_city_historicalCountryId")
   @@index([administrativeDivisionId], name: "idx_city_adminDivId")
   @@map("city")
 }

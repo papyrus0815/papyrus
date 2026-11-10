@@ -1,4 +1,9 @@
-import { Injectable } from '@nestjs/common'
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 import type {
@@ -24,6 +29,80 @@ const COUNTRY_SUMMARY_INCLUDE = {
 @Injectable()
 export class OrganizationPrismaRepository implements IOrganizationRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  private assertValidDateOrder(
+    start: Date | null | undefined,
+    end: Date | null | undefined,
+    startLabel: string,
+    endLabel: string,
+  ): void {
+    if (start && Number.isNaN(start.getTime())) {
+      throw new BadRequestException(`유효하지 않은 ${startLabel} 날짜입니다.`)
+    }
+    if (end && Number.isNaN(end.getTime())) {
+      throw new BadRequestException(`유효하지 않은 ${endLabel} 날짜입니다.`)
+    }
+    if (start && end && start.getTime() > end.getTime()) {
+      throw new BadRequestException(
+        `${endLabel}이 ${startLabel}보다 앞설 수 없습니다.`,
+      )
+    }
+  }
+
+  private async resolveCountryAxis(
+    countryId?: string | null,
+    historicalCountryId?: string | null,
+  ): Promise<{ countryId: string | null; historicalCountryId: string | null }> {
+    let cid = countryId && countryId.trim() !== '' ? countryId.trim() : null
+    const hid =
+      historicalCountryId && historicalCountryId.trim() !== ''
+        ? historicalCountryId.trim()
+        : null
+
+    if (cid && this.prisma.country?.findUnique) {
+      const c = await this.prisma.country.findUnique({
+        where: { id: cid },
+        select: { id: true },
+      })
+      if (!c) {
+        throw new NotFoundException('소속 국가(countryId)를 찾을 수 없습니다.')
+      }
+    }
+
+    if (hid) {
+      if (this.prisma.historicalCountry?.findUnique) {
+        const hc = await this.prisma.historicalCountry.findUnique({
+          where: { id: hid },
+          select: { id: true },
+        })
+        if (!hc) {
+          throw new NotFoundException(
+            '소속 역사적 국가(historicalCountryId)를 찾을 수 없습니다.',
+          )
+        }
+      }
+      if (this.prisma.historicalCountryModernCountry?.findMany) {
+        const links =
+          await this.prisma.historicalCountryModernCountry.findMany({
+            where: { historicalCountryId: hid },
+            select: { modernCountryId: true },
+          })
+        const modernIds = [
+          ...new Set(links.map((l) => l.modernCountryId).filter(Boolean)),
+        ]
+        if (cid && modernIds.length > 0 && !modernIds.includes(cid)) {
+          throw new BadRequestException(
+            '선택한 역사적 국가가 지정한 현대 국가와 연결되어 있지 않습니다.',
+          )
+        }
+        if (!cid && modernIds.length === 1) {
+          cid = modernIds[0]
+        }
+      }
+    }
+
+    return { countryId: cid, historicalCountryId: hid }
+  }
 
   async findById(id: string): Promise<OrganizationEntity | null> {
     const row = await this.prisma.organization.findUnique({
@@ -54,6 +133,28 @@ export class OrganizationPrismaRepository implements IOrganizationRepository {
   }
 
   async create(data: CreateOrganizationData): Promise<OrganizationEntity> {
+    this.assertValidDateOrder(
+      data.foundedDate,
+      data.dissolvedDate,
+      '조직 설립일',
+      '조직 해산일',
+    )
+    const axis = await this.resolveCountryAxis(
+      data.countryId,
+      data.historicalCountryId,
+    )
+    if (data.headquartersCityId && this.prisma.city?.findUnique) {
+      const city = await this.prisma.city.findUnique({
+        where: { id: data.headquartersCityId },
+        select: { id: true },
+      })
+      if (!city) {
+        throw new NotFoundException(
+          '본부 소재 도시(headquartersCityId)를 찾을 수 없습니다.',
+        )
+      }
+    }
+
     const row = await this.prisma.organization.create({
       data: {
         name: data.name,
@@ -68,8 +169,8 @@ export class OrganizationPrismaRepository implements IOrganizationRepository {
         logoUrl: data.logoUrl,
         ideology: data.ideology,
         headquartersCityId: data.headquartersCityId,
-        countryId: data.countryId,
-        historicalCountryId: data.historicalCountryId,
+        countryId: axis.countryId,
+        historicalCountryId: axis.historicalCountryId,
       },
       include: COUNTRY_SUMMARY_INCLUDE,
     })
@@ -80,6 +181,72 @@ export class OrganizationPrismaRepository implements IOrganizationRepository {
     id: string,
     data: UpdateOrganizationData,
   ): Promise<OrganizationEntity> {
+    let existing: {
+      id: string
+      foundedDate: Date | null
+      dissolvedDate: Date | null
+      countryId: string | null
+      historicalCountryId: string | null
+    } | null = null
+    if (this.prisma.organization?.findUnique) {
+      existing = await this.prisma.organization.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          foundedDate: true,
+          dissolvedDate: true,
+          countryId: true,
+          historicalCountryId: true,
+        },
+      })
+      if (!existing) {
+        throw new NotFoundException(`조직을 찾을 수 없습니다 (ID: ${id})`)
+      }
+    }
+
+    const effectiveFounded =
+      data.foundedDate !== undefined
+        ? data.foundedDate
+        : (existing?.foundedDate ?? null)
+    const effectiveDissolved =
+      data.dissolvedDate !== undefined
+        ? data.dissolvedDate
+        : (existing?.dissolvedDate ?? null)
+    this.assertValidDateOrder(
+      effectiveFounded,
+      effectiveDissolved,
+      '조직 설립일',
+      '조직 해산일',
+    )
+
+    let resolvedCountryId = data.countryId
+    let resolvedHistoricalCountryId = data.historicalCountryId
+    if (data.countryId !== undefined || data.historicalCountryId !== undefined) {
+      const nextCid =
+        data.countryId !== undefined
+          ? data.countryId
+          : (existing?.countryId ?? null)
+      const nextHid =
+        data.historicalCountryId !== undefined
+          ? data.historicalCountryId
+          : (existing?.historicalCountryId ?? null)
+      const axis = await this.resolveCountryAxis(nextCid, nextHid)
+      resolvedCountryId = axis.countryId
+      resolvedHistoricalCountryId = axis.historicalCountryId
+    }
+
+    if (data.headquartersCityId && this.prisma.city?.findUnique) {
+      const city = await this.prisma.city.findUnique({
+        where: { id: data.headquartersCityId },
+        select: { id: true },
+      })
+      if (!city) {
+        throw new NotFoundException(
+          '본부 소재 도시(headquartersCityId)를 찾을 수 없습니다.',
+        )
+      }
+    }
+
     const row = await this.prisma.organization.update({
       where: { id },
       data: {
@@ -95,8 +262,8 @@ export class OrganizationPrismaRepository implements IOrganizationRepository {
         logoUrl: data.logoUrl,
         ideology: data.ideology,
         headquartersCityId: data.headquartersCityId,
-        countryId: data.countryId,
-        historicalCountryId: data.historicalCountryId,
+        countryId: resolvedCountryId,
+        historicalCountryId: resolvedHistoricalCountryId,
       },
       include: COUNTRY_SUMMARY_INCLUDE,
     })
@@ -104,12 +271,124 @@ export class OrganizationPrismaRepository implements IOrganizationRepository {
   }
 
   async delete(id: string): Promise<void> {
+    if (this.prisma.organization?.findUnique) {
+      const existing = await this.prisma.organization.findUnique({
+        where: { id },
+        select: { id: true, name: true },
+      })
+      if (!existing) {
+        throw new NotFoundException(`조직을 찾을 수 없습니다 (ID: ${id})`)
+      }
+    }
+
+    const [posDefCount, companyCount, eventRelCount] = await Promise.all([
+      this.prisma.governmentPositionDefinition?.count
+        ? this.prisma.governmentPositionDefinition.count({
+            where: { organizationId: id },
+          })
+        : Promise.resolve(0),
+      this.prisma.company?.count
+        ? this.prisma.company.count({
+            where: { organizationId: id },
+          })
+        : Promise.resolve(0),
+      this.prisma.eventOrganizationRelation?.count
+        ? this.prisma.eventOrganizationRelation.count({
+            where: { organizationId: id },
+          })
+        : Promise.resolve(0),
+    ])
+    const refs: string[] = []
+    if (posDefCount > 0) refs.push(`관직 정의 ${posDefCount}건`)
+    if (companyCount > 0) refs.push(`기업 ${companyCount}건`)
+    if (eventRelCount > 0) refs.push(`사건 조직 관계 ${eventRelCount}건`)
+    if (refs.length > 0) {
+      throw new ConflictException(
+        `이 조직을 참조 중인 기록(${refs.join(', ')})이 있어 삭제할 수 없습니다.`,
+      )
+    }
+
     await this.prisma.organization.delete({ where: { id } })
   }
 
   async addHierarchy(
     data: CreateOrganizationHierarchyData,
   ): Promise<OrganizationHierarchyEntity> {
+    if (data.parentOrganizationId === data.childOrganizationId) {
+      throw new BadRequestException(
+        '자기 자신을 상위 또는 하위 조직으로 연결할 수 없습니다.',
+      )
+    }
+    this.assertValidDateOrder(
+      data.startDate,
+      data.endDate,
+      '계층 관계 시작일',
+      '계층 관계 종료일',
+    )
+
+    if (this.prisma.organization?.findUnique) {
+      const [parentOrg, childOrg] = await Promise.all([
+        this.prisma.organization.findUnique({
+          where: { id: data.parentOrganizationId },
+          select: { id: true },
+        }),
+        this.prisma.organization.findUnique({
+          where: { id: data.childOrganizationId },
+          select: { id: true },
+        }),
+      ])
+      if (!parentOrg) {
+        throw new NotFoundException(
+          '상위 조직(parentOrganizationId)을 찾을 수 없습니다.',
+        )
+      }
+      if (!childOrg) {
+        throw new NotFoundException(
+          '하위 조직(childOrganizationId)을 찾을 수 없습니다.',
+        )
+      }
+    }
+
+    if (this.prisma.organizationHierarchy?.findFirst) {
+      const dup = await this.prisma.organizationHierarchy.findFirst({
+        where: {
+          parentOrganizationId: data.parentOrganizationId,
+          childOrganizationId: data.childOrganizationId,
+        },
+        select: { id: true },
+      })
+      if (dup) {
+        throw new ConflictException(
+          '이미 동일한 상하위 조직 관계가 등록되어 있습니다.',
+        )
+      }
+    }
+
+    if (this.prisma.organizationHierarchy?.findMany) {
+      const queue = [data.parentOrganizationId]
+      const visited = new Set<string>()
+      while (queue.length > 0) {
+        const curr = queue.shift()!
+        if (curr === data.childOrganizationId) {
+          throw new BadRequestException(
+            '상하위 조직 계층 관계가 순환(Cycle)합니다.',
+          )
+        }
+        if (visited.has(curr)) continue
+        visited.add(curr)
+        const parentEdges =
+          await this.prisma.organizationHierarchy.findMany({
+            where: { childOrganizationId: curr },
+            select: { parentOrganizationId: true },
+          })
+        for (const edge of parentEdges) {
+          if (!visited.has(edge.parentOrganizationId)) {
+            queue.push(edge.parentOrganizationId)
+          }
+        }
+      }
+    }
+
     const row = await this.prisma.organizationHierarchy.create({
       data: {
         parentOrganizationId: data.parentOrganizationId,
@@ -202,7 +481,10 @@ export class OrganizationPrismaRepository implements IOrganizationRepository {
       )
       const children = childrenEdges
         .map((e) => list.find((o) => o.id === e.childOrganizationId))
-        .filter((o): o is OrganizationEntity => o != null)
+        .filter(
+          (o): o is OrganizationEntity =>
+            o != null && !parentIds.includes(o.id) && o.id !== org.id,
+        )
         .map((o) => buildNode(o, [...parentIds, org.id]))
       return {
         ...org,

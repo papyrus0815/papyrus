@@ -246,9 +246,6 @@ export function displayInitial(p: PersonNameFields): string {
 export function buildPersonTooltipLines(person: PersonMetaSource): PersonTooltipLine[] {
   const lines: PersonTooltipLine[] = []
   if (person.originalName) lines.push({ label: '원어', value: person.originalName })
-  if (person.preEnthronementTitle) lines.push({ label: '작호', value: person.preEnthronementTitle })
-  if (person.templeName) lines.push({ label: '묘호', value: person.templeName })
-  if (person.posthumousName) lines.push({ label: '시호', value: person.posthumousName })
   if (person.birthOrder != null || person.genderBirthOrder != null) {
     const g = (person.gender ?? '').toUpperCase()
     const genderSuffix = g === 'MALE' ? '남' : g === 'FEMALE' ? '녀' : '번째(동성)'

@@ -95,11 +95,20 @@ export interface RoleGroup {
  * 사실이다(한국전쟁: 참여국 미국·영국 / 적대국 중국·소련 / 관찰국 일본).
  * 순서는 역할 선택지 순서(EVENT_COUNTRY_ROLE_OPTIONS), 역할 없는 나라는 맨 뒤.
  */
-export function groupCountriesByRole(countries: RoleCountry[]): RoleGroup[] {
+export function groupCountriesByRole(
+  countries: RoleCountry[],
+  eventType?: string | null,
+): RoleGroup[] {
   const groups: RoleGroup[] = []
   for (const option of EVENT_COUNTRY_ROLE_OPTIONS) {
     const members = countries.filter((country) => country.role === option.value)
-    if (members.length > 0) groups.push({ label: option.label, countries: members })
+    if (members.length > 0) {
+      const label =
+        eventType === 'WAR_DECLARATION' && option.value === 'INITIATOR'
+          ? '선포국'
+          : option.label
+      groups.push({ label, countries: members })
+    }
   }
   const known = new Set<string>(EVENT_COUNTRY_ROLE_OPTIONS.map((option) => option.value))
   const unassigned = countries.filter(

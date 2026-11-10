@@ -1,8 +1,10 @@
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -118,6 +120,7 @@ const TREATY_INCLUDE = {
     orderBy: [{ isPrimary: 'desc' as const }, { order: 'asc' as const }],
   },
   eventLinks: {
+    where: { event: { deletedAt: null } },
     include: TREATY_EVENT_LINK_INCLUDE,
     orderBy: { createdAt: 'asc' as const },
   },
@@ -167,14 +170,205 @@ export class TreatyController {
     }
   }
 
-  private async assertPositionDefinitionExists(id: string | null | undefined): Promise<void> {
-    if (!id) return
-    const row = await this.prisma.governmentPositionDefinition.findUnique({
-      where: { id },
-      select: { id: true },
-    })
-    if (!row) {
-      throw new BadRequestException('관직 정의를 찾을 수 없습니다.')
+  private async areSignatoryAxesCompatible(
+    a: { countryId?: string | null; historicalCountryId?: string | null },
+    b: { countryId?: string | null; historicalCountryId?: string | null },
+  ): Promise<boolean> {
+    if (!a.countryId && !a.historicalCountryId) return true
+    if (!b.countryId && !b.historicalCountryId) return true
+    if (a.historicalCountryId && b.historicalCountryId) {
+      return a.historicalCountryId === b.historicalCountryId
+    }
+    if (a.countryId && b.countryId && a.countryId === b.countryId) {
+      return true
+    }
+    const histId = a.historicalCountryId ?? b.historicalCountryId
+    const modId = a.countryId ?? b.countryId
+    if (histId && modId && this.prisma.historicalCountryModernCountry?.findFirst) {
+      const bridge = await this.prisma.historicalCountryModernCountry.findFirst({
+        where: {
+          historicalCountryId: histId,
+          modernCountryId: modId,
+        },
+        select: { id: true },
+      })
+      if (bridge) return true
+    }
+    return false
+  }
+
+  private assertTreatyDateOrder(dates: {
+    signDate: Date
+    effectiveDate?: Date | null
+    expiryDate?: Date | null
+    violationDate?: Date | null
+  }): void {
+    const { signDate, effectiveDate, expiryDate, violationDate } = dates
+    if (Number.isNaN(signDate.getTime())) {
+      throw new BadRequestException('서명일 형식이 올바르지 않습니다.')
+    }
+    if (effectiveDate && Number.isNaN(effectiveDate.getTime())) {
+      throw new BadRequestException('발효일 형식이 올바르지 않습니다.')
+    }
+    if (expiryDate && Number.isNaN(expiryDate.getTime())) {
+      throw new BadRequestException('만료일 형식이 올바르지 않습니다.')
+    }
+    if (violationDate && Number.isNaN(violationDate.getTime())) {
+      throw new BadRequestException('파기/위반일 형식이 올바르지 않습니다.')
+    }
+    const signTime = signDate.getTime()
+    if (effectiveDate && effectiveDate.getTime() < signTime) {
+      throw new BadRequestException('조약 발효일이 서명일보다 앞설 수 없습니다.')
+    }
+    if (expiryDate && expiryDate.getTime() < signTime) {
+      throw new BadRequestException('조약 만료일이 서명일보다 앞설 수 없습니다.')
+    }
+    if (
+      effectiveDate &&
+      expiryDate &&
+      expiryDate.getTime() < effectiveDate.getTime()
+    ) {
+      throw new BadRequestException('조약 만료일이 발효일보다 앞설 수 없습니다.')
+    }
+    if (violationDate && violationDate.getTime() < signTime) {
+      throw new BadRequestException('조약 파기/위반일이 서명일보다 앞설 수 없습니다.')
+    }
+  }
+
+  private async validateSignatoryTargetAndScope(s: {
+    countryId?: string | null
+    historicalCountryId?: string | null
+    personId?: string | null
+    cabinetId?: string | null
+    positionDefinitionId?: string | null
+    signedAt?: string | null
+  }): Promise<void> {
+    this.validateSignatoryCountryXor(s)
+    if (!s.countryId && !s.historicalCountryId && !s.personId && !s.cabinetId) {
+      throw new BadRequestException(
+        '서명국에는 국가(현대/역사), 인물, 행정부 중 최소 하나를 지정해야 합니다.',
+      )
+    }
+    if (s.signedAt) {
+      const parsedSignedAt = new Date(s.signedAt)
+      if (Number.isNaN(parsedSignedAt.getTime())) {
+        throw new BadRequestException('국가별 서명일 형식이 올바르지 않습니다.')
+      }
+    }
+    if (s.countryId && this.prisma.country?.findUnique) {
+      const country = await this.prisma.country.findUnique({
+        where: { id: s.countryId },
+        select: { id: true },
+      })
+      if (!country) {
+        throw new NotFoundException('서명 현대 국가를 찾을 수 없습니다.')
+      }
+    }
+    if (s.historicalCountryId && this.prisma.historicalCountry?.findUnique) {
+      const hist = await this.prisma.historicalCountry.findUnique({
+        where: { id: s.historicalCountryId },
+        select: { id: true },
+      })
+      if (!hist) {
+        throw new NotFoundException('서명 역사적 국가를 찾을 수 없습니다.')
+      }
+    }
+    if (s.personId && this.prisma.person?.findUnique) {
+      const person = await this.prisma.person.findUnique({
+        where: { id: s.personId },
+        select: { id: true },
+      })
+      if (!person) {
+        throw new NotFoundException('서명 인물을 찾을 수 없습니다.')
+      }
+    }
+    if (s.cabinetId && this.prisma.cabinet?.findUnique) {
+      const cabinet = await this.prisma.cabinet.findUnique({
+        where: { id: s.cabinetId },
+        select: {
+          id: true,
+          name: true,
+          headTenure: {
+            select: { countryId: true, historicalCountryId: true },
+          },
+        },
+      })
+      if (!cabinet) {
+        throw new NotFoundException('소속 행정부를 찾을 수 없습니다.')
+      }
+      if (
+        (s.countryId || s.historicalCountryId) &&
+        cabinet.headTenure &&
+        (cabinet.headTenure.countryId || cabinet.headTenure.historicalCountryId)
+      ) {
+        const compatible = await this.areSignatoryAxesCompatible(
+          { countryId: s.countryId, historicalCountryId: s.historicalCountryId },
+          cabinet.headTenure,
+        )
+        if (!compatible) {
+          throw new BadRequestException(
+            `서명국의 국가·시대와 소속 행정부${cabinet.name ? `(${cabinet.name})` : ''}의 국가·시대가 일치하지 않습니다.`,
+          )
+        }
+      }
+    }
+    if (s.positionDefinitionId) {
+      const def = await this.prisma.governmentPositionDefinition.findUnique({
+        where: { id: s.positionDefinitionId },
+        select: {
+          id: true,
+          title: true,
+          isGeneric: true,
+          administrationDepartment: {
+            select: { name: true, countryId: true, historicalCountryId: true },
+          },
+          scopes: {
+            select: { countryId: true, historicalCountryId: true },
+          },
+        },
+      })
+      if (!def) {
+        throw new BadRequestException('관직 정의를 찾을 수 없습니다.')
+      }
+      if (!def.isGeneric && (s.countryId || s.historicalCountryId)) {
+        if (
+          def.administrationDepartment &&
+          (def.administrationDepartment.countryId ||
+            def.administrationDepartment.historicalCountryId)
+        ) {
+          const deptOk = await this.areSignatoryAxesCompatible(
+            { countryId: s.countryId, historicalCountryId: s.historicalCountryId },
+            def.administrationDepartment,
+          )
+          if (!deptOk) {
+            throw new BadRequestException(
+              `관직 정의(${def.title})가 귀속된 국가 기관(${def.administrationDepartment.name})의 국가·시대와 서명국 국가·시대가 일치하지 않습니다.`,
+            )
+          }
+        }
+        const activeScopes = (def.scopes ?? []).filter((sc) =>
+          Boolean(sc.countryId || sc.historicalCountryId),
+        )
+        if (activeScopes.length > 0) {
+          let matched = false
+          for (const sc of activeScopes) {
+            if (
+              await this.areSignatoryAxesCompatible(
+                { countryId: s.countryId, historicalCountryId: s.historicalCountryId },
+                sc,
+              )
+            ) {
+              matched = true
+              break
+            }
+          }
+          if (!matched) {
+            throw new BadRequestException(
+              `관직 정의(${def.title})의 적용 국가 범위와 서명국 국가·시대가 일치하지 않습니다.`,
+            )
+          }
+        }
+      }
     }
   }
 
@@ -251,7 +445,9 @@ export class TreatyController {
     }
 
     if (query.eventId) {
-      parts.push({ eventLinks: { some: { eventId: query.eventId } } })
+      parts.push({
+        eventLinks: { some: { eventId: query.eventId, event: { deletedAt: null } } },
+      })
     }
 
     if (query.type) parts.push({ type: query.type })
@@ -306,6 +502,17 @@ export class TreatyController {
     const accountId = req.user?.accountId ?? req.user?.id ?? undefined
     const name = dto.name.trim()
 
+    const signDate = new Date(dto.signDate)
+    const effectiveDate = dto.effectiveDate ? new Date(dto.effectiveDate) : undefined
+    const expiryDate = dto.expiryDate ? new Date(dto.expiryDate) : undefined
+    const violationDate = dto.violationDate ? new Date(dto.violationDate) : undefined
+    this.assertTreatyDateOrder({
+      signDate,
+      effectiveDate,
+      expiryDate,
+      violationDate,
+    })
+
     await this.assertAdministrativeDivisionExists(dto.signingAdministrativeDivisionId ?? null)
 
     if (!dto.allowDuplicateSignDate) {
@@ -326,8 +533,7 @@ export class TreatyController {
 
     if (dto.signatories?.length) {
       for (const s of dto.signatories) {
-        this.validateSignatoryCountryXor(s)
-        await this.assertPositionDefinitionExists(s.positionDefinitionId ?? null)
+        await this.validateSignatoryTargetAndScope(s)
       }
     }
 
@@ -335,10 +541,10 @@ export class TreatyController {
       name,
       alias: dto.alias ?? undefined,
       type: dto.type as any,
-      signDate: new Date(dto.signDate),
-      effectiveDate: dto.effectiveDate ? new Date(dto.effectiveDate) : undefined,
-      expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : undefined,
-      violationDate: dto.violationDate ? new Date(dto.violationDate) : undefined,
+      signDate,
+      effectiveDate,
+      expiryDate,
+      violationDate,
       violationReason: dto.violationReason ?? undefined,
       location: dto.location ?? undefined,
       signingAdministrativeDivisionId: dto.signingAdministrativeDivisionId ?? undefined,
@@ -379,9 +585,44 @@ export class TreatyController {
   @ApiBearerAuth()
   @Put(':id')
   @ApiOperation({ summary: '조약 수정' })
-  async update(@Param('id') id: string, @Body() dto: UpdateTreatyBodyDto): Promise<any> {
+  async update(
+    @Param('id') id: string,
+    @Body() dto: UpdateTreatyBodyDto,
+    @Request() req?: any,
+  ): Promise<any> {
     const exists = await this.prisma.treaty.findUnique({ where: { id } })
     if (!exists) throw new NotFoundException('조약을 찾을 수 없습니다.')
+    const accountId = req?.user?.accountId ?? req?.user?.id ?? undefined
+    if (exists.accountId && accountId && exists.accountId !== accountId) {
+      throw new ForbiddenException('이 조약을 수정할 권한이 없습니다.')
+    }
+
+    const nextSignDate =
+      dto.signDate !== undefined ? new Date(dto.signDate) : exists.signDate
+    const nextEffectiveDate =
+      dto.effectiveDate !== undefined
+        ? dto.effectiveDate
+          ? new Date(dto.effectiveDate)
+          : null
+        : exists.effectiveDate
+    const nextExpiryDate =
+      dto.expiryDate !== undefined
+        ? dto.expiryDate
+          ? new Date(dto.expiryDate)
+          : null
+        : exists.expiryDate
+    const nextViolationDate =
+      dto.violationDate !== undefined
+        ? dto.violationDate
+          ? new Date(dto.violationDate)
+          : null
+        : exists.violationDate
+    this.assertTreatyDateOrder({
+      signDate: nextSignDate,
+      effectiveDate: nextEffectiveDate,
+      expiryDate: nextExpiryDate,
+      violationDate: nextViolationDate,
+    })
 
     if (dto.signingAdministrativeDivisionId !== undefined) {
       await this.assertAdministrativeDivisionExists(dto.signingAdministrativeDivisionId)
@@ -393,15 +634,15 @@ export class TreatyController {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.alias !== undefined && { alias: dto.alias }),
         ...(dto.type !== undefined && { type: dto.type as any }),
-        ...(dto.signDate !== undefined && { signDate: new Date(dto.signDate) }),
+        ...(dto.signDate !== undefined && { signDate: nextSignDate }),
         ...(dto.effectiveDate !== undefined && {
-          effectiveDate: dto.effectiveDate ? new Date(dto.effectiveDate) : null,
+          effectiveDate: nextEffectiveDate,
         }),
         ...(dto.expiryDate !== undefined && {
-          expiryDate: dto.expiryDate ? new Date(dto.expiryDate) : null,
+          expiryDate: nextExpiryDate,
         }),
         ...(dto.violationDate !== undefined && {
-          violationDate: dto.violationDate ? new Date(dto.violationDate) : null,
+          violationDate: nextViolationDate,
         }),
         ...(dto.violationReason !== undefined && { violationReason: dto.violationReason }),
         ...(dto.location !== undefined && { location: dto.location }),
@@ -424,9 +665,13 @@ export class TreatyController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: '조약 삭제 (서명·조항·이미지 CASCADE)' })
-  async remove(@Param('id') id: string): Promise<any> {
+  async remove(@Param('id') id: string, @Request() req?: any): Promise<any> {
     const exists = await this.prisma.treaty.findUnique({ where: { id } })
     if (!exists) throw new NotFoundException('조약을 찾을 수 없습니다.')
+    const accountId = req?.user?.accountId ?? req?.user?.id ?? undefined
+    if (exists.accountId && accountId && exists.accountId !== accountId) {
+      throw new ForbiddenException('이 조약을 삭제할 권한이 없습니다.')
+    }
     await this.prisma.treaty.delete({ where: { id } })
   }
 
@@ -447,10 +692,14 @@ export class TreatyController {
   ): Promise<any> {
     const [treaty, event] = await Promise.all([
       this.prisma.treaty.findUnique({ where: { id: treatyId } }),
-      this.prisma.event.findUnique({ where: { id: dto.eventId } }),
+      this.prisma.event?.findFirst
+        ? this.prisma.event.findFirst({ where: { id: dto.eventId, deletedAt: null } })
+        : this.prisma.event.findUnique({ where: { id: dto.eventId } }),
     ])
     if (!treaty) throw new NotFoundException('조약을 찾을 수 없습니다.')
-    if (!event) throw new NotFoundException('사건을 찾을 수 없습니다.')
+    if (!event || (event as any).deletedAt != null) {
+      throw new NotFoundException('사건을 찾을 수 없습니다.')
+    }
 
     const linkType = dto.linkType ?? 'SIGNING'
     const existing = await this.prisma.treatyEventLink.findFirst({
@@ -494,8 +743,34 @@ export class TreatyController {
   @Post('signatories')
   @ApiOperation({ summary: '서명국 추가' })
   async addSignatory(@Body() dto: CreateTreatySignatoryBodyDto): Promise<any> {
-    this.validateSignatoryCountryXor(dto)
-    await this.assertPositionDefinitionExists(dto.positionDefinitionId ?? null)
+    if (this.prisma.treaty?.findUnique) {
+      const treaty = await this.prisma.treaty.findUnique({
+        where: { id: dto.treatyId },
+        select: { id: true },
+      })
+      if (!treaty) {
+        throw new NotFoundException('조약을 찾을 수 없습니다.')
+      }
+    }
+    await this.validateSignatoryTargetAndScope(dto)
+
+    if (this.prisma.treatySignatory?.findFirst) {
+      const duplicate = await this.prisma.treatySignatory.findFirst({
+        where: {
+          treatyId: dto.treatyId,
+          countryId: dto.countryId ?? null,
+          historicalCountryId: dto.historicalCountryId ?? null,
+          personId: dto.personId ?? null,
+          participationType: (dto.participationType ?? 'SIGNATORY') as any,
+        },
+        select: { id: true },
+      })
+      if (duplicate) {
+        throw new ConflictException(
+          '동일한 국가·인물·참여 유형의 서명국이 이미 등록되어 있습니다.',
+        )
+      }
+    }
 
     const signatory = await this.prisma.treatySignatory.create({
       data: {
@@ -529,12 +804,15 @@ export class TreatyController {
         dto.historicalCountryId !== undefined
           ? dto.historicalCountryId
           : exists.historicalCountryId,
+      personId: dto.personId !== undefined ? dto.personId : exists.personId,
+      cabinetId: dto.cabinetId !== undefined ? dto.cabinetId : exists.cabinetId,
+      positionDefinitionId:
+        dto.positionDefinitionId !== undefined
+          ? dto.positionDefinitionId
+          : exists.positionDefinitionId,
+      signedAt: dto.signedAt !== undefined ? dto.signedAt : undefined,
     }
-    this.validateSignatoryCountryXor(merged)
-
-    if (dto.positionDefinitionId !== undefined) {
-      await this.assertPositionDefinitionExists(dto.positionDefinitionId)
-    }
+    await this.validateSignatoryTargetAndScope(merged)
 
     const updated = await this.prisma.treatySignatory.update({
       where: { id },

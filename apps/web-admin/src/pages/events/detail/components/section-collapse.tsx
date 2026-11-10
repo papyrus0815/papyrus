@@ -20,9 +20,14 @@ import { REVEAL_ANCHOR_EVENT, scrollToAnchor } from './scroll-to-anchor'
  * @param initiallyCollapsed 처음 상태 — **연 순간 한 번** 정한다(편집으로 길이가 바뀌어도 다시 접지 않는다)
  * @param chars 지금 글자수 — 1,200자 이하로 줄면 줄여 보기 자체를 거둔다
  */
-export function useSectionCollapse(anchorId: string, initiallyCollapsed: boolean, chars: number) {
+export function useSectionCollapse(
+  anchorId: string,
+  initiallyCollapsed: boolean,
+  chars: number,
+  alwaysCanCollapse = false,
+) {
   const [collapsedState, setCollapsed] = useState(initiallyCollapsed)
-  const canCollapse = chars > LONG_BACKGROUND_CHARS
+  const canCollapse = alwaysCanCollapse || chars > LONG_BACKGROUND_CHARS
   const collapsed = collapsedState && canCollapse
 
   /*
@@ -56,14 +61,18 @@ export function CollapseHeaderToggle({
   collapsed,
   bodyId,
   onToggle,
+  collapsedLabel = '전체 보기',
+  expandedLabel = '줄여 보기',
 }: {
   collapsed: boolean
   bodyId: string
   onToggle: () => void
+  collapsedLabel?: string
+  expandedLabel?: string
 }) {
   return (
     <HeaderTextAction type="button" aria-expanded={!collapsed} aria-controls={bodyId} onClick={onToggle}>
-      {collapsed ? '전체 보기' : '줄여 보기'}
+      {collapsed ? collapsedLabel : expandedLabel}
     </HeaderTextAction>
   )
 }

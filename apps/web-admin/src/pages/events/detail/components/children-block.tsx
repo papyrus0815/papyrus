@@ -206,6 +206,15 @@ export function ChildrenBlock({
             외 {hiddenChildCount}개 더 보기 · 시간 흐름은 개요의 전개에서
           </NetStyles.MoreBtn>
         )}
+        {showAllChildren && childEvents.length > CHILD_CARD_CAP && (
+          <NetStyles.MoreBtn
+            type="button"
+            onClick={() => setShowAllChildren(false)}
+            aria-label="하위 사건 목록 접기"
+          >
+            접기 ({CHILD_CARD_CAP}개만 표시)
+          </NetStyles.MoreBtn>
+        )}
         {/* 추가 어포던스 행 — $reveal 미지정: '하위 사건 추가'(AddBtn)와 강등된
             '새 하위 사건 만들기'(TextBtn) 모두 rest 상태 상시 노출. */}
         <NetStyles.HierRow>
@@ -256,6 +265,15 @@ export function ChildrenBlock({
                 aria-label={`추가 하위 ${hiddenExtraChildCount}개 더 보기`}
               >
                 외 {hiddenExtraChildCount}개 더 보기
+              </NetStyles.MoreBtn>
+            )}
+            {showAllExtraChildren && extraChildren.length > EXTRA_CHILD_CAP && (
+              <NetStyles.MoreBtn
+                type="button"
+                onClick={() => setShowAllExtraChildren(false)}
+                aria-label="추가 하위 목록 접기"
+              >
+                접기
               </NetStyles.MoreBtn>
             )}
           </NetStyles.KeywordsRow>

@@ -25,6 +25,10 @@ import { CountryPicker } from '@/shared/ui/country-picker'
 import { personCareerApi } from '@/shared/api/person-career'
 import type { CreateGovernmentPositionDefinitionDto } from '@/shared/api/person-career'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
+import {
+  administrationDepartmentsByCountryQueryKey,
+  administrationDepartmentsByHistoricalCountryQueryKey,
+} from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
@@ -95,6 +99,8 @@ export interface PositionDefinitionsSectionProps {
   /** 행정기구 페이지에서 고정 주입 — 이 기구 소속 직위만 표시·등록 */
   fixedOrganizationId?: string
   fixedOrganizationName?: string
+  /** 중앙부처 탭에서 특정 부처·카테고리 문맥으로 넘어왔을 때 필터 해제 콜백 */
+  onClearFixedFilter?: () => void
 }
 
 type ScopeFilterMode = 'applicable' | 'country_only' | 'global_only' | 'all'
@@ -641,6 +647,7 @@ export function PositionDefinitionsSection({
   fixedAdministrationDepartmentName,
   fixedOrganizationId,
   fixedOrganizationName,
+  onClearFixedFilter,
 }: PositionDefinitionsSectionProps) {
   const queryClient = useQueryClient()
 
@@ -652,6 +659,7 @@ export function PositionDefinitionsSection({
     useState<boolean>(false)
   const [positionTypeModalOpen, setPositionTypeModalOpen] = useState(false)
   const [categoryModalOpen, setCategoryModalOpen] = useState(false)
+  const [departmentModalOpen, setDepartmentModalOpen] = useState(false)
   const [scopeCountryModalOpen, setScopeCountryModalOpen] = useState(false)
   const [form, setForm] = useState<CreateGovernmentPositionDefinitionDto>(
     emptyForm(
@@ -805,6 +813,23 @@ export function PositionDefinitionsSection({
     enabled: !fixedCategoryId && !fixedOrganizationId && view === 'form',
   })
 
+  /* 소속 부처 목록 (국가 상세에서 고정 부처가 없을 때 선택용) */
+  const { data: countryDepartments = [] } = useQuery({
+    queryKey:
+      country?.type === 'historical'
+        ? administrationDepartmentsByHistoricalCountryQueryKey(country?.id)
+        : administrationDepartmentsByCountryQueryKey(country?.id),
+    queryFn: () =>
+      country?.type === 'historical'
+        ? administrationDepartmentApi.getByHistoricalCountryId(country.id)
+        : administrationDepartmentApi.getByCountryId(country!.id),
+    enabled:
+      Boolean(country?.id) &&
+      !fixedAdministrationDepartmentId &&
+      !fixedOrganizationId &&
+      view === 'form',
+  })
+
   const refetch = () => {
     queryClient.invalidateQueries({ queryKey: ['position-definitions'] })
   }
@@ -903,7 +928,12 @@ export function PositionDefinitionsSection({
         const created = (await personCareerApi.createPositionDefinition(
           form,
         )) as { id?: string } | undefined
-        if (scopeToCurrentCountryOnCreate && country && created?.id) {
+        if (
+          scopeToCurrentCountryOnCreate &&
+          country &&
+          created?.id &&
+          !form.administrationDepartmentId
+        ) {
           await personCareerApi.addPositionDefinitionScope(
             created.id,
             country.type === 'historical'
@@ -941,6 +971,9 @@ export function PositionDefinitionsSection({
   const positionTypeLabel =
     POSITION_TYPE_OPTIONS.find((o) => o.value === form.positionType)?.label ?? form.positionType
   const selectedCategory = categories.find((c) => c.id === form.categoryId)
+  const selectedDepartment = countryDepartments.find(
+    (d) => d.id === form.administrationDepartmentId,
+  )
 
   const contextLabel = fixedAdministrationDepartmentName
     ? `"${fixedAdministrationDepartmentName}" 부처`
@@ -963,6 +996,18 @@ export function PositionDefinitionsSection({
           <SectionSub>
             {contextLabel} 직위 목록입니다. 각 직위의 <strong>적용 범위</strong>가 비어 있으면
             모든 국가에서, 국가가 지정돼 있으면 그 국가에서만 재임·재위 등록에 나옵니다.
+            {onClearFixedFilter && (
+              <>
+                {' '}
+                <FilterResetButton
+                  type="button"
+                  onClick={onClearFixedFilter}
+                  style={{ marginLeft: 8 }}
+                >
+                  전체 직위 보기
+                </FilterResetButton>
+              </>
+            )}
           </SectionSub>
         </SectionTitleBlock>
         {view === 'list' && (
@@ -1416,6 +1461,71 @@ export function PositionDefinitionsSection({
                       </FieldControl>
                     </FieldRow>
                   )}
+
+                  {/* 소속 부처·기관 선택 — 국가 상세에서 고정 부처가 없을 때 표시 */}
+                  {country &&
+                    !fixedAdministrationDepartmentId &&
+                    !fixedOrganizationId && (
+                      <FieldRow>
+                        <FieldLabel>소속 부처·기관</FieldLabel>
+                        <FieldControl>
+                          <SelectTrigger
+                            type="button"
+                            $hasValue={!!selectedDepartment}
+                            onClick={() => setDepartmentModalOpen(true)}
+                          >
+                            <span>
+                              {selectedDepartment
+                                ? selectedDepartment.historicalCountry?.name &&
+                                  country.type !== 'historical'
+                                  ? `${selectedDepartment.name} [${selectedDepartment.historicalCountry.name}]`
+                                  : selectedDepartment.name
+                                : '선택 안 함 (특정 부처에 귀속하지 않음)'}
+                            </span>
+                            <FiChevronDown size={16} />
+                          </SelectTrigger>
+                          <SelectModal
+                            isOpen={departmentModalOpen}
+                            onClose={() => setDepartmentModalOpen(false)}
+                            options={[
+                              {
+                                value: '',
+                                label: '선택 안 함 (특정 부처에 귀속하지 않음)',
+                              },
+                              ...countryDepartments.map((d) => ({
+                                value: d.id,
+                                label:
+                                  d.historicalCountry?.name &&
+                                  country.type !== 'historical'
+                                    ? `${d.name} [${d.historicalCountry.name}]`
+                                    : d.name,
+                              })),
+                            ]}
+                            selectedValue={
+                              form.administrationDepartmentId ?? ''
+                            }
+                            onSelect={(value) => {
+                              const picked = countryDepartments.find(
+                                (d) => d.id === value,
+                              )
+                              setForm((f) => ({
+                                ...f,
+                                administrationDepartmentId: value || null,
+                                categoryId:
+                                  picked?.categoryId && !f.categoryId
+                                    ? picked.categoryId
+                                    : f.categoryId,
+                              }))
+                              setDepartmentModalOpen(false)
+                            }}
+                            title="소속 부처·기관 선택"
+                          />
+                          <FieldHint>
+                            특정 부처 전용 직위(예: 이조판서 → 이조, 육군대신 → 육군성)일 때 지정하면 해당 부처 상세의 소속 직위와 역대 재임 목록에 자동 연동됩니다.
+                          </FieldHint>
+                        </FieldControl>
+                      </FieldRow>
+                    )}
 
                   {/* 고정된 컨텍스트 표시 */}
                   {(fixedAdministrationDepartmentId ||

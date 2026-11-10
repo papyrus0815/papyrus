@@ -24,7 +24,9 @@ import type {
 import {
   DEPARTMENT_NAME_FRAMES,
   getDepartmentNameFrame,
+  inferDepartmentCategoryName,
   inferDepartmentFrameId,
+  inferDepartmentKind,
   suggestFrameItems,
 } from '@/shared/lib/ministry-department/department-name-frames'
 import {
@@ -1051,14 +1053,13 @@ export function CurrentCabinetPanel({
     () => filterDepartmentsForCabinet(allDepartments, activeCabinetScope),
     [allDepartments, activeCabinetScope],
   )
-  const hiddenEraDepartmentCount =
-    eraFilteredDepartments.length > 0
-      ? Math.max(0, allDepartments.length - eraFilteredDepartments.length)
-      : 0
-  const departments =
-    eraFilteredDepartments.length > 0 && !showAllEraDepartments
-      ? eraFilteredDepartments
-      : allDepartments
+  const hiddenEraDepartmentCount = Math.max(
+    0,
+    allDepartments.length - eraFilteredDepartments.length,
+  )
+  const departments = showAllEraDepartments
+    ? allDepartments
+    : eraFilteredDepartments
 
   const existingDepartmentNames = useMemo(
     () => departments.map((department) => department.name),
@@ -1099,7 +1100,11 @@ export function CurrentCabinetPanel({
           countryId: countryId || undefined,
           historicalCountryId: activeHistoricalCountryId ?? undefined,
           // 카테고리를 함께 걸어야 「행정조직 → 중앙부처」의 해당 탭에 나타난다
-          categoryId: categoryIdByName.get(item.categoryName) ?? null,
+          categoryId:
+            categoryIdByName.get(item.categoryName) ??
+            categoryIdByName.get('기타') ??
+            null,
+          kind: item.kind,
         })
       }
       await invalidateDepartments()
@@ -1116,10 +1121,20 @@ export function CurrentCabinetPanel({
     if (!name) return
     setCreatingDepartment(true)
     try {
+      const inferredCategoryName = inferDepartmentCategoryName(name, frame)
+      const resolvedCategoryId =
+        (inferredCategoryName
+          ? categoryIdByName.get(inferredCategoryName)
+          : undefined) ??
+        categoryIdByName.get('기타') ??
+        null
+      const inferredKind = inferDepartmentKind(name, frame)
       await administrationDepartmentApi.create({
         name,
         countryId: countryId || undefined,
         historicalCountryId: activeHistoricalCountryId ?? undefined,
+        categoryId: resolvedCategoryId,
+        kind: inferredKind,
       })
       setNewDepartmentName('')
       await invalidateDepartments()

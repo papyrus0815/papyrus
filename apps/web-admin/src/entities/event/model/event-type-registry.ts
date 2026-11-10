@@ -30,6 +30,7 @@ export type EventTypeKey =
   | 'MOBILIZATION'
   | 'TREATY'
   | 'SUMMIT'
+  | 'WAR_DECLARATION'
   | 'DECLARATION'
   | 'VISIT'
   | 'CRISIS'
@@ -68,6 +69,7 @@ export type EventFacetKey =
   | 'metrics'
   | 'military'
   | 'treaty'
+  | 'warDeclaration'
   | 'statehood'
   | 'territory'
   | 'power'
@@ -82,6 +84,7 @@ export const FACET_LABEL: Record<EventFacetKey, string> = {
   metrics: '수치',
   military: '작전 정보',
   treaty: '맺어진 조약',
+  warDeclaration: '선전포고 당사국',
   statehood: '성립·소멸 국가',
   territory: '영토 이전',
   power: '취임·즉위',
@@ -256,8 +259,12 @@ export const EVENT_TYPES: Record<EventTypeKey, EventTypeDef> = {
     key: 'SUMMIT', short: '회담', label: '회담·회의·교섭', examples: '베를린 회의 · 어전회의 · 공의회 · 협정안 교섭 · 정상 통화', defaultDomain: 'DIPLOMACY',
     core: ['participants', 'persons'], optional: ['treaty'],
   },
+  WAR_DECLARATION: {
+    key: 'WAR_DECLARATION', short: '선전', label: '선전포고', examples: '오스트리아-헝가리의 대세르비아 선전포고 · 프랑스의 대프로이센 선전포고 · 참전 선언', defaultDomain: 'DIPLOMACY',
+    core: ['warDeclaration', 'participants'], optional: ['persons', 'treaty'],
+  },
   DECLARATION: {
-    key: 'DECLARATION', short: '선언', label: '선언·통첩·연설', examples: '선전포고 · 최후통첩 · 중립 선언 · 예산 연설 · 결의', defaultDomain: 'DIPLOMACY',
+    key: 'DECLARATION', short: '선언', label: '선언·통첩·연설', examples: '최후통첩 · 중립 선언 · 예산 연설 · 결의', defaultDomain: 'DIPLOMACY',
     core: ['participants'], optional: ['persons', 'treaty'],
   },
   VISIT: {
@@ -371,10 +378,10 @@ export interface EventTypeGroup {
   types: EventTypeKey[]
 }
 
-/** 세부 의미군 5묶음 — '더 보기'·'기타'·분야 미선택 시 29종을 훑기 쉽게 묶는다 */
+/** 세부 의미군 5묶음 — '더 보기'·'기타'·분야 미선택 시 30종을 훑기 쉽게 묶는다 */
 export const EVENT_TYPE_GROUPS: ReadonlyArray<EventTypeGroup> = [
   { label: '충돌', types: ['WAR', 'BATTLE', 'UPRISING', 'ATTACK', 'MOBILIZATION'] },
-  { label: '국가 간', types: ['TREATY', 'SUMMIT', 'DECLARATION', 'VISIT', 'CRISIS', 'EXPANSION'] },
+  { label: '국가 간', types: ['TREATY', 'SUMMIT', 'WAR_DECLARATION', 'DECLARATION', 'VISIT', 'CRISIS', 'EXPANSION'] },
   { label: '국가·권력', types: ['STATEHOOD', 'TERRITORY', 'POWER_CHANGE', 'ELECTION', 'LAW_POLICY', 'INSTITUTION', 'INCIDENT', 'MOVEMENT'] },
   { label: '경제·산업', types: ['COMPANY', 'MARKET', 'PRODUCT', 'CONSTRUCTION'] },
   { label: '자연·문화·사람', types: ['DISASTER', 'DISCOVERY', 'CREATION', 'CONVERSION', 'MIGRATION', 'PERSONAL'] },
@@ -408,9 +415,9 @@ export function groupSubtypes(types: ReadonlyArray<EventTypeKey>): EventTypeGrou
  * 나머지 세부도 '더 보기'로 고를 수 있다(저장은 독립 축). 기타는 앞줄이 없어 전부 보인다.
  */
 export const DOMAIN_SUBTYPES: Partial<Record<EventDomainKey, EventTypeKey[]>> = {
-  POLITICS: ['STATEHOOD', 'TERRITORY', 'POWER_CHANGE', 'ELECTION', 'LAW_POLICY', 'INSTITUTION', 'UPRISING', 'INCIDENT', 'ATTACK', 'MOVEMENT', 'DECLARATION', 'PERSONAL'],
-  DIPLOMACY: ['TREATY', 'TERRITORY', 'SUMMIT', 'DECLARATION', 'VISIT', 'CRISIS', 'EXPANSION', 'INSTITUTION'],
-  MILITARY: ['WAR', 'BATTLE', 'MOBILIZATION', 'LAW_POLICY', 'POWER_CHANGE', 'INSTITUTION', 'UPRISING', 'ATTACK', 'TREATY', 'SUMMIT', 'PERSONAL'],
+  POLITICS: ['STATEHOOD', 'TERRITORY', 'POWER_CHANGE', 'ELECTION', 'LAW_POLICY', 'INSTITUTION', 'UPRISING', 'INCIDENT', 'ATTACK', 'MOVEMENT', 'WAR_DECLARATION', 'DECLARATION', 'PERSONAL'],
+  DIPLOMACY: ['TREATY', 'TERRITORY', 'SUMMIT', 'WAR_DECLARATION', 'DECLARATION', 'VISIT', 'CRISIS', 'EXPANSION', 'INSTITUTION'],
+  MILITARY: ['WAR', 'BATTLE', 'WAR_DECLARATION', 'MOBILIZATION', 'LAW_POLICY', 'POWER_CHANGE', 'INSTITUTION', 'UPRISING', 'ATTACK', 'TREATY', 'SUMMIT', 'PERSONAL'],
   ECONOMY: ['COMPANY', 'MARKET', 'PRODUCT', 'CONSTRUCTION', 'LAW_POLICY', 'INSTITUTION', 'TREATY', 'MOVEMENT'],
   SOCIETY: ['UPRISING', 'MOVEMENT', 'DISASTER', 'MIGRATION', 'ATTACK', 'INCIDENT', 'LAW_POLICY', 'INSTITUTION', 'CONSTRUCTION'],
   CULTURE: ['CREATION', 'CONSTRUCTION', 'INSTITUTION', 'DISCOVERY', 'MOVEMENT', 'VISIT'],
@@ -523,6 +530,7 @@ export interface EventTypeFeatures {
   metricPresets: string[]
   metricSubject: 'side' | 'event'
   promoteTreaties: boolean
+  expectWarDeclaration: boolean
   expectStatehood: boolean
   expectTerritory: boolean
   expectPower: boolean
@@ -543,6 +551,7 @@ export function eventTypeFeatures(type?: string | null, domain?: string | null):
     metricPresets: metrics.presets,
     metricSubject: metrics.subject,
     promoteTreaties: core.includes('treaty'),
+    expectWarDeclaration: core.includes('warDeclaration'),
     /* 성립·소멸은 핵심일 때만 비어 있어도 세운다 — 영토 변경은 선택이라(1차 분할에서 연방은 소멸하지 않았다) 빈 안내만 섰다 */
     expectStatehood: core.includes('statehood'),
     expectTerritory: facets.includes('territory'),
@@ -589,9 +598,14 @@ const TITLE_SUGGESTION_RULES: ReadonlyArray<{
     domain: 'POLITICS',
     type: 'STATEHOOD',
   },
-  // 선언·통첩·연설
+  // 선전포고·참전 선언 vs 선언·통첩·연설
   {
-    pattern: /(?:선전\s*포고|최후\s*통첩|중립\s*선언|연설|담화|성명|통첩|결의)$/,
+    pattern: /(?:선전\s*포고|개전\s*(?:선언|포고)|참전\s*선언|전쟁\s*참전)$/,
+    domain: 'DIPLOMACY',
+    type: 'WAR_DECLARATION',
+  },
+  {
+    pattern: /(?:최후\s*통첩|중립\s*선언|연설|담화|성명|통첩|결의)$/,
     domain: 'DIPLOMACY',
     type: 'DECLARATION',
   },
@@ -692,7 +706,8 @@ const SEARCH_KEYWORDS: Partial<Record<EventTypeKey, string>> = {
   MOBILIZATION: '총동원령 동원령 기동훈련 작전지령 계엄령 배치 파병',
   TREATY: '강화조약 화약 의정서 휴전협정 체결 조인 비준 동맹 가입',
   SUMMIT: '정상회담 강화회의 평화회의 어전회의 공의회 교섭 회동',
-  DECLARATION: '선전포고 최후통첩 중립선언 담화 성명 통첩 결의 연설',
+  WAR_DECLARATION: '선전포고 개전선언 개전포고 참전선언 전쟁선포 참전 개전 각서',
+  DECLARATION: '최후통첩 중립선언 담화 성명 통첩 결의 연설',
   VISIT: '국빈방문 사절단 내항 기항 예방 순방',
   CRISIS: '외교위기 사태 분쟁 대치',
   EXPANSION: '식민지 개척 진출 원정대',

@@ -1444,28 +1444,54 @@ export function TenureRegisterPanel({
   })
 
   const departmentOptions: SelectOption<string>[] = useMemo(() => {
-    const opts = (
-      departments as Array<{ id: string; name: string; abbreviation?: string | null }>
-    ).map((d) => ({
-      value: d.id,
-      label: d.abbreviation?.trim()
+    const formatDeptLabel = (d: {
+      name: string
+      abbreviation?: string | null
+      historicalCountry?: { id: string; name: string } | null
+    }) => {
+      const base = d.abbreviation?.trim()
         ? `${d.name} (${d.abbreviation.trim()})`
-        : d.name,
-    }))
+        : d.name
+      return !historicalCountryId && d.historicalCountry?.name
+        ? `${base} [${d.historicalCountry.name}]`
+        : base
+    }
+    const opts = (
+      departments as Array<{
+        id: string
+        name: string
+        abbreviation?: string | null
+        historicalCountryId?: string | null
+        historicalCountry?: { id: string; name: string } | null
+      }>
+    )
+      .filter((d) =>
+        historicalCountryId
+          ? !d.historicalCountryId ||
+            d.historicalCountryId === historicalCountryId
+          : true,
+      )
+      .map((d) => ({
+        value: d.id,
+        label: formatDeptLabel(d),
+      }))
     const pinnedDept = (editingTenure as any)?.administrationDepartment as
-      | { id: string; name: string; abbreviation?: string | null }
+      | {
+          id: string
+          name: string
+          abbreviation?: string | null
+          historicalCountry?: { id: string; name: string } | null
+        }
       | null
       | undefined
     if (pinnedDept?.id && !opts.some((o) => o.value === pinnedDept.id)) {
       opts.push({
         value: pinnedDept.id,
-        label: pinnedDept.abbreviation?.trim()
-          ? `${pinnedDept.name} (${pinnedDept.abbreviation.trim()})`
-          : pinnedDept.name,
+        label: formatDeptLabel(pinnedDept),
       })
     }
     return opts
-  }, [departments, editingTenure])
+  }, [departments, editingTenure, historicalCountryId])
 
   /** 재위로 연 경우(재위 추가·재위 수정) — 피커를 군주 칭호 우선으로 */
   const reignEntry = isEdit ? (editingTenure as any)?.isMonarchical === true : monarchicalMode

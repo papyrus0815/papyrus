@@ -228,6 +228,10 @@ const InsigniaThumbnailHint = styled.span`
 `
 
 const UNIT_TYPES: { value: MilitaryUnitType; label: string }[] = [
+  { value: 'THEATER', label: '전구·총사령부' },
+  { value: 'ARMY_GROUP', label: '집단군' },
+  { value: 'FRONT', label: '전선군·방면군' },
+  { value: 'MILITARY_DISTRICT', label: '군관구' },
   { value: 'FIELD_ARMY', label: '야전군' },
   { value: 'CORPS', label: '군단' },
   { value: 'DIVISION', label: '사단' },
@@ -238,6 +242,8 @@ const UNIT_TYPES: { value: MilitaryUnitType; label: string }[] = [
   { value: 'PLATOON', label: '소대' },
   { value: 'SQUAD', label: '분대' },
   { value: 'FLEET', label: '함대' },
+  { value: 'AIR_FLEET', label: '항공함대' },
+  { value: 'AIR_CORPS', label: '항공군단' },
   { value: 'SQUADRON', label: '전대' },
   { value: 'WING', label: '비행단' },
   { value: 'SPECIAL_FORCES', label: '특수부대' },

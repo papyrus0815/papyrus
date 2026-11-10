@@ -22,6 +22,10 @@ export interface GovernmentMilitaryTabProps {
 }
 
 const UNIT_TYPE_LABELS: Record<MilitaryUnitType, string> = {
+  THEATER: '전구·총사령부',
+  ARMY_GROUP: '집단군',
+  FRONT: '전선군·방면군',
+  MILITARY_DISTRICT: '군관구',
   FIELD_ARMY: '야전군',
   CORPS: '군단',
   DIVISION: '사단',
@@ -32,6 +36,8 @@ const UNIT_TYPE_LABELS: Record<MilitaryUnitType, string> = {
   PLATOON: '소대',
   SQUAD: '분대',
   FLEET: '함대',
+  AIR_FLEET: '항공함대',
+  AIR_CORPS: '항공군단',
   SQUADRON: '전대',
   WING: '비행단',
   SPECIAL_FORCES: '특수부대',

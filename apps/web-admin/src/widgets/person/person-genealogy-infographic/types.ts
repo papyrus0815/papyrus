@@ -33,9 +33,6 @@ export type NodePerson = PersonNameFields & {
   floruitEndYear?: number | null
   floruitEra?: string | null
   originalName?: string | null
-  posthumousName?: string | null
-  templeName?: string | null
-  preEnthronementTitle?: string | null
   birthPlace?: string | null
   deathPlace?: string | null
   illegitimate?: boolean | null
@@ -108,9 +105,6 @@ export type PersonMetaSource = {
   adoptiveFatherId?: string | null
   adoptiveMotherId?: string | null
   originalName?: string | null
-  posthumousName?: string | null
-  templeName?: string | null
-  preEnthronementTitle?: string | null
   birthPlace?: string | null
   deathPlace?: string | null
   birthOrder?: number | null

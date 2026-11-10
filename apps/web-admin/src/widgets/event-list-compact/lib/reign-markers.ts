@@ -39,7 +39,6 @@ export interface SovereignReignTimelineItem {
     surname?: string | null
     middleName?: string | null
     nameDisplayOrder?: string | null
-    templeName?: string | null
     profileImageUrl?: string | null
     isAlive?: boolean | null
     deathDate?: string | null
@@ -296,7 +295,6 @@ export function toReignMarkers(
 
     const name =
       reign.regnalName?.trim() ||
-      person?.templeName?.trim() ||
       (person ? personName(person) : '') ||
       '군주'
 

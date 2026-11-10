@@ -9,6 +9,7 @@ export type MinistryFormFields = {
   nameEn: string
   abbreviation: string
   kind: AdministrationDepartmentKind
+  historicalCountryId: string
   parentId: string
   categoryId: string
   thumbnailUrl: string

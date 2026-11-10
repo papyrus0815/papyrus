@@ -99,3 +99,151 @@ export function toSideInputs(sides: ReadonlyArray<EventSide>): EventSideInput[] 
     outcomeNote: side.outcomeNote,
   }))
 }
+
+export type SideUnitRole = 'MAIN_EFFORT' | 'SUPPORTING' | 'RESERVE' | 'DEFENSE'
+
+export interface SideUnitLineage {
+  id: string
+  name: string
+  unitType?: string | null
+}
+
+export interface SideUnitCommanderView {
+  id: string
+  name: string
+  rank: string | null
+  role: string | null
+  isOverride: boolean
+}
+
+export interface SideUnitMetricView {
+  id: string
+  metricKey: string
+  metricName: string
+  unit: string | null
+  value: number | null
+  low: number | null
+  high: number | null
+  approx: boolean
+  qualifier: string | null
+}
+
+export interface SideUnitView {
+  id: string
+  sideId: string
+  parentUnitId: string | null
+  commanderId: string | null
+  commander: SideUnitCommanderView | null
+  role: SideUnitRole | null
+  note: string | null
+  sortOrder: number
+  metrics: SideUnitMetricView[]
+  unit: {
+    id: string
+    name: string
+    unitType: string | null
+    branch: string | null
+    nickname: string | null
+    countryId: string | null
+    historicalCountryId: string | null
+    countryName: string | null
+    parents: SideUnitLineage[]
+    department: { id: string; name: string; abbreviation: string | null } | null
+  }
+}
+
+export interface AddSideUnitInput {
+  militaryUnitId: string
+  parentUnitId?: string | null
+  commanderId?: string | null
+  role?: SideUnitRole | null
+  note?: string | null
+}
+
+export interface UpdateSideUnitInput {
+  parentUnitId?: string | null
+  commanderId?: string | null
+  role?: SideUnitRole | null
+  note?: string | null
+  sortOrder?: number
+}
+
+async function parseSideUnitResponse(res: Response, fallbackMessage: string): Promise<SideUnitView[]> {
+  if (!res.ok) {
+    const text = await res.text()
+    let message = text
+    try {
+      const parsed = JSON.parse(text) as { message?: unknown; error?: { message?: unknown } }
+      const candidate = parsed.error?.message ?? parsed.message
+      if (typeof candidate === 'string') message = candidate
+    } catch {
+      /* 원문 */
+    }
+    throw new Error(message || `${fallbackMessage} (${res.status})`)
+  }
+  const data = (await res.json()) as { data?: SideUnitView[] } & SideUnitView[]
+  return data?.data ?? data
+}
+
+/** 사건의 진영별 투입 부대(전투서열 ORBAT) 전체 조회 */
+export async function listEventSideUnits(eventId: string): Promise<SideUnitView[]> {
+  const conn = getApiConnection()
+  const res = await fetch(`${conn.host}/events/${encodeURIComponent(eventId)}/side-units`, {
+    method: 'GET',
+    headers: conn.headers as HeadersInit,
+    credentials: 'include',
+  })
+  return parseSideUnitResponse(res, '투입 부대 목록을 불러오지 못했습니다')
+}
+
+/** 진영에 군사 부대 투입 */
+export async function addEventSideUnit(
+  eventId: string,
+  sideId: string,
+  body: AddSideUnitInput,
+): Promise<SideUnitView[]> {
+  const conn = getApiConnection()
+  const res = await fetch(
+    `${conn.host}/events/${encodeURIComponent(eventId)}/sides/${encodeURIComponent(sideId)}/units`,
+    {
+      method: 'POST',
+      headers: { ...conn.headers, 'Content-Type': 'application/json' } as HeadersInit,
+      body: JSON.stringify(body),
+      credentials: 'include',
+    },
+  )
+  return parseSideUnitResponse(res, '부대를 투입하지 못했습니다')
+}
+
+/** 투입 부대 역할·상급 부대·지휘관·비고 수정 */
+export async function updateEventSideUnit(
+  eventId: string,
+  id: string,
+  body: UpdateSideUnitInput,
+): Promise<SideUnitView[]> {
+  const conn = getApiConnection()
+  const res = await fetch(
+    `${conn.host}/events/${encodeURIComponent(eventId)}/side-units/${encodeURIComponent(id)}`,
+    {
+      method: 'PATCH',
+      headers: { ...conn.headers, 'Content-Type': 'application/json' } as HeadersInit,
+      body: JSON.stringify(body),
+      credentials: 'include',
+    },
+  )
+  return parseSideUnitResponse(res, '투입 부대를 수정하지 못했습니다')
+}
+
+/** 진영에서 투입 부대 제외 (부대 엔티티 자체는 유지) */
+export async function removeEventSideUnit(eventId: string, id: string): Promise<SideUnitView[]> {
+  const conn = getApiConnection()
+  const res = await fetch(
+    `${conn.host}/events/${encodeURIComponent(eventId)}/side-units/${encodeURIComponent(id)}`,
+    {
+      method: 'DELETE',
+      headers: conn.headers as HeadersInit,
+      credentials: 'include',
+    },
+  )
+  return parseSideUnitResponse(res, '투입 부대를 제외하지 못했습니다')
+}

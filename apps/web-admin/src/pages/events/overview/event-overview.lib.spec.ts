@@ -3,6 +3,7 @@ import type { EventOverviewNode } from '@/shared/api/event-overview'
 import {
   aggregatePersons,
   buildCountryMatrix,
+  buildWarDeclarationFlow,
   axisTicks,
   BREAK_PCT,
   brokenAxis,
@@ -567,5 +568,65 @@ describe('간트 축 확대 — 고른 시기를 축 전체로', () => {
     expect(zoomed.rows.map((row) => row.node.id)).toEqual(full.rows.map((row) => row.node.id))
     expect(zoomed.domain).toEqual([1914 + 7 / 12, 1915])
     expect(full.rows.every((row) => row.offWindow === null)).toBe(true)
+  })
+})
+
+describe('buildWarDeclarationFlow — 선전포고 하위 사건 + 가담·이탈 시점', () => {
+  it('WAR_DECLARATION 하위 사건을 시간순으로 모으고 선포국·대상국을 분리하며 상위 가담·이탈 시점을 정렬한다', () => {
+    const warRoot = node({
+      id: 'ww1',
+      title: '제1차 세계대전',
+      parentEventId: null,
+      depth: 0,
+      sides: [{ id: 'side-entente', name: '협상국', color: null }],
+      countries: [
+        {
+          key: 'h:ru',
+          id: 'ru',
+          kind: 'historical',
+          name: '러시아 제국',
+          flagEmoji: null,
+          role: 'PARTICIPANT',
+          sideId: 'side-entente',
+          join: { era: 'AD', year: 1914, month: 8, day: 1, precision: 'day' },
+          joinReason: '독일의 선전포고',
+          withdraw: { era: 'AD', year: 1918, month: 3, day: 3, precision: 'day' },
+          withdrawReason: '브레스트-리토프스크 조약',
+        },
+      ],
+    })
+    const declLater = node({
+      id: 'decl-2',
+      title: '독일의 대러 선전포고',
+      type: 'WAR_DECLARATION',
+      domain: 'DIPLOMACY',
+      startDate: '1914-08-01T00:00:00.000Z',
+      startDatePrecision: 'day',
+      countries: [
+        { key: 'h:de', id: 'de', kind: 'historical', name: '독일 제국', flagEmoji: null, role: 'INITIATOR', sideId: null },
+        { key: 'h:ru', id: 'ru', kind: 'historical', name: '러시아 제국', flagEmoji: null, role: 'TARGET', sideId: null },
+      ],
+    })
+    const declEarlier = node({
+      id: 'decl-1',
+      title: '오스트리아-헝가리의 대세르비아 선전포고',
+      type: 'WAR_DECLARATION',
+      domain: 'DIPLOMACY',
+      startDate: '1914-07-28T00:00:00.000Z',
+      startDatePrecision: 'day',
+      countries: [
+        { key: 'h:at', id: 'at', kind: 'historical', name: '오스트리아-헝가리', flagEmoji: null, role: 'INITIATOR', sideId: null },
+        { key: 'h:rs', id: 'rs', kind: 'historical', name: '세르비아 왕국', flagEmoji: null, role: 'TARGET', sideId: null },
+      ],
+    })
+
+    const flow = buildWarDeclarationFlow(warRoot, [declLater, marne, declEarlier])
+    expect(flow.declarations.map((item) => item.eventId)).toEqual(['decl-1', 'decl-2'])
+    expect(flow.declarations[0].initiators.map((country) => country.name)).toEqual(['오스트리아-헝가리'])
+    expect(flow.declarations[0].targets.map((country) => country.name)).toEqual(['세르비아 왕국'])
+    expect(flow.milestones.map((milestone) => milestone.kind)).toEqual(['join', 'withdraw'])
+    expect(flow.milestones[0].dateLabel).toBe('1914.8.1')
+    expect(flow.milestones[0].sideName).toBe('협상국')
+    expect(flow.milestones[1].reason).toBe('브레스트-리토프스크 조약')
   })
 })

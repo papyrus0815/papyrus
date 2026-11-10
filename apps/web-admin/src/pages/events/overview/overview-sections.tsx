@@ -27,6 +27,7 @@ import {
   type PeriodFilter,
   type TimeBin,
   type PersonAggregate,
+  type WarDeclarationFlow,
   applicableCountByColumn,
   checkNode,
   chooseLabelPlace,
@@ -40,6 +41,9 @@ import {
 } from './event-overview.lib'
 import { type RegroupCandidate, RegroupBar } from '../detail/components/collection-regroup'
 import { withSideColors } from '../detail/components/side-colors'
+import { SIDE_UNIT_ROLE_LABEL } from '../detail/components/side-orbat.lib'
+import { SIDE_OUTCOME_LABEL } from '../detail/components/side-outcome'
+import { militaryUnitTypeLabelKo } from '@/shared/lib/military-unit-type-label'
 
 import { type AccessionMarker } from '../detail/components/contemporary-heads.lib'
 import { toAxisSpan } from '../detail/components/development-timeline.lib'
@@ -741,7 +745,231 @@ export function GanttPanel({
   )
 }
 
-// ─── 참여국 매트릭스 ───────────────────────────────────────────────────────
+// ─── 참여국 매트릭스 · 선전포고 흐름 ─────────────────────────────────────────
+
+export function WarDeclarationFlowPanel({
+  flow,
+  numberById,
+  selectedCountryKey,
+  onSelectCountry,
+  visibleIds,
+  hotId,
+  onHover,
+  onOpen,
+}: HoverProps & {
+  flow: WarDeclarationFlow
+  numberById: Map<string, string>
+  selectedCountryKey: string | null
+  onSelectCountry: (key: string | null) => void
+  visibleIds: Set<string> | null
+}) {
+  const theme = useTheme()
+  const leadColor = S.toneColor('lead', theme.mode)
+  const targetColor = S.toneColor('target', theme.mode)
+  const { declarations, milestones } = flow
+
+  if (declarations.length === 0 && milestones.length === 0) return null
+
+  const summaryParts = [
+    declarations.length > 0 ? `선전포고 하위 사건 ${declarations.length}건` : null,
+    milestones.length > 0 ? `참전·이탈 시점 ${milestones.length}건` : null,
+    '나라를 누르면 그 나라로 거르고, 사건을 누르면 상세를 연다',
+  ].filter(Boolean)
+
+  return (
+    <S.Panel $wide id="overview-war-declarations" aria-labelledby="overview-war-declarations-title">
+      <S.PanelHead>
+        <S.PanelTitle id="overview-war-declarations-title">선전포고 · 참전 흐름</S.PanelTitle>
+        <S.PanelNote>{summaryParts.join(' · ')}</S.PanelNote>
+      </S.PanelHead>
+
+      {declarations.length > 0 && (
+        <S.Scroll>
+          <S.Table aria-label="선전포고 하위 사건 시간순 목록">
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">시점</th>
+                <th scope="col">선포국 ──▶ 대상국</th>
+                <th scope="col">선전포고 사건</th>
+              </tr>
+            </thead>
+            <tbody>
+              {declarations.map((item) => {
+                const dimmed = isDimmed(visibleIds, item.eventId)
+                return (
+                  <S.ChecklistRow
+                    key={item.eventId}
+                    $hot={hotId === item.eventId}
+                    style={dimmed ? { opacity: 0.42 } : undefined}
+                    onMouseEnter={() => onHover(item.eventId)}
+                    onMouseLeave={() => onHover(null)}
+                    onClick={() => onOpen(item.eventId)}
+                  >
+                    <td>
+                      <S.Muted>{numberById.get(item.eventId) ?? '—'}</S.Muted>
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                      {item.dateLabel}
+                    </td>
+                    <td onClick={(clickEvent) => clickEvent.stopPropagation()}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          flexWrap: 'wrap',
+                          alignItems: 'center',
+                          gap: '4px 6px',
+                        }}
+                      >
+                        {item.initiators.length > 0 ? (
+                          item.initiators.map((country, index) => {
+                            const active = selectedCountryKey === country.key
+                            return (
+                              <Fragment key={country.key}>
+                                {index > 0 && <S.Muted>·</S.Muted>}
+                                <S.TextButton
+                                  type="button"
+                                  onClick={() => onSelectCountry(active ? null : country.key)}
+                                  style={{
+                                    color: leadColor,
+                                    textDecoration: active ? 'underline' : undefined,
+                                    fontStyle: country.kind === 'historical' ? 'italic' : undefined,
+                                  }}
+                                  title="선포국 — 눌러서 이 나라 사건만 거르기"
+                                >
+                                  {country.flagEmoji ? `${country.flagEmoji} ` : ''}
+                                  {country.name}
+                                </S.TextButton>
+                              </Fragment>
+                            )
+                          })
+                        ) : item.others.length > 0 ? (
+                          item.others.map((country, index) => {
+                            const active = selectedCountryKey === country.key
+                            return (
+                              <Fragment key={country.key}>
+                                {index > 0 && <S.Muted>·</S.Muted>}
+                                <S.TextButton
+                                  type="button"
+                                  onClick={() => onSelectCountry(active ? null : country.key)}
+                                  style={{
+                                    textDecoration: active ? 'underline' : undefined,
+                                    fontStyle: country.kind === 'historical' ? 'italic' : undefined,
+                                  }}
+                                >
+                                  {country.flagEmoji ? `${country.flagEmoji} ` : ''}
+                                  {country.name}
+                                </S.TextButton>
+                              </Fragment>
+                            )
+                          })
+                        ) : (
+                          <S.Muted>미지정</S.Muted>
+                        )}
+                        {(item.initiators.length > 0 || item.targets.length > 0) && (
+                          <S.Muted aria-label="선전포고 대상">──▶</S.Muted>
+                        )}
+                        {item.targets.length > 0 ? (
+                          item.targets.map((country, index) => {
+                            const active = selectedCountryKey === country.key
+                            return (
+                              <Fragment key={country.key}>
+                                {index > 0 && <S.Muted>·</S.Muted>}
+                                <S.TextButton
+                                  type="button"
+                                  onClick={() => onSelectCountry(active ? null : country.key)}
+                                  style={{
+                                    color: targetColor,
+                                    textDecoration: active ? 'underline' : undefined,
+                                    fontStyle: country.kind === 'historical' ? 'italic' : undefined,
+                                  }}
+                                  title="대상국(피선포) — 눌러서 이 나라 사건만 거르기"
+                                >
+                                  {country.flagEmoji ? `${country.flagEmoji} ` : ''}
+                                  {country.name}
+                                </S.TextButton>
+                              </Fragment>
+                            )
+                          })
+                        ) : item.initiators.length > 0 ? (
+                          <S.Muted>대상국 미지정</S.Muted>
+                        ) : null}
+                      </span>
+                    </td>
+                    <td>
+                      <S.RowTitleButton
+                        type="button"
+                        style={{ whiteSpace: 'normal' }}
+                        onClick={(clickEvent) => {
+                          clickEvent.stopPropagation()
+                          onOpen(item.eventId)
+                        }}
+                      >
+                        {item.title}
+                      </S.RowTitleButton>
+                    </td>
+                  </S.ChecklistRow>
+                )
+              })}
+            </tbody>
+          </S.Table>
+        </S.Scroll>
+      )}
+
+      {milestones.length > 0 && (
+        <S.Scroll>
+          <S.Table aria-label="상위 전쟁 국가별 가담·이탈 시점">
+            <thead>
+              <tr>
+                <th scope="col">시점</th>
+                <th scope="col">구분</th>
+                <th scope="col">국가</th>
+                <th scope="col">경위 · 사유</th>
+              </tr>
+            </thead>
+            <tbody>
+              {milestones.map((milestone) => {
+                const active = selectedCountryKey === milestone.country.key
+                return (
+                  <tr key={milestone.key}>
+                    <td style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+                      {milestone.dateLabel}
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <strong
+                        style={{
+                          color: milestone.kind === 'join' ? leadColor : targetColor,
+                          fontSize: 12,
+                        }}
+                      >
+                        {milestone.kind === 'join' ? '참전·가담' : '이탈·강화'}
+                      </strong>
+                    </td>
+                    <td>
+                      <S.TextButton
+                        type="button"
+                        onClick={() => onSelectCountry(active ? null : milestone.country.key)}
+                        style={{
+                          textDecoration: active ? 'underline' : undefined,
+                          fontStyle: milestone.country.kind === 'historical' ? 'italic' : undefined,
+                        }}
+                      >
+                        {milestone.country.flagEmoji ? `${milestone.country.flagEmoji} ` : ''}
+                        {milestone.country.name}
+                      </S.TextButton>
+                      {milestone.sideName && <S.Muted> ({milestone.sideName})</S.Muted>}
+                    </td>
+                    <td>{milestone.reason ?? <S.Muted>—</S.Muted>}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </S.Table>
+        </S.Scroll>
+      )}
+    </S.Panel>
+  )
+}
 
 /**
  * 가로로 넘치는 표 — 아직 오른쪽에 열이 남아 있으면 오른쪽 끝을 흐려 '더 있다'를 알린다.
@@ -1008,9 +1236,9 @@ function CountryMatrixTable({
                               <S.RoleMark
                                 $color={S.toneColor(roleTone(role), theme.mode)}
                                 $hollow={roleTone(role) === 'neutral'}
-                                title={`${event.title} — ${roleLabel(role)}`}
+                                title={`${event.title} — ${roleLabel(role, event.type)}`}
                                 role="img"
-                                aria-label={`${numberById.get(event.id)}번 ${event.title}: ${roleLabel(role)}`}
+                                aria-label={`${numberById.get(event.id)}번 ${event.title}: ${roleLabel(role, event.type)}`}
                               />
                             )}
                           </S.MatrixCell>
@@ -1469,14 +1697,62 @@ export function SidesMetricsPanel({
                 <S.ChecklistRow key={node.id} {...rowProps(node.id)}>
                   {renderEventCells(node.id, node.title)}
                   <td>
-                    {/* 진영마다 그 진영 색 칩 — 상세 '진영' 카드·수치 막대와 같은 색이라 지면을 건너도 같은 편으로 읽힌다 */}
+                    {/* 진영마다 그 진영 색 칩 + 승패 결과 + 투입 부대 요약 */}
                     <S.SideChips>
-                      {withSideColors(node.sides).map((side, index) => (
-                        <Fragment key={side.id}>
-                          {index > 0 && <S.SideVersus aria-label="대">↔</S.SideVersus>}
-                          <S.SideChip $color={side.color}>{side.name}</S.SideChip>
-                        </Fragment>
-                      ))}
+                      {withSideColors(node.sides).map((side, index) => {
+                        const extSide = side as typeof side & {
+                          outcome?: string | null
+                          outcomeNote?: string | null
+                          deployedUnits?: Array<{
+                            id: string
+                            militaryUnitId: string
+                            name: string
+                            unitType: string | null
+                            role: string | null
+                          }>
+                        }
+                        const outcomeText =
+                          extSide.outcome && extSide.outcome in SIDE_OUTCOME_LABEL
+                            ? SIDE_OUTCOME_LABEL[extSide.outcome as keyof typeof SIDE_OUTCOME_LABEL]
+                            : null
+                        const units = extSide.deployedUnits ?? []
+                        return (
+                          <Fragment key={side.id}>
+                            {index > 0 && <S.SideVersus aria-label="대">↔</S.SideVersus>}
+                            <S.SideChip
+                              $color={side.color}
+                              title={
+                                [
+                                  outcomeText
+                                    ? `${outcomeText}${extSide.outcomeNote ? ` (${extSide.outcomeNote})` : ''}`
+                                    : null,
+                                  units.length > 0
+                                    ? `투입 부대 ${units.length}개: ${units
+                                        .map((unitItem) => {
+                                          const typeLabel = unitItem.unitType
+                                            ? militaryUnitTypeLabelKo(unitItem.unitType)
+                                            : null
+                                          const roleText =
+                                            unitItem.role && unitItem.role in SIDE_UNIT_ROLE_LABEL
+                                              ? SIDE_UNIT_ROLE_LABEL[unitItem.role as keyof typeof SIDE_UNIT_ROLE_LABEL]
+                                              : null
+                                          const meta = [typeLabel, roleText].filter(Boolean).join('·')
+                                          return meta ? `${unitItem.name}(${meta})` : unitItem.name
+                                        })
+                                        .join(', ')}`
+                                    : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' — ') || undefined
+                              }
+                            >
+                              {side.name}
+                              {outcomeText ? ` · ${outcomeText}` : ''}
+                              {units.length > 0 ? ` (부대 ${units.length})` : ''}
+                            </S.SideChip>
+                          </Fragment>
+                        )
+                      })}
                     </S.SideChips>
                   </td>
                 </S.ChecklistRow>

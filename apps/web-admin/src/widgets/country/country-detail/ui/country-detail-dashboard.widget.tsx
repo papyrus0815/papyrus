@@ -84,6 +84,7 @@ import { PoliticalSystemPanel } from './dashboard-panels/political-system-panel'
 import { PopulationPyramidSection } from './dashboard-panels/population-pyramid-section'
 import { SectionNav } from './dashboard-panels/section-nav'
 import { TradeSection } from './dashboard-panels/trade-section'
+import { WarDeclarationsSection } from './war-declarations-section'
 
 /** 대시보드 계보 요약에 한 번에 보여줄 과거 국가 수 */
 const LINEAGE_SUMMARY_LIMIT = 12
@@ -1491,6 +1492,15 @@ export function CountryDetailDashboard({
           />
         </S.Section>
       ) : null}
+
+      {/*
+        4-1b. 선전포고 · 참전 이력 — 이 나라(및 전신 과거국가)가 관여한 선전포고 사건 목록
+      */}
+      <WarDeclarationsSection
+        countryId={isModern ? country.id : undefined}
+        historicalCountryId={isModern ? undefined : country.id}
+        linkedHistoricalCountryIds={linkedHistoricalIds}
+      />
 
       {/*
        * 4-2. 최근 활동 — 활동 내역이 실제로 있을 때만 깔끔하게 단독 노출한다.

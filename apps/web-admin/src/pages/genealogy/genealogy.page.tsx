@@ -984,9 +984,6 @@ function buildPersonTooltip(
     }
   }
   if (p.originalName) lines.push(`원어 — ${p.originalName}`)
-  if (p.preEnthronementTitle) lines.push(`작호 — ${p.preEnthronementTitle}`)
-  if (p.templeName) lines.push(`묘호 — ${p.templeName}`)
-  if (p.posthumousName) lines.push(`시호 — ${p.posthumousName}`)
   if (p.genderBirthOrder != null || p.birthOrder != null) {
     const g = (p.gender ?? '').toUpperCase()
     const gLabel =

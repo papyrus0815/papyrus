@@ -120,6 +120,13 @@ export function DetailStatehood({
 
   const [dragCountry, setDragCountry] = useState<{ id: string; historical: boolean } | null>(null)
   const [dragOverRole, setDragOverRole] = useState<StatehoodRole | null>(null)
+  const [showAllParticipants, setShowAllParticipants] = useState(false)
+
+  const QUICK_ASSIGN_CAP = 4
+  const visibleParticipants = showAllParticipants
+    ? otherParticipants
+    : otherParticipants.slice(0, QUICK_ASSIGN_CAP)
+  const hiddenParticipantCount = otherParticipants.length - visibleParticipants.length
 
   const assignStatehoodRole = (
     target: { id: string; historical: boolean },
@@ -220,14 +227,24 @@ export function DetailStatehood({
                         {entry.name}
                       </TransitionPillName>
                       {onPatch && (
-                        <TransitionPillClear
-                          type="button"
-                          onClick={() => assignStatehoodRole(entry, 'PARTICIPANT')}
-                          title="소멸 역할 해제"
-                          aria-label={`${entry.name} 소멸 역할 해제`}
-                        >
-                          ×
-                        </TransitionPillClear>
+                        <>
+                          <TransitionPillFlip
+                            type="button"
+                            onClick={() => assignStatehoodRole(entry, 'FOUNDED')}
+                            title="성립(신생국)으로 역할 전환"
+                            aria-label={`${entry.name} 성립으로 역할 전환`}
+                          >
+                            ⇄
+                          </TransitionPillFlip>
+                          <TransitionPillClear
+                            type="button"
+                            onClick={() => assignStatehoodRole(entry, 'PARTICIPANT')}
+                            title="소멸 역할 해제"
+                            aria-label={`${entry.name} 소멸 역할 해제`}
+                          >
+                            ×
+                          </TransitionPillClear>
+                        </>
                       )}
                     </TransitionPill>
                   ))}
@@ -291,14 +308,24 @@ export function DetailStatehood({
                         {entry.name}
                       </TransitionPillName>
                       {onPatch && (
-                        <TransitionPillClear
-                          type="button"
-                          onClick={() => assignStatehoodRole(entry, 'PARTICIPANT')}
-                          title="성립 역할 해제"
-                          aria-label={`${entry.name} 성립 역할 해제`}
-                        >
-                          ×
-                        </TransitionPillClear>
+                        <>
+                          <TransitionPillFlip
+                            type="button"
+                            onClick={() => assignStatehoodRole(entry, 'DISSOLVED')}
+                            title="소멸(구체제)로 역할 전환"
+                            aria-label={`${entry.name} 소멸로 역할 전환`}
+                          >
+                            ⇄
+                          </TransitionPillFlip>
+                          <TransitionPillClear
+                            type="button"
+                            onClick={() => assignStatehoodRole(entry, 'PARTICIPANT')}
+                            title="성립 역할 해제"
+                            aria-label={`${entry.name} 성립 역할 해제`}
+                          >
+                            ×
+                          </TransitionPillClear>
+                        </>
                       )}
                     </TransitionPill>
                   ))}
@@ -314,7 +341,7 @@ export function DetailStatehood({
           {onPatch && otherParticipants.length > 0 && (
             <QuickAssignBar aria-label="참여국 성립·소멸 빠른 지정">
               <QuickAssignLabel>참여국 빠른 배정</QuickAssignLabel>
-              {otherParticipants.map((participant) => (
+              {visibleParticipants.map((participant) => (
                 <QuickAssignChip
                   key={`${participant.historical ? 'h' : 'c'}:${participant.id}`}
                   draggable
@@ -345,6 +372,14 @@ export function DetailStatehood({
                   </QuickAssignBtn>
                 </QuickAssignChip>
               ))}
+              {otherParticipants.length > QUICK_ASSIGN_CAP && (
+                <QuickAssignMoreBtn
+                  type="button"
+                  onClick={() => setShowAllParticipants((previous) => !previous)}
+                >
+                  {showAllParticipants ? '접기' : `+${hiddenParticipantCount}개국 더 보기`}
+                </QuickAssignMoreBtn>
+              )}
             </QuickAssignBar>
           )}
         </TransitionBoard>
@@ -789,6 +824,19 @@ const TransitionPillName = styled.button`
   }
 `
 
+const TransitionPillFlip = styled.button`
+  ${buttonReset}
+  font-size: 11.5px;
+  line-height: 1;
+  color: ${metaText};
+  opacity: 0.75;
+
+  &:hover {
+    opacity: 1;
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+`
+
 const TransitionPillClear = styled.button`
   ${buttonReset}
   font-size: 13px;
@@ -890,5 +938,20 @@ const QuickAssignBtn = styled.button<{ $founded: boolean }>`
 
   &:hover {
     opacity: 0.85;
+  }
+`
+
+const QuickAssignMoreBtn = styled.button`
+  ${buttonReset}
+  padding: 2px 8px;
+  border-radius: ${RADIUS.PILL};
+  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${metaText};
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 `

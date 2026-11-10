@@ -102,6 +102,9 @@ export function DetailOrganizations({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [creatingOrgOpen, setCreatingOrgOpen] = useState(false)
   const [pendingOrganizationId, setPendingOrganizationId] = useState<string | null>(null)
+  const [orgQuery, setOrgQuery] = useState('')
+  const [orgSearchFocused, setOrgSearchFocused] = useState(false)
+  const [showAllRecommendedOrgs, setShowAllRecommendedOrgs] = useState(false)
   const [dragRelationId, setDragRelationId] = useState<string | null>(null)
   const [dragOverSideKey, setDragOverSideKey] = useState<string | null>(null)
 
@@ -118,9 +121,27 @@ export function DetailOrganizations({
   const { data: allOrganizations = [], isLoading } = useQuery({
     queryKey: ['organizations', 'event-link-candidates'],
     queryFn: () => getOrganizations(getApiConnection()),
-    enabled: pickerOpen || hasParticipantCountries,
+    enabled: pickerOpen || hasParticipantCountries || orgSearchFocused || orgQuery.trim().length > 0,
     staleTime: 60_000,
   })
+
+  const linkedOrgIdSet = useMemo(
+    () => new Set(organizations.map((relation) => relation.organizationId)),
+    [organizations],
+  )
+
+  const orgQuickMatches = useMemo(() => {
+    const trimmed = orgQuery.trim().toLowerCase()
+    if (!trimmed) return []
+    return allOrganizations
+      .filter(
+        (organization) =>
+          !linkedOrgIdSet.has(organization.id) &&
+          (organization.name.toLowerCase().includes(trimmed) ||
+            (organization.shortName?.toLowerCase().includes(trimmed) ?? false)),
+      )
+      .slice(0, 6)
+  }, [orgQuery, allOrganizations, linkedOrgIdSet])
 
   const participantCountrySideMap = useMemo(() => {
     const map = new Map<string, { name: string; sideId: string | null }>()
@@ -230,6 +251,17 @@ export function DetailOrganizations({
     } catch (error) {
       notify.error(
         error instanceof Error ? error.message : '조직 진영 변경에 실패했습니다',
+      )
+    }
+  }
+
+  const handleUpdateRole = async (relationId: string, role: EventOrganizationRole) => {
+    try {
+      await updateEventOrganization(event.id, relationId, { role })
+      refresh()
+    } catch (error) {
+      notify.error(
+        error instanceof Error ? error.message : '조직 역할 변경에 실패했습니다',
       )
     }
   }
@@ -394,6 +426,7 @@ export function DetailOrganizations({
                 setDragOverSideKey(null)
               }}
               onUpdateSide={(sideId) => void handleUpdateSide(relation.relationId, sideId)}
+              onUpdateRole={(role) => void handleUpdateRole(relation.relationId, role)}
               onImportMembers={onPatch ? () => void handleImportMembers(relation) : undefined}
               onRemove={() => void handleRemove(relation)}
             />
@@ -411,7 +444,10 @@ export function DetailOrganizations({
         <RecommendBar aria-label="참여국 소속 추천 기관·조직">
           <RecommendLabel>참여국 소속 기관·조직 빠른 연결</RecommendLabel>
           <RecommendChips>
-            {recommendedOrganizations.map((organization) => {
+            {(showAllRecommendedOrgs
+              ? recommendedOrganizations
+              : recommendedOrganizations.slice(0, 4)
+            ).map((organization) => {
               const ownerCountry =
                 (organization.countryId
                   ? participantCountrySideMap.get(`C:${organization.countryId}`)
@@ -426,7 +462,12 @@ export function DetailOrganizations({
                   key={organization.id}
                   type="button"
                   disabled={addMutation.isPending}
-                  onClick={() => setPendingOrganizationId(organization.id)}
+                  onClick={() =>
+                    addMutation.mutate({
+                      organizationId: organization.id,
+                      role: 'PRINCIPAL',
+                    })
+                  }
                 >
                   <strong>{organization.name}</strong>
                   {ownerCountry && (
@@ -438,9 +479,56 @@ export function DetailOrganizations({
                 </RecommendChipBtn>
               )
             })}
+            {recommendedOrganizations.length > 4 && (
+              <RecommendMoreBtn
+                type="button"
+                onClick={() => setShowAllRecommendedOrgs((previous) => !previous)}
+              >
+                {showAllRecommendedOrgs
+                  ? '접기'
+                  : `+${recommendedOrganizations.length - 4}곳 더 보기`}
+              </RecommendMoreBtn>
+            )}
           </RecommendChips>
         </RecommendBar>
       )}
+
+      <QuickAddRow>
+        <QuickSearchInput
+          type="search"
+          value={orgQuery}
+          onFocus={() => setOrgSearchFocused(true)}
+          onChange={(changeEvent) => setOrgQuery(changeEvent.target.value)}
+          onKeyDown={(keyEvent) => {
+            if (keyEvent.key === 'Enter' && orgQuickMatches.length > 0) {
+              keyEvent.preventDefault()
+              addMutation.mutate({
+                organizationId: orgQuickMatches[0].id,
+                role: 'PRINCIPAL',
+              })
+              setOrgQuery('')
+            }
+          }}
+          placeholder="+ 기업·조직 빠른 연결 (이름 입력 후 Enter)…"
+          aria-label="기업·조직 빠른 검색"
+        />
+        {orgQuickMatches.map((candidate) => (
+          <QuickMatchBtn
+            key={candidate.id}
+            type="button"
+            disabled={addMutation.isPending}
+            onClick={() => {
+              addMutation.mutate({
+                organizationId: candidate.id,
+                role: 'PRINCIPAL',
+              })
+              setOrgQuery('')
+            }}
+          >
+            + {candidate.name}
+          </QuickMatchBtn>
+        ))}
+      </QuickAddRow>
 
       <Actions>
         <ActionButton type="button" onClick={() => setPickerOpen(true)}>
@@ -505,6 +593,7 @@ function OrganizationRow({
   onDragStart,
   onDragEnd,
   onUpdateSide,
+  onUpdateRole,
   onImportMembers,
   onRemove,
 }: {
@@ -515,6 +604,7 @@ function OrganizationRow({
   onDragStart?: (dragEvent: React.DragEvent<HTMLLIElement>) => void
   onDragEnd?: (dragEvent: React.DragEvent<HTMLLIElement>) => void
   onUpdateSide: (sideId: string | null) => void
+  onUpdateRole: (role: EventOrganizationRole) => void
   onImportMembers?: () => void
   onRemove: () => void
 }) {
@@ -548,7 +638,15 @@ function OrganizationRow({
               <FiExternalLink size={12} aria-hidden />
             </NameLink>
           )}
-          <RoleBadge>{ROLE_LABEL[relation.role] ?? relation.role}</RoleBadge>
+          <RoleBadge>
+            <InlineSelect
+              value={relation.role}
+              options={ROLE_OPTIONS}
+              onSave={(nextRole) => onUpdateRole(nextRole as EventOrganizationRole)}
+              placeholder={ROLE_LABEL[relation.role] ?? relation.role}
+              label={`${relation.name}의 사건 내 역할`}
+            />
+          </RoleBadge>
           {sideOptions.length > 0 && (
             <SideBadge $color={side?.color}>
               {side && <SideDot $color={side.color} aria-hidden />}
@@ -673,13 +771,9 @@ const NameLink = styled(Link)`
   }
 `
 
-const Name = styled.span`
-  font-size: 15px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
 const RoleBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
   padding: 1px 7px;
   border-radius: ${RADIUS.PILL};
   border: 1px solid ${({ theme }) => theme.colors.border};
@@ -895,4 +989,73 @@ const RecommendChipPlus = styled.span`
   font-size: 11px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.accent};
+`
+
+const RecommendMoreBtn = styled.button`
+  padding: 2px 8px;
+  border: none;
+  background: transparent;
+  color: ${metaText};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+`
+
+const QuickAddRow = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin-top: 6px;
+  margin-bottom: 10px;
+`
+
+const QuickSearchInput = styled.input`
+  width: 260px;
+  max-width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 12.5px;
+
+  &::placeholder {
+    color: ${metaText};
+  }
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.colors.accent};
+    background: ${({ theme }) => theme.colors.background.primary};
+  }
+`
+
+const QuickMatchBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: ${RADIUS.PILL};
+  border: 1px dashed ${({ theme }) => theme.colors.accent};
+  background: ${({ theme }) => `${theme.colors.accent}0e`};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: ${({ theme }) => `${theme.colors.accent}1c`};
+  }
 `

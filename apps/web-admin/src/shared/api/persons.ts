@@ -108,9 +108,6 @@ interface RelaxedPersonInputFields {
   gender?: string | null
   profileImageUrl?: string | null
   regnalName?: string | null
-  templeName?: string | null
-  posthumousName?: string | null
-  preEnthronementTitle?: string | null
   deathType?: string | null
   birthEra?: Era
   deathEra?: Era

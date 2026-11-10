@@ -197,6 +197,18 @@ export function DetailTerritory({ event, expectTerritory, readOnly = false, onCo
     )
   }
 
+  const addRowForGroup = (group: { party: TerritoryParty; rows: TerritoryTransfer[] }) => {
+    const lastInGroup = group.rows[group.rows.length - 1]
+    setEditing(
+      emptyTerritoryDraft({
+        ...(lastInGroup ? { from: lastInGroup.from } : {}),
+        to: group.party,
+        method: lastInGroup?.method ?? 'CESSION',
+        treatyId: lastInGroup?.treaty?.id ?? treaties[0]?.id ?? null,
+      }),
+    )
+  }
+
   const { gained, lost } = useMemo(() => summarizeTerritory(rows), [rows])
   const maxGained = Math.max(1, ...gained.map((total) => total.areaKm2))
   const totalArea = lost.reduce((sum, total) => sum + total.areaKm2, 0)
@@ -294,7 +306,18 @@ export function DetailTerritory({ event, expectTerritory, readOnly = false, onCo
 
           {groups.map((group) => (
             <Group key={group.key} aria-label={`${partyName(group.party)}이(가) 받은 땅`}>
-              <GroupHead>→ {partyName(group.party)}</GroupHead>
+              <GroupHeadRow>
+                <GroupHead>→ {partyLink(group.party)}</GroupHead>
+                {!readOnly && (
+                  <GroupAddBtn
+                    type="button"
+                    onClick={() => addRowForGroup(group)}
+                    aria-label={`${partyName(group.party)}이(가) 받은 땅 줄 추가`}
+                  >
+                    + 이 나라로 줄 추가
+                  </GroupAddBtn>
+                )}
+              </GroupHeadRow>
               <Rows>
                 {group.rows.map((row) => {
                   const when = effectiveLabel(row)
@@ -304,7 +327,7 @@ export function DetailTerritory({ event, expectTerritory, readOnly = false, onCo
                         <Region>{row.regionName}</Region>
                         <MethodTag>{territoryMethodLabel(row.method)}</MethodTag>
                         <Meta>
-                          ← {partyName(row.from)}
+                          ← {partyLink(row.from)}
                           {row.areaKm2 != null && ` · ${formatArea(row.areaKm2)}`}
                           {row.population != null && ` · ${formatPopulation(row.population)}`}
                           {when && ` · ${when}`}
@@ -512,11 +535,35 @@ const Group = styled.section`
   margin-top: 10px;
 `
 
+const GroupHeadRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+`
+
 const GroupHead = styled.h3`
   margin: 0;
   font-size: 13px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const GroupAddBtn = styled.button`
+  padding: 2px 8px;
+  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.PILL};
+  background: transparent;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${metaText};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
 `
 
 const Rows = styled.ul`

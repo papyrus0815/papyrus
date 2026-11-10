@@ -222,7 +222,14 @@ export function ParentBlock({
           이 사건({formatYearLabel(selfYear ?? 0)})이 상위 기간(
           {formatYearLabel(parentStartYear)}
           {parentEndYear != null && parentEndYear !== parentStartYear ? `–${formatYearLabel(parentEndYear)}` : ''}) 밖에
-          {' '}{outsideBy}년 떨어져 있습니다 — 날짜 오타이거나 상위를 잘못 고른 것일 수 있습니다
+          {' '}{outsideBy}년 떨어져 있습니다 — 날짜 오타이거나 상위를 잘못 고른 것일 수 있습니다{' '}
+          <NetStyles.TextBtn
+            type="button"
+            onClick={onOpenParentModal}
+            aria-label="기간 불일치 상위 사건 변경"
+          >
+            상위 사건 변경
+          </NetStyles.TextBtn>
         </NetStyles.WarnNote>
       )}
       {/* 유령 상위 표지 — 주 상위가 해제·삭제됐는데 추가 상위만 남은 상태의 유일 안내. */}

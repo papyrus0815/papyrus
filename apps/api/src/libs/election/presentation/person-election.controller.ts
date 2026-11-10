@@ -21,6 +21,7 @@ import { CreatePartyMembershipDto } from './dto/create-party-membership.dto'
 import { UpdatePartyMembershipDto } from './dto/update-party-membership.dto'
 import {
   assertMembershipStartBeforeEnd,
+  assertMembershipWithinPersonLifespan,
   membershipInputToDate,
 } from './party-membership-dates.util'
 
@@ -38,8 +39,28 @@ export class PersonElectionController {
     if (!accountId) throw new UnauthorizedException()
     const person = await this.prisma.person.findFirst({
       where: { id: personId, accountId },
+      select: {
+        id: true,
+        birthDate: true,
+        birthEra: true,
+        isBirthDateUnknown: true,
+        deathDate: true,
+        deathEra: true,
+        isDeathDateUnknown: true,
+        isAlive: true,
+      },
     })
     if (!person) throw new NotFoundException('인물을 찾을 수 없거나 권한이 없습니다.')
+    return person
+  }
+
+  private async ensurePartyExists(partyId: string) {
+    if (!this.prisma.politicalParty?.findUnique) return
+    const party = await this.prisma.politicalParty.findUnique({
+      where: { id: partyId },
+      select: { id: true },
+    })
+    if (!party) throw new NotFoundException('정당을 찾을 수 없습니다.')
   }
 
   @Get(':personId/political-party-memberships')
@@ -64,17 +85,18 @@ export class PersonElectionController {
     @Req() req: Request,
     @Body() body: CreatePartyMembershipDto,
   ): Promise<any> {
-    await this.ensurePersonOwned(personId, req)
+    const person = await this.ensurePersonOwned(personId, req)
+    await this.ensurePartyExists(body.partyId)
 
     const startParsed = membershipInputToDate(
       body.startDate,
       body.startDate !== undefined,
     )
     const endParsed = membershipInputToDate(body.endDate, body.endDate !== undefined)
-    assertMembershipStartBeforeEnd(
-      startParsed === undefined ? null : startParsed,
-      endParsed === undefined ? null : endParsed,
-    )
+    const effectiveStart = startParsed === undefined ? null : startParsed
+    const effectiveEnd = endParsed === undefined ? null : endParsed
+    assertMembershipStartBeforeEnd(effectiveStart, effectiveEnd)
+    assertMembershipWithinPersonLifespan(effectiveStart, effectiveEnd, person)
 
     const roleCategory =
       body.roleCategory != null ? body.roleCategory : undefined
@@ -111,11 +133,14 @@ export class PersonElectionController {
     @Req() req: Request,
     @Body() body: UpdatePartyMembershipDto,
   ): Promise<any> {
-    await this.ensurePersonOwned(personId, req)
+    const person = await this.ensurePersonOwned(personId, req)
     const existing = await this.prisma.politicalPartyMembership.findFirst({
       where: { id: membershipId, personId },
     })
     if (!existing) throw new NotFoundException('당원 기록을 찾을 수 없습니다.')
+    if (body.partyId !== undefined) {
+      await this.ensurePartyExists(body.partyId)
+    }
 
     const startWas = body.startDate !== undefined
     const endWas = body.endDate !== undefined
@@ -124,6 +149,7 @@ export class PersonElectionController {
     const nextStart = startWas ? startParsed ?? null : existing.startDate
     const nextEnd = endWas ? endParsed ?? null : existing.endDate
     assertMembershipStartBeforeEnd(nextStart, nextEnd)
+    assertMembershipWithinPersonLifespan(nextStart, nextEnd, person)
 
     const data: Record<string, unknown> = {}
     if (body.partyId !== undefined) data.partyId = body.partyId

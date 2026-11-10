@@ -21,6 +21,7 @@ import {
 } from '@/entities/event/model/event-type-registry'
 import {
   type EventCountryParticipant,
+  type EventCountryRole,
   participantKey,
 } from '@/entities/event/model/country-participant'
 import { ORGANIZATION_ROLE_OPTIONS } from '@/features/event-facets/model/organization-roles'
@@ -78,6 +79,8 @@ type PickerKind = 'persons' | 'power' | 'organizations' | 'treaty' | 'election'
 export const PERSON_ROLE_PRESETS = [
   '주도',
   '지휘관',
+  '국가원수',
+  '협상 대표',
   '집권',
   '반대파',
   '숙청·처형',
@@ -96,14 +99,14 @@ interface CoreRecordsGroupProps {
   participantName: (row: EventCountryParticipant) => string
   /** 참여국 피커 열기 — 진영 칸에서 아직 참여국이 없을 때 바로 추가할 수 있게 한다 */
   onOpenCountryModal?: () => void
-  /** 나라를 이 역할로 넣는다 — 성립·소멸 칸(국가 선택 모달을 역할을 정한 채로 연다) */
-  onAddCountryWithRole: (role: 'FOUNDED' | 'DISSOLVED') => void
-  /** 이미 참여국에 들어 있는 나라의 성립·소멸 배역을 바로 지정한다 */
-  onAssignParticipantRole?: (key: string, role: 'FOUNDED' | 'DISSOLVED') => void
-  /** 성립·소멸 칸 안에서 인라인 빠른 검색으로 나라를 즉시 추가·역할 배정 */
+  /** 나라를 이 역할로 넣는다 — 성립·소멸 또는 선전포고 칸(국가 선택 모달을 역할을 정한 채로 연다) */
+  onAddCountryWithRole: (role: 'FOUNDED' | 'DISSOLVED' | 'INITIATOR' | 'TARGET') => void
+  /** 이미 참여국에 들어 있는 나라의 배역을 바로 지정한다 */
+  onAssignParticipantRole?: (key: string, role: 'FOUNDED' | 'DISSOLVED' | 'INITIATOR' | 'TARGET') => void
+  /** 성립·소멸 및 진영 칸 안에서 인라인 빠른 검색으로 나라를 즉시 추가·역할 배정 */
   onQuickAddCountryWithRole?: (
     target: { countryId?: string; historicalCountryId?: string },
-    role: 'FOUNDED' | 'DISSOLVED',
+    role: EventCountryRole,
   ) => void
   availableCountries?: Array<{ id: string; name: string }>
   availableHistoricalCountries?: Array<{
@@ -291,9 +294,46 @@ export function CoreRecordsGroup({
     queryFn: () => getElections(),
     enabled:
       fieldFacets.includes('election') &&
-      electionQuickQuery.trim().length >= 1,
+      (electionQuickQuery.trim().length >= 1 || personContext?.fromYear != null),
     staleTime: 60_000,
   })
+
+  const suggestedElections = useMemo(() => {
+    if (drafts.election) return []
+    const allElections = electionQuickSearchQuery.data ?? []
+    if (allElections.length === 0) return []
+    const targetYear = personContext?.fromYear ?? null
+    const countryIds = new Set(
+      participants
+        .map((row) => row.countryId)
+        .filter((id): id is string => Boolean(id)),
+    )
+    const histCountryIds = new Set(
+      participants
+        .map((row) => row.historicalCountryId)
+        .filter((id): id is string => Boolean(id)),
+    )
+    return allElections
+      .filter((election) => {
+        const pollYear = signedYearFromIsoLike(election.pollDate)
+        const yearMatches =
+          targetYear != null && pollYear != null && Math.abs(pollYear - targetYear) <= 2
+        const countryMatches =
+          (election.countryId != null && countryIds.has(election.countryId)) ||
+          (election.historicalCountryId != null &&
+            histCountryIds.has(election.historicalCountryId))
+        if (countryIds.size > 0 || histCountryIds.size > 0) {
+          return countryMatches && (targetYear == null || yearMatches)
+        }
+        return yearMatches
+      })
+      .slice(0, 4)
+  }, [
+    drafts.election,
+    electionQuickSearchQuery.data,
+    participants,
+    personContext?.fromYear,
+  ])
 
   const quickElectionMatches = useMemo(() => {
     const needle = electionQuickQuery.trim().toLowerCase()
@@ -435,6 +475,9 @@ export function CoreRecordsGroup({
           update={update}
           participants={participants}
           participantName={participantName}
+          availableCountries={availableCountries}
+          availableHistoricalCountries={availableHistoricalCountries}
+          onQuickAddCountryWithRole={onQuickAddCountryWithRole}
           onOpenCountryModal={onOpenCountryModal}
           onImportOrgMembers={importOrganizationMembers}
           personContext={personContext}
@@ -442,8 +485,24 @@ export function CoreRecordsGroup({
         />
       )}
 
+      {fieldFacets.includes('warDeclaration') && (
+        <StatehoodField
+          mode="warDeclaration"
+          participants={participants}
+          participantName={participantName}
+          onAdd={onAddCountryWithRole}
+          onAssignRole={onAssignParticipantRole}
+          onQuickAddCountryWithRole={onQuickAddCountryWithRole}
+          availableCountries={availableCountries}
+          availableHistoricalCountries={availableHistoricalCountries}
+          onRemove={onRemoveParticipant}
+          playClickSound={playClickSound}
+        />
+      )}
+
       {fieldFacets.includes('statehood') && (
         <StatehoodField
+          mode="statehood"
           participants={participants}
           participantName={participantName}
           onAdd={onAddCountryWithRole}
@@ -620,6 +679,20 @@ export function CoreRecordsGroup({
                 </KitAddButton>
               )}
             </OrgActionRow>
+            {suggestedElections.length > 0 && (
+              <PersonSuggestionBar role="group" aria-label="동시대 추천 선거">
+                <OrgRoleLabel>추천 선거</OrgRoleLabel>
+                {suggestedElections.map((candidate) => (
+                  <PersonRolePresetChip
+                    key={candidate.id}
+                    type="button"
+                    onClick={() => selectQuickElection(candidate)}
+                  >
+                    + 🗳️ {candidate.name}
+                  </PersonRolePresetChip>
+                ))}
+              </PersonSuggestionBar>
+            )}
           </S.FormField>
         </S.FormRow>
       )}
@@ -1120,6 +1193,9 @@ function SidesField({
   update,
   participants,
   participantName,
+  availableCountries,
+  availableHistoricalCountries,
+  onQuickAddCountryWithRole,
   onOpenCountryModal: _onOpenCountryModal,
   onImportOrgMembers,
   personContext,
@@ -1129,6 +1205,17 @@ function SidesField({
   update: (patch: Partial<RegisterFacetDrafts>) => void
   participants: EventCountryParticipant[]
   participantName: (row: EventCountryParticipant) => string
+  availableCountries?: ReadonlyArray<{ id: string; name: string }>
+  availableHistoricalCountries?: ReadonlyArray<{
+    id: string
+    name: string
+    foundedYear?: number | null
+    dissolvedYear?: number | null
+  }>
+  onQuickAddCountryWithRole?: (
+    target: { countryId?: string; historicalCountryId?: string },
+    role: EventCountryRole,
+  ) => void
   onOpenCountryModal?: () => void
   onImportOrgMembers: (
     organizationId: string,
@@ -1402,6 +1489,16 @@ function SidesField({
 
   type SlotQuickCandidate =
     | {
+        kind: 'country'
+        id: string
+        participantKey: string
+        countryId?: string
+        historicalCountryId?: string
+        name: string
+        subtitle?: string
+        alreadyInEvent: boolean
+      }
+    | {
         kind: 'person'
         id: string
         name: string
@@ -1419,6 +1516,62 @@ function SidesField({
   const getSlotQuickCandidates = (slot: SideSlot): SlotQuickCandidate[] => {
     const queryText = (slotQuickQueries[slot] ?? '').trim().toLowerCase()
     if (!queryText) return []
+
+    const countryMatches: SlotQuickCandidate[] = []
+    const seenParticipantKeys = new Set<string>()
+    for (const row of participants) {
+      const pKey = participantKey(row)
+      seenParticipantKeys.add(pKey)
+      if (assignment[pKey] === slot) continue
+      const rowName = participantName(row)
+      if (!rowName || !rowName.toLowerCase().includes(queryText)) continue
+      countryMatches.push({
+        kind: 'country',
+        id: pKey,
+        participantKey: pKey,
+        countryId: row.countryId ?? undefined,
+        historicalCountryId: row.historicalCountryId ?? undefined,
+        name: rowName,
+        subtitle: '참여국 · 이 진영에 배정',
+        alreadyInEvent: true,
+      })
+      if (countryMatches.length >= 2) break
+    }
+
+    if (countryMatches.length < 2 && onQuickAddCountryWithRole) {
+      for (const histCountry of availableHistoricalCountries ?? []) {
+        const pKey = `h:${histCountry.id}`
+        if (seenParticipantKeys.has(pKey) || assignment[pKey] === slot) continue
+        if (!histCountry.name.toLowerCase().includes(queryText)) continue
+        seenParticipantKeys.add(pKey)
+        countryMatches.push({
+          kind: 'country',
+          id: pKey,
+          participantKey: pKey,
+          historicalCountryId: histCountry.id,
+          name: histCountry.name,
+          subtitle: '역사국가 · 참여국 추가 후 배정',
+          alreadyInEvent: false,
+        })
+        if (countryMatches.length >= 2) break
+      }
+      for (const modernCountry of availableCountries ?? []) {
+        if (countryMatches.length >= 2) break
+        const pKey = `m:${modernCountry.id}`
+        if (seenParticipantKeys.has(pKey) || assignment[pKey] === slot) continue
+        if (!modernCountry.name.toLowerCase().includes(queryText)) continue
+        seenParticipantKeys.add(pKey)
+        countryMatches.push({
+          kind: 'country',
+          id: pKey,
+          participantKey: pKey,
+          countryId: modernCountry.id,
+          name: modernCountry.name,
+          subtitle: '국가 · 참여국 추가 후 배정',
+          alreadyInEvent: false,
+        })
+      }
+    }
 
     const eventPersonMap = new Map(
       drafts.persons.map((person) => [person.personId, person]),
@@ -1475,7 +1628,7 @@ function SidesField({
       return 0
     })
 
-    return [...sortedPersons, ...orgMatches].slice(0, 6)
+    return [...countryMatches, ...sortedPersons, ...orgMatches].slice(0, 6)
   }
 
   const assignQuickCandidateToSlot = (
@@ -1483,7 +1636,20 @@ function SidesField({
     candidate: SlotQuickCandidate,
   ) => {
     playClickSound()
-    if (candidate.kind === 'person') {
+    if (candidate.kind === 'country') {
+      if (!candidate.alreadyInEvent && onQuickAddCountryWithRole) {
+        const defaultRole: EventCountryRole =
+          slot === 'A' ? 'INITIATOR' : slot === 'B' ? 'ADVERSARY' : 'PARTICIPANT'
+        onQuickAddCountryWithRole(
+          {
+            countryId: candidate.countryId,
+            historicalCountryId: candidate.historicalCountryId,
+          },
+          defaultRole,
+        )
+      }
+      setSlot(candidate.participantKey, slot)
+    } else if (candidate.kind === 'person') {
       const exists = drafts.persons.some(
         (person) => person.personId === candidate.id,
       )
@@ -1972,7 +2138,7 @@ function SidesField({
                   <SideQuickInput
                     type="text"
                     aria-label={`${index + 1}번 진영 인물·조직 빠른 추가`}
-                    placeholder={`+ ${index + 1}편에 인물·조직 바로 검색·추가…`}
+                    placeholder={`+ ${index + 1}편에 국가·인물·조직 바로 검색·추가…`}
                     value={slotQuickQueries[slot] ?? ''}
                     onFocus={() => {
                       setOpenSlotQuick(slot)
@@ -2031,7 +2197,7 @@ function SidesField({
                       >
                         {getSlotQuickCandidates(slot).length === 0 ? (
                           <QuickResultEmpty>
-                            일치하는 인물·조직이 없습니다
+                            일치하는 국가·인물·조직이 없습니다
                           </QuickResultEmpty>
                         ) : (
                           getSlotQuickCandidates(slot).map(
@@ -2050,7 +2216,11 @@ function SidesField({
                                 }}
                               >
                                 <QuickResultName>
-                                  {candidate.kind === 'person' ? '👤 ' : '🏢 '}
+                                  {candidate.kind === 'country'
+                                    ? '🏳️ '
+                                    : candidate.kind === 'person'
+                                      ? '👤 '
+                                      : '🏢 '}
                                   {candidate.name}
                                 </QuickResultName>
                                 {candidate.subtitle && (
@@ -2069,10 +2239,11 @@ function SidesField({
             )
           })}
         </SideBoardGrid>
-        {unassigned.length > 0 && (
+        {unassigned.length +
+          unassignedPersons.length +
+          unassignedOrgs.length >
+          0 && (
           <UnassignedBar
-            role="group"
-            aria-label="미배정 참여국"
             $dragOver={dragOverTarget === 'UNASSIGNED'}
             onDragOver={(dragEvent) => {
               dragEvent.preventDefault()
@@ -2093,187 +2264,147 @@ function SidesField({
             }}
             onDrop={(dragEvent) => handleDropToTarget(dragEvent, null)}
           >
-            <UnassignedLabel>미배정 ({unassigned.length})</UnassignedLabel>
-            {unassigned.map((row) => {
-              const key = participantKey(row)
-              const name = participantName(row)
-              const dragPayload: DraggedSideMember = {
-                kind: 'country',
-                key,
-                fromSlot: null,
-              }
-              return (
-                <UnassignedChip
-                  key={key}
-                  draggable
-                  title="원하는 진영 카드로 드래그하여 배정"
-                  onDragStart={(dragEvent) => {
-                    setDraggedMember(dragPayload)
-                    dragEvent.dataTransfer?.setData(
-                      'text/plain',
-                      encodeDragPayload(dragPayload),
-                    )
-                  }}
-                  onDragEnd={() => {
-                    setDraggedMember(null)
-                    setDragOverTarget(null)
-                  }}
-                >
-                  <UnassignedName>{name}</UnassignedName>
-                  {activeSlots.map((slot, slotIdx) => (
-                    <UnassignedAssignButton
-                      key={slot}
-                      type="button"
-                      aria-label={`${name} ${slotIdx + 1}번 진영 배정`}
-                      onClick={() => {
-                        playClickSound()
-                        setSlot(key, slot)
+            {unassigned.length > 0 && (
+              <UnassignedSubgroup role="group" aria-label="미배정 참여국">
+                <UnassignedLabel>미배정 ({unassigned.length})</UnassignedLabel>
+                {unassigned.map((row) => {
+                  const key = participantKey(row)
+                  const name = participantName(row)
+                  const dragPayload: DraggedSideMember = {
+                    kind: 'country',
+                    key,
+                    fromSlot: null,
+                  }
+                  return (
+                    <UnassignedChip
+                      key={key}
+                      draggable
+                      title="원하는 진영 카드로 드래그하여 배정"
+                      onDragStart={(dragEvent) => {
+                        setDraggedMember(dragPayload)
+                        dragEvent.dataTransfer?.setData(
+                          'text/plain',
+                          encodeDragPayload(dragPayload),
+                        )
+                      }}
+                      onDragEnd={() => {
+                        setDraggedMember(null)
+                        setDragOverTarget(null)
                       }}
                     >
-                      +{slotIdx + 1}편
-                    </UnassignedAssignButton>
-                  ))}
-                </UnassignedChip>
-              )
-            })}
-          </UnassignedBar>
-        )}
-        {unassignedPersons.length > 0 && (
-          <UnassignedBar
-            role="group"
-            aria-label="미배정 인물"
-            $dragOver={dragOverTarget === 'UNASSIGNED'}
-            onDragOver={(dragEvent) => {
-              dragEvent.preventDefault()
-              if (dragOverTarget !== 'UNASSIGNED') {
-                setDragOverTarget('UNASSIGNED')
-              }
-            }}
-            onDragLeave={(dragEvent) => {
-              if (
-                !dragEvent.currentTarget.contains(
-                  dragEvent.relatedTarget as Node | null,
-                )
-              ) {
-                setDragOverTarget((current) =>
-                  current === 'UNASSIGNED' ? null : current,
-                )
-              }
-            }}
-            onDrop={(dragEvent) => handleDropToTarget(dragEvent, null)}
-          >
-            <UnassignedLabel>
-              미배정 인물 ({unassignedPersons.length})
-            </UnassignedLabel>
-            {unassignedPersons.map((person) => {
-              const dragPayload: DraggedSideMember = {
-                kind: 'person',
-                key: person.personId,
-                fromSlot: null,
-              }
-              return (
-                <UnassignedChip
-                  key={person.personId}
-                  draggable
-                  title="원하는 진영 카드로 드래그하여 배정"
-                  onDragStart={(dragEvent) => {
-                    setDraggedMember(dragPayload)
-                    dragEvent.dataTransfer?.setData(
-                      'text/plain',
-                      encodeDragPayload(dragPayload),
-                    )
-                  }}
-                  onDragEnd={() => {
-                    setDraggedMember(null)
-                    setDragOverTarget(null)
-                  }}
-                >
-                  <UnassignedName>👤 {person.name}</UnassignedName>
-                  {activeSlots.map((slot, slotIdx) => (
-                    <UnassignedAssignButton
-                      key={slot}
-                      type="button"
-                      aria-label={`${person.name} ${slotIdx + 1}번 진영 배정`}
-                      onClick={() => {
-                        playClickSound()
-                        setPersonSlot(person.personId, slot)
+                      <UnassignedName>{name}</UnassignedName>
+                      {activeSlots.map((slot, slotIdx) => (
+                        <UnassignedAssignButton
+                          key={slot}
+                          type="button"
+                          aria-label={`${name} ${slotIdx + 1}번 진영 배정`}
+                          onClick={() => {
+                            playClickSound()
+                            setSlot(key, slot)
+                          }}
+                        >
+                          +{slotIdx + 1}편
+                        </UnassignedAssignButton>
+                      ))}
+                    </UnassignedChip>
+                  )
+                })}
+              </UnassignedSubgroup>
+            )}
+            {unassignedPersons.length > 0 && (
+              <UnassignedSubgroup role="group" aria-label="미배정 인물">
+                <UnassignedLabel>
+                  미배정 인물 ({unassignedPersons.length})
+                </UnassignedLabel>
+                {unassignedPersons.map((person) => {
+                  const dragPayload: DraggedSideMember = {
+                    kind: 'person',
+                    key: person.personId,
+                    fromSlot: null,
+                  }
+                  return (
+                    <UnassignedChip
+                      key={person.personId}
+                      draggable
+                      title="원하는 진영 카드로 드래그하여 배정"
+                      onDragStart={(dragEvent) => {
+                        setDraggedMember(dragPayload)
+                        dragEvent.dataTransfer?.setData(
+                          'text/plain',
+                          encodeDragPayload(dragPayload),
+                        )
+                      }}
+                      onDragEnd={() => {
+                        setDraggedMember(null)
+                        setDragOverTarget(null)
                       }}
                     >
-                      +{slotIdx + 1}편
-                    </UnassignedAssignButton>
-                  ))}
-                </UnassignedChip>
-              )
-            })}
-          </UnassignedBar>
-        )}
-        {unassignedOrgs.length > 0 && (
-          <UnassignedBar
-            role="group"
-            aria-label="미배정 조직"
-            $dragOver={dragOverTarget === 'UNASSIGNED'}
-            onDragOver={(dragEvent) => {
-              dragEvent.preventDefault()
-              if (dragOverTarget !== 'UNASSIGNED') {
-                setDragOverTarget('UNASSIGNED')
-              }
-            }}
-            onDragLeave={(dragEvent) => {
-              if (
-                !dragEvent.currentTarget.contains(
-                  dragEvent.relatedTarget as Node | null,
-                )
-              ) {
-                setDragOverTarget((current) =>
-                  current === 'UNASSIGNED' ? null : current,
-                )
-              }
-            }}
-            onDrop={(dragEvent) => handleDropToTarget(dragEvent, null)}
-          >
-            <UnassignedLabel>
-              미배정 조직 ({unassignedOrgs.length})
-            </UnassignedLabel>
-            {unassignedOrgs.map((org) => {
-              const dragPayload: DraggedSideMember = {
-                kind: 'organization',
-                key: org.id,
-                fromSlot: null,
-              }
-              return (
-                <UnassignedChip
-                  key={org.id}
-                  draggable
-                  title="원하는 진영 카드로 드래그하여 배정"
-                  onDragStart={(dragEvent) => {
-                    setDraggedMember(dragPayload)
-                    dragEvent.dataTransfer?.setData(
-                      'text/plain',
-                      encodeDragPayload(dragPayload),
-                    )
-                  }}
-                  onDragEnd={() => {
-                    setDraggedMember(null)
-                    setDragOverTarget(null)
-                  }}
-                >
-                  <UnassignedName>🏢 {org.name}</UnassignedName>
-                  {activeSlots.map((slot, slotIdx) => (
-                    <UnassignedAssignButton
-                      key={slot}
-                      type="button"
-                      aria-label={`${org.name} ${slotIdx + 1}번 진영 배정`}
-                      onClick={() => {
-                        playClickSound()
-                        setOrgSlot(org.id, slot)
+                      <UnassignedName>👤 {person.name}</UnassignedName>
+                      {activeSlots.map((slot, slotIdx) => (
+                        <UnassignedAssignButton
+                          key={slot}
+                          type="button"
+                          aria-label={`${person.name} ${slotIdx + 1}번 진영 배정`}
+                          onClick={() => {
+                            playClickSound()
+                            setPersonSlot(person.personId, slot)
+                          }}
+                        >
+                          +{slotIdx + 1}편
+                        </UnassignedAssignButton>
+                      ))}
+                    </UnassignedChip>
+                  )
+                })}
+              </UnassignedSubgroup>
+            )}
+            {unassignedOrgs.length > 0 && (
+              <UnassignedSubgroup role="group" aria-label="미배정 조직">
+                <UnassignedLabel>
+                  미배정 조직 ({unassignedOrgs.length})
+                </UnassignedLabel>
+                {unassignedOrgs.map((org) => {
+                  const dragPayload: DraggedSideMember = {
+                    kind: 'organization',
+                    key: org.id,
+                    fromSlot: null,
+                  }
+                  return (
+                    <UnassignedChip
+                      key={org.id}
+                      draggable
+                      title="원하는 진영 카드로 드래그하여 배정"
+                      onDragStart={(dragEvent) => {
+                        setDraggedMember(dragPayload)
+                        dragEvent.dataTransfer?.setData(
+                          'text/plain',
+                          encodeDragPayload(dragPayload),
+                        )
+                      }}
+                      onDragEnd={() => {
+                        setDraggedMember(null)
+                        setDragOverTarget(null)
                       }}
                     >
-                      +{slotIdx + 1}편
-                    </UnassignedAssignButton>
-                  ))}
-                </UnassignedChip>
-              )
-            })}
+                      <UnassignedName>🏢 {org.name}</UnassignedName>
+                      {activeSlots.map((slot, slotIdx) => (
+                        <UnassignedAssignButton
+                          key={slot}
+                          type="button"
+                          aria-label={`${org.name} ${slotIdx + 1}번 진영 배정`}
+                          onClick={() => {
+                            playClickSound()
+                            setOrgSlot(org.id, slot)
+                          }}
+                        >
+                          +{slotIdx + 1}편
+                        </UnassignedAssignButton>
+                      ))}
+                    </UnassignedChip>
+                  )
+                })}
+              </UnassignedSubgroup>
+            )}
           </UnassignedBar>
         )}
         {draggedMember &&
@@ -2379,7 +2510,10 @@ function SidesField({
 
 // ─── 성립·소멸 ───────────────────────────────────────────────────────────
 
+type CountryPairRole = 'FOUNDED' | 'DISSOLVED' | 'INITIATOR' | 'TARGET'
+
 function StatehoodField({
+  mode = 'statehood',
   participants,
   participantName,
   onAdd,
@@ -2390,13 +2524,14 @@ function StatehoodField({
   onRemove,
   playClickSound,
 }: {
+  mode?: 'statehood' | 'warDeclaration'
   participants: EventCountryParticipant[]
   participantName: (row: EventCountryParticipant) => string
-  onAdd: (role: 'FOUNDED' | 'DISSOLVED') => void
-  onAssignRole?: (key: string, role: 'FOUNDED' | 'DISSOLVED') => void
+  onAdd: (role: CountryPairRole) => void
+  onAssignRole?: (key: string, role: CountryPairRole) => void
   onQuickAddCountryWithRole?: (
     target: { countryId?: string; historicalCountryId?: string },
-    role: 'FOUNDED' | 'DISSOLVED',
+    role: CountryPairRole,
   ) => void
   availableCountries?: Array<{ id: string; name: string }>
   availableHistoricalCountries?: Array<{
@@ -2408,20 +2543,34 @@ function StatehoodField({
   onRemove: (key: string) => void
   playClickSound: () => void
 }) {
-  const [slotQueries, setSlotQueries] = useState<{
-    FOUNDED: string
-    DISSOLVED: string
-  }>({ FOUNDED: '', DISSOLVED: '' })
-  const [openRoleSlot, setOpenRoleSlot] = useState<'FOUNDED' | 'DISSOLVED' | null>(null)
+  const isWarDeclaration = mode === 'warDeclaration'
+  const [slotQueries, setSlotQueries] = useState<Record<CountryPairRole, string>>({
+    FOUNDED: '',
+    DISSOLVED: '',
+    INITIATOR: '',
+    TARGET: '',
+  })
+  const [openRoleSlot, setOpenRoleSlot] = useState<CountryPairRole | null>(null)
   const [activeCandidateIdx, setActiveCandidateIdx] = useState(0)
 
-  const slots: Array<{ role: 'FOUNDED' | 'DISSOLVED'; label: string; add: string }> = [
-    { role: 'FOUNDED', label: '세워진 나라', add: '세워진 나라 고르기' },
-    { role: 'DISSOLVED', label: '무너진 나라', add: '무너진 나라 고르기' },
-  ]
-  const unassigned = participants.filter((row) => row.role !== 'FOUNDED' && row.role !== 'DISSOLVED')
+  const slots: Array<{
+    role: CountryPairRole
+    label: string
+    add: string
+    shortAssignLabel: string
+  }> = isWarDeclaration
+    ? [
+        { role: 'INITIATOR', label: '선포국 (개전 주도)', add: '선포국 고르기', shortAssignLabel: '+선포국' },
+        { role: 'TARGET', label: '대상국 (피선포)', add: '대상국 고르기', shortAssignLabel: '+대상국' },
+      ]
+    : [
+        { role: 'FOUNDED', label: '세워진 나라', add: '세워진 나라 고르기', shortAssignLabel: '+세워진' },
+        { role: 'DISSOLVED', label: '무너진 나라', add: '무너진 나라 고르기', shortAssignLabel: '+무너진' },
+      ]
+  const activeRoleSet = new Set<string>(slots.map((slot) => slot.role))
+  const unassigned = participants.filter((row) => !row.role || !activeRoleSet.has(row.role))
 
-  const getRoleQuickCandidates = (role: 'FOUNDED' | 'DISSOLVED') => {
+  const getRoleQuickCandidates = (role: CountryPairRole) => {
     const needle = (slotQueries[role] ?? '').trim().toLowerCase()
     if (!needle) return []
     const alreadyInRoleKeys = new Set(
@@ -2491,7 +2640,7 @@ function StatehoodField({
   }
 
   const pickRoleCandidate = (
-    role: 'FOUNDED' | 'DISSOLVED',
+    role: CountryPairRole,
     candidate: {
       key: string
       countryId?: string
@@ -2519,9 +2668,10 @@ function StatehoodField({
   }
 
   return (
-    <S.FormRow data-core-record="statehood">
+    <S.FormRow data-core-record={isWarDeclaration ? 'warDeclaration' : 'statehood'}>
       <S.FormLabel as="span">
-        성립·소멸<RecordOptionalTag>(선택)</RecordOptionalTag>
+        {isWarDeclaration ? '선전포고 당사국' : '성립·소멸'}
+        <RecordOptionalTag>(선택)</RecordOptionalTag>
       </S.FormLabel>
       <S.FormField>
         <StatehoodGrid>
@@ -2651,7 +2801,10 @@ function StatehoodField({
           })}
         </StatehoodGrid>
         {onAssignRole && unassigned.length > 0 && (
-          <UnassignedBar role="group" aria-label="성립·소멸 미지정 참여국">
+          <UnassignedBar
+            role="group"
+            aria-label={isWarDeclaration ? '선전포고 당사국 미지정 참여국' : '성립·소멸 미지정 참여국'}
+          >
             <UnassignedLabel>참여국에서 지정</UnassignedLabel>
             {unassigned.map((row) => {
               const key = participantKey(row)
@@ -2659,26 +2812,19 @@ function StatehoodField({
               return (
                 <UnassignedChip key={key}>
                   <UnassignedName>{name}</UnassignedName>
-                  <UnassignedAssignButton
-                    type="button"
-                    aria-label={`${name} 세워진 나라로 지정`}
-                    onClick={() => {
-                      playClickSound()
-                      onAssignRole(key, 'FOUNDED')
-                    }}
-                  >
-                    +세워진
-                  </UnassignedAssignButton>
-                  <UnassignedAssignButton
-                    type="button"
-                    aria-label={`${name} 무너진 나라로 지정`}
-                    onClick={() => {
-                      playClickSound()
-                      onAssignRole(key, 'DISSOLVED')
-                    }}
-                  >
-                    +무너진
-                  </UnassignedAssignButton>
+                  {slots.map((slot) => (
+                    <UnassignedAssignButton
+                      key={slot.role}
+                      type="button"
+                      aria-label={`${name} ${slot.label}로 지정`}
+                      onClick={() => {
+                        playClickSound()
+                        onAssignRole(key, slot.role)
+                      }}
+                    >
+                      {slot.shortAssignLabel}
+                    </UnassignedAssignButton>
+                  ))}
                 </UnassignedChip>
               )
             })}
@@ -4519,9 +4665,9 @@ const UnassignedBar = styled.div<{ $dragOver?: boolean }>`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 8px 12px;
   margin-top: 6px;
-  padding: 8px 10px;
+  padding: 7px 10px;
   border-radius: 10px;
   border: 1px dashed
     ${({ $dragOver, theme }) =>
@@ -4533,6 +4679,19 @@ const UnassignedBar = styled.div<{ $dragOver?: boolean }>`
         ? 'rgba(255, 255, 255, 0.02)'
         : 'rgba(248, 250, 252, 0.85)'};
   transition: border-color 0.14s ease, background 0.14s ease;
+`
+
+const UnassignedSubgroup = styled.div`
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+
+  & + & {
+    padding-left: 10px;
+    border-left: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  }
 `
 
 const UnassignedLabel = styled.span`
@@ -4620,7 +4779,7 @@ const StatehoodGrid = styled.div`
   }
 `
 
-const StatehoodCard = styled.div<{ $role?: 'FOUNDED' | 'DISSOLVED' }>`
+const StatehoodCard = styled.div<{ $role?: CountryPairRole }>`
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -4628,7 +4787,12 @@ const StatehoodCard = styled.div<{ $role?: 'FOUNDED' | 'DISSOLVED' }>`
   border-radius: 12px;
   border: 1px solid ${({ theme }) => S.getC(theme).border.light};
   border-top: 3px solid
-    ${({ $role }) => ($role === 'DISSOLVED' ? '#f43f5e' : '#10b981')};
+    ${({ $role }) =>
+      $role === 'DISSOLVED' || $role === 'TARGET'
+        ? '#f43f5e'
+        : $role === 'INITIATOR'
+          ? '#6366f1'
+          : '#10b981'};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.025)' : '#f8fafc'};
   min-width: 0;

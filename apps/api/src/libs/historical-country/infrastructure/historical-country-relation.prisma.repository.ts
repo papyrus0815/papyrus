@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common'
 import { PrismaService } from '@prisma/prisma.service'
 import type {
   IHistoricalCountryRelationRepository,
@@ -12,6 +12,23 @@ export class HistoricalCountryRelationPrismaRepository
   implements IHistoricalCountryRelationRepository
 {
   constructor(private readonly prisma: PrismaService) {}
+
+  private assertValidRelationPeriod(
+    startDate?: Date | null,
+    endDate?: Date | null,
+  ): void {
+    if (
+      startDate &&
+      endDate &&
+      !Number.isNaN(startDate.getTime()) &&
+      !Number.isNaN(endDate.getTime()) &&
+      startDate.getTime() > endDate.getTime()
+    ) {
+      throw new BadRequestException(
+        '관계 종료일이 관계 시작일보다 앞설 수 없습니다.',
+      )
+    }
+  }
 
   async findManyByHistoricalCountryId(
     historicalCountryId: string,
@@ -51,6 +68,22 @@ export class HistoricalCountryRelationPrismaRepository
   }
 
   async create(data: CreateRelationData): Promise<HistoricalCountryRelationRecord> {
+    this.assertValidRelationPeriod(data.startDate, data.endDate)
+    if (this.prisma.historicalCountryRelation?.findFirst) {
+      const duplicate = await this.prisma.historicalCountryRelation.findFirst({
+        where: {
+          subjectCountryId: data.subjectCountryId,
+          objectCountryId: data.objectCountryId,
+          relationType: data.relationType,
+        },
+        select: { id: true },
+      })
+      if (duplicate) {
+        throw new ConflictException(
+          '이미 동일한 국가 간 수평 관계가 등록되어 있습니다.',
+        )
+      }
+    }
     const row = await this.prisma.historicalCountryRelation.create({
       data: {
         subjectCountryId: data.subjectCountryId,
@@ -71,6 +104,14 @@ export class HistoricalCountryRelationPrismaRepository
     id: string,
     data: UpdateRelationData,
   ): Promise<HistoricalCountryRelationRecord> {
+    if (data.startDate !== undefined || data.endDate !== undefined) {
+      const existing = await this.findById(id)
+      const nextStart =
+        data.startDate !== undefined ? data.startDate : existing?.startDate
+      const nextEnd =
+        data.endDate !== undefined ? data.endDate : existing?.endDate
+      this.assertValidRelationPeriod(nextStart, nextEnd)
+    }
     const row = await this.prisma.historicalCountryRelation.update({
       where: { id },
       data: {

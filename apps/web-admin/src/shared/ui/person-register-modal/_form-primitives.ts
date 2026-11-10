@@ -308,10 +308,10 @@ export const SelectBtn = styled.button<{
   }
 `
 
-// ─── Disclosure 카드 (이름의 뜻·군주 호칭 등 옵셔널 입력 그룹) ─────────────────
+// ─── Disclosure 카드 (이름의 뜻·부가 상세 등 옵셔널 입력 그룹) ─────────────────
 
 /**
- * 2차 disclosure(이름의 뜻·군주 호칭) — 카드 보더/배경을 없앤 경량 텍스트 토글.
+ * 2차 disclosure(이름의 뜻·부가 상세) — 카드 보더/배경을 없앤 경량 텍스트 토글.
  * '더 입력' 카드 안에서 또 카드가 겹치던 '카드-인-카드' 조잡함을 1겹으로 낮춤.
  */
 export const AdvancedSection = styled.section`

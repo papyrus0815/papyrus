@@ -45,6 +45,8 @@ export interface TimelineLayout {
 }
 
 const DAY = 1 / 365.25
+const HOUR = DAY / 24
+const MINUTE = HOUR / 60
 
 const astronomical = (signedYear: number) => (signedYear < 0 ? signedYear + 1 : signedYear)
 
@@ -60,6 +62,10 @@ function pointOf(iso: string | null | undefined, precision: Precision): { from: 
   const monthStart = base + (parts.month - 1) / 12
   if (precision === 'month') return { from: monthStart, to: monthStart + 1 / 12 }
   const day = monthStart + (parts.day - 1) * DAY
+  if (parts.hour !== 0 || parts.minute !== 0) {
+    const at = day + parts.hour * HOUR + parts.minute * MINUTE
+    return { from: at, to: at + HOUR }
+  }
   return { from: day, to: day + DAY }
 }
 
@@ -84,6 +90,11 @@ function formatSigned(iso: string | null | undefined, precision: Precision): str
   const year = parts.year < 0 ? `기원전 ${-parts.year}` : String(parts.year)
   if (precision === 'year') return year
   if (precision === 'month') return `${year}.${parts.month}`
+  if (parts.hour !== 0 || parts.minute !== 0) {
+    const hh = String(parts.hour).padStart(2, '0')
+    const mm = String(parts.minute).padStart(2, '0')
+    return `${year}.${parts.month}.${parts.day} ${hh}:${mm}`
+  }
   return `${year}.${parts.month}.${parts.day}`
 }
 
@@ -94,15 +105,51 @@ export function formatSpanLabel(source: TimelineSource): string {
   return end && end !== start ? `${start} ~ ${end}` : start
 }
 
-const TICK_STEPS = [1 / 12, 0.25, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
+const TICK_STEPS = [
+  HOUR * 2,
+  HOUR * 4,
+  HOUR * 6,
+  HOUR * 12,
+  DAY,
+  DAY * 2,
+  DAY * 7,
+  DAY * 14,
+  1 / 12,
+  0.25,
+  0.5,
+  1,
+  2,
+  5,
+  10,
+  20,
+  50,
+  100,
+  200,
+  500,
+  1000,
+]
 
 function tickLabel(value: number, step: number): string {
   const yearFloor = Math.floor(value + 1e-9)
   const signed = yearFloor <= 0 ? yearFloor - 1 : yearFloor
   const year = signed < 0 ? `기원전 ${-signed}` : String(signed)
   if (step >= 1) return year
-  const month = Math.round((value - yearFloor) * 12) + 1
-  return month === 1 ? year : `${month}월`
+  const remYear = Math.max(0, value - yearFloor)
+  const monthIdx = Math.min(11, Math.floor(remYear * 12 + 1e-7))
+  const month = monthIdx + 1
+  if (step >= 1 / 12 - 1e-6) {
+    return month === 1 ? year : `${month}월`
+  }
+  const remMonth = Math.max(0, remYear - monthIdx / 12)
+  const dayFloat = remMonth / DAY
+  const dayIdx = Math.max(0, Math.floor(dayFloat + 1e-6))
+  const day = dayIdx + 1
+  if (step >= DAY - 1e-6) {
+    return `${month}.${day}`
+  }
+  const remDay = Math.max(0, dayFloat - dayIdx)
+  const hour = Math.min(23, Math.round(remDay * 24))
+  return `${month}.${day} ${String(hour).padStart(2, '0')}:00`
 }
 
 /**
@@ -122,7 +169,16 @@ export function layoutTimeline(
 
   let low = Math.min(...spans.map((entry) => entry.span.from), parent?.from ?? Infinity)
   let high = Math.max(...spans.map((entry) => entry.span.to), parent?.to ?? -Infinity)
-  if (high - low < DAY * 7) high = low + DAY * 7
+  const hasSubDay = spans.some(({ child }) => {
+    const startParts = parseIsoDateParts(child.startDate)
+    const endParts = parseIsoDateParts(child.endDate)
+    return Boolean(
+      (startParts && (startParts.hour !== 0 || startParts.minute !== 0)) ||
+        (endParts && (endParts.hour !== 0 || endParts.minute !== 0)),
+    )
+  })
+  const minDomain = hasSubDay ? DAY : DAY * 7
+  if (high - low < minDomain) high = low + minDomain
   const padding = (high - low) * 0.03
   low -= padding
   high += padding

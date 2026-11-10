@@ -949,6 +949,13 @@ export const FactTag = styled.span<{ $color?: string }>`
     $color
       ? `&::before { content: ''; width: 7px; height: 7px; border-radius: 2px; background: ${$color}; }`
       : ''}
+  button {
+    opacity: 0.45;
+  }
+  &:hover button,
+  &:focus-within button {
+    opacity: 1;
+  }
 `
 
 /** 이 나라 몫의 측정값 — '병력 120만' 같은 숫자 칩. 숫자는 고정폭 */
@@ -973,5 +980,115 @@ export const FigureChip = styled.span`
     font-weight: 750;
     font-variant-numeric: tabular-nums;
     color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+/** 인라인 빠른 검색 + 추천 칩 바 */
+export const QuickAddBar = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 10px;
+`
+
+export const QuickSearchRow = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+`
+
+export const QuickSearchInput = styled.input`
+  width: 240px;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => surface.card(theme.mode)};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font: inherit;
+  font-size: 12px;
+
+  &::placeholder {
+    color: ${({ theme }) => mutedTextColor(theme.mode)};
+  }
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    background: ${({ theme }) => theme.colors.background.primary};
+  }
+`
+
+export const QuickMatchChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: ${RADIUS.PILL};
+  border: 1px dashed ${({ theme }) => ledgerAccent(theme.mode)};
+  background: ${({ theme }) => `color-mix(in srgb, ${ledgerAccent(theme.mode)} 8%, transparent)`};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s, transform 0.1s;
+
+  &:hover {
+    background: ${({ theme }) => `color-mix(in srgb, ${ledgerAccent(theme.mode)} 15%, transparent)`};
+  }
+`
+
+export const RecommendBar = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 6px;
+`
+
+export const RecommendLabel = styled.span`
+  font-size: 11px;
+  font-weight: 650;
+  color: ${({ theme }) => mutedTextColor(theme.mode)};
+  margin-right: 2px;
+`
+
+export const RecommendChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: ${RADIUS.PILL};
+  border: none;
+  background: ${({ theme }) => surface.chip(theme.mode)};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.14s, background 0.14s;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => surface.cardHover(theme.mode)};
+  }
+`
+
+export const RecommendMoreBtn = styled.button`
+  padding: 2px 6px;
+  border: none;
+  background: transparent;
+  color: ${({ theme }) => mutedTextColor(theme.mode)};
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
 `

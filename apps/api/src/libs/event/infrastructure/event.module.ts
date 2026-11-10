@@ -4,12 +4,14 @@ import { MilitaryEventService } from '../application/military-event.service'
 import { EventCountryParticipantService } from '../application/event-country-participant.service'
 import { EventRelationService } from '../application/event-relation.service'
 import { EventSideService } from '../application/event-side.service'
+import { EventSideUnitService } from '../application/event-side-unit.service'
 import { EventTerritoryTransferService } from '../application/event-territory-transfer.service'
 import { EventTerritoryTransferController } from '../presentation/event-territory-transfer.controller'
 import { EventDepartmentService } from '../application/event-department.service'
 import { EventDepartmentController } from '../presentation/event-department.controller'
 import { EventSectionService } from '../application/event-section.service'
 import { EventSideController } from '../presentation/event-side.controller'
+import { EventSideUnitController } from '../presentation/event-side-unit.controller'
 import { EventOverviewController } from '../presentation/event-overview.controller'
 import { EventOverviewService } from '../application/event-overview.service'
 import { EventPrismaRepository } from './event.prisma.repository'
@@ -24,6 +26,7 @@ import { NotificationModule } from '../../notification/notification.module'
   controllers: [
     EventController,
     EventSideController,
+    EventSideUnitController,
     EventOverviewController,
     EventPhaseController,
     EventTerritoryTransferController,
@@ -35,6 +38,7 @@ import { NotificationModule } from '../../notification/notification.module'
     EventCountryParticipantService,
     EventRelationService,
     EventSideService,
+    EventSideUnitService,
     EventTerritoryTransferService,
     EventDepartmentService,
     EventSectionService,

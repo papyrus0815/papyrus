@@ -48,6 +48,7 @@ export function ActorCountryRow({
   row,
   figures = [],
   side = null,
+  sideOptions = [],
   manageMode,
   isFirst,
   isLast,
@@ -69,6 +70,8 @@ export function ActorCountryRow({
   figures?: Observation[]
   /** 진영 — 진영별 칸 밖(평평한 목록)에서만 넘긴다. 칸 안이면 머리가 이미 말한다 */
   side?: { name: string; color: string } | null
+  /** 진영 선택지 — 사건에 진영이 있을 때 1클릭 진영 지정/변경 */
+  sideOptions?: Array<{ value: string; label: string }>
   manageMode: boolean
   isFirst: boolean
   isLast: boolean
@@ -94,7 +97,8 @@ export function ActorCountryRow({
   const [editing, setEditing] = useState(false)
   const period = membershipPeriodLabel(row)
   const participation = row.participation && row.participation !== 'FULL' ? PARTICIPATION_LABEL[row.participation] : null
-  const hasFacts = Boolean(period || participation || side)
+  const showSidePicker = sideOptions.length > 1
+  const hasFacts = Boolean(period || participation || side || showSidePicker)
 
   return (
     <CountryRow
@@ -144,7 +148,23 @@ export function ActorCountryRow({
         </CountryNameLine>
         {hasFacts && (
           <CountryFacts>
-            {side && <FactTag $color={side.color}>{side.name}</FactTag>}
+            {showSidePicker ? (
+              <FactTag $color={side?.color}>
+                <InlineSelect
+                  value={row.sideId ?? 'none'}
+                  options={sideOptions}
+                  onSave={(next) =>
+                    onUpdate(rowKey, {
+                      sideId: next === 'none' || !next ? null : next,
+                    })
+                  }
+                  placeholder={side?.name ?? '진영 지정'}
+                  label={`${row.name}의 소속 진영`}
+                />
+              </FactTag>
+            ) : (
+              side && <FactTag $color={side.color}>{side.name}</FactTag>
+            )}
             {participation && <FactTag>{participation}</FactTag>}
             {period && (
               <span title={[row.joinReason, row.withdrawReason].filter(Boolean).join(' / ') || undefined}>

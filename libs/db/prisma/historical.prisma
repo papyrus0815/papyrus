@@ -268,6 +268,18 @@ model HistoricalCountry {
   positionDefinitionScopes  GovernmentPositionDefinitionScope[] @relation("HistoricalCountryPositionDefinitionScopes")
   /// 이 역사적 국가 소속 군부대 (독일 제국 제1군, 조선 훈련도감 등)
   militaryUnits             MilitaryUnit[]                @relation("MilitaryUnitHistoricalCountry")
+  /// 이 역사적 국가 소속 무기·장비·함선
+  weapons                   Weapon[]                      @relation("WeaponHistoricalCountry")
+  groundVehicles            GroundVehicle[]               @relation("GroundVehicleHistoricalCountry")
+  aircraft                  Aircraft[]                    @relation("AircraftHistoricalCountry")
+  navalVessels              NavalVessel[]                 @relation("NavalVesselHistoricalCountry")
+  /// 이 역사적 국가 소속 도시
+  cities                    City[]                        @relation("HistoricalCountryCities")
+  /// 이 역사적 국가의 연도별 경제·인구·발전·국채 지표
+  economicIndicators        CountryEconomicIndicator[]    @relation("HistoricalCountryEconomicIndicators")
+  demographicIndicators     CountryDemographicIndicator[] @relation("HistoricalCountryDemographicIndicators")
+  developmentIndicators     CountryDevelopmentIndicator[] @relation("HistoricalCountryDevelopmentIndicators")
+  bondYields                CountryBondYield[]            @relation("HistoricalCountryBondYields")
   /// 이 역사적 국가의 행정구역 단위 설정 (예: 조선의 '도')
   adminDivisionConfigs      CountryAdminDivisionConfig[]  @relation("AdminDivConfigHistoricalCountry")
   /// 이 역사적 국가의 행정구역 체계 (팔도제·13도제 등)

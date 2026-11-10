@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common'
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common'
 import { PrismaService } from '@prisma/prisma.service'
 import type {
   IHistoricalCountryMembershipRepository,
@@ -123,6 +123,21 @@ export class HistoricalCountryMembershipPrismaRepository
   async create(data: CreateMembershipData): Promise<HistoricalCountryMembershipRecord> {
     this.assertValidMembershipPeriod(data.start, data.end)
     await this.assertNoMembershipCycle(data.historicalCountryId, data.memberCountryId)
+    if (this.prisma.historicalCountryMembership?.findFirst) {
+      const duplicate = await this.prisma.historicalCountryMembership.findFirst({
+        where: {
+          historicalCountryId: data.historicalCountryId,
+          memberCountryId: data.memberCountryId,
+          role: data.role,
+        },
+        select: { id: true },
+      })
+      if (duplicate) {
+        throw new ConflictException(
+          '이미 동일한 상위·하위 국가 및 역할의 소속 관계가 등록되어 있습니다.',
+        )
+      }
+    }
     const row = await this.prisma.historicalCountryMembership.create({
       data: {
         historicalCountryId: data.historicalCountryId,

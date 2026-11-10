@@ -40,7 +40,6 @@ function neighbor(overrides: {
       nameDisplayOrder: null,
       country: null,
       profileImageUrl: null,
-      templeName: null,
       isAlive: false,
       deathYear: overrides.endYear,
       isOwned: overrides.isOwned ?? true,

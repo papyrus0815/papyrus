@@ -89,29 +89,71 @@ export const CoreFieldCell = styled.div`
 `
 
 /**
- * 코어 블록 구분선 — 이름 / 신원 / 생몰을 옅은 hairline으로 끊어 "서류 항목" 리듬.
- * 섹션 헤더 없이 divider만으로 그룹 경계를 만들어 과하지 않게.
+ * 사건 등록 폼(BasicInfoSection)과 동일한 섹션 묶음 및 타이틀 스타일.
+ * 좌측 6×6px 프라이머리 컬러 도트 + 하단 구분선 + 우측 요약 배지.
  */
+export const FormGroup = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 0 8px;
+
+  & + & {
+    margin-top: 20px;
+    padding-top: 4px;
+    border-top: none;
+  }
+`
+
+export const FormGroupTitle = styled.h3`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  margin: 0 0 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  &::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: ${({ theme }) => theme.colors.primary};
+    transition: background-color 0.2s ease;
+  }
+`
+
+export const FormGroupSummaryBadge = styled.span`
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.16)'
+      : 'rgba(99, 102, 241, 0.08)'};
+  border: 1px solid rgba(99, 102, 241, 0.22);
+`
+
 export const CoreDivider = styled.div`
   height: 1px;
   background: ${({ theme }) => theme.colors.border.light};
   margin: 28px 0 24px;
 `
 
-/**
- * 블록 머리글(이름/신원/생몰/생애 상세/소속/가족) — 폼의 유일한 섹션 마커.
- * 예전엔 11px 대문자 eyebrow(tertiary)였는데, 한글엔 대문자·자간이 먹지 않아 작은 회색 글자만
- * 남았고(대비 2.5:1) 필드 라벨(13px)보다 **약해** 섹션 경계가 읽히지 않았다.
- * 이제 필드 라벨(13/500 secondary)보다 한 단 위(15/700 primary)로 둔다 — 마커 종류는 여전히 하나.
- */
-export const CoreSectionLabel = styled.h3`
-  /* UA margin-top을 0으로 눌러 CoreDivider 리듬을 보호. */
-  margin: 0 0 16px;
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.3;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
+export const CoreSectionLabel = FormGroupTitle
 
 /** 성·이름·중간이름·국적·성별 등 인라인 서브 셀 — 칸마다 자기 라벨을 위에 둔다. */
 export const NameCell = styled.div`
@@ -176,12 +218,89 @@ export const FieldErrorActionBtn = styled.button`
   }
 `
 
-// ─── Layout wrapper — 사건 등록 폼과 같은 옆 라벨 행 ─────────────────────────
-// 라벨 열 200px(14/600 primary) | 간격 24 | 필드 열(상한 680px).
+// ─── Layout wrapper — 사건 등록 폼(event-create.styles)과 동일한 옆 라벨 행 ──────
+// 라벨 열 148px(13/600 secondary, 2단 분할 시 104px) | 간격 24 | 필드 열(상한 680px).
 // 격자 규칙 — 라벨(또는 라벨을 품은 머리 줄)은 1열 1행에 못박고, 나머지 자식은 전부 2열.
 
-const SIDE_LABEL_COLUMN = '200px'
+const SIDE_LABEL_COLUMN = '148px'
 const FIELD_MAX_WIDTH = '680px'
+
+export const SplitColumnsGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1.06fr) minmax(0, 0.94fr);
+  gap: 0;
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+
+  @media (min-width: 1180px) {
+    ${FieldRow},
+    ${CoreFieldCell} {
+      grid-template-columns: 104px minmax(0, 1fr);
+      gap: 8px 16px;
+    }
+    ${AdvancedSection} > button {
+      margin-left: 120px;
+    }
+  }
+
+  @media (max-width: 1179px) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+`
+
+export const SplitColumnLeft = styled.div`
+  min-width: 0;
+  overflow-x: hidden;
+
+  @media (min-width: 1180px) {
+    max-height: calc(90vh - 172px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-left: 3px;
+    padding-right: 26px;
+    padding-bottom: 56px;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: ${({ theme }) => theme.colors.border.default};
+      border-radius: 2px;
+    }
+  }
+`
+
+export const SplitColumnRight = styled.div`
+  min-width: 0;
+  overflow-x: hidden;
+
+  @media (min-width: 1180px) {
+    max-height: calc(90vh - 172px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-left: 26px;
+    padding-right: 3px;
+    padding-bottom: 56px;
+    border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: ${({ theme }) => theme.colors.border.default};
+      border-radius: 2px;
+    }
+  }
+`
 
 export const PersonFormLayoutWrap = styled.div`
   /* 모달 셸의 스크롤 여백(28px)과 겹쳐 머리글 아래 56px 빈 띠가 생기던 것 — 셸 여백만 남긴다. */
@@ -212,7 +331,6 @@ export const PersonFormLayoutWrap = styled.div`
     gap: 8px 24px;
     align-items: start;
     margin: 0;
-    /* 행 사이 hairline 없음 — 선은 장(章) 경계(CoreDivider)에만. */
     padding: 10px 0;
     border-bottom: none;
   }
@@ -239,11 +357,22 @@ export const PersonFormLayoutWrap = styled.div`
   ${FieldLabel} {
     display: block;
     margin: 0;
-    padding-top: 10px;
-    font-size: 14px;
+    padding-top: 9px;
+    font-size: 13px;
     font-weight: 600;
-    line-height: 1.4;
-    color: ${({ theme }) => theme.colors.text.primary};
+    line-height: 1.45;
+    letter-spacing: -0.01em;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+
+  /* 선택(비필수) 필드 라벨 옆 (선택) 표기 — 사건 등록 폼 OptionalTag와 동일 */
+  ${FieldRow} > ${FieldLabel}:not([data-no-optional]):not(:has(${Required}))::after,
+  ${FieldRow} > :has(> ${FieldLabel}) > ${FieldLabel}:not([data-no-optional]):not(:has(${Required}))::after {
+    content: '(선택)';
+    margin-left: 4px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
   }
 
   /* 두 칸 묶음 호환 */
@@ -283,7 +412,7 @@ export const PersonFormLayoutWrap = styled.div`
   }
 
   /* 2차 disclosure(이름 상세·생애 상세·추가 소속·가족) — 토글 버튼만 컨트롤 열에 맞춰 들이고,
-     펼쳐진 본문(AdvancedBody) 안의 FieldRow는 기본 2열(라벨 200px + 컨트롤 680px) 격자를 그대로 유지 */
+     펼쳐진 본문(AdvancedBody) 안의 FieldRow는 기본 2열 격자를 그대로 유지 */
   ${AdvancedSection} {
     margin: 0;
     padding: 2px 0 4px;
@@ -302,20 +431,16 @@ export const PersonFormLayoutWrap = styled.div`
     margin: 16px 0 18px;
     background: ${({ theme }) => theme.colors.border.light};
   }
-  /* 장 머리글 바로 아래 첫 행은 행 padding(10px)이 간격을 준다 */
-  ${CoreSectionLabel} {
-    margin-bottom: 4px;
-  }
 
-  /* 사건 폼과 같은 단계: 좁은 화면은 라벨 열 160, 모바일은 한 열 */
+  /* 사건 폼과 같은 단계: 좁은 화면은 라벨 열 132, 모바일은 한 열 */
   @media (max-width: 1024px) {
     ${FieldRow},
     ${CoreFieldCell} {
-      grid-template-columns: 160px minmax(0, 1fr);
-      column-gap: 16px;
+      grid-template-columns: 132px minmax(0, 1fr);
+      column-gap: 18px;
     }
     ${AdvancedSection} > button {
-      margin-left: 176px;
+      margin-left: 150px;
     }
   }
   @media (max-width: 768px) {

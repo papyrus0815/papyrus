@@ -6,8 +6,17 @@ import { FiSettings } from 'react-icons/fi'
 import { getAllCountries } from '@/shared/api/countries'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
+import { getAllPersons } from '@/shared/api/persons'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { CountryPicker } from '@/shared/ui/country-picker'
 import { PersonPickerModal } from '@/shared/ui/person-picker'
+import {
+  comparePersons,
+  contextScore,
+  headlineOffice,
+  matchesQuery,
+  searchHaystack,
+} from '@/shared/ui/person-picker/person-picker.lib'
 
 import * as S from '../styles'
 import { type PatchOptions } from '../use-undoable-patch'
@@ -32,6 +41,14 @@ import {
   GroupLabel,
   ManageToggle,
   PersonList,
+  QuickAddBar,
+  QuickMatchChip,
+  QuickSearchInput,
+  QuickSearchRow,
+  RecommendBar,
+  RecommendChip,
+  RecommendLabel,
+  RecommendMoreBtn,
   ShowAllToggle,
   SideColumns,
   SideCountryList,
@@ -80,6 +97,10 @@ interface DetailActorsProps {
 export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: DetailActorsProps) {
   const [personModalOpen, setPersonModalOpen] = useState(false)
   const [countryModalOpen, setCountryModalOpen] = useState(false)
+  const [countryQuery, setCountryQuery] = useState('')
+  const [countrySearchFocused, setCountrySearchFocused] = useState(false)
+  const [personQuery, setPersonQuery] = useState('')
+  const [showAllRecommendedPersons, setShowAllRecommendedPersons] = useState(false)
   /** 관리 모드 — true일 때만 reorder(↑↓) 버튼이 각 행에 등장한다(평소엔 read-first) */
   const [manageMode, setManageMode] = useState(false)
   /** 인물은 앞 PERSON_PREVIEW_COUNT명만 — 순서 변경 중엔 전원이 보여야 옮길 수 있어 강제로 펼친다 */
@@ -103,16 +124,22 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
     return byParticipant
   }, [observations])
 
+  const shouldLoadCountries = countryModalOpen || countrySearchFocused || countryQuery.trim().length > 0
   const { data: allModern = [], isLoading: modernLoading } = useQuery({
     queryKey: ['countries', 'all'],
     queryFn: getAllCountries,
-    enabled: countryModalOpen,
+    enabled: shouldLoadCountries,
     staleTime: 5 * 60_000,
   })
   const { data: allHistorical = [], isLoading: historicalLoading } = useQuery({
     queryKey: ['historical-countries', 'all'],
     queryFn: getAllHistoricalCountries,
-    enabled: countryModalOpen,
+    enabled: shouldLoadCountries,
+    staleTime: 5 * 60_000,
+  })
+  const { data: allPersons = [] } = useQuery({
+    queryKey: ['persons', 'all'],
+    queryFn: getAllPersons,
     staleTime: 5 * 60_000,
   })
 
@@ -123,6 +150,8 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
   }
 
   const selectedCountryIds = useMemo(() => countryRows.map((row) => row.id), [countryRows])
+  const selectedCountrySet = useMemo(() => new Set(selectedCountryIds), [selectedCountryIds])
+  const selectedPersonSet = useMemo(() => new Set(persons.map((entry) => entry.personId)), [persons])
   /** 인물 고르기 맥락 — 사건 기간(앞뒤 여유는 고르기 쪽이 생몰 겹침으로 판단)·참여국 */
   const personContext = useMemo(() => {
     const span = toAxisSpan(event)
@@ -141,6 +170,51 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
     }
     return undefined
   }, [personContext.fromYear, personContext.toYear, countryRows])
+
+  const countryQuickMatches = useMemo(() => {
+    const trimmed = countryQuery.trim().toLowerCase()
+    if (!trimmed) return []
+    const modernItems = allModern
+      .filter((country) => !selectedCountrySet.has(country.id) && country.name.toLowerCase().includes(trimmed))
+      .map((country) => ({
+        id: country.id,
+        name: country.name,
+        flagEmoji: (country as { flagEmoji?: string | null }).flagEmoji ?? null,
+        isHistorical: false,
+      }))
+    const historicalItems = allHistorical
+      .filter((country) => !selectedCountrySet.has(country.id) && country.name.toLowerCase().includes(trimmed))
+      .map((country) => ({
+        id: country.id,
+        name: country.name,
+        flagEmoji: null as string | null,
+        isHistorical: true,
+      }))
+    const ordered =
+      countryPickerInitialKind === 'historical'
+        ? [...historicalItems, ...modernItems]
+        : [...modernItems, ...historicalItems]
+    return ordered.slice(0, 6)
+  }, [countryQuery, allModern, allHistorical, selectedCountrySet, countryPickerInitialKind])
+
+  const personQuickMatches = useMemo(() => {
+    const trimmed = personQuery.trim()
+    if (!trimmed) return []
+    return allPersons
+      .filter((person) => !selectedPersonSet.has(person.id) && matchesQuery(searchHaystack(person), trimmed))
+      .sort(comparePersons('relevance', personContext))
+      .slice(0, 6)
+  }, [personQuery, allPersons, selectedPersonSet, personContext])
+
+  const recommendedPersons = useMemo(() => {
+    const hasContext = personContext.fromYear !== null || personContext.countryIds.length > 0
+    if (!hasContext || allPersons.length === 0) return []
+    const minScore = personContext.fromYear !== null && personContext.countryIds.length > 0 ? 3 : 1
+    return allPersons
+      .filter((person) => !selectedPersonSet.has(person.id) && contextScore(person, personContext) >= minScore)
+      .sort(comparePersons('relevance', personContext))
+      .slice(0, 12)
+  }, [allPersons, selectedPersonSet, personContext])
   const totalCountries = countryRows.length
   const hasAnything = persons.length > 0 || totalCountries > 0
   /** 순서 변경 토글은 행이 2개 이상일 때만 의미가 있다 */
@@ -300,12 +374,8 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
         key={countryRowKey(row)}
         row={row}
         figures={row.participantId ? figuresByParticipant.get(row.participantId) : undefined}
-        /* 진영 칸 밖(평평한 목록·순서 바꾸기)에서만 진영을 행에 적는다 */
-        side={
-          !countrySideGroups && row.sideId && sideById.get(row.sideId)
-            ? sideById.get(row.sideId)
-            : null
-        }
+        side={row.sideId && sideById.get(row.sideId) ? sideById.get(row.sideId) : null}
+        sideOptions={sideOptions}
         manageMode={manageMode}
         isFirst={index === 0}
         isLast={index === countryRows.length - 1}
@@ -387,14 +457,60 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
             국가 추가
           </AddBtn>
         </GroupHead>
+        <QuickAddBar>
+          <QuickSearchRow>
+            <QuickSearchInput
+              type="search"
+              value={countryQuery}
+              onFocus={() => setCountrySearchFocused(true)}
+              onChange={(changeEvent) => setCountryQuery(changeEvent.target.value)}
+              onKeyDown={(keyEvent) => {
+                if (keyEvent.key === 'Enter' && countryQuickMatches.length > 0) {
+                  keyEvent.preventDefault()
+                  const firstMatch = countryQuickMatches[0]
+                  actors.addCountries([
+                    {
+                      id: firstMatch.id,
+                      name: firstMatch.name,
+                      isHistorical: firstMatch.isHistorical,
+                    },
+                  ])
+                  setCountryQuery('')
+                }
+              }}
+              placeholder="+ 참여국 빠른 추가 (이름 입력 후 Enter)…"
+              aria-label="참여국 빠른 검색"
+            />
+            {countryQuickMatches.map((candidate) => (
+              <QuickMatchChip
+                key={`${candidate.isHistorical ? 'h' : 'c'}:${candidate.id}`}
+                type="button"
+                onClick={() => {
+                  actors.addCountries([
+                    {
+                      id: candidate.id,
+                      name: candidate.name,
+                      isHistorical: candidate.isHistorical,
+                    },
+                  ])
+                  setCountryQuery('')
+                }}
+              >
+                + {candidate.flagEmoji ? `${candidate.flagEmoji} ` : ''}
+                {candidate.name}
+                {candidate.isHistorical ? ' (역사)' : ''}
+              </QuickMatchChip>
+            ))}
+          </QuickSearchRow>
+        </QuickAddBar>
         {/*
           * 진영은 있는데 어느 나라도 진영에 들지 않았다 — 머리엔 '진영 4'가 서 있는데 목록은 평평해 진영이 어디 갔는지 몰랐다
           * (프랑스 혁명: 진영 4 · 진영에 든 나라 0). 어디서 넣는지 한 줄로.
           */}
         {sideCount >= 2 && !manageMode && countryRows.length > 0 && !countryRows.some((row) => row.sideId) && (
           <EmptyGroupLine>
-            진영 {sideCount}개에 아직 나라가 들지 않았습니다 — <a href="#module-sides">진영·수치</a>에서 나라를 진영에 넣으면
-            여기서 진영별로 나뉩니다.
+            진영 {sideCount}개에 아직 나라가 들지 않았습니다 — 각 나라의 <strong>진영 지정</strong> 배지를 눌러 바로
+            지정하거나 <a href="#module-sides">진영·수치</a>에서 나라를 진영에 넣으면 여기서 진영별로 나뉩니다.
           </EmptyGroupLine>
         )}
         {countryRows.length > 0 &&
@@ -454,6 +570,10 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
           ))}
       </ActorsBlock>
   )
+  const visibleRecommendedPersons = showAllRecommendedPersons
+    ? recommendedPersons
+    : recommendedPersons.slice(0, 3)
+
   /** 인물 무리 — 대표단 보기면 참여 국가가 없는 인물만 */
   const personsBlock = (
       <ActorsBlock
@@ -487,6 +607,70 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
             인물 추가
           </AddBtn>
         </GroupHead>
+        <QuickAddBar>
+          <QuickSearchRow>
+            <QuickSearchInput
+              type="search"
+              value={personQuery}
+              onChange={(changeEvent) => setPersonQuery(changeEvent.target.value)}
+              onKeyDown={(keyEvent) => {
+                if (keyEvent.key === 'Enter' && personQuickMatches.length > 0) {
+                  keyEvent.preventDefault()
+                  addPerson(personQuickMatches[0].id)
+                  setPersonQuery('')
+                }
+              }}
+              placeholder="+ 인물 빠른 추가 (이름·직위 입력 후 Enter)…"
+              aria-label="참여 인물 빠른 검색"
+            />
+            {personQuickMatches.map((candidate) => {
+              const displayName = getPersonDisplayName(candidate)
+              const office = headlineOffice(candidate)
+              return (
+                <QuickMatchChip
+                  key={candidate.id}
+                  type="button"
+                  title={office ?? undefined}
+                  onClick={() => {
+                    addPerson(candidate.id)
+                    setPersonQuery('')
+                  }}
+                >
+                  + {displayName}
+                </QuickMatchChip>
+              )
+            })}
+          </QuickSearchRow>
+          {recommendedPersons.length > 0 && !personQuery.trim() && (
+            <RecommendBar aria-label="이 사건 무렵 · 참여국 추천 인물">
+              <RecommendLabel>동시대·참여국 추천</RecommendLabel>
+              {visibleRecommendedPersons.map((candidate) => {
+                const displayName = getPersonDisplayName(candidate)
+                const office = headlineOffice(candidate)
+                return (
+                  <RecommendChip
+                    key={candidate.id}
+                    type="button"
+                    title={office ? `${displayName} · ${office}` : displayName}
+                    onClick={() => addPerson(candidate.id)}
+                  >
+                    + {displayName}
+                  </RecommendChip>
+                )
+              })}
+              {recommendedPersons.length > 3 && (
+                <RecommendMoreBtn
+                  type="button"
+                  onClick={() => setShowAllRecommendedPersons((previous) => !previous)}
+                >
+                  {showAllRecommendedPersons
+                    ? '접기'
+                    : `+${recommendedPersons.length - 3}명 더 보기`}
+                </RecommendMoreBtn>
+              )}
+            </RecommendBar>
+          )}
+        </QuickAddBar>
         {/*
           * 빈 무리도 한 줄은 말한다(머리글만 서 있으면 비었는지 덜 불러온 건지 몰랐다) — 다만 짧게.
           * 대표단 보기에서 '모두 위 나라 아래에 있습니다'는 빈 자리를 설명만 했다 — 머리와 추가 버튼으로 충분하다.

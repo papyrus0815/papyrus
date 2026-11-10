@@ -1,4 +1,10 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common'
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common'
 import {
   Person,
   MilitaryCareer,
@@ -453,9 +459,19 @@ const ACHIEVEMENT_PARENT_TENURE_INCLUDE = {
   },
 } as const
 
-/** 업적 행 — 부모 재임을 직위 보유 모양(isMonarchical)으로 */
-function withOfficeHoldingParent<T extends { tenure?: any }>(row: T): T {
-  return { ...row, tenure: row.tenure ? asOfficeHolding(row.tenure) : row.tenure }
+/** 업적 행 — 부모 재임을 직위 보유 모양(isMonarchical)으로 변환하고 소프트 삭제된 사건은 제외 */
+function withOfficeHoldingParent<
+  T extends { tenure?: any; event?: any; eventId?: string | null },
+>(row: T): T {
+  const activeEvent =
+    row.event && row.event.deletedAt == null ? row.event : null
+  return {
+    ...row,
+    ...(row.event !== undefined
+      ? { event: activeEvent, eventId: activeEvent ? row.eventId : null }
+      : {}),
+    tenure: row.tenure ? asOfficeHolding(row.tenure) : row.tenure,
+  }
 }
 
 /** 연대표(역대 수반) 행 — 재위·재임 같은 모양. 재위는 직함 칸이 비어 있으면 정의 직함(한·영)으로 채운다 */
@@ -700,9 +716,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       // 왕/군주 관련 필드
       // 대표 왕호 — 저장 칸이 아니라 재위 기록에서 파생(왕호는 재위의 속성)
       regnalName: representativeRegnalName((person as any).sovereignReigns),
-      templeName: person.templeName,
-      posthumousName: person.posthumousName,
-      preEnthronementTitle: (person as any).preEnthronementTitle ?? null,
       // 관계
       dynastyId: person.dynastyId,
       dynasty:
@@ -877,6 +890,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       rankId: career.rankId,
       jobCategoryId: career.jobCategoryId,
       organizationId: career.organizationId,
+      militaryUnitId: career.militaryUnitId ?? null,
       branch: career.branch,
       position: career.position,
       termNumber: career.termNumber,
@@ -1579,9 +1593,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       adoptiveFatherId: true,
       adoptiveMotherId: true,
       parentMarriageId: true,
-      templeName: true,
-      posthumousName: true,
-      preEnthronementTitle: true,
       GovernmentTenures: {
         where: MONARCHICAL_TENURE,
         select: { regnalName: true, ordinal: true },
@@ -3632,6 +3643,81 @@ export class PersonPrismaRepository implements IPersonRepository {
     }
   }
 
+  /**
+   * 재임 기록에 선거 출마 기록(electionCandidacyId)을 연결할 때
+   * 1) 출마 기록 존재 여부
+   * 2) 출마자(personId) 일치 여부
+   * 3) 이미 다른 재임 기록에 연결되었는지(1:1 중복 연결 방지)
+   * 4) 선거의 관할 국가·시대와 재임 국가·시대 호환 여부
+   * 를 검증한다.
+   */
+  private async assertElectionCandidacyMatchesTenure(
+    electionCandidacyId: string | null | undefined,
+    personId: string | null | undefined,
+    countryId: string | null | undefined,
+    historicalCountryId: string | null | undefined,
+    tenureId?: string,
+  ): Promise<void> {
+    if (!electionCandidacyId) return
+    if (!this.prisma.electionCandidacy?.findUnique) return
+    const candidacy = await this.prisma.electionCandidacy.findUnique({
+      where: { id: electionCandidacyId },
+      select: {
+        id: true,
+        personId: true,
+        election: {
+          select: { id: true, name: true, countryId: true, historicalCountryId: true },
+        },
+        resultingTenure: {
+          select: { id: true },
+        },
+      },
+    })
+    if (!candidacy) {
+      throw new NotFoundException(`연결할 선거 출마 기록을 찾을 수 없습니다: ${electionCandidacyId}`)
+    }
+    if (candidacy.personId && personId && candidacy.personId !== personId) {
+      throw new BadRequestException(
+        '다른 인물의 선거 출마 기록을 이 인물의 재임 기록에 연결할 수 없습니다.',
+      )
+    }
+    if (candidacy.resultingTenure && candidacy.resultingTenure.id !== tenureId) {
+      throw new ConflictException(
+        '이미 다른 재임 기록에 연결된 선거 출마 기록입니다.',
+      )
+    }
+    if (
+      candidacy.election &&
+      (candidacy.election.countryId || candidacy.election.historicalCountryId) &&
+      (countryId || historicalCountryId)
+    ) {
+      const check = await this.areTenureCountryAxesCompatible(
+        { countryId, historicalCountryId },
+        candidacy.election,
+        { strictHistoricalMatch: true },
+      )
+      if (!check.compatible) {
+        throw new BadRequestException(
+          `연결할 선거(${candidacy.election.name})의 국가·시대와 재임 국가·시대가 일치하지 않습니다.`,
+        )
+      }
+    }
+  }
+
+  private async assertAccessionEventExists(
+    accessionEventId: string | null | undefined,
+  ): Promise<void> {
+    if (!accessionEventId) return
+    if (!this.prisma.event?.findFirst) return
+    const ev = await this.prisma.event.findFirst({
+      where: { id: accessionEventId, deletedAt: null },
+      select: { id: true },
+    })
+    if (!ev) {
+      throw new NotFoundException(`연결할 취임·즉위 사건을 찾을 수 없습니다: ${accessionEventId}`)
+    }
+  }
+
   async addGovernmentPositionTenure(dto: CreateGovernmentPositionTenureDto, accountId?: string): Promise<any> {
     const countryFields = await this.resolveTenureCountryFields({
       countryId: dto.countryId,
@@ -3658,6 +3744,13 @@ export class PersonPrismaRepository implements IPersonRepository {
       definition.isMonarchical,
       definition.positionType,
     )
+    await this.assertElectionCandidacyMatchesTenure(
+      dto.electionCandidacyId,
+      dto.personId,
+      countryFields.countryId,
+      countryFields.historicalCountryId,
+    )
+    await this.assertAccessionEventExists(dto.accessionEventId)
 
     // 직위 정의에 특정 국가 기관(administrationDepartmentId)이 지정되어 있고 호출자가 비웠다면 호환 시 자동 매핑
     let effectiveDepartmentId = dto.administrationDepartmentId ?? undefined
@@ -3829,14 +3922,19 @@ export class PersonPrismaRepository implements IPersonRepository {
       updateData.cabinetId !== undefined ||
       updateData.positionDefinitionId !== undefined ||
       updateData.countryId !== undefined ||
-      updateData.historicalCountryId !== undefined
+      updateData.historicalCountryId !== undefined ||
+      updateData.electionCandidacyId !== undefined ||
+      updateData.accessionEventId !== undefined
     ) {
       const existingForScope = await this.prisma.governmentPositionTenure.findUnique({
         where: { id },
         select: {
+          personId: true,
           positionType: true,
           administrationDepartmentId: true,
           cabinetId: true,
+          electionCandidacyId: true,
+          accessionEventId: true,
           countryId: true,
           historicalCountryId: true,
           positionDefinition: {
@@ -3977,6 +4075,13 @@ export class PersonPrismaRepository implements IPersonRepository {
         updateData.cabinetId !== undefined
           ? updateData.cabinetId
           : (existingForScope?.cabinetId ?? null)
+      const effectiveCandidacyId =
+        updateData.electionCandidacyId !== undefined
+          ? updateData.electionCandidacyId
+          : (existingForScope?.electionCandidacyId ?? null)
+      const candidacyChanged =
+        updateData.electionCandidacyId !== undefined &&
+        updateData.electionCandidacyId !== (existingForScope?.electionCandidacyId ?? null)
       await this.assertDepartmentMatchesTenureCountry(
         effectiveDeptId,
         effectiveCountryId,
@@ -3990,6 +4095,18 @@ export class PersonPrismaRepository implements IPersonRepository {
         effectivePositionType,
         id,
       )
+      if (effectiveCandidacyId && (candidacyChanged || countryChanged)) {
+        await this.assertElectionCandidacyMatchesTenure(
+          effectiveCandidacyId,
+          existingForScope?.personId,
+          effectiveCountryId,
+          effectiveHistCountryId,
+          id,
+        )
+      }
+      if (updateData.accessionEventId) {
+        await this.assertAccessionEventExists(updateData.accessionEventId)
+      }
     }
 
     // 기간 — 한쪽 끝만 바뀌어도 키·DATETIME·정밀도를 한 덩어리로 다시 계산(안 보낸 끝은 저장값).
@@ -4502,8 +4619,12 @@ export class PersonPrismaRepository implements IPersonRepository {
       where: { id: cabinetId },
       select: { headTenureId: true, accountId: true, linkageGroupId: true },
     })
-    if (!cabinet) return
-    if (cabinet.accountId != null && cabinet.accountId !== accountId) return
+    if (!cabinet) {
+      throw new NotFoundException('행정부를 찾을 수 없습니다.')
+    }
+    if (cabinet.accountId != null && cabinet.accountId !== accountId) {
+      throw new ForbiddenException('행정부를 삭제할 권한이 없습니다.')
+    }
     // 행정부(Cabinet) 삭제 시 수반 및 소속 각료의 재임 기록(GovernmentPositionTenure)은 보존하고
     // 각료들의 cabinetId 연결만 해제한 뒤 Cabinet 행만 삭제한다(스키마 onDelete: SetNull 정합).
     // 또한 다국 행정부 묶음(CabinetLinkageGroup)에 남은 행정부가 0개가 되면 빈 그룹도 함께 정리한다.
@@ -4535,7 +4656,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       .filter((x) => x !== '')
     const unique = [...new Set(ids)]
     if (unique.length > 1) {
-      throw new Error(
+      throw new BadRequestException(
         '서로 다른 사건에 속한 행정부 묶음은 합칠 수 없습니다. 같은 사건을 선택했는지 확인하세요.',
       )
     }
@@ -4553,7 +4674,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     eventId?: string | null,
   ): Promise<any> {
     if (cabinetId === otherCabinetId) {
-      throw new Error('같은 행정부는 묶을 수 없습니다.')
+      throw new BadRequestException('같은 행정부는 묶을 수 없습니다.')
     }
     const canLinkThisCabinet = (cab: { accountId: string | null }) =>
       cab.accountId == null || cab.accountId === accountId
@@ -4566,7 +4687,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           select: { id: true },
         })
         if (!ev) {
-          throw new Error('해당 사건을 찾을 수 없습니다.')
+          throw new NotFoundException('해당 사건을 찾을 수 없습니다.')
         }
       }
 
@@ -4579,17 +4700,17 @@ export class PersonPrismaRepository implements IPersonRepository {
         select: { id: true, linkageGroupId: true, accountId: true },
       })
       if (!a || !b) {
-        throw new Error('행정부를 찾을 수 없습니다.')
+        throw new NotFoundException('행정부를 찾을 수 없습니다.')
       }
       if (!canLinkThisCabinet(a) || !canLinkThisCabinet(b)) {
-        throw new Error('행정부를 찾을 수 없거나 권한이 없습니다.')
+        throw new ForbiddenException('행정부를 찾을 수 없거나 권한이 없습니다.')
       }
       if (
         a.accountId != null &&
         b.accountId != null &&
         a.accountId !== b.accountId
       ) {
-        throw new Error(
+        throw new BadRequestException(
           '서로 다른 계정이 등록한 행정부는 한 묶음으로 묶을 수 없습니다.',
         )
       }
@@ -4748,7 +4869,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       })
       if (!cab?.linkageGroupId) return
       if (cab.accountId != null && cab.accountId !== accountId) {
-        throw new Error('행정부를 찾을 수 없거나 권한이 없습니다.')
+        throw new ForbiddenException('행정부를 찾을 수 없거나 권한이 없습니다.')
       }
       const gid = cab.linkageGroupId
       await tx.cabinet.update({
@@ -5014,13 +5135,33 @@ export class PersonPrismaRepository implements IPersonRepository {
     tenureId: string,
     dto: CreateTenureAchievementDto,
   ): Promise<any> {
+    const startDate = dto.startDate ? new Date(dto.startDate) : undefined
+    const endDate = dto.endDate ? new Date(dto.endDate) : undefined
+    if (
+      startDate &&
+      endDate &&
+      !Number.isNaN(startDate.getTime()) &&
+      !Number.isNaN(endDate.getTime()) &&
+      startDate.getTime() > endDate.getTime()
+    ) {
+      throw new BadRequestException('업적 종료일이 시작일보다 앞설 수 없습니다.')
+    }
+    if (dto.eventId && this.prisma.event?.findFirst) {
+      const ev = await this.prisma.event.findFirst({
+        where: { id: dto.eventId, deletedAt: null },
+        select: { id: true },
+      })
+      if (!ev) {
+        throw new NotFoundException('연결할 사건을 찾을 수 없습니다.')
+      }
+    }
     const achievement = await this.prisma.tenureAchievement.create({
       data: {
         tenureId,
         title: dto.title,
         description: dto.description ?? undefined,
-        startDate: dto.startDate ? new Date(dto.startDate) : undefined,
-        endDate: dto.endDate ? new Date(dto.endDate) : undefined,
+        startDate,
+        endDate,
         orderNum: dto.orderNum ?? 0,
         showOnEventsPage: dto.showOnEventsPage ?? true,
         eventId: dto.eventId ?? undefined,
@@ -5034,9 +5175,9 @@ export class PersonPrismaRepository implements IPersonRepository {
    */
   async findTenureAchievementsByEventId(eventId: string): Promise<any[]> {
     const rows = await this.prisma.tenureAchievement.findMany({
-      where: { eventId },
+      where: { eventId, event: { deletedAt: null } },
       include: {
-        event: { select: { id: true, title: true } },
+        event: { select: { id: true, title: true, deletedAt: true } },
         tenure: { include: ACHIEVEMENT_PARENT_TENURE_INCLUDE },
       },
       orderBy: [{ createdAt: 'asc' }],
@@ -5077,6 +5218,12 @@ export class PersonPrismaRepository implements IPersonRepository {
     achievementId: string,
     dto: UpdateTenureAchievementDto,
   ): Promise<any> {
+    const existing = await this.prisma.tenureAchievement.findFirst({
+      where: { id: achievementId, tenureId },
+    })
+    if (!existing) {
+      throw new NotFoundException('재임 업적을 찾을 수 없습니다.')
+    }
     const data: any = {}
     if (dto.title !== undefined) data.title = dto.title
     if (dto.description !== undefined) data.description = dto.description
@@ -5085,11 +5232,28 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.orderNum !== undefined) data.orderNum = dto.orderNum
     if (dto.showOnEventsPage !== undefined) data.showOnEventsPage = dto.showOnEventsPage
     if (dto.eventId !== undefined) data.eventId = dto.eventId
-    const existing = await this.prisma.tenureAchievement.findFirst({
-      where: { id: achievementId, tenureId },
-    })
-    if (!existing) {
-      throw new Error('TenureAchievement not found')
+
+    const effectiveStart =
+      data.startDate !== undefined ? data.startDate : existing.startDate
+    const effectiveEnd =
+      data.endDate !== undefined ? data.endDate : existing.endDate
+    if (
+      effectiveStart &&
+      effectiveEnd &&
+      !Number.isNaN(effectiveStart.getTime()) &&
+      !Number.isNaN(effectiveEnd.getTime()) &&
+      effectiveStart.getTime() > effectiveEnd.getTime()
+    ) {
+      throw new BadRequestException('업적 종료일이 시작일보다 앞설 수 없습니다.')
+    }
+    if (dto.eventId && this.prisma.event?.findFirst) {
+      const ev = await this.prisma.event.findFirst({
+        where: { id: dto.eventId, deletedAt: null },
+        select: { id: true },
+      })
+      if (!ev) {
+        throw new NotFoundException('연결할 사건을 찾을 수 없습니다.')
+      }
     }
     const achievement = await this.prisma.tenureAchievement.update({
       where: { id: achievementId },
@@ -5107,6 +5271,50 @@ export class PersonPrismaRepository implements IPersonRepository {
     })
   }
 
+  private assertRegnalEraWithinTenureYears(
+    tenure: {
+      startEra?: string | null
+      startYear?: number | null
+      endEra?: string | null
+      endYear?: number | null
+    },
+    era: {
+      startEra: 'BC' | 'AD'
+      startYear: number
+      endEra?: 'BC' | 'AD' | null
+      endYear?: number | null
+    },
+  ): void {
+    const signedYear = (e: string | null | undefined, y: number) =>
+      (e ?? 'AD') === 'BC' ? -Math.abs(y) : Math.abs(y)
+
+    const eraStart = signedYear(era.startEra, era.startYear)
+    if (tenure.startYear != null) {
+      const tenureStart = signedYear(tenure.startEra, tenure.startYear)
+      if (eraStart < tenureStart) {
+        throw new BadRequestException(
+          '연호 시작 연도가 재임 시작 연도보다 앞설 수 없습니다.',
+        )
+      }
+    }
+    if (tenure.endYear != null) {
+      const tenureEnd = signedYear(tenure.endEra ?? tenure.startEra, tenure.endYear)
+      if (eraStart > tenureEnd) {
+        throw new BadRequestException(
+          '연호 시작 연도가 재임 종료 연도보다 늦을 수 없습니다.',
+        )
+      }
+      if (era.endYear != null) {
+        const eraEnd = signedYear(era.endEra ?? era.startEra, era.endYear)
+        if (eraEnd > tenureEnd) {
+          throw new BadRequestException(
+            '연호 종료 연도가 재임 종료 연도보다 늦을 수 없습니다.',
+          )
+        }
+      }
+    }
+  }
+
   async createRegnalEra(
     parent: { tenureId: string },
     dto: CreateRegnalEraDto,
@@ -5114,10 +5322,28 @@ export class PersonPrismaRepository implements IPersonRepository {
     const { tenureId } = parent
     const tenure = await this.prisma.governmentPositionTenure.findUnique({
       where: { id: tenureId },
-      select: { id: true, startEra: true },
+      select: {
+        id: true,
+        startEra: true,
+        startYear: true,
+        endEra: true,
+        endYear: true,
+      },
     })
     if (!tenure) {
-      throw new Error('GovernmentPositionTenure not found')
+      throw new NotFoundException('재임 기록을 찾을 수 없습니다.')
+    }
+    const eraName = dto.eraName.trim()
+    if (this.prisma.regnalEra?.findFirst) {
+      const duplicate = await this.prisma.regnalEra.findFirst({
+        where: { tenureId, eraName },
+        select: { id: true },
+      })
+      if (duplicate) {
+        throw new ConflictException(
+          '이미 이 재임에 동일한 연호명이 등록되어 있습니다.',
+        )
+      }
     }
     const startEra = (dto.startEra ?? tenure.startEra ?? 'AD') as 'BC' | 'AD'
     const endEra =
@@ -5142,10 +5368,16 @@ export class PersonPrismaRepository implements IPersonRepository {
         throw new BadRequestException('연호 종료 시점이 시작 시점보다 앞섭니다')
       }
     }
+    this.assertRegnalEraWithinTenureYears(tenure, {
+      startEra,
+      startYear: dto.startYear,
+      endEra,
+      endYear: dto.endYear ?? null,
+    })
     const row = await this.prisma.regnalEra.create({
       data: {
         tenureId,
-        eraName: dto.eraName.trim(),
+        eraName,
         eraNameEn: dto.eraNameEn?.trim() || null,
         startEra: startEra as any,
         startYear: dto.startYear,
@@ -5164,10 +5396,28 @@ export class PersonPrismaRepository implements IPersonRepository {
   async updateRegnalEra(id: string, dto: UpdateRegnalEraDto): Promise<any> {
     const existing = await this.prisma.regnalEra.findUnique({ where: { id } })
     if (!existing) {
-      throw new Error('RegnalEra not found')
+      throw new NotFoundException('연호를 찾을 수 없습니다.')
     }
     const data: any = {}
-    if (dto.eraName !== undefined) data.eraName = dto.eraName.trim()
+    if (dto.eraName !== undefined) {
+      const nextEraName = dto.eraName.trim()
+      if (nextEraName !== existing.eraName && this.prisma.regnalEra?.findFirst) {
+        const duplicate = await this.prisma.regnalEra.findFirst({
+          where: {
+            tenureId: existing.tenureId,
+            eraName: nextEraName,
+            id: { not: id },
+          },
+          select: { id: true },
+        })
+        if (duplicate) {
+          throw new ConflictException(
+            '이미 이 재임에 동일한 연호명이 등록되어 있습니다.',
+          )
+        }
+      }
+      data.eraName = nextEraName
+    }
     if (dto.eraNameEn !== undefined) data.eraNameEn = dto.eraNameEn?.trim() || null
     if (dto.startEra !== undefined) data.startEra = (dto.startEra ?? 'AD') as any
     if (dto.startYear !== undefined) data.startYear = dto.startYear
@@ -5218,12 +5468,41 @@ export class PersonPrismaRepository implements IPersonRepository {
         throw new BadRequestException('연호 종료 시점이 시작 시점보다 앞섭니다')
       }
     }
+    if (existing.tenureId && this.prisma.governmentPositionTenure?.findUnique) {
+      const parentTenure = await this.prisma.governmentPositionTenure.findUnique({
+        where: { id: existing.tenureId },
+        select: {
+          id: true,
+          startEra: true,
+          startYear: true,
+          endEra: true,
+          endYear: true,
+        },
+      })
+      if (parentTenure) {
+        this.assertRegnalEraWithinTenureYears(parentTenure, {
+          startEra: effectiveStartEra,
+          startYear: effectiveStartYear,
+          endEra: effectiveEndEra,
+          endYear: effectiveEndYear ?? null,
+        })
+      }
+    }
 
     const row = await this.prisma.regnalEra.update({ where: { id }, data })
     return serializeBigInt(row)
   }
 
   async deleteRegnalEra(id: string): Promise<void> {
+    if (this.prisma.regnalEra?.findUnique) {
+      const existing = await this.prisma.regnalEra.findUnique({
+        where: { id },
+        select: { id: true },
+      })
+      if (!existing) {
+        throw new NotFoundException('연호를 찾을 수 없습니다.')
+      }
+    }
     await this.prisma.regnalEra.delete({ where: { id } })
   }
 
@@ -5472,6 +5751,42 @@ export class PersonPrismaRepository implements IPersonRepository {
         }
       }
     }
+    if (dto.organizationId && this.prisma.organization?.findUnique) {
+      const org = await this.prisma.organization.findUnique({
+        where: { id: dto.organizationId },
+        select: { id: true, countryId: true, historicalCountryId: true },
+      })
+      if (!org) {
+        throw new NotFoundException('연결할 조직을 찾을 수 없습니다.')
+      }
+      if (deptScope && (org.countryId || org.historicalCountryId)) {
+        const compat = await this.areTenureCountryAxesCompatible(deptScope, {
+          countryId: org.countryId,
+          historicalCountryId: org.historicalCountryId,
+        })
+        if (!compat.compatible) {
+          throw new BadRequestException(
+            '연결할 조직의 소속 국가·시대와 국가 기관(부처)의 소속 국가·시대가 일치하지 않습니다.',
+          )
+        }
+      }
+    }
+    const establishedDate = dto.establishedDate ? new Date(dto.establishedDate) : undefined
+    const abolishedDate = dto.abolishedDate ? new Date(dto.abolishedDate) : undefined
+    if (establishedDate && Number.isNaN(establishedDate.getTime())) {
+      throw new BadRequestException('유효하지 않은 관직 신설일(establishedDate)입니다.')
+    }
+    if (abolishedDate && Number.isNaN(abolishedDate.getTime())) {
+      throw new BadRequestException('유효하지 않은 관직 폐지일(abolishedDate)입니다.')
+    }
+    if (
+      establishedDate &&
+      abolishedDate &&
+      establishedDate.getTime() > abolishedDate.getTime()
+    ) {
+      throw new BadRequestException('관직 폐지일은 신설일 이후여야 합니다.')
+    }
+
     const row = await this.prisma.governmentPositionDefinition.create({
       data: {
         positionType: dto.positionType as any,
@@ -5484,8 +5799,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         categoryId: resolvedCategoryId,
         administrationDepartmentId: dto.administrationDepartmentId ?? undefined,
         organizationId: dto.organizationId ?? undefined,
-        establishedDate: dto.establishedDate ? new Date(dto.establishedDate) : undefined,
-        abolishedDate: dto.abolishedDate ? new Date(dto.abolishedDate) : undefined,
+        establishedDate,
+        abolishedDate,
         ...(deptScope
           ? {
               scopes: {
@@ -5533,6 +5848,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         isMonarchical: true,
         categoryId: true,
         administrationDepartmentId: true,
+        establishedDate: true,
+        abolishedDate: true,
         administrationDepartment: {
           select: { countryId: true, historicalCountryId: true },
         },
@@ -5612,11 +5929,50 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.categoryId !== undefined) data.categoryId = dto.categoryId
     if (dto.administrationDepartmentId !== undefined)
       data.administrationDepartmentId = dto.administrationDepartmentId
-    if (dto.organizationId !== undefined) data.organizationId = dto.organizationId
-    if (dto.establishedDate !== undefined)
-      data.establishedDate = dto.establishedDate ? new Date(dto.establishedDate) : null
-    if (dto.abolishedDate !== undefined)
-      data.abolishedDate = dto.abolishedDate ? new Date(dto.abolishedDate) : null
+    if (dto.organizationId !== undefined) {
+      if (dto.organizationId && this.prisma.organization?.findUnique) {
+        const org = await this.prisma.organization.findUnique({
+          where: { id: dto.organizationId },
+          select: { id: true },
+        })
+        if (!org) {
+          throw new NotFoundException('연결할 조직을 찾을 수 없습니다.')
+        }
+      }
+      data.organizationId = dto.organizationId
+    }
+    if (dto.establishedDate !== undefined) {
+      const parsed = dto.establishedDate ? new Date(dto.establishedDate) : null
+      if (parsed && Number.isNaN(parsed.getTime())) {
+        throw new BadRequestException('유효하지 않은 관직 신설일(establishedDate)입니다.')
+      }
+      data.establishedDate = parsed
+    }
+    if (dto.abolishedDate !== undefined) {
+      const parsed = dto.abolishedDate ? new Date(dto.abolishedDate) : null
+      if (parsed && Number.isNaN(parsed.getTime())) {
+        throw new BadRequestException('유효하지 않은 관직 폐지일(abolishedDate)입니다.')
+      }
+      data.abolishedDate = parsed
+    }
+
+    const effectiveEstablished: Date | null =
+      data.establishedDate !== undefined
+        ? data.establishedDate
+        : (existing.establishedDate ?? null)
+    const effectiveAbolished: Date | null =
+      data.abolishedDate !== undefined
+        ? data.abolishedDate
+        : (existing.abolishedDate ?? null)
+    if (
+      effectiveEstablished &&
+      effectiveAbolished &&
+      !Number.isNaN(effectiveEstablished.getTime()) &&
+      !Number.isNaN(effectiveAbolished.getTime()) &&
+      effectiveEstablished.getTime() > effectiveAbolished.getTime()
+    ) {
+      throw new BadRequestException('관직 폐지일은 신설일 이후여야 합니다.')
+    }
 
     if (dto.administrationDepartmentId) {
       const dept = await this.prisma.administrationDepartment.findUnique({
@@ -5754,6 +6110,20 @@ export class PersonPrismaRepository implements IPersonRepository {
         '관직 정의 적용 범위에는 국가(countryId) 또는 역사적 국가(historicalCountryId) 중 하나 이상이 필요합니다.',
       )
     }
+    if (this.prisma.governmentPositionDefinition?.findUnique) {
+      const def = await this.prisma.governmentPositionDefinition.findUnique({
+        where: { id: dto.definitionId },
+        select: { id: true, title: true, isGeneric: true },
+      })
+      if (!def) {
+        throw new NotFoundException(`관직 정의를 찾을 수 없습니다 (ID: ${dto.definitionId})`)
+      }
+      if (def.isGeneric) {
+        throw new BadRequestException(
+          `시스템 기본 직위 정의(${def.title})에는 특정 국가 범위를 제한할 수 없습니다.`,
+        )
+      }
+    }
     const resolved = await this.resolveTenureCountryFields({
       // 스코프는 역사국가 전용으로만 걸 수도 있으므로 countryId가 비었을 때 자동 dual-fill하지 않게 null 전달
       countryId: rawCid,
@@ -5767,16 +6137,18 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (existing) return serializeBigInt(existing)
 
     const usage = await this.countPositionDefinitionUsageContexts(dto.definitionId)
-    if (usage.scopeCount === 0 && usage.contextCount === 1 && usage.contexts[0]) {
-      const check = await this.areTenureCountryAxesCompatible(
-        usage.contexts[0],
-        { countryId, historicalCountryId },
-        { strictHistoricalMatch: true },
-      )
-      if (!check.compatible) {
-        throw new BadRequestException(
-          '이 직책은 이미 다른 국가·시대의 재임 기록에서 사용 중이어서 해당 국가를 제외한 범위로 제한할 수 없습니다.',
+    if (usage.scopeCount === 0 && usage.contextCount > 0) {
+      for (const ctx of usage.contexts) {
+        const check = await this.areTenureCountryAxesCompatible(
+          ctx,
+          { countryId, historicalCountryId },
+          { strictHistoricalMatch: true },
         )
+        if (!check.compatible) {
+          throw new BadRequestException(
+            '이 직책은 이미 다른 국가·시대의 재임 기록 또는 정체(정치체제)에서 사용 중이어서 해당 국가를 제외한 범위로 제한할 수 없습니다.',
+          )
+        }
       }
     }
 
@@ -5803,11 +6175,22 @@ export class PersonPrismaRepository implements IPersonRepository {
     scopeCount: number
     contexts: Array<{ countryId: string | null; historicalCountryId: string | null }>
   }> {
-    const [tenures, scopeCount] = await Promise.all([
+    const [tenures, politicalSystems, scopeCount] = await Promise.all([
       this.prisma.governmentPositionTenure.findMany({
         where: { positionDefinitionId: definitionId },
         select: { countryId: true, historicalCountryId: true },
       }),
+      this.prisma.politicalSystem?.findMany
+        ? this.prisma.politicalSystem.findMany({
+            where: {
+              OR: [
+                { headOfStatePositionId: definitionId },
+                { headOfGovernmentPositionId: definitionId },
+              ],
+            },
+            select: { countryId: true, historicalCountryId: true },
+          })
+        : Promise.resolve([]),
       this.prisma.governmentPositionDefinitionScope.count({
         where: { definitionId },
       }),
@@ -5816,7 +6199,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       string,
       { countryId: string | null; historicalCountryId: string | null }
     >()
-    for (const row of tenures) {
+    for (const row of [...tenures, ...politicalSystems]) {
       if (row.historicalCountryId) {
         contextMap.set(`h:${row.historicalCountryId}`, {
           countryId: row.countryId ?? null,
@@ -5838,6 +6221,43 @@ export class PersonPrismaRepository implements IPersonRepository {
 
   /** 관직 정의 적용 범위 삭제 — 마지막 스코프를 지우면 그 정의는 다시 전역이 된다. */
   async removePositionDefinitionScope(scopeId: string): Promise<void> {
+    if (this.prisma.governmentPositionDefinitionScope?.findUnique) {
+      const scope = await this.prisma.governmentPositionDefinitionScope.findUnique({
+        where: { id: scopeId },
+        select: { id: true, definitionId: true },
+      })
+      if (!scope) {
+        throw new NotFoundException('삭제할 직위 적용 범위를 찾을 수 없습니다.')
+      }
+      if (this.prisma.governmentPositionDefinitionScope?.findMany) {
+        const remainingScopes = await this.prisma.governmentPositionDefinitionScope.findMany({
+          where: { definitionId: scope.definitionId, id: { not: scopeId } },
+          select: { countryId: true, historicalCountryId: true },
+        })
+        if (remainingScopes.length > 0) {
+          const usage = await this.countPositionDefinitionUsageContexts(scope.definitionId)
+          for (const ctx of usage.contexts) {
+            let matched = false
+            for (const rem of remainingScopes) {
+              const check = await this.areTenureCountryAxesCompatible(
+                ctx,
+                rem,
+                { strictHistoricalMatch: true },
+              )
+              if (check.compatible) {
+                matched = true
+                break
+              }
+            }
+            if (!matched) {
+              throw new ConflictException(
+                '이 국가 범위를 사용하는 재임 기록 또는 정체(정치체제)가 존재하여 해당 적용 범위를 삭제할 수 없습니다.',
+              )
+            }
+          }
+        }
+      }
+    }
     await this.prisma.governmentPositionDefinitionScope.delete({ where: { id: scopeId } })
   }
 
@@ -6242,8 +6662,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       deathEra: true,
       isAlive: true,
       isDeathDateUnknown: true,
-      templeName: true,
-      posthumousName: true,
       fatherId: true,
       motherId: true,
       adoptiveFatherId: true,
@@ -6756,9 +7174,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       parentMarriageId: true,
       // 추가 이름 메타 — 카드 호버/확장에 사용
       originalName: true,
-      posthumousName: true,
-      templeName: true,
-      preEnthronementTitle: true,
       // 출생/사망지 라벨
       birthPlaceText: true, deathPlaceText: true,
       birthCity: { select: { id: true, name: true } },
@@ -7535,9 +7950,6 @@ export class PersonPrismaRepository implements IPersonRepository {
           (p.adoptiveMotherId && p.adoptiveMotherId !== p.id ? p.adoptiveMotherId : null) as string | null,
         // 새 메타 필드 (UI 카드 hover/확장에 사용)
         originalName:         (p.originalName ?? null) as string | null,
-        posthumousName:       (p.posthumousName ?? null) as string | null,
-        templeName:           (p.templeName ?? null) as string | null,
-        preEnthronementTitle: (p.preEnthronementTitle ?? null) as string | null,
         birthPlace:           (p.birthCity?.name ?? p.birthPlaceText ?? null) as string | null,
         deathPlace:           (p.deathCity?.name ?? p.deathPlaceText ?? null) as string | null,
         // 가장 이른 재임 — 군주 카드용 (id/name은 즉위국 자체, flag는 modern 폴백)

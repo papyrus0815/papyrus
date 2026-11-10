@@ -75,10 +75,6 @@ export interface CreatePersonData {
   biography?: string
   profileImageUrl?: string
   showLifespanOnEventList?: boolean
-  // 왕/군주 관련 필드 (왕호는 재위 기록의 regnalName)
-  templeName?: string | null
-  posthumousName?: string | null
-  preEnthronementTitle?: string | null
   // 관계
   dynastyId?: string
   religionId?: string
@@ -194,10 +190,6 @@ export interface UpdatePersonData {
   biography?: string
   profileImageUrl?: string | null
   showLifespanOnEventList?: boolean
-  // 왕/군주 관련 필드 (왕호는 재위 기록의 regnalName)
-  templeName?: string | null
-  posthumousName?: string | null
-  preEnthronementTitle?: string | null
   // 관계 — null = 명시적 해제, undefined = 변경 없음
   dynastyId?: string | null
   religionId?: string | null

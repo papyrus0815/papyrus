@@ -36,6 +36,7 @@ import {
 } from '@/shared/api/treaty'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
+import { InlineSelect } from '@/shared/ui/inline-edit'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { notify } from '@/shared/ui/toast'
 
@@ -62,17 +63,48 @@ interface DetailTreatiesProps {
 export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
   const queryClient = useQueryClient()
   const [linkModalOpen, setLinkModalOpen] = useState(false)
+  const [showAllRecommended, setShowAllRecommended] = useState(false)
   /** 2단계 연결 — 조약을 고른 뒤 '이 사건과의 관계'(체결·비준·파기·관련)를 고른다 */
   const [pendingTreatyId, setPendingTreatyId] = useState<string | null>(null)
-  const treaties = event.treaties ?? []
+  const treaties = useMemo(() => event.treaties ?? [], [event.treaties])
+  const eventYear = parseTreatyYmd(event.startDate)?.year ?? null
+  const RECOMMEND_CHIP_CAP = 4
 
-  /** 연결 후보 — 이미 걸린 조약은 뺀다. 모달을 열 때만 가져온다. */
+  /** 연결 후보 — 이미 걸린 조약은 뺀다. 사건 연도가 있거나 모달을 열 때 가져온다. */
   const { data: candidates, isLoading: candidatesLoading } = useQuery({
     queryKey: ['treaties', 'link-candidates'],
     queryFn: () => treatyApi.getAll({ take: 200 }),
-    enabled: linkModalOpen,
+    enabled: linkModalOpen || eventYear !== null,
     staleTime: 60_000,
   })
+
+  const recommendedTreaties = useMemo(() => {
+    const items = candidates?.items ?? []
+    if (items.length === 0) return []
+    const linkedIds = new Set(treaties.map((treaty) => treaty.id))
+    const normalizedTitle = treatyNameFromEventTitle(event.title).toLowerCase()
+    return items
+      .filter((treaty) => {
+        if (linkedIds.has(treaty.id)) return false
+        const treatyNameLower = treaty.name.toLowerCase()
+        const nameMatch =
+          normalizedTitle.length >= 2 &&
+          (treatyNameLower.includes(normalizedTitle) ||
+            normalizedTitle.includes(treatyNameLower))
+        const signYear = parseTreatyYmd(treaty.signDate)?.year ?? null
+        const yearMatch =
+          eventYear !== null && signYear !== null && Math.abs(signYear - eventYear) <= 1
+        return nameMatch || yearMatch
+      })
+      .sort((left, right) => {
+        const leftNameMatch = left.name.toLowerCase().includes(normalizedTitle) ? 1 : 0
+        const rightNameMatch = right.name.toLowerCase().includes(normalizedTitle) ? 1 : 0
+        if (leftNameMatch !== rightNameMatch) return rightNameMatch - leftNameMatch
+        const leftYear = parseTreatyYmd(left.signDate)?.year ?? (eventYear ?? 0)
+        const rightYear = parseTreatyYmd(right.signDate)?.year ?? (eventYear ?? 0)
+        return Math.abs(leftYear - (eventYear ?? 0)) - Math.abs(rightYear - (eventYear ?? 0))
+      })
+  }, [candidates?.items, event.title, eventYear, treaties])
 
   const candidateOptions = useMemo(() => {
     const linkedIds = new Set(treaties.map((treaty) => treaty.id))
@@ -159,6 +191,26 @@ export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
     onError: () => notify.error('연결 해제에 실패했습니다'),
   })
 
+  const changeLinkTypeMutation = useMutation({
+    mutationFn: async ({
+      treatyId,
+      oldLinkId,
+      nextLinkType,
+    }: {
+      treatyId: string
+      oldLinkId: string
+      nextLinkType: TreatyEventLinkType
+    }) => {
+      await treatyApi.linkEvent(treatyId, { eventId: event.id, linkType: nextLinkType })
+      await treatyApi.unlinkEvent(oldLinkId)
+    },
+    onSuccess: () => {
+      notify.success('사건-조약 관계 유형을 변경했습니다')
+      invalidateTreaties()
+    },
+    onError: () => notify.error('관계 유형 변경에 실패했습니다'),
+  })
+
   const handleUnlink = async (linkId: string, name: string) => {
     const ok = await confirm({
       title: '연결 해제',
@@ -201,6 +253,14 @@ export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
             <TreatyCard
               key={treaty.linkId}
               treaty={treaty}
+              onChangeLinkType={(nextLinkType) => {
+                if (nextLinkType === treaty.linkType) return
+                changeLinkTypeMutation.mutate({
+                  treatyId: treaty.id,
+                  oldLinkId: treaty.linkId,
+                  nextLinkType,
+                })
+              }}
               onUnlink={() => handleUnlink(treaty.linkId, treaty.name)}
               onChanged={onInvalidate}
             />
@@ -212,6 +272,48 @@ export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
             ? '참여국을 그대로 서명국으로 옮겨 조약을 만들 수 있습니다.'
             : '이 사건에서 체결된 조약을 만들거나, 이미 등록된 조약을 연결하세요.'}
         </EmptyNote>
+      )}
+
+      {recommendedTreaties.length > 0 && (
+        <RecommendBar aria-label="동시대 추천 조약 빠른 연결">
+          <RecommendLabel>동시대·제목 일치 추천 조약 원클릭 연결</RecommendLabel>
+          <RecommendChipGroup>
+            {(showAllRecommended
+              ? recommendedTreaties
+              : recommendedTreaties.slice(0, RECOMMEND_CHIP_CAP)
+            ).map((candidateTreaty) => {
+              const dateText = formatTreatyDate(candidateTreaty.signDate)
+              return (
+                <RecommendChipBtn
+                  key={candidateTreaty.id}
+                  type="button"
+                  disabled={linkMutation.isPending}
+                  onClick={() =>
+                    linkMutation.mutate({
+                      treatyId: candidateTreaty.id,
+                      linkType: 'SIGNING',
+                    })
+                  }
+                >
+                  <span>📜</span>
+                  <strong>{candidateTreaty.name}</strong>
+                  {dateText && <RecommendChipSub>({dateText})</RecommendChipSub>}
+                  <RecommendChipPlus>+ 체결 연결</RecommendChipPlus>
+                </RecommendChipBtn>
+              )
+            })}
+            {recommendedTreaties.length > RECOMMEND_CHIP_CAP && (
+              <RecommendMoreBtn
+                type="button"
+                onClick={() => setShowAllRecommended((previous) => !previous)}
+              >
+                {showAllRecommended
+                  ? '접기'
+                  : `+${recommendedTreaties.length - RECOMMEND_CHIP_CAP}건 더 보기`}
+              </RecommendMoreBtn>
+            )}
+          </RecommendChipGroup>
+        </RecommendBar>
       )}
 
       <Actions>
@@ -349,10 +451,12 @@ function lifecycleSteps(treaty: EventDetailTreaty): LifecycleStep[] {
 
 function TreatyCard({
   treaty,
+  onChangeLinkType,
   onUnlink,
   onChanged,
 }: {
   treaty: EventDetailTreaty
+  onChangeLinkType: (nextLinkType: TreatyEventLinkType) => void
   onUnlink: () => void
   onChanged: () => void
 }) {
@@ -370,7 +474,17 @@ function TreatyCard({
             {treaty.name}
             <FiExternalLink size={13} aria-hidden />
           </TreatyLink>
-          <LinkKindBadge>{TREATY_EVENT_LINK_LABELS[treaty.linkType as TreatyEventLinkType]}</LinkKindBadge>
+          <LinkKindBadge title="클릭하여 사건-조약 관계 유형 변경">
+            <InlineSelect
+              value={treaty.linkType as TreatyEventLinkType}
+              options={LINK_TYPE_OPTIONS.map((option) => ({
+                value: option.value,
+                label: option.label,
+              }))}
+              onSave={(nextLinkType) => onChangeLinkType(nextLinkType)}
+              label={`${treaty.name} 관계 유형`}
+            />
+          </LinkKindBadge>
         </TreatyNameLine>
         <UnlinkBtn type="button" onClick={onUnlink} aria-label={`${treaty.name} 연결 해제`}>
           <FiX />
@@ -664,6 +778,87 @@ const EmptyNote = styled.p`
   font-size: 14px;
   line-height: 1.65;
   color: ${metaText};
+`
+
+const RecommendBar = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: ${RADIUS.SM};
+  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => theme.colors.background.secondary};
+`
+
+const RecommendLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${metaText};
+`
+
+const RecommendChipGroup = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const RecommendChipBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: ${RADIUS.PILL};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color 0.14s, background 0.14s;
+
+  &:hover:not(:disabled) {
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+`
+
+const RecommendChipSub = styled.span`
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: ${metaText};
+`
+
+const RecommendChipPlus = styled.span`
+  margin-left: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+`
+
+const RecommendMoreBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: ${RADIUS.PILL};
+  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
+  color: ${metaText};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
 `
 
 const Actions = styled.div`

@@ -1,6 +1,12 @@
-import { tenureWhere } from '../../person/infrastructure/office-holding.query'
 import {
+  asOfficeHolding,
+  tenureWhere,
+} from '../../person/infrastructure/office-holding.query'
+import { structuredDateKey } from '../../person/domain/structured-date.util'
+import {
+  BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Delete,
   Get,
@@ -18,7 +24,9 @@ import { EventMethod, GovernmentPositionType } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 import { resolveCountryScopeOr } from '../../country/domain/country-scope.util'
 import { NotificationService } from '../../notification/application/notification.service'
-import { assertLawMatchesPoliticalPartyJurisdiction } from '../domain/law-jurisdiction.util'
+import {
+  assertLawMatchesPoliticalPartyJurisdictionAsync,
+} from '../domain/law-jurisdiction.util'
 import {
   buildTenureJurisdictionWhere,
   membershipOverlapsTenure,
@@ -83,11 +91,11 @@ export class PoliticalPartyController {
   ): Promise<any> {
     let where: Record<string, unknown> = {}
 
-    if (countryId) {
+    if (historicalCountryId) {
+      where.historicalCountryId = historicalCountryId
+    } else if (countryId) {
       // 현대 국가 → 연결된 역사 국가까지 OR 포함(브리지 스코프 공용 헬퍼)
       where = await resolveCountryScopeOr(this.prisma, countryId)
-    } else if (historicalCountryId) {
-      where.historicalCountryId = historicalCountryId
     }
 
     const rows = await this.prisma.politicalParty.findMany({
@@ -190,13 +198,15 @@ export class PoliticalPartyController {
       },
     }
 
+    const topLeaderTypes = [
+      GovernmentPositionType.HEAD_OF_STATE,
+      GovernmentPositionType.HEAD_OF_GOVERNMENT,
+    ]
     const topLeaderPositionFilter = {
-      positionType: {
-        in: [
-          GovernmentPositionType.HEAD_OF_STATE,
-          GovernmentPositionType.HEAD_OF_GOVERNMENT,
-        ],
-      },
+      OR: [
+        { positionType: { in: topLeaderTypes } },
+        { positionDefinition: { is: { positionType: { in: topLeaderTypes } } } },
+      ],
     }
 
     const [memberships, candidates, fromCabinetHead] = await Promise.all([
@@ -210,7 +220,7 @@ export class PoliticalPartyController {
           AND: [jurisdictionWhere, topLeaderPositionFilter],
         }),
         include: tenureInclude,
-        orderBy: { startDate: 'desc' },
+        orderBy: [{ startDate: 'desc' }, { startYear: 'desc' }],
       }),
       this.prisma.governmentPositionTenure.findMany({
         where: {
@@ -227,7 +237,7 @@ export class PoliticalPartyController {
           ],
         },
         include: tenureInclude,
-        orderBy: { startDate: 'desc' },
+        orderBy: [{ startDate: 'desc' }, { startYear: 'desc' }],
       }),
     ])
 
@@ -247,9 +257,27 @@ export class PoliticalPartyController {
       if (!byId.has(t.id)) byId.set(t.id, t)
     }
 
-    const merged = Array.from(byId.values()).sort(
-      (a, b) => (b.startDate?.getTime() ?? 0) - (a.startDate?.getTime() ?? 0),
-    )
+    const tenureSortKey = (t: (typeof linked)[number]): number => {
+      const structured = structuredDateKey(
+        (t as any).startEra,
+        (t as any).startYear,
+        (t as any).startMonth,
+        (t as any).startDay,
+      )
+      if (structured != null) return structured
+      if (t.startDate instanceof Date && !Number.isNaN(t.startDate.getTime())) {
+        return (
+          t.startDate.getUTCFullYear() * 10000 +
+          (t.startDate.getUTCMonth() + 1) * 100 +
+          t.startDate.getUTCDate()
+        )
+      }
+      return Number.NEGATIVE_INFINITY
+    }
+
+    const merged = Array.from(byId.values())
+      .sort((a, b) => tenureSortKey(b) - tenureSortKey(a))
+      .map((t) => asOfficeHolding(t))
 
     return serializeElectionBigInt(merged)
   }
@@ -359,7 +387,20 @@ export class PoliticalPartyController {
     if (!party) throw new NotFoundException('정당을 찾을 수 없습니다.')
     const law = await this.prisma.law.findUnique({ where: { id: body.lawId } })
     if (!law) throw new NotFoundException('법령을 찾을 수 없습니다.')
-    assertLawMatchesPoliticalPartyJurisdiction(law, party)
+    await assertLawMatchesPoliticalPartyJurisdictionAsync(
+      this.prisma,
+      law,
+      party,
+    )
+    if (this.prisma.politicalPartyLaw?.findFirst) {
+      const existingLink = await this.prisma.politicalPartyLaw.findFirst({
+        where: { partyId: id, lawId: body.lawId },
+        select: { id: true },
+      })
+      if (existingLink) {
+        throw new ConflictException('이미 이 정당에 연결된 법령입니다.')
+      }
+    }
     const row = await this.prisma.politicalPartyLaw.create({
       data: {
         partyId: id,
@@ -406,6 +447,10 @@ export class PoliticalPartyController {
     @Body()
     body: CreatePoliticalPartyBody,
   ): Promise<any> {
+    const foundedDate = this.parseOptionalDate(body.foundedDate, '창당일')
+    const dissolvedDate = this.parseOptionalDate(body.dissolvedDate, '해산일')
+    this.assertPartyDateOrder(foundedDate ?? null, dissolvedDate ?? null)
+
     const row = await this.prisma.politicalParty.create({
       data: {
         name: body.name,
@@ -414,8 +459,8 @@ export class PoliticalPartyController {
         ideology: body.ideology ?? undefined,
         position: body.position as any,
         description: body.description ?? undefined,
-        foundedDate: body.foundedDate ? new Date(body.foundedDate) : undefined,
-        dissolvedDate: body.dissolvedDate ? new Date(body.dissolvedDate) : undefined,
+        foundedDate: foundedDate ?? undefined,
+        dissolvedDate: dissolvedDate ?? undefined,
         logoUrl: body.logoUrl ?? undefined,
         brandColor: body.brandColor ?? undefined,
         headquartersCityId: body.headquartersCityId ?? undefined,
@@ -438,6 +483,18 @@ export class PoliticalPartyController {
     @Body()
     body: UpdatePoliticalPartyBody,
   ): Promise<any> {
+    const existing = await this.prisma.politicalParty.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        foundedDate: true,
+        dissolvedDate: true,
+        countryId: true,
+        historicalCountryId: true,
+      },
+    })
+    if (!existing) throw new NotFoundException('정당을 찾을 수 없습니다.')
+
     const data: Record<string, unknown> = {}
     if (body.name !== undefined) data.name = body.name
     if (body.shortName !== undefined) data.shortName = body.shortName
@@ -445,15 +502,27 @@ export class PoliticalPartyController {
     if (body.ideology !== undefined) data.ideology = body.ideology
     if (body.position !== undefined) data.position = body.position
     if (body.description !== undefined) data.description = body.description
-    if (body.foundedDate !== undefined)
-      data.foundedDate = body.foundedDate ? new Date(body.foundedDate) : null
-    if (body.dissolvedDate !== undefined)
-      data.dissolvedDate = body.dissolvedDate ? new Date(body.dissolvedDate) : null
+    if (body.foundedDate !== undefined) {
+      data.foundedDate = this.parseOptionalDate(body.foundedDate, '창당일')
+    }
+    if (body.dissolvedDate !== undefined) {
+      data.dissolvedDate = this.parseOptionalDate(body.dissolvedDate, '해산일')
+    }
     if (body.logoUrl !== undefined) data.logoUrl = body.logoUrl
     if (body.brandColor !== undefined) data.brandColor = body.brandColor
     if (body.headquartersCityId !== undefined) data.headquartersCityId = body.headquartersCityId
     if (body.countryId !== undefined) data.countryId = body.countryId
     if (body.historicalCountryId !== undefined) data.historicalCountryId = body.historicalCountryId
+
+    const nextFounded =
+      body.foundedDate !== undefined
+        ? (data.foundedDate as Date | null)
+        : existing.foundedDate
+    const nextDissolved =
+      body.dissolvedDate !== undefined
+        ? (data.dissolvedDate as Date | null)
+        : existing.dissolvedDate
+    this.assertPartyDateOrder(nextFounded ?? null, nextDissolved ?? null)
 
     const row = await this.prisma.politicalParty.update({
       where: { id },
@@ -470,6 +539,7 @@ export class PoliticalPartyController {
 
   @Delete(':id')
   async remove(@Param('id') id: string): Promise<any> {
+    await this.ensureParty(id)
     const row = await this.prisma.politicalParty.delete({ where: { id } })
     await this.notificationService.notifyPoliticalParty(
       row.name,
@@ -477,6 +547,31 @@ export class PoliticalPartyController {
       id,
       row.localName ?? dateYearRangePreview(row.foundedDate),
     )
+  }
+
+  private parseOptionalDate(
+    raw: string | null | undefined,
+    fieldLabel: string,
+  ): Date | null {
+    if (raw == null || raw === '') return null
+    const d = new Date(raw)
+    if (Number.isNaN(d.getTime())) {
+      throw new BadRequestException(`${fieldLabel} 날짜 형식이 올바르지 않습니다.`)
+    }
+    return d
+  }
+
+  private assertPartyDateOrder(
+    foundedDate: Date | null,
+    dissolvedDate: Date | null,
+  ): void {
+    if (
+      foundedDate != null &&
+      dissolvedDate != null &&
+      dissolvedDate.getTime() < foundedDate.getTime()
+    ) {
+      throw new BadRequestException('해산일은 창당일 이후여야 합니다.')
+    }
   }
 
   private async ensureParty(id: string) {

@@ -99,14 +99,15 @@ export class ObservationService {
   }
 
   /**
-   * 사건 단위 — 사건 자신 + 그 사건의 참여국 줄 + 진영에 달린 측정값 전부.
+   * 사건 단위 — 사건 자신 + 그 사건의 참여국 줄 + 진영 + 진영 투입 부대에 달린 측정값 전부.
    * 상세 화면이 진영별 비교 차트를 그리려면 한 번에 받아야 한다.
    */
   async listForEvent(eventId: string): Promise<ObservationView[]> {
     await this.subjectAccess.assertExists(ObservationSubjectType.EVENT, eventId)
-    const [participants, sides] = await Promise.all([
+    const [participants, sides, sideUnits] = await Promise.all([
       this.prisma.eventCountryRelation.findMany({ where: { eventId }, select: { id: true } }),
       this.prisma.eventSide.findMany({ where: { eventId }, select: { id: true } }),
+      this.prisma.sideDeployedUnit.findMany({ where: { side: { eventId } }, select: { id: true } }),
     ])
     const rows = await this.prisma.observation.findMany({
       where: {
@@ -119,6 +120,11 @@ export class ObservationService {
           {
             subjectType: ObservationSubjectType.EVENT_SIDE,
             subjectId: { in: sides.map((row) => row.id) },
+          },
+          /* 진영에 투입된 부대의 이 작전 병력·전차 */
+          {
+            subjectType: ObservationSubjectType.EVENT_SIDE_UNIT,
+            subjectId: { in: sideUnits.map((row) => row.id) },
           },
         ],
       },

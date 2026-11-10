@@ -345,6 +345,8 @@ model SocialPhenomenon {
   tags          SocialPhenomenonTagRelation[]
   /// 현상의 구체적 관측(기관, 맥락, 방법론 등 포함)
   observations  SocialPhenomenonObservation[]
+  /// 이 사회현상과 연결된 역사적 사건 목록
+  eventContextLinks EventContextLink[] @relation("EventContextSocialPhenomenon")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")

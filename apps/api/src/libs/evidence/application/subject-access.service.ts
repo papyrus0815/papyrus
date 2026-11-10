@@ -10,7 +10,7 @@ import { PrismaService } from '../../../../prisma/prisma.service'
  *
  * | 대상 | 소유자 | 근거 |
  * |---|---|---|
- * | 사건 · 참여국 줄 · 진영 | `event.createdById` | event.service의 수정·연결 가드 |
+ * | 사건 · 참여국 줄 · 진영 · 진영 투입 부대 | `event.createdById` | event.service의 수정·연결 가드 |
  * | 현대·역사 국가 · 인물 | `accountId` 일치 | country.repository `where: { id, accountId }` |
  * | 조직 | (소유 개념 없음) | organization 도메인에 계정 필드 없음 |
  */
@@ -55,6 +55,13 @@ export class SubjectAccessService {
         })
         return row?.eventId ?? null
       }
+      case ObservationSubjectType.EVENT_SIDE_UNIT: {
+        const row = await this.prisma.sideDeployedUnit.findUnique({
+          where: { id: subjectId },
+          select: { side: { select: { eventId: true } } },
+        })
+        return row?.side.eventId ?? null
+      }
       default:
         return null
     }
@@ -71,7 +78,8 @@ export class SubjectAccessService {
       case ObservationSubjectType.EVENT:
         return this.eventOwner(subjectId, notFound)
       case ObservationSubjectType.EVENT_PARTICIPANT:
-      case ObservationSubjectType.EVENT_SIDE: {
+      case ObservationSubjectType.EVENT_SIDE:
+      case ObservationSubjectType.EVENT_SIDE_UNIT: {
         const eventId = await this.eventIdOf(subjectType, subjectId)
         if (!eventId) throw notFound()
         return this.eventOwner(eventId, notFound)

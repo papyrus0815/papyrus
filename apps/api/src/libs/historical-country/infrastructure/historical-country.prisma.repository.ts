@@ -251,16 +251,16 @@ export class HistoricalCountryPrismaRepository
     // 상위 역사적 국가 = 후임. Transition만 생성 (Membership은 소속·구성 탭 전용)
     if (
       data.parentHistoricalCountryIds &&
-      data.parentHistoricalCountryIds.length > 0 &&
-      data.transitionEventType
+      data.parentHistoricalCountryIds.length > 0
     ) {
       await this.assertNoTransitionCycle(country.id, data.parentHistoricalCountryIds)
+      const effectiveEventType = data.transitionEventType ?? 'SUCCESSION'
       await this.prisma.historicalCountryTransition.createMany({
         data: [...new Set(data.parentHistoricalCountryIds.filter(Boolean))].map(
           (successorId) => ({
             predecessorId: country.id,
             successorId,
-            eventType: data.transitionEventType!,
+            eventType: effectiveEventType as any,
             transitionScope: data.transitionScope ?? undefined,
           }),
         ),
@@ -356,6 +356,42 @@ export class HistoricalCountryPrismaRepository
               where: { historicalCountryId: id, ...countryFilter },
               data: { countryId: targetCountryId },
             }),
+            tx.electoralDistrict?.updateMany
+              ? tx.electoralDistrict.updateMany({
+                  where: { historicalCountryId: id, ...countryFilter },
+                  data: { countryId: targetCountryId },
+                })
+              : Promise.resolve(),
+            tx.law?.updateMany
+              ? tx.law.updateMany({
+                  where: { historicalCountryId: id, ...countryFilter },
+                  data: { countryId: targetCountryId },
+                })
+              : Promise.resolve(),
+            tx.militaryUnit?.updateMany
+              ? tx.militaryUnit.updateMany({
+                  where: { historicalCountryId: id, ...countryFilter },
+                  data: { countryId: targetCountryId },
+                })
+              : Promise.resolve(),
+            tx.organization?.updateMany
+              ? tx.organization.updateMany({
+                  where: { historicalCountryId: id, ...countryFilter },
+                  data: { countryId: targetCountryId },
+                })
+              : Promise.resolve(),
+            tx.personGroup?.updateMany
+              ? tx.personGroup.updateMany({
+                  where: { historicalCountryId: id, ...countryFilter },
+                  data: { countryId: targetCountryId },
+                })
+              : Promise.resolve(),
+            tx.glossaryTerm?.updateMany
+              ? tx.glossaryTerm.updateMany({
+                  where: { historicalCountryId: id, ...countryFilter },
+                  data: { countryId: targetCountryId },
+                })
+              : Promise.resolve(),
           ])
 
           // GovernmentPositionDefinitionScope는 (definitionId, countryId, historicalCountryId) unique 제약이 있으므로 안전하게 동기화
@@ -421,6 +457,54 @@ export class HistoricalCountryPrismaRepository
               where: { historicalCountryId: id, ...staleCountryWhere },
               data: { countryId: null },
             }),
+            tx.election?.updateMany
+              ? tx.election.updateMany({
+                  where: { historicalCountryId: id, ...staleCountryWhere },
+                  data: { countryId: null },
+                })
+              : Promise.resolve(),
+            tx.politicalParty?.updateMany
+              ? tx.politicalParty.updateMany({
+                  where: { historicalCountryId: id, ...staleCountryWhere },
+                  data: { countryId: null },
+                })
+              : Promise.resolve(),
+            tx.electoralDistrict?.updateMany
+              ? tx.electoralDistrict.updateMany({
+                  where: { historicalCountryId: id, ...staleCountryWhere },
+                  data: { countryId: null },
+                })
+              : Promise.resolve(),
+            tx.law?.updateMany
+              ? tx.law.updateMany({
+                  where: { historicalCountryId: id, ...staleCountryWhere },
+                  data: { countryId: null },
+                })
+              : Promise.resolve(),
+            tx.militaryUnit?.updateMany
+              ? tx.militaryUnit.updateMany({
+                  where: { historicalCountryId: id, ...staleCountryWhere },
+                  data: { countryId: null },
+                })
+              : Promise.resolve(),
+            tx.organization?.updateMany
+              ? tx.organization.updateMany({
+                  where: { historicalCountryId: id, ...staleCountryWhere },
+                  data: { countryId: null },
+                })
+              : Promise.resolve(),
+            tx.personGroup?.updateMany
+              ? tx.personGroup.updateMany({
+                  where: { historicalCountryId: id, ...staleCountryWhere },
+                  data: { countryId: null },
+                })
+              : Promise.resolve(),
+            tx.glossaryTerm?.updateMany
+              ? tx.glossaryTerm.updateMany({
+                  where: { historicalCountryId: id, ...staleCountryWhere },
+                  data: { countryId: null },
+                })
+              : Promise.resolve(),
           ])
 
           const staleScopes = await tx.governmentPositionDefinitionScope.findMany({
@@ -459,7 +543,12 @@ export class HistoricalCountryPrismaRepository
       const existingTransitions =
         await this.prisma.historicalCountryTransition.findMany({
           where: { predecessorId: id },
-          select: { id: true, successorId: true },
+          select: {
+            id: true,
+            successorId: true,
+            eventType: true,
+            transitionScope: true,
+          },
         })
       const { transitionIdsToDelete, successorIdsToAdd } =
         computeTransitionSuccessorDiff(
@@ -474,14 +563,22 @@ export class HistoricalCountryPrismaRepository
         })
       }
 
-      // 새로 추가된 후임만 생성 (eventType/scope는 폼이 보낸 대표값 사용)
-      if (successorIdsToAdd.length > 0 && data.transitionEventType) {
+      // 새로 추가된 후임만 생성 (eventType/scope는 폼이 보낸 대표값 우선, 미전달 시 기존 대표값/SUCCESSION 폴백)
+      if (successorIdsToAdd.length > 0) {
+        const effectiveEventType =
+          data.transitionEventType ??
+          existingTransitions[0]?.eventType ??
+          'SUCCESSION'
+        const effectiveScope =
+          data.transitionScope !== undefined
+            ? data.transitionScope
+            : existingTransitions[0]?.transitionScope
         await this.prisma.historicalCountryTransition.createMany({
           data: successorIdsToAdd.map((successorId) => ({
             predecessorId: id,
             successorId,
-            eventType: data.transitionEventType!,
-            transitionScope: data.transitionScope ?? undefined,
+            eventType: effectiveEventType as any,
+            transitionScope: effectiveScope ?? undefined,
           })),
         })
       }
@@ -516,7 +613,20 @@ export class HistoricalCountryPrismaRepository
   }
 
   async delete(id: string): Promise<void> {
-    const [tenureCount, deptCount, psCount, scopeCount] = await Promise.all([
+    const [
+      tenureCount,
+      deptCount,
+      psCount,
+      scopeCount,
+      electionCount,
+      partyCount,
+      districtCount,
+      lawCount,
+      militaryUnitCount,
+      orgCount,
+      personGroupCount,
+      glossaryCount,
+    ] = await Promise.all([
       this.prisma.governmentPositionTenure.count({
         where: { historicalCountryId: id },
       }),
@@ -529,12 +639,46 @@ export class HistoricalCountryPrismaRepository
       this.prisma.governmentPositionDefinitionScope.count({
         where: { historicalCountryId: id },
       }),
+      this.prisma.election?.count
+        ? this.prisma.election.count({ where: { historicalCountryId: id } })
+        : Promise.resolve(0),
+      this.prisma.politicalParty?.count
+        ? this.prisma.politicalParty.count({ where: { historicalCountryId: id } })
+        : Promise.resolve(0),
+      this.prisma.electoralDistrict?.count
+        ? this.prisma.electoralDistrict.count({
+            where: { historicalCountryId: id },
+          })
+        : Promise.resolve(0),
+      this.prisma.law?.count
+        ? this.prisma.law.count({ where: { historicalCountryId: id } })
+        : Promise.resolve(0),
+      this.prisma.militaryUnit?.count
+        ? this.prisma.militaryUnit.count({ where: { historicalCountryId: id } })
+        : Promise.resolve(0),
+      this.prisma.organization?.count
+        ? this.prisma.organization.count({ where: { historicalCountryId: id } })
+        : Promise.resolve(0),
+      this.prisma.personGroup?.count
+        ? this.prisma.personGroup.count({ where: { historicalCountryId: id } })
+        : Promise.resolve(0),
+      this.prisma.glossaryTerm?.count
+        ? this.prisma.glossaryTerm.count({ where: { historicalCountryId: id } })
+        : Promise.resolve(0),
     ])
     const refs: string[] = []
     if (tenureCount > 0) refs.push(`공직 재임 ${tenureCount}건`)
     if (deptCount > 0) refs.push(`행정부처 ${deptCount}건`)
     if (psCount > 0) refs.push(`정체(정치체제) ${psCount}건`)
     if (scopeCount > 0) refs.push(`직위 스코프 ${scopeCount}건`)
+    if (electionCount > 0) refs.push(`선거 ${electionCount}건`)
+    if (partyCount > 0) refs.push(`정당 ${partyCount}건`)
+    if (districtCount > 0) refs.push(`선거구 ${districtCount}건`)
+    if (lawCount > 0) refs.push(`법령 ${lawCount}건`)
+    if (militaryUnitCount > 0) refs.push(`군부대 ${militaryUnitCount}건`)
+    if (orgCount > 0) refs.push(`조직 ${orgCount}건`)
+    if (personGroupCount > 0) refs.push(`인물 묶음 ${personGroupCount}건`)
+    if (glossaryCount > 0) refs.push(`용어집 ${glossaryCount}건`)
     if (refs.length > 0) {
       throw new ConflictException(
         `해당 역사적 국가에 귀속된 기록(${refs.join(', ')})이 존재하여 삭제할 수 없습니다. 관련 기록을 먼저 정리하거나 다른 국가로 이전해 주세요.`,

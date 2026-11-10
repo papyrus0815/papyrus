@@ -73,6 +73,10 @@ interface DetailFactsProps {
   onJump?: (anchorId: string) => void
   /** 원어 사건명이 비었을 때의 진입점 — 주면 위치 줄 아래 '+ 원어 사건명'이 선다 */
   onAddOriginalTitle?: () => void
+  /** 연결된 관련 사건(인과·배경·동시대) 건수 */
+  relatedCount?: number
+  /** 연결된 국가 기관(부처·위원회) 건수 */
+  departmentCount?: number
 }
 
 /** 배역 한 줄에 세우는 나라 수 — 넘치면 '외 N'(참여 행위자 섹션으로). */
@@ -95,6 +99,8 @@ export function DetailFacts({
   foldedCount,
   onJump,
   onAddOriginalTitle,
+  relatedCount = 0,
+  departmentCount = 0,
 }: DetailFactsProps) {
   const jumpTo = (anchorId: string) => (onJump ? onJump(anchorId) : scrollToAnchor(anchorId))
   /**
@@ -172,24 +178,27 @@ export function DetailFacts({
     })
     .filter((line): line is string => Boolean(line))
 
-  const roleGroups = groupCountriesByRole([
-    ...(event.relatedCountries ?? []).map(
-      (country): RoleCountry => ({
-        id: country.id,
-        name: country.name,
-        role: country.role,
-        historical: false,
-      }),
-    ),
-    ...(event.relatedHistoricalCountries ?? []).map(
-      (country): RoleCountry => ({
-        id: country.id,
-        name: country.name,
-        role: country.role,
-        historical: true,
-      }),
-    ),
-  ])
+  const roleGroups = groupCountriesByRole(
+    [
+      ...(event.relatedCountries ?? []).map(
+        (country): RoleCountry => ({
+          id: country.id,
+          name: country.name,
+          role: country.role,
+          historical: false,
+        }),
+      ),
+      ...(event.relatedHistoricalCountries ?? []).map(
+        (country): RoleCountry => ({
+          id: country.id,
+          name: country.name,
+          role: country.role,
+          historical: true,
+        }),
+      ),
+    ],
+    event.type,
+  )
 
   const heroShowsAll = heroCardsShowAllCountries(
     [...(event.relatedCountries ?? []), ...(event.relatedHistoricalCountries ?? [])],
@@ -417,10 +426,33 @@ export function DetailFacts({
             </JumpButton>
           </FactRow>
         )}
+        {relatedCount > 0 && (
+          <FactRow label="관련 사건">
+            <JumpButton type="button" onClick={() => jumpTo('network')}>
+              {relatedCount}건
+            </JumpButton>
+          </FactRow>
+        )}
         {personCount > 0 && (
           <FactRow label="인물">
             <JumpButton type="button" onClick={() => jumpTo('actors')}>
               {personCount}명
+            </JumpButton>
+          </FactRow>
+        )}
+        {(event.organizations?.length ?? 0) + departmentCount > 0 && (
+          <FactRow label="기관·조직">
+            <JumpButton
+              type="button"
+              onClick={() =>
+                jumpTo(
+                  (event.organizations?.length ?? 0) > 0
+                    ? 'organizations'
+                    : 'departments',
+                )
+              }
+            >
+              {(event.organizations?.length ?? 0) + departmentCount}곳
             </JumpButton>
           </FactRow>
         )}

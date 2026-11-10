@@ -174,6 +174,11 @@ export function MinistryDepartmentDetailView({
         </S.DeptProfileAvatar>
         <S.DeptProfileMeta>
           <S.DeptProfileNameRow>
+            {department.historicalCountry?.name ? (
+              <S.DeptCategoryBadge>
+                {department.historicalCountry.name}
+              </S.DeptCategoryBadge>
+            ) : null}
             {kindLabel ? (
               <S.DeptCategoryBadge>{kindLabel}</S.DeptCategoryBadge>
             ) : null}

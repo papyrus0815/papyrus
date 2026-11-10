@@ -6,10 +6,11 @@
  * **잎 사건마다 자기 날짜로** 상위 국면에 놓는다 — 스탈린그라드·노르망디가 제 장에 선다.
  * 행마다 어느 묶음 소속인지('서부·북유럽 전선 › 노르망디 상륙 작전')를 묶음 색과 함께 꼬리로 단다.
  */
-import { Fragment, useMemo } from 'react'
+import { useMemo } from 'react'
 
 import styled, { useTheme } from 'styled-components'
 
+import { ledgerBackground } from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { groupColor } from '@/pages/events/overview/overview.styles'
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
@@ -114,17 +115,13 @@ export function ChronologicalFlow({
             <span>{section.rows.length}건</span>
           </SectionHead>
           <Rows>
-            {section.rows.map((row, index) => {
-              const showYear = row.year != null && row.year !== section.rows[index - 1]?.year
+            {section.rows.map((row) => {
               const color = row.groupIndex != null ? groupColor(row.groupIndex, theme.mode) : neutral
               return (
-                <Fragment key={row.node.id}>
-                  {showYear && (
-                    <YearMark>{row.year! < 0 ? `기원전 ${-row.year!}년` : `${row.year}년`}</YearMark>
-                  )}
-                  <Row>
-                    <Dot style={{ background: color }} aria-hidden="true" />
-                    <When>{formatSpanLabel(row.node)}</When>
+                <Row key={row.node.id}>
+                  <Dot style={{ background: color }} aria-hidden="true" />
+                  <When>{formatSpanLabel(row.node)}</When>
+                  <RowBody>
                     <Title type="button" onClick={() => onOpen(row.node.id)} title="미리보기">
                       {row.node.title}
                     </Title>
@@ -133,8 +130,8 @@ export function ChronologicalFlow({
                         {row.path.join(' › ')}
                       </Path>
                     )}
-                  </Row>
-                </Fragment>
+                  </RowBody>
+                </Row>
               )
             })}
           </Rows>
@@ -177,58 +174,57 @@ const SectionHead = styled.div`
 `
 
 const Rows = styled.ol`
-  margin: 0;
-  padding: 0 0 0 12px;
+  margin: 0 0 0 10px;
+  padding: 4px 0 4px 20px;
   list-style: none;
-  border-left: 2px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(20,19,34,0.08)')};
-`
-
-const YearMark = styled.li`
-  margin: 10px 0 2px;
-  font-size: 12px;
-  font-weight: 800;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-variant-numeric: tabular-nums;
+  border-left: 2px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(129,140,248,0.28)' : 'rgba(79,70,229,0.22)')};
 `
 
 const Row = styled.li`
   position: relative;
   display: grid;
-  /* 날짜 열 고정 폭 — 행마다 max-content면 제목 시작이 들쭉날쭉했다 */
-  grid-template-columns: 10px 172px minmax(0, 1fr);
-  column-gap: 8px;
+  grid-template-columns: 112px minmax(0, 1fr);
+  column-gap: 14px;
   align-items: baseline;
   padding: 5px 0;
 
   @media (max-width: 640px) {
-    grid-template-columns: 10px minmax(0, 1fr);
-
-    > :nth-child(2) {
-      grid-column: 2;
-    }
-    > :nth-child(3),
-    > :nth-child(4) {
-      grid-column: 2;
-    }
+    grid-template-columns: 84px minmax(0, 1fr);
+    column-gap: 10px;
   }
 `
 
 const Dot = styled.span`
+  position: absolute;
+  left: -25px;
+  top: 10px;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  transform: translateY(-1px);
+  box-shadow: 0 0 0 3px ${ledgerBackground};
 `
 
 const When = styled.span`
-  font-size: 12px;
-  color: ${metaText};
+  font-size: 12.5px;
+  font-weight: 700;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const RowBody = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
 `
 
 const Title = styled.button`
-  justify-self: start;
+  align-self: flex-start;
   min-width: 0;
   padding: 0;
   border: none;
@@ -246,14 +242,9 @@ const Title = styled.button`
 `
 
 const Path = styled.span`
-  grid-column: 3;
   font-size: 12px;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-
-  @media (max-width: 640px) {
-    grid-column: 2;
-  }
 `

@@ -94,19 +94,27 @@ export function compareEventStart(
     return firstTokens.year - secondTokens.year
   if (firstTokens.month !== secondTokens.month)
     return firstTokens.month - secondTokens.month
-  return firstTokens.day - secondTokens.day
+  if (firstTokens.day !== secondTokens.day)
+    return firstTokens.day - secondTokens.day
+  if (firstTokens.hour !== secondTokens.hour)
+    return firstTokens.hour - secondTokens.hour
+  return firstTokens.minute - secondTokens.minute
 }
 
 function parseEventDateTokens(
   input: string | null | undefined,
-): { year: number; month: number; day: number } | null {
+): { year: number; month: number; day: number; hour: number; minute: number } | null {
   if (!input) return null
-  // 선택적 부호 + 1~6자리 연도, 월·일은 선택적.
-  const matched = input.match(/^(-?\d{1,6})(?:-(\d{1,2}))?(?:-(\d{1,2}))?/)
+  // 선택적 부호 + 1~6자리 연도, 월·일·시·분은 선택적.
+  const matched = input.match(
+    /^(-?\d{1,6})(?:-(\d{1,2}))?(?:-(\d{1,2}))?(?:T(\d{1,2}):(\d{1,2}))?/,
+  )
   if (!matched || !matched[1]) return null
   const year = parseInt(matched[1], 10)
   if (!Number.isFinite(year)) return null
   const month = matched[2] ? parseInt(matched[2], 10) : 1
   const day = matched[3] ? parseInt(matched[3], 10) : 1
-  return { year, month, day }
+  const hour = matched[4] ? parseInt(matched[4], 10) : 0
+  const minute = matched[5] ? parseInt(matched[5], 10) : 0
+  return { year, month, day, hour, minute }
 }

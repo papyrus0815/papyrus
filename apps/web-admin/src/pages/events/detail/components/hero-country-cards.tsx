@@ -304,7 +304,10 @@ export function HeroCountryCards({
     const isLead = Boolean(figure && leadMetric && figure.metric.key === leadMetric.key)
     const share =
       figure && isLead && leadMax > 0 ? Math.max(3, ((observationExtent(figure)?.center ?? 0) / leadMax) * 100) : null
-    const role = country.role && !QUIET_ROLES.has(country.role) ? eventCountryRoleLabel(country.role) : null
+    const role =
+      country.role && !QUIET_ROLES.has(country.role)
+        ? eventCountryRoleLabel(country.role, event.type)
+        : null
     const participation =
       country.participation && country.participation !== 'FULL' ? PARTICIPATION_LABEL[country.participation] : null
     const join = formatPointShort(country.join)

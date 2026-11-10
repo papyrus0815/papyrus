@@ -90,6 +90,8 @@ model Law {
   historicalCountry HistoricalCountry? @relation("LawHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
   /// 정당과의 연결 (`politics.prisma` PoliticalPartyLaw)
   politicalPartyLaws PoliticalPartyLaw[] @relation("PoliticalPartyLawLink")
+  /// 이 법령·명령이 제정·적용·위반된 역사적 사건 연결
+  eventContextLinks  EventContextLink[]  @relation("EventContextLaw")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")

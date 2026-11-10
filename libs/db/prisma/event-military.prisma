@@ -40,6 +40,13 @@ model EventSide {
   /// 결과 한마디 — '결정적 승리', '전술적 패배·전략적 승리' 같은 단서
   outcomeNote String? @map("outcome_note") @db.Text
 
+  /// 진영별 작전 목표·전략·전술·첩보·보급 대칭 서술 (추축국의 전격전 계획 vs 소련군의 종심방어·첩보 오판 등 양측 대칭 비교)
+  objective    String? @db.Text
+  strategy     String? @db.Text
+  tactics      String? @db.Text
+  intelligence String? @db.Text
+  logistics    String? @db.Text
+
   /// 상위 진영 FK (하위 사건인 경우 상위 사건의 진영 참조)
   parentSideId String?    @map("parent_side_id") @db.Char(36)
   parentSide   EventSide? @relation("SideHierarchy", fields: [parentSideId], references: [id], onDelete: SetNull)
@@ -67,6 +74,12 @@ model EventSide {
 
   /// 사용 무기/장비 목록 (군사 확장)
   weaponsUsed SideWeapon[]
+
+  /// 이 진영의 지도 기동 축선·포위망·전선 피처
+  mapFeatures EventMapFeature[] @relation("EventSideMapFeatures")
+
+  /// 이 진영에 귀속된 지리·인프라·기후·자원·법령·사회현상 맥락 연결
+  contextLinks EventContextLink[] @relation("EventSideContextLinks")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
@@ -456,6 +469,22 @@ model MilitaryDetailsCombatType {
 // ========================
 // 진영 - 투입 부대 연결
 // ========================
+/// 이 작전에서 부대가 맡은 몫
+enum SideUnitRole {
+  /// 주공(主攻) — 결정적 타격을 맡은 축
+  MAIN_EFFORT
+  /// 조공(助攻)·견제
+  SUPPORTING
+  /// 예비
+  RESERVE
+  /// 수비·방어 — 공격받은 쪽의 주력 방어 부대
+  DEFENSE
+  /// 기타
+  OTHER
+}
+
+/// 사건 진영에 투입된 야전 부대(집단군·군·군단·사단). 부대 자체(이름·계통·소속 기관)는 MilitaryUnit,
+/// 이 작전에서의 몫·병력은 여기(병력 수치는 측정값 subjectType=EVENT_SIDE_UNIT, subjectId=이 행 id).
 model SideDeployedUnit {
   /// PK
   id String @id @default(uuid()) @db.Char(36)
@@ -468,11 +497,38 @@ model SideDeployedUnit {
   militaryUnitId String       @map("military_unit_id") @db.Char(36)
   militaryUnit   MilitaryUnit @relation(fields: [militaryUnitId], references: [id], onDelete: Cascade)
 
+  /// 작전 당시 배속 상급 부대 오버라이드(선택) — 비어 있으면 MilitaryUnit.parentUnitId 기본 편제를 따르고,
+  /// 값이 있으면 이 작전에서의 직속 상급 부대로 우선 연결한다 (예: 제4기갑집단이 바르바로사 개전 시 북부집단군 → 태풍 작전 시 중부집단군 배속).
+  parentUnitId String?       @map("parent_unit_id") @db.Char(36)
+  parentUnit   MilitaryUnit? @relation("SideDeployedUnitParent", fields: [parentUnitId], references: [id], onDelete: SetNull)
+
+  /// 작전 당시 부대 지휘관 오버라이드(선택) — 비어 있으면 MilitaryUnitCommander 임기에서 사건 시점 지휘관을 자동 추론하고,
+  /// 값이 있으면 명시된 지휘관을 우선 표시한다.
+  commanderId String? @map("commander_id") @db.Char(36)
+  commander   Person? @relation("SideDeployedUnitCommander", fields: [commanderId], references: [id], onDelete: SetNull)
+
+  /// 이 작전에서의 몫 — 주공·조공·예비·수비
+  role SideUnitRole?
+
+  /// 한 줄 메모 — '제2·제3 기갑집단을 앞세워 민스크 포위'
+  note String? @db.Text
+
+  /// 진영 안 표시 순서
+  sortOrder Int @default(0) @map("sort_order")
+
+  /// 이 투입 부대에 배속·운용된 주요 무기·장비
+  weaponsUsed SideWeapon[] @relation("SideDeployedUnitWeapons")
+
+  /// 이 투입 부대의 기동 축선·포위망·전선 지도 피처 (예: 제2기갑집단 민스크-스몰렌스크 돌파 축선)
+  mapFeatures EventMapFeature[] @relation("SideDeployedUnitMapFeatures")
+
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([sideId, militaryUnitId])
+  @@index([parentUnitId], name: "idx_side_deployed_unit_parentUnitId")
+  @@index([commanderId], name: "idx_side_deployed_unit_commanderId")
   @@map("side_deployed_unit")
 }
 
@@ -484,19 +540,40 @@ model SideWeapon {
   id String @id @default(uuid()) @db.Char(36)
 
   /// 진영 FK
-  sideId String          @map("side_id") @db.Char(36)
+  sideId String    @map("side_id") @db.Char(36)
   side   EventSide @relation(fields: [sideId], references: [id], onDelete: Cascade)
 
-  /// 무기 FK (확장 가능: Weapon, GroundVehicle, Aircraft, NavalVessel)
-  weaponId String? @map("weapon_id") @db.Char(36)
-  groundVehicleId String? @map("ground_vehicle_id") @db.Char(36)
-  aircraftId String? @map("aircraft_id") @db.Char(36)
-  navalVesselId String? @map("naval_vessel_id") @db.Char(36)
+  /// 특정 투입 부대에 배속된 장비인 경우 연결 (선택 — 비어 있으면 진영 전체 사용 장비)
+  deployedUnitId String?           @map("deployed_unit_id") @db.Char(36)
+  deployedUnit   SideDeployedUnit? @relation("SideDeployedUnitWeapons", fields: [deployedUnitId], references: [id], onDelete: SetNull)
+
+  /// 무기 FK (Weapon, GroundVehicle, Aircraft, NavalVessel 중 하나)
+  weaponId        String?        @map("weapon_id") @db.Char(36)
+  weapon          Weapon?        @relation("SideWeaponToWeapon", fields: [weaponId], references: [id], onDelete: Cascade)
+  groundVehicleId String?        @map("ground_vehicle_id") @db.Char(36)
+  groundVehicle   GroundVehicle? @relation("SideWeaponToGroundVehicle", fields: [groundVehicleId], references: [id], onDelete: Cascade)
+  aircraftId      String?        @map("aircraft_id") @db.Char(36)
+  aircraft        Aircraft?      @relation("SideWeaponToAircraft", fields: [aircraftId], references: [id], onDelete: Cascade)
+  navalVesselId   String?        @map("naval_vessel_id") @db.Char(36)
+  navalVessel     NavalVessel?   @relation("SideWeaponToNavalVessel", fields: [navalVesselId], references: [id], onDelete: Cascade)
+
+  /// 투입 수량 (선택, 예: 3350)
+  quantity  Int?
+  /// 운용 메모·비고 (예: '중부집단군 제2기갑집단 주력 전차')
+  note      String? @db.Text
+  /// 표시 순서
+  sortOrder Int     @default(0) @map("sort_order")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([sideId, sortOrder], name: "idx_side_weapon_sideId")
+  @@index([deployedUnitId], name: "idx_side_weapon_deployedUnitId")
+  @@index([weaponId], name: "idx_side_weapon_weaponId")
+  @@index([groundVehicleId], name: "idx_side_weapon_groundVehicleId")
+  @@index([aircraftId], name: "idx_side_weapon_aircraftId")
+  @@index([navalVesselId], name: "idx_side_weapon_navalVesselId")
   @@map("side_weapon")
 }
 

@@ -82,10 +82,15 @@ export function buildDepartmentDescription(
   return out
 }
 
-/** 카테고리가 국방·군사 계열인지 (등록 폼·상세 톤 분기) */
+/** 카테고리가 미지정(`categoryId == null`)인 부처를 표시하기 위한 가상 카테고리 탭 ID */
+export const UNCATEGORIZED_CATEGORY_ID = '__uncategorized__'
+
+/** 카테고리 또는 기관 종류(`MILITARY_COMMAND`)가 국방·군사 계열인지 (등록 폼·상세 톤 분기) */
 export function isDefenseRelatedCategory(
   category: AdministrationDepartmentCategory | null | undefined,
+  kind?: AdministrationDepartment['kind'] | null,
 ): boolean {
+  if (kind === 'MILITARY_COMMAND') return true
   if (!category) return false
   const ko = category.name ?? ''
   const en = category.nameEn ?? ''
@@ -171,14 +176,15 @@ export function ministryFormFieldsFromDepartment(
     nameEn: dept.nameEn ?? d.officialNameEn ?? '',
     abbreviation: dept.abbreviation ?? '',
     kind: dept.kind ?? 'MINISTRY',
+    historicalCountryId: dept.historicalCountryId ?? '',
     parentId: dept.parentId ?? '',
     categoryId: dept.categoryId ?? '',
     thumbnailUrl: dept.thumbnailUrl ?? '',
     description: cleanDescription,
     establishedDate: dept.establishedDate
-      ? dept.establishedDate.slice(0, 10)
+      ? dept.establishedDate.split('T')[0]
       : '',
-    abolishedDate: dept.abolishedDate ? dept.abolishedDate.slice(0, 10) : '',
+    abolishedDate: dept.abolishedDate ? dept.abolishedDate.split('T')[0] : '',
     successorId: dept.successors?.[0]?.department.id ?? '',
     defenseOfficialNameEn: dept.nameEn ?? d.officialNameEn,
     defenseMissionScope: d.missionScope,
@@ -188,15 +194,20 @@ export function ministryFormFieldsFromDepartment(
   }
 }
 
-export function emptyMinistryFormFields(categoryId: string, parentId = '') {
+export function emptyMinistryFormFields(
+  categoryId: string,
+  parentId = '',
+  historicalCountryId = '',
+) {
   return {
     name: '',
     nameLocal: '',
     nameEn: '',
     abbreviation: '',
     kind: 'MINISTRY' as const,
+    historicalCountryId,
     parentId,
-    categoryId,
+    categoryId: categoryId === UNCATEGORIZED_CATEGORY_ID ? '' : categoryId,
     thumbnailUrl: '',
     description: '',
     establishedDate: '',
@@ -210,7 +221,7 @@ export function emptyMinistryFormFields(categoryId: string, parentId = '') {
   }
 }
 
-/** 부처 이름·원어명·영문명·약칭·소속 카테고리 표기(한/영)로 검색 */
+/** 부처 이름·원어명·영문명·약칭·소속 카테고리·역사국가 표기(한/영)로 검색 */
 export function filterDepartmentsBySearchQuery(
   departments: AdministrationDepartment[],
   query: string,
@@ -222,6 +233,11 @@ export function filterDepartmentsBySearchQuery(
     if (d.nameLocal && d.nameLocal.toLowerCase().includes(q)) return true
     if (d.nameEn && d.nameEn.toLowerCase().includes(q)) return true
     if (d.abbreviation && d.abbreviation.toLowerCase().includes(q)) return true
+    if (
+      d.historicalCountry?.name &&
+      d.historicalCountry.name.toLowerCase().includes(q)
+    )
+      return true
     const c = d.category
     if (c?.name && c.name.toLowerCase().includes(q)) return true
     if (c?.nameEn && c.nameEn.toLowerCase().includes(q)) return true
@@ -229,14 +245,13 @@ export function filterDepartmentsBySearchQuery(
   })
 }
 
-/** 국가 부처 목록으로 카테고리별 개수 (탭 배지용) */
+/** 국가 부처 목록으로 카테고리별 개수 (탭 배지용, 미분류 포함) */
 export function countDepartmentsByCategoryId(
   departments: AdministrationDepartment[],
 ): Map<string, number> {
   const m = new Map<string, number>()
   for (const d of departments) {
-    const cid = d.categoryId
-    if (!cid) continue
+    const cid = d.categoryId || UNCATEGORIZED_CATEGORY_ID
     m.set(cid, (m.get(cid) ?? 0) + 1)
   }
   return m

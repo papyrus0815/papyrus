@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query'
 import { FiShield } from 'react-icons/fi'
 
 import { militaryUnitApi } from '@/shared/api/military-unit'
+import { militaryUnitTypeLabelKo } from '@/shared/lib/military-unit-type-label'
 import {
   EntityListSidebar,
   filterSidebarItems,
@@ -60,7 +61,7 @@ export function MilitaryUnitListSidebar({
       return {
         id: unit.id,
         name: unit.name,
-        meta: [unit.unitType ?? null, countryName],
+        meta: [unit.unitType ? militaryUnitTypeLabelKo(unit.unitType) : null, countryName],
         groupId,
       }
     })

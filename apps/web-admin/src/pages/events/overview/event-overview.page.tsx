@@ -31,6 +31,7 @@ import {
   aggregatePersons,
   buildCountryMatrix,
   buildGantt,
+  buildWarDeclarationFlow,
   collectionGroups,
   inGroupFilter,
   SINGLES_GROUP_KEY,
@@ -58,6 +59,7 @@ import {
   GanttPanel,
   PersonsPanel,
   SidesMetricsPanel,
+  WarDeclarationFlowPanel,
 } from './overview-sections'
 import { OverviewEventModal } from './overview-event-modal'
 import { GroupLanesPanel } from './overview-lanes'
@@ -288,6 +290,7 @@ export function EventOverviewPanel({
       ordered,
       numberById,
       matrix,
+      warDeclarationFlow: buildWarDeclarationFlow(root, descendants),
       types: typeBreakdown(descendants),
       persons: aggregatePersons([root, ...descendants]),
       metrics: metricRows([root, ...descendants]),
@@ -782,6 +785,16 @@ export function EventOverviewPanel({
         )}
         {activeView === 'participants' && (
           <>
+            <WarDeclarationFlowPanel
+              flow={derived.warDeclarationFlow}
+              numberById={derived.numberById}
+              selectedCountryKey={selectedCountryKey}
+              onSelectCountry={setSelectedCountryKey}
+              visibleIds={visibleIds}
+              hotId={highlightId}
+              onHover={setHotId}
+              onOpen={openEventById}
+            />
             <CountryMatrixPanel
               hideFiltered={selectedGroup !== null}
               grouping={derived.grouping}

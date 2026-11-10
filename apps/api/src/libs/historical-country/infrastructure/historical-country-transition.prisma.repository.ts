@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common'
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common'
 import { Era } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 import type {
@@ -147,6 +147,20 @@ export class HistoricalCountryTransitionPrismaRepository
 
   async create(data: CreateTransitionData): Promise<HistoricalCountryTransitionRecord> {
     await this.assertNoCycle(data.predecessorId, data.successorId)
+    if (this.prisma.historicalCountryTransition?.findFirst) {
+      const duplicate = await this.prisma.historicalCountryTransition.findFirst({
+        where: {
+          predecessorId: data.predecessorId,
+          successorId: data.successorId,
+        },
+        select: { id: true },
+      })
+      if (duplicate) {
+        throw new ConflictException(
+          '이미 동일한 전임·후임 계승 관계가 등록되어 있습니다.',
+        )
+      }
+    }
     const row = await this.prisma.historicalCountryTransition.create({
       data: {
         predecessorId: data.predecessorId,

@@ -115,7 +115,7 @@ function displayNameOf(ruler: ContemporaryRuler): string {
 }
 
 /**
- * 수장 라벨 — 묘호(세종)·기록 왕호(에드워드 7세) 우선, 없으면 인물 표시명.
+ * 수장 라벨 — 기록 왕호(에드워드 7세) 우선, 없으면 인물 표시명.
  * person.regnalName은 라벨로 쓰지 않는다 — 원문 표기('Nicholas')·칭호('쇼군')·
  * 맨 서수('4세')가 섞인 오염 필드라 칩에 원문이 새던 원인이었고, 수장비교 보드도
  * record 왕호→표시명 체인만 쓴다(normalize-tenures 규약). 표시 record(창 최대 겹침)에
@@ -125,8 +125,7 @@ export function chipLabelOf(ruler: ContemporaryRuler, record: ContemporaryRecord
   const recordRegnalName =
     record.regnalName?.trim() ||
     ruler.records.find((other) => other.regnalName?.trim())?.regnalName?.trim()
-  const label =
-    ruler.person.templeName?.trim() || recordRegnalName || displayNameOf(ruler)
+  const label = recordRegnalName || displayNameOf(ruler)
   return label || '(이름 미상)'
 }
 

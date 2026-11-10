@@ -67,6 +67,8 @@ export interface GetAllEventsParams {
   historicalCountryIds?: string[]
   /** 분야 키(MILITARY…) 정확 매칭 */
   domain?: string
+  /** 세부 분야 쉼표 목록 — 예: WAR_DECLARATION,BATTLE */
+  types?: string
   /** 십년대 시작 연도 (예: 1860) */
   decade?: number
   /** 세기 (예: 19) */
@@ -109,6 +111,7 @@ export async function getAllEvents(
       )
     }
     set('domain', params?.domain)
+    set('types', params?.types)
     set('decade', params?.decade)
     set('century', params?.century)
     if (params?.includeSubEvents) url.searchParams.set('includeSubEvents', 'true')
@@ -145,6 +148,7 @@ export async function getEventsCount(
     | 'countryIds'
     | 'historicalCountryIds'
     | 'domain'
+    | 'types'
     | 'decade'
     | 'century'
     | 'createdSinceDays'
@@ -172,6 +176,7 @@ export async function getEventsCount(
       )
     }
     set('domain', params?.domain)
+    set('types', params?.types)
     set('decade', params?.decade)
     set('century', params?.century)
     set('createdSinceDays', params?.createdSinceDays)

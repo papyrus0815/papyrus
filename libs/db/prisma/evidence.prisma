@@ -77,6 +77,8 @@ enum ObservationSubjectType {
   EVENT_SIDE
   /// 사건 참여국 한 줄 (EventCountryRelation)
   EVENT_PARTICIPANT
+  /// 사건 진영에 투입된 부대 한 줄 (SideDeployedUnit) — 그 작전에서의 병력·전차
+  EVENT_SIDE_UNIT
   /// 현대 국가
   COUNTRY
   /// 역사 국가
@@ -93,8 +95,12 @@ enum CitationTargetType {
   OBSERVATION
   /// 사건
   EVENT
+  /// 사건 본문 섹션 (단락별 사료 각주)
+  EVENT_SECTION
   /// 사건 진영
   EVENT_SIDE
+  /// 사건 진영 투입 부대 한 줄
+  SIDE_DEPLOYED_UNIT
   /// 사건 참여국 한 줄
   EVENT_PARTICIPANT
   /// 사건 참여 인물 한 줄

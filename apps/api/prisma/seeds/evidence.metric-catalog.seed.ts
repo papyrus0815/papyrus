@@ -144,6 +144,15 @@ const METRICS: MetricSeed[] = [
     definition: '투입된 대포·화포 수.',
   },
   {
+    key: 'military.tanks',
+    name: '전차',
+    domain: 'military',
+    valueKind: COUNT,
+    aggregation: MAX,
+    unit: 'tank',
+    definition: '투입된 전차·돌격포 등 장갑 전투차량 수(장갑차·수송차량 제외). 정의가 다르면 메모에 밝힌다.',
+  },
+  {
     key: 'military.missiles_launched',
     name: '미사일·로켓 발사',
     domain: 'military',

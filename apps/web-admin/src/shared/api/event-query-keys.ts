@@ -63,4 +63,6 @@ export const eventKeys = {
   detail: (eventId: string) => ['event-detail', eventId] as const,
   /** 사건 단위 측정값(사건 + 참여국 줄 + 진영) */
   observations: (eventId: string) => ['event-detail', eventId, 'observations'] as const,
+  /** 사건 진영별 투입 부대(전투서열 ORBAT) */
+  sideUnits: (eventId: string) => ['event-detail', eventId, 'side-units'] as const,
 }

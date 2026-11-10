@@ -46,9 +46,6 @@ export interface FamilyTreePerson {
   adoptiveMotherId?: string | null
   // 카드 hover/확장용 메타
   originalName?: string | null
-  posthumousName?: string | null
-  templeName?: string | null
-  preEnthronementTitle?: string | null
   birthPlace?: string | null
   deathPlace?: string | null
   /** 가장 이른 재임 — 군주 카드 즉위국·재위 번호 + 국기 */

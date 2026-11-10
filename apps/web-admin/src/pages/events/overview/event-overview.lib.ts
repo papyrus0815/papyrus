@@ -778,8 +778,128 @@ export function rootCountriesPayload(
   ]
 }
 
-export const roleLabel = (role: string | null | undefined) =>
-  eventCountryRoleLabel(role) ?? '관여'
+export const roleLabel = (role: string | null | undefined, eventType?: string | null) =>
+  eventCountryRoleLabel(role, eventType) ?? '관여'
+
+export interface WarDeclarationEventItem {
+  eventId: string
+  title: string
+  dateLabel: string
+  sortKey: number
+  initiators: EventOverviewCountry[]
+  targets: EventOverviewCountry[]
+  others: EventOverviewCountry[]
+}
+
+export interface WarParticipationMilestone {
+  key: string
+  country: EventOverviewCountry
+  kind: 'join' | 'withdraw'
+  dateLabel: string
+  sortKey: number
+  reason: string | null
+  sideName: string | null
+}
+
+export interface WarDeclarationFlow {
+  declarations: WarDeclarationEventItem[]
+  milestones: WarParticipationMilestone[]
+}
+
+function structuredPointSortKey(point: {
+  era: 'BC' | 'AD'
+  year: number
+  month?: number | null
+  day?: number | null
+}): number {
+  const astroYear = point.era === 'BC' ? -(point.year - 1) : point.year
+  const monthPart = ((point.month ?? 1) - 1) / 12
+  const dayPart = ((point.day ?? 1) - 1) * DAY
+  return astroYear + monthPart + dayPart
+}
+
+function formatStructuredPointLabel(point: {
+  era: 'BC' | 'AD'
+  year: number
+  month?: number | null
+  day?: number | null
+}): string {
+  const yearText = point.era === 'BC' ? `기원전 ${point.year}` : String(point.year)
+  if (point.month && point.day) return `${yearText}.${point.month}.${point.day}`
+  if (point.month) return `${yearText}.${point.month}`
+  return `${yearText}년`
+}
+
+/**
+ * 전쟁 내 선전포고(WAR_DECLARATION) 하위 사건 흐름 + 상위 전쟁 참여국의 가담·이탈 시점 집계.
+ * 선전포고 연쇄(도미노)와 참전·이탈 순서를 시간순으로 한눈에 읽도록 구성한다.
+ */
+export function buildWarDeclarationFlow(
+  root: EventOverviewNode,
+  descendants: EventOverviewNode[],
+): WarDeclarationFlow {
+  const declarations: WarDeclarationEventItem[] = descendants
+    .filter((node) => node.type === 'WAR_DECLARATION')
+    .map((node) => {
+      const effective = withEffectivePrecision(node)
+      const span = toAxisSpan(effective)
+      const dateLabel = formatSpanLabel(effective) || '날짜 미상'
+      const sortKey = span?.from ?? Infinity
+      const initiators = node.countries.filter((country) => country.role === 'INITIATOR')
+      const targets = node.countries.filter((country) => country.role === 'TARGET')
+      const others = node.countries.filter(
+        (country) => country.role !== 'INITIATOR' && country.role !== 'TARGET',
+      )
+      return {
+        eventId: node.id,
+        title: node.title,
+        dateLabel,
+        sortKey,
+        initiators,
+        targets,
+        others,
+      }
+    })
+    .sort((left, right) => left.sortKey - right.sortKey || left.title.localeCompare(right.title))
+
+  const sideNameById = new Map(root.sides.map((side) => [side.id, side.name]))
+  const milestones: WarParticipationMilestone[] = []
+
+  for (const country of root.countries) {
+    const sideName = country.sideId ? (sideNameById.get(country.sideId) ?? null) : null
+    if (country.join) {
+      milestones.push({
+        key: `${country.key}:join`,
+        country,
+        kind: 'join',
+        dateLabel: formatStructuredPointLabel(country.join),
+        sortKey: structuredPointSortKey(country.join),
+        reason: country.joinReason?.trim() || country.roleDescription?.trim() || null,
+        sideName,
+      })
+    }
+    if (country.withdraw) {
+      milestones.push({
+        key: `${country.key}:withdraw`,
+        country,
+        kind: 'withdraw',
+        dateLabel: formatStructuredPointLabel(country.withdraw),
+        sortKey: structuredPointSortKey(country.withdraw),
+        reason: country.withdrawReason?.trim() || null,
+        sideName,
+      })
+    }
+  }
+
+  milestones.sort(
+    (left, right) =>
+      left.sortKey - right.sortKey ||
+      (left.kind === right.kind ? 0 : left.kind === 'join' ? -1 : 1) ||
+      left.country.name.localeCompare(right.country.name),
+  )
+
+  return { declarations, milestones }
+}
 
 // ─── 분포 ──────────────────────────────────────────────────────────────────
 
@@ -940,9 +1060,9 @@ export interface MetricRow {
   eventId: string
   eventTitle: string
   metricName: string
-  /** 누구의 수치인가 — 진영 이름 · 참여국 이름 · 사건 전체면 null */
+  /** 누구의 수치인가 — 진영 이름 · 참여국 이름 · 부대 이름 · 사건 전체면 null */
   subject: string | null
-  subjectKind: 'EVENT' | 'SIDE' | 'PARTICIPANT'
+  subjectKind: 'EVENT' | 'SIDE' | 'PARTICIPANT' | 'UNIT'
   /** 단위까지 붙인 표기 — 진영·수치 탭과 같은 포매터('약 13.9만명', '약 1.8만~2만명', '1,000명 이상') */
   display: string
 }

@@ -47,6 +47,16 @@ export class UpdateCountryDto {
   @IsOptional()
   capital?: string
 
+  @ApiProperty({ description: '위도 (수도 또는 중심부)', required: false })
+  @IsNumber()
+  @IsOptional()
+  latitude?: number | null
+
+  @ApiProperty({ description: '경도 (수도 또는 중심부)', required: false })
+  @IsNumber()
+  @IsOptional()
+  longitude?: number | null
+
   @ApiProperty({ description: '통화 ID', required: false })
   @IsString()
   @IsOptional()

@@ -283,8 +283,10 @@ export function DetailNarrative({
   )
   const narrativeFold = useSectionCollapse(
     'narrative',
-    shouldCollapseLongSection('narrative', backgroundLength(null, serverNarrative)),
+    /* 전개는 타임라인 흐름이 한눈에 보이도록 기본 상태를 '제목만 보기(collapsed)'로 둔다 */
+    serverNarrative.length > 0,
     narrativeChars,
+    narrativeRows.length > 0,
   )
   const aftermathFold = useSectionCollapse(
     'aftermath',
@@ -437,6 +439,8 @@ export function DetailNarrative({
                     collapsed={narrativeFold.collapsed}
                     bodyId="narrative-body"
                     onToggle={() => narrativeFold.setCollapsed((prev) => !prev)}
+                    collapsedLabel="본문 펼치기"
+                    expandedLabel="제목만 보기"
                   />
                 )}
                 {/* 전개가 여러 국면으로 커지면 묶음 사건이 되어 국면마다 하위 사건이 된다 */}
@@ -474,22 +478,24 @@ export function DetailNarrative({
               onMoveToSection={(index, kind) => moveBetween('narrative', index, kind)}
               collapsed={narrativeFold.collapsed}
               onRequestExpand={() => narrativeFold.setCollapsed(false)}
+              timeline
             />
             </div>
           )}
-          <CollapseEndBar
-            label="전개"
-            collapsed={narrativeFold.collapsed}
-            canCollapse={narrativeFold.canCollapse}
-            bodyId="narrative-body"
-            rowCount={narrativeRows.length}
-            chars={narrativeChars}
-            onExpand={() => narrativeFold.setCollapsed(false)}
-            onCollapseFromEnd={narrativeFold.collapseFromEnd}
-          />
+          {!narrativeFold.collapsed && (
+            <CollapseEndBar
+              label="전개"
+              collapsed={narrativeFold.collapsed}
+              canCollapse={narrativeFold.canCollapse}
+              bodyId="narrative-body"
+              rowCount={narrativeRows.length}
+              chars={narrativeChars}
+              onExpand={() => narrativeFold.setCollapsed(false)}
+              onCollapseFromEnd={narrativeFold.collapseFromEnd}
+            />
+          )}
           <AddSectionButton
             onClick={() => {
-              narrativeFold.setCollapsed(false)
               narrative.add()
             }}
             label="전개 단락 추가"

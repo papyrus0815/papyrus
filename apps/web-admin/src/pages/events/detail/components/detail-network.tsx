@@ -12,13 +12,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useBlocker } from 'react-router-dom'
 import { FiLayers, FiShuffle } from 'react-icons/fi'
 
-import { useEvents } from '@/entities/event/model'
+import { toParticipants, useEvents } from '@/entities/event/model'
 
 import {
   type EventLinkCandidate,
   type UpdateEventDto,
   updateEvent,
 } from '@/shared/api/events'
+import { isoToDateInput } from '@/shared/lib/iso-date'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
 import { notify } from '@/shared/ui/toast'
@@ -1062,10 +1063,15 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
             isOpen
             onClose={() => setCreateRelatedOpen(false)}
             initialDomain={event.domain}
+            initialCountries={toParticipants(
+              event.relatedCountries as Parameters<typeof toParticipants>[0],
+              event.relatedHistoricalCountries as Parameters<typeof toParticipants>[1],
+            )}
             initialRelatedEvents={[
               {
                 relatedEventId: event.id,
                 title: event.title,
+                dateLabel: isoToDateInput(event.endDate ?? event.startDate) || undefined,
                 relationType: 'LED_TO',
                 direction: 'incoming',
               },

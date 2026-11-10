@@ -154,6 +154,9 @@ model Climate {
   /// 썸네일
   thumbnailUrl String? @map("thumbnail_url") @db.VarChar(255)
 
+  //--- 관계 필드
+  eventContextLinks EventContextLink[] @relation("EventContextClimate")
+
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

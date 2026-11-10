@@ -50,17 +50,18 @@ export class CountryPrismaRepository implements CountryRepository {
             },
           })
     const entity = country ? this.toEntity(country) : null
-    if (entity) await this.attachLinkKinds(entity)
+    if (entity?.historicalCountries) {
+      await this.attachLinkKinds(entity.historicalCountries)
+    }
     return entity
   }
 
   /**
    * 연결된 역사국가에 표시용 관계 분류(linkKind)를 파생·부착한다.
-   * 상세 조회 경로에서만 호출 — 목록(findAll)은 무변경(추가 쿼리 회피).
+   * 상세 조회 및 연결 역사국가 목록 경로에서 호출 — 목록(findAll)은 무변경(추가 쿼리 회피).
    * ⚠️ 브리지 행 집합·스코프 합산과 무관한 표시 전용 파생이다.
    */
-  private async attachLinkKinds(country: Country): Promise<void> {
-    const items = country.historicalCountries
+  private async attachLinkKinds(items: HistoricalCountrySimple[]): Promise<void> {
     if (!items || items.length === 0) return
     const ids = items.map((item) => item.id)
     const [transitions, memberships] = await Promise.all([
@@ -121,7 +122,7 @@ export class CountryPrismaRepository implements CountryRepository {
         },
       })
 
-    return connections
+    const items: HistoricalCountrySimple[] = connections
       .map((conn) => ({
         id: conn.historicalCountry.id,
         name: conn.historicalCountry.name,
@@ -136,12 +137,14 @@ export class CountryPrismaRepository implements CountryRepository {
         endYear: conn.historicalCountry.endYear,
         endMonth: conn.historicalCountry.endMonth,
         endDay: conn.historicalCountry.endDay,
-        latitude: conn.historicalCountry.latitude
-          ? Number(conn.historicalCountry.latitude)
-          : null,
-        longitude: conn.historicalCountry.longitude
-          ? Number(conn.historicalCountry.longitude)
-          : null,
+        latitude:
+          conn.historicalCountry.latitude != null
+            ? Number(conn.historicalCountry.latitude)
+            : null,
+        longitude:
+          conn.historicalCountry.longitude != null
+            ? Number(conn.historicalCountry.longitude)
+            : null,
       }))
       .sort((a, b) => {
         // 시작일이 최근일수록 위로 (BC는 아래, AD는 최근 연도가 위).
@@ -159,6 +162,8 @@ export class CountryPrismaRepository implements CountryRepository {
           (b.startDay ?? 0) - (a.startDay ?? 0)
         )
       })
+    await this.attachLinkKinds(items)
+    return items
   }
 
   async create(data: Omit<Country, 'id'>): Promise<Country> {
@@ -173,6 +178,8 @@ export class CountryPrismaRepository implements CountryRepository {
         areaSqKm: data.areaSqKm,
         thumbnailUrl: data.thumbnailUrl,
         capital: data.capital,
+        latitude: data.latitude,
+        longitude: data.longitude,
         currencyId: data.currencyId,
         languageId: data.languageId,
         continentId: data.continentId,
@@ -203,6 +210,8 @@ export class CountryPrismaRepository implements CountryRepository {
           thumbnailUrl: data.thumbnailUrl,
         }),
         ...(data.capital !== undefined && { capital: data.capital }),
+        ...(data.latitude !== undefined && { latitude: data.latitude }),
+        ...(data.longitude !== undefined && { longitude: data.longitude }),
         ...(data.currencyId !== undefined && { currencyId: data.currencyId }),
         ...(data.languageId !== undefined && { languageId: data.languageId }),
         ...(data.continentId !== undefined && {
@@ -217,25 +226,71 @@ export class CountryPrismaRepository implements CountryRepository {
   }
 
   async delete(id: string): Promise<void> {
-    const [tenureCount, deptCount, psCount, scopeCount] = await Promise.all([
+    const directScopeWhere = { countryId: id, historicalCountryId: null }
+    const [
+      tenureCount,
+      deptCount,
+      psCount,
+      scopeCount,
+      electionCount,
+      partyCount,
+      districtCount,
+      lawCount,
+      militaryUnitCount,
+      orgCount,
+      personGroupCount,
+      glossaryCount,
+    ] = await Promise.all([
       this.prisma.governmentPositionTenure.count({
-        where: { countryId: id, historicalCountryId: null },
+        where: directScopeWhere,
       }),
       this.prisma.administrationDepartment.count({
-        where: { countryId: id, historicalCountryId: null },
+        where: directScopeWhere,
       }),
       this.prisma.politicalSystem.count({
-        where: { countryId: id, historicalCountryId: null },
+        where: directScopeWhere,
       }),
       this.prisma.governmentPositionDefinitionScope.count({
-        where: { countryId: id, historicalCountryId: null },
+        where: directScopeWhere,
       }),
+      this.prisma.election?.count
+        ? this.prisma.election.count({ where: directScopeWhere })
+        : Promise.resolve(0),
+      this.prisma.politicalParty?.count
+        ? this.prisma.politicalParty.count({ where: directScopeWhere })
+        : Promise.resolve(0),
+      this.prisma.electoralDistrict?.count
+        ? this.prisma.electoralDistrict.count({ where: directScopeWhere })
+        : Promise.resolve(0),
+      this.prisma.law?.count
+        ? this.prisma.law.count({ where: directScopeWhere })
+        : Promise.resolve(0),
+      this.prisma.militaryUnit?.count
+        ? this.prisma.militaryUnit.count({ where: directScopeWhere })
+        : Promise.resolve(0),
+      this.prisma.organization?.count
+        ? this.prisma.organization.count({ where: directScopeWhere })
+        : Promise.resolve(0),
+      this.prisma.personGroup?.count
+        ? this.prisma.personGroup.count({ where: directScopeWhere })
+        : Promise.resolve(0),
+      this.prisma.glossaryTerm?.count
+        ? this.prisma.glossaryTerm.count({ where: directScopeWhere })
+        : Promise.resolve(0),
     ])
     const refs: string[] = []
     if (tenureCount > 0) refs.push(`공직 재임 ${tenureCount}건`)
     if (deptCount > 0) refs.push(`행정부처 ${deptCount}건`)
     if (psCount > 0) refs.push(`정체(정치체제) ${psCount}건`)
     if (scopeCount > 0) refs.push(`직위 스코프 ${scopeCount}건`)
+    if (electionCount > 0) refs.push(`선거 ${electionCount}건`)
+    if (partyCount > 0) refs.push(`정당 ${partyCount}건`)
+    if (districtCount > 0) refs.push(`선거구 ${districtCount}건`)
+    if (lawCount > 0) refs.push(`법령 ${lawCount}건`)
+    if (militaryUnitCount > 0) refs.push(`군부대 ${militaryUnitCount}건`)
+    if (orgCount > 0) refs.push(`조직 ${orgCount}건`)
+    if (personGroupCount > 0) refs.push(`인물 묶음 ${personGroupCount}건`)
+    if (glossaryCount > 0) refs.push(`용어집 ${glossaryCount}건`)
     if (refs.length > 0) {
       throw new ConflictException(
         `해당 현대 국가에 직접 귀속된 기록(${refs.join(', ')})이 존재하여 삭제할 수 없습니다. 관련 기록을 먼저 정리하거나 다른 국가로 이전해 주세요.`,
@@ -268,11 +323,88 @@ export class CountryPrismaRepository implements CountryRepository {
           where: dualFilledWhere,
           data: { countryId: null },
         }),
-        tx.governmentPositionDefinitionScope.updateMany({
+        tx.election?.updateMany
+          ? tx.election.updateMany({
+              where: dualFilledWhere,
+              data: { countryId: null },
+            })
+          : Promise.resolve(),
+        tx.politicalParty?.updateMany
+          ? tx.politicalParty.updateMany({
+              where: dualFilledWhere,
+              data: { countryId: null },
+            })
+          : Promise.resolve(),
+        tx.electoralDistrict?.updateMany
+          ? tx.electoralDistrict.updateMany({
+              where: dualFilledWhere,
+              data: { countryId: null },
+            })
+          : Promise.resolve(),
+        tx.law?.updateMany
+          ? tx.law.updateMany({
+              where: dualFilledWhere,
+              data: { countryId: null },
+            })
+          : Promise.resolve(),
+        tx.militaryUnit?.updateMany
+          ? tx.militaryUnit.updateMany({
+              where: dualFilledWhere,
+              data: { countryId: null },
+            })
+          : Promise.resolve(),
+        tx.organization?.updateMany
+          ? tx.organization.updateMany({
+              where: dualFilledWhere,
+              data: { countryId: null },
+            })
+          : Promise.resolve(),
+        tx.personGroup?.updateMany
+          ? tx.personGroup.updateMany({
+              where: dualFilledWhere,
+              data: { countryId: null },
+            })
+          : Promise.resolve(),
+        tx.glossaryTerm?.updateMany
+          ? tx.glossaryTerm.updateMany({
+              where: dualFilledWhere,
+              data: { countryId: null },
+            })
+          : Promise.resolve(),
+      ])
+
+      if (tx.governmentPositionDefinitionScope.findMany) {
+        const dualScopes = await tx.governmentPositionDefinitionScope.findMany({
+          where: dualFilledWhere,
+          select: { id: true, definitionId: true, historicalCountryId: true },
+        })
+        for (const s of dualScopes) {
+          const collision = await tx.governmentPositionDefinitionScope.findFirst({
+            where: {
+              definitionId: s.definitionId,
+              countryId: null,
+              historicalCountryId: s.historicalCountryId,
+              id: { not: s.id },
+            },
+            select: { id: true },
+          })
+          if (collision) {
+            await tx.governmentPositionDefinitionScope.delete({
+              where: { id: s.id },
+            })
+          } else {
+            await tx.governmentPositionDefinitionScope.update({
+              where: { id: s.id },
+              data: { countryId: null },
+            })
+          }
+        }
+      } else {
+        await tx.governmentPositionDefinitionScope.updateMany({
           where: dualFilledWhere,
           data: { countryId: null },
-        }),
-      ])
+        })
+      }
 
       await tx.country.delete({
         where: { id },
@@ -287,24 +419,89 @@ export class CountryPrismaRepository implements CountryRepository {
         })
         if (remaining.length === 1 && remaining[0].modernCountryId) {
           const nextCountryId = remaining[0].modernCountryId
+          const nullCountryWhere = { historicalCountryId: hcId, countryId: null }
           await Promise.all([
             tx.governmentPositionTenure.updateMany({
-              where: { historicalCountryId: hcId, countryId: null },
+              where: nullCountryWhere,
               data: { countryId: nextCountryId },
             }),
             tx.administrationDepartment.updateMany({
-              where: { historicalCountryId: hcId, countryId: null },
+              where: nullCountryWhere,
               data: { countryId: nextCountryId },
             }),
             tx.politicalSystem.updateMany({
-              where: { historicalCountryId: hcId, countryId: null },
+              where: nullCountryWhere,
               data: { countryId: nextCountryId },
             }),
-            tx.governmentPositionDefinitionScope.updateMany({
-              where: { historicalCountryId: hcId, countryId: null },
-              data: { countryId: nextCountryId },
-            }),
+            tx.electoralDistrict?.updateMany
+              ? tx.electoralDistrict.updateMany({
+                  where: nullCountryWhere,
+                  data: { countryId: nextCountryId },
+                })
+              : Promise.resolve(),
+            tx.law?.updateMany
+              ? tx.law.updateMany({
+                  where: nullCountryWhere,
+                  data: { countryId: nextCountryId },
+                })
+              : Promise.resolve(),
+            tx.militaryUnit?.updateMany
+              ? tx.militaryUnit.updateMany({
+                  where: nullCountryWhere,
+                  data: { countryId: nextCountryId },
+                })
+              : Promise.resolve(),
+            tx.organization?.updateMany
+              ? tx.organization.updateMany({
+                  where: nullCountryWhere,
+                  data: { countryId: nextCountryId },
+                })
+              : Promise.resolve(),
+            tx.personGroup?.updateMany
+              ? tx.personGroup.updateMany({
+                  where: nullCountryWhere,
+                  data: { countryId: nextCountryId },
+                })
+              : Promise.resolve(),
+            tx.glossaryTerm?.updateMany
+              ? tx.glossaryTerm.updateMany({
+                  where: nullCountryWhere,
+                  data: { countryId: nextCountryId },
+                })
+              : Promise.resolve(),
           ])
+          if (tx.governmentPositionDefinitionScope.findMany) {
+            const scopes = await tx.governmentPositionDefinitionScope.findMany({
+              where: nullCountryWhere,
+              select: { id: true, definitionId: true },
+            })
+            for (const s of scopes) {
+              const collision = await tx.governmentPositionDefinitionScope.findFirst({
+                where: {
+                  definitionId: s.definitionId,
+                  countryId: nextCountryId,
+                  historicalCountryId: hcId,
+                  id: { not: s.id },
+                },
+                select: { id: true },
+              })
+              if (collision) {
+                await tx.governmentPositionDefinitionScope.delete({
+                  where: { id: s.id },
+                })
+              } else {
+                await tx.governmentPositionDefinitionScope.update({
+                  where: { id: s.id },
+                  data: { countryId: nextCountryId },
+                })
+              }
+            }
+          } else {
+            await tx.governmentPositionDefinitionScope.updateMany({
+              where: nullCountryWhere,
+              data: { countryId: nextCountryId },
+            })
+          }
         }
       }
     })
@@ -326,12 +523,14 @@ export class CountryPrismaRepository implements CountryRepository {
         endYear: conn.historicalCountry.endYear,
         endMonth: conn.historicalCountry.endMonth,
         endDay: conn.historicalCountry.endDay,
-        latitude: conn.historicalCountry.latitude
-          ? Number(conn.historicalCountry.latitude)
-          : null,
-        longitude: conn.historicalCountry.longitude
-          ? Number(conn.historicalCountry.longitude)
-          : null,
+        latitude:
+          conn.historicalCountry.latitude != null
+            ? Number(conn.historicalCountry.latitude)
+            : null,
+        longitude:
+          conn.historicalCountry.longitude != null
+            ? Number(conn.historicalCountry.longitude)
+            : null,
       }))
       .sort((a: any, b: any) => {
         // 시작일이 최근일수록 위로 (BC는 음수, AD는 양수로 환산해 비교)
@@ -356,11 +555,11 @@ export class CountryPrismaRepository implements CountryRepository {
       flagEmoji: data.flagEmoji,
       isoCode: data.isoCode,
       population: data.population,
-      areaSqKm: data.areaSqKm ? Number(data.areaSqKm) : null,
+      areaSqKm: data.areaSqKm != null ? Number(data.areaSqKm) : null,
       thumbnailUrl: data.thumbnailUrl,
       capital: data.capital,
-      latitude: data.latitude ? Number(data.latitude) : null,
-      longitude: data.longitude ? Number(data.longitude) : null,
+      latitude: data.latitude != null ? Number(data.latitude) : null,
+      longitude: data.longitude != null ? Number(data.longitude) : null,
       currencyId: data.currencyId,
       languageId: data.languageId,
       continentId: data.continentId,

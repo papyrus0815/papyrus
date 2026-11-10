@@ -87,7 +87,6 @@ export function searchHaystack(person: PickerPerson): string {
     getPersonDisplayName(person, { countryDefaultNameDisplayOrder: 'korean' }),
     person.originalName ?? '',
     person.regnalName ?? '',
-    person.templeName ?? '',
     person.birthYear ? String(person.birthYear) : '',
     person.deathYear ? String(person.deathYear) : '',
   ]

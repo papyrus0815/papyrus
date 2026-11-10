@@ -1,0 +1,763 @@
+import { useMemo } from 'react'
+
+import { useQuery } from '@tanstack/react-query'
+import { FiArrowRight, FiCalendar, FiMapPin, FiShield, FiUser, FiUsers } from 'react-icons/fi'
+import { Link, useSearchParams } from 'react-router-dom'
+import styled from 'styled-components'
+
+import { SIDE_UNIT_ROLE_LABEL } from '@/pages/events/detail/components/side-orbat.lib'
+import { SIDE_OUTCOME_LABEL } from '@/pages/events/detail/components/side-outcome'
+import { militaryUnitApi } from '@/shared/api/military-unit'
+import { formatSpanLabel } from '@/pages/events/detail/components/development-timeline.lib'
+import { militaryUnitTypeLabelKo } from '@/shared/lib/military-unit-type-label'
+import { pathKeys } from '@/shared/router'
+
+const BRANCH_LABELS: Record<string, string> = {
+  ARMY: '육군',
+  NAVY: '해군',
+  AIR_FORCE: '공군',
+  MARINE_CORPS: '해병대',
+  COAST_GUARD: '해안경비대',
+  SPACE_FORCE: '우주군',
+  JOINT: '합동',
+  OTHER: '기타',
+}
+
+interface UnitDetailResponse {
+  id: string
+  name: string
+  unitType?: string | null
+  branch?: string | null
+  nickname?: string | null
+  motto?: string | null
+  garrison?: string | null
+  strength?: string | null
+  description?: string | null
+  establishedDate?: string | null
+  disbandedDate?: string | null
+  countryId?: string | null
+  historicalCountryId?: string | null
+  country?: { id: string; name: string } | null
+  historicalCountry?: { id: string; name: string } | null
+  administrationDepartment?: {
+    id: string
+    name: string
+    abbreviation?: string | null
+  } | null
+  parentUnit?: {
+    id: string
+    name: string
+    unitType?: string | null
+  } | null
+  subUnits?: Array<{
+    id: string
+    name: string
+    unitType?: string | null
+    branch?: string | null
+  }>
+  commanders?: Array<{
+    id: string
+    personId: string
+    rank?: string | null
+    role?: string | null
+    startDate?: string | null
+    endDate?: string | null
+    isCurrent?: boolean | null
+    person?: {
+      id: string
+      name: string
+      surname?: string | null
+    } | null
+  }>
+  sideDeployedUnits?: Array<{
+    id: string
+    role?: string | null
+    note?: string | null
+    side?: {
+      id: string
+      name: string
+      color?: string | null
+      outcome?: string | null
+      event?: {
+        id: string
+        title: string
+        startDate?: string | null
+        startDatePrecision?: string | null
+        endDate?: string | null
+        endDatePrecision?: string | null
+        domain?: string | null
+        type?: string | null
+      } | null
+    } | null
+  }>
+  navalVessels?: Array<{
+    id: string
+    name: string
+    vesselType?: string | null
+    vesselClass?: string | null
+  }>
+}
+
+export function MilitaryUnitDetailSection() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const selectedUnitId = searchParams.get('unitId')
+
+  const allUnitsQuery = useQuery({
+    queryKey: ['military-units', 'all-overview'],
+    queryFn: () => militaryUnitApi.getAll(),
+    staleTime: 60_000,
+  })
+
+  const detailQuery = useQuery({
+    queryKey: ['military-unit', 'detail', selectedUnitId],
+    queryFn: () =>
+      militaryUnitApi.getById(selectedUnitId!) as unknown as Promise<UnitDetailResponse>,
+    enabled: Boolean(selectedUnitId),
+    staleTime: 30_000,
+  })
+
+  const selectUnit = (unitId: string) => {
+    const next = new URLSearchParams(searchParams)
+    next.set('unitId', unitId)
+    setSearchParams(next)
+  }
+
+  const allUnits = useMemo(
+    () => (allUnitsQuery.data ?? []) as UnitDetailResponse[],
+    [allUnitsQuery.data],
+  )
+
+  if (!selectedUnitId) {
+    return (
+      <PageWrap>
+        <HeroCard>
+          <HeroTopRow>
+            <HeroTitleGroup>
+              <BadgeRow>
+                <PrimaryBadge>
+                  <FiShield size={12} /> 군사 부대 편제 · 전투서열 도메인
+                </PrimaryBadge>
+              </BadgeRow>
+              <HeroTitle>군사 부대 총람 ({allUnits.length}개 부대)</HeroTitle>
+              <HeroSubtitle>
+                좌측 목록이나 아래 카드에서 부대를 선택하면 상급·예하 편제 트리, 역대 지휘관 임기, 참전 작전·전투 타임라인을 한눈에 볼 수 있습니다.
+              </HeroSubtitle>
+            </HeroTitleGroup>
+          </HeroTopRow>
+        </HeroCard>
+
+        {allUnits.length === 0 ? (
+          <EmptyCard>
+            아직 등록된 군사 부대가 없습니다. 국가 상세 → 행정조직 → 군사 탭에서 부대를 등록하세요.
+          </EmptyCard>
+        ) : (
+          <UnitGrid>
+            {allUnits.slice(0, 48).map((unitItem) => {
+              const countryName =
+                unitItem.historicalCountry?.name ?? unitItem.country?.name ?? '국가 미지정'
+              const typeLabel = unitItem.unitType
+                ? militaryUnitTypeLabelKo(unitItem.unitType)
+                : null
+              return (
+                <UnitSummaryCard
+                  key={unitItem.id}
+                  type="button"
+                  onClick={() => selectUnit(unitItem.id)}
+                >
+                  <UnitSummaryTop>
+                    {typeLabel && <SmallBadge>{typeLabel}</SmallBadge>}
+                    <CountryTag>{countryName}</CountryTag>
+                  </UnitSummaryTop>
+                  <UnitSummaryName>{unitItem.name}</UnitSummaryName>
+                  {unitItem.nickname && <UnitSummaryNick>“{unitItem.nickname}”</UnitSummaryNick>}
+                </UnitSummaryCard>
+              )
+            })}
+          </UnitGrid>
+        )}
+      </PageWrap>
+    )
+  }
+
+  if (detailQuery.isLoading) {
+    return (
+      <PageWrap>
+        <EmptyCard>부대 상세 정보를 불러오는 중입니다…</EmptyCard>
+      </PageWrap>
+    )
+  }
+
+  const unit = detailQuery.data
+  if (!unit) {
+    return (
+      <PageWrap>
+        <EmptyCard>선택한 부대를 찾을 수 없습니다.</EmptyCard>
+      </PageWrap>
+    )
+  }
+
+  const countryName = unit.historicalCountry?.name ?? unit.country?.name ?? null
+  const countryIdForLink = unit.country?.id ?? unit.historicalCountry?.id ?? null
+  const unitTypeLabel = unit.unitType ? militaryUnitTypeLabelKo(unit.unitType) : null
+  const branchLabel = unit.branch ? (BRANCH_LABELS[unit.branch] ?? unit.branch) : null
+  const subUnits = unit.subUnits ?? []
+  const commanders = unit.commanders ?? []
+  const deployments = (unit.sideDeployedUnits ?? []).filter((dep) => dep.side?.event)
+  const vessels = unit.navalVessels ?? []
+
+  return (
+    <PageWrap>
+      <HeroCard>
+        <HeroTopRow>
+          <HeroTitleGroup>
+            <BadgeRow>
+              {unitTypeLabel && <PrimaryBadge>{unitTypeLabel}</PrimaryBadge>}
+              {branchLabel && <SecondaryBadge>{branchLabel}</SecondaryBadge>}
+              {countryName && countryIdForLink && (
+                <CountryLink to={pathKeys.countryGovernment(countryIdForLink)}>
+                  🏳️ {countryName}
+                </CountryLink>
+              )}
+              {unit.administrationDepartment && (
+                <SecondaryBadge>
+                  🏛️ {unit.administrationDepartment.name}
+                  {unit.administrationDepartment.abbreviation
+                    ? ` (${unit.administrationDepartment.abbreviation})`
+                    : ''}
+                </SecondaryBadge>
+              )}
+            </BadgeRow>
+            <HeroTitle>
+              {unit.name}
+              {unit.nickname && <NicknameSpan> “{unit.nickname}”</NicknameSpan>}
+            </HeroTitle>
+            {unit.motto && <HeroSubtitle>표어: {unit.motto}</HeroSubtitle>}
+          </HeroTitleGroup>
+        </HeroTopRow>
+
+        <MetaRow>
+          {(unit.establishedDate || unit.disbandedDate) && (
+            <MetaItem>
+              <FiCalendar size={13} />
+              <span>
+                존속:{' '}
+                {unit.establishedDate ? unit.establishedDate.slice(0, 10) : '?'} ~{' '}
+                {unit.disbandedDate ? unit.disbandedDate.slice(0, 10) : '현재'}
+              </span>
+            </MetaItem>
+          )}
+          {unit.garrison && (
+            <MetaItem>
+              <FiMapPin size={13} />
+              <span>주둔지: {unit.garrison}</span>
+            </MetaItem>
+          )}
+          {unit.strength && (
+            <MetaItem>
+              <FiUsers size={13} />
+              <span>편제 규모: {unit.strength}</span>
+            </MetaItem>
+          )}
+        </MetaRow>
+
+        {unit.description && <DescriptionBox>{unit.description}</DescriptionBox>}
+      </HeroCard>
+
+      {/* 1. 편제 계통 (상급 부대 → 현재 부대 → 예하 부대) */}
+      <SectionCard>
+        <SectionTitle>편제 계통 (Command Hierarchy)</SectionTitle>
+        <HierarchyFlow>
+          {unit.parentUnit ? (
+            <HierarchyNodeBtn
+              type="button"
+              onClick={() => selectUnit(unit.parentUnit!.id)}
+              title="상급 부대 상세로 이동"
+            >
+              <SmallBadge>
+                {unit.parentUnit.unitType
+                  ? militaryUnitTypeLabelKo(unit.parentUnit.unitType)
+                  : '상급 부대'}
+              </SmallBadge>
+              <strong>{unit.parentUnit.name}</strong>
+            </HierarchyNodeBtn>
+          ) : (
+            <HierarchyRootNote>최상위 편제 (상급 부대 없음)</HierarchyRootNote>
+          )}
+
+          <FiArrowRight size={14} />
+
+          <CurrentUnitPill>
+            {unitTypeLabel && <SmallBadge>{unitTypeLabel}</SmallBadge>}
+            <strong>{unit.name}</strong>
+          </CurrentUnitPill>
+        </HierarchyFlow>
+
+        {subUnits.length > 0 && (
+          <SubUnitSection>
+            <SubSectionLabel>예하 편제 ({subUnits.length}개 부대)</SubSectionLabel>
+            <UnitGrid>
+              {subUnits.map((sub) => (
+                <UnitSummaryCard
+                  key={sub.id}
+                  type="button"
+                  onClick={() => selectUnit(sub.id)}
+                >
+                  <UnitSummaryTop>
+                    {sub.unitType && (
+                      <SmallBadge>{militaryUnitTypeLabelKo(sub.unitType)}</SmallBadge>
+                    )}
+                  </UnitSummaryTop>
+                  <UnitSummaryName>{sub.name}</UnitSummaryName>
+                </UnitSummaryCard>
+              ))}
+            </UnitGrid>
+          </SubUnitSection>
+        )}
+      </SectionCard>
+
+      {/* 2. 역대 지휘관 */}
+      <SectionCard>
+        <SectionTitle>역대 지휘관 ({commanders.length}명)</SectionTitle>
+        {commanders.length === 0 ? (
+          <EmptyNote>등록된 지휘관 임기 기록이 없습니다.</EmptyNote>
+        ) : (
+          <Table>
+            <thead>
+              <tr>
+                <th>지휘관</th>
+                <th>계급 · 직책</th>
+                <th>재임 기간</th>
+              </tr>
+            </thead>
+            <tbody>
+              {commanders.map((cmd) => {
+                const fullName = cmd.person
+                  ? [cmd.person.name, cmd.person.surname].filter(Boolean).join(' ')
+                  : '인물 미상'
+                const startStr = cmd.startDate ? cmd.startDate.slice(0, 10) : '?'
+                const endStr = cmd.endDate
+                  ? cmd.endDate.slice(0, 10)
+                  : cmd.isCurrent
+                    ? '현임'
+                    : '?'
+                return (
+                  <tr key={cmd.id}>
+                    <td>
+                      <PersonLink to={pathKeys.personsTimelineDetail(cmd.personId)}>
+                        <FiUser size={12} /> {fullName}
+                      </PersonLink>
+                    </td>
+                    <td>{[cmd.rank, cmd.role].filter(Boolean).join(' · ') || '지휘관'}</td>
+                    <td>
+                      {startStr} ~ {endStr}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </Table>
+        )}
+      </SectionCard>
+
+      {/* 3. 참전 작전·전투 타임라인 (SideDeployedUnit 역방향 연결) */}
+      <SectionCard>
+        <SectionTitle>참전 작전 · 전투 타임라인 ({deployments.length}건)</SectionTitle>
+        {deployments.length === 0 ? (
+          <EmptyNote>
+            아직 이 부대가 투입된 사건·작전이 없습니다. 사건 상세 → 진영 → 전투서열(ORBAT)에서 이 부대를 투입하면 자동으로 여기에 집계됩니다.
+          </EmptyNote>
+        ) : (
+          <Table>
+            <thead>
+              <tr>
+                <th>시기</th>
+                <th>작전 · 전투(사건)</th>
+                <th>소속 진영 · 결과</th>
+                <th>작전 역할 · 비고</th>
+              </tr>
+            </thead>
+            <tbody>
+              {deployments.map((dep) => {
+                const ev = dep.side!.event!
+                const side = dep.side!
+                const dateLabel =
+                  formatSpanLabel({
+                    id: ev.id,
+                    title: ev.title,
+                    startDate: ev.startDate,
+                    startDatePrecision: ev.startDatePrecision,
+                    endDate: ev.endDate,
+                    endDatePrecision: ev.endDatePrecision,
+                  }) || '날짜 미상'
+                const roleLabel =
+                  dep.role && dep.role in SIDE_UNIT_ROLE_LABEL
+                    ? SIDE_UNIT_ROLE_LABEL[dep.role as keyof typeof SIDE_UNIT_ROLE_LABEL]
+                    : null
+                const outcomeLabel =
+                  side.outcome && side.outcome in SIDE_OUTCOME_LABEL
+                    ? SIDE_OUTCOME_LABEL[side.outcome as keyof typeof SIDE_OUTCOME_LABEL]
+                    : null
+                return (
+                  <tr key={dep.id}>
+                    <td>{dateLabel}</td>
+                    <td>
+                      <EventLink to={pathKeys.events.detail(ev.id)}>{ev.title}</EventLink>
+                    </td>
+                    <td>
+                      <strong>{side.name}</strong>
+                      {outcomeLabel ? ` (${outcomeLabel})` : ''}
+                    </td>
+                    <td>
+                      {[roleLabel, dep.note].filter(Boolean).join(' — ') || '—'}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </Table>
+        )}
+      </SectionCard>
+
+      {vessels.length > 0 && (
+        <SectionCard>
+          <SectionTitle>배속 함정 ({vessels.length}척)</SectionTitle>
+          <UnitGrid>
+            {vessels.map((vessel) => (
+              <VesselCard key={vessel.id}>
+                <SmallBadge>{vessel.vesselType ?? '함정'}</SmallBadge>
+                <strong>{vessel.name}</strong>
+                {vessel.vesselClass && <CountryTag>{vessel.vesselClass}</CountryTag>}
+              </VesselCard>
+            ))}
+          </UnitGrid>
+        </SectionCard>
+      )}
+    </PageWrap>
+  )
+}
+
+const PageWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  max-width: 1120px;
+  margin: 0 auto;
+`
+
+const HeroCard = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 24px;
+  border-radius: 12px;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+`
+
+const HeroTopRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+`
+
+const HeroTitleGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const BadgeRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+`
+
+const PrimaryBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  background: ${({ theme }) => `${theme.colors.primary}20`};
+  color: ${({ theme }) => theme.colors.primary};
+`
+
+const SecondaryBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const CountryLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-decoration: none;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'};
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  &:hover {
+    text-decoration: underline;
+  }
+`
+
+const HeroTitle = styled.h1`
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const NicknameSpan = styled.span`
+  font-size: 16px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const HeroSubtitle = styled.p`
+  margin: 0;
+  font-size: 13.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  line-height: 1.5;
+`
+
+const MetaRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const MetaItem = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+`
+
+const DescriptionBox = styled.p`
+  margin: 4px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.default};
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: pre-line;
+`
+
+const SectionCard = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 22px;
+  border-radius: 12px;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+`
+
+const SectionTitle = styled.h2`
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const HierarchyFlow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+`
+
+const HierarchyNodeBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
+const HierarchyRootNote = styled.span`
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const CurrentUnitPill = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 2px solid ${({ theme }) => theme.colors.primary};
+  background: ${({ theme }) => `${theme.colors.primary}12`};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 13px;
+`
+
+const SubUnitSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+`
+
+const SubSectionLabel = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const UnitGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+`
+
+const UnitSummaryCard = styled.button`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
+const UnitSummaryTop = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 6px;
+`
+
+const SmallBadge = styled.span`
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const CountryTag = styled.span`
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const UnitSummaryName = styled.strong`
+  font-size: 13.5px;
+  font-weight: 700;
+`
+
+const UnitSummaryNick = styled.span`
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const Table = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th,
+  td {
+    padding: 8px 10px;
+    text-align: left;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.default};
+  }
+
+  th {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+const PersonLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  text-decoration: none;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+    text-decoration: underline;
+  }
+`
+
+const EventLink = styled(Link)`
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.primary};
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+`
+
+const EmptyCard = styled.div`
+  padding: 32px;
+  border-radius: 12px;
+  text-align: center;
+  font-size: 14px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+`
+
+const EmptyNote = styled.p`
+  margin: 0;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const VesselCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  font-size: 13px;
+`

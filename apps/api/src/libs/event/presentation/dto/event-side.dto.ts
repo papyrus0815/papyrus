@@ -72,6 +72,36 @@ export class EventSideInputDto {
   @IsString()
   @MaxLength(1000)
   outcomeNote?: string | null
+
+  @ApiProperty({ required: false, nullable: true, description: '진영 작전 목표' })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  objective?: string | null
+
+  @ApiProperty({ required: false, nullable: true, description: '진영 전략·작전 계획' })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  strategy?: string | null
+
+  @ApiProperty({ required: false, nullable: true, description: '진영 전술·교리' })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  tactics?: string | null
+
+  @ApiProperty({ required: false, nullable: true, description: '진영 첩보·정보 판단' })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  intelligence?: string | null
+
+  @ApiProperty({ required: false, nullable: true, description: '진영 보급·병참' })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  logistics?: string | null
 }
 
 /** 진영 목록 동기화 — 배열 순서가 표시 순서. 빠진 진영은 지워지고 소속만 풀린다 */

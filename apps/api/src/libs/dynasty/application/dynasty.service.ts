@@ -1,10 +1,15 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common'
 import { AttachmentOwner, Era } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
+import {
+  structuredDateEndKey,
+  structuredDateKey,
+} from '../../person/domain/structured-date.util'
 import { UploadService } from '../../shared/upload/upload.service'
 import { DynastyRepository } from '../infrastructure/dynasty.repository'
 import {
@@ -101,6 +106,21 @@ export class DynastyService {
     motto?: string | null
   }) {
     const { thumbnailUrl, ...rest } = data
+    this.assertValidPeriod(
+      {
+        era: rest.startEra,
+        year: rest.startYear,
+        month: rest.startMonth,
+        day: rest.startDay,
+      },
+      {
+        era: rest.endEra,
+        year: rest.endYear,
+        month: rest.endMonth,
+        day: rest.endDay,
+      },
+      '가문(왕조)',
+    )
     const fields = {
       ...rest,
       startReason: clampReason(rest.startReason),
@@ -158,8 +178,23 @@ export class DynastyService {
       motto?: string | null
     },
   ) {
-    await this.findById(id)
+    const current = await this.findById(id)
     const { thumbnailUrl, ...rest } = data
+    this.assertValidPeriod(
+      {
+        era: rest.startEra !== undefined ? rest.startEra : current.startEra,
+        year: rest.startYear !== undefined ? rest.startYear : current.startYear,
+        month: rest.startMonth !== undefined ? rest.startMonth : current.startMonth,
+        day: rest.startDay !== undefined ? rest.startDay : current.startDay,
+      },
+      {
+        era: rest.endEra !== undefined ? rest.endEra : current.endEra,
+        year: rest.endYear !== undefined ? rest.endYear : current.endYear,
+        month: rest.endMonth !== undefined ? rest.endMonth : current.endMonth,
+        day: rest.endDay !== undefined ? rest.endDay : current.endDay,
+      },
+      '가문(왕조)',
+    )
     const fields = {
       ...rest,
       startReason: clampReason(rest.startReason),
@@ -208,6 +243,30 @@ export class DynastyService {
     }
   }
 
+  private assertValidPeriod(
+    start: {
+      era?: Era | string | null
+      year?: number | null
+      month?: number | null
+      day?: number | null
+    },
+    end: {
+      era?: Era | string | null
+      year?: number | null
+      month?: number | null
+      day?: number | null
+    },
+    label = '가문(왕조)',
+  ): void {
+    const startKey = structuredDateKey(start.era, start.year, start.month, start.day)
+    const endKey = structuredDateEndKey(end.era ?? start.era, end.year, end.month, end.day)
+    if (startKey != null && endKey != null && startKey > endKey) {
+      throw new BadRequestException(
+        `${label}의 종료 시점이 시작 시점보다 앞설 수 없습니다.`,
+      )
+    }
+  }
+
   /**
    * 가문 상세 — 기본 필드 + 통치 국가(역사·현대) + 구성원 미리보기 포함
    */
@@ -243,9 +302,25 @@ export class DynastyService {
       }),
     ])
 
+    const ruleSortKey = (r: {
+      startEra: Era | string | null
+      startYear: number | null
+      startMonth: number | null
+      startDay: number | null
+    }) =>
+      structuredDateKey(r.startEra, r.startYear, r.startMonth, r.startDay) ??
+      Number.POSITIVE_INFINITY
+
+    const sortedHistoricalRules = [...historicalRules].sort(
+      (a, b) => ruleSortKey(a) - ruleSortKey(b),
+    )
+    const sortedModernRules = [...modernRules].sort(
+      (a, b) => ruleSortKey(a) - ruleSortKey(b),
+    )
+
     return {
       ...base,
-      historicalRules: historicalRules.map((r) => ({
+      historicalRules: sortedHistoricalRules.map((r) => ({
         id: r.id,
         historicalCountryId: r.historicalCountryId,
         historicalCountryName: r.historicalCountry.name,
@@ -261,7 +336,7 @@ export class DynastyService {
         endReason: r.endReason,
         notes: r.notes,
       })),
-      modernRules: modernRules.map((r) => ({
+      modernRules: sortedModernRules.map((r) => ({
         id: r.id,
         countryId: r.countryId,
         countryName: r.country.name,
@@ -301,6 +376,31 @@ export class DynastyService {
     data: RuleMutableFields,
   ) {
     await this.findById(dynastyId)
+    if (this.prisma.dynastyRule?.findFirst) {
+      const existing = await this.prisma.dynastyRule.findFirst({
+        where: { id: ruleId, dynastyId },
+      })
+      if (!existing) {
+        throw new NotFoundException(
+          `Dynasty rule ${ruleId} not found under dynasty ${dynastyId}`,
+        )
+      }
+      this.assertValidPeriod(
+        {
+          era: data.startEra !== undefined ? data.startEra : existing.startEra,
+          year: data.startYear !== undefined ? data.startYear : existing.startYear,
+          month: data.startMonth !== undefined ? data.startMonth : existing.startMonth,
+          day: data.startDay !== undefined ? data.startDay : existing.startDay,
+        },
+        {
+          era: data.endEra !== undefined ? data.endEra : existing.endEra,
+          year: data.endYear !== undefined ? data.endYear : existing.endYear,
+          month: data.endMonth !== undefined ? data.endMonth : existing.endMonth,
+          day: data.endDay !== undefined ? data.endDay : existing.endDay,
+        },
+        '역사국가 통치기록',
+      )
+    }
     const res = await this.prisma.dynastyRule.updateMany({
       where: { id: ruleId, dynastyId },
       data: this.buildRuleUpdateData(data),
@@ -320,6 +420,31 @@ export class DynastyService {
     data: RuleMutableFields,
   ) {
     await this.findById(dynastyId)
+    if (this.prisma.dynastyModernRule?.findFirst) {
+      const existing = await this.prisma.dynastyModernRule.findFirst({
+        where: { id: ruleId, dynastyId },
+      })
+      if (!existing) {
+        throw new NotFoundException(
+          `Dynasty modern rule ${ruleId} not found under dynasty ${dynastyId}`,
+        )
+      }
+      this.assertValidPeriod(
+        {
+          era: data.startEra !== undefined ? data.startEra : existing.startEra,
+          year: data.startYear !== undefined ? data.startYear : existing.startYear,
+          month: data.startMonth !== undefined ? data.startMonth : existing.startMonth,
+          day: data.startDay !== undefined ? data.startDay : existing.startDay,
+        },
+        {
+          era: data.endEra !== undefined ? data.endEra : existing.endEra,
+          year: data.endYear !== undefined ? data.endYear : existing.endYear,
+          month: data.endMonth !== undefined ? data.endMonth : existing.endMonth,
+          day: data.endDay !== undefined ? data.endDay : existing.endDay,
+        },
+        '현대국가 통치기록',
+      )
+    }
     const res = await this.prisma.dynastyModernRule.updateMany({
       where: { id: ruleId, dynastyId },
       data: this.buildRuleUpdateData(data),
@@ -338,12 +463,36 @@ export class DynastyService {
     data: RuleMutableFields & { historicalCountryId: string },
   ) {
     await this.findById(dynastyId)
+    this.assertValidPeriod(
+      {
+        era: data.startEra,
+        year: data.startYear,
+        month: data.startMonth,
+        day: data.startDay,
+      },
+      {
+        era: data.endEra,
+        year: data.endYear,
+        month: data.endMonth,
+        day: data.endDay,
+      },
+      '역사국가 통치기록',
+    )
     const exists = await this.prisma.historicalCountry.findUnique({
       where: { id: data.historicalCountryId },
       select: { id: true },
     })
     if (!exists) {
       throw new BadRequestException('통치 대상 역사국가를 찾을 수 없습니다.')
+    }
+    if (this.prisma.dynastyRule?.findFirst) {
+      const duplicate = await this.prisma.dynastyRule.findFirst({
+        where: { dynastyId, historicalCountryId: data.historicalCountryId },
+        select: { id: true },
+      })
+      if (duplicate) {
+        throw new ConflictException('이미 이 가문에 등록된 통치 역사국가입니다.')
+      }
     }
     await this.prisma.dynastyRule.create({
       data: {
@@ -361,12 +510,36 @@ export class DynastyService {
     data: RuleMutableFields & { countryId: string },
   ) {
     await this.findById(dynastyId)
+    this.assertValidPeriod(
+      {
+        era: data.startEra,
+        year: data.startYear,
+        month: data.startMonth,
+        day: data.startDay,
+      },
+      {
+        era: data.endEra,
+        year: data.endYear,
+        month: data.endMonth,
+        day: data.endDay,
+      },
+      '현대국가 통치기록',
+    )
     const exists = await this.prisma.country.findUnique({
       where: { id: data.countryId },
       select: { id: true },
     })
     if (!exists) {
       throw new BadRequestException('통치 대상 현대국가를 찾을 수 없습니다.')
+    }
+    if (this.prisma.dynastyModernRule?.findFirst) {
+      const duplicate = await this.prisma.dynastyModernRule.findFirst({
+        where: { dynastyId, countryId: data.countryId },
+        select: { id: true },
+      })
+      if (duplicate) {
+        throw new ConflictException('이미 이 가문에 등록된 통치 현대국가입니다.')
+      }
     }
     await this.prisma.dynastyModernRule.create({
       data: {

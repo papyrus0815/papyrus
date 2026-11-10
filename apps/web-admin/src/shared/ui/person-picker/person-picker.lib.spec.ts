@@ -17,7 +17,6 @@ const person = (over: Record<string, unknown> & { id: string }): PickerPerson =>
     nameDisplayOrder: null,
     originalName: null,
     regnalName: null,
-    templeName: null,
     birthEra: 'AD',
     birthYear: null,
     deathEra: 'AD',

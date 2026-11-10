@@ -155,6 +155,8 @@ export function RelatedBlock({
   const [pickerFilter, setPickerFilter] = useState<RelatedLinkFilter>('all')
   /** 긴 목록에서 펼친 묶음 */
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(() => new Set())
+  const [expandedCausalBefore, setExpandedCausalBefore] = useState(false)
+  const [expandedCausalAfter, setExpandedCausalAfter] = useState(false)
 
   // ── 후보 검색(서버) — 상위/하위 픽커와 같은 link-candidates 엔드포인트 ──
   const [searchTerm, setSearchTerm] = useState('')
@@ -477,7 +479,7 @@ export function RelatedBlock({
                 <CausalFlowEmpty>사건을 여기로 끌어 원인 지정</CausalFlowEmpty>
               ) : (
                 <CausalFlowPillList>
-                  {beforeItems.slice(0, 3).map((relation) => (
+                  {(expandedCausalBefore ? beforeItems : beforeItems.slice(0, 3)).map((relation) => (
                     <CausalFlowPill
                       key={relation.id}
                       draggable
@@ -494,11 +496,27 @@ export function RelatedBlock({
                         setDragOverSide(null)
                       }}
                     >
-                      {relation.event.title}
+                      <CausalFlowPillLabel>{relation.event.title}</CausalFlowPillLabel>
+                      <CausalFlowPillRemove
+                        type="button"
+                        onClick={(clickEvent) => {
+                          clickEvent.stopPropagation()
+                          void handleRemove(relation)
+                        }}
+                        aria-label={`'${relation.event.title}' 연결 해제`}
+                        title="연결 해제"
+                      >
+                        ×
+                      </CausalFlowPillRemove>
                     </CausalFlowPill>
                   ))}
                   {beforeItems.length > 3 && (
-                    <CausalFlowMore>+{beforeItems.length - 3}</CausalFlowMore>
+                    <CausalFlowMoreBtn
+                      type="button"
+                      onClick={() => setExpandedCausalBefore((previous) => !previous)}
+                    >
+                      {expandedCausalBefore ? '접기' : `+${beforeItems.length - 3} 더 보기`}
+                    </CausalFlowMoreBtn>
                   )}
                 </CausalFlowPillList>
               )}
@@ -544,7 +562,7 @@ export function RelatedBlock({
                 <CausalFlowEmpty>사건을 여기로 끌어 결과 지정</CausalFlowEmpty>
               ) : (
                 <CausalFlowPillList>
-                  {afterItems.slice(0, 3).map((relation) => (
+                  {(expandedCausalAfter ? afterItems : afterItems.slice(0, 3)).map((relation) => (
                     <CausalFlowPill
                       key={relation.id}
                       draggable
@@ -561,11 +579,27 @@ export function RelatedBlock({
                         setDragOverSide(null)
                       }}
                     >
-                      {relation.event.title}
+                      <CausalFlowPillLabel>{relation.event.title}</CausalFlowPillLabel>
+                      <CausalFlowPillRemove
+                        type="button"
+                        onClick={(clickEvent) => {
+                          clickEvent.stopPropagation()
+                          void handleRemove(relation)
+                        }}
+                        aria-label={`'${relation.event.title}' 연결 해제`}
+                        title="연결 해제"
+                      >
+                        ×
+                      </CausalFlowPillRemove>
                     </CausalFlowPill>
                   ))}
                   {afterItems.length > 3 && (
-                    <CausalFlowMore>+{afterItems.length - 3}</CausalFlowMore>
+                    <CausalFlowMoreBtn
+                      type="button"
+                      onClick={() => setExpandedCausalAfter((previous) => !previous)}
+                    >
+                      {expandedCausalAfter ? '접기' : `+${afterItems.length - 3} 더 보기`}
+                    </CausalFlowMoreBtn>
                   )}
                 </CausalFlowPillList>
               )}
@@ -616,7 +650,18 @@ export function RelatedBlock({
                       setDragOverSide(null)
                     }}
                   >
-                    {relation.event.title}
+                    <CausalFlowPillLabel>{relation.event.title}</CausalFlowPillLabel>
+                    <CausalFlowPillRemove
+                      type="button"
+                      onClick={(clickEvent) => {
+                        clickEvent.stopPropagation()
+                        void handleRemove(relation)
+                      }}
+                      aria-label={`'${relation.event.title}' 연결 해제`}
+                      title="연결 해제"
+                    >
+                      ×
+                    </CausalFlowPillRemove>
                   </CausalFlowPill>
                 ))
               )}
@@ -700,8 +745,20 @@ export function RelatedBlock({
                         {EVENT_RELATION_LABELS[relation.relationType].name}
                       </RelationTag>
                       {reversed && (
-                        <ReversedTag title="상대 사건의 날짜가 이 칸과 반대입니다 — '관계 바꾸기'로 방향을 고치거나 날짜를 확인하세요">
-                          날짜와 방향 반대
+                        <ReversedTag
+                          as="button"
+                          type="button"
+                          onClick={(clickEvent) => {
+                            clickEvent.preventDefault()
+                            clickEvent.stopPropagation()
+                            roleSwitchMutation.mutate({
+                              relation,
+                              targetSide: group.side === 'before' ? 'after' : 'before',
+                            })
+                          }}
+                          title="상대 사건의 날짜가 이 칸과 반대입니다 — 클릭하면 반대 방향(원인 ↔ 결과)으로 바로 바꿉니다"
+                        >
+                          날짜와 방향 반대 · ⇄ 바로잡기
                         </ReversedTag>
                       )}
                     </NetStyles.ChildEyebrow>
@@ -918,17 +975,15 @@ const CausalFlowPillList = styled.div`
 const CausalFlowPill = styled.span`
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   max-width: 100%;
-  padding: 2px 8px;
+  padding: 2px 6px 2px 8px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'};
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   cursor: grab;
 
   &:active {
@@ -936,11 +991,52 @@ const CausalFlowPill = styled.span`
   }
 `
 
-const CausalFlowMore = styled.span`
+const CausalFlowPillLabel = styled.span`
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+`
+
+const CausalFlowPillRemove = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: ${metaText};
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.error};
+    background: rgba(239, 68, 68, 0.12);
+  }
+`
+
+const CausalFlowMoreBtn = styled.button`
+  padding: 2px 6px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  font-family: inherit;
   font-size: 11.5px;
   font-weight: 600;
   color: ${metaText};
   align-self: center;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
 `
 
 const CausalFlowArrow = styled.div`
@@ -1163,8 +1259,15 @@ const RelationTag = styled.small`
   color: ${metaText};
 `
 
-/** 방향·날짜 어긋남 — 호박색(주의). 고치기는 행의 '관계 바꾸기'(잇기 창에서 날짜대로 버튼) */
+/** 방향·날짜 어긋남 — 호박색(주의). 클릭 시 반대 방향(원인 ↔ 결과)으로 즉시 교정 */
 const ReversedTag = styled(RelationTag)`
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
   border-color: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(251,191,36,0.4)' : 'rgba(180,83,9,0.35)')};
   color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
+
+  &:hover {
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(251,191,36,0.12)' : 'rgba(180,83,9,0.08)')};
+  }
 `

@@ -98,9 +98,6 @@ export interface PersonResponseDto {
   // 왕/군주 관련 필드
   /** 대표 왕호 — 저장 칸 아님, 가장 최근 재위의 왕호에서 파생 */
   regnalName: string | null
-  templeName: string | null
-  posthumousName: string | null
-  preEnthronementTitle?: string | null
   // 관계
   dynastyId: string | null
   /** 가문 (목록/재임 응답에서 노출, id·name만) */
@@ -280,9 +277,6 @@ export interface FamilyTreeNodeDto {
   adoptiveFatherId?: string | null
   adoptiveMotherId?: string | null
   originalName: string | null
-  posthumousName: string | null
-  templeName: string | null
-  preEnthronementTitle: string | null
   birthPlace: string | null
   deathPlace: string | null
   /** 가장 이른 재임 — 군주 카드 즉위국·재위 번호 + 국기 */

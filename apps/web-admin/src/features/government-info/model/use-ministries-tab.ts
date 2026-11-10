@@ -22,6 +22,7 @@ import {
   administrationDepartmentsByHistoricalCountryQueryKey,
 } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import {
+  UNCATEGORIZED_CATEGORY_ID,
   buildDepartmentDescription,
   countDescendantsInDepartmentTree,
   countDepartmentsByCategoryId,
@@ -113,18 +114,31 @@ export function useMinistriesTab({
     (parent: AdministrationDepartment, categoryId: string) => {
       setMinistryBrowseDepartment(null)
       setEditingMinistry(null)
-      setMinistryForm(emptyMinistryFormFields(categoryId, parent.id))
+      setMinistryForm(
+        emptyMinistryFormFields(
+          categoryId,
+          parent.id,
+          parent.historicalCountryId ?? '',
+        ),
+      )
       setMinistryFormModalOpen(true)
     },
     [],
   )
 
-  const openMinistryCreateRootInCategory = useCallback((categoryId: string) => {
-    setMinistryBrowseDepartment(null)
-    setEditingMinistry(null)
-    setMinistryForm(emptyMinistryFormFields(categoryId, ''))
-    setMinistryFormModalOpen(true)
-  }, [])
+  const openMinistryCreateRootInCategory = useCallback(
+    (categoryId: string) => {
+      setMinistryBrowseDepartment(null)
+      setEditingMinistry(null)
+      const resolvedCatId =
+        categoryId === UNCATEGORIZED_CATEGORY_ID
+          ? (categoriesList[0]?.id ?? '')
+          : categoryId
+      setMinistryForm(emptyMinistryFormFields(resolvedCatId, ''))
+      setMinistryFormModalOpen(true)
+    },
+    [categoriesList],
+  )
 
   const closeMinistryFormModal = useCallback(() => {
     setMinistryFormModalOpen(false)
@@ -144,7 +158,10 @@ export function useMinistriesTab({
     const category = categoriesList.find(
       (row) => row.id === ministryForm.categoryId,
     )
-    const defenseCat = isDefenseRelatedCategory(category ?? null)
+    const defenseCat = isDefenseRelatedCategory(
+      category ?? null,
+      ministryForm.kind,
+    )
     const defensePayload = defenseCat
       ? {
           officialNameEn: ministryForm.defenseOfficialNameEn.trim(),
@@ -162,6 +179,9 @@ export function useMinistriesTab({
     const effectiveNameEn =
       ministryForm.nameEn.trim() ||
       (defenseCat ? ministryForm.defenseOfficialNameEn.trim() : '')
+    const resolvedHistoricalCountryId = isHistorical
+      ? effectiveCountryId
+      : ministryForm.historicalCountryId.trim() || null
     const payload = {
       name: ministryForm.name.trim(),
       nameLocal: ministryForm.nameLocal.trim() || null,
@@ -174,6 +194,8 @@ export function useMinistriesTab({
       description: descriptionCombined || null,
       establishedDate: ministryForm.establishedDate.trim() || null,
       abolishedDate: ministryForm.abolishedDate.trim() || null,
+      historicalCountryId: resolvedHistoricalCountryId,
+      ...(isHistorical ? {} : { countryId: effectiveCountryId }),
     }
     const nextSuccessorId = ministryForm.successorId.trim() || null
     const syncSuccessor = async (
@@ -211,12 +233,7 @@ export function useMinistriesTab({
         )
     } else {
       administrationDepartmentApi
-        .create({
-          ...payload,
-          ...(isHistorical
-            ? { historicalCountryId: effectiveCountryId }
-            : { countryId: effectiveCountryId }),
-        })
+        .create(payload)
         .then((created) => syncSuccessor(created.id, []))
         .then(() => {
           closeMinistryFormModal()
@@ -270,6 +287,19 @@ export function useMinistriesTab({
     [ministriesList],
   )
 
+  /** 탭 바 표시용 카테고리 목록 — 미분류(`categoryId: null`) 부처가 있으면 끝에 '미분류' 탭 추가 */
+  const displayCategoriesList = useMemo<
+    AdministrationDepartmentCategory[]
+  >(() => {
+    const uncategorizedCount =
+      ministryCategoryDeptCounts.get(UNCATEGORIZED_CATEGORY_ID) ?? 0
+    if (uncategorizedCount <= 0) return categoriesList
+    return [
+      ...categoriesList,
+      { id: UNCATEGORIZED_CATEGORY_ID, name: '미분류', nameEn: null },
+    ]
+  }, [categoriesList, ministryCategoryDeptCounts])
+
   useEffect(() => {
     if (contentTab === 'ministries') {
       administrationDepartmentApi
@@ -280,16 +310,16 @@ export function useMinistriesTab({
   }, [contentTab])
 
   useEffect(() => {
-    if (!categoriesList.length) return
+    if (!displayCategoriesList.length) return
     setMinistryTreeCategoryId((prev) => {
       if (
         prev &&
-        categoriesList.some((category) => category.id === prev)
+        displayCategoriesList.some((category) => category.id === prev)
       )
         return prev
-      return categoriesList[0].id
+      return displayCategoriesList[0].id
     })
-  }, [categoriesList])
+  }, [displayCategoriesList])
 
   useEffect(() => {
     setMinistryBrowseDepartment(null)
@@ -348,6 +378,7 @@ export function useMinistriesTab({
     ministryForm,
     setMinistryForm,
     categoriesList,
+    displayCategoriesList,
     loadMinistries,
     openMinistryEdit,
     openMinistryCreateChild,

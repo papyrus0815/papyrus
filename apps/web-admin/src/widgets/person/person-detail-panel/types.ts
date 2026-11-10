@@ -125,9 +125,6 @@ export interface PersonDetailData {
   biographySections?: BiographySectionData[] | null
   profileImageUrl?: string | null
   regnalName?: string | null
-  templeName?: string | null
-  posthumousName?: string | null
-  preEnthronementTitle?: string | null
   originalName?: string | null
   surnameMeaning?: string | null
   nameMeaning?: string | null

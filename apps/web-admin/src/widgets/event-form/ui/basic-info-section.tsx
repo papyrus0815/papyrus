@@ -116,6 +116,9 @@ export interface RelatedEventsSlotProps {
     id: string
     title: string
     startYear?: number | null
+    startDate?: string
+    endDate?: string
+    datePrecision?: DatePickerPrecision
   } | null
   /** 현재 사건의 시작 연도(부호 연도) — 연도 비교로 기본 관계 역할 추론용 */
   currentStartYear?: number | null
@@ -855,6 +858,9 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   )
   const [dragOverCausalLane, setDragOverCausalLane] =
     useState<ModalCausalLane | null>(null)
+  const [expandedRelatedDescIds, setExpandedRelatedDescIds] = useState<
+    Record<string, boolean>
+  >({})
 
   const getModalCausalLane = (item: EventRelatedDraft): ModalCausalLane => {
     if (item.relationType === 'CONCURRENT' || item.relationType === 'RELATED') {
@@ -1473,43 +1479,94 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
               <S.DateRangeColumn id="event-form-start-date">
                 <DateColumnHeaderRow>
                   <S.DateRangeLabel>시작</S.DateRangeLabel>
-                  {!startDate && parentEventSlot?.parentPeriod?.startDate && (
-                    <DateQuickActions>
-                      <DateQuickActionBtn
-                        type="button"
-                        aria-label="상위 사건 시작일 적용"
-                        onClick={() => {
-                          const parentStart =
-                            parentEventSlot.parentPeriod?.startDate
-                          if (!parentStart) return
-                          playClickSound()
-                          const inferredPrecision: DatePickerPrecision =
-                            /^-?\d{1,6}-\d{2}-\d{2}/.test(parentStart)
-                              ? 'day'
-                              : /^-?\d{1,6}-\d{2}$/.test(parentStart)
-                                ? 'month'
-                                : 'year'
-                          const normalizedStart =
-                            inferredPrecision === 'year'
-                              ? `${parentStart.replace(/-.*$/, '')}-01-01`
-                              : inferredPrecision === 'month'
-                                ? `${parentStart}-01`
-                                : parentStart.slice(0, 10)
-                          setStartDate(normalizedStart)
-                          setStartDatePrecision?.(inferredPrecision)
-                          setStartTime('')
-                          if (!endDate) {
-                            setEndFollowsStart(true)
-                            setEndDate(normalizedStart)
-                            setEndDatePrecision?.(inferredPrecision)
-                            setEndTime('')
-                          }
-                        }}
-                      >
-                        상위 사건 시작일 적용
-                      </DateQuickActionBtn>
-                    </DateQuickActions>
-                  )}
+                  {!startDate &&
+                    (Boolean(parentEventSlot?.parentPeriod?.startDate) ||
+                      Boolean(
+                        relatedEventsSlot?.lastSavedEvent?.endDate ||
+                          relatedEventsSlot?.lastSavedEvent?.startDate,
+                      )) && (
+                      <DateQuickActions>
+                        {parentEventSlot?.parentPeriod?.startDate && (
+                          <DateQuickActionBtn
+                            type="button"
+                            aria-label="상위 사건 시작일 적용"
+                            onClick={() => {
+                              const parentStart =
+                                parentEventSlot.parentPeriod?.startDate
+                              if (!parentStart) return
+                              playClickSound()
+                              const inferredPrecision: DatePickerPrecision =
+                                /^-?\d{1,6}-\d{2}-\d{2}/.test(parentStart)
+                                  ? 'day'
+                                  : /^-?\d{1,6}-\d{2}$/.test(parentStart)
+                                    ? 'month'
+                                    : 'year'
+                              const normalizedStart =
+                                inferredPrecision === 'year'
+                                  ? `${parentStart.replace(/-.*$/, '')}-01-01`
+                                  : inferredPrecision === 'month'
+                                    ? `${parentStart}-01`
+                                    : parentStart.slice(0, 10)
+                              setStartDate(normalizedStart)
+                              setStartDatePrecision?.(inferredPrecision)
+                              setStartTime('')
+                              if (!endDate) {
+                                setEndFollowsStart(true)
+                                setEndDate(normalizedStart)
+                                setEndDatePrecision?.(inferredPrecision)
+                                setEndTime('')
+                              }
+                            }}
+                          >
+                            상위 사건 시작일 적용
+                          </DateQuickActionBtn>
+                        )}
+                        {(relatedEventsSlot?.lastSavedEvent?.endDate ||
+                          relatedEventsSlot?.lastSavedEvent?.startDate) && (
+                          <DateQuickActionBtn
+                            type="button"
+                            aria-label="직전 사건 날짜 이어받기"
+                            onClick={() => {
+                              const carrySource =
+                                relatedEventsSlot?.lastSavedEvent?.endDate ||
+                                relatedEventsSlot?.lastSavedEvent?.startDate
+                              if (!carrySource) return
+                              playClickSound()
+                              const carryPrecision: DatePickerPrecision =
+                                relatedEventsSlot?.lastSavedEvent?.datePrecision ??
+                                (/^-?\d{1,6}-\d{2}-\d{2}/.test(carrySource)
+                                  ? 'day'
+                                  : /^-?\d{1,6}-\d{2}$/.test(carrySource)
+                                    ? 'month'
+                                    : 'year')
+                              const normalizedCarry =
+                                carryPrecision === 'year'
+                                  ? `${carrySource.replace(/-.*$/, '')}-01-01`
+                                  : carryPrecision === 'month'
+                                    ? `${carrySource.slice(0, 7)}-01`
+                                    : carrySource.slice(0, 10)
+                              setStartDate(normalizedCarry)
+                              setStartDatePrecision?.(carryPrecision)
+                              setStartTime('')
+                              if (!endDate) {
+                                setEndFollowsStart(true)
+                                setEndDate(normalizedCarry)
+                                setEndDatePrecision?.(carryPrecision)
+                                setEndTime('')
+                              }
+                            }}
+                          >
+                            + 직전 사건 날짜(
+                            {(
+                              relatedEventsSlot?.lastSavedEvent?.endDate ||
+                              relatedEventsSlot?.lastSavedEvent?.startDate ||
+                              ''
+                            ).slice(0, 10)}
+                            ) 이어받기
+                          </DateQuickActionBtn>
+                        )}
+                      </DateQuickActions>
+                    )}
                 </DateColumnHeaderRow>
                 <DateTimeLine>
                   <EventDateField
@@ -2531,7 +2588,10 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
           )}
           {/* 세부 분야의 핵심 기록 — 참여국 바로 아래에 이어서 배치 */}
           {recordsSlot?.content}
-          {layoutMode === 'split' && (Boolean(quickRecordTypesSlot) || !recordsSlot) ? (
+          {layoutMode === 'split' &&
+          (Boolean(quickRecordTypesSlot?.parentRecordsSlot) ||
+            (quickRecordTypesSlot?.items.length ?? 0) > 0 ||
+            !recordsSlot) ? (
             <SplitRecordsGuideBox
               role="note"
               aria-label="세부 분야 맞춤 기록 안내"
@@ -2574,6 +2634,11 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     </SplitQuickTypeChip>
                   ))}
                 </SplitQuickTypeRow>
+              )}
+              {!recordsSlot && !quickRecordTypesSlot && (
+                <SplitEditModeHint>
+                  진영 · 인물 · 조약 · 하위 사건 등 세부 기록은 사건 상세 화면에서 편집할 수 있습니다.
+                </SplitEditModeHint>
               )}
             </SplitRecordsGuideBox>
           ) : null}
@@ -3022,7 +3087,25 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                                       setDragOverCausalLane(null)
                                     }}
                                   >
-                                    {causeItem.title}
+                                    <ModalCausalPillText>
+                                      {causeItem.title}
+                                    </ModalCausalPillText>
+                                    <ModalCausalPillRemove
+                                      type="button"
+                                      aria-label={`${causeItem.title} 인과 흐름도에서 연결 해제`}
+                                      onClick={() => {
+                                        playClickSound()
+                                        relatedEventsSlot.onChange(
+                                          relatedEventsSlot.items.filter(
+                                            (row) =>
+                                              row.relatedEventId !==
+                                              causeItem.relatedEventId,
+                                          ),
+                                        )
+                                      }}
+                                    >
+                                      <FiX size={11} />
+                                    </ModalCausalPillRemove>
                                   </ModalCausalPill>
                                 ))}
                               </ModalCausalPillWrap>
@@ -3102,7 +3185,25 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                                       setDragOverCausalLane(null)
                                     }}
                                   >
-                                    {effectItem.title}
+                                    <ModalCausalPillText>
+                                      {effectItem.title}
+                                    </ModalCausalPillText>
+                                    <ModalCausalPillRemove
+                                      type="button"
+                                      aria-label={`${effectItem.title} 인과 흐름도에서 연결 해제`}
+                                      onClick={() => {
+                                        playClickSound()
+                                        relatedEventsSlot.onChange(
+                                          relatedEventsSlot.items.filter(
+                                            (row) =>
+                                              row.relatedEventId !==
+                                              effectItem.relatedEventId,
+                                          ),
+                                        )
+                                      }}
+                                    >
+                                      <FiX size={11} />
+                                    </ModalCausalPillRemove>
                                   </ModalCausalPill>
                                 ))}
                               </ModalCausalPillWrap>
@@ -3163,7 +3264,25 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                                     setDragOverCausalLane(null)
                                   }}
                                 >
-                                  {concItem.title}
+                                  <ModalCausalPillText>
+                                    {concItem.title}
+                                  </ModalCausalPillText>
+                                  <ModalCausalPillRemove
+                                    type="button"
+                                    aria-label={`${concItem.title} 인과 흐름도에서 연결 해제`}
+                                    onClick={() => {
+                                      playClickSound()
+                                      relatedEventsSlot.onChange(
+                                        relatedEventsSlot.items.filter(
+                                          (row) =>
+                                            row.relatedEventId !==
+                                            concItem.relatedEventId,
+                                        ),
+                                      )
+                                    }}
+                                  >
+                                    <FiX size={11} />
+                                  </ModalCausalPillRemove>
                                 </ModalCausalPill>
                               ))
                             )}
@@ -3213,6 +3332,12 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       const isCoreRelation = coreRelationPills.some(
                         (pill) => pill.key === roleKey,
                       )
+                      const hasRelatedDescription = Boolean(
+                        (item.description ?? '').trim(),
+                      )
+                      const isRelatedDescOpen =
+                        hasRelatedDescription ||
+                        Boolean(expandedRelatedDescIds[item.relatedEventId])
                       return (
                         <ParticipantRow
                           key={item.relatedEventId}
@@ -3318,43 +3443,68 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                               </option>
                             ))}
                           </RoleSelect>
+                          {!isRelatedDescOpen && (
+                            <ParticipantDescToggleBtn
+                              type="button"
+                              aria-label={`${item.title} 관계 설명 입력 열기`}
+                              onClick={() => {
+                                playClickSound()
+                                setExpandedRelatedDescIds((previous) => ({
+                                  ...previous,
+                                  [item.relatedEventId]: true,
+                                }))
+                              }}
+                            >
+                              + 설명 메모
+                            </ParticipantDescToggleBtn>
+                          )}
                         </ParticipantRoleBar>
-                        <RoleDescriptionWrap>
-                          <RoleDescriptionTextarea
-                            rows={Math.max(
-                              1,
-                              Math.min(
-                                5,
-                                Math.max(
-                                  (item.description ?? '').split('\n').length,
-                                  (item.description ?? '').length > 56 ? 2 : 1,
+                        {isRelatedDescOpen && (
+                          <RoleDescriptionWrap>
+                            <RoleDescriptionTextarea
+                              rows={Math.max(
+                                1,
+                                Math.min(
+                                  5,
+                                  Math.max(
+                                    (item.description ?? '').split('\n').length,
+                                    (item.description ?? '').length > 56 ? 2 : 1,
+                                  ),
                                 ),
-                              ),
-                            )}
-                            value={item.description ?? ''}
-                            aria-label={`${item.title} 관계 설명`}
-                            placeholder="어떻게 이어지는지 한 줄 설명 (선택 · 줄바꿈 가능)"
-                            onChange={(changeEvent) =>
-                              patchItem({
-                                description: changeEvent.target.value,
-                              })
-                            }
-                          />
-                          {Boolean((item.description ?? '').trim()) && (
+                              )}
+                              value={item.description ?? ''}
+                              aria-label={`${item.title} 관계 설명`}
+                              placeholder="어떻게 이어지는지 한 줄 설명 (선택 · 줄바꿈 가능)"
+                              onChange={(changeEvent) =>
+                                patchItem({
+                                  description: changeEvent.target.value,
+                                })
+                              }
+                            />
                             <ParticipantDescFooterRow>
                               <ParticipantDescClearBtn
                                 type="button"
-                                aria-label={`${item.title} 관계 설명 비우기`}
+                                aria-label={
+                                  hasRelatedDescription
+                                    ? `${item.title} 관계 설명 비우기`
+                                    : `${item.title} 관계 설명 접기`
+                                }
                                 onClick={() => {
                                   playClickSound()
-                                  patchItem({ description: '' })
+                                  if (hasRelatedDescription) {
+                                    patchItem({ description: '' })
+                                  }
+                                  setExpandedRelatedDescIds((previous) => ({
+                                    ...previous,
+                                    [item.relatedEventId]: false,
+                                  }))
                                 }}
                               >
-                                비우기
+                                {hasRelatedDescription ? '비우기' : '접기'}
                               </ParticipantDescClearBtn>
                             </ParticipantDescFooterRow>
-                          )}
-                        </RoleDescriptionWrap>
+                          </RoleDescriptionWrap>
+                        )}
                       </ParticipantRow>
                     )
                   })}
@@ -4443,21 +4593,46 @@ const ModalCausalPillWrap = styled.div`
 const ModalCausalPill = styled.span`
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   max-width: 100%;
-  padding: 2px 8px;
+  padding: 2px 5px 2px 8px;
   border-radius: 999px;
   border: 1px solid ${({ theme }) => S.getC(theme).border.light};
   background: ${({ theme }) => S.getC(theme).background.section};
   font-size: 11.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   cursor: grab;
 
   &:active {
     cursor: grabbing;
+  }
+`
+
+const ModalCausalPillText = styled.span`
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const ModalCausalPillRemove = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.error};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(239,68,68,0.16)' : 'rgba(239,68,68,0.1)'};
   }
 `
 
@@ -5782,6 +5957,36 @@ const SplitColumnRight = styled.div`
     padding-right: 3px;
     border-left: 1px solid ${({ theme }) => S.getC(theme).border.light};
   }
+`
+
+const ParticipantDescToggleBtn = styled.button`
+  height: 26px;
+  padding: 0 9px;
+  margin-left: auto;
+  border: 1px dashed ${({ theme }) => S.getC(theme).border.default};
+  border-radius: 999px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease;
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.primary};
+    border-color: ${({ theme }) => theme.colors.primary};
+    outline: none;
+  }
+`
+
+const SplitEditModeHint = styled.p`
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const SplitRecordsGuideBox = styled.div`

@@ -296,12 +296,7 @@ export class HistoricalCountryService {
     historicalCountryId: string,
     accountId?: string,
   ): Promise<HistoricalCountryTransitionRecord[]> {
-    const country = await this.repository.findById(historicalCountryId, accountId)
-    if (!country) {
-      throw accountId
-        ? new ForbiddenException('본인이 등록한 역사적 국가만 조회할 수 있습니다.')
-        : new NotFoundException(`Historical country with id ${historicalCountryId} not found`)
-    }
+    await this.getHistoricalCountryById(historicalCountryId, accountId)
     return this.transitionRepository.findManyByHistoricalCountryId(historicalCountryId)
   }
 

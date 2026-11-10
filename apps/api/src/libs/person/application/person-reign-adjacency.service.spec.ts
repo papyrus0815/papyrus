@@ -33,7 +33,6 @@ function rulerPerson(overrides: Partial<any> = {}) {
     nameDisplayOrder: null,
     country: null,
     profileImageUrl: null,
-    templeName: null,
     regnalName: null,
     isAlive: false,
     isDeathDateUnknown: false,

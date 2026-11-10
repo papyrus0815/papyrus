@@ -21,8 +21,8 @@ import {
 } from './event-type-registry'
 
 describe('세부 분야 레지스트리', () => {
-  it('서버 enum 29종과 같은 수, 정의의 key가 표와 맞고 핵심·선택 기록은 겹치지 않는다', () => {
-    expect(EVENT_TYPE_ORDER).toHaveLength(29)
+  it('서버 enum 30종과 같은 수, 정의의 key가 표와 맞고 핵심·선택 기록은 겹치지 않는다', () => {
+    expect(EVENT_TYPE_ORDER).toHaveLength(30)
     for (const [key, def] of Object.entries(EVENT_TYPES)) {
       expect(def.key).toBe(key)
       expect(def.core.filter((facet) => def.optional.includes(facet))).toEqual([])
@@ -98,6 +98,7 @@ describe('기록 — 세부가 정하고 분야가 얹는다', () => {
     expect(facetWeight('BATTLE', 'sides', 'MILITARY')).toBe('core')
     expect(facetWeight('LAW_POLICY', 'sides', 'MILITARY')).toBeNull()
     expect(facetWeight('TREATY', 'treaty', 'ECONOMY')).toBe('core')
+    expect(facetWeight('WAR_DECLARATION', 'warDeclaration')).toBe('core')
     expect(facetWeight('STATEHOOD', 'statehood')).toBe('core')
     expect(facetWeight('POWER_CHANGE', 'power', 'MILITARY')).toBe('core')
     expect(facetWeight('INSTITUTION', 'organizations')).toBe('core')
@@ -152,12 +153,14 @@ describe('eventTypeFeatures — 상세 지면이 읽는 기능', () => {
     expect(features.metricPresets).toContain('economy.indemnity')
   })
 
-  it('건국·멸망 / 즉위·취임 / 기관 설립은 각자의 빈 섹션을 세운다', () => {
+  it('건국·멸망 / 선전포고 / 즉위·취임 / 기관 설립은 각자의 빈 섹션을 세운다', () => {
+    expect(eventTypeFeatures('WAR_DECLARATION').expectWarDeclaration).toBe(true)
     expect(eventTypeFeatures('STATEHOOD').expectStatehood).toBe(true)
     expect(eventTypeFeatures('POWER_CHANGE').expectPower).toBe(true)
     expect(eventTypeFeatures('ELECTION').expectPower).toBe(true)
     expect(eventTypeFeatures('INSTITUTION').expectOrganizations).toBe(true)
     expect(eventTypeFeatures('BATTLE').expectStatehood).toBe(false)
+    expect(eventTypeFeatures('DECLARATION').expectWarDeclaration).toBe(false)
   })
 })
 
@@ -210,6 +213,10 @@ describe('suggestClassificationFromTitle — 사건명 기반 분야·세부 추
     expect(suggestClassificationFromTitle('관동 대지진')).toEqual({
       domain: 'SOCIETY',
       type: 'DISASTER',
+    })
+    expect(suggestClassificationFromTitle('오스트리아-헝가리의 대세르비아 선전포고 (1914)')).toEqual({
+      domain: 'DIPLOMACY',
+      type: 'WAR_DECLARATION',
     })
   })
 

@@ -46,7 +46,6 @@ export interface ContemporaryRulerPersonDto {
   /** 주 국적의 이름 순서 기본값 — 개인 오버라이드 없을 때 서양식(이름·성) 판단용 */
   country: { defaultNameDisplayOrder: string | null } | null
   profileImageUrl: string | null
-  templeName: string | null
   isAlive: boolean
   /** 부호 연도 — 종료일 없는 기록의 표시(?–) 판단용 */
   deathYear: number | null

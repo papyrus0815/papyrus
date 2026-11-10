@@ -106,7 +106,8 @@ model NaturalFeature {
   attributes Json?
 
   //--- 관계 필드
-  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  country           Country            @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  eventContextLinks EventContextLink[] @relation("EventContextNaturalFeature")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")
@@ -174,7 +175,8 @@ model Infrastructure {
   attributes Json?
 
   //--- 관계 필드
-  country Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  country           Country            @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  eventContextLinks EventContextLink[] @relation("EventContextInfrastructure")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")

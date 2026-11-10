@@ -87,7 +87,10 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
 
   const [accessionPickerOpen, setAccessionPickerOpen] = useState(false)
   const [electionPickerOpen, setElectionPickerOpen] = useState(false)
+  const [showAllAccessionCandidates, setShowAllAccessionCandidates] = useState(false)
+  const [showAllElectionCandidates, setShowAllElectionCandidates] = useState(false)
   const shouldShowPower = expectPower || accessions.length > 0 || elections.length > 0
+  const CANDIDATE_CHIP_CAP = 4
 
   const refreshEvent = () => void queryClient.invalidateQueries({ queryKey: eventKeys.detail(event.id) })
 
@@ -158,7 +161,7 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
   const { data: allElections = [], isLoading: electionsLoading } = useQuery({
     queryKey: ['elections', 'event-link-candidates'],
     queryFn: () => getElections(),
-    enabled: electionPickerOpen,
+    enabled: electionPickerOpen || (shouldShowPower && eventYear != null),
     staleTime: 60_000,
   })
 
@@ -174,6 +177,26 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
       ]),
     [event.relatedCountries, event.relatedHistoricalCountries],
   )
+  const recommendedElections = useMemo(() => {
+    if (eventYear == null) return []
+    const linked = new Set(elections.map((election) => election.id))
+    const isRelatedCountry = (election: (typeof allElections)[number]) =>
+      (election.countryId != null && relatedCountryKeys.has(`C:${election.countryId}`)) ||
+      (election.historicalCountryId != null && relatedCountryKeys.has(`H:${election.historicalCountryId}`))
+    return allElections
+      .filter((election) => {
+        if (linked.has(election.id)) return false
+        if (election.event && !election.event.deletedAt) return false
+        const pollYear = parseIsoDateParts(election.pollDate)?.year ?? null
+        if (pollYear == null || Math.abs(pollYear - eventYear) > 2) return false
+        return relatedCountryKeys.size === 0 || isRelatedCountry(election)
+      })
+      .sort((left, right) => {
+        const leftYear = parseIsoDateParts(left.pollDate)?.year ?? eventYear
+        const rightYear = parseIsoDateParts(right.pollDate)?.year ?? eventYear
+        return Math.abs(leftYear - eventYear) - Math.abs(rightYear - eventYear)
+      })
+  }, [allElections, elections, eventYear, relatedCountryKeys])
   const electionOptions = useMemo(() => {
     const linked = new Set(elections.map((election) => election.id))
     const yearOf = (iso: string) => parseIsoDateParts(iso)?.year ?? null
@@ -292,7 +315,10 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
             참여 인물의 취임·즉위 후보 원클릭 연결
           </CandidateRecommendLabel>
           <CandidateRecommendChips>
-            {unlinkedAccessionCandidates.map((candidate) => {
+            {(showAllAccessionCandidates
+              ? unlinkedAccessionCandidates
+              : unlinkedAccessionCandidates.slice(0, CANDIDATE_CHIP_CAP)
+            ).map((candidate) => {
               const span = spanLabel(candidate.startYear, candidate.endYear)
               return (
                 <CandidateChipBtn
@@ -311,6 +337,54 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
                 </CandidateChipBtn>
               )
             })}
+            {unlinkedAccessionCandidates.length > CANDIDATE_CHIP_CAP && (
+              <CandidateMoreBtn
+                type="button"
+                onClick={() => setShowAllAccessionCandidates((previous) => !previous)}
+              >
+                {showAllAccessionCandidates
+                  ? '접기'
+                  : `+${unlinkedAccessionCandidates.length - CANDIDATE_CHIP_CAP}건 더 보기`}
+              </CandidateMoreBtn>
+            )}
+          </CandidateRecommendChips>
+        </CandidateRecommendBar>
+      )}
+
+      {recommendedElections.length > 0 && (
+        <CandidateRecommendBar aria-label="추천 선거 후보">
+          <CandidateRecommendLabel>
+            동시대·참여국 추천 선거 원클릭 연결
+          </CandidateRecommendLabel>
+          <CandidateRecommendChips>
+            {(showAllElectionCandidates
+              ? recommendedElections
+              : recommendedElections.slice(0, CANDIDATE_CHIP_CAP)
+            ).map((electionCandidate) => (
+              <CandidateChipBtn
+                key={electionCandidate.id}
+                type="button"
+                disabled={setElectionMutation.isPending}
+                onClick={() => void pickElection(electionCandidate.id)}
+              >
+                <span>🗳️</span>
+                <strong>{electionCandidate.name}</strong>
+                {electionCandidate.pollDate && (
+                  <CandidateChipSub>({electionCandidate.pollDate.slice(0, 10)})</CandidateChipSub>
+                )}
+                <CandidateChipPlus>+ 연결</CandidateChipPlus>
+              </CandidateChipBtn>
+            ))}
+            {recommendedElections.length > CANDIDATE_CHIP_CAP && (
+              <CandidateMoreBtn
+                type="button"
+                onClick={() => setShowAllElectionCandidates((previous) => !previous)}
+              >
+                {showAllElectionCandidates
+                  ? '접기'
+                  : `+${recommendedElections.length - CANDIDATE_CHIP_CAP}건 더 보기`}
+              </CandidateMoreBtn>
+            )}
           </CandidateRecommendChips>
         </CandidateRecommendBar>
       )}
@@ -796,6 +870,26 @@ const CandidateChipPlus = styled.span`
   font-size: 11px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.accent};
+`
+
+const CandidateMoreBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: ${RADIUS.PILL};
+  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
+  color: ${metaText};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.accent};
+  }
 `
 
 const buttonReset = `

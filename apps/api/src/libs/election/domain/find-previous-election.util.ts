@@ -24,19 +24,32 @@ export async function findPreviousComparableElection(
     | 'scopeAdministrativeDivisionId'
     | 'convocationOrdinal'
     | 'pollDate'
-  >,
+  > & {
+    accountId?: string | null
+    status?: string | null
+  },
 ): Promise<Election | null> {
+  if (current.status === 'CANCELLED') {
+    return null
+  }
+
   const scopeWhere: Prisma.ElectionWhereInput = {
     electionType: current.electionType,
     NOT: { id: current.id },
+    status: { not: 'CANCELLED' },
   }
 
-  if (current.countryId) {
+  if (current.accountId !== undefined) {
+    scopeWhere.accountId = current.accountId
+  }
+
+  // 역사적 국가가 지정된 경우(단일 현대국과 매핑되어 countryId가 dual-fill된 경우 포함)
+  // 해당 역사적 국가 범위에서 직전 선거를 찾는다.
+  if (current.historicalCountryId) {
+    scopeWhere.historicalCountryId = current.historicalCountryId
+  } else if (current.countryId) {
     scopeWhere.countryId = current.countryId
     scopeWhere.historicalCountryId = null
-  } else if (current.historicalCountryId) {
-    scopeWhere.historicalCountryId = current.historicalCountryId
-    scopeWhere.countryId = null
   } else {
     return null
   }

@@ -1,7 +1,6 @@
 /**
  * 인물 등록/수정 폼의 "생애" 탭.
  * - 출생일(미상 토글) → 사망 여부 3-way 라디오 → 사망일(사망 시) → 사망 상세(사망/미상)
- * - 군주 호칭(군주명·묘호·시호) collapse — 일반 인물에겐 무관해 기본 접힘
  * 부모(person-register-view)는 state·setters·errors와 setDeathStatus 헬퍼만 주입.
  */
 import React from 'react'
@@ -15,7 +14,6 @@ import type { Era } from '@/shared/api/persons'
 import { FormInput } from '@/shared/ui/form-input/form-input'
 import {
   FieldControl,
-  FieldHint,
   FieldLabel,
   FieldRow,
   FormRows,
@@ -25,7 +23,6 @@ import {
 import {
   FONT,
   FieldError,
-  InlineFields,
   inputFocusMixin,
   mobileInputFontMixin,
   CheckLabel,
@@ -86,25 +83,16 @@ export interface LifeSectionProps {
   setDeathType: (v: string) => void
   setDeathCause: (v: string) => void
   setDeathNote: (v: string) => void
-  // 군주 호칭
-  monarchTitlesOpen: boolean
-  setMonarchTitlesOpen: React.Dispatch<React.SetStateAction<boolean>>
   /** 출생일/사망일 드롭다운 달력이 열려 있는지 — 날짜 칸 포커스 링 유지용 */
   birthPickerOpen?: boolean
   deathPickerOpen?: boolean
-  templeName: string
-  posthumousName: string
-  preEnthronementTitle: string
-  setTempleName: (v: string) => void
-  setPosthumousName: (v: string) => void
-  setPreEnthronementTitle: (v: string) => void
   // 파생값(부모에서 계산)
   /** "향년 N세" 라벨 — 둘 다 정상 입력 시에만 truthy */
   lifespanText: string | null
   /**
    * 렌더 범위 — 필수-먼저 레이아웃용.
    * - essentials: 생몰 날짜 + 사망 여부(코어, 늘 노출)
-   * - details: 사망 상세(유형·원인·메모) + 군주 호칭(접힘 영역)
+   * - details: 사망 상세(유형·원인·메모)
    * - all(기본): 둘 다
    */
   mode?: 'all' | 'essentials' | 'details'
@@ -156,14 +144,6 @@ export function LifeSection({
   setDeathType,
   setDeathCause,
   setDeathNote,
-  monarchTitlesOpen,
-  setMonarchTitlesOpen,
-  templeName,
-  posthumousName,
-  preEnthronementTitle,
-  setTempleName,
-  setPosthumousName,
-  setPreEnthronementTitle,
   lifespanText,
   mode = 'all',
   errors,
@@ -503,47 +483,6 @@ export function LifeSection({
                 rows={1}
               />
             </LifeDeathDetails>
-          </FieldControl>
-        </FieldRow>
-      )}
-
-      {/* 군주 호칭 — 생애 상세 disclosure 안에서 바로 입력 */}
-      {showDetails && (
-        <FieldRow>
-          <FieldLabel htmlFor={fid('templeName')}>군주 호칭</FieldLabel>
-          <FieldControl>
-            <InlineFields $cols={3}>
-              <FormInput
-                id={fid('templeName')}
-                value={templeName}
-                onChange={(e) => {
-                  setTempleName(e.target.value)
-                  markDirty()
-                }}
-                placeholder="묘호 (예: 세종)"
-              />
-              <FormInput
-                id={fid('posthumousName')}
-                value={posthumousName}
-                onChange={(e) => {
-                  setPosthumousName(e.target.value)
-                  markDirty()
-                }}
-                placeholder="시호 (예: 장헌)"
-              />
-              <FormInput
-                id={fid('preEnthronementTitle')}
-                value={preEnthronementTitle}
-                onChange={(e) => {
-                  setPreEnthronementTitle(e.target.value)
-                  markDirty()
-                }}
-                placeholder="즉위 전 작호 (예: 충녕대군)"
-              />
-            </InlineFields>
-            <FieldHint>
-              왕호(루이 14세 등)는 재위 기록에 적습니다
-            </FieldHint>
           </FieldControl>
         </FieldRow>
       )}

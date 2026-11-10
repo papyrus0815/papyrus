@@ -57,6 +57,7 @@ import { MapRegionAdministrativeView } from './map-region-administrative-view'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { HistoricalFoundingCards } from './historical-founding-cards'
 import { TerritoryChangesSection } from './territory-changes-section'
+import { WarDeclarationsSection } from './war-declarations-section'
 import {
   MembershipSection,
   RelationSection,
@@ -1711,6 +1712,9 @@ function HistoricalOverviewSection({
 
       {/* 영토 변천 — 사건의 '영토 이전' 줄을 이 나라 쪽에서(분할·할양·병합으로 얻고 잃은 땅) */}
       <TerritoryChangesSection historicalCountryId={country.id} />
+
+      {/* 선전포고 · 참전 이력 — 선전포고(WAR_DECLARATION) 사건을 이 나라 쪽에서(선포 ──▶ 상대국 / 피선포 ◀── 상대국) */}
+      <WarDeclarationsSection historicalCountryId={country.id} />
 
       {/* 역대 수반 — 0명이어도 대시보드에 상시 노출해 등록 진입점을 제공한다 */}
       <DashboardStyles.Section

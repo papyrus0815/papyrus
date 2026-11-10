@@ -11,7 +11,9 @@ import {
 } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import * as eventDepartmentsApi from '@api/functional/events/departments'
 
+import { getApiConnection } from '@/shared/api/client'
 import { getEventTerritoryTransfers, territoryTransferKeys } from '@/shared/api/territory-transfers'
 import { syncEventSides } from '@/shared/api/event-sides'
 import { type UpdateEventDto } from '@/shared/api/events'
@@ -55,12 +57,13 @@ import { DetailNetwork } from './components/detail-network'
 import { DetailTreaties } from './components/detail-treaties'
 import { EventKindGuideModal } from './components/event-kind-guide-modal'
 import { DetailFacts } from './components/detail-facts'
-import { DetailDepartments } from './components/detail-departments'
+import { DetailDepartments, eventDepartmentsQueryKey } from './components/detail-departments'
 import { DetailOrganizations } from './components/detail-organizations'
 import { DetailPower, hasPowerData } from './components/detail-power'
 import { DetailRail } from './components/detail-rail'
 import { DetailStatehood, statehoodEntries } from './components/detail-statehood'
 import { DetailTerritory } from './components/detail-territory'
+import { DetailWarDeclaration } from './components/detail-war-declaration'
 import { FillInStrip } from './components/fill-in-strip'
 import { InlineEditProvider } from './components/inline'
 import { ModuleAdd } from './components/module-add'
@@ -123,7 +126,7 @@ const LazyEventOverviewPanel = lazy(() =>
  */
 function tabOfSection(id: string, promoteTreaties: boolean): EventTabId {
   if (/^(background|narrative|aftermath|comments|development)/.test(id)) return 'overview'
-  if (/^(actors|statehood|territory|power|organizations)/.test(id)) return 'actors'
+  if (/^(actors|war-declaration|statehood|territory|power|departments|organizations)/.test(id)) return 'actors'
   if (id.startsWith('module-')) return 'modules'
   if (id === 'treaties') return promoteTreaties ? 'overview' : 'links'
   if (id === 'network') return 'links'
@@ -403,6 +406,8 @@ function EventDetailContent({
    */
   const features = eventTypeFeatures(event.type, event.domain)
   const promoteTreaties = features.promoteTreaties
+  /* 선전포고 — 선전포고(WAR_DECLARATION) 사건이면 선포국·대상국 구도 보드를 세운다 */
+  const showWarDeclaration = features.expectWarDeclaration
   /* 국가 성립·소멸 — 역할(건국·멸망)이 있으면 늘, 건국/멸망 사건이면 비어 있어도 보인다 */
   const showStatehood = features.expectStatehood || statehoodEntries(event).length > 0
   /* 영토 이전 — 줄이 있으면 늘, 영토 변경 사건이면 비어 있어도 보인다(같은 캐시를 섹션도 읽는다) */
@@ -414,6 +419,18 @@ function EventDetailContent({
   const showTerritory = features.expectTerritory || (territoryQuery.data?.length ?? 0) > 0
   /* 권력 교체·선거 — 취임·즉위·선거가 걸려 있으면 늘, 즉위·취임·선거 형식이면 비어 있어도 보인다 */
   const showPower = features.expectPower || hasPowerData(event)
+  /* 관련 국가 기관 — 연결이 있으면 탭 건수·목차에 포함하고, 비어 있을 땐 정치·제도 사건만 기본 펼침 */
+  const departmentsQuery = useQuery({
+    queryKey: eventDepartmentsQueryKey(event.id),
+    queryFn: () => eventDepartmentsApi.list(getApiConnection(), event.id),
+    staleTime: 30_000,
+  })
+  const departmentCount = departmentsQuery.data?.length ?? 0
+  const expectDepartments =
+    features.expectPower ||
+    features.expectStatehood ||
+    event.domain === 'POLITICS' ||
+    event.domain === 'DIPLOMACY'
   /* 관련 기업·조직 — 연결이 있으면 늘, 경제 사건이면 비어 있어도 보인다 */
   const showOrganizations = features.expectOrganizations || (event.organizations?.length ?? 0) > 0
   /** 묶음 사건 — 전개 자리는 하위 사건이라 비어 있어도 접지 않는다(빈 상태가 곧 '첫 하위 등록' 안내) */
@@ -484,6 +501,7 @@ function EventDetailContent({
       countOf(event.relatedPersons) +
       countOf(event.relatedCountries) +
       countOf(event.relatedHistoricalCountries) +
+      departmentCount +
       countOf(event.organizations),
     modules: enabledModules.length,
     links:
@@ -662,9 +680,11 @@ function EventDetailContent({
         label: '여파',
         children: withParagraphs('aftermath'),
       })
+    if (showWarDeclaration) items.push({ id: 'war-declaration', label: '선전포고 당사국' })
     if (showStatehood) items.push({ id: 'statehood', label: '성립·소멸' })
     if (showTerritory) items.push({ id: 'territory', label: '영토 이전' })
     if (showPower) items.push({ id: 'power', label: '권력 교체·선거' })
+    if (departmentCount > 0) items.push({ id: 'departments', label: '관련 기관' })
     if (showOrganizations) items.push({ id: 'organizations', label: '관련 기업·조직' })
     if (promoteTreaties && shown('treaties')) items.push({ id: 'treaties', label: '조약' })
     if (shown('actors')) items.push({ id: 'actors', label: '참여 행위자' })
@@ -687,10 +707,7 @@ function EventDetailContent({
     if (!event.deletedAt) items.push({ id: 'comments', label: '댓글' })
 
     return items
-    // 섹션 구성은 보임 여부·단락 제목·모듈에만 의존한다 — event 전체를 deps에 두면
-    // 인라인 patch refetch마다 재계산된다.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleKey, event, enabledModules, promoteTreaties, showStatehood, showTerritory, showPower, showOrganizations])
+  }, [visibleKey, event, enabledModules, promoteTreaties, showStatehood, showTerritory, showPower, departmentCount, showOrganizations])
 
   /**
    * URL hash → 섹션 스크롤. 사건 id가 바뀐 첫 렌더에서 1회만 실행.
@@ -811,7 +828,7 @@ function EventDetailContent({
    * 빈 탭 머리(TabEmpty)로 같은 버튼을 들고 '무엇을 둘 수 있는 탭인지'를 말한다.
    */
   const emptyTab: Partial<Record<EventTabId, { title: string; text: string }>> = {
-    ...(!isVisible('actors') && !showStatehood && !showTerritory && !showPower && !showOrganizations
+    ...(!isVisible('actors') && !showStatehood && !showTerritory && !showPower && !showOrganizations && departmentCount === 0
       ? {
           actors: {
             title: '아직 참여한 인물·국가가 없습니다',
@@ -1025,8 +1042,16 @@ function EventDetailContent({
                     />
                   )}
                   {/* 요약 — 히어로에서 옮겨 와 개요의 머리글이 된다(히어로는 제목·행위자·국가만) */}
-                  {((!collectionTextNotice && !singleTextNotice) || hasSummary || summaryOpen) && (
+                   {((!collectionTextNotice && !singleTextNotice) || hasSummary || summaryOpen) && (
                     <DetailSummary event={event} onPatch={onPatch} autoEdit={summaryOpen && !hasSummary} />
+                  )}
+                  {showWarDeclaration && (
+                    <DetailWarDeclaration
+                      event={event}
+                      expectWarDeclaration={features.expectWarDeclaration}
+                      onCountryClick={onCountryClick}
+                      onPatch={trashedView ? undefined : onPatch}
+                    />
                   )}
                   {hasSummary && (collectionTextNotice || singleTextNotice) && (
                     <CollectionWholeTextNotice
@@ -1083,6 +1108,14 @@ function EventDetailContent({
 
               {activeTab === 'actors' && (
                 <>
+                  {showWarDeclaration && (
+                    <DetailWarDeclaration
+                      event={event}
+                      expectWarDeclaration={features.expectWarDeclaration}
+                      onCountryClick={onCountryClick}
+                      onPatch={trashedView ? undefined : onPatch}
+                    />
+                  )}
                   {isVisible('actors') && (
                     <DetailActors
                       event={event}
@@ -1116,7 +1149,11 @@ function EventDetailContent({
                     />
                   )}
                   {/* 국가 기관(부처·최고사령부·총독부) — 조직(정당·기업·국제기구)과 다른 표라 칸을 나눈다 */}
-                  <DetailDepartments event={event} readOnly={trashedView} />
+                  <DetailDepartments
+                    event={event}
+                    expectDepartments={expectDepartments}
+                    readOnly={trashedView}
+                  />
                   <DetailOrganizations
                     event={event}
                     expectOrganizations={features.expectOrganizations}
@@ -1253,6 +1290,8 @@ function EventDetailContent({
                 foldedCount={trashedView ? 0 : folded.length}
                 onJump={jumpToSection}
                 onAddOriginalTitle={trashedView ? undefined : () => setOriginalTitleOpen(true)}
+                relatedCount={relatedCount}
+                departmentCount={departmentCount}
               />
               {/* 목차는 긴 글이 있는 개요에서만 — 다른 탭은 탭 자체가 목차다.
                   두 칸 이하('전개·댓글')면 길을 안내하지 못하고 자리만 차지해 세우지 않는다 */}

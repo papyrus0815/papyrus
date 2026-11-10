@@ -28,7 +28,7 @@ import {
 
 // ─── 카드 hover 부가 정보 버블 (React Portal) ─────────────────────
 /**
- * 카드 hover/포커스 시 부가 정보(원어명·시호·묘호·작호·출생/사망지)를 노출.
+ * 카드 hover/포커스 시 부가 정보(원어명·출생/사망지)를 노출.
  *
  * 구현 — **document.body 로 portal 렌더링**:
  *  1. CardHoverInfo 자체는 카드 안에 숨겨진 anchor(<span>)만 두고, 실제 버블은 body로 portal.

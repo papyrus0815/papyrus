@@ -226,8 +226,18 @@ export class OrganizationController {
       type: dto.type,
       scope: dto.scope,
       description: dto.description,
-      foundedDate: dto.foundedDate ? new Date(dto.foundedDate) : undefined,
-      dissolvedDate: dto.dissolvedDate ? new Date(dto.dissolvedDate) : undefined,
+      foundedDate:
+        dto.foundedDate !== undefined
+          ? dto.foundedDate
+            ? new Date(dto.foundedDate)
+            : null
+          : undefined,
+      dissolvedDate:
+        dto.dissolvedDate !== undefined
+          ? dto.dissolvedDate
+            ? new Date(dto.dissolvedDate)
+            : null
+          : undefined,
       websiteUrl: dto.websiteUrl,
       logoUrl: dto.logoUrl,
       ideology: dto.ideology,

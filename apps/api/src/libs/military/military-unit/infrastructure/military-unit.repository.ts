@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common'
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common'
 import { PrismaService } from '@prisma/prisma.service'
 import type { Prisma } from '@prisma/client'
 import type {
@@ -7,12 +11,15 @@ import type {
   UpdateMilitaryUnitDto,
 } from '../presentation/dto'
 
-function parseOptionalCommanderDate(
+function parseOptionalUnitDate(
   value: string | null | undefined,
+  label: string,
 ): Date | null {
   if (value == null || value === '') return null
   const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return null
+  if (Number.isNaN(d.getTime())) {
+    throw new BadRequestException(`유효하지 않은 ${label} 날짜입니다.`)
+  }
   return d
 }
 
@@ -20,20 +27,220 @@ function parseOptionalCommanderDate(
 export class MilitaryUnitRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async resolveCountryAxis(
+    countryId?: string | null,
+    historicalCountryId?: string | null,
+  ): Promise<{ countryId: string | null; historicalCountryId: string | null }> {
+    let cid = countryId && countryId.trim() !== '' ? countryId.trim() : null
+    const hid =
+      historicalCountryId && historicalCountryId.trim() !== ''
+        ? historicalCountryId.trim()
+        : null
+
+    if (cid && this.prisma.country?.findUnique) {
+      const c = await this.prisma.country.findUnique({
+        where: { id: cid },
+        select: { id: true },
+      })
+      if (!c) {
+        throw new NotFoundException('소속 국가(countryId)를 찾을 수 없습니다.')
+      }
+    }
+
+    if (hid) {
+      if (this.prisma.historicalCountry?.findUnique) {
+        const hc = await this.prisma.historicalCountry.findUnique({
+          where: { id: hid },
+          select: { id: true },
+        })
+        if (!hc) {
+          throw new NotFoundException(
+            '소속 역사적 국가(historicalCountryId)를 찾을 수 없습니다.',
+          )
+        }
+      }
+      if (this.prisma.historicalCountryModernCountry?.findMany) {
+        const links =
+          await this.prisma.historicalCountryModernCountry.findMany({
+            where: { historicalCountryId: hid },
+            select: { modernCountryId: true },
+          })
+        const modernIds = [
+          ...new Set(links.map((l) => l.modernCountryId).filter(Boolean)),
+        ]
+        if (cid && modernIds.length > 0 && !modernIds.includes(cid)) {
+          throw new BadRequestException(
+            '선택한 역사적 국가가 지정한 현대 국가와 연결되어 있지 않습니다.',
+          )
+        }
+        if (!cid && modernIds.length === 1) {
+          cid = modernIds[0]
+        }
+      }
+    }
+
+    return { countryId: cid, historicalCountryId: hid }
+  }
+
+  private async areAxesCompatible(
+    a: { countryId: string | null; historicalCountryId: string | null },
+    b: { countryId: string | null; historicalCountryId: string | null },
+  ): Promise<boolean> {
+    if (
+      (!a.countryId && !a.historicalCountryId) ||
+      (!b.countryId && !b.historicalCountryId)
+    ) {
+      return true
+    }
+    if (a.historicalCountryId && b.historicalCountryId) {
+      return a.historicalCountryId === b.historicalCountryId
+    }
+    if (a.countryId && b.countryId && a.countryId === b.countryId) {
+      return true
+    }
+    if (
+      a.historicalCountryId &&
+      b.countryId &&
+      this.prisma.historicalCountryModernCountry?.findFirst
+    ) {
+      const link =
+        await this.prisma.historicalCountryModernCountry.findFirst({
+          where: {
+            historicalCountryId: a.historicalCountryId,
+            modernCountryId: b.countryId,
+          },
+          select: { modernCountryId: true },
+        })
+      if (link) return true
+    }
+    if (
+      b.historicalCountryId &&
+      a.countryId &&
+      this.prisma.historicalCountryModernCountry?.findFirst
+    ) {
+      const link =
+        await this.prisma.historicalCountryModernCountry.findFirst({
+          where: {
+            historicalCountryId: b.historicalCountryId,
+            modernCountryId: a.countryId,
+          },
+          select: { modernCountryId: true },
+        })
+      if (link) return true
+    }
+    return false
+  }
+
+  private async validateUnitRelations(
+    id: string | null,
+    axis: { countryId: string | null; historicalCountryId: string | null },
+    parentUnitId: string | null | undefined,
+    administrationDepartmentId: string | null | undefined,
+  ): Promise<void> {
+    if (parentUnitId) {
+      if (id && parentUnitId === id) {
+        throw new BadRequestException(
+          '자기 자신을 상위 부대로 지정할 수 없습니다.',
+        )
+      }
+      if (this.prisma.militaryUnit?.findUnique) {
+        const parentUnit = await this.prisma.militaryUnit.findUnique({
+          where: { id: parentUnitId },
+          select: {
+            id: true,
+            parentUnitId: true,
+            countryId: true,
+            historicalCountryId: true,
+          },
+        })
+        if (!parentUnit) {
+          throw new NotFoundException(
+            '상위 부대(parentUnitId)를 찾을 수 없습니다.',
+          )
+        }
+        const compat = await this.areAxesCompatible(axis, {
+          countryId: parentUnit.countryId ?? null,
+          historicalCountryId: parentUnit.historicalCountryId ?? null,
+        })
+        if (!compat) {
+          throw new BadRequestException(
+            '상위 부대의 소속 국가·시대와 부대의 소속 국가·시대가 일치하지 않습니다.',
+          )
+        }
+        if (id) {
+          let cursor = parentUnit.parentUnitId
+          const seen = new Set<string>([parentUnitId])
+          while (cursor) {
+            if (cursor === id) {
+              throw new BadRequestException('상위 부대 관계가 순환됩니다.')
+            }
+            if (seen.has(cursor)) break
+            seen.add(cursor)
+            const ancestor = await this.prisma.militaryUnit.findUnique({
+              where: { id: cursor },
+              select: { parentUnitId: true },
+            })
+            if (!ancestor) break
+            cursor = ancestor.parentUnitId
+          }
+        }
+      }
+    }
+
+    if (
+      administrationDepartmentId &&
+      this.prisma.administrationDepartment?.findUnique
+    ) {
+      const dept = await this.prisma.administrationDepartment.findUnique({
+        where: { id: administrationDepartmentId },
+        select: { id: true, countryId: true, historicalCountryId: true },
+      })
+      if (!dept) {
+        throw new NotFoundException(
+          '연결할 행정부처(administrationDepartmentId)를 찾을 수 없습니다.',
+        )
+      }
+      const compat = await this.areAxesCompatible(axis, {
+        countryId: dept.countryId ?? null,
+        historicalCountryId: dept.historicalCountryId ?? null,
+      })
+      if (!compat) {
+        throw new BadRequestException(
+          '연결할 행정부처의 소속 국가·시대와 부대의 소속 국가·시대가 일치하지 않습니다.',
+        )
+      }
+    }
+  }
+
   private commanderRowsForUnit(
     unitId: string,
     commanders: MilitaryUnitCommanderInput[],
   ): Prisma.MilitaryUnitCommanderCreateManyInput[] {
-    return commanders.map((c) => ({
-      unitId,
-      personId: c.personId,
-      rank: c.rank ?? null,
-      role: c.role ?? null,
-      isCurrent: c.isCurrent ?? false,
-      startDate: parseOptionalCommanderDate(c.startDate ?? undefined),
-      endDate: parseOptionalCommanderDate(c.endDate ?? undefined),
-      termNumber: c.termNumber ?? null,
-    }))
+    return commanders.map((c) => {
+      const startDate = parseOptionalUnitDate(
+        c.startDate ?? undefined,
+        '지휘관 임기 시작일',
+      )
+      const endDate = parseOptionalUnitDate(
+        c.endDate ?? undefined,
+        '지휘관 임기 종료일',
+      )
+      if (startDate && endDate && startDate.getTime() > endDate.getTime()) {
+        throw new BadRequestException(
+          '지휘관 임기 종료일이 시작일보다 앞설 수 없습니다.',
+        )
+      }
+      return {
+        unitId,
+        personId: c.personId,
+        rank: c.rank ?? null,
+        role: c.role ?? null,
+        isCurrent: c.isCurrent ?? false,
+        startDate,
+        endDate,
+        termNumber: c.termNumber ?? null,
+      }
+    })
   }
 
   async findAll() {
@@ -185,26 +392,87 @@ export class MilitaryUnitRepository {
           },
           orderBy: { name: 'asc' },
         },
+        sideDeployedUnits: {
+          where: {
+            side: {
+              event: {
+                deletedAt: null,
+              },
+            },
+          },
+          select: {
+            id: true,
+            role: true,
+            note: true,
+            parentUnitId: true,
+            commanderId: true,
+            side: {
+              select: {
+                id: true,
+                name: true,
+                outcome: true,
+                event: {
+                  select: {
+                    id: true,
+                    title: true,
+                    startDate: true,
+                    endDate: true,
+                    kind: true,
+                    type: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
       },
     })
   }
 
   async create(data: CreateMilitaryUnitDto) {
+    const establishedDate = parseOptionalUnitDate(
+      data.establishedDate,
+      '부대 창설일',
+    )
+    const disbandedDate = parseOptionalUnitDate(
+      data.disbandedDate,
+      '부대 해체일',
+    )
+    if (
+      establishedDate &&
+      disbandedDate &&
+      establishedDate.getTime() > disbandedDate.getTime()
+    ) {
+      throw new BadRequestException(
+        '부대 해체일이 창설일보다 앞설 수 없습니다.',
+      )
+    }
+
+    const axis = await this.resolveCountryAxis(
+      data.countryId,
+      data.historicalCountryId,
+    )
+    await this.validateUnitRelations(
+      null,
+      axis,
+      data.parentUnitId,
+      data.administrationDepartmentId,
+    )
+
     const unitId = await this.prisma.$transaction(async (tx) => {
       const created = await tx.militaryUnit.create({
         data: {
           name: data.name,
           unitType: data.unitType,
           branch: data.branch ?? null,
-          countryId: data.countryId,
-          historicalCountryId: data.historicalCountryId ?? null,
+          countryId: axis.countryId,
+          historicalCountryId: axis.historicalCountryId,
           isActive: data.isActive,
-          establishedDate: data.establishedDate
-            ? new Date(data.establishedDate)
-            : null,
-          disbandedDate: data.disbandedDate
-            ? new Date(data.disbandedDate)
-            : null,
+          establishedDate,
+          disbandedDate,
           parentUnitId: data.parentUnitId,
           ...(data.administrationDepartmentId !== undefined
             ? { administrationDepartmentId: data.administrationDepartmentId }
@@ -229,32 +497,112 @@ export class MilitaryUnitRepository {
       return created.id
     })
     const created = await this.findById(unitId)
-    if (!created) throw new Error(`MilitaryUnit not found after create: ${unitId}`)
+    if (!created)
+      throw new NotFoundException(`MilitaryUnit not found after create: ${unitId}`)
     return created
   }
 
   async update(id: string, data: UpdateMilitaryUnitDto) {
+    const existing = await this.prisma.militaryUnit.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        countryId: true,
+        historicalCountryId: true,
+        establishedDate: true,
+        disbandedDate: true,
+        parentUnitId: true,
+        administrationDepartmentId: true,
+      },
+    })
+    if (!existing) {
+      throw new NotFoundException(`군부대를 찾을 수 없습니다 (ID: ${id})`)
+    }
+
     const updateData: any = {}
 
     if (data.name !== undefined) updateData.name = data.name
     if (data.unitType !== undefined) updateData.unitType = data.unitType
     if (data.branch !== undefined) updateData.branch = data.branch
-    if (data.countryId !== undefined) updateData.countryId = data.countryId
-    if (data.historicalCountryId !== undefined)
-      updateData.historicalCountryId = data.historicalCountryId
+    if (data.countryId !== undefined || data.historicalCountryId !== undefined) {
+      const nextCid =
+        data.countryId !== undefined ? data.countryId : existing.countryId
+      const nextHid =
+        data.historicalCountryId !== undefined
+          ? data.historicalCountryId
+          : existing.historicalCountryId
+      const axis = await this.resolveCountryAxis(nextCid, nextHid)
+      updateData.countryId = axis.countryId
+      updateData.historicalCountryId = axis.historicalCountryId
+    }
     if (data.isActive !== undefined) updateData.isActive = data.isActive
     if (data.establishedDate !== undefined)
-      updateData.establishedDate = data.establishedDate
-        ? new Date(data.establishedDate)
-        : null
+      updateData.establishedDate = parseOptionalUnitDate(
+        data.establishedDate,
+        '부대 창설일',
+      )
     if (data.disbandedDate !== undefined)
-      updateData.disbandedDate = data.disbandedDate
-        ? new Date(data.disbandedDate)
-        : null
+      updateData.disbandedDate = parseOptionalUnitDate(
+        data.disbandedDate,
+        '부대 해체일',
+      )
+
+    const effectiveEstablished: Date | null =
+      updateData.establishedDate !== undefined
+        ? updateData.establishedDate
+        : (existing.establishedDate ?? null)
+    const effectiveDisbanded: Date | null =
+      updateData.disbandedDate !== undefined
+        ? updateData.disbandedDate
+        : (existing.disbandedDate ?? null)
+    if (
+      effectiveEstablished &&
+      effectiveDisbanded &&
+      effectiveEstablished.getTime() > effectiveDisbanded.getTime()
+    ) {
+      throw new BadRequestException(
+        '부대 해체일이 창설일보다 앞설 수 없습니다.',
+      )
+    }
+
     if (data.parentUnitId !== undefined)
       updateData.parentUnitId = data.parentUnitId
     if (data.administrationDepartmentId !== undefined)
       updateData.administrationDepartmentId = data.administrationDepartmentId
+
+    const effectiveAxis = {
+      countryId:
+        updateData.countryId !== undefined
+          ? updateData.countryId
+          : (existing.countryId ?? null),
+      historicalCountryId:
+        updateData.historicalCountryId !== undefined
+          ? updateData.historicalCountryId
+          : (existing.historicalCountryId ?? null),
+    }
+    const effectiveParentUnitId =
+      updateData.parentUnitId !== undefined
+        ? updateData.parentUnitId
+        : (existing.parentUnitId ?? null)
+    const effectiveDeptId =
+      updateData.administrationDepartmentId !== undefined
+        ? updateData.administrationDepartmentId
+        : (existing.administrationDepartmentId ?? null)
+
+    if (
+      data.countryId !== undefined ||
+      data.historicalCountryId !== undefined ||
+      data.parentUnitId !== undefined ||
+      data.administrationDepartmentId !== undefined
+    ) {
+      await this.validateUnitRelations(
+        id,
+        effectiveAxis,
+        effectiveParentUnitId,
+        effectiveDeptId,
+      )
+    }
+
     if (data.nickname !== undefined) updateData.nickname = data.nickname
     if (data.motto !== undefined) updateData.motto = data.motto
     if (data.garrison !== undefined) updateData.garrison = data.garrison
@@ -270,17 +618,21 @@ export class MilitaryUnitRepository {
 
     if (data.commanders === undefined && Object.keys(updateData).length === 0) {
       const unchanged = await this.findById(id)
-      if (!unchanged) throw new Error(`MilitaryUnit not found: ${id}`)
+      if (!unchanged) throw new NotFoundException(`MilitaryUnit not found: ${id}`)
       return unchanged
     }
 
     if (data.commanders !== undefined) {
       const commandersList = data.commanders ?? []
+      const commanderRows =
+        commandersList.length > 0
+          ? this.commanderRowsForUnit(id, commandersList)
+          : []
       await this.prisma.$transaction(async (tx) => {
         await tx.militaryUnitCommander.deleteMany({ where: { unitId: id } })
-        if (commandersList.length > 0) {
+        if (commanderRows.length > 0) {
           await tx.militaryUnitCommander.createMany({
-            data: this.commanderRowsForUnit(id, commandersList),
+            data: commanderRows,
           })
         }
         if (Object.keys(updateData).length > 0) {
@@ -291,7 +643,8 @@ export class MilitaryUnitRepository {
         }
       })
       const updated = await this.findById(id)
-      if (!updated) throw new Error(`MilitaryUnit not found after update: ${id}`)
+      if (!updated)
+        throw new NotFoundException(`MilitaryUnit not found after update: ${id}`)
       return updated
     }
 
@@ -300,11 +653,21 @@ export class MilitaryUnitRepository {
       data: updateData,
     })
     const refreshed = await this.findById(id)
-    if (!refreshed) throw new Error(`MilitaryUnit not found after update: ${id}`)
+    if (!refreshed)
+      throw new NotFoundException(`MilitaryUnit not found after update: ${id}`)
     return refreshed
   }
 
   async delete(id: string) {
+    if (this.prisma.militaryUnit?.findUnique) {
+      const existing = await this.prisma.militaryUnit.findUnique({
+        where: { id },
+        select: { id: true },
+      })
+      if (!existing) {
+        throw new NotFoundException(`군부대를 찾을 수 없습니다 (ID: ${id})`)
+      }
+    }
     await this.prisma.militaryUnit.delete({
       where: { id },
     })

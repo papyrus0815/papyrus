@@ -16,6 +16,8 @@ function fakeDb(data: {
   bridges?: Array<{ historicalCountryId: string; modernCountryId: string }>
   reigns?: unknown[]
   tenures?: unknown[]
+  unitCommands?: unknown[]
+  militaryCareers?: unknown[]
 }) {
   return withOfficeHoldingRouter({
     event: { findUnique: jest.fn(async () => data.event ?? null) },
@@ -25,6 +27,8 @@ function fakeDb(data: {
     },
     sovereignReign: { findMany: jest.fn(async () => data.reigns ?? []) },
     governmentPositionTenure: { findMany: jest.fn(async () => data.tenures ?? []) },
+    militaryUnitCommander: { findMany: jest.fn(async () => data.unitCommands ?? []) },
+    militaryCareer: { findMany: jest.fn(async () => data.militaryCareers ?? []) },
   } as any) as never
 }
 
@@ -140,6 +144,31 @@ describe('resolveOfficesAtEvent — 사건 당시 직위', () => {
     const db = fakeDb({ tenures: [tenure('1993-01-20T00:00:00Z', null, '대통령')] })
     const result = await resolveOfficesAtEvent(db, {}, ['p1'])
     expect(result.size).toBe(0)
+  })
+
+  it('군사 부대 지휘관 임기(MilitaryUnitCommander)가 사건 시점과 겹치면 부대 지휘관 직책을 파생한다', async () => {
+    const db = fakeDb({
+      unitCommands: [
+        {
+          personId: 'p-bock',
+          startDate: new Date('1941-04-01T00:00:00Z'),
+          endDate: new Date('1941-12-19T00:00:00Z'),
+          rank: '원수',
+          role: '사령관',
+          unit: {
+            name: '중부집단군',
+            historicalCountry: { name: '나치 독일' },
+            country: null,
+          },
+        },
+      ],
+    })
+    const result = await resolveOfficesAtEvent(
+      db,
+      { startEra: 'AD', startYear: 1941, startMonth: 6, startDay: 22 },
+      ['p-bock'],
+    )
+    expect(result.get('p-bock')).toEqual(['나치 독일 중부집단군 사령관 (원수)'])
   })
 })
 

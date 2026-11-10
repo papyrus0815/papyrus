@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Delete,
   Get,
@@ -99,6 +100,26 @@ export class CabinetPoliticalPartyController {
       throw new NotFoundException('행정부를 찾을 수 없습니다.')
     }
 
+    if (this.prisma.politicalParty?.findUnique) {
+      const party = await this.prisma.politicalParty.findUnique({
+        where: { id: body.partyId },
+        select: { id: true },
+      })
+      if (!party) {
+        throw new NotFoundException('정당을 찾을 수 없습니다.')
+      }
+    }
+
+    if (this.prisma.cabinetPoliticalParty?.findFirst) {
+      const duplicateLink = await this.prisma.cabinetPoliticalParty.findFirst({
+        where: { cabinetId, partyId: body.partyId },
+        select: { id: true },
+      })
+      if (duplicateLink) {
+        throw new ConflictException('이미 이 행정부에 연결된 정당입니다.')
+      }
+    }
+
     let provenance: 'MANUAL' | 'FROM_ELECTION_PARTY_RESULT' | 'FROM_HEAD_CANDIDACY' | 'OTHER' =
       'MANUAL'
     let electionPartyResultId: string | null | undefined = undefined
@@ -125,10 +146,16 @@ export class CabinetPoliticalPartyController {
       const ht = cabinet.headTenure
       const hasElectionScope = ec.countryId != null || ec.historicalCountryId != null
       if (hasElectionScope && ht) {
-        const match =
-          (ec.countryId != null && ec.countryId === ht.countryId) ||
-          (ec.historicalCountryId != null &&
-            ec.historicalCountryId === ht.historicalCountryId)
+        const match = await this.areElectionAndHeadCountriesCompatible(
+          {
+            countryId: ec.countryId ?? null,
+            historicalCountryId: ec.historicalCountryId ?? null,
+          },
+          {
+            countryId: ht.countryId ?? null,
+            historicalCountryId: ht.historicalCountryId ?? null,
+          },
+        )
         if (!match) {
           throw new BadRequestException(
             '선거 소속 국가가 이 행정부 수반 재임과 맞지 않습니다.',
@@ -177,5 +204,47 @@ export class CabinetPoliticalPartyController {
     })
     if (!existing) throw new NotFoundException('연결 정보를 찾을 수 없습니다.')
     await this.prisma.cabinetPoliticalParty.delete({ where: { id: linkId } })
+  }
+
+  private async areElectionAndHeadCountriesCompatible(
+    ec: { countryId: string | null; historicalCountryId: string | null },
+    ht: { countryId: string | null; historicalCountryId: string | null },
+  ): Promise<boolean> {
+    if (!ec.countryId && !ec.historicalCountryId) return true
+    if (!ht.countryId && !ht.historicalCountryId) return true
+
+    // 양쪽 모두 역사적 국가가 지정된 경우에는 동일한 역사적 국가여야 한다 (같은 현대국으로 dual-fill된 서로 다른 시대 오매칭 방지)
+    if (ec.historicalCountryId && ht.historicalCountryId) {
+      return ec.historicalCountryId === ht.historicalCountryId
+    }
+
+    if (ec.countryId && ht.countryId && ec.countryId === ht.countryId) {
+      return true
+    }
+
+    if (this.prisma.historicalCountryModernCountry?.findFirst) {
+      if (ec.historicalCountryId && ht.countryId) {
+        const link = await this.prisma.historicalCountryModernCountry.findFirst({
+          where: {
+            historicalCountryId: ec.historicalCountryId,
+            modernCountryId: ht.countryId,
+          },
+          select: { historicalCountryId: true },
+        })
+        return Boolean(link)
+      }
+      if (ht.historicalCountryId && ec.countryId) {
+        const link = await this.prisma.historicalCountryModernCountry.findFirst({
+          where: {
+            historicalCountryId: ht.historicalCountryId,
+            modernCountryId: ec.countryId,
+          },
+          select: { historicalCountryId: true },
+        })
+        return Boolean(link)
+      }
+    }
+
+    return false
   }
 }
