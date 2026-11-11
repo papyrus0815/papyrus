@@ -6,6 +6,8 @@ import {
   pointBefore,
   phaseReach,
   phaseReachLabel,
+  orderByPhase,
+  type PhaseReach,
   childStartKey,
   formatPhasePoint,
   parsePhasePoint,
@@ -135,5 +137,37 @@ describe('국면 경계', () => {
   it('사건 날짜를 국면 시점으로', () => {
     expect(isoToPhasePoint('1792-08-10T00:00:00.000Z', 'day')).toEqual({ era: 'AD', year: 1792, month: 8, day: 10 })
     expect(isoToPhasePoint('1792-01-01T00:00:00.000Z', null)).toEqual({ era: 'AD', year: 1792, month: null, day: null })
+  })
+})
+
+describe('orderByPhase — 같은 국면은 한 번만', () => {
+  const reach = (from: number | null, outside: PhaseReach['outside'] = null): PhaseReach => ({
+    from,
+    to: from,
+    outside,
+    manual: false,
+  })
+  it('날짜 순으로 끼어든 다른 국면 사건을 국면별로 모은다(안은 날짜 순)', () => {
+    const rows = ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id }))
+    const reachById = new Map([
+      ['a', reach(1)],
+      ['b', reach(3)],
+      ['c', reach(2)],
+      ['d', reach(3)],
+      ['e', reach(2)],
+    ])
+    expect(orderByPhase(rows, reachById).map((row) => row.id)).toEqual(['a', 'c', 'e', 'b', 'd'])
+  })
+  it('국면 전은 맨 앞, 사이는 직전 국면 뒤, 후·미상은 끝', () => {
+    const rows = ['x', 'p1', 'gap', 'p2', 'late', 'pre'].map((id) => ({ id }))
+    const reachById = new Map([
+      ['x', reach(null, null)],
+      ['p1', reach(1)],
+      ['gap', reach(null, 'between')],
+      ['p2', reach(2)],
+      ['late', reach(null, 'after')],
+      ['pre', reach(null, 'before')],
+    ])
+    expect(orderByPhase(rows, reachById).map((row) => row.id)).toEqual(['pre', 'p1', 'gap', 'p2', 'x', 'late'])
   })
 })

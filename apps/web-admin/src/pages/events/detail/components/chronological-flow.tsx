@@ -10,14 +10,13 @@ import { Fragment, useMemo } from 'react'
 
 import styled, { useTheme } from 'styled-components'
 
-import { metaText } from '@/pages/events/styles/theme'
 import { groupColor } from '@/pages/events/overview/overview.styles'
-import { parseIsoDateParts } from '@/shared/lib/iso-date'
+import { metaText } from '@/pages/events/styles/theme'
 
-import { formatSpanLabel } from './development-timeline.lib'
+import { compareEventStart } from './detail-network.lib'
+import { compactRowDate } from './development-date.lib'
 import type { TreeNode } from './development-tree.lib'
 import { type EventPhase, phaseRangeLabel, phaseReach } from './event-phase.lib'
-import { compareEventStart } from './detail-network.lib'
 
 interface FlowRow {
   node: TreeNode
@@ -25,7 +24,6 @@ interface FlowRow {
   path: string[]
   /** 직계 묶음 순번(색) — 직계 개별 사건이면 null */
   groupIndex: number | null
-  year: number | null
 }
 
 interface FlowSection {
@@ -53,7 +51,7 @@ export function ChronologicalFlow({
       const groupIndex = top.children.length > 0 ? collectionIndex++ : null
       const walk = (node: TreeNode, path: string[]) => {
         if (node.children.length === 0) {
-          rows.push({ node, path, groupIndex, year: parseIsoDateParts(node.startDate)?.year ?? null })
+          rows.push({ node, path, groupIndex })
           return
         }
         for (const child of node.children) walk(child, [...path, node.title])
@@ -108,29 +106,46 @@ export function ChronologicalFlow({
     <Flow>
       {sections.map((section) => (
         <Section key={section.key} aria-label={section.label}>
-          <SectionHead>
-            <b>{section.label}</b>
-            {section.meta && <span>{section.meta}</span>}
-            <span>{section.rows.length}건</span>
-          </SectionHead>
+          {/* 국면이 없으면 머리를 세우지 않는다 — '전체 103건'은 아무것도 가르지 않고, 머리 부제의 '그 아래까지 108건'(묶음 포함)과
+              숫자만 엇갈렸다. 소속은 행의 색 점·바뀔 때의 경로가 말한다 */}
+          {section.key !== 'all' && (
+            <SectionHead>
+              <b>{section.label}</b>
+              {section.meta && <span>{section.meta}</span>}
+              <span>{section.rows.length}건</span>
+            </SectionHead>
+          )}
           <Rows>
             {section.rows.map((row, index) => {
-              const showYear = row.year != null && row.year !== section.rows[index - 1]?.year
-              const color = row.groupIndex != null ? groupColor(row.groupIndex, theme.mode) : neutral
+              const previous = section.rows[index - 1]
+              const color =
+                row.groupIndex != null
+                  ? groupColor(row.groupIndex, theme.mode)
+                  : neutral
+              /* 계층 보기와 같은 날짜 문법 — 앞 행과 같은 해·같은 날은 생략, 해가 바뀌면 연도를 굵게(연 표지 줄 대신) */
+              const date = compactRowDate(row.node, previous?.node ?? null)
+              /* 소속 경로는 바뀔 때만 — 같은 묶음이 이어지면 같은 색 점이 말한다(예전엔 6행 연속 같은 경로) */
+              const pathText = row.path.join(' › ')
+              const showPath =
+                row.path.length > 0 && pathText !== previous?.path.join(' › ')
               return (
                 <Fragment key={row.node.id}>
-                  {showYear && (
-                    <YearMark>{row.year! < 0 ? `기원전 ${-row.year!}년` : `${row.year}년`}</YearMark>
-                  )}
                   <Row>
                     <Dot style={{ background: color }} aria-hidden="true" />
-                    <When>{formatSpanLabel(row.node)}</When>
-                    <Title type="button" onClick={() => onOpen(row.node.id)} title="미리보기">
+                    <When title={date?.full}>
+                      {date?.yearText && <b>{date.yearText}</b>}
+                      {date?.rest ?? '날짜 미상'}
+                    </When>
+                    <Title
+                      type="button"
+                      onClick={() => onOpen(row.node.id)}
+                      title="미리보기"
+                    >
                       {row.node.title}
                     </Title>
-                    {row.path.length > 0 && (
-                      <Path style={{ color }} title={row.path.join(' › ')}>
-                        {row.path.join(' › ')}
+                    {showPath && (
+                      <Path style={{ color }} title={pathText}>
+                        {pathText}
                       </Path>
                     )}
                   </Row>
@@ -158,84 +173,89 @@ const Section = styled.section`
   gap: 4px;
 `
 
+/** 국면 머리 — 계층 보기의 목차 줄과 같은 문법(면 없이 아래 머리카락선 하나) */
 const SectionHead = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 4px 10px;
-  padding: 8px 12px;
-  border-radius: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(20,19,34,0.12)'};
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
   color: ${metaText};
-  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(129,140,248,0.10)' : 'rgba(79,70,229,0.06)')};
 
   b {
     font-size: 15px;
-    font-weight: 800;
+    font-weight: 700;
     color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
 const Rows = styled.ol`
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   margin: 0;
-  padding: 0 0 0 12px;
+  padding: 6px 0 4px 26px;
   list-style: none;
-  border-left: 2px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(20,19,34,0.08)')};
-`
 
-const YearMark = styled.li`
-  margin: 10px 0 2px;
-  font-size: 12px;
-  font-weight: 800;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-variant-numeric: tabular-nums;
+  &::before {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 10px;
+    bottom: 8px;
+    width: 2px;
+    border-radius: 1px;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(20,19,34,0.12)'};
+  }
 `
 
 const Row = styled.li`
   position: relative;
-  display: grid;
-  /* 날짜 열 고정 폭 — 행마다 max-content면 제목 시작이 들쭉날쭉했다 */
-  grid-template-columns: 10px 172px minmax(0, 1fr);
-  column-gap: 8px;
-  align-items: baseline;
-  padding: 5px 0;
-
-  @media (max-width: 640px) {
-    grid-template-columns: 10px minmax(0, 1fr);
-
-    > :nth-child(2) {
-      grid-column: 2;
-    }
-    > :nth-child(3),
-    > :nth-child(4) {
-      grid-column: 2;
-    }
-  }
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 `
 
 const Dot = styled.span`
-  width: 8px;
-  height: 8px;
+  position: absolute;
+  left: -26px;
+  top: 5px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  transform: translateY(-1px);
+  box-shadow: 0 0 0 3px ${({ theme }) => theme.colors.background.primary};
 `
 
 const When = styled.span`
-  font-size: 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 18px;
   color: ${metaText};
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+
+  b {
+    font-weight: 800;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `
 
 const Title = styled.button`
-  justify-self: start;
+  align-self: flex-start;
   min-width: 0;
   padding: 0;
   border: none;
   background: none;
   font: inherit;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 15.5px;
+  font-weight: 600;
+  line-height: 1.45;
   text-align: left;
   color: ${({ theme }) => theme.colors.text.primary};
   cursor: pointer;
@@ -246,14 +266,9 @@ const Title = styled.button`
 `
 
 const Path = styled.span`
-  grid-column: 3;
   font-size: 12px;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-
-  @media (max-width: 640px) {
-    grid-column: 2;
-  }
 `

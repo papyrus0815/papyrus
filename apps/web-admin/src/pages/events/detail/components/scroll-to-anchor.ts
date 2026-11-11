@@ -15,6 +15,13 @@
  */
 export const REVEAL_ANCHOR_EVENT = 'papyrus:reveal-anchor'
 
+/**
+ * 앵커가 아예 그려져 있지 않을 때(접힌 국면·접힌 묶음 안의 하위 사건) — 그 앵커를 가진 쪽이 펼치라고 알린다.
+ * 받는 쪽은 flushSync로 펼쳐, 바로 이어지는 getElementById가 펼친 뒤의 요소를 찾게 한다.
+ * 예전엔 목차에서 접힌 하위를 누르면 아무 일도 없었다(제헌국민의회기 '국면만'에서 '바스티유 감옥 습격' → 이동 0px).
+ */
+export const REVEAL_MISSING_ANCHOR_EVENT = 'papyrus:reveal-missing-anchor'
+
 export function revealAnchor(target: HTMLElement) {
   target.dispatchEvent(new CustomEvent(REVEAL_ANCHOR_EVENT, { bubbles: true }))
 }
@@ -24,8 +31,13 @@ export function scrollToAnchor(
   options: { block?: ScrollLogicalPosition; updateHash?: boolean } = {},
 ) {
   const { block = 'start', updateHash = true } = options
-  const target = document.getElementById(anchorId)
-  if (!target) return
+  let target = document.getElementById(anchorId)
+  /* 접힌 자리('찾으면 펼쳐지는 숨김')에 든 앵커는 좌표가 없다 — 그려지지 않은 것과 같이 펼쳐 달라고 한다 */
+  if (!target || target.closest('[hidden]')) {
+    window.dispatchEvent(new CustomEvent(REVEAL_MISSING_ANCHOR_EVENT, { detail: { anchorId } }))
+    target = document.getElementById(anchorId)
+  }
+  if (!target || target.closest('[hidden]')) return
   revealAnchor(target)
   target.scrollIntoView({ behavior: 'smooth', block })
   if (updateHash) window.history.replaceState(null, '', `#${anchorId}`)

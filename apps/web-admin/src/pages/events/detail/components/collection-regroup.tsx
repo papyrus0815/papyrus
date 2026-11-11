@@ -5,10 +5,23 @@
  * 예전엔 하위 하나를 묶음으로 바꾸려면 그 상세로 들어가 종류를 바꾸고, 그 밑에 넣을 사건마다 다시
  * 상세로 들어가 상위를 고쳐야 했다(1차세계대전 하위 18건 중 7월 위기 11건을 한 묶음으로 → 상세 왕복 12번).
  */
-import { useState } from 'react'
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
-import { FiChevronDown, FiChevronRight, FiCornerLeftUp, FiPlus } from 'react-icons/fi'
+
+import {
+  FiChevronDown,
+  FiChevronRight,
+  FiCornerLeftUp,
+  FiLayers,
+  FiMoreHorizontal,
+  FiPlus,
+} from 'react-icons/fi'
 import styled from 'styled-components'
 
 import {
@@ -26,33 +39,89 @@ import { notify } from '@/shared/ui/toast'
 import { type DatedLike, spanOfChildren } from './collection-development.lib'
 import { crossPatchErrorMessage } from './detail-network.lib'
 
-/* ───────────────────────── 개별 ↔ 묶음 ───────────────────────── */
+/* ───────────────────────── 행 메뉴(⋯) ───────────────────────── */
 
 /**
- * 종류 바꾸기 — '개별 | 묶음' 두 칸. 서버 규칙을 그대로 따른다:
- *  - 개별 → 묶음: 전개 단락이 있으면 거부(단락은 하위 사건이 맡아야 한다 → 그 사건의 '하위 사건으로 나누기')
- *  - 묶음 → 개별: 하위가 남아 있으면 거부
- * 거부 사유는 서버 문장 그대로 알린다(같은 규칙을 여기서 또 계산하지 않는다).
+ * 행 도구 — '⋯' 하나에 종류 바꾸기 · 하위 추가 · 모두 위로 꺼내기.
+ *
+ * 예전엔 행마다 '개별 | 묶음' 두 칸과 묶음 도구 두 단추가 숨어 있다가 마우스가 지나가면 깜빡였고, 숨은 동안에도
+ * 키보드 탭이 멈춰 프랑스 혁명 전개 108행에 탭 정지점이 367개였다(행당 3.4). 지금은 행당 하나.
+ *
+ * 종류 바꾸기는 서버 규칙을 그대로 따른다 — 전개 단락이 있는 개별은 묶음이 못 되고, 하위가 남은 묶음은 개별이
+ * 못 된다. 거부 사유는 서버 문장 그대로 알린다(같은 규칙을 여기서 또 계산하지 않는다).
+ * 꺼내기는 그 묶음의 하위를 묶음의 상위 밑으로 올린다. 빈 묶음은 남는다(지우기는 파괴라 여기서 하지 않는다).
  */
-export function KindSwitch({
+export function RowMenu({
   parentId,
+  rootId,
   child,
-  onChanged,
+  childIds,
+  onKindChanged,
+  onAddUnder,
 }: {
+  /** 이 행의 상위 — 꺼낸 하위가 갈 곳이기도 하다 */
   parentId: string
+  rootId: string
   child: { id: string; title: string; isCollection: boolean }
+  /** 묶음의 직계 하위 id — 꺼내기 대상 */
+  childIds: string[]
   /** 바뀐 종류를 부모에 알린다 — 응답에 종류가 없는 하위의 하위도 화면이 바로 따라오게 */
-  onChanged?: (kind: 'SINGLE' | 'COLLECTION') => void
+  onKindChanged?: (kind: 'SINGLE' | 'COLLECTION') => void
+  onAddUnder: () => void
 }) {
   const queryClient = useQueryClient()
+  const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const hostRef = useRef<HTMLSpanElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
-  const change = async (toCollection: boolean) => {
-    if (busy || toCollection === child.isCollection) return
+  const close = (refocus: boolean) => {
+    setOpen(false)
+    if (refocus) triggerRef.current?.focus()
+  }
+
+  /* 바깥 클릭·Esc로 닫기, 위아래 화살표로 항목 사이 */
+  useEffect(() => {
+    if (!open) return undefined
+    menuRef.current
+      ?.querySelector<HTMLButtonElement>('button:not(:disabled)')
+      ?.focus()
+    const onPointer = (pointerEvent: MouseEvent) => {
+      if (!hostRef.current?.contains(pointerEvent.target as Node))
+        setOpen(false)
+    }
+    document.addEventListener('mousedown', onPointer)
+    return () => document.removeEventListener('mousedown', onPointer)
+  }, [open])
+
+  const onMenuKey = (keyEvent: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (keyEvent.key === 'Escape') {
+      keyEvent.preventDefault()
+      keyEvent.stopPropagation()
+      close(true)
+      return
+    }
+    if (keyEvent.key !== 'ArrowDown' && keyEvent.key !== 'ArrowUp') return
+    keyEvent.preventDefault()
+    const items = [
+      ...(menuRef.current?.querySelectorAll<HTMLButtonElement>(
+        'button:not(:disabled)',
+      ) ?? []),
+    ]
+    const current = items.indexOf(document.activeElement as HTMLButtonElement)
+    const step = keyEvent.key === 'ArrowDown' ? 1 : -1
+    items[(current + step + items.length) % items.length]?.focus()
+  }
+
+  const changeKind = async () => {
+    const toCollection = !child.isCollection
     setBusy(true)
     try {
-      await updateEvent(child.id, { kind: toCollection ? 'COLLECTION' : 'SINGLE' } as UpdateEventDto)
-      onChanged?.(toCollection ? 'COLLECTION' : 'SINGLE')
+      await updateEvent(child.id, {
+        kind: toCollection ? 'COLLECTION' : 'SINGLE',
+      } as UpdateEventDto)
+      onKindChanged?.(toCollection ? 'COLLECTION' : 'SINGLE')
       invalidateEventQueries(queryClient, { eventId: parentId })
       invalidateEventQueries(queryClient, { eventId: child.id })
       notify.success(`'${child.title}'을(를) ${toCollection ? '묶음' : '개별 사건'}으로 바꿨습니다`)
@@ -68,86 +137,84 @@ export function KindSwitch({
     }
   }
 
-  return (
-    <Segment role="radiogroup" aria-label={`${child.title} 종류`} aria-busy={busy}>
-      <SegmentOption
-        type="button"
-        role="radio"
-        aria-checked={!child.isCollection}
-        $active={!child.isCollection}
-        disabled={busy}
-        onClick={() => void change(false)}
-      >
-        개별
-      </SegmentOption>
-      <SegmentOption
-        type="button"
-        role="radio"
-        aria-checked={child.isCollection}
-        $active={child.isCollection}
-        disabled={busy}
-        onClick={() => void change(true)}
-      >
-        묶음
-      </SegmentOption>
-    </Segment>
-  )
-}
-
-/* ───────────────────────── 묶음 끝 동작 ───────────────────────── */
-
-/**
- * 펼친 묶음의 끝 줄 — '이 묶음에 하위 추가'(그 묶음 상세로 들어가지 않고) · '모두 위로 꺼내기'(묶은 것 되돌리기).
- * 꺼내기는 그 묶음의 하위를 묶음의 상위 밑으로 올린다. 빈 묶음은 남는다(지우기는 파괴라 여기서 하지 않는다).
- */
-export function CollectionFooter({
-  collection,
-  liftTo,
-  rootId,
-  onAddUnder,
-}: {
-  collection: { id: string; title: string; childIds: string[] }
-  /** 꺼낸 하위가 갈 곳 — 이 묶음의 상위 */
-  liftTo: string
-  rootId: string
-  onAddUnder: () => void
-}) {
-  const queryClient = useQueryClient()
-  const [busy, setBusy] = useState(false)
-
   const liftAll = async () => {
-    if (busy || collection.childIds.length === 0) return
+    if (childIds.length === 0) return
     setBusy(true)
     let moved = 0
     try {
-      for (const id of collection.childIds) {
-        await updateEvent(id, { parentEventId: liftTo } as UpdateEventDto)
+      for (const id of childIds) {
+        await updateEvent(id, { parentEventId: parentId } as UpdateEventDto)
         moved += 1
         invalidateEventQueries(queryClient, { eventId: id })
       }
-      notify.success(`'${collection.title}' 밑의 ${moved}건을 위로 꺼냈습니다`)
+      notify.success(`'${child.title}' 밑의 ${moved}건을 위로 꺼냈습니다`)
     } catch (error) {
       notify.error(`${moved}건 꺼낸 뒤 멈췄습니다 — ${crossPatchErrorMessage(error)}`)
     } finally {
       invalidateEventQueries(queryClient, { eventId: rootId })
-      invalidateEventQueries(queryClient, { eventId: liftTo })
-      invalidateEventQueries(queryClient, { eventId: collection.id })
+      invalidateEventQueries(queryClient, { eventId: parentId })
+      invalidateEventQueries(queryClient, { eventId: child.id })
       setBusy(false)
     }
   }
 
+  const run = (action: () => void | Promise<void>) => {
+    close(true)
+    void action()
+  }
+
   return (
-    <NestedActions>
-      <NestedAdd type="button" onClick={onAddUnder} disabled={busy}>
-        <FiPlus aria-hidden />이 묶음에 하위 추가
-      </NestedAdd>
-      {collection.childIds.length > 0 && (
-        <NestedLift type="button" disabled={busy} onClick={() => void liftAll()}>
-          <FiCornerLeftUp aria-hidden />
-          {busy ? '꺼내는 중…' : `모두 위로 꺼내기 (${collection.childIds.length})`}
-        </NestedLift>
+    <MenuHost ref={hostRef}>
+      <MenuTrigger
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`'${child.title}' 메뉴`}
+        title="종류 바꾸기 · 하위 추가 · 꺼내기"
+        disabled={busy}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <FiMoreHorizontal aria-hidden />
+      </MenuTrigger>
+      {open && (
+        <MenuPanel
+          ref={menuRef}
+          role="menu"
+          aria-label={`'${child.title}' 메뉴`}
+          onKeyDown={onMenuKey}
+        >
+          {child.isCollection && (
+            <MenuRow
+              type="button"
+              role="menuitem"
+              onClick={() => run(onAddUnder)}
+            >
+              <FiPlus aria-hidden />이 묶음에 하위 추가
+            </MenuRow>
+          )}
+          {child.isCollection && childIds.length > 0 && (
+            <MenuRow
+              type="button"
+              role="menuitem"
+              title="이 묶음의 하위를 묶음의 상위 밑으로 올린다 — 빈 묶음은 남는다"
+              onClick={() => run(liftAll)}
+            >
+              <FiCornerLeftUp aria-hidden />
+              하위 {childIds.length}건 모두 위로 꺼내기
+            </MenuRow>
+          )}
+          <MenuRow
+            type="button"
+            role="menuitem"
+            onClick={() => run(changeKind)}
+          >
+            <FiLayers aria-hidden />
+            {child.isCollection ? '개별 사건으로 바꾸기' : '묶음으로 바꾸기'}
+          </MenuRow>
+        </MenuPanel>
       )}
-    </NestedActions>
+    </MenuHost>
   )
 }
 
@@ -341,11 +408,9 @@ export function RegroupBar({
           </BarPrimary>
         )}
       </BarGroup>
-      {onMakeChapter && (
-        <BarHint>
-          {chapterBlockedReason ?? '국면 = 목차(깊이 그대로) · 새 묶음 = 고른 것을 사건 하나로(한 단 깊게)'}
-        </BarHint>
-      )}
+      {/* 막을 때만 한 줄 — 국면·새 묶음의 차이는 두 단추의 설명(title)이 말한다. 늘 서 있으면 떠 있는 막대가 세 줄이 되어
+          고르는 동안 화면 아래 행 두세 개를 가렸다 */}
+      {onMakeChapter && chapterBlockedReason && <BarHint>{chapterBlockedReason}</BarHint>}
       {targets.length > 0 && (
         <BarGroup
           onSubmit={(submitEvent) => {
@@ -380,42 +445,91 @@ export function RegroupBar({
 
 /* ───────────────────────── 조판 ───────────────────────── */
 
-/** 국면과 새 묶음의 차이 한 줄 — 막대 맨 아래 전체 폭 */
-const BarHint = styled.span`
-  flex-basis: 100%;
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const Segment = styled.span`
+const MenuHost = styled.span`
+  position: relative;
   display: inline-flex;
-  padding: 2px;
-  border-radius: ${RADIUS.PILL};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
 `
 
-const SegmentOption = styled.button<{ $active: boolean }>`
-  padding: 2px 9px;
+const MenuTrigger = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   border: none;
-  border-radius: ${RADIUS.PILL};
-  background: ${({ theme, $active }) => ($active ? ledgerAccentSubtle(theme.mode) : 'transparent')};
-  font: inherit;
-  font-size: 11.5px;
-  font-weight: ${({ $active }) => ($active ? 700 : 500)};
-  color: ${({ theme, $active }) => ($active ? ledgerAccent(theme.mode) : theme.colors.text.secondary)};
+  border-radius: ${RADIUS.SM};
+  background: transparent;
+  color: ${metaText};
   cursor: pointer;
 
-  &:hover:not(:disabled) {
-    color: ${({ theme }) => theme.colors.text.primary};
+  svg {
+    width: 16px;
+    height: 16px;
   }
-  &:disabled {
-    cursor: progress;
+  &:hover,
+  &[aria-expanded='true'] {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'};
   }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 1px;
   }
+`
+
+const MenuPanel = styled.div`
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  min-width: 196px;
+  padding: 4px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 8px 24px rgba(0, 0, 0, 0.5)'
+      : '0 8px 24px rgba(15, 23, 42, 0.1)'};
+`
+
+const MenuRow = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: ${RADIUS.XS};
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: pointer;
+
+  svg {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    color: ${metaText};
+  }
+  &:hover,
+  &:focus-visible {
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+    outline: none;
+  }
+`
+
+/** 국면과 새 묶음의 차이 한 줄 — 막대 맨 아래 전체 폭 */
+const BarHint = styled.span`
+  flex-basis: 100%;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const ExpandButton = styled.button`
@@ -439,63 +553,6 @@ const ExpandButton = styled.button`
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
     border-radius: 2px;
-  }
-`
-
-const NestedActions = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 16px;
-`
-
-/** 되돌리기 — 추가보다 한 단 낮은 목소리(회색) */
-const NestedLift = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 0;
-  border: none;
-  background: none;
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: ${metaText};
-  cursor: pointer;
-
-  svg {
-    width: 12px;
-    height: 12px;
-  }
-  &:hover:not(:disabled) {
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-  &:disabled {
-    cursor: progress;
-  }
-`
-
-const NestedAdd = styled.button`
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 0;
-  border: none;
-  background: none;
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-  cursor: pointer;
-
-  svg {
-    width: 12px;
-    height: 12px;
-  }
-  &:hover {
-    text-decoration: underline;
-    text-underline-offset: 3px;
   }
 `
 

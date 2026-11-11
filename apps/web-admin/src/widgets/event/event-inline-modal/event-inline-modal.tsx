@@ -12,7 +12,7 @@ import { useRef } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
-import { FiArrowRight, FiCalendar, FiMapPin, FiUsers, FiX } from 'react-icons/fi'
+import { FiArrowRight, FiCalendar, FiChevronLeft, FiChevronRight, FiMapPin, FiUsers, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import { eventKeys } from '@/shared/api/event-query-keys'
@@ -48,6 +48,20 @@ export interface EventInlineModalProps {
     /** 블록 제목 — 기본 '이 인물의 사건 기록'. 기업 상세는 '이 기업의 역할'처럼 바꿔 쓴다 */
     label?: string
   } | null
+  /**
+   * 차례 넘기기 — 사건 상세 '전개'처럼 흐름을 읽는 자리에서 연 미리보기. 앞·다음 사건으로 바로 넘어간다(←/→ 키도).
+   * 예전엔 다음 사건을 보려면 닫고 → 다음 행 제목을 다시 눌러야 했다.
+   */
+  sequence?: {
+    previous: { id: string; title: string } | null
+    next: { id: string; title: string } | null
+    /** 1부터 — '3 / 31' */
+    position: number
+    /** 어디쯤 — '제헌국민의회기 › 2국면 파리 봉기와 구체제의 붕괴'. 깊은 계층에서 차례 숫자만으로는 자리를 모른다 */
+    context?: string | null
+    total: number
+    onGo: (eventId: string) => void
+  } | null
 }
 
 export function EventInlineModal({
@@ -55,6 +69,7 @@ export function EventInlineModal({
   onClose,
   onNavigate,
   personContext,
+  sequence,
 }: EventInlineModalProps) {
   // 공용 모달 동작 — Esc 닫기·포커스 트랩·바디 스크롤락·초기 포커스·트리거 복원·
   // aria-modal 일괄. (이전엔 Esc만 수동 구현해 Tab이 배경으로 새고 닫은 뒤 포커스가
@@ -100,6 +115,16 @@ export function EventInlineModal({
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
             onClick={(event) => event.stopPropagation()}
+            onKeyDown={(keyEvent) => {
+              if (!sequence) return
+              const field = (keyEvent.target as HTMLElement).closest('input, textarea, select, [contenteditable="true"]')
+              if (field || keyEvent.altKey || keyEvent.metaKey || keyEvent.ctrlKey) return
+              const target =
+                keyEvent.key === 'ArrowLeft' ? sequence.previous : keyEvent.key === 'ArrowRight' ? sequence.next : null
+              if (!target) return
+              keyEvent.preventDefault()
+              sequence.onGo(target.id)
+            }}
             role="dialog"
             aria-modal="true"
             aria-label="사건 상세 미리보기"
@@ -170,6 +195,34 @@ export function EventInlineModal({
                 </>
               )}
             </Body>
+
+            {sequence && (
+              <SequenceBar aria-label="앞뒤 사건">
+                {sequence.context && <SequenceContext title={sequence.context}>{sequence.context}</SequenceContext>}
+                <SequenceButton
+                  type="button"
+                  disabled={!sequence.previous}
+                  onClick={() => sequence.previous && sequence.onGo(sequence.previous.id)}
+                  title={sequence.previous ? `앞 사건 — ${sequence.previous.title} (←)` : undefined}
+                >
+                  <FiChevronLeft aria-hidden size={14} />
+                  <span>{sequence.previous?.title ?? '처음'}</span>
+                </SequenceButton>
+                <SequencePosition>
+                  {sequence.position} / {sequence.total}
+                </SequencePosition>
+                <SequenceButton
+                  type="button"
+                  $end
+                  disabled={!sequence.next}
+                  onClick={() => sequence.next && sequence.onGo(sequence.next.id)}
+                  title={sequence.next ? `다음 사건 — ${sequence.next.title} (→)` : undefined}
+                >
+                  <span>{sequence.next?.title ?? '끝'}</span>
+                  <FiChevronRight aria-hidden size={14} />
+                </SequenceButton>
+              </SequenceBar>
+            )}
 
             <ModalFooter>
               <SecondaryButton type="button" onClick={onClose}>
@@ -358,6 +411,67 @@ const Skeleton = styled.div`
     0%, 100% { opacity: 1; }
     50% { opacity: 0.55; }
   }
+`
+
+/** 앞뒤 사건 줄 — 본문과 꼬리 사이. 양 끝은 사건 이름(넘치면 말줄임), 가운데 차례 */
+const SequenceBar = styled.nav`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.default};
+`
+
+const SequenceButton = styled.button<{ $end?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: ${({ $end }) => ($end ? 'flex-end' : 'flex-start')};
+  gap: 4px;
+  min-width: 0;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+
+  span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  svg {
+    flex-shrink: 0;
+  }
+  &:hover:not(:disabled) {
+    background: ${({ theme }) => theme.colors.background.tertiary};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  &:disabled {
+    cursor: default;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+const SequenceContext = styled.span`
+  grid-column: 1 / -1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  text-align: center;
+`
+
+const SequencePosition = styled.span`
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const SecondaryButton = styled.button`

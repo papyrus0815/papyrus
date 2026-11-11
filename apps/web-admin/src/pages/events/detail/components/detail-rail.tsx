@@ -147,7 +147,7 @@ export function DetailRail({ sections }: DetailRailProps) {
                           title={child.label}
                           onClick={() => handleNavClick(child.id)}
                         >
-                          <S.RailSubIndex aria-hidden>{index + 1}</S.RailSubIndex>
+                          <S.RailSubIndex aria-hidden>{child.marker ?? index + 1}</S.RailSubIndex>
                           <S.RailSubLabel>{child.label}</S.RailSubLabel>
                         </S.RailSubItem>
                         {inChild && headings.length > 0 && (

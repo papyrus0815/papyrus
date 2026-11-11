@@ -85,7 +85,8 @@ import {
   paragraphOutline,
 } from './components/section-outline.lib'
 import { groupByPhase } from './components/collection-development.lib'
-import { phaseReach, phaseReachLabel } from './components/event-phase.lib'
+import { orderByPhase, phaseReach, phaseReachLabel } from './components/event-phase.lib'
+import { compactStartText } from './components/development-date.lib'
 import { compareEventStart } from './components/detail-network.lib'
 import * as S from './styles'
 import { type EventDetail, eventKeys, useEventDetail } from './use-event-detail'
@@ -631,34 +632,48 @@ function EventDetailContent({
     const shown = (id: FoldableSectionId) =>
       visibleKey[FOLDABLE_SECTIONS.findIndex((section) => section.id === id)] ===
       '1'
+    /**
+     * 묶음의 전개 목차 — 본문과 **같은 차례**(국면이 있으면 국면별로 모은 순서)와 같은 표지.
+     * 본문은 번호 노드를 지웠는데 목차만 1·2·3을 달아, 본문에 없는 번호를 가리켰다 → 시작 날짜(앞 줄과 같은 해는 생략).
+     */
+    const collectionOutline = () => {
+      const dated = [...(event.childEvents ?? []), ...(event.extraChildren ?? [])].sort((first, second) =>
+        compareEventStart(first.startDate, second.startDate),
+      )
+      const chapters = [...(event.phases ?? [])].sort((left, right) => left.order - right.order)
+      const reachById = new Map(
+        dated.map((child) => [
+          child.id,
+          phaseReach(chapters, {
+            id: child.id,
+            phaseId: (child as { phaseId?: string | null }).phaseId ?? null,
+            startDate: child.startDate,
+            startDatePrecision: child.startDatePrecision,
+          }),
+        ]),
+      )
+      const ordered =
+        chapters.length > 0 ? orderByPhase(dated, reachById) : groupByPhase(dated, event).flatMap((group) => group.items)
+      return ordered.map((child, position) => {
+        const previous = ordered[position - 1]
+        /* 시작만 쓰되 정밀도는 끝까지 본 행 전체로 — 정밀도 없는 '7.1 ~ 12.31'은 '7월' */
+        const marker = compactStartText(child, previous ?? null) ?? undefined
+        if (chapters.length === 0) return { id: `narrative-${child.id}`, label: child.title, marker }
+        const reach = reachById.get(child.id)!
+        const chapter = reach.from != null ? chapters[reach.from - 1] : null
+        return {
+          id: `narrative-${child.id}`,
+          label: child.title,
+          marker,
+          chapter: chapter ? `${reach.from}국면 · ${chapter.title}` : phaseReachLabel(reach),
+        }
+      })
+    }
     const withParagraphs = (kind: 'background' | 'narrative' | 'aftermath') => {
       /* 묶음의 전개는 하위 사건이 맡는다 — 목차도 화면과 같은 차례로 하위를 가리킨다 */
       const children =
         kind === 'narrative' && event.kind === 'COLLECTION'
-          ? groupByPhase(
-              [...(event.childEvents ?? []), ...(event.extraChildren ?? [])].sort((first, second) =>
-                compareEventStart(first.startDate, second.startDate),
-              ),
-              event,
-            ).flatMap((group) =>
-              group.items.map((child) => {
-                /* 국면이 있으면 목차에도 장 — 전개의 장 머리와 같은 배정(손 지정 우선, 없으면 시작일) */
-                const chapters = [...(event.phases ?? [])].sort((left, right) => left.order - right.order)
-                if (chapters.length === 0) return { id: `narrative-${child.id}`, label: child.title }
-                const reach = phaseReach(chapters, {
-                  id: child.id,
-                  phaseId: (child as { phaseId?: string | null }).phaseId ?? null,
-                  startDate: child.startDate,
-                  startDatePrecision: child.startDatePrecision,
-                })
-                const chapter = reach.from != null ? chapters[reach.from - 1] : null
-                return {
-                  id: `narrative-${child.id}`,
-                  label: child.title,
-                  chapter: chapter ? `${reach.from}국면 · ${chapter.title}` : phaseReachLabel(reach),
-                }
-              }),
-            )
+          ? collectionOutline()
           : paragraphOutline(event, kind)
       return children.length >= 2 ? children : undefined
     }

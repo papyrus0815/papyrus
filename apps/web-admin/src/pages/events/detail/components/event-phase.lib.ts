@@ -267,6 +267,33 @@ export function phaseReach(phases: ReadonlyArray<EventPhase>, child: PhaseChild)
   return { from, to, outside, manual: false }
 }
 
+/**
+ * 국면별로 모아 놓기 — 하위는 날짜 순으로 오는데, 손으로 3국면에 넣은 6.22 사건이 2국면 사건들 사이에 끼면
+ * 장 머리가 3→2→3→2로 끊겨 같은 국면이 여러 번 섰다(독소전쟁 개전일 13건에 장 머리 6개).
+ * 국면 순으로 모으고 국면 안은 들어온(날짜) 순서 그대로. 국면 전은 맨 앞, 국면 사이는 직전에 지난 국면 바로 뒤,
+ * 국면 후·날짜 미상은 맨 끝.
+ */
+export function orderByPhase<T extends { id: string }>(
+  rows: ReadonlyArray<T>,
+  reachById: ReadonlyMap<string, PhaseReach>,
+): T[] {
+  let passed = 0
+  const ranked = rows.map((row, position) => {
+    const reach = reachById.get(row.id)
+    let rank: number
+    if (!reach) rank = passed
+    else if (reach.from != null) rank = reach.from
+    else if (reach.outside === 'before') rank = 0
+    else if (reach.outside === 'between') rank = Math.floor(passed) + 0.5
+    else rank = Number.POSITIVE_INFINITY
+    if (Number.isFinite(rank)) passed = Math.max(passed, rank)
+    return { row, rank, position }
+  })
+  return ranked
+    .sort((left, right) => (left.rank === right.rank ? left.position - right.position : left.rank - right.rank))
+    .map((entry) => entry.row)
+}
+
 /** '2국면' · '2–4국면' · '국면 전' */
 export function phaseReachLabel(reach: PhaseReach): string {
   if (reach.from == null) {
