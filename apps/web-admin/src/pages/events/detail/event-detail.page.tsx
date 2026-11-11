@@ -38,10 +38,8 @@ import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
 import { pathKeys } from '@/shared/router'
 import { SmartErrorBoundary } from '@/shared/ui/error-handler/smart-error-boundary'
 
-import {
-  CollectionDevelopment,
-  CollectionWholeTextNotice,
-} from './components/collection-development'
+import { CollectionDevelopment } from './components/collection-development'
+import { CollectionWholeTextNotice } from './components/collection-whole-text-notice'
 import { CountryInfoModal } from './components/country-info-modal'
 import { DetailActors } from './components/detail-actors'
 import { DetailAppendix } from './components/detail-appendix'

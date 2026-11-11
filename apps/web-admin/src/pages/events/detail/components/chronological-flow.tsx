@@ -37,11 +37,14 @@ export function ChronologicalFlow({
   tree,
   chapters,
   onOpen,
+  highlightId = null,
 }: {
   tree: ReadonlyArray<TreeNode>
   /** 이 사건(상위)의 국면 — 없으면 해 단위로만 나눈다 */
   chapters: ReadonlyArray<EventPhase>
   onOpen: (id: string) => void
+  /** 미리보기에서 돌아온 행 — 잠깐 강조(계층 보기와 같은 '어디까지 읽었나') */
+  highlightId?: string | null
 }) {
   const theme = useTheme()
   const sections = useMemo<FlowSection[]>(() => {
@@ -130,7 +133,7 @@ export function ChronologicalFlow({
                 row.path.length > 0 && pathText !== previous?.path.join(' › ')
               return (
                 <Fragment key={row.node.id}>
-                  <Row>
+                  <Row id={`chrono-${row.node.id}`} data-highlight={highlightId === row.node.id || undefined}>
                     <Dot style={{ background: color }} aria-hidden="true" />
                     <When title={date?.full}>
                       {date?.yearText && <b>{date.yearText}</b>}
@@ -218,6 +221,14 @@ const Rows = styled.ol`
 
 const Row = styled.li`
   position: relative;
+  scroll-margin-top: 72px;
+  border-radius: 6px;
+  transition: background 0.2s;
+
+  &[data-highlight] {
+    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(129,140,248,0.14)' : 'rgba(79,70,229,0.08)')};
+    box-shadow: 0 0 0 6px ${({ theme }) => (theme.mode === 'dark' ? 'rgba(129,140,248,0.14)' : 'rgba(79,70,229,0.08)')};
+  }
   display: flex;
   flex-direction: column;
   gap: 2px;
