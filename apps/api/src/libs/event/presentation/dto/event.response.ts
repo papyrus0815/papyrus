@@ -387,6 +387,8 @@ export class EventResponseDto {
       countryName: string | null
       personId: string | null
       personName: string | null
+      tenureId?: string | null
+      roleLabel?: string | null
     }>
     /** 조항 미리보기(앞 3개, 본문 140자 발췌) — 전체 수는 termCount */
     termsPreview?: Array<{

@@ -61,6 +61,29 @@ const TREATY_SIGNATORY_INCLUDE = {
   positionDefinition: {
     select: { id: true, title: true, positionType: true, titleEn: true },
   },
+  tenure: {
+    select: {
+      id: true,
+      title: true,
+      rankTitle: true,
+      positionType: true,
+      startEra: true,
+      startYear: true,
+      startMonth: true,
+      endEra: true,
+      endYear: true,
+      endMonth: true,
+      positionDefinition: {
+        select: { id: true, title: true, positionType: true },
+      },
+      administrationDepartment: {
+        select: { id: true, name: true, abbreviation: true },
+      },
+      militaryUnit: {
+        select: { id: true, name: true, abbreviation: true },
+      },
+    },
+  },
   cabinet: {
     select: {
       id: true,
@@ -235,56 +258,79 @@ export class TreatyController {
     }
   }
 
-  private async validateSignatoryTargetAndScope(s: {
+  private async validateSignatoryTargetAndScope(sigTarget: {
     countryId?: string | null
     historicalCountryId?: string | null
     personId?: string | null
+    tenureId?: string | null
     cabinetId?: string | null
     positionDefinitionId?: string | null
     signedAt?: string | null
   }): Promise<void> {
-    this.validateSignatoryCountryXor(s)
-    if (!s.countryId && !s.historicalCountryId && !s.personId && !s.cabinetId) {
+    this.validateSignatoryCountryXor(sigTarget)
+    if (
+      !sigTarget.countryId &&
+      !sigTarget.historicalCountryId &&
+      !sigTarget.personId &&
+      !sigTarget.cabinetId
+    ) {
       throw new BadRequestException(
         '서명국에는 국가(현대/역사), 인물, 행정부 중 최소 하나를 지정해야 합니다.',
       )
     }
-    if (s.signedAt) {
-      const parsedSignedAt = new Date(s.signedAt)
+    if (sigTarget.signedAt) {
+      const parsedSignedAt = new Date(sigTarget.signedAt)
       if (Number.isNaN(parsedSignedAt.getTime())) {
         throw new BadRequestException('국가별 서명일 형식이 올바르지 않습니다.')
       }
     }
-    if (s.countryId && this.prisma.country?.findUnique) {
+    if (sigTarget.countryId && this.prisma.country?.findUnique) {
       const country = await this.prisma.country.findUnique({
-        where: { id: s.countryId },
+        where: { id: sigTarget.countryId },
         select: { id: true },
       })
       if (!country) {
         throw new NotFoundException('서명 현대 국가를 찾을 수 없습니다.')
       }
     }
-    if (s.historicalCountryId && this.prisma.historicalCountry?.findUnique) {
+    if (
+      sigTarget.historicalCountryId &&
+      this.prisma.historicalCountry?.findUnique
+    ) {
       const hist = await this.prisma.historicalCountry.findUnique({
-        where: { id: s.historicalCountryId },
+        where: { id: sigTarget.historicalCountryId },
         select: { id: true },
       })
       if (!hist) {
         throw new NotFoundException('서명 역사적 국가를 찾을 수 없습니다.')
       }
     }
-    if (s.personId && this.prisma.person?.findUnique) {
+    if (sigTarget.personId && this.prisma.person?.findUnique) {
       const person = await this.prisma.person.findUnique({
-        where: { id: s.personId },
+        where: { id: sigTarget.personId },
         select: { id: true },
       })
       if (!person) {
         throw new NotFoundException('서명 인물을 찾을 수 없습니다.')
       }
     }
-    if (s.cabinetId && this.prisma.cabinet?.findUnique) {
+    if (sigTarget.tenureId && this.prisma.governmentPositionTenure?.findUnique) {
+      const tenureRow = await this.prisma.governmentPositionTenure.findUnique({
+        where: { id: sigTarget.tenureId },
+        select: { id: true, personId: true },
+      })
+      if (!tenureRow) {
+        throw new NotFoundException('연결할 재임·보직 기록을 찾을 수 없습니다.')
+      }
+      if (sigTarget.personId && tenureRow.personId !== sigTarget.personId) {
+        throw new BadRequestException(
+          '선택한 재임·보직이 서명 인물의 보직이 아닙니다.',
+        )
+      }
+    }
+    if (sigTarget.cabinetId && this.prisma.cabinet?.findUnique) {
       const cabinet = await this.prisma.cabinet.findUnique({
-        where: { id: s.cabinetId },
+        where: { id: sigTarget.cabinetId },
         select: {
           id: true,
           name: true,
@@ -297,12 +343,15 @@ export class TreatyController {
         throw new NotFoundException('소속 행정부를 찾을 수 없습니다.')
       }
       if (
-        (s.countryId || s.historicalCountryId) &&
+        (sigTarget.countryId || sigTarget.historicalCountryId) &&
         cabinet.headTenure &&
         (cabinet.headTenure.countryId || cabinet.headTenure.historicalCountryId)
       ) {
         const compatible = await this.areSignatoryAxesCompatible(
-          { countryId: s.countryId, historicalCountryId: s.historicalCountryId },
+          {
+            countryId: sigTarget.countryId,
+            historicalCountryId: sigTarget.historicalCountryId,
+          },
           cabinet.headTenure,
         )
         if (!compatible) {
@@ -312,9 +361,9 @@ export class TreatyController {
         }
       }
     }
-    if (s.positionDefinitionId) {
+    if (sigTarget.positionDefinitionId) {
       const def = await this.prisma.governmentPositionDefinition.findUnique({
-        where: { id: s.positionDefinitionId },
+        where: { id: sigTarget.positionDefinitionId },
         select: {
           id: true,
           title: true,
@@ -330,14 +379,20 @@ export class TreatyController {
       if (!def) {
         throw new BadRequestException('관직 정의를 찾을 수 없습니다.')
       }
-      if (!def.isGeneric && (s.countryId || s.historicalCountryId)) {
+      if (
+        !def.isGeneric &&
+        (sigTarget.countryId || sigTarget.historicalCountryId)
+      ) {
         if (
           def.administrationDepartment &&
           (def.administrationDepartment.countryId ||
             def.administrationDepartment.historicalCountryId)
         ) {
           const deptOk = await this.areSignatoryAxesCompatible(
-            { countryId: s.countryId, historicalCountryId: s.historicalCountryId },
+            {
+              countryId: sigTarget.countryId,
+              historicalCountryId: sigTarget.historicalCountryId,
+            },
             def.administrationDepartment,
           )
           if (!deptOk) {
@@ -354,7 +409,10 @@ export class TreatyController {
           for (const sc of activeScopes) {
             if (
               await this.areSignatoryAxesCompatible(
-                { countryId: s.countryId, historicalCountryId: s.historicalCountryId },
+                {
+                  countryId: sigTarget.countryId,
+                  historicalCountryId: sigTarget.historicalCountryId,
+                },
                 sc,
               )
             ) {
@@ -385,21 +443,233 @@ export class TreatyController {
     }
   }
 
+  private async resolveSignatoryTenureFields(params: {
+    personId?: string | null
+    tenureId?: string | null
+    cabinetId?: string | null
+    positionDefinitionId?: string | null
+    role?: string | null
+    countryId?: string | null
+    historicalCountryId?: string | null
+    targetDate?: Date | null
+  }): Promise<{
+    tenureId: string | null
+    cabinetId: string | null
+    positionDefinitionId: string | null
+    role: string | null
+  }> {
+    const baseResult = {
+      tenureId: params.tenureId ?? null,
+      cabinetId: params.cabinetId ?? null,
+      positionDefinitionId: params.positionDefinitionId ?? null,
+      role: params.role ?? null,
+    }
+    if (!params.personId) {
+      return { ...baseResult, tenureId: null }
+    }
+    if (params.tenureId === null) {
+      return { ...baseResult, tenureId: null }
+    }
+
+    if (
+      typeof params.tenureId === 'string' &&
+      params.tenureId.trim() !== '' &&
+      this.prisma.governmentPositionTenure?.findUnique
+    ) {
+      const explicitTenure =
+        await this.prisma.governmentPositionTenure.findUnique({
+          where: { id: params.tenureId },
+          select: {
+            id: true,
+            title: true,
+            positionDefinitionId: true,
+            cabinetId: true,
+            positionDefinition: { select: { title: true } },
+            cabinetMemberships: { select: { cabinetId: true }, take: 1 },
+          },
+        })
+      if (!explicitTenure) return baseResult
+      return {
+        tenureId: explicitTenure.id,
+        cabinetId:
+          params.cabinetId ??
+          explicitTenure.cabinetId ??
+          explicitTenure.cabinetMemberships[0]?.cabinetId ??
+          null,
+        positionDefinitionId:
+          params.positionDefinitionId ??
+          explicitTenure.positionDefinitionId ??
+          null,
+        role:
+          params.role ??
+          explicitTenure.title ??
+          explicitTenure.positionDefinition?.title ??
+          null,
+      }
+    }
+
+    if (
+      params.tenureId === undefined &&
+      this.prisma.governmentPositionTenure?.findMany
+    ) {
+      const candidates = await this.prisma.governmentPositionTenure.findMany({
+        where: { personId: params.personId },
+        select: {
+          id: true,
+          title: true,
+          positionType: true,
+          countryId: true,
+          historicalCountryId: true,
+          positionDefinitionId: true,
+          cabinetId: true,
+          startEra: true,
+          startYear: true,
+          startMonth: true,
+          startDay: true,
+          startDate: true,
+          endEra: true,
+          endYear: true,
+          endMonth: true,
+          endDay: true,
+          endDate: true,
+          positionDefinition: { select: { title: true, rank: true } },
+          cabinetMemberships: { select: { cabinetId: true }, take: 1 },
+        },
+      })
+      if (candidates.length === 0) return baseResult
+
+      const toSignedKey = (
+        eraVal: string | null,
+        yearVal: number | null,
+        monthVal: number | null,
+        dayVal: number | null,
+        isoDate: Date | null,
+        isEnd: boolean,
+      ): number | null => {
+        if (yearVal != null && yearVal > 0) {
+          const signedYear = eraVal === 'BC' ? -yearVal : yearVal
+          const resolvedMonth = monthVal ?? (isEnd ? 12 : 1)
+          const resolvedDay = dayVal ?? (isEnd ? 31 : 1)
+          return signedYear * 10000 + resolvedMonth * 100 + resolvedDay
+        }
+        if (isoDate && !Number.isNaN(isoDate.getTime())) {
+          return (
+            isoDate.getUTCFullYear() * 10000 +
+            (isoDate.getUTCMonth() + 1) * 100 +
+            isoDate.getUTCDate()
+          )
+        }
+        return null
+      }
+
+      const targetKey =
+        params.targetDate && !Number.isNaN(params.targetDate.getTime())
+          ? params.targetDate.getUTCFullYear() * 10000 +
+            (params.targetDate.getUTCMonth() + 1) * 100 +
+            params.targetDate.getUTCDate()
+          : null
+
+      const overlapping = candidates.filter((cand) => {
+        if (targetKey == null) return false
+        const startKey = toSignedKey(
+          cand.startEra,
+          cand.startYear,
+          cand.startMonth,
+          cand.startDay,
+          cand.startDate,
+          false,
+        )
+        const endKey =
+          toSignedKey(
+            cand.endEra,
+            cand.endYear,
+            cand.endMonth,
+            cand.endDay,
+            cand.endDate,
+            true,
+          ) ?? Number.MAX_SAFE_INTEGER
+        if (startKey == null) return false
+        return startKey <= targetKey && targetKey <= endKey
+      })
+
+      if (overlapping.length === 0) return baseResult
+
+      const scoreCandidate = (cand: (typeof overlapping)[number]): number => {
+        let score = 0
+        if (
+          params.historicalCountryId &&
+          cand.historicalCountryId === params.historicalCountryId
+        ) {
+          score += 50
+        }
+        if (params.countryId && cand.countryId === params.countryId) {
+          score += 30
+        }
+        if (cand.positionType === 'DIPLOMATIC_POST') score += 18
+        else if (cand.positionType === 'CABINET_MINISTER') score += 16
+        else if (cand.positionType === 'HEAD_OF_GOVERNMENT') score += 14
+        else if (cand.positionType === 'HEAD_OF_STATE') score += 12
+        else if (cand.positionType === 'MILITARY_COMMANDER') score += 10
+        const titleText = `${cand.title ?? ''} ${cand.positionDefinition?.title ?? ''}`
+        if (titleText.includes('외무') || titleText.includes('외교')) {
+          score += 12
+        }
+        return score
+      }
+
+      overlapping.sort(
+        (left, right) => scoreCandidate(right) - scoreCandidate(left),
+      )
+      const matched = overlapping[0]!
+      return {
+        tenureId: matched.id,
+        cabinetId:
+          params.cabinetId ??
+          matched.cabinetId ??
+          matched.cabinetMemberships[0]?.cabinetId ??
+          null,
+        positionDefinitionId:
+          params.positionDefinitionId ?? matched.positionDefinitionId ?? null,
+        role:
+          params.role ??
+          matched.title ??
+          matched.positionDefinition?.title ??
+          null,
+      }
+    }
+
+    return baseResult
+  }
+
   private signatoryNestedToPrismaData(
     treatyId: string,
-    s: CreateTreatySignatoryNestedDto,
+    sigInput: CreateTreatySignatoryNestedDto,
+    resolvedTenure?: {
+      tenureId: string | null
+      cabinetId: string | null
+      positionDefinitionId: string | null
+      role: string | null
+    },
   ): Prisma.TreatySignatoryUncheckedCreateInput {
     return {
       treatyId,
-      countryId: s.countryId ?? null,
-      historicalCountryId: s.historicalCountryId ?? null,
-      personId: s.personId ?? null,
-      cabinetId: s.cabinetId ?? null,
-      role: s.role ?? null,
-      positionDefinitionId: s.positionDefinitionId ?? null,
-      participationType: (s.participationType ?? 'SIGNATORY') as any,
-      signedAt: s.signedAt ? new Date(s.signedAt) : null,
-      note: s.note ?? null,
+      countryId: sigInput.countryId ?? null,
+      historicalCountryId: sigInput.historicalCountryId ?? null,
+      personId: sigInput.personId ?? null,
+      tenureId: resolvedTenure
+        ? resolvedTenure.tenureId
+        : (sigInput.tenureId ?? null),
+      cabinetId: resolvedTenure
+        ? resolvedTenure.cabinetId
+        : (sigInput.cabinetId ?? null),
+      role: resolvedTenure ? resolvedTenure.role : (sigInput.role ?? null),
+      positionDefinitionId: resolvedTenure
+        ? resolvedTenure.positionDefinitionId
+        : (sigInput.positionDefinitionId ?? null),
+      participationType: (sigInput.participationType ??
+        'SIGNATORY') as Prisma.TreatySignatoryUncheckedCreateInput['participationType'],
+      signedAt: sigInput.signedAt ? new Date(sigInput.signedAt) : null,
+      note: sigInput.note ?? null,
     } as Prisma.TreatySignatoryUncheckedCreateInput
   }
 
@@ -555,13 +825,31 @@ export class TreatyController {
     } as Prisma.TreatyUncheckedCreateInput
 
     if (dto.signatories?.length) {
+      const resolvedNested = await Promise.all(
+        dto.signatories.map((sigItem) =>
+          this.resolveSignatoryTenureFields({
+            personId: sigItem.personId,
+            tenureId: sigItem.tenureId,
+            cabinetId: sigItem.cabinetId,
+            positionDefinitionId: sigItem.positionDefinitionId,
+            role: sigItem.role,
+            countryId: sigItem.countryId,
+            historicalCountryId: sigItem.historicalCountryId,
+            targetDate: sigItem.signedAt ? new Date(sigItem.signedAt) : signDate,
+          }),
+        ),
+      )
       const treaty = await this.prisma.$transaction(async (tx) => {
         const created = await tx.treaty.create({
           data: baseData,
         })
-        for (const s of dto.signatories!) {
+        for (let idx = 0; idx < dto.signatories!.length; idx += 1) {
           await tx.treatySignatory.create({
-            data: this.signatoryNestedToPrismaData(created.id, s),
+            data: this.signatoryNestedToPrismaData(
+              created.id,
+              dto.signatories![idx]!,
+              resolvedNested[idx],
+            ),
           })
         }
         return tx.treaty.findUniqueOrThrow({
@@ -743,14 +1031,16 @@ export class TreatyController {
   @Post('signatories')
   @ApiOperation({ summary: '서명국 추가' })
   async addSignatory(@Body() dto: CreateTreatySignatoryBodyDto): Promise<any> {
+    let treatySignDate: Date | null = null
     if (this.prisma.treaty?.findUnique) {
       const treaty = await this.prisma.treaty.findUnique({
         where: { id: dto.treatyId },
-        select: { id: true },
+        select: { id: true, signDate: true },
       })
       if (!treaty) {
         throw new NotFoundException('조약을 찾을 수 없습니다.')
       }
+      treatySignDate = treaty.signDate ?? null
     }
     await this.validateSignatoryTargetAndScope(dto)
 
@@ -772,15 +1062,27 @@ export class TreatyController {
       }
     }
 
+    const resolvedTenure = await this.resolveSignatoryTenureFields({
+      personId: dto.personId,
+      tenureId: dto.tenureId,
+      cabinetId: dto.cabinetId,
+      positionDefinitionId: dto.positionDefinitionId,
+      role: dto.role,
+      countryId: dto.countryId,
+      historicalCountryId: dto.historicalCountryId,
+      targetDate: dto.signedAt ? new Date(dto.signedAt) : treatySignDate,
+    })
+
     const signatory = await this.prisma.treatySignatory.create({
       data: {
         treatyId: dto.treatyId,
         countryId: dto.countryId ?? undefined,
         historicalCountryId: dto.historicalCountryId ?? undefined,
         personId: dto.personId ?? undefined,
-        cabinetId: dto.cabinetId ?? undefined,
-        role: dto.role ?? undefined,
-        positionDefinitionId: dto.positionDefinitionId ?? undefined,
+        tenureId: resolvedTenure.tenureId ?? undefined,
+        cabinetId: resolvedTenure.cabinetId ?? undefined,
+        role: resolvedTenure.role ?? undefined,
+        positionDefinitionId: resolvedTenure.positionDefinitionId ?? undefined,
         participationType: (dto.participationType ?? 'SIGNATORY') as any,
         signedAt: dto.signedAt ? new Date(dto.signedAt) : undefined,
         note: dto.note ?? undefined,
@@ -805,6 +1107,12 @@ export class TreatyController {
           ? dto.historicalCountryId
           : exists.historicalCountryId,
       personId: dto.personId !== undefined ? dto.personId : exists.personId,
+      tenureId:
+        dto.tenureId !== undefined
+          ? dto.tenureId
+          : dto.personId !== undefined && dto.personId !== exists.personId
+            ? undefined
+            : (exists as { tenureId?: string | null }).tenureId,
       cabinetId: dto.cabinetId !== undefined ? dto.cabinetId : exists.cabinetId,
       positionDefinitionId:
         dto.positionDefinitionId !== undefined
@@ -814,17 +1122,81 @@ export class TreatyController {
     }
     await this.validateSignatoryTargetAndScope(merged)
 
+    let nextTenureId: string | null | undefined = dto.tenureId
+    let autoRole: string | null | undefined = undefined
+    let autoCabinetId: string | null | undefined = undefined
+    let autoPositionDefId: string | null | undefined = undefined
+
+    if (
+      dto.tenureId !== undefined ||
+      (dto.personId !== undefined && dto.personId !== exists.personId)
+    ) {
+      let treatySignDate: Date | null = null
+      if (exists.treatyId && this.prisma.treaty?.findUnique) {
+        const parentTreaty = await this.prisma.treaty.findUnique({
+          where: { id: exists.treatyId },
+          select: { signDate: true },
+        })
+        treatySignDate = parentTreaty?.signDate ?? null
+      }
+      const effectiveSignedAt =
+        dto.signedAt !== undefined
+          ? dto.signedAt
+            ? new Date(dto.signedAt)
+            : null
+          : exists.signedAt ?? null
+      const resolvedTenure = await this.resolveSignatoryTenureFields({
+        personId: merged.personId,
+        tenureId: merged.tenureId,
+        cabinetId: dto.cabinetId,
+        positionDefinitionId: dto.positionDefinitionId,
+        role: dto.role,
+        countryId: merged.countryId,
+        historicalCountryId: merged.historicalCountryId,
+        targetDate: effectiveSignedAt ?? treatySignDate,
+      })
+      nextTenureId = resolvedTenure.tenureId
+      if (dto.role === undefined && !exists.role && resolvedTenure.role) {
+        autoRole = resolvedTenure.role
+      }
+      if (
+        dto.cabinetId === undefined &&
+        !exists.cabinetId &&
+        resolvedTenure.cabinetId
+      ) {
+        autoCabinetId = resolvedTenure.cabinetId
+      }
+      if (
+        dto.positionDefinitionId === undefined &&
+        !exists.positionDefinitionId &&
+        resolvedTenure.positionDefinitionId
+      ) {
+        autoPositionDefId = resolvedTenure.positionDefinitionId
+      }
+    }
+
     const updated = await this.prisma.treatySignatory.update({
       where: { id },
       data: {
         ...(dto.countryId !== undefined && { countryId: dto.countryId }),
         ...(dto.historicalCountryId !== undefined && { historicalCountryId: dto.historicalCountryId }),
         ...(dto.personId !== undefined && { personId: dto.personId }),
-        ...(dto.cabinetId !== undefined && { cabinetId: dto.cabinetId }),
-        ...(dto.role !== undefined && { role: dto.role }),
-        ...(dto.positionDefinitionId !== undefined && {
-          positionDefinitionId: dto.positionDefinitionId,
-        }),
+        ...(nextTenureId !== undefined && { tenureId: nextTenureId }),
+        ...(dto.cabinetId !== undefined
+          ? { cabinetId: dto.cabinetId }
+          : autoCabinetId !== undefined
+            ? { cabinetId: autoCabinetId }
+            : {}),
+        ...(dto.role !== undefined
+          ? { role: dto.role }
+          : autoRole !== undefined
+            ? { role: autoRole }
+            : {}),
+        ...(dto.positionDefinitionId !== undefined
+          ? { positionDefinitionId: dto.positionDefinitionId }
+          : autoPositionDefId !== undefined
+            ? { positionDefinitionId: autoPositionDefId }
+            : {}),
         ...(dto.participationType !== undefined && { participationType: dto.participationType as any }),
         ...(dto.signedAt !== undefined && { signedAt: dto.signedAt ? new Date(dto.signedAt) : null }),
         ...(dto.note !== undefined && { note: dto.note }),

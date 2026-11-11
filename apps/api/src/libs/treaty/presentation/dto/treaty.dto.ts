@@ -59,6 +59,11 @@ export class CreateTreatySignatoryNestedDto {
   personId?: string | null
 
   @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined && val !== '')
+  @IsString()
+  tenureId?: string | null
+
+  @IsOptional()
   @ValidateIf((_, v) => v !== null && v !== undefined && v !== '')
   @IsString()
   cabinetId?: string | null
@@ -232,6 +237,11 @@ export class CreateTreatySignatoryBodyDto {
   personId?: string | null
 
   @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined && val !== '')
+  @IsString()
+  tenureId?: string | null
+
+  @IsOptional()
   @ValidateIf((_, v) => v !== null && v !== undefined && v !== '')
   @IsString()
   cabinetId?: string | null
@@ -274,6 +284,11 @@ export class UpdateTreatySignatoryBodyDto {
   @ValidateIf((_, v) => v !== null && v !== undefined && v !== '')
   @IsString()
   personId?: string | null
+
+  @IsOptional()
+  @ValidateIf((_, val) => val !== null && val !== undefined && val !== '')
+  @IsString()
+  tenureId?: string | null
 
   @IsOptional()
   @ValidateIf((_, v) => v !== null && v !== undefined && v !== '')

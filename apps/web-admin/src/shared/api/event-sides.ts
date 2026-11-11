@@ -130,6 +130,7 @@ export interface SideUnitCommanderView {
   rank: string | null
   role: string | null
   isOverride: boolean
+  tenureId?: string | null
 }
 
 export interface SideUnitMetricView {
@@ -262,6 +263,23 @@ export async function removeEventSideUnit(eventId: string, id: string): Promise<
     },
   )
   return parseSideUnitResponse(res, '투입 부대를 제외하지 못했습니다')
+}
+
+/** 전투서열(ORBAT)에 지정된 지휘관을 군사부대 보직 정본(GovernmentPositionTenure)에 등록 */
+export async function syncEventSideUnitCommanderTenure(
+  eventId: string,
+  id: string,
+): Promise<SideUnitView[]> {
+  const conn = getApiConnection()
+  const res = await fetch(
+    `${conn.host}/events/${encodeURIComponent(eventId)}/side-units/${encodeURIComponent(id)}/sync-commander-tenure`,
+    {
+      method: 'POST',
+      headers: conn.headers as HeadersInit,
+      credentials: 'include',
+    },
+  )
+  return parseSideUnitResponse(res, '지휘관 보직 정본 등록에 실패했습니다')
 }
 
 export type SideWeaponKind = 'WEAPON' | 'GROUND_VEHICLE' | 'AIRCRAFT' | 'NAVAL_VESSEL'

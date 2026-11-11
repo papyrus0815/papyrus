@@ -2292,28 +2292,63 @@ export const TreatyDetail: React.FC<{
                       <TD.Tag>{fmtDate(signatory.signedAt)} 서명</TD.Tag>
                     )}
                   </TD.PartyTags>
-                  {(personName || signatory.role) && (
-                    <TD.PartyLine>
-                      {personName &&
-                        (signatory.person ? (
-                          <TD.PersonLink
-                            to={pathKeys.personsTimelineDetail(
-                              signatory.person.id,
-                            )}
-                          >
-                            {personName}
-                          </TD.PersonLink>
-                        ) : (
-                          <b>{personName}</b>
-                        ))}
-                      {personName && signatory.role && ' · '}
-                      {signatory.role && (
-                        <span className={personName ? 'meta' : undefined}>
-                          {signatory.role}
-                        </span>
-                      )}
-                    </TD.PartyLine>
-                  )}
+                  {(() => {
+                    const linkedTenure = signatory.tenure
+                    const tenureTitle =
+                      linkedTenure?.title ??
+                      linkedTenure?.positionDefinition?.title ??
+                      null
+                    const displayRole =
+                      signatory.role ??
+                      tenureTitle ??
+                      signatory.positionDefinition?.title ??
+                      null
+                    const instName =
+                      linkedTenure?.administrationDepartment?.abbreviation ??
+                      linkedTenure?.administrationDepartment?.name ??
+                      linkedTenure?.militaryUnit?.abbreviation ??
+                      linkedTenure?.militaryUnit?.name ??
+                      null
+                    const roleWithRank = [
+                      linkedTenure?.rankTitle ?? null,
+                      displayRole,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')
+                    const fullRoleMeta = [
+                      roleWithRank || null,
+                      instName &&
+                      (!roleWithRank || !roleWithRank.includes(instName))
+                        ? instName
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
+
+                    if (!personName && !fullRoleMeta) return null
+                    return (
+                      <TD.PartyLine>
+                        {personName &&
+                          (signatory.person ? (
+                            <TD.PersonLink
+                              to={pathKeys.personsTimelineDetail(
+                                signatory.person.id,
+                              )}
+                            >
+                              {personName}
+                            </TD.PersonLink>
+                          ) : (
+                            <b>{personName}</b>
+                          ))}
+                        {personName && fullRoleMeta && ' · '}
+                        {fullRoleMeta && (
+                          <span className={personName ? 'meta' : undefined}>
+                            {fullRoleMeta}
+                          </span>
+                        )}
+                      </TD.PartyLine>
+                    )
+                  })()}
                   {cabinetLabel && (
                     <TD.PartyLine>
                       <span className="meta">{cabinetLabel}</span>
@@ -2615,6 +2650,7 @@ export const TreatyDetail: React.FC<{
           {addSignatoryOpen && (
             <AddSignatoryModal
               treatyId={treatyId}
+              treatySignDate={treaty.signDate}
               onClose={() => setAddSignatoryOpen(false)}
               onAdded={() => {
                 setAddSignatoryOpen(false)
@@ -2627,6 +2663,7 @@ export const TreatyDetail: React.FC<{
             <EditSignatoryModal
               key={editSignatory.id}
               signatory={editSignatory}
+              treatySignDate={treaty.signDate}
               onClose={() => setEditSignatory(null)}
               onSaved={() => {
                 setEditSignatory(null)
@@ -2735,6 +2772,224 @@ const SignatoryPersonPicker: React.FC<{
   )
 }
 
+interface SignatoryTenureOption {
+  id: string
+  title?: string | null
+  rankTitle?: string | null
+  cabinetId?: string | null
+  cabinetMemberships?: Array<{ cabinetId?: string | null }> | null
+  startEra?: string | null
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
+  startDate?: string | null
+  endEra?: string | null
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
+  endDate?: string | null
+  positionDefinition?: { id: string; title: string } | null
+  administrationDepartment?: {
+    id: string
+    name: string
+    abbreviation?: string | null
+  } | null
+  militaryUnit?: {
+    id: string
+    name: string
+    abbreviation?: string | null
+  } | null
+}
+
+function parseTargetDateKey(dateStr: string | null | undefined): number | null {
+  if (!dateStr) return null
+  const match = /^(-?\d{1,6})-(\d{2})-(\d{2})/.exec(dateStr.trim())
+  if (!match) return null
+  return Number(match[1]) * 10000 + Number(match[2]) * 100 + Number(match[3])
+}
+
+function toTenureDateKey(
+  eraVal: string | null | undefined,
+  yearVal: number | null | undefined,
+  monthVal: number | null | undefined,
+  dayVal: number | null | undefined,
+  isoVal: string | null | undefined,
+  isEnd: boolean,
+): number | null {
+  if (yearVal != null && yearVal > 0) {
+    const signedYear = eraVal === 'BC' ? -yearVal : yearVal
+    const resolvedMonth = monthVal ?? (isEnd ? 12 : 1)
+    const resolvedDay = dayVal ?? (isEnd ? 31 : 1)
+    return signedYear * 10000 + resolvedMonth * 100 + resolvedDay
+  }
+  return parseTargetDateKey(isoVal)
+}
+
+function formatSignatoryTenureLabel(tenureItem: SignatoryTenureOption): string {
+  const titleText =
+    tenureItem.title ?? tenureItem.positionDefinition?.title ?? '보직'
+  const instText =
+    tenureItem.administrationDepartment?.abbreviation ??
+    tenureItem.administrationDepartment?.name ??
+    tenureItem.militaryUnit?.abbreviation ??
+    tenureItem.militaryUnit?.name ??
+    null
+  const startLabel = tenureItem.startYear
+    ? `${tenureItem.startEra === 'BC' ? 'BC ' : ''}${tenureItem.startYear}`
+    : tenureItem.startDate
+      ? tenureItem.startDate.slice(0, 4)
+      : '?'
+  const endLabel = tenureItem.endYear
+    ? `${tenureItem.endEra === 'BC' ? 'BC ' : ''}${tenureItem.endYear}`
+    : tenureItem.endDate
+      ? tenureItem.endDate.slice(0, 4)
+      : '현임'
+  return [
+    tenureItem.rankTitle ?? null,
+    titleText,
+    instText ? `(${instText})` : null,
+    `· ${startLabel}~${endLabel}`,
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
+
+const SignatoryTenurePicker: React.FC<{
+  personId: string
+  tenureId: string
+  targetDateStr: string | null | undefined
+  onSelectTenure: (
+    nextTenureId: string,
+    selectedTenure: SignatoryTenureOption | null,
+  ) => void
+}> = ({ personId, tenureId, targetDateStr, onSelectTenure }) => {
+  const { data: rawTenures = [], isLoading } = useQuery({
+    queryKey: ['person-tenures-for-signatory', personId],
+    queryFn: () => personCareerApi.getTenuresByPersonId(personId),
+    enabled: Boolean(personId),
+    staleTime: 60_000,
+  })
+
+  const tenures = rawTenures as SignatoryTenureOption[]
+  const targetKey = parseTargetDateKey(targetDateStr)
+
+  const sortedTenures = useMemo(() => {
+    return [...tenures].sort((left, right) => {
+      if (targetKey != null) {
+        const leftStart = toTenureDateKey(
+          left.startEra,
+          left.startYear,
+          left.startMonth,
+          left.startDay,
+          left.startDate,
+          false,
+        )
+        const leftEnd =
+          toTenureDateKey(
+            left.endEra,
+            left.endYear,
+            left.endMonth,
+            left.endDay,
+            left.endDate,
+            true,
+          ) ?? Number.MAX_SAFE_INTEGER
+        const rightStart = toTenureDateKey(
+          right.startEra,
+          right.startYear,
+          right.startMonth,
+          right.startDay,
+          right.startDate,
+          false,
+        )
+        const rightEnd =
+          toTenureDateKey(
+            right.endEra,
+            right.endYear,
+            right.endMonth,
+            right.endDay,
+            right.endDate,
+            true,
+          ) ?? Number.MAX_SAFE_INTEGER
+        const leftOverlap =
+          leftStart != null && leftStart <= targetKey && targetKey <= leftEnd
+            ? 1
+            : 0
+        const rightOverlap =
+          rightStart != null && rightStart <= targetKey && targetKey <= rightEnd
+            ? 1
+            : 0
+        if (leftOverlap !== rightOverlap) return rightOverlap - leftOverlap
+      }
+      return (right.startYear ?? 0) - (left.startYear ?? 0)
+    })
+  }, [tenures, targetKey])
+
+  if (!personId) {
+    return (
+      <FieldHint>
+        서명 인물을 선택하면 체결 당시 재임·보직 정본을 바로 연결할 수 있습니다.
+      </FieldHint>
+    )
+  }
+
+  if (isLoading) {
+    return <FieldHint>인물의 재임·보직 목록을 불러오는 중…</FieldHint>
+  }
+
+  if (sortedTenures.length === 0) {
+    return (
+      <FieldHint>
+        이 인물에 등록된 재임·보직이 없습니다. 아래 역할/직책 칸에 직접 입력할 수 있습니다.
+      </FieldHint>
+    )
+  }
+
+  return (
+    <Select
+      value={tenureId}
+      onChange={(changeEvent) => {
+        const nextVal = changeEvent.target.value
+        const matched =
+          sortedTenures.find((cand) => cand.id === nextVal) ?? null
+        onSelectTenure(nextVal, matched)
+      }}
+    >
+      <option value="__AUTO__">체결일 기준 자동 매칭 (권장)</option>
+      <option value="__NONE__">보직 정본 연결 안 함</option>
+      {sortedTenures.map((tenureItem) => {
+        const startKey = toTenureDateKey(
+          tenureItem.startEra,
+          tenureItem.startYear,
+          tenureItem.startMonth,
+          tenureItem.startDay,
+          tenureItem.startDate,
+          false,
+        )
+        const endKey =
+          toTenureDateKey(
+            tenureItem.endEra,
+            tenureItem.endYear,
+            tenureItem.endMonth,
+            tenureItem.endDay,
+            tenureItem.endDate,
+            true,
+          ) ?? Number.MAX_SAFE_INTEGER
+        const isContemporary =
+          targetKey != null &&
+          startKey != null &&
+          startKey <= targetKey &&
+          targetKey <= endKey
+        return (
+          <option key={tenureItem.id} value={tenureItem.id}>
+            {isContemporary ? '★ [체결 당시 재임] ' : ''}
+            {formatSignatoryTenureLabel(tenureItem)}
+          </option>
+        )
+      })}
+    </Select>
+  )
+}
+
 const SignatoryCabinetPicker: React.FC<{
   cabinetId: string
   /** 선택된 서명국 — 행정부 후보를 그 나라로 좁힌다 */
@@ -2808,9 +3063,10 @@ const PickerBtn = styled.button`
 
 const AddSignatoryModal: React.FC<{
   treatyId: string
+  treatySignDate?: string | null
   onClose: () => void
   onAdded: () => void
-}> = ({ treatyId, onClose, onAdded }) => {
+}> = ({ treatyId, treatySignDate, onClose, onAdded }) => {
   const [countryId, setCountryId] = useState<string | null>(null)
   const [historicalCountryId, setHistoricalCountryId] = useState<
     string | null
@@ -2818,6 +3074,7 @@ const AddSignatoryModal: React.FC<{
   const [countryLabel, setCountryLabel] = useState('')
   const [countryPickerOpen, setCountryPickerOpen] = useState(false)
   const [personId, setPersonId] = useState('')
+  const [tenureChoice, setTenureChoice] = useState('__AUTO__')
   const [cabinetId, setCabinetId] = useState('')
   const [role, setRole] = useState('')
   const [participationType, setParticipationType] =
@@ -2849,6 +3106,13 @@ const AddSignatoryModal: React.FC<{
         countryId,
         historicalCountryId,
         personId: personId || null,
+        tenureId: !personId
+          ? null
+          : tenureChoice === '__AUTO__'
+            ? undefined
+            : tenureChoice === '__NONE__'
+              ? null
+              : tenureChoice,
         cabinetId: cabinetId || null,
         role: role || null,
         participationType,
@@ -2921,7 +3185,37 @@ const AddSignatoryModal: React.FC<{
               <FieldLabel>서명 인물 (선택)</FieldLabel>
               <SignatoryPersonPicker
                 personId={personId}
-                onChange={setPersonId}
+                onChange={(nextPersonId) => {
+                  setPersonId(nextPersonId)
+                  setTenureChoice('__AUTO__')
+                }}
+              />
+            </Field>
+            <Field>
+              <FieldLabel>체결 당시 재임·보직 정본 (선택)</FieldLabel>
+              <SignatoryTenurePicker
+                personId={personId}
+                tenureId={tenureChoice}
+                targetDateStr={signedAt || treatySignDate}
+                onSelectTenure={(nextVal, pickedTenure) => {
+                  setTenureChoice(nextVal)
+                  if (pickedTenure) {
+                    const suggestedRole =
+                      pickedTenure.title ??
+                      pickedTenure.positionDefinition?.title ??
+                      ''
+                    if (!role && suggestedRole) {
+                      setRole(suggestedRole)
+                    }
+                    const suggestedCabinet =
+                      pickedTenure.cabinetId ??
+                      pickedTenure.cabinetMemberships?.[0]?.cabinetId ??
+                      ''
+                    if (!cabinetId && suggestedCabinet) {
+                      setCabinetId(suggestedCabinet)
+                    }
+                  }
+                }}
               />
             </Field>
             <Field>
@@ -3011,18 +3305,22 @@ const AddSignatoryModal: React.FC<{
   )
 }
 
-function signatoryFormInit(s: TreatySignatoryDto) {
+function signatoryFormInit(sig: TreatySignatoryDto) {
   return {
-    countryId: s.countryId ?? s.country?.id ?? null,
+    countryId: sig.countryId ?? sig.country?.id ?? null,
     historicalCountryId:
-      s.historicalCountryId ?? s.historicalCountry?.id ?? null,
-    countryLabel: s.country?.name ?? s.historicalCountry?.name ?? '',
-    personId: s.personId ?? '',
-    cabinetId: s.cabinetId ?? '',
-    role: s.role ?? '',
-    participationType: s.participationType,
-    signedAt: toDateInputValue(s.signedAt),
-    note: s.note ?? '',
+      sig.historicalCountryId ?? sig.historicalCountry?.id ?? null,
+    countryLabel: sig.country?.name ?? sig.historicalCountry?.name ?? '',
+    personId: sig.personId ?? '',
+    tenureChoice:
+      sig.tenureId ?? sig.tenure?.id
+        ? (sig.tenureId ?? sig.tenure?.id ?? '')
+        : '__AUTO__',
+    cabinetId: sig.cabinetId ?? '',
+    role: sig.role ?? '',
+    participationType: sig.participationType,
+    signedAt: toDateInputValue(sig.signedAt),
+    note: sig.note ?? '',
   }
 }
 
@@ -3032,9 +3330,10 @@ function signatoryFormInit(s: TreatySignatoryDto) {
 
 const EditSignatoryModal: React.FC<{
   signatory: TreatySignatoryDto
+  treatySignDate?: string | null
   onClose: () => void
   onSaved: () => void
-}> = ({ signatory, onClose, onSaved }) => {
+}> = ({ signatory, treatySignDate, onClose, onSaved }) => {
   const init = signatoryFormInit(signatory)
   const [countryId, setCountryId] = useState(init.countryId)
   const [historicalCountryId, setHistoricalCountryId] = useState<
@@ -3043,6 +3342,7 @@ const EditSignatoryModal: React.FC<{
   const [countryLabel, setCountryLabel] = useState(init.countryLabel)
   const [countryPickerOpen, setCountryPickerOpen] = useState(false)
   const [personId, setPersonId] = useState(init.personId)
+  const [tenureChoice, setTenureChoice] = useState(init.tenureChoice)
   const [cabinetId, setCabinetId] = useState(init.cabinetId)
   const [role, setRole] = useState(init.role)
   const [participationType, setParticipationType] =
@@ -3073,6 +3373,13 @@ const EditSignatoryModal: React.FC<{
         countryId,
         historicalCountryId,
         personId: personId || null,
+        tenureId: !personId
+          ? null
+          : tenureChoice === '__AUTO__'
+            ? undefined
+            : tenureChoice === '__NONE__'
+              ? null
+              : tenureChoice,
         cabinetId: cabinetId || null,
         role: role || null,
         participationType,
@@ -3145,7 +3452,37 @@ const EditSignatoryModal: React.FC<{
               <FieldLabel>서명 인물 (선택)</FieldLabel>
               <SignatoryPersonPicker
                 personId={personId}
-                onChange={setPersonId}
+                onChange={(nextPersonId) => {
+                  setPersonId(nextPersonId)
+                  setTenureChoice('__AUTO__')
+                }}
+              />
+            </Field>
+            <Field>
+              <FieldLabel>체결 당시 재임·보직 정본 (선택)</FieldLabel>
+              <SignatoryTenurePicker
+                personId={personId}
+                tenureId={tenureChoice}
+                targetDateStr={signedAt || treatySignDate}
+                onSelectTenure={(nextVal, pickedTenure) => {
+                  setTenureChoice(nextVal)
+                  if (pickedTenure) {
+                    const suggestedRole =
+                      pickedTenure.title ??
+                      pickedTenure.positionDefinition?.title ??
+                      ''
+                    if (!role && suggestedRole) {
+                      setRole(suggestedRole)
+                    }
+                    const suggestedCabinet =
+                      pickedTenure.cabinetId ??
+                      pickedTenure.cabinetMemberships?.[0]?.cabinetId ??
+                      ''
+                    if (!cabinetId && suggestedCabinet) {
+                      setCabinetId(suggestedCabinet)
+                    }
+                  }
+                }}
               />
             </Field>
             <Field>

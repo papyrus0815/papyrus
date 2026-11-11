@@ -46,6 +46,8 @@ import {
 import { InstitutionAppointmentModal } from '@/shared/ui/institution-appointment-modal'
 import { notify } from '@/shared/ui/toast'
 
+import { UnlinkedCountryTenuresBar } from './unlinked-country-tenures-bar'
+
 export interface CreateMilitaryUnitDefaults {
   parentUnitId?: string | null
   administrationDepartmentId?: string | null
@@ -941,6 +943,24 @@ export function GovernmentMilitaryTab({
           </PrimaryButton>
         </HeaderRightActions>
       </HeaderBar>
+
+      <UnlinkedCountryTenuresBar
+        mode="MILITARY_UNIT"
+        effectiveCountryId={targetId || undefined}
+        isHistorical={isHistorical}
+        targetOptions={countryUnits.map((unitRow) => ({
+          id: unitRow.id,
+          label: unitRow.historicalCountry?.name
+            ? `[${unitRow.historicalCountry.name}] ${unitRow.name}`
+            : unitRow.name,
+          historicalCountryId: unitRow.historicalCountryId ?? null,
+        }))}
+        onRequestCreateTarget={(tenureHistCountryId) =>
+          onCreateUnit({
+            historicalCountryId: tenureHistCountryId,
+          })
+        }
+      />
 
       {countryUnits.length > 0 && (
         <Toolbar>

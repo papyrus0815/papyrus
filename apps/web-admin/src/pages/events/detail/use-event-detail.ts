@@ -120,6 +120,8 @@ export interface EventDetailTreatySignatory {
   countryName: string | null
   personId: string | null
   personName: string | null
+  tenureId?: string | null
+  roleLabel?: string | null
 }
 
 export interface EventDetailTreatyTerm {

@@ -52,6 +52,16 @@ export class EventSideUnitController {
   ): Promise<SideUnitView[]> {
     return this.sideUnits.remove(actorOf(req), eventId, id)
   }
+
+  /** 전투서열 지휘관을 군사부대 보직 정본(GovernmentPositionTenure)에 동기화 — POST /events/:eventId/side-units/:id/sync-commander-tenure */
+  @Post(':eventId/side-units/:id/sync-commander-tenure')
+  async syncCommanderTenure(
+    @Req() req: AuthedRequest,
+    @Param('eventId') eventId: string,
+    @Param('id') id: string,
+  ): Promise<SideUnitView[]> {
+    return this.sideUnits.syncCommanderTenure(actorOf(req), eventId, id)
+  }
 }
 
 /** passport jwt 전략이 채우는 요청 사용자 */

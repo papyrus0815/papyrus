@@ -432,6 +432,10 @@ export function CareerRegisterModal({
 
   const handleKindChange = (next: CareerKind) => {
     if (isEditMode) return
+    if (next === 'military' && onSwitchToMilitaryTenure) {
+      onSwitchToMilitaryTenure()
+      return
+    }
     setKind(next)
     setExtras({})
   }
@@ -526,19 +530,32 @@ export function CareerRegisterModal({
               분야 <Required>*</Required>
             </Label>
             <KindGrid role="radiogroup" aria-label="경력 분야">
-              {KIND_ORDER.map((kindValue) => (
-                <KindChip
-                  key={kindValue}
-                  type="button"
-                  role="radio"
-                  aria-checked={kind === kindValue}
-                  $active={kind === kindValue}
-                  disabled={isEditMode && kind !== kindValue}
-                  onClick={() => handleKindChange(kindValue)}
-                >
-                  {KIND_CONFIG[kindValue].label}
-                </KindChip>
-              ))}
+              {KIND_ORDER.map((kindValue) => {
+                const isMilitaryRedirect =
+                  kindValue === 'military' &&
+                  !isEditMode &&
+                  Boolean(onSwitchToMilitaryTenure)
+                return (
+                  <KindChip
+                    key={kindValue}
+                    type="button"
+                    role="radio"
+                    aria-checked={kind === kindValue}
+                    $active={kind === kindValue}
+                    disabled={isEditMode && kind !== kindValue}
+                    title={
+                      isMilitaryRedirect
+                        ? '국가 군사 사령부·부대와 연동되는 군사 보직 등록 화면으로 전환합니다'
+                        : undefined
+                    }
+                    onClick={() => handleKindChange(kindValue)}
+                  >
+                    {isMilitaryRedirect
+                      ? '군사 보직 →'
+                      : KIND_CONFIG[kindValue].label}
+                  </KindChip>
+                )
+              })}
             </KindGrid>
             {kind === 'military' && !isEditMode && onSwitchToMilitaryTenure && (
               <MilitaryTenureGuideBanner>

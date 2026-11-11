@@ -1,21 +1,70 @@
 import { useMemo, useState } from 'react'
 
-import { useQuery } from '@tanstack/react-query'
-import { FiArrowRight, FiCalendar, FiMapPin, FiShield, FiUser, FiUsers } from 'react-icons/fi'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  FiArrowRight,
+  FiCalendar,
+  FiEdit2,
+  FiGitCommit,
+  FiMapPin,
+  FiPlus,
+  FiShield,
+  FiTrash2,
+  FiUser,
+  FiUsers,
+  FiX,
+} from 'react-icons/fi'
 import { Link, useSearchParams } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { SIDE_UNIT_ROLE_LABEL } from '@/pages/events/detail/components/side-orbat.lib'
 import { SIDE_OUTCOME_LABEL } from '@/pages/events/detail/components/side-outcome'
+import { formatSpanLabel } from '@/pages/events/detail/components/development-timeline.lib'
+import { administrationDepartmentApi } from '@/shared/api/administration-department'
+import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
 import {
   militaryUnitApi,
   type MilitaryUnitDatePartsDto,
   type MilitaryUnitEventLinkDto,
   type MilitaryUnitLineageDto,
+  type MilitaryUnitTenureItem,
+  type MilitaryUnitTransitionKind,
 } from '@/shared/api/military-unit'
-import { formatSpanLabel } from '@/pages/events/detail/components/development-timeline.lib'
+import { personCareerApi } from '@/shared/api/person-career'
+import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { militaryUnitTypeLabelKo } from '@/shared/lib/military-unit-type-label'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
+import { confirm } from '@/shared/ui/confirm-dialog'
+import {
+  type EditableInstitutionTenure,
+  InstitutionAppointmentModal,
+} from '@/shared/ui/institution-appointment-modal'
+import { notify } from '@/shared/ui/toast'
+
+const TRANSITION_KIND_LABELS: Record<MilitaryUnitTransitionKind, string> = {
+  REORGANIZE: '개편',
+  RENAME: '개칭',
+  MERGE: '통합',
+  SPLIT: '분할',
+  ABSORBED: '흡수',
+}
+
+const TRANSITION_KIND_OPTIONS: Array<{
+  value: MilitaryUnitTransitionKind
+  label: string
+}> = [
+  { value: 'REORGANIZE', label: '개편 (편제·역할 재편)' },
+  { value: 'RENAME', label: '개칭 (명칭 변경)' },
+  { value: 'SPLIT', label: '분할 (신설 분리)' },
+  { value: 'MERGE', label: '통합 (합병)' },
+  { value: 'ABSORBED', label: '흡수 (타 편제로 편입)' },
+]
+
+type TransitionDirection =
+  | 'PREDECESSOR_UNIT'
+  | 'PREDECESSOR_DEPT'
+  | 'SUCCESSOR_UNIT'
 
 const BRANCH_LABELS: Record<string, string> = {
   ARMY: '육군',
@@ -68,8 +117,10 @@ interface UnitDetailResponse {
     unitType?: string | null
     branch?: string | null
   }>
+  tenures?: MilitaryUnitTenureItem[]
   commanders?: Array<{
     id: string
+    tenureId?: string | null
     personId: string
     rank?: string | null
     role?: string | null
@@ -150,8 +201,35 @@ interface UnitDetailResponse {
 }
 
 export function MilitaryUnitDetailSection() {
+  const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedUnitId = searchParams.get('unitId')
+
+  const [appointmentOpen, setAppointmentOpen] = useState(false)
+  const [editingTenure, setEditingTenure] =
+    useState<EditableInstitutionTenure | null>(null)
+
+  const [addTransitionOpen, setAddTransitionOpen] = useState(false)
+  const [transitionDirection, setTransitionDirection] =
+    useState<TransitionDirection>('PREDECESSOR_UNIT')
+  const [transitionTargetId, setTransitionTargetId] = useState('')
+  const [transitionKind, setTransitionKind] =
+    useState<MilitaryUnitTransitionKind>('REORGANIZE')
+  const [transitionEra, setTransitionEra] = useState<'AD' | 'BC'>('AD')
+  const [transitionYear, setTransitionYear] = useState('')
+  const [transitionMonth, setTransitionMonth] = useState('')
+  const [transitionNote, setTransitionNote] = useState('')
+  const [transitionBusy, setTransitionBusy] = useState(false)
+
+  const [editingTransitionId, setEditingTransitionId] = useState<string | null>(
+    null,
+  )
+  const [editTransitionKind, setEditTransitionKind] =
+    useState<MilitaryUnitTransitionKind>('REORGANIZE')
+  const [editTransitionEra, setEditTransitionEra] = useState<'AD' | 'BC'>('AD')
+  const [editTransitionYear, setEditTransitionYear] = useState('')
+  const [editTransitionMonth, setEditTransitionMonth] = useState('')
+  const [editTransitionNote, setEditTransitionNote] = useState('')
 
   const allUnitsQuery = useQuery({
     queryKey: ['military-units', 'all-overview'],
@@ -167,7 +245,61 @@ export function MilitaryUnitDetailSection() {
     staleTime: 30_000,
   })
 
+  const detailUnit = detailQuery.data
+
+  const departmentsForLineageQuery = useQuery({
+    queryKey: [
+      'administration-departments',
+      'lineage-candidates',
+      detailUnit?.countryId ?? null,
+      detailUnit?.historicalCountryId ?? null,
+    ],
+    queryFn: async () => {
+      if (detailUnit?.historicalCountryId) {
+        const histDepts = await administrationDepartmentApi.getAll({
+          historicalCountryId: detailUnit.historicalCountryId,
+        })
+        if (detailUnit.countryId) {
+          const modernDepts = await administrationDepartmentApi.getAll({
+            countryId: detailUnit.countryId,
+          })
+          const seen = new Set(histDepts.map((deptItem) => deptItem.id))
+          return [
+            ...histDepts,
+            ...modernDepts.filter((deptItem) => !seen.has(deptItem.id)),
+          ]
+        }
+        return histDepts
+      }
+      if (detailUnit?.countryId) {
+        return administrationDepartmentApi.getAll({
+          countryId: detailUnit.countryId,
+        })
+      }
+      return administrationDepartmentApi.getAll({ take: 200 })
+    },
+    enabled:
+      Boolean(selectedUnitId) &&
+      addTransitionOpen &&
+      transitionDirection === 'PREDECESSOR_DEPT',
+    staleTime: 60_000,
+  })
+
+  const invalidateUnitLineageAndTenures = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['military-units'] })
+    if (selectedUnitId) {
+      await queryClient.invalidateQueries({
+        queryKey: ['military-unit', 'detail', selectedUnitId],
+      })
+    }
+    await queryClient.invalidateQueries({
+      queryKey: ['administration-departments'],
+    })
+  }
+
   const selectUnit = (unitId: string) => {
+    setAddTransitionOpen(false)
+    setEditingTransitionId(null)
     const next = new URLSearchParams(searchParams)
     next.set('unitId', unitId)
     setSearchParams(next)
@@ -354,12 +486,249 @@ export function MilitaryUnitDetailSection() {
   const unitTypeLabel = unit.unitType ? militaryUnitTypeLabelKo(unit.unitType) : null
   const branchLabel = unit.branch ? (BRANCH_LABELS[unit.branch] ?? unit.branch) : null
   const subUnits = unit.subUnits ?? []
-  const commanders = unit.commanders ?? []
+  const unifiedTenures = unit.tenures ?? []
+  const legacyOnlyCommanders = (unit.commanders ?? []).filter(
+    (cmdItem) => !cmdItem.tenureId,
+  )
+  const totalCommanderCount =
+    unifiedTenures.length + legacyOnlyCommanders.length
   const predecessors = unit.predecessors ?? []
   const successors = unit.successors ?? []
   const eventRelations = unit.eventRelations ?? []
   const deployments = (unit.sideDeployedUnits ?? []).filter((dep) => dep.side?.event)
   const vessels = unit.navalVessels ?? []
+
+  const candidateLineageUnits = allUnits
+    .filter((candidate) => candidate.id !== unit.id)
+    .sort((left, right) => {
+      const leftSameCountry =
+        (unit.historicalCountryId &&
+          left.historicalCountryId === unit.historicalCountryId) ||
+        (unit.countryId && left.countryId === unit.countryId)
+          ? 1
+          : 0
+      const rightSameCountry =
+        (unit.historicalCountryId &&
+          right.historicalCountryId === unit.historicalCountryId) ||
+        (unit.countryId && right.countryId === unit.countryId)
+          ? 1
+          : 0
+      if (leftSameCountry !== rightSameCountry) {
+        return rightSameCountry - leftSameCountry
+      }
+      return left.name.localeCompare(right.name, 'ko')
+    })
+
+  const candidateLineageDepartments = departmentsForLineageQuery.data ?? []
+
+  const formatLineageTime = (item: MilitaryUnitLineageDto): string | null => {
+    if (!item.year) return null
+    const eraPrefix = item.era === 'BC' ? 'BC ' : ''
+    const monthPart = item.month ? `.${String(item.month).padStart(2, '0')}` : ''
+    return `${eraPrefix}${item.year}${monthPart}`
+  }
+
+  const handleAddTransition = async () => {
+    if (!transitionTargetId) {
+      notify.error('연결할 대상 부대 또는 행정부처를 선택해 주세요.')
+      return
+    }
+    const parsedYear = transitionYear.trim()
+      ? Number(transitionYear.trim())
+      : null
+    const parsedMonth = transitionMonth.trim()
+      ? Number(transitionMonth.trim())
+      : null
+    if (
+      parsedYear !== null &&
+      (!Number.isInteger(parsedYear) || parsedYear < 1)
+    ) {
+      notify.error('계보 전환 연도는 1 이상의 정수여야 합니다.')
+      return
+    }
+    if (
+      parsedMonth !== null &&
+      (!Number.isInteger(parsedMonth) || parsedMonth < 1 || parsedMonth > 12)
+    ) {
+      notify.error('계보 전환 월은 1~12 사이여야 합니다.')
+      return
+    }
+    if (parsedYear === null && parsedMonth !== null) {
+      notify.error('전환 연도 없이 월만 입력할 수 없습니다.')
+      return
+    }
+
+    setTransitionBusy(true)
+    try {
+      await militaryUnitApi.addTransition(unit.id, {
+        ...(transitionDirection === 'PREDECESSOR_UNIT'
+          ? { predecessorUnitId: transitionTargetId }
+          : transitionDirection === 'PREDECESSOR_DEPT'
+            ? { predecessorDepartmentId: transitionTargetId }
+            : { successorUnitId: transitionTargetId }),
+        kind: transitionKind,
+        era: parsedYear !== null ? transitionEra : null,
+        year: parsedYear,
+        month: parsedMonth,
+        note: transitionNote.trim() || null,
+      })
+      await invalidateUnitLineageAndTenures()
+      setAddTransitionOpen(false)
+      setTransitionTargetId('')
+      setTransitionYear('')
+      setTransitionMonth('')
+      setTransitionNote('')
+      notify.success('조직 계보 연결이 추가되었습니다.')
+    } catch (err) {
+      notify.error(getApiErrorMessage(err, '계보 연결 추가에 실패했습니다.'))
+    } finally {
+      setTransitionBusy(false)
+    }
+  }
+
+  const openEditTransition = (item: MilitaryUnitLineageDto) => {
+    setEditingTransitionId(item.transitionId)
+    setEditTransitionKind(item.kind)
+    setEditTransitionEra(item.era === 'BC' ? 'BC' : 'AD')
+    setEditTransitionYear(item.year != null ? String(item.year) : '')
+    setEditTransitionMonth(item.month != null ? String(item.month) : '')
+    setEditTransitionNote(item.note ?? '')
+  }
+
+  const handleUpdateTransition = async (transitionId: string) => {
+    const parsedYear = editTransitionYear.trim()
+      ? Number(editTransitionYear.trim())
+      : null
+    const parsedMonth = editTransitionMonth.trim()
+      ? Number(editTransitionMonth.trim())
+      : null
+    if (
+      parsedYear !== null &&
+      (!Number.isInteger(parsedYear) || parsedYear < 1)
+    ) {
+      notify.error('계보 전환 연도는 1 이상의 정수여야 합니다.')
+      return
+    }
+    if (
+      parsedMonth !== null &&
+      (!Number.isInteger(parsedMonth) || parsedMonth < 1 || parsedMonth > 12)
+    ) {
+      notify.error('계보 전환 월은 1~12 사이여야 합니다.')
+      return
+    }
+    if (parsedYear === null && parsedMonth !== null) {
+      notify.error('전환 연도 없이 월만 입력할 수 없습니다.')
+      return
+    }
+
+    setTransitionBusy(true)
+    try {
+      await militaryUnitApi.updateTransition(transitionId, {
+        kind: editTransitionKind,
+        era: parsedYear !== null ? editTransitionEra : null,
+        year: parsedYear,
+        month: parsedMonth,
+        note: editTransitionNote.trim() || null,
+      })
+      await invalidateUnitLineageAndTenures()
+      setEditingTransitionId(null)
+      notify.success('계보 정보가 수정되었습니다.')
+    } catch (err) {
+      notify.error(getApiErrorMessage(err, '계보 수정에 실패했습니다.'))
+    } finally {
+      setTransitionBusy(false)
+    }
+  }
+
+  const handleDeleteTransition = async (
+    transitionId: string,
+    targetLabel: string,
+  ) => {
+    const ok = await confirm({
+      title: '조직 계보 연결 삭제',
+      message: `'${targetLabel}' 계보 연결을 삭제하시겠습니까? (부대·부처 자체는 삭제되지 않습니다)`,
+      confirmText: '삭제',
+      danger: true,
+    })
+    if (!ok) return
+    setTransitionBusy(true)
+    try {
+      await militaryUnitApi.deleteTransition(transitionId)
+      await invalidateUnitLineageAndTenures()
+      if (editingTransitionId === transitionId) {
+        setEditingTransitionId(null)
+      }
+      notify.success('계보 연결이 삭제되었습니다.')
+    } catch (err) {
+      notify.error(getApiErrorMessage(err, '계보 삭제에 실패했습니다.'))
+    } finally {
+      setTransitionBusy(false)
+    }
+  }
+
+  const handleDeleteCommanderTenure = async (
+    tenureItem: MilitaryUnitTenureItem,
+  ) => {
+    const roleLabel =
+      tenureItem.title ??
+      tenureItem.positionDefinition?.title ??
+      '지휘관·참모 보직'
+    const ok = await confirm({
+      title: '지휘관·참모 재임 삭제',
+      message: `'${roleLabel}' 재임 기록을 삭제하시겠습니까?`,
+      confirmText: '삭제',
+      danger: true,
+    })
+    if (!ok) return
+    try {
+      await personCareerApi.deleteGovernmentPositionTenure(tenureItem.id)
+      invalidateTenureQueries(queryClient, {
+        personId: tenureItem.person?.id ?? tenureItem.personId,
+        countryId: unit.countryId ?? null,
+        historicalCountryId: unit.historicalCountryId ?? null,
+      })
+      await invalidateUnitLineageAndTenures()
+      notify.success('재임 기록이 삭제되었습니다.')
+    } catch (err) {
+      notify.error(getApiErrorMessage(err, '재임 기록 삭제에 실패했습니다.'))
+    }
+  }
+
+  const formatTenureSpan = (tenureItem: MilitaryUnitTenureItem): string => {
+    const fmtSide = (
+      eraVal: string | null | undefined,
+      yearVal: number | null | undefined,
+      monthVal: number | null | undefined,
+      dayVal: number | null | undefined,
+      isoVal: string | null | undefined,
+    ) => {
+      if (yearVal && yearVal > 0) {
+        const eraPrefix = eraVal === 'BC' ? 'BC ' : ''
+        const mStr = monthVal ? `.${String(monthVal).padStart(2, '0')}` : ''
+        const dStr =
+          monthVal && dayVal ? `.${String(dayVal).padStart(2, '0')}` : ''
+        return `${eraPrefix}${yearVal}${mStr}${dStr}`
+      }
+      if (isoVal) return isoVal.slice(0, 10)
+      return ''
+    }
+    const startPart = fmtSide(
+      tenureItem.startEra,
+      tenureItem.startYear,
+      tenureItem.startMonth,
+      tenureItem.startDay,
+      tenureItem.startDate,
+    )
+    const endPart = fmtSide(
+      tenureItem.endEra,
+      tenureItem.endYear,
+      tenureItem.endMonth,
+      tenureItem.endDay,
+      tenureItem.endDate,
+    )
+    if (!startPart && !endPart) return '연도 미상'
+    return `${startPart || '?'} ~ ${endPart || '현임'}`
+  }
 
   const formatPartsOrIso = (
     parts: MilitaryUnitDatePartsDto | null | undefined,
@@ -481,57 +850,362 @@ export function MilitaryUnitDetailSection() {
           </CurrentUnitPill>
         </HierarchyFlow>
 
-        {(predecessors.length > 0 || successors.length > 0) && (
-          <SubUnitSection>
-            <SubSectionLabel>전신 · 후신 개편 계보</SubSectionLabel>
-            <HierarchyFlow>
-              {predecessors.map((predItem) => {
-                if (predItem.targetType === 'DEPARTMENT' && predItem.department) {
-                  return countryIdForLink ? (
-                    <CountryLink
-                      key={predItem.transitionId}
-                      to={`${pathKeys.countryGovernment(countryIdForLink)}?departmentId=${encodeURIComponent(predItem.department.id)}`}
-                    >
-                      🏛️ [전신 부처] {predItem.department.name}
-                      {predItem.year
-                        ? ` (${predItem.era === 'BC' ? 'BC ' : ''}${predItem.year})`
-                        : ''}
-                    </CountryLink>
-                  ) : (
-                    <SecondaryBadge key={predItem.transitionId}>
-                      🏛️ [전신 부처] {predItem.department.name}
-                    </SecondaryBadge>
-                  )
-                }
-                if (predItem.unit) {
-                  return (
-                    <HierarchyNodeBtn
-                      key={predItem.transitionId}
-                      type="button"
-                      onClick={() => selectUnit(predItem.unit!.id)}
-                    >
-                      <SmallBadge>전신 부대</SmallBadge>
-                      <strong>{predItem.unit.name}</strong>
-                    </HierarchyNodeBtn>
-                  )
-                }
-                return null
-              })}
-              {successors.map((succItem) =>
-                succItem.unit ? (
-                  <HierarchyNodeBtn
-                    key={succItem.transitionId}
-                    type="button"
-                    onClick={() => selectUnit(succItem.unit!.id)}
-                  >
-                    <SmallBadge>후신 부대</SmallBadge>
-                    <strong>{succItem.unit.name}</strong>
-                  </HierarchyNodeBtn>
-                ) : null,
+        <SubUnitSection>
+          <LineageHeaderRow>
+            <SubSectionLabel>
+              <FiGitCommit size={12} style={{ marginRight: 4, verticalAlign: -1 }} />
+              조직 계보 (전신 · 후신 개편 이력)
+            </SubSectionLabel>
+            <MiniOutlineBtn
+              type="button"
+              onClick={() => {
+                setAddTransitionOpen((prev) => !prev)
+                setTransitionTargetId('')
+              }}
+            >
+              {addTransitionOpen ? (
+                <>
+                  <FiX size={12} /> 닫기
+                </>
+              ) : (
+                <>
+                  <FiPlus size={12} /> 계보 연결 추가
+                </>
               )}
-            </HierarchyFlow>
-          </SubUnitSection>
-        )}
+            </MiniOutlineBtn>
+          </LineageHeaderRow>
+
+          {predecessors.length === 0 &&
+            successors.length === 0 &&
+            !addTransitionOpen && (
+              <EmptyNote>
+                등록된 전신·후신 개편 계보가 없습니다. (예: 제국전쟁부 → 국방군 최고사령부, 제2기갑집단 → 제2기갑군)
+              </EmptyNote>
+            )}
+
+          {(predecessors.length > 0 || successors.length > 0) && (
+            <LineageList>
+              {[
+                ...predecessors.map((predItem) => ({
+                  directionLabel:
+                    predItem.targetType === 'DEPARTMENT'
+                      ? '전신 행정부처'
+                      : '전신 부대',
+                  arrowSymbol: '←',
+                  item: predItem,
+                })),
+                ...successors.map((succItem) => ({
+                  directionLabel: '후신 부대',
+                  arrowSymbol: '→',
+                  item: succItem,
+                })),
+              ].map(({ directionLabel, arrowSymbol, item }) => {
+                const targetName =
+                  item.targetType === 'DEPARTMENT'
+                    ? (item.department?.name ?? '행정부처')
+                    : (item.unit?.name ?? '군사부대')
+                const timeText = formatLineageTime(item)
+                const kindLabel =
+                  TRANSITION_KIND_LABELS[item.kind] ?? item.kind
+                const isEditingThis =
+                  editingTransitionId === item.transitionId
+
+                return (
+                  <LineageItemCard key={item.transitionId}>
+                    <LineageItemMain>
+                      <LineageDirectionBadge $isDept={item.targetType === 'DEPARTMENT'}>
+                        {arrowSymbol} {directionLabel}
+                      </LineageDirectionBadge>
+                      <SmallBadge>{kindLabel}</SmallBadge>
+                      {item.targetType === 'DEPARTMENT' && item.department ? (
+                        countryIdForLink ? (
+                          <CountryLink
+                            to={`${pathKeys.countryGovernment(countryIdForLink)}?departmentId=${encodeURIComponent(item.department.id)}`}
+                          >
+                            🏛️ {item.department.name}
+                            {item.department.abbreviation
+                              ? ` (${item.department.abbreviation})`
+                              : ''}{' '}
+                            ↗
+                          </CountryLink>
+                        ) : (
+                          <strong>🏛️ {item.department.name}</strong>
+                        )
+                      ) : item.unit ? (
+                        <InlineActionLink
+                          type="button"
+                          onClick={() => selectUnit(item.unit!.id)}
+                        >
+                          ⚔️ {item.unit.name}
+                          {item.unit.abbreviation
+                            ? ` (${item.unit.abbreviation})`
+                            : ''}
+                          {item.unit.unitType
+                            ? ` · ${militaryUnitTypeLabelKo(item.unit.unitType)}`
+                            : ''}
+                        </InlineActionLink>
+                      ) : null}
+                      {timeText && <CountryTag>{timeText}</CountryTag>}
+                      {item.note && <LineageNoteText>— {item.note}</LineageNoteText>}
+                    </LineageItemMain>
+
+                    <LineageItemActions>
+                      <IconBtn
+                        type="button"
+                        title="계보 수정"
+                        aria-label={`${targetName} 계보 수정`}
+                        onClick={() =>
+                          isEditingThis
+                            ? setEditingTransitionId(null)
+                            : openEditTransition(item)
+                        }
+                      >
+                        <FiEdit2 size={12} />
+                      </IconBtn>
+                      <IconBtn
+                        type="button"
+                        $danger
+                        title="계보 연결 삭제"
+                        aria-label={`${targetName} 계보 연결 삭제`}
+                        disabled={transitionBusy}
+                        onClick={() =>
+                          void handleDeleteTransition(
+                            item.transitionId,
+                            targetName,
+                          )
+                        }
+                      >
+                        <FiTrash2 size={12} />
+                      </IconBtn>
+                    </LineageItemActions>
+
+                    {isEditingThis && (
+                      <LineageInlineForm>
+                        <LineageFormRow>
+                          <OverviewFilterSelect
+                            aria-label="개편 유형"
+                            value={editTransitionKind}
+                            onChange={(changeEvent) =>
+                              setEditTransitionKind(
+                                changeEvent.target
+                                  .value as MilitaryUnitTransitionKind,
+                              )
+                            }
+                          >
+                            {TRANSITION_KIND_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </OverviewFilterSelect>
+                          <OverviewFilterSelect
+                            aria-label="기원"
+                            value={editTransitionEra}
+                            onChange={(changeEvent) =>
+                              setEditTransitionEra(
+                                changeEvent.target.value as 'AD' | 'BC',
+                              )
+                            }
+                            style={{ maxWidth: 84 }}
+                          >
+                            <option value="AD">서기</option>
+                            <option value="BC">BC</option>
+                          </OverviewFilterSelect>
+                          <OverviewFilterInput
+                            type="number"
+                            placeholder="연도 (예: 1938)"
+                            value={editTransitionYear}
+                            onChange={(changeEvent) =>
+                              setEditTransitionYear(changeEvent.target.value)
+                            }
+                            style={{ maxWidth: 120 }}
+                          />
+                          <OverviewFilterInput
+                            type="number"
+                            placeholder="월 (1~12)"
+                            value={editTransitionMonth}
+                            onChange={(changeEvent) =>
+                              setEditTransitionMonth(changeEvent.target.value)
+                            }
+                            style={{ maxWidth: 96 }}
+                          />
+                          <OverviewFilterInput
+                            type="text"
+                            placeholder="개편 사유·비고"
+                            value={editTransitionNote}
+                            onChange={(changeEvent) =>
+                              setEditTransitionNote(changeEvent.target.value)
+                            }
+                          />
+                          <MiniPrimaryBtn
+                            type="button"
+                            disabled={transitionBusy}
+                            onClick={() =>
+                              void handleUpdateTransition(item.transitionId)
+                            }
+                          >
+                            저장
+                          </MiniPrimaryBtn>
+                          <MiniOutlineBtn
+                            type="button"
+                            onClick={() => setEditingTransitionId(null)}
+                          >
+                            취소
+                          </MiniOutlineBtn>
+                        </LineageFormRow>
+                      </LineageInlineForm>
+                    )}
+                  </LineageItemCard>
+                )
+              })}
+            </LineageList>
+          )}
+
+          {addTransitionOpen && (
+            <LineageInlineForm>
+              <LineageFormRow>
+                <OverviewFilterSelect
+                  aria-label="계보 방향"
+                  value={transitionDirection}
+                  onChange={(changeEvent) => {
+                    setTransitionDirection(
+                      changeEvent.target.value as TransitionDirection,
+                    )
+                    setTransitionTargetId('')
+                  }}
+                >
+                  <option value="PREDECESSOR_UNIT">
+                    ← 전신 군사부대 (이전 부대 → {unit.name})
+                  </option>
+                  <option value="PREDECESSOR_DEPT">
+                    🏛️ 전신 행정부처 (전쟁부 등 → {unit.name})
+                  </option>
+                  <option value="SUCCESSOR_UNIT">
+                    → 후신 군사부대 ({unit.name} → 후속 부대)
+                  </option>
+                </OverviewFilterSelect>
+
+                {transitionDirection === 'PREDECESSOR_DEPT' ? (
+                  <OverviewFilterSelect
+                    aria-label="전신 행정부처 선택"
+                    value={transitionTargetId}
+                    onChange={(changeEvent) =>
+                      setTransitionTargetId(changeEvent.target.value)
+                    }
+                  >
+                    <option value="">
+                      {departmentsForLineageQuery.isLoading
+                        ? '행정부처 불러오는 중…'
+                        : '전신 행정부처 선택…'}
+                    </option>
+                    {candidateLineageDepartments.map((deptItem) => (
+                      <option key={deptItem.id} value={deptItem.id}>
+                        {deptItem.name}
+                        {deptItem.abbreviation
+                          ? ` (${deptItem.abbreviation})`
+                          : ''}
+                      </option>
+                    ))}
+                  </OverviewFilterSelect>
+                ) : (
+                  <OverviewFilterSelect
+                    aria-label="연결할 군사부대 선택"
+                    value={transitionTargetId}
+                    onChange={(changeEvent) =>
+                      setTransitionTargetId(changeEvent.target.value)
+                    }
+                  >
+                    <option value="">
+                      {transitionDirection === 'PREDECESSOR_UNIT'
+                        ? '전신 군사부대 선택…'
+                        : '후신 군사부대 선택…'}
+                    </option>
+                    {candidateLineageUnits.map((unitCandidate) => {
+                      const candCountry =
+                        unitCandidate.historicalCountry?.name ??
+                        unitCandidate.country?.name
+                      const candType = unitCandidate.unitType
+                        ? militaryUnitTypeLabelKo(unitCandidate.unitType)
+                        : null
+                      const suffix = [candType, candCountry]
+                        .filter(Boolean)
+                        .join(' · ')
+                      return (
+                        <option key={unitCandidate.id} value={unitCandidate.id}>
+                          {unitCandidate.name}
+                          {suffix ? ` (${suffix})` : ''}
+                        </option>
+                      )
+                    })}
+                  </OverviewFilterSelect>
+                )}
+
+                <OverviewFilterSelect
+                  aria-label="개편 유형"
+                  value={transitionKind}
+                  onChange={(changeEvent) =>
+                    setTransitionKind(
+                      changeEvent.target.value as MilitaryUnitTransitionKind,
+                    )
+                  }
+                >
+                  {TRANSITION_KIND_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </OverviewFilterSelect>
+              </LineageFormRow>
+
+              <LineageFormRow>
+                <OverviewFilterSelect
+                  aria-label="기원"
+                  value={transitionEra}
+                  onChange={(changeEvent) =>
+                    setTransitionEra(changeEvent.target.value as 'AD' | 'BC')
+                  }
+                  style={{ maxWidth: 84 }}
+                >
+                  <option value="AD">서기</option>
+                  <option value="BC">BC</option>
+                </OverviewFilterSelect>
+                <OverviewFilterInput
+                  type="number"
+                  placeholder="전환 연도 (예: 1938)"
+                  value={transitionYear}
+                  onChange={(changeEvent) =>
+                    setTransitionYear(changeEvent.target.value)
+                  }
+                  style={{ maxWidth: 140 }}
+                />
+                <OverviewFilterInput
+                  type="number"
+                  placeholder="월 (1~12)"
+                  value={transitionMonth}
+                  onChange={(changeEvent) =>
+                    setTransitionMonth(changeEvent.target.value)
+                  }
+                  style={{ maxWidth: 100 }}
+                />
+                <OverviewFilterInput
+                  type="text"
+                  placeholder="개편 메모 (예: 블롬베르크-프리치 사건 직후 국방군 최고사령부로 개편)"
+                  value={transitionNote}
+                  onChange={(changeEvent) =>
+                    setTransitionNote(changeEvent.target.value)
+                  }
+                />
+                <MiniPrimaryBtn
+                  type="button"
+                  disabled={transitionBusy || !transitionTargetId}
+                  onClick={() => void handleAddTransition()}
+                >
+                  {transitionBusy ? '추가 중…' : '계보 연결'}
+                </MiniPrimaryBtn>
+              </LineageFormRow>
+            </LineageInlineForm>
+          )}
+        </SubUnitSection>
 
         {subUnits.length > 0 && (
           <SubUnitSection>
@@ -594,22 +1268,123 @@ export function MilitaryUnitDetailSection() {
         </SectionCard>
       )}
 
-      {/* 2. 역대 지휘관 */}
+      {/* 2. 역대 지휘관 · 참모 */}
       <SectionCard>
-        <SectionTitle>역대 지휘관 ({commanders.length}명)</SectionTitle>
-        {commanders.length === 0 ? (
-          <EmptyNote>등록된 지휘관 임기 기록이 없습니다.</EmptyNote>
+        <LineageHeaderRow>
+          <SectionTitle>
+            역대 지휘관 · 참모 ({totalCommanderCount}명)
+          </SectionTitle>
+          <MiniOutlineBtn
+            type="button"
+            onClick={() => {
+              setEditingTenure(null)
+              setAppointmentOpen(true)
+            }}
+          >
+            <FiPlus size={12} /> 지휘관·참모 임명
+          </MiniOutlineBtn>
+        </LineageHeaderRow>
+        {totalCommanderCount === 0 ? (
+          <EmptyNote>
+            등록된 지휘관·참모 재임 기록이 없습니다. 우측 상단 &lsquo;+ 지휘관·참모 임명&rsquo;으로 인물을 바로 임명할 수 있습니다.
+          </EmptyNote>
         ) : (
           <Table>
             <thead>
               <tr>
-                <th>지휘관</th>
-                <th>계급 · 직책</th>
+                <th>지휘관 · 참모</th>
+                <th>계급 · 보직</th>
                 <th>재임 기간</th>
+                <th style={{ width: 76, textAlign: 'right' }}>관리</th>
               </tr>
             </thead>
             <tbody>
-              {commanders.map((cmd) => {
+              {unifiedTenures.map((tenureItem) => {
+                const targetPersonId =
+                  tenureItem.person?.id ?? tenureItem.personId
+                const personName = tenureItem.person
+                  ? getPersonDisplayName({
+                      name: tenureItem.person.name ?? '',
+                      surname: tenureItem.person.surname ?? undefined,
+                      middleName: tenureItem.person.middleName ?? undefined,
+                      country: tenureItem.person.country ?? undefined,
+                    }) || tenureItem.person.name
+                  : '인물 미상'
+                const roleLabel =
+                  [
+                    tenureItem.rankTitle,
+                    tenureItem.title ?? tenureItem.positionDefinition?.title,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || '지휘관'
+                return (
+                  <tr key={tenureItem.id}>
+                    <td>
+                      {targetPersonId ? (
+                        <PersonLink
+                          to={pathKeys.personsTimelineDetail(targetPersonId)}
+                        >
+                          <FiUser size={12} /> {personName}
+                        </PersonLink>
+                      ) : (
+                        <span>{personName}</span>
+                      )}
+                    </td>
+                    <td>{roleLabel}</td>
+                    <td>{formatTenureSpan(tenureItem)}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <LineageItemActions style={{ justifyContent: 'flex-end' }}>
+                        <IconBtn
+                          type="button"
+                          title="보직 수정"
+                          aria-label={`${personName} 보직 수정`}
+                          onClick={() => {
+                            setEditingTenure({
+                              id: tenureItem.id,
+                              personId: targetPersonId,
+                              personName,
+                              positionType: tenureItem.positionType ?? null,
+                              positionDefinitionId:
+                                tenureItem.positionDefinitionId ?? null,
+                              title: tenureItem.title ?? null,
+                              rankTitle: tenureItem.rankTitle ?? null,
+                              ordinal: tenureItem.ordinal ?? null,
+                              partyId: tenureItem.partyId ?? null,
+                              militaryUnitId: unit.id,
+                              startDate: tenureItem.startDate ?? null,
+                              endDate: tenureItem.endDate ?? null,
+                              startEra: tenureItem.startEra ?? null,
+                              startYear: tenureItem.startYear ?? null,
+                              startMonth: tenureItem.startMonth ?? null,
+                              startDay: tenureItem.startDay ?? null,
+                              endEra: tenureItem.endEra ?? null,
+                              endYear: tenureItem.endYear ?? null,
+                              endMonth: tenureItem.endMonth ?? null,
+                              endDay: tenureItem.endDay ?? null,
+                              notes: tenureItem.notes ?? null,
+                            })
+                            setAppointmentOpen(true)
+                          }}
+                        >
+                          <FiEdit2 size={12} />
+                        </IconBtn>
+                        <IconBtn
+                          type="button"
+                          $danger
+                          title="보직 삭제"
+                          aria-label={`${personName} 보직 삭제`}
+                          onClick={() =>
+                            void handleDeleteCommanderTenure(tenureItem)
+                          }
+                        >
+                          <FiTrash2 size={12} />
+                        </IconBtn>
+                      </LineageItemActions>
+                    </td>
+                  </tr>
+                )
+              })}
+              {legacyOnlyCommanders.map((cmd) => {
                 const fullName = cmd.person
                   ? [cmd.person.name, cmd.person.surname].filter(Boolean).join(' ')
                   : '인물 미상'
@@ -629,6 +1404,9 @@ export function MilitaryUnitDetailSection() {
                     <td>{[cmd.rank, cmd.role].filter(Boolean).join(' · ') || '지휘관'}</td>
                     <td>
                       {startStr} ~ {endStr}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <CountryTag>레거시</CountryTag>
                     </td>
                   </tr>
                 )
@@ -793,9 +1571,165 @@ export function MilitaryUnitDetailSection() {
           </UnitGrid>
         </SectionCard>
       )}
+
+      <InstitutionAppointmentModal
+        isOpen={appointmentOpen}
+        onClose={() => {
+          setAppointmentOpen(false)
+          setEditingTenure(null)
+        }}
+        onSaved={() => {
+          void invalidateUnitLineageAndTenures()
+        }}
+        contextType="MILITARY_UNIT"
+        countryId={unit.countryId ?? null}
+        historicalCountryId={unit.historicalCountryId ?? null}
+        countryName={countryName}
+        militaryUnitId={unit.id}
+        militaryUnitName={unit.name}
+        militaryUnitType={unit.unitType ?? null}
+        editingTenure={editingTenure}
+      />
     </PageWrap>
   )
 }
+
+const LineageHeaderRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+`
+
+const LineageList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+const LineageItemCard = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+`
+
+const LineageItemMain = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  font-size: 13px;
+`
+
+const LineageDirectionBadge = styled.span<{ $isDept?: boolean }>`
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: ${({ $isDept, theme }) =>
+    $isDept ? 'rgba(99, 102, 241, 0.14)' : `${theme.colors.primary}18`};
+  color: ${({ $isDept, theme }) =>
+    $isDept ? '#4f46e5' : theme.colors.primary};
+`
+
+const LineageNoteText = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const LineageItemActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+`
+
+const LineageInlineForm = styled.div`
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+`
+
+const LineageFormRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+`
+
+const MiniOutlineBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+`
+
+const MiniPrimaryBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: none;
+  background: ${({ theme }) => theme.colors.primary};
+  color: #ffffff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`
+
+const IconBtn = styled.button<{ $danger?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: ${({ $danger, theme }) =>
+    $danger ? '#ef4444' : theme.colors.text.secondary};
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(15,23,42,0.06)'};
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+`
 
 const PageWrap = styled.div`
   display: flex;

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiChevronDown, FiChevronRight, FiPlus, FiShield, FiUser, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
@@ -14,6 +14,7 @@ import {
   type SideUnitRole,
   type SideUnitView,
   type SideWeaponView,
+  syncEventSideUnitCommanderTenure,
   updateEventSideUnit,
 } from '@/shared/api/event-sides'
 import { militaryUnitTypeLabelKo } from '@/shared/lib/military-unit-type-label'
@@ -39,6 +40,11 @@ export interface AvailableMilitaryUnitItem {
   historicalCountryId?: string | null
   country?: { name?: string | null } | null
   historicalCountry?: { name?: string | null } | null
+  commanders?: Array<{
+    rank?: string | null
+    role?: string | null
+    person?: { name?: string | null; surname?: string | null } | null
+  }>
 }
 
 interface SideOrbatSectionProps {
@@ -68,6 +74,7 @@ export function SideOrbatSection({
   candidatePersonIds,
   onRefresh,
 }: SideOrbatSectionProps) {
+  const queryClient = useQueryClient()
   const [busy, setBusy] = useState(false)
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set())
   const [commanderPickerRow, setCommanderPickerRow] = useState<SideUnitView | null>(null)
@@ -142,7 +149,11 @@ export function SideOrbatSection({
       const countryName =
         unitItem.historicalCountry?.name ?? unitItem.country?.name ?? null
       const typeLabel = unitItem.unitType ? militaryUnitTypeLabelKo(unitItem.unitType) : null
-      const meta = [typeLabel, countryName].filter(Boolean).join(' · ')
+      const leadCommander = unitItem.commanders?.[0]
+      const commanderHint = leadCommander?.person
+        ? `🎖️ ${[leadCommander.person.name, leadCommander.person.surname].filter(Boolean).join(' ')}`
+        : null
+      const meta = [typeLabel, countryName, commanderHint].filter(Boolean).join(' · ')
       return {
         value: unitItem.id,
         label: meta ? `${unitItem.name} (${meta})` : unitItem.name,
@@ -229,6 +240,30 @@ export function SideOrbatSection({
       notify.success(`'${unitName}' 투입을 해제했습니다`)
     } catch (err) {
       notify.error(err instanceof Error ? err.message : '부대 제외에 실패했습니다')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleSyncCommanderTenure = async (
+    rowId: string,
+    unitName: string,
+    commanderName: string,
+  ) => {
+    setBusy(true)
+    try {
+      await syncEventSideUnitCommanderTenure(eventId, rowId)
+      await queryClient.invalidateQueries({ queryKey: ['military-units'] })
+      await queryClient.invalidateQueries({ queryKey: ['military-unit'] })
+      await queryClient.invalidateQueries({ queryKey: ['person-detail'] })
+      await onRefresh()
+      notify.success(
+        `${commanderName} 지휘관을 '${unitName}' 보직 정본에도 등록했습니다`,
+      )
+    } catch (err) {
+      notify.error(
+        err instanceof Error ? err.message : '지휘관 보직 정본 등록에 실패했습니다',
+      )
     } finally {
       setBusy(false)
     }
@@ -324,12 +359,28 @@ export function SideOrbatSection({
                     title={
                       deployed.commander.isOverride
                         ? '이 작전 지휘관(직접 지정됨) — 인물 상세 보기'
-                        : '부대 지휘관 임기 기록에서 자동 추론됨 — 인물 상세 보기'
+                        : '부대 지휘관 임기 정본에서 자동 추론됨 — 인물 상세 보기'
                     }
                   >
                     🎖️ {deployed.commander.name}
                     {deployed.commander.rank ? ` (${deployed.commander.rank})` : ''}
                   </CommanderLink>
+                  {deployed.commander.isOverride && !deployed.commander.tenureId && (
+                    <SyncTenureBtn
+                      type="button"
+                      disabled={busy}
+                      onClick={() =>
+                        void handleSyncCommanderTenure(
+                          deployed.id,
+                          node.name,
+                          deployed.commander!.name,
+                        )
+                      }
+                      title="이 작전 지휘관을 군사부대 및 인물의 보직 정본(GovernmentPositionTenure)에도 자동 등록합니다"
+                    >
+                      + 보직 정본 등록
+                    </SyncTenureBtn>
+                  )}
                   <TinyActionBtn
                     type="button"
                     onClick={() => setCommanderPickerRow(deployed)}
@@ -813,6 +864,30 @@ const CommanderLink = styled(Link)`
   &:hover {
     color: ${({ theme }) => theme.colors.primary};
     text-decoration: underline;
+  }
+`
+
+const SyncTenureBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 1px solid ${({ theme }) => theme.colors.primary};
+  background: ${({ theme }) => `${theme.colors.primary}14`};
+  color: ${({ theme }) => theme.colors.primary};
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: ${({ theme }) => `${theme.colors.primary}26`};
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
 `
 

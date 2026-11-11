@@ -659,14 +659,70 @@ export class EventController {
             expiryDate: toIsoOrNull(link.treaty.expiryDate),
             violationDate: toIsoOrNull(link.treaty.violationDate),
             violationReason: link.treaty.violationReason ?? null,
-            signatories: (link.treaty.signatories ?? []).map((signatory: any) => ({
-              participationType: signatory.participationType,
-              countryId: signatory.country?.id ?? null,
-              historicalCountryId: signatory.historicalCountry?.id ?? null,
-              countryName: signatory.country?.name ?? signatory.historicalCountry?.name ?? null,
-              personId: signatory.person?.id ?? null,
-              personName: signatory.person ? displayPersonName(signatory.person) : null,
-            })),
+            signatories: (link.treaty.signatories ?? []).map(
+              (signatory: {
+                participationType: string
+                tenureId?: string | null
+                role?: string | null
+                country?: { id: string; name: string } | null
+                historicalCountry?: { id: string; name: string } | null
+                person?: (Parameters<typeof displayPersonName>[0] & {
+                  id: string
+                }) | null
+                positionDefinition?: { title?: string | null } | null
+                tenure?: {
+                  id?: string
+                  title?: string | null
+                  rankTitle?: string | null
+                  positionDefinition?: { title?: string | null } | null
+                  administrationDepartment?: {
+                    name?: string | null
+                    abbreviation?: string | null
+                  } | null
+                  militaryUnit?: {
+                    name?: string | null
+                    abbreviation?: string | null
+                  } | null
+                } | null
+              }) => {
+              const tenureObj = signatory.tenure
+              const roleText =
+                signatory.role ??
+                tenureObj?.title ??
+                tenureObj?.positionDefinition?.title ??
+                signatory.positionDefinition?.title ??
+                null
+              const instText =
+                tenureObj?.administrationDepartment?.abbreviation ??
+                tenureObj?.administrationDepartment?.name ??
+                tenureObj?.militaryUnit?.abbreviation ??
+                tenureObj?.militaryUnit?.name ??
+                null
+              const roleParts = [
+                tenureObj?.rankTitle ?? null,
+                roleText,
+                instText && roleText && !roleText.includes(instText)
+                  ? instText
+                  : !roleText
+                    ? instText
+                    : null,
+              ].filter(Boolean)
+              return {
+                participationType: signatory.participationType,
+                countryId: signatory.country?.id ?? null,
+                historicalCountryId: signatory.historicalCountry?.id ?? null,
+                countryName:
+                  signatory.country?.name ??
+                  signatory.historicalCountry?.name ??
+                  null,
+                personId: signatory.person?.id ?? null,
+                personName: signatory.person
+                  ? displayPersonName(signatory.person)
+                  : null,
+                tenureId: signatory.tenureId ?? tenureObj?.id ?? null,
+                roleLabel: roleParts.length > 0 ? roleParts.join(' · ') : null,
+              }
+            }),
             termsPreview: (link.treaty.terms ?? []).map((term: any) => ({
               id: term.id,
               order: term.order,
@@ -1911,8 +1967,25 @@ export class EventController {
                   orderBy: { createdAt: 'asc' },
                   select: {
                     participationType: true,
+                    role: true,
+                    tenureId: true,
                     country: { select: { id: true, name: true } },
                     historicalCountry: { select: { id: true, name: true } },
+                    positionDefinition: { select: { title: true } },
+                    tenure: {
+                      select: {
+                        id: true,
+                        title: true,
+                        rankTitle: true,
+                        positionDefinition: { select: { title: true } },
+                        administrationDepartment: {
+                          select: { name: true, abbreviation: true },
+                        },
+                        militaryUnit: {
+                          select: { name: true, abbreviation: true },
+                        },
+                      },
+                    },
                     person: {
                       select: {
                         id: true,

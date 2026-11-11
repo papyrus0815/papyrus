@@ -111,6 +111,34 @@ export interface TreatySignatoryDto {
   historicalCountry: { id: string; name: string; thumbnailUrl: string | null } | null
   personId: string | null
   person: { id: string; name: string | null; surname: string | null; profileImageUrl: string | null } | null
+  tenureId?: string | null
+  tenure?: {
+    id: string
+    title: string | null
+    rankTitle: string | null
+    positionType: string | null
+    startEra?: string | null
+    startYear?: number | null
+    startMonth?: number | null
+    endEra?: string | null
+    endYear?: number | null
+    endMonth?: number | null
+    positionDefinition?: {
+      id: string
+      title: string
+      positionType?: string | null
+    } | null
+    administrationDepartment?: {
+      id: string
+      name: string
+      abbreviation?: string | null
+    } | null
+    militaryUnit?: {
+      id: string
+      name: string
+      abbreviation?: string | null
+    } | null
+  } | null
   cabinetId: string | null
   cabinet: {
     id: string
@@ -180,6 +208,7 @@ export type CreateTreatySignatoryDto = {
   countryId?: string | null
   historicalCountryId?: string | null
   personId?: string | null
+  tenureId?: string | null
   cabinetId?: string | null
   role?: string | null
   positionDefinitionId?: string | null

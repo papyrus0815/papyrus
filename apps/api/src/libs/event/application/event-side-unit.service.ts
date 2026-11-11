@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
-import { EstimateRole, ObservationSubjectType, PrismaClient, SideUnitRole } from '@prisma/client'
+import { Era, EstimateRole, ObservationSubjectType, PrismaClient, SideUnitRole } from '@prisma/client'
 
 import { removeObservationsForSubjects } from '../../evidence/application/observation-cleanup'
 import { displayPersonName } from '../../shared/person-display-name'
@@ -14,13 +14,15 @@ export interface SideUnitLineage {
   unitType?: string | null
 }
 
-/** 작전 시점의 부대 지휘관 — 명시 오버라이드 또는 부대 지휘관 임기(MilitaryUnitCommander)에서 자동 추론 */
+/** 작전 시점의 부대 지휘관 — 명시 오버라이드 또는 부대 지휘관 임기(GovernmentPositionTenure / MilitaryUnitCommander)에서 자동 추론 */
 export interface SideUnitCommanderView {
   id: string
   name: string
   rank: string | null
   role: string | null
   isOverride: boolean
+  /** 해당 군사부대의 GovernmentPositionTenure 정본과 연결되어 있으면 그 tenure ID */
+  tenureId: string | null
 }
 
 /** 투입 부대 한 줄의 대표 측정값(병력·전차·항공기·사상자 등) */
@@ -112,6 +114,7 @@ const UNIT_SELECT = {
   tenures: {
     orderBy: { startKey: 'desc' },
     select: {
+      id: true,
       personId: true,
       title: true,
       rankTitle: true,
@@ -271,6 +274,204 @@ export class EventSideUnitService {
       await removeObservationsForSubjects(tx, ObservationSubjectType.EVENT_SIDE_UNIT, [id])
       await tx.sideDeployedUnit.delete({ where: { id } })
     })
+    return this.list(eventId)
+  }
+
+  /**
+   * 전투서열(ORBAT)에 지정된 지휘관을 군사부대 보직 정본(GovernmentPositionTenure)으로 역방향 동기화한다.
+   */
+  async syncCommanderTenure(actorId: string, eventId: string, id: string): Promise<SideUnitView[]> {
+    await assertEventOwnership(this.prisma, eventId, actorId, { action: '수정', deleted: 'conflict' })
+    const row = await this.prisma.sideDeployedUnit.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        commanderId: true,
+        side: {
+          select: {
+            eventId: true,
+            event: {
+              select: {
+                title: true,
+                startDate: true,
+                startEra: true,
+                startYear: true,
+                startMonth: true,
+                startDay: true,
+                endDate: true,
+                endEra: true,
+                endYear: true,
+                endMonth: true,
+                endDay: true,
+              },
+            },
+          },
+        },
+        militaryUnit: {
+          select: {
+            id: true,
+            name: true,
+            unitType: true,
+            countryId: true,
+            historicalCountryId: true,
+            tenures: {
+              select: {
+                id: true,
+                personId: true,
+                startEra: true,
+                startYear: true,
+                startMonth: true,
+                startDay: true,
+                startDate: true,
+                endEra: true,
+                endYear: true,
+                endMonth: true,
+                endDay: true,
+                endDate: true,
+              },
+            },
+            commanders: {
+              select: {
+                personId: true,
+                rank: true,
+                role: true,
+              },
+            },
+          },
+        },
+      },
+    })
+    if (!row || row.side.eventId !== eventId) {
+      throw new NotFoundException('이 사건의 투입 부대가 아닙니다')
+    }
+    const targetPersonId = row.commanderId
+    if (!targetPersonId) {
+      throw new BadRequestException('이 전투서열 항목에 직접 지정된 지휘관이 없습니다')
+    }
+
+    const eventInfo = row.side.event
+    const evStart = partsOf(
+      eventInfo.startEra,
+      eventInfo.startYear,
+      eventInfo.startMonth,
+      eventInfo.startDay,
+      eventInfo.startDate,
+    )
+    if (!evStart.year || evStart.year < 1) {
+      throw new BadRequestException(
+        '사건 시작 연도가 없어 지휘관 보직 임기를 자동 생성할 수 없습니다. 부대 상세에서 직접 등록해 주세요.',
+      )
+    }
+    const evEnd = partsOf(
+      eventInfo.endEra,
+      eventInfo.endYear,
+      eventInfo.endMonth,
+      eventInfo.endDay,
+      eventInfo.endDate,
+    )
+    const evStartKey = dateKey(evStart.year, evStart.month, evStart.day, false)
+    const evEndKey = dateKey(evEnd.year, evEnd.month, evEnd.day, true) ?? evStartKey
+
+    const alreadyLinked = row.militaryUnit.tenures.some((tenureItem) => {
+      if (tenureItem.personId !== targetPersonId) return false
+      if (evStartKey == null || evEndKey == null) return true
+      const tStart = partsOf(
+        tenureItem.startEra,
+        tenureItem.startYear,
+        tenureItem.startMonth,
+        tenureItem.startDay,
+        tenureItem.startDate,
+      )
+      const tEnd = partsOf(
+        tenureItem.endEra,
+        tenureItem.endYear,
+        tenureItem.endMonth,
+        tenureItem.endDay,
+        tenureItem.endDate,
+      )
+      const tStartKey = dateKey(tStart.year, tStart.month, tStart.day, false)
+      const tEndKey = dateKey(tEnd.year, tEnd.month, tEnd.day, true) ?? Number.MAX_SAFE_INTEGER
+      if (tStartKey == null) return true
+      return tStartKey <= evEndKey && tEndKey >= evStartKey
+    })
+
+    if (alreadyLinked) {
+      return this.list(eventId)
+    }
+
+    let genericDef = await this.prisma.governmentPositionDefinition.findFirst({
+      where: { positionType: 'MILITARY_COMMANDER', isGeneric: true },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    })
+    if (!genericDef) {
+      genericDef = await this.prisma.governmentPositionDefinition.findFirst({
+        where: { positionType: 'MILITARY_COMMANDER' },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      })
+    }
+    if (!genericDef) {
+      genericDef = await this.prisma.governmentPositionDefinition.create({
+        data: {
+          title: '군 지휘관',
+          positionType: 'MILITARY_COMMANDER',
+          isGeneric: true,
+        },
+        select: { id: true },
+      })
+    }
+
+    const legacyMatch = row.militaryUnit.commanders.find(
+      (cmdItem) => cmdItem.personId === targetPersonId,
+    )
+    const unitName = row.militaryUnit.name
+    const unitType = row.militaryUnit.unitType
+    const defaultRoleSuffix =
+      unitType === 'SUPREME_COMMAND' || unitType === 'THEATER'
+        ? '총사령관'
+        : unitType === 'GENERAL_STAFF'
+          ? '참모총장'
+          : unitType === 'CORPS' || unitType === 'AIR_CORPS'
+            ? '군단장'
+            : unitType === 'DIVISION'
+              ? '사단장'
+              : unitType === 'BRIGADE'
+                ? '여단장'
+                : unitType === 'REGIMENT'
+                  ? '연대장'
+                  : unitType === 'BATTALION'
+                    ? '대대장'
+                    : unitType === 'FLEET'
+                      ? '함대사령관'
+                      : '사령관'
+    const computedTitle =
+      legacyMatch?.role?.trim() || `${unitName} ${defaultRoleSuffix}`
+
+    const resolvedEnd = evEnd.year != null ? evEnd : evStart
+
+    await this.prisma.governmentPositionTenure.create({
+      data: {
+        personId: targetPersonId,
+        positionDefinitionId: genericDef.id,
+        positionType: 'MILITARY_COMMANDER',
+        title: computedTitle.slice(0, 100),
+        rankTitle: legacyMatch?.rank?.trim() || null,
+        militaryUnitId: row.militaryUnit.id,
+        countryId: row.militaryUnit.countryId ?? null,
+        historicalCountryId: row.militaryUnit.historicalCountryId ?? null,
+        startEra: (evStart.year != null && evStart.year < 0 ? 'BC' : 'AD') as Era,
+        startYear: evStart.year != null ? Math.abs(evStart.year) : null,
+        startMonth: evStart.month ?? null,
+        startDay: evStart.day ?? null,
+        endEra: (resolvedEnd.year != null && resolvedEnd.year < 0 ? 'BC' : 'AD') as Era,
+        endYear: resolvedEnd.year != null ? Math.abs(resolvedEnd.year) : null,
+        endMonth: resolvedEnd.month ?? null,
+        endDay: resolvedEnd.day ?? null,
+        notes: `사건 「${eventInfo.title}」 전투서열(ORBAT) 지휘관 지정에서 동기화됨`,
+      },
+    })
+
     return this.list(eventId)
   }
 
@@ -438,6 +639,7 @@ interface CommanderPersonRow {
 }
 
 interface UnitTenureRow {
+  id: string
   personId: string
   title: string | null
   rankTitle: string | null
@@ -456,6 +658,7 @@ interface UnitTenureRow {
 }
 
 interface UnitCommanderRow {
+  tenureId?: string | null
   personId: string
   rank: string | null
   role: string | null
@@ -496,6 +699,7 @@ function mergeTenureAndLegacyCommanders(
   legacyCommanders: UnitCommanderRow[],
 ): UnitCommanderRow[] {
   const fromTenures: UnitCommanderRow[] = tenures.map((tenure) => ({
+    tenureId: tenure.id,
     personId: tenure.personId,
     rank: tenure.rankTitle ?? null,
     role: tenure.title ?? tenure.positionDefinition?.title ?? null,
@@ -545,13 +749,16 @@ function resolveUnitCommanderAtEvent(
   } | null,
 ): SideUnitCommanderView | null {
   if (overrideId && overridePerson) {
-    const matchedTenure = commanders.find((cmd) => cmd.personId === overrideId)
+    const matchedTenure =
+      commanders.find((cmd) => cmd.personId === overrideId && Boolean(cmd.tenureId)) ??
+      commanders.find((cmd) => cmd.personId === overrideId)
     return {
       id: overridePerson.id,
       name: displayPersonName(overridePerson),
       rank: matchedTenure?.rank ?? null,
       role: matchedTenure?.role ?? null,
       isOverride: true,
+      tenureId: matchedTenure?.tenureId ?? null,
     }
   }
   if (commanders.length === 0) return null
@@ -578,6 +785,7 @@ function resolveUnitCommanderAtEvent(
           rank: overlapping.rank ?? null,
           role: overlapping.role ?? null,
           isOverride: false,
+          tenureId: overlapping.tenureId ?? null,
         }
       }
     }
@@ -594,5 +802,6 @@ function resolveUnitCommanderAtEvent(
     rank: fallback.rank ?? null,
     role: fallback.role ?? null,
     isOverride: false,
+    tenureId: fallback.tenureId ?? null,
   }
 }

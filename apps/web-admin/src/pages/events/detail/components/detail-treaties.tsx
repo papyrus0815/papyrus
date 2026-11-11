@@ -533,7 +533,20 @@ function TreatyCard({
                 {PARTICIPATION_SUFFIX[signatory.participationType] && (
                   <SignatoryRole>{PARTICIPATION_SUFFIX[signatory.participationType]}</SignatoryRole>
                 )}
-                {signatory.personName && <SignatoryPerson>{signatory.personName}</SignatoryPerson>}
+                {signatory.personName && (
+                  <SignatoryPerson>
+                    {signatory.personId ? (
+                      <SignatoryPersonLink to={pathKeys.personsTimelineDetail(signatory.personId)}>
+                        {signatory.personName}
+                      </SignatoryPersonLink>
+                    ) : (
+                      signatory.personName
+                    )}
+                    {signatory.roleLabel && (
+                      <SignatoryTenureMeta> ({signatory.roleLabel})</SignatoryTenureMeta>
+                    )}
+                  </SignatoryPerson>
+                )}
               </Signatory>
             ))}
             {hiddenSignatories > 0 && <MoreNote>외 {hiddenSignatories}곳</MoreNote>}
@@ -766,6 +779,22 @@ const SignatoryPerson = styled.span`
     content: '· ';
     color: ${({ theme }) => theme.colors.text.tertiary};
   }
+`
+
+const SignatoryPersonLink = styled(Link)`
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-weight: 600;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+`
+
+const SignatoryTenureMeta = styled.span`
+  font-size: 11.5px;
+  color: ${metaText};
 `
 
 const MoreNote = styled.li`

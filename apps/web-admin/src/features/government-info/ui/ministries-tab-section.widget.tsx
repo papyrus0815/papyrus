@@ -36,6 +36,7 @@ import {
   DepartmentTenuresBlock,
 } from './department-blocks'
 import { MinistryFormModal } from './ministry-form-modal.widget'
+import { UnlinkedCountryTenuresBar } from './unlinked-country-tenures-bar'
 
 type DepartmentKindGroup =
   | 'ALL'
@@ -524,19 +525,21 @@ export function MinistriesTabSection({
             >
               {[
                 {
-                  label: '전체 국가기관',
+                  label: '전체 행정부처·기관',
                   value: `${kpiStats.totalCount}곳`,
                   sub: `최상위 ${kpiStats.rootCount} · 산하 ${kpiStats.subCount}`,
                 },
                 {
-                  label: '군 최고사령부·참모본부',
-                  value: `${kpiStats.commandCount}곳`,
-                  sub: 'OKW·STAVKA·합참 등 군령기구',
+                  label: '시대별 국가 정체',
+                  value: isHistorical
+                    ? '단일 정체'
+                    : `${historicalErasAvailable.length}개`,
+                  sub: '왕조·제국·공화국 시대 구분',
                 },
                 {
-                  label: '연결된 야전·직할 군부대',
+                  label: '소관 연결 군사조직',
                   value: `${kpiStats.linkedUnitCount}개`,
-                  sub: '부처·사령부 소관 군부대',
+                  sub: '국방·군정 부처 소관 사령부·부대',
                 },
                 {
                   label: '등록된 분야 카테고리',
@@ -581,6 +584,26 @@ export function MinistriesTabSection({
                 </div>
               ))}
             </div>
+
+            <UnlinkedCountryTenuresBar
+              mode="DEPARTMENT"
+              effectiveCountryId={effectiveCountryId}
+              isHistorical={isHistorical}
+              targetOptions={ministriesList.map((deptRow) => ({
+                id: deptRow.id,
+                label: deptRow.historicalCountry?.name
+                  ? `[${deptRow.historicalCountry.name}] ${deptRow.name}`
+                  : deptRow.name,
+                historicalCountryId: deptRow.historicalCountryId ?? null,
+              }))}
+              onRequestCreateTarget={(tenureHistCountryId) =>
+                openMinistryCreateRootInCategory(
+                  ministryTreeCategoryId,
+                  tenureHistCountryId,
+                  'MINISTRY',
+                )
+              }
+            />
 
             {/* 검색 + 성격·시대 필터 */}
             <div
