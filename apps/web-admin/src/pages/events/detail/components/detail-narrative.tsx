@@ -283,8 +283,9 @@ export function DetailNarrative({
   )
   const narrativeFold = useSectionCollapse(
     'narrative',
-    shouldCollapseLongSection('narrative', backgroundLength(null, serverNarrative)),
+    serverNarrative.length >= 2 || shouldCollapseLongSection('narrative', backgroundLength(null, serverNarrative)),
     narrativeChars,
+    narrativeRows.length >= 2,
   )
   const aftermathFold = useSectionCollapse(
     'aftermath',
@@ -437,6 +438,8 @@ export function DetailNarrative({
                     collapsed={narrativeFold.collapsed}
                     bodyId="narrative-body"
                     onToggle={() => narrativeFold.setCollapsed((prev) => !prev)}
+                    collapsedLabel="본문 펼치기"
+                    expandedLabel="제목만 보기"
                   />
                 )}
                 {/* 전개가 여러 국면으로 커지면 묶음 사건이 되어 국면마다 하위 사건이 된다 */}
@@ -474,6 +477,7 @@ export function DetailNarrative({
               onMoveToSection={(index, kind) => moveBetween('narrative', index, kind)}
               collapsed={narrativeFold.collapsed}
               onRequestExpand={() => narrativeFold.setCollapsed(false)}
+              timeline
             />
             </div>
           )}

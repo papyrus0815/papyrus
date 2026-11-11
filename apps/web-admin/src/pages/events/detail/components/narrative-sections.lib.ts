@@ -207,7 +207,10 @@ const TITLE_PERIOD = /\s*\(\s*((?:서기|기원전|BC|AD|B\.C\.|A\.D\.)?\s*\d[^(
  * 날짜 뒤에 공백이나 구분 기호가 와야 한다 — '1949년의 위기'처럼 낱말에 붙은 연도는 제목의 일부다.
  */
 const LEADING_PERIOD =
-  /^((?:기원전\s*)?\d{3,4}(?:~\d{3,4}년|년대|년(?:\s*\d{1,2}월(?:\s*\d{1,2}일)?(?:\([^)]*\))?)?|-\d{2}(?:-\d{2})?))(?:\s*[:：—–]\s*|\s+)(\S.+)$/
+  /^((?:(?:기원전|서기)\s*)?(?:\d{1,4}(?:~\d{1,4}년|년대|년(?:\s*\d{1,2}월(?:\s*\d{1,2}일)?)?(?:\([^)]*\))?(?:\s*[~–-]\s*(?:\d{1,4}년\s*)?(?:\d{1,2}월\s*)?(?:\d{1,2}일|\d{1,2}월|\d{1,4}년))?|[.-]\d{2}(?:[.-]\d{2})?)|\d{1,2}월(?:\s*\d{1,2}일)?(?:\s*[~–-]\s*(?:\d{1,2}월\s*)?\d{1,2}일)?))(?:\s*[:：—–-]\s*|\s+)(\S.+)$/
+
+const BODY_LEAD_PERIOD =
+  /^((?:(?:기원전|서기)\s*)?(?:\d{1,4}년(?:\s*\d{1,2}월(?:\s*\d{1,2}일)?)?|\d{1,2}월\s*\d{1,2}일))(?:\([^)]*\))?(?:에|에는|부터|경)?(?=\s|,)/
 
 const HEADING_PATTERN = /<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi
 
@@ -249,6 +252,18 @@ export function splitTitlePeriod(title: string): { title: string; period: string
   const leading = LEADING_PERIOD.exec(title.trim())
   if (leading) return { title: leading[2].trim(), period: leading[1].trim() }
   return { title, period: null }
+}
+
+/** 제목에 날짜가 없을 때 본문 첫머리('1914년 6월 28일 사라예보에서...')에서 시기를 뽑는다 */
+export function extractBodyLeadPeriod(html: string | null | undefined): string | null {
+  if (!html) return null
+  const text = html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const match = BODY_LEAD_PERIOD.exec(text)
+  return match ? match[1].trim() : null
 }
 
 /* ───────────────────────── 긴 배경 줄여 보기 ───────────────────────── */

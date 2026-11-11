@@ -32,7 +32,14 @@ import { tidyProseHtml } from '@/shared/lib/prose-tidy'
 
 import * as S from '../styles'
 import { InlineRichText, InlineText } from './inline'
-import { addHeadingAnchors, plainTextLength, type SectionKind, type SectionRow, splitTitlePeriod } from './narrative-sections.lib'
+import {
+  addHeadingAnchors,
+  extractBodyLeadPeriod,
+  plainTextLength,
+  type SectionKind,
+  type SectionRow,
+  splitTitlePeriod,
+} from './narrative-sections.lib'
 import { REVEAL_ANCHOR_EVENT, revealAnchor } from './scroll-to-anchor'
 
 export * from './narrative-sections.lib'
@@ -81,6 +88,8 @@ interface NarrativeSectionListProps {
    */
   moveTargets?: ReadonlyArray<{ kind: SectionKind; label: string }>
   onMoveToSection?: (index: number, kind: SectionKind) => void
+  /** 전개 타임라인 — 번호 원(1·2·3) 대신 타임라인 점 노드를 세우고 접힌 줄의 글자수를 숨긴다 */
+  timeline?: boolean
 }
 
 export function NarrativeSectionList({
@@ -100,6 +109,7 @@ export function NarrativeSectionList({
   onRequestExpand,
   moveTargets,
   onMoveToSection,
+  timeline = false,
 }: NarrativeSectionListProps) {
   /** 메뉴가 열리면 첫 항목으로 — 키보드 사용자가 바로 고를 수 있게(마운트 때 한 번) */
   const focusFirstMenuItem = useCallback((menu: HTMLDivElement | null) => {
@@ -176,7 +186,8 @@ export function NarrativeSectionList({
         const titleOpen =
           hasTitle || row.key === autoEditKey || titleOpenKeys.includes(row.key)
         const ordinal = index + 1
-        const { period, title: titleText } = splitTitlePeriod(row.title)
+        const { period: titlePeriod, title: titleText } = splitTitlePeriod(row.title)
+        const period = titlePeriod ?? (timeline ? extractBodyLeadPeriod(row.content) : null)
         const anchorId = `${anchorPrefix}-${ordinal}`
         const bodyLength = plainTextLength(row.content)
         const rowOpen = !collapsed || openKeys.has(row.key)
@@ -184,11 +195,16 @@ export function NarrativeSectionList({
           <SectionItem
             key={row.key}
             id={anchorId}
+            $timeline={timeline}
             data-row-key={row.key}
             data-open={collapsed && rowOpen ? 'true' : undefined}
           >
-            {/* 타임라인 노드 — 선 위의 번호. 시기가 있으면 노드는 그 날짜 줄과 나란히 선다(연혁과 같은 문법) */}
-            <SectionIndex aria-hidden>{ordinal}</SectionIndex>
+            {/* 타임라인 노드 — 전개는 연혁과 같은 원형 점 노드, 배경·여파는 단락 번호 */}
+            {timeline ? (
+              <TimelineNode $dated={Boolean(period)} aria-hidden />
+            ) : (
+              <SectionIndex aria-hidden>{ordinal}</SectionIndex>
+            )}
             {period && <SectionPeriod>{period}</SectionPeriod>}
             {collapsed ? (
               /* 줄인 단락 — 누르면 이 단락만 제자리에서 열고 닫는다. 펼친 제목과 같은 크기·굵기 */
@@ -206,7 +222,7 @@ export function NarrativeSectionList({
                   <CollapsedPreview>{bodyPreview(row.content) || '빈 단락'}</CollapsedPreview>
                 )}
                 <CollapsedTail aria-hidden>
-                  {bodyLength > 0 && `${bodyLength.toLocaleString('ko-KR')}자`}
+                  {!timeline && bodyLength > 0 && `${bodyLength.toLocaleString('ko-KR')}자`}
                   <FiChevronDown />
                 </CollapsedTail>
               </CollapsedHead>
@@ -436,15 +452,15 @@ export const SectionStack = styled.div<{ $compact?: boolean }>`
   }
 `
 
-const SectionItem = styled.div`
+const SectionItem = styled.div<{ $timeline?: boolean }>`
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-left: ${TIMELINE_INSET}px;
+  padding-left: ${({ $timeline }) => ($timeline ? 28 : TIMELINE_INSET)}px;
 
   @media (max-width: 640px) {
-    padding-left: ${TIMELINE_INSET - 8}px;
+    padding-left: ${({ $timeline }) => ($timeline ? 24 : TIMELINE_INSET - 8)}px;
   }
   /* 단락 하나를 직접 가리키는 앵커(#background-2) — 헤더 아래로 파묻히지 않게. */
   scroll-margin-top: 24px;
@@ -509,6 +525,29 @@ const LeadNode = styled.span`
   border-radius: 50%;
   background: ${({ theme }) => theme.colors.text.tertiary};
   box-shadow: 0 0 0 3px ${({ theme }) => ledgerBackground(theme.mode)};
+`
+
+/** 전개 타임라인 마디 — 번호 원 대신 세로선 위의 10px 점 노드(연혁 TLItem과 같은 규격) */
+const TimelineNode = styled.span<{ $dated?: boolean }>`
+  position: absolute;
+  left: ${NODE_SIZE / 2 - 5}px;
+  top: 6px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 2px solid ${({ theme, $dated }) => ($dated ? ledgerAccent(theme.mode) : theme.colors.text.tertiary)};
+  background: ${({ theme, $dated }) => ($dated ? ledgerAccent(theme.mode) : ledgerBackground(theme.mode))};
+  box-shadow: 0 0 0 3px ${({ theme }) => ledgerBackground(theme.mode)};
+  transition:
+    background ${MOTION.fast},
+    border-color ${MOTION.fast};
+
+  ${SectionItem}:hover > &,
+  ${SectionItem}[data-open='true'] > & {
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    background: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
 `
 
 /**

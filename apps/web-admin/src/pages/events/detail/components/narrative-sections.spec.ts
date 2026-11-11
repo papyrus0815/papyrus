@@ -21,6 +21,7 @@ import {
   shouldCollapseLongSection,
   type SectionRow,
   splitTitlePeriod,
+  extractBodyLeadPeriod,
   syncRowsWithServer,
   addHeadingAnchors,
   extractProseHeadings,
@@ -189,6 +190,18 @@ describe('splitTitlePeriod', () => {
     expect(splitTitlePeriod('1970년대: 투기꾼의 아수라장')).toEqual({ title: '투기꾼의 아수라장', period: '1970년대' })
     expect(splitTitlePeriod('1874~1880년 코베 측 확장').period).toBe('1874~1880년')
     expect(splitTitlePeriod('1867년 11월 9일(음력 10월 14일) 니조성 의식').title).toBe('니조성 의식')
+    expect(splitTitlePeriod('1914년 6월 ~ 7월: 7월 위기')).toEqual({
+      title: '7월 위기',
+      period: '1914년 6월 ~ 7월',
+    })
+  })
+
+  it('제목에 날짜가 없을 때 본문 첫머리에서 시기를 뽑는다', () => {
+    expect(extractBodyLeadPeriod('<p>1914년 6월 28일 오스트리아-헝가리 황태자 부부가 피격되었다.</p>')).toBe(
+      '1914년 6월 28일',
+    )
+    expect(extractBodyLeadPeriod('<p>6월 28일에는 사라예보에서 사건이 일어났다.</p>')).toBe('6월 28일')
+    expect(extractBodyLeadPeriod('<p>날짜 없이 시작하는 단락 본문이다.</p>')).toBeNull()
   })
 
   it('낱말에 붙은 연도와 숫자로 시작하는 이름은 그대로', () => {
