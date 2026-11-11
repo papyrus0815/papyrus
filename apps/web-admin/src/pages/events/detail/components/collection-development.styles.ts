@@ -526,6 +526,18 @@ export const AccessionTitle = styled.div`
 /** 전개 머리의 '하위가 다룬 기간' — 건수 뒤에 이어 쓴다 */
 /** 머리 부제 — 좁은 화면에서 '37 / 건'처럼 낱말 가운데가 꺾이지 않게(꺾을 때는 띄어쓰기에서) */
 /**
+ * 전개 섹션 — 키보드로 옮겨 간 자리가 붙어 있는 머리(탭 줄 + 전개 머리) 밑에 가려지지 않게, 포커스가 닿는 것마다
+ * 그만큼 위 여백을 둔다. 머리를 붙인 뒤 Shift+Tab으로 올라가면 40번 중 6번이 머리 밑에 가렸다(WCAG 2.4.11).
+ */
+export const DevelopmentSection = styled(S.Section)`
+  a[href],
+  button,
+  input {
+    scroll-margin-top: calc(56px + var(--development-head, 0px));
+  }
+`
+
+/**
  * 전개 머리 — 섹션을 읽는 동안 탭 줄 아래에 붙는다(제목·건수·보기 단추). 프랑스 혁명 '전부'는 6,500px라 보기를 바꾸려면
  * 맨 위까지 올라가야 했다. 좁은 지면에선 붙이지 않는다(머리가 세 줄이라 화면을 너무 먹는다).
  * 높이는 --development-head로 섹션에 알려, 구획 띠·앵커 이동이 그 아래에 서게 한다.

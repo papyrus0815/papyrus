@@ -59,6 +59,7 @@ import {
   ChapterTitle,
   CoveredRange,
   DevelopmentHeader,
+  DevelopmentSection,
   DevelopmentSubtitle,
   DragPreview,
   DropLabel,
@@ -1605,7 +1606,7 @@ export function CollectionDevelopment({
   }, [overview, event.id, totalCount, allChapterKeys, foldableIds, urlView])
 
   return (
-    <S.Section id="narrative" aria-busy={busy} ref={sectionRef}>
+    <DevelopmentSection id="narrative" aria-busy={busy} ref={sectionRef}>
       {/* 끌기 미리보기 칩 — 화면 밖에 두고 setDragImage로만 쓴다 */}
       <DragPreview ref={previewRef} aria-hidden />
       <DevelopmentHeader ref={headerRef}>
@@ -1941,7 +1942,7 @@ export function CollectionDevelopment({
           collectionChildCount={tree.filter((node) => node.isCollection && !node.viaExtraLink).length}
         />
       )}
-    </S.Section>
+    </DevelopmentSection>
   )
 }
 
