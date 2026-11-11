@@ -5,11 +5,12 @@
 import React, { useEffect, useState } from 'react'
 
 import {
-  FiAward,
   FiCalendar,
   FiCheck,
   FiChevronDown,
-  FiFileText,
+  FiPlus,
+  FiTrash2,
+  FiUser,
   FiX,
 } from 'react-icons/fi'
 import styled from 'styled-components'
@@ -32,15 +33,20 @@ import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import type {
   CreateMilitaryUnitInput,
   MilitaryUnit,
+  MilitaryUnitLineageDto,
+  MilitaryUnitTransitionKind,
   MilitaryUnitType,
 } from '@/shared/api/military-unit'
 import { militaryUnitApi } from '@/shared/api/military-unit'
+import { personCareerApi } from '@/shared/api/person-career'
+import { getAllPersons, type PersonResponseDto } from '@/shared/api/persons'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { CountryPicker } from '@/shared/ui/country-picker'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
+import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import {
   DateFieldBtn,
-  DateFieldsRow,
   FieldControl,
   FieldHint,
   FieldLabel,
@@ -112,15 +118,6 @@ const CommanderFormField = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
-`
-
-const CommanderFormLabel = styled.div`
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  display: flex;
-  align-items: center;
-  gap: 4px;
 `
 
 const CommanderMicroLabel = styled.span`
@@ -228,6 +225,9 @@ const InsigniaThumbnailHint = styled.span`
 `
 
 const UNIT_TYPES: { value: MilitaryUnitType; label: string }[] = [
+  { value: 'SUPREME_COMMAND', label: '최고사령부 (OKW · STAVKA · 대본영 등)' },
+  { value: 'GENERAL_STAFF', label: '참모본부 · 합동참모본부' },
+  { value: 'SERVICE_HQ', label: '각군 총사령부 (OKH · OKM · OKL · 육본 등)' },
   { value: 'THEATER', label: '전구·총사령부' },
   { value: 'ARMY_GROUP', label: '집단군' },
   { value: 'FRONT', label: '전선군·방면군' },
@@ -251,6 +251,90 @@ const UNIT_TYPES: { value: MilitaryUnitType; label: string }[] = [
   { value: 'OTHER', label: '기타' },
 ]
 
+const HIGH_COMMAND_PRESETS: Array<{
+  label: string
+  name: string
+  abbreviation: string
+  nameLocal?: string
+  nameEn?: string
+  unitType: MilitaryUnitType
+  branch: string
+}> = [
+  {
+    label: 'OKW (국방군 최고사령부)',
+    name: '국방군 최고사령부',
+    abbreviation: 'OKW',
+    nameLocal: 'Oberkommando der Wehrmacht',
+    nameEn: 'Armed Forces High Command',
+    unitType: 'SUPREME_COMMAND',
+    branch: 'JOINT',
+  },
+  {
+    label: 'OKH (육군 총사령부)',
+    name: '육군 총사령부',
+    abbreviation: 'OKH',
+    nameLocal: 'Oberkommando des Heeres',
+    nameEn: 'Army High Command',
+    unitType: 'SERVICE_HQ',
+    branch: 'ARMY',
+  },
+  {
+    label: 'OKM (해군 총사령부)',
+    name: '해군 총사령부',
+    abbreviation: 'OKM',
+    nameLocal: 'Oberkommando der Marine',
+    nameEn: 'Navy High Command',
+    unitType: 'SERVICE_HQ',
+    branch: 'NAVY',
+  },
+  {
+    label: 'OKL (공군 총사령부)',
+    name: '공군 총사령부',
+    abbreviation: 'OKL',
+    nameLocal: 'Oberkommando der Luftwaffe',
+    nameEn: 'Air Force High Command',
+    unitType: 'SERVICE_HQ',
+    branch: 'AIR_FORCE',
+  },
+  {
+    label: 'STAVKA (소련 최고사령부)',
+    name: '최고사령부 스타프카',
+    abbreviation: 'STAVKA',
+    nameLocal: 'Ставка Верховного Главнокомандования',
+    nameEn: 'Stavka of the Supreme High Command',
+    unitType: 'SUPREME_COMMAND',
+    branch: 'JOINT',
+  },
+  {
+    label: '대본영 (일본 제국)',
+    name: '대본영',
+    abbreviation: '대본영',
+    nameLocal: '大本営',
+    nameEn: 'Imperial General Headquarters',
+    unitType: 'SUPREME_COMMAND',
+    branch: 'JOINT',
+  },
+  {
+    label: '합동참모본부 (합참)',
+    name: '합동참모본부',
+    abbreviation: '합참',
+    nameEn: 'Joint Chiefs of Staff',
+    unitType: 'GENERAL_STAFF',
+    branch: 'JOINT',
+  },
+]
+
+const TRANSITION_KIND_OPTIONS: Array<{
+  value: MilitaryUnitTransitionKind
+  label: string
+}> = [
+  { value: 'REORGANIZE', label: '개편 · 승계' },
+  { value: 'RENAME', label: '개칭' },
+  { value: 'SPLIT', label: '분리 · 창설' },
+  { value: 'MERGE', label: '통합' },
+  { value: 'ABSORBED', label: '흡수' },
+]
+
 const MILITARY_BRANCHES = [
   { value: 'ARMY', label: '육군' },
   { value: 'NAVY', label: '해군' },
@@ -269,7 +353,18 @@ const MILITARY_BRANCHES = [
  * 독일 제국 제1군처럼 과거 정치체 소속 부대는 역사 축에 저장된다.
  */
 
-type TabType = 'basic' | 'military' | 'description'
+type TabType = 'basic' | 'military' | 'lineage' | 'description'
+
+export type CommanderDraftRow = {
+  personId: string
+  personName: string
+  rank: string
+  role: string
+  termNumber: string
+  startDate: string
+  endDate: string
+  isCurrent: boolean
+}
 
 export type MilitaryUnitFormModalProps = {
   isOpen: boolean
@@ -278,8 +373,14 @@ export type MilitaryUnitFormModalProps = {
   onSaved?: () => void
   /** 신규 등록 시 기본 소속 국가 */
   defaultCountryId?: string | null
+  /** 신규 시 기본 역사적 국가 ID (역사 국가 페이지 또는 역사 부처에서 열 때) */
+  defaultHistoricalCountryId?: string | null
   /** 신규 시 연결할 중앙부처 ID (행정조직에서 열 때) */
   defaultAdministrationDepartmentId?: string | null
+  /** 신규 시 기본 상위 부대 ID (편제 트리에서 '+ 예하 부대 추가'로 열 때) */
+  defaultParentUnitId?: string | null
+  /** 신규 시 기본 군종 */
+  defaultBranch?: string | null
   /** 수정할 부대 ID — 있으면 수정 모드 */
   editingUnitId?: string | null
   /** 국가·연결 부처 변경 불가 (국가 상세 → 중앙부처 컨텍스트) */
@@ -291,7 +392,10 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   onClose,
   onSaved,
   defaultCountryId = null,
+  defaultHistoricalCountryId = null,
   defaultAdministrationDepartmentId = null,
+  defaultParentUnitId = null,
+  defaultBranch = null,
   editingUnitId = null,
   lockCountryAndDepartment = false,
 }) => {
@@ -307,6 +411,8 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     HistoricalCountryResponseDto[]
   >([])
   const [allUnits, setAllUnits] = useState<MilitaryUnit[]>([])
+  const [allPersons, setAllPersons] = useState<PersonResponseDto[]>([])
+  const [personsLoading, setPersonsLoading] = useState(false)
 
   // Modals
   const [countryModalOpen, setCountryModalOpen] = useState(false)
@@ -316,9 +422,14 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   const [establishedDateModalOpen, setEstablishedDateModalOpen] =
     useState(false)
   const [disbandedDateModalOpen, setDisbandedDateModalOpen] = useState(false)
+  const [commanderPersonModalOpen, setCommanderPersonModalOpen] =
+    useState(false)
 
   // Form fields - 기본 정보
   const [name, setName] = useState('')
+  const [abbreviation, setAbbreviation] = useState('')
+  const [nameLocal, setNameLocal] = useState('')
+  const [nameEn, setNameEn] = useState('')
   const [unitType, setUnitType] = useState<MilitaryUnitType | ''>('')
   const [unitTypeName, setUnitTypeName] = useState('')
   const [branch, setBranch] = useState('')
@@ -336,7 +447,11 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     AdministrationDepartment[]
   >([])
   const [isActive, setIsActive] = useState(true)
+  const [establishedEra, setEstablishedEra] = useState<'AD' | 'BC'>('AD')
+  const [establishedYear, setEstablishedYear] = useState('')
   const [establishedDate, setEstablishedDate] = useState('')
+  const [disbandedEra, setDisbandedEra] = useState<'AD' | 'BC'>('AD')
+  const [disbandedYear, setDisbandedYear] = useState('')
   const [disbandedDate, setDisbandedDate] = useState('')
   const [description, setDescription] = useState('')
 
@@ -350,6 +465,23 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   const [honors, setHonors] = useState('')
   const [primaryMission, setPrimaryMission] = useState('')
   const [jurisdiction, setJurisdiction] = useState('')
+  const [commanderRows, setCommanderRows] = useState<CommanderDraftRow[]>([])
+  const [commanderTouched, setCommanderTouched] = useState(false)
+  const [existingTenureCount, setExistingTenureCount] = useState(0)
+
+  // Form fields - 전신·후신 계보
+  const [predecessors, setPredecessors] = useState<MilitaryUnitLineageDto[]>([])
+  const [successors, setSuccessors] = useState<MilitaryUnitLineageDto[]>([])
+  const [newTransitionDirection, setNewTransitionDirection] = useState<
+    'PREDECESSOR_DEPARTMENT' | 'PREDECESSOR_UNIT' | 'SUCCESSOR_UNIT'
+  >('PREDECESSOR_DEPARTMENT')
+  const [newTransitionTargetId, setNewTransitionTargetId] = useState('')
+  const [newTransitionKind, setNewTransitionKind] =
+    useState<MilitaryUnitTransitionKind>('REORGANIZE')
+  const [newTransitionEra, setNewTransitionEra] = useState<'AD' | 'BC'>('AD')
+  const [newTransitionYear, setNewTransitionYear] = useState('')
+  const [newTransitionNote, setNewTransitionNote] = useState('')
+  const [transitionBusy, setTransitionBusy] = useState(false)
 
   useEffect(() => {
     loadCountries()
@@ -357,22 +489,49 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   }, [])
 
   useEffect(() => {
+    if (!isOpen) return
+    void loadAllUnits()
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!commanderPersonModalOpen || allPersons.length > 0) return
+    setPersonsLoading(true)
+    getAllPersons()
+      .then((list) => setAllPersons(Array.isArray(list) ? list : []))
+      .catch(() => setAllPersons([]))
+      .finally(() => setPersonsLoading(false))
+  }, [commanderPersonModalOpen, allPersons.length])
+
+  useEffect(() => {
     if (!isOpen || !editingUnitId) return
     void loadMilitaryUnit(editingUnitId)
   }, [isOpen, editingUnitId])
 
-  /** 신규: 모달을 열 때 폼·기본 국가·중앙부처 연결 */
+  /** 신규: 모달을 열 때 폼·기본 국가·중앙부처·상위 부대 연결 */
   useEffect(() => {
     if (!isOpen || editingUnitId) return
     setName('')
+    setAbbreviation('')
+    setNameLocal('')
+    setNameEn('')
     setUnitType('')
     setUnitTypeName('')
-    setBranch('')
-    setBranchName('')
-    setParentUnitId('')
+    const resolvedBranch = defaultBranch ?? ''
+    setBranch(resolvedBranch)
+    setBranchName(
+      resolvedBranch
+        ? MILITARY_BRANCHES.find((item) => item.value === resolvedBranch)
+            ?.label || ''
+        : '',
+    )
+    setParentUnitId(defaultParentUnitId ?? '')
     setParentUnitName('')
     setIsActive(true)
+    setEstablishedEra('AD')
+    setEstablishedYear('')
     setEstablishedDate('')
+    setDisbandedEra('AD')
+    setDisbandedYear('')
     setDisbandedDate('')
     setDescription('')
     setNickname('')
@@ -384,29 +543,118 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     setHonors('')
     setPrimaryMission('')
     setJurisdiction('')
+    setCommanderRows([])
+    setCommanderTouched(false)
+    setExistingTenureCount(0)
+    setPredecessors([])
+    setSuccessors([])
+    setNewTransitionDirection('PREDECESSOR_DEPARTMENT')
+    setNewTransitionTargetId('')
+    setNewTransitionKind('REORGANIZE')
+    setNewTransitionEra('AD')
+    setNewTransitionYear('')
+    setNewTransitionNote('')
     setActiveTab('basic')
     setAdministrationDepartmentId(defaultAdministrationDepartmentId ?? '')
-    // 신규 등록의 기본 국가는 현대 축뿐 — 역사 축은 항상 비운 채 시작한다
-    setHistoricalCountryId('')
-    if (defaultCountryId) {
-      setCountryId(defaultCountryId)
+    if (defaultHistoricalCountryId) {
+      setHistoricalCountryId(defaultHistoricalCountryId)
+      setCountryId(defaultCountryId ?? '')
     } else {
-      setCountryId('')
-      setCountryName('')
-      setCountryFlagEmoji('')
-      setCountryEnglishName('')
+      setHistoricalCountryId('')
+      if (defaultCountryId) {
+        setCountryId(defaultCountryId)
+      } else {
+        setCountryId('')
+        setCountryName('')
+        setCountryFlagEmoji('')
+        setCountryEnglishName('')
+      }
     }
-  }, [isOpen, editingUnitId, defaultCountryId, defaultAdministrationDepartmentId])
+  }, [
+    isOpen,
+    editingUnitId,
+    defaultCountryId,
+    defaultHistoricalCountryId,
+    defaultAdministrationDepartmentId,
+    defaultParentUnitId,
+    defaultBranch,
+  ])
+
+  /** 신규 생성 시 상위 부대(defaultParentUnitId)가 있으면 이름·군종·소속 국가·중앙부처 자동 상속 */
+  useEffect(() => {
+    if (!isOpen || editingUnitId || !parentUnitId || allUnits.length === 0)
+      return
+    const matchedParent = allUnits.find((unit) => unit.id === parentUnitId)
+    if (!matchedParent) return
+    setParentUnitName(matchedParent.name)
+    const parentExtended = matchedParent as MilitaryUnit & {
+      branch?: string | null
+      administrationDepartmentId?: string | null
+      administrationDepartment?: { id: string; name: string } | null
+    }
+    if (!branch && parentExtended.branch) {
+      setBranch(parentExtended.branch)
+      setBranchName(
+        MILITARY_BRANCHES.find((item) => item.value === parentExtended.branch)
+          ?.label || '',
+      )
+    }
+    const parentDeptId =
+      parentExtended.administrationDepartmentId ??
+      parentExtended.administrationDepartment?.id ??
+      ''
+    if (!administrationDepartmentId && parentDeptId) {
+      setAdministrationDepartmentId(parentDeptId)
+    }
+    if (matchedParent.historicalCountryId) {
+      setHistoricalCountryId(matchedParent.historicalCountryId)
+      setCountryId(matchedParent.countryId ?? '')
+    } else if (matchedParent.countryId) {
+      setHistoricalCountryId('')
+      setCountryId(matchedParent.countryId)
+    }
+  }, [
+    isOpen,
+    editingUnitId,
+    parentUnitId,
+    allUnits,
+    branch,
+    administrationDepartmentId,
+  ])
 
   useEffect(() => {
-    if (!isOpen || editingUnitId || !countryId || modernCountries.length === 0)
+    if (
+      !isOpen ||
+      editingUnitId ||
+      historicalCountryId ||
+      !countryId ||
+      modernCountries.length === 0
+    )
       return
-    const c = modernCountries.find((x) => x.id === countryId)
-    if (c) {
-      setCountryName(c.name)
-      setCountryFlagEmoji(c.flagEmoji || '🏳️')
+    const foundModern = modernCountries.find((item) => item.id === countryId)
+    if (foundModern) {
+      setCountryName(foundModern.name)
+      setCountryFlagEmoji(foundModern.flagEmoji || '🏳️')
     }
-  }, [isOpen, editingUnitId, countryId, modernCountries])
+  }, [isOpen, editingUnitId, countryId, historicalCountryId, modernCountries])
+
+  useEffect(() => {
+    if (
+      !isOpen ||
+      editingUnitId ||
+      !historicalCountryId ||
+      historicalCountries.length === 0
+    )
+      return
+    const foundHist = historicalCountries.find(
+      (item) => item.id === historicalCountryId,
+    )
+    if (foundHist) {
+      setCountryName(foundHist.name)
+      setCountryFlagEmoji('🏛️')
+      setCountryEnglishName(foundHist.enName || '')
+    }
+  }, [isOpen, editingUnitId, historicalCountryId, historicalCountries])
 
   useEffect(() => {
     // 부처 목록도 선택된 축을 따라간다 — 역사 국가 소속 부대는 그 역사 국가의 부처만 후보
@@ -417,12 +665,26 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     let cancelled = false
     ;(async () => {
       try {
-        const list = countryId
-          ? await administrationDepartmentApi.getByCountryId(countryId)
-          : await administrationDepartmentApi.getByHistoricalCountryId(
+        const list = historicalCountryId
+          ? await administrationDepartmentApi.getByHistoricalCountryId(
               historicalCountryId,
             )
-        if (!cancelled) setAdminDepartments(Array.isArray(list) ? list : [])
+          : await administrationDepartmentApi.getByCountryId(countryId)
+        if (!cancelled) {
+          const validList = Array.isArray(list) ? list : []
+          setAdminDepartments(validList)
+          if (administrationDepartmentId) {
+            const matchedDept = validList.find(
+              (dept) => dept.id === administrationDepartmentId,
+            )
+            if (
+              matchedDept?.historicalCountryId &&
+              matchedDept.historicalCountryId !== historicalCountryId
+            ) {
+              setHistoricalCountryId(matchedDept.historicalCountryId)
+            }
+          }
+        }
       } catch {
         if (!cancelled) setAdminDepartments([])
       }
@@ -430,7 +692,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     return () => {
       cancelled = true
     }
-  }, [countryId, historicalCountryId])
+  }, [countryId, historicalCountryId, administrationDepartmentId])
 
   useEffect(() => {
     if (!countryId && !historicalCountryId) setGarrisonPlace(null)
@@ -464,10 +726,14 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       setLoading(true)
       const unit = await militaryUnitApi.getById(unitId)
       setName(unit.name)
+      setAbbreviation(unit.abbreviation || '')
+      setNameLocal(unit.nameLocal || '')
+      setNameEn(unit.nameEn || '')
       setUnitType(unit.unitType || '')
       setUnitTypeName(
         unit.unitType
-          ? UNIT_TYPES.find((t) => t.value === unit.unitType)?.label || ''
+          ? UNIT_TYPES.find((typeItem) => typeItem.value === unit.unitType)
+              ?.label || ''
           : '',
       )
       setCountryId(unit.countryId || '')
@@ -486,16 +752,26 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       setParentUnitId(unit.parentUnitId || '')
       if (unit.parentUnit) {
         setParentUnitName(unit.parentUnit.name)
+      } else {
+        setParentUnitName('')
       }
       const admId = (unit as { administrationDepartmentId?: string | null })
         .administrationDepartmentId
       setAdministrationDepartmentId(admId ?? '')
       setIsActive(unit.isActive ?? true)
-      setEstablishedDate(unit.establishedDate || '')
-      setDisbandedDate(unit.disbandedDate || '')
+      setEstablishedEra(unit.established?.era === 'BC' ? 'BC' : 'AD')
+      setEstablishedYear(
+        unit.established?.year ? String(unit.established.year) : '',
+      )
+      setEstablishedDate(unit.establishedDate ? unit.establishedDate.slice(0, 10) : '')
+      setDisbandedEra(unit.disbanded?.era === 'BC' ? 'BC' : 'AD')
+      setDisbandedYear(unit.disbanded?.year ? String(unit.disbanded.year) : '')
+      setDisbandedDate(unit.disbandedDate ? unit.disbandedDate.slice(0, 10) : '')
       setDescription(unit.description || '')
+      setPredecessors(Array.isArray(unit.predecessors) ? unit.predecessors : [])
+      setSuccessors(Array.isArray(unit.successors) ? unit.successors : [])
 
-      const u = unit as typeof unit & {
+      const unitExtended = unit as typeof unit & {
         branch?: string | null
         nickname?: string | null
         motto?: string | null
@@ -507,32 +783,70 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
         notableBattles?: string | null
         honors?: string | null
       }
-      if (u.branch) {
-        setBranch(u.branch)
+      if (unitExtended.branch) {
+        setBranch(unitExtended.branch)
         setBranchName(
-          MILITARY_BRANCHES.find((b) => b.value === u.branch)?.label || '',
+          MILITARY_BRANCHES.find(
+            (branchOpt) => branchOpt.value === unitExtended.branch,
+          )?.label || '',
         )
       } else {
         setBranch('')
         setBranchName('')
       }
-      setNickname(u.nickname || '')
-      setMotto(u.motto || '')
+      setNickname(unitExtended.nickname || '')
+      setMotto(unitExtended.motto || '')
       setGarrisonPlace(
-        u.garrison
+        unitExtended.garrison
           ? {
-              displayName: u.garrison,
-              shortName: u.garrison,
+              displayName: unitExtended.garrison,
+              shortName: unitExtended.garrison,
               isManual: true,
             }
           : null,
       )
-      setStrength(u.strength || '')
-      setInsigniaUrl(u.insigniaUrl || '')
-      setPrimaryMission(u.primaryMission || '')
-      setJurisdiction(u.jurisdiction || '')
-      setNotableBattles(u.notableBattles || '')
-      setHonors(u.honors || '')
+      setStrength(unitExtended.strength || '')
+      setInsigniaUrl(unitExtended.insigniaUrl || '')
+      setPrimaryMission(unitExtended.primaryMission || '')
+      setJurisdiction(unitExtended.jurisdiction || '')
+      setNotableBattles(unitExtended.notableBattles || '')
+      setHonors(unitExtended.honors || '')
+
+      const existingCommanders = Array.isArray(unit.commanders)
+        ? unit.commanders
+        : []
+      const unifiedCount = existingCommanders.filter((cmdItem) =>
+        Boolean(cmdItem.tenureId),
+      ).length
+      setExistingTenureCount(
+        Math.max(unifiedCount, Array.isArray(unit.tenures) ? unit.tenures.length : 0),
+      )
+      const legacyCommanders = existingCommanders.filter(
+        (cmdItem) => !cmdItem.tenureId,
+      )
+      setCommanderTouched(false)
+      setCommanderRows(
+        legacyCommanders.map((cmdItem) => {
+          const personRecord = cmdItem.person
+          const resolvedPersonName = personRecord
+            ? getPersonDisplayName({
+                name: personRecord.name ?? '',
+                surname: personRecord.surname ?? undefined,
+              }) || personRecord.name
+            : cmdItem.personId
+          return {
+            personId: cmdItem.personId,
+            personName: resolvedPersonName,
+            rank: cmdItem.rank ?? '',
+            role: cmdItem.role ?? '',
+            termNumber:
+              cmdItem.termNumber != null ? String(cmdItem.termNumber) : '',
+            startDate: cmdItem.startDate ? cmdItem.startDate.slice(0, 10) : '',
+            endDate: cmdItem.endDate ? cmdItem.endDate.slice(0, 10) : '',
+            isCurrent: Boolean(cmdItem.isCurrent),
+          }
+        }),
+      )
     } catch {
       notify.error('군부대 정보를 불러오는데 실패했습니다.')
       onClose()
@@ -541,8 +855,98 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleAddTransition = async () => {
+    if (!editingUnitId || !newTransitionTargetId || transitionBusy) return
+    const parsedYear = Number.parseInt(newTransitionYear.trim(), 10)
+    const transitionPayload = {
+      kind: newTransitionKind,
+      era: Number.isFinite(parsedYear) ? newTransitionEra : null,
+      year: Number.isFinite(parsedYear) && parsedYear > 0 ? parsedYear : null,
+      note: newTransitionNote.trim() || null,
+      ...(newTransitionDirection === 'PREDECESSOR_DEPARTMENT'
+        ? { predecessorDepartmentId: newTransitionTargetId }
+        : newTransitionDirection === 'PREDECESSOR_UNIT'
+          ? { predecessorUnitId: newTransitionTargetId }
+          : { successorUnitId: newTransitionTargetId }),
+    }
+    try {
+      setTransitionBusy(true)
+      await militaryUnitApi.addTransition(editingUnitId, transitionPayload)
+      const refreshed = await militaryUnitApi.getById(editingUnitId)
+      setPredecessors(
+        Array.isArray(refreshed.predecessors) ? refreshed.predecessors : [],
+      )
+      setSuccessors(
+        Array.isArray(refreshed.successors) ? refreshed.successors : [],
+      )
+      setNewTransitionTargetId('')
+      setNewTransitionYear('')
+      setNewTransitionNote('')
+      notify.success('전신·후신 계보가 연결되었습니다.')
+      onSaved?.()
+    } catch (err) {
+      notify.error(
+        err instanceof Error ? err.message : '계보 연결에 실패했습니다.',
+      )
+    } finally {
+      setTransitionBusy(false)
+    }
+  }
+
+  const handleDeleteTransition = async (transitionId: string) => {
+    if (!editingUnitId || transitionBusy) return
+    try {
+      setTransitionBusy(true)
+      await militaryUnitApi.deleteTransition(transitionId)
+      const refreshed = await militaryUnitApi.getById(editingUnitId)
+      setPredecessors(
+        Array.isArray(refreshed.predecessors) ? refreshed.predecessors : [],
+      )
+      setSuccessors(
+        Array.isArray(refreshed.successors) ? refreshed.successors : [],
+      )
+      notify.success('계보 연결이 해제되었습니다.')
+      onSaved?.()
+    } catch {
+      notify.error('계보 연결 해제에 실패했습니다.')
+    } finally {
+      setTransitionBusy(false)
+    }
+  }
+
+  const buildDatePayload = (
+    eraVal: 'AD' | 'BC',
+    yearStr: string,
+    isoStr: string,
+  ) => {
+    const trimmedIso = isoStr.trim()
+    if (trimmedIso) {
+      return {
+        date: trimmedIso,
+        info: undefined,
+      }
+    }
+    const parsedYear = Number.parseInt(yearStr.trim(), 10)
+    if (Number.isFinite(parsedYear) && parsedYear > 0) {
+      return {
+        date: null,
+        info: {
+          era: eraVal,
+          year: parsedYear,
+          month: null,
+          day: null,
+          precision: 'YEAR',
+        },
+      }
+    }
+    return {
+      date: null,
+      info: null,
+    }
+  }
+
+  const handleSubmit = async (formEvent: React.FormEvent) => {
+    formEvent.preventDefault()
 
     if (!name.trim()) {
       notify.error('군부대명을 입력해주세요.')
@@ -550,8 +954,35 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       return
     }
 
-    const data = {
+    const validCommanders = commanderRows
+      .filter((row) => row.personId.trim().length > 0)
+      .map((row) => {
+        const parsedTerm = Number.parseInt(row.termNumber.trim(), 10)
+        return {
+          personId: row.personId.trim(),
+          rank: row.rank.trim() || null,
+          role: row.role.trim() || null,
+          termNumber: Number.isFinite(parsedTerm) ? parsedTerm : null,
+          startDate: row.startDate.trim() || null,
+          endDate: row.endDate.trim() || null,
+          isCurrent: row.isCurrent,
+        }
+      })
+
+    const establishedPayload = buildDatePayload(
+      establishedEra,
+      establishedYear,
+      establishedDate,
+    )
+    const disbandedPayload = isActive
+      ? { date: null, info: null }
+      : buildDatePayload(disbandedEra, disbandedYear, disbandedDate)
+
+    const baseData = {
       name: name.trim(),
+      abbreviation: abbreviation.trim() || null,
+      nameLocal: nameLocal.trim() || null,
+      nameEn: nameEn.trim() || null,
       unitType: unitType || null,
       branch: branch
         ? (branch as NonNullable<CreateMilitaryUnitInput['branch']>)
@@ -561,8 +992,14 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       parentUnitId: parentUnitId || null,
       administrationDepartmentId: administrationDepartmentId || null,
       isActive,
-      establishedDate: establishedDate || null,
-      disbandedDate: disbandedDate || null,
+      establishedDate: establishedPayload.date,
+      ...(establishedPayload.info !== undefined
+        ? { establishedInfo: establishedPayload.info }
+        : {}),
+      disbandedDate: disbandedPayload.date,
+      ...(disbandedPayload.info !== undefined
+        ? { disbandedInfo: disbandedPayload.info }
+        : {}),
       nickname: nickname.trim() || null,
       motto: motto.trim() || null,
       garrison: garrisonPlace?.displayName?.trim() || null,
@@ -573,15 +1010,70 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       notableBattles: notableBattles.trim() || null,
       honors: honors.trim() || null,
       description: description.trim() || null,
-    } as CreateMilitaryUnitInput
+    }
 
     try {
       setLoading(true)
       if (isEdit && editingUnitId) {
-        await militaryUnitApi.update(editingUnitId, data)
+        await militaryUnitApi.update(editingUnitId, {
+          ...baseData,
+          ...(commanderTouched ? { commanders: validCommanders } : {}),
+        } as CreateMilitaryUnitInput)
         notify.success('군부대가 수정되었습니다.')
       } else {
-        await militaryUnitApi.create(data)
+        const createdUnit = await militaryUnitApi.create(
+          baseData as CreateMilitaryUnitInput,
+        )
+        // 신규 생성 시 함께 입력한 지휘관은 통합 GovernmentPositionTenure로 직결 등록
+        for (const cmdRow of validCommanders) {
+          const parsedStartYear = cmdRow.startDate
+            ? Number.parseInt(cmdRow.startDate.slice(0, 4), 10)
+            : Number.NaN
+          if (Number.isFinite(parsedStartYear) && parsedStartYear > 0) {
+            try {
+              await personCareerApi.createTenure({
+                personId: cmdRow.personId,
+                countryId: countryId || null,
+                historicalCountryId: historicalCountryId || null,
+                positionType: 'MILITARY_COMMANDER',
+                militaryUnitId: createdUnit.id,
+                administrationDepartmentId: administrationDepartmentId || null,
+                title: cmdRow.role || '사령관',
+                rankTitle: cmdRow.rank || null,
+                ordinal: cmdRow.termNumber ?? null,
+                startDate: cmdRow.startDate,
+                endDate: cmdRow.endDate || null,
+              })
+            } catch {
+              // 날짜 파싱 실패 시 부대 생성은 유지
+            }
+          }
+        }
+        // 신규 생성 시 계보 연결이 함께 지정되어 있으면 자동 생성
+        if (newTransitionTargetId) {
+          const parsedTransYear = Number.parseInt(
+            newTransitionYear.trim(),
+            10,
+          )
+          try {
+            await militaryUnitApi.addTransition(createdUnit.id, {
+              kind: newTransitionKind,
+              era: Number.isFinite(parsedTransYear) ? newTransitionEra : null,
+              year:
+                Number.isFinite(parsedTransYear) && parsedTransYear > 0
+                  ? parsedTransYear
+                  : null,
+              note: newTransitionNote.trim() || null,
+              ...(newTransitionDirection === 'PREDECESSOR_DEPARTMENT'
+                ? { predecessorDepartmentId: newTransitionTargetId }
+                : newTransitionDirection === 'PREDECESSOR_UNIT'
+                  ? { predecessorUnitId: newTransitionTargetId }
+                  : { successorUnitId: newTransitionTargetId }),
+            })
+          } catch {
+            // 계보 연결 실패 시 부대 본체는 유지
+          }
+        }
         notify.success('군부대가 생성되었습니다.')
       }
       onSaved?.()
@@ -593,9 +1085,20 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     }
   }
 
-  const availableParentUnits = allUnits.filter(
-    (unit) => unit.id !== editingUnitId,
-  )
+  const availableParentUnits = allUnits.filter((candidateUnit) => {
+    if (candidateUnit.id === editingUnitId) return false
+    if (candidateUnit.id === parentUnitId) return true
+    if (historicalCountryId) {
+      return candidateUnit.historicalCountryId === historicalCountryId
+    }
+    if (countryId) {
+      return (
+        candidateUnit.countryId === countryId &&
+        !candidateUnit.historicalCountryId
+      )
+    }
+    return true
+  })
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -603,6 +1106,64 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
         return (
           <FormSectionInner>
             <FormRows>
+              {!isEdit && (
+                <FieldRow>
+                  <FieldLabel>최고사령부·본부 빠른 프리셋</FieldLabel>
+                  <FullWidthFieldControl>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 6,
+                      }}
+                    >
+                      {HIGH_COMMAND_PRESETS.map((preset) => (
+                        <button
+                          key={preset.abbreviation}
+                          type="button"
+                          onClick={() => {
+                            playClickSound()
+                            setName(preset.name)
+                            setAbbreviation(preset.abbreviation)
+                            setNameLocal(preset.nameLocal ?? '')
+                            setNameEn(preset.nameEn ?? '')
+                            setUnitType(preset.unitType)
+                            setUnitTypeName(
+                              UNIT_TYPES.find(
+                                (typeItem) =>
+                                  typeItem.value === preset.unitType,
+                              )?.label || '',
+                            )
+                            setBranch(preset.branch)
+                            setBranchName(
+                              MILITARY_BRANCHES.find(
+                                (branchItem) =>
+                                  branchItem.value === preset.branch,
+                              )?.label || '',
+                            )
+                          }}
+                          style={{
+                            padding: '5px 11px',
+                            borderRadius: 999,
+                            border: '1px solid rgba(99, 102, 241, 0.35)',
+                            background: 'rgba(99, 102, 241, 0.08)',
+                            color: '#6366f1',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          ⚡ {preset.label}
+                        </button>
+                      ))}
+                    </div>
+                    <FieldHint>
+                      OKW·OKH·OKM·OKL·STAVKA·대본영·합참 등 군사 최고사령부·참모본부는 행정부처가 아닌 군사 조직 최상위 편제로 등록합니다.
+                    </FieldHint>
+                  </FullWidthFieldControl>
+                </FieldRow>
+              )}
+
               <FieldRow>
                 <FieldLabel htmlFor="insignia-upload-basic">
                   부대 마크/휘장
@@ -617,8 +1178,8 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                         <img
                           src={insigniaUrl}
                           alt="부대 마크 미리보기"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none'
+                          onError={(imgEvent) => {
+                            imgEvent.currentTarget.style.display = 'none'
                           }}
                         />
                       ) : (
@@ -657,7 +1218,9 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                       </TextGhostBtn>
                     ) : null}
                   </InsigniaThumbnailRow>
-                  <InsigniaThumbnailHint style={{ marginTop: 8, display: 'block' }}>
+                  <InsigniaThumbnailHint
+                    style={{ marginTop: 8, display: 'block' }}
+                  >
                     {insigniaUrl
                       ? '클릭하면 이미지를 변경할 수 있습니다'
                       : '클릭하여 부대 마크·휘장 이미지를 넣어주세요 (선택)'}
@@ -667,13 +1230,13 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                     type="file"
                     accept="image/*"
                     style={{ display: 'none' }}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
+                    onChange={(fileEvent) => {
+                      const file = fileEvent.target.files?.[0]
                       if (file) {
                         const url = URL.createObjectURL(file)
                         setInsigniaUrl(url)
                       }
-                      e.target.value = ''
+                      fileEvent.target.value = ''
                     }}
                   />
                   <FieldHint>부대의 공식 마크나 휘장 (선택)</FieldHint>
@@ -682,18 +1245,68 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
 
               <FieldRow>
                 <FieldLabel htmlFor="military-unit-name">
-                  군부대명 <Required title="필수" />
+                  군부대·사령부명 <Required title="필수" />
                 </FieldLabel>
                 <FieldControl>
                   <Input
                     id="military-unit-name"
                     type="text"
-                    placeholder="예: 제1보병사단"
+                    placeholder="예: 국방군 최고사령부, 중부집단군, 제1보병사단"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(changeEvent) =>
+                      setName(changeEvent.target.value)
+                    }
                     required
                   />
                 </FieldControl>
+              </FieldRow>
+
+              <FieldRow>
+                <FieldLabel htmlFor="military-unit-abbr">약칭 · 부호</FieldLabel>
+                <FieldControl>
+                  <Input
+                    id="military-unit-abbr"
+                    type="text"
+                    placeholder="예: OKW, OKH, STAVKA, 합참, HG Mitte"
+                    value={abbreviation}
+                    onChange={(changeEvent) =>
+                      setAbbreviation(changeEvent.target.value)
+                    }
+                  />
+                  <FieldHint>
+                    트리·사건 지령 보드·배지에 함께 표시될 약칭 (선택)
+                  </FieldHint>
+                </FieldControl>
+              </FieldRow>
+
+              <FieldRow>
+                <FieldLabel>원어명 · 영문명</FieldLabel>
+                <FullWidthFieldControl>
+                  <CommanderMiniGrid>
+                    <div>
+                      <CommanderMicroLabel>원어명 (선택)</CommanderMicroLabel>
+                      <Input
+                        type="text"
+                        placeholder="예: Oberkommando der Wehrmacht"
+                        value={nameLocal}
+                        onChange={(changeEvent) =>
+                          setNameLocal(changeEvent.target.value)
+                        }
+                      />
+                    </div>
+                    <div>
+                      <CommanderMicroLabel>영문명 (선택)</CommanderMicroLabel>
+                      <Input
+                        type="text"
+                        placeholder="예: Armed Forces High Command"
+                        value={nameEn}
+                        onChange={(changeEvent) =>
+                          setNameEn(changeEvent.target.value)
+                        }
+                      />
+                    </div>
+                  </CommanderMiniGrid>
+                </FullWidthFieldControl>
               </FieldRow>
 
               <FieldRow>
@@ -783,7 +1396,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
               </FieldRow>
 
               <FieldRow>
-                <FieldLabel>부대 유형</FieldLabel>
+                <FieldLabel>부대 유형 · 제대</FieldLabel>
                 <FieldControl>
                   <SelectClearRow>
                     <SelectBtn
@@ -843,12 +1456,12 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                       </ClearFieldBtn>
                     ) : null}
                   </SelectClearRow>
-                  <FieldHint>육군, 해군, 공군, 해병대 등</FieldHint>
+                  <FieldHint>육군, 해군, 공군, 해병대, 합동 등</FieldHint>
                 </FieldControl>
               </FieldRow>
 
               <FieldRow>
-                <FieldLabel>상위 부대</FieldLabel>
+                <FieldLabel>상위 부대·사령부</FieldLabel>
                 <FieldControl>
                   <SelectClearRow>
                     <SelectBtn
@@ -877,35 +1490,50 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                     ) : null}
                   </SelectClearRow>
                   <FieldHint>
-                    예: 제1군단 소속 제1사단의 경우, 제1군단을 선택
+                    예: OKW 산하 OKH, 중부집단군 산하 제2기갑집단 등
                   </FieldHint>
                 </FieldControl>
               </FieldRow>
 
               <FieldRow>
-                <FieldLabel>연결 행정 부처 (선택)</FieldLabel>
+                <FieldLabel>소관 국방·군정 부처 (선택)</FieldLabel>
                 <FieldControl>
                   <AdminDeptSelect
                     value={administrationDepartmentId}
-                    onChange={(e) => {
+                    onChange={(event) => {
                       playClickSound()
-                      setAdministrationDepartmentId(e.target.value)
+                      const nextDeptId = event.target.value
+                      setAdministrationDepartmentId(nextDeptId)
+                      const nextDept = adminDepartments.find(
+                        (dept) => dept.id === nextDeptId,
+                      )
+                      if (nextDept) {
+                        if (nextDept.historicalCountryId) {
+                          setHistoricalCountryId(nextDept.historicalCountryId)
+                        } else if (
+                          nextDept.countryId &&
+                          !defaultHistoricalCountryId
+                        ) {
+                          setHistoricalCountryId('')
+                        }
+                      }
                     }}
                     disabled={
                       (!countryId && !historicalCountryId) ||
                       lockCountryAndDepartment
                     }
                   >
-                    <option value="">— 없음 —</option>
-                    {adminDepartments.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.name}
+                    <option value="">— 없음 (독립 최고사령부 등) —</option>
+                    {adminDepartments.map((dept) => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.historicalCountry?.name && !historicalCountryId
+                          ? `${dept.name} [${dept.historicalCountry.name}]`
+                          : dept.name}
                       </option>
                     ))}
                   </AdminDeptSelect>
                   <FieldHint>
-                    중앙부처(예: 국방부)와 동일 기관으로 묶을 때 선택합니다.
-                    소속 국가를 먼저 지정하세요.
+                    민간 국방부·병조 등 군정 부처 산하일 때 선택합니다. (예: 전쟁부가 폐지되고 OKW로 개편된 경우는 &lsquo;전신·후신 계보&rsquo; 탭에서 전신 부처로 연결하세요.)
                   </FieldHint>
                 </FieldControl>
               </FieldRow>
@@ -926,9 +1554,9 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                     <input
                       type="checkbox"
                       checked={isActive}
-                      onChange={(e) => {
+                      onChange={(changeEvent) => {
                         playClickSound()
-                        setIsActive(e.target.checked)
+                        setIsActive(changeEvent.target.checked)
                       }}
                       style={{
                         width: 18,
@@ -937,79 +1565,136 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                         cursor: 'pointer',
                       }}
                     />
-                    현재 활동 중인 부대
+                    현재 운용 중인 부대·사령부
                   </label>
                 </FieldControl>
               </FieldRow>
 
               <FieldRow>
                 <FieldLabel>창설·해산</FieldLabel>
-                <FieldControl $variant="datePair">
-                  <DateFieldsRow style={{ maxWidth: '100%' }}>
-                    <SelectClearRow style={{ maxWidth: '100%' }}>
-                      <DateFieldBtn
-                        type="button"
-                        $hasValue={!!establishedDate}
-                        onClick={() => {
-                          playClickSound()
-                          setEstablishedDateModalOpen(true)
-                        }}
-                      >
-                        <FiCalendar size={16} />
-                        <span>
-                          {establishedDate || '창설일 (달력)'}
-                        </span>
-                        <FiChevronDown size={20} />
-                      </DateFieldBtn>
-                      {establishedDate ? (
-                        <ClearFieldBtn
+                <FullWidthFieldControl>
+                  <CommanderMiniGrid>
+                    <div>
+                      <CommanderMicroLabel>창설 시기 (연도 / 달력)</CommanderMicroLabel>
+                      <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                        <AdminDeptSelect
+                          value={establishedEra}
+                          onChange={(changeEvent) =>
+                            setEstablishedEra(
+                              changeEvent.target.value as 'AD' | 'BC',
+                            )
+                          }
+                          style={{ maxWidth: 88, padding: '8px 10px' }}
+                        >
+                          <option value="AD">서기</option>
+                          <option value="BC">BC</option>
+                        </AdminDeptSelect>
+                        <Input
+                          type="number"
+                          min={1}
+                          placeholder="창설 연도 (예: 1938)"
+                          value={establishedYear}
+                          onChange={(changeEvent) => {
+                            setEstablishedYear(changeEvent.target.value)
+                            if (establishedDate) setEstablishedDate('')
+                          }}
+                        />
+                      </div>
+                      <SelectClearRow style={{ maxWidth: '100%' }}>
+                        <DateFieldBtn
                           type="button"
+                          $hasValue={!!establishedDate}
                           onClick={() => {
                             playClickSound()
-                            setEstablishedDate('')
+                            setEstablishedDateModalOpen(true)
                           }}
-                          aria-label="창설일 지우기"
                         >
-                          <FiX size={16} />
-                        </ClearFieldBtn>
-                      ) : null}
-                    </SelectClearRow>
-                    <SelectClearRow style={{ maxWidth: '100%' }}>
-                      <DateFieldBtn
-                        type="button"
-                        disabled={isActive}
-                        $hasValue={!!disbandedDate}
-                        onClick={() => {
-                          playClickSound()
-                          if (!isActive) setDisbandedDateModalOpen(true)
-                        }}
-                      >
-                        <FiCalendar size={16} />
-                        <span>
-                          {disbandedDate || '해산일 (달력)'}
-                        </span>
-                        <FiChevronDown size={20} />
-                      </DateFieldBtn>
-                      {disbandedDate && !isActive ? (
-                        <ClearFieldBtn
+                          <FiCalendar size={16} />
+                          <span>
+                            {establishedDate || '정확한 창설 연월일 선택'}
+                          </span>
+                          <FiChevronDown size={20} />
+                        </DateFieldBtn>
+                        {establishedDate ? (
+                          <ClearFieldBtn
+                            type="button"
+                            onClick={() => {
+                              playClickSound()
+                              setEstablishedDate('')
+                            }}
+                            aria-label="창설일 지우기"
+                          >
+                            <FiX size={16} />
+                          </ClearFieldBtn>
+                        ) : null}
+                      </SelectClearRow>
+                    </div>
+
+                    <div>
+                      <CommanderMicroLabel>해산 시기 (연도 / 달력)</CommanderMicroLabel>
+                      <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                        <AdminDeptSelect
+                          value={disbandedEra}
+                          disabled={isActive}
+                          onChange={(changeEvent) =>
+                            setDisbandedEra(
+                              changeEvent.target.value as 'AD' | 'BC',
+                            )
+                          }
+                          style={{ maxWidth: 88, padding: '8px 10px' }}
+                        >
+                          <option value="AD">서기</option>
+                          <option value="BC">BC</option>
+                        </AdminDeptSelect>
+                        <Input
+                          type="number"
+                          min={1}
+                          disabled={isActive}
+                          placeholder="해산 연도 (예: 1945)"
+                          value={disbandedYear}
+                          onChange={(changeEvent) => {
+                            setDisbandedYear(changeEvent.target.value)
+                            if (disbandedDate) setDisbandedDate('')
+                          }}
+                        />
+                      </div>
+                      <SelectClearRow style={{ maxWidth: '100%' }}>
+                        <DateFieldBtn
                           type="button"
+                          disabled={isActive}
+                          $hasValue={!!disbandedDate}
                           onClick={() => {
                             playClickSound()
-                            setDisbandedDate('')
+                            if (!isActive) setDisbandedDateModalOpen(true)
                           }}
-                          aria-label="해산일 지우기"
                         >
-                          <FiX size={16} />
-                        </ClearFieldBtn>
-                      ) : null}
-                    </SelectClearRow>
-                  </DateFieldsRow>
+                          <FiCalendar size={16} />
+                          <span>
+                            {disbandedDate || '정확한 해산 연월일 선택'}
+                          </span>
+                          <FiChevronDown size={20} />
+                        </DateFieldBtn>
+                        {disbandedDate && !isActive ? (
+                          <ClearFieldBtn
+                            type="button"
+                            onClick={() => {
+                              playClickSound()
+                              setDisbandedDate('')
+                            }}
+                            aria-label="해산일 지우기"
+                          >
+                            <FiX size={16} />
+                          </ClearFieldBtn>
+                        ) : null}
+                      </SelectClearRow>
+                    </div>
+                  </CommanderMiniGrid>
                   {isActive ? (
                     <FieldHint>
-                      활동 중인 부대는 해산일을 입력할 수 없습니다
+                      운용 중인 부대는 해산 시기를 비워둡니다 (해체된 과거 부대·사령부는 위 체크박스를 해제하세요)
                     </FieldHint>
                   ) : null}
-                </FieldControl>
+                </FullWidthFieldControl>
               </FieldRow>
             </FormRows>
           </FormSectionInner>
@@ -1026,7 +1711,9 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                     type="text"
                     placeholder="예: 맹호부대, 불사조 사단"
                     value={nickname}
-                    onChange={(e) => setNickname(e.target.value)}
+                    onChange={(changeEvent) =>
+                      setNickname(changeEvent.target.value)
+                    }
                   />
                   <FieldHint>부대의 별명이나 통칭</FieldHint>
                 </FieldControl>
@@ -1039,20 +1726,22 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                     type="text"
                     placeholder="예: 필승, 충성, 용맹"
                     value={motto}
-                    onChange={(e) => setMotto(e.target.value)}
+                    onChange={(changeEvent) =>
+                      setMotto(changeEvent.target.value)
+                    }
                   />
                   <FieldHint>부대의 모토나 슬로건</FieldHint>
                 </FieldControl>
               </FieldRow>
 
               <FieldRow>
-                <FieldLabel>주둔지</FieldLabel>
+                <FieldLabel>주둔지·본부</FieldLabel>
                 <FullWidthFieldControl>
                   <PlaceSelect
                     countryId={countryId || undefined}
                     disabled={!countryId}
                     value={garrisonPlace}
-                    onChange={(p) => setGarrisonPlace(p)}
+                    onChange={(placeVal) => setGarrisonPlace(placeVal)}
                   />
                   <FieldHint>
                     소속 국가를 먼저 선택한 뒤 지명을 입력하세요. 등록된 행정구역·도시는
@@ -1068,7 +1757,9 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                     type="text"
                     placeholder="예: 약 10,000명"
                     value={strength}
-                    onChange={(e) => setStrength(e.target.value)}
+                    onChange={(changeEvent) =>
+                      setStrength(changeEvent.target.value)
+                    }
                   />
                   <FieldHint>부대의 총 병력 수</FieldHint>
                 </FieldControl>
@@ -1079,9 +1770,11 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                 <FieldControl>
                   <Textarea
                     rows={3}
-                    placeholder="예: 기동 타격, 국경 경계, 해상 호위 등"
+                    placeholder="예: 국방군 작전 총괄 지휘, 기동 타격, 해상 호위 등"
                     value={primaryMission}
-                    onChange={(e) => setPrimaryMission(e.target.value)}
+                    onChange={(changeEvent) =>
+                      setPrimaryMission(changeEvent.target.value)
+                    }
                   />
                   <FieldHint>부대의 핵심 임무·역할</FieldHint>
                 </FieldControl>
@@ -1092,12 +1785,255 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                 <FieldControl>
                   <Textarea
                     rows={3}
-                    placeholder="예: 제3함대 작전구역, OO지역 방어 등"
+                    placeholder="예: 서부·북아프리카·발칸 전구, 동부전선 작전구역 등"
                     value={jurisdiction}
-                    onChange={(e) => setJurisdiction(e.target.value)}
+                    onChange={(changeEvent) =>
+                      setJurisdiction(changeEvent.target.value)
+                    }
                   />
                   <FieldHint>작전·행정 관할 구역 또는 책임 범위</FieldHint>
                 </FieldControl>
+              </FieldRow>
+
+              <FieldRow>
+                <FieldLabel>역대 지휘관</FieldLabel>
+                <FullWidthFieldControl>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 10,
+                    }}
+                  >
+                    {existingTenureCount > 0 && (
+                      <SidePanelFormSectionCard
+                        style={{
+                          padding: '10px 14px',
+                          fontSize: 12.5,
+                          color: '#6366f1',
+                          fontWeight: 600,
+                        }}
+                      >
+                        🎖️ 통합 인사·재임 시스템으로 연결된 지휘관·참모{' '}
+                        {existingTenureCount}명이 등록되어 있습니다. 부대 상세 화면의
+                        &lsquo;+ 지휘관·참모 임명&rsquo; 또는 인물 상세에서 편집할 수 있습니다.
+                      </SidePanelFormSectionCard>
+                    )}
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 8,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 12.5,
+                          color: '#64748b',
+                        }}
+                      >
+                        사령관·군단장·사단장·참모장 등 지휘관 인물과 재임 기간을
+                        연결합니다 ({commanderRows.length}명)
+                      </span>
+                      <MilitaryPanelPrimaryBtn
+                        type="button"
+                        onClick={() => {
+                          playClickSound()
+                          setCommanderPersonModalOpen(true)
+                        }}
+                        style={{ padding: '6px 12px', fontSize: 12.5 }}
+                      >
+                        <FiPlus size={14} />
+                        지휘관 인물 추가
+                      </MilitaryPanelPrimaryBtn>
+                    </div>
+
+                    {commanderRows.length > 0 && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 10,
+                        }}
+                      >
+                        {commanderRows.map((rowItem, rowIndex) => (
+                          <SidePanelFormSectionCard
+                            key={`${rowItem.personId}-${rowIndex}`}
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 10,
+                              padding: '12px 14px',
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 8,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  fontWeight: 700,
+                                  fontSize: 14,
+                                }}
+                              >
+                                <FiUser size={14} color="#6366f1" />
+                                {rowItem.personName}
+                              </div>
+                              <div
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 10,
+                                }}
+                              >
+                                <label
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                    fontSize: 12,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={rowItem.isCurrent}
+                                    onChange={(event) => {
+                                      const checked = event.target.checked
+                                      setCommanderTouched(true)
+                                      setCommanderRows((prev) =>
+                                        prev.map((item, idx) =>
+                                          idx === rowIndex
+                                            ? { ...item, isCurrent: checked }
+                                            : item,
+                                        ),
+                                      )
+                                    }}
+                                  />
+                                  현임/대표 지휘관
+                                </label>
+                                <TextGhostBtn
+                                  type="button"
+                                  $danger
+                                  onClick={() => {
+                                    playClickSound()
+                                    setCommanderTouched(true)
+                                    setCommanderRows((prev) =>
+                                      prev.filter((_, idx) => idx !== rowIndex),
+                                    )
+                                  }}
+                                  style={{ padding: '4px 8px', fontSize: 12 }}
+                                >
+                                  <FiTrash2 size={13} />
+                                </TextGhostBtn>
+                              </div>
+                            </div>
+
+                            <CommanderMiniGrid>
+                              <CommanderFormField>
+                                <CommanderMicroLabel>
+                                  계급 (예: 원수, 상급대장, 중장)
+                                </CommanderMicroLabel>
+                                <Input
+                                  type="text"
+                                  placeholder="계급 입력"
+                                  value={rowItem.rank}
+                                  onChange={(event) => {
+                                    const nextRank = event.target.value
+                                    setCommanderTouched(true)
+                                    setCommanderRows((prev) =>
+                                      prev.map((item, idx) =>
+                                        idx === rowIndex
+                                          ? { ...item, rank: nextRank }
+                                          : item,
+                                      ),
+                                    )
+                                  }}
+                                />
+                              </CommanderFormField>
+
+                              <CommanderFormField>
+                                <CommanderMicroLabel>
+                                  직책 (예: 총장, 사령관, 참모장)
+                                </CommanderMicroLabel>
+                                <Input
+                                  type="text"
+                                  placeholder="사령관 / 참모장 등"
+                                  value={rowItem.role}
+                                  onChange={(event) => {
+                                    const nextRole = event.target.value
+                                    setCommanderTouched(true)
+                                    setCommanderRows((prev) =>
+                                      prev.map((item, idx) =>
+                                        idx === rowIndex
+                                          ? { ...item, role: nextRole }
+                                          : item,
+                                      ),
+                                    )
+                                  }}
+                                />
+                              </CommanderFormField>
+
+                              <CommanderFormField>
+                                <CommanderMicroLabel>
+                                  부임일 (YYYY-MM-DD)
+                                </CommanderMicroLabel>
+                                <Input
+                                  type="text"
+                                  placeholder="예: 1941-06-22"
+                                  value={rowItem.startDate}
+                                  onChange={(event) => {
+                                    const nextStart = event.target.value
+                                    setCommanderTouched(true)
+                                    setCommanderRows((prev) =>
+                                      prev.map((item, idx) =>
+                                        idx === rowIndex
+                                          ? { ...item, startDate: nextStart }
+                                          : item,
+                                      ),
+                                    )
+                                  }}
+                                />
+                              </CommanderFormField>
+
+                              <CommanderFormField>
+                                <CommanderMicroLabel>
+                                  이임일 (YYYY-MM-DD)
+                                </CommanderMicroLabel>
+                                <Input
+                                  type="text"
+                                  placeholder="예: 1941-12-19"
+                                  value={rowItem.endDate}
+                                  onChange={(event) => {
+                                    const nextEnd = event.target.value
+                                    setCommanderTouched(true)
+                                    setCommanderRows((prev) =>
+                                      prev.map((item, idx) =>
+                                        idx === rowIndex
+                                          ? { ...item, endDate: nextEnd }
+                                          : item,
+                                      ),
+                                    )
+                                  }}
+                                />
+                              </CommanderFormField>
+                            </CommanderMiniGrid>
+                          </SidePanelFormSectionCard>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </FullWidthFieldControl>
               </FieldRow>
 
               <FieldRow>
@@ -1107,7 +2043,9 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                     rows={4}
                     placeholder="예: 6.25전쟁 인천상륙작전, 베트남전 등"
                     value={notableBattles}
-                    onChange={(e) => setNotableBattles(e.target.value)}
+                    onChange={(changeEvent) =>
+                      setNotableBattles(changeEvent.target.value)
+                    }
                   />
                   <FieldHint>
                     부대가 참여한 주요 전투나 작전 (각 줄마다 하나씩)
@@ -1122,12 +2060,306 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                     rows={4}
                     placeholder="예: 대통령부대표창(2020), 국방부장관표창(2018)"
                     value={honors}
-                    onChange={(e) => setHonors(e.target.value)}
+                    onChange={(changeEvent) =>
+                      setHonors(changeEvent.target.value)
+                    }
                   />
                   <FieldHint>
                     부대가 받은 훈장이나 표창 (각 줄마다 하나씩)
                   </FieldHint>
                 </FieldControl>
+              </FieldRow>
+            </FormRows>
+          </FormSectionInner>
+        )
+
+      case 'lineage':
+        return (
+          <FormSectionInner>
+            <FormRows>
+              <FieldRow>
+                <FieldLabel>전신·후신 계보</FieldLabel>
+                <FullWidthFieldControl>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 12,
+                    }}
+                  >
+                    <FieldHint style={{ marginTop: 0 }}>
+                      부대 개칭·분리·통합 계보는 물론, 민간 국방부처가 군사 최고사령부로 개편된 역사(예: <strong>전쟁부 → 국방군 최고사령부 OKW</strong>)까지 기록합니다.
+                    </FieldHint>
+
+                    {isEdit && (predecessors.length > 0 || successors.length > 0) && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                        }}
+                      >
+                        {predecessors.map((predItem) => {
+                          const targetLabel =
+                            predItem.targetType === 'DEPARTMENT'
+                              ? `🏛️ [전신 부처] ${predItem.department?.name ?? ''}`
+                              : `🛡️ [전신 부대] ${predItem.unit?.name ?? ''}`
+                          const kindLabel =
+                            TRANSITION_KIND_OPTIONS.find(
+                              (opt) => opt.value === predItem.kind,
+                            )?.label ?? predItem.kind
+                          return (
+                            <SidePanelFormSectionCard
+                              key={predItem.transitionId}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 10,
+                                padding: '10px 14px',
+                              }}
+                            >
+                              <div style={{ fontSize: 13 }}>
+                                <strong>{targetLabel}</strong>{' '}
+                                <span style={{ opacity: 0.75 }}>
+                                  → 현재 부대 ({kindLabel}
+                                  {predItem.year
+                                    ? ` · ${predItem.era === 'BC' ? 'BC ' : ''}${predItem.year}년`
+                                    : ''}
+                                  )
+                                </span>
+                                {predItem.note && (
+                                  <div
+                                    style={{
+                                      fontSize: 12,
+                                      opacity: 0.7,
+                                      marginTop: 2,
+                                    }}
+                                  >
+                                    {predItem.note}
+                                  </div>
+                                )}
+                              </div>
+                              <TextGhostBtn
+                                type="button"
+                                $danger
+                                disabled={transitionBusy}
+                                onClick={() =>
+                                  void handleDeleteTransition(
+                                    predItem.transitionId,
+                                  )
+                                }
+                              >
+                                <FiTrash2 size={13} />
+                              </TextGhostBtn>
+                            </SidePanelFormSectionCard>
+                          )
+                        })}
+
+                        {successors.map((succItem) => {
+                          const kindLabel =
+                            TRANSITION_KIND_OPTIONS.find(
+                              (opt) => opt.value === succItem.kind,
+                            )?.label ?? succItem.kind
+                          return (
+                            <SidePanelFormSectionCard
+                              key={succItem.transitionId}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 10,
+                                padding: '10px 14px',
+                              }}
+                            >
+                              <div style={{ fontSize: 13 }}>
+                                <span style={{ opacity: 0.75 }}>현재 부대 → </span>
+                                <strong>
+                                  🛡️ [후신 부대] {succItem.unit?.name ?? ''}
+                                </strong>{' '}
+                                <span style={{ opacity: 0.75 }}>
+                                  ({kindLabel}
+                                  {succItem.year
+                                    ? ` · ${succItem.era === 'BC' ? 'BC ' : ''}${succItem.year}년`
+                                    : ''}
+                                  )
+                                </span>
+                                {succItem.note && (
+                                  <div
+                                    style={{
+                                      fontSize: 12,
+                                      opacity: 0.7,
+                                      marginTop: 2,
+                                    }}
+                                  >
+                                    {succItem.note}
+                                  </div>
+                                )}
+                              </div>
+                              <TextGhostBtn
+                                type="button"
+                                $danger
+                                disabled={transitionBusy}
+                                onClick={() =>
+                                  void handleDeleteTransition(
+                                    succItem.transitionId,
+                                  )
+                                }
+                              >
+                                <FiTrash2 size={13} />
+                              </TextGhostBtn>
+                            </SidePanelFormSectionCard>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    <SidePanelFormSectionCard
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 10,
+                        padding: 14,
+                      }}
+                    >
+                      <CommanderMicroLabel style={{ marginBottom: 0 }}>
+                        {isEdit
+                          ? '새 계보 연결 추가'
+                          : '생성 시 함께 연결할 계보 (선택)'}
+                      </CommanderMicroLabel>
+
+                      <CommanderMiniGrid>
+                        <CommanderFormField>
+                          <CommanderMicroLabel>연결 방향</CommanderMicroLabel>
+                          <AdminDeptSelect
+                            value={newTransitionDirection}
+                            onChange={(changeEvent) => {
+                              setNewTransitionDirection(
+                                changeEvent.target.value as
+                                  | 'PREDECESSOR_DEPARTMENT'
+                                  | 'PREDECESSOR_UNIT'
+                                  | 'SUCCESSOR_UNIT',
+                              )
+                              setNewTransitionTargetId('')
+                            }}
+                            style={{ maxWidth: '100%' }}
+                          >
+                            <option value="PREDECESSOR_DEPARTMENT">
+                              전신 행정부처 → 이 사령부·부대 (예: 전쟁부 → OKW)
+                            </option>
+                            <option value="PREDECESSOR_UNIT">
+                              전신 군부대 → 이 부대
+                            </option>
+                            <option value="SUCCESSOR_UNIT">
+                              이 부대 → 후신 군부대
+                            </option>
+                          </AdminDeptSelect>
+                        </CommanderFormField>
+
+                        <CommanderFormField>
+                          <CommanderMicroLabel>변동 유형</CommanderMicroLabel>
+                          <AdminDeptSelect
+                            value={newTransitionKind}
+                            onChange={(changeEvent) =>
+                              setNewTransitionKind(
+                                changeEvent.target.value as MilitaryUnitTransitionKind,
+                              )
+                            }
+                            style={{ maxWidth: '100%' }}
+                          >
+                            {TRANSITION_KIND_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                          </AdminDeptSelect>
+                        </CommanderFormField>
+
+                        <CommanderFormField>
+                          <CommanderMicroLabel>대상 기관·부대</CommanderMicroLabel>
+                          <AdminDeptSelect
+                            value={newTransitionTargetId}
+                            onChange={(changeEvent) =>
+                              setNewTransitionTargetId(changeEvent.target.value)
+                            }
+                            style={{ maxWidth: '100%' }}
+                          >
+                            <option value="">— 대상 선택 —</option>
+                            {newTransitionDirection === 'PREDECESSOR_DEPARTMENT'
+                              ? adminDepartments.map((deptItem) => (
+                                  <option key={deptItem.id} value={deptItem.id}>
+                                    🏛️ {deptItem.name}
+                                    {deptItem.abbreviation
+                                      ? ` (${deptItem.abbreviation})`
+                                      : ''}
+                                  </option>
+                                ))
+                              : availableParentUnits.map((unitCandidate) => (
+                                  <option
+                                    key={unitCandidate.id}
+                                    value={unitCandidate.id}
+                                  >
+                                    🛡️ {unitCandidate.name}
+                                    {unitCandidate.abbreviation
+                                      ? ` (${unitCandidate.abbreviation})`
+                                      : ''}
+                                  </option>
+                                ))}
+                          </AdminDeptSelect>
+                        </CommanderFormField>
+
+                        <CommanderFormField>
+                          <CommanderMicroLabel>개편 연도 (선택)</CommanderMicroLabel>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <AdminDeptSelect
+                              value={newTransitionEra}
+                              onChange={(changeEvent) =>
+                                setNewTransitionEra(
+                                  changeEvent.target.value as 'AD' | 'BC',
+                                )
+                              }
+                              style={{ maxWidth: 88 }}
+                            >
+                              <option value="AD">서기</option>
+                              <option value="BC">BC</option>
+                            </AdminDeptSelect>
+                            <Input
+                              type="number"
+                              min={1}
+                              placeholder="예: 1938"
+                              value={newTransitionYear}
+                              onChange={(changeEvent) =>
+                                setNewTransitionYear(changeEvent.target.value)
+                              }
+                            />
+                          </div>
+                        </CommanderFormField>
+                      </CommanderMiniGrid>
+
+                      <Input
+                        type="text"
+                        placeholder="비고 (선택 — 예: 블롬베르크-프리치 사건으로 전쟁부 폐지 후 직할 최고사령부로 개편)"
+                        value={newTransitionNote}
+                        onChange={(changeEvent) =>
+                          setNewTransitionNote(changeEvent.target.value)
+                        }
+                      />
+
+                      {isEdit && (
+                        <div>
+                          <MilitaryPanelPrimaryBtn
+                            type="button"
+                            disabled={!newTransitionTargetId || transitionBusy}
+                            onClick={() => void handleAddTransition()}
+                          >
+                            <FiPlus size={14} />
+                            {transitionBusy ? '연결 중…' : '계보 연결 추가'}
+                          </MilitaryPanelPrimaryBtn>
+                        </div>
+                      )}
+                    </SidePanelFormSectionCard>
+                  </div>
+                </FullWidthFieldControl>
               </FieldRow>
             </FormRows>
           </FormSectionInner>
@@ -1144,7 +2376,9 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                     rows={12}
                     placeholder="부대에 대한 전반적인 설명을 입력하세요"
                     value={description}
-                    onChange={(e) => setDescription(e.target.value)}
+                    onChange={(changeEvent) =>
+                      setDescription(changeEvent.target.value)
+                    }
                   />
                 </FullWidthFieldControl>
               </FieldRow>
@@ -1169,10 +2403,10 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
         }}
         title={
           <span id="military-unit-form-title">
-            {isEdit ? '군부대 수정' : '군부대 등록'}
+            {isEdit ? '군사 사령부·부대 수정' : '군사 사령부·부대 등록'}
           </span>
         }
-        subtitle="부대명·소속·군정보·설명을 입력합니다. 보조 선택·날짜 모달은 패널 위 레이어에 표시됩니다."
+        subtitle="최고사령부(OKW·STAVKA)·각군 총사령부·야전군·사단 편제와 전신·후신 계보를 관리합니다."
         footer={
           <MilitaryPanelPrimaryBtn
             type="submit"
@@ -1210,7 +2444,22 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                 setActiveTab('military')
               }}
             >
-              군정보
+              군정보·지휘관
+            </SidePanelFormTab>
+            <SidePanelFormTab
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'lineage'}
+              $active={activeTab === 'lineage'}
+              onClick={() => {
+                playClickSound()
+                setActiveTab('lineage')
+              }}
+            >
+              전신·후신 계보
+              {predecessors.length + successors.length > 0
+                ? ` (${predecessors.length + successors.length})`
+                : ''}
             </SidePanelFormTab>
             <SidePanelFormTab
               type="button"
@@ -1270,7 +2519,10 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       {unitTypeModalOpen && (
         <SimpleSelectModal
           title="부대 유형 선택"
-          options={UNIT_TYPES.map((t) => ({ value: t.value, label: t.label }))}
+          options={UNIT_TYPES.map((typeItem) => ({
+            value: typeItem.value,
+            label: typeItem.label,
+          }))}
           selectedValue={unitType}
           onSelect={(value, label) => {
             setUnitType(value as MilitaryUnitType)
@@ -1316,6 +2568,11 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
         onClose={() => setEstablishedDateModalOpen(false)}
         onSelect={(date) => {
           setEstablishedDate(date)
+          const yearPrefix = Number.parseInt(date.slice(0, 4), 10)
+          if (Number.isFinite(yearPrefix) && yearPrefix > 0) {
+            setEstablishedEra('AD')
+            setEstablishedYear(String(yearPrefix))
+          }
           setEstablishedDateModalOpen(false)
         }}
         initialDate={establishedDate}
@@ -1327,11 +2584,57 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
         onClose={() => setDisbandedDateModalOpen(false)}
         onSelect={(date) => {
           setDisbandedDate(date)
+          const yearPrefix = Number.parseInt(date.slice(0, 4), 10)
+          if (Number.isFinite(yearPrefix) && yearPrefix > 0) {
+            setDisbandedEra('AD')
+            setDisbandedYear(String(yearPrefix))
+          }
           setDisbandedDateModalOpen(false)
         }}
         initialDate={disbandedDate}
         title="해산일 선택"
       />
+
+      {commanderPersonModalOpen && (
+        <PersonSelectModal
+          persons={allPersons}
+          selectedPersonId=""
+          loading={personsLoading}
+          title={`${name.trim() || '부대'} 지휘관 인물 선택`}
+          searchPlaceholder="지휘관으로 등록할 인물을 검색..."
+          defaultCountryId={countryId || undefined}
+          onSelect={(selectedPersonId) => {
+            const matchedPerson = allPersons.find(
+              (personItem) => personItem.id === selectedPersonId,
+            )
+            const displayPersonName = matchedPerson
+              ? getPersonDisplayName({
+                  name: matchedPerson.name ?? '',
+                  surname: matchedPerson.surname ?? undefined,
+                  middleName: matchedPerson.middleName ?? undefined,
+                  nameDisplayOrder: matchedPerson.nameDisplayOrder ?? null,
+                  country: matchedPerson.country ?? undefined,
+                }) || matchedPerson.name
+              : selectedPersonId
+            setCommanderTouched(true)
+            setCommanderRows((prev) => [
+              ...prev,
+              {
+                personId: selectedPersonId,
+                personName: displayPersonName,
+                rank: '',
+                role: '사령관',
+                termNumber: String(prev.length + 1),
+                startDate: '',
+                endDate: '',
+                isCurrent: prev.length === 0,
+              },
+            ])
+            setCommanderPersonModalOpen(false)
+          }}
+          onClose={() => setCommanderPersonModalOpen(false)}
+        />
+      )}
     </>
   )
 }
@@ -1356,7 +2659,7 @@ const SimpleSelectModal: React.FC<SimpleSelectModalProps> = ({
 
   return (
     <InnerModalOverlay onClick={onClose}>
-      <InnerModalBox onClick={(e) => e.stopPropagation()}>
+      <InnerModalBox onClick={(clickEvent) => clickEvent.stopPropagation()}>
         <InnerModalHeader>
           <InnerModalTitle>{title}</InnerModalTitle>
           <InnerModalCloseButton onClick={onClose}>
@@ -1408,7 +2711,7 @@ const UnitSelectModal: React.FC<UnitSelectModalProps> = ({
 
   return (
     <InnerModalOverlay onClick={onClose}>
-      <InnerModalBox onClick={(e) => e.stopPropagation()}>
+      <InnerModalBox onClick={(clickEvent) => clickEvent.stopPropagation()}>
         <InnerModalHeader>
           <InnerModalTitle>{title}</InnerModalTitle>
           <InnerModalCloseButton onClick={onClose}>
@@ -1420,7 +2723,9 @@ const UnitSelectModal: React.FC<UnitSelectModalProps> = ({
             type="text"
             placeholder="부대명 검색..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(changeEvent) =>
+              setSearchQuery(changeEvent.target.value)
+            }
             autoFocus
           />
         </SearchSection>
@@ -1438,7 +2743,10 @@ const UnitSelectModal: React.FC<UnitSelectModalProps> = ({
                 }}
               >
                 <div>
-                  <div style={{ fontWeight: 600 }}>{unit.name}</div>
+                  <div style={{ fontWeight: 600 }}>
+                    {unit.name}
+                    {unit.abbreviation ? ` (${unit.abbreviation})` : ''}
+                  </div>
                   {unit.country && (
                     <div
                       style={{
@@ -1564,11 +2872,6 @@ const InnerModalBox = styled.div`
       opacity: 1;
     }
   }
-`
-
-const LargeModalBox = styled(InnerModalBox)`
-  max-width: 700px;
-  max-height: 80vh;
 `
 
 const InnerModalHeader = styled.div`

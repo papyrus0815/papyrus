@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
 import type { ReactNode } from 'react'
 
+import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { useThemeStore } from '@/shared/styles/theme.store'
-import { mockGovernmentData } from '@/widgets/country/country-detail/mock'
 
 import {
   GOV_ACCENT as ACCENT,
@@ -13,8 +13,15 @@ import { useGovernmentStatisticsMockData } from '../model/use-government-statist
 
 import { GovSectionEyebrow } from './government-organizations-tab.styled'
 
-/** props 없음 — mock 통계·필터 상태는 `useGovernmentStatisticsMockData`에서 처리 */
-export function GovernmentStatisticsTab() {
+export interface GovernmentStatisticsTabProps {
+  country?: UnifiedCountry
+  effectiveCountryId?: string
+}
+
+export function GovernmentStatisticsTab({
+  country,
+  effectiveCountryId,
+}: GovernmentStatisticsTabProps = {}) {
   const isDark = useThemeStore((state) => state.mode === 'dark')
   const palette = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
   const {
@@ -25,12 +32,16 @@ export function GovernmentStatisticsTab() {
     totalConstitutional,
     totalAgencies,
     totalLocal,
+    ministryExamples,
+    agencyExamples,
+    specialExamples,
+    organizationExamples,
     budgetData,
     filteredEvents,
     eventCounts,
     selectedEventType,
     onSelectedEventTypeChange,
-  } = useGovernmentStatisticsMockData()
+  } = useGovernmentStatisticsMockData({ country, effectiveCountryId })
   return (
     <>
       {/* 핵심 수치 요약 */}
@@ -44,11 +55,11 @@ export function GovernmentStatisticsTab() {
         }}
       >
         {[
-          { label: '총 인원', value: totalEmployees, unit: '명' },
-          { label: '총 예산', value: totalBudget, unit: '조원' },
-          { label: '조직 수', value: totalOrganizations, unit: '개' },
+          { label: '등록 직위 정의', value: totalEmployees, unit: '개' },
+          { label: '역대 행정부', value: totalBudget, unit: '개' },
+          { label: '전체 조직·기관', value: totalOrganizations, unit: '개' },
           { label: '중앙부처', value: totalMinistries, unit: '개' },
-          { label: '헌법기관', value: totalConstitutional, unit: '개' },
+          { label: '특수·군령기관', value: totalConstitutional, unit: '개' },
         ].map((kpi, kpiIndex, kpiRow) => (
           <div
             key={kpiIndex}
@@ -171,7 +182,7 @@ export function GovernmentStatisticsTab() {
                 <line x1="4" y1="22" x2="4" y2="15" />
               </svg>
             }
-            title="헌법기관"
+            title="특수·군령기관"
             value={totalConstitutional}
             unit="개"
           />
@@ -192,9 +203,9 @@ export function GovernmentStatisticsTab() {
                 <circle cx="9" cy="7" r="4" />
               </svg>
             }
-            title="총 인원"
+            title="등록 직위 정의"
             value={totalEmployees}
-            unit="명"
+            unit="개"
           />
           <StatCard
             accentColor={ACCENT.sky}
@@ -213,16 +224,16 @@ export function GovernmentStatisticsTab() {
                 <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
               </svg>
             }
-            title="총 예산"
+            title="역대 행정부"
             value={totalBudget}
-            unit="조원"
+            unit="개"
           />
         </div>
       </section>
 
-      {/* 예산 추이 — 요약 지표 바로 아래 */}
-      <section aria-label="국가 예산 추이">
-        <GovSectionEyebrow>예산 추이</GovSectionEyebrow>
+      {/* 분야별 부처 분포 — 요약 지표 바로 아래 */}
+      <section aria-label="분야별 기관 분포">
+        <GovSectionEyebrow>분야별 기관 분포</GovSectionEyebrow>
         <div
           style={{
             background: palette.bgSubtle,
@@ -252,7 +263,7 @@ export function GovernmentStatisticsTab() {
                 fontWeight: 500,
               }}
             >
-              최근 6년간 예산 변화 (단위: 조원)
+              카테고리별 등록 기관 수 (단위: 개)
             </p>
             {budgetData.length > 0 && (
               <span
@@ -262,7 +273,7 @@ export function GovernmentStatisticsTab() {
                   fontWeight: 500,
                 }}
               >
-                최대 {Math.max(...budgetData.map((row) => row.budget || 0))}조원
+                최다 {Math.max(...budgetData.map((row) => row.budget || 0))}개
               </span>
             )}
           </div>
@@ -362,7 +373,7 @@ export function GovernmentStatisticsTab() {
                         '0 2px 12px rgba(99, 102, 241, 0.25)'
                     }}
                   >
-                    {stat.budget}조
+                    {stat.budget}개
                   </div>
                   <div
                     style={{
@@ -641,11 +652,7 @@ export function GovernmentStatisticsTab() {
                     const eventWithImages = event as typeof event & {
                       images?: string[]
                     }
-                    const imageUrl =
-                      eventWithImages.images?.[0] ??
-                      mockGovernmentData.ministries.find(
-                        (ministry) => ministry.name === event.orgName,
-                      )?.images?.[0]
+                    const imageUrl = eventWithImages.images?.[0]
                     return (
                       <div
                         key={eventIndex}
@@ -836,29 +843,45 @@ export function GovernmentStatisticsTab() {
               accentColor={MAIN}
               title="중앙행정기관"
               count={totalMinistries}
-              description="18개 부처"
-              examples={['기획재정부', '외교부', '국방부']}
+              description={`${totalMinistries}개 부처`}
+              examples={
+                ministryExamples.length > 0
+                  ? ministryExamples
+                  : ['등록된 중앙부처 없음']
+              }
             />
             <OrgTypeCard
               accentColor={ACCENT.teal}
-              title="헌법기관"
+              title="특수·군령·궁내기관"
               count={totalConstitutional}
-              description="5개 기관"
-              examples={['국회', '대법원', '헌법재판소']}
+              description={`${totalConstitutional}개 기관`}
+              examples={
+                specialExamples.length > 0
+                  ? specialExamples
+                  : ['등록된 특수기관 없음']
+              }
             />
             <OrgTypeCard
               accentColor={ACCENT.amber}
-              title="산하기관"
+              title="외청·위원회"
               count={totalAgencies}
-              description="8개 기관"
-              examples={['국세청', '관세청', '경찰청']}
+              description={`${totalAgencies}개 기관`}
+              examples={
+                agencyExamples.length > 0
+                  ? agencyExamples
+                  : ['등록된 외청·위원회 없음']
+              }
             />
             <OrgTypeCard
               accentColor={ACCENT.sky}
-              title="지방자치단체"
+              title="행정기구·산하조직"
               count={totalLocal}
-              description="4개 시/도"
-              examples={['서울시', '경기도', '부산시']}
+              description={`${totalLocal}개 조직`}
+              examples={
+                organizationExamples.length > 0
+                  ? organizationExamples
+                  : ['등록된 행정기구 없음']
+              }
             />
           </div>
         </div>

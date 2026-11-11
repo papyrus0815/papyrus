@@ -28,6 +28,7 @@ import {
 import {
   AccessionEventLink,
   TenureEmpty,
+  TenureEmptyAddBtn,
   UnifiedCard,
   UnifiedCardActions,
   UnifiedCardList,
@@ -44,6 +45,7 @@ import {
   UnifiedFact,
   UnifiedFactKey,
   UnifiedFactLine,
+  UnifiedFactLink,
   UnifiedHiddenStamp,
   UnifiedReappointBadge,
 } from './person-detail-panel.styles'
@@ -82,6 +84,18 @@ interface TenureReignListProps {
   achievementSuggestionsByRecordId?: Record<string, RecordEventSuggestion[]>
   /** 즉위·취임식 사건 또는 업적 연결 사건 클릭 → 인라인 사건 미리보기 */
   onEventClick?: (eventId: string) => void
+  /** 소속 중앙부처·행정기관 클릭 → 국가 행정조직 상세 이동 */
+  onDepartmentClick?: (params: {
+    departmentId: string
+    countryId?: string | null
+  }) => void
+  /** 소속 군사 사령부·부대 클릭 → 국가 군사조직 상세 이동 */
+  onMilitaryUnitClick?: (params: {
+    militaryUnitId: string
+    countryId?: string | null
+  }) => void
+  /** 빈 상태에서 바로 공직·군직·재위 추가 모달 열기 */
+  onAddTenure?: () => void
   onEditTenure: (id: string) => void
   onEditReign: (id: string) => void
   onDeleteTenure?: (id: string, label: string) => void
@@ -109,6 +123,9 @@ export function TenureReignList({
   adjacencyByRecordId,
   achievementSuggestionsByRecordId,
   onEventClick,
+  onDepartmentClick,
+  onMilitaryUnitClick,
+  onAddTenure,
   onEditTenure,
   onEditReign,
   onDeleteTenure,
@@ -125,6 +142,17 @@ export function TenureReignList({
           <>
             등록된 재임·재위 기록이 없습니다. 위{' '}
             <strong>재임·재위 버튼</strong>으로 추가하세요.
+            {onAddTenure && (
+              <TenureEmptyAddBtn
+                type="button"
+                onClick={() => {
+                  onPlayClick()
+                  onAddTenure()
+                }}
+              >
+                + 공직·군직·재위 등록
+              </TenureEmptyAddBtn>
+            )}
           </>
         )}
       </TenureEmpty>
@@ -251,7 +279,32 @@ export function TenureReignList({
           record.title !== record.positionDefinition.title
             ? record.positionDefinition.title
             : null
+        const isMilitaryTenure =
+          !isReign &&
+          !isNobleTitle &&
+          (record.positionType === 'MILITARY_COMMANDER' ||
+            Boolean(record.militaryUnit?.id))
+        const deptInfo = record.administrationDepartment?.id
+          ? record.administrationDepartment
+          : null
+        const unitInfo = record.militaryUnit?.id ? record.militaryUnit : null
+        const deptDisplay = deptInfo
+          ? deptInfo.abbreviation && deptInfo.abbreviation !== deptInfo.name
+            ? `${deptInfo.name} (${deptInfo.abbreviation})`
+            : deptInfo.name
+          : null
+        const unitDisplay = unitInfo
+          ? unitInfo.abbreviation && unitInfo.abbreviation !== unitInfo.name
+            ? `${unitInfo.name} (${unitInfo.abbreviation})`
+            : unitInfo.name
+          : null
+        const rankLabel = !isReign ? record.rankTitle?.trim() || null : null
+        const partyLabel = !isReign
+          ? record.party?.shortName || record.party?.name || null
+          : null
         const orgName =
+          !deptInfo &&
+          !unitInfo &&
           record.positionDefinition?.organization?.name &&
           record.positionDefinition.organization.name !== countryName
             ? record.positionDefinition.organization.name
@@ -259,12 +312,39 @@ export function TenureReignList({
         const electionName = record.electionCandidacy?.election?.name ?? null
         const hasFacts =
           !!countryName ||
+          !!deptDisplay ||
+          !!unitDisplay ||
           !!orgName ||
+          !!partyLabel ||
           (isReign && record.dynastyOrdinal != null) ||
           !!rangeLabel ||
           !!durationLabel ||
           ageAtStart != null ||
           ageAtEnd != null
+        const linkedCabinets = (() => {
+          const seenCabIds = new Set<string>()
+          const collected: Array<{ id: string; name?: string | null }> = []
+          const pushCabinet = (
+            cabObj?: { id?: string | null; name?: string | null } | null,
+          ) => {
+            if (!cabObj?.id || seenCabIds.has(cabObj.id)) return
+            seenCabIds.add(cabObj.id)
+            collected.push({ id: cabObj.id, name: cabObj.name ?? null })
+          }
+          record.headedCabinets?.forEach(pushCabinet)
+          pushCabinet(record.headOfCabinet)
+          record.cabinets?.forEach(pushCabinet)
+          record.cabinetMemberships?.forEach((membershipItem) =>
+            pushCabinet(
+              membershipItem.cabinet ?? {
+                id: membershipItem.cabinetId,
+                name: null,
+              },
+            ),
+          )
+          pushCabinet(record.cabinet)
+          return collected
+        })()
         return (
           <UnifiedCard
             key={`${kind}-${record.id}`}
@@ -279,10 +359,21 @@ export function TenureReignList({
                   <FiShield size={11} />
                 ) : isNobleTitle ? (
                   <FiAward size={11} />
+                ) : isMilitaryTenure ? (
+                  <FiShield size={11} />
                 ) : (
                   <FiBriefcase size={11} />
                 )}
-                <span>{isReign ? '재위' : isNobleTitle ? '작위' : '재임'}</span>
+                <span>
+                  {isReign
+                    ? '재위'
+                    : isNobleTitle
+                      ? '작위'
+                      : isMilitaryTenure
+                        ? '군직'
+                        : '재임'}
+                </span>
+                {rankLabel && <span>· {rankLabel}</span>}
                 {baseCatalogTitle && <span>· {baseCatalogTitle}</span>}
                 {ordinalNum != null && (
                   <span>
@@ -334,10 +425,68 @@ export function TenureReignList({
                       {countryName}
                     </UnifiedFact>
                   )}
+                  {deptInfo && deptDisplay && (
+                    <UnifiedFact>
+                      <VisuallyHidden>소속 부처 </VisuallyHidden>
+                      {onDepartmentClick && !embedInModal ? (
+                        <UnifiedFactLink
+                          type="button"
+                          onClick={() => {
+                            onPlayClick()
+                            onDepartmentClick({
+                              departmentId: deptInfo.id,
+                              countryId:
+                                deptInfo.countryId ??
+                                deptInfo.historicalCountryId ??
+                                record.country?.id ??
+                                record.historicalCountry?.id ??
+                                null,
+                            })
+                          }}
+                        >
+                          {deptDisplay}
+                        </UnifiedFactLink>
+                      ) : (
+                        deptDisplay
+                      )}
+                    </UnifiedFact>
+                  )}
+                  {unitInfo && unitDisplay && (
+                    <UnifiedFact>
+                      <VisuallyHidden>소속 부대 </VisuallyHidden>
+                      {onMilitaryUnitClick && !embedInModal ? (
+                        <UnifiedFactLink
+                          type="button"
+                          onClick={() => {
+                            onPlayClick()
+                            onMilitaryUnitClick({
+                              militaryUnitId: unitInfo.id,
+                              countryId:
+                                unitInfo.countryId ??
+                                unitInfo.historicalCountryId ??
+                                record.country?.id ??
+                                record.historicalCountry?.id ??
+                                null,
+                            })
+                          }}
+                        >
+                          {unitDisplay}
+                        </UnifiedFactLink>
+                      ) : (
+                        unitDisplay
+                      )}
+                    </UnifiedFact>
+                  )}
                   {orgName && (
                     <UnifiedFact>
                       <VisuallyHidden>소속 기관 </VisuallyHidden>
                       {orgName}
+                    </UnifiedFact>
+                  )}
+                  {partyLabel && (
+                    <UnifiedFact>
+                      <VisuallyHidden>소속 정당 </VisuallyHidden>
+                      {partyLabel}
                     </UnifiedFact>
                   )}
                   {isReign && record.dynastyOrdinal != null && (
@@ -467,16 +616,19 @@ export function TenureReignList({
                     />
                   )
                 })()}
-              {!isReign &&
-                onPersonClick &&
-                (record.headOfCabinet?.id || record.cabinet?.id) && (
+              {onPersonClick &&
+                linkedCabinets.map((cabinetEntry) => (
                   <CabinetConnections
-                    cabinetId={(record.headOfCabinet?.id ?? record.cabinet?.id)!}
+                    key={cabinetEntry.id}
+                    cabinetId={cabinetEntry.id}
+                    cabinetLabel={
+                      linkedCabinets.length > 1 ? cabinetEntry.name ?? null : null
+                    }
                     currentPersonId={currentPersonId}
                     onPersonClick={onPersonClick}
                     onToggle={onPlayClick}
                   />
-                )}
+                ))}
             </UnifiedCardMain>
             {!embedInModal && (
               <UnifiedCardActions data-hover-reveal>

@@ -94,6 +94,42 @@ describe('PoliticalSystemController & Country Deletion Guards (Round 6)', () => 
       ).rejects.toThrow(BadRequestException)
     })
 
+    it('rejects cross-era headOfGovernmentPositionId even when both share dual-filled countryId', async () => {
+      const prisma = createMockPrisma()
+      prisma.country.findUnique.mockResolvedValue({ id: 'country-kr' })
+      prisma.historicalCountry.findUnique.mockResolvedValue({ id: 'hc-goryeo' })
+      prisma.historicalCountryModernCountry.findFirst.mockResolvedValue({
+        historicalCountryId: 'hc-goryeo',
+        modernCountryId: 'country-kr',
+      })
+      prisma.governmentPositionDefinition.findMany.mockResolvedValue([
+        {
+          id: 'def-yeonguijeong',
+          title: '영의정',
+          isGeneric: false,
+          positionType: 'HEAD_OF_GOVERNMENT',
+          administrationDepartment: {
+            id: 'dept-uijeongbu',
+            countryId: 'country-kr',
+            historicalCountryId: 'hc-joseon',
+          },
+          scopes: [{ countryId: 'country-kr', historicalCountryId: 'hc-joseon' }],
+        },
+      ])
+      const controller = new PoliticalSystemController(prisma)
+
+      await expect(
+        controller.create(
+          {
+            countryId: 'country-kr',
+            historicalCountryId: 'hc-goryeo',
+            headOfGovernmentPositionId: 'def-yeonguijeong',
+          },
+          { user: { id: 'acc-1' } },
+        ),
+      ).rejects.toThrow(BadRequestException)
+    })
+
     it('supports updating historicalCountryId and re-deriving dual-fill countryId on update', async () => {
       const prisma = createMockPrisma()
       prisma.politicalSystem.findUnique.mockResolvedValue({

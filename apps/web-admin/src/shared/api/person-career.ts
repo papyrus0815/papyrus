@@ -234,6 +234,14 @@ export interface CreateGovernmentPositionTenureDto {
   accessionEventId?: string
   /** 소속 행정부(Cabinet) ID — 이 각료/총독 재임이 속한 행정부 */
   cabinetId?: string | null
+  /** 복수 행정부(연임·개각 내각) 소속 ID 배열 */
+  cabinetIds?: string[] | null
+  /** 계급·칭호 — 예: 원수, 상급대장, 육군 중장 */
+  rankTitle?: string | null
+  /** 재임 당시 소속 정당 ID */
+  partyId?: string | null
+  /** 소속 군사 사령부·부대 ID */
+  militaryUnitId?: string | null
   appointmentMethod?:
     | 'DIRECT_ELECTION'
     | 'INDIRECT_ELECTION'
@@ -331,6 +339,13 @@ export interface PickerPositionDefinition {
     name: string
     categoryId?: string | null
   } | null
+  militaryUnitId?: string | null
+  militaryUnit?: {
+    id: string
+    name: string
+    abbreviation?: string | null
+    unitType?: string | null
+  } | null
   scopes?: GovernmentPositionDefinitionScope[] | null
   /** 이 국가 컨텍스트의 재임·재위에서 쓰인 횟수 */
   usedCount?: number
@@ -368,6 +383,8 @@ export interface CreateGovernmentPositionDefinitionDto {
   categoryId?: string | null
   /** 소속 중앙부처 인스턴스 연결 */
   administrationDepartmentId?: string | null
+  /** 소속 군사 사령부·부대 연결 */
+  militaryUnitId?: string | null
   /** 행정기구 연결 (사용자 등록 직위) */
   organizationId?: string | null
   establishedDate?: string | null
@@ -390,6 +407,8 @@ export interface UpdateGovernmentPositionDefinitionDto {
   categoryId?: string | null
   /** 소속 중앙부처 인스턴스 연결 */
   administrationDepartmentId?: string | null
+  /** 소속 군사 사령부·부대 연결 */
+  militaryUnitId?: string | null
   /** 행정기구 연결 (사용자 등록 직위) */
   organizationId?: string | null
   establishedDate?: string | null
@@ -486,14 +505,39 @@ export type TenureAchievementByEventLinkRow = {
  */
 export type GovernmentCabinetTenureItem = {
   id: string
+  personId?: string
   title?: string | null
+  rankTitle?: string | null
+  ordinal?: number | null
+  partyId?: string | null
+  party?: {
+    id: string
+    name: string
+    shortName?: string | null
+    brandColor?: string | null
+  } | null
   startDate?: string | null
   endDate?: string | null
+  startEra?: string | null
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
+  endEra?: string | null
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
   administrationDepartmentId?: string | null
   administrationDepartment?: {
     id: string
     name: string
     categoryId?: string | null
+  } | null
+  militaryUnitId?: string | null
+  militaryUnit?: {
+    id: string
+    name: string
+    abbreviation?: string | null
+    unitType?: string | null
   } | null
   person?: {
     id: string
@@ -597,11 +641,73 @@ export type GovernmentHeadTenureInCabinetList = {
   } | null
 }
 
+export type SuggestedCabinetMemberDto = {
+  tenureId: string
+  title?: string | null
+  rankTitle?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  startYear?: number | null
+  startMonth?: number | null
+  endYear?: number | null
+  endMonth?: number | null
+  person: {
+    id: string
+    name: string
+    surname?: string | null
+    middleName?: string | null
+    nameDisplayOrder?: string | null
+    profileImageUrl?: string | null
+  } | null
+  administrationDepartment: {
+    id: string
+    name: string
+    abbreviation?: string | null
+    kind?: string | null
+    categoryId?: string | null
+  } | null
+  party?: {
+    id: string
+    name: string
+    shortName?: string | null
+    brandColor?: string | null
+  } | null
+  positionDefinition?: {
+    id: string
+    title: string
+    positionType?: string | null
+  } | null
+}
+
 /** GET /government-positions/cabinets 응답 1건 */
 export type CabinetListItemDto = {
   id: string
   name?: string | null
-  headTenureId?: string
+  description?: string | null
+  headTenureId?: string | null
+  countryId?: string | null
+  historicalCountryId?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  startEra?: string | null
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
+  endEra?: string | null
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
+  country?: {
+    id: string
+    name: string
+    flagEmoji?: string | null
+    thumbnailUrl?: string | null
+  } | null
+  historicalCountry?: {
+    id: string
+    name: string
+    thumbnailUrl?: string | null
+  } | null
   /** 다국 행정부 묶음 (CabinetLinkageGroup) — `eventId`로 같은 국제 사건 축 */
   linkageGroup?: {
     id: string
@@ -609,7 +715,7 @@ export type CabinetListItemDto = {
     eventId?: string | null
     event?: { id: string; title: string } | null
   } | null
-  headTenure: GovernmentHeadTenureInCabinetList
+  headTenure: GovernmentHeadTenureInCabinetList | null
 }
 
 /** GET /government-positions/cabinets/:id/overview 의 재임 1건 (수반·각료 공통) */
@@ -629,6 +735,14 @@ export type CabinetOverviewTenure = {
   positionType?: string | null
   title?: string | null
   titleEn?: string | null
+  rankTitle?: string | null
+  partyId?: string | null
+  party?: {
+    id: string
+    name: string
+    shortName?: string | null
+    brandColor?: string | null
+  } | null
   ordinal?: number | null
   subTermNumber?: number | null
   startDate?: string | null
@@ -639,6 +753,13 @@ export type CabinetOverviewTenure = {
     id: string
     name: string
     categoryId?: string | null
+  } | null
+  militaryUnitId?: string | null
+  militaryUnit?: {
+    id: string
+    name: string
+    abbreviation?: string | null
+    unitType?: string | null
   } | null
   person: {
     id: string
@@ -966,23 +1087,108 @@ export const personCareerApi = {
    * POST /government-positions/cabinets
    */
   createCabinet: async (dto: {
-    headTenureId: string
+    headTenureId?: string | null
     name?: string | null
+    description?: string | null
+    countryId?: string | null
+    historicalCountryId?: string | null
+    startDate?: string | null
+    endDate?: string | null
+    startDateInfo?: {
+      era: 'BC' | 'AD'
+      year: number
+      month?: number
+      day?: number
+    } | null
+    endDateInfo?: {
+      era: 'BC' | 'AD'
+      year: number
+      month?: number
+      day?: number
+    } | null
+    allowReshuffle?: boolean
+    memberTenureIds?: string[]
   }) => {
     const response = await apiClient.post('/government-positions/cabinets', dto)
     return response.data
   },
 
   /**
-   * 행정부 수정 (이름 등)
+   * 행정부 수정 (이름·기간·수반 등)
    * PATCH /government-positions/cabinets/:cabinetId
    */
-  updateCabinet: async (cabinetId: string, dto: { name?: string | null }) => {
+  updateCabinet: async (
+    cabinetId: string,
+    dto: {
+      name?: string | null
+      description?: string | null
+      headTenureId?: string | null
+      startDate?: string | null
+      endDate?: string | null
+      startDateInfo?: {
+        era: 'BC' | 'AD'
+        year: number
+        month?: number
+        day?: number
+      } | null
+      endDateInfo?: {
+        era: 'BC' | 'AD'
+        year: number
+        month?: number
+        day?: number
+      } | null
+    },
+  ) => {
     const response = await apiClient.patch(
       `/government-positions/cabinets/${encodeURIComponent(cabinetId)}`,
       dto,
     )
     return response.data
+  },
+
+  /**
+   * 내각 재임 기간과 겹치는 해당 국가 부처 장관·인사 추천 목록 조회
+   * GET /government-positions/cabinets/:cabinetId/suggested-members
+   */
+  getSuggestedCabinetMembers: async (
+    cabinetId: string,
+  ): Promise<SuggestedCabinetMemberDto[]> => {
+    const response = await apiClient.get(
+      `/government-positions/cabinets/${encodeURIComponent(cabinetId)}/suggested-members`,
+    )
+    return Array.isArray(response.data) ? response.data : []
+  },
+
+  /**
+   * 기존 부처 장관·인사 재임을 내각 각료로 일괄 편입
+   * POST /government-positions/cabinets/:cabinetId/members
+   */
+  attachCabinetMembers: async (
+    cabinetId: string,
+    items: Array<{
+      tenureId: string
+      administrationDepartmentId?: string | null
+      roleTitle?: string | null
+    }>,
+  ) => {
+    const response = await apiClient.post(
+      `/government-positions/cabinets/${encodeURIComponent(cabinetId)}/members`,
+      { items },
+    )
+    return response.data
+  },
+
+  /**
+   * 내각에서 특정 각료 편입 해제 (재임 자체는 삭제하지 않음)
+   * DELETE /government-positions/cabinets/:cabinetId/members/:tenureId
+   */
+  detachCabinetMember: async (
+    cabinetId: string,
+    tenureId: string,
+  ): Promise<void> => {
+    await apiClient.delete(
+      `/government-positions/cabinets/${encodeURIComponent(cabinetId)}/members/${encodeURIComponent(tenureId)}`,
+    )
   },
 
   /**

@@ -35,11 +35,14 @@ import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { formatDate, getPersonName } from './cabinets-section.helpers'
 import * as CabS from './cabinets-section.styled'
 
+export type RegisterCabinetFlow = 'select' | 'new' | 'collective'
+
 export function RegisterCabinetModal({
   registerFlow,
   setRegisterFlow,
   headTenuresForRegister,
   handleRegisterCabinet,
+  handleRegisterCollectiveCabinet,
   handleRegisterNewHeadAndCabinet,
   registerCabinetSubmitting,
   setRegisterCabinetModalOpen,
@@ -72,55 +75,86 @@ export function RegisterCabinetModal({
   setRegisterTargetHistoricalCountryId,
   resetNewHeadForm,
 }: {
-  registerFlow: 'select' | 'new'
-  setRegisterFlow: (f: 'select' | 'new') => void
+  registerFlow: RegisterCabinetFlow
+  setRegisterFlow: (flow: RegisterCabinetFlow) => void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   headTenuresForRegister: any[]
-  handleRegisterCabinet: (t: any) => Promise<void>
+  handleRegisterCabinet: (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    tenure: any,
+    options?: { name?: string; startDate?: string; endDate?: string },
+  ) => Promise<void>
+  handleRegisterCollectiveCabinet: (payload: {
+    name: string
+    startDate: string
+    endDate?: string
+    historicalCountryId?: string | null
+  }) => Promise<void>
   handleRegisterNewHeadAndCabinet: () => Promise<void>
   registerCabinetSubmitting: boolean
-  setRegisterCabinetModalOpen: (v: boolean) => void
+  setRegisterCabinetModalOpen: (open: boolean) => void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   allPersons: any[]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   headPositionOptions: any[]
   newHeadPersonId: string | null
-  setNewHeadPersonId: (v: string | null) => void
+  setNewHeadPersonId: (personId: string | null) => void
   newHeadPositionDefId: string | null
-  setNewHeadPositionDefId: (v: string | null) => void
+  setNewHeadPositionDefId: (defId: string | null) => void
   newHeadTermNumber: string
-  setNewHeadTermNumber: (v: string) => void
+  setNewHeadTermNumber: (value: string) => void
   newHeadSubTermNumber: string
-  setNewHeadSubTermNumber: (v: string) => void
+  setNewHeadSubTermNumber: (value: string) => void
   newCabinetName: string
-  setNewCabinetName: (v: string) => void
+  setNewCabinetName: (value: string) => void
   newHeadAppointmentMethod: string
-  setNewHeadAppointmentMethod: (v: string) => void
+  setNewHeadAppointmentMethod: (value: string) => void
   newHeadEndReason: string
-  setNewHeadEndReason: (v: string) => void
+  setNewHeadEndReason: (value: string) => void
   newHeadEndReasonDetail: string
-  setNewHeadEndReasonDetail: (v: string) => void
+  setNewHeadEndReasonDetail: (value: string) => void
   newHeadNotes: string
-  setNewHeadNotes: (v: string) => void
+  setNewHeadNotes: (value: string) => void
   newHeadStartDate: string
-  setNewHeadStartDate: (v: string) => void
+  setNewHeadStartDate: (value: string) => void
   newHeadEndDate: string
-  setNewHeadEndDate: (v: string) => void
+  setNewHeadEndDate: (value: string) => void
   country: UnifiedCountry
   registerTargetHistoricalCountryId: string | null
-  setRegisterTargetHistoricalCountryId: (v: string | null) => void
+  setRegisterTargetHistoricalCountryId: (hcId: string | null) => void
   resetNewHeadForm: () => void
 }) {
   const [headTenureFilter, setHeadTenureFilter] = useState('')
+  const [selectCabinetName, setSelectCabinetName] = useState('')
+  const [selectCabinetStartDate, setSelectCabinetStartDate] = useState('')
+  const [selectCabinetEndDate, setSelectCabinetEndDate] = useState('')
+  const [collectiveName, setCollectiveName] = useState('')
+  const [collectiveStartDate, setCollectiveStartDate] = useState('')
+  const [collectiveEndDate, setCollectiveEndDate] = useState('')
   const [personSelectOpen, setPersonSelectOpen] = useState(false)
-  const [startDatePickerOpen, setStartDatePickerOpen] = useState(false)
-  const [endDatePickerOpen, setEndDatePickerOpen] = useState(false)
+  const [datePickerTarget, setDatePickerTarget] = useState<
+    | 'newStart'
+    | 'newEnd'
+    | 'selectStart'
+    | 'selectEnd'
+    | 'collectiveStart'
+    | 'collectiveEnd'
+    | null
+  >(null)
+
   const filteredHeadTenures = useMemo(() => {
-    const q = headTenureFilter.trim().toLowerCase()
-    if (!q) return headTenuresForRegister
-    return headTenuresForRegister.filter((t: any) => {
-      const name = getPersonName(t.person)
-      const title = t.title ?? t.positionDefinition?.title ?? '수반'
-      const startStr = formatDate(t.startDate)
-      const endStr = t.endDate ? formatDate(t.endDate) : '현재'
-      return `${name} ${title} ${startStr} ${endStr}`.toLowerCase().includes(q)
+    const query = headTenureFilter.trim().toLowerCase()
+    if (!query) return headTenuresForRegister
+    return headTenuresForRegister.filter((tenureItem) => {
+      const name = getPersonName(tenureItem.person)
+      const regnal = tenureItem.regnalName ?? ''
+      const title =
+        tenureItem.title ?? tenureItem.positionDefinition?.title ?? '수반'
+      const startStr = formatDate(tenureItem.startDate)
+      const endStr = tenureItem.endDate ? formatDate(tenureItem.endDate) : '현재'
+      return `${name} ${regnal} ${title} ${startStr} ${endStr}`
+        .toLowerCase()
+        .includes(query)
     })
   }, [headTenuresForRegister, headTenureFilter])
 
@@ -132,16 +166,37 @@ export function RegisterCabinetModal({
     }
   }
 
+  const activePickerDate =
+    datePickerTarget === 'newStart'
+      ? newHeadStartDate
+      : datePickerTarget === 'newEnd'
+        ? newHeadEndDate
+        : datePickerTarget === 'selectStart'
+          ? selectCabinetStartDate
+          : datePickerTarget === 'selectEnd'
+            ? selectCabinetEndDate
+            : datePickerTarget === 'collectiveStart'
+              ? collectiveStartDate
+              : datePickerTarget === 'collectiveEnd'
+                ? collectiveEndDate
+                : ''
+
   const content = (
     <ModalOverlay
       role="dialog"
       aria-modal="true"
       aria-labelledby="cabinet-modal-title"
-      onClick={(e) => e.target === e.currentTarget && close()}
+      onClick={(clickEvent) =>
+        clickEvent.target === clickEvent.currentTarget && close()
+      }
     >
-      <CabS.CabinetModalBox onClick={(e) => e.stopPropagation()}>
+      <CabS.CabinetModalBox
+        onClick={(clickEvent) => clickEvent.stopPropagation()}
+      >
         <ModalHeader>
-          <ModalTitle id="cabinet-modal-title">행정부 등록</ModalTitle>
+          <ModalTitle id="cabinet-modal-title">
+            행정부 · 내각 개설
+          </ModalTitle>
           <ModalCloseButton type="button" onClick={close} aria-label="닫기">
             <FiX size={22} strokeWidth={2} />
           </ModalCloseButton>
@@ -154,14 +209,21 @@ export function RegisterCabinetModal({
                 $active={registerFlow === 'select'}
                 onClick={() => setRegisterFlow('select')}
               >
-                기존 수반 선택
+                기존 수반 · 군주에서 개설 (개각)
               </TabButton>
               <TabButton
                 type="button"
                 $active={registerFlow === 'new'}
                 onClick={() => setRegisterFlow('new')}
               >
-                새 수반 등록
+                새 수반 + 내각 동시 등록
+              </TabButton>
+              <TabButton
+                type="button"
+                $active={registerFlow === 'collective'}
+                onClick={() => setRegisterFlow('collective')}
+              >
+                집단지도 · 과도정부
               </TabButton>
             </TabNavigation>
           </CabS.CabinetTabWrap>
@@ -171,30 +233,75 @@ export function RegisterCabinetModal({
               <CabS.CabinetFormDesc>
                 <FiInfo size={20} />
                 <span>
-                  이 국가의 <strong>수반(국가원수·정부수반) 재임</strong> 중,
-                  아직 행정부가 연결되지 않은 재임만 표시됩니다.{' '}
-                  <strong>군주 등록</strong>으로 만든 재위 전용 재임은 행정부와
-                  분리되어 여기에 나오지 않습니다. 항목을 선택하면 해당 재임으로
-                  행정부가 생성됩니다.
+                  등록된 <strong>대통령·총리·군주(전제군주 친정 포함) 재임</strong>을
+                  선택해 내각을 개설합니다. 이미 내각이 있는 수반도{' '}
+                  <strong>개각(제2차·전시내각 등)</strong>으로 추가 내각을 만들 수
+                  있습니다.
                 </span>
               </CabS.CabinetFormDesc>
+              <FormRows style={{ marginBottom: 14 }}>
+                <FieldRow>
+                  <FieldLabel>내각 명칭 (선택)</FieldLabel>
+                  <FieldControl>
+                    <RegisterInput
+                      type="text"
+                      placeholder="예: 루즈벨트 제2기 내각, 처칠 전시연립내각, 세종 의정부"
+                      value={selectCabinetName}
+                      onChange={(changeEvent) =>
+                        setSelectCabinetName(changeEvent.target.value)
+                      }
+                    />
+                  </FieldControl>
+                </FieldRow>
+                <FieldRow>
+                  <FieldLabel>개각 기간 (선택)</FieldLabel>
+                  <FieldControl $variant="datePair">
+                    <DateFieldsRow>
+                      <CabS.CabinetDateTrigger
+                        type="button"
+                        $hasValue={!!selectCabinetStartDate}
+                        onClick={() => setDatePickerTarget('selectStart')}
+                      >
+                        <span>
+                          {selectCabinetStartDate
+                            ? formatDate(selectCabinetStartDate)
+                            : '수반 취임일과 동일 (직접 지정)'}
+                        </span>
+                        <FiChevronDown size={18} />
+                      </CabS.CabinetDateTrigger>
+                      <CabS.CabinetDateTrigger
+                        type="button"
+                        $hasValue={!!selectCabinetEndDate}
+                        onClick={() => setDatePickerTarget('selectEnd')}
+                      >
+                        <span>
+                          {selectCabinetEndDate
+                            ? formatDate(selectCabinetEndDate)
+                            : '수반 퇴임일과 동일 (직접 지정)'}
+                        </span>
+                        <FiChevronDown size={18} />
+                      </CabS.CabinetDateTrigger>
+                    </DateFieldsRow>
+                  </FieldControl>
+                </FieldRow>
+              </FormRows>
               {headTenuresForRegister.length === 0 ? (
                 <CabS.CabinetSelectSection
                   style={{ minHeight: 200, justifyContent: 'center' }}
                 >
                   <CabS.CabinetEmptyHint>
                     <FiUsers size={44} strokeWidth={1.5} />
-                    <span>등록된 수반 재임이 없습니다.</span>
+                    <span>등록된 수반·군주 재임이 없습니다.</span>
                     <span>
-                      <strong>새 수반 등록</strong> 탭에서 먼저 수반을
-                      등록하세요.
+                      <strong>새 수반 + 내각 동시 등록</strong> 또는{' '}
+                      <strong>집단지도 · 과도정부</strong> 탭을 이용하세요.
                     </span>
                   </CabS.CabinetEmptyHint>
                 </CabS.CabinetSelectSection>
               ) : (
                 <CabS.CabinetSelectSection>
                   <CabS.CabinetSelectSectionTitle>
-                    수반 재임 목록
+                    수반 · 군주 재임 목록 ({filteredHeadTenures.length}건)
                   </CabS.CabinetSelectSectionTitle>
                   <CabS.CabinetSearchWrap>
                     <CabS.CabinetSearchIcon>
@@ -202,9 +309,11 @@ export function RegisterCabinetModal({
                     </CabS.CabinetSearchIcon>
                     <RegisterInput
                       type="text"
-                      placeholder="이름, 직위, 기간 검색"
+                      placeholder="이름, 왕호, 직위, 기간 검색"
                       value={headTenureFilter}
-                      onChange={(e) => setHeadTenureFilter(e.target.value)}
+                      onChange={(changeEvent) =>
+                        setHeadTenureFilter(changeEvent.target.value)
+                      }
                       style={{ paddingLeft: 44 }}
                     />
                   </CabS.CabinetSearchWrap>
@@ -222,44 +331,79 @@ export function RegisterCabinetModal({
                         </CabS.CabinetEmptyHint>
                       </li>
                     ) : (
-                      filteredHeadTenures.map((t: any) => {
-                        const termNum = t.ordinal
+                      filteredHeadTenures.map((tenureItem) => {
+                        const termNum = tenureItem.ordinal
                         const termLabel =
                           termNum != null
-                            ? t.subTermNumber != null
-                              ? `제${termNum}대 ${t.subTermNumber}기 `
+                            ? tenureItem.subTermNumber != null
+                              ? `제${termNum}대 ${tenureItem.subTermNumber}기 `
                               : `제${termNum}대 `
                             : ''
                         const positionTitle =
-                          t.title ?? t.positionDefinition?.title ?? '수반'
+                          tenureItem.title ??
+                          tenureItem.positionDefinition?.title ??
+                          '수반'
+                        const existingCount =
+                          Number(tenureItem._existingCabinetCount ?? 0) || 0
                         const roleLabel =
-                          t.positionType === 'HEAD_OF_STATE'
-                            ? '국가원수'
-                            : t.positionType === 'HEAD_OF_GOVERNMENT'
-                              ? '정부수반'
-                              : '수반'
+                          tenureItem.isMonarchical === true
+                            ? '군주 친정'
+                            : tenureItem.positionType === 'HEAD_OF_STATE'
+                              ? '국가원수'
+                              : tenureItem.positionType === 'HEAD_OF_GOVERNMENT'
+                                ? '정부수반'
+                                : '수반'
+                        const displayPerson =
+                          tenureItem.regnalName?.trim() ||
+                          getPersonName(tenureItem.person)
                         return (
-                          <li key={t.id}>
+                          <li key={tenureItem.id}>
                             <CabS.CabinetHeadTenureCard
                               type="button"
                               disabled={registerCabinetSubmitting}
-                              onClick={() => handleRegisterCabinet(t)}
+                              onClick={() =>
+                                handleRegisterCabinet(tenureItem, {
+                                  name: selectCabinetName.trim() || undefined,
+                                  startDate:
+                                    selectCabinetStartDate.trim() || undefined,
+                                  endDate:
+                                    selectCabinetEndDate.trim() || undefined,
+                                })
+                              }
                             >
                               <CabS.CabinetHeadTenureCardMain>
-                                <CabS.CabinetHeadTenureCardBadge>
-                                  {roleLabel}
-                                </CabS.CabinetHeadTenureCardBadge>
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    flexWrap: 'wrap',
+                                  }}
+                                >
+                                  <CabS.CabinetHeadTenureCardBadge>
+                                    {roleLabel}
+                                  </CabS.CabinetHeadTenureCardBadge>
+                                  {existingCount > 0 && (
+                                    <CabS.CabinetHeadTenureCardBadge
+                                      style={{ opacity: 0.8 }}
+                                    >
+                                      기존 내각 {existingCount}개 · 개각 추가
+                                    </CabS.CabinetHeadTenureCardBadge>
+                                  )}
+                                </div>
                                 <CabS.CabinetHeadTenureCardName>
-                                  {getPersonName(t.person)} · {termLabel}
+                                  {displayPerson} · {termLabel}
                                   {positionTitle}
                                 </CabS.CabinetHeadTenureCardName>
                                 <CabS.CabinetHeadTenureCardMeta>
-                                  {formatDate(t.startDate)} ~{' '}
-                                  {t.endDate ? formatDate(t.endDate) : '현재'}
+                                  {formatDate(tenureItem.startDate)} ~{' '}
+                                  {tenureItem.endDate
+                                    ? formatDate(tenureItem.endDate)
+                                    : '현재'}
                                 </CabS.CabinetHeadTenureCardMeta>
                               </CabS.CabinetHeadTenureCardMain>
                               <CabS.CabinetHeadTenureCardAction>
-                                선택
+                                {existingCount > 0 ? '개각 개설' : '내각 개설'}
                                 <FiChevronRight size={18} />
                               </CabS.CabinetHeadTenureCardAction>
                             </CabS.CabinetHeadTenureCard>
@@ -276,6 +420,117 @@ export function RegisterCabinetModal({
                 </CabS.CabinetCancelBtn>
               </CabS.CabinetActions>
             </>
+          ) : registerFlow === 'collective' ? (
+            <>
+              <CabS.CabinetFormDesc>
+                <FiInfo size={20} />
+                <span>
+                  1인 수반이 없는{' '}
+                  <strong>
+                    집단지도체제 · 혁명위원회 · 과도정부 · 군정위원회
+                  </strong>
+                  (예: 스위스 연방평의회, 프랑스 공안위원회, 러시아 임시정부)를
+                  개설하고 구성원을 각료로 배속합니다.
+                </span>
+              </CabS.CabinetFormDesc>
+              <FormRows>
+                {country.type === 'modern' &&
+                  Array.isArray(country.historicalCountries) &&
+                  country.historicalCountries.length > 0 && (
+                    <FieldRow>
+                      <FieldLabel>등록 대상 국가</FieldLabel>
+                      <FieldControl>
+                        <CabS.CabinetSelectNative
+                          value={registerTargetHistoricalCountryId ?? ''}
+                          onChange={(changeEvent) =>
+                            setRegisterTargetHistoricalCountryId(
+                              changeEvent.target.value || null,
+                            )
+                          }
+                        >
+                          <option value="">{country.name} (현대국가)</option>
+                          {country.historicalCountries.map((histCountry) => (
+                            <option key={histCountry.id} value={histCountry.id}>
+                              {histCountry.name}
+                            </option>
+                          ))}
+                        </CabS.CabinetSelectNative>
+                      </FieldControl>
+                    </FieldRow>
+                  )}
+                <FieldRow>
+                  <FieldLabel>
+                    행정부 · 위원회 명칭 <Required />
+                  </FieldLabel>
+                  <FieldControl>
+                    <RegisterInput
+                      type="text"
+                      placeholder="예: 공안위원회, 스위스 연방평의회, 대한민국 임시정부 국무원"
+                      value={collectiveName}
+                      onChange={(changeEvent) =>
+                        setCollectiveName(changeEvent.target.value)
+                      }
+                    />
+                  </FieldControl>
+                </FieldRow>
+                <FieldRow>
+                  <FieldLabel>
+                    출범일 <Required /> / 종료일
+                  </FieldLabel>
+                  <FieldControl $variant="datePair">
+                    <DateFieldsRow>
+                      <CabS.CabinetDateTrigger
+                        type="button"
+                        $hasValue={!!collectiveStartDate}
+                        onClick={() => setDatePickerTarget('collectiveStart')}
+                      >
+                        <span>
+                          {collectiveStartDate
+                            ? formatDate(collectiveStartDate)
+                            : '출범일 선택'}
+                        </span>
+                        <FiChevronDown size={18} />
+                      </CabS.CabinetDateTrigger>
+                      <CabS.CabinetDateTrigger
+                        type="button"
+                        $hasValue={!!collectiveEndDate}
+                        onClick={() => setDatePickerTarget('collectiveEnd')}
+                      >
+                        <span>
+                          {collectiveEndDate
+                            ? formatDate(collectiveEndDate)
+                            : '종료일 선택 (선택)'}
+                        </span>
+                        <FiChevronDown size={18} />
+                      </CabS.CabinetDateTrigger>
+                    </DateFieldsRow>
+                  </FieldControl>
+                </FieldRow>
+              </FormRows>
+              <CabS.CabinetActions>
+                <CabS.CabinetCancelBtn type="button" onClick={close}>
+                  취소
+                </CabS.CabinetCancelBtn>
+                <SubmitButton
+                  type="button"
+                  disabled={
+                    registerCabinetSubmitting ||
+                    !collectiveName.trim() ||
+                    !collectiveStartDate.trim()
+                  }
+                  onClick={() =>
+                    handleRegisterCollectiveCabinet({
+                      name: collectiveName.trim(),
+                      startDate: collectiveStartDate.trim(),
+                      endDate: collectiveEndDate.trim() || undefined,
+                      historicalCountryId: registerTargetHistoricalCountryId,
+                    })
+                  }
+                >
+                  {registerCabinetSubmitting ? '등록 중…' : '등록'}
+                </SubmitButton>
+              </CabS.CabinetActions>
+            </>
           ) : (
             <>
               <CabS.CabinetFormDesc>
@@ -286,7 +541,6 @@ export function RegisterCabinetModal({
                 </span>
               </CabS.CabinetFormDesc>
               <FormRows>
-                {/* 현대국가인 경우: 어느 국가(하위 역사국가 포함)로 등록할지 선택 */}
                 {country.type === 'modern' &&
                   Array.isArray(country.historicalCountries) &&
                   country.historicalCountries.length > 0 && (
@@ -295,23 +549,22 @@ export function RegisterCabinetModal({
                       <FieldControl>
                         <CabS.CabinetSelectNative
                           value={registerTargetHistoricalCountryId ?? ''}
-                          onChange={(e) =>
+                          onChange={(changeEvent) =>
                             setRegisterTargetHistoricalCountryId(
-                              e.target.value || null,
+                              changeEvent.target.value || null,
                             )
                           }
                         >
                           <option value="">{country.name} (현대국가)</option>
-                          {country.historicalCountries.map((hc) => (
-                            <option key={hc.id} value={hc.id}>
-                              {hc.name}
+                          {country.historicalCountries.map((histCountry) => (
+                            <option key={histCountry.id} value={histCountry.id}>
+                              {histCountry.name}
                             </option>
                           ))}
                         </CabS.CabinetSelectNative>
                       </FieldControl>
                     </FieldRow>
                   )}
-                {/* 역사국가인 경우: 소속 국가 읽기 전용 표시 */}
                 {country.type === 'historical' && (
                   <FieldRow>
                     <FieldLabel>등록 대상 국가</FieldLabel>
@@ -337,7 +590,9 @@ export function RegisterCabinetModal({
                         min={1}
                         placeholder="제 N대"
                         value={newHeadTermNumber}
-                        onChange={(e) => setNewHeadTermNumber(e.target.value)}
+                        onChange={(changeEvent) =>
+                          setNewHeadTermNumber(changeEvent.target.value)
+                        }
                         aria-label="대수"
                       />
                     </CabS.CabinetTermNumberWrap>
@@ -352,8 +607,8 @@ export function RegisterCabinetModal({
                         min={1}
                         placeholder="N기 (예: 1, 2)"
                         value={newHeadSubTermNumber}
-                        onChange={(e) =>
-                          setNewHeadSubTermNumber(e.target.value)
+                        onChange={(changeEvent) =>
+                          setNewHeadSubTermNumber(changeEvent.target.value)
                         }
                         aria-label="기수"
                         title="같은 대수 내 복수 임기 구분 (예: 클린턴 42대 1기/2기)"
@@ -376,7 +631,7 @@ export function RegisterCabinetModal({
                         {newHeadPersonId
                           ? getPersonName(
                               allPersons.find(
-                                (p: any) => p.id === newHeadPersonId,
+                                (personItem) => personItem.id === newHeadPersonId,
                               ),
                             )
                           : '인물 선택'}
@@ -392,15 +647,15 @@ export function RegisterCabinetModal({
                   <FieldControl>
                     <CabS.CabinetSelectNative
                       value={newHeadPositionDefId ?? ''}
-                      onChange={(e) =>
-                        setNewHeadPositionDefId(e.target.value || null)
+                      onChange={(changeEvent) =>
+                        setNewHeadPositionDefId(changeEvent.target.value || null)
                       }
                       aria-label="직위 선택"
                     >
                       <option value="">선택</option>
-                      {headPositionOptions.map((d: any) => (
-                        <option key={d.id} value={d.id}>
-                          {d.title}
+                      {headPositionOptions.map((defItem) => (
+                        <option key={defItem.id} value={defItem.id}>
+                          {defItem.title}
                         </option>
                       ))}
                     </CabS.CabinetSelectNative>
@@ -415,7 +670,7 @@ export function RegisterCabinetModal({
                       <CabS.CabinetDateTrigger
                         type="button"
                         $hasValue={!!newHeadStartDate}
-                        onClick={() => setStartDatePickerOpen(true)}
+                        onClick={() => setDatePickerTarget('newStart')}
                         aria-label="취임일 선택"
                       >
                         <span>
@@ -428,7 +683,7 @@ export function RegisterCabinetModal({
                       <CabS.CabinetDateTrigger
                         type="button"
                         $hasValue={!!newHeadEndDate}
-                        onClick={() => setEndDatePickerOpen(true)}
+                        onClick={() => setDatePickerTarget('newEnd')}
                         aria-label="퇴임일 선택"
                       >
                         <span>
@@ -448,9 +703,13 @@ export function RegisterCabinetModal({
                       type="text"
                       placeholder="예: 루즈벨트 제1기"
                       value={newCabinetName}
-                      onChange={(e) => setNewCabinetName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') handleRegisterNewHeadAndCabinet()
+                      onChange={(changeEvent) =>
+                        setNewCabinetName(changeEvent.target.value)
+                      }
+                      onKeyDown={(keyEvent) => {
+                        if (keyEvent.key === 'Enter') {
+                          void handleRegisterNewHeadAndCabinet()
+                        }
                       }}
                     />
                   </FieldControl>
@@ -460,8 +719,8 @@ export function RegisterCabinetModal({
                   <FieldControl>
                     <CabS.CabinetSelectNative
                       value={newHeadAppointmentMethod}
-                      onChange={(e) =>
-                        setNewHeadAppointmentMethod(e.target.value)
+                      onChange={(changeEvent) =>
+                        setNewHeadAppointmentMethod(changeEvent.target.value)
                       }
                     >
                       <option value="">선택 안 함</option>
@@ -480,7 +739,9 @@ export function RegisterCabinetModal({
                   <FieldControl>
                     <CabS.CabinetSelectNative
                       value={newHeadEndReason}
-                      onChange={(e) => setNewHeadEndReason(e.target.value)}
+                      onChange={(changeEvent) =>
+                        setNewHeadEndReason(changeEvent.target.value)
+                      }
                     >
                       <option value="">선택 안 함</option>
                       <option value="TERM_COMPLETED">임기 만료</option>
@@ -548,7 +809,7 @@ export function RegisterCabinetModal({
                     !newHeadPositionDefId ||
                     !newHeadStartDate.trim()
                   }
-                  onClick={() => handleRegisterNewHeadAndCabinet()}
+                  onClick={() => void handleRegisterNewHeadAndCabinet()}
                 >
                   {registerCabinetSubmitting ? '등록 중…' : '등록'}
                 </SubmitButton>
@@ -557,13 +818,13 @@ export function RegisterCabinetModal({
           )}
         </CabS.CabinetModalBody>
       </CabS.CabinetModalBox>
-      {(personSelectOpen || startDatePickerOpen || endDatePickerOpen) && (
+      {(personSelectOpen || datePickerTarget !== null) && (
         <CabS.CabinetSubModalLayer>
           {personSelectOpen && (
             <PersonSelectModal
               persons={allPersons}
               selectedPersonId={newHeadPersonId ?? ''}
-              onSelect={(personId, _personName) => {
+              onSelect={(personId) => {
                 setNewHeadPersonId(personId)
                 setPersonSelectOpen(false)
               }}
@@ -571,24 +832,26 @@ export function RegisterCabinetModal({
             />
           )}
           <DatePickerModal
-            isOpen={startDatePickerOpen}
-            onClose={() => setStartDatePickerOpen(false)}
-            onSelect={(date) => {
-              setNewHeadStartDate(date)
-              setStartDatePickerOpen(false)
+            isOpen={datePickerTarget !== null}
+            onClose={() => setDatePickerTarget(null)}
+            onSelect={(selectedDate) => {
+              if (datePickerTarget === 'newStart') {
+                setNewHeadStartDate(selectedDate)
+              } else if (datePickerTarget === 'newEnd') {
+                setNewHeadEndDate(selectedDate)
+              } else if (datePickerTarget === 'selectStart') {
+                setSelectCabinetStartDate(selectedDate)
+              } else if (datePickerTarget === 'selectEnd') {
+                setSelectCabinetEndDate(selectedDate)
+              } else if (datePickerTarget === 'collectiveStart') {
+                setCollectiveStartDate(selectedDate)
+              } else if (datePickerTarget === 'collectiveEnd') {
+                setCollectiveEndDate(selectedDate)
+              }
+              setDatePickerTarget(null)
             }}
-            initialDate={newHeadStartDate || undefined}
-            title="취임일 선택"
-          />
-          <DatePickerModal
-            isOpen={endDatePickerOpen}
-            onClose={() => setEndDatePickerOpen(false)}
-            onSelect={(date) => {
-              setNewHeadEndDate(date)
-              setEndDatePickerOpen(false)
-            }}
-            initialDate={newHeadEndDate || undefined}
-            title="퇴임일 선택"
+            initialDate={activePickerDate || undefined}
+            title="날짜 선택"
           />
         </CabS.CabinetSubModalLayer>
       )}

@@ -43,6 +43,8 @@ export type CabinetDetailChromeProps = {
   setAddMinisterCabinet: (cab: unknown) => void
   setPersonSelectOpen: (open: boolean) => void
   handleDeleteCabinet: (cabinetId: string, e: React.MouseEvent) => void
+  /** 각료 수정(1스텝 임명 모달) */
+  onEditMinister?: (minister: unknown) => void
   /** 행정부 메타·수반 재임 수정 모달 (상단 툴바) */
   onEditCabinet?: () => void
   /** 현재 화면(행정부 상세·재임 기록) 인쇄 */
@@ -73,6 +75,7 @@ export function CabinetDetailChrome({
   setAddMinisterCabinet,
   setPersonSelectOpen,
   handleDeleteCabinet,
+  onEditMinister,
   onEditCabinet,
   onPrint,
 }: CabinetDetailChromeProps) {
@@ -127,12 +130,14 @@ export function CabinetDetailChrome({
                   >
                     {formatCabinetHeadBreadcrumbLabel(
                       selectedCabinet.headTenure,
+                      selectedCabinet.name,
                     )}
                   </CabS.CabDetailBackBtn>
                 ) : (
                   <CabS.CabDetailCrumbText>
                     {formatCabinetHeadBreadcrumbLabel(
                       selectedCabinet.headTenure,
+                      selectedCabinet.name,
                     )}
                   </CabS.CabDetailCrumbText>
                 )}
@@ -218,6 +223,10 @@ export function CabinetDetailChrome({
                   aria-label="각료 수정"
                   title="각료 수정"
                   onClick={() => {
+                    if (onEditMinister) {
+                      onEditMinister(minister)
+                      return
+                    }
                     const defId =
                       minister.positionDefinition?.id ??
                       minister.positionDefinitionId ??
@@ -273,7 +282,9 @@ export function CabinetDetailChrome({
               $variant="danger"
               aria-label="행정부 삭제"
               title="행정부 삭제"
-              onClick={(e) => handleDeleteCabinet(selectedCabinet.id, e)}
+              onClick={(clickEvent) =>
+                handleDeleteCabinet(selectedCabinet.id, clickEvent)
+              }
             >
               <FiTrash2 size={17} strokeWidth={2} />
             </DetailHeaderIconBtn>

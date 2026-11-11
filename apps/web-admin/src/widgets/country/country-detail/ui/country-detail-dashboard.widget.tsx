@@ -225,6 +225,10 @@ export function CountryDetailDashboard({
     subTab?: 'heads' | 'cabinets' | 'ministries' | 'system' | 'military',
     cabinetId?: string | null,
   ) => {
+    if (subTab === 'military') {
+      navigate(pathKeys.countryMilitary(country.id))
+      return
+    }
     const params = new URLSearchParams()
     if (typeof subTab === 'string' && subTab) params.set('sub', subTab)
     if (typeof cabinetId === 'string' && cabinetId) params.set('cabinetId', cabinetId)

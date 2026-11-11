@@ -487,20 +487,26 @@ export function GovernmentOrganizationsTab({
                     cardBorder={false}
                     flat
                     icon={<FiPlus size={28} strokeWidth={2.5} />}
-                    title="등록된 조직이 없습니다"
-                    description="만철·관동군·총독부 등 행정기구·조직을 등록하면 이 국가 소속으로 관리할 수 있습니다."
+                    title="등록된 정당·사회단체가 없습니다"
+                    description="정당·기업·NGO·국제기구·반군·교단·학술단체 등을 등록합니다. (국가 공조직·최고사령부는 「중앙부처·국가기관」, 야전군·사단은 「군사 조직」 탭에서 관리)"
                     primaryAction={{
-                      label: '조직 등록',
+                      label: '단체·조직 등록',
                       onClick: () => {
                         setEditingOrganization(null)
                         setOrganizationForm({
                           name: '',
                           shortName: null,
                           localName: null,
-                          type: 'GOVERNMENT_AGENCY',
+                          type: 'POLITICAL_PARTY',
                           scope: null,
-                          countryId: effectiveCountryId,
-                          historicalCountryId: null,
+                          countryId:
+                            country?.type === 'historical'
+                              ? (country.modernCountries?.[0]?.id ?? null)
+                              : (effectiveCountryId ?? null),
+                          historicalCountryId:
+                            country?.type === 'historical'
+                              ? (effectiveCountryId ?? null)
+                              : null,
                           description: null,
                           foundedDate: null,
                           dissolvedDate: null,
@@ -520,7 +526,7 @@ export function GovernmentOrganizationsTab({
                     <OrgListHeaderRow>
                       <OrgListHeaderTitleBlock>
                         <OrgListHeaderTitle>
-                          행정기구·조직
+                          정당 · 사회단체 · 외곽기구
                           <OrgListHeaderCount>
                             {filteredOrganizationsList.length}개
                             {organizationSearchQuery.trim()
@@ -529,7 +535,7 @@ export function GovernmentOrganizationsTab({
                           </OrgListHeaderCount>
                         </OrgListHeaderTitle>
                         <OrgListHeaderDesc>
-                          이름·약칭·유형으로 검색할 수 있습니다.
+                          정당·기업·NGO·반군·국제기구·교단 등 국가 소속 단체를 관리합니다. (정부 부처·청·최고사령부는 「중앙부처·국가기관」 탭 참조)
                         </OrgListHeaderDesc>
                       </OrgListHeaderTitleBlock>
                     </OrgListHeaderRow>
@@ -585,8 +591,14 @@ export function GovernmentOrganizationsTab({
                             localName: null,
                             type: 'GOVERNMENT_AGENCY',
                             scope: null,
-                            countryId: effectiveCountryId,
-                            historicalCountryId: null,
+                            countryId:
+                              country?.type === 'historical'
+                                ? (country.modernCountries?.[0]?.id ?? null)
+                                : (effectiveCountryId ?? null),
+                            historicalCountryId:
+                              country?.type === 'historical'
+                                ? (effectiveCountryId ?? null)
+                                : null,
                             description: null,
                             foundedDate: null,
                             dissolvedDate: null,

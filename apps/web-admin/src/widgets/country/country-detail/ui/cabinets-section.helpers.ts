@@ -70,7 +70,7 @@ export function getPersonBirthPlaceLabel(
   return text || null
 }
 
-/** 수반 재임 기준 상단 브레드크럼: 「제N대 [M기] 이름」 또는 이름만 / 없으면 「행정부 상세」 */
+/** 수반 재임 기준 상단 브레드크럼: 「제N대 [M기] 이름」 또는 이름만 / 없으면 행정부 명칭 또는 「행정부 상세」 */
 export function formatCabinetHeadBreadcrumbLabel(
   headTenure:
     | {
@@ -80,15 +80,22 @@ export function formatCabinetHeadBreadcrumbLabel(
       }
     | null
     | undefined,
+  cabinetName?: string | null,
 ): string {
-  if (!headTenure) return '행정부 상세'
-  const n = headTenure.person ? getPersonName(headTenure.person) : null
-  const t = headTenure.ordinal
-  if (!n) return '행정부 상세'
-  if (t == null) return n
-  const sub =
+  if (!headTenure) {
+    const trimmedCabinetName = cabinetName?.trim()
+    return trimmedCabinetName || '행정부 상세'
+  }
+  const personLabel = headTenure.person ? getPersonName(headTenure.person) : null
+  const ordinalNum = headTenure.ordinal
+  if (!personLabel || personLabel === '—') {
+    const trimmedCabinetName = cabinetName?.trim()
+    return trimmedCabinetName || '행정부 상세'
+  }
+  if (ordinalNum == null) return personLabel
+  const subLabel =
     headTenure.subTermNumber != null ? ` ${headTenure.subTermNumber}기` : ''
-  return `제${t}대${sub} ${n}`
+  return `제${ordinalNum}대${subLabel} ${personLabel}`
 }
 
 /** 퇴임일 기준 나이 계산 (birthDate/birthYear 기반, 기원전·서기 모두 지원) */
@@ -329,13 +336,27 @@ export function territoryKeyFromCabinet(
     | {
         id?: string
         name?: string | null
+        countryId?: string | null
+        historicalCountryId?: string | null
+        country?: { id?: string | null; name?: string | null } | null
+        historicalCountry?: { id?: string | null; name?: string | null } | null
         headTenure?: HeadForTerritoryKey | null
       }
     | null
     | undefined,
 ): string {
-  // 동일 국가는 동일 색이어야 하므로 행정부 명칭으로 분기하지 않음.
-  return territoryKeyFromHead(cabinet?.headTenure)
+  if (cabinet?.headTenure) {
+    return territoryKeyFromHead(cabinet.headTenure)
+  }
+  if (cabinet) {
+    return territoryKeyFromHead({
+      countryId: cabinet.countryId,
+      historicalCountryId: cabinet.historicalCountryId,
+      country: cabinet.country,
+      historicalCountry: cabinet.historicalCountry,
+    })
+  }
+  return 'default'
 }
 
 /**
@@ -1113,21 +1134,30 @@ export function overlappingMonarchCaptionForExecutiveHead(
 
 function unionExecutiveHeadRangesMs(
   timelineCabinets: readonly {
-    headTenure: GovernmentHeadTenureInCabinetList
+    headTenure: GovernmentHeadTenureInCabinetList | null
+    startDate?: string | null
+    endDate?: string | null
   }[],
 ): { start: number; end: number } | null {
-  let minS = Infinity
-  let maxE = -Infinity
-  for (const c of timelineCabinets) {
-    const h = c.headTenure
-    if (!h || shouldHideCabinetFromExecutiveTimeline(h)) continue
-    const r = headTenureDateRangeMs(h)
-    if (!r) continue
-    if (r.start < minS) minS = r.start
-    if (r.end > maxE) maxE = r.end
+  let minStart = Infinity
+  let maxEnd = -Infinity
+  for (const cabinetItem of timelineCabinets) {
+    const headItem = cabinetItem.headTenure
+    if (headItem && shouldHideCabinetFromExecutiveTimeline(headItem)) continue
+    const rangeResult = headItem
+      ? headTenureDateRangeMs(headItem)
+      : cabinetItem.startDate
+        ? headTenureDateRangeMs({
+            startDate: cabinetItem.startDate,
+            endDate: cabinetItem.endDate,
+          })
+        : null
+    if (!rangeResult) continue
+    if (rangeResult.start < minStart) minStart = rangeResult.start
+    if (rangeResult.end > maxEnd) maxEnd = rangeResult.end
   }
-  if (minS === Infinity) return null
-  return { start: minS, end: maxE }
+  if (minStart === Infinity) return null
+  return { start: minStart, end: maxEnd }
 }
 
 export type MonarchReignLegendItem = {
@@ -1140,7 +1170,9 @@ export type MonarchReignLegendItem = {
 /** 타임라인에 올라온 행정부 기간과 겹치는 군주 재위 — 헤더 표기용 */
 export function monarchReignLegendForCabinetTimeline(
   timelineCabinets: readonly {
-    headTenure: GovernmentHeadTenureInCabinetList
+    headTenure: GovernmentHeadTenureInCabinetList | null
+    startDate?: string | null
+    endDate?: string | null
   }[],
   allCountryTenures:
     | readonly GovernmentHeadTenureInCabinetList[]
@@ -1153,48 +1185,50 @@ export function monarchReignLegendForCabinetTimeline(
   const union = unionExecutiveHeadRangesMs(timelineCabinets)
   if (!union) return []
 
-  const nowY = new Date().getFullYear()
+  const nowYear = new Date().getFullYear()
   const out: MonarchReignLegendItem[] = []
   const seen = new Set<string>()
 
   const monarchPool = effectiveMonarchTenuresForCabinetTimeline(
     allCountryTenures,
   )
-  for (const m of monarchPool) {
-    if (!isSovereignMonarchTenureForCabinetTimeline(m) || !m.startDate) continue
-    if (!tenureInCabinetTimelineCountryScope(m, scope)) continue
-    const mr = headTenureDateRangeMs(m)
-    if (!mr) continue
-    if (mr.end < union.start || mr.start > union.end) continue
-    if (seen.has(m.id)) continue
-    seen.add(m.id)
-    const cap = monarchCaptionFromTenure(m, m.startDate)
-    const sParts = parseSignedDateParts(m.startDate)
-    if (!sParts) continue
-    const eParts = m.endDate ? parseSignedDateParts(m.endDate) : null
-    const sy = sParts.signedYear
-    const ey = eParts ? eParts.signedYear : nowY
-    const syLabel = sParts.era === 'BC' ? `BC ${sParts.absYear}` : String(sParts.absYear)
-    const eyLabel = eParts
-      ? eParts.era === 'BC'
-        ? `BC ${eParts.absYear}`
-        : String(eParts.absYear)
-      : String(nowY)
+  for (const monarchItem of monarchPool) {
+    if (!isSovereignMonarchTenureForCabinetTimeline(monarchItem) || !monarchItem.startDate) continue
+    if (!tenureInCabinetTimelineCountryScope(monarchItem, scope)) continue
+    const monarchRange = headTenureDateRangeMs(monarchItem)
+    if (!monarchRange) continue
+    if (monarchRange.end < union.start || monarchRange.start > union.end) continue
+    if (seen.has(monarchItem.id)) continue
+    seen.add(monarchItem.id)
+    const cap = monarchCaptionFromTenure(monarchItem, monarchItem.startDate)
+    const startParts = parseSignedDateParts(monarchItem.startDate)
+    if (!startParts) continue
+    const endParts = monarchItem.endDate ? parseSignedDateParts(monarchItem.endDate) : null
+    const signedStartYear = startParts.signedYear
+    const signedEndYear = endParts ? endParts.signedYear : nowYear
+    const startYearLabel = startParts.era === 'BC' ? `BC ${startParts.absYear}` : String(startParts.absYear)
+    const endYearLabel = endParts
+      ? endParts.era === 'BC'
+        ? `BC ${endParts.absYear}`
+        : String(endParts.absYear)
+      : String(nowYear)
     out.push({
-      id: m.id,
-      label: `${cap} ${syLabel}–${eyLabel}`,
-      startYear: sy,
-      endYear: ey,
+      id: monarchItem.id,
+      label: `${cap} ${startYearLabel}–${endYearLabel}`,
+      startYear: signedStartYear,
+      endYear: signedEndYear,
     })
   }
-  out.sort((a, b) => a.startYear - b.startYear)
+  out.sort((left, right) => left.startYear - right.startYear)
   return out
 }
 
 /** 타임라인 헤더 연도 — 행정부 수반 재임 시작·끝 + (겹치는) 군주 재위 시작·끝 포함 */
 export function cabinetTimelineHeaderYearRange(
   timelineCabinets: readonly {
-    headTenure: GovernmentHeadTenureInCabinetList
+    headTenure: GovernmentHeadTenureInCabinetList | null
+    startDate?: string | null
+    endDate?: string | null
   }[],
   allCountryTenures:
     | readonly GovernmentHeadTenureInCabinetList[]
@@ -1203,36 +1237,42 @@ export function cabinetTimelineHeaderYearRange(
   scope?: CabinetTimelineCountryScope | null,
 ): { minY: number | null; maxY: number | null } {
   const years: number[] = []
-  const nowY = new Date().getFullYear()
+  const nowYear = new Date().getFullYear()
 
-  for (const c of timelineCabinets) {
-    const h = c.headTenure
-    if (!h?.startDate) continue
-    const sy = parseSignedDateParts(h.startDate)?.signedYear
-    if (sy != null) years.push(sy)
-    const ey = h.endDate ? parseSignedDateParts(h.endDate)?.signedYear : nowY
-    if (ey != null) years.push(ey)
+  for (const cabinetItem of timelineCabinets) {
+    const headItem = cabinetItem.headTenure
+    const effStart = headItem?.startDate ?? cabinetItem.startDate
+    const effEnd = headItem ? headItem.endDate : cabinetItem.endDate
+    if (!effStart) continue
+    const startYear = parseSignedDateParts(effStart)?.signedYear
+    if (startYear != null) years.push(startYear)
+    const endYear = effEnd ? parseSignedDateParts(effEnd)?.signedYear : nowYear
+    if (endYear != null) years.push(endYear)
   }
 
   if (allCountryTenures?.length) {
     const monarchPool = effectiveMonarchTenuresForCabinetTimeline(
       allCountryTenures,
     )
-    for (const c of timelineCabinets) {
-      const h = c.headTenure
-      if (!h?.startDate || shouldHideCabinetFromExecutiveTimeline(h)) continue
-      const execRange = headTenureDateRangeMs(h)
+    for (const cabinetItem of timelineCabinets) {
+      const headItem = cabinetItem.headTenure
+      if (!headItem?.startDate || shouldHideCabinetFromExecutiveTimeline(headItem)) continue
+      const execRange = headTenureDateRangeMs(headItem)
       if (!execRange) continue
-      for (const m of monarchPool) {
-        if (!isSovereignMonarchTenureForCabinetTimeline(m)) continue
-        if (!headTenuresMatchForMonarchOverlap(m, h, scope)) continue
-        const mRange = headTenureDateRangeMs(m)
-        if (!mRange) continue
-        if (execRange.start <= mRange.end && mRange.start <= execRange.end) {
-          const ms = m.startDate ? parseSignedDateParts(m.startDate)?.signedYear : null
-          if (ms != null) years.push(ms)
-          const me = m.endDate ? parseSignedDateParts(m.endDate)?.signedYear : nowY
-          if (me != null) years.push(me)
+      for (const monarchItem of monarchPool) {
+        if (!isSovereignMonarchTenureForCabinetTimeline(monarchItem)) continue
+        if (!headTenuresMatchForMonarchOverlap(monarchItem, headItem, scope)) continue
+        const monarchRange = headTenureDateRangeMs(monarchItem)
+        if (!monarchRange) continue
+        if (execRange.start <= monarchRange.end && monarchRange.start <= execRange.end) {
+          const monarchStartYear = monarchItem.startDate
+            ? parseSignedDateParts(monarchItem.startDate)?.signedYear
+            : null
+          if (monarchStartYear != null) years.push(monarchStartYear)
+          const monarchEndYear = monarchItem.endDate
+            ? parseSignedDateParts(monarchItem.endDate)?.signedYear
+            : nowYear
+          if (monarchEndYear != null) years.push(monarchEndYear)
         }
       }
     }

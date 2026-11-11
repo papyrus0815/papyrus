@@ -339,8 +339,14 @@ export function PoliticalSystemTab({
             ? await updateMutation.mutateAsync({ id: editing.id, dto })
             : await createMutation.mutateAsync({
                 ...dto,
-                countryId: countryId ?? null,
-                historicalCountryId: historicalCountryId ?? null,
+                countryId:
+                  dto.countryId !== undefined
+                    ? dto.countryId
+                    : (countryId ?? null),
+                historicalCountryId:
+                  dto.historicalCountryId !== undefined
+                    ? dto.historicalCountryId
+                    : (historicalCountryId ?? null),
               })
           setFormOpen(false)
 
@@ -357,17 +363,17 @@ export function PoliticalSystemTab({
           ) => {
             if (!titleText) return true
             const norm = titleText.trim().replace(/\s+/g, '')
-            return rows.some((r) => {
+            return rows.some((rowItem) => {
               if (saved.historicalCountryId) {
-                if (r.historicalCountryId !== saved.historicalCountryId) {
+                if (rowItem.historicalCountryId !== saved.historicalCountryId) {
                   return false
                 }
-              } else if (r.historicalCountryId) {
+              } else if (rowItem.historicalCountryId) {
                 return false
               }
               return (
-                Boolean(posId && r.positionDefinition?.id === posId) ||
-                (r.title ?? r.positionDefinition?.title ?? '')
+                Boolean(posId && rowItem.positionDefinition?.id === posId) ||
+                (rowItem.title ?? rowItem.positionDefinition?.title ?? '')
                   .trim()
                   .replace(/\s+/g, '') === norm
               )

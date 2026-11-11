@@ -127,6 +127,8 @@ model PoliticalParty {
   electionPartyResults ElectionPartyResult[]        @relation("ElectionPartyResults")
   /// 내각과의 연정·여당 관계
   cabinetAffiliations  CabinetPoliticalParty[]      @relation("CabinetPartyAffiliations")
+  /// 이 정당 소속으로 기록된 공직·군직 재임들
+  governmentTenures    GovernmentPositionTenure[]   @relation("TenurePoliticalParty")
   /// 관련 법령(`Law`) 연결 — 정당법·정치자금법 등
   politicalPartyLaws   PoliticalPartyLaw[]        @relation("PartyLawAffiliations")
 

@@ -112,10 +112,12 @@ describe('office-holding.query', () => {
     it('deleteGovernmentPositionTenure: cleans up head cabinet, detaches members, and deletes empty linkageGroup', async () => {
       const prisma: any = {
         cabinet: {
-          findUnique: jest.fn().mockResolvedValue({
-            id: 'cab-1',
-            linkageGroupId: 'grp-1',
-          }),
+          findMany: jest.fn().mockResolvedValue([
+            {
+              id: 'cab-1',
+              linkageGroupId: 'grp-1',
+            },
+          ]),
           delete: jest.fn().mockResolvedValue({ id: 'cab-1' }),
           count: jest.fn().mockResolvedValue(0),
         },

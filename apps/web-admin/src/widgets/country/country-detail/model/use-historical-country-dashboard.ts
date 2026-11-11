@@ -22,6 +22,7 @@ import {
 } from '@/shared/api/historical-countries'
 import { personCareerApi } from '@/shared/api/person-career'
 import { getPersonsByHistoricalCountryUnion } from '@/shared/api/persons'
+import { militaryUnitApi } from '@/shared/api/military-unit'
 import { listPoliticalSystems } from '@/shared/api/political-system'
 import { treatyApi } from '@/shared/api/treaty'
 import { administrationDepartmentsByHistoricalCountryQueryKey } from '@/shared/lib/ministry-department/ministry-department-query-keys'
@@ -280,6 +281,13 @@ export function useHistoricalCountryDashboard(
         staleTime: STALE_MS,
       },
     ],
+  })
+
+  const militaryUnitsQuery = useQuery({
+    queryKey: ['military-units', 'all'] as const,
+    queryFn: () => militaryUnitApi.getAll(),
+    enabled: Boolean(id),
+    staleTime: 1000 * 60 * 2,
   })
 
   const transitions: HistoricalCountryTransitionDto[] = useMemo(
@@ -612,6 +620,13 @@ export function useHistoricalCountryDashboard(
       : 0
   }, [divisionsQuery.data])
   const electionCount = elections.length
+  const departmentCount = departments.length
+  const militaryCount = useMemo(() => {
+    if (!id || !Array.isArray(militaryUnitsQuery.data)) return 0
+    return militaryUnitsQuery.data.filter(
+      (unitItem) => unitItem.historicalCountryId === id,
+    ).length
+  }, [id, militaryUnitsQuery.data])
   const administrationCount = departments.length + politicalSystems.length
   const lawCount = laws.length
   const ethnicityCount = ethnicities.length
@@ -654,6 +669,23 @@ export function useHistoricalCountryDashboard(
       filled: politicalSystems.length > 0,
       target: 'government',
       historicalTarget: 'government',
+      governmentSubTab: 'system',
+    },
+    {
+      key: 'departments',
+      label: '중앙부처·국가기관',
+      filled: departmentCount > 0,
+      target: 'government',
+      historicalTarget: 'government',
+      governmentSubTab: 'ministries',
+    },
+    {
+      key: 'military',
+      label: '군사 조직',
+      filled: militaryCount > 0,
+      target: 'government',
+      historicalTarget: 'government',
+      governmentSubTab: 'military',
     },
     {
       key: 'lineage',
@@ -720,6 +752,7 @@ export function useHistoricalCountryDashboard(
     tenures: tenuresQuery.isLoading,
     administration:
       departmentsQuery.isLoading || politicalSystemsQuery.isLoading,
+    military: militaryUnitsQuery.isLoading,
     laws: lawsQuery.isLoading,
     ethnicity: ethnicityQuery.isLoading,
     regions: divisionsQuery.isLoading,
@@ -743,6 +776,8 @@ export function useHistoricalCountryDashboard(
     membershipCount: memberships.length,
     relationCount: relations.length,
     administrationCount,
+    departmentCount,
+    militaryCount,
     divisionCount,
     electionCount,
     lawCount,

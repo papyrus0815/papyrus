@@ -72,23 +72,26 @@ export function parseDepartmentDescription(raw: string | null | undefined): {
 export function buildDepartmentDescription(
   cleanDescription: string,
   defense: DefenseDeptFormExtension | null,
-  isDefenseCategory: boolean,
+  _isDefenseCategory?: boolean,
 ): string {
   let out = cleanDescription.trim()
-  if (isDefenseCategory && defense && hasDefenseExtensionContent(defense)) {
+  if (defense && hasDefenseExtensionContent(defense)) {
     const encoded = encodeDefenseExt(defense)
     out += `\n\n${DEFENSE_MARKER_START}${encoded}${DEFENSE_MARKER_END}`
   }
   return out
 }
 
+/** 전체 부처·국가기관을 한눈에 보는 통합 탭 ID */
+export const ALL_DEPARTMENTS_CATEGORY_ID = '__all__'
+
 /** 카테고리가 미지정(`categoryId == null`)인 부처를 표시하기 위한 가상 카테고리 탭 ID */
 export const UNCATEGORIZED_CATEGORY_ID = '__uncategorized__'
 
-/** 카테고리 또는 기관 종류(`MILITARY_COMMAND`)가 국방·군사 계열인지 (등록 폼·상세 톤 분기) */
+/** 카테고리가 국방·군사 계열인지 (등록 폼·상세 톤 분기; 레거시 문자열 kind도 안전 허용) */
 export function isDefenseRelatedCategory(
   category: AdministrationDepartmentCategory | null | undefined,
-  kind?: AdministrationDepartment['kind'] | null,
+  kind?: string | null,
 ): boolean {
   if (kind === 'MILITARY_COMMAND') return true
   if (!category) return false
@@ -141,18 +144,34 @@ export function hasParentCycleInList(
 }
 
 /**
+ * 국가 전체 부처 목록에서 rootId 아래(직·간접) 자식 ID 집합 반환 (본인 미포함)
+ */
+export function collectDescendantDepartmentIds(
+  rootId: string,
+  allDepartments: AdministrationDepartment[],
+): Set<string> {
+  const result = new Set<string>()
+  const queue = [rootId]
+  while (queue.length > 0) {
+    const curId = queue.shift()!
+    for (const deptItem of allDepartments) {
+      if (deptItem.parentId === curId && !result.has(deptItem.id)) {
+        result.add(deptItem.id)
+        queue.push(deptItem.id)
+      }
+    }
+  }
+  return result
+}
+
+/**
  * 국가 전체 부처 목록에서 rootId 아래(직·간접) 자식 수 (본인 제외)
  */
 export function countDescendantsInDepartmentTree(
   rootId: string,
   allDepartments: AdministrationDepartment[],
 ): number {
-  const direct = allDepartments.filter((d) => d.parentId === rootId)
-  let n = direct.length
-  for (const c of direct) {
-    n += countDescendantsInDepartmentTree(c.id, allDepartments)
-  }
-  return n
+  return collectDescendantDepartmentIds(rootId, allDepartments).size
 }
 
 const emptyDefenseFields = (): DefenseDeptFormExtension => ({
@@ -163,6 +182,56 @@ const emptyDefenseFields = (): DefenseDeptFormExtension => ({
   budgetOrForcesNote: '',
 })
 
+function parseIsoOrStructuredDate(
+  parts: AdministrationDepartment['established'] | null | undefined,
+  isoStr: string | null | undefined,
+): {
+  era: 'AD' | 'BC'
+  year: number | null
+  month: number | null
+  day: number | null
+  isoInput: string
+} {
+  if (parts && typeof parts.year === 'number' && parts.year > 0) {
+    const era = parts.era === 'BC' ? 'BC' : 'AD'
+    const year = parts.year
+    const month = parts.month ?? null
+    const day = parts.day ?? null
+    const isoInput =
+      era === 'AD' && month != null && day != null
+        ? `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+        : ''
+    return { era, year, month, day, isoInput }
+  }
+  const raw = (isoStr ?? '').trim().split('T')[0]
+  if (!raw) {
+    return { era: 'AD', year: null, month: null, day: null, isoInput: '' }
+  }
+  if (raw.startsWith('-')) {
+    const bcMatch = raw.match(/^-(\d{1,6})-(\d{2})-(\d{2})$/)
+    if (bcMatch) {
+      return {
+        era: 'BC',
+        year: Number.parseInt(bcMatch[1], 10),
+        month: Number.parseInt(bcMatch[2], 10),
+        day: Number.parseInt(bcMatch[3], 10),
+        isoInput: '',
+      }
+    }
+  }
+  const adMatch = raw.match(/^(\d{1,4})-(\d{2})-(\d{2})$/)
+  if (adMatch) {
+    return {
+      era: 'AD',
+      year: Number.parseInt(adMatch[1], 10),
+      month: Number.parseInt(adMatch[2], 10),
+      day: Number.parseInt(adMatch[3], 10),
+      isoInput: raw,
+    }
+  }
+  return { era: 'AD', year: null, month: null, day: null, isoInput: raw }
+}
+
 export function ministryFormFieldsFromDepartment(
   dept: AdministrationDepartment,
 ) {
@@ -170,6 +239,14 @@ export function ministryFormFieldsFromDepartment(
     dept.description,
   )
   const d = defense ?? emptyDefenseFields()
+  const estParsed = parseIsoOrStructuredDate(
+    dept.established,
+    dept.establishedDate,
+  )
+  const abolParsed = parseIsoOrStructuredDate(
+    dept.abolished,
+    dept.abolishedDate,
+  )
   return {
     name: dept.name,
     nameLocal: dept.nameLocal ?? '',
@@ -181,11 +258,38 @@ export function ministryFormFieldsFromDepartment(
     categoryId: dept.categoryId ?? '',
     thumbnailUrl: dept.thumbnailUrl ?? '',
     description: cleanDescription,
-    establishedDate: dept.establishedDate
-      ? dept.establishedDate.split('T')[0]
-      : '',
-    abolishedDate: dept.abolishedDate ? dept.abolishedDate.split('T')[0] : '',
+    establishedDate: estParsed.isoInput,
+    establishedEra: estParsed.era,
+    establishedYear: estParsed.year,
+    establishedMonth: estParsed.month,
+    establishedDay: estParsed.day,
+    abolishedDate: abolParsed.isoInput,
+    abolishedEra: abolParsed.era,
+    abolishedYear: abolParsed.year,
+    abolishedMonth: abolParsed.month,
+    abolishedDay: abolParsed.day,
     successorId: dept.successors?.[0]?.department.id ?? '',
+    predecessorTransitions: (dept.predecessors ?? []).map((item) => ({
+      predecessorId: item.department.id,
+      kind: ((item.kind as string) === 'ABSORB'
+        ? 'ABSORBED'
+        : (item.kind ?? 'REORGANIZE')) as AdministrationDepartment['successors'][number]['kind'],
+      era: item.era ?? null,
+      year: item.year ?? null,
+      month: item.month ?? null,
+      note: item.note ?? null,
+    })),
+    successorTransitions: (dept.successors ?? []).map((item) => ({
+      successorId: item.department.id,
+      kind: ((item.kind as string) === 'ABSORB'
+        ? 'ABSORBED'
+        : (item.kind ?? 'REORGANIZE')) as AdministrationDepartment['successors'][number]['kind'],
+      era: item.era ?? null,
+      year: item.year ?? null,
+      month: item.month ?? null,
+      note: item.note ?? null,
+    })),
+    linkedMilitaryUnitIds: (dept.militaryUnits ?? []).map((unit) => unit.id),
     defenseOfficialNameEn: dept.nameEn ?? d.officialNameEn,
     defenseMissionScope: d.missionScope,
     defenseHeadquarters: d.headquarters,
@@ -198,21 +302,37 @@ export function emptyMinistryFormFields(
   categoryId: string,
   parentId = '',
   historicalCountryId = '',
+  defaultKind: NonNullable<AdministrationDepartment['kind']> = 'MINISTRY',
 ) {
   return {
     name: '',
     nameLocal: '',
     nameEn: '',
     abbreviation: '',
-    kind: 'MINISTRY' as const,
+    kind: defaultKind,
     historicalCountryId,
     parentId,
-    categoryId: categoryId === UNCATEGORIZED_CATEGORY_ID ? '' : categoryId,
+    categoryId:
+      categoryId === UNCATEGORIZED_CATEGORY_ID ||
+      categoryId === ALL_DEPARTMENTS_CATEGORY_ID
+        ? ''
+        : categoryId,
     thumbnailUrl: '',
     description: '',
     establishedDate: '',
+    establishedEra: 'AD' as const,
+    establishedYear: null as number | null,
+    establishedMonth: null as number | null,
+    establishedDay: null as number | null,
     abolishedDate: '',
+    abolishedEra: 'AD' as const,
+    abolishedYear: null as number | null,
+    abolishedMonth: null as number | null,
+    abolishedDay: null as number | null,
     successorId: '',
+    predecessorTransitions: [],
+    successorTransitions: [],
+    linkedMilitaryUnitIds: [],
     defenseOfficialNameEn: '',
     defenseMissionScope: '',
     defenseHeadquarters: '',
@@ -245,11 +365,12 @@ export function filterDepartmentsBySearchQuery(
   })
 }
 
-/** 국가 부처 목록으로 카테고리별 개수 (탭 배지용, 미분류 포함) */
+/** 국가 부처 목록으로 카테고리별 개수 (탭 배지용, 전체·미분류 포함) */
 export function countDepartmentsByCategoryId(
   departments: AdministrationDepartment[],
 ): Map<string, number> {
   const m = new Map<string, number>()
+  m.set(ALL_DEPARTMENTS_CATEGORY_ID, departments.length)
   for (const d of departments) {
     const cid = d.categoryId || UNCATEGORIZED_CATEGORY_ID
     m.set(cid, (m.get(cid) ?? 0) + 1)

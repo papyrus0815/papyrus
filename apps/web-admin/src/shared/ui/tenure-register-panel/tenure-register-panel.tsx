@@ -18,6 +18,12 @@ import {
   type CreateGovernmentPositionTenureDto,
 } from '@/shared/api/person-career'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
+import {
+  militaryUnitApi,
+  type MilitaryBranch,
+  type MilitaryUnitType,
+} from '@/shared/api/military-unit'
+import { getPoliticalParties } from '@/shared/api/election'
 import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
 import { personKeys } from '@/entities/person/query-keys'
 import { getPersonDetailById } from '@/shared/api/persons-detail'
@@ -906,19 +912,465 @@ const POSITION_TYPE_SHORT_LABELS: Record<string, string> = {
   HEAD_OF_STATE: '국가원수',
   DEPUTY_HEAD_OF_STATE: '부통령·부원수',
   HEAD_OF_GOVERNMENT: '정부수반',
+  REGENT: '섭정',
+  HEIR_APPARENT: '왕위계승자',
   CABINET_MINISTER: '각료·장관',
   VICE_MINISTER: '차관',
   LEGISLATOR: '의원·입법',
+  JUDICIARY: '사법',
+  LOCAL_GOVERNMENT: '지방관·총독',
   GOVERNOR: '지방장관',
+  SPECIAL_POSITION: '특별 직위',
+  DIPLOMATIC_POST: '외교 사절',
   MILITARY_COMMANDER: '군 지휘관',
   DIPLOMAT: '외교관',
+  ROYAL_NOBLE_TITLE: '작위·칭호',
   NOBLE: '작위·칭호',
+  OTHER: '기타 직위',
 }
 
-interface CustomDropboxOption {
+const DEFAULT_RANK_BY_POSITION_TYPE: Record<string, number> = {
+  HEAD_OF_STATE: 1,
+  HEAD_OF_GOVERNMENT: 1,
+  DEPUTY_HEAD_OF_STATE: 2,
+  REGENT: 2,
+  HEIR_APPARENT: 2,
+  CABINET_MINISTER: 2,
+  VICE_MINISTER: 3,
+  MILITARY_COMMANDER: 3,
+  DIPLOMATIC_POST: 3,
+  LOCAL_GOVERNMENT: 3,
+  LEGISLATOR: 3,
+  JUDICIARY: 3,
+  SPECIAL_POSITION: 4,
+  ROYAL_NOBLE_TITLE: 3,
+  OTHER: 5,
+}
+
+const INLINE_POSITION_TYPE_OPTIONS: ReadonlyArray<{
   value: string
   label: string
-  description?: string
+  description: string
+}> = [
+  {
+    value: 'HEAD_OF_STATE',
+    label: '국가원수 (대통령·국왕·황제·최고지도자)',
+    description: '기본 서열 1 · 국가 대표 및 통수권자',
+  },
+  {
+    value: 'HEAD_OF_GOVERNMENT',
+    label: '정부수반 (총리·내각총리대신·영의정)',
+    description: '기본 서열 1 · 내각 및 행정부 수장',
+  },
+  {
+    value: 'DEPUTY_HEAD_OF_STATE',
+    label: '부원수 (부통령·국가부주석)',
+    description: '기본 서열 2 · 국가원수 차석 직위',
+  },
+  {
+    value: 'REGENT',
+    label: '섭정·국정대리',
+    description: '기본 서열 2 · 군주 권한 대행 직위',
+  },
+  {
+    value: 'CABINET_MINISTER',
+    label: '각료·장관 (대신·상서·판서)',
+    description: '기본 서열 2 · 중앙부처 수장 및 내각 구성원',
+  },
+  {
+    value: 'VICE_MINISTER',
+    label: '차관·부대신·참판',
+    description: '기본 서열 3 · 부처 차석 정무직',
+  },
+  {
+    value: 'MILITARY_COMMANDER',
+    label: '군 지휘관 (참모총장·사령관·원수)',
+    description: '기본 서열 3 · 군령·작전 지휘 직위',
+  },
+  {
+    value: 'DIPLOMATIC_POST',
+    label: '외교 사절 (대사·공사·영사)',
+    description: '기본 서열 3 · 재외공관장 및 외교 대표',
+  },
+  {
+    value: 'LOCAL_GOVERNMENT',
+    label: '지방관·총독 (주지사·도지사·총독·관찰사)',
+    description: '기본 서열 3 · 지방 및 식민 통치 수장',
+  },
+  {
+    value: 'LEGISLATOR',
+    label: '입법·의회직 (국회의장·상원의원·의원)',
+    description: '기본 서열 3 · 의회 의장단 및 의원',
+  },
+  {
+    value: 'JUDICIARY',
+    label: '사법직 (대법원장·대법관·검찰총장)',
+    description: '기본 서열 3 · 최고 사법기관 직위',
+  },
+  {
+    value: 'SPECIAL_POSITION',
+    label: '특별 직위 (특사·고문·위원장·궁내관)',
+    description: '기본 서열 4 · 특별 보직 및 독립기구 직위',
+  },
+  {
+    value: 'ROYAL_NOBLE_TITLE',
+    label: '왕실·귀족 작위 (공작·후작·백작)',
+    description: '기본 서열 3 · 세습 또는 봉작 칭호',
+  },
+]
+
+const INLINE_RANK_PRESETS: ReadonlyArray<{ rank: number; label: string }> = [
+  { rank: 1, label: '1 · 최고(수반·핵심)' },
+  { rank: 2, label: '2 · 상급(부수반·장관)' },
+  { rank: 3, label: '3 · 정무·지휘(장관·참모총장)' },
+  { rank: 4, label: '4 · 차관·실무급' },
+  { rank: 5, label: '5 · 기타·하위직' },
+]
+
+const INLINE_DEPARTMENT_KIND_OPTIONS: ReadonlyArray<{
+  value: string
+  label: string
+  description: string
+}> = [
+  {
+    value: 'MINISTRY',
+    label: '중앙부처 (부·성·처)',
+    description: '예: 국방부, 외무성, 재무부, 병조',
+  },
+  {
+    value: 'AGENCY',
+    label: '외청 · 위원회 · 독립기구',
+    description: '예: 국가기획위원회, 중앙정보국, 경찰청',
+  },
+  {
+    value: 'ROYAL_HOUSEHOLD',
+    label: '왕실 · 황실 · 궁내부',
+    description: '예: 궁내성, 종친부, 내수사',
+  },
+  {
+    value: 'COLONIAL_GOVERNMENT',
+    label: '총독부 · 식민통치기구',
+    description: '예: 인도 총독부, 조선총독부',
+  },
+  {
+    value: 'OTHER',
+    label: '기타 국가기관',
+    description: '그 밖의 중앙 행정·통치 기구',
+  },
+]
+
+export type TenureAffiliationTrack = 'HEAD' | 'DEPARTMENT' | 'MILITARY' | 'OTHER'
+
+const AFFILIATION_TRACK_OPTIONS: ReadonlyArray<{
+  value: TenureAffiliationTrack
+  label: string
+  subLabel: string
+}> = [
+  {
+    value: 'HEAD',
+    label: '국가원수 · 수반',
+    subLabel: '대통령 · 총리 · 군주',
+  },
+  {
+    value: 'DEPARTMENT',
+    label: '중앙부처 · 행정기관',
+    subLabel: '장관 · 차관 · 총독 · 청장',
+  },
+  {
+    value: 'MILITARY',
+    label: '군사 사령부 · 부대',
+    subLabel: '사령관 · 참모총장 · 지휘관',
+  },
+  {
+    value: 'OTHER',
+    label: '의회 · 외교 · 기타',
+    subLabel: '의원 · 대사 · 법관 · 작위',
+  },
+]
+
+const MILITARY_UNIT_TYPE_LABELS: Record<string, string> = {
+  HIGH_COMMAND: '최고사령부',
+  GENERAL_STAFF: '참모본부',
+  ARMY_GROUP: '집단군·전선군',
+  FIELD_ARMY: '야전군',
+  CORPS: '군단',
+  DIVISION: '사단',
+  BRIGADE: '여단',
+  REGIMENT: '연대',
+  FLEET: '함대',
+  AIR_FLEET: '항공함대·항공군',
+  GARRISON: '주둔군·방어사령부',
+  OTHER: '기타 부대',
+}
+
+const INLINE_MILITARY_UNIT_TYPE_OPTIONS: ReadonlyArray<{
+  value: MilitaryUnitType
+  label: string
+  description: string
+}> = [
+  {
+    value: 'HIGH_COMMAND',
+    label: '최고사령부 (OKW·STAVKA·합참)',
+    description: '전군 또는 전구 최고 통수·작전 사령부',
+  },
+  {
+    value: 'GENERAL_STAFF',
+    label: '참모본부 (OKH·육군참모본부)',
+    description: '군종별 참모본부 및 작전 지도부',
+  },
+  {
+    value: 'ARMY_GROUP',
+    label: '집단군 · 전선군',
+    description: '복수 야전군을 지휘하는 전략 제대',
+  },
+  {
+    value: 'FIELD_ARMY',
+    label: '야전군',
+    description: '예: 제6군, 제8군, 기갑군',
+  },
+  {
+    value: 'CORPS',
+    label: '군단',
+    description: '복수 사단을 지휘하는 작전 제대',
+  },
+  {
+    value: 'DIVISION',
+    label: '사단',
+    description: '예: 제7기갑사단, 제101공수사단',
+  },
+  {
+    value: 'FLEET',
+    label: '함대 · 해군사령부',
+    description: '예: 연합함대, 태평양함대, 전쟁해군최고사령부(OKM)',
+  },
+  {
+    value: 'AIR_FLEET',
+    label: '항공함대 · 공군사령부',
+    description: '예: 제2항공함대, 공군최고사령부(OKL)',
+  },
+  {
+    value: 'OTHER',
+    label: '기타 군사조직 · 부대',
+    description: '여단, 연대, 주둔군, 독립부대 등',
+  },
+]
+
+const INLINE_MILITARY_BRANCH_OPTIONS: ReadonlyArray<{
+  value: MilitaryBranch
+  label: string
+}> = [
+  { value: 'JOINT', label: '합동 · 통합군' },
+  { value: 'ARMY', label: '육군' },
+  { value: 'NAVY', label: '해군' },
+  { value: 'AIR_FORCE', label: '공군' },
+  { value: 'MARINES', label: '해병대' },
+  { value: 'PARAMILITARY', label: '준군사조직 · 친위대' },
+  { value: 'OTHER', label: '기타 군종' },
+]
+
+const DEPARTMENT_ROLE_PRESETS: ReadonlyArray<{
+  label: string
+  positionType: string
+  suffix: string
+}> = [
+  { label: '장관', positionType: 'CABINET_MINISTER', suffix: '장관' },
+  { label: '대신', positionType: 'CABINET_MINISTER', suffix: '대신' },
+  { label: '판서·상서', positionType: 'CABINET_MINISTER', suffix: '판서' },
+  { label: '차관', positionType: 'VICE_MINISTER', suffix: '차관' },
+  { label: '총독', positionType: 'LOCAL_GOVERNMENT', suffix: '총독' },
+  { label: '청장·원장', positionType: 'SPECIAL_POSITION', suffix: '청장' },
+  { label: '위원장', positionType: 'SPECIAL_POSITION', suffix: '위원장' },
+]
+
+const MILITARY_ROLE_PRESETS: ReadonlyArray<string> = [
+  '총사령관',
+  '사령관',
+  '참모총장',
+  '참모장',
+  '작전부장',
+  '군단장',
+  '사단장',
+  '함대사령관',
+  '지휘관',
+]
+
+const MILITARY_RANK_PRESETS: ReadonlyArray<string> = [
+  '원수',
+  '상급대장',
+  '대장',
+  '중장',
+  '소장',
+  '준장',
+  '대령',
+  '제독',
+]
+
+const TrackGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  @media (max-width: 720px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const TrackCardBtn = styled.button<{ $active?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  border: 1px solid
+    ${({ $active, theme }) => ($active ? kitC(theme).focus : kitC(theme).border)};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(139, 92, 246, 0.16)'
+        : '#f5f3ff'
+      : kitC(theme).section};
+  color: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '#ddd6fe'
+        : '#4c1d95'
+      : kitC(theme).textPrimary};
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.14s ease, background 0.14s ease;
+
+  &:hover {
+    border-color: ${({ $active, theme }) =>
+      $active ? kitC(theme).focus : kitC(theme).borderHover};
+  }
+`
+
+const TrackCardTitle = styled.span`
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+`
+
+const TrackCardSub = styled.span`
+  font-size: 11px;
+  font-weight: 500;
+  color: ${({ theme }) => kitC(theme).textMuted};
+`
+
+function deriveAffiliationTrack(params: {
+  militaryUnitId?: string | null
+  administrationDepartmentId?: string | null
+  cabinetId?: string | null
+  positionType?: string | null
+  isMonarchical?: boolean | null
+}): TenureAffiliationTrack {
+  if (params.militaryUnitId || params.positionType === 'MILITARY_COMMANDER') {
+    return 'MILITARY'
+  }
+  if (
+    params.administrationDepartmentId ||
+    params.cabinetId ||
+    params.positionType === 'CABINET_MINISTER' ||
+    params.positionType === 'VICE_MINISTER'
+  ) {
+    return 'DEPARTMENT'
+  }
+  if (
+    params.isMonarchical ||
+    !params.positionType ||
+    params.positionType === 'HEAD_OF_STATE' ||
+    params.positionType === 'HEAD_OF_GOVERNMENT' ||
+    params.positionType === 'DEPUTY_HEAD_OF_STATE' ||
+    params.positionType === 'REGENT' ||
+    params.positionType === 'HEIR_APPARENT' ||
+    params.positionType === 'MONARCH'
+  ) {
+    return 'HEAD'
+  }
+  return 'OTHER'
+}
+
+interface EditingTenureRecord {
+  id: string
+  positionType?: string | null
+  positionDefinitionId?: string | null
+  positionDefinition?:
+    | (PositionDefinitionLike & {
+        categoryId?: string | null
+        administrationDepartmentId?: string | null
+      })
+    | null
+  isMonarchical?: boolean | null
+  title?: string | null
+  titleEn?: string | null
+  rankTitle?: string | null
+  partyId?: string | null
+  party?: { id: string; name: string; shortName?: string | null } | null
+  countryId?: string | null
+  country?: { id: string; name?: string | null } | null
+  historicalCountryId?: string | null
+  historicalCountry?: { id: string; name?: string | null } | null
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
+  startEra?: string | null
+  startDate?: string | null
+  startDatePrecision?: string | null
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
+  endEra?: string | null
+  endDate?: string | null
+  endDatePrecision?: string | null
+  regnalName?: string | null
+  accessionEventId?: string | null
+  accessionEvent?: { id: string; title?: string | null } | null
+  ordinal?: number | null
+  subTermNumber?: number | null
+  dynastyOrdinal?: number | null
+  appointmentMethod?: string | null
+  appointmentDetail?: string | null
+  endReason?: string | null
+  endReasonDetail?: string | null
+  notes?: string | null
+  showPositionInfo?: boolean | null
+  cabinetId?: string | null
+  cabinet?: { id: string; name?: string | null } | null
+  cabinets?: Array<{ id: string; name?: string | null }> | null
+  cabinetMemberships?: Array<{
+    cabinetId: string
+    cabinet?: { id?: string; name?: string | null } | null
+  }> | null
+  administrationDepartmentId?: string | null
+  administrationDepartment?: {
+    id: string
+    name: string
+    abbreviation?: string | null
+    historicalCountry?: { id: string; name: string } | null
+  } | null
+  militaryUnitId?: string | null
+  militaryUnit?: {
+    id: string
+    name: string
+    abbreviation?: string | null
+    unitType?: string | null
+    branch?: string | null
+    historicalCountry?: { id: string; name: string } | null
+  } | null
+}
+
+interface CabinetListItem {
+  id: string
+  name?: string | null
+  startDate?: string | null
+  endDate?: string | null
+  headTenure?: {
+    title?: string | null
+    startDate?: string | null
+    endDate?: string | null
+    person?: { name?: string | null; surname?: string | null } | null
+    positionDefinition?: { title?: string | null } | null
+  } | null
 }
 
 interface CustomDropboxProps {
@@ -1105,6 +1557,12 @@ function CustomDropbox({
   )
 }
 
+interface CustomDropboxOption {
+  value: string
+  label: string
+  description?: string
+}
+
 export interface TenureRegisterPanelProps {
   personId: string
   open: boolean
@@ -1121,6 +1579,10 @@ export interface TenureRegisterPanelProps {
   initialAdministrationDepartmentId?: string | null
   /** 부처 슬롯에서 열 때 화면에 표시할 부처 이름 */
   initialAdministrationDepartmentName?: string | null
+  /** 군사 사령부·부대 지면에서 열 때 — 해당 MilitaryUnit 소속으로 저장한다 */
+  initialMilitaryUnitId?: string | null
+  /** 군사 사령부·부대 슬롯에서 열 때 화면에 표시할 부대 이름 */
+  initialMilitaryUnitName?: string | null
   /** 정체·마인드맵에서 열 때 미리 고를 직책 정의 ID */
   initialPositionDefinitionId?: string | null
   /** 마인드맵·정체 직책 슬롯에서 열 때 미리 고를 직책 정의·직함 이름 (예: 대통령, 국왕, 외무장관) */
@@ -1170,6 +1632,8 @@ export function TenureRegisterPanel({
   defaultCabinetId,
   initialAdministrationDepartmentId,
   initialAdministrationDepartmentName,
+  initialMilitaryUnitId,
+  initialMilitaryUnitName,
   initialPositionDefinitionId,
   initialPositionTitle,
   initialPositionType,
@@ -1196,6 +1660,15 @@ export function TenureRegisterPanel({
   const latestSnapshotRef = useRef('')
   const [activeSectionId, setActiveSectionId] = useState<string>(TENURE_SECTION_LINKS[0].id)
 
+  const [affiliationTrack, setAffiliationTrack] = useState<TenureAffiliationTrack>(() =>
+    deriveAffiliationTrack({
+      militaryUnitId: initialMilitaryUnitId,
+      administrationDepartmentId: initialAdministrationDepartmentId,
+      cabinetId: initialCabinetId,
+      positionType: initialPositionType,
+      isMonarchical: defaultMonarchical,
+    }),
+  )
   const [monarchicalMode, setMonarchicalMode] = useState(defaultMonarchical)
   const [countryId, setCountryId] = useState('')
   const [historicalCountryId, setHistoricalCountryId] = useState<string | null>(null)
@@ -1204,6 +1677,14 @@ export function TenureRegisterPanel({
   const [presetPositionType, setPresetPositionType] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [titleEn, setTitleEn] = useState('')
+  /** 계급·칭호 — 예: 원수, 상급대장, 중장 */
+  const [rankTitle, setRankTitle] = useState('')
+  /** 재임 당시 소속 정당 */
+  const [partyId, setPartyId] = useState<string | null>(null)
+  /** 소속 군사 사령부·부대 ID */
+  const [militaryUnitId, setMilitaryUnitId] = useState<string | null>(null)
+  /** 복수 내각(행정부) 소속 ID 목록 */
+  const [selectedCabinetIds, setSelectedCabinetIds] = useState<string[]>([])
   /**
    * 「외무장관」을 고른 뒤 이 나라에서 부르는 이름(외무대신)으로 바꾸는 입력.
    * 고른 정의 위에 다른 표기를 덧씌우는 게 아니라, 그 나라 전용 정의를 새로 담는다 —
@@ -1218,6 +1699,29 @@ export function TenureRegisterPanel({
   const [specificTitleOpen, setSpecificTitleOpen] = useState(false)
   const [localTitleDraft, setLocalTitleDraft] = useState('')
   const [localTitleSaving, setLocalTitleSaving] = useState(false)
+  /** 인라인 정식 직위 정의(GovernmentPositionDefinition) 생성 폼 상태 */
+  const [newPosOpen, setNewPosOpen] = useState(false)
+  const [newPosTitle, setNewPosTitle] = useState('')
+  const [newPosTitleEn, setNewPosTitleEn] = useState('')
+  const [newPosType, setNewPosType] = useState<string>('CABINET_MINISTER')
+  const [newPosRank, setNewPosRank] = useState<string>('2')
+  const [newPosIsMonarchical, setNewPosIsMonarchical] = useState(false)
+  const [newPosScoped, setNewPosScoped] = useState(true)
+  const [newPosSaving, setNewPosSaving] = useState(false)
+  /** 인라인 소속 기관·부처(AdministrationDepartment) 즉석 생성 폼 상태 */
+  const [newDeptOpen, setNewDeptOpen] = useState(false)
+  const [newDeptName, setNewDeptName] = useState('')
+  const [newDeptNameEn, setNewDeptNameEn] = useState('')
+  const [newDeptKind, setNewDeptKind] = useState<string>('MINISTRY')
+  const [newDeptCategoryId, setNewDeptCategoryId] = useState<string>('')
+  const [newDeptSaving, setNewDeptSaving] = useState(false)
+  /** 인라인 군사 사령부·부대(MilitaryUnit) 즉석 생성 폼 상태 */
+  const [newUnitOpen, setNewUnitOpen] = useState(false)
+  const [newUnitName, setNewUnitName] = useState('')
+  const [newUnitAbbr, setNewUnitAbbr] = useState('')
+  const [newUnitType, setNewUnitType] = useState<MilitaryUnitType>('HIGH_COMMAND')
+  const [newUnitBranch, setNewUnitBranch] = useState<MilitaryBranch>('JOINT')
+  const [newUnitSaving, setNewUnitSaving] = useState(false)
   /** 기간 — 구조화 파츠(기원전·연 단위까지). 월·일을 비우면 그만큼만 안다는 뜻 */
   const [start, setStart] = useState<PartialDateParts>(emptyPartialDateParts())
   const [end, setEnd] = useState<PartialDateParts>(emptyPartialDateParts())
@@ -1242,7 +1746,7 @@ export function TenureRegisterPanel({
   const [endReasonDetail, setEndReasonDetail] = useState('')
   const [notes, setNotes] = useState('')
   const [showOnEvents, setShowOnEvents] = useState(true)
-  const [cabinetId, setCabinetId] = useState<string | null>(null)
+  const cabinetId = selectedCabinetIds[0] ?? null
   const [administrationDepartmentId, setAdministrationDepartmentId] = useState<string | null>(null)
   const [eventAttachModalOpen, setEventAttachModalOpen] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
@@ -1396,16 +1900,39 @@ export function TenureRegisterPanel({
   })
 
   const cabinetOptions: SelectOption<string>[] = useMemo(() => {
-    return (cabinets as any[]).map((c: any) => {
-      const head = c.headTenure
+    return (cabinets as CabinetListItem[]).map((cabinetItem) => {
+      const head = cabinetItem.headTenure
+      if (!head) {
+        const startYear = cabinetItem.startDate
+          ? parseIsoDateParts(cabinetItem.startDate)?.year ?? ''
+          : ''
+        const endYear = cabinetItem.endDate
+          ? parseIsoDateParts(cabinetItem.endDate)?.year ?? ''
+          : '현재'
+        const range = startYear && endYear ? ` (${startYear}~${endYear})` : ''
+        return {
+          value: cabinetItem.id,
+          label: `${cabinetItem.name || '집단지도 · 과도정부'}${range}`,
+        }
+      }
       const personName = head?.person?.name ?? head?.person?.surname ?? '이름 없음'
-      const posTitle = head?.title ?? head?.positionDefinition?.title ?? c.name ?? '행정부'
+      const posTitle =
+        cabinetItem.name?.trim() ||
+        head?.title ||
+        head?.positionDefinition?.title ||
+        '행정부'
       // 연도는 문자열에서 직접 추출(TZ 안전) — getFullYear()는 UTC 서쪽 타임존에서 1월 1일 시작 임기를 전년도로 보여준다
-      const headStartYear = head?.startDate ? parseIsoDateParts(head.startDate)?.year ?? '' : ''
-      const headEndYear = head?.endDate ? parseIsoDateParts(head.endDate)?.year ?? '' : '현재'
+      const effectiveStart = cabinetItem.startDate ?? head?.startDate
+      const effectiveEnd = cabinetItem.endDate ?? head?.endDate
+      const headStartYear = effectiveStart
+        ? parseIsoDateParts(effectiveStart)?.year ?? ''
+        : ''
+      const headEndYear = effectiveEnd
+        ? parseIsoDateParts(effectiveEnd)?.year ?? ''
+        : '현재'
       const range = headStartYear && headEndYear ? ` (${headStartYear}~${headEndYear})` : ''
       return {
-        value: c.id,
+        value: cabinetItem.id,
         label: `${personName} - ${posTitle}${range}`,
       }
     })
@@ -1426,8 +1953,10 @@ export function TenureRegisterPanel({
     enabled: open && !!personId && !!tenureId,
   })
 
-  const editingTenure = tenureId
-    ? (personTenures as any[]).find((t: any) => t.id === tenureId)
+  const editingTenure: EditingTenureRecord | null = tenureId
+    ? ((personTenures as EditingTenureRecord[]).find(
+        (tenureItem) => tenureItem.id === tenureId,
+      ) ?? null)
     : null
 
   const { data: departments = [] } = useQuery({
@@ -1443,48 +1972,75 @@ export function TenureRegisterPanel({
     enabled: open && (!!countryId || !!historicalCountryId),
   })
 
+  const { data: departmentCategories = [] } = useQuery({
+    queryKey: ['administration-department-categories'],
+    queryFn: () =>
+      typeof administrationDepartmentApi.getCategories === 'function'
+        ? administrationDepartmentApi.getCategories()
+        : Promise.resolve([]),
+    enabled: open && newDeptOpen,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const { data: militaryUnits = [] } = useQuery({
+    queryKey: [
+      'military-units',
+      historicalCountryId ? 'by-historical-country' : 'by-country',
+      historicalCountryId || countryId,
+    ],
+    queryFn: () =>
+      historicalCountryId
+        ? militaryUnitApi.getByHistoricalCountryId(historicalCountryId)
+        : militaryUnitApi.getByCountryId(countryId),
+    enabled: open && (!!countryId || !!historicalCountryId),
+  })
+
+  const { data: politicalParties = [] } = useQuery({
+    queryKey: ['political-parties', countryId, historicalCountryId],
+    queryFn: () =>
+      getPoliticalParties({
+        countryId: countryId || undefined,
+        historicalCountryId: historicalCountryId || undefined,
+      }),
+    enabled: open && (!!countryId || !!historicalCountryId),
+  })
+
   const departmentOptions: SelectOption<string>[] = useMemo(() => {
-    const formatDeptLabel = (d: {
+    const formatDeptLabel = (dept: {
       name: string
       abbreviation?: string | null
       historicalCountry?: { id: string; name: string } | null
     }) => {
-      const base = d.abbreviation?.trim()
-        ? `${d.name} (${d.abbreviation.trim()})`
-        : d.name
-      return !historicalCountryId && d.historicalCountry?.name
-        ? `${base} [${d.historicalCountry.name}]`
+      const base = dept.abbreviation?.trim()
+        ? `${dept.name} (${dept.abbreviation.trim()})`
+        : dept.name
+      return !historicalCountryId && dept.historicalCountry?.name
+        ? `${base} [${dept.historicalCountry.name}]`
         : base
     }
     const opts = (
       departments as Array<{
         id: string
         name: string
+        kind?: string | null
         abbreviation?: string | null
         historicalCountryId?: string | null
         historicalCountry?: { id: string; name: string } | null
       }>
     )
-      .filter((d) =>
+      .filter((dept) => dept.kind !== 'MILITARY_COMMAND')
+      .filter((dept) =>
         historicalCountryId
-          ? !d.historicalCountryId ||
-            d.historicalCountryId === historicalCountryId
+          ? !dept.historicalCountryId ||
+            dept.historicalCountryId === historicalCountryId
           : true,
       )
-      .map((d) => ({
-        value: d.id,
-        label: formatDeptLabel(d),
+      .map((dept) => ({
+        value: dept.id,
+        label: formatDeptLabel(dept),
       }))
-    const pinnedDept = (editingTenure as any)?.administrationDepartment as
-      | {
-          id: string
-          name: string
-          abbreviation?: string | null
-          historicalCountry?: { id: string; name: string } | null
-        }
-      | null
-      | undefined
-    if (pinnedDept?.id && !opts.some((o) => o.value === pinnedDept.id)) {
+    const pinnedDept = editingTenure?.administrationDepartment
+    if (pinnedDept?.id && !opts.some((opt) => opt.value === pinnedDept.id)) {
       opts.push({
         value: pinnedDept.id,
         label: formatDeptLabel(pinnedDept),
@@ -1492,6 +2048,92 @@ export function TenureRegisterPanel({
     }
     return opts
   }, [departments, editingTenure, historicalCountryId])
+
+  const militaryUnitOptions: CustomDropboxOption[] = useMemo(() => {
+    const formatUnitOption = (unitItem: {
+      id: string
+      name: string
+      abbreviation?: string | null
+      unitType?: string | null
+      branch?: string | null
+      historicalCountry?: { id: string; name: string } | null
+    }): CustomDropboxOption => {
+      const baseName = unitItem.abbreviation?.trim()
+        ? `${unitItem.name} (${unitItem.abbreviation.trim()})`
+        : unitItem.name
+      const scopedLabel =
+        !historicalCountryId && unitItem.historicalCountry?.name
+          ? `${baseName} [${unitItem.historicalCountry.name}]`
+          : baseName
+      const typeLabel = unitItem.unitType
+        ? MILITARY_UNIT_TYPE_LABELS[unitItem.unitType] ?? unitItem.unitType
+        : ''
+      return {
+        value: unitItem.id,
+        label: scopedLabel,
+        description: typeLabel || undefined,
+      }
+    }
+    const unitOpts = (
+      militaryUnits as Array<{
+        id: string
+        name: string
+        abbreviation?: string | null
+        unitType?: string | null
+        branch?: string | null
+        historicalCountryId?: string | null
+        historicalCountry?: { id: string; name: string } | null
+      }>
+    )
+      .filter((unitItem) =>
+        historicalCountryId
+          ? !unitItem.historicalCountryId ||
+            unitItem.historicalCountryId === historicalCountryId
+          : true,
+      )
+      .map(formatUnitOption)
+    const pinnedUnit = editingTenure?.militaryUnit
+    if (pinnedUnit?.id && !unitOpts.some((option) => option.value === pinnedUnit.id)) {
+      unitOpts.push(formatUnitOption(pinnedUnit))
+    } else if (
+      initialMilitaryUnitId &&
+      initialMilitaryUnitName &&
+      !unitOpts.some((option) => option.value === initialMilitaryUnitId)
+    ) {
+      unitOpts.push({
+        value: initialMilitaryUnitId,
+        label: initialMilitaryUnitName,
+      })
+    }
+    return unitOpts
+  }, [
+    militaryUnits,
+    editingTenure,
+    historicalCountryId,
+    initialMilitaryUnitId,
+    initialMilitaryUnitName,
+  ])
+
+  const politicalPartyOptions: CustomDropboxOption[] = useMemo(() => {
+    const partyOpts: CustomDropboxOption[] = politicalParties.map((partyItem) => ({
+      value: partyItem.id,
+      label:
+        partyItem.shortName && partyItem.shortName !== partyItem.name
+          ? `${partyItem.name} (${partyItem.shortName})`
+          : partyItem.name,
+    }))
+    const pinnedParty = editingTenure?.party
+    if (pinnedParty?.id && !partyOpts.some((option) => option.value === pinnedParty.id)) {
+      partyOpts.push({
+        value: pinnedParty.id,
+        label:
+          pinnedParty.shortName && pinnedParty.shortName !== pinnedParty.name
+            ? `${pinnedParty.name} (${pinnedParty.shortName})`
+            : pinnedParty.name,
+      })
+    }
+    return partyOpts
+  }, [politicalParties, editingTenure])
 
   /** 재위로 연 경우(재위 추가·재위 수정) — 피커를 군주 칭호 우선으로 */
   const reignEntry = isEdit ? (editingTenure as any)?.isMonarchical === true : monarchicalMode
@@ -1645,14 +2287,326 @@ export function TenureRegisterPanel({
   const isPositionGroupExpanded = (group: string): boolean =>
     positionQuery.trim() ? true : isPositionGroupExpandedByState(group)
 
+  const openNewPositionCreator = (preset?: {
+    title?: string
+    titleEn?: string
+    positionType?: string
+    rank?: number | null
+    isMonarchical?: boolean
+  }) => {
+    const fallbackType =
+      preset?.positionType ??
+      selectedDef?.positionType ??
+      (affiliationTrack === 'MILITARY'
+        ? 'MILITARY_COMMANDER'
+        : isMinisterFlowForFilter
+          ? 'CABINET_MINISTER'
+          : reignPickerEntry
+            ? 'HEAD_OF_STATE'
+            : 'CABINET_MINISTER')
+    const defaultRank =
+      preset?.rank != null && preset.rank > 0 && preset.rank < 999
+        ? preset.rank
+        : (DEFAULT_RANK_BY_POSITION_TYPE[fallbackType] ?? 3)
+    setNewPosTitle(preset?.title ?? '')
+    setNewPosTitleEn(preset?.titleEn ?? '')
+    setNewPosType(fallbackType)
+    setNewPosRank(String(defaultRank))
+    setNewPosIsMonarchical(Boolean(preset?.isMonarchical ?? reignPickerEntry))
+    setNewPosScoped(Boolean(countryId || historicalCountryId))
+    setNewPosOpen(true)
+    setManualEntryOpen(false)
+    setLocalTitleOpen(false)
+    setPositionModalOpen(false)
+  }
+
+  const handleCreateInlinePositionDefinition = async () => {
+    const trimmedTitle = newPosTitle.trim()
+    if (!trimmedTitle) {
+      notify.error('새 직책의 한글 명칭을 입력해 주세요.')
+      return
+    }
+    if (newPosScoped && !countryId && !historicalCountryId) {
+      notify.error('이 국가 전용 직책으로 등록하려면 먼저 국가를 선택해 주세요.')
+      return
+    }
+    const parsedRank = parseInt(newPosRank, 10)
+    const effectiveRank =
+      Number.isFinite(parsedRank) && parsedRank >= 1 && parsedRank < 999
+        ? parsedRank
+        : (DEFAULT_RANK_BY_POSITION_TYPE[newPosType] ?? 3)
+
+    // 이미 현재 국가 풀에 동일한 명칭·유형의 정식 정의가 있으면 재사용
+    const existing = definitionPool.find(
+      (candidate) =>
+        !candidate.isGeneric &&
+        (candidate.title ?? candidate.name ?? '').trim() === trimmedTitle &&
+        (!candidate.positionType || candidate.positionType === newPosType),
+    )
+    if (existing) {
+      setPositionDefinitionId(existing.id)
+      setTitle('')
+      setTitleEn(existing.titleEn ?? '')
+      setPresetPositionType(null)
+      setNewPosOpen(false)
+      notify.success(`이미 등록된 「${trimmedTitle}」 직책을 선택했습니다.`)
+      return
+    }
+
+    const selectedDeptObj = administrationDepartmentId
+      ? (
+          departments as Array<{
+            id: string
+            categoryId?: string | null
+          }>
+        ).find((deptItem) => deptItem.id === administrationDepartmentId)
+      : undefined
+
+    setNewPosSaving(true)
+    try {
+      const created = (await personCareerApi.createPositionDefinition({
+        title: trimmedTitle,
+        titleEn: newPosTitleEn.trim() || null,
+        positionType: newPosType,
+        rank: effectiveRank,
+        isMonarchical: newPosIsMonarchical,
+        administrationDepartmentId: administrationDepartmentId || null,
+        categoryId: selectedDeptObj?.categoryId ?? selectedDef?.categoryId ?? null,
+      })) as { id?: string } | null
+
+      if (!created?.id) {
+        throw new Error('직책 정의를 생성하지 못했습니다.')
+      }
+
+      if (newPosScoped && (countryId || historicalCountryId)) {
+        try {
+          await personCareerApi.addPositionDefinitionScope(created.id, {
+            countryId: countryId || null,
+            historicalCountryId: historicalCountryId || null,
+            note: `${trimmedTitle} (국가 직위 등록)`,
+          })
+        } catch {
+          try {
+            await personCareerApi.deletePositionDefinition(created.id)
+          } catch {
+            // ignore cleanup error
+          }
+          throw new Error('국가 전용 범위를 연결하지 못했습니다.')
+        }
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ['position-definitions'] })
+      setMonarchicalMode(newPosIsMonarchical)
+      setPositionDefinitionId(created.id)
+      setTitle('')
+      setTitleEn(newPosTitleEn.trim())
+      setPresetPositionType(null)
+      setNewPosOpen(false)
+      setManualEntryOpen(false)
+      notify.success(
+        `새 직책 「${trimmedTitle}」(서열 ${effectiveRank})을(를) 등록하고 선택했습니다.`,
+      )
+    } catch (err: unknown) {
+      const errMessage = err instanceof Error ? err.message : ''
+      notify.error(errMessage || '직책 등록에 실패했습니다.')
+    } finally {
+      setNewPosSaving(false)
+    }
+  }
+
+  const handleCreateInlineDepartment = async () => {
+    const trimmedName = newDeptName.trim()
+    if (!trimmedName) {
+      notify.error('기관·부처명을 입력해 주세요.')
+      return
+    }
+    if (!countryId && !historicalCountryId) {
+      notify.error('국가를 먼저 선택해 주세요.')
+      return
+    }
+    setNewDeptSaving(true)
+    try {
+      const created = await administrationDepartmentApi.create({
+        countryId: countryId || undefined,
+        historicalCountryId: historicalCountryId || undefined,
+        name: trimmedName,
+        nameEn: newDeptNameEn.trim() || undefined,
+        kind: (newDeptKind ||
+          'MINISTRY') as Parameters<typeof administrationDepartmentApi.create>[0]['kind'],
+        categoryId: newDeptCategoryId || null,
+      })
+      await queryClient.invalidateQueries({ queryKey: ['administration-departments'] })
+      setAdministrationDepartmentId(created.id)
+      setNewDeptName('')
+      setNewDeptNameEn('')
+      setNewDeptOpen(false)
+      notify.success(`「${trimmedName}」 기관·부처를 생성하고 선택했습니다.`)
+    } catch (err: unknown) {
+      const responseMsg = (
+        err as { response?: { data?: { message?: string } }; message?: string }
+      )?.response?.data?.message
+      const fallbackMsg = err instanceof Error ? err.message : ''
+      notify.error(responseMsg || fallbackMsg || '기관·부처 생성에 실패했습니다.')
+    } finally {
+      setNewDeptSaving(false)
+    }
+  }
+
+  const handleCreateInlineMilitaryUnit = async () => {
+    const trimmedName = newUnitName.trim()
+    if (!trimmedName) {
+      notify.error('사령부·부대명을 입력해 주세요.')
+      return
+    }
+    if (!countryId && !historicalCountryId) {
+      notify.error('국가를 먼저 선택해 주세요.')
+      return
+    }
+    setNewUnitSaving(true)
+    try {
+      const createdUnit = await militaryUnitApi.create({
+        countryId: countryId || undefined,
+        historicalCountryId: historicalCountryId || undefined,
+        name: trimmedName,
+        abbreviation: newUnitAbbr.trim() || undefined,
+        unitType: newUnitType,
+        branch: newUnitBranch,
+      })
+      await queryClient.invalidateQueries({ queryKey: ['military-units'] })
+      setMilitaryUnitId(createdUnit.id)
+      setNewUnitName('')
+      setNewUnitAbbr('')
+      setNewUnitOpen(false)
+      notify.success(`「${trimmedName}」 사령부·부대를 생성하고 선택했습니다.`)
+    } catch (err: unknown) {
+      const responseMsg = (
+        err as { response?: { data?: { message?: string } }; message?: string }
+      )?.response?.data?.message
+      const fallbackMsg = err instanceof Error ? err.message : ''
+      notify.error(responseMsg || fallbackMsg || '사령부·부대 생성에 실패했습니다.')
+    } finally {
+      setNewUnitSaving(false)
+    }
+  }
+
+  const handleTrackChange = (nextTrack: TenureAffiliationTrack) => {
+    setAffiliationTrack(nextTrack)
+    setNewDeptOpen(false)
+    setNewUnitOpen(false)
+    setNewPosOpen(false)
+    if (nextTrack === 'MILITARY') {
+      setMonarchicalMode(false)
+      setAdministrationDepartmentId(null)
+      if (selectedDef && selectedDef.positionType !== 'MILITARY_COMMANDER') {
+        setPositionDefinitionId(null)
+      }
+      if (!positionDefinitionId || selectedDef?.positionType !== 'MILITARY_COMMANDER') {
+        setPresetPositionType('MILITARY_COMMANDER')
+      }
+      return
+    }
+    if (nextTrack === 'DEPARTMENT') {
+      setMonarchicalMode(false)
+      setMilitaryUnitId(null)
+      if (selectedDef?.isMonarchical) {
+        setPositionDefinitionId(null)
+      }
+      if (presetPositionType === 'MILITARY_COMMANDER') {
+        setPresetPositionType('CABINET_MINISTER')
+      }
+      return
+    }
+    if (nextTrack === 'HEAD') {
+      setAdministrationDepartmentId(null)
+      setMilitaryUnitId(null)
+      if (presetPositionType === 'MILITARY_COMMANDER') {
+        setPresetPositionType(null)
+      }
+      return
+    }
+    setMonarchicalMode(false)
+    setMilitaryUnitId(null)
+    if (selectedDef?.isMonarchical) {
+      setPositionDefinitionId(null)
+    }
+  }
+
+  const applyDepartmentRolePreset = (presetItem: {
+    label: string
+    positionType: string
+    suffix: string
+  }) => {
+    const selectedDeptObj = administrationDepartmentId
+      ? (departments as Array<{ id: string; name: string }>).find(
+          (deptItem) => deptItem.id === administrationDepartmentId,
+        )
+      : undefined
+    const composedCandidates = selectedDeptObj
+      ? [
+          `${selectedDeptObj.name} ${presetItem.suffix}`,
+          `${selectedDeptObj.name}${presetItem.suffix}`,
+          selectedDeptObj.name.replace(/(부|성|처|청)$/, '') + presetItem.suffix,
+        ]
+      : [presetItem.suffix]
+    const matchedCatalog = definitionPool.find(
+      (candidate) =>
+        !candidate.isGeneric &&
+        composedCandidates.some(
+          (composedText) => (candidate.title ?? '').trim() === composedText.trim(),
+        ),
+    )
+    setMonarchicalMode(false)
+    if (matchedCatalog) {
+      setPositionDefinitionId(matchedCatalog.id)
+      setTitle('')
+      setTitleEn(matchedCatalog.titleEn ?? '')
+      setPresetPositionType(null)
+      setManualEntryOpen(false)
+      return
+    }
+    setPositionDefinitionId(null)
+    setPresetPositionType(presetItem.positionType)
+    setTitle(
+      selectedDeptObj ? `${selectedDeptObj.name} ${presetItem.suffix}` : presetItem.suffix,
+    )
+    setManualEntryOpen(true)
+  }
+
+  const applyMilitaryRolePreset = (roleLabel: string) => {
+    const selectedUnitObj = militaryUnitId
+      ? (militaryUnits as Array<{ id: string; name: string }>).find(
+          (unitItem) => unitItem.id === militaryUnitId,
+        ) ??
+        (editingTenure?.militaryUnit?.id === militaryUnitId
+          ? editingTenure.militaryUnit
+          : undefined)
+      : undefined
+    setMonarchicalMode(false)
+    setPositionDefinitionId(null)
+    setPresetPositionType('MILITARY_COMMANDER')
+    setTitle(selectedUnitObj ? `${selectedUnitObj.name} ${roleLabel}` : roleLabel)
+    setManualEntryOpen(true)
+  }
+
   const handlePositionSelect = (value: string) => {
     setPositionModalOpen(false)
-    // 정의를 고르면 직접 입력은 닫고, '기타'를 고르면 연다(아래 분기)
-    setManualEntryOpen(value === OTHER_POSITION_VALUE)
-    // 다른 직책을 고르면 열어 둔 '이 나라 명칭' 입력은 원본이 바뀌므로 닫는다
+    // 다른 직책을 고르면 열어 둔 '이 나라 명칭'·'새 직책 생성' 입력은 닫는다
     setLocalTitleOpen(false)
     setLocalTitleDraft('')
-    const builtin = BUILTIN_POSITIONS.find((b) => b.value === value)
+    if (value === OTHER_POSITION_VALUE) {
+      setMonarchicalMode(false)
+      setPositionDefinitionId(null)
+      setTitle('')
+      setTitleEn('')
+      setPresetPositionType(null)
+      openNewPositionCreator({ title: positionQuery.trim() })
+      return
+    }
+    setNewPosOpen(false)
+    setManualEntryOpen(false)
+    const builtin = BUILTIN_POSITIONS.find(
+      (builtinItem) => builtinItem.value === value,
+    )
     if (builtin) {
       setMonarchicalMode(false)
       setPositionDefinitionId(null)
@@ -1672,46 +2626,40 @@ export function TenureRegisterPanel({
       setPresetPositionType(recentTitle.positionType)
       return
     }
-    if (value === OTHER_POSITION_VALUE) {
-      setMonarchicalMode(false)
-      setPositionDefinitionId(null)
+    const def = definitionPool.find((definition) => definition.id === value)
+    if (def?.isGeneric) {
+      // 레거시 일반 정의(군 지휘관·특별 직위…) — 종류만 정하고 구체 직함을 직접 입력한다
+      setMonarchicalMode(Boolean(def.isMonarchical))
+      setPositionDefinitionId(def.id)
       setTitle('')
       setTitleEn('')
       setPresetPositionType(null)
-    } else {
-      const def = definitionPool.find((definition) => definition.id === value)
-      if (def?.isGeneric) {
-        // 일반 정의(군 지휘관·특별 직위…) — 종류만 정하고 구체 직함을 직접 입력한다
-        setMonarchicalMode(Boolean(def.isMonarchical))
-        setPositionDefinitionId(def.id)
-        setTitle('')
-        setTitleEn('')
-        setPresetPositionType(null)
-        setManualEntryOpen(true)
-      } else if (def) {
-        setMonarchicalMode(Boolean(def.isMonarchical))
-        setPositionDefinitionId(def.id)
-        setTitle('')
-        setTitleEn(def.titleEn ?? '')
-        setPresetPositionType(null)
-        // 직위 정의에 소속 중앙부처(또는 부처 카테고리)가 연결되어 있고 아직 부처가 미선택이면 자동 매칭
-        if (!administrationDepartmentId) {
-          const deptList = departments as Array<{
-            id: string
-            categoryId?: string | null
-          }>
-          if (
-            def.administrationDepartmentId &&
-            deptList.some((d) => d.id === def.administrationDepartmentId)
-          ) {
-            setAdministrationDepartmentId(def.administrationDepartmentId)
-          } else if (def.categoryId) {
-            const matchingDepts = deptList.filter(
-              (d) => d.categoryId === def.categoryId,
-            )
-            if (matchingDepts.length === 1) {
-              setAdministrationDepartmentId(matchingDepts[0].id)
-            }
+      setManualEntryOpen(true)
+    } else if (def) {
+      setMonarchicalMode(Boolean(def.isMonarchical))
+      setPositionDefinitionId(def.id)
+      setTitle('')
+      setTitleEn(def.titleEn ?? '')
+      setPresetPositionType(null)
+      // 직위 정의에 소속 중앙부처(또는 부처 카테고리)가 연결되어 있고 아직 부처가 미선택이면 자동 매칭
+      if (!administrationDepartmentId) {
+        const deptList = departments as Array<{
+          id: string
+          categoryId?: string | null
+        }>
+        if (
+          def.administrationDepartmentId &&
+          deptList.some(
+            (deptItem) => deptItem.id === def.administrationDepartmentId,
+          )
+        ) {
+          setAdministrationDepartmentId(def.administrationDepartmentId)
+        } else if (def.categoryId) {
+          const matchingDepts = deptList.filter(
+            (deptItem) => deptItem.categoryId === def.categoryId,
+          )
+          if (matchingDepts.length === 1) {
+            setAdministrationDepartmentId(matchingDepts[0].id)
           }
         }
       }
@@ -1771,22 +2719,50 @@ export function TenureRegisterPanel({
     if (derivedFromCatalog) {
       setTitle('')
       setTitleEn('')
-      setPresetPositionType(null)
+      setPresetPositionType(
+        affiliationTrack === 'MILITARY' ? 'MILITARY_COMMANDER' : null,
+      )
     }
-    setCabinetId(null)
+    setSelectedCabinetIds([])
     setAdministrationDepartmentId(null)
+    setMilitaryUnitId(null)
+    setPartyId(null)
   }
 
   const resetForm = () => {
+    setAffiliationTrack(
+      deriveAffiliationTrack({
+        militaryUnitId: initialMilitaryUnitId,
+        administrationDepartmentId: initialAdministrationDepartmentId,
+        cabinetId: initialCabinetId,
+        positionType: initialPositionType,
+        isMonarchical: defaultMonarchical,
+      }),
+    )
     setMonarchicalMode(defaultMonarchical)
     setManualEntryOpen(false)
     setSpecificTitleOpen(false)
+    setNewPosOpen(false)
+    setNewPosTitle('')
+    setNewPosTitleEn('')
+    setNewDeptOpen(false)
+    setNewDeptName('')
+    setNewDeptNameEn('')
+    setNewUnitOpen(false)
+    setNewUnitName('')
+    setNewUnitAbbr('')
     setCountryId('')
     setHistoricalCountryId(null)
     setPositionDefinitionId(null)
-    setPresetPositionType(null)
+    setPresetPositionType(
+      initialPositionType === 'MILITARY_COMMANDER' ? 'MILITARY_COMMANDER' : null,
+    )
     setTitle('')
     setTitleEn('')
+    setRankTitle('')
+    setPartyId(null)
+    setMilitaryUnitId(null)
+    setSelectedCabinetIds([])
     setStart(emptyPartialDateParts())
     setEnd(emptyPartialDateParts())
     setDatePickerSide(null)
@@ -1801,7 +2777,6 @@ export function TenureRegisterPanel({
     setEndReasonDetail('')
     setNotes('')
     setShowOnEvents(true)
-    setCabinetId(null)
     setAdministrationDepartmentId(null)
   }
 
@@ -1847,10 +2822,30 @@ export function TenureRegisterPanel({
       setDeleteConfirmOpen(false)
     } else if (!isEdit) {
       setMonarchicalMode(defaultMonarchical)
+      setAffiliationTrack(
+        deriveAffiliationTrack({
+          militaryUnitId: initialMilitaryUnitId,
+          administrationDepartmentId: initialAdministrationDepartmentId,
+          cabinetId: initialCabinetId,
+          positionType: initialPositionType,
+          isMonarchical: defaultMonarchical,
+        }),
+      )
+      if (initialPositionType === 'MILITARY_COMMANDER') {
+        setPresetPositionType('MILITARY_COMMANDER')
+      }
     }
-  }, [open, isEdit, defaultMonarchical])
+  }, [
+    open,
+    isEdit,
+    defaultMonarchical,
+    initialMilitaryUnitId,
+    initialAdministrationDepartmentId,
+    initialCabinetId,
+    initialPositionType,
+  ])
 
-  /** 행정부·부처 탭 등에서 열 때 국가·행정부·부처 미리 채우기 (추가 모드 전용) */
+  /** 행정부·부처·사령부 탭 등에서 열 때 국가·행정부·부처·사령부 미리 채우기 (추가 모드 전용) */
   useEffect(() => {
     if (
       open &&
@@ -1859,16 +2854,21 @@ export function TenureRegisterPanel({
         initialHistoricalCountryId != null ||
         initialCabinetId != null ||
         defaultCabinetId != null ||
-        initialAdministrationDepartmentId != null)
+        initialAdministrationDepartmentId != null ||
+        initialMilitaryUnitId != null)
     ) {
       if (initialCountryId != null) setCountryId(initialCountryId)
       if (initialHistoricalCountryId !== undefined)
         setHistoricalCountryId(initialHistoricalCountryId ?? null)
-      if (initialCabinetId !== undefined) setCabinetId(initialCabinetId ?? null)
-      else if (defaultCabinetId !== undefined)
-        setCabinetId(defaultCabinetId ?? null)
+      if (initialCabinetId !== undefined) {
+        setSelectedCabinetIds(initialCabinetId ? [initialCabinetId] : [])
+      } else if (defaultCabinetId !== undefined) {
+        setSelectedCabinetIds(defaultCabinetId ? [defaultCabinetId] : [])
+      }
       if (initialAdministrationDepartmentId !== undefined)
         setAdministrationDepartmentId(initialAdministrationDepartmentId ?? null)
+      if (initialMilitaryUnitId !== undefined)
+        setMilitaryUnitId(initialMilitaryUnitId ?? null)
     }
   }, [
     open,
@@ -1878,6 +2878,7 @@ export function TenureRegisterPanel({
     initialCabinetId,
     defaultCabinetId,
     initialAdministrationDepartmentId,
+    initialMilitaryUnitId,
   ])
 
   useEffect(() => {
@@ -1961,71 +2962,145 @@ export function TenureRegisterPanel({
 
   /** 수반 직책 선택 시 소속 행정부 지정 불가(백엔드 400) — 선택돼 있던 행정부는 자동 해제 */
   useEffect(() => {
-    if (isHeadPositionType && cabinetId) setCabinetId(null)
-  }, [isHeadPositionType, cabinetId])
+    if (isHeadPositionType && selectedCabinetIds.length > 0) {
+      setSelectedCabinetIds([])
+    }
+  }, [isHeadPositionType, selectedCabinetIds.length])
 
   useEffect(() => {
     if (!open || !editingTenure) return
-    const t = editingTenure as any
+    const tenureRow = editingTenure
     // 하이드레이트 전에 잡힌 기준선은 빈 폼이다 — 버려야 불러온 값이 '변경'으로 오인되지 않는다
     dirtyBaselineRef.current = null
-    setMonarchicalMode(t.isMonarchical === true)
-    setCountryId(t.countryId ?? t.country?.id ?? '')
-    setHistoricalCountryId(t.historicalCountryId ?? t.historicalCountry?.id ?? null)
-    const hydratedDefId = t.positionDefinitionId ?? t.positionDefinition?.id ?? null
+    const hydratedDeptId =
+      tenureRow.administrationDepartmentId ??
+      tenureRow.administrationDepartment?.id ??
+      null
+    const hydratedUnitId =
+      tenureRow.militaryUnitId ?? tenureRow.militaryUnit?.id ?? null
+    const membershipCabinetIds: string[] = Array.isArray(tenureRow.cabinetMemberships)
+      ? tenureRow.cabinetMemberships
+          .map((membershipItem) => membershipItem.cabinetId)
+          .filter(Boolean)
+      : Array.isArray(tenureRow.cabinets)
+        ? tenureRow.cabinets
+            .map((cabinetItem) => cabinetItem.id)
+            .filter(Boolean)
+        : []
+    const fallbackCabinetId = tenureRow.cabinetId ?? tenureRow.cabinet?.id ?? null
+    const hydratedCabinetIds = Array.from(
+      new Set([
+        ...membershipCabinetIds,
+        ...(fallbackCabinetId ? [fallbackCabinetId] : []),
+      ]),
+    )
+    setAffiliationTrack(
+      deriveAffiliationTrack({
+        militaryUnitId: hydratedUnitId,
+        administrationDepartmentId: hydratedDeptId,
+        cabinetId: hydratedCabinetIds[0] ?? null,
+        positionType:
+          tenureRow.positionType ??
+          tenureRow.positionDefinition?.positionType ??
+          null,
+        isMonarchical: tenureRow.isMonarchical === true,
+      }),
+    )
+    setMonarchicalMode(tenureRow.isMonarchical === true)
+    setCountryId(tenureRow.countryId ?? tenureRow.country?.id ?? '')
+    setHistoricalCountryId(
+      tenureRow.historicalCountryId ?? tenureRow.historicalCountry?.id ?? null,
+    )
+    const hydratedDefId =
+      tenureRow.positionDefinitionId ?? tenureRow.positionDefinition?.id ?? null
     setPositionDefinitionId(hydratedDefId)
-    // 정의 없이 내장 직책(부통령 등) 타입으로 저장된 재임이면 preset 복원 → 라벨·선택 표시 유지
-    const builtinForType = BUILTIN_POSITIONS.find((b) => b.positionType === t.positionType)
-    setPresetPositionType(!hydratedDefId && builtinForType ? builtinForType.positionType : null)
+    // 정의 없이 내장 직책(부통령 등) 또는 명시적 직위 유형으로 저장된 재임이면 preset 복원
+    const builtinForType = BUILTIN_POSITIONS.find(
+      (builtinItem) => builtinItem.positionType === tenureRow.positionType,
+    )
+    setPresetPositionType(
+      !hydratedDefId
+        ? (builtinForType?.positionType ??
+            (tenureRow.positionType && tenureRow.positionType !== 'OTHER'
+              ? tenureRow.positionType
+              : null))
+        : null,
+    )
     // 구체 직함 — 일반 정의·정의 미선택이면 그 직함, 카탈로그 정의면 정의 이름과 다를 때만 구체 직함으로 복원
-    const hydratedGeneric = t.positionDefinition?.isGeneric === true
-    const defTitle = t.positionDefinition?.title ?? ''
+    const hydratedGeneric = tenureRow.positionDefinition?.isGeneric === true
+    const defTitle = tenureRow.positionDefinition?.title ?? ''
     const specificTitle =
       !hydratedDefId || hydratedGeneric
-        ? t.title ?? ''
-        : t.title && t.title !== defTitle
-          ? t.title
+        ? tenureRow.title ?? ''
+        : tenureRow.title && tenureRow.title !== defTitle
+          ? tenureRow.title
           : ''
     setTitle(specificTitle)
     setSpecificTitleOpen(Boolean(hydratedDefId && !hydratedGeneric && specificTitle))
     setManualEntryOpen(hydratedGeneric)
-    setTitleEn(t.titleEn ?? '')
+    setTitleEn(tenureRow.titleEn ?? '')
+    setRankTitle(tenureRow.rankTitle ?? '')
+    setPartyId(tenureRow.partyId ?? tenureRow.party?.id ?? null)
+    setMilitaryUnitId(hydratedUnitId)
     // 구조화(startEra/startYear/...) 우선, 없으면 DATETIME+정밀도 폴백 → 파츠 복원
     setStart(
       parsePartialDateString(
-        partialDateFromStructured(t.startYear, t.startMonth, t.startDay, t.startEra) ||
-          partialDateFromResponse(t.startDate, t.startEra, t.startDatePrecision),
+        partialDateFromStructured(
+          tenureRow.startYear,
+          tenureRow.startMonth,
+          tenureRow.startDay,
+          tenureRow.startEra,
+        ) ||
+          partialDateFromResponse(
+            tenureRow.startDate,
+            tenureRow.startEra,
+            tenureRow.startDatePrecision,
+          ),
       ),
     )
     setEnd(
       parsePartialDateString(
-        partialDateFromStructured(t.endYear, t.endMonth, t.endDay, t.endEra) ||
-          partialDateFromResponse(t.endDate, t.endEra, t.endDatePrecision),
+        partialDateFromStructured(
+          tenureRow.endYear,
+          tenureRow.endMonth,
+          tenureRow.endDay,
+          tenureRow.endEra,
+        ) ||
+          partialDateFromResponse(
+            tenureRow.endDate,
+            tenureRow.endEra,
+            tenureRow.endDatePrecision,
+          ),
       ),
     )
-    setRegnalName(t.regnalName ?? '')
+    setRegnalName(tenureRow.regnalName ?? '')
     setLinkedAccessionEvent(
-      t.accessionEvent?.id
-        ? { id: t.accessionEvent.id, title: t.accessionEvent.title ?? '' }
-        : t.accessionEventId
-          ? { id: t.accessionEventId, title: '연결된 사건' }
+      tenureRow.accessionEvent?.id
+        ? {
+            id: tenureRow.accessionEvent.id,
+            title: tenureRow.accessionEvent.title ?? '',
+          }
+        : tenureRow.accessionEventId
+          ? { id: tenureRow.accessionEventId, title: '연결된 사건' }
           : null,
     )
     // 대수 — 재위·재임 공통 ordinal
-    const num = t.ordinal
+    const num = tenureRow.ordinal
     setOrdinalNumber(num != null ? String(num) : '')
-    setSubTermNumber(t.subTermNumber != null ? String(t.subTermNumber) : '')
-    setDynastyOrdinal(t.dynastyOrdinal != null ? String(t.dynastyOrdinal) : '')
-    setAppointmentMethod(t.appointmentMethod ?? '')
-    setAppointmentDetail(t.appointmentDetail ?? '')
-    setEndReason(t.endReason ?? '')
-    setEndReasonDetail(t.endReasonDetail ?? '')
-    setNotes(t.notes ?? '')
-    setShowOnEvents(t.showPositionInfo !== false)
-    setCabinetId(t.cabinetId ?? t.cabinet?.id ?? null)
-    setAdministrationDepartmentId(
-      t.administrationDepartmentId ?? t.administrationDepartment?.id ?? null,
+    setSubTermNumber(
+      tenureRow.subTermNumber != null ? String(tenureRow.subTermNumber) : '',
     )
+    setDynastyOrdinal(
+      tenureRow.dynastyOrdinal != null ? String(tenureRow.dynastyOrdinal) : '',
+    )
+    setAppointmentMethod(tenureRow.appointmentMethod ?? '')
+    setAppointmentDetail(tenureRow.appointmentDetail ?? '')
+    setEndReason(tenureRow.endReason ?? '')
+    setEndReasonDetail(tenureRow.endReasonDetail ?? '')
+    setNotes(tenureRow.notes ?? '')
+    setShowOnEvents(tenureRow.showPositionInfo !== false)
+    setSelectedCabinetIds(hydratedCabinetIds)
+    setAdministrationDepartmentId(hydratedDeptId)
   }, [open, editingTenure])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -2071,14 +3146,55 @@ export function TenureRegisterPanel({
     const parsedDynastyOrdinal = dynastyOrdinal.trim()
       ? parseInt(dynastyOrdinal, 10) || emptyAs
       : emptyAs
+    const effectiveDepartmentId =
+      !isReign && affiliationTrack !== 'MILITARY'
+        ? administrationDepartmentId
+        : null
+    const effectiveMilitaryUnitId =
+      !isReign && affiliationTrack === 'MILITARY' ? militaryUnitId : null
+    const selectedDeptForPayload = effectiveDepartmentId
+      ? (
+          departments as Array<{
+            id: string
+            historicalCountryId?: string | null
+          }>
+        ).find((dept) => dept.id === effectiveDepartmentId)
+      : undefined
+    const selectedUnitForPayload = effectiveMilitaryUnitId
+      ? (
+          militaryUnits as Array<{
+            id: string
+            historicalCountryId?: string | null
+          }>
+        ).find((unitItem) => unitItem.id === effectiveMilitaryUnitId)
+      : undefined
+    const effectiveHistoricalIdForPayload =
+      historicalCountryId ||
+      selectedDeptForPayload?.historicalCountryId ||
+      selectedUnitForPayload?.historicalCountryId ||
+      ''
+    const effectivePositionType =
+      !isReign && affiliationTrack === 'MILITARY' && !selectedDef
+        ? 'MILITARY_COMMANDER'
+        : positionType
+    const effectiveCabinetIds =
+      !isHeadPositionType && !isReign && affiliationTrack !== 'MILITARY'
+        ? selectedCabinetIds
+        : []
     const payload = {
-      positionType: (positionType as any) ?? 'OTHER',
+      positionType:
+        (effectivePositionType as CreateGovernmentPositionTenureDto['positionType']) ??
+        'OTHER',
       // 정의를 비우면(직접 입력) 수정 때 null — 서버가 그 종류의 일반 정의로 옮긴다
       positionDefinitionId: positionDefinitionId || emptyAs,
       title: titleValue,
       titleEn: titleEn.trim() || emptyAs,
-      countryId: historicalCountryId ? emptyAs : (countryId || emptyAs),
-      historicalCountryId: historicalCountryId || emptyAs,
+      rankTitle: isReign ? emptyAs : (rankTitle.trim() || emptyAs),
+      partyId: isReign ? emptyAs : (partyId || emptyAs),
+      countryId: effectiveHistoricalIdForPayload
+        ? emptyAs
+        : (countryId || emptyAs),
+      historicalCountryId: effectiveHistoricalIdForPayload || emptyAs,
       // 구조화 기간 — 서버가 정렬 키·DATETIME(AD 1000+)·정밀도를 파생한다. 수정 때 종료 비움 = 해제
       startDateInfo: startInfo,
       endDateInfo: endInfo ?? emptyAs,
@@ -2095,10 +3211,14 @@ export function TenureRegisterPanel({
       endReasonDetail: endReasonDetail.trim() || emptyAs,
       notes: notes.trim() || emptyAs,
       showPositionInfo: showOnEvents,
-      cabinetId: cabinetId || emptyAs,
-      administrationDepartmentId: isReign
-        ? emptyAs
-        : (administrationDepartmentId || emptyAs),
+      cabinetId: effectiveCabinetIds[0] || emptyAs,
+      cabinetIds: isEdit
+        ? effectiveCabinetIds
+        : effectiveCabinetIds.length > 0
+          ? effectiveCabinetIds
+          : undefined,
+      administrationDepartmentId: effectiveDepartmentId || emptyAs,
+      militaryUnitId: effectiveMilitaryUnitId || emptyAs,
     }
     setSubmitting(true)
     try {
@@ -2383,22 +3503,36 @@ export function TenureRegisterPanel({
   const isLoadingEdit = Boolean(isEdit && tenureId && !editingTenure && loadingTenures)
 
   const showCabinetField =
-    (!isHeadPositionType && (countryId || historicalCountryId) && cabinetOptions.length > 0) ||
-    Boolean(cabinetId || initialCabinetId)
+    !isReign &&
+    affiliationTrack !== 'MILITARY' &&
+    ((!isHeadPositionType &&
+      (countryId || historicalCountryId) &&
+      cabinetOptions.length > 0) ||
+      Boolean(selectedCabinetIds.length > 0 || initialCabinetId))
 
   const showDepartmentField =
     !isReign &&
-    ((Boolean(countryId || historicalCountryId) && departmentOptions.length > 0) ||
+    affiliationTrack === 'OTHER' &&
+    (Boolean(countryId || historicalCountryId) ||
       Boolean(administrationDepartmentId || initialAdministrationDepartmentId))
+
+  const showPartyField =
+    !isReign &&
+    (Boolean((countryId || historicalCountryId) && politicalPartyOptions.length > 0) ||
+      Boolean(partyId))
 
   /** 저장 대상 값 전부 — 기준선과 다르면 미저장 변경. UI 상태(드롭다운 열림 등)는 넣지 않는다. */
   const formSnapshot = JSON.stringify([
+    affiliationTrack,
     countryId,
     historicalCountryId,
     positionDefinitionId,
     presetPositionType,
     title,
     titleEn,
+    rankTitle,
+    partyId,
+    militaryUnitId,
     start,
     end,
     regnalName,
@@ -2412,7 +3546,7 @@ export function TenureRegisterPanel({
     endReasonDetail,
     notes,
     showOnEvents,
-    cabinetId,
+    selectedCabinetIds,
     administrationDepartmentId,
   ])
   latestSnapshotRef.current = formSnapshot
@@ -2571,7 +3705,8 @@ export function TenureRegisterPanel({
                   {/* 인물 — 국가 카드와 동일한 톤의 요약 카드 */}
                   {(personDetail ||
                     (initialAdministrationDepartmentId &&
-                      initialAdministrationDepartmentName)) && (
+                      initialAdministrationDepartmentName) ||
+                    (initialMilitaryUnitId && initialMilitaryUnitName)) && (
                     <FieldRow>
                       <FieldLabel as="span">인물</FieldLabel>
                       <FieldControl>
@@ -2620,6 +3755,11 @@ export function TenureRegisterPanel({
                                   {initialAdministrationDepartmentName}
                                 </DepartmentBadge>
                               )}
+                            {initialMilitaryUnitId && initialMilitaryUnitName && (
+                              <DepartmentBadge title="소속 사령부·부대">
+                                {initialMilitaryUnitName}
+                              </DepartmentBadge>
+                            )}
                           </PersonMetaRight>
                         </PersonContextCard>
                       </FieldControl>
@@ -2689,7 +3829,7 @@ export function TenureRegisterPanel({
                               onClick={() => {
                                 setCountryId('')
                                 setHistoricalCountryId(null)
-                                setCabinetId(null)
+                                releasePositionOnCountryChange()
                               }}
                             >
                               <FiX size={14} />
@@ -2750,6 +3890,336 @@ export function TenureRegisterPanel({
                       )}
                     </FieldControl>
                   </FieldRow>
+
+                  {/* 소속 구분 — 국가원수·수반 / 중앙부처·행정기관 / 군사 사령부·부대 / 의회·외교·기타 */}
+                  <FieldRow>
+                    <FieldLabel as="span">소속 구분</FieldLabel>
+                    <FieldControl>
+                      <TrackGrid role="radiogroup" aria-label="소속 구분">
+                        {AFFILIATION_TRACK_OPTIONS.map((trackOption) => {
+                          const isTrackActive = affiliationTrack === trackOption.value
+                          return (
+                            <TrackCardBtn
+                              key={trackOption.value}
+                              type="button"
+                              role="radio"
+                              aria-checked={isTrackActive}
+                              $active={isTrackActive}
+                              onClick={() => handleTrackChange(trackOption.value)}
+                            >
+                              <TrackCardTitle>{trackOption.label}</TrackCardTitle>
+                              <TrackCardSub>{trackOption.subLabel}</TrackCardSub>
+                            </TrackCardBtn>
+                          )
+                        })}
+                      </TrackGrid>
+                      {affiliationTrack === 'HEAD' && (
+                        <CheckboxLabelRow style={{ marginTop: 4 }}>
+                          <input
+                            type="checkbox"
+                            id="tenure-monarch-mode-toggle"
+                            checked={isReign}
+                            onChange={(changeEvent) => {
+                              const nextReign = changeEvent.target.checked
+                              setMonarchicalMode(nextReign)
+                              if (!nextReign && selectedDef?.isMonarchical) {
+                                setPositionDefinitionId(null)
+                              }
+                            }}
+                          />
+                          <label htmlFor="tenure-monarch-mode-toggle">
+                            군주 재위 (국왕·황제·천황 등 왕호·왕조 서수 입력)
+                          </label>
+                        </CheckboxLabelRow>
+                      )}
+                    </FieldControl>
+                  </FieldRow>
+
+                  {/* 중앙부처·행정기관 트랙: 부처 선택 + 빠른 보직 칩 + 즉석 부처 생성 */}
+                  {!isReign && affiliationTrack === 'DEPARTMENT' && (
+                    <FieldRow>
+                      <FieldLabel as="span">
+                        소속 부처·기관<OptionalTag>(선택)</OptionalTag>
+                      </FieldLabel>
+                      <FieldControl>
+                        {departmentOptions.length > 0 && (
+                          <CustomDropbox
+                            ariaLabel="소속 기관·부처"
+                            value={administrationDepartmentId ?? ''}
+                            placeholder="중앙부처·행정기관 선택 (예: 국방부, 외무성, 병조)"
+                            options={[
+                              { value: '', label: '선택 안 함 (특정 부처 미지정)' },
+                              ...departmentOptions,
+                            ]}
+                            onChange={(nextValue) =>
+                              setAdministrationDepartmentId(nextValue || null)
+                            }
+                            searchable={departmentOptions.length >= 6}
+                            searchPlaceholder="부처·기관 검색..."
+                          />
+                        )}
+                        <AffiliatedPolityBar>
+                          <AffiliatedPolityLabel>빠른 보직 선택:</AffiliatedPolityLabel>
+                          {DEPARTMENT_ROLE_PRESETS.map((presetItem) => (
+                            <AffiliatedPolityChip
+                              key={presetItem.label}
+                              type="button"
+                              onClick={() => applyDepartmentRolePreset(presetItem)}
+                            >
+                              {presetItem.label}
+                            </AffiliatedPolityChip>
+                          ))}
+                        </AffiliatedPolityBar>
+                        {!newDeptOpen && (countryId || historicalCountryId) && (
+                          <FieldHint>
+                            {departmentOptions.length === 0
+                              ? '이 국가에 등록된 중앙부처·행정기관이 아직 없습니다. '
+                              : '찾는 부처·기관이 목록에 없으면 '}
+                            <LocalTitleLink
+                              type="button"
+                              onClick={() => {
+                                setNewDeptKind('MINISTRY')
+                                setNewDeptOpen(true)
+                              }}
+                            >
+                              + 새 부처·기관 바로 만들기
+                            </LocalTitleLink>
+                          </FieldHint>
+                        )}
+                        {newDeptOpen && (
+                          <ManualEntryGroup>
+                            <ManualEntryCaption>
+                              새 부처·기관 등록 (
+                              {selectedHistoricalCountry?.name ??
+                                selectedModernCountry?.name ??
+                                '선택 국가'}
+                              ){' '}
+                              <LocalTitleLink
+                                type="button"
+                                style={{ marginLeft: 8 }}
+                                onClick={() => setNewDeptOpen(false)}
+                              >
+                                닫기
+                              </LocalTitleLink>
+                            </ManualEntryCaption>
+                            <SubFieldPair>
+                              <ManualEntryField>
+                                기관·부처명 (한글) *
+                                <Input
+                                  autoFocus
+                                  value={newDeptName}
+                                  onChange={(changeEvent) =>
+                                    setNewDeptName(changeEvent.target.value)
+                                  }
+                                  placeholder="예: 국방부, 외무성, 내무부, 병조"
+                                />
+                              </ManualEntryField>
+                              <ManualEntryField>
+                                영문/원어명 (선택)
+                                <Input
+                                  value={newDeptNameEn}
+                                  onChange={(changeEvent) =>
+                                    setNewDeptNameEn(changeEvent.target.value)
+                                  }
+                                  placeholder="예: Ministry of National Defence"
+                                />
+                              </ManualEntryField>
+                            </SubFieldPair>
+                            <SubFieldPair>
+                              <ManualEntryField>
+                                기관 유형 *
+                                <CustomDropbox
+                                  ariaLabel="새 기관 유형"
+                                  value={newDeptKind}
+                                  placeholder="기관 유형 선택"
+                                  options={INLINE_DEPARTMENT_KIND_OPTIONS}
+                                  onChange={(nextValue) => {
+                                    if (nextValue) setNewDeptKind(nextValue)
+                                  }}
+                                />
+                              </ManualEntryField>
+                              <ManualEntryField>
+                                기능 분야 (선택)
+                                <CustomDropbox
+                                  ariaLabel="새 기관 기능 분야"
+                                  value={newDeptCategoryId}
+                                  placeholder="분야 선택 (국방, 외교, 재정 등)"
+                                  options={[
+                                    { value: '', label: '분야 미지정' },
+                                    ...(
+                                      departmentCategories as Array<{
+                                        id: string
+                                        name: string
+                                        nameEn?: string | null
+                                      }>
+                                    ).map((categoryItem) => ({
+                                      value: categoryItem.id,
+                                      label: categoryItem.name,
+                                      description: categoryItem.nameEn ?? undefined,
+                                    })),
+                                  ]}
+                                  onChange={(nextValue) => setNewDeptCategoryId(nextValue)}
+                                />
+                              </ManualEntryField>
+                            </SubFieldPair>
+                            <LocalTitleActions>
+                              <LocalTitleSubmit
+                                type="button"
+                                disabled={newDeptSaving || !newDeptName.trim()}
+                                onClick={() => void handleCreateInlineDepartment()}
+                              >
+                                {newDeptSaving ? '생성 중…' : '부처 생성 후 선택'}
+                              </LocalTitleSubmit>
+                              <LocalTitleCancel
+                                type="button"
+                                disabled={newDeptSaving}
+                                onClick={() => setNewDeptOpen(false)}
+                              >
+                                취소
+                              </LocalTitleCancel>
+                            </LocalTitleActions>
+                          </ManualEntryGroup>
+                        )}
+                      </FieldControl>
+                    </FieldRow>
+                  )}
+
+                  {/* 군사 사령부·부대 트랙: MilitaryUnit 선택 + 빠른 지휘 보직 칩 + 즉석 사령부·부대 생성 */}
+                  {!isReign && affiliationTrack === 'MILITARY' && (
+                    <FieldRow>
+                      <FieldLabel as="span">
+                        소속 사령부·부대<OptionalTag>(선택)</OptionalTag>
+                      </FieldLabel>
+                      <FieldControl>
+                        {militaryUnitOptions.length > 0 && (
+                          <CustomDropbox
+                            ariaLabel="소속 군사 사령부·부대"
+                            value={militaryUnitId ?? ''}
+                            placeholder="사령부·야전군·사단·함대 선택 (예: 국방군 최고사령부, 제6군)"
+                            options={[
+                              { value: '', label: '선택 안 함 (특정 부대 미지정)' },
+                              ...militaryUnitOptions,
+                            ]}
+                            onChange={(nextValue) => setMilitaryUnitId(nextValue || null)}
+                            searchable={militaryUnitOptions.length >= 6}
+                            searchPlaceholder="사령부·부대 검색..."
+                          />
+                        )}
+                        <AffiliatedPolityBar>
+                          <AffiliatedPolityLabel>빠른 지휘 보직:</AffiliatedPolityLabel>
+                          {MILITARY_ROLE_PRESETS.map((roleLabel) => (
+                            <AffiliatedPolityChip
+                              key={roleLabel}
+                              type="button"
+                              onClick={() => applyMilitaryRolePreset(roleLabel)}
+                            >
+                              {roleLabel}
+                            </AffiliatedPolityChip>
+                          ))}
+                        </AffiliatedPolityBar>
+                        {!newUnitOpen && (countryId || historicalCountryId) && (
+                          <FieldHint>
+                            {militaryUnitOptions.length === 0
+                              ? '이 국가에 등록된 군사 사령부·부대가 아직 없습니다. '
+                              : '찾는 사령부·부대가 목록에 없으면 '}
+                            <LocalTitleLink
+                              type="button"
+                              onClick={() => setNewUnitOpen(true)}
+                            >
+                              + 새 사령부·부대 바로 만들기
+                            </LocalTitleLink>
+                          </FieldHint>
+                        )}
+                        {newUnitOpen && (
+                          <ManualEntryGroup>
+                            <ManualEntryCaption>
+                              새 군사 사령부·부대 등록 (
+                              {selectedHistoricalCountry?.name ??
+                                selectedModernCountry?.name ??
+                                '선택 국가'}
+                              ){' '}
+                              <LocalTitleLink
+                                type="button"
+                                style={{ marginLeft: 8 }}
+                                onClick={() => setNewUnitOpen(false)}
+                              >
+                                닫기
+                              </LocalTitleLink>
+                            </ManualEntryCaption>
+                            <SubFieldPair>
+                              <ManualEntryField>
+                                사령부·부대명 (한글) *
+                                <Input
+                                  autoFocus
+                                  value={newUnitName}
+                                  onChange={(changeEvent) =>
+                                    setNewUnitName(changeEvent.target.value)
+                                  }
+                                  placeholder="예: 국방군 최고사령부, 육군최고사령부, 제6군, 연합함대"
+                                />
+                              </ManualEntryField>
+                              <ManualEntryField>
+                                약칭 (선택)
+                                <Input
+                                  value={newUnitAbbr}
+                                  onChange={(changeEvent) =>
+                                    setNewUnitAbbr(changeEvent.target.value)
+                                  }
+                                  placeholder="예: OKW, OKH, STAVKA, IJN"
+                                />
+                              </ManualEntryField>
+                            </SubFieldPair>
+                            <SubFieldPair>
+                              <ManualEntryField>
+                                부대 유형 *
+                                <CustomDropbox
+                                  ariaLabel="새 사령부·부대 유형"
+                                  value={newUnitType}
+                                  placeholder="부대 유형 선택"
+                                  options={[...INLINE_MILITARY_UNIT_TYPE_OPTIONS]}
+                                  onChange={(nextValue) => {
+                                    if (nextValue) {
+                                      setNewUnitType(nextValue as MilitaryUnitType)
+                                    }
+                                  }}
+                                />
+                              </ManualEntryField>
+                              <ManualEntryField>
+                                군종 *
+                                <CustomDropbox
+                                  ariaLabel="새 사령부·부대 군종"
+                                  value={newUnitBranch}
+                                  placeholder="군종 선택"
+                                  options={[...INLINE_MILITARY_BRANCH_OPTIONS]}
+                                  onChange={(nextValue) => {
+                                    if (nextValue) {
+                                      setNewUnitBranch(nextValue as MilitaryBranch)
+                                    }
+                                  }}
+                                />
+                              </ManualEntryField>
+                            </SubFieldPair>
+                            <LocalTitleActions>
+                              <LocalTitleSubmit
+                                type="button"
+                                disabled={newUnitSaving || !newUnitName.trim()}
+                                onClick={() => void handleCreateInlineMilitaryUnit()}
+                              >
+                                {newUnitSaving ? '생성 중…' : '사령부·부대 생성 후 선택'}
+                              </LocalTitleSubmit>
+                              <LocalTitleCancel
+                                type="button"
+                                disabled={newUnitSaving}
+                                onClick={() => setNewUnitOpen(false)}
+                              >
+                                취소
+                              </LocalTitleCancel>
+                            </LocalTitleActions>
+                          </ManualEntryGroup>
+                        )}
+                      </FieldControl>
+                    </FieldRow>
+                  )}
 
                   {/* 직책명 — 클릭 시 바로 아래에 검색 가능한 Selectbox 드롭다운 노출 */}
                   <FieldRow>
@@ -2826,11 +4296,7 @@ export function TenureRegisterPanel({
                                     if (filteredPositionOptions.length > 0) {
                                       handlePositionSelect(filteredPositionOptions[0].value)
                                     } else if (positionQuery.trim()) {
-                                      setPositionDefinitionId(null)
-                                      setPresetPositionType(null)
-                                      setTitle(positionQuery.trim())
-                                      setManualEntryOpen(true)
-                                      setPositionModalOpen(false)
+                                      openNewPositionCreator({ title: positionQuery.trim() })
                                     }
                                   }
                                 }}
@@ -2854,15 +4320,12 @@ export function TenureRegisterPanel({
                                   {positionQuery.trim() && (
                                     <CountryCardChangeBtn
                                       type="button"
-                                      onClick={() => {
-                                        setPositionDefinitionId(null)
-                                        setPresetPositionType(null)
-                                        setTitle(positionQuery.trim())
-                                        setManualEntryOpen(true)
-                                        setPositionModalOpen(false)
-                                      }}
+                                      onClick={() =>
+                                        openNewPositionCreator({ title: positionQuery.trim() })
+                                      }
                                     >
-                                      &lsquo;{positionQuery.trim()}&rsquo; 직접 입력하기
+                                      + &lsquo;{positionQuery.trim()}&rsquo; 새 직책 등록하기
+                                      (직위 구분·서열 지정)
                                     </CountryCardChangeBtn>
                                   )}
                                 </PositionEmptyBox>
@@ -2933,20 +4396,31 @@ export function TenureRegisterPanel({
                         )}
                       </PositionSelectWrap>
 
-                      {(positionDefinitionId &&
-                        !localTitleOpen &&
-                        (countryId || historicalCountryId)) ||
-                      (selectedDef &&
-                        !selectedIsGeneric &&
-                        !specificTitleOpen &&
-                        !title.trim()) ||
-                      (!positionDefinitionId && !manualEntryOpen && !title.trim()) ? (
+                      {!newPosOpen &&
+                        ((positionDefinitionId &&
+                          !localTitleOpen &&
+                          (countryId || historicalCountryId)) ||
+                        (selectedDef &&
+                          !selectedIsGeneric &&
+                          !specificTitleOpen &&
+                          !title.trim()) ||
+                        (!positionDefinitionId && !manualEntryOpen && !title.trim())) ? (
                         <FieldHint>
+                          {selectedDef &&
+                            !selectedIsGeneric &&
+                            typeof selectedDef.rank === 'number' &&
+                            selectedDef.rank > 0 &&
+                            selectedDef.rank < 999 && (
+                              <>
+                                <strong>서열 {selectedDef.rank}</strong>
+                                {' · '}
+                              </>
+                            )}
                           {positionDefinitionId &&
                             !localTitleOpen &&
                             (countryId || historicalCountryId) && (
                               <>
-                                이 나라에서 다른 명칭으로 부른다면{' '}
+                                이 나라 고유 명칭이면{' '}
                                 <LocalTitleLink
                                   type="button"
                                   onClick={() => {
@@ -2958,7 +4432,7 @@ export function TenureRegisterPanel({
                                     setLocalTitleOpen(true)
                                   }}
                                 >
-                                  명칭 바꾸기
+                                  이 나라 명칭으로 등록
                                 </LocalTitleLink>
                               </>
                             )}
@@ -2971,12 +4445,12 @@ export function TenureRegisterPanel({
                                   !localTitleOpen &&
                                   (countryId || historicalCountryId) &&
                                   ' · '}
-                                대사·장관 등 부임지나 보직을 덧붙이려면{' '}
+                                부임지·세부 보직을 덧붙이려면{' '}
                                 <LocalTitleLink
                                   type="button"
                                   onClick={() => setSpecificTitleOpen(true)}
                                 >
-                                  구체 직함 추가
+                                  보직·부임지 상세 표기 추가
                                 </LocalTitleLink>
                               </>
                             )}
@@ -2985,14 +4459,122 @@ export function TenureRegisterPanel({
                               목록에 찾는 직책이 없으면{' '}
                               <LocalTitleLink
                                 type="button"
-                                onClick={() => setManualEntryOpen(true)}
+                                onClick={() => openNewPositionCreator()}
                               >
-                                직접 입력
+                                + 새 직책 등록 (직위 구분·서열 지정)
                               </LocalTitleLink>
                             </>
                           )}
                         </FieldHint>
                       ) : null}
+
+                      {/* ─── 인라인 새 직책(국가 직위 정의) 등록 카드 ─── */}
+                      {newPosOpen && (
+                        <ManualEntryGroup>
+                          <ManualEntryCaption>
+                            새 직책 등록 (정식 직위 정의 생성){' '}
+                            <LocalTitleLink
+                              type="button"
+                              style={{ marginLeft: 8 }}
+                              onClick={() => setNewPosOpen(false)}
+                            >
+                              닫기
+                            </LocalTitleLink>
+                          </ManualEntryCaption>
+                          <SubFieldPair>
+                            <ManualEntryField>
+                              직책명 (한글) *
+                              <Input
+                                autoFocus
+                                value={newPosTitle}
+                                onChange={(e) => setNewPosTitle(e.target.value)}
+                                placeholder="예: 루마니아 참모총장, 국방대신, 콘두커토르"
+                              />
+                            </ManualEntryField>
+                            <ManualEntryField>
+                              영문 직책명 (선택)
+                              <Input
+                                value={newPosTitleEn}
+                                onChange={(e) => setNewPosTitleEn(e.target.value)}
+                                placeholder="예: Chief of the General Staff"
+                              />
+                            </ManualEntryField>
+                          </SubFieldPair>
+                          <SubFieldPair>
+                            <ManualEntryField>
+                              직위 구분 (위계 분류) *
+                              <CustomDropbox
+                                ariaLabel="새 직책 직위 구분"
+                                value={newPosType}
+                                placeholder="직위 구분 선택"
+                                options={INLINE_POSITION_TYPE_OPTIONS}
+                                onChange={(next) => {
+                                  if (!next) return
+                                  setNewPosType(next)
+                                  const autoRank = DEFAULT_RANK_BY_POSITION_TYPE[next] ?? 3
+                                  setNewPosRank(String(autoRank))
+                                  if (next === 'ROYAL_NOBLE_TITLE') {
+                                    setNewPosIsMonarchical(false)
+                                  }
+                                }}
+                              />
+                            </ManualEntryField>
+                            <ManualEntryField>
+                              서열 · 레벨 (숫자가 낮을수록 상위) *
+                              <Input
+                                type="number"
+                                min={1}
+                                max={50}
+                                value={newPosRank}
+                                onChange={(e) => setNewPosRank(e.target.value)}
+                                placeholder="1 ~ 10"
+                              />
+                            </ManualEntryField>
+                          </SubFieldPair>
+                          <AffiliatedPolityBar style={{ marginTop: 2 }}>
+                            <AffiliatedPolityLabel>빠른 서열 선택:</AffiliatedPolityLabel>
+                            {INLINE_RANK_PRESETS.map((preset) => (
+                              <AffiliatedPolityChip
+                                key={preset.rank}
+                                type="button"
+                                $active={Number(newPosRank) === preset.rank}
+                                onClick={() => setNewPosRank(String(preset.rank))}
+                              >
+                                {preset.label}
+                              </AffiliatedPolityChip>
+                            ))}
+                          </AffiliatedPolityBar>
+                          {(countryId || historicalCountryId) && (
+                            <CheckboxLabelRow style={{ marginTop: 2 }}>
+                              <input
+                                type="checkbox"
+                                id="tenure-new-pos-scoped"
+                                checked={newPosScoped}
+                                onChange={(e) => setNewPosScoped(e.target.checked)}
+                              />
+                              <label htmlFor="tenure-new-pos-scoped">
+                                현재 선택한 국가({selectedHistoricalCountry?.name ?? selectedModernCountry?.name ?? '선택 국가'}) 전용 직책으로 등록
+                              </label>
+                            </CheckboxLabelRow>
+                          )}
+                          <LocalTitleActions>
+                            <LocalTitleSubmit
+                              type="button"
+                              disabled={newPosSaving || !newPosTitle.trim()}
+                              onClick={() => void handleCreateInlinePositionDefinition()}
+                            >
+                              {newPosSaving ? '등록 중…' : '직책 생성 후 선택'}
+                            </LocalTitleSubmit>
+                            <LocalTitleCancel
+                              type="button"
+                              disabled={newPosSaving}
+                              onClick={() => setNewPosOpen(false)}
+                            >
+                              취소
+                            </LocalTitleCancel>
+                          </LocalTitleActions>
+                        </ManualEntryGroup>
+                      )}
 
                       {positionDefinitionId && localTitleOpen && (
                         <ManualEntryGroup>
@@ -3039,7 +4621,7 @@ export function TenureRegisterPanel({
                         (specificTitleOpen || !!title.trim()) && (
                           <ManualEntryGroup>
                             <ManualEntryCaption>
-                              구체 직함{' '}
+                              보직·부임지 상세 표기 (선택){' '}
                               <LocalTitleLink
                                 type="button"
                                 style={{ marginLeft: 8 }}
@@ -3054,23 +4636,39 @@ export function TenureRegisterPanel({
                             <Input
                               value={title}
                               onChange={(event) => setTitle(event.target.value)}
-                              placeholder={`예: 주러시아 ${selectedDef.title ?? ''}`}
+                              placeholder={`예: 주러시아 ${selectedDef.title ?? ''} (기본 직위는 유지하고 표시명만 구체화)`}
                             />
                           </ManualEntryGroup>
                         )}
 
-                      {(!positionDefinitionId || selectedIsGeneric) &&
+                      {!newPosOpen &&
+                        (!positionDefinitionId || selectedIsGeneric) &&
                         (manualEntryOpen || !!title.trim() || selectedIsGeneric) && (
                           <ManualEntryGroup>
                             <ManualEntryCaption>
-                              {selectedIsGeneric ? '구체 직함' : '직접 입력'}
+                              {selectedIsGeneric ? '임시 직함 (서열 미지정 상태)' : '직접 입력 직함'}
+                              {' · '}
+                              <LocalTitleLink
+                                type="button"
+                                onClick={() =>
+                                  openNewPositionCreator({
+                                    title: title.trim(),
+                                    titleEn: titleEn.trim(),
+                                    positionType,
+                                  })
+                                }
+                              >
+                                정식 직책 정의(서열·레벨 포함)로 승격·등록하기
+                              </LocalTitleLink>
                             </ManualEntryCaption>
                             <SubFieldPair>
                               <ManualEntryField>
                                 한글 직책명
                                 <Input
                                   value={title}
-                                  onChange={(e) => setTitle(e.target.value)}
+                                  onChange={(changeEvent) =>
+                                    setTitle(changeEvent.target.value)
+                                  }
                                   placeholder={
                                     selectedIsGeneric
                                       ? '예: 제7보병연대 소위'
@@ -3082,7 +4680,9 @@ export function TenureRegisterPanel({
                                 영문 직책명 (선택)
                                 <Input
                                   value={titleEn}
-                                  onChange={(e) => setTitleEn(e.target.value)}
+                                  onChange={(changeEvent) =>
+                                    setTitleEn(changeEvent.target.value)
+                                  }
                                   placeholder="예: Consul at Canton"
                                 />
                               </ManualEntryField>
@@ -3091,6 +4691,38 @@ export function TenureRegisterPanel({
                         )}
                     </FieldControl>
                   </FieldRow>
+
+                  {/* 계급·칭호 — 군사 사령부·부대 트랙이거나 기존 값이 있을 때 직책명과 분리 입력 */}
+                  {!isReign &&
+                    (affiliationTrack === 'MILITARY' || Boolean(rankTitle.trim())) && (
+                      <FieldRow>
+                        <FieldLabel as="span">
+                          계급 · 칭호<OptionalTag>(선택)</OptionalTag>
+                        </FieldLabel>
+                        <FieldControl>
+                          <Input
+                            id="tenure-rank-title"
+                            aria-label="계급·칭호"
+                            value={rankTitle}
+                            onChange={(changeEvent) => setRankTitle(changeEvent.target.value)}
+                            placeholder="예: 원수, 상급대장, 육군 중장, 해군 대장"
+                          />
+                          <AffiliatedPolityBar>
+                            <AffiliatedPolityLabel>빠른 계급 선택:</AffiliatedPolityLabel>
+                            {MILITARY_RANK_PRESETS.map((rankPreset) => (
+                              <AffiliatedPolityChip
+                                key={rankPreset}
+                                type="button"
+                                $active={rankTitle.trim() === rankPreset}
+                                onClick={() => setRankTitle(rankPreset)}
+                              >
+                                {rankPreset}
+                              </AffiliatedPolityChip>
+                            ))}
+                          </AffiliatedPolityBar>
+                        </FieldControl>
+                      </FieldRow>
+                    )}
 
                   {/* 기간 — 사건 등록 모달 '기간 *' 행(라벨 아래 PeriodBadge + 우측 2열 DateRangeGrid + 하단 Hint)과 100% 동일 */}
                   <FieldRow>
@@ -3377,26 +5009,92 @@ export function TenureRegisterPanel({
                     </FieldControl>
                   </FieldRow>
 
-                  {/* 소속 행정부 — 커스텀 Dropbox */}
+                  {/* 소속 행정부 — 다대다(연임·개각 복수 연결) 지원 */}
                   {showCabinetField && (
                     <FieldRow>
                       <FieldLabel as="span">
                         소속 행정부<OptionalTag>(선택)</OptionalTag>
                       </FieldLabel>
                       <FieldControl>
-                        {!isHeadPositionType &&
-                          (countryId || historicalCountryId) &&
-                          cabinetOptions.length > 0 && (
-                            <CustomDropbox
-                              ariaLabel="소속 행정부"
-                              value={cabinetId ?? ''}
-                              placeholder="행정부 선택 (각료인 경우)"
-                              options={cabinetOptions}
-                              onChange={(next) => setCabinetId(next || null)}
-                              searchable={cabinetOptions.length >= 6}
-                              searchPlaceholder="행정부 검색..."
-                            />
-                          )}
+                        {(() => {
+                          const availableCabinetOptions = cabinetOptions.filter(
+                            (optItem) => !selectedCabinetIds.includes(optItem.value),
+                          )
+                          return (
+                            <>
+                              {!isHeadPositionType &&
+                                (countryId || historicalCountryId) &&
+                                availableCabinetOptions.length > 0 && (
+                                  <CustomDropbox
+                                    ariaLabel="소속 행정부"
+                                    value=""
+                                    placeholder={
+                                      selectedCabinetIds.length > 0
+                                        ? '행정부·내각 추가 연결 (연임·개각)'
+                                        : '행정부·내각 선택 (각료인 경우, 복수 선택 가능)'
+                                    }
+                                    options={availableCabinetOptions}
+                                    onChange={(nextValue) => {
+                                      if (
+                                        nextValue &&
+                                        !selectedCabinetIds.includes(nextValue)
+                                      ) {
+                                        setSelectedCabinetIds((prevIds) => [
+                                          ...prevIds,
+                                          nextValue,
+                                        ])
+                                      }
+                                    }}
+                                    searchable={availableCabinetOptions.length >= 6}
+                                    searchPlaceholder="행정부 검색..."
+                                  />
+                                )}
+                              {selectedCabinetIds.length > 0 && (
+                                <KitSelectedItems>
+                                  {selectedCabinetIds.map((selectedCabId) => {
+                                    const matchedOpt = cabinetOptions.find(
+                                      (optItem) => optItem.value === selectedCabId,
+                                    )
+                                    const fallbackMembership =
+                                      editingTenure?.cabinetMemberships?.find(
+                                        (membershipItem) =>
+                                          membershipItem.cabinetId === selectedCabId,
+                                      )
+                                    const chipLabel =
+                                      matchedOpt?.label ||
+                                      fallbackMembership?.cabinet?.name ||
+                                      (editingTenure?.cabinet?.id === selectedCabId
+                                        ? editingTenure?.cabinet?.name
+                                        : null) ||
+                                      '연결된 행정부'
+                                    return (
+                                      <KitSelectedItem
+                                        key={selectedCabId}
+                                        title={chipLabel}
+                                      >
+                                        <span>{chipLabel}</span>
+                                        <KitRemoveButton
+                                          type="button"
+                                          aria-label="행정부 연결 해제"
+                                          onClick={() =>
+                                            setSelectedCabinetIds((prevIds) =>
+                                              prevIds.filter(
+                                                (existingId) =>
+                                                  existingId !== selectedCabId,
+                                              ),
+                                            )
+                                          }
+                                        >
+                                          <FiX size={14} />
+                                        </KitRemoveButton>
+                                      </KitSelectedItem>
+                                    )
+                                  })}
+                                </KitSelectedItems>
+                              )}
+                            </>
+                          )
+                        })()}
                         {(cabinetId || initialCabinetId) && (
                           <KitAddButton
                             type="button"
@@ -3410,27 +5108,162 @@ export function TenureRegisterPanel({
                     </FieldRow>
                   )}
 
-                  {/* 소속 기관·부처 — 커스텀 Dropbox */}
+                  {/* 재임 당시 소속 정당 — 연립내각·당적 변천 기록 */}
+                  {showPartyField && (
+                    <FieldRow>
+                      <FieldLabel as="span">
+                        재임 당시 정당<OptionalTag>(선택)</OptionalTag>
+                      </FieldLabel>
+                      <FieldControl>
+                        <CustomDropbox
+                          ariaLabel="재임 당시 소속 정당"
+                          value={partyId ?? ''}
+                          placeholder="재임 당시 소속 정당 선택"
+                          options={[
+                            { value: '', label: '선택 안 함 (무소속·미지정)' },
+                            ...politicalPartyOptions,
+                          ]}
+                          onChange={(nextValue) => setPartyId(nextValue || null)}
+                          searchable={politicalPartyOptions.length >= 6}
+                          searchPlaceholder="정당 검색..."
+                        />
+                      </FieldControl>
+                    </FieldRow>
+                  )}
+
+                  {/* 소속 기관·부처 (의회·외교·기타 트랙 보조 연결) */}
                   {showDepartmentField && (
                     <FieldRow>
                       <FieldLabel as="span">
                         소속 기관·부처<OptionalTag>(선택)</OptionalTag>
                       </FieldLabel>
                       <FieldControl>
-                        <CustomDropbox
-                          ariaLabel="소속 기관·부처"
-                          value={administrationDepartmentId ?? ''}
-                          placeholder="기관·부처 선택 (장관·지휘관 등)"
-                          options={[
-                            { value: '', label: '선택 안 함 (특정 기관 미지정)' },
-                            ...departmentOptions,
-                          ]}
-                          onChange={(next) =>
-                            setAdministrationDepartmentId(next || null)
-                          }
-                          searchable={departmentOptions.length >= 6}
-                          searchPlaceholder="기관·부처 검색..."
-                        />
+                        {departmentOptions.length > 0 && (
+                          <CustomDropbox
+                            ariaLabel="소속 기관·부처"
+                            value={administrationDepartmentId ?? ''}
+                            placeholder="기관·부처 선택 (공관·위원회·기관 등)"
+                            options={[
+                              { value: '', label: '선택 안 함 (특정 기관 미지정)' },
+                              ...departmentOptions,
+                            ]}
+                            onChange={(nextValue) =>
+                              setAdministrationDepartmentId(nextValue || null)
+                            }
+                            searchable={departmentOptions.length >= 6}
+                            searchPlaceholder="기관·부처 검색..."
+                          />
+                        )}
+                        {!newDeptOpen && (countryId || historicalCountryId) && (
+                          <FieldHint>
+                            {departmentOptions.length === 0
+                              ? '이 국가에 등록된 중앙부처·기관이 아직 없습니다. '
+                              : '소속 기관이 목록에 없으면 '}
+                            <LocalTitleLink
+                              type="button"
+                              onClick={() => {
+                                setNewDeptKind('AGENCY')
+                                setNewDeptOpen(true)
+                              }}
+                            >
+                              + 새 부처·기관 바로 만들기
+                            </LocalTitleLink>
+                          </FieldHint>
+                        )}
+                        {newDeptOpen && (
+                          <ManualEntryGroup>
+                            <ManualEntryCaption>
+                              새 부처·기관 등록 (
+                              {selectedHistoricalCountry?.name ??
+                                selectedModernCountry?.name ??
+                                '선택 국가'}
+                              ){' '}
+                              <LocalTitleLink
+                                type="button"
+                                style={{ marginLeft: 8 }}
+                                onClick={() => setNewDeptOpen(false)}
+                              >
+                                닫기
+                              </LocalTitleLink>
+                            </ManualEntryCaption>
+                            <SubFieldPair>
+                              <ManualEntryField>
+                                기관·부처명 (한글) *
+                                <Input
+                                  autoFocus
+                                  value={newDeptName}
+                                  onChange={(changeEvent) =>
+                                    setNewDeptName(changeEvent.target.value)
+                                  }
+                                  placeholder="예: 국가기획위원회, 중앙선거관리위원회, 외무성"
+                                />
+                              </ManualEntryField>
+                              <ManualEntryField>
+                                영문/원어명 (선택)
+                                <Input
+                                  value={newDeptNameEn}
+                                  onChange={(changeEvent) =>
+                                    setNewDeptNameEn(changeEvent.target.value)
+                                  }
+                                  placeholder="예: National Planning Commission"
+                                />
+                              </ManualEntryField>
+                            </SubFieldPair>
+                            <SubFieldPair>
+                              <ManualEntryField>
+                                기관 유형 *
+                                <CustomDropbox
+                                  ariaLabel="새 기관 유형"
+                                  value={newDeptKind}
+                                  placeholder="기관 유형 선택"
+                                  options={INLINE_DEPARTMENT_KIND_OPTIONS}
+                                  onChange={(nextValue) => {
+                                    if (nextValue) setNewDeptKind(nextValue)
+                                  }}
+                                />
+                              </ManualEntryField>
+                              <ManualEntryField>
+                                기능 분야 (선택)
+                                <CustomDropbox
+                                  ariaLabel="새 기관 기능 분야"
+                                  value={newDeptCategoryId}
+                                  placeholder="분야 선택 (국방, 외교, 재정 등)"
+                                  options={[
+                                    { value: '', label: '분야 미지정' },
+                                    ...(
+                                      departmentCategories as Array<{
+                                        id: string
+                                        name: string
+                                        nameEn?: string | null
+                                      }>
+                                    ).map((categoryItem) => ({
+                                      value: categoryItem.id,
+                                      label: categoryItem.name,
+                                      description: categoryItem.nameEn ?? undefined,
+                                    })),
+                                  ]}
+                                  onChange={(nextValue) => setNewDeptCategoryId(nextValue)}
+                                />
+                              </ManualEntryField>
+                            </SubFieldPair>
+                            <LocalTitleActions>
+                              <LocalTitleSubmit
+                                type="button"
+                                disabled={newDeptSaving || !newDeptName.trim()}
+                                onClick={() => void handleCreateInlineDepartment()}
+                              >
+                                {newDeptSaving ? '생성 중…' : '부처 생성 후 선택'}
+                              </LocalTitleSubmit>
+                              <LocalTitleCancel
+                                type="button"
+                                disabled={newDeptSaving}
+                                onClick={() => setNewDeptOpen(false)}
+                              >
+                                취소
+                              </LocalTitleCancel>
+                            </LocalTitleActions>
+                          </ManualEntryGroup>
+                        )}
                       </FieldControl>
                     </FieldRow>
                   )}

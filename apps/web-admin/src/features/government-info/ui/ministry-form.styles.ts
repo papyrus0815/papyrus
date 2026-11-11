@@ -13,8 +13,8 @@ export { FieldLabel }
 
 /** 중앙부처 등록·수정 모달 */
 export const MinistryFormModalBox = styled(ModalBox)`
-  max-width: 720px;
-  width: 100%;
+  max-width: 880px;
+  width: 96vw;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -22,33 +22,33 @@ export const MinistryFormModalBox = styled(ModalBox)`
 export const MinistryFormModalBody = styled(ModalBody)`
   flex: 1;
   min-height: 0;
-  max-height: min(78vh, 720px);
+  max-height: min(82vh, 780px);
   overflow-y: auto;
-  padding: 20px 24px 28px;
+  padding: 20px 26px 28px;
 `
 
-/** 중앙부처 등록 폼 행 (200px 레이블 컬럼, FieldRow 기반) */
+/** 중앙부처 등록 폼 행 (170px 레이블 컬럼, FieldRow 기반) */
 export const FormFieldRow = styled(FieldRow)`
-  grid-template-columns: 200px 1fr;
+  grid-template-columns: 170px 1fr;
   @media (max-width: 640px) {
     grid-template-columns: 1fr;
   }
 `
 export const FormSelectBtn = styled.button<{ $hasValue?: boolean }>`
   width: 100%;
-  max-width: 380px;
-  padding: 12px 16px;
+  max-width: 100%;
+  padding: 11px 15px;
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e5e7eb'};
-  border-radius: 12px;
-  font-size: 14px;
-  color: ${(p) =>
-    p.$hasValue
-      ? p.theme.mode === 'dark'
+  border-radius: 11px;
+  font-size: 13.5px;
+  color: ${(props) =>
+    props.$hasValue
+      ? props.theme.mode === 'dark'
         ? '#f1f5f9'
         : '#111827'
-      : p.theme.mode === 'dark'
+      : props.theme.mode === 'dark'
         ? '#64748b'
         : '#9ca3af'};
   background: ${({ theme }) =>
@@ -70,13 +70,14 @@ export const FormSelectBtn = styled.button<{ $hasValue?: boolean }>`
 `
 export const FormTextareaField = styled.textarea`
   width: 100%;
-  max-width: 440px;
-  padding: 12px 16px;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 11px 15px;
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e5e7eb'};
-  border-radius: 12px;
-  font-size: 14px;
+  border-radius: 11px;
+  font-size: 13.5px;
   color: ${({ theme }) => theme.colors.text.primary};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
@@ -96,13 +97,14 @@ export const FormTextareaField = styled.textarea`
 `
 export const FormInputField = styled.input`
   width: 100%;
-  max-width: 380px;
-  padding: 12px 16px;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 11px 15px;
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#e5e7eb'};
-  border-radius: 12px;
-  font-size: 14px;
+  border-radius: 11px;
+  font-size: 13.5px;
   color: ${({ theme }) => theme.colors.text.primary};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};

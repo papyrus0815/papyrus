@@ -30,7 +30,7 @@ export class EventContextLinkController {
 
   @Get(':eventId/context-catalog')
   @ApiOperation({ summary: '사건 맥락 연결 선택용 7대 도메인 통합 카탈로그' })
-  catalog(): Promise<EventContextCatalogItem[]> {
+  catalog(@Param('eventId') _eventId: string): Promise<EventContextCatalogItem[]> {
     return this.service.getCatalog()
   }
 

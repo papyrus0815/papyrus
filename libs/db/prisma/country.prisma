@@ -113,6 +113,7 @@ model Country {
   electoralDistricts      ElectoralDistrict[]              @relation("ElectoralDistrictCountry")
   elections                 Election[]                       @relation("ElectionCountry")
   governmentTenures         GovernmentPositionTenure[]       @relation("TenureCountry")
+  cabinets                  Cabinet[]                        @relation("CabinetCountry")
   politicalSystems          PoliticalSystem[]                @relation("CountryPoliticalSystems")
   eventCountryRelations     EventCountryRelation[]
   territoryTransfersFrom    EventTerritoryTransfer[] @relation("TerritoryTransferFromCountry")
@@ -458,15 +459,13 @@ model AdministrationDepartmentCategory {
 // ========================
 // AdministrationDepartment (국가 기관)
 // ========================
-/// 국가 기관의 종류 — 같은 '국방' 분류 안에서도 국방부와 최고사령부는 다른 것이다.
-/// 2026-11-08 재설계: OKW(국방군 최고사령부)·OHL·스타프카·대본영을 '국방부'와 구별할 칸이 없었다.
+/// 국가 행정·통치 기관의 종류 — 민간·국가 행정 조직 전용.
+/// 군 최고사령부(OKW, OHL, Stavka)·참모본부·각군 총사령부·야전부대는 모두 MilitaryUnit에서 단일 트리로 관리한다.
 enum AdministrationDepartmentKind {
-  /// 부처 — 부·성·조·인민위원부 (외무부, 대장성, 이조, 전쟁부)
+  /// 부처 — 부·성·조·인민위원부 (외무부, 대장성, 이조, 국방부, 전쟁부)
   MINISTRY
   /// 외청·위원회·독립기관 — 청·처·원·위원회 (국정원, 감사원, 중앙정보국)
   AGENCY
-  /// 군 최고사령부·참모본부 — 국가의 군령 기관 (OKW, OHL, 스타프카, 대본영). 야전 편제는 MilitaryUnit
-  MILITARY_COMMAND
   /// 총독부·속령 통치기관 (조선총독부, 인도 정청, 폴란드 총독부의 행정청)
   COLONIAL_GOVERNMENT
   /// 궁내·왕실 기관 (궁내부, 궁내성, 내무반)
@@ -561,10 +560,14 @@ model AdministrationDepartment {
   eventRelations     EventDepartmentRelation[]
   /// 이 기관 소속으로 등록된 재임 기록 (역대 장관 조회)
   tenures            GovernmentPositionTenure[]     @relation("TenureDepartment")
-  /// 이 기관에 직접 연결된 직위 정의 (예: OKW 총장, 해군대신 등)
+  /// 이 기관에 직접 연결된 직위 정의 (예: 해군대신, 외무부 장관 등)
   positionDefinitions GovernmentPositionDefinition[] @relation("DepartmentPositionDefinitions")
-  /// 군사 부대(MilitaryUnit)와 1:N 연결 — 국방부·최고사령부 산하 부대
+  /// 군사 부대·사령부(MilitaryUnit)와 1:N 연결 — 국방부·전쟁부 산하 참모본부·야전부대
   militaryUnits      MilitaryUnit[]                 @relation("DeptMilitaryUnits")
+  /// 이 민간·국방 부처가 폐지·개편되어 탄생한 군사 사령부 계보 (예: 전쟁부 → OKW)
+  militaryUnitSuccessors MilitaryUnitTransition[]   @relation("DeptToMilitaryUnitTransition")
+  /// 내각 각료 구성(CabinetMember)에서 이 부처를 담당 부처로 지정한 항목들
+  cabinetMemberships CabinetMember[]                @relation("CabinetMemberDepartment")
 
   //--- 메타데이터 필드
   createdAt DateTime @default(now()) @map("created_at")

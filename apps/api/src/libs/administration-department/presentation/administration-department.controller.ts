@@ -33,6 +33,7 @@ export type {
   AdministrationDepartmentResponseDto,
   DepartmentEventLinkDto,
   DepartmentLineageDto,
+  DepartmentMilitaryUnitLineageDto,
   DepartmentRefDto,
 } from './dto/administration-department.dto'
 

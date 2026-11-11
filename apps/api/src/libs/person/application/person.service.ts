@@ -2990,29 +2990,83 @@ export class PersonService {
     return this.personRepository.findCabinets(params)
   }
 
-  async createCabinet(dto: {
-    headTenureId: string
-    name?: string | null
-  }, accountId?: string): Promise<any> {
-    const head = await this.personRepository.findTenureById(dto.headTenureId)
-    if (!head) {
-      throw new NotFoundException('수반 재임을 찾을 수 없습니다.')
-    }
-    // 가드: head는 비군주 국가원수(HEAD_OF_STATE) 또는 정부수반(HEAD_OF_GOVERNMENT)이어야 함
-    const headType = (head as any).positionDefinition?.positionType ?? (head as any).positionType
-    const isMonarchical = Boolean((head as any).positionDefinition?.isMonarchical)
-    if (isMonarchical || (headType !== 'HEAD_OF_STATE' && headType !== 'HEAD_OF_GOVERNMENT')) {
-      throw new BadRequestException('행정부의 수반은 비군주 국가원수 또는 정부수반 임기여야 합니다.')
+  async createCabinet(
+    dto: {
+      headTenureId?: string | null
+      name?: string | null
+      description?: string | null
+      countryId?: string | null
+      historicalCountryId?: string | null
+      startDateInfo?: any
+      endDateInfo?: any
+      allowReshuffle?: boolean
+      memberTenureIds?: string[]
+    },
+    accountId?: string,
+  ): Promise<any> {
+    const trimmedHeadTenureId = dto.headTenureId?.trim() || null
+    if (trimmedHeadTenureId) {
+      const head = await this.personRepository.findTenureById(trimmedHeadTenureId)
+      if (!head) {
+        throw new NotFoundException('수반 재임을 찾을 수 없습니다.')
+      }
+      const headType =
+        (head as any).positionDefinition?.positionType ?? (head as any).positionType
+      if (headType !== 'HEAD_OF_STATE' && headType !== 'HEAD_OF_GOVERNMENT') {
+        throw new BadRequestException(
+          '행정부의 수반은 국가원수(군주·대통령 등) 또는 정부수반(총리·수상 등) 임기여야 합니다.',
+        )
+      }
     }
     return this.personRepository.createCabinet(dto, requireActorId(accountId))
   }
 
   async updateCabinet(
     cabinetId: string,
-    dto: { name?: string | null },
+    dto: {
+      name?: string | null
+      description?: string | null
+      headTenureId?: string | null
+      countryId?: string | null
+      historicalCountryId?: string | null
+      startDateInfo?: any
+      endDateInfo?: any
+    },
     accountId?: string,
   ): Promise<any> {
     return this.personRepository.updateCabinet(cabinetId, dto, requireActorId(accountId))
+  }
+
+  async attachCabinetMembers(
+    cabinetId: string,
+    items: Array<{
+      tenureId: string
+      departmentId?: string | null
+      roleTitle?: string | null
+    }>,
+    accountId?: string,
+  ): Promise<any[]> {
+    return this.personRepository.attachCabinetMembers(
+      cabinetId,
+      items,
+      requireActorId(accountId),
+    )
+  }
+
+  async detachCabinetMember(
+    cabinetId: string,
+    tenureId: string,
+    accountId?: string,
+  ): Promise<void> {
+    return this.personRepository.detachCabinetMember(
+      cabinetId,
+      tenureId,
+      requireActorId(accountId),
+    )
+  }
+
+  async findSuggestedCabinetMembers(cabinetId: string): Promise<any[]> {
+    return this.personRepository.findSuggestedCabinetMembers(cabinetId)
   }
 
   async deleteCabinet(cabinetId: string, accountId?: string): Promise<void> {

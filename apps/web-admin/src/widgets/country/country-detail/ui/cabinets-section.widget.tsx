@@ -21,6 +21,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   FiCalendar,
+  FiCheck,
   FiChevronDown,
   FiClock,
   FiEdit2,
@@ -53,6 +54,7 @@ import {
   type CreateGovernmentPositionTenureDto,
   type GovernmentCabinetTenureItem,
   type GovernmentHeadTenureInCabinetList,
+  type SuggestedCabinetMemberDto,
   type TenureAchievementByEventLinkRow,
   personCareerApi,
 } from '@/shared/api/person-career'
@@ -114,6 +116,10 @@ import {
   ModalOverlay,
   ModalTitle,
 } from '@/shared/ui/modal/modal.styles'
+import {
+  type EditableInstitutionTenure,
+  InstitutionAppointmentModal,
+} from '@/shared/ui/institution-appointment-modal/institution-appointment-modal'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import {
@@ -172,6 +178,7 @@ import {
   cabinetTimelineMonarchUiTint,
   calcAgeAtEndTenure,
   calcTenureDuration,
+  formatCabinetHeadBreadcrumbLabel,
   formatDate,
   getHeadTenureTerritoryLabel,
   getPersonBirthPlaceLabel,
@@ -190,7 +197,10 @@ import {
 } from './cabinets-section.helpers'
 import * as CabS from './cabinets-section.styled'
 import { SubsectionAddBtn } from './country-politics-tab.styles'
-import { RegisterCabinetModal } from './register-cabinet-modal'
+import {
+  RegisterCabinetModal,
+  type RegisterCabinetFlow,
+} from './register-cabinet-modal'
 import { TenureHistoryHorizTimeline } from './tenure-history-horiz-timeline'
 import { TreatyLinkModal } from './treaty-link-modal'
 import { CabinetEventsSection } from './cabinet-events-section.widget'
@@ -391,11 +401,14 @@ export interface CabinetsSectionProps {
   country: UnifiedCountry
   /** 부처 등록 시 중앙부처 탭으로 전환하고 해당 카테고리로 폼 열기 */
   onOpenMinistriesTab?: (categoryId?: string) => void
+  /** 각료 소속 부처 배지 클릭 시 중앙부처 탭의 해당 부처 상세로 이동 */
+  onOpenDepartmentDetail?: (departmentId: string) => void
 }
 
 export function CabinetsSection({
   country,
   onOpenMinistriesTab,
+  onOpenDepartmentDetail,
 }: CabinetsSectionProps) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -464,8 +477,16 @@ export function CabinetsSection({
     useState(false)
   const [registerCabinetSubmitting, setRegisterCabinetSubmitting] =
     useState(false)
-  /** 'select' = 기존 수반 재임 선택, 'new' = 새 수반 등록(재임+행정부 한 번에) */
-  const [registerFlow, setRegisterFlow] = useState<'select' | 'new'>('select')
+  /** 'select' = 기존 수반 재임 선택(개각 포함), 'new' = 새 수반 등록, 'collective' = 집단지도·과도정부 */
+  const [registerFlow, setRegisterFlow] =
+    useState<RegisterCabinetFlow>('select')
+  const [appointmentModalOpen, setAppointmentModalOpen] = useState(false)
+  const [editingMinisterForModal, setEditingMinisterForModal] =
+    useState<EditableInstitutionTenure | null>(null)
+  const [selectedSuggestionIds, setSelectedSuggestionIds] = useState<string[]>(
+    [],
+  )
+  const [attachingSuggestions, setAttachingSuggestions] = useState(false)
   /** 현대국가에서 등록 시 하위 역사국가 선택 (null = 현대국가 자신에 등록) */
   const [
     registerTargetHistoricalCountryId,
@@ -490,6 +511,9 @@ export function CabinetsSection({
   /** 군주 등록 — 인물을 고른 뒤 직위 보유 폼을 재위로 연다 */
   const [monarchPersonPickerOpen, setMonarchPersonPickerOpen] = useState(false)
   const [monarchPersonId, setMonarchPersonId] = useState<string | null>(null)
+  /** 수반·행정부 등록 — 인물을 고른 뒤 통합 재임 등록 폼(TenureRegisterPanel)을 연다 */
+  const [headPersonPickerOpen, setHeadPersonPickerOpen] = useState(false)
+  const [headPersonId, setHeadPersonId] = useState<string | null>(null)
   const [deletingCabinetId, setDeletingCabinetId] = useState<string | null>(
     null,
   )
@@ -651,25 +675,24 @@ export function CabinetsSection({
     enabled: !!countryId || !!historicalCountryId,
   })
 
-  /** 행정부 리스트: 수반 취임일 기준 시간순(과거→현재) 정렬 */
+  /** 행정부 리스트: 수반 취임일(또는 내각 출범일) 기준 시간순(과거→현재) 정렬 */
   const sortedCabinets = useMemo(() => {
     const list = [...cabinets]
-    return list.sort((a, b) => {
-      const dateA = a.headTenure?.startDate
-        ? new Date(a.headTenure.startDate).getTime()
-        : 0
-      const dateB = b.headTenure?.startDate
-        ? new Date(b.headTenure.startDate).getTime()
-        : 0
-      return dateA - dateB
+    return list.sort((left, right) => {
+      const leftStart = left.headTenure?.startDate ?? left.startDate
+      const rightStart = right.headTenure?.startDate ?? right.startDate
+      const dateLeft = leftStart ? new Date(leftStart).getTime() : 0
+      const dateRight = rightStart ? new Date(rightStart).getTime() : 0
+      return dateLeft - dateRight
     })
   }, [cabinets])
 
-  /** 내각 목록 — 군주(황제·왕 등)로 식별되는 국가원수 행정부만 제외 */
+  /** 내각 목록 — 의례적 원수(천황·황제 등) 중복 행만 제외하고 전제군주 친정·집단지도 내각은 표시 */
   const executiveCabinetsSorted = useMemo(
     () =>
       sortedCabinets.filter(
-        (c) => !shouldHideCabinetFromExecutiveTimeline(c.headTenure),
+        (cabinetItem) =>
+          !shouldHideCabinetFromExecutiveTimeline(cabinetItem.headTenure),
       ),
     [sortedCabinets],
   )
@@ -678,10 +701,13 @@ export function CabinetsSection({
     if (!cabinetCountryFilter) return executiveCabinetsSorted
     return executiveCabinetsSorted.filter((cabinet) => {
       const head = cabinet.headTenure
+      const effCountryId = head?.countryId ?? cabinet.countryId
+      const effHistCountryId =
+        head?.historicalCountryId ?? cabinet.historicalCountryId
       if (cabinetCountryFilter === countryId) {
-        return head?.countryId === countryId && !head?.historicalCountryId
+        return effCountryId === countryId && !effHistCountryId
       }
-      return head?.historicalCountryId === cabinetCountryFilter
+      return effHistCountryId === cabinetCountryFilter
     })
   }, [executiveCabinetsSorted, cabinetCountryFilter, countryId])
 
@@ -707,21 +733,33 @@ export function CabinetsSection({
       )
     }
 
-    const q = cabinetSearchQuery.trim().toLowerCase()
-    if (!q) return list
-    return list.filter((c: any) => {
-      const head = c.headTenure
+    const query = cabinetSearchQuery.trim().toLowerCase()
+    if (!query) return list
+    return list.filter((cabinetItem: any) => {
+      const head = cabinetItem.headTenure
       const personName = head?.person ? getPersonName(head.person) : ''
       const posTitle =
-        head?.title ?? head?.positionDefinition?.title ?? c.name ?? ''
-      const start = head?.startDate
-        ? new Date(head.startDate).getUTCFullYear().toString()
+        head?.title ??
+        head?.positionDefinition?.title ??
+        cabinetItem.name ??
+        '집단지도체제'
+      const effStart = head?.startDate ?? cabinetItem.startDate
+      const effEnd = head ? head.endDate : cabinetItem.endDate
+      const start = effStart
+        ? new Date(effStart).getUTCFullYear().toString()
         : ''
-      const end = head?.endDate
-        ? new Date(head.endDate).getUTCFullYear().toString()
+      const end = effEnd
+        ? new Date(effEnd).getUTCFullYear().toString()
         : '현재'
-      const territory = getHeadTenureTerritoryLabel(head, country.name)
-      const cabName = typeof c.name === 'string' ? c.name : ''
+      const territory = getHeadTenureTerritoryLabel(
+        head ?? {
+          country: cabinetItem.country,
+          historicalCountry: cabinetItem.historicalCountry,
+        },
+        country.name,
+      )
+      const cabName =
+        typeof cabinetItem.name === 'string' ? cabinetItem.name : ''
       const eraLine = resolveReignEraLineForCabinetHead(
         head,
         countryTenures as Parameters<
@@ -754,10 +792,10 @@ export function CabinetsSection({
         eraLine,
         monarchLine,
         monarchPersonSearch,
-      ].some((v) =>
-        String(v ?? '')
+      ].some((val) =>
+        String(val ?? '')
           .toLowerCase()
-          .includes(q),
+          .includes(query),
       )
     })
   }, [
@@ -772,14 +810,12 @@ export function CabinetsSection({
   /** 타임라인·범례: 내각(행정부)만 — 군주는 칸으로 넣지 않음 */
   const timelineCabinetsMerged = useMemo(() => {
     const dir = cabinetSortOrder === 'asc' ? 1 : -1
-    return [...filteredCabinets].sort((a, b) => {
-      const dateA = a.headTenure?.startDate
-        ? new Date(a.headTenure.startDate).getTime()
-        : 0
-      const dateB = b.headTenure?.startDate
-        ? new Date(b.headTenure.startDate).getTime()
-        : 0
-      return (dateA - dateB) * dir
+    return [...filteredCabinets].sort((left, right) => {
+      const leftStart = left.headTenure?.startDate ?? left.startDate
+      const rightStart = right.headTenure?.startDate ?? right.startDate
+      const dateLeft = leftStart ? new Date(leftStart).getTime() : 0
+      const dateRight = rightStart ? new Date(rightStart).getTime() : 0
+      return (dateLeft - dateRight) * dir
     })
   }, [filteredCabinets, cabinetSortOrder])
 
@@ -1039,15 +1075,34 @@ export function CabinetsSection({
     [positionDefinitions],
   )
 
-  /** 부처 선택 시 해당 부처 카테고리의 직위만 필터링, 미선택 시 전체 */
+  /** 부처 선택 시 해당 부처 귀속 직위 최우선 + 동일 카테고리 직위 필터링, 미선택 시 전체 */
   const filteredMinisterPositionOptions = useMemo(() => {
     if (!ministerFormDeptId) return ministerPositionOptions
     const dept = (ministriesForCabinet as any[]).find(
-      (d: any) => d.id === ministerFormDeptId,
+      (deptItem: any) => deptItem.id === ministerFormDeptId,
     )
     const catId = dept?.categoryId ?? null
+    const directMatches = ministerPositionOptions.filter(
+      (defItem: any) => defItem.administrationDepartmentId === ministerFormDeptId,
+    )
+    const categoryMatches = catId
+      ? ministerPositionOptions.filter(
+          (defItem: any) =>
+            defItem.administrationDepartmentId !== ministerFormDeptId &&
+            !defItem.administrationDepartmentId &&
+            defItem.categoryId === catId,
+        )
+      : []
+    if (directMatches.length > 0 || categoryMatches.length > 0) {
+      return [...directMatches, ...categoryMatches]
+    }
     if (!catId) return ministerPositionOptions
-    return ministerPositionOptions.filter((d: any) => d.categoryId === catId)
+    return ministerPositionOptions.filter(
+      (defItem: any) =>
+        defItem.categoryId === catId &&
+        (!defItem.administrationDepartmentId ||
+          defItem.administrationDepartmentId === ministerFormDeptId),
+    )
   }, [ministerPositionOptions, ministerFormDeptId, ministriesForCabinet])
 
   /** 각료 등록 모달에서 선택한 인물 (썸네일·이름 표시용) */
@@ -1156,7 +1211,73 @@ export function CabinetsSection({
 
   const handleAddMinister = (cabinet: any) => {
     setAddMinisterCabinet(cabinet)
-    setPersonSelectOpen(true)
+    setEditingMinisterForModal(null)
+    setAppointmentModalOpen(true)
+  }
+
+  const handleEditMinister = (minister: any) => {
+    if (!selectedCabinet) return
+    setAddMinisterCabinet(selectedCabinet)
+    setEditingMinisterForModal({
+      id: minister.id,
+      personId: minister.personId ?? minister.person?.id ?? null,
+      personName: minister.person ? getPersonName(minister.person) : null,
+      positionType:
+        minister.positionType ??
+        minister.positionDefinition?.positionType ??
+        'CABINET_MINISTER',
+      positionDefinitionId:
+        minister.positionDefinition?.id ??
+        minister.positionDefinitionId ??
+        null,
+      title: minister.title ?? minister.positionDefinition?.title ?? null,
+      rankTitle: minister.rankTitle ?? null,
+      ordinal: minister.ordinal ?? null,
+      partyId: minister.partyId ?? minister.party?.id ?? null,
+      administrationDepartmentId:
+        minister.administrationDepartmentId ??
+        minister.administrationDepartment?.id ??
+        null,
+      cabinetId: selectedCabinet.id,
+      startDate: minister.startDate ?? null,
+      endDate: minister.endDate ?? null,
+      startEra: minister.startEra ?? null,
+      startYear: minister.startYear ?? null,
+      startMonth: minister.startMonth ?? null,
+      startDay: minister.startDay ?? null,
+      endEra: minister.endEra ?? null,
+      endYear: minister.endYear ?? null,
+      endMonth: minister.endMonth ?? null,
+      endDay: minister.endDay ?? null,
+    })
+    setAppointmentModalOpen(true)
+  }
+
+  const handleDetachMinisterFromCabinet = async (minister: any) => {
+    if (!selectedCabinet?.id || !minister?.id) return
+    const personLabel = minister.person
+      ? getPersonName(minister.person)
+      : '해당 각료'
+    const ok = await confirm({
+      title: '내각 각료 편입 해제',
+      message: `「${personLabel}」을(를) 이 행정부에서 제외합니다. 중앙부처·인물의 본래 재임 기록은 삭제되지 않고 내각 연결만 해제됩니다.`,
+      confirmLabel: '편입 해제',
+      danger: true,
+    })
+    if (!ok) return
+    try {
+      await personCareerApi.detachCabinetMember(selectedCabinet.id, minister.id)
+      notify.success('내각 연결을 해제했습니다.')
+      if (selectedMinisterId === minister.id) {
+        setSelectedMinisterId(null)
+      }
+      invalidateTenureQueries(queryClient)
+      void queryClient.invalidateQueries({
+        queryKey: ['cabinet-suggested-members', selectedCabinet.id],
+      })
+    } catch (err: unknown) {
+      notify.error(getApiErrorMessage(err, '편입 해제에 실패했습니다.'))
+    }
   }
 
   /** 각료 상세 뷰에서 직접 히스토리 삭제 */
@@ -1246,6 +1367,24 @@ export function CabinetsSection({
           ? (ministerFormPositionDefId ?? undefined)
           : undefined
 
+      const selectedDept = ministerFormDeptId
+        ? (allMinistriesForCabinet as any[]).find(
+            (deptItem: any) => deptItem.id === ministerFormDeptId,
+          )
+        : null
+      const resolvedHistoricalCountryId =
+        selectedDept?.historicalCountryId ??
+        (addMinisterCabinet as any)?.headTenure?.historicalCountryId ??
+        addMinisterCabinet.historicalCountryId ??
+        historicalCountryId ??
+        undefined
+      const resolvedCountryId =
+        selectedDept?.countryId ??
+        (addMinisterCabinet as any)?.headTenure?.countryId ??
+        addMinisterCabinet.countryId ??
+        countryId ??
+        undefined
+
       if (editingTenureId) {
         await personCareerApi.updateGovernmentPositionTenure(editingTenureId, {
           personId: selectedPersonIdForAdd,
@@ -1265,9 +1404,8 @@ export function CabinetsSection({
           positionDefinitionId: resolvedPositionDefId,
           administrationDepartmentId: ministerFormDeptId || undefined,
           title: titleValue,
-          countryId: addMinisterCabinet.countryId ?? undefined,
-          historicalCountryId:
-            addMinisterCabinet.historicalCountryId ?? undefined,
+          countryId: resolvedCountryId,
+          historicalCountryId: resolvedHistoricalCountryId,
           cabinetId: addMinisterCabinet.id,
           startDate: ministerFormStartDate,
           endDate: ministerFormEndDate || undefined,
@@ -1278,6 +1416,9 @@ export function CabinetsSection({
       setPersonSelectOpen(false)
       setAddMinisterCabinet(null)
       invalidateTenureQueries(queryClient)
+      void queryClient.invalidateQueries({
+        queryKey: ['administration-department-tenures'],
+      })
     } catch (e: any) {
       notify.error(
         e?.response?.data?.message ?? e?.message ?? '처리에 실패했습니다.',
@@ -1299,34 +1440,87 @@ export function CabinetsSection({
     setSelectedPersonIdForAdd(null)
   }
 
-  const headTenureIdsWithCabinet = new Set(
-    (cabinets as any[]).map((c: any) => c.headTenureId),
-  )
-  const headTenuresForRegister = (countryTenures as any[]).filter((t: any) => {
-    const pt =
-      t.positionType ??
-      t.positionDefinition?.positionType ??
-      t.position?.positionType
-    return (
-      pt &&
-      HEAD_POSITION_TYPES.has(pt) &&
-      !headTenureIdsWithCabinet.has(t.id) &&
-      t.isMonarchical !== true
-    )
-  })
+  const cabinetCountByHeadId = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const cabinetItem of cabinets as any[]) {
+      if (cabinetItem.headTenureId) {
+        counts.set(
+          cabinetItem.headTenureId,
+          (counts.get(cabinetItem.headTenureId) ?? 0) + 1,
+        )
+      }
+    }
+    return counts
+  }, [cabinets])
 
-  const handleRegisterCabinet = async (tenure: any) => {
+  const headTenuresForRegister = useMemo(
+    () =>
+      (countryTenures as any[])
+        .filter((tenureItem: any) => {
+          const posType =
+            tenureItem.positionType ??
+            tenureItem.positionDefinition?.positionType ??
+            tenureItem.position?.positionType
+          return Boolean(posType && HEAD_POSITION_TYPES.has(posType))
+        })
+        .map((tenureItem: any) => ({
+          ...tenureItem,
+          _existingCabinetCount: cabinetCountByHeadId.get(tenureItem.id) ?? 0,
+        })),
+    [countryTenures, cabinetCountByHeadId],
+  )
+
+  const handleRegisterCabinet = async (
+    tenure: any,
+    options?: { name?: string; startDate?: string; endDate?: string },
+  ) => {
     setRegisterCabinetSubmitting(true)
     try {
-      await personCareerApi.createCabinet({ headTenureId: tenure.id })
-      notify.success('행정부가 등록되었습니다.')
+      await personCareerApi.createCabinet({
+        headTenureId: tenure.id,
+        name: options?.name?.trim() || null,
+        startDate: options?.startDate || null,
+        endDate: options?.endDate || null,
+        allowReshuffle: true,
+      })
+      notify.success('행정부가 개설되었습니다.')
       setRegisterCabinetModalOpen(false)
       setRegisterFlow('select')
       invalidateTenureQueries(queryClient)
-    } catch (e: any) {
-      const msg =
-        e?.response?.data?.message ?? e?.message ?? '등록에 실패했습니다.'
-      notify.error(msg)
+    } catch (err: unknown) {
+      notify.error(getApiErrorMessage(err, '등록에 실패했습니다.'))
+    } finally {
+      setRegisterCabinetSubmitting(false)
+    }
+  }
+
+  const handleRegisterCollectiveCabinet = async (payload: {
+    name: string
+    startDate: string
+    endDate?: string
+    historicalCountryId?: string | null
+  }) => {
+    setRegisterCabinetSubmitting(true)
+    try {
+      const effectiveCountryId =
+        !isHistorical && !payload.historicalCountryId ? countryId : null
+      const effectiveHistoricalCountryId =
+        payload.historicalCountryId ?? historicalCountryId ?? null
+      await personCareerApi.createCabinet({
+        headTenureId: null,
+        name: payload.name,
+        startDate: payload.startDate,
+        endDate: payload.endDate || null,
+        countryId: effectiveCountryId,
+        historicalCountryId: effectiveHistoricalCountryId,
+      })
+      notify.success('집단지도체제 · 과도정부 행정부가 등록되었습니다.')
+      setRegisterCabinetModalOpen(false)
+      setRegisterFlow('select')
+      resetNewHeadForm()
+      invalidateTenureQueries(queryClient)
+    } catch (err: unknown) {
+      notify.error(getApiErrorMessage(err, '등록에 실패했습니다.'))
     } finally {
       setRegisterCabinetSubmitting(false)
     }
@@ -1459,11 +1653,11 @@ export function CabinetsSection({
     }
   }
 
-  const handleOpenEditCabinet = (c: any, e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    const head = c.headTenure
-    setEditingCabinet(c)
-    setEditingCabinetName(c.name ?? '')
+  const handleOpenEditCabinet = (cabinetItem: any, clickEvent?: React.MouseEvent) => {
+    clickEvent?.stopPropagation()
+    const head = cabinetItem.headTenure
+    setEditingCabinet(cabinetItem)
+    setEditingCabinetName(cabinetItem.name ?? '')
     setEditingTermNumber(
       head?.ordinal != null ? String(head.ordinal) : '',
     )
@@ -1473,28 +1667,31 @@ export function CabinetsSection({
     setEditingPositionDefId(
       head?.positionDefinitionId ?? head?.positionDefinition?.id ?? null,
     )
+    const rawStart = head?.startDate ?? cabinetItem.startDate
+    const rawEnd = head ? head.endDate : cabinetItem.endDate
     setEditingStartDate(
-      head?.startDate
-        ? typeof head.startDate === 'string'
-          ? head.startDate.slice(0, 10)
-          : new Date(head.startDate).toISOString().slice(0, 10)
+      rawStart
+        ? typeof rawStart === 'string'
+          ? rawStart.slice(0, 10)
+          : new Date(rawStart).toISOString().slice(0, 10)
         : '',
     )
     setEditingEndDate(
-      head?.endDate
-        ? typeof head.endDate === 'string'
-          ? head.endDate.slice(0, 10)
-          : new Date(head.endDate).toISOString().slice(0, 10)
+      rawEnd
+        ? typeof rawEnd === 'string'
+          ? rawEnd.slice(0, 10)
+          : new Date(rawEnd).toISOString().slice(0, 10)
         : '',
     )
     setEditingAppointmentMethod(head?.appointmentMethod ?? '')
     setEditingEndReason(head?.endReason ?? '')
     setEditingEndReasonDetail(head?.endReasonDetail ?? '')
     setEditingNotes(head?.notes ?? '')
-    // 수반 재임의 현재 소속 국가 초기화
-    if (head?.historicalCountryId) {
+    const effHistCountryId =
+      head?.historicalCountryId ?? cabinetItem.historicalCountryId
+    if (effHistCountryId) {
       setEditingTargetType('historical')
-      setEditingTargetHistoricalCountryId(head.historicalCountryId)
+      setEditingTargetHistoricalCountryId(effHistCountryId)
     } else {
       setEditingTargetType('modern')
       setEditingTargetHistoricalCountryId(null)
@@ -1552,12 +1749,19 @@ export function CabinetsSection({
     if (!editingCabinet) return
     const cabinetId = editingCabinet.id
     const headTenureId = editingCabinet.headTenure?.id
-    if (!headTenureId) {
-      notify.error('수반 재임 정보가 없습니다.')
-      return
-    }
     setUpdatingCabinetId(cabinetId)
     try {
+      if (!headTenureId) {
+        await personCareerApi.updateCabinet(cabinetId, {
+          name: editingCabinetName.trim() || null,
+          startDate: editingStartDate.trim() || null,
+          endDate: editingEndDate.trim() || null,
+        })
+        notify.success('행정부가 수정되었습니다.')
+        closeEditCabinetModal()
+        invalidateTenureQueries(queryClient)
+        return
+      }
       const termNumParsed = editingTermNumber.trim()
         ? parseInt(editingTermNumber.trim(), 10)
         : undefined
@@ -1668,6 +1872,64 @@ export function CabinetsSection({
     enabled: !!selectedCabinetId && cabinetView === 'detail',
   })
 
+  /** 내각 기간과 겹치는 해당 국가 중앙부처 장·차관 추천 목록 */
+  const { data: suggestedCabinetMembers = [] } = useQuery<
+    SuggestedCabinetMemberDto[]
+  >({
+    queryKey: ['cabinet-suggested-members', selectedCabinetId],
+    queryFn: () =>
+      selectedCabinetId
+        ? personCareerApi.getSuggestedCabinetMembers(selectedCabinetId)
+        : Promise.resolve([]),
+    enabled: Boolean(
+      selectedCabinetId &&
+        cabinetView === 'detail' &&
+        !selectedMinisterId &&
+        !selectedHeadHistoryId,
+    ),
+  })
+
+  useEffect(() => {
+    setSelectedSuggestionIds(
+      suggestedCabinetMembers.map((suggestedItem) => suggestedItem.tenureId),
+    )
+  }, [suggestedCabinetMembers])
+
+  const handleAttachSuggestedMinisters = async () => {
+    if (!selectedCabinetId || selectedSuggestionIds.length === 0) return
+    const selectedSet = new Set(selectedSuggestionIds)
+    const itemsToAttach = suggestedCabinetMembers
+      .filter((suggestedItem) => selectedSet.has(suggestedItem.tenureId))
+      .map((suggestedItem) => ({
+        tenureId: suggestedItem.tenureId,
+        administrationDepartmentId:
+          suggestedItem.administrationDepartment?.id ?? null,
+        roleTitle:
+          suggestedItem.title ??
+          suggestedItem.positionDefinition?.title ??
+          null,
+      }))
+    if (itemsToAttach.length === 0) return
+    setAttachingSuggestions(true)
+    try {
+      await personCareerApi.attachCabinetMembers(
+        selectedCabinetId,
+        itemsToAttach,
+      )
+      notify.success(
+        `${itemsToAttach.length}명의 부처 재임을 내각 각료로 일괄 편입했습니다.`,
+      )
+      invalidateTenureQueries(queryClient)
+      void queryClient.invalidateQueries({
+        queryKey: ['cabinet-suggested-members', selectedCabinetId],
+      })
+    } catch (err: unknown) {
+      notify.error(getApiErrorMessage(err, '일괄 편입에 실패했습니다.'))
+    } finally {
+      setAttachingSuggestions(false)
+    }
+  }
+
   useLayoutEffect(() => {
     if (!selectedHeadHistoryId && !selectedHistoryId) return
     const el = cabinetDetailViewRootRef.current
@@ -1731,22 +1993,43 @@ export function CabinetsSection({
     [visibleSelectedCabinetMinisters],
   )
 
-  const getMinisterDepartmentName = (t: GovernmentCabinetTenureItem) => {
-    if (t?.administrationDepartment?.name) {
-      return t.administrationDepartment.name
-    }
+  const resolveMinisterDepartment = (
+    tenureItem: GovernmentCabinetTenureItem,
+  ): { id: string; name: string; categoryId?: string | null } | null => {
     const matched = findDepartmentForMember(
       {
-        title: t?.title ?? t?.positionDefinition?.title ?? null,
+        title:
+          tenureItem?.title ?? tenureItem?.positionDefinition?.title ?? null,
         administrationDepartmentId:
-          t?.administrationDepartmentId ??
-          t?.positionDefinition?.administrationDepartmentId ??
+          tenureItem?.administrationDepartmentId ??
+          tenureItem?.positionDefinition?.administrationDepartmentId ??
           null,
-        administrationDepartment: t?.administrationDepartment ?? null,
-        positionDefinition: t?.positionDefinition ?? null,
+        administrationDepartment: tenureItem?.administrationDepartment ?? null,
+        positionDefinition: tenureItem?.positionDefinition ?? null,
       },
-      allMinistriesForCabinet as any[],
+      allMinistriesForCabinet,
     )
+    if (matched) return matched
+    if (
+      tenureItem?.administrationDepartment?.id &&
+      tenureItem?.administrationDepartment?.name
+    ) {
+      return {
+        id: tenureItem.administrationDepartment.id,
+        name: tenureItem.administrationDepartment.name,
+        categoryId: tenureItem.administrationDepartment.categoryId ?? null,
+      }
+    }
+    return null
+  }
+
+  const getMinisterDepartmentName = (
+    tenureItem: GovernmentCabinetTenureItem,
+  ) => {
+    if (tenureItem?.administrationDepartment?.name) {
+      return tenureItem.administrationDepartment.name
+    }
+    const matched = resolveMinisterDepartment(tenureItem)
     return matched?.name ?? '미연결'
   }
   if (loadingCabinets) {
@@ -1921,14 +2204,21 @@ export function CabinetsSection({
 
                     <CabS.CabListRegisterBtn
                       type="button"
+                      onClick={() => setHeadPersonPickerOpen(true)}
+                    >
+                      <FiPlus size={14} />
+                      수반 · 행정부 등록
+                    </CabS.CabListRegisterBtn>
+                    <CabS.CabListMonarchRegisterBtn
+                      type="button"
                       onClick={() => {
-                        setRegisterFlow('new')
+                        setRegisterFlow('select')
                         setRegisterCabinetModalOpen(true)
                       }}
                     >
                       <FiPlus size={14} />
-                      행정부 등록
-                    </CabS.CabListRegisterBtn>
+                      내각 개설 · 개각 · 집단지도
+                    </CabS.CabListMonarchRegisterBtn>
                     <CabS.CabListMonarchRegisterBtn
                       type="button"
                       onClick={() => setMonarchPersonPickerOpen(true)}
@@ -1966,10 +2256,7 @@ export function CabinetsSection({
                         description="총리·대통령 등 정부 수반의 임기를 등록하면 행정부가 함께 만들어집니다. 군주 재위는 「역대 수반」 탭에서 별도로 관리되며 이 목록에는 표시되지 않습니다."
                         primaryAction={{
                           label: '수반 임기와 함께 행정부 등록',
-                          onClick: () => {
-                            setRegisterFlow('new')
-                            setRegisterCabinetModalOpen(true)
-                          },
+                          onClick: () => setHeadPersonPickerOpen(true),
                           icon: <FiPlus size={16} strokeWidth={2.25} />,
                         }}
                         secondaryAction={{
@@ -2234,26 +2521,38 @@ export function CabinetsSection({
                                       const territoryLabel =
                                         showCabinetTerritoryLabels
                                           ? getHeadTenureTerritoryLabel(
-                                              head,
+                                              head ?? {
+                                                country: item.country,
+                                                historicalCountry:
+                                                  item.historicalCountry,
+                                              },
                                               country.name,
                                             )
                                           : null
                                       const personName = head?.person
                                         ? getPersonName(head.person)
-                                        : '이름 없음'
-                                      const posTitle =
-                                        head?.positionDefinition?.title ??
-                                        head?.title ??
-                                        '—'
-                                      const termNum =
-                                        head?.ordinal
+                                        : item.name?.trim() ||
+                                          '집단지도 · 과도정부'
+                                      const posTitle = head
+                                        ? (head.positionDefinition?.title ??
+                                          head.title ??
+                                          '—')
+                                        : '집단지도 · 위원회'
+                                      const termNum = head?.ordinal
                                       const thumbUrl =
                                         head?.person?.profileImageUrl ?? null
-                                      const startYear = head?.startDate
-                                        ? new Date(head.startDate).getUTCFullYear()
+                                      const effStartDate =
+                                        head?.startDate ?? item.startDate
+                                      const effEndDate = head
+                                        ? head.endDate
+                                        : item.endDate
+                                      const startYear = effStartDate
+                                        ? new Date(
+                                            effStartDate,
+                                          ).getUTCFullYear()
                                         : null
-                                      const range = head?.startDate
-                                        ? `${formatDate(head.startDate)} – ${head?.endDate ? formatDate(head.endDate) : '현재'}`
+                                      const range = effStartDate
+                                        ? `${formatDate(effStartDate)} – ${effEndDate ? formatDate(effEndDate) : '현재'}`
                                         : '—'
                                       const ageAtStart =
                                         head?.person && head?.startDate
@@ -2768,6 +3067,7 @@ export function CabinetsSection({
                   setAddMinisterCabinet={setAddMinisterCabinet}
                   setPersonSelectOpen={setPersonSelectOpen}
                   handleDeleteCabinet={handleDeleteCabinet}
+                  onEditMinister={handleEditMinister}
                   onEditCabinet={() => handleOpenEditCabinet(selectedCabinet)}
                   onPrint={() => window.print()}
                 />
@@ -2789,6 +3089,8 @@ export function CabinetsSection({
                         minister.positionDefinition?.title ??
                         minister.title ??
                         '—'
+                      const matchedDepartment =
+                        resolveMinisterDepartment(minister)
                       const deptName = getMinisterDepartmentName(minister)
                       const start = minister.startDate
                         ? formatDate(minister.startDate)
@@ -2857,7 +3159,29 @@ export function CabinetsSection({
                                   </CabS.MinisterPosBadge>
                                   {deptName !== '—' &&
                                     deptName !== '미연결' && (
-                                      <CabS.MinisterDeptTag>
+                                      <CabS.MinisterDeptTag
+                                        onClick={
+                                          matchedDepartment?.id &&
+                                          onOpenDepartmentDetail
+                                            ? () =>
+                                                onOpenDepartmentDetail(
+                                                  matchedDepartment.id,
+                                                )
+                                            : undefined
+                                        }
+                                        style={
+                                          matchedDepartment?.id &&
+                                          onOpenDepartmentDetail
+                                            ? { cursor: 'pointer' }
+                                            : undefined
+                                        }
+                                        title={
+                                          matchedDepartment?.id &&
+                                          onOpenDepartmentDetail
+                                            ? `${deptName} 중앙부처 상세로 이동`
+                                            : undefined
+                                        }
+                                      >
                                         {deptName}
                                       </CabS.MinisterDeptTag>
                                     )}
@@ -2902,7 +3226,20 @@ export function CabinetsSection({
                                   ) : null
                                 })()}
                               </CabS.MinisterProfileMeta>
-                              <CabS.MinisterProfileAction></CabS.MinisterProfileAction>
+                              <CabS.MinisterProfileAction>
+                                <SubsectionAddBtn
+                                  type="button"
+                                  onClick={() =>
+                                    void handleDetachMinisterFromCabinet(
+                                      minister,
+                                    )
+                                  }
+                                  title="부처·인물의 본래 재임 기록은 남기고 이 내각 연결만 해제합니다"
+                                >
+                                  <FiX size={13} strokeWidth={2.25} />
+                                  내각 제외
+                                </SubsectionAddBtn>
+                              </CabS.MinisterProfileAction>
                             </CabS.MinisterProfileBlock>
                           )}
 
@@ -3319,27 +3656,33 @@ export function CabinetsSection({
                       const thumbUrl = head?.person?.profileImageUrl ?? null
                       const personName = head?.person
                         ? getPersonName(head.person)
-                        : '이름 없음'
-                      const posTitle =
-                        head?.title ?? head?.positionDefinition?.title ?? '—'
+                        : selectedCabinet.name?.trim() ||
+                          '집단지도 · 과도정부'
+                      const posTitle = head
+                        ? (head.title ??
+                          head.positionDefinition?.title ??
+                          '—')
+                        : '집단지도체제 · 과도정부'
                       const termNum = head?.ordinal
-                      const startFull = head?.startDate
-                        ? formatDate(head.startDate)
+                      const effStart =
+                        head?.startDate ?? selectedCabinet.startDate
+                      const effEnd = head
+                        ? head.endDate
+                        : selectedCabinet.endDate
+                      const startFull = effStart
+                        ? formatDate(effStart)
                         : '—'
-                      const endFull = head?.endDate
-                        ? formatDate(head.endDate)
+                      const endFull = effEnd
+                        ? formatDate(effEnd)
                         : '현재'
-                      const duration = calcTenureDuration(
-                        head?.startDate,
-                        head?.endDate,
-                      )
-                      const ageAtStart = calcAgeAtTenure(
-                        head?.person,
-                        head?.startDate,
-                      )
-                      const ageAtEnd = head?.endDate
-                        ? calcAgeAtEndTenure(head?.person, head?.endDate)
+                      const duration = calcTenureDuration(effStart, effEnd)
+                      const ageAtStart = head?.person
+                        ? calcAgeAtTenure(head.person, head?.startDate)
                         : null
+                      const ageAtEnd =
+                        head?.person && head?.endDate
+                          ? calcAgeAtEndTenure(head.person, head.endDate)
+                          : null
                       const termBadge = formatCabinetTermBadge(
                         termNum,
                         head?.subTermNumber ?? null,
@@ -3347,8 +3690,8 @@ export function CabinetsSection({
                       const activePolSys = findActivePoliticalSystemForCabinet(
                         politicalSystems,
                         {
-                          startDate: head?.startDate ?? null,
-                          endDate: head?.endDate ?? null,
+                          startDate: effStart ?? null,
+                          endDate: effEnd ?? null,
                           historicalCountryId:
                             selectedCabinet.historicalCountryId ??
                             head?.historicalCountryId ??
@@ -3473,7 +3816,8 @@ export function CabinetsSection({
 
                           {!selectedHeadHistoryId && (
                             <>
-                              {/* 취임/퇴임 정보 섹션 — 수반 히스토리 상세 시에는 숨김(각료 상세와 동일하게 프로필+히스토리만) */}
+                              {/* 취임/퇴임 정보 섹션 — 수반이 있는 내각에서만 표시 */}
+                              {head && (
                               <CabS.CabDetailScrollSection id="cab-detail-tenure">
                                 {/* ── 취임 정보 ── */}
                                 <CabS.HeadTenureInfoSection $accent="mint">
@@ -3868,6 +4212,7 @@ export function CabinetsSection({
                                   )}
                                 </CabS.HeadTenureInfoSection>
                               </CabS.CabDetailScrollSection>
+                              )}
 
                               {selectedCabinet?.id && (
                                 <CabinetPoliticalPartiesBlock
@@ -3880,7 +4225,8 @@ export function CabinetsSection({
                             </>
                           )}
 
-                          {/* 수반 재임 기록 — 각료와 동일: 목록 영역만 상세 전환 */}
+                          {/* 수반 재임 기록 — 수반이 있는 내각에서만 표시 */}
+                          {head && (
                           <CabS.HeadTenureInfoSection
                             id="cab-detail-achievements"
                             $omitBottomRule={!!selectedHeadHistoryId}
@@ -4343,6 +4689,7 @@ export function CabinetsSection({
                               </>
                             )}
                           </CabS.HeadTenureInfoSection>
+                          )}
 
                           {!selectedHeadHistoryId && (
                             <>
@@ -4381,8 +4728,10 @@ export function CabinetsSection({
                                         type="text"
                                         placeholder="각료명, 직위..."
                                         value={ministerSearchQuery}
-                                        onChange={(e) =>
-                                          setMinisterSearchQuery(e.target.value)
+                                        onChange={(changeEvent) =>
+                                          setMinisterSearchQuery(
+                                            changeEvent.target.value,
+                                          )
                                         }
                                         style={{ height: 32, fontSize: 12 }}
                                       />
@@ -4406,10 +4755,143 @@ export function CabinetsSection({
                                       }
                                     >
                                       <FiPlus size={14} strokeWidth={2.25} />
-                                      각료 추가
+                                      각료 · 장관 임명
                                     </SubsectionAddBtn>
                                   )}
                                 </CabS.CabDetailMinistersSectionHeader>
+
+                                {suggestedCabinetMembers.length > 0 && (
+                                  <div
+                                    style={{
+                                      marginBottom: 14,
+                                      padding: '12px 14px',
+                                      borderRadius: 10,
+                                      border: `1px solid ${C.badgeBorder}`,
+                                      background: C.chipActionBg,
+                                      display: 'flex',
+                                      flexDirection: 'column',
+                                      gap: 10,
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: 10,
+                                        flexWrap: 'wrap',
+                                      }}
+                                    >
+                                      <div
+                                        style={{
+                                          fontSize: 12.5,
+                                          fontWeight: 600,
+                                          color: C.text,
+                                        }}
+                                      >
+                                        💡 이 내각 임기와 겹치는 중앙부처 장·차관{' '}
+                                        <strong>
+                                          {suggestedCabinetMembers.length}명
+                                        </strong>
+                                        이 감지되었습니다
+                                      </div>
+                                      <SubsectionAddBtn
+                                        type="button"
+                                        disabled={
+                                          attachingSuggestions ||
+                                          selectedSuggestionIds.length === 0
+                                        }
+                                        onClick={() =>
+                                          void handleAttachSuggestedMinisters()
+                                        }
+                                      >
+                                        <FiCheck size={13} strokeWidth={2.5} />
+                                        {attachingSuggestions
+                                          ? '편입 중…'
+                                          : `선택한 ${selectedSuggestionIds.length}명 내각 일괄 편입`}
+                                      </SubsectionAddBtn>
+                                    </div>
+                                    <div
+                                      style={{
+                                        display: 'flex',
+                                        flexWrap: 'wrap',
+                                        gap: 6,
+                                      }}
+                                    >
+                                      {suggestedCabinetMembers.map(
+                                        (suggestedItem) => {
+                                          const checked =
+                                            selectedSuggestionIds.includes(
+                                              suggestedItem.tenureId,
+                                            )
+                                          const personLabel =
+                                            getPersonName(suggestedItem.person)
+                                          const deptLabel =
+                                            suggestedItem
+                                              .administrationDepartment?.name ??
+                                            ''
+                                          const roleLabel =
+                                            suggestedItem.title ??
+                                            suggestedItem.positionDefinition
+                                              ?.title ??
+                                            '장관'
+                                          return (
+                                            <button
+                                              key={suggestedItem.tenureId}
+                                              type="button"
+                                              onClick={() =>
+                                                setSelectedSuggestionIds(
+                                                  (prev) =>
+                                                    prev.includes(
+                                                      suggestedItem.tenureId,
+                                                    )
+                                                      ? prev.filter(
+                                                          (id) =>
+                                                            id !==
+                                                            suggestedItem.tenureId,
+                                                        )
+                                                      : [
+                                                          ...prev,
+                                                          suggestedItem.tenureId,
+                                                        ],
+                                                )
+                                              }
+                                              style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: 5,
+                                                padding: '4px 10px',
+                                                borderRadius: 9999,
+                                                border: `1px solid ${checked ? MAIN : C.badgeBorder}`,
+                                                background: checked
+                                                  ? `${MAIN}18`
+                                                  : 'transparent',
+                                                color: C.text,
+                                                fontSize: 11.5,
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
+                                              }}
+                                            >
+                                              <span>{checked ? '✓' : '○'}</span>
+                                              <span>{personLabel}</span>
+                                              <span
+                                                style={{
+                                                  color: C.textMuted,
+                                                  fontWeight: 500,
+                                                }}
+                                              >
+                                                ·{' '}
+                                                {deptLabel
+                                                  ? `${deptLabel} ${roleLabel}`
+                                                  : roleLabel}
+                                              </span>
+                                            </button>
+                                          )
+                                        },
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
 
                                 {loadingCabinetMinisters ? (
                                   <CabS.CabMinistersLoadingBox
@@ -5022,6 +5504,7 @@ export function CabinetsSection({
           setRegisterFlow={setRegisterFlow}
           headTenuresForRegister={headTenuresForRegister}
           handleRegisterCabinet={handleRegisterCabinet}
+          handleRegisterCollectiveCabinet={handleRegisterCollectiveCabinet}
           handleRegisterNewHeadAndCabinet={handleRegisterNewHeadAndCabinet}
           registerCabinetSubmitting={registerCabinetSubmitting}
           setRegisterCabinetModalOpen={setRegisterCabinetModalOpen}
@@ -5058,6 +5541,35 @@ export function CabinetsSection({
         />
       )}
 
+      {headPersonPickerOpen && (
+        <PersonSelectModal
+          persons={allPersons as any[]}
+          selectedPersonId={headPersonId ?? ''}
+          title="수반 · 행정부 등록 — 인물 선택"
+          defaultCountryId={countryId || undefined}
+          onSelect={(personId) => {
+            setHeadPersonId(personId)
+            setHeadPersonPickerOpen(false)
+          }}
+          onClose={() => setHeadPersonPickerOpen(false)}
+        />
+      )}
+      {headPersonId && (
+        <TenureRegisterPanel
+          personId={headPersonId}
+          open={!!headPersonId}
+          onClose={() => setHeadPersonId(null)}
+          onSuccess={() => {
+            setHeadPersonId(null)
+            invalidateTenureQueries(queryClient)
+            queryClient.invalidateQueries({ queryKey: ['cabinets'] })
+          }}
+          initialCountryId={countryId || undefined}
+          initialHistoricalCountryId={historicalCountryId || null}
+          initialPositionType="HEAD_OF_GOVERNMENT"
+        />
+      )}
+
       {monarchPersonPickerOpen && (
         <PersonSelectModal
           persons={allPersons as any[]}
@@ -5083,7 +5595,35 @@ export function CabinetsSection({
         />
       )}
 
-      {editingCabinet && (
+      {editingCabinet &&
+      editingCabinet.headTenure?.id &&
+      (editingCabinet.headTenure?.personId ??
+        editingCabinet.headTenure?.person?.id) ? (
+        <TenureRegisterPanel
+          personId={
+            editingCabinet.headTenure.personId ??
+            editingCabinet.headTenure.person.id
+          }
+          tenureId={editingCabinet.headTenure.id}
+          open={true}
+          onClose={closeEditCabinetModal}
+          onSuccess={() => {
+            closeEditCabinetModal()
+            invalidateTenureQueries(queryClient)
+            queryClient.invalidateQueries({ queryKey: ['cabinets'] })
+          }}
+          initialCountryId={
+            editingCabinet.countryId ??
+            editingCabinet.headTenure?.countryId ??
+            (countryId || undefined)
+          }
+          initialHistoricalCountryId={
+            editingCabinet.historicalCountryId ??
+            editingCabinet.headTenure?.historicalCountryId ??
+            (historicalCountryId || null)
+          }
+        />
+      ) : editingCabinet ? (
         <ModalOverlay
           role="dialog"
           aria-modal="true"
@@ -5412,259 +5952,100 @@ export function CabinetsSection({
             </CabS.CabinetSubModalLayer>
           )}
         </ModalOverlay>
+      ) : null}
+
+      {appointmentModalOpen && addMinisterCabinet && (
+        <InstitutionAppointmentModal
+          isOpen={appointmentModalOpen}
+          onClose={() => {
+            setAppointmentModalOpen(false)
+            setEditingMinisterForModal(null)
+            setAddMinisterCabinet(null)
+          }}
+          onSaved={() => {
+            setAppointmentModalOpen(false)
+            setEditingMinisterForModal(null)
+            setAddMinisterCabinet(null)
+            invalidateTenureQueries(queryClient)
+            void queryClient.invalidateQueries({
+              queryKey: ['cabinet-suggested-members'],
+            })
+            void queryClient.invalidateQueries({
+              queryKey: ['administration-department-tenures'],
+            })
+          }}
+          contextType="CABINET"
+          countryId={
+            addMinisterCabinet.countryId ??
+            addMinisterCabinet.headTenure?.countryId ??
+            countryId ??
+            null
+          }
+          historicalCountryId={
+            addMinisterCabinet.historicalCountryId ??
+            addMinisterCabinet.headTenure?.historicalCountryId ??
+            historicalCountryId ??
+            null
+          }
+          countryName={country.name}
+          cabinetId={addMinisterCabinet.id}
+          cabinetName={
+            addMinisterCabinet.name?.trim() ||
+            formatCabinetHeadBreadcrumbLabel(
+              addMinisterCabinet.headTenure,
+              addMinisterCabinet.name,
+            )
+          }
+          availableDepartments={ministriesForCabinet as any[]}
+          editingTenure={editingMinisterForModal}
+        />
       )}
 
-      {personSelectOpen && addMinisterCabinet && (
-        <>
-          <ModalOverlay
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="minister-select-title"
-            onClick={handleCloseMinisterModal}
-          >
-            <CabS.MinisterSelectModalBox onClick={(e) => e.stopPropagation()}>
-              <ModalHeader>
-                <ModalTitle id="minister-select-title">
-                  {(addMinisterCabinet as { _editingTenureId?: string } | null)
-                    ?._editingTenureId
-                    ? '각료 수정'
-                    : '각료 등록'}
-                </ModalTitle>
-                <ModalCloseButton
-                  type="button"
-                  onClick={handleCloseMinisterModal}
-                  aria-label="닫기"
-                >
-                  <FiX size={22} strokeWidth={2} />
-                </ModalCloseButton>
-              </ModalHeader>
-              <CabS.MinisterSelectModalBody>
-                <FormRows>
-                  <FieldRow>
-                    <FieldLabel>
-                      인물 <Required aria-label="필수" />
-                    </FieldLabel>
-                    <FieldControl>
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 10,
-                          flexWrap: 'wrap',
-                        }}
-                      >
-                        <CabS.MinisterPersonTrigger
-                          type="button"
-                          onClick={() => setPersonPickerOpen(true)}
-                        >
-                          <CabS.MinisterPersonThumb
-                            $hasImage={
-                              !!selectedMinisterPerson?.profileImageUrl
-                            }
-                          >
-                            {selectedMinisterPerson?.profileImageUrl ? (
-                              <img
-                                src={
-                                  getUploadImageUrl(
-                                    selectedMinisterPerson.profileImageUrl,
-                                  ) || selectedMinisterPerson.profileImageUrl
-                                }
-                                alt=""
-                              />
-                            ) : (
-                              <FiUser size={24} strokeWidth={2} />
-                            )}
-                          </CabS.MinisterPersonThumb>
-                          <CabS.MinisterPersonLabel
-                            className={
-                              selectedPersonIdForAdd ? '' : 'placeholder'
-                            }
-                          >
-                            {selectedMinisterPerson
-                              ? getPersonName(selectedMinisterPerson)
-                              : '인물 선택'}
-                          </CabS.MinisterPersonLabel>
-                          <FiChevronDown
-                            size={18}
-                            style={{ flexShrink: 0, color: '#94a3b8' }}
-                          />
-                        </CabS.MinisterPersonTrigger>
-                        {selectedPersonIdForAdd && (
-                          <button
-                            type="button"
-                            onClick={handleChangePersonForMinister}
-                            style={{
-                              padding: '6px 12px',
-                              fontSize: 13,
-                              fontWeight: 500,
-                              color: MAIN,
-                              background: 'transparent',
-                              border: `1px solid ${C.borderMid}`,
-                              borderRadius: 8,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            변경
-                          </button>
-                        )}
-                      </div>
-                    </FieldControl>
-                  </FieldRow>
-                  <FieldRow>
-                    <FieldLabel>부처 · 행정기구 (선택)</FieldLabel>
-                    <FieldControl>
-                      <CabS.CabinetSelectNative
-                        value={ministerFormDeptId ?? ''}
-                        onChange={(e) => {
-                          const v = e.target.value
-                          setMinisterFormDeptId(v === '' ? null : v)
-                          setMinisterFormPositionDefId(null)
-                          setMinisterFormTitle('')
-                        }}
-                      >
-                        <option value="">전체 (부처 미지정)</option>
-                        {(ministriesForCabinet as any[]).map((dept: any) => (
-                          <option key={dept.id} value={dept.id}>
-                            {dept.name}
-                          </option>
-                        ))}
-                      </CabS.CabinetSelectNative>
-                      <p
-                        style={{
-                          margin: '6px 0 0',
-                          fontSize: 12,
-                          color: C.textMuted,
-                        }}
-                      >
-                        부처를 선택하면 해당 부처의 직위만 표시됩니다.
-                      </p>
-                    </FieldControl>
-                  </FieldRow>
-                  <FieldRow>
-                    <FieldLabel>
-                      직위 <Required aria-label="필수" />
-                    </FieldLabel>
-                    <FieldControl>
-                      <CabS.CabinetSelectNative
-                        value={ministerFormPositionDefId ?? ''}
-                        onChange={(e) => {
-                          const v = e.target.value
-                          setMinisterFormPositionDefId(v === '' ? null : v)
-                          if (!v || v === '__OTHER__') {
-                            if (v !== '__OTHER__') setMinisterFormTitle('')
-                          } else {
-                            const d = ministerPositionOptions.find(
-                              (o: any) => o.id === v,
-                            )
-                            if (d) setMinisterFormTitle('')
-                          }
-                        }}
-                      >
-                        <option value="">직위 선택</option>
-                        {filteredMinisterPositionOptions.map((d: any) => (
-                          <option key={d.id} value={d.id}>
-                            {d.title ?? d.name ?? d.id}
-                          </option>
-                        ))}
-                        <option value="__OTHER__">기타 (직접 입력)</option>
-                      </CabS.CabinetSelectNative>
-                      {ministerFormPositionDefId === '__OTHER__' && (
-                        <RegisterInput
-                          type="text"
-                          placeholder="예: 국방장관"
-                          value={ministerFormTitle}
-                          onChange={(e) => setMinisterFormTitle(e.target.value)}
-                          style={{ marginTop: 8, maxWidth: 320 }}
-                        />
-                      )}
-                      <p
-                        style={{
-                          margin: '8px 0 0',
-                          fontSize: 12,
-                          color: C.textMuted,
-                        }}
-                      >
-                        교육부 장관·외무대신 등 직위는 행정조직{' '}
-                        <strong>직위 정의</strong> 탭에서 등록한 뒤 목록에서
-                        선택할 수 있습니다. 없으면 기타(직접 입력)을 사용하세요.
-                      </p>
-                    </FieldControl>
-                  </FieldRow>
-                  <FieldRow>
-                    <FieldLabel>대수 (선택)</FieldLabel>
-                    <FieldControl>
-                      <RegisterInput
-                        type="number"
-                        min={1}
-                        placeholder="예: 1"
-                        value={ministerFormTermNumber}
-                        onChange={(e) =>
-                          setMinisterFormTermNumber(e.target.value)
-                        }
-                        aria-label="대수"
-                        style={{ width: '100%', maxWidth: 96 }}
-                      />
-                    </FieldControl>
-                  </FieldRow>
-                  <DateRangeField
-                    label="취임일 · 퇴임일"
-                    required
-                    startValue={ministerFormStartDate}
-                    endValue={ministerFormEndDate}
-                    onStartChange={setMinisterFormStartDate}
-                    onEndChange={setMinisterFormEndDate}
-                    startPlaceholder="취임일"
-                    endPlaceholder="퇴임일 (선택)"
-                  />
-                </FormRows>
-                <CabS.MinisterSelectActions>
-                  <CabS.CabinetCancelBtn
-                    type="button"
-                    onClick={handleCloseMinisterModal}
-                  >
-                    취소
-                  </CabS.CabinetCancelBtn>
-                  <SubmitButton
-                    type="button"
-                    disabled={
-                      ministerFormSubmitting ||
-                      !selectedPersonIdForAdd ||
-                      !ministerFormStartDate.trim() ||
-                      (!(
-                        ministerFormPositionDefId &&
-                        ministerFormPositionDefId !== '__OTHER__'
-                      ) &&
-                        !ministerFormTitle.trim())
-                    }
-                    onClick={handleSubmitMinister}
-                  >
-                    {ministerFormSubmitting
-                      ? '처리 중…'
-                      : (
-                            addMinisterCabinet as {
-                              _editingTenureId?: string
-                            } | null
-                          )?._editingTenureId
-                        ? '저장'
-                        : '각료 등록'}
-                  </SubmitButton>
-                </CabS.MinisterSelectActions>
-              </CabS.MinisterSelectModalBody>
-            </CabS.MinisterSelectModalBox>
-          </ModalOverlay>
+      {personSelectOpen && addMinisterCabinet && !selectedPersonIdForAdd && (
+        <PersonSelectModal
+          persons={personsForMinisterSelect as any[]}
+          selectedPersonId=""
+          title="각료 등록 — 인물 선택"
+          defaultCountryId={countryId || undefined}
+          onSelect={(personId) => {
+            handleSelectPersonForMinister(personId)
+          }}
+          onClose={handleCloseMinisterModal}
+        />
+      )}
 
-          {personPickerOpen && (
-            <PersonSelectModal
-              persons={personsForMinisterSelect as any[]}
-              selectedPersonId={selectedPersonIdForAdd ?? ''}
-              onSelect={(personId) => {
-                handleSelectPersonForMinister(personId)
-                setPersonPickerOpen(false)
-              }}
-              onClose={() => setPersonPickerOpen(false)}
-            />
-          )}
-        </>
+      {personSelectOpen && addMinisterCabinet && selectedPersonIdForAdd && (
+        <TenureRegisterPanel
+          personId={selectedPersonIdForAdd}
+          tenureId={
+            (addMinisterCabinet as { _editingTenureId?: string } | null)
+              ?._editingTenureId ?? null
+          }
+          open={true}
+          onClose={handleCloseMinisterModal}
+          onSuccess={() => {
+            handleCloseMinisterModal()
+            invalidateTenureQueries(queryClient)
+            queryClient.invalidateQueries({ queryKey: ['cabinets'] })
+            if (addMinisterCabinet?.id) {
+              queryClient.invalidateQueries({
+                queryKey: ['cabinet', addMinisterCabinet.id],
+              })
+            }
+          }}
+          initialCabinetId={addMinisterCabinet.id}
+          initialCountryId={
+            addMinisterCabinet.countryId ??
+            addMinisterCabinet.headTenure?.countryId ??
+            (countryId || undefined)
+          }
+          initialHistoricalCountryId={
+            addMinisterCabinet.historicalCountryId ??
+            addMinisterCabinet.headTenure?.historicalCountryId ??
+            (historicalCountryId || null)
+          }
+          initialAdministrationDepartmentId={ministerFormDeptId || null}
+        />
       )}
 
       {/* 인물 상세 모달 — 공용 위젯 PersonInlineModal (사건 상세와 동일한 모달) */}

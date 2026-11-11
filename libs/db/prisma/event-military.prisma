@@ -241,6 +241,10 @@ model TreatySignatory {
   positionDefinitionId String?                       @map("position_definition_id") @db.Char(36)
   positionDefinition   GovernmentPositionDefinition? @relation(fields: [positionDefinitionId], references: [id], onDelete: SetNull)
 
+  /// 서명 당시 재임 기록 (GovernmentPositionTenure, 선택 — 몰로토프·리벤트로프·카이텔 등 당시 직위 정본 연결)
+  tenureId String?                   @map("tenure_id") @db.Char(36)
+  tenure   GovernmentPositionTenure? @relation("TreatySignatoryTenure", fields: [tenureId], references: [id], onDelete: SetNull)
+
   /// 참여 유형 (서명국, 보증국, 조정국 등)
   participationType TreatyParticipationType @default(SIGNATORY) @map("participation_type")
 
@@ -258,6 +262,7 @@ model TreatySignatory {
   @@index([personId], name: "idx_treaty_signatory_personId")
   @@index([cabinetId], name: "idx_treaty_signatory_cabinetId")
   @@index([positionDefinitionId], name: "idx_treaty_signatory_positionDefId")
+  @@index([tenureId], name: "idx_treaty_signatory_tenureId")
   @@map("treaty_signatory")
 }
 

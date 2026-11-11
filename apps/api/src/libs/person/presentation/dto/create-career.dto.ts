@@ -783,15 +783,36 @@ export class CreateGovernmentPositionTenureDto {
   @IsNumber()
   priority?: number
 
-  /** 소속 행정부(Cabinet) ID — 이 각료/총독 재임이 속한 행정부 */
+  /** 소속 행정부(Cabinet) ID — 이 각료/총독 재임이 속한 대표 행정부 */
   @IsOptional()
   @IsString()
   cabinetId?: string | null
+
+  /** 다중 행정부(유임·개각 등 N:M CabinetMember) ID 목록 */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  cabinetIds?: string[] | null
 
   /** 소속 중앙부처 ID — 이 재임이 실제 속한 국가별 부처 인스턴스 (예: 미국 국무부, 한국 외교부) */
   @IsOptional()
   @IsString()
   administrationDepartmentId?: string | null
+
+  /** 소속 군사 사령부·부대 ID — 이 지휘관·참모 재임이 속한 부대 인스턴스 (예: OKW, 제1군, 제2기갑집단) */
+  @IsOptional()
+  @IsString()
+  militaryUnitId?: string | null
+
+  /** 재임 당시 계급·품계 (예: 상급대장, 원수, 정1품) */
+  @IsOptional()
+  @IsString()
+  rankTitle?: string | null
+
+  /** 재임 당시 소속 정당·정파 ID */
+  @IsOptional()
+  @IsString()
+  partyId?: string | null
 
   /** 당선된 선거 후보(ElectionCandidacy)와 연결 — 이 임기가 해당 선거로 시작된 경우 */
   @IsOptional()

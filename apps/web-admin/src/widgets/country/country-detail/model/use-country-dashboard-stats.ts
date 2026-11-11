@@ -1,6 +1,7 @@
+/* eslint-disable no-restricted-syntax, @typescript-eslint/no-explicit-any -- 레거시 대시보드 통계 훅 호환 */
 import { useMemo } from 'react'
 
-import { useQueries } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { politicalSystemKeys } from '@/entities/political-system/api'
@@ -17,6 +18,7 @@ import { getAllCountries } from '@/shared/api/countries'
 import { getElections, getLaws } from '@/shared/api/election'
 import { ethnicityApi } from '@/shared/api/ethnicity'
 import { getAllEventsExhaustive } from '@/shared/api/events'
+import { militaryUnitApi } from '@/shared/api/military-unit'
 import { personApi } from '@/shared/api/person'
 import { personCareerApi } from '@/shared/api/person-career'
 import type { PersonResponseDto } from '@/shared/api/persons'
@@ -106,7 +108,7 @@ export interface CompletenessField {
   filled: boolean
   target: CompletenessTarget
   /** target === 'government'일 때 행정조직 내부 하위 탭 딥링크 */
-  governmentSubTab?: 'heads' | 'cabinets' | 'ministries' | 'system'
+  governmentSubTab?: 'heads' | 'cabinets' | 'ministries' | 'system' | 'military'
 }
 
 export interface DeltaCounts {
@@ -560,6 +562,13 @@ export function useCountryDashboardStats(
     ],
   })
 
+  const militaryUnitsQuery = useQuery({
+    queryKey: ['military-units', 'all'] as const,
+    queryFn: () => militaryUnitApi.getAll(),
+    enabled: Boolean(countryId),
+    staleTime: 1000 * 60 * 2,
+  })
+
   // 활성 cabinet 중 가장 최신(headTenure.startDate desc)을 우선 선택하고,
   // 모든 내각이 종료된 국가(프랑스·일본·독일 등 과거 내각만 등록된 경우)에서는 가장 최근 내각으로 폴백한다.
   const latestActiveCabinetId = useMemo<string | null>(() => {
@@ -610,7 +619,24 @@ export function useCountryDashboardStats(
   }, [personsQuery.data])
 
   const personCount = persons.length
-  const militaryCount = 0
+  const militaryCount = useMemo(() => {
+    if (!countryId || !Array.isArray(militaryUnitsQuery.data)) return 0
+    const linkedHistoricalIds = new Set(
+      (country?.historicalCountries ?? [])
+        .map((histItem) => histItem?.id)
+        .filter((histId): histId is string => Boolean(histId)),
+    )
+    return militaryUnitsQuery.data.filter((unitItem) => {
+      if (unitItem.countryId === countryId) return true
+      if (
+        unitItem.historicalCountryId &&
+        linkedHistoricalIds.has(unitItem.historicalCountryId)
+      ) {
+        return true
+      }
+      return false
+    }).length
+  }, [countryId, country?.historicalCountries, militaryUnitsQuery.data])
   const eventCount = Array.isArray(eventsQuery.data) ? eventsQuery.data.length : 0
   const historicalCountryCount = country?.historicalCountries?.length ?? 0
   const departmentCount = Array.isArray(administrationQuery.data)
@@ -1371,6 +1397,13 @@ export function useCountryDashboardStats(
             governmentSubTab: 'ministries',
           },
           {
+            key: 'military',
+            label: '군사 조직',
+            filled: militaryCount > 0,
+            target: 'government',
+            governmentSubTab: 'military',
+          },
+          {
             key: 'persons',
             label: '인물',
             filled: personCount > 0,
@@ -1432,6 +1465,7 @@ export function useCountryDashboardStats(
     cabinetList.length,
     hasAnyMinisterRecord,
     departmentCount,
+    militaryCount,
     personCount,
     eventCount,
     nextElection,
@@ -1496,7 +1530,7 @@ export function useCountryDashboardStats(
 
   const loading = {
     persons: personsQuery.isLoading,
-    military: false,
+    military: militaryUnitsQuery.isLoading,
     events: eventsQuery.isLoading,
     administration:
       administrationQuery.isLoading ||

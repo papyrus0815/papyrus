@@ -76,6 +76,8 @@ export function sortMembers(
 
 interface CabinetConnectionsProps {
   cabinetId: string
+  /** 복수 행정부에 걸친 경우 토글 버튼에 행정부명을 구분 표시 */
+  cabinetLabel?: string | null
   /** 현재 보고 있는 인물 — 본인 행은 링크 대신 강조 표시 */
   currentPersonId?: string | null
   onPersonClick: (id: string) => void
@@ -85,6 +87,7 @@ interface CabinetConnectionsProps {
 
 export function CabinetConnections({
   cabinetId,
+  cabinetLabel,
   currentPersonId,
   onPersonClick,
   onToggle,
@@ -99,18 +102,19 @@ export function CabinetConnections({
 
   const head = data?.headTenure ?? null
   const cabinetClosed = Boolean(
-    head &&
-      (head.endDate ||
-        head.endReason ||
-        head.person?.isAlive === false ||
-        head.person?.isDeathDateUnknown === true ||
-        head.person?.deathDate),
+    (data as { endDate?: string | null } | undefined)?.endDate ||
+      (head &&
+        (head.endDate ||
+          head.endReason ||
+          head.person?.isAlive === false ||
+          head.person?.isDeathDateUnknown === true ||
+          head.person?.deathDate)),
   )
   const members = data ? sortMembers(data.memberTenures) : []
   const parties = data?.politicalParties ?? []
-  const rows: Array<{ t: CabinetOverviewTenure; isHead: boolean }> = [
-    ...(head ? [{ t: head, isHead: true }] : []),
-    ...members.map((t) => ({ t, isHead: false })),
+  const rows: Array<{ tenureItem: CabinetOverviewTenure; isHead: boolean }> = [
+    ...(head ? [{ tenureItem: head, isHead: true }] : []),
+    ...members.map((memberItem) => ({ tenureItem: memberItem, isHead: false })),
   ]
   const isEmpty = Boolean(data) && rows.length === 0
 
@@ -120,13 +124,13 @@ export function CabinetConnections({
         type="button"
         onClick={() => {
           onToggle?.()
-          setOpen((v) => !v)
+          setOpen((prevOpen) => !prevOpen)
         }}
         aria-expanded={open}
       >
         {open ? <FiChevronDown size={12} /> : <FiChevronRight size={12} />}
         <FiUsers size={11} />
-        <span>같은 행정부</span>
+        <span>{cabinetLabel ? `같은 행정부 · ${cabinetLabel}` : '같은 행정부'}</span>
       </ToggleBtn>
       {open && (
         <Body>
@@ -137,17 +141,19 @@ export function CabinetConnections({
             <>
               {data.name && <CabinetName>{data.name}</CabinetName>}
               <MemberList>
-                {rows.map(({ t, isHead }) => {
+                {rows.map(({ tenureItem, isHead }) => {
                   const isCurrent =
-                    !!currentPersonId && t.person?.id === currentPersonId
+                    !!currentPersonId && tenureItem.person?.id === currentPersonId
                   const posTitle =
-                    t.title ?? t.positionDefinition?.title ?? '직책'
-                  const name = t.person ? getPersonDisplayName(t.person) : '미상'
-                  const period = periodLabel(t, cabinetClosed)
+                    tenureItem.title ?? tenureItem.positionDefinition?.title ?? '직책'
+                  const name = tenureItem.person
+                    ? getPersonDisplayName(tenureItem.person)
+                    : '미상'
+                  const period = periodLabel(tenureItem, cabinetClosed)
                   return (
-                    <MemberRow key={t.id} $head={isHead}>
+                    <MemberRow key={tenureItem.id} $head={isHead}>
                       <PosChip $head={isHead}>{posTitle}</PosChip>
-                      {isCurrent || !t.person?.id ? (
+                      {isCurrent || !tenureItem.person?.id ? (
                         <SelfName>
                           {name}
                           {isCurrent && <SelfTag>이 인물</SelfTag>}
@@ -155,7 +161,7 @@ export function CabinetConnections({
                       ) : (
                         <PersonLink
                           type="button"
-                          onClick={() => onPersonClick(t.person!.id)}
+                          onClick={() => onPersonClick(tenureItem.person!.id)}
                         >
                           {name}
                         </PersonLink>
@@ -167,12 +173,12 @@ export function CabinetConnections({
               </MemberList>
               {parties.length > 0 && (
                 <PartyRow>
-                  {parties.map((p) => (
-                    <PartyChip key={p.id} $color={p.party.brandColor}>
-                      <PartyDot $color={p.party.brandColor} />
-                      {p.party.shortName || p.party.name}
+                  {parties.map((partyEntry) => (
+                    <PartyChip key={partyEntry.id} $color={partyEntry.party.brandColor}>
+                      <PartyDot $color={partyEntry.party.brandColor} />
+                      {partyEntry.party.shortName || partyEntry.party.name}
                       <PartyRole>
-                        {CABINET_PARTY_ROLE_LABELS[p.role] ?? p.role}
+                        {CABINET_PARTY_ROLE_LABELS[partyEntry.role] ?? partyEntry.role}
                       </PartyRole>
                     </PartyChip>
                   ))}

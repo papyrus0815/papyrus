@@ -11,8 +11,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
   AdministrationDepartment,
   AdministrationDepartmentCategory,
+  CreateAdministrationDepartmentInput,
 } from '@/shared/api/administration-department'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
+import { militaryUnitApi } from '@/shared/api/military-unit'
 
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
@@ -22,12 +24,14 @@ import {
   administrationDepartmentsByHistoricalCountryQueryKey,
 } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import {
+  ALL_DEPARTMENTS_CATEGORY_ID,
   UNCATEGORIZED_CATEGORY_ID,
   buildDepartmentDescription,
   countDescendantsInDepartmentTree,
   countDepartmentsByCategoryId,
   emptyMinistryFormFields,
   filterDepartmentsBySearchQuery,
+  hasDefenseExtensionContent,
   isDefenseRelatedCategory,
   ministryFormFieldsFromDepartment,
 } from '@/shared/lib/ministry-department/ministry-department-utils'
@@ -42,6 +46,9 @@ export type UseMinistriesTabOptions = {
   /** 행정부 탭에서「부처 등록」으로 넘어올 때 */
   cabinetOpenMinistryIntent: { categoryId: string } | null
   onConsumedCabinetOpenMinistryIntent: () => void
+  /** 군사 조직 탭 등에서 특정 부처 상세로 바로 이동할 때 */
+  focusDepartmentId?: string | null
+  onConsumedFocusDepartment?: () => void
 }
 
 export function useMinistriesTab({
@@ -50,6 +57,8 @@ export function useMinistriesTab({
   contentTab,
   cabinetOpenMinistryIntent,
   onConsumedCabinetOpenMinistryIntent,
+  focusDepartmentId,
+  onConsumedFocusDepartment,
 }: UseMinistriesTabOptions) {
   const queryClient = useQueryClient()
   const departmentsQueryKey = useMemo(
@@ -92,19 +101,20 @@ export function useMinistriesTab({
 
   const thumbnailInputRef = useRef<HTMLInputElement>(null)
   const [thumbnailUploading, setThumbnailUploading] = useState(false)
+  const [submittingMinistry, setSubmittingMinistry] = useState(false)
   const [establishedDateModalOpen, setEstablishedDateModalOpen] =
     useState(false)
   const [abolishedDateModalOpen, setAbolishedDateModalOpen] = useState(false)
   const [categorySelectOpen, setCategorySelectOpen] = useState(false)
   const [parentSelectOpen, setParentSelectOpen] = useState(false)
   const [successorSelectOpen, setSuccessorSelectOpen] = useState(false)
+  const [predecessorSelectOpen, setPredecessorSelectOpen] = useState(false)
 
   const loadMinistries = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: departmentsQueryKey })
   }, [queryClient, departmentsQueryKey])
 
   const openMinistryEdit = useCallback((dept: AdministrationDepartment) => {
-    setMinistryBrowseDepartment(null)
     setEditingMinistry(dept)
     setMinistryForm(ministryFormFieldsFromDepartment(dept))
     setMinistryFormModalOpen(true)
@@ -112,13 +122,13 @@ export function useMinistriesTab({
 
   const openMinistryCreateChild = useCallback(
     (parent: AdministrationDepartment, categoryId: string) => {
-      setMinistryBrowseDepartment(null)
       setEditingMinistry(null)
       setMinistryForm(
         emptyMinistryFormFields(
-          categoryId,
+          parent.categoryId || categoryId,
           parent.id,
           parent.historicalCountryId ?? '',
+          parent.kind ?? 'MINISTRY',
         ),
       )
       setMinistryFormModalOpen(true)
@@ -127,17 +137,28 @@ export function useMinistriesTab({
   )
 
   const openMinistryCreateRootInCategory = useCallback(
-    (categoryId: string) => {
-      setMinistryBrowseDepartment(null)
+    (
+      categoryId: string,
+      defaultHistoricalCountryId = '',
+      defaultKind: NonNullable<AdministrationDepartment['kind']> = 'MINISTRY',
+    ) => {
       setEditingMinistry(null)
       const resolvedCatId =
-        categoryId === UNCATEGORIZED_CATEGORY_ID
-          ? (categoriesList[0]?.id ?? '')
+        categoryId === UNCATEGORIZED_CATEGORY_ID ||
+        categoryId === ALL_DEPARTMENTS_CATEGORY_ID
+          ? ''
           : categoryId
-      setMinistryForm(emptyMinistryFormFields(resolvedCatId, ''))
+      setMinistryForm(
+        emptyMinistryFormFields(
+          resolvedCatId,
+          '',
+          defaultHistoricalCountryId,
+          defaultKind,
+        ),
+      )
       setMinistryFormModalOpen(true)
     },
-    [categoriesList],
+    [],
   )
 
   const closeMinistryFormModal = useCallback(() => {
@@ -146,13 +167,9 @@ export function useMinistriesTab({
   }, [])
 
   const submitMinistryForm = useCallback(() => {
-    if (!effectiveCountryId) return
+    if (!effectiveCountryId || submittingMinistry) return
     if (!ministryForm.name.trim()) {
-      notify.error('부처명을 입력해주세요.')
-      return
-    }
-    if (!ministryForm.categoryId?.trim()) {
-      notify.error('카테고리를 선택해주세요.')
+      notify.error('부처·기관명을 입력해주세요.')
       return
     }
     const category = categoriesList.find(
@@ -162,93 +179,323 @@ export function useMinistriesTab({
       category ?? null,
       ministryForm.kind,
     )
-    const defensePayload = defenseCat
-      ? {
-          officialNameEn: ministryForm.defenseOfficialNameEn.trim(),
-          missionScope: ministryForm.defenseMissionScope.trim(),
-          headquarters: ministryForm.defenseHeadquarters.trim(),
-          orgStructure: ministryForm.defenseOrgStructure.trim(),
-          budgetOrForcesNote: ministryForm.defenseBudgetOrForcesNote.trim(),
-        }
+    const candidateDefensePayload = {
+      officialNameEn: ministryForm.defenseOfficialNameEn.trim(),
+      missionScope: ministryForm.defenseMissionScope.trim(),
+      headquarters: ministryForm.defenseHeadquarters.trim(),
+      orgStructure: ministryForm.defenseOrgStructure.trim(),
+      budgetOrForcesNote: ministryForm.defenseBudgetOrForcesNote.trim(),
+    }
+    const shouldSaveDefenseBlock =
+      defenseCat || hasDefenseExtensionContent(candidateDefensePayload)
+    const defensePayload = shouldSaveDefenseBlock
+      ? candidateDefensePayload
       : null
     const descriptionCombined = buildDepartmentDescription(
       ministryForm.description.trim(),
       defensePayload,
-      defenseCat,
+      shouldSaveDefenseBlock,
     )
     const effectiveNameEn =
       ministryForm.nameEn.trim() ||
-      (defenseCat ? ministryForm.defenseOfficialNameEn.trim() : '')
+      ministryForm.defenseOfficialNameEn.trim()
     const resolvedHistoricalCountryId = isHistorical
       ? effectiveCountryId
       : ministryForm.historicalCountryId.trim() || null
-    const payload = {
+    const resolvedCategoryId =
+      ministryForm.categoryId &&
+      ministryForm.categoryId !== ALL_DEPARTMENTS_CATEGORY_ID &&
+      ministryForm.categoryId !== UNCATEGORIZED_CATEGORY_ID
+        ? ministryForm.categoryId
+        : null
+
+    type DateInfoPayload = NonNullable<
+      CreateAdministrationDepartmentInput['establishedInfo']
+    >
+    const buildStructuredDateInfo = (
+      era: 'AD' | 'BC',
+      year: number | null,
+      month: number | null,
+      day: number | null,
+    ): DateInfoPayload | null => {
+      if (year == null || !Number.isFinite(year) || year <= 0) return null
+      return {
+        era: (era || 'AD') as DateInfoPayload['era'],
+        year: Math.trunc(year),
+        ...(month != null && month >= 1 && month <= 12
+          ? { month: Math.trunc(month) }
+          : {}),
+        ...(month != null &&
+        day != null &&
+        day >= 1 &&
+        day <= 31
+          ? { day: Math.trunc(day) }
+          : {}),
+      }
+    }
+
+    const establishedInfo = buildStructuredDateInfo(
+      ministryForm.establishedEra,
+      ministryForm.establishedYear,
+      ministryForm.establishedMonth,
+      ministryForm.establishedDay,
+    )
+    const abolishedInfo = buildStructuredDateInfo(
+      ministryForm.abolishedEra,
+      ministryForm.abolishedYear,
+      ministryForm.abolishedMonth,
+      ministryForm.abolishedDay,
+    )
+
+    const payload: CreateAdministrationDepartmentInput = {
       name: ministryForm.name.trim(),
       nameLocal: ministryForm.nameLocal.trim() || null,
       nameEn: effectiveNameEn || null,
       abbreviation: ministryForm.abbreviation.trim() || null,
       kind: ministryForm.kind || 'MINISTRY',
       parentId: ministryForm.parentId || null,
-      categoryId: ministryForm.categoryId || null,
+      categoryId: resolvedCategoryId,
       thumbnailUrl: ministryForm.thumbnailUrl.trim() || null,
       description: descriptionCombined || null,
-      establishedDate: ministryForm.establishedDate.trim() || null,
-      abolishedDate: ministryForm.abolishedDate.trim() || null,
+      establishedInfo,
+      abolishedInfo,
+      establishedDate: establishedInfo
+        ? null
+        : ministryForm.establishedDate.trim() || null,
+      abolishedDate: abolishedInfo
+        ? null
+        : ministryForm.abolishedDate.trim() || null,
       historicalCountryId: resolvedHistoricalCountryId,
       ...(isHistorical ? {} : { countryId: effectiveCountryId }),
     }
-    const nextSuccessorId = ministryForm.successorId.trim() || null
-    const syncSuccessor = async (
+
+    const desiredPredecessors = (() => {
+      const list = ministryForm.predecessorTransitions ?? []
+      const seen = new Set<string>()
+      return list.filter((item) => {
+        const trimmedId = item.predecessorId.trim()
+        if (!trimmedId || seen.has(trimmedId)) return false
+        seen.add(trimmedId)
+        return true
+      })
+    })()
+
+    const desiredTransitions = (() => {
+      const list =
+        ministryForm.successorTransitions &&
+        ministryForm.successorTransitions.length > 0
+          ? ministryForm.successorTransitions
+          : ministryForm.successorId.trim()
+            ? [
+                {
+                  successorId: ministryForm.successorId.trim(),
+                  kind: 'REORGANIZE' as const,
+                },
+              ]
+            : []
+      const seen = new Set<string>()
+      return list.filter((item) => {
+        const trimmedId = item.successorId.trim()
+        if (!trimmedId || seen.has(trimmedId)) return false
+        seen.add(trimmedId)
+        return true
+      })
+    })()
+
+    const syncLineageAndUnits = async (
       deptId: string,
+      prevPredecessors: AdministrationDepartment['predecessors'] = [],
       prevTransitions: AdministrationDepartment['successors'] = [],
+      prevUnitIds: string[] = [],
     ) => {
-      const prevPrimary = prevTransitions[0] ?? null
-      if (prevPrimary && prevPrimary.department.id !== nextSuccessorId) {
-        await administrationDepartmentApi.deleteTransition(
-          prevPrimary.transitionId,
-        )
+      // 1. 전신 기관(predecessors) 동기화: predecessorId -> deptId
+      const desiredByPredecessorId = new Map(
+        desiredPredecessors.map((item) => [item.predecessorId.trim(), item]),
+      )
+      for (const prev of prevPredecessors) {
+        const matched = desiredByPredecessorId.get(prev.department.id)
+        if (!matched) {
+          await administrationDepartmentApi.deleteTransition(prev.transitionId)
+        } else {
+          const nextKind = matched.kind ?? 'REORGANIZE'
+          const nextYear = matched.year ?? null
+          const nextEra = matched.era ?? (nextYear != null ? 'AD' : null)
+          const nextMonth = nextYear != null ? (matched.month ?? null) : null
+          const nextNote = matched.note?.trim() ? matched.note.trim() : null
+          if (
+            prev.kind !== nextKind ||
+            (prev.era ?? null) !== nextEra ||
+            (prev.year ?? null) !== nextYear ||
+            (prev.month ?? null) !== nextMonth ||
+            (prev.note ?? null) !== nextNote
+          ) {
+            await administrationDepartmentApi.updateTransition(
+              prev.transitionId,
+              {
+                kind: nextKind,
+                era: nextEra,
+                year: nextYear,
+                month: nextMonth,
+                note: nextNote,
+              },
+            )
+          }
+        }
       }
-      if (
-        nextSuccessorId &&
-        (!prevPrimary || prevPrimary.department.id !== nextSuccessorId)
-      ) {
-        await administrationDepartmentApi.addTransition(deptId, {
-          successorId: nextSuccessorId,
-          kind: 'REORGANIZE',
-        })
+      const prevPredecessorIds = new Set(
+        prevPredecessors.map((prev) => prev.department.id),
+      )
+      for (const desired of desiredPredecessors) {
+        const sourceId = desired.predecessorId.trim()
+        if (!prevPredecessorIds.has(sourceId)) {
+          const nextYear = desired.year ?? null
+          const nextEra = desired.era ?? (nextYear != null ? 'AD' : null)
+          const nextMonth = nextYear != null ? (desired.month ?? null) : null
+          const nextNote = desired.note?.trim() ? desired.note.trim() : null
+          await administrationDepartmentApi.addTransition(sourceId, {
+            successorId: deptId,
+            kind: desired.kind ?? 'REORGANIZE',
+            era: nextEra,
+            year: nextYear,
+            month: nextMonth,
+            note: nextNote,
+          })
+        }
+      }
+
+      // 2. 후신 기관(successors) 동기화: deptId -> successorId
+      const desiredBySuccessorId = new Map(
+        desiredTransitions.map((item) => [item.successorId.trim(), item]),
+      )
+      for (const prev of prevTransitions) {
+        const matched = desiredBySuccessorId.get(prev.department.id)
+        if (!matched) {
+          await administrationDepartmentApi.deleteTransition(prev.transitionId)
+        } else {
+          const nextKind = matched.kind ?? 'REORGANIZE'
+          const nextYear = matched.year ?? null
+          const nextEra = matched.era ?? (nextYear != null ? 'AD' : null)
+          const nextMonth = nextYear != null ? (matched.month ?? null) : null
+          const nextNote = matched.note?.trim() ? matched.note.trim() : null
+          if (
+            prev.kind !== nextKind ||
+            (prev.era ?? null) !== nextEra ||
+            (prev.year ?? null) !== nextYear ||
+            (prev.month ?? null) !== nextMonth ||
+            (prev.note ?? null) !== nextNote
+          ) {
+            await administrationDepartmentApi.updateTransition(
+              prev.transitionId,
+              {
+                kind: nextKind,
+                era: nextEra,
+                year: nextYear,
+                month: nextMonth,
+                note: nextNote,
+              },
+            )
+          }
+        }
+      }
+      const prevSuccessorIds = new Set(
+        prevTransitions.map((prev) => prev.department.id),
+      )
+      for (const desired of desiredTransitions) {
+        const targetId = desired.successorId.trim()
+        if (!prevSuccessorIds.has(targetId)) {
+          const nextYear = desired.year ?? null
+          const nextEra = desired.era ?? (nextYear != null ? 'AD' : null)
+          const nextMonth = nextYear != null ? (desired.month ?? null) : null
+          const nextNote = desired.note?.trim() ? desired.note.trim() : null
+          await administrationDepartmentApi.addTransition(deptId, {
+            successorId: targetId,
+            kind: desired.kind ?? 'REORGANIZE',
+            era: nextEra,
+            year: nextYear,
+            month: nextMonth,
+            note: nextNote,
+          })
+        }
+      }
+
+      // 3. 연결 군부대(militaryUnits) 동기화
+      const desiredUnitIds = new Set(
+        (ministryForm.linkedMilitaryUnitIds ?? []).filter(Boolean),
+      )
+      const prevUnitIdSet = new Set(prevUnitIds.filter(Boolean))
+      const unitUpdatePromises: Promise<unknown>[] = []
+      for (const prevUnitId of prevUnitIdSet) {
+        if (!desiredUnitIds.has(prevUnitId)) {
+          unitUpdatePromises.push(
+            militaryUnitApi.update(prevUnitId, {
+              administrationDepartmentId: null,
+            }),
+          )
+        }
+      }
+      for (const nextUnitId of desiredUnitIds) {
+        if (!prevUnitIdSet.has(nextUnitId)) {
+          unitUpdatePromises.push(
+            militaryUnitApi.update(nextUnitId, {
+              administrationDepartmentId: deptId,
+            }),
+          )
+        }
+      }
+      if (unitUpdatePromises.length > 0) {
+        await Promise.all(unitUpdatePromises)
+        void queryClient.invalidateQueries({ queryKey: ['military-units'] })
+        void queryClient.invalidateQueries({ queryKey: ['military-unit'] })
       }
     }
+
+    setSubmittingMinistry(true)
     if (editingMinistry) {
       administrationDepartmentApi
         .update(editingMinistry.id, payload)
         .then((updated) =>
-          syncSuccessor(updated.id, editingMinistry.successors ?? []),
+          syncLineageAndUnits(
+            updated.id,
+            editingMinistry.predecessors ?? [],
+            editingMinistry.successors ?? [],
+            (editingMinistry.militaryUnits ?? []).map((unit) => unit.id),
+          ).then(() => updated),
         )
-        .then(() => {
+        .then((updated) => {
+          notify.success(`「${updated.name}」 기관 정보가 저장되었습니다.`)
+          setMinistryBrowseDepartment(updated)
           closeMinistryFormModal()
           loadMinistries()
         })
         .catch((err) =>
           notify.error(err instanceof Error ? err.message : '수정에 실패했습니다'),
         )
+        .finally(() => setSubmittingMinistry(false))
     } else {
       administrationDepartmentApi
         .create(payload)
-        .then((created) => syncSuccessor(created.id, []))
-        .then(() => {
+        .then((created) =>
+          syncLineageAndUnits(created.id, [], [], []).then(() => created),
+        )
+        .then((created) => {
+          notify.success(`「${created.name}」 기관이 등록되었습니다.`)
+          setMinistryBrowseDepartment(created)
           closeMinistryFormModal()
           loadMinistries()
         })
         .catch((err) =>
           notify.error(err instanceof Error ? err.message : '등록에 실패했습니다'),
         )
+        .finally(() => setSubmittingMinistry(false))
     }
   }, [
     effectiveCountryId,
+    submittingMinistry,
     isHistorical,
     ministryForm,
     editingMinistry,
     categoriesList,
+    queryClient,
     loadMinistries,
     closeMinistryFormModal,
   ])
@@ -287,27 +534,39 @@ export function useMinistriesTab({
     [ministriesList],
   )
 
-  /** 탭 바 표시용 카테고리 목록 — 미분류(`categoryId: null`) 부처가 있으면 끝에 '미분류' 탭 추가 */
+  /** 탭 바 표시용 카테고리 목록 — 맨 앞에 '전체 기관' 통합 탭을 두고, 미분류 부처가 있으면 끝에 '미분류·직속' 탭 추가 */
   const displayCategoriesList = useMemo<
     AdministrationDepartmentCategory[]
   >(() => {
+    const allTab: AdministrationDepartmentCategory = {
+      id: ALL_DEPARTMENTS_CATEGORY_ID,
+      name: '전체 기관',
+      nameEn: null,
+    }
     const uncategorizedCount =
       ministryCategoryDeptCounts.get(UNCATEGORIZED_CATEGORY_ID) ?? 0
-    if (uncategorizedCount <= 0) return categoriesList
+    if (categoriesList.length > 0 && uncategorizedCount <= 0) {
+      return [allTab, ...categoriesList]
+    }
     return [
+      allTab,
       ...categoriesList,
-      { id: UNCATEGORIZED_CATEGORY_ID, name: '미분류', nameEn: null },
+      { id: UNCATEGORIZED_CATEGORY_ID, name: '미분류·직속', nameEn: null },
     ]
   }, [categoriesList, ministryCategoryDeptCounts])
 
+  const reloadCategories = useCallback(() => {
+    administrationDepartmentApi
+      .getCategories()
+      .then(setCategoriesList)
+      .catch(() => setCategoriesList([]))
+  }, [])
+
   useEffect(() => {
     if (contentTab === 'ministries') {
-      administrationDepartmentApi
-        .getCategories()
-        .then(setCategoriesList)
-        .catch(() => setCategoriesList([]))
+      reloadCategories()
     }
-  }, [contentTab])
+  }, [contentTab, reloadCategories])
 
   useEffect(() => {
     if (!displayCategoriesList.length) return
@@ -322,8 +581,26 @@ export function useMinistriesTab({
   }, [displayCategoriesList])
 
   useEffect(() => {
-    setMinistryBrowseDepartment(null)
-  }, [ministryTreeCategoryId])
+    if (!focusDepartmentId || contentTab !== 'ministries') return
+    if (ministriesList.length === 0) return
+    const matchedDept = ministriesList.find(
+      (deptItem) => deptItem.id === focusDepartmentId,
+    )
+    if (matchedDept) {
+      setMinistryTreeCategoryId((prevCatId) =>
+        prevCatId === ALL_DEPARTMENTS_CATEGORY_ID
+          ? ALL_DEPARTMENTS_CATEGORY_ID
+          : matchedDept.categoryId || UNCATEGORIZED_CATEGORY_ID,
+      )
+      setMinistryBrowseDepartment(matchedDept)
+    }
+    onConsumedFocusDepartment?.()
+  }, [
+    focusDepartmentId,
+    contentTab,
+    ministriesList,
+    onConsumedFocusDepartment,
+  ])
 
   useEffect(() => {
     if (!ministryBrowseDepartment) return
@@ -349,7 +626,6 @@ export function useMinistriesTab({
 
   useEffect(() => {
     if (!cabinetOpenMinistryIntent || contentTab !== 'ministries') return
-    setMinistryBrowseDepartment(null)
     setEditingMinistry(null)
     setMinistryForm(
       emptyMinistryFormFields(cabinetOpenMinistryIntent.categoryId, ''),
@@ -378,6 +654,8 @@ export function useMinistriesTab({
     ministryForm,
     setMinistryForm,
     categoriesList,
+    setCategoriesList,
+    reloadCategories,
     displayCategoriesList,
     loadMinistries,
     openMinistryEdit,
@@ -385,6 +663,7 @@ export function useMinistriesTab({
     openMinistryCreateRootInCategory,
     closeMinistryFormModal,
     submitMinistryForm,
+    submittingMinistry,
     handleMinistryDelete,
     ministryCategoryDeptCounts,
     ministryBrowseResolved,
@@ -403,5 +682,7 @@ export function useMinistriesTab({
     setParentSelectOpen,
     successorSelectOpen,
     setSuccessorSelectOpen,
+    predecessorSelectOpen,
+    setPredecessorSelectOpen,
   }
 }

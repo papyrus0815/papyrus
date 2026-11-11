@@ -45,6 +45,22 @@ export function invalidateTenureQueries(
   invalidate(['cabinet-tenures'])
   invalidate(['cabinet-overview'])
   invalidate(['cabinet-linked-cabinets'])
+  invalidate(['cabinet-suggested-members'])
+
+  // ── 중앙부처·군사 사령부·부대 재임 및 상세 ──
+  invalidate(['administration-department'])
+  invalidate(['administration-departments'])
+  invalidate(['administration-department-tenures'])
+  invalidate(['department-tenures'])
+  invalidate(['military-unit'])
+  invalidate(['military-units'])
+  invalidate(['military-unit-tenures'])
+
+  // ── 국가 상세 인물 목록 (재임 배지 갱신) ──
+  invalidate(['country-persons'])
+  invalidate(['historical-country-persons'])
+  invalidate(['persons-by-tenure-country'])
+  invalidate(['persons-by-historical-country-union'])
 
   // ── 국가/글로벌 재임·재위 목록 (국가 상세) ──
   invalidate(['tenures-by-country'])

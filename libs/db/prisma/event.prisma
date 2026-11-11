@@ -925,14 +925,14 @@ enum EventDepartmentRole {
   OTHER
 }
 
-/// 사건 ↔ 국가 기관(AdministrationDepartment). 2026-11-08 신설 — 예전 administration_department_event는
-/// 사건을 가리키지 않는 별도 복제 사건 표(0행)라 폐기하고 이 연결로 대체했다.
-/// 같은 기관을 다른 역할로 거는 것은 된다(발령이자 집행).
+/// 사건 ↔ 국가 행정기관(AdministrationDepartment) 또는 군사 사령부·부대(MilitaryUnit).
+/// 민간 부처(국방인민위원부, 외무부)와 군사령부(OKW, OKH, 붉은 군대 총참모부) 모두 명령 발령(ISSUER)·수령(RECIPIENT)·주체·관여로 연결된다.
 model EventDepartmentRelation {
   id String @id @default(uuid()) @db.Char(36)
 
-  eventId      String @map("event_id") @db.Char(36)
-  departmentId String @map("department_id") @db.Char(36)
+  eventId        String  @map("event_id") @db.Char(36)
+  departmentId   String? @map("department_id") @db.Char(36)
+  militaryUnitId String? @map("military_unit_id") @db.Char(36)
 
   role EventDepartmentRole
   /// 역할 상세 ('국방군 지휘참모부가 기안', '육군 작전 담당')
@@ -940,16 +940,19 @@ model EventDepartmentRelation {
 
   sortOrder Int @default(0) @map("sort_order")
 
-  event      Event                    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  /// 기관 삭제는 연결된 사건이 있으면 막는다(서버도 409)
-  department AdministrationDepartment @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  event        Event                     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  /// 기관·부대 삭제는 연결된 사건이 있으면 막는다(서버도 409)
+  department   AdministrationDepartment? @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  militaryUnit MilitaryUnit?             @relation("EventMilitaryUnitRelations", fields: [militaryUnitId], references: [id], onDelete: Restrict)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@unique([eventId, departmentId, role], name: "uniq_event_department_role")
+  @@unique([eventId, departmentId, role], map: "event_department_relation_event_id_department_id_role_key")
+  @@unique([eventId, militaryUnitId, role], map: "uniq_event_military_unit_role")
   @@index([eventId], name: "idx_event_department_eventId")
   @@index([departmentId], name: "idx_event_department_departmentId")
+  @@index([militaryUnitId], name: "idx_event_department_militaryUnitId")
   @@map("event_department_relation")
 }
 

@@ -177,7 +177,10 @@ export async function resolveOfficesAtEvent(
         endDate: true,
         regnalName: true,
         title: true,
+        rankTitle: true,
         positionDefinition: { select: { title: true } },
+        administrationDepartment: { select: { name: true } },
+        militaryUnit: { select: { name: true } },
         country: { select: { name: true } },
         historicalCountry: { select: { name: true } },
       },
@@ -197,7 +200,10 @@ export async function resolveOfficesAtEvent(
         endDay: true,
         endDate: true,
         title: true,
+        rankTitle: true,
         positionDefinition: { select: { title: true } },
+        administrationDepartment: { select: { name: true } },
+        militaryUnit: { select: { name: true } },
         country: { select: { name: true } },
         historicalCountry: { select: { name: true } },
       },
@@ -261,7 +267,11 @@ export async function resolveOfficesAtEvent(
     const countryName = tenure.historicalCountry?.name ?? tenure.country?.name ?? ''
     const office = tenure.title ?? tenure.positionDefinition?.title
     if (!office) continue
-    push(tenure.personId, `${countryName} ${office}`.trim())
+    const institutionName = tenure.militaryUnit?.name ?? tenure.administrationDepartment?.name ?? ''
+    const institutionPart =
+      institutionName && !office.includes(institutionName) ? `${institutionName} ` : ''
+    const rankSuffix = tenure.rankTitle ? ` (${tenure.rankTitle})` : ''
+    push(tenure.personId, `${countryName} ${institutionPart}${office}${rankSuffix}`.trim())
   }
   for (const cmd of unitCommands) {
     const start = partsOf(null, null, null, null, cmd.startDate)

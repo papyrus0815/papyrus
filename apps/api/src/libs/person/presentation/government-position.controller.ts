@@ -65,12 +65,36 @@ function assertNoBcTenureDates(dto: {
 }
 
 export interface CreateCabinetBody {
-  headTenureId: string
+  headTenureId?: string | null
   name?: string | null
+  description?: string | null
+  countryId?: string | null
+  historicalCountryId?: string | null
+  startDateInfo?: any
+  endDateInfo?: any
+  allowReshuffle?: boolean
+  memberTenureIds?: string[]
 }
 
 export interface UpdateCabinetBody {
   name?: string | null
+  description?: string | null
+  headTenureId?: string | null
+  countryId?: string | null
+  historicalCountryId?: string | null
+  startDateInfo?: any
+  endDateInfo?: any
+}
+
+export interface AttachCabinetMembersBody {
+  tenureId?: string
+  departmentId?: string | null
+  roleTitle?: string | null
+  items?: Array<{
+    tenureId: string
+    departmentId?: string | null
+    roleTitle?: string | null
+  }>
 }
 
 export interface LinkCabinetWithOtherBody {
@@ -497,6 +521,65 @@ export class GovernmentPositionController {
   }
 
   /**
+   * 스마트 각료 자동 탐색 — 같은 국가·정체에서 내각 기간과 겹치는 장관·부처 재임 후보 조회
+   */
+  @Get('cabinets/:cabinetId/suggested-members')
+  async getSuggestedCabinetMembers(
+    @Param('cabinetId') cabinetId: string,
+  ): Promise<any[]> {
+    const list = await this.personService.findSuggestedCabinetMembers(cabinetId)
+    return list.map(serializeBigInt)
+  }
+
+  /**
+   * 행정부에 각료(재임) 편입 — 1건 또는 일괄 편입
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Post('cabinets/:cabinetId/members')
+  async attachCabinetMembers(
+    @Req() req: Request,
+    @Param('cabinetId') cabinetId: string,
+    @Body() body: AttachCabinetMembersBody,
+  ): Promise<any[]> {
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    const items =
+      body.items && body.items.length > 0
+        ? body.items
+        : body.tenureId
+          ? [
+              {
+                tenureId: body.tenureId,
+                departmentId: body.departmentId ?? null,
+                roleTitle: body.roleTitle ?? null,
+              },
+            ]
+          : []
+    if (items.length === 0) {
+      throw new BadRequestException('편입할 재임(tenureId 또는 items)이 필요합니다.')
+    }
+    const list = await this.personService.attachCabinetMembers(
+      cabinetId,
+      items,
+      accountId,
+    )
+    return list.map(serializeBigInt)
+  }
+
+  /**
+   * 행정부에서 특정 각료(재임) 편입 해제 (재임 자체는 삭제하지 않음)
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Delete('cabinets/:cabinetId/members/:tenureId')
+  async detachCabinetMember(
+    @Req() req: Request,
+    @Param('cabinetId') cabinetId: string,
+    @Param('tenureId') tenureId: string,
+  ): Promise<void> {
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    await this.personService.detachCabinetMember(cabinetId, tenureId, accountId)
+  }
+
+  /**
    * 행정부 한눈에 보기 — 수반·각료·여당을 한 번에. (인물 상세의 "같은 행정부 동료" 표시용)
    * 비공개(계정 소유) 행정부는 소유 계정만 접근 가능 — 그 외에는 null.
    */
@@ -585,14 +668,27 @@ export class GovernmentPositionController {
   }
 
   /**
-   * 국가원수/왕위 재임 기록 수정
+   * 국가원수/왕위/공직/군직 재임 기록 수정 (PUT / PATCH 모두 지원)
    */
   @UseGuards(AuthGuard('jwt'))
   @Put('tenures/:id')
   async updateTenure(
     @Req() req: Request,
     @Param('id') id: string,
-    @Body() dto: Partial<CreateGovernmentPositionTenureDto>
+    @Body() dto: Partial<CreateGovernmentPositionTenureDto>,
+  ): Promise<any> {
+    assertNoBcTenureDates(dto)
+    const accountId = (req as any).user?.id ?? (req as any).user?.sub
+    const result = await this.personService.updateGovernmentPositionTenure(id, dto, accountId)
+    return serializeBigInt(result)
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Patch('tenures/:id')
+  async patchTenure(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Body() dto: Partial<CreateGovernmentPositionTenureDto>,
   ): Promise<any> {
     assertNoBcTenureDates(dto)
     const accountId = (req as any).user?.id ?? (req as any).user?.sub

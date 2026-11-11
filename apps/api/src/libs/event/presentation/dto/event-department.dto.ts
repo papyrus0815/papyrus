@@ -14,6 +14,7 @@ export type EventDepartmentDto = {
   role: EventDepartmentRoleValue
   roleDescription: string | null
   sortOrder: number
+  targetType: 'DEPARTMENT' | 'MILITARY_UNIT'
   department: {
     id: string
     name: string
@@ -21,12 +22,26 @@ export type EventDepartmentDto = {
     kind: string
     country: { id: string; name: string } | null
     historicalCountry: { id: string; name: string } | null
-  }
+  } | null
+  militaryUnit: {
+    id: string
+    name: string
+    abbreviation: string | null
+    unitType: string | null
+    branch: string | null
+    country: { id: string; name: string } | null
+    historicalCountry: { id: string; name: string } | null
+  } | null
 }
 
 export class CreateEventDepartmentDto {
+  @IsOptional()
   @IsUUID()
-  departmentId!: string
+  departmentId?: string | null
+
+  @IsOptional()
+  @IsUUID()
+  militaryUnitId?: string | null
 
   @IsIn(EVENT_DEPARTMENT_ROLES as unknown as string[])
   role!: EventDepartmentRoleValue

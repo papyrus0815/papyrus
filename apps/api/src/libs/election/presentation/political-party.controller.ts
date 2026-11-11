@@ -228,8 +228,8 @@ export class PoliticalPartyController {
             jurisdictionWhere,
             topLeaderPositionFilter,
             {
-              headOfCabinet: {
-                is: {
+              headedCabinets: {
+                some: {
                   politicalParties: { some: { partyId: id } },
                 },
               },

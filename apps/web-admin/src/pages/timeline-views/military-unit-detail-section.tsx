@@ -7,7 +7,12 @@ import styled from 'styled-components'
 
 import { SIDE_UNIT_ROLE_LABEL } from '@/pages/events/detail/components/side-orbat.lib'
 import { SIDE_OUTCOME_LABEL } from '@/pages/events/detail/components/side-outcome'
-import { militaryUnitApi } from '@/shared/api/military-unit'
+import {
+  militaryUnitApi,
+  type MilitaryUnitDatePartsDto,
+  type MilitaryUnitEventLinkDto,
+  type MilitaryUnitLineageDto,
+} from '@/shared/api/military-unit'
 import { formatSpanLabel } from '@/pages/events/detail/components/development-timeline.lib'
 import { militaryUnitTypeLabelKo } from '@/shared/lib/military-unit-type-label'
 import { pathKeys } from '@/shared/router'
@@ -26,6 +31,9 @@ const BRANCH_LABELS: Record<string, string> = {
 interface UnitDetailResponse {
   id: string
   name: string
+  nameLocal?: string | null
+  nameEn?: string | null
+  abbreviation?: string | null
   unitType?: string | null
   branch?: string | null
   nickname?: string | null
@@ -33,8 +41,13 @@ interface UnitDetailResponse {
   garrison?: string | null
   strength?: string | null
   description?: string | null
+  established?: MilitaryUnitDatePartsDto | null
+  disbanded?: MilitaryUnitDatePartsDto | null
   establishedDate?: string | null
   disbandedDate?: string | null
+  predecessors?: MilitaryUnitLineageDto[]
+  successors?: MilitaryUnitLineageDto[]
+  eventRelations?: MilitaryUnitEventLinkDto[]
   countryId?: string | null
   historicalCountryId?: string | null
   country?: { id: string; name: string } | null
@@ -196,7 +209,14 @@ export function MilitaryUnitDetailSection() {
       if (unitTypeFilter && unitItem.unitType !== unitTypeFilter) return false
       if (branchFilter && unitItem.branch !== branchFilter) return false
       if (queryLower) {
-        const hay = [unitItem.name, unitItem.nickname, countryName]
+        const hay = [
+          unitItem.name,
+          unitItem.abbreviation,
+          unitItem.nameLocal,
+          unitItem.nameEn,
+          unitItem.nickname,
+          countryName,
+        ]
           .filter(Boolean)
           .join(' ')
           .toLowerCase()
@@ -298,7 +318,10 @@ export function MilitaryUnitDetailSection() {
                     {typeLabel && <SmallBadge>{typeLabel}</SmallBadge>}
                     <CountryTag>{countryName}</CountryTag>
                   </UnitSummaryTop>
-                  <UnitSummaryName>{unitItem.name}</UnitSummaryName>
+                  <UnitSummaryName>
+                    {unitItem.name}
+                    {unitItem.abbreviation ? ` (${unitItem.abbreviation})` : ''}
+                  </UnitSummaryName>
                   {unitItem.nickname && <UnitSummaryNick>“{unitItem.nickname}”</UnitSummaryNick>}
                 </UnitSummaryCard>
               )
@@ -332,8 +355,30 @@ export function MilitaryUnitDetailSection() {
   const branchLabel = unit.branch ? (BRANCH_LABELS[unit.branch] ?? unit.branch) : null
   const subUnits = unit.subUnits ?? []
   const commanders = unit.commanders ?? []
+  const predecessors = unit.predecessors ?? []
+  const successors = unit.successors ?? []
+  const eventRelations = unit.eventRelations ?? []
   const deployments = (unit.sideDeployedUnits ?? []).filter((dep) => dep.side?.event)
   const vessels = unit.navalVessels ?? []
+
+  const formatPartsOrIso = (
+    parts: MilitaryUnitDatePartsDto | null | undefined,
+    iso: string | null | undefined,
+    fallback: string,
+  ): string => {
+    if (parts?.year && parts.year > 0) {
+      const prefix = parts.era === 'BC' ? 'BC ' : ''
+      const monthPart =
+        parts.month != null ? `.${String(parts.month).padStart(2, '0')}` : ''
+      const dayPart =
+        parts.month != null && parts.day != null
+          ? `.${String(parts.day).padStart(2, '0')}`
+          : ''
+      return `${prefix}${parts.year}${monthPart}${dayPart}`
+    }
+    if (iso) return iso.slice(0, 10)
+    return fallback
+  }
 
   return (
     <PageWrap>
@@ -344,8 +389,10 @@ export function MilitaryUnitDetailSection() {
               {unitTypeLabel && <PrimaryBadge>{unitTypeLabel}</PrimaryBadge>}
               {branchLabel && <SecondaryBadge>{branchLabel}</SecondaryBadge>}
               {countryName && countryIdForLink && (
-                <CountryLink to={pathKeys.countryGovernment(countryIdForLink)}>
-                  🏳️ {countryName}
+                <CountryLink
+                  to={`${pathKeys.countryMilitary(countryIdForLink)}?unitId=${encodeURIComponent(unit.id)}`}
+                >
+                  🏳️ {countryName} 군사 편제 ↗
                 </CountryLink>
               )}
               {unit.administrationDepartment && (
@@ -359,20 +406,29 @@ export function MilitaryUnitDetailSection() {
             </BadgeRow>
             <HeroTitle>
               {unit.name}
+              {unit.abbreviation ? ` (${unit.abbreviation})` : ''}
               {unit.nickname && <NicknameSpan> “{unit.nickname}”</NicknameSpan>}
             </HeroTitle>
+            {(unit.nameLocal || unit.nameEn) && (
+              <HeroSubtitle>
+                {[unit.nameLocal, unit.nameEn].filter(Boolean).join(' · ')}
+              </HeroSubtitle>
+            )}
             {unit.motto && <HeroSubtitle>표어: {unit.motto}</HeroSubtitle>}
           </HeroTitleGroup>
         </HeroTopRow>
 
         <MetaRow>
-          {(unit.establishedDate || unit.disbandedDate) && (
+          {(unit.established?.year ||
+            unit.disbanded?.year ||
+            unit.establishedDate ||
+            unit.disbandedDate) && (
             <MetaItem>
               <FiCalendar size={13} />
               <span>
                 존속:{' '}
-                {unit.establishedDate ? unit.establishedDate.slice(0, 10) : '?'} ~{' '}
-                {unit.disbandedDate ? unit.disbandedDate.slice(0, 10) : '현재'}
+                {formatPartsOrIso(unit.established, unit.establishedDate, '?')} ~{' '}
+                {formatPartsOrIso(unit.disbanded, unit.disbandedDate, '현재')}
               </span>
             </MetaItem>
           )}
@@ -393,9 +449,9 @@ export function MilitaryUnitDetailSection() {
         {unit.description && <DescriptionBox>{unit.description}</DescriptionBox>}
       </HeroCard>
 
-      {/* 1. 편제 계통 (상급 부대 → 현재 부대 → 예하 부대) */}
+      {/* 1. 편제 계통 (상급 부대 → 현재 부대 → 예하 부대) + 전신·후신 계보 */}
       <SectionCard>
-        <SectionTitle>편제 계통 (Command Hierarchy)</SectionTitle>
+        <SectionTitle>편제 계통 · 계보 (Command Hierarchy &amp; Lineage)</SectionTitle>
         <HierarchyFlow>
           {unit.parentUnit ? (
             <HierarchyNodeBtn
@@ -418,9 +474,64 @@ export function MilitaryUnitDetailSection() {
 
           <CurrentUnitPill>
             {unitTypeLabel && <SmallBadge>{unitTypeLabel}</SmallBadge>}
-            <strong>{unit.name}</strong>
+            <strong>
+              {unit.name}
+              {unit.abbreviation ? ` (${unit.abbreviation})` : ''}
+            </strong>
           </CurrentUnitPill>
         </HierarchyFlow>
+
+        {(predecessors.length > 0 || successors.length > 0) && (
+          <SubUnitSection>
+            <SubSectionLabel>전신 · 후신 개편 계보</SubSectionLabel>
+            <HierarchyFlow>
+              {predecessors.map((predItem) => {
+                if (predItem.targetType === 'DEPARTMENT' && predItem.department) {
+                  return countryIdForLink ? (
+                    <CountryLink
+                      key={predItem.transitionId}
+                      to={`${pathKeys.countryGovernment(countryIdForLink)}?departmentId=${encodeURIComponent(predItem.department.id)}`}
+                    >
+                      🏛️ [전신 부처] {predItem.department.name}
+                      {predItem.year
+                        ? ` (${predItem.era === 'BC' ? 'BC ' : ''}${predItem.year})`
+                        : ''}
+                    </CountryLink>
+                  ) : (
+                    <SecondaryBadge key={predItem.transitionId}>
+                      🏛️ [전신 부처] {predItem.department.name}
+                    </SecondaryBadge>
+                  )
+                }
+                if (predItem.unit) {
+                  return (
+                    <HierarchyNodeBtn
+                      key={predItem.transitionId}
+                      type="button"
+                      onClick={() => selectUnit(predItem.unit!.id)}
+                    >
+                      <SmallBadge>전신 부대</SmallBadge>
+                      <strong>{predItem.unit.name}</strong>
+                    </HierarchyNodeBtn>
+                  )
+                }
+                return null
+              })}
+              {successors.map((succItem) =>
+                succItem.unit ? (
+                  <HierarchyNodeBtn
+                    key={succItem.transitionId}
+                    type="button"
+                    onClick={() => selectUnit(succItem.unit!.id)}
+                  >
+                    <SmallBadge>후신 부대</SmallBadge>
+                    <strong>{succItem.unit.name}</strong>
+                  </HierarchyNodeBtn>
+                ) : null,
+              )}
+            </HierarchyFlow>
+          </SubUnitSection>
+        )}
 
         {subUnits.length > 0 && (
           <SubUnitSection>
@@ -444,6 +555,44 @@ export function MilitaryUnitDetailSection() {
           </SubUnitSection>
         )}
       </SectionCard>
+
+      {eventRelations.length > 0 && (
+        <SectionCard>
+          <SectionTitle>
+            지령 · 작전 관여 사건 ({eventRelations.length}건)
+          </SectionTitle>
+          <Table>
+            <thead>
+              <tr>
+                <th>시기</th>
+                <th>사건 · 지령</th>
+                <th>관여 성격</th>
+                <th>설명</th>
+              </tr>
+            </thead>
+            <tbody>
+              {eventRelations.map((relItem) => (
+                <tr key={relItem.relationId}>
+                  <td>
+                    {relItem.event.startYear
+                      ? `${relItem.event.startEra === 'BC' ? 'BC ' : ''}${relItem.event.startYear}`
+                      : '—'}
+                  </td>
+                  <td>
+                    <EventLink to={pathKeys.events.detail(relItem.event.id)}>
+                      {relItem.event.title}
+                    </EventLink>
+                  </td>
+                  <td>
+                    <SmallBadge>{relItem.role}</SmallBadge>
+                  </td>
+                  <td>{relItem.roleDescription || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </SectionCard>
+      )}
 
       {/* 2. 역대 지휘관 */}
       <SectionCard>

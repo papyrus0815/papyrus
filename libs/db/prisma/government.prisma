@@ -163,8 +163,11 @@ model GovernmentPositionDefinition {
   /// 중앙부처 카테고리 연결 — 외교부 장관, 국방부 장관 등 일반 직위 (관리자 등록)
   categoryId String? @map("category_id") @db.Char(36)
 
-  /// 국가 기관(부처) 직접 연결 — 동일 카테고리 내 여러 부처(예: 육군성 vs 해군성 vs OKW)를 구분해야 하는 특정 기관 직위
+  /// 국가 기관(부처) 직접 연결 — 동일 카테고리 내 여러 부처(예: 육군성 vs 해군성)를 구분해야 하는 특정 기관 직위
   administrationDepartmentId String? @map("administration_department_id") @db.Char(36)
+
+  /// 군사 사령부·부대 직접 연결 — 특정 사령부·부대 전용 직위 정의 (예: OKW 총장, 루마니아 참모총장 등)
+  militaryUnitId String? @map("military_unit_id") @db.Char(36)
 
   /// 행정기구(Organization) 연결 — 만철 총재 등 국가 밖/별도 기구 직위 (사용자 등록)
   organizationId String? @map("organization_id") @db.Char(36)
@@ -174,6 +177,7 @@ model GovernmentPositionDefinition {
 
   category                 AdministrationDepartmentCategory? @relation("CategoryPositionDefinitions", fields: [categoryId], references: [id], onDelete: SetNull)
   administrationDepartment AdministrationDepartment?         @relation("DepartmentPositionDefinitions", fields: [administrationDepartmentId], references: [id], onDelete: SetNull)
+  militaryUnit             MilitaryUnit?                     @relation("MilitaryUnitPositionDefinitions", fields: [militaryUnitId], references: [id], onDelete: SetNull)
   organization             Organization?                     @relation("GovernmentPositionOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
 
   /// 적용 범위 — 행이 0개면 전역(어느 국가에서나 노출), 1개 이상이면 그 국가에서만 노출
@@ -191,6 +195,7 @@ model GovernmentPositionDefinition {
 
   @@index([categoryId], name: "idx_gov_pos_def_categoryId")
   @@index([administrationDepartmentId], name: "idx_gov_pos_def_adminDeptId")
+  @@index([militaryUnitId], name: "idx_gov_pos_def_militaryUnitId")
   @@index([organizationId], name: "idx_gov_pos_def_organizationId")
   @@index([positionType], name: "idx_gov_pos_def_positionType")
   @@index([rank], name: "idx_gov_pos_def_rank")
@@ -283,31 +288,55 @@ model CabinetLinkageGroup {
 }
 
 // ========================
-// Cabinet (행정부) — 정규화된 행정부 단위
+// Cabinet (행정부·내각) — 정규화된 행정부/내각 단위
 // ========================
-/// 한 수반(대통령·수상) 재임을 중심으로 한 행정부. 각료 재임은 cabinetId로 소속.
-/// - 기간·국가는 headTenure 조인으로 조회 (이중 저장 제거, 정규화)
-/// - "이 행정부 각료" = GovernmentPositionTenure where cabinetId = id
+/// 수반(대통령·총리·군주) 재임 또는 집단지도체제를 중심으로 구성되는 행정부·내각 단위.
+/// - 한 수반 재임 동안에도 개각(제1차·제2차 내각)이 일어날 수 있으므로 `headTenureId`는 1:N 허용.
+/// - 집단지도체제·과도위원회 등 단일 수반이 없는 내각을 위해 `headTenureId`는 선택(nullable)이며,
+///   수반이 없거나 개각 기간이 수반 전체 임기와 다를 때를 위해 국가·기간 오버라이드 필드를 함께 지원한다.
+/// - 각료 구성은 N:M `CabinetMember`가 정본이다(연속 유임 장관이 여러 내각에 동시 소속 가능).
 model Cabinet {
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 이 행정부의 수반 재임 (대통령·수상 등 1건)
-  headTenureId String @unique @map("head_tenure_id") @db.Char(36)
+  /// 이 행정부·내각의 수반 재임 (대통령·총리·군주 등 — 개각 시 1:N 가능, 집단지도체제면 null)
+  headTenureId String? @map("head_tenure_id") @db.Char(36)
 
-  /// 행정부 명칭 (선택, 예: "루즈벨트 제1기")
+  /// 행정부·내각 명칭 (예: "루즈벨트 제1기 행정부", "처칠 전시내각", "히틀러 내각")
   name String? @db.VarChar(120)
+
+  /// 내각 설명·개각 배경 (선택)
+  description String? @db.Text
+
+  /// 소속 국가 오버라이드 (수반 재임이 없을 때 필수, 있으면 수반 재임과 자동 동기화)
+  countryId           String? @map("country_id") @db.Char(36)
+  historicalCountryId String? @map("historical_country_id") @db.Char(36)
+
+  /// 내각 존속 기간 오버라이드 (비어 있으면 headTenure 기간을 폴백으로 사용; 개각 시 내각 고유 기간 기록)
+  startEra   Era? @map("start_era")
+  startYear  Int? @map("start_year")
+  startMonth Int? @map("start_month")
+  startDay   Int? @map("start_day")
+  endEra     Era? @map("end_era")
+  endYear    Int? @map("end_year")
+  endMonth   Int? @map("end_month")
+  endDay     Int? @map("end_day")
 
   /// 등록한 계정 (계정별 행정부 구분)
   accountId String? @map("account_id") @db.Char(36)
 
-  headTenure    GovernmentPositionTenure  @relation("CabinetHead", fields: [headTenureId], references: [id], onDelete: Cascade)
-  memberTenures GovernmentPositionTenure[] @relation("CabinetMembers")
-  account       Account?                  @relation("AccountCabinets", fields: [accountId], references: [id], onDelete: SetNull)
-  treatySignatories TreatySignatory[]     @relation("TreatySignatoryCabinet")
+  headTenure        GovernmentPositionTenure? @relation("CabinetHead", fields: [headTenureId], references: [id], onDelete: SetNull)
+  country           Country?                  @relation("CabinetCountry", fields: [countryId], references: [id], onDelete: SetNull)
+  historicalCountry HistoricalCountry?        @relation("CabinetHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+  /// N:M 각료 구성 정본 (연속 유임 장관이 1기·2기 내각 모두에 소속 가능)
+  members           CabinetMember[]           @relation("CabinetMemberships")
+  /// 레거시 1:N 참조 호환용
+  memberTenures     GovernmentPositionTenure[] @relation("CabinetMembers")
+  account           Account?                  @relation("AccountCabinets", fields: [accountId], references: [id], onDelete: SetNull)
+  treatySignatories TreatySignatory[]         @relation("TreatySignatoryCabinet")
   /// 연정·여당 등 이 행정부를 지지한 정당(행정부 단위 기록)
-  politicalParties CabinetPoliticalParty[] @relation("CabinetPoliticalParties")
+  politicalParties  CabinetPoliticalParty[]   @relation("CabinetPoliticalParties")
   /// 이 행정부가 관여한 사건들 (N:M)
-  events           CabinetEvent[]          @relation("CabinetEventsCabinet")
+  events            CabinetEvent[]            @relation("CabinetEventsCabinet")
 
   /// 다른 나라 행정부와의 묶음 (다국 행정부 연결). 묶음 그룹에 `eventId`가 있으면 그 사건 축.
   linkageGroupId String?              @map("linkage_group_id") @db.Char(36)
@@ -316,9 +345,44 @@ model Cabinet {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([headTenureId], name: "idx_cabinet_headTenureId")
+  @@index([countryId], name: "idx_cabinet_countryId")
+  @@index([historicalCountryId], name: "idx_cabinet_historicalCountryId")
   @@index([accountId], name: "idx_cabinet_accountId")
   @@index([linkageGroupId], name: "idx_cabinet_linkageGroupId")
   @@map("cabinet")
+}
+
+// ========================
+// CabinetMember (행정부·내각 ↔ 각료 재임 N:M)
+// ========================
+/// 한 장관 재임(예: 리벤트로프 외무장관 1938~1945, 그로미코 외무장관 1957~1985)이 여러 내각에 걸치거나,
+/// 한 내각 안에서 부처별 각료 슬롯을 명시적으로 편성할 때 쓰는 N:M 연결 테이블.
+model CabinetMember {
+  id String @id @default(uuid()) @db.Char(36)
+
+  cabinetId String @map("cabinet_id") @db.Char(36)
+  tenureId  String @map("tenure_id") @db.Char(36)
+
+  /// 내각 내 담당 부처 오버라이드 (비어 있으면 tenure.administrationDepartmentId 사용)
+  administrationDepartmentId String? @map("administration_department_id") @db.Char(36)
+  /// 내각 내 직함 오버라이드 (예: 부총리 겸 재무장관, 무임소 장관)
+  roleTitle String? @map("role_title") @db.VarChar(120)
+  sortOrder Int     @default(0) @map("sort_order")
+  isActing  Boolean @default(false) @map("is_acting")
+  note      String? @db.Text
+
+  cabinet                  Cabinet                   @relation("CabinetMemberships", fields: [cabinetId], references: [id], onDelete: Cascade)
+  tenure                   GovernmentPositionTenure  @relation("TenureCabinetMemberships", fields: [tenureId], references: [id], onDelete: Cascade)
+  administrationDepartment AdministrationDepartment? @relation("CabinetMemberDepartment", fields: [administrationDepartmentId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([cabinetId, tenureId], map: "uq_cabinet_member_cabinet_tenure")
+  @@index([tenureId], name: "idx_cabinet_member_tenureId")
+  @@index([administrationDepartmentId], name: "idx_cabinet_member_adminDeptId")
+  @@map("cabinet_member")
 }
 
 // ========================
@@ -473,23 +537,40 @@ model GovernmentPositionTenure {
   /// 우선순위 (같은 직위를 여러 번 역임한 경우 순서 구분, 낮을수록 우선)
   priority Int? @default(0)
 
-  /// 소속 행정부 ID — 이 각료/총독 재임이 속한 행정부(Cabinet)
+  /// 소속 행정부 ID — 레거시/대표 행정부 포인터 (다중 내각 N:M 정본은 cabinetMemberships)
   cabinetId String? @map("cabinet_id") @db.Char(36)
 
-  /// 소속 중앙부처 ID — 이 재임이 실제 속한 국가별 부처 인스턴스 (예: 미국 국무부, 한국 외교부)
+  /// 소속 중앙부처·국가기관 ID — 민간 행정 조직 인스턴스 (예: 미국 국무부, 한국 외교부, 조선총독부)
   administrationDepartmentId String? @map("administration_department_id") @db.Char(36)
 
+  /// 소속 군사 사령부·부대 ID — 군령 기관·야전부대 인스턴스 (예: OKW, OKH, 중부집단군, 제1군)
+  militaryUnitId String? @map("military_unit_id") @db.Char(36)
+
+  /// 재임 당시 계급·품계 (예: 원수, 상급대장, 대장, 정1품) — 군직·관직 공통 표시용
+  rankTitle String? @map("rank_title") @db.VarChar(100)
+
+  /// 재임 당시 소속·집권 정당 FK (예: 민주당, 보수당, 나치당)
+  partyId String? @map("party_id") @db.Char(36)
+
+  /// 파생 — 대수(ordinal) 유일성 스코프 키(DB 트리거가 COALESCE(administration_department_id, military_unit_id, 'POLITY_ROOT')로 채움).
+  /// 덕분에 한 나라 안에서 외무부 초대(1대) 장관과 국방부 초대(1대) 장관, 제1군 1대 사령관이 충돌 없이 공존한다.
+  scopeEntityKey String @default("POLITY_ROOT") @map("scope_entity_key") @db.VarChar(40)
+
   //--- 관계 필드
-  positionDefinition GovernmentPositionDefinition @relation(fields: [positionDefinitionId], references: [id], onDelete: Restrict)
-  country            Country?                      @relation("TenureCountry", fields: [countryId], references: [id], onDelete: SetNull)
-  historicalCountry  HistoricalCountry?            @relation("TenureHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
-  person             Person                        @relation("PersonGovernmentTenure", fields: [personId], references: [id], onDelete: Cascade)
-  cabinet            Cabinet?                      @relation("CabinetMembers", fields: [cabinetId], references: [id], onDelete: SetNull)
-  headOfCabinet      Cabinet?                      @relation("CabinetHead")
-  regnalEras         RegnalEra[]                   @relation("TenureRegnalEras")
+  positionDefinition       GovernmentPositionDefinition @relation(fields: [positionDefinitionId], references: [id], onDelete: Restrict)
+  country                  Country?                     @relation("TenureCountry", fields: [countryId], references: [id], onDelete: SetNull)
+  historicalCountry        HistoricalCountry?           @relation("TenureHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+  person                   Person                       @relation("PersonGovernmentTenure", fields: [personId], references: [id], onDelete: Cascade)
+  cabinet                  Cabinet?                     @relation("CabinetMembers", fields: [cabinetId], references: [id], onDelete: SetNull)
+  cabinetMemberships       CabinetMember[]              @relation("TenureCabinetMemberships")
+  headedCabinets           Cabinet[]                    @relation("CabinetHead")
+  regnalEras               RegnalEra[]                  @relation("TenureRegnalEras")
   /// 재임 기간 중 업적·한일 (사건과 별도 개념)
-  achievements       TenureAchievement[]           @relation("TenureAchievements")
-  administrationDepartment AdministrationDepartment? @relation("TenureDepartment", fields: [administrationDepartmentId], references: [id], onDelete: SetNull)
+  achievements             TenureAchievement[]          @relation("TenureAchievements")
+  administrationDepartment AdministrationDepartment?    @relation("TenureDepartment", fields: [administrationDepartmentId], references: [id], onDelete: SetNull)
+  militaryUnit             MilitaryUnit?                @relation("TenureMilitaryUnit", fields: [militaryUnitId], references: [id], onDelete: SetNull)
+  party                    PoliticalParty?              @relation("TenurePoliticalParty", fields: [partyId], references: [id], onDelete: SetNull)
+  treatySignatories        TreatySignatory[]            @relation("TreatySignatoryTenure")
 
 
   /// 이 공직 임기가 특정 선거의 당선으로 시작된 경우(대통령·국회의원 등). 1:1.
@@ -508,10 +589,12 @@ model GovernmentPositionTenure {
   @@index([startDate], name: "idx_gov_tenure_startDate")
   @@index([cabinetId], name: "idx_gov_tenure_cabinetId")
   @@index([administrationDepartmentId], name: "idx_gov_tenure_adminDeptId")
+  @@index([militaryUnitId], name: "idx_gov_tenure_militaryUnitId")
+  @@index([partyId], name: "idx_gov_tenure_partyId")
   @@index([accessionEventId], name: "idx_gov_tenure_accessionEventId")
   @@index([startKey, endKey], name: "idx_gov_tenure_period_key")
   @@index([polityId], name: "idx_gov_tenure_polityId")
-  @@unique([polityId, positionDefinitionId, ordinal, subTermKey], map: "uq_gov_tenure_polity_def_ordinal")
+  @@unique([polityId, scopeEntityKey, positionDefinitionId, ordinal, subTermKey], map: "uq_gov_tenure_polity_def_ordinal")
   @@map("government_position_tenure")
 }
 

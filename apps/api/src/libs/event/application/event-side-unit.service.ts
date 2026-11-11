@@ -10,6 +10,7 @@ import { partsOf } from './person-participation'
 export interface SideUnitLineage {
   id: string
   name: string
+  abbreviation?: string | null
   unitType?: string | null
 }
 
@@ -51,6 +52,7 @@ export interface SideUnitView {
   unit: {
     id: string
     name: string
+    abbreviation?: string | null
     unitType: string | null
     branch: string | null
     nickname: string | null
@@ -61,8 +63,8 @@ export interface SideUnitView {
     /** 바로 위 부대부터 맨 위 부대까지(가까운 순) */
     parents: SideUnitLineage[]
     /**
-     * 소속 기관 — 이 부대 또는 가장 가까운 상위 부대에 걸린 기관(OKH·스타프카…). 부대는 국가 › 기관 › 부대로
-     * 이어진다(기관=AdministrationDepartment, 야전 편제=MilitaryUnit).
+     * 소속 행정부처 — 이 부대 또는 상위 부대에 걸린 민간 부처(국방부·국방인민위원부 등).
+     * OKW·OHL·스타프카 등 군 최고사령부는 parents 부대 사슬 맨 위에 그대로 올라간다.
      */
     department: { id: string; name: string; abbreviation: string | null } | null
   }
@@ -96,6 +98,7 @@ const PERSON_DISPLAY_SELECT = {
 const UNIT_SELECT = {
   id: true,
   name: true,
+  abbreviation: true,
   unitType: true,
   branch: true,
   nickname: true,
@@ -106,6 +109,26 @@ const UNIT_SELECT = {
   country: { select: { name: true } },
   historicalCountry: { select: { name: true } },
   administrationDepartment: { select: { id: true, name: true, abbreviation: true } },
+  tenures: {
+    orderBy: { startKey: 'desc' },
+    select: {
+      personId: true,
+      title: true,
+      rankTitle: true,
+      startEra: true,
+      startYear: true,
+      startMonth: true,
+      startDay: true,
+      startDate: true,
+      endEra: true,
+      endYear: true,
+      endMonth: true,
+      endDay: true,
+      endDate: true,
+      positionDefinition: { select: { title: true } },
+      person: { select: PERSON_DISPLAY_SELECT },
+    },
+  },
   commanders: {
     select: {
       personId: true,
@@ -364,13 +387,19 @@ export class EventSideUnitService {
       let cursor = firstParentId ? byId.get(firstParentId) : undefined
       while (cursor && !seen.has(cursor.id)) {
         seen.add(cursor.id)
-        parents.push({ id: cursor.id, name: cursor.name, unitType: cursor.unitType ?? null })
+        parents.push({
+          id: cursor.id,
+          name: cursor.name,
+          abbreviation: cursor.abbreviation ?? null,
+          unitType: cursor.unitType ?? null,
+        })
         department ??= cursor.administrationDepartment
         const nextParentId =
           overrideParentBySideAndUnit.get(`${row.sideId}:${cursor.id}`) ?? cursor.parentUnitId
         cursor = nextParentId ? byId.get(nextParentId) : undefined
       }
-      const commander = resolveUnitCommanderAtEvent(row.commanderId, row.commander, unit.commanders, event)
+      const unifiedCandidates = mergeTenureAndLegacyCommanders(unit.tenures ?? [], unit.commanders ?? [])
+      const commander = resolveUnitCommanderAtEvent(row.commanderId, row.commander, unifiedCandidates, event)
       return {
         id: row.id,
         sideId: row.sideId,
@@ -384,6 +413,7 @@ export class EventSideUnitService {
         unit: {
           id: unit.id,
           name: unit.name,
+          abbreviation: unit.abbreviation ?? null,
           unitType: unit.unitType ?? null,
           branch: unit.branch ?? null,
           nickname: unit.nickname ?? null,
@@ -407,12 +437,38 @@ interface CommanderPersonRow {
   country?: { defaultNameDisplayOrder?: string | null } | null
 }
 
+interface UnitTenureRow {
+  personId: string
+  title: string | null
+  rankTitle: string | null
+  startEra: string | null
+  startYear: number | null
+  startMonth: number | null
+  startDay: number | null
+  startDate: Date | null
+  endEra: string | null
+  endYear: number | null
+  endMonth: number | null
+  endDay: number | null
+  endDate: Date | null
+  positionDefinition: { title: string } | null
+  person: CommanderPersonRow
+}
+
 interface UnitCommanderRow {
   personId: string
   rank: string | null
   role: string | null
   isCurrent: boolean | null
+  startEra?: string | null
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
   startDate: Date | null
+  endEra?: string | null
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
   endDate: Date | null
   person: CommanderPersonRow
 }
@@ -420,6 +476,7 @@ interface UnitCommanderRow {
 interface UnitRow {
   id: string
   name: string
+  abbreviation?: string | null
   unitType: string | null
   branch: string | null
   nickname: string | null
@@ -430,7 +487,32 @@ interface UnitRow {
   country: { name: string } | null
   historicalCountry: { name: string } | null
   administrationDepartment: { id: string; name: string; abbreviation: string | null } | null
+  tenures?: UnitTenureRow[]
   commanders: UnitCommanderRow[]
+}
+
+function mergeTenureAndLegacyCommanders(
+  tenures: UnitTenureRow[],
+  legacyCommanders: UnitCommanderRow[],
+): UnitCommanderRow[] {
+  const fromTenures: UnitCommanderRow[] = tenures.map((tenure) => ({
+    personId: tenure.personId,
+    rank: tenure.rankTitle ?? null,
+    role: tenure.title ?? tenure.positionDefinition?.title ?? null,
+    isCurrent: !tenure.endYear && !tenure.endDate,
+    startEra: tenure.startEra,
+    startYear: tenure.startYear,
+    startMonth: tenure.startMonth,
+    startDay: tenure.startDay,
+    startDate: tenure.startDate,
+    endEra: tenure.endEra,
+    endYear: tenure.endYear,
+    endMonth: tenure.endMonth,
+    endDay: tenure.endDay,
+    endDate: tenure.endDate,
+    person: tenure.person,
+  }))
+  return [...fromTenures, ...legacyCommanders]
 }
 
 function dateKey(year: number | null, month: number | null, day: number | null, isEnd: boolean): number | null {
@@ -442,8 +524,8 @@ function dateKey(year: number | null, month: number | null, day: number | null, 
 
 /**
  * 작전 당시 부대 지휘관 결정:
- * 1) SideDeployedUnit.commanderId가 명시돼 있으면 그 인물을 최우선 사용 (동일 인물의 부대 지휘관 기록이 있으면 계급·직책 보강)
- * 2) 없으면 MilitaryUnit.commanders 중 사건 기간과 임기가 겹치는 지휘관을 자동 선택
+ * 1) SideDeployedUnit.commanderId가 명시돼 있으면 그 인물을 최우선 사용 (동일 인물의 부대 재임·지휘관 기록이 있으면 계급·직책 보강)
+ * 2) 없으면 통합 재임(GovernmentPositionTenure.militaryUnitId) + 레거시 MilitaryUnit.commanders 중 사건 기간과 임기가 겹치는 지휘관을 자동 선택
  */
 function resolveUnitCommanderAtEvent(
   overrideId: string | null,
@@ -482,8 +564,8 @@ function resolveUnitCommanderAtEvent(
 
     if (evStartKey != null && evEndKey != null) {
       const overlapping = commanders.find((cmd) => {
-        const cStart = partsOf(null, null, null, null, cmd.startDate)
-        const cEnd = partsOf(null, null, null, null, cmd.endDate)
+        const cStart = partsOf(cmd.startEra, cmd.startYear, cmd.startMonth, cmd.startDay, cmd.startDate)
+        const cEnd = partsOf(cmd.endEra, cmd.endYear, cmd.endMonth, cmd.endDay, cmd.endDate)
         const cStartKey = dateKey(cStart.year, cStart.month, cStart.day, false)
         const cEndKey = dateKey(cEnd.year, cEnd.month, cEnd.day, true) ?? Number.MAX_SAFE_INTEGER
         if (cStartKey == null) return false
@@ -503,8 +585,8 @@ function resolveUnitCommanderAtEvent(
 
   /* 날짜 없는 단일 지휘관 기록 또는 현임(isCurrent) 지휘관 폴백 */
   const fallback =
-    commanders.find((cmd) => !cmd.startDate && !cmd.endDate) ??
-    (commanders.length === 1 && !commanders[0].startDate ? commanders[0] : null)
+    commanders.find((cmd) => !cmd.startYear && !cmd.startDate && !cmd.endYear && !cmd.endDate) ??
+    (commanders.length === 1 && !commanders[0].startYear && !commanders[0].startDate ? commanders[0] : null)
   if (!fallback) return null
   return {
     id: fallback.person.id,

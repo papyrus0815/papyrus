@@ -21,6 +21,7 @@ import {
   type LegislatureType,
 } from '@/entities/political-system/model/political-system'
 import { personCareerApi } from '@/shared/api/person-career'
+import { useHistoricalCountriesByModernCountry } from '@/features/country/api/use-historical-countries-by-modern-country.hook'
 import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
 
@@ -41,6 +42,7 @@ interface Props {
 
 type FormState = {
   name: string
+  historicalCountryId: string
   startEra: 'BC' | 'AD'
   startYear: string
   endEra: 'BC' | 'AD'
@@ -69,6 +71,7 @@ type FormState = {
 
 const EMPTY: FormState = {
   name: '',
+  historicalCountryId: '',
   startEra: 'AD',
   startYear: '',
   endEra: 'AD',
@@ -124,6 +127,7 @@ interface DefinitionOption {
 function hydrate(system: PoliticalSystem): FormState {
   return {
     name: toText(system.name),
+    historicalCountryId: system.historicalCountryId ?? '',
     startEra: system.startEra ?? 'AD',
     startYear: toText(system.startYear),
     endEra: system.endEra ?? 'AD',
@@ -263,6 +267,17 @@ export function PoliticalSystemFormModal({
   const [saving, setSaving] = useState(false)
   const [forceSplitExecutive, setForceSplitExecutive] = useState(false)
 
+  const { data: linkedHistoricalCountries = [] } =
+    useHistoricalCountriesByModernCountry(
+      open && !historicalCountryId && countryId ? countryId : '',
+    )
+
+  const effectiveHistoricalCountryId =
+    historicalCountryId ?? (form.historicalCountryId || undefined)
+  const effectiveCountryIdForDefs = effectiveHistoricalCountryId
+    ? undefined
+    : countryId
+
   /*
    * 직함 후보 = 관직 정의 카탈로그. 재임·재위가 쓰는 것과 **같은 목록·같은 쿼리키**를
    * 쓴다 — 여기만 자유 문자열로 두면 같은 '대통령'이 두 어휘로 갈라진다.
@@ -272,13 +287,13 @@ export function PoliticalSystemFormModal({
     queryKey: [
       'position-definitions',
       'list',
-      countryId ?? null,
-      historicalCountryId ?? null,
+      effectiveCountryIdForDefs ?? null,
+      effectiveHistoricalCountryId ?? null,
     ],
     queryFn: () =>
       personCareerApi.getPositionDefinitions({
-        countryId,
-        historicalCountryId,
+        countryId: effectiveCountryIdForDefs,
+        historicalCountryId: effectiveHistoricalCountryId,
       }) as Promise<DefinitionOption[]>,
     enabled: open,
     staleTime: 60_000,
@@ -356,6 +371,12 @@ export function PoliticalSystemFormModal({
 
     const dto: UpdatePoliticalSystemInput = {
       name: textOrNull(form.name),
+      ...(!historicalCountryId && countryId
+        ? {
+            countryId: form.historicalCountryId ? null : countryId,
+            historicalCountryId: form.historicalCountryId || null,
+          }
+        : {}),
       startEra: startYear == null ? null : form.startEra,
       startYear,
       endEra: endYear == null ? null : form.endEra,
@@ -416,7 +437,14 @@ export function PoliticalSystemFormModal({
       <ModalBody>
         <SectionLabel>기간</SectionLabel>
         <Grid>
-          <Field style={{ gridColumn: 'span 2' }}>
+          <Field
+            style={{
+              gridColumn:
+                !historicalCountryId && linkedHistoricalCountries.length > 0
+                  ? undefined
+                  : 'span 2',
+            }}
+          >
             이름
             <Input
               value={form.name}
@@ -424,6 +452,27 @@ export function PoliticalSystemFormModal({
               placeholder="제5공화국 · 바이마르 공화국 (선택)"
             />
           </Field>
+          {!historicalCountryId && linkedHistoricalCountries.length > 0 && (
+            <Field>
+              소속 시대 · 국가
+              <Select
+                value={form.historicalCountryId}
+                onChange={(event) =>
+                  set('historicalCountryId', event.target.value)
+                }
+                aria-label="소속 시대 및 국가"
+              >
+                <option value="">
+                  {countryName ? `${countryName} (현대 국가)` : '현대 국가'}
+                </option>
+                {linkedHistoricalCountries.map((hcItem) => (
+                  <option key={hcItem.id} value={hcItem.id}>
+                    {hcItem.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
           <Field>
             시작
             <Inline>

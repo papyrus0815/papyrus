@@ -495,6 +495,9 @@ export function PersonDetailPanel({
   )
   const [tenureModalOpen, setTenureModalOpen] = useState(false)
   const [editingTenureId, setEditingTenureId] = useState<string | null>(null)
+  const [initialTenurePositionType, setInitialTenurePositionType] = useState<string | null>(
+    null,
+  )
   const [sovereignReignModalOpen, setSovereignReignModalOpen] = useState(false)
   const [editingReignId, setEditingReignId] = useState<string | null>(null)
   /** 재임·재위 단일 진입점 — "추가" 클릭 시 군주/관직 선택 스텝을 띄우고, 선택에 따라
@@ -3652,6 +3655,28 @@ export function PersonDetailPanel({
                           recordEventSuggestionsQuery.data?.byRecordId
                         }
                         onEventClick={(eventId) => setViewingEventId(eventId)}
+                        onDepartmentClick={({ departmentId, countryId: deptCountryId }) => {
+                          if (deptCountryId) {
+                            navigate(
+                              `/country/${encodeURIComponent(deptCountryId)}/government?departmentId=${encodeURIComponent(departmentId)}`,
+                            )
+                          }
+                        }}
+                        onMilitaryUnitClick={({ militaryUnitId, countryId: unitCountryId }) => {
+                          if (unitCountryId) {
+                            navigate(
+                              `/country/${encodeURIComponent(unitCountryId)}/military?unitId=${encodeURIComponent(militaryUnitId)}`,
+                            )
+                          } else {
+                            navigate(`/military-units/${encodeURIComponent(militaryUnitId)}`)
+                          }
+                        }}
+                        onAddTenure={() => {
+                          setEditingTenureId(null)
+                          setEditingReignId(null)
+                          setInitialTenurePositionType(null)
+                          setAddKindChooserOpen(true)
+                        }}
                         onPlayClick={playClickSound}
                         onEditTenure={(id) => {
                           setEditingTenureId(id)
@@ -5573,6 +5598,14 @@ export function PersonDetailPanel({
           setCareerModalOpen(false)
           setEditingCareer(null)
         }}
+        onSwitchToMilitaryTenure={() => {
+          setCareerModalOpen(false)
+          setEditingCareer(null)
+          setEditingTenureId(null)
+          setEditingReignId(null)
+          setInitialTenurePositionType('MILITARY_COMMANDER')
+          setTenureModalOpen(true)
+        }}
       />
 
       <EducationRegisterModal
@@ -5592,16 +5625,23 @@ export function PersonDetailPanel({
         onClose={() => {
           setTenureModalOpen(false)
           setEditingTenureId(null)
+          setInitialTenurePositionType(null)
           setSovereignReignModalOpen(false)
           setEditingReignId(null)
         }}
         onSuccess={() => {
           setTenureModalOpen(false)
           setEditingTenureId(null)
+          setInitialTenurePositionType(null)
           setSovereignReignModalOpen(false)
           setEditingReignId(null)
         }}
         tenureId={(editingTenureId ?? editingReignId) ?? undefined}
+        initialPositionType={
+          !(editingTenureId ?? editingReignId)
+            ? initialTenurePositionType
+            : undefined
+        }
         initialCountryId={
           !(editingTenureId ?? editingReignId)
             ? (person as { countryId?: string }).countryId ||
@@ -5638,7 +5678,13 @@ export function PersonDetailPanel({
             value: 'tenure',
             icon: '🏛️',
             label: '관직 재임',
-            description: '대통령·총리·장관·외교관 등 공직 임기',
+            description: '대통령·총리·장관·총독·외교관 등 공직 임기',
+          },
+          {
+            value: 'military_tenure',
+            icon: '🛡️',
+            label: '군사 사령부·부대 보직',
+            description: '최고사령부(OKW·참모본부)·야전군·사단 지휘관 및 참모 보직',
           },
         ]}
         onSelect={(kind) => {
@@ -5646,9 +5692,15 @@ export function PersonDetailPanel({
           playClickSound()
           if (kind === 'reign') {
             setEditingReignId(null)
+            setInitialTenurePositionType(null)
             setSovereignReignModalOpen(true)
+          } else if (kind === 'military_tenure') {
+            setEditingTenureId(null)
+            setInitialTenurePositionType('MILITARY_COMMANDER')
+            setTenureModalOpen(true)
           } else {
             setEditingTenureId(null)
+            setInitialTenurePositionType(null)
             setTenureModalOpen(true)
           }
         }}

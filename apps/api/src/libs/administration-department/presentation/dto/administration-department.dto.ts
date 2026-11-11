@@ -24,7 +24,6 @@ import { DateInfoDto } from '../../../person/presentation/dto/create-person.dto'
 export const ADMINISTRATION_DEPARTMENT_KINDS = [
   'MINISTRY',
   'AGENCY',
-  'MILITARY_COMMAND',
   'COLONIAL_GOVERNMENT',
   'ROYAL_HOUSEHOLD',
   'OTHER',
@@ -74,7 +73,24 @@ export type DepartmentLineageDto = {
 export type AdministrationDepartmentMilitaryUnitDto = {
   id: string
   name: string
+  abbreviation?: string | null
   unitType: string | null
+}
+
+/** 이 행정기관에서 군사 사령부·부대로 개편된 후신 계보(예: 전쟁부 → OKW) */
+export type DepartmentMilitaryUnitLineageDto = {
+  transitionId: string
+  kind: DepartmentTransitionKindValue
+  era: 'BC' | 'AD' | null
+  year: number | null
+  month: number | null
+  note: string | null
+  militaryUnit: {
+    id: string
+    name: string
+    abbreviation: string | null
+    unitType: string | null
+  }
 }
 
 export type AdministrationDepartmentResponseDto = {
@@ -107,6 +123,8 @@ export type AdministrationDepartmentResponseDto = {
   predecessors: DepartmentLineageDto[]
   /** 후신 — 이 기관이 이어진 뒤 기관들 */
   successors: DepartmentLineageDto[]
+  /** 군사 사령부·부대로 이어진 후신 계보(예: 전쟁부 → OKW) */
+  militaryUnitSuccessors?: DepartmentMilitaryUnitLineageDto[]
   /** 군부대(MilitaryUnit) FK 역방향 */
   militaryUnits: AdministrationDepartmentMilitaryUnitDto[]
   createdAt: string

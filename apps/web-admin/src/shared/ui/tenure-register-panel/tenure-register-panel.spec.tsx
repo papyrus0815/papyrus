@@ -95,12 +95,46 @@ jest.mock('@/shared/api/person-career', () => ({
 jest.mock('@/shared/api/administration-department', () => ({
   administrationDepartmentApi: {
     getByCountryId: jest.fn().mockResolvedValue([
-      { id: 'dept-mnd', name: '국방부', abbreviation: '국방부' },
+      { id: 'dept-mnd', name: '국방부', abbreviation: '국방부', kind: 'MINISTRY' },
     ]),
     getByHistoricalCountryId: jest.fn().mockResolvedValue([
-      { id: 'dept-byeongjo', name: '병조', abbreviation: null },
+      { id: 'dept-byeongjo', name: '병조', abbreviation: null, kind: 'MINISTRY' },
     ]),
+    getCategories: jest.fn().mockResolvedValue([]),
   },
+}))
+
+jest.mock('@/shared/api/military-unit', () => ({
+  militaryUnitApi: {
+    getByCountryId: jest.fn().mockResolvedValue([
+      {
+        id: 'unit-jcs',
+        name: '합동참모본부',
+        abbreviation: '합참',
+        unitType: 'HIGH_COMMAND',
+        branch: 'JOINT',
+      },
+    ]),
+    getByHistoricalCountryId: jest.fn().mockResolvedValue([
+      {
+        id: 'unit-samdo',
+        name: '삼도수군통제영',
+        abbreviation: '통제영',
+        unitType: 'FLEET',
+        branch: 'NAVY',
+      },
+    ]),
+    create: jest.fn().mockResolvedValue({
+      id: 'unit-created',
+      name: '전라좌수영',
+    }),
+  },
+}))
+
+jest.mock('@/shared/api/election', () => ({
+  getPoliticalParties: jest.fn().mockResolvedValue([
+    { id: 'party-1', name: '한국독립당', shortName: '한독당' },
+  ]),
 }))
 
 jest.mock('@/shared/api/persons-detail', () => ({
@@ -321,5 +355,46 @@ describe('TenureRegisterPanel 셸 — 사건 등록 모달과 같은 닫기 확�
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
     expect(onSuccess).toHaveBeenCalledTimes(1)
     expect(mockConfirm).not.toHaveBeenCalled()
+  })
+
+  it('4-트랙 소속 구분에서 군사 사령부·부대 트랙을 선택하면 MilitaryUnit·계급·지휘 보직을 함께 저장한다', async () => {
+    const { onSuccess } = renderPanel()
+    const api = jest.requireMock('@/shared/api/person-career').personCareerApi
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: '조선' })).toBeInTheDocument()
+    })
+    fireEvent.click(screen.getByRole('button', { name: '조선' }))
+
+    const militaryTrackRadio = screen.getByRole('radio', {
+      name: /군사 사령부 · 부대/,
+    })
+    fireEvent.click(militaryTrackRadio)
+    expect(militaryTrackRadio).toHaveAttribute('aria-checked', 'true')
+
+    const unitDropbox = await screen.findByLabelText('소속 군사 사령부·부대')
+    fireEvent.click(unitDropbox)
+    fireEvent.click(await screen.findByRole('option', { name: /삼도수군통제영/ }))
+
+    fireEvent.click(screen.getByRole('button', { name: '사령관' }))
+    fireEvent.click(screen.getByRole('button', { name: '원수' }))
+
+    const startYear = screen.getAllByRole('textbox', { name: '연도' })[0]
+    fireEvent.change(startYear, { target: { value: '1593' } })
+
+    fireEvent.click(screen.getByRole('button', { name: '재임 등록' }))
+
+    await waitFor(() => expect(api.addGovernmentPositionTenure).toHaveBeenCalledTimes(1))
+    expect(api.addGovernmentPositionTenure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        personId: 'person-1',
+        historicalCountryId: 'joseon',
+        positionType: 'MILITARY_COMMANDER',
+        militaryUnitId: 'unit-samdo',
+        title: '삼도수군통제영 사령관',
+        rankTitle: '원수',
+      }),
+    )
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1))
   })
 })

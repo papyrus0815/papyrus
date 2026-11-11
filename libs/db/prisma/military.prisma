@@ -195,8 +195,17 @@ enum NavalPropulsionType {
   OTHER
 }
 
-/// 부대의 규모 및 종류를 정의합니다.
+/// 부대 및 군 지휘기구의 규모·위계를 정의합니다.
+/// 최고사령부(OKW, Stavka, OHL)·참모본부·각군 총사령부부터 집단군·사단·함대까지 단일 군사 계통 트리를 이룹니다.
 enum MilitaryUnitType {
+  // --- 최고 군령·참모·각군 본부 ---
+  /// 군 최고사령부·대본영 (OKW, OHL, Stavka, 대본영, 합동참모본부 등)
+  SUPREME_COMMAND
+  /// 총참모부·참모본부·작전참모부 (붉은 군대 총참모부, 육군 참모본부, 지휘참모부 WFSt 등)
+  GENERAL_STAFF
+  /// 각군 총사령부·각군 본부 (OKH, OKM, OKL, 육·해·공군본부 등)
+  SERVICE_HQ
+
   // --- 전략·전역 사령부 / 상급 야전 편제 ---
   /// 전구·전역사령부 (Theater Command)
   THEATER
@@ -786,16 +795,25 @@ model MilitaryUnit {
   /// 고유 식별자 (PK)
   id String @id @default(uuid()) @db.Char(36)
 
-  /// 부대명
+  /// 부대·사령부명 (한국어, 나라 이름 없이)
   name String @db.VarChar(100)
 
-  /// 부대 종류 (MilitaryUnitType Enum 참조)
+  /// 원어명 (예: Oberkommando der Wehrmacht, Heeresgruppe Mitte)
+  nameLocal String? @map("name_local") @db.VarChar(200)
+
+  /// 영문명 (예: High Command of the Armed Forces, Army Group Centre)
+  nameEn String? @map("name_en") @db.VarChar(200)
+
+  /// 공식 약칭 (예: OKW, OKH, OHL, Stavka, WFSt) — 검색 및 트리 배지용
+  abbreviation String? @db.VarChar(40)
+
+  /// 부대·지휘기구 종류 (MilitaryUnitType Enum 참조 — 최고사령부·참모본부부터 사단·함대까지)
   unitType MilitaryUnitType? @map("unit_type")
 
   /// 현대 소속 국가의 외래 키 (FK) — 표시/그룹핑 축
   countryId String? @map("country_id") @db.Char(36)
 
-  /// 역사적 국가의 외래 키 (FK) — 독일 제국 제1군, 조선 훈련도감 등
+  /// 역사적 국가의 외래 키 (FK) — 독일 제국 제1군, 나치 독일 OKW, 조선 훈련도감 등
   ///
   /// 현대(countryId)·역사(historicalCountryId) 듀얼 FK. 상호배타 아님: 둘 다 설정 가능하며
   /// countryId는 표시/그룹핑 축, historicalCountryId는 소속 축이라 의미가 다르다.
@@ -803,56 +821,82 @@ model MilitaryUnit {
   /// 둘 다 null이면 무소속.
   historicalCountryId String? @map("historical_country_id") @db.Char(36)
 
-  /// 부대 상태
-  isActive        Boolean?  @map("is_active")
-  /// 창설일
+  /// 부대 현존 상태
+  isActive Boolean? @map("is_active")
+
+  /// 창설일 — 구조화(진실). 기원전·고대·연·월 단위 지원
+  establishedEra       Era?    @map("established_era")
+  establishedYear      Int?    @map("established_year")
+  establishedMonth     Int?    @map("established_month")
+  establishedDay       Int?    @map("established_day")
+  /// 'year' | 'month' | 'day'
+  establishedPrecision String? @map("established_precision") @db.VarChar(10)
+
+  /// 해체·폐지일 — 구조화(진실). NULL이면 현존
+  disbandedEra       Era?    @map("disbanded_era")
+  disbandedYear      Int?    @map("disbanded_year")
+  disbandedMonth     Int?    @map("disbanded_month")
+  disbandedDay       Int?    @map("disbanded_day")
+  disbandedPrecision String? @map("disbanded_precision") @db.VarChar(10)
+
+  /// 창설일 DateTime — 서기 1000~9999 서버 파생(정렬·레거시 호환)
   establishedDate DateTime? @map("established_date")
-  /// 해체일
+  /// 해체일 DateTime — 서기 1000~9999 서버 파생
   disbandedDate   DateTime? @map("disbanded_date")
 
-  /// 상위 부대의 외래 키 (자기 참조)
+  /// 상위 군사 사령부·부대의 외래 키 (자기 참조 — OKW → OKH → 중부집단군 → 제2기갑집단)
   parentUnitId String? @map("parent_unit_id") @db.Char(36)
 
-  /// 행정 부처/기관(중앙부처 UI)과의 선택적 연결 — 국방부·합참 등 노드와 군사 부대 트리를 동일 기관으로 엮을 때
+  /// 민간 국방부·행정기관(AdministrationDepartment)과의 선택적 연결 — 국방인민위원부 산하 붉은 군대 총참모부 등
   administrationDepartmentId String? @map("administration_department_id") @db.Char(36)
 
-  /// 군종 (육군·해군·공군 등)
+  /// 군종 (육군·해군·공군·합동 등)
   branch MilitaryBranch? @map("branch")
 
-  /// 별칭·약칭
+  /// 별칭·통칭 (예: 구데리안 기갑집단, 사막의 쥐)
   nickname String? @db.VarChar(200)
   /// 표어·모토
   motto    String? @db.VarChar(500)
-  /// 주둔지·본부·거점 (자유 서술)
+  /// 주둔지·본부·작전 거점 (자유 서술)
   garrison String? @db.VarChar(500)
-  /// 병력·정원 (자유 서술, 예: "약 1만 명")
+  /// 병력·편제 정원 요약 (자유 서술, 예: "약 130만 명 · 49개 사단")
   strength String? @db.VarChar(200)
   /// 휘장·식별표지 이미지 URL
   insigniaUrl String? @map("insignia_url") @db.VarChar(500)
   /// 주요 임무
   primaryMission String? @map("primary_mission") @db.Text
-  /// 관할 구역·임무
-  jurisdiction     String? @db.Text
+  /// 관할 구역·작전 구역
+  jurisdiction   String? @db.Text
   /// 주요 전투·작전 이력
   notableBattles String? @map("notable_battles") @db.Text
   /// 훈장·표창 등
   honors         String? @db.Text
 
-  /// 부대에 대한 상세 설명
+  /// 부대·사령부에 대한 상세 설명
   description String? @db.Text
 
   // --- 관계 필드
   /// 소속 국가 (현대)
   country                  Country?                  @relation(fields: [countryId], references: [id], onDelete: SetNull)
-  /// 소속 국가 (역사) — 독일 제국·조선 등 과거 정치체
+  /// 소속 국가 (역사) — 독일 제국·나치 독일·조선 등 과거 정치체
   historicalCountry        HistoricalCountry?        @relation("MilitaryUnitHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
-  /// 연결된 행정 부처(국방부 본부, 군 참모부 등)
+  /// 연결된 상위 민간 행정 부처(국방부, 전쟁부, 국방인민위원부 등)
   administrationDepartment AdministrationDepartment? @relation("DeptMilitaryUnits", fields: [administrationDepartmentId], references: [id], onDelete: SetNull)
-  /// 상위 부대
+  /// 상위 사령부·부대
   parentUnit               MilitaryUnit?             @relation("UnitHierarchy", fields: [parentUnitId], references: [id], onDelete: SetNull)
-  /// 하위 부대들
+  /// 하위 사령부·부대들
   subUnits                 MilitaryUnit[]            @relation("UnitHierarchy")
-  /// 지휘관 기록
+  /// 이 사령부·부대가 앞선 조직인 개편 계보(→ 후신)
+  successorTransitions     MilitaryUnitTransition[]  @relation("MilitaryUnitTransitionPredecessor")
+  /// 이 사령부·부대가 뒤 조직인 개편 계보(전신 →)
+  predecessorTransitions   MilitaryUnitTransition[]  @relation("MilitaryUnitTransitionSuccessor")
+  /// 통합 인사·지휘관 재임 기록 (GovernmentPositionTenure 정본 — 총장·참모총장·사령관·군단장·사단장 등)
+  tenures                  GovernmentPositionTenure[]     @relation("TenureMilitaryUnit")
+  /// 이 사령부·부대에 귀속된 직위 정의
+  positionDefinitions      GovernmentPositionDefinition[] @relation("MilitaryUnitPositionDefinitions")
+  /// 이 사령부·부대가 관여한 사건 지령·명령 관계 (발령 ISSUER · 수령 RECIPIENT · 주체 · 관여)
+  eventRelations           EventDepartmentRelation[]      @relation("EventMilitaryUnitRelations")
+  /// 레거시 지휘관 기록 (GovernmentPositionTenure로 무손실 이관됨)
   commanders               MilitaryUnitCommander[]
   /// 참전 기록
   wars                     WarHistoryMilitaryUnit[]
@@ -876,7 +920,41 @@ model MilitaryUnit {
   @@index([parentUnitId])
   @@index([administrationDepartmentId], name: "idx_military_unit_adminDeptId")
   @@index([branch], name: "idx_military_unit_branch")
+  @@index([unitType], name: "idx_military_unit_unitType")
   @@map("military_units")
+}
+
+/// 군사 사령부·부대 개편·계보 그래프 — A → B (개칭·통합·분리·개편·흡수).
+/// 부대 간 개편(제2기갑집단 → 제2기갑군)뿐만 아니라 민간 부처에서 군사령부로의 개편(전쟁부 → OKW)도 함께 담는다.
+model MilitaryUnitTransition {
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 앞선 군사 사령부·부대 (부대 간 개편일 때)
+  predecessorUnitId       String? @map("predecessor_unit_id") @db.Char(36)
+  /// 앞선 민간·국방 부처 (예: 전쟁부 폐지 → OKW 신설)
+  predecessorDepartmentId String? @map("predecessor_department_id") @db.Char(36)
+  /// 뒤를 잇는 군사 사령부·부대
+  successorUnitId         String  @map("successor_unit_id") @db.Char(36)
+
+  kind DepartmentTransitionKind
+
+  era   Era? @map("era")
+  year  Int? @map("year")
+  month Int? @map("month")
+
+  note String? @db.Text
+
+  predecessorUnit       MilitaryUnit?             @relation("MilitaryUnitTransitionPredecessor", fields: [predecessorUnitId], references: [id], onDelete: Cascade)
+  predecessorDepartment AdministrationDepartment? @relation("DeptToMilitaryUnitTransition", fields: [predecessorDepartmentId], references: [id], onDelete: Cascade)
+  successorUnit         MilitaryUnit              @relation("MilitaryUnitTransitionSuccessor", fields: [successorUnitId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([predecessorUnitId, successorUnitId], map: "uniq_mil_unit_transition_unit_pair")
+  @@unique([predecessorDepartmentId, successorUnitId], map: "uniq_mil_unit_transition_dept_pair")
+  @@index([successorUnitId], name: "idx_mil_unit_transition_succUnitId")
+  @@map("military_unit_transition")
 }
 
 model MilitaryUnitCommander {

@@ -45,6 +45,7 @@ const countryDetailChildSegments = [
   'government',
   // 행정조직의 '정체' 서브탭 — 대시보드 '시대별 전체 보기'가 이 URL로 바로 온다
   'government/system',
+  'military',
   'elections',
   'elections/party/:partyId',
   'laws',

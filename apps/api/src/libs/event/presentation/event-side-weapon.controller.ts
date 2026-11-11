@@ -30,7 +30,7 @@ export class EventSideWeaponController {
 
   @Get(':eventId/weapon-catalog')
   @ApiOperation({ summary: '투입 병기 선택용 마스터 카탈로그 (전차·항공기·화포·함선)' })
-  catalog(): Promise<WeaponCatalogItem[]> {
+  catalog(@Param('eventId') _eventId: string): Promise<WeaponCatalogItem[]> {
     return this.service.getCatalog()
   }
 

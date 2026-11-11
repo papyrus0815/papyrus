@@ -51,9 +51,9 @@ export function CabinetMinisterCards({
             }}
           >
             <CabS.MinisterCardThumb
-              onClick={(e) => {
+              onClick={(clickEvent) => {
                 if (tenure.person?.id) {
-                  e.stopPropagation()
+                  clickEvent.stopPropagation()
                   onMentionPerson(tenure.person.id)
                 }
               }}
@@ -75,7 +75,13 @@ export function CabinetMinisterCards({
             </CabS.MinisterCardThumb>
             <CabS.MinisterCardInfo>
               <CabS.MinisterCardName>{mName}</CabS.MinisterCardName>
-              <CabS.MinisterCardPos>{mPos}</CabS.MinisterCardPos>
+              <CabS.MinisterCardPos>
+                {tenure.administrationDepartment?.name
+                  ? `${tenure.administrationDepartment.name} · ${mPos}`
+                  : mPos}
+                {tenure.rankTitle ? ` (${tenure.rankTitle})` : ''}
+                {tenure.party?.name ? ` · ${tenure.party.shortName || tenure.party.name}` : ''}
+              </CabS.MinisterCardPos>
               <CabS.MinisterCardRange>
                 {mStartFull} – {mEndFull}
                 {mDuration && (

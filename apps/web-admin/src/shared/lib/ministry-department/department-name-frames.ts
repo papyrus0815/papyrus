@@ -433,7 +433,9 @@ export function inferDepartmentCategoryName(
   const framesToCheck = preferredFrame
     ? [
         preferredFrame,
-        ...DEPARTMENT_NAME_FRAMES.filter((f) => f.id !== preferredFrame.id),
+        ...DEPARTMENT_NAME_FRAMES.filter(
+          (candidateFrame) => candidateFrame.id !== preferredFrame.id,
+        ),
       ]
     : DEPARTMENT_NAME_FRAMES
 
@@ -466,7 +468,9 @@ export function inferDepartmentKind(
   const framesToCheck = preferredFrame
     ? [
         preferredFrame,
-        ...DEPARTMENT_NAME_FRAMES.filter((f) => f.id !== preferredFrame.id),
+        ...DEPARTMENT_NAME_FRAMES.filter(
+          (candidateFrame) => candidateFrame.id !== preferredFrame.id,
+        ),
       ]
     : DEPARTMENT_NAME_FRAMES
 

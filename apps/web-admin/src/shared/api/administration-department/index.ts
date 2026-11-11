@@ -47,8 +47,21 @@ export type AdministrationDepartmentTenureItem = {
   endMonth?: number | null
   endDay?: number | null
   title?: string | null
+  rankTitle?: string | null
+  partyId?: string | null
+  party?: {
+    id: string
+    name: string
+    shortName?: string | null
+    brandColor?: string | null
+  } | null
   cabinetId?: string | null
+  cabinets?: Array<{
+    id: string
+    name?: string | null
+  }>
   administrationDepartmentId?: string | null
+  militaryUnitId?: string | null
   positionDefinition?: {
     id: string
     title: string
@@ -81,7 +94,7 @@ export type EventDepartmentRoleValue =
 /** 사건 속 기관의 역할 — 기관 상세 '관련 사건' 블록이 쓰는 이름 */
 export type AdministrationDepartmentEventRole = EventDepartmentRoleValue
 
-/** 기관 종류(부처·외청·군 최고사령부·총독부·궁내·기타) */
+/** 기관 종류(부처·외청·총독부·궁내·기타) — 군 사령부·부대는 MilitaryUnit 도메인 전담 */
 export type AdministrationDepartmentKind = AdministrationDepartment['kind']
 
 /** 기관 종류 선택지·라벨 — 정본(폼·상세·사건 상세가 함께 쓴다) */
@@ -91,7 +104,6 @@ export const DEPARTMENT_KIND_OPTIONS: ReadonlyArray<{
 }> = [
   { value: 'MINISTRY', label: '부처' },
   { value: 'AGENCY', label: '외청·위원회' },
-  { value: 'MILITARY_COMMAND', label: '군 최고사령부' },
   { value: 'COLONIAL_GOVERNMENT', label: '총독부·속령' },
   { value: 'ROYAL_HOUSEHOLD', label: '궁내·왕실' },
   { value: 'OTHER', label: '기타' },
@@ -99,7 +111,7 @@ export const DEPARTMENT_KIND_OPTIONS: ReadonlyArray<{
 
 export const DEPARTMENT_KIND_LABEL = Object.fromEntries(
   DEPARTMENT_KIND_OPTIONS.map((option) => [option.value, option.label]),
-) as Record<AdministrationDepartmentKind, string>
+) as Record<string, string>
 
 /** 사건 속 기관의 역할 선택지·라벨 — 정본 */
 export const EVENT_DEPARTMENT_ROLE_OPTIONS: ReadonlyArray<{
@@ -303,7 +315,8 @@ export const administrationDepartmentApi = {
   linkDepartmentEvent: async (
     eventId: string,
     data: {
-      departmentId: string
+      departmentId?: string | null
+      militaryUnitId?: string | null
       role: EventDepartmentRoleValue
       roleDescription?: string | null
     },

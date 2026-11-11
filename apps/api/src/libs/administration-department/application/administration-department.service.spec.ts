@@ -546,14 +546,14 @@ describe('AdministrationDepartmentService', () => {
     ).rejects.toThrow(ConflictException)
   })
 
-  it('update: 같은 국가 계보 내에서 상위 기관의 역사국가를 변경하면 동일 축을 공유하던 하위 기관도 함께 이동시킨다(데드락 방지)', async () => {
+  it('update: 같은 국가 계보 내에서 상위 기관의 역사국가를 변경하면 다단계(자식·손자) 하위 기관도 함께 이동시킨다(데드락 방지)', async () => {
     const prisma = createMockPrisma()
     ;(prisma.administrationDepartment as any).updateMany = jest
       .fn()
-      .mockResolvedValue({ count: 1 })
+      .mockResolvedValue({ count: 2 })
     prisma.administrationDepartment.findUnique.mockResolvedValue({
       id: 'parent-dept',
-      name: '이조',
+      name: '궁내부',
       countryId: 'kr',
       historicalCountryId: null,
       parentId: null,
@@ -566,15 +566,24 @@ describe('AdministrationDepartmentService', () => {
       .mockResolvedValueOnce([
         {
           id: 'child-dept',
-          name: '문선사',
+          name: '내장원',
+          countryId: 'kr',
+          historicalCountryId: null,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: 'grandchild-dept',
+          name: '삼정과',
           countryId: 'kr',
           historicalCountryId: null,
         },
       ])
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
     prisma.administrationDepartment.update.mockResolvedValue({
       id: 'parent-dept',
-      name: '이조',
+      name: '궁내부',
       countryId: 'kr',
       historicalCountryId: 'hist-joseon',
       parentId: null,
@@ -596,7 +605,7 @@ describe('AdministrationDepartmentService', () => {
       (prisma.administrationDepartment as any).updateMany,
     ).toHaveBeenCalledWith({
       where: {
-        parentId: 'parent-dept',
+        id: { in: ['child-dept', 'grandchild-dept'] },
         countryId: 'kr',
         historicalCountryId: null,
       },
@@ -605,5 +614,107 @@ describe('AdministrationDepartmentService', () => {
         historicalCountryId: 'hist-joseon',
       },
     })
+  })
+
+  it('update: 함께 이동할 하위 기관(cascadeDescendant)에 기존 시대의 재임 기록이 남아있으면 국가/시대 변경을 차단한다', async () => {
+    const prisma = createMockPrisma()
+    prisma.administrationDepartment.findUnique.mockResolvedValue({
+      id: 'parent-dept',
+      name: '궁내부',
+      countryId: 'kr',
+      historicalCountryId: null,
+      parentId: null,
+      categoryId: 'cat-1',
+    })
+    prisma.historicalCountryModernCountry.findMany.mockResolvedValue([
+      { modernCountryId: 'kr' },
+    ])
+    prisma.administrationDepartment.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 'child-dept',
+          name: '내장원',
+          countryId: 'kr',
+          historicalCountryId: null,
+        },
+      ])
+      .mockResolvedValueOnce([])
+    prisma.governmentPositionTenure.findMany
+      .mockResolvedValueOnce([]) // parent-dept tenures
+      .mockResolvedValueOnce([
+        {
+          id: 'child-tenure-1',
+          countryId: 'kr',
+          historicalCountryId: null,
+        },
+      ]) // child-dept tenures
+
+    const service = new AdministrationDepartmentService(
+      prisma as any,
+      createMockNotification() as any,
+    )
+
+    await expect(
+      service.update('parent-dept', {
+        historicalCountryId: 'hist-joseon',
+      }),
+    ).rejects.toThrow(BadRequestException)
+  })
+
+  it('addTransition validates transition date rules and rejects transition year before predecessor establishment', async () => {
+    const prisma = createMockPrisma()
+    const service = new AdministrationDepartmentService(
+      prisma as any,
+      createMockNotification() as any,
+    )
+
+    // 월만 단독 지정 시 차단
+    await expect(
+      service.addTransition('dept-pred', {
+        successorId: 'dept-succ',
+        kind: 'REORGANIZE',
+        month: 5,
+      }),
+    ).rejects.toThrow(BadRequestException)
+
+    // 전신 부처 설립 연도(1994)보다 이른 개편 시점(1990) 차단
+    prisma.administrationDepartment.findUnique
+      .mockResolvedValueOnce({
+        id: 'dept-pred',
+        name: '재정경제원',
+        countryId: 'country-kr',
+        historicalCountryId: null,
+        establishedEra: 'AD',
+        establishedYear: 1994,
+        establishedMonth: 12,
+        establishedDay: 23,
+        abolishedEra: 'AD',
+        abolishedYear: 1998,
+        abolishedMonth: 2,
+        abolishedDay: 28,
+      })
+      .mockResolvedValueOnce({
+        id: 'dept-succ',
+        name: '재정경제부',
+        countryId: 'country-kr',
+        historicalCountryId: null,
+        establishedEra: 'AD',
+        establishedYear: 1998,
+        establishedMonth: 2,
+        establishedDay: 28,
+        abolishedEra: null,
+        abolishedYear: null,
+        abolishedMonth: null,
+        abolishedDay: null,
+      })
+
+    await expect(
+      service.addTransition('dept-pred', {
+        successorId: 'dept-succ',
+        kind: 'REORGANIZE',
+        era: 'AD',
+        year: 1990,
+      }),
+    ).rejects.toThrow(BadRequestException)
   })
 })

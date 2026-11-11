@@ -50,7 +50,7 @@ function hasPersonTenure(person: Person): boolean {
     jobTitle?: string | null
     governmentTenures?: Array<{
       title?: string | null
-      positionDefinition?: { name?: string | null } | null
+      positionDefinition?: { title?: string | null; name?: string | null } | null
     }>
   }
   return Boolean(
@@ -64,16 +64,41 @@ function getPrimaryRoleLabel(person: Person): string | null {
     jobTitle?: string | null
     governmentTenures?: Array<{
       title?: string | null
-      positionDefinition?: { name?: string | null } | null
+      rankTitle?: string | null
+      positionDefinition?: { title?: string | null; name?: string | null } | null
+      administrationDepartment?: {
+        name?: string | null
+        abbreviation?: string | null
+      } | null
+      militaryUnit?: {
+        name?: string | null
+        abbreviation?: string | null
+      } | null
     }>
   }
   const firstTenure = extended.governmentTenures?.[0]
-  return (
-    firstTenure?.title?.trim() ||
-    firstTenure?.positionDefinition?.name?.trim() ||
-    extended.jobTitle?.trim() ||
-    null
-  )
+  if (firstTenure) {
+    const rawRole =
+      firstTenure.title?.trim() ||
+      firstTenure.positionDefinition?.title?.trim() ||
+      firstTenure.positionDefinition?.name?.trim() ||
+      ''
+    const institutionLabel =
+      firstTenure.militaryUnit?.abbreviation?.trim() ||
+      firstTenure.militaryUnit?.name?.trim() ||
+      firstTenure.administrationDepartment?.abbreviation?.trim() ||
+      firstTenure.administrationDepartment?.name?.trim() ||
+      ''
+    const withInst =
+      institutionLabel && rawRole && !rawRole.includes(institutionLabel)
+        ? `${institutionLabel} ${rawRole}`
+        : rawRole || institutionLabel
+    const rankSuffix = firstTenure.rankTitle?.trim()
+      ? ` · ${firstTenure.rankTitle.trim()}`
+      : ''
+    if (withInst) return `${withInst}${rankSuffix}`
+  }
+  return extended.jobTitle?.trim() || null
 }
 
 function formatPersonLifespan(person: Person): string {

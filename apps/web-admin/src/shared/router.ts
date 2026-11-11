@@ -82,9 +82,14 @@ export const pathKeys = {
   /** 국가 상세 내 행정구역(지도·지역) 탭 고유 URL */
   countryRegions: (countryId: string) =>
     `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/regions`,
-  /** 국가 상세 내 행정조직 탭 고유 URL */
+  /** 국가 상세 내 정부·행정 탭 고유 URL */
   countryGovernment: (countryId: string) =>
     `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/government`,
+  /** 국가 상세 내 군사 탭 고유 URL */
+  countryMilitary: (countryId: string, unitId?: string | null) =>
+    `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/military${
+      unitId ? `?unitId=${encodeURIComponent(unitId)}` : ''
+    }`,
   /** 국가 상세 → 행정조직 → '정체' 서브탭 고유 URL */
   countryPoliticalSystem: (countryId: string) =>
     `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/government/system`,

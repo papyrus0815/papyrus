@@ -278,6 +278,7 @@ const PERSON_CARD_INCLUDE = {
       id: true,
       positionType: true,
       title: true,
+      rankTitle: true,
       startDate: true,
       startDatePrecision: true,
       startEra: true,
@@ -291,6 +292,12 @@ const PERSON_CARD_INCLUDE = {
       endDay: true,
       notes: true,
       regnalName: true,
+      administrationDepartment: {
+        select: { id: true, name: true, abbreviation: true },
+      },
+      militaryUnit: {
+        select: { id: true, name: true, abbreviation: true, unitType: true },
+      },
       positionDefinition: {
         select: {
           id: true,
@@ -1469,6 +1476,32 @@ export class PersonPrismaRepository implements IPersonRepository {
             positionType: true,
             title: true,
             titleEn: true,
+            rankTitle: true,
+            partyId: true,
+            party: { select: { id: true, name: true, shortName: true, brandColor: true } },
+            administrationDepartmentId: true,
+            administrationDepartment: {
+              select: {
+                id: true,
+                name: true,
+                abbreviation: true,
+                kind: true,
+                countryId: true,
+                historicalCountryId: true,
+              },
+            },
+            militaryUnitId: true,
+            militaryUnit: {
+              select: {
+                id: true,
+                name: true,
+                abbreviation: true,
+                unitType: true,
+                branch: true,
+                countryId: true,
+                historicalCountryId: true,
+              },
+            },
             showPositionInfo: true,
             countryId: true,
             historicalCountryId: true,
@@ -1968,6 +2001,32 @@ export class PersonPrismaRepository implements IPersonRepository {
             positionType: true,
             title: true,
             titleEn: true,
+            rankTitle: true,
+            partyId: true,
+            party: { select: { id: true, name: true, shortName: true, brandColor: true } },
+            administrationDepartmentId: true,
+            administrationDepartment: {
+              select: {
+                id: true,
+                name: true,
+                abbreviation: true,
+                kind: true,
+                countryId: true,
+                historicalCountryId: true,
+              },
+            },
+            militaryUnitId: true,
+            militaryUnit: {
+              select: {
+                id: true,
+                name: true,
+                abbreviation: true,
+                unitType: true,
+                branch: true,
+                countryId: true,
+                historicalCountryId: true,
+              },
+            },
             showPositionInfo: true,
             startDate: true,
             endDate: true,
@@ -2016,10 +2075,17 @@ export class PersonPrismaRepository implements IPersonRepository {
                 election: { select: { id: true, name: true, pollDate: true } },
               },
             },
-            // 같은 행정부 동료 표시용: 각료면 cabinet(소속), 수반이면 headOfCabinet(수장)
+            // 같은 행정부 동료 표시용: 각료면 cabinet/cabinetMemberships(소속), 수반이면 headedCabinets(수장)
             cabinetId: true,
             cabinet: { select: { id: true, name: true } },
-            headOfCabinet: { select: { id: true, name: true } },
+            cabinetMemberships: {
+              select: {
+                cabinetId: true,
+                roleTitle: true,
+                cabinet: { select: { id: true, name: true } },
+              },
+            },
+            headedCabinets: { select: { id: true, name: true } },
             achievements: TENURE_ACHIEVEMENTS_SELECT,
           },
           orderBy: [
@@ -3427,12 +3493,18 @@ export class PersonPrismaRepository implements IPersonRepository {
   private async resolveDefinitionForWrite(
     positionDefinitionId: string | null | undefined,
     positionType: string | null | undefined,
+    context?: {
+      title?: string | null
+      administrationDepartmentId?: string | null
+      militaryUnitId?: string | null
+    },
   ): Promise<{
     id: string
     positionType: GovernmentPositionType
     title: string
     isMonarchical: boolean
     administrationDepartmentId: string | null
+    militaryUnitId: string | null
   }> {
     const select = {
       id: true,
@@ -3440,43 +3512,86 @@ export class PersonPrismaRepository implements IPersonRepository {
       title: true,
       isMonarchical: true,
       administrationDepartmentId: true,
+      militaryUnitId: true,
     } as const
-    const definition = positionDefinitionId
-      ? await this.prisma.governmentPositionDefinition.findUnique({ where: { id: positionDefinitionId }, select })
-      : await this.prisma.governmentPositionDefinition.findFirst({
-          where: { isGeneric: true, positionType: (positionType ?? 'OTHER') as GovernmentPositionType },
-          select,
-        })
+    if (positionDefinitionId) {
+      const explicitDef = await this.prisma.governmentPositionDefinition.findUnique({
+        where: { id: positionDefinitionId },
+        select,
+      })
+      if (!explicitDef) {
+        throw new BadRequestException(`직위 정의를 찾을 수 없습니다: ${positionDefinitionId}`)
+      }
+      return explicitDef
+    }
+
+    const trimmedTitle = context?.title?.trim() || null
+    const resolvedType = (positionType ??
+      (context?.militaryUnitId
+        ? 'MILITARY_COMMANDER'
+        : context?.administrationDepartmentId
+          ? 'CABINET_MINISTER'
+          : 'OTHER')) as GovernmentPositionType
+
+    /* 부처 또는 군 부대가 함께 주어졌고 그 기관 전용 직위 정의가 이미 존재하면 자동 재사용 */
+    if (trimmedTitle && (context?.administrationDepartmentId || context?.militaryUnitId)) {
+      const scopedMatch = await this.prisma.governmentPositionDefinition.findFirst({
+        where: {
+          title: trimmedTitle,
+          positionType: resolvedType,
+          isMonarchical: false,
+          ...(context.administrationDepartmentId
+            ? { administrationDepartmentId: context.administrationDepartmentId }
+            : {}),
+          ...(context.militaryUnitId ? { militaryUnitId: context.militaryUnitId } : {}),
+        },
+        select,
+      })
+      if (scopedMatch) return scopedMatch
+    }
+
+    const definition = await this.prisma.governmentPositionDefinition.findFirst({
+      where: { isGeneric: true, positionType: resolvedType },
+      select,
+    })
     if (!definition) {
       throw new BadRequestException(
-        positionDefinitionId
-          ? `직위 정의를 찾을 수 없습니다: ${positionDefinitionId}`
-          : `직위 종류 ${positionType ?? 'OTHER'}의 일반 정의가 없습니다`,
+        `직위 종류 ${resolvedType}의 일반 정의가 없습니다`,
       )
     }
     return definition
   }
 
   private async areTenureCountryAxesCompatible(
-    a: { countryId?: string | null; historicalCountryId?: string | null },
-    b: { countryId?: string | null; historicalCountryId?: string | null },
+    firstAxis: { countryId?: string | null; historicalCountryId?: string | null },
+    secondAxis: { countryId?: string | null; historicalCountryId?: string | null },
     options?: { strictHistoricalMatch?: boolean },
   ): Promise<{ compatible: boolean; reason?: 'historical_mismatch' | 'country_mismatch' }> {
-    if (!a.countryId && !a.historicalCountryId) return { compatible: true }
-    if (!b.countryId && !b.historicalCountryId) return { compatible: true }
+    if (!firstAxis.countryId && !firstAxis.historicalCountryId) return { compatible: true }
+    if (!secondAxis.countryId && !secondAxis.historicalCountryId) return { compatible: true }
 
-    if (a.historicalCountryId && b.historicalCountryId) {
-      if (a.historicalCountryId === b.historicalCountryId) return { compatible: true }
+    if (firstAxis.historicalCountryId && secondAxis.historicalCountryId) {
+      if (firstAxis.historicalCountryId === secondAxis.historicalCountryId) {
+        return { compatible: true }
+      }
       if (options?.strictHistoricalMatch !== false) {
         return { compatible: false, reason: 'historical_mismatch' }
       }
     }
-    if (a.countryId && b.countryId && a.countryId === b.countryId) {
+    if (
+      firstAxis.countryId &&
+      secondAxis.countryId &&
+      firstAxis.countryId === secondAxis.countryId &&
+      (!firstAxis.historicalCountryId || !secondAxis.historicalCountryId)
+    ) {
       return { compatible: true }
     }
 
-    const targetHistoricalId = a.historicalCountryId ?? b.historicalCountryId
-    const targetModernId = a.countryId ?? b.countryId
+    const targetHistoricalId =
+      firstAxis.historicalCountryId ?? secondAxis.historicalCountryId
+    const targetModernId = firstAxis.historicalCountryId
+      ? secondAxis.countryId
+      : firstAxis.countryId
     if (targetHistoricalId && targetModernId) {
       const bridge = await this.prisma.historicalCountryModernCountry.findFirst({
         where: {
@@ -3524,6 +3639,39 @@ export class PersonPrismaRepository implements IPersonRepository {
   }
 
   /**
+   * 소속 군사 사령부·부대가 재임 기록의 국가(현대·역사 + 브리지)와 호환되는지 검증한다.
+   */
+  private async assertMilitaryUnitMatchesTenureCountry(
+    militaryUnitId: string | null | undefined,
+    countryId: string | null | undefined,
+    historicalCountryId: string | null | undefined,
+  ): Promise<void> {
+    if (!militaryUnitId) return
+    const unit = await this.prisma.militaryUnit.findUnique({
+      where: { id: militaryUnitId },
+      select: { id: true, name: true, countryId: true, historicalCountryId: true },
+    })
+    if (!unit) {
+      throw new BadRequestException(`소속 군사 사령부·부대를 찾을 수 없습니다: ${militaryUnitId}`)
+    }
+    const check = await this.areTenureCountryAxesCompatible(
+      { countryId, historicalCountryId },
+      unit,
+      { strictHistoricalMatch: true },
+    )
+    if (!check.compatible) {
+      if (check.reason === 'historical_mismatch') {
+        throw new BadRequestException(
+          `소속 군사 부대(${unit.name})의 역사적 국가와 재임 역사적 국가가 일치하지 않습니다.`,
+        )
+      }
+      throw new BadRequestException(
+        `소속 군사 부대(${unit.name})의 국가와 재임 국가가 일치하지 않습니다.`,
+      )
+    }
+  }
+
+  /**
    * 소속 행정부(cabinetId)가 재임 기록의 국가·성격(비군주·비수반)과 호환되는지 검증한다.
    */
   private async assertCabinetMatchesTenure(
@@ -3548,6 +3696,8 @@ export class PersonPrismaRepository implements IPersonRepository {
       select: {
         id: true,
         name: true,
+        countryId: true,
+        historicalCountryId: true,
         headTenure: {
           select: { id: true, countryId: true, historicalCountryId: true },
         },
@@ -3559,16 +3709,66 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (tenureId && cabinet.headTenure?.id === tenureId) {
       throw new BadRequestException('행정부 수반 자신을 같은 행정부의 하위 각료로 편입할 수 없습니다.')
     }
-    if (cabinet.headTenure) {
+    const cabinetAxis =
+      cabinet.countryId || cabinet.historicalCountryId
+        ? {
+            countryId: cabinet.countryId ?? null,
+            historicalCountryId: cabinet.historicalCountryId ?? null,
+          }
+        : cabinet.headTenure
+    if (cabinetAxis) {
       const check = await this.areTenureCountryAxesCompatible(
         { countryId, historicalCountryId },
-        cabinet.headTenure,
+        cabinetAxis,
         { strictHistoricalMatch: true },
       )
       if (!check.compatible) {
         throw new BadRequestException(
           `소속 행정부${cabinet.name ? `(${cabinet.name})` : ''}의 국가·시대와 재임 국가·시대가 일치하지 않습니다.`,
         )
+      }
+    }
+  }
+
+  private async syncTenureCabinetMemberships(
+    tenureId: string,
+    cabinetIds: string[],
+    departmentId: string | null | undefined,
+    roleTitle: string | null | undefined,
+  ): Promise<void> {
+    if (!this.prisma.cabinetMember) return
+    const uniqueCabinetIds = [...new Set(cabinetIds.filter(Boolean))]
+    await this.prisma.cabinetMember.deleteMany({
+      where: {
+        tenureId,
+        ...(uniqueCabinetIds.length > 0
+          ? { cabinetId: { notIn: uniqueCabinetIds } }
+          : {}),
+      },
+    })
+    for (const targetCabinetId of uniqueCabinetIds) {
+      const existing = await this.prisma.cabinetMember.findUnique({
+        where: {
+          cabinetId_tenureId: {
+            cabinetId: targetCabinetId,
+            tenureId,
+          },
+        },
+      })
+      if (!existing) {
+        await this.prisma.cabinetMember.create({
+          data: {
+            cabinetId: targetCabinetId,
+            tenureId,
+            administrationDepartmentId: departmentId ?? null,
+            roleTitle: roleTitle ?? null,
+          },
+        })
+      } else if (departmentId !== undefined) {
+        await this.prisma.cabinetMember.update({
+          where: { id: existing.id },
+          data: { administrationDepartmentId: departmentId ?? null },
+        })
       }
     }
   }
@@ -3723,8 +3923,12 @@ export class PersonPrismaRepository implements IPersonRepository {
       countryId: dto.countryId,
       historicalCountryId: dto.historicalCountryId,
     })
-    // 직위 정의는 필수 — 정의 id가 오면 그것, 없으면 직위 종류의 일반 정의. 종류는 정의가 정본
-    const definition = await this.resolveDefinitionForWrite(dto.positionDefinitionId, dto.positionType)
+    // 직위 정의는 필수 — 정의 id가 오면 그것, 없으면 직위 종류·소속 기관 기반 해석(없으면 일반 정의)
+    const definition = await this.resolveDefinitionForWrite(dto.positionDefinitionId, dto.positionType, {
+      title: dto.title,
+      administrationDepartmentId: dto.administrationDepartmentId,
+      militaryUnitId: dto.militaryUnitId,
+    })
     if (dto.positionDefinitionId) {
       await this.assertDefinitionMatchesTenureCountry(
         definition.id,
@@ -3737,13 +3941,35 @@ export class PersonPrismaRepository implements IPersonRepository {
       countryFields.countryId,
       countryFields.historicalCountryId,
     )
-    await this.assertCabinetMatchesTenure(
-      dto.cabinetId,
+    await this.assertMilitaryUnitMatchesTenureCountry(
+      dto.militaryUnitId,
       countryFields.countryId,
       countryFields.historicalCountryId,
-      definition.isMonarchical,
-      definition.positionType,
     )
+    const targetCabinetIds =
+      dto.cabinetIds !== undefined && dto.cabinetIds !== null
+        ? [...new Set(dto.cabinetIds.filter(Boolean))]
+        : dto.cabinetId
+          ? [dto.cabinetId]
+          : []
+    for (const targetCabId of targetCabinetIds) {
+      await this.assertCabinetMatchesTenure(
+        targetCabId,
+        countryFields.countryId,
+        countryFields.historicalCountryId,
+        definition.isMonarchical,
+        definition.positionType,
+      )
+    }
+    if (dto.partyId && this.prisma.politicalParty?.findUnique) {
+      const partyRow = await this.prisma.politicalParty.findUnique({
+        where: { id: dto.partyId },
+        select: { id: true },
+      })
+      if (!partyRow) {
+        throw new NotFoundException(`소속 정당을 찾을 수 없습니다: ${dto.partyId}`)
+      }
+    }
     await this.assertElectionCandidacyMatchesTenure(
       dto.electionCandidacyId,
       dto.personId,
@@ -3752,8 +3978,8 @@ export class PersonPrismaRepository implements IPersonRepository {
     )
     await this.assertAccessionEventExists(dto.accessionEventId)
 
-    // 직위 정의에 특정 국가 기관(administrationDepartmentId)이 지정되어 있고 호출자가 비웠다면 호환 시 자동 매핑
-    let effectiveDepartmentId = dto.administrationDepartmentId ?? undefined
+    // 직위 정의에 특정 국가 기관(administrationDepartmentId)이나 군 부대(militaryUnitId)가 지정되어 있고 호출자가 비웠다면 호환 시 자동 매핑
+    let effectiveDepartmentId = dto.administrationDepartmentId || undefined
     if (!effectiveDepartmentId && definition.administrationDepartmentId) {
       const defDept = await this.prisma.administrationDepartment.findUnique({
         where: { id: definition.administrationDepartmentId },
@@ -3770,6 +3996,26 @@ export class PersonPrismaRepository implements IPersonRepository {
         }
       }
     }
+    let effectiveMilitaryUnitId = dto.militaryUnitId || undefined
+    if (!effectiveMilitaryUnitId && definition.militaryUnitId) {
+      const defUnit = await this.prisma.militaryUnit.findUnique({
+        where: { id: definition.militaryUnitId },
+        select: { id: true, countryId: true, historicalCountryId: true },
+      })
+      if (defUnit) {
+        const check = await this.areTenureCountryAxesCompatible(
+          { countryId: countryFields.countryId, historicalCountryId: countryFields.historicalCountryId },
+          defUnit,
+          { strictHistoricalMatch: true },
+        )
+        if (check.compatible) {
+          effectiveMilitaryUnitId = defUnit.id
+        }
+      }
+    }
+    const primaryCabinetId = targetCabinetIds[0] ?? undefined
+    const resolvedSpecificTitle = specificTitle(dto.title, definition.title)
+
     // 기간 — 구조화(startDateInfo)가 오면 그것, 아니면 레거시 ISO 문자열의 날짜 부분 + 정밀도.
     // 어느 쪽이든 구조화 칸이 정본이고 DATETIME·키는 그 파생(DB 트리거도 같은 규칙으로 다시 맞춘다)
     const startEdge = edgeFromInput(dto.startDateInfo, dto.startDate, dto.startDatePrecision)
@@ -3778,7 +4024,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       startEdge,
       edgeFromInput(dto.endDateInfo, dto.endDate, dto.endDatePrecision ?? dto.startDatePrecision),
     )
-    const tenure = await this.prisma.governmentPositionTenure.create({
+    const createdTenure = await this.prisma.governmentPositionTenure.create({
       data: {
         ...period,
         ordinal: dto.ordinal ?? null,
@@ -3786,8 +4032,10 @@ export class PersonPrismaRepository implements IPersonRepository {
         dynastyOrdinal: dto.dynastyOrdinal ?? null,
         personId: dto.personId,
         positionType: definition.positionType,
-        title: specificTitle(dto.title, definition.title),
+        title: resolvedSpecificTitle,
         titleEn: dto.titleEn ?? undefined,
+        rankTitle: dto.rankTitle?.trim() || undefined,
+        partyId: dto.partyId || undefined,
         showPositionInfo: dto.showPositionInfo !== false, // 기본값 true
         ...(countryFields.countryId != null && { countryId: countryFields.countryId }),
         ...(countryFields.historicalCountryId != null && {
@@ -3802,15 +4050,35 @@ export class PersonPrismaRepository implements IPersonRepository {
         endReasonDetail: dto.endReasonDetail,
         notes: dto.notes,
         priority: dto.priority,
-        cabinetId: dto.cabinetId ?? undefined,
+        cabinetId: primaryCabinetId,
         administrationDepartmentId: effectiveDepartmentId,
+        militaryUnitId: effectiveMilitaryUnitId,
+        scopeEntityKey: effectiveDepartmentId ?? effectiveMilitaryUnitId ?? '',
         electionCandidacyId: dto.electionCandidacyId ?? undefined,
       },
+      select: { id: true },
+    }).catch(translateTenureWriteError)
+
+    if (targetCabinetIds.length > 0) {
+      await this.syncTenureCabinetMemberships(
+        createdTenure.id,
+        targetCabinetIds,
+        effectiveDepartmentId ?? null,
+        resolvedSpecificTitle ?? definition.title,
+      )
+    }
+
+    const tenure = await this.prisma.governmentPositionTenure.findUnique({
+      where: { id: createdTenure.id },
       include: {
         positionDefinition: true,
         administrationDepartment: {
           select: { id: true, name: true, abbreviation: true, kind: true, categoryId: true },
         },
+        militaryUnit: {
+          select: { id: true, name: true, abbreviation: true, unitType: true, branch: true },
+        },
+        party: { select: { id: true, name: true, shortName: true, brandColor: true } },
         country: true,
         historicalCountry: true,
         person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
@@ -3821,6 +4089,12 @@ export class PersonPrismaRepository implements IPersonRepository {
             },
           },
         },
+        cabinetMemberships: {
+          include: {
+            cabinet: { select: { id: true, name: true } },
+          },
+        },
+        headedCabinets: { select: { id: true, name: true } },
         electionCandidacy: {
           select: {
             id: true,
@@ -3829,10 +4103,10 @@ export class PersonPrismaRepository implements IPersonRepository {
           },
         },
       },
-    }).catch(translateTenureWriteError)
-    
+    })
+
     // BigInt를 문자열로 변환 + 기원전·고대 구조화 날짜를 부호 날짜 문자열로 복원
-    return serializeBigInt(asOfficeHolding(tenure))
+    return serializeBigInt(asOfficeHolding(tenure!))
   }
 
   /**
@@ -3848,6 +4122,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         where: { id },
         select: {
           title: true,
+          administrationDepartmentId: true,
+          militaryUnitId: true,
           positionDefinition: {
             select: {
               id: true,
@@ -3855,6 +4131,7 @@ export class PersonPrismaRepository implements IPersonRepository {
               title: true,
               isMonarchical: true,
               administrationDepartmentId: true,
+              militaryUnitId: true,
             },
           },
         },
@@ -3867,13 +4144,38 @@ export class PersonPrismaRepository implements IPersonRepository {
         dto.positionDefinitionId === null ||
         (dto.positionType && dto.positionType !== definition.positionType)
       ) {
-        definition = await this.resolveDefinitionForWrite(undefined, dto.positionType ?? definition.positionType)
+        definition = await this.resolveDefinitionForWrite(
+          undefined,
+          dto.positionType ?? definition.positionType,
+          {
+            title: dto.title !== undefined ? dto.title : current.title,
+            administrationDepartmentId:
+              dto.administrationDepartmentId !== undefined
+                ? dto.administrationDepartmentId
+                : current.administrationDepartmentId,
+            militaryUnitId:
+              dto.militaryUnitId !== undefined ? dto.militaryUnitId : current.militaryUnitId,
+          },
+        )
       }
       updateData.positionDefinitionId = definition.id
       updateData.positionType = definition.positionType
       updateData.title = specificTitle(dto.title !== undefined ? dto.title : current.title, definition.title)
     }
     if (dto.titleEn !== undefined) updateData.titleEn = dto.titleEn
+    if (dto.rankTitle !== undefined) updateData.rankTitle = dto.rankTitle?.trim() || null
+    if (dto.partyId !== undefined) {
+      if (dto.partyId && this.prisma.politicalParty?.findUnique) {
+        const partyRow = await this.prisma.politicalParty.findUnique({
+          where: { id: dto.partyId },
+          select: { id: true },
+        })
+        if (!partyRow) {
+          throw new NotFoundException(`소속 정당을 찾을 수 없습니다: ${dto.partyId}`)
+        }
+      }
+      updateData.partyId = dto.partyId || null
+    }
     if (dto.showPositionInfo !== undefined) updateData.showPositionInfo = dto.showPositionInfo
     if (dto.countryId !== undefined || dto.historicalCountryId !== undefined) {
       const existingCountry = await this.prisma.governmentPositionTenure.findUnique({
@@ -3884,9 +4186,6 @@ export class PersonPrismaRepository implements IPersonRepository {
         dto.historicalCountryId !== undefined
           ? dto.historicalCountryId
           : existingCountry?.historicalCountryId
-      // historicalCountryId만 새로 바뀌고 countryId는 안 보낸 경우:
-      // 새 historicalCountryId에서 countryId를 다시 유도(dual-fill)하도록 countryId는 비워 넘긴다.
-      // 반대로 historicalCountryId가 안 바뀌었거나 null로 지워지는 경우엔 기존 countryId를 유지한다.
       const nextRawCountryId =
         dto.countryId !== undefined
           ? dto.countryId
@@ -3911,15 +4210,24 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.endReasonDetail !== undefined) updateData.endReasonDetail = dto.endReasonDetail
     if (dto.notes !== undefined) updateData.notes = dto.notes
     if (dto.priority !== undefined) updateData.priority = dto.priority
-    if (dto.cabinetId !== undefined) updateData.cabinetId = dto.cabinetId || null
+    if (dto.cabinetIds !== undefined) {
+      const normalizedCabIds = dto.cabinetIds ? [...new Set(dto.cabinetIds.filter(Boolean))] : []
+      updateData.cabinetId = normalizedCabIds[0] ?? null
+    } else if (dto.cabinetId !== undefined) {
+      updateData.cabinetId = dto.cabinetId || null
+    }
     if (dto.administrationDepartmentId !== undefined)
       updateData.administrationDepartmentId = dto.administrationDepartmentId || null
+    if (dto.militaryUnitId !== undefined)
+      updateData.militaryUnitId = dto.militaryUnitId || null
     if (dto.electionCandidacyId !== undefined)
       updateData.electionCandidacyId = dto.electionCandidacyId || null
 
     if (
       updateData.administrationDepartmentId !== undefined ||
+      updateData.militaryUnitId !== undefined ||
       updateData.cabinetId !== undefined ||
+      dto.cabinetIds !== undefined ||
       updateData.positionDefinitionId !== undefined ||
       updateData.countryId !== undefined ||
       updateData.historicalCountryId !== undefined ||
@@ -3932,6 +4240,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           personId: true,
           positionType: true,
           administrationDepartmentId: true,
+          militaryUnitId: true,
           cabinetId: true,
           electionCandidacyId: true,
           accessionEventId: true,
@@ -3943,6 +4252,7 @@ export class PersonPrismaRepository implements IPersonRepository {
               isMonarchical: true,
               positionType: true,
               administrationDepartmentId: true,
+              militaryUnitId: true,
             },
           },
         },
@@ -3962,14 +4272,21 @@ export class PersonPrismaRepository implements IPersonRepository {
         existingForScope?.positionType ??
         null
       let nextDefDeptId: string | null = null
+      let nextDefUnitId: string | null = null
       if (updateData.positionDefinitionId) {
         const nextDef = await this.prisma.governmentPositionDefinition.findUnique({
           where: { id: updateData.positionDefinitionId },
-          select: { isMonarchical: true, positionType: true, administrationDepartmentId: true },
+          select: {
+            isMonarchical: true,
+            positionType: true,
+            administrationDepartmentId: true,
+            militaryUnitId: true,
+          },
         })
         effectiveIsMonarchical = Boolean(nextDef?.isMonarchical)
         effectivePositionType = nextDef?.positionType ?? effectivePositionType
         nextDefDeptId = nextDef?.administrationDepartmentId ?? null
+        nextDefUnitId = nextDef?.militaryUnitId ?? null
       }
       const effectiveDefId =
         updateData.positionDefinitionId !== undefined
@@ -3991,14 +4308,14 @@ export class PersonPrismaRepository implements IPersonRepository {
         )
       }
       // 이 임기가 내각(Cabinet)의 수반(headTenure)인 경우:
-      // 1) 비수반 직위 또는 군주직으로 변경 차단
-      // 2) 국가 축 변경 시 이미 소속된 하위 각료(memberTenures)와의 국가·시대 불일치 차단
+      // 1) 비수반 직위로 변경 차단 (군주 친정 내각은 HEAD_OF_STATE 허용)
+      // 2) 국가 축 변경 시 이미 소속된 하위 각료와의 국가·시대 불일치 차단
       if (
         updateData.positionDefinitionId !== undefined ||
         updateData.positionType !== undefined ||
         countryChanged
       ) {
-        const headCabinet = await this.prisma.cabinet.findUnique({
+        const headCabinets = await this.prisma.cabinet.findMany({
           where: { headTenureId: id },
           select: {
             id: true,
@@ -4006,20 +4323,28 @@ export class PersonPrismaRepository implements IPersonRepository {
             memberTenures: {
               select: { id: true, countryId: true, historicalCountryId: true },
             },
+            members: {
+              select: {
+                tenure: { select: { id: true, countryId: true, historicalCountryId: true } },
+              },
+            },
           },
         })
-        if (headCabinet) {
+        for (const headCabinet of headCabinets) {
           if (
-            effectiveIsMonarchical ||
-            (effectivePositionType !== 'HEAD_OF_STATE' &&
-              effectivePositionType !== 'HEAD_OF_GOVERNMENT')
+            effectivePositionType !== 'HEAD_OF_STATE' &&
+            effectivePositionType !== 'HEAD_OF_GOVERNMENT'
           ) {
             throw new BadRequestException(
               '이 임기는 행정부의 수반으로 사용 중입니다. 행정부를 먼저 삭제한 뒤 직위를 변경하세요.',
             )
           }
-          if (countryChanged && headCabinet.memberTenures.length > 0) {
-            for (const member of headCabinet.memberTenures) {
+          if (countryChanged) {
+            const allMembers = [
+              ...headCabinet.memberTenures,
+              ...headCabinet.members.map((memberLink) => memberLink.tenure),
+            ]
+            for (const member of allMembers) {
               const check = await this.areTenureCountryAxesCompatible(
                 { countryId: effectiveCountryId, historicalCountryId: effectiveHistCountryId },
                 member,
@@ -4034,7 +4359,7 @@ export class PersonPrismaRepository implements IPersonRepository {
           }
         }
       }
-      // 직위 정의가 바뀌었을 때 호출자가 부처를 명시하지 않았다면 새 직위 정의의 기본 부처와 동기화
+      // 직위 정의가 바뀌었을 때 호출자가 부처·부대를 명시하지 않았다면 새 직위 정의의 기본 부처·부대와 동기화
       if (
         updateData.positionDefinitionId &&
         dto.administrationDepartmentId === undefined &&
@@ -4058,23 +4383,56 @@ export class PersonPrismaRepository implements IPersonRepository {
           }
         }
       }
-      // 일반 각료에서 수반(국가원수·행정수반) 또는 군주직으로 직위가 변경될 때,
-      // 호출자가 새 cabinetId를 명시적으로 넘기지 않았다면 기존 하위 각료 소속(cabinetId)은 자동 해제한다.
+      if (
+        updateData.positionDefinitionId &&
+        dto.militaryUnitId === undefined &&
+        nextDefUnitId &&
+        (!existingForScope?.militaryUnitId ||
+          existingForScope.militaryUnitId ===
+            existingForScope.positionDefinition?.militaryUnitId)
+      ) {
+        const defUnit = await this.prisma.militaryUnit.findUnique({
+          where: { id: nextDefUnitId },
+          select: { id: true, countryId: true, historicalCountryId: true },
+        })
+        if (defUnit) {
+          const check = await this.areTenureCountryAxesCompatible(
+            { countryId: effectiveCountryId, historicalCountryId: effectiveHistCountryId },
+            defUnit,
+            { strictHistoricalMatch: true },
+          )
+          if (check.compatible) {
+            updateData.militaryUnitId = defUnit.id
+          }
+        }
+      }
       const isHeadOrMonarch =
         effectiveIsMonarchical ||
         effectivePositionType === 'HEAD_OF_STATE' ||
         effectivePositionType === 'HEAD_OF_GOVERNMENT'
-      if (isHeadOrMonarch && !dto.cabinetId && existingForScope?.cabinetId) {
+      if (isHeadOrMonarch && !dto.cabinetId && !dto.cabinetIds?.length && existingForScope?.cabinetId) {
         updateData.cabinetId = null
       }
       const effectiveDeptId =
         updateData.administrationDepartmentId !== undefined
           ? updateData.administrationDepartmentId
           : (existingForScope?.administrationDepartmentId ?? null)
-      const effectiveCabinetId =
-        updateData.cabinetId !== undefined
-          ? updateData.cabinetId
-          : (existingForScope?.cabinetId ?? null)
+      const effectiveMilitaryUnitId =
+        updateData.militaryUnitId !== undefined
+          ? updateData.militaryUnitId
+          : (existingForScope?.militaryUnitId ?? null)
+      updateData.scopeEntityKey = effectiveDeptId ?? effectiveMilitaryUnitId ?? ''
+
+      const effectiveCabinetIds =
+        dto.cabinetIds !== undefined && dto.cabinetIds !== null
+          ? [...new Set(dto.cabinetIds.filter(Boolean))]
+          : updateData.cabinetId !== undefined
+            ? updateData.cabinetId
+              ? [updateData.cabinetId]
+              : []
+            : existingForScope?.cabinetId
+              ? [existingForScope.cabinetId]
+              : []
       const effectiveCandidacyId =
         updateData.electionCandidacyId !== undefined
           ? updateData.electionCandidacyId
@@ -4087,14 +4445,21 @@ export class PersonPrismaRepository implements IPersonRepository {
         effectiveCountryId,
         effectiveHistCountryId,
       )
-      await this.assertCabinetMatchesTenure(
-        effectiveCabinetId,
+      await this.assertMilitaryUnitMatchesTenureCountry(
+        effectiveMilitaryUnitId,
         effectiveCountryId,
         effectiveHistCountryId,
-        effectiveIsMonarchical,
-        effectivePositionType,
-        id,
       )
+      for (const cabId of effectiveCabinetIds) {
+        await this.assertCabinetMatchesTenure(
+          cabId,
+          effectiveCountryId,
+          effectiveHistCountryId,
+          effectiveIsMonarchical,
+          effectivePositionType,
+          id,
+        )
+      }
       if (effectiveCandidacyId && (candidacyChanged || countryChanged)) {
         await this.assertElectionCandidacyMatchesTenure(
           effectiveCandidacyId,
@@ -4110,7 +4475,6 @@ export class PersonPrismaRepository implements IPersonRepository {
     }
 
     // 기간 — 한쪽 끝만 바뀌어도 키·DATETIME·정밀도를 한 덩어리로 다시 계산(안 보낸 끝은 저장값).
-    // 구조화(…DateInfo)든 레거시 ISO든 구조화 칸으로 옮겨 쓴다 — DATETIME은 파생
     const startTouched =
       dto.startDateInfo !== undefined || dto.startDate !== undefined || dto.startDatePrecision !== undefined
     const endTouched =
@@ -4129,7 +4493,6 @@ export class PersonPrismaRepository implements IPersonRepository {
       const startPrecision =
         dto.startDatePrecision !== undefined ? dto.startDatePrecision : (current?.startDatePrecision ?? null)
       const storedStart = stored(current?.startEra, current?.startYear ?? null, current?.startMonth ?? null, current?.startDay ?? null)
-      // 정밀도만 바꾸면 저장된 구조화 시작을 그 정밀도로 자른다(DATETIME이 없는 BC·고대 행도 안전)
       const start = !startTouched
         ? storedStart
         : dto.startDateInfo !== undefined || dto.startDate !== undefined
@@ -4147,14 +4510,47 @@ export class PersonPrismaRepository implements IPersonRepository {
       Object.assign(updateData, period)
     }
 
-    const tenure = await this.prisma.governmentPositionTenure.update({
+    await this.prisma.governmentPositionTenure.update({
       where: { id },
       data: updateData,
+      select: { id: true },
+    }).catch(translateTenureWriteError)
+
+    if (dto.cabinetIds !== undefined || dto.cabinetId !== undefined) {
+      const refreshedRow = await this.prisma.governmentPositionTenure.findUnique({
+        where: { id },
+        select: {
+          cabinetId: true,
+          administrationDepartmentId: true,
+          title: true,
+          positionDefinition: { select: { title: true } },
+        },
+      })
+      const nextCabinetIds =
+        dto.cabinetIds !== undefined && dto.cabinetIds !== null
+          ? [...new Set(dto.cabinetIds.filter(Boolean))]
+          : refreshedRow?.cabinetId
+            ? [refreshedRow.cabinetId]
+            : []
+      await this.syncTenureCabinetMemberships(
+        id,
+        nextCabinetIds,
+        refreshedRow?.administrationDepartmentId ?? null,
+        refreshedRow?.title ?? refreshedRow?.positionDefinition?.title ?? null,
+      )
+    }
+
+    const tenure = await this.prisma.governmentPositionTenure.findUnique({
+      where: { id },
       include: {
         positionDefinition: true,
         administrationDepartment: {
           select: { id: true, name: true, abbreviation: true, kind: true, categoryId: true },
         },
+        militaryUnit: {
+          select: { id: true, name: true, abbreviation: true, unitType: true, branch: true },
+        },
+        party: { select: { id: true, name: true, shortName: true, brandColor: true } },
         country: true,
         historicalCountry: true,
         person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
@@ -4165,6 +4561,12 @@ export class PersonPrismaRepository implements IPersonRepository {
             },
           },
         },
+        cabinetMemberships: {
+          include: {
+            cabinet: { select: { id: true, name: true } },
+          },
+        },
+        headedCabinets: { select: { id: true, name: true } },
         electionCandidacy: {
           select: {
             id: true,
@@ -4173,21 +4575,28 @@ export class PersonPrismaRepository implements IPersonRepository {
           },
         },
       },
-    }).catch(translateTenureWriteError)
+    })
 
-
-    return serializeBigInt(asOfficeHolding(tenure))
+    return serializeBigInt(asOfficeHolding(tenure!))
   }
 
   /**
    * 특정 수반 재임(행정부 수반) 하의 각료 목록 — Cabinet 조회 후 memberTenures
    */
   async findSubordinateTenures(headTenureId: string): Promise<any[]> {
-    const cabinet = await this.prisma.cabinet.findUnique({
+    const cabinets = await this.prisma.cabinet.findMany({
       where: { headTenureId },
+      select: { id: true },
     })
-    if (!cabinet) return []
-    return this.findTenuresByCabinetId(cabinet.id)
+    if (cabinets.length === 0) return []
+    const byTenureId = new Map<string, any>()
+    for (const cab of cabinets) {
+      const list = await this.findTenuresByCabinetId(cab.id)
+      for (const item of list) {
+        if (!byTenureId.has(item.id)) byTenureId.set(item.id, item)
+      }
+    }
+    return [...byTenureId.values()]
   }
 
   /**
@@ -4195,46 +4604,48 @@ export class PersonPrismaRepository implements IPersonRepository {
    * 각 수반의 achievements 목록에 합쳐서 내려준다(묶인 상대 행정부에서도 사건이 보이게).
    */
   private mergePeerHeadAchievementsIntoOneCabinet(
-    cabinet: { headTenure: { id: string; achievements: any[] } },
+    cabinet: { headTenure: { id: string; achievements: any[] } | null },
     groupCabinets: Array<{
       linkageGroup?: { eventId?: string | null } | null
-      headTenure: { id: string; achievements: any[] }
+      headTenure: { id: string; achievements: any[] } | null
     }>,
   ): void {
+    if (!cabinet.headTenure) return
     const ownId = cabinet.headTenure.id
     const groupEventId = groupCabinets[0]?.linkageGroup?.eventId ?? null
     const sharedEventIds = new Set<string>()
     if (groupEventId) sharedEventIds.add(groupEventId)
-    for (const gc of groupCabinets) {
-      for (const a of gc.headTenure.achievements ?? []) {
-        if (a.eventId) sharedEventIds.add(a.eventId)
+    for (const groupCab of groupCabinets) {
+      if (!groupCab.headTenure) continue
+      for (const ach of groupCab.headTenure.achievements ?? []) {
+        if (ach.eventId) sharedEventIds.add(ach.eventId)
       }
     }
     const own = [...(cabinet.headTenure.achievements ?? [])]
-    const ownIds = new Set(own.map((a) => a.id))
+    const ownIds = new Set(own.map((ach) => ach.id))
     const ownEventKeys = new Set(
-      own.map((a) => a.eventId).filter((x): x is string => !!x),
+      own.map((ach) => ach.eventId).filter((val): val is string => !!val),
     )
 
-    for (const gc of groupCabinets) {
-      if (gc.headTenure.id === ownId) continue
-      for (const a of gc.headTenure.achievements ?? []) {
-        if (ownIds.has(a.id)) continue
-        if (!a.eventId) continue
-        if (!sharedEventIds.has(a.eventId)) continue
-        if (ownEventKeys.has(a.eventId)) continue
-        own.push({ ...a })
-        ownIds.add(a.id)
-        ownEventKeys.add(a.eventId)
+    for (const groupCab of groupCabinets) {
+      if (!groupCab.headTenure || groupCab.headTenure.id === ownId) continue
+      for (const ach of groupCab.headTenure.achievements ?? []) {
+        if (ownIds.has(ach.id)) continue
+        if (!ach.eventId) continue
+        if (!sharedEventIds.has(ach.eventId)) continue
+        if (ownEventKeys.has(ach.eventId)) continue
+        own.push({ ...ach })
+        ownIds.add(ach.id)
+        ownEventKeys.add(ach.eventId)
       }
     }
-    own.sort((a, b) => {
-      const oa = a.orderNum ?? 0
-      const ob = b.orderNum ?? 0
-      if (oa !== ob) return oa - ob
-      const sa = a.startDate ? new Date(a.startDate).getTime() : 0
-      const sb = b.startDate ? new Date(b.startDate).getTime() : 0
-      return sa - sb
+    own.sort((left, right) => {
+      const orderLeft = left.orderNum ?? 0
+      const orderRight = right.orderNum ?? 0
+      if (orderLeft !== orderRight) return orderLeft - orderRight
+      const startLeft = left.startDate ? new Date(left.startDate).getTime() : 0
+      const startRight = right.startDate ? new Date(right.startDate).getTime() : 0
+      return startLeft - startRight
     })
     cabinet.headTenure.achievements = own
   }
@@ -4244,12 +4655,12 @@ export class PersonPrismaRepository implements IPersonRepository {
       id: string
       linkageGroupId: string | null
       linkageGroup?: { eventId?: string | null } | null
-      headTenure: { id: string; achievements: any[] }
+      headTenure: { id: string; achievements: any[] } | null
     }>,
   ): Promise<void> {
     const groupIds = [
       ...new Set(
-        cabinets.map((c) => c.linkageGroupId).filter((g): g is string => !!g),
+        cabinets.map((cab) => cab.linkageGroupId).filter((grp): grp is string => !!grp),
       ),
     ]
     if (groupIds.length === 0) return
@@ -4266,25 +4677,56 @@ export class PersonPrismaRepository implements IPersonRepository {
       },
     })
     const byGroup = new Map<string, typeof groupCabinetsAll>()
-    for (const c of groupCabinetsAll) {
-      if (!c.linkageGroupId) continue
-      if (!byGroup.has(c.linkageGroupId)) byGroup.set(c.linkageGroupId, [])
-      byGroup.get(c.linkageGroupId)!.push(c)
+    for (const cab of groupCabinetsAll) {
+      if (!cab.linkageGroupId) continue
+      if (!byGroup.has(cab.linkageGroupId)) byGroup.set(cab.linkageGroupId, [])
+      byGroup.get(cab.linkageGroupId)!.push(cab)
     }
 
-    for (const c of cabinets) {
-      if (!c.linkageGroupId) continue
-      const group = byGroup.get(c.linkageGroupId)
+    for (const cab of cabinets) {
+      if (!cab.linkageGroupId) continue
+      const group = byGroup.get(cab.linkageGroupId)
       if (!group || group.length < 2) continue
-      this.mergePeerHeadAchievementsIntoOneCabinet(c, group)
+      this.mergePeerHeadAchievementsIntoOneCabinet(cab, group)
+    }
+  }
+
+  private formatCabinetRow(cabinet: any): any {
+    const cabinetStart =
+      cabinet.startYear != null
+        ? toSignedDateString(
+            cabinet.startEra,
+            cabinet.startYear,
+            cabinet.startMonth,
+            cabinet.startDay,
+          )
+        : null
+    const cabinetEnd =
+      cabinet.endYear != null
+        ? toSignedDateString(
+            cabinet.endEra,
+            cabinet.endYear,
+            cabinet.endMonth,
+            cabinet.endDay,
+          )
+        : null
+    const formattedHead = cabinet.headTenure ? withSignedDates(cabinet.headTenure) : null
+    return {
+      ...cabinet,
+      startDate: cabinetStart ?? formattedHead?.startDate ?? null,
+      endDate: cabinetEnd ?? formattedHead?.endDate ?? null,
+      headTenure: formattedHead,
     }
   }
 
   async findCabinetByHeadTenureId(headTenureId: string): Promise<any | null> {
-    const cabinet = await this.prisma.cabinet.findUnique({
+    const cabinet = await this.prisma.cabinet.findFirst({
       where: { headTenureId },
+      orderBy: [{ startYear: 'asc' }, { createdAt: 'asc' }],
       include: {
         linkageGroup: { select: this.LINKAGE_GROUP_EVENT_SELECT },
+        country: { select: { id: true, name: true } },
+        historicalCountry: { select: { id: true, name: true } },
         headTenure: {
           include: {
             person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
@@ -4297,41 +4739,73 @@ export class PersonPrismaRepository implements IPersonRepository {
     })
     if (!cabinet) return null
     await this.mergeLinkagePeerHeadAchievementsForCabinets([cabinet as any])
-    return serializeBigInt({
-      ...cabinet,
-      headTenure: cabinet.headTenure ? withSignedDates(cabinet.headTenure) : null,
-    })
+    return serializeBigInt(this.formatCabinetRow(cabinet))
   }
 
-  async findTenuresByCabinetId(cabinetId: string, accountId?: string): Promise<any[]> {
-    if (accountId != null) {
-      const cabinet = await this.prisma.cabinet.findUnique({
-        where: { id: cabinetId },
-        select: { accountId: true },
-      })
-      if (!cabinet || (cabinet.accountId != null && cabinet.accountId !== accountId)) return []
-    }
-    const tenures = await this.prisma.governmentPositionTenure.findMany({
-      where: { cabinetId },
-      orderBy: [{ startKey: 'asc' }, { startDate: 'asc' }],
-      include: {
-        person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
-        positionDefinition: true,
-        administrationDepartment: {
-          select: { id: true, name: true, categoryId: true },
-        },
-        country: true,
-        historicalCountry: true,
-        achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+  async findTenuresByCabinetId(cabinetId: string, _accountId?: string): Promise<any[]> {
+    const tenureInclude = {
+      person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
+      positionDefinition: true,
+      administrationDepartment: {
+        select: { id: true, name: true, abbreviation: true, kind: true, categoryId: true },
       },
-    })
-    return tenures.map((t) => serializeBigInt(withSignedDates(t)))
+      militaryUnit: {
+        select: { id: true, name: true, abbreviation: true, unitType: true },
+      },
+      party: { select: { id: true, name: true, shortName: true, brandColor: true } },
+      country: true,
+      historicalCountry: true,
+      achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+    } as const
+
+    const [legacyTenures, memberLinks] = await Promise.all([
+      this.prisma.governmentPositionTenure.findMany({
+        where: { cabinetId },
+        orderBy: [{ startKey: 'asc' }, { startDate: 'asc' }],
+        include: tenureInclude,
+      }),
+      this.prisma.cabinetMember
+        ? this.prisma.cabinetMember.findMany({
+            where: { cabinetId },
+            orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+            include: {
+              administrationDepartment: {
+                select: { id: true, name: true, abbreviation: true, kind: true, categoryId: true },
+              },
+              tenure: { include: tenureInclude },
+            },
+          })
+        : Promise.resolve([]),
+    ])
+
+    const byId = new Map<string, any>()
+    for (const link of memberLinks) {
+      if (!link.tenure) continue
+      const mergedTenure = {
+        ...link.tenure,
+        administrationDepartmentId:
+          link.administrationDepartmentId ?? link.tenure.administrationDepartmentId ?? null,
+        administrationDepartment:
+          link.administrationDepartment ?? link.tenure.administrationDepartment ?? null,
+        title: link.roleTitle ?? link.tenure.title,
+        cabinetMemberId: link.id,
+      }
+      byId.set(link.tenure.id, mergedTenure)
+    }
+    for (const legacyRow of legacyTenures) {
+      if (!byId.has(legacyRow.id)) {
+        byId.set(legacyRow.id, legacyRow)
+      }
+    }
+
+    return [...byId.values()].map((tenureItem) =>
+      serializeBigInt(asOfficeHolding(withSignedDates(tenureItem))),
+    )
   }
 
   /**
    * 행정부 한눈에 보기 — 수반(head) + 각료(members) + 여당/연정(parties)을 한 번에.
    * 인물 상세의 재임 카드에서 "같은 행정부 동료"를 보여줄 때 사용.
-   * 비공개(계정 소유) 행정부는 소유 계정만 접근 가능.
    */
   async findCabinetOverview(cabinetId: string, accountId?: string): Promise<any | null> {
     const tenureSelect = {
@@ -4345,6 +4819,7 @@ export class PersonPrismaRepository implements IPersonRepository {
       positionType: true,
       title: true,
       titleEn: true,
+      rankTitle: true,
       ordinal: true,
       subTermNumber: true,
       regnalName: true,
@@ -4362,8 +4837,9 @@ export class PersonPrismaRepository implements IPersonRepository {
       endReason: true,
       administrationDepartmentId: true,
       administrationDepartment: {
-        select: { id: true, name: true, categoryId: true },
+        select: { id: true, name: true, abbreviation: true, categoryId: true },
       },
+      party: { select: { id: true, name: true, shortName: true, brandColor: true } },
       person: {
         select: {
           id: true,
@@ -4392,16 +4868,9 @@ export class PersonPrismaRepository implements IPersonRepository {
           administrationDepartmentId: true,
         },
       },
-      /*
-       * 이 임기를 낳은 선거. 행정부 지면이 "이 정권은 어느 선거로 섰나"를 보여주려면
-       * 후보(candidacy)를 거쳐 선거까지 따라가야 한다 — 스키마에 이미 있던 경로인데
-       * overview가 안 실어 줘서 화면에서 읽을 수 없었다(실측 재임 217건 중 연결 0건).
-       */
       electionCandidacy: {
         select: {
           id: true,
-          // 득표율은 정권 요약에 바로 쓴다 — 이것 없으면 선거를 이어 놓고도
-          // '얼마로 이겼나'를 보려면 상세 모달을 열어야 한다
           result: { select: { voteSharePercent: true, elected: true } },
           election: {
             select: { id: true, name: true, pollDate: true, electionType: true },
@@ -4415,8 +4884,31 @@ export class PersonPrismaRepository implements IPersonRepository {
       select: {
         id: true,
         name: true,
+        description: true,
         accountId: true,
+        countryId: true,
+        historicalCountryId: true,
+        startEra: true,
+        startYear: true,
+        startMonth: true,
+        startDay: true,
+        endEra: true,
+        endYear: true,
+        endMonth: true,
+        endDay: true,
+        country: { select: { id: true, name: true } },
+        historicalCountry: { select: { id: true, name: true } },
         headTenure: { select: tenureSelect },
+        members: {
+          orderBy: [{ sortOrder: Prisma.SortOrder.asc }, { createdAt: Prisma.SortOrder.asc }],
+          select: {
+            id: true,
+            administrationDepartmentId: true,
+            roleTitle: true,
+            administrationDepartment: { select: { id: true, name: true, abbreviation: true, categoryId: true } },
+            tenure: { select: tenureSelect },
+          },
+        },
         memberTenures: {
           orderBy: [
             { startKey: Prisma.SortOrder.asc },
@@ -4438,20 +4930,37 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (accountId != null && cabinet.accountId != null && cabinet.accountId !== accountId) {
       return null
     }
-    const { accountId: _ownerAccountId, headTenure, memberTenures, ...rest } = cabinet
-    return serializeBigInt({
-      ...rest,
-      headTenure: headTenure ? withSignedDates(headTenure) : null,
-      memberTenures: (memberTenures ?? []).map((t) => withSignedDates(t)),
-    })
+    const { accountId: _ownerAccountId, headTenure, members, memberTenures, ...rest } = cabinet
+    const mergedMap = new Map<string, any>()
+    for (const memberLink of members ?? []) {
+      if (!memberLink.tenure) continue
+      mergedMap.set(memberLink.tenure.id, {
+        ...withSignedDates(memberLink.tenure),
+        administrationDepartmentId:
+          memberLink.administrationDepartmentId ?? memberLink.tenure.administrationDepartmentId ?? null,
+        administrationDepartment:
+          memberLink.administrationDepartment ?? memberLink.tenure.administrationDepartment ?? null,
+        title: memberLink.roleTitle ?? memberLink.tenure.title,
+      })
+    }
+    for (const legacyMember of memberTenures ?? []) {
+      if (!mergedMap.has(legacyMember.id)) {
+        mergedMap.set(legacyMember.id, withSignedDates(legacyMember))
+      }
+    }
+    return serializeBigInt(
+      this.formatCabinetRow({
+        ...rest,
+        headTenure,
+        memberTenures: [...mergedMap.values()],
+      }),
+    )
   }
 
   async findCabinets(params: {
     countryId?: string
     historicalCountryId?: string
   }): Promise<any[]> {
-    // 역사적 국가 우선: historicalCountryId가 명시되면 해당 역사국가 행정부만 조회한다.
-    // 현대국가만 조회할 때만 연결된 하위 역사국가의 행정부까지 확장한다.
     let linkedHistoricalIds: string[] = []
     if (params.countryId && !params.historicalCountryId) {
       linkedHistoricalIds = await this.prisma.historicalCountryModernCountry
@@ -4459,38 +4968,53 @@ export class PersonPrismaRepository implements IPersonRepository {
           where: { modernCountryId: params.countryId },
           select: { historicalCountryId: true },
         })
-        .then((rows) => rows.map((r) => r.historicalCountryId))
+        .then((rows) => rows.map((row) => row.historicalCountryId))
     }
 
-    const baseWhere: any = params.historicalCountryId
+    const baseWhere: Prisma.CabinetWhereInput = params.historicalCountryId
       ? {
-          headTenure: { historicalCountryId: params.historicalCountryId },
+          OR: [
+            { historicalCountryId: params.historicalCountryId },
+            { headTenure: { historicalCountryId: params.historicalCountryId } },
+          ],
         }
       : params.countryId
         ? {
-            headTenure:
-              linkedHistoricalIds.length > 0
-                ? {
-                    OR: [
-                      { countryId: params.countryId },
-                      { historicalCountryId: { in: linkedHistoricalIds } },
-                    ],
-                  }
-                : { countryId: params.countryId },
+            OR: [
+              { countryId: params.countryId },
+              ...(linkedHistoricalIds.length > 0
+                ? [{ historicalCountryId: { in: linkedHistoricalIds } }]
+                : []),
+              {
+                headTenure:
+                  linkedHistoricalIds.length > 0
+                    ? {
+                        OR: [
+                          { countryId: params.countryId },
+                          { historicalCountryId: { in: linkedHistoricalIds } },
+                        ],
+                      }
+                    : { countryId: params.countryId },
+              },
+            ],
           }
         : {}
-    /**
-     * 국가(또는 역사국가) 소속 수반 재임 기준으로만 필터.
-     * accountId로 목록을 좁히지 않음 — 다른 계정이 등록한 행정부도 동일 국가 페이지에서 보이게 함.
-     */
+
     const list = await this.prisma.cabinet.findMany({
       where: Object.keys(baseWhere).length > 0 ? baseWhere : undefined,
       orderBy: [
         { headTenure: { startKey: 'desc' } },
         { headTenure: { startDate: 'desc' } },
+        { startYear: 'desc' },
+        { createdAt: 'desc' },
       ],
       include: {
         linkageGroup: { select: this.LINKAGE_GROUP_EVENT_SELECT },
+        country: { select: { id: true, name: true } },
+        historicalCountry: { select: { id: true, name: true } },
+        _count: {
+          select: { members: true, memberTenures: true },
+        },
         headTenure: {
           include: {
             person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
@@ -4504,88 +5028,212 @@ export class PersonPrismaRepository implements IPersonRepository {
       },
     })
     await this.mergeLinkagePeerHeadAchievementsForCabinets(list as any[])
-    return list.map((c) =>
-      serializeBigInt({
-        ...c,
-        headTenure: c.headTenure ? withSignedDates(c.headTenure) : null,
-      }),
-    )
+    return list.map((cab) => serializeBigInt(this.formatCabinetRow(cab)))
   }
 
-  async createCabinet(dto: {
-    headTenureId: string
-    name?: string | null
-  }, accountId: string): Promise<any> {
+  private cabinetPeriodColumns(
+    startDateInfo?: any,
+    endDateInfo?: any,
+  ): Record<string, any> {
+    const result: Record<string, any> = {}
+    if (startDateInfo !== undefined) {
+      if (!startDateInfo || startDateInfo.year == null) {
+        result.startEra = null
+        result.startYear = null
+        result.startMonth = null
+        result.startDay = null
+      } else {
+        const mapped = mapStructuredDateInput(startDateInfo, null)
+        result.startEra = mapped.era
+        result.startYear = mapped.year
+        result.startMonth = mapped.month
+        result.startDay = mapped.day
+      }
+    }
+    if (endDateInfo !== undefined) {
+      if (!endDateInfo || endDateInfo.year == null) {
+        result.endEra = null
+        result.endYear = null
+        result.endMonth = null
+        result.endDay = null
+      } else {
+        const mapped = mapStructuredDateInput(endDateInfo, null)
+        result.endEra = mapped.era
+        result.endYear = mapped.year
+        result.endMonth = mapped.month
+        result.endDay = mapped.day
+      }
+    }
+    return result
+  }
+
+  async createCabinet(
+    dto: {
+      headTenureId?: string | null
+      name?: string | null
+      description?: string | null
+      countryId?: string | null
+      historicalCountryId?: string | null
+      startDateInfo?: any
+      endDateInfo?: any
+      allowReshuffle?: boolean
+      memberTenureIds?: string[]
+    },
+    accountId: string,
+  ): Promise<any> {
     const cabinetInclude = {
+      country: { select: { id: true, name: true } },
+      historicalCountry: { select: { id: true, name: true } },
+      _count: { select: { members: true, memberTenures: true } },
       headTenure: {
         include: {
           person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
           positionDefinition: true,
+          country: { select: { id: true, name: true } },
+          historicalCountry: { select: { id: true, name: true } },
           achievements: TENURE_ACHIEVEMENTS_INCLUDE,
           regnalEras: REGNAL_ERAS_ORDER,
         },
       },
     } as const
-    const existing = await this.prisma.cabinet.findUnique({
-      where: { headTenureId: dto.headTenureId },
-      include: cabinetInclude,
-    })
-    if (existing) {
-      // 자동 생성된 Cabinet에 사용자가 입력한 이름이 동기화되도록 반영
-      const wantsName = dto.name != null && dto.name !== ''
-      if (wantsName && existing.name !== dto.name) {
-        const updated = await this.prisma.cabinet.update({
-          where: { id: existing.id },
-          data: { name: dto.name },
-          include: cabinetInclude,
-        })
-        return serializeBigInt({
-          ...updated,
-          headTenure: updated.headTenure ? withSignedDates(updated.headTenure) : null,
-        })
-      }
-      return serializeBigInt({
-        ...existing,
-        headTenure: existing.headTenure ? withSignedDates(existing.headTenure) : null,
+
+    const trimmedName = dto.name?.trim() || null
+    const headTenureId = dto.headTenureId?.trim() || null
+
+    if (headTenureId && !dto.allowReshuffle) {
+      const existingList = await this.prisma.cabinet.findMany({
+        where: { headTenureId },
+        orderBy: { createdAt: 'asc' },
+        include: cabinetInclude,
       })
-    }
-    // 비군주 수반이면 트리거가 이미 만들었다 — 여기까지 왔다면 군주 재위이거나 수반이 아닌 직위
-    const head = await this.prisma.governmentPositionTenure.findUnique({
-      where: { id: dto.headTenureId },
-      select: {
-        positionType: true,
-        positionDefinition: { select: { isMonarchical: true, positionType: true } },
-      },
-    })
-    if (!head) {
-      throw new NotFoundException('행정부 수반 재임 기록을 찾을 수 없습니다')
-    }
-    if (head.positionDefinition.isMonarchical) {
-      throw new BadRequestException('군주 재위에는 행정부를 만들 수 없습니다 — 행정부의 수반은 비군주 국가원수·정부수반입니다')
-    }
-    const effectivePositionType = head.positionDefinition.positionType ?? head.positionType
-    if (effectivePositionType !== 'HEAD_OF_STATE' && effectivePositionType !== 'HEAD_OF_GOVERNMENT') {
-      throw new BadRequestException(
-        '행정부의 수반은 국가원수(HEAD_OF_STATE) 또는 행정수반(HEAD_OF_GOVERNMENT) 재임이어야 합니다',
+      const exactMatch = existingList.find(
+        (cab) => (cab.name ?? null) === trimmedName || (!cab.name && trimmedName),
       )
+      if (exactMatch) {
+        if (trimmedName && exactMatch.name !== trimmedName) {
+          const updated = await this.prisma.cabinet.update({
+            where: { id: exactMatch.id },
+            data: {
+              name: trimmedName,
+              ...(dto.description !== undefined && {
+                description: dto.description?.trim() || null,
+              }),
+              ...this.cabinetPeriodColumns(dto.startDateInfo, dto.endDateInfo),
+            },
+            include: cabinetInclude,
+          })
+          return serializeBigInt(this.formatCabinetRow(updated))
+        }
+        return serializeBigInt(this.formatCabinetRow(exactMatch))
+      }
     }
+
+    let resolvedCountryId: string | null = dto.countryId?.trim() || null
+    let resolvedHistoricalId: string | null = dto.historicalCountryId?.trim() || null
+    let defaultPeriod: Record<string, any> = {}
+
+    if (headTenureId) {
+      const head = await this.prisma.governmentPositionTenure.findUnique({
+        where: { id: headTenureId },
+        select: {
+          countryId: true,
+          historicalCountryId: true,
+          positionType: true,
+          startEra: true,
+          startYear: true,
+          startMonth: true,
+          startDay: true,
+          startDatePrecision: true,
+          startKey: true,
+          endEra: true,
+          endYear: true,
+          endMonth: true,
+          endDay: true,
+          endKey: true,
+          positionDefinition: { select: { isMonarchical: true, positionType: true } },
+        },
+      })
+      if (!head) {
+        throw new NotFoundException('행정부 수반 재임 기록을 찾을 수 없습니다')
+      }
+      const effectivePositionType = head.positionDefinition.positionType ?? head.positionType
+      if (
+        effectivePositionType !== 'HEAD_OF_STATE' &&
+        effectivePositionType !== 'HEAD_OF_GOVERNMENT'
+      ) {
+        throw new BadRequestException(
+          '행정부의 수반은 국가원수(HEAD_OF_STATE) 또는 정부수반(HEAD_OF_GOVERNMENT) 재임이어야 합니다',
+        )
+      }
+      resolvedCountryId = resolvedCountryId ?? head.countryId ?? null
+      resolvedHistoricalId = resolvedHistoricalId ?? head.historicalCountryId ?? null
+      if (dto.startDateInfo === undefined && head.startYear != null) {
+        defaultPeriod = {
+          startEra: head.startEra,
+          startYear: head.startYear,
+          startMonth: head.startMonth,
+          startDay: head.startDay,
+          endEra: head.endEra,
+          endYear: head.endYear,
+          endMonth: head.endMonth,
+          endDay: head.endDay,
+        }
+      }
+    } else {
+      if (!resolvedCountryId && !resolvedHistoricalId) {
+        throw new BadRequestException(
+          '수반 없이 행정부(집단지도체제·임시정부 등)를 등록할 때는 국가 또는 역사적 국가를 지정해야 합니다.',
+        )
+      }
+      if (!trimmedName) {
+        throw new BadRequestException(
+          '수반 없이 행정부를 등록할 때는 행정부·내각 이름을 입력해야 합니다.',
+        )
+      }
+      const axis = await this.resolveTenureCountryFields({
+        countryId: resolvedCountryId ?? undefined,
+        historicalCountryId: resolvedHistoricalId ?? undefined,
+      })
+      resolvedCountryId = axis.countryId ?? null
+      resolvedHistoricalId = axis.historicalCountryId ?? null
+    }
+
     const cabinet = await this.prisma.cabinet.create({
       data: {
-        headTenureId: dto.headTenureId,
-        name: dto.name ?? null,
+        headTenureId,
+        name: trimmedName,
+        description: dto.description?.trim() || null,
+        countryId: resolvedCountryId,
+        historicalCountryId: resolvedHistoricalId,
+        ...defaultPeriod,
+        ...this.cabinetPeriodColumns(dto.startDateInfo, dto.endDateInfo),
         accountId,
       },
       include: cabinetInclude,
     })
-    return serializeBigInt({
-      ...cabinet,
-      headTenure: cabinet.headTenure ? withSignedDates(cabinet.headTenure) : null,
-    })
+
+    if (dto.memberTenureIds?.length) {
+      await this.attachCabinetMembers(
+        cabinet.id,
+        dto.memberTenureIds.map((tenureId) => ({ tenureId })),
+        accountId,
+      )
+    }
+
+    return serializeBigInt(this.formatCabinetRow(cabinet))
   }
 
   async updateCabinet(
     cabinetId: string,
-    dto: { name?: string | null },
+    dto: {
+      name?: string | null
+      description?: string | null
+      headTenureId?: string | null
+      countryId?: string | null
+      historicalCountryId?: string | null
+      startDateInfo?: any
+      endDateInfo?: any
+    },
     accountId: string,
   ): Promise<any> {
     const cabinet = await this.prisma.cabinet.findUnique({
@@ -4596,22 +5244,260 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (cabinet.accountId != null && cabinet.accountId !== accountId) return null
     const updated = await this.prisma.cabinet.update({
       where: { id: cabinetId },
-      data: { ...(dto.name !== undefined && { name: dto.name }) },
+      data: {
+        ...(dto.name !== undefined && { name: dto.name?.trim() || null }),
+        ...(dto.description !== undefined && {
+          description: dto.description?.trim() || null,
+        }),
+        ...(dto.headTenureId !== undefined && {
+          headTenureId: dto.headTenureId || null,
+        }),
+        ...(dto.countryId !== undefined && { countryId: dto.countryId || null }),
+        ...(dto.historicalCountryId !== undefined && {
+          historicalCountryId: dto.historicalCountryId || null,
+        }),
+        ...this.cabinetPeriodColumns(dto.startDateInfo, dto.endDateInfo),
+      },
       include: {
+        country: { select: { id: true, name: true } },
+        historicalCountry: { select: { id: true, name: true } },
+        _count: { select: { members: true, memberTenures: true } },
         headTenure: {
           include: {
             person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
             positionDefinition: true,
+            country: { select: { id: true, name: true } },
+            historicalCountry: { select: { id: true, name: true } },
             achievements: TENURE_ACHIEVEMENTS_INCLUDE,
             regnalEras: REGNAL_ERAS_ORDER,
           },
         },
       },
     })
-    return serializeBigInt({
-      ...updated,
-      headTenure: updated.headTenure ? withSignedDates(updated.headTenure) : null,
+    return serializeBigInt(this.formatCabinetRow(updated))
+  }
+
+  async attachCabinetMembers(
+    cabinetId: string,
+    items: Array<{
+      tenureId: string
+      departmentId?: string | null
+      roleTitle?: string | null
+    }>,
+    _accountId?: string,
+  ): Promise<any[]> {
+    const cabinet = await this.prisma.cabinet.findUnique({
+      where: { id: cabinetId },
+      select: {
+        id: true,
+        name: true,
+        countryId: true,
+        historicalCountryId: true,
+        headTenureId: true,
+        headTenure: { select: { id: true, countryId: true, historicalCountryId: true } },
+      },
     })
+    if (!cabinet) throw new NotFoundException('행정부를 찾을 수 없습니다.')
+
+    for (const item of items) {
+      const tenure = await this.prisma.governmentPositionTenure.findUnique({
+        where: { id: item.tenureId },
+        select: {
+          id: true,
+          countryId: true,
+          historicalCountryId: true,
+          cabinetId: true,
+          administrationDepartmentId: true,
+          title: true,
+          positionType: true,
+          positionDefinition: { select: { isMonarchical: true, positionType: true, title: true } },
+        },
+      })
+      if (!tenure) continue
+      await this.assertCabinetMatchesTenure(
+        cabinetId,
+        tenure.countryId,
+        tenure.historicalCountryId,
+        tenure.positionDefinition.isMonarchical,
+        tenure.positionDefinition.positionType ?? tenure.positionType,
+        tenure.id,
+      )
+      await this.prisma.cabinetMember.upsert({
+        where: {
+          cabinetId_tenureId: {
+            cabinetId,
+            tenureId: tenure.id,
+          },
+        },
+        create: {
+          cabinetId,
+          tenureId: tenure.id,
+          administrationDepartmentId: item.departmentId ?? tenure.administrationDepartmentId ?? null,
+          roleTitle:
+            item.roleTitle ?? tenure.title ?? tenure.positionDefinition.title ?? null,
+        },
+        update: {
+          ...(item.departmentId !== undefined && { administrationDepartmentId: item.departmentId }),
+          ...(item.roleTitle !== undefined && { roleTitle: item.roleTitle }),
+        },
+      })
+      if (!tenure.cabinetId) {
+        await this.prisma.governmentPositionTenure.update({
+          where: { id: tenure.id },
+          data: { cabinetId },
+        })
+      }
+    }
+    return this.findTenuresByCabinetId(cabinetId)
+  }
+
+  async detachCabinetMember(
+    cabinetId: string,
+    tenureId: string,
+    _accountId?: string,
+  ): Promise<void> {
+    await this.prisma.cabinetMember.deleteMany({
+      where: { cabinetId, tenureId },
+    })
+    const tenure = await this.prisma.governmentPositionTenure.findUnique({
+      where: { id: tenureId },
+      select: { cabinetId: true },
+    })
+    if (tenure?.cabinetId === cabinetId) {
+      const remaining = await this.prisma.cabinetMember.findFirst({
+        where: { tenureId },
+        select: { cabinetId: true },
+      })
+      await this.prisma.governmentPositionTenure.update({
+        where: { id: tenureId },
+        data: { cabinetId: remaining?.cabinetId ?? null },
+      })
+    }
+  }
+
+  /**
+   * 스마트 각료 자동 탐색 — 같은 국가·정체에서 이 내각 기간과 겹치는 장관·차관·부수반·부처 소속 재임 중
+   * 아직 이 내각에 편입되지 않은 후보를 찾아 반환한다.
+   */
+  async findSuggestedCabinetMembers(cabinetId: string): Promise<any[]> {
+    const cabinet = await this.prisma.cabinet.findUnique({
+      where: { id: cabinetId },
+      include: {
+        headTenure: {
+          select: {
+            id: true,
+            countryId: true,
+            historicalCountryId: true,
+            startKey: true,
+            endKey: true,
+            startEra: true,
+            startYear: true,
+            startMonth: true,
+            startDay: true,
+            endEra: true,
+            endYear: true,
+            endMonth: true,
+            endDay: true,
+          },
+        },
+        members: { select: { tenureId: true } },
+        memberTenures: { select: { id: true } },
+      },
+    })
+    if (!cabinet) throw new NotFoundException('행정부를 찾을 수 없습니다.')
+
+    const targetHistoricalId =
+      cabinet.historicalCountryId ?? cabinet.headTenure?.historicalCountryId ?? null
+    const targetCountryId =
+      cabinet.countryId ?? cabinet.headTenure?.countryId ?? null
+    if (!targetHistoricalId && !targetCountryId) return []
+
+    const cabStartKey =
+      cabinet.startYear != null
+        ? structuredDateKey(
+            cabinet.startEra,
+            cabinet.startYear,
+            cabinet.startMonth,
+            cabinet.startDay,
+          )
+        : (cabinet.headTenure?.startKey ??
+          structuredDateKey(
+            cabinet.headTenure?.startEra ?? null,
+            cabinet.headTenure?.startYear ?? null,
+            cabinet.headTenure?.startMonth ?? null,
+            cabinet.headTenure?.startDay ?? null,
+          ))
+    const cabEndKey =
+      cabinet.endYear != null
+        ? structuredDateEndKey(
+            cabinet.endEra,
+            cabinet.endYear,
+            cabinet.endMonth,
+            cabinet.endDay,
+          )
+        : (cabinet.headTenure?.endKey ??
+          structuredDateEndKey(
+            cabinet.headTenure?.endEra ?? null,
+            cabinet.headTenure?.endYear ?? null,
+            cabinet.headTenure?.endMonth ?? null,
+            cabinet.headTenure?.endDay ?? null,
+          ))
+
+    const existingTenureIds = new Set<string>([
+      ...(cabinet.headTenureId ? [cabinet.headTenureId] : []),
+      ...cabinet.members.map((memberRow) => memberRow.tenureId),
+      ...cabinet.memberTenures.map((tenureRow) => tenureRow.id),
+    ])
+
+    const candidates = await this.prisma.governmentPositionTenure.findMany({
+      where: {
+        ...(targetHistoricalId
+          ? { historicalCountryId: targetHistoricalId }
+          : { countryId: targetCountryId! }),
+        positionDefinition: { is: { isMonarchical: false } },
+        positionType: {
+          notIn: ['HEAD_OF_STATE', 'HEAD_OF_GOVERNMENT', 'MILITARY_COMMANDER'],
+        },
+        OR: [
+          {
+            positionType: {
+              in: ['CABINET_MINISTER', 'VICE_MINISTER', 'DEPUTY_HEAD_OF_STATE'],
+            },
+          },
+          { administrationDepartmentId: { not: null } },
+        ],
+      },
+      orderBy: [{ startKey: 'asc' }, { startDate: 'asc' }],
+      include: {
+        person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
+        positionDefinition: true,
+        administrationDepartment: {
+          select: { id: true, name: true, abbreviation: true, kind: true, categoryId: true },
+        },
+        party: { select: { id: true, name: true, shortName: true, brandColor: true } },
+        country: { select: { id: true, name: true } },
+        historicalCountry: { select: { id: true, name: true } },
+      },
+    })
+
+    const filtered = candidates.filter((cand) => {
+      if (existingTenureIds.has(cand.id)) return false
+      if (cabStartKey == null) return true
+      const candStart =
+        cand.startKey ??
+        structuredDateKey(cand.startEra, cand.startYear, cand.startMonth, cand.startDay)
+      const candEnd =
+        cand.endKey ??
+        structuredDateEndKey(cand.endEra, cand.endYear, cand.endMonth, cand.endDay) ??
+        Number.MAX_SAFE_INTEGER
+      if (candStart == null) return false
+      const effectiveCabEnd = cabEndKey ?? Number.MAX_SAFE_INTEGER
+      return candStart <= effectiveCabEnd && candEnd >= cabStartKey
+    })
+
+    return filtered.map((cand) =>
+      serializeBigInt(asOfficeHolding(withSignedDates(cand))),
+    )
   }
 
   async deleteCabinet(cabinetId: string, accountId: string): Promise<void> {
@@ -5101,11 +5987,13 @@ export class PersonPrismaRepository implements IPersonRepository {
    */
   async deleteGovernmentPositionTenure(id: string): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
-      const headCabinet = await tx.cabinet.findUnique({
-        where: { headTenureId: id },
-        select: { id: true, linkageGroupId: true },
-      })
-      if (headCabinet) {
+      const headCabinets = tx.cabinet.findMany
+        ? await tx.cabinet.findMany({
+            where: { headTenureId: id },
+            select: { id: true, linkageGroupId: true },
+          })
+        : []
+      for (const headCabinet of headCabinets) {
         await tx.governmentPositionTenure.updateMany({
           where: { cabinetId: headCabinet.id },
           data: { cabinetId: null },
@@ -5533,29 +6421,9 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (countryIds.size === 0 && historicalIds.size === 0) return []
 
     // 역사적 국가가 명시된 경우:
-    // - 다른 시대 역사국가(형제 정체)로 번지는 역방향 확장을 하지 않는다.
-    // - 직위 정의 스코프(forDefinitionScope=true)에서만 연결된 현대국가(countryId)의
-    //   "역사국가 미지정(historicalCountryId: null)" 스코프 행을 함께 허용한다(dual-fill된 타 역사국가 정의 누출 방지).
+    // - 다른 시대 역사국가(형제 정체)나 현대 국가 전용(historicalCountryId: null) 정의로 번지는 역방향 확장을 하지 않는다.
+    // - 전역(무스코프·무부처) 보편 칭호는 findPositionDefinitions의 별도 OR 절({ scopes: { none: {} }, administrationDepartmentId: null })에서 포함된다.
     if (params?.historicalCountryId) {
-      if (options?.forDefinitionScope) {
-        const links = await this.prisma.historicalCountryModernCountry.findMany({
-          where: { historicalCountryId: params.historicalCountryId },
-          select: { modernCountryId: true },
-        })
-        for (const link of links) {
-          if (link.modernCountryId) countryIds.add(link.modernCountryId)
-        }
-        const clauses: Array<Record<string, any>> = [
-          { historicalCountryId: params.historicalCountryId },
-        ]
-        if (countryIds.size > 0) {
-          clauses.push({
-            countryId: { in: [...countryIds] },
-            historicalCountryId: null,
-          })
-        }
-        return clauses
-      }
       return [{ historicalCountryId: params.historicalCountryId }]
     }
 
@@ -5601,10 +6469,11 @@ export class PersonPrismaRepository implements IPersonRepository {
         ? undefined
         : {
             OR: [
-              // 스코프가 하나도 없고 특정 국가 부처에도 귀속되지 않은 정의 = 어느 나라에서나 쓰는 보편 칭호(총리·대통령·국왕…)
-              { scopes: { none: {} }, administrationDepartmentId: null },
+              // 스코프가 하나도 없고 특정 국가 부처·부대에도 귀속되지 않은 정의 = 어느 나라에서나 쓰는 보편 칭호(총리·대통령·국왕·사령관…)
+              { scopes: { none: {} }, administrationDepartmentId: null, militaryUnitId: null },
               { scopes: { some: { OR: scopeOr } } },
               { administrationDepartment: { is: { OR: scopeOr } } },
+              { militaryUnit: { is: { OR: scopeOr } } },
               ...(includeIds.length > 0 ? [{ id: { in: includeIds } }] : []),
             ],
           }
@@ -5615,6 +6484,9 @@ export class PersonPrismaRepository implements IPersonRepository {
         category: { select: { id: true, name: true, nameEn: true } },
         administrationDepartment: {
           select: { id: true, name: true, categoryId: true, countryId: true, historicalCountryId: true },
+        },
+        militaryUnit: {
+          select: { id: true, name: true, abbreviation: true, unitType: true, countryId: true, historicalCountryId: true },
         },
         organization: { select: { id: true, name: true, shortName: true } },
         // 적용 범위 칩·편집용 — 빈 배열이면 "전역"이라는 뜻이다(별도 플래그 없음)
@@ -5798,6 +6670,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         isMonarchical: dto.isMonarchical ?? undefined,
         categoryId: resolvedCategoryId,
         administrationDepartmentId: dto.administrationDepartmentId ?? undefined,
+        militaryUnitId: dto.militaryUnitId ?? undefined,
         organizationId: dto.organizationId ?? undefined,
         establishedDate,
         abolishedDate,
@@ -5848,9 +6721,13 @@ export class PersonPrismaRepository implements IPersonRepository {
         isMonarchical: true,
         categoryId: true,
         administrationDepartmentId: true,
+        organizationId: true,
         establishedDate: true,
         abolishedDate: true,
         administrationDepartment: {
+          select: { categoryId: true, countryId: true, historicalCountryId: true },
+        },
+        organization: {
           select: { countryId: true, historicalCountryId: true },
         },
         scopes: {
@@ -5904,15 +6781,15 @@ export class PersonPrismaRepository implements IPersonRepository {
       (dto.isMonarchical !== undefined && dto.isMonarchical !== existing.isMonarchical)
     ) {
       if (
-        nextIsMonarchical ||
-        (nextPositionType !== 'HEAD_OF_STATE' && nextPositionType !== 'HEAD_OF_GOVERNMENT')
+        nextPositionType !== 'HEAD_OF_STATE' &&
+        nextPositionType !== 'HEAD_OF_GOVERNMENT'
       ) {
         const cabinetCount = await this.prisma.cabinet.count({
           where: { headTenure: { positionDefinitionId: id } },
         })
         if (cabinetCount > 0) {
           throw new BadRequestException(
-            `이 직위(${existing.title})를 사용하는 재임이 행정부(내각)의 수반으로 등록되어 있어(${cabinetCount}건) 비수반 직위 또는 군주직으로 변경할 수 없습니다.`,
+            `이 직위(${existing.title})를 사용하는 재임이 행정부(내각)의 수반으로 등록되어 있어(${cabinetCount}건) 비수반 직위로 변경할 수 없습니다.`,
           )
         }
       }
@@ -5929,15 +6806,19 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (dto.categoryId !== undefined) data.categoryId = dto.categoryId
     if (dto.administrationDepartmentId !== undefined)
       data.administrationDepartmentId = dto.administrationDepartmentId
+    if (dto.militaryUnitId !== undefined) data.militaryUnitId = dto.militaryUnitId
+    let resolvedOrg: { id?: string; countryId: string | null; historicalCountryId: string | null } | null =
+      dto.organizationId === undefined ? ((existing as any).organization ?? null) : null
     if (dto.organizationId !== undefined) {
       if (dto.organizationId && this.prisma.organization?.findUnique) {
         const org = await this.prisma.organization.findUnique({
           where: { id: dto.organizationId },
-          select: { id: true },
+          select: { id: true, countryId: true, historicalCountryId: true },
         })
         if (!org) {
           throw new NotFoundException('연결할 조직을 찾을 수 없습니다.')
         }
+        resolvedOrg = org
       }
       data.organizationId = dto.organizationId
     }
@@ -5974,6 +6855,16 @@ export class PersonPrismaRepository implements IPersonRepository {
       throw new BadRequestException('관직 폐지일은 신설일 이후여야 합니다.')
     }
 
+    let resolvedDept: {
+      id?: string
+      categoryId?: string | null
+      countryId: string | null
+      historicalCountryId: string | null
+    } | null =
+      dto.administrationDepartmentId === undefined
+        ? (existing.administrationDepartment ?? null)
+        : null
+
     if (dto.administrationDepartmentId) {
       const dept = await this.prisma.administrationDepartment.findUnique({
         where: { id: dto.administrationDepartmentId },
@@ -5982,33 +6873,153 @@ export class PersonPrismaRepository implements IPersonRepository {
       if (!dept) {
         throw new BadRequestException('연결할 국가 기관(부처)을 찾을 수 없습니다.')
       }
-      if (dto.categoryId === undefined && !existing.categoryId && dept.categoryId) {
+      resolvedDept = dept
+      if (
+        dto.categoryId === undefined &&
+        (!existing.categoryId ||
+          existing.categoryId === existing.administrationDepartment?.categoryId) &&
+        dept.categoryId
+      ) {
         data.categoryId = dept.categoryId
       }
+    }
+
+    if (
+      resolvedDept &&
+      resolvedOrg &&
+      (resolvedDept.countryId || resolvedDept.historicalCountryId) &&
+      (resolvedOrg.countryId || resolvedOrg.historicalCountryId)
+    ) {
+      const compat = await this.areTenureCountryAxesCompatible(
+        {
+          countryId: resolvedDept.countryId ?? null,
+          historicalCountryId: resolvedDept.historicalCountryId ?? null,
+        },
+        {
+          countryId: resolvedOrg.countryId ?? null,
+          historicalCountryId: resolvedOrg.historicalCountryId ?? null,
+        },
+      )
+      if (!compat.compatible) {
+        throw new BadRequestException(
+          '연결할 조직의 소속 국가·시대와 국가 기관(부처)의 소속 국가·시대가 일치하지 않습니다.',
+        )
+      }
+    }
+
+    if (dto.administrationDepartmentId && resolvedDept) {
+      if (
+        existing.administrationDepartmentId !== dto.administrationDepartmentId &&
+        (resolvedDept.countryId || resolvedDept.historicalCountryId)
+      ) {
+        const targetAxis = {
+          countryId: resolvedDept.countryId ?? null,
+          historicalCountryId: resolvedDept.historicalCountryId ?? null,
+        }
+        const [defTenures, defPoliticalSystems] = await Promise.all([
+          this.prisma.governmentPositionTenure?.findMany
+            ? this.prisma.governmentPositionTenure.findMany({
+                where: { positionDefinitionId: id },
+                select: { id: true, countryId: true, historicalCountryId: true },
+              })
+            : Promise.resolve([]),
+          this.prisma.politicalSystem?.findMany
+            ? this.prisma.politicalSystem.findMany({
+                where: {
+                  OR: [
+                    { headOfStatePositionId: id },
+                    { headOfGovernmentPositionId: id },
+                  ],
+                },
+                select: {
+                  id: true,
+                  name: true,
+                  countryId: true,
+                  historicalCountryId: true,
+                },
+              })
+            : Promise.resolve([]),
+        ])
+        for (const defTenure of defTenures ?? []) {
+          const compat = await this.areTenureCountryAxesCompatible(
+            targetAxis,
+            {
+              countryId: defTenure.countryId ?? null,
+              historicalCountryId: defTenure.historicalCountryId ?? null,
+            },
+          )
+          if (!compat.compatible) {
+            throw new BadRequestException(
+              '이미 이 직위 정의를 참조하는 재임 기록의 소속 국가·시대와 변경하려는 국가 기관(부처)의 소속 국가·시대가 일치하지 않습니다.',
+            )
+          }
+        }
+        for (const polSys of defPoliticalSystems ?? []) {
+          const compat = await this.areTenureCountryAxesCompatible(
+            targetAxis,
+            {
+              countryId: polSys.countryId ?? null,
+              historicalCountryId: polSys.historicalCountryId ?? null,
+            },
+          )
+          if (!compat.compatible) {
+            throw new BadRequestException(
+              `이미 이 직위 정의를 참조하는 정체(${polSys.name ?? polSys.id})의 소속 국가·시대와 변경하려는 국가 기관(부처)의 소속 국가·시대가 일치하지 않습니다.`,
+            )
+          }
+        }
+      }
+
       const existingScopes = existing.scopes ?? []
       if (
         existing.administrationDepartmentId &&
         existing.administrationDepartmentId !== dto.administrationDepartmentId &&
-        existingScopes.length === 1 &&
-        existing.administrationDepartment &&
-        existingScopes[0].countryId === (existing.administrationDepartment.countryId ?? null) &&
-        existingScopes[0].historicalCountryId ===
-          (existing.administrationDepartment.historicalCountryId ?? null)
+        existing.administrationDepartment
       ) {
-        await this.prisma.governmentPositionDefinitionScope.delete({
-          where: { id: existingScopes[0].id },
-        })
+        const prevDeptScope = existingScopes.find(
+          (scopeItem) =>
+            scopeItem.countryId === (existing.administrationDepartment?.countryId ?? null) &&
+            scopeItem.historicalCountryId ===
+              (existing.administrationDepartment?.historicalCountryId ?? null),
+        )
+        if (
+          prevDeptScope &&
+          (prevDeptScope.countryId !== (resolvedDept.countryId ?? null) ||
+            prevDeptScope.historicalCountryId !== (resolvedDept.historicalCountryId ?? null))
+        ) {
+          await this.prisma.governmentPositionDefinitionScope.delete({
+            where: { id: prevDeptScope.id },
+          })
+        }
       }
       if (
         (existingScopes.length === 0 ||
           existing.administrationDepartmentId !== dto.administrationDepartmentId) &&
-        (dept.countryId || dept.historicalCountryId)
+        (resolvedDept.countryId || resolvedDept.historicalCountryId)
       ) {
         await this.addPositionDefinitionScope({
           definitionId: id,
-          countryId: dept.countryId,
-          historicalCountryId: dept.historicalCountryId,
+          countryId: resolvedDept.countryId,
+          historicalCountryId: resolvedDept.historicalCountryId,
         })
+      }
+    } else if (
+      dto.administrationDepartmentId === null &&
+      existing.administrationDepartmentId &&
+      existing.administrationDepartment
+    ) {
+      const existingScopes = existing.scopes ?? []
+      if (existingScopes.length === 1) {
+        const onlyScope = existingScopes[0]
+        if (
+          onlyScope.countryId === (existing.administrationDepartment.countryId ?? null) &&
+          onlyScope.historicalCountryId ===
+            (existing.administrationDepartment.historicalCountryId ?? null)
+        ) {
+          await this.prisma.governmentPositionDefinitionScope.delete({
+            where: { id: onlyScope.id },
+          })
+        }
       }
     }
 
@@ -6572,8 +7583,39 @@ export class PersonPrismaRepository implements IPersonRepository {
     const tenureInclude = {
       positionDefinition: true,
       administrationDepartment: {
-        select: { id: true, name: true, abbreviation: true, kind: true, categoryId: true },
+        select: {
+          id: true,
+          name: true,
+          abbreviation: true,
+          kind: true,
+          categoryId: true,
+          countryId: true,
+          historicalCountryId: true,
+        },
       },
+      militaryUnit: {
+        select: {
+          id: true,
+          name: true,
+          abbreviation: true,
+          unitType: true,
+          branch: true,
+          countryId: true,
+          historicalCountryId: true,
+        },
+      },
+      party: {
+        select: { id: true, name: true, shortName: true, brandColor: true },
+      },
+      cabinet: { select: { id: true, name: true } },
+      cabinetMemberships: {
+        select: {
+          cabinetId: true,
+          roleTitle: true,
+          cabinet: { select: { id: true, name: true } },
+        },
+      },
+      headedCabinets: { select: { id: true, name: true } },
       country: true,
       historicalCountry: true,
       achievements: TENURE_ACHIEVEMENTS_INCLUDE,
@@ -6688,9 +7730,17 @@ export class PersonPrismaRepository implements IPersonRepository {
       administrationDepartment: {
         select: { id: true, name: true, abbreviation: true, kind: true, categoryId: true },
       },
+      militaryUnit: {
+        select: { id: true, name: true, abbreviation: true, unitType: true, branch: true },
+      },
+      party: { select: { id: true, name: true, shortName: true, brandColor: true } },
       country: true,
       historicalCountry: true,
       cabinet: { select: { id: true, name: true } },
+      cabinetMemberships: {
+        select: { cabinetId: true, cabinet: { select: { id: true, name: true } } },
+      },
+      headedCabinets: { select: { id: true, name: true } },
       person: { select: headPersonSelect },
       electionCandidacy: {
         select: {
@@ -7043,6 +8093,7 @@ export class PersonPrismaRepository implements IPersonRepository {
             id: true,
             positionType: true,
             title: true,
+            rankTitle: true,
             startDate: true,
             startDatePrecision: true,
             startEra: true,
@@ -7059,6 +8110,12 @@ export class PersonPrismaRepository implements IPersonRepository {
             dynastyOrdinal: true,
             notes: true,
             showPositionInfo: true,
+            administrationDepartment: {
+              select: { id: true, name: true, abbreviation: true },
+            },
+            militaryUnit: {
+              select: { id: true, name: true, abbreviation: true, unitType: true },
+            },
             positionDefinition: {
               select: {
                 id: true,

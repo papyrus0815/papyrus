@@ -47,8 +47,16 @@ const DEPARTMENT_INCLUDE = {
     include: { predecessor: { select: REF_SELECT } },
     orderBy: [{ year: 'asc' as const }, { createdAt: 'asc' as const }],
   },
+  militaryUnitSuccessors: {
+    include: {
+      successorUnit: {
+        select: { id: true, name: true, abbreviation: true, unitType: true },
+      },
+    },
+    orderBy: [{ year: 'asc' as const }, { createdAt: 'asc' as const }],
+  },
   militaryUnits: {
-    select: { id: true, name: true, unitType: true },
+    select: { id: true, name: true, abbreviation: true, unitType: true },
     orderBy: { name: 'asc' as const },
   },
 } satisfies Prisma.AdministrationDepartmentInclude
@@ -116,10 +124,13 @@ function toResponse(row: DepartmentRow): AdministrationDepartmentResponseDto {
     department: toRef(other),
   })
   const sortedPredecessors = [...(row.predecessorTransitions ?? [])].sort(
-    (a, b) => transitionSortKey(a) - transitionSortKey(b),
+    (left, right) => transitionSortKey(left) - transitionSortKey(right),
   )
   const sortedSuccessors = [...(row.successorTransitions ?? [])].sort(
-    (a, b) => transitionSortKey(a) - transitionSortKey(b),
+    (left, right) => transitionSortKey(left) - transitionSortKey(right),
+  )
+  const sortedMilitaryUnitSuccessors = [...(row.militaryUnitSuccessors ?? [])].sort(
+    (left, right) => transitionSortKey(left) - transitionSortKey(right),
   )
   return {
     id: row.id,
@@ -164,9 +175,24 @@ function toResponse(row: DepartmentRow): AdministrationDepartmentResponseDto {
     abolishedDate: toSignedDateString(row.abolishedEra, row.abolishedYear, row.abolishedMonth, row.abolishedDay),
     predecessors: sortedPredecessors.map((transition) => lineage(transition, transition.predecessor)),
     successors: sortedSuccessors.map((transition) => lineage(transition, transition.successor)),
+    militaryUnitSuccessors: sortedMilitaryUnitSuccessors.map((transition) => ({
+      transitionId: transition.id,
+      kind: transition.kind as DepartmentTransitionKindValue,
+      era: (transition.era as 'BC' | 'AD' | null) ?? null,
+      year: transition.year,
+      month: transition.month,
+      note: transition.note ?? null,
+      militaryUnit: {
+        id: transition.successorUnit.id,
+        name: transition.successorUnit.name,
+        abbreviation: transition.successorUnit.abbreviation ?? null,
+        unitType: transition.successorUnit.unitType ?? null,
+      },
+    })),
     militaryUnits: (row.militaryUnits ?? []).map((unit) => ({
       id: unit.id,
       name: unit.name,
+      abbreviation: unit.abbreviation ?? null,
       unitType: unit.unitType ?? null,
     })),
     createdAt: row.createdAt.toISOString(),
@@ -433,6 +459,10 @@ export class AdministrationDepartmentService {
         positionDefinition: {
           select: { id: true, title: true, positionType: true, isMonarchical: true },
         },
+        party: { select: { id: true, name: true, shortName: true, brandColor: true } },
+        cabinetMemberships: {
+          include: { cabinet: { select: { id: true, name: true } } },
+        },
         country: { select: { id: true, name: true } },
         historicalCountry: { select: { id: true, name: true } },
       },
@@ -442,7 +472,7 @@ export class AdministrationDepartmentService {
       personId: row.personId,
       ordinal: row.ordinal,
       subTermNumber: row.subTermNumber ?? null,
-      isMonarchical: Boolean((row as any).positionDefinition?.isMonarchical),
+      isMonarchical: Boolean(row.positionDefinition?.isMonarchical),
       startDate:
         toSignedDateString(row.startEra, row.startYear, row.startMonth, row.startDay) ??
         row.startDate?.toISOString() ??
@@ -461,12 +491,16 @@ export class AdministrationDepartmentService {
       endMonth: row.endMonth ?? null,
       endDay: row.endDay ?? null,
       title: row.title,
-      cabinetId: row.cabinetId ?? null,
+      rankTitle: row.rankTitle ?? null,
+      partyId: row.partyId ?? null,
+      party: row.party ?? null,
+      cabinetId: row.cabinetId ?? row.cabinetMemberships?.[0]?.cabinetId ?? null,
+      cabinets: (row.cabinetMemberships ?? []).map((membership) => membership.cabinet),
       administrationDepartmentId: row.administrationDepartmentId ?? null,
-      positionDefinition: (row as any).positionDefinition,
-      person: (row as any).person,
-      country: (row as any).country,
-      historicalCountry: (row as any).historicalCountry,
+      positionDefinition: row.positionDefinition,
+      person: row.person,
+      country: row.country,
+      historicalCountry: row.historicalCountry,
     }))
   }
 
@@ -569,8 +603,9 @@ export class AdministrationDepartmentService {
         )
       }
     }
+    let cascadeDescendantIds: string[] = []
     if (body.countryId !== undefined || body.historicalCountryId !== undefined) {
-      await this.assertCompatibleDependentsOnCountryChange(
+      cascadeDescendantIds = await this.assertCompatibleDependentsOnCountryChange(
         id,
         effectiveCountryId,
         nextHistoricalCountryId,
@@ -640,10 +675,14 @@ export class AdministrationDepartmentService {
       nextHistoricalCountryId !== current.historicalCountryId
     const categoryChanged =
       body.categoryId !== undefined && body.categoryId !== current.categoryId
-    if (countryChanged && this.prisma.administrationDepartment?.updateMany) {
+    if (
+      countryChanged &&
+      cascadeDescendantIds.length > 0 &&
+      this.prisma.administrationDepartment?.updateMany
+    ) {
       await this.prisma.administrationDepartment.updateMany({
         where: {
-          parentId: id,
+          id: { in: cascadeDescendantIds },
           countryId: current.countryId ?? null,
           historicalCountryId: current.historicalCountryId ?? null,
         },
@@ -664,6 +703,20 @@ export class AdministrationDepartmentService {
         prevCategoryId: current.categoryId ?? null,
         nextCategoryId: body.categoryId !== undefined ? (body.categoryId ?? null) : (current.categoryId ?? null),
       })
+      if (countryChanged && cascadeDescendantIds.length > 0) {
+        for (const descendantId of cascadeDescendantIds) {
+          await this.syncDependentPositionDefinitions(descendantId, {
+            countryChanged: true,
+            prevCountryId: current.countryId ?? null,
+            prevHistoricalCountryId: current.historicalCountryId ?? null,
+            effectiveCountryId: effectiveCountryId ?? null,
+            effectiveHistoricalCountryId: nextHistoricalCountryId ?? null,
+            categoryChanged: false,
+            prevCategoryId: null,
+            nextCategoryId: null,
+          })
+        }
+      }
     }
     await this.notificationService.notifyAdministrationDepartment(
       row.name,
@@ -722,7 +775,16 @@ export class AdministrationDepartmentService {
     if (predecessorId === body.successorId) {
       throw new BadRequestException('같은 기관을 자기 후신으로 둘 수 없습니다.')
     }
-    await this.assertCompatibleTransitionDepartments(predecessorId, body.successorId)
+    this.assertValidTransitionDate(body.year, body.month)
+    await this.assertCompatibleTransitionDepartments(
+      predecessorId,
+      body.successorId,
+      {
+        era: (body.era ?? (body.year != null ? 'AD' : null)) as Era | null,
+        year: body.year ?? null,
+        month: body.month ?? null,
+      },
+    )
     await this.assertNoLineageCycle(predecessorId, body.successorId)
     const exists = await this.prisma.administrationDepartmentTransition.findFirst({
       where: { predecessorId, successorId: body.successorId },
@@ -745,16 +807,58 @@ export class AdministrationDepartmentService {
   async updateTransition(transitionId: string, body: UpdateDepartmentTransitionDto): Promise<void> {
     const current = await this.prisma.administrationDepartmentTransition.findUnique({ where: { id: transitionId } })
     if (!current) throw new NotFoundException('계보 연결을 찾을 수 없습니다.')
+    const nextYear = body.year !== undefined ? body.year : current.year
+    const nextMonth =
+      body.year === null
+        ? null
+        : body.month !== undefined
+          ? body.month
+          : current.month
+    const nextEra =
+      nextYear == null
+        ? null
+        : ((body.era !== undefined ? body.era : current.era) ?? 'AD')
+    this.assertValidTransitionDate(nextYear, nextMonth)
+    if (body.year !== undefined || body.month !== undefined || body.era !== undefined) {
+      await this.assertCompatibleTransitionDepartments(
+        current.predecessorId,
+        current.successorId,
+        {
+          era: nextEra as Era | null,
+          year: nextYear ?? null,
+          month: nextMonth ?? null,
+        },
+      )
+    }
     await this.prisma.administrationDepartmentTransition.update({
       where: { id: transitionId },
       data: {
         ...(body.kind !== undefined && { kind: body.kind }),
-        ...(body.era !== undefined && { era: body.era as Era | null }),
-        ...(body.year !== undefined && { year: body.year }),
-        ...(body.month !== undefined && { month: body.month }),
+        ...(body.era !== undefined || body.year !== undefined
+          ? { era: nextEra as Era | null }
+          : {}),
+        ...(body.year !== undefined && { year: nextYear }),
+        ...(body.month !== undefined || body.year === null
+          ? { month: nextMonth }
+          : {}),
         ...(body.note !== undefined && { note: body.note?.trim() || null }),
       },
     })
+  }
+
+  private assertValidTransitionDate(
+    year: number | null | undefined,
+    month: number | null | undefined,
+  ): void {
+    if (year != null && (!Number.isInteger(year) || year < 1)) {
+      throw new BadRequestException('계보 전환 연도는 1 이상의 정수여야 합니다.')
+    }
+    if (month != null && (!Number.isInteger(month) || month < 1 || month > 12)) {
+      throw new BadRequestException('계보 전환 월은 1~12 사이여야 합니다.')
+    }
+    if (year == null && month != null) {
+      throw new BadRequestException('계보 전환 연도 없이 월만 입력할 수 없습니다.')
+    }
   }
 
   async deleteTransition(transitionId: string): Promise<void> {
@@ -1141,7 +1245,7 @@ export class AdministrationDepartmentService {
       prevCountryId: string | null
       prevHistoricalCountryId: string | null
     },
-  ): Promise<void> {
+  ): Promise<string[]> {
     const targetAxis = {
       countryId: countryId ?? null,
       historicalCountryId: historicalCountryId ?? null,
@@ -1183,7 +1287,12 @@ export class AdministrationDepartmentService {
           })
         : Promise.resolve([]),
     ])
+    const cascadeDescendantIds: string[] = []
+    const visitedIds = new Set<string>([id])
+    let frontier: string[] = []
     for (const child of children) {
+      if (visitedIds.has(child.id)) continue
+      visitedIds.add(child.id)
       const sharesPrevParentAxis =
         prevAxis != null &&
         (child.countryId ?? null) === prevAxis.prevCountryId &&
@@ -1196,8 +1305,97 @@ export class AdministrationDepartmentService {
           `하위 기관(${child.name})의 소속 국가·시대와 변경하려는 소속 국가·시대가 일치하지 않습니다. 하위 기관을 먼저 옮겨 주세요.`,
         )
       }
+      if (sharesPrevParentAxis) {
+        cascadeDescendantIds.push(child.id)
+        frontier.push(child.id)
+      }
     }
-    for (const unit of militaryUnits ?? []) {
+    while (frontier.length > 0) {
+      const subChildren =
+        (await this.prisma.administrationDepartment.findMany({
+          where: { parentId: { in: frontier } },
+          select: { id: true, name: true, countryId: true, historicalCountryId: true },
+        })) ?? []
+      const nextFrontier: string[] = []
+      for (const subChild of subChildren) {
+        if (visitedIds.has(subChild.id)) continue
+        visitedIds.add(subChild.id)
+        const sharesPrevParentAxis =
+          prevAxis != null &&
+          (subChild.countryId ?? null) === prevAxis.prevCountryId &&
+          (subChild.historicalCountryId ?? null) === prevAxis.prevHistoricalCountryId
+        const compatible = await this.areCountryAxesCompatible(targetAxis, subChild, {
+          allowSiblingHistoricalEras: sharesPrevParentAxis,
+        })
+        if (!compatible) {
+          throw new BadRequestException(
+            `하위 기관(${subChild.name})의 소속 국가·시대와 변경하려는 소속 국가·시대가 일치하지 않습니다. 하위 기관을 먼저 옮겨 주세요.`,
+          )
+        }
+        if (sharesPrevParentAxis) {
+          cascadeDescendantIds.push(subChild.id)
+          nextFrontier.push(subChild.id)
+        }
+      }
+      frontier = nextFrontier
+    }
+    const affectedDeptIdSet = new Set<string>([id, ...cascadeDescendantIds])
+    let descTenures: Array<{ id: string; countryId: string | null; historicalCountryId: string | null }> = []
+    let descTransitions: Array<{
+      predecessorId: string
+      successorId: string
+      predecessor: { id: string; name: string; countryId: string | null; historicalCountryId: string | null } | null
+      successor: { id: string; name: string; countryId: string | null; historicalCountryId: string | null } | null
+    }> = []
+    let descDefinitions: Array<{ id: string; title: string }> = []
+    let descMilitaryUnits: Array<{
+      id: string
+      name: string
+      countryId: string | null
+      historicalCountryId: string | null
+    }> = []
+    if (cascadeDescendantIds.length > 0) {
+      ;[descTenures, descTransitions, descDefinitions, descMilitaryUnits] = await Promise.all([
+        this.prisma.governmentPositionTenure.findMany({
+          where: { administrationDepartmentId: { in: cascadeDescendantIds } },
+          select: { id: true, countryId: true, historicalCountryId: true },
+        }),
+        this.prisma.administrationDepartmentTransition?.findMany
+          ? this.prisma.administrationDepartmentTransition.findMany({
+              where: {
+                OR: [
+                  { predecessorId: { in: cascadeDescendantIds } },
+                  { successorId: { in: cascadeDescendantIds } },
+                ],
+              },
+              select: {
+                predecessorId: true,
+                successorId: true,
+                predecessor: {
+                  select: { id: true, name: true, countryId: true, historicalCountryId: true },
+                },
+                successor: {
+                  select: { id: true, name: true, countryId: true, historicalCountryId: true },
+                },
+              },
+            })
+          : Promise.resolve([]),
+        this.prisma.governmentPositionDefinition?.findMany
+          ? this.prisma.governmentPositionDefinition.findMany({
+              where: { administrationDepartmentId: { in: cascadeDescendantIds } },
+              select: { id: true, title: true },
+            })
+          : Promise.resolve([]),
+        (this.prisma as any).militaryUnit?.findMany
+          ? (this.prisma as any).militaryUnit.findMany({
+              where: { administrationDepartmentId: { in: cascadeDescendantIds } },
+              select: { id: true, name: true, countryId: true, historicalCountryId: true },
+            })
+          : Promise.resolve([]),
+      ])
+    }
+    const allMilitaryUnits = [...(militaryUnits ?? []), ...(descMilitaryUnits ?? [])]
+    for (const unit of allMilitaryUnits) {
       const compatible = await this.areCountryAxesCompatible(targetAxis, unit, {
         allowSiblingHistoricalEras: false,
       })
@@ -1207,18 +1405,28 @@ export class AdministrationDepartmentService {
         )
       }
     }
-    for (const tenure of tenures) {
+    const allTenures = [...tenures, ...(descTenures ?? [])]
+    for (const tenure of allTenures) {
       const compatible = await this.areCountryAxesCompatible(targetAxis, tenure, {
         allowSiblingHistoricalEras: false,
       })
       if (!compatible) {
         throw new BadRequestException(
-          '이미 이 기관에 연결된 재임 기록이 변경하려는 소속 국가·시대와 일치하지 않습니다. 재임 기록을 먼저 정리해 주세요.',
+          '이미 이 기관(또는 함께 이동할 하위 기관)에 연결된 재임 기록이 변경하려는 소속 국가·시대와 일치하지 않습니다. 재임 기록을 먼저 정리해 주세요.',
         )
       }
     }
-    for (const t of transitions ?? []) {
-      const other = t.predecessorId === id ? t.successor : t.predecessor
+    const allTransitions = [...(transitions ?? []), ...(descTransitions ?? [])]
+    for (const trans of allTransitions) {
+      if (
+        affectedDeptIdSet.has(trans.predecessorId) &&
+        affectedDeptIdSet.has(trans.successorId)
+      ) {
+        continue
+      }
+      const other = affectedDeptIdSet.has(trans.predecessorId)
+        ? trans.successor
+        : trans.predecessor
       if (!other) continue
       const compatible = await this.areCountryAxesCompatible(targetAxis, other, {
         allowSiblingHistoricalEras: true,
@@ -1229,7 +1437,8 @@ export class AdministrationDepartmentService {
         )
       }
     }
-    const defIds = (definitions ?? []).map((d) => d.id)
+    const allDefinitions = [...(definitions ?? []), ...(descDefinitions ?? [])]
+    const defIds = allDefinitions.map((defItem) => defItem.id)
     if (defIds.length > 0) {
       const [defTenures, defPoliticalSystems] = await Promise.all([
         this.prisma.governmentPositionTenure.findMany({
@@ -1269,20 +1478,38 @@ export class AdministrationDepartmentService {
         }
       }
     }
+    return cascadeDescendantIds
   }
 
   private async assertCompatibleTransitionDepartments(
     predecessorId: string,
     successorId: string,
+    transitionDate?: { era: Era | null; year: number | null; month: number | null },
   ): Promise<void> {
     const [predecessor, successor] = await Promise.all([
       this.prisma.administrationDepartment.findUnique({
         where: { id: predecessorId },
-        select: { id: true, name: true, countryId: true, historicalCountryId: true },
+        select: {
+          id: true,
+          name: true,
+          countryId: true,
+          historicalCountryId: true,
+          establishedEra: true,
+          establishedYear: true,
+          establishedMonth: true,
+        },
       }),
       this.prisma.administrationDepartment.findUnique({
         where: { id: successorId },
-        select: { id: true, name: true, countryId: true, historicalCountryId: true },
+        select: {
+          id: true,
+          name: true,
+          countryId: true,
+          historicalCountryId: true,
+          abolishedEra: true,
+          abolishedYear: true,
+          abolishedMonth: true,
+        },
       }),
     ])
     if (!predecessor) throw new NotFoundException('기관을 찾을 수 없습니다.')
@@ -1294,6 +1521,42 @@ export class AdministrationDepartmentService {
       throw new BadRequestException(
         `서로 다른 국가의 기관(${predecessor.name} → ${successor.name})끼리는 계보를 연결할 수 없습니다.`,
       )
+    }
+    if (transitionDate && transitionDate.year != null) {
+      const transStartKey = structuredDateEndKey(
+        transitionDate.era,
+        transitionDate.year,
+        transitionDate.month,
+        null,
+      )
+      const transEndKey = structuredDateKey(
+        transitionDate.era,
+        transitionDate.year,
+        transitionDate.month,
+        null,
+      )
+      const predEstKey = structuredDateKey(
+        predecessor.establishedEra ?? null,
+        predecessor.establishedYear ?? null,
+        predecessor.establishedMonth ?? null,
+        null,
+      )
+      if (predEstKey != null && transStartKey != null && transStartKey < predEstKey) {
+        throw new BadRequestException(
+          `계보 전환 시점이 전신 기관(${predecessor.name})의 설립 시점보다 앞설 수 없습니다.`,
+        )
+      }
+      const succAbolKey = structuredDateEndKey(
+        successor.abolishedEra ?? null,
+        successor.abolishedYear ?? null,
+        successor.abolishedMonth ?? null,
+        null,
+      )
+      if (succAbolKey != null && transEndKey != null && transEndKey > succAbolKey) {
+        throw new BadRequestException(
+          `계보 전환 시점이 후신 기관(${successor.name})의 폐지 시점보다 뒤일 수 없습니다.`,
+        )
+      }
     }
   }
 

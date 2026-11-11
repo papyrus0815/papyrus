@@ -45,6 +45,7 @@ import { useTradeRecords } from '@/entities/trade/api'
 import { CountryCompaniesTabSection } from './country-companies-tab-section.widget'
 import { CountryElectionsSection } from './country-elections-section.widget'
 import { CountryLawsSection } from './country-laws-section.widget'
+import { CountryMilitarySection } from './country-military-section.widget'
 import { CountryTradeSection } from './country-trade-section.widget'
 import { EthnicitySection } from './ethnicity-section.widget'
 import { EventsTimelineSection } from './events-timeline-section.widget'
@@ -92,6 +93,7 @@ import {
   IconGlobe,
   IconHistory,
   IconLandmark,
+  IconMilitary,
   IconPin,
   IconScroll,
   IconTrade,
@@ -122,7 +124,8 @@ export type HistoricalCountryTab =
   | 'figures' // 주요 인물
   | 'heads' // 수장 (국왕, 황제 등)
   | 'regions' // 행정구역 (조선 팔도 등)
-  | 'government' // 행정조직 (관직 정의, 행정기구)
+  | 'government' // 정부·행정
+  | 'military' // 군사 사령부·편제
   | 'elections' // 선거·투표 (역사 국가 맥락)
   | 'laws' // 법령 카탈로그
   | 'ethnicity' // 구성 민족
@@ -145,6 +148,7 @@ type HistoricalSyncedTab =
   | 'heads'
   | 'regions'
   | 'government'
+  | 'military'
   | 'elections'
   | 'laws'
   | 'ethnicity'
@@ -181,6 +185,7 @@ const SYNCED_TAB_SET = new Set<HistoricalCountryTab>([
   'figures',
   'regions',
   'government',
+  'military',
   'elections',
   'laws',
   'ethnicity',
@@ -205,6 +210,7 @@ export function HistoricalCountryDetail({
   const [searchParams, setSearchParams] = useSearchParams()
   const queryTabParam = searchParams.get('tab') as HistoricalCountryTab | null
   const [activeTab, setActiveTab] = useState<HistoricalCountryTab>(() => {
+    if (initialTab === 'heads' || queryTabParam === 'heads') return 'government'
     if (initialTab) return initialTab
     if (queryTabParam && LOCAL_QUERY_TAB_SET.has(queryTabParam)) {
       return queryTabParam
@@ -212,8 +218,10 @@ export function HistoricalCountryDetail({
     return 'overview'
   })
   const [governmentSubTab, setGovernmentSubTab] = useState<
-    'system' | 'heads' | 'cabinets' | 'ministries' | 'military'
-  >('system')
+    'system' | 'heads' | 'cabinets' | 'ministries'
+  >(() =>
+    initialTab === 'heads' || queryTabParam === 'heads' ? 'heads' : 'heads',
+  )
   const [focusEventsCentury, setFocusEventsCentury] = useState<number | null>(
     null,
   )
@@ -298,7 +306,10 @@ export function HistoricalCountryDetail({
         : dashboardStats.treatyCount,
       government: dashboardStats.loading.administration
         ? undefined
-        : dashboardStats.administrationCount,
+        : dashboardStats.administrationCount + rulersInSpanCount,
+      military: dashboardStats.loading.military
+        ? undefined
+        : dashboardStats.militaryCount,
       elections: dashboardStats.loading.elections
         ? undefined
         : dashboardStats.electionCount,
@@ -320,6 +331,12 @@ export function HistoricalCountryDetail({
   const handleTabChange = (tab: HistoricalCountryTab) => {
     if (tab !== 'events') {
       setFocusEventsCentury(null)
+    }
+    if (tab === 'heads') {
+      setGovernmentSubTab('heads')
+      setActiveTab('government')
+      onTabChangeToUrl?.('government')
+      return
     }
     setActiveTab(tab)
     if (SYNCED_TAB_SET.has(tab)) {
@@ -357,6 +374,11 @@ export function HistoricalCountryDetail({
 
   // URL에서 직접 진입·뒤로가기 시 탭 동기화 — initialTab이 있으면 그 탭, 없으면 synced 탭에 머물러 있을 때만 overview로 복귀.
   useEffect(() => {
+    if (initialTab === 'heads' || queryTabParam === 'heads') {
+      setGovernmentSubTab('heads')
+      setActiveTab('government')
+      return
+    }
     if (initialTab) {
       setActiveTab(initialTab)
       return
@@ -477,6 +499,10 @@ export function HistoricalCountryDetail({
                         onEdit={onEdit ? () => onEdit(country) : undefined}
                         onGoToTab={handleTabChange}
                         onOpenGovernmentSubTab={(subTab) => {
+                          if (subTab === 'military') {
+                            handleTabChange('military')
+                            return
+                          }
                           setGovernmentSubTab(subTab)
                           handleTabChange('government')
                         }}
@@ -513,13 +539,16 @@ export function HistoricalCountryDetail({
                   )}
                   {activeTab === 'government' && (
                     /*
-                      역사국가도 정체·역대 수반·행정부(내각)·중앙부처(6조/내각 각 성 등)·행정기구·직위 정의를
-                      현대 국가와 동일한 통합 행정조직 섹션으로 관리한다.
+                      역사국가도 정체·역대 수반·행정부(내각)·중앙부처(6조/내각 각 성 등)를
+                      현대 국가와 동일한 통합 정부·행정 섹션으로 관리한다.
                     */
                     <GovernmentInfoSection
                       country={country}
                       initialContentTab={governmentSubTab}
                     />
+                  )}
+                  {activeTab === 'military' && (
+                    <CountryMilitarySection country={country} />
                   )}
                   {activeTab === 'elections' && (
                     <div
@@ -720,13 +749,13 @@ const HISTORICAL_TABS: ReadonlyArray<{
   // id는 URL·동기화 탭 키라 그대로 두고 이름만 — 현대 국가 지면도 '대시보드'다
   { id: 'overview', label: '대시보드', groupEnd: true },
   { id: 'events', label: '주요 사건' },
-  { id: 'figures', label: '인물' },
-  { id: 'heads', label: '역대 수반', groupEnd: true },
+  { id: 'figures', label: '인물', groupEnd: true },
   { id: 'succession', label: '계승' },
   { id: 'membership', label: '소속·구성' },
   { id: 'relation', label: '국가 관계' },
   { id: 'treaty', label: '조약', groupEnd: true },
-  { id: 'government', label: '행정조직' },
+  { id: 'government', label: '정부·행정' },
+  { id: 'military', label: '군사' },
   { id: 'regions', label: '행정구역' },
   { id: 'laws', label: '법령' },
   { id: 'ethnicity', label: '민족', groupEnd: true },
@@ -1067,7 +1096,20 @@ function HistoricalOverviewSection({
       delta: 0,
       isLoading: stats.loading.administration,
       icon: <IconLandmark />,
-      onClick: () => onGoToTab('government'),
+      onClick: () =>
+        onOpenGovernmentSubTab
+          ? onOpenGovernmentSubTab('ministries')
+          : onGoToTab('government'),
+    },
+    {
+      key: 'military',
+      label: '군사',
+      unit: '개',
+      value: stats.militaryCount,
+      delta: 0,
+      isLoading: stats.loading.military,
+      icon: <IconMilitary />,
+      onClick: () => onGoToTab('military'),
     },
     {
       key: 'regions',
@@ -1155,6 +1197,14 @@ function HistoricalOverviewSection({
         'founding-note-trigger-founding',
       ) as HTMLButtonElement | null
       trigger?.click()
+      return
+    }
+    if (
+      target === 'government' &&
+      field.governmentSubTab &&
+      onOpenGovernmentSubTab
+    ) {
+      onOpenGovernmentSubTab(field.governmentSubTab)
       return
     }
     onGoToTab(target)
@@ -2680,7 +2730,7 @@ function HistoricalFiguresSection({
       person as PersonResponseDto & {
         governmentTenures?: Array<{
           title?: string | null
-          positionDefinition?: { name?: string | null } | null
+          positionDefinition?: { title?: string | null; name?: string | null } | null
         }>
       }
     ).governmentTenures
@@ -2695,16 +2745,41 @@ function HistoricalFiguresSection({
       jobTitle?: string | null
       governmentTenures?: Array<{
         title?: string | null
-        positionDefinition?: { name?: string | null } | null
+        rankTitle?: string | null
+        positionDefinition?: { title?: string | null; name?: string | null } | null
+        administrationDepartment?: {
+          name?: string | null
+          abbreviation?: string | null
+        } | null
+        militaryUnit?: {
+          name?: string | null
+          abbreviation?: string | null
+        } | null
       }>
     }
     const firstTenure = extended.governmentTenures?.[0]
-    return (
-      firstTenure?.title?.trim() ||
-      firstTenure?.positionDefinition?.name?.trim() ||
-      extended.jobTitle?.trim() ||
-      null
-    )
+    if (firstTenure) {
+      const rawRole =
+        firstTenure.title?.trim() ||
+        firstTenure.positionDefinition?.title?.trim() ||
+        firstTenure.positionDefinition?.name?.trim() ||
+        ''
+      const institutionLabel =
+        firstTenure.militaryUnit?.abbreviation?.trim() ||
+        firstTenure.militaryUnit?.name?.trim() ||
+        firstTenure.administrationDepartment?.abbreviation?.trim() ||
+        firstTenure.administrationDepartment?.name?.trim() ||
+        ''
+      const withInst =
+        institutionLabel && rawRole && !rawRole.includes(institutionLabel)
+          ? `${institutionLabel} ${rawRole}`
+          : rawRole || institutionLabel
+      const rankSuffix = firstTenure.rankTitle?.trim()
+        ? ` · ${firstTenure.rankTitle.trim()}`
+        : ''
+      if (withInst) return `${withInst}${rankSuffix}`
+    }
+    return extended.jobTitle?.trim() || null
   }
 
   const formatPersonLifespan = (person: PersonResponseDto): string => {

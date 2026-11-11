@@ -610,6 +610,32 @@ const FormActions = styled.div`
   border-top: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f3f4f6'};
 `
 
+const DEFAULT_RANK_BY_POSITION_TYPE: Record<string, number> = {
+  HEAD_OF_STATE: 1,
+  HEAD_OF_GOVERNMENT: 1,
+  DEPUTY_HEAD_OF_STATE: 2,
+  REGENT: 2,
+  HEIR_APPARENT: 2,
+  CABINET_MINISTER: 2,
+  VICE_MINISTER: 3,
+  MILITARY_COMMANDER: 3,
+  DIPLOMATIC_POST: 3,
+  LOCAL_GOVERNMENT: 3,
+  LEGISLATOR: 3,
+  JUDICIARY: 3,
+  SPECIAL_POSITION: 4,
+  ROYAL_NOBLE_TITLE: 3,
+  OTHER: 5,
+}
+
+const RANK_PRESET_OPTIONS: ReadonlyArray<{ rank: number; label: string }> = [
+  { rank: 1, label: '1 · 최고 (원수·총리·핵심)' },
+  { rank: 2, label: '2 · 상급 (부원수·주요장관·원수)' },
+  { rank: 3, label: '3 · 정무·지휘 (장관·참모총장·대사)' },
+  { rank: 4, label: '4 · 차관·차장급' },
+  { rank: 5, label: '5 · 실무·기타' },
+]
+
 const emptyForm = (
   categoryId?: string | null,
   organizationId?: string | null,
@@ -620,7 +646,7 @@ const emptyForm = (
   titleLocal: null,
   positionType: 'CABINET_MINISTER',
   description: null,
-  rank: null,
+  rank: 2,
   isMonarchical: false,
   categoryId: categoryId ?? null,
   administrationDepartmentId: administrationDepartmentId ?? null,
@@ -661,6 +687,11 @@ export function PositionDefinitionsSection({
   const [categoryModalOpen, setCategoryModalOpen] = useState(false)
   const [departmentModalOpen, setDepartmentModalOpen] = useState(false)
   const [scopeCountryModalOpen, setScopeCountryModalOpen] = useState(false)
+  const [inlineDeptOpen, setInlineDeptOpen] = useState(false)
+  const [inlineDeptName, setInlineDeptName] = useState('')
+  const [inlineDeptNameEn, setInlineDeptNameEn] = useState('')
+  const [inlineDeptKind, setInlineDeptKind] = useState<'MINISTRY' | 'AGENCY' | 'ROYAL_HOUSEHOLD' | 'COLONIAL_GOVERNMENT' | 'OTHER'>('MINISTRY')
+  const [inlineDeptSaving, setInlineDeptSaving] = useState(false)
   const [form, setForm] = useState<CreateGovernmentPositionDefinitionDto>(
     emptyForm(
       fixedCategoryId,
@@ -692,32 +723,54 @@ export function PositionDefinitionsSection({
     return { modernIds, historicalIds }
   }, [country])
 
+  const isGlobalDefinition = (def: GovernmentPositionDefinition) =>
+    (def.scopes ?? []).length === 0 &&
+    !def.administrationDepartmentId &&
+    !def.organizationId
+
   const isScopedToCurrentCountry = (def: GovernmentPositionDefinition) => {
     const scopes = def.scopes ?? []
-    if (scopes.length === 0) return false
-    return scopes.some(
-      (s) =>
-        (s.countryId && matchingCountryIds.modernIds.has(s.countryId)) ||
-        (s.historicalCountryId &&
-          matchingCountryIds.historicalIds.has(s.historicalCountryId)),
+    const matchesScope = scopes.some((scopeItem) =>
+      scopeItem.historicalCountryId
+        ? matchingCountryIds.historicalIds.has(scopeItem.historicalCountryId)
+        : Boolean(
+            scopeItem.countryId &&
+              matchingCountryIds.modernIds.has(scopeItem.countryId),
+          ),
     )
+    if (matchesScope) return true
+    const dept = def.administrationDepartment
+    if (dept) {
+      return dept.historicalCountryId
+        ? matchingCountryIds.historicalIds.has(dept.historicalCountryId)
+        : Boolean(
+            dept.countryId &&
+              matchingCountryIds.modernIds.has(dept.countryId),
+          )
+    }
+    return false
   }
 
   const baseDefinitions = useMemo(
     () =>
-      (allDefinitions as GovernmentPositionDefinition[]).filter((d) => {
-        if (fixedAdministrationDepartmentId) {
-          return (
-            d.administrationDepartmentId === fixedAdministrationDepartmentId ||
-            (!d.administrationDepartmentId &&
-              Boolean(fixedCategoryId) &&
-              d.categoryId === fixedCategoryId)
-          )
-        }
-        if (fixedCategoryId) return d.categoryId === fixedCategoryId
-        if (fixedOrganizationId) return d.organizationId === fixedOrganizationId
-        return true
-      }),
+      (allDefinitions as Array<GovernmentPositionDefinition & { isGeneric?: boolean | null }>).filter(
+        (defItem) => {
+          if (defItem.isGeneric === true) return false
+          if (fixedAdministrationDepartmentId) {
+            return (
+              defItem.administrationDepartmentId ===
+                fixedAdministrationDepartmentId ||
+              (!defItem.administrationDepartmentId &&
+                Boolean(fixedCategoryId) &&
+                defItem.categoryId === fixedCategoryId)
+            )
+          }
+          if (fixedCategoryId) return defItem.categoryId === fixedCategoryId
+          if (fixedOrganizationId)
+            return defItem.organizationId === fixedOrganizationId
+          return true
+        },
+      ),
     [
       allDefinitions,
       fixedAdministrationDepartmentId,
@@ -737,8 +790,7 @@ export function PositionDefinitionsSection({
       'ROYAL_NOBLE_TITLE',
     ])
     for (const definitionItem of baseDefinitions) {
-      const scopes = definitionItem.scopes ?? []
-      const isGlobal = scopes.length === 0
+      const isGlobal = isGlobalDefinition(definitionItem)
       const isCurrent = !isGlobal && isScopedToCurrentCountry(definitionItem)
       if (isGlobal) {
         globalOnly += 1
@@ -764,12 +816,11 @@ export function PositionDefinitionsSection({
   }, [baseDefinitions, country, matchingCountryIds])
 
   const definitions = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
-    const filtered = baseDefinitions.filter((d) => {
+    const queryText = searchQuery.trim().toLowerCase()
+    const filtered = baseDefinitions.filter((defItem) => {
       if (country) {
-        const scopes = d.scopes ?? []
-        const isGlobal = scopes.length === 0
-        const isCurrent = isScopedToCurrentCountry(d)
+        const isGlobal = isGlobalDefinition(defItem)
+        const isCurrent = isScopedToCurrentCountry(defItem)
         if (scopeFilter === 'applicable' && !isGlobal && !isCurrent) {
           return false
         }
@@ -780,29 +831,29 @@ export function PositionDefinitionsSection({
           return false
         }
       }
-      if (q) {
+      if (queryText) {
         const hay = [
-          d.title,
-          d.titleEn ?? '',
-          d.titleLocal ?? '',
-          d.category?.name ?? '',
-          d.administrationDepartment?.name ?? '',
-          d.organization?.name ?? '',
+          defItem.title,
+          defItem.titleEn ?? '',
+          defItem.titleLocal ?? '',
+          defItem.category?.name ?? '',
+          defItem.administrationDepartment?.name ?? '',
+          defItem.organization?.name ?? '',
         ]
           .join(' ')
           .toLowerCase()
-        if (!hay.includes(q)) return false
+        if (!hay.includes(queryText)) return false
       }
       return true
     })
 
     if (!country) return filtered
     // 현재 국가 전용 직위를 전역 직위보다 먼저 배치해 국가별 직위 파악을 돕는다
-    return [...filtered].sort((a, b) => {
-      const aCurrent = isScopedToCurrentCountry(a) ? 0 : 1
-      const bCurrent = isScopedToCurrentCountry(b) ? 0 : 1
-      if (aCurrent !== bCurrent) return aCurrent - bCurrent
-      return (a.rank ?? 999) - (b.rank ?? 999)
+    return [...filtered].sort((leftDef, rightDef) => {
+      const leftCurrent = isScopedToCurrentCountry(leftDef) ? 0 : 1
+      const rightCurrent = isScopedToCurrentCountry(rightDef) ? 0 : 1
+      if (leftCurrent !== rightCurrent) return leftCurrent - rightCurrent
+      return (leftDef.rank ?? 999) - (rightDef.rank ?? 999)
     })
   }, [baseDefinitions, country, scopeFilter, searchQuery, matchingCountryIds])
 
@@ -876,15 +927,22 @@ export function PositionDefinitionsSection({
   }
 
   const openForm = (def?: GovernmentPositionDefinition | null) => {
+    setInlineDeptOpen(false)
+    setInlineDeptName('')
+    setInlineDeptNameEn('')
     if (def) {
       setEditingId(def.id)
+      const hydratedRank =
+        def.rank != null && def.rank > 0 && def.rank < 999
+          ? def.rank
+          : (DEFAULT_RANK_BY_POSITION_TYPE[def.positionType] ?? 3)
       setForm({
         title: def.title,
         titleEn: def.titleEn ?? null,
         titleLocal: def.titleLocal ?? null,
         positionType: def.positionType,
         description: def.description ?? null,
-        rank: def.rank ?? null,
+        rank: hydratedRank,
         isMonarchical: def.isMonarchical ?? false,
         categoryId: def.categoryId ?? fixedCategoryId ?? null,
         administrationDepartmentId:
@@ -912,6 +970,46 @@ export function PositionDefinitionsSection({
       )
     }
     setView('form')
+  }
+
+  const handleCreateInlineDept = async () => {
+    if (!country?.id) return
+    const trimmedName = inlineDeptName.trim()
+    if (!trimmedName) {
+      notify.error('기관·부처명을 입력해 주세요.')
+      return
+    }
+    setInlineDeptSaving(true)
+    try {
+      const created = await administrationDepartmentApi.create({
+        ...(country.type === 'historical'
+          ? { historicalCountryId: country.id }
+          : { countryId: country.id }),
+        name: trimmedName,
+        nameEn: inlineDeptNameEn.trim() || undefined,
+        kind: inlineDeptKind,
+        categoryId: form.categoryId || null,
+      })
+      await queryClient.invalidateQueries({
+        queryKey: ['administration-departments'],
+      })
+      setForm((prevForm) => ({
+        ...prevForm,
+        administrationDepartmentId: created.id,
+      }))
+      setInlineDeptName('')
+      setInlineDeptNameEn('')
+      setInlineDeptOpen(false)
+      notify.success(`「${trimmedName}」 부처·기관을 생성하고 선택했습니다.`)
+    } catch (err: any) {
+      notify.error(
+        err?.response?.data?.message ||
+          err?.message ||
+          '부처·기관 생성에 실패했습니다.',
+      )
+    } finally {
+      setInlineDeptSaving(false)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -945,8 +1043,10 @@ export function PositionDefinitionsSection({
       }
       refetch()
       setView('list')
-    } catch (err: any) {
-      notify.error(err?.message || '저장에 실패했습니다.')
+    } catch (err: unknown) {
+      notify.error(
+        err instanceof Error ? err.message : '저장에 실패했습니다.',
+      )
     }
   }
 
@@ -963,16 +1063,21 @@ export function PositionDefinitionsSection({
       await personCareerApi.deletePositionDefinition(id)
       notify.success('삭제되었습니다.')
       refetch()
-    } catch (err: any) {
-      notify.error(err?.message || '삭제에 실패했습니다.')
+    } catch (err: unknown) {
+      notify.error(
+        err instanceof Error ? err.message : '삭제에 실패했습니다.',
+      )
     }
   }
 
   const positionTypeLabel =
-    POSITION_TYPE_OPTIONS.find((o) => o.value === form.positionType)?.label ?? form.positionType
-  const selectedCategory = categories.find((c) => c.id === form.categoryId)
+    POSITION_TYPE_OPTIONS.find((optItem) => optItem.value === form.positionType)
+      ?.label ?? form.positionType
+  const selectedCategory = categories.find(
+    (catItem) => catItem.id === form.categoryId,
+  )
   const selectedDepartment = countryDepartments.find(
-    (d) => d.id === form.administrationDepartmentId,
+    (dept) => dept.id === form.administrationDepartmentId,
   )
 
   const contextLabel = fixedAdministrationDepartmentName
@@ -1214,7 +1319,7 @@ export function PositionDefinitionsSection({
                             <MetaText>{def.titleEn}</MetaText>
                           </>
                         )}
-                        {def.rank != null && (
+                        {def.rank != null && def.rank > 0 && def.rank < 999 && (
                           <>
                             <Dot />
                             <MetaText>서열 {def.rank}</MetaText>
@@ -1266,7 +1371,12 @@ export function PositionDefinitionsSection({
                     <FieldControl>
                       <Input
                         value={form.title}
-                        onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                        onChange={(event) =>
+                          setForm((prevForm) => ({
+                            ...prevForm,
+                            title: event.target.value,
+                          }))
+                        }
                         placeholder="예: 영의정, 외교부 장관, 조선총독"
                       />
                     </FieldControl>
@@ -1277,7 +1387,12 @@ export function PositionDefinitionsSection({
                     <FieldControl>
                       <Input
                         value={form.titleEn ?? ''}
-                        onChange={(e) => setForm((f) => ({ ...f, titleEn: e.target.value || null }))}
+                        onChange={(event) =>
+                          setForm((prevForm) => ({
+                            ...prevForm,
+                            titleEn: event.target.value || null,
+                          }))
+                        }
                         placeholder="예: Prime Minister"
                       />
                     </FieldControl>
@@ -1288,7 +1403,12 @@ export function PositionDefinitionsSection({
                     <FieldControl>
                       <Input
                         value={form.titleLocal ?? ''}
-                        onChange={(e) => setForm((f) => ({ ...f, titleLocal: e.target.value || null }))}
+                        onChange={(event) =>
+                          setForm((prevForm) => ({
+                            ...prevForm,
+                            titleLocal: event.target.value || null,
+                          }))
+                        }
                         placeholder="예: 総理大臣"
                       />
                     </FieldControl>
@@ -1311,11 +1431,76 @@ export function PositionDefinitionsSection({
                         options={POSITION_TYPE_OPTIONS}
                         selectedValue={form.positionType}
                         onSelect={(value) => {
-                          setForm((f) => ({ ...f, positionType: value }))
+                          setForm((prevForm) => {
+                            const prevDefault =
+                              DEFAULT_RANK_BY_POSITION_TYPE[prevForm.positionType] ?? 3
+                            const shouldUpdateRank =
+                              prevForm.rank == null ||
+                              prevForm.rank >= 999 ||
+                              prevForm.rank === prevDefault
+                            return {
+                              ...prevForm,
+                              positionType: value,
+                              rank: shouldUpdateRank
+                                ? (DEFAULT_RANK_BY_POSITION_TYPE[value] ?? 3)
+                                : prevForm.rank,
+                            }
+                          })
                           setPositionTypeModalOpen(false)
                         }}
                         title="직위 유형 선택"
                       />
+                    </FieldControl>
+                  </FieldRow>
+
+                  <FieldRow>
+                    <FieldLabel>서열 · 레벨 (Rank)</FieldLabel>
+                    <FieldControl>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={50}
+                          style={{ width: 110 }}
+                          value={form.rank ?? ''}
+                          onChange={(event) => {
+                            const parsed = parseInt(event.target.value, 10)
+                            setForm((prevForm) => ({
+                              ...prevForm,
+                              rank: Number.isFinite(parsed) && parsed > 0 ? parsed : null,
+                            }))
+                          }}
+                          placeholder="1 ~ 10"
+                        />
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {RANK_PRESET_OPTIONS.map((preset) => {
+                            const active = form.rank === preset.rank
+                            return (
+                              <ScopeAddBtn
+                                key={preset.rank}
+                                type="button"
+                                onClick={() =>
+                                  setForm((prevForm) => ({
+                                    ...prevForm,
+                                    rank: preset.rank,
+                                  }))
+                                }
+                                style={{
+                                  borderStyle: 'solid',
+                                  borderColor: active ? '#6366f1' : undefined,
+                                  background: active ? 'rgba(99, 102, 241, 0.1)' : undefined,
+                                  color: active ? '#4f46e5' : undefined,
+                                }}
+                              >
+                                {preset.label}
+                              </ScopeAddBtn>
+                            )
+                          })}
+                        </div>
+                      </div>
+                      <FieldHint>
+                        숫자가 낮을수록 상위 위계입니다 (1: 국가원수·정부수반·핵심장관 / 2: 부원수·주요장관·원수 / 3: 일반장관·참모총장·대사 / 4: 차관·차장급).
+                      </FieldHint>
                     </FieldControl>
                   </FieldRow>
 
@@ -1445,14 +1630,19 @@ export function PositionDefinitionsSection({
                           onClose={() => setCategoryModalOpen(false)}
                           options={[
                             { value: '', label: '선택 안 함' },
-                            ...categories.map((c) => ({
-                              value: c.id,
-                              label: c.nameEn ? `${c.name} (${c.nameEn})` : c.name,
+                            ...categories.map((catItem) => ({
+                              value: catItem.id,
+                              label: catItem.nameEn
+                                ? `${catItem.name} (${catItem.nameEn})`
+                                : catItem.name,
                             })),
                           ]}
                           selectedValue={form.categoryId ?? ''}
                           onSelect={(value) => {
-                            setForm((f) => ({ ...f, categoryId: value || null }))
+                            setForm((prevForm) => ({
+                              ...prevForm,
+                              categoryId: value || null,
+                            }))
                             setCategoryModalOpen(false)
                           }}
                           title="부처 카테고리 선택"
@@ -1476,10 +1666,16 @@ export function PositionDefinitionsSection({
                           >
                             <span>
                               {selectedDepartment
-                                ? selectedDepartment.historicalCountry?.name &&
-                                  country.type !== 'historical'
-                                  ? `${selectedDepartment.name} [${selectedDepartment.historicalCountry.name}]`
-                                  : selectedDepartment.name
+                                ? `${selectedDepartment.name}${
+                                    selectedDepartment.category?.name
+                                      ? ` (${selectedDepartment.category.name})`
+                                      : ''
+                                  }${
+                                    selectedDepartment.historicalCountry?.name &&
+                                    country.type !== 'historical'
+                                      ? ` [${selectedDepartment.historicalCountry.name}]`
+                                      : ''
+                                  }`
                                 : '선택 안 함 (특정 부처에 귀속하지 않음)'}
                             </span>
                             <FiChevronDown size={16} />
@@ -1492,37 +1688,160 @@ export function PositionDefinitionsSection({
                                 value: '',
                                 label: '선택 안 함 (특정 부처에 귀속하지 않음)',
                               },
-                              ...countryDepartments.map((d) => ({
-                                value: d.id,
-                                label:
-                                  d.historicalCountry?.name &&
-                                  country.type !== 'historical'
-                                    ? `${d.name} [${d.historicalCountry.name}]`
-                                    : d.name,
-                              })),
+                              ...[...countryDepartments]
+                                .sort((leftDept, rightDept) => {
+                                  if (form.categoryId) {
+                                    const leftMatch =
+                                      leftDept.categoryId === form.categoryId ? 0 : 1
+                                    const rightMatch =
+                                      rightDept.categoryId === form.categoryId ? 0 : 1
+                                    if (leftMatch !== rightMatch)
+                                      return leftMatch - rightMatch
+                                  }
+                                  return leftDept.name.localeCompare(rightDept.name, 'ko')
+                                })
+                                .map((dept) => ({
+                                  value: dept.id,
+                                  label: `${dept.name}${
+                                    dept.category?.name
+                                      ? ` (${dept.category.name})`
+                                      : ''
+                                  }${
+                                    dept.historicalCountry?.name &&
+                                    country.type !== 'historical'
+                                      ? ` [${dept.historicalCountry.name}]`
+                                      : ''
+                                  }`,
+                                })),
                             ]}
                             selectedValue={
                               form.administrationDepartmentId ?? ''
                             }
                             onSelect={(value) => {
                               const picked = countryDepartments.find(
-                                (d) => d.id === value,
+                                (dept) => dept.id === value,
                               )
-                              setForm((f) => ({
-                                ...f,
+                              setForm((prevForm) => ({
+                                ...prevForm,
                                 administrationDepartmentId: value || null,
                                 categoryId:
-                                  picked?.categoryId && !f.categoryId
+                                  picked?.categoryId &&
+                                  (!prevForm.categoryId ||
+                                    prevForm.categoryId ===
+                                      selectedDepartment?.categoryId)
                                     ? picked.categoryId
-                                    : f.categoryId,
+                                    : prevForm.categoryId,
                               }))
                               setDepartmentModalOpen(false)
                             }}
                             title="소속 부처·기관 선택"
                           />
                           <FieldHint>
-                            특정 부처 전용 직위(예: 이조판서 → 이조, 육군대신 → 육군성)일 때 지정하면 해당 부처 상세의 소속 직위와 역대 재임 목록에 자동 연동됩니다.
+                            특정 부처 전용 직위(예: 이조판서 → 이조, 육군대신 → 육군성)일 때 지정하면 해당 부처 상세의 소속 직위와 역대 재임 목록에 자동 연동됩니다.{' '}
+                            {!inlineDeptOpen && (
+                              <button
+                                type="button"
+                                onClick={() => setInlineDeptOpen(true)}
+                                style={{
+                                  border: 'none',
+                                  background: 'none',
+                                  color: '#6366f1',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  padding: 0,
+                                  fontSize: 12,
+                                }}
+                              >
+                                + 새 부처·기관 바로 만들기
+                              </button>
+                            )}
                           </FieldHint>
+                          {inlineDeptOpen && (
+                            <div
+                              style={{
+                                marginTop: 10,
+                                padding: '14px 16px',
+                                borderRadius: 8,
+                                border: '1px solid rgba(99, 102, 241, 0.28)',
+                                background: 'rgba(99, 102, 241, 0.04)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 10,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  fontSize: 12.5,
+                                  fontWeight: 600,
+                                }}
+                              >
+                                <span>새 부처·기관 등록 ({country.name})</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setInlineDeptOpen(false)}
+                                  style={{
+                                    border: 'none',
+                                    background: 'none',
+                                    color: '#64748b',
+                                    cursor: 'pointer',
+                                    fontSize: 12,
+                                  }}
+                                >
+                                  닫기
+                                </button>
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                <Input
+                                  value={inlineDeptName}
+                                  onChange={(e) => setInlineDeptName(e.target.value)}
+                                  placeholder="부처·기관명 (예: 국방부, 육군참모본부)"
+                                />
+                                <Input
+                                  value={inlineDeptNameEn}
+                                  onChange={(e) => setInlineDeptNameEn(e.target.value)}
+                                  placeholder="영문명 (선택)"
+                                />
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                                {(
+                                  [
+                                    { value: 'MINISTRY', label: '중앙부처' },
+                                    { value: 'AGENCY', label: '외청·위원회' },
+                                    { value: 'ROYAL_HOUSEHOLD', label: '왕실·궁내부' },
+                                    { value: 'COLONIAL_GOVERNMENT', label: '총독부' },
+                                  ] as const
+                                ).map((opt) => (
+                                  <ScopeAddBtn
+                                    key={opt.value}
+                                    type="button"
+                                    onClick={() => setInlineDeptKind(opt.value)}
+                                    style={{
+                                      borderStyle: 'solid',
+                                      borderColor: inlineDeptKind === opt.value ? '#6366f1' : undefined,
+                                      background:
+                                        inlineDeptKind === opt.value
+                                          ? 'rgba(99, 102, 241, 0.12)'
+                                          : undefined,
+                                      color: inlineDeptKind === opt.value ? '#4f46e5' : undefined,
+                                    }}
+                                  >
+                                    {opt.label}
+                                  </ScopeAddBtn>
+                                ))}
+                                <SubmitButton
+                                  type="button"
+                                  disabled={inlineDeptSaving || !inlineDeptName.trim()}
+                                  onClick={() => void handleCreateInlineDept()}
+                                  style={{ marginLeft: 'auto', padding: '7px 14px', fontSize: 12.5 }}
+                                >
+                                  {inlineDeptSaving ? '생성 중…' : '부처 생성 후 선택'}
+                                </SubmitButton>
+                              </div>
+                            </div>
+                          )}
                         </FieldControl>
                       </FieldRow>
                     )}
@@ -1559,8 +1878,11 @@ export function PositionDefinitionsSection({
                     <FieldControl>
                       <Textarea
                         value={form.description ?? ''}
-                        onChange={(e) =>
-                          setForm((f) => ({ ...f, description: e.target.value || null }))
+                        onChange={(event) =>
+                          setForm((prevForm) => ({
+                            ...prevForm,
+                            description: event.target.value || null,
+                          }))
                         }
                         placeholder="직위의 역할, 권한, 역사적 배경 등을 자유롭게 기술하세요."
                         rows={5}

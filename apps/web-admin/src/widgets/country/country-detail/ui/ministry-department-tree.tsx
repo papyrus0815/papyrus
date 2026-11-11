@@ -9,10 +9,14 @@ import {
   FiChevronRight,
   FiLayers,
   FiPlus,
+  FiShield,
 } from 'react-icons/fi'
 
 import { getUploadImageUrl } from '@/shared/api/upload'
-import type { AdministrationDepartment } from '@/shared/api/administration-department'
+import {
+  type AdministrationDepartment,
+  DEPARTMENT_KIND_LABEL,
+} from '@/shared/api/administration-department'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 
 import {
@@ -28,7 +32,147 @@ export type MinistryDepartmentTreeProps = {
   onSelectDepartment: (dept: AdministrationDepartment) => void
   selectedDepartmentId?: string | null
   onAddRoot: () => void
+  onAddChild?: (parent: AdministrationDepartment) => void
   onGoToPositionDefinitions?: () => void
+}
+
+function formatDeptYearPart(
+  parts: AdministrationDepartment['established'] | null | undefined,
+): string | null {
+  if (!parts || typeof parts.year !== 'number' || parts.year <= 0) return null
+  return `${parts.era === 'BC' ? 'BC ' : ''}${parts.year}`
+}
+
+function renderDeptMetaBadges(
+  dept: AdministrationDepartment,
+  isDark: boolean,
+  palette: ReturnType<typeof getCabinetsSectionPalette>,
+) {
+  const kindLabel =
+    dept.kind && DEPARTMENT_KIND_LABEL[dept.kind]
+      ? DEPARTMENT_KIND_LABEL[dept.kind]
+      : null
+  const isMilitaryOrIntel = (dept.militaryUnits?.length ?? 0) > 0
+  const unitCount = dept.militaryUnits?.length ?? 0
+  const childCount = dept.children?.length ?? 0
+  const estYearStr = formatDeptYearPart(dept.established)
+  const abolYearStr = formatDeptYearPart(dept.abolished)
+  const lifespanLabel =
+    estYearStr || abolYearStr
+      ? `${estYearStr ?? '?'} ~ ${abolYearStr ?? '현재'}`
+      : null
+
+  return (
+    <>
+      {dept.abbreviation?.trim() ? (
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: palette.textMuted,
+          }}
+        >
+          ({dept.abbreviation.trim()})
+        </span>
+      ) : null}
+      {dept.historicalCountry?.name ? (
+        <span
+          style={{
+            padding: '2px 7px',
+            borderRadius: 6,
+            fontSize: 11,
+            fontWeight: 600,
+            background: palette.btnHover,
+            color: palette.textMuted,
+          }}
+        >
+          {dept.historicalCountry.name}
+        </span>
+      ) : null}
+      {kindLabel ? (
+        <span
+          style={{
+            padding: '2px 7px',
+            borderRadius: 6,
+            fontSize: 11,
+            fontWeight: 600,
+            background: isMilitaryOrIntel
+              ? isDark
+                ? 'rgba(239, 68, 68, 0.16)'
+                : '#fef2f2'
+              : palette.accentBg,
+            color: isMilitaryOrIntel
+              ? isDark
+                ? '#fca5a5'
+                : '#b91c1c'
+              : palette.accent,
+          }}
+        >
+          {kindLabel}
+        </span>
+      ) : null}
+      {dept.category?.name ? (
+        <span
+          style={{
+            padding: '2px 7px',
+            borderRadius: 6,
+            fontSize: 11,
+            fontWeight: 500,
+            background: palette.bgMuted,
+            color: palette.textMuted,
+          }}
+        >
+          {dept.category.name}
+        </span>
+      ) : null}
+      {lifespanLabel ? (
+        <span
+          style={{
+            padding: '2px 7px',
+            borderRadius: 6,
+            fontSize: 11,
+            fontWeight: 500,
+            background: palette.bgMuted,
+            color: palette.textMuted,
+          }}
+        >
+          {lifespanLabel}
+        </span>
+      ) : null}
+      {childCount > 0 ? (
+        <span
+          style={{
+            padding: '2px 7px',
+            borderRadius: 6,
+            fontSize: 11,
+            fontWeight: 600,
+            background: palette.bgMuted,
+            color: palette.textMuted,
+          }}
+        >
+          산하 {childCount}개
+        </span>
+      ) : null}
+      {unitCount > 0 ? (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '2px 7px',
+            borderRadius: 6,
+            fontSize: 11,
+            fontWeight: 600,
+            background: isDark ? 'rgba(99, 102, 241, 0.16)' : '#eef2ff',
+            color: isDark ? '#a5b4fc' : '#4338ca',
+          }}
+        >
+          <FiShield size={10} />
+          군부대 {unitCount}
+        </span>
+      ) : null}
+    </>
+  )
 }
 
 export function MinistryDepartmentTree({
@@ -38,6 +182,7 @@ export function MinistryDepartmentTree({
   onSelectDepartment,
   selectedDepartmentId,
   onAddRoot,
+  onAddChild,
   onGoToPositionDefinitions,
 }: MinistryDepartmentTreeProps) {
   const roots = useMemo(
@@ -58,14 +203,14 @@ export function MinistryDepartmentTree({
   )
 
   const idsInCategory = useMemo(
-    () => new Set(departmentsInCategory.map((d) => d.id)),
+    () => new Set(departmentsInCategory.map((deptItem) => deptItem.id)),
     [departmentsInCategory],
   )
 
   const parentById = useMemo(() => {
-    const m = new Map<string, AdministrationDepartment>()
-    for (const d of allDepartments) m.set(d.id, d)
-    return m
+    const deptMap = new Map<string, AdministrationDepartment>()
+    for (const deptItem of allDepartments) deptMap.set(deptItem.id, deptItem)
+    return deptMap
   }, [allDepartments])
 
   const parentLabel = useCallback(
@@ -78,24 +223,24 @@ export function MinistryDepartmentTree({
 
   const crossCategoryParentHint = useCallback(
     (dept: AdministrationDepartment) => {
-      const pId = dept.parentId
-      if (!pId || idsInCategory.has(pId)) return null
-      const p = parentById.get(pId)
-      if (!p) return null
-      const catName = p.category?.name ?? '다른 카테고리'
-      return { parentName: p.name, categoryLabel: catName }
+      const parentId = dept.parentId
+      if (!parentId || idsInCategory.has(parentId)) return null
+      const parentDept = parentById.get(parentId)
+      if (!parentDept) return null
+      const catName = parentDept.category?.name ?? '다른 카테고리'
+      return { parentName: parentDept.name, categoryLabel: catName }
     },
     [idsInCategory, parentById],
   )
 
   const sortedFlat = useMemo(() => {
-    return [...departmentsInCategory].sort((a, b) =>
-      a.name.localeCompare(b.name, 'ko', { sensitivity: 'base' }),
+    return [...departmentsInCategory].sort((left, right) =>
+      left.name.localeCompare(right.name, 'ko', { sensitivity: 'base' }),
     )
   }, [departmentsInCategory])
 
-  const C = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
-  const rowBorder = C.divider
+  const palette = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
+  const rowBorder = palette.divider
 
   return (
     <div
@@ -153,6 +298,7 @@ export function MinistryDepartmentTree({
               parentLabel={parentLabel}
               crossCategoryParentHint={crossCategoryParentHint}
               onSelectDepartment={onSelectDepartment}
+              onAddChild={onAddChild}
               selectedDepartmentId={selectedDepartmentId}
             />
           ))}
@@ -174,6 +320,7 @@ export function MinistryDepartmentTree({
               departmentsInCategory={departmentsInCategory}
               isDark={isDark}
               onSelectDepartment={onSelectDepartment}
+              onAddChild={onAddChild}
               selectedDepartmentId={selectedDepartmentId}
               parentLabel={parentLabel}
               crossCategoryParentHint={crossCategoryParentHint}
@@ -189,7 +336,7 @@ export function MinistryDepartmentTree({
           marginTop: 10,
           paddingTop: 14,
           flexShrink: 0,
-          borderTop: `1px solid ${C.divider}`,
+          borderTop: `1px solid ${palette.divider}`,
         }}
       >
         <button
@@ -203,14 +350,14 @@ export function MinistryDepartmentTree({
             fontSize: 12,
             fontWeight: 600,
             cursor: 'pointer',
-            border: `1px dashed ${C.accentSecondaryBorder}`,
+            border: `1px dashed ${palette.accentSecondaryBorder}`,
             borderRadius: 8,
-            background: C.accentBg,
+            background: palette.accentBg,
             color: isDark ? '#a5b4fc' : '#4338ca',
             alignSelf: 'flex-start',
           }}
         >
-          <FiPlus size={14} /> 이 카테고리에 부처·기관 추가
+          <FiPlus size={14} /> 새 최상위 부처·국가기관 추가
         </button>
         {onGoToPositionDefinitions ? (
           <button
@@ -227,7 +374,7 @@ export function MinistryDepartmentTree({
               border: 'none',
               borderRadius: 8,
               background: 'transparent',
-              color: C.textMuted,
+              color: palette.textMuted,
               textDecoration: 'underline',
               alignSelf: 'flex-start',
             }}
@@ -247,153 +394,182 @@ function FlatDeptRow({
   parentLabel,
   crossCategoryParentHint,
   onSelectDepartment,
+  onAddChild,
   selectedDepartmentId,
 }: {
   dept: AdministrationDepartment
   isDark: boolean
   parentLabel: (parentId: string | null | undefined) => string | null
   crossCategoryParentHint: (
-    d: AdministrationDepartment,
+    deptItem: AdministrationDepartment,
   ) => { parentName: string; categoryLabel: string } | null
-  onSelectDepartment: (d: AdministrationDepartment) => void
+  onSelectDepartment: (deptItem: AdministrationDepartment) => void
+  onAddChild?: (parent: AdministrationDepartment) => void
   selectedDepartmentId?: string | null
 }) {
-  const C = getCabinetsSectionPalette(isDark)
+  const palette = getCabinetsSectionPalette(isDark)
   const [hover, setHover] = useState(false)
   const pName = parentLabel(dept.parentId)
   const cross = crossCategoryParentHint(dept)
   const selected = selectedDepartmentId === dept.id
-  const cardBorder = C.borderHairline
+  const cardBorder = palette.borderHairline
   const bg = selected
-    ? C.cardBgSelected
+    ? palette.cardBgSelected
     : hover
-      ? C.cardBgHover
-      : C.cardBg
+      ? palette.cardBgHover
+      : palette.cardBg
 
   return (
-    <button
-      type="button"
-      onClick={() => onSelectDepartment(dept)}
+    <div
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
         width: '100%',
         display: 'flex',
         alignItems: 'center',
-        gap: 14,
-        padding: '14px 16px',
+        gap: 10,
+        padding: '12px 14px',
         marginBottom: 8,
-        border: `1px solid ${selected ? C.accentSecondaryBorder : cardBorder}`,
+        border: `1px solid ${selected ? palette.accentSecondaryBorder : cardBorder}`,
         borderRadius: 12,
         background: bg,
-        cursor: 'pointer',
-        textAlign: 'left',
         transition: 'background 0.14s, border-color 0.14s, box-shadow 0.14s',
         boxShadow: selected
           ? isDark
             ? '0 0 0 1px rgba(99,102,241,0.25)'
             : '0 1px 2px rgba(99, 102, 241, 0.12)'
           : 'none',
+        boxSizing: 'border-box',
       }}
     >
-      {dept.thumbnailUrl ? (
-        <img
-          src={getUploadImageUrl(dept.thumbnailUrl)}
-          alt=""
-          style={{
-            width: 42,
-            height: 42,
-            objectFit: 'cover',
-            borderRadius: 10,
-            flexShrink: 0,
-            border: `1px solid ${C.border}`,
-          }}
-        />
-      ) : (
-        <div
-          style={{
-            width: 42,
-            height: 42,
-            borderRadius: 10,
-            background: C.avatarBg,
-            flexShrink: 0,
-            border: `1px solid ${C.border}`,
-          }}
-        />
-      )}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            flexWrap: 'wrap',
-            fontSize: 15,
-            fontWeight: 600,
-            color: C.text,
-            letterSpacing: '-0.02em',
-            lineHeight: 1.35,
-          }}
-        >
-          <span>{dept.name}</span>
-          {dept.historicalCountry?.name ? (
-            <span
+      <button
+        type="button"
+        onClick={() => onSelectDepartment(dept)}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 14,
+          border: 'none',
+          background: 'transparent',
+          cursor: 'pointer',
+          textAlign: 'left',
+          padding: 0,
+        }}
+      >
+        {dept.thumbnailUrl ? (
+          <img
+            src={getUploadImageUrl(dept.thumbnailUrl)}
+            alt=""
+            style={{
+              width: 42,
+              height: 42,
+              objectFit: 'cover',
+              borderRadius: 10,
+              flexShrink: 0,
+              border: `1px solid ${palette.border}`,
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              width: 42,
+              height: 42,
+              borderRadius: 10,
+              background: palette.avatarBg,
+              flexShrink: 0,
+              border: `1px solid ${palette.border}`,
+            }}
+          />
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              flexWrap: 'wrap',
+              fontSize: 15,
+              fontWeight: 600,
+              color: palette.text,
+              letterSpacing: '-0.02em',
+              lineHeight: 1.35,
+            }}
+          >
+            <span>{dept.name}</span>
+            {renderDeptMetaBadges(dept, isDark, palette)}
+          </div>
+          {cross ? (
+            <div
               style={{
-                padding: '2px 7px',
-                borderRadius: 6,
                 fontSize: 11,
-                fontWeight: 600,
-                background: C.btnHover,
-                color: C.textMuted,
+                color: palette.textMuted,
+                marginTop: 4,
               }}
             >
-              {dept.historicalCountry.name}
-            </span>
+              상위: {cross.parentName}{' '}
+              <span
+                style={{
+                  marginLeft: 4,
+                  padding: '2px 6px',
+                  borderRadius: 6,
+                  background: palette.btnHover,
+                  fontWeight: 600,
+                }}
+              >
+                타 카테고리 · {cross.categoryLabel}
+              </span>
+            </div>
+          ) : pName ? (
+            <div
+              style={{
+                fontSize: 11,
+                color: palette.textMuted,
+                marginTop: 4,
+              }}
+            >
+              상위: {pName}
+            </div>
           ) : null}
         </div>
-        {cross ? (
-          <div
-            style={{
-              fontSize: 11,
-              color: C.textMuted,
-              marginTop: 4,
-            }}
-          >
-            상위: {cross.parentName}{' '}
-            <span
-              style={{
-                marginLeft: 4,
-                padding: '2px 6px',
-                borderRadius: 6,
-                background: C.btnHover,
-                fontWeight: 600,
-              }}
-            >
-              타 카테고리 · {cross.categoryLabel}
-            </span>
-          </div>
-        ) : pName ? (
-          <div
-            style={{
-              fontSize: 11,
-              color: C.textMuted,
-              marginTop: 4,
-            }}
-          >
-            상위: {pName}
-          </div>
-        ) : null}
-      </div>
-      <FiChevronRight
-        size={18}
-        style={{
-          flexShrink: 0,
-          color: C.iconColor,
-          opacity: 0.55,
-        }}
-        aria-hidden
-      />
-    </button>
+        <FiChevronRight
+          size={18}
+          style={{
+            flexShrink: 0,
+            color: palette.iconColor,
+            opacity: 0.55,
+          }}
+          aria-hidden
+        />
+      </button>
+      {onAddChild ? (
+        <button
+          type="button"
+          title={`${dept.name} 산하 기관 추가`}
+          onClick={(event) => {
+            event.stopPropagation()
+            onAddChild(dept)
+          }}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '5px 9px',
+            borderRadius: 8,
+            fontSize: 11,
+            fontWeight: 600,
+            border: `1px solid ${palette.borderMid}`,
+            background: palette.cardBg,
+            color: palette.textMuted,
+            cursor: 'pointer',
+            flexShrink: 0,
+          }}
+        >
+          <FiPlus size={12} /> 산하 추가
+        </button>
+      ) : null}
+    </div>
   )
 }
 
@@ -403,6 +579,7 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
   departmentsInCategory,
   isDark,
   onSelectDepartment,
+  onAddChild,
   selectedDepartmentId,
   parentLabel,
   crossCategoryParentHint,
@@ -411,14 +588,15 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
   depth: number
   departmentsInCategory: AdministrationDepartment[]
   isDark: boolean
-  onSelectDepartment: (d: AdministrationDepartment) => void
+  onSelectDepartment: (deptItem: AdministrationDepartment) => void
+  onAddChild?: (parent: AdministrationDepartment) => void
   selectedDepartmentId?: string | null
   parentLabel: (parentId: string | null | undefined) => string | null
   crossCategoryParentHint: (
-    d: AdministrationDepartment,
+    deptItem: AdministrationDepartment,
   ) => { parentName: string; categoryLabel: string } | null
 }) {
-  const C = getCabinetsSectionPalette(isDark)
+  const palette = getCabinetsSectionPalette(isDark)
   const children = useMemo(
     () => childrenOf(dept.id, departmentsInCategory),
     [dept.id, departmentsInCategory],
@@ -428,18 +606,18 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
   const hasChildren = children.length > 0
   const pName = parentLabel(dept.parentId)
   const cross = crossCategoryParentHint(dept)
-  const isRootInForest = !dept.parentId || !departmentsInCategory.some(
-    (d) => d.id === dept.parentId,
-  )
+  const isRootInForest =
+    !dept.parentId ||
+    !departmentsInCategory.some((deptItem) => deptItem.id === dept.parentId)
   const selected = selectedDepartmentId === dept.id
-  const cardEdge = C.borderHairline
-  const cardEdgeActive = C.accentSecondaryBorder
+  const cardEdge = palette.borderHairline
+  const cardEdgeActive = palette.accentSecondaryBorder
   const indent = depth * 18
   const rowBg = selected
-    ? C.cardBgSelected
+    ? palette.cardBgSelected
     : rowHover
-      ? C.cardBgHover
-      : C.cardBg
+      ? palette.cardBgHover
+      : palette.cardBg
 
   return (
     <div style={{ minWidth: 0 }}>
@@ -448,7 +626,7 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
         onMouseLeave={() => setRowHover(false)}
         style={{
           display: 'flex',
-          alignItems: 'stretch',
+          alignItems: 'center',
           minHeight: 52,
           marginBottom: 8,
           borderRadius: 12,
@@ -461,6 +639,7 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
               : '0 1px 2px rgba(99, 102, 241, 0.1)'
             : 'none',
           overflow: 'hidden',
+          paddingRight: 10,
         }}
       >
         <div
@@ -478,9 +657,9 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
               type="button"
               aria-expanded={expanded}
               aria-label={expanded ? '하위 접기' : '하위 펼치기'}
-              onClick={(e) => {
-                e.stopPropagation()
-                setExpanded((e) => !e)
+              onClick={(event) => {
+                event.stopPropagation()
+                setExpanded((prev) => !prev)
               }}
               style={{
                 width: 28,
@@ -488,12 +667,12 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
                 flexShrink: 0,
                 border: 'none',
                 borderRadius: 8,
-                background: C.avatarBg,
+                background: palette.avatarBg,
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: C.textMuted,
+                color: palette.textMuted,
               }}
             >
               {expanded ? (
@@ -532,7 +711,7 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
                 objectFit: 'cover',
                 borderRadius: 10,
                 flexShrink: 0,
-                border: `1px solid ${C.border}`,
+                border: `1px solid ${palette.border}`,
               }}
             />
           ) : (
@@ -541,9 +720,9 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
                 width: 40,
                 height: 40,
                 borderRadius: 10,
-                background: C.avatarBg,
+                background: palette.avatarBg,
                 flexShrink: 0,
-                border: `1px solid ${C.border}`,
+                border: `1px solid ${palette.border}`,
               }}
             />
           )}
@@ -556,32 +735,19 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
                 flexWrap: 'wrap',
                 fontSize: 15,
                 fontWeight: 600,
-                color: C.text,
+                color: palette.text,
                 letterSpacing: '-0.02em',
                 lineHeight: 1.35,
               }}
             >
               <span>{dept.name}</span>
-              {dept.historicalCountry?.name ? (
-                <span
-                  style={{
-                    padding: '2px 7px',
-                    borderRadius: 6,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    background: C.btnHover,
-                    color: C.textMuted,
-                  }}
-                >
-                  {dept.historicalCountry.name}
-                </span>
-              ) : null}
+              {renderDeptMetaBadges(dept, isDark, palette)}
             </div>
             {isRootInForest && cross ? (
               <div
                 style={{
                   fontSize: 11,
-                  color: C.textMuted,
+                  color: palette.textMuted,
                   marginTop: 2,
                 }}
               >
@@ -591,7 +757,7 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
                     marginLeft: 4,
                     padding: '2px 6px',
                     borderRadius: 6,
-                    background: C.btnHover,
+                    background: palette.btnHover,
                     fontWeight: 600,
                   }}
                 >
@@ -600,11 +766,13 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
               </div>
             ) : pName &&
               dept.parentId &&
-              departmentsInCategory.some((d) => d.id === dept.parentId) ? (
+              departmentsInCategory.some(
+                (deptItem) => deptItem.id === dept.parentId,
+              ) ? (
               <div
                 style={{
                   fontSize: 11,
-                  color: C.textMuted,
+                  color: palette.textMuted,
                   marginTop: 2,
                 }}
               >
@@ -616,23 +784,50 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
             size={18}
             style={{
               flexShrink: 0,
-              color: C.iconColor,
+              color: palette.iconColor,
               opacity: 0.5,
             }}
             aria-hidden
           />
         </button>
+        {onAddChild ? (
+          <button
+            type="button"
+            title={`${dept.name} 산하 기관 추가`}
+            onClick={(event) => {
+              event.stopPropagation()
+              onAddChild(dept)
+            }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '5px 9px',
+              borderRadius: 8,
+              fontSize: 11,
+              fontWeight: 600,
+              border: `1px solid ${palette.borderMid}`,
+              background: palette.cardBg,
+              color: palette.textMuted,
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            <FiPlus size={12} /> 산하 추가
+          </button>
+        ) : null}
       </div>
       {hasChildren && expanded ? (
         <div>
-          {children.map((ch) => (
+          {children.map((childDept) => (
             <DeptTreeNode
-              key={ch.id}
-              dept={ch}
+              key={childDept.id}
+              dept={childDept}
               depth={depth + 1}
               departmentsInCategory={departmentsInCategory}
               isDark={isDark}
               onSelectDepartment={onSelectDepartment}
+              onAddChild={onAddChild}
               selectedDepartmentId={selectedDepartmentId}
               parentLabel={parentLabel}
               crossCategoryParentHint={crossCategoryParentHint}

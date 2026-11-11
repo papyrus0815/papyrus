@@ -434,16 +434,52 @@ export interface IPersonRepository {
   }): Promise<any[]>
   /** accountId 필수 — 소유자 없는 행정부(공유 정본)를 쓰기 경로로 만들지 않게 */
   createCabinet(
-    dto: { headTenureId: string; name?: string | null },
+    dto: {
+      headTenureId?: string | null
+      name?: string | null
+      description?: string | null
+      countryId?: string | null
+      historicalCountryId?: string | null
+      startDateInfo?: any
+      endDateInfo?: any
+      allowReshuffle?: boolean
+      memberTenureIds?: string[]
+    },
     accountId: string,
   ): Promise<any>
-  /** 행정부 수정 — name 등 */
+  /** 행정부 수정 — name, 기간, 수반 등 */
   updateCabinet(
     cabinetId: string,
-    dto: { name?: string | null },
+    dto: {
+      name?: string | null
+      description?: string | null
+      headTenureId?: string | null
+      countryId?: string | null
+      historicalCountryId?: string | null
+      startDateInfo?: any
+      endDateInfo?: any
+    },
     accountId: string,
   ): Promise<any>
-  /** 행정부 삭제 — 소속 각료 재임 삭제 후 행정부·수반 재임 삭제 (관련 데이터 모두) */
+  /** 행정부에 각료(재임) 편입 — CabinetMember N:M + 레거시 cabinetId 동기화 */
+  attachCabinetMembers(
+    cabinetId: string,
+    items: Array<{
+      tenureId: string
+      departmentId?: string | null
+      roleTitle?: string | null
+    }>,
+    accountId?: string,
+  ): Promise<any[]>
+  /** 행정부에서 특정 각료(재임) 편입 해제 (재임 자체는 삭제하지 않음) */
+  detachCabinetMember(
+    cabinetId: string,
+    tenureId: string,
+    accountId?: string,
+  ): Promise<void>
+  /** 스마트 각료 자동 탐색 — 같은 국가·정체에서 내각 기간과 겹치는 부처·각료 재임 후보 조회 */
+  findSuggestedCabinetMembers(cabinetId: string): Promise<any[]>
+  /** 행정부 삭제 — 소속 각료 재임 연결 해제 후 행정부 삭제 */
   deleteCabinet(cabinetId: string, accountId: string): Promise<void>
   /** 두 행정부를 같은 묶음(CabinetLinkageGroup)으로 연결 */
   linkCabinetWithOther(

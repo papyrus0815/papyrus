@@ -121,6 +121,35 @@ export const DEFAULT_COLLAPSED_POSITION_GROUPS = [
   GENERIC_GROUP_LABEL,
 ]
 
+const POSITION_TYPE_SHORT_LABELS: Record<string, string> = {
+  HEAD_OF_STATE: '국가원수',
+  HEAD_OF_GOVERNMENT: '정부수반',
+  DEPUTY_HEAD_OF_STATE: '부원수',
+  HEIR_APPARENT: '왕위계승자',
+  REGENT: '섭정',
+  CABINET_MINISTER: '각료·장관',
+  VICE_MINISTER: '차관',
+  LEGISLATOR: '입법·의회',
+  JUDICIARY: '사법',
+  LOCAL_GOVERNMENT: '지방관·총독',
+  SPECIAL_POSITION: '특별 직위',
+  DIPLOMATIC_POST: '외교 사절',
+  MILITARY_COMMANDER: '군 지휘관',
+  ROYAL_NOBLE_TITLE: '작위·칭호',
+  OTHER: '기타 직위',
+}
+
+function formatPositionOptionDescription(def: PositionDefinitionLike): string | undefined {
+  const parts: string[] = []
+  if (def.positionType && POSITION_TYPE_SHORT_LABELS[def.positionType]) {
+    parts.push(POSITION_TYPE_SHORT_LABELS[def.positionType])
+  }
+  if (typeof def.rank === 'number' && def.rank > 0 && def.rank < 999) {
+    parts.push(`서열 ${def.rank}`)
+  }
+  return parts.length > 0 ? parts.join(' · ') : undefined
+}
+
 function definitionLabel(def: PositionDefinitionLike): string {
   return def.title ?? def.name ?? def.id ?? '직책'
 }
@@ -132,17 +161,17 @@ export function buildPositionOptions({
   pinnedDefinition,
   recentTitles = [],
   otherValue,
-  otherLabel = '기타 (직접 입력)',
+  otherLabel = '+ 새 직책 등록 / 직접 입력',
 }: BuildPositionOptionsInput): PositionOptionItem[] {
-  // 일반 정의는 카탈로그 그룹에 섞지 않고 맨 아래 '직접 입력 (종류별)'로 따로 둔다
-  const generic = definitions.filter((def) => def.isGeneric === true)
+  // 일반 더미 정의(isGeneric=true, rank=999)는 신규 선택지에서 제외하고,
+  // 기존에 일반 정의로 저장된 레거시 행을 수정할 때만(pinnedDefinition) 보존한다.
+  const generic: PositionDefinitionLike[] = []
   const filtered = filterPositionDefinitions(
     definitions.filter((def) => def.isGeneric !== true),
     { isMinisterFlow },
   )
 
   // 수정 중인 정의 되살리기 — 필터·그룹 판정보다 먼저. 서버 목록에 이미 있으면 그대로 둔다.
-  // 일반 정의는 아래 일반 그룹이 맡는다 — 여기서 되살리면 같은 옵션이 두 번 나온다
   const visible = [...filtered]
   if (
     pinnedDefinition?.id &&
@@ -166,23 +195,29 @@ export function buildPositionOptions({
 
   const officeBucket: PositionOptionItem[] = []
   const nobleBucket: PositionOptionItem[] = []
-  visible.forEach((def) => {
-    if (usedIds.has(def.id)) return
-    const isNoble = getRecordFamily(def) === 'NOBLE_TITLE'
-    if (isNoble) {
-      nobleBucket.push({
-        value: def.id,
-        label: definitionLabel(def),
-        group: RECORD_FAMILY_GROUP_LABELS.NOBLE_TITLE,
-      })
-    } else {
-      officeBucket.push({
-        value: def.id,
-        label: definitionLabel(def),
-        group: RECORD_FAMILY_GROUP_LABELS.OFFICE,
-      })
-    }
-  })
+  visible
+    .slice()
+    .sort(compareByUsageThenRank)
+    .forEach((def) => {
+      if (usedIds.has(def.id)) return
+      const isNoble = getRecordFamily(def) === 'NOBLE_TITLE'
+      const desc = formatPositionOptionDescription(def)
+      if (isNoble) {
+        nobleBucket.push({
+          value: def.id,
+          label: definitionLabel(def),
+          ...(desc ? { description: desc } : {}),
+          group: RECORD_FAMILY_GROUP_LABELS.NOBLE_TITLE,
+        })
+      } else {
+        officeBucket.push({
+          value: def.id,
+          label: definitionLabel(def),
+          ...(desc ? { description: desc } : {}),
+          group: RECORD_FAMILY_GROUP_LABELS.OFFICE,
+        })
+      }
+    })
 
   // 같은 positionType의 정의가 이미 있으면 내장 항목은 중복 노출하지 않는다.
   const definedTypes = new Set(visible.map((def) => def.positionType))
@@ -191,6 +226,7 @@ export function buildPositionOptions({
     .map((builtin) => ({
       value: builtin.value,
       label: builtin.label,
+      description: POSITION_TYPE_SHORT_LABELS[builtin.positionType],
       group: RECORD_FAMILY_GROUP_LABELS.OFFICE,
     }))
   if (builtinOptions.length > 0) {
@@ -201,9 +237,11 @@ export function buildPositionOptions({
 
   // 1) 이 국가에서 실제로 쓰인 직책 — 정의 실적 + 자유입력 실적 순
   usedPositions.forEach((def) => {
+    const desc = formatPositionOptionDescription(def)
     options.push({
       value: def.id,
       label: definitionLabel(def),
+      ...(desc ? { description: desc } : {}),
       group: USED_GROUP_LABEL,
     })
   })
@@ -351,7 +389,13 @@ export function buildReignPositionOptions({
       .filter((def) => groupOf(def) === group)
       .sort(compareByRankThenTitle)
       .forEach((def) => {
-        options.push({ value: def.id, label: definitionLabel(def), group })
+        const desc = formatPositionOptionDescription(def)
+        options.push({
+          value: def.id,
+          label: definitionLabel(def),
+          ...(desc ? { description: desc } : {}),
+          group,
+        })
       })
   })
 

@@ -2,6 +2,9 @@ import { tags } from 'typia'
 
 // MilitaryUnitType enum
 export type MilitaryUnitType =
+  | 'SUPREME_COMMAND'
+  | 'GENERAL_STAFF'
+  | 'SERVICE_HQ'
   | 'THEATER'
   | 'ARMY_GROUP'
   | 'FRONT'
@@ -35,7 +38,66 @@ export type MilitaryBranch =
   | 'JOINT'
   | 'OTHER'
 
-/** 군부대 생성/수정 시 함께 저장하는 지휘관 행 */
+export type MilitaryUnitTransitionKind =
+  | 'RENAME'
+  | 'MERGE'
+  | 'SPLIT'
+  | 'REORGANIZE'
+  | 'ABSORBED'
+
+export interface MilitaryUnitDatePartsDto {
+  era: 'BC' | 'AD'
+  year: number
+  month: number | null
+  day: number | null
+  precision: string | null
+}
+
+export interface MilitaryUnitDateInput {
+  era?: 'BC' | 'AD' | null
+  year?: number | null
+  month?: number | null
+  day?: number | null
+  precision?: string | null
+}
+
+export interface MilitaryUnitLineageDto {
+  transitionId: string
+  kind: MilitaryUnitTransitionKind
+  era: 'BC' | 'AD' | null
+  year: number | null
+  month: number | null
+  note: string | null
+  targetType: 'MILITARY_UNIT' | 'DEPARTMENT'
+  unit: {
+    id: string
+    name: string
+    abbreviation: string | null
+    unitType: MilitaryUnitType | null
+  } | null
+  department: {
+    id: string
+    name: string
+    abbreviation: string | null
+    kind: string
+  } | null
+}
+
+export interface MilitaryUnitEventLinkDto {
+  relationId: string
+  role: string
+  roleDescription: string | null
+  event: {
+    id: string
+    title: string
+    startEra: string | null
+    startYear: number | null
+    startMonth: number | null
+    startDay: number | null
+  }
+}
+
+/** 군부대 생성/수정 시 함께 저장하는 레거시 지휘관 행 */
 export interface MilitaryUnitCommanderInput {
   personId: string & tags.Format<'uuid'>
   rank?: string | null
@@ -52,6 +114,9 @@ export interface MilitaryUnitCommanderInput {
 export interface MilitaryUnitDto {
   id: string
   name: string
+  nameLocal?: string | null
+  nameEn?: string | null
+  abbreviation?: string | null
   unitType?: MilitaryUnitType | null
   branch?: MilitaryBranch | null
   /** 현대 소속 국가 — 표시/그룹핑 축 */
@@ -59,6 +124,8 @@ export interface MilitaryUnitDto {
   /** 역사 소속 국가(독일 제국 등) — 소속 축. 현대와 듀얼, 표시는 역사 우선 */
   historicalCountryId?: string | null
   isActive?: boolean | null
+  established?: MilitaryUnitDatePartsDto | null
+  disbanded?: MilitaryUnitDatePartsDto | null
   establishedDate?: string | null
   disbandedDate?: string | null
   parentUnitId?: string | null
@@ -74,6 +141,10 @@ export interface MilitaryUnitDto {
   notableBattles?: string | null
   honors?: string | null
   description?: string | null
+  predecessors?: MilitaryUnitLineageDto[]
+  successors?: MilitaryUnitLineageDto[]
+  eventRelations?: MilitaryUnitEventLinkDto[]
+  tenures?: any[]
   /** 배속 함선(해군 ORBAT) — 조회 전용 */
   assignedNavalVessels?: Array<{
     id: string
@@ -101,20 +172,25 @@ export interface MilitaryUnitDto {
   parentUnit?: {
     id: string
     name: string
+    abbreviation?: string | null
     unitType?: MilitaryUnitType | null
   } | null
   administrationDepartment?: {
     id: string
     name: string
+    abbreviation?: string | null
+    kind?: string | null
   } | null
   subUnits?: Array<{
     id: string
     name: string
+    abbreviation?: string | null
     unitType?: MilitaryUnitType | null
     isActive?: boolean | null
   }>
   commanders?: Array<{
     id: string
+    tenureId?: string | null
     personId: string
     rank?: string | null
     role?: string | null
@@ -154,14 +230,19 @@ export interface MilitaryUnitDto {
 // Create DTO
 export interface CreateMilitaryUnitDto {
   name: string & tags.MinLength<1> & tags.MaxLength<100>
+  nameLocal?: (string & tags.MaxLength<200>) | null
+  nameEn?: (string & tags.MaxLength<200>) | null
+  abbreviation?: (string & tags.MaxLength<40>) | null
   unitType?: MilitaryUnitType | null
   branch?: MilitaryBranch | null
   countryId?: (string & tags.Format<'uuid'>) | null
   /** 역사 소속 국가(독일 제국 등). countryId와 동시 설정 가능 — 표시는 역사 우선 */
   historicalCountryId?: (string & tags.Format<'uuid'>) | null
   isActive?: boolean | null
-  establishedDate?: (string & tags.Format<'date-time'>) | null
-  disbandedDate?: (string & tags.Format<'date-time'>) | null
+  establishedInfo?: MilitaryUnitDateInput | null
+  disbandedInfo?: MilitaryUnitDateInput | null
+  establishedDate?: string | null
+  disbandedDate?: string | null
   parentUnitId?: (string & tags.Format<'uuid'>) | null
   administrationDepartmentId?: (string & tags.Format<'uuid'>) | null
   nickname?: (string & tags.MaxLength<200>) | null
@@ -181,14 +262,19 @@ export interface CreateMilitaryUnitDto {
 // Update DTO
 export interface UpdateMilitaryUnitDto {
   name?: string & tags.MinLength<1> & tags.MaxLength<100>
+  nameLocal?: (string & tags.MaxLength<200>) | null
+  nameEn?: (string & tags.MaxLength<200>) | null
+  abbreviation?: (string & tags.MaxLength<40>) | null
   unitType?: MilitaryUnitType | null
   branch?: MilitaryBranch | null
   countryId?: (string & tags.Format<'uuid'>) | null
   /** 역사 소속 국가(독일 제국 등). countryId와 동시 설정 가능 — 표시는 역사 우선 */
   historicalCountryId?: (string & tags.Format<'uuid'>) | null
   isActive?: boolean | null
-  establishedDate?: (string & tags.Format<'date-time'>) | null
-  disbandedDate?: (string & tags.Format<'date-time'>) | null
+  establishedInfo?: MilitaryUnitDateInput | null
+  disbandedInfo?: MilitaryUnitDateInput | null
+  establishedDate?: string | null
+  disbandedDate?: string | null
   parentUnitId?: (string & tags.Format<'uuid'>) | null
   administrationDepartmentId?: (string & tags.Format<'uuid'>) | null
   nickname?: (string & tags.MaxLength<200>) | null
@@ -205,3 +291,24 @@ export interface UpdateMilitaryUnitDto {
   commanders?: MilitaryUnitCommanderInput[] | null
 }
 
+export interface CreateMilitaryUnitTransitionDto {
+  /** 이 부대가 이어진 후신 부대 ID (:id → successorUnitId) */
+  successorUnitId?: string | null
+  /** 이 부대의 전신 부대 ID (predecessorUnitId → :id) */
+  predecessorUnitId?: string | null
+  /** 이 부대의 전신 행정부처 ID (예: 전쟁부 → OKW, predecessorDepartmentId → :id) */
+  predecessorDepartmentId?: string | null
+  kind: MilitaryUnitTransitionKind
+  era?: 'BC' | 'AD' | null
+  year?: number | null
+  month?: number | null
+  note?: string | null
+}
+
+export interface UpdateMilitaryUnitTransitionDto {
+  kind?: MilitaryUnitTransitionKind
+  era?: 'BC' | 'AD' | null
+  year?: number | null
+  month?: number | null
+  note?: string | null
+}

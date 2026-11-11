@@ -323,28 +323,20 @@ export class PoliticalSystemController {
   }
 
   private async isAxisCompatible(
-    a: { countryId?: string | null; historicalCountryId?: string | null },
-    b: { countryId?: string | null; historicalCountryId?: string | null },
+    leftAxis: { countryId?: string | null; historicalCountryId?: string | null },
+    rightAxis: { countryId?: string | null; historicalCountryId?: string | null },
   ): Promise<boolean> {
-    if (!a.countryId && !a.historicalCountryId) return true
-    if (!b.countryId && !b.historicalCountryId) return true
-    if (a.historicalCountryId && b.historicalCountryId) {
-      return a.historicalCountryId === b.historicalCountryId
+    if (!leftAxis.countryId && !leftAxis.historicalCountryId) return true
+    if (!rightAxis.countryId && !rightAxis.historicalCountryId) return true
+    if (leftAxis.historicalCountryId || rightAxis.historicalCountryId) {
+      return leftAxis.historicalCountryId === rightAxis.historicalCountryId
     }
-    if (a.countryId && b.countryId && a.countryId === b.countryId) {
+    if (
+      leftAxis.countryId &&
+      rightAxis.countryId &&
+      leftAxis.countryId === rightAxis.countryId
+    ) {
       return true
-    }
-    const targetHistoricalId = a.historicalCountryId ?? b.historicalCountryId
-    const targetModernId = a.countryId ?? b.countryId
-    if (targetHistoricalId && targetModernId) {
-      const bridge = await this.prisma.historicalCountryModernCountry.findFirst({
-        where: {
-          historicalCountryId: targetHistoricalId,
-          modernCountryId: targetModernId,
-        },
-        select: { id: true },
-      })
-      if (bridge) return true
     }
     return false
   }

@@ -2072,6 +2072,54 @@ export const TenureEmpty = styled.p`
   }
 `
 
+export const TenureEmptyAddBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(139, 92, 246, 0.4)'
+        : 'rgba(109, 40, 217, 0.28)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(139, 92, 246, 0.14)'
+      : 'rgba(109, 40, 217, 0.06)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#c4b5fd' : '#6d28d9')};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.14s ease;
+
+  &:hover {
+    opacity: 0.9;
+  }
+`
+
+export const UnifiedFactLink = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#2563eb')};
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.14s ease;
+
+  &:hover {
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#bfdbfe' : '#1d4ed8')};
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+`
+
 /* ── 군주 재위 카드 ──────────────────────────── */
 export const ReignCardList = styled.div`
   display: flex;

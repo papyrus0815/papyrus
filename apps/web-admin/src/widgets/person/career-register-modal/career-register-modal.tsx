@@ -276,6 +276,8 @@ export interface CareerRegisterModalProps {
   onClose: () => void
   /** 저장 성공 시 호출 (모달은 onClose로 상위에서 닫음) */
   onSuccess?: () => void
+  /** 군 사령부·부대 지휘 보직 등록(TenureRegisterPanel 군사 트랙)으로 즉시 전환 */
+  onSwitchToMilitaryTenure?: () => void
 }
 
 export function CareerRegisterModal({
@@ -284,6 +286,7 @@ export function CareerRegisterModal({
   initialCareer,
   onClose,
   onSuccess,
+  onSwitchToMilitaryTenure,
 }: CareerRegisterModalProps) {
   const queryClient = useQueryClient()
   const [kind, setKind] = useState<CareerKind>('business')
@@ -399,8 +402,8 @@ export function CareerRegisterModal({
       setExtras(nextExtras)
       const toIsoDateInput = (iso: string | null | undefined) => {
         if (!iso) return ''
-        const s = String(iso)
-        return s.startsWith('-') ? s.slice(0, 11) : s.slice(0, 10)
+        const isoText = String(iso)
+        return isoText.startsWith('-') ? isoText.slice(0, 11) : isoText.slice(0, 10)
       }
       setStartDate(toIsoDateInput(initialCareer.startDate))
       setEndDate(toIsoDateInput(initialCareer.endDate))
@@ -537,6 +540,20 @@ export function CareerRegisterModal({
                 </KindChip>
               ))}
             </KindGrid>
+            {kind === 'military' && !isEditMode && onSwitchToMilitaryTenure && (
+              <MilitaryTenureGuideBanner>
+                <MilitaryTenureGuideText>
+                  <strong>군 최고사령부(OKW·참모본부)·야전군·사단 지휘관 및 참모 보직</strong>은
+                  국가 군사조직과 직접 연동되는 보직(재임) 화면에서 등록하세요. 이 칸은 일반 복무·입대 이력용입니다.
+                </MilitaryTenureGuideText>
+                <MilitaryTenureSwitchBtn
+                  type="button"
+                  onClick={onSwitchToMilitaryTenure}
+                >
+                  군사 사령부·부대 보직 등록으로 전환 →
+                </MilitaryTenureSwitchBtn>
+              </MilitaryTenureGuideBanner>
+            )}
           </Field>
 
           <Field>
@@ -891,6 +908,55 @@ const KindGrid = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+`
+
+const MilitaryTenureGuideBanner = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.35)'
+        : 'rgba(99, 102, 241, 0.25)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.12)'
+      : 'rgba(99, 102, 241, 0.06)'};
+`
+
+const MilitaryTenureGuideText = styled.p`
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? theme.colors.text.secondary : '#334155'};
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? theme.colors.text.primary : '#0f172a'};
+  }
+`
+
+const MilitaryTenureSwitchBtn = styled.button`
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #6366f1;
+  background: #6366f1;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+
+  &:hover {
+    opacity: 0.92;
+  }
 `
 
 const KindChip = styled.button<{ $active: boolean }>`

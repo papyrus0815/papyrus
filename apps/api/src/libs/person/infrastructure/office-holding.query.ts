@@ -65,7 +65,7 @@ export function sortRegnalErasChronologically<T extends Record<string, any>>(
     const day = typeof era.startDay === 'number' ? era.startDay : 1
     return sign * year * 10000 + month * 100 + day
   }
-  return [...eras].sort((a, b) => keyOf(a) - keyOf(b))
+  return [...eras].sort((left, right) => keyOf(left) - keyOf(right))
 }
 
 /**
@@ -91,8 +91,31 @@ export function asOfficeHolding<T extends Record<string, any>>(
     row.endYear != null && (row.endEra === 'BC' || row.endDate == null)
       ? toSignedDateString(row.endEra, row.endYear, row.endMonth, row.endDay)
       : row.endDate
+  const extraCabinetFields: Record<string, unknown> = {}
+  if (Array.isArray(row.headedCabinets) && row.headOfCabinet === undefined) {
+    extraCabinetFields.headOfCabinet = row.headedCabinets[0] ?? null
+  }
+  if (Array.isArray(row.cabinetMemberships)) {
+    const memberCabinets = row.cabinetMemberships
+      .map((membership: Record<string, any>) => membership.cabinet)
+      .filter(Boolean)
+    if (
+      row.cabinet &&
+      !memberCabinets.some((cabinetItem: Record<string, any>) => cabinetItem.id === row.cabinet.id)
+    ) {
+      memberCabinets.unshift(row.cabinet)
+    }
+    extraCabinetFields.cabinets = memberCabinets
+    if (!row.cabinet && memberCabinets.length > 0) {
+      extraCabinetFields.cabinet = memberCabinets[0]
+      if (!row.cabinetId) {
+        extraCabinetFields.cabinetId = memberCabinets[0].id
+      }
+    }
+  }
   return {
     ...row,
+    ...extraCabinetFields,
     startDate,
     endDate,
     ...(Array.isArray(row.regnalEras)

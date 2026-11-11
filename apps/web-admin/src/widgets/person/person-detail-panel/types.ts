@@ -42,6 +42,37 @@ export interface TenureLikeRecord {
   titleEn?: string | null
   /** 사건 목록(연대표)에 직함 표시 여부 (기본 true, false면 비표시) */
   showPositionInfo?: boolean | null
+  /** 보직 당시 계급·칭호 (예: 원수, 상급대장, 중장) */
+  rankTitle?: string | null
+  /** 재임 당시 소속 정당 */
+  partyId?: string | null
+  party?: {
+    id: string
+    name: string
+    shortName?: string | null
+    brandColor?: string | null
+  } | null
+  /** 소속 중앙부처 · 행정기관 */
+  administrationDepartmentId?: string | null
+  administrationDepartment?: {
+    id: string
+    name: string
+    abbreviation?: string | null
+    kind?: string | null
+    countryId?: string | null
+    historicalCountryId?: string | null
+  } | null
+  /** 소속 군사 사령부 · 부대 */
+  militaryUnitId?: string | null
+  militaryUnit?: {
+    id: string
+    name: string
+    abbreviation?: string | null
+    unitType?: string | null
+    branch?: string | null
+    countryId?: string | null
+    historicalCountryId?: string | null
+  } | null
   /** 직위 유형(GovernmentPositionType — HEAD_OF_STATE 등). 재임에만 존재, 재위는 없음. */
   positionType?: string | null
   /** 직책 정의 — positionType·isMonarchical은 기록 가족(관직/작위/군주) 판정에 쓴다 */
@@ -63,8 +94,16 @@ export interface TenureLikeRecord {
   /** 각료로 소속된 행정부(같은 행정부 동료 표시용). 재임에만 존재. */
   cabinetId?: string | null
   cabinet?: { id: string; name?: string | null } | null
-  /** 이 재임이 수반(대통령·총리)으로 수장인 행정부. 재임에만 존재. */
+  /** 다대다 소속 행정부 목록 (연임·개각으로 복수 내각에 걸친 경우) */
+  cabinets?: Array<{ id: string; name?: string | null }> | null
+  cabinetMemberships?: Array<{
+    cabinetId: string
+    roleTitle?: string | null
+    cabinet?: { id: string; name?: string | null } | null
+  }> | null
+  /** 이 재임·재위가 수반(대통령·총리·군주)으로 수장인 행정부 */
   headOfCabinet?: { id: string; name?: string | null } | null
+  headedCabinets?: Array<{ id: string; name?: string | null }> | null
 }
 
 /**

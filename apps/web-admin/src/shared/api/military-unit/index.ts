@@ -1,36 +1,163 @@
 import * as militaryUnitsApi from '@api/functional/military_units'
-import { apiConnection } from '../client'
 
-// SDK 기반 타입 — 서버·클라이언트 동일 타입 사용
-export type MilitaryUnit = Awaited<ReturnType<typeof militaryUnitsApi.getById>>
-export type MilitaryUnitType = NonNullable<MilitaryUnit['unitType']>
-export type CreateMilitaryUnitInput = Parameters<typeof militaryUnitsApi.create>[1]
-export type UpdateMilitaryUnitInput = Parameters<typeof militaryUnitsApi.update>[2]
+import type {
+  CreateMilitaryUnitTransitionDto,
+  MilitaryBranch,
+  MilitaryUnitDateInput,
+  MilitaryUnitDatePartsDto,
+  MilitaryUnitDto,
+  MilitaryUnitEventLinkDto,
+  MilitaryUnitLineageDto,
+  MilitaryUnitTransitionKind,
+  MilitaryUnitType as ServerMilitaryUnitType,
+  UpdateMilitaryUnitTransitionDto,
+} from '../../../../api/src/libs/military/military-unit/presentation/dto'
+import type { AdministrationDepartmentTenureItem } from '../administration-department'
+import { apiConnection, getApiConnection } from '../client'
+
+export type MilitaryUnit = MilitaryUnitDto
+export type MilitaryUnitType = ServerMilitaryUnitType
+export type {
+  CreateMilitaryUnitTransitionDto,
+  MilitaryBranch,
+  MilitaryUnitDateInput,
+  MilitaryUnitDatePartsDto,
+  MilitaryUnitEventLinkDto,
+  MilitaryUnitLineageDto,
+  MilitaryUnitTransitionKind,
+  UpdateMilitaryUnitTransitionDto,
+}
+export type CreateMilitaryUnitInput = Parameters<
+  typeof militaryUnitsApi.create
+>[1]
+export type UpdateMilitaryUnitInput = Parameters<
+  typeof militaryUnitsApi.update
+>[2]
+
+export type MilitaryUnitTenureItem = AdministrationDepartmentTenureItem & {
+  militaryUnitId?: string | null
+}
+
+async function fetchMilitaryJsonList<T>(path: string): Promise<T[]> {
+  const conn = getApiConnection()
+  const url = `${conn.host}${path}`
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(conn.headers as Record<string, string>),
+  }
+  const response = await fetch(url, { method: 'GET', headers })
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(text || `HTTP ${response.status}`)
+  }
+  const list = (await response.json()) as T[]
+  return Array.isArray(list) ? list : []
+}
 
 export const militaryUnitApi = {
-  getAll: async () => {
-    const result = await militaryUnitsApi.getAll(apiConnection)
-    // 응답이 { data: [...] } 형태인 경우 data 추출
+  getAll: async (params?: {
+    countryId?: string
+    historicalCountryId?: string
+    search?: string
+    unitType?: string
+    branch?: string
+  }): Promise<MilitaryUnit[]> => {
+    const result = await militaryUnitsApi.getAll(
+      getApiConnection(),
+      params?.countryId,
+      params?.historicalCountryId,
+      params?.search,
+      params?.unitType,
+      params?.branch,
+    )
     if (result && typeof result === 'object' && 'data' in result) {
-      return Array.isArray((result as any).data) ? (result as any).data : []
+      const nested = (result as { data?: unknown }).data
+      return Array.isArray(nested) ? (nested as MilitaryUnit[]) : []
     }
-    // 직접 배열인 경우
-    return Array.isArray(result) ? result : []
+    return Array.isArray(result) ? (result as MilitaryUnit[]) : []
   },
 
-  getById: async (id: string) => {
-    return await militaryUnitsApi.getById(apiConnection, id)
+  getByCountryId: async (countryId: string): Promise<MilitaryUnit[]> => {
+    const result = await militaryUnitsApi.country.getByCountryId(
+      getApiConnection(),
+      countryId,
+    )
+    return Array.isArray(result) ? (result as MilitaryUnit[]) : []
   },
 
-  create: async (data: CreateMilitaryUnitInput) => {
-    return await militaryUnitsApi.create(apiConnection, data)
+  getByHistoricalCountryId: async (
+    historicalCountryId: string,
+  ): Promise<MilitaryUnit[]> => {
+    return militaryUnitApi.getAll({ historicalCountryId })
   },
 
-  update: async (id: string, data: UpdateMilitaryUnitInput) => {
-    return await militaryUnitsApi.update(apiConnection, id, data)
+  getById: async (id: string): Promise<MilitaryUnit> => {
+    return (await militaryUnitsApi.getById(
+      apiConnection,
+      id,
+    )) as MilitaryUnit
   },
 
-  delete: async (id: string) => {
-    await militaryUnitsApi._delete(apiConnection, id)
+  create: async (data: CreateMilitaryUnitInput): Promise<MilitaryUnit> => {
+    return (await militaryUnitsApi.create(
+      getApiConnection(),
+      data,
+    )) as MilitaryUnit
+  },
+
+  update: async (
+    id: string,
+    data: UpdateMilitaryUnitInput,
+  ): Promise<MilitaryUnit> => {
+    return (await militaryUnitsApi.update(
+      getApiConnection(),
+      id,
+      data,
+    )) as MilitaryUnit
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await militaryUnitsApi._delete(getApiConnection(), id)
+  },
+
+  addTransition: async (
+    unitId: string,
+    data: CreateMilitaryUnitTransitionDto,
+  ): Promise<MilitaryUnit> => {
+    return (await militaryUnitsApi.transitions.addTransition(
+      getApiConnection(),
+      unitId,
+      data,
+    )) as MilitaryUnit
+  },
+
+  updateTransition: async (
+    transitionId: string,
+    data: UpdateMilitaryUnitTransitionDto,
+  ): Promise<void> => {
+    await militaryUnitsApi.transitions.updateTransition(
+      getApiConnection(),
+      transitionId,
+      data,
+    )
+  },
+
+  deleteTransition: async (transitionId: string): Promise<void> => {
+    await militaryUnitsApi.transitions.deleteTransition(
+      getApiConnection(),
+      transitionId,
+    )
+  },
+
+  getTenures: async (unitId: string): Promise<MilitaryUnitTenureItem[]> => {
+    return fetchMilitaryJsonList<MilitaryUnitTenureItem>(
+      `/military-units/${encodeURIComponent(unitId)}/tenures`,
+    )
+  },
+
+  getEvents: async (unitId: string): Promise<MilitaryUnitEventLinkDto[]> => {
+    return fetchMilitaryJsonList<MilitaryUnitEventLinkDto>(
+      `/military-units/${encodeURIComponent(unitId)}/events`,
+    )
   },
 }

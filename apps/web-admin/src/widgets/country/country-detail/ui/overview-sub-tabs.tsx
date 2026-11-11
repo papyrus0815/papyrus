@@ -17,6 +17,7 @@ export type OverviewSubTab =
   | 'linked-historical'
   | 'regions'
   | 'government'
+  | 'military'
   | 'ethnicity'
   | 'elections'
   | 'laws'
@@ -43,7 +44,8 @@ const TAB_LABELS: Array<{
   { key: 'persons', label: '인물' },
   { key: 'events', label: '사건' },
   { key: 'linked-historical', label: '과거국가', groupEnd: true },
-  { key: 'government', label: '행정조직' },
+  { key: 'government', label: '정부·행정' },
+  { key: 'military', label: '군사' },
   { key: 'regions', label: '행정구역' },
   { key: 'elections', label: '선거·투표' },
   { key: 'laws', label: '법령', groupEnd: true },

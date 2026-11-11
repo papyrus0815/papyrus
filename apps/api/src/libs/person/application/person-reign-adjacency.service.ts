@@ -35,7 +35,13 @@ const NEIGHBOR_OVERFETCH = 16
 type SuccessionAxis =
   | { kind: 'HEAD_OF_STATE' }
   | { kind: 'HEAD_OF_GOVERNMENT' }
-  | { kind: 'TITLED'; positionType: (typeof TITLED_POSITION_TYPES)[number]; title: string }
+  | {
+      kind: 'TITLED'
+      positionType: (typeof TITLED_POSITION_TYPES)[number]
+      title: string
+      administrationDepartmentId?: string | null
+      militaryUnitId?: string | null
+    }
 
 /**
  * 「같은 국가 전/후 재위」 화면에서만 앵커 후보를 넓히는 확장 — 「동시대 수장」 등 다른
@@ -85,6 +91,8 @@ const ANCHOR_TENURE_SELECT = {
   ...ANCHOR_BASE_SELECT,
   positionType: true,
   title: true,
+  administrationDepartmentId: true,
+  militaryUnitId: true,
 } as const
 
 /** 재위 앵커의 축은 연결된 직위 정의에서 읽는다 (정의 없으면 국가원수 폴백) */
@@ -130,12 +138,14 @@ export interface GetReignAdjacencyParams {
 interface AxisSource {
   positionType?: string | null
   title?: string | null
+  administrationDepartmentId?: string | null
+  militaryUnitId?: string | null
   positionDefinition?: { positionType?: string | null } | null
 }
 
 /**
  * 앵커가 놓인 승계 축 — 재임은 자기 positionType, 재위는 연결된 직위 정의에서 읽는다.
- * 재임이 TITLED 후보(참모총장·장관 등)면 title까지 축에 실어 "같은 자리"만 매칭되게 한다
+ * 재임이 TITLED 후보(참모총장·장관 등)면 title(+ 부처/부대 ID가 있으면 그 ID까지)을 축에 실어 "같은 자리"만 매칭되게 한다
  * (title이 비어 있으면 매칭 상대가 있을 수 없으므로 국가원수 축으로 안전 폴백 — 빈 이웃).
  * 그 외(재임의 다른 positionType, 재위 전체)는 HEAD_OF_GOVERNMENT가 아니면 국가원수(폴백)라,
  * 값이 비어도 `positionType: undefined`(= 필터 소실) 같은 구멍이 이웃 쿼리로 새지 않는다.
@@ -147,6 +157,8 @@ function axisOfAnchor(isMonarchical: boolean, row: AxisSource): SuccessionAxis {
         kind: 'TITLED',
         positionType: row.positionType as (typeof TITLED_POSITION_TYPES)[number],
         title: row.title,
+        administrationDepartmentId: row.administrationDepartmentId ?? null,
+        militaryUnitId: row.militaryUnitId ?? null,
       }
     }
     return { kind: 'HEAD_OF_STATE' }
@@ -614,7 +626,14 @@ export class PersonReignAdjacencyService {
     // TITLED는 positionType과 title이 둘 다 같아야 "같은 자리"다.
     const tenureAxisWhere =
       axis.kind === 'TITLED'
-        ? { positionType: axis.positionType, title: axis.title }
+        ? {
+            positionType: axis.positionType,
+            title: axis.title,
+            ...(axis.administrationDepartmentId
+              ? { administrationDepartmentId: axis.administrationDepartmentId }
+              : {}),
+            ...(axis.militaryUnitId ? { militaryUnitId: axis.militaryUnitId } : {}),
+          }
         : { positionType: axis.kind }
     const [tenureRows, reignRows] = await Promise.all([
       this.prisma.governmentPositionTenure.findMany({

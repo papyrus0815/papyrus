@@ -5,6 +5,7 @@
  */
 import { renderWithTheme } from '@/shared/test/render-with-theme'
 import '@testing-library/jest-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { ThemeProvider } from 'styled-components'
 
@@ -511,5 +512,99 @@ describe('TenureReignList', () => {
     expect(screen.getByText('선거')).toBeInTheDocument()
     expect(screen.getByText('제20대 대통령 선거')).toBeInTheDocument()
     expect(screen.getByText('연대표 비표시')).toBeInTheDocument()
+  })
+
+  it('소속 부처·군사 사령부 클릭 링크, 계급·정당 표기, 복수 행정부 연결을 렌더링한다', () => {
+    const onDepartmentClick = jest.fn()
+    const onMilitaryUnitClick = jest.fn()
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+
+    renderWithTheme(
+      <QueryClientProvider client={queryClient}>
+        <TenureReignList
+          {...baseProps}
+          onDepartmentClick={onDepartmentClick}
+          onMilitaryUnitClick={onMilitaryUnitClick}
+          items={[
+            makeItem({
+              kind: 'tenure',
+              record: {
+                id: 't-minister',
+                title: '외무장관',
+                positionType: 'CABINET_MINISTER',
+                country: { id: 'de', name: '독일' },
+                administrationDepartment: {
+                  id: 'dept-aa',
+                  name: '독일 외무청',
+                  abbreviation: 'AA',
+                  countryId: 'de',
+                },
+                party: {
+                  id: 'party-spd',
+                  name: '독일 사회민주당',
+                  shortName: '사민당',
+                },
+                cabinets: [
+                  { id: 'cab-1', name: '제1차 내각' },
+                  { id: 'cab-2', name: '제2차 내각' },
+                ],
+              },
+            }),
+            makeItem({
+              kind: 'tenure',
+              record: {
+                id: 't-okw',
+                title: '국방군 최고사령부 총장',
+                positionType: 'MILITARY_COMMANDER',
+                rankTitle: '원수',
+                country: { id: 'de', name: '독일' },
+                historicalCountry: { id: 'hc-3reich', name: '나치 독일' },
+                militaryUnit: {
+                  id: 'unit-okw',
+                  name: '국방군 최고사령부',
+                  abbreviation: 'OKW',
+                  countryId: 'de',
+                  historicalCountryId: 'hc-3reich',
+                },
+              },
+            }),
+          ]}
+        />
+      </QueryClientProvider>,
+    )
+
+    // 군직 구분 + 계급
+    expect(screen.getByText('군직')).toBeInTheDocument()
+    expect(screen.getByText('· 원수')).toBeInTheDocument()
+    // 정당 단축명
+    expect(screen.getByText('사민당')).toBeInTheDocument()
+
+    // 부처 클릭 링크
+    const deptBtn = screen.getByRole('button', { name: '독일 외무청 (AA)' })
+    fireEvent.click(deptBtn)
+    expect(onDepartmentClick).toHaveBeenCalledWith({
+      departmentId: 'dept-aa',
+      countryId: 'de',
+    })
+
+    // 군사 사령부·부대 클릭 링크
+    const unitBtn = screen.getByRole('button', {
+      name: '국방군 최고사령부 (OKW)',
+    })
+    fireEvent.click(unitBtn)
+    expect(onMilitaryUnitClick).toHaveBeenCalledWith({
+      militaryUnitId: 'unit-okw',
+      countryId: 'de',
+    })
+
+    // 다대다 행정부 복수 토글 버튼
+    expect(
+      screen.getByRole('button', { name: '같은 행정부 · 제1차 내각' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: '같은 행정부 · 제2차 내각' }),
+    ).toBeInTheDocument()
   })
 })

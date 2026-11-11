@@ -24,6 +24,7 @@ import { CountryDetailHeader } from './country-detail-header.widget'
 import * as S from './country-detail.styles'
 import { CountryElectionsSection } from './country-elections-section.widget'
 import { CountryLawsSection } from './country-laws-section.widget'
+import { CountryMilitarySection } from './country-military-section.widget'
 import { CountryStatisticsSection } from './country-statistics-section.widget'
 import { CountryTradeSection } from './country-trade-section.widget'
 import { EthnicitySection } from './ethnicity-section.widget'
@@ -191,8 +192,10 @@ function CountryDetailInner({
       government: dashboardStats.loading.administration
         ? undefined
         : dashboardStats.administrationCount +
-          dashboardStats.currentHeads.length +
-          dashboardStats.militaryCount,
+          dashboardStats.currentHeads.length,
+      military: dashboardStats.loading.military
+        ? undefined
+        : dashboardStats.militaryCount,
       ethnicity: dashboardStats.loading.ethnicity
         ? undefined
         : dashboardStats.ethnicityCount,
@@ -246,6 +249,7 @@ function CountryDetailInner({
               initialDetailTab === 'heads' ||
               initialDetailTab === 'regions' ||
               initialDetailTab === 'government' ||
+              initialDetailTab === 'military' ||
               initialDetailTab === 'elections' ||
               initialDetailTab === 'laws' ||
               initialDetailTab === 'ethnicity' ||
@@ -448,6 +452,12 @@ function CountryDetailInner({
                             : undefined)
                       }
                     />
+                  </S.TabContentPane>
+                )}
+
+                {activeSubTab === 'military' && (
+                  <S.TabContentPane>
+                    <CountryMilitarySection country={country} />
                   </S.TabContentPane>
                 )}
 

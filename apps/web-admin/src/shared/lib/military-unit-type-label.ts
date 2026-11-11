@@ -1,6 +1,9 @@
 /** Prisma `MilitaryUnitType` → 한글 라벨 (관리자 UI 표시용) */
 export const MILITARY_UNIT_TYPE_KO: Record<string, string> = {
-  THEATER: '전구·총사령부',
+  SUPREME_COMMAND: '최고사령부',
+  GENERAL_STAFF: '참모본부·합참',
+  SERVICE_HQ: '각군 총사령부',
+  THEATER: '전구·방면사령부',
   ARMY_GROUP: '집단군',
   FRONT: '전선군·방면군',
   MILITARY_DISTRICT: '군관구',
@@ -21,6 +24,16 @@ export const MILITARY_UNIT_TYPE_KO: Record<string, string> = {
   SPECIAL_FORCES: '특수부대',
   DETACHMENT: '분견대',
   OTHER: '기타',
+}
+
+export function isHighCommandUnitType(
+  unitType: string | null | undefined,
+): boolean {
+  return (
+    unitType === 'SUPREME_COMMAND' ||
+    unitType === 'GENERAL_STAFF' ||
+    unitType === 'SERVICE_HQ'
+  )
 }
 
 export function militaryUnitTypeLabelKo(
@@ -46,6 +59,9 @@ export function militaryUnitIconVariant(
     return 'air-force'
   }
   if (
+    upper === 'SUPREME_COMMAND' ||
+    upper === 'GENERAL_STAFF' ||
+    upper === 'SERVICE_HQ' ||
     upper === 'THEATER' ||
     upper === 'ARMY_GROUP' ||
     upper === 'FRONT' ||

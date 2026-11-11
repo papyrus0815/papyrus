@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -8,15 +9,15 @@ import type {
   AdministrationDepartmentTenureItem,
 } from '@/shared/api/administration-department'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
-import { getAllPersons } from '@/shared/api/persons'
+import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
+import { personCareerApi } from '@/shared/api/person-career'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { useThemeStore } from '@/shared/styles/theme.store'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import type { EventPickerSelection } from '@/shared/ui/event-picker-modal/event-picker-modal'
 import { EventPickerModal } from '@/shared/ui/event-picker-modal/event-picker-modal'
-import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
-import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
+import { InstitutionAppointmentModal } from '@/shared/ui/institution-appointment-modal'
 import { notify } from '@/shared/ui/toast'
 
 function formatStructuredOrIsoDate(
@@ -58,30 +59,23 @@ export function DepartmentTenuresBlock({
   countryId,
   historicalCountryId,
   departmentName,
+  departmentKind,
 }: {
   departmentId: string
   /** 등록 폼에 미리 채울 국가 */
   countryId?: string
   historicalCountryId?: string | null
   departmentName?: string
+  departmentKind?: string | null
 }) {
   const queryClient = useQueryClient()
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const [registerPersonId, setRegisterPersonId] = useState<string | null>(null)
+  const [appointmentOpen, setAppointmentOpen] = useState(false)
   const [editingTenure, setEditingTenure] =
     useState<AdministrationDepartmentTenureItem | null>(null)
 
-  const personsQuery = useQuery({
-    queryKey: ['persons', 'all'],
-    queryFn: getAllPersons,
-    enabled: pickerOpen,
-    staleTime: 5 * 60_000,
-  })
-
-  const closeRegister = () => {
-    setRegisterPersonId(null)
+  const closeAppointmentModal = () => {
+    setAppointmentOpen(false)
     setEditingTenure(null)
-    setPickerOpen(false)
   }
 
   const { mode } = useThemeStore()
@@ -93,10 +87,54 @@ export function DepartmentTenuresBlock({
       administrationDepartmentApi.getTenuresByDepartmentId(departmentId),
     enabled: !!departmentId,
   })
+  const { data: availableCabinets = [] } = useQuery({
+    queryKey: [
+      'cabinets-by-country',
+      countryId ?? '',
+      historicalCountryId ?? '',
+    ],
+    queryFn: () =>
+      personCareerApi.getCabinets({
+        ...(countryId ? { countryId } : {}),
+        ...(historicalCountryId ? { historicalCountryId } : {}),
+      }),
+    enabled:
+      Boolean(appointmentOpen || editingTenure) &&
+      Boolean(countryId || historicalCountryId),
+    staleTime: 60_000,
+  })
+
+  const handleDeleteTenure = async (
+    tenure: AdministrationDepartmentTenureItem,
+  ) => {
+    const label =
+      tenure.title ?? tenure.positionDefinition?.title ?? '재임 기록'
+    const ok = await confirm({
+      title: '재임 기록 삭제',
+      message: `"${label}" 재임 기록을 삭제하시겠습니까?`,
+      confirmText: '삭제',
+      danger: true,
+    })
+    if (!ok) return
+    try {
+      await personCareerApi.deleteGovernmentPositionTenure(tenure.id)
+      invalidateTenureQueries(queryClient, {
+        personId: tenure.personId ?? tenure.person?.id ?? null,
+        countryId: countryId ?? null,
+        historicalCountryId: historicalCountryId ?? null,
+      })
+      notify.success('재임 기록을 삭제했습니다.')
+    } catch (err) {
+      notify.error(
+        err instanceof Error ? err.message : '재임 기록 삭제에 실패했습니다.',
+      )
+    }
+  }
+
   if (isLoading) return null
 
   const formatName = (
-    p: {
+    personObj: {
       name?: string
       surname?: string
       middleName?: string
@@ -104,19 +142,26 @@ export function DepartmentTenuresBlock({
       country?: { defaultNameDisplayOrder?: string | null } | null
     } | null,
   ) => {
-    if (!p) return '—'
+    if (!personObj) return '—'
     return (
       getPersonDisplayName({
-        name: p.name ?? '',
-        surname: p.surname,
-        middleName: p.middleName,
-        nameDisplayOrder: p.nameDisplayOrder ?? null,
-        country: p.country ?? undefined,
+        name: personObj.name ?? '',
+        surname: personObj.surname,
+        middleName: personObj.middleName,
+        nameDisplayOrder: personObj.nameDisplayOrder ?? null,
+        country: personObj.country ?? undefined,
       }) ||
-      p.name ||
+      personObj.name ||
       '—'
     )
   }
+
+  const appointButtonLabel =
+    departmentKind === 'COLONIAL_GOVERNMENT'
+      ? '+ 총독·인사 임명'
+      : departmentKind === 'AGENCY' || departmentKind === 'ROYAL_HOUSEHOLD'
+        ? '+ 수장·인사 임명'
+        : '+ 장관·수장 임명'
 
   const listEl = (
     <>
@@ -127,10 +172,10 @@ export function DepartmentTenuresBlock({
           listStyle: 'none',
           display: 'flex',
           flexDirection: 'column',
-          gap: 6,
+          gap: 8,
         }}
       >
-        {tenures.slice(0, 12).map((tenure) => {
+        {tenures.slice(0, 20).map((tenure) => {
           const startLabel = formatStructuredOrIsoDate(
             {
               era: tenure.startEra,
@@ -150,6 +195,17 @@ export function DepartmentTenuresBlock({
             tenure.endDate,
           )
           const canEdit = Boolean(tenure.personId || tenure.person?.id)
+          const personIdVal = tenure.person?.id ?? tenure.personId
+          const displayPersonName = formatName(
+            tenure.person
+              ? {
+                  name: tenure.person.name,
+                  surname: tenure.person.surname ?? undefined,
+                  middleName: tenure.person.middleName ?? undefined,
+                  country: tenure.person.country ?? undefined,
+                }
+              : null,
+          )
           return (
             <li
               key={tenure.id}
@@ -159,69 +215,125 @@ export function DepartmentTenuresBlock({
                 display: 'flex',
                 flexWrap: 'wrap',
                 gap: 6,
-                alignItems: 'baseline',
+                alignItems: 'center',
+                padding: '6px 8px',
+                borderRadius: 8,
+                background: palette.bgSubtle,
               }}
             >
-              <span style={{ fontWeight: 600 }}>
-                {formatName(
-                  tenure.person
-                    ? {
-                        name: tenure.person.name,
-                        surname: tenure.person.surname ?? undefined,
-                        middleName: tenure.person.middleName ?? undefined,
-                        country:
-                          (
-                            tenure.person as {
-                              country?: {
-                                defaultNameDisplayOrder?: string | null
-                              } | null
-                            }
-                          ).country ?? undefined,
-                      }
-                    : null,
-                )}
-              </span>
-              <span style={{ color: palette.textMuted }}>
+              {tenure.ordinal != null && (
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: palette.accent,
+                    background: palette.accentBg,
+                    padding: '1px 6px',
+                    borderRadius: 999,
+                  }}
+                >
+                  제{tenure.ordinal}대
+                </span>
+              )}
+              {personIdVal ? (
+                <Link
+                  to={`/persons-timeline/${encodeURIComponent(personIdVal)}/`}
+                  style={{
+                    fontWeight: 700,
+                    color: palette.text,
+                    textDecoration: 'none',
+                  }}
+                >
+                  {displayPersonName}
+                </Link>
+              ) : (
+                <span style={{ fontWeight: 700 }}>{displayPersonName}</span>
+              )}
+              <span style={{ color: palette.textMuted, fontWeight: 600 }}>
                 {tenure.title ?? tenure.positionDefinition?.title ?? ''}
               </span>
+              {tenure.rankTitle ? (
+                <span
+                  style={{
+                    fontSize: 11.5,
+                    padding: '1px 6px',
+                    borderRadius: 6,
+                    background: palette.chipActionBg,
+                    color: palette.textMuted,
+                  }}
+                >
+                  {tenure.rankTitle}
+                </span>
+              ) : null}
+              {tenure.party ? (
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    padding: '1px 7px',
+                    borderRadius: 999,
+                    border: `1px solid ${tenure.party.brandColor || palette.borderMid}`,
+                    color: palette.textMuted,
+                  }}
+                >
+                  {tenure.party.shortName || tenure.party.name}
+                </span>
+              ) : null}
               <span style={{ color: palette.textMuted, fontSize: 12 }}>
-                {startLabel}–{endLabel}
+                {startLabel} ~ {endLabel === '—' ? '재임·미상' : endLabel}
               </span>
-              {canEdit && (
+              <div
+                style={{
+                  marginLeft: 'auto',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => setEditingTenure(tenure)}
+                    style={{
+                      padding: '2px 7px',
+                      fontSize: 11,
+                      borderRadius: 6,
+                      border: `1px solid ${palette.borderHairline}`,
+                      background: palette.chipActionBg,
+                      color: palette.textMuted,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    수정
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => setEditingTenure(tenure)}
+                  onClick={() => void handleDeleteTenure(tenure)}
                   style={{
-                    marginLeft: 'auto',
                     padding: '2px 7px',
                     fontSize: 11,
                     borderRadius: 6,
                     border: `1px solid ${palette.borderHairline}`,
                     background: palette.chipActionBg,
-                    color: palette.textMuted,
+                    color: '#ef4444',
                     cursor: 'pointer',
                   }}
                 >
-                  수정
+                  삭제
                 </button>
-              )}
+              </div>
             </li>
           )
         })}
       </ul>
-      {tenures.length > 12 && (
+      {tenures.length > 20 && (
         <div style={{ fontSize: 12, color: palette.textMuted, marginTop: 6 }}>
-          외 {tenures.length - 12}명
+          외 {tenures.length - 20}명
         </div>
       )}
     </>
   )
-
-  const activeTenurePersonId =
-    editingTenure?.personId ??
-    editingTenure?.person?.id ??
-    registerPersonId ??
-    null
 
   return (
     <div
@@ -244,68 +356,91 @@ export function DepartmentTenuresBlock({
           marginBottom: 10,
         }}
       >
-        <span>소속 인사(재임)</span>
+        <span>역대 수장 · 주요 인사 ({tenures.length})</span>
         <button
           type="button"
-          onClick={() => setPickerOpen(true)}
+          onClick={() => {
+            setEditingTenure(null)
+            setAppointmentOpen(true)
+          }}
           style={{
             marginLeft: 'auto',
-            padding: '4px 10px',
-            borderRadius: 7,
-            border: `1px solid ${palette.borderMid}`,
-            background: 'transparent',
-            color: palette.sectionLabelTint,
-            fontSize: 11.5,
+            padding: '5px 11px',
+            borderRadius: 8,
+            border: `1px solid ${palette.accentBorder}`,
+            background: palette.accentBg,
+            color: palette.accent,
+            fontSize: 12,
             fontWeight: 700,
             letterSpacing: 0,
             textTransform: 'none',
             cursor: 'pointer',
           }}
         >
-          + 장관 등록
+          {appointButtonLabel}
         </button>
       </div>
       {tenures.length === 0 ? (
         <div style={{ fontSize: 12.5, color: palette.textMuted }}>
-          이 부처에 등록된 인사가 없습니다.
+          이 기관에 등록된 수장·인사가 없습니다. 우측 상단 버튼으로 바로 임명하세요.
         </div>
       ) : (
         listEl
       )}
 
-      {pickerOpen && (
-        <PersonSelectModal
-          persons={personsQuery.data ?? []}
-          selectedPersonId={registerPersonId ?? ''}
-          loading={personsQuery.isLoading}
-          title={`${departmentName ?? '부처'} 장관 등록 — 인물 선택`}
-          searchPlaceholder="장관으로 등록할 인물을 검색..."
-          defaultCountryId={countryId}
-          onSelect={(personId) => {
-            setRegisterPersonId(personId)
-            setPickerOpen(false)
-          }}
-          onClose={() => setPickerOpen(false)}
-        />
-      )}
-
-      {activeTenurePersonId && (
-        <TenureRegisterPanel
-          personId={activeTenurePersonId}
-          tenureId={editingTenure?.id ?? null}
-          open
-          onClose={closeRegister}
-          onSuccess={() => {
-            queryClient.invalidateQueries({
-              queryKey: ['administration-department-tenures', departmentId],
-            })
-            closeRegister()
-          }}
-          initialCountryId={countryId}
-          initialHistoricalCountryId={historicalCountryId ?? null}
-          initialAdministrationDepartmentId={departmentId}
-        />
-      )}
+      <InstitutionAppointmentModal
+        isOpen={appointmentOpen || Boolean(editingTenure)}
+        onClose={closeAppointmentModal}
+        contextType="DEPARTMENT"
+        countryId={countryId ?? null}
+        historicalCountryId={historicalCountryId ?? null}
+        departmentId={departmentId}
+        departmentName={departmentName ?? null}
+        departmentKind={departmentKind ?? null}
+        availableCabinets={availableCabinets}
+        editingTenure={
+          editingTenure
+            ? {
+                id: editingTenure.id,
+                personId: editingTenure.person?.id ?? editingTenure.personId,
+                personName: formatName(
+                  editingTenure.person
+                    ? {
+                        name: editingTenure.person.name,
+                        surname: editingTenure.person.surname ?? undefined,
+                        middleName: editingTenure.person.middleName ?? undefined,
+                        country: editingTenure.person.country ?? undefined,
+                      }
+                    : null,
+                ),
+                positionType:
+                  editingTenure.positionDefinition?.positionType ?? null,
+                positionDefinitionId:
+                  editingTenure.positionDefinition?.id ?? null,
+                title:
+                  editingTenure.title ??
+                  editingTenure.positionDefinition?.title ??
+                  '',
+                rankTitle: editingTenure.rankTitle ?? null,
+                ordinal: editingTenure.ordinal ?? null,
+                partyId: editingTenure.partyId ?? null,
+                administrationDepartmentId: departmentId,
+                cabinetId: editingTenure.cabinetId ?? null,
+                cabinetIds: editingTenure.cabinets?.map((cab) => cab.id),
+                startDate: editingTenure.startDate,
+                endDate: editingTenure.endDate,
+                startEra: editingTenure.startEra,
+                startYear: editingTenure.startYear,
+                startMonth: editingTenure.startMonth,
+                startDay: editingTenure.startDay,
+                endEra: editingTenure.endEra,
+                endYear: editingTenure.endYear,
+                endMonth: editingTenure.endMonth,
+                endDay: editingTenure.endDay,
+              }
+            : null
+        }
+      />
     </div>
   )
 }
@@ -695,9 +830,18 @@ export function DepartmentEventsBlock({
                         gap: 6,
                       }}
                     >
-                      <span style={{ fontWeight: 600 }}>
+                      <Link
+                        to={`/events/${deptEvent.event.id}`}
+                        style={{
+                          fontWeight: 600,
+                          color: palette.text,
+                          textDecoration: 'underline',
+                          textUnderlineOffset: 2,
+                        }}
+                        title={`${deptEvent.event.title} 사건 상세 보기`}
+                      >
                         {deptEvent.event.title}
-                      </span>
+                      </Link>
                       <span style={{ fontSize: 11, color: palette.textMuted }}>
                         {dateLabel}
                       </span>
