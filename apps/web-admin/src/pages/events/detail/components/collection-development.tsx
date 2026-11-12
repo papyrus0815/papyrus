@@ -80,6 +80,7 @@ import {
   NextStep,
   NextStepNode,
   NextStepTools,
+  NoBreak,
   Node,
   NodeCol,
   PartialFold,
@@ -1434,10 +1435,11 @@ export function CollectionDevelopment({
           ? `${chapters.length}국면(–${phaseRangeLabel(last).split('–')[1] ?? ''}) 이후`
           : ''
     /*
-     * 한 줄 머리 — 하위 묶음 안 · 국면 밖('어느 국면에도 들지 않는…'을 큰 제목으로 세우지 않는다) ·
-     * 1건짜리 국면(그 1건이 대개 같은 이름의 묶음이라 제목이 두 번 섰다). 설명도 숨긴다.
+     * 한 줄 머리 — 하위 묶음 안 · 국면 밖('어느 국면에도 들지 않는…'을 큰 제목으로 세우지 않는다). 설명도 숨긴다.
+     * 1건짜리 직계 국면도 예전엔 한 줄이었는데('그 1건이 대개 같은 이름'), 실제 4개 중 이름이 겹치는 건 1개뿐이고
+     * 넷 다 설명이 있었다 — 독소조약 1국면 이름이 말줄임으로 잘리고 설명이 사라졌다. 직계는 건수와 상관없이 큰 머리.
      */
-    const inline = depth > 1 || !chapter || head.count <= 1
+    const inline = depth > 1 || !chapter
     const canDropToChapter = Boolean(
       draggingId &&
       !(index.get(draggingId) as TreeRow | undefined)?.viaExtraLink &&
@@ -1612,11 +1614,20 @@ export function CollectionDevelopment({
       <DevelopmentHeader ref={headerRef}>
         <S.SectionTitle>전개</S.SectionTitle>
         <DevelopmentSubtitle>
-          {directCount === 0
-            ? '하위 사건으로 기록'
-            : totalCount > directCount
-              ? `하위 사건 ${directCount}건 · 그 아래까지 ${totalCount}건`
-              : `하위 사건 ${directCount}건`}
+          {/* 토막마다 통째로 — 390px에서 '그 아래까지 / 39건'처럼 숫자 앞에서 꺾였다 */}
+          {directCount === 0 ? (
+            '하위 사건으로 기록'
+          ) : (
+            <>
+              <NoBreak>하위 사건 {directCount}건</NoBreak>
+              {totalCount > directCount && (
+                <>
+                  {' · '}
+                  <NoBreak>그 아래까지 {totalCount}건</NoBreak>
+                </>
+              )}
+            </>
+          )}
           {coveredRange && directCount > 1 && (
             <CoveredRange title="하위 사건이 실제로 다룬 기간 — 가장 이른 시작부터 가장 늦은 끝까지">
               {' · '}

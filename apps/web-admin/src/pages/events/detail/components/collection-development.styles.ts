@@ -429,7 +429,7 @@ export const PeriodTag = styled.span`
 `
 
 /** 해가 바뀌는 행의 연도 — 연 표지 줄을 따로 세우지 않고 날짜 줄 안에서 굵게 */
-export const YearText = styled.b`
+export const YearText = styled('b')`
   font-weight: 800;
   color: ${({ theme }) => theme.colors.text.primary};
 `
@@ -929,9 +929,6 @@ export const ChapterKicker = styled.span`
     [data-inline] > & {
       flex-wrap: wrap;
     }
-    [data-inline] > & > :nth-child(3) {
-      flex: 1 1 calc(100% - 72px);
-    }
   }
 `
 
@@ -1024,6 +1021,22 @@ export const ChapterAdd = styled.button`
   @media (hover: none) {
     opacity: 0.8;
   }
+
+  /*
+   * 한 줄 머리(하위 묶음 안)에선 줄 흐름 밖에 — 투명한 채로 84px를 차지해, '국면만' 보기에서 오른쪽이 비어 있는데도
+   * 국면 이름 20개 중 10개가 '삼부회에서 국민의회로 — 제3신분…'처럼 잘렸다. 손이 닿을 때만 줄 끝 위에 겹쳐 선다.
+   * 빈 국면('아직 없음' 옆에 늘 서 있음)과 좁은 지면(둘째 줄에 자리가 있음)은 그대로 줄 안에.
+   */
+  @container eventdetail (min-width: 640px) {
+    li:not([data-empty]) > [data-inline] > span > & {
+      position: absolute;
+      top: 50%;
+      right: 0;
+      transform: translateY(-50%);
+      padding-left: 12px;
+      background: ${({ theme }) => ledgerBackground(theme.mode)};
+    }
+  }
 `
 
 /** 국면 설명 — 직계 장 머리 아래 두 줄까지 */
@@ -1063,6 +1076,24 @@ export const ChapterTitle = styled.span<{ $inline: boolean }>`
     font-weight: 600;
     color: ${({ theme }) => theme.colors.text.secondary};
   }
+
+  /*
+   * 좁은 지면 — 이름이 첫 줄을 다 쓰고 기간·건수는 둘째 줄로. 예전엔 표지 줄의 ':nth-child(3)'을 키웠는데,
+   * 이름이 없는 줄('국면 사이')·접기 단추가 없는 빈 국면에선 그 자리가 건수라 '2건'만 다음 줄로 떨어졌다.
+   */
+  @container eventdetail (max-width: 639px) {
+    [data-inline] & {
+      flex: 1 1 calc(100% - 72px);
+      /* 첫 줄을 혼자 쓰는데도 말줄임이면 390px에서 20개 중 8개가 잘렸다 — 줄을 바꾼다 */
+      white-space: normal;
+      word-break: keep-all;
+    }
+  }
+`
+
+/** 머리 부제의 한 토막 — 좁으면 토막째 다음 줄로('그 아래까지 / 39건'처럼 숫자 앞에서 꺾이지 않게) */
+export const NoBreak = styled.span`
+  white-space: nowrap;
 `
 
 /**

@@ -127,9 +127,13 @@ describe('initialView', () => {
     expect(initialView({ ...base, urlView: 'chrono', stored: true })).toEqual({ kind: 'chrono' })
     expect(initialView({ ...base, urlView: 'all' })).toEqual({ kind: 'level', level: 'events' })
   })
-  it('기억한 접기가 있으면 손대지 않고, 40건 미만도 그대로', () => {
+  it('기억한 접기가 있으면 손대지 않고, 25건 미만도 그대로', () => {
     expect(initialView({ ...base, stored: true })).toBeNull()
-    expect(initialView({ ...base, totalCount: 31 })).toBeNull()
+    expect(initialView({ ...base, totalCount: 24 })).toBeNull()
+  })
+  it('25건부터 접는다 — 대불동맹(39)·제헌(31)·동부전선(29)이 한 건 차이로 다 펼쳐지던 경계', () => {
+    expect(initialView({ ...base, totalCount: 25 })).toEqual({ kind: 'level', level: 'chapters' })
+    expect(initialView({ ...base, totalCount: 39 })).toEqual({ kind: 'level', level: 'chapters' })
   })
   it('큰 트리 첫 방문 — 국면이 있으면 국면만, 없으면 묶음만', () => {
     expect(initialView(base)).toEqual({ kind: 'level', level: 'chapters' })
