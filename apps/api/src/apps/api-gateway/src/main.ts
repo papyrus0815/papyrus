@@ -37,7 +37,9 @@ async function bootstrap() {
     const expressApp = express()
     // 같은 호스트의 프록시(nginx·vite·데스크톱 로컬 서버)가 붙인 X-Forwarded-For만 믿는다 —
     // 로그인 시도 제한이 req.ip로 클라이언트를 구분한다. 외부에서 보낸 XFF는 무시된다.
-    expressApp.set('trust proxy', 'loopback')
+    // 쿠버네티스처럼 프록시가 다른 파드(사설 대역)에 있으면 TRUST_PROXY='loopback, uniquelocal'로 넓힌다.
+    // 안 넓히면 req.ip가 전부 Ingress 파드 IP가 되어 한 사람의 실패가 모든 사용자를 잠근다.
+    expressApp.set('trust proxy', process.env.TRUST_PROXY?.trim() || 'loopback')
     const uploadCandidates = getUploadDirCandidates(config.uploadPath)
     expressApp.use('/uploads', (req: Request, res: Response, next: NextFunction) => {
       const raw = (req.originalUrl || req.url || '').split('?')[0]

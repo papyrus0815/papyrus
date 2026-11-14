@@ -28,9 +28,11 @@ export default defineConfig(({ mode }) => {
   return {
     // 환경 변수 정의
     define: {
+      // production은 빌드할 때 넘긴 VITE_API_BASE_URL을 굽는다(컨테이너 빌드는 build-arg, Jenkins는 셸 env).
+      // 예전엔 localhost:8000을 하드코딩해 사용자 브라우저가 자기 PC의 8000번을 불렀다. 안 넘기면 예전 값을 유지.
       'import.meta.env.VITE_API_BASE_URL':
         mode === 'production'
-          ? JSON.stringify('http://localhost:8000')
+          ? JSON.stringify(process.env.VITE_API_BASE_URL ?? 'http://localhost:8000')
           : JSON.stringify(process.env.VITE_API_BASE_URL || ''),
       'import.meta.env.VITE_APP_TITLE': JSON.stringify(appTitle),
       // 데스크톱 셸(apps/desktop)은 API를 같은 오리진으로 프록시해 주므로

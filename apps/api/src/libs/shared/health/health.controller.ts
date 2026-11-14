@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common'
+import { Controller, Get, ServiceUnavailableException } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger'
 import { HealthService } from './health.service'
 import { Public } from '../auth/public.decorator'
@@ -50,7 +50,10 @@ export class HealthController {
   @ApiResponse({ status: 200, description: '서비스 준비 완료' })
   async ready(): Promise<{ status: string }> {
     const isReady = await this.healthService.isReady()
-    return { status: isReady ? 'ready' : 'not ready' }
+    // probe는 본문이 아니라 상태 코드만 본다 — 예전처럼 200에 'not ready'를 실으면
+    // DB가 끊긴 파드에도 트래픽이 계속 들어간다.
+    if (!isReady) throw new ServiceUnavailableException({ status: 'not ready' })
+    return { status: 'ready' }
   }
 
   @Get('live')
