@@ -9,7 +9,14 @@ import { useMemo } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 
-import { FiArrowRight, FiAward, FiCalendar, FiLayers } from 'react-icons/fi'
+import {
+  FiArrowRight,
+  FiAward,
+  FiCalendar,
+  FiColumns,
+  FiLayers,
+} from 'react-icons/fi'
+import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { personCareerApi } from '@/shared/api/person-career'
@@ -23,6 +30,7 @@ import {
 } from '@/shared/api/person-records'
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { formatSignedYear } from '@/shared/lib/lifespan-text'
+import { pathKeys } from '@/shared/router'
 import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
 
 import type { PositionTypeCategory, TenureBar } from '../lib/normalize-tenures'
@@ -93,11 +101,21 @@ export function LeaderQuickView({
   onClose: () => void
   onOpenPerson: (personId: string) => void
 }) {
+  const navigate = useNavigate()
+
   const { data, isLoading, isError } = useQuery({
     queryKey: ['heads-of-state', 'tenure-achievements', bar?.id],
     // 재위·재임 같은 재임 행 — 엔드포인트 하나
     queryFn: () => (bar ? personCareerApi.getTenureWithAchievements(bar.id) : null),
     enabled: !!bar,
+    staleTime: 60_000,
+  })
+
+  const { data: linkedCabinet } = useQuery({
+    queryKey: ['heads-of-state', 'cabinet-by-head-tenure', bar?.id],
+    queryFn: () =>
+      bar ? personCareerApi.getCabinetByHeadTenureId(bar.id) : null,
+    enabled: Boolean(bar && !bar.isMonarchical),
     staleTime: 60_000,
   })
 
@@ -237,6 +255,19 @@ export function LeaderQuickView({
         )}
       </ModalBody>
       <ModalFooter>
+        {linkedCabinet?.id && (
+          <CabinetButton
+            type="button"
+            onClick={() => {
+              const targetCabinetId = linkedCabinet.id
+              onClose()
+              navigate(pathKeys.government.cabinetDetail(targetCabinetId))
+            }}
+          >
+            <FiColumns size={13} aria-hidden />
+            행정부·각료진 보기
+          </CabinetButton>
+        )}
         {bar?.personId ? (
           <PersonButton
             type="button"
@@ -398,6 +429,27 @@ const UndatedNote = styled.p`
   font-size: 11px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const CabinetButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
 `
 
 const PersonButton = styled.button`

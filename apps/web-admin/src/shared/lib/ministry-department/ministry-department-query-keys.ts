@@ -16,11 +16,18 @@ export function administrationDepartmentsByCountryQueryKey(
  */
 export function administrationDepartmentsByHistoricalCountryQueryKey(
   historicalCountryId: string | undefined,
+  options?: { includeConstituents?: boolean },
 ) {
-  return [
-    'administration-departments-by-historical-country',
-    historicalCountryId,
-  ] as const
+  return options?.includeConstituents
+    ? ([
+        'administration-departments-by-historical-country',
+        historicalCountryId,
+        'with-constituents',
+      ] as const)
+    : ([
+        'administration-departments-by-historical-country',
+        historicalCountryId,
+      ] as const)
 }
 
 /** 전체 행정부처 목록 — 관리자 목록 페이지 등 */

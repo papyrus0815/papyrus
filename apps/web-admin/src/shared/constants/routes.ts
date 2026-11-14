@@ -23,6 +23,8 @@ export const ROUTES = {
   ETHNICITY: 'ethnicity',
   LEGISLATURE: 'legislature',
   MILITARY: 'military',
+  /** 전 국가 행정부·내각 및 중앙부처·국가기관 통합 허브 */
+  GOVERNMENT: 'government',
   EVENTS: 'events',
   TREATIES: 'treaties',
   /** 출처 서고 — 수치·인용이 기대는 책·사료 */
@@ -57,6 +59,7 @@ export const CONTENT_AREA_PREFIXES = [
   `/${ROUTES.ETHNICITY}`,
   `/${ROUTES.LEGISLATURE}`,
   `/${ROUTES.MILITARY}`,
+  `/${ROUTES.GOVERNMENT}`,
   `/${ROUTES.TREATIES}`,
   `/${ROUTES.SOURCES}`,
 ] as const

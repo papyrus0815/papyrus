@@ -64,6 +64,7 @@ export function useMinistriesTab({
       isHistorical
         ? administrationDepartmentsByHistoricalCountryQueryKey(
             effectiveCountryId,
+            { includeConstituents: true },
           )
         : administrationDepartmentsByCountryQueryKey(effectiveCountryId),
     [effectiveCountryId, isHistorical],
@@ -78,6 +79,7 @@ export function useMinistriesTab({
       isHistorical
         ? administrationDepartmentApi.getByHistoricalCountryId(
             effectiveCountryId!,
+            { includeConstituents: true },
           )
         : administrationDepartmentApi.getByCountryId(effectiveCountryId!),
     enabled: !!effectiveCountryId && contentTab === 'ministries',
@@ -174,7 +176,9 @@ export function useMinistriesTab({
       ministryForm.nameEn.trim() ||
       ministryForm.defenseOfficialNameEn.trim()
     const resolvedHistoricalCountryId = isHistorical
-      ? effectiveCountryId
+      ? ministryForm.historicalCountryId.trim() ||
+        editingMinistry?.historicalCountryId ||
+        effectiveCountryId
       : ministryForm.historicalCountryId.trim() || null
     const resolvedCategoryId =
       ministryForm.categoryId &&

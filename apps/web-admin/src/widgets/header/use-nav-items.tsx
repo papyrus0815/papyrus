@@ -9,6 +9,7 @@ import React, { useMemo } from 'react'
 import {
   FiAward,
   FiBriefcase,
+  FiColumns,
   FiCompass,
   FiFileText,
   FiGlobe,
@@ -106,6 +107,13 @@ export function useNavItems(pathname: string): NavItemSpec[] {
         icon: <FiCompass size={18} />,
         onClick: go(pathKeys.headsOfStateAtlas()),
         active: pathname.startsWith('/heads-of-state/atlas'),
+      },
+      {
+        key: 'government',
+        label: '정부·내각',
+        icon: <FiColumns size={18} />,
+        onClick: go(pathKeys.government.list()),
+        active: pathname.startsWith('/government'),
       },
       {
         key: 'treaties',

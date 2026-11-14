@@ -102,7 +102,7 @@ export type AdministrationDepartmentResponseDto = {
   kind: AdministrationDepartmentKindValue
   thumbnailUrl: string | null
   countryId: string | null
-  country: { id: string; name: string } | null
+  country: { id: string; name: string; flagEmoji?: string | null } | null
   /** 역사적 국가 — 정체성 축(표시는 역사 우선) */
   historicalCountryId: string | null
   historicalCountry: { id: string; name: string } | null

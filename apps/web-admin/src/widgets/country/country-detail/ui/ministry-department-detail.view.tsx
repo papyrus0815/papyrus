@@ -220,14 +220,29 @@ export function MinistryDepartmentDetailView({
               산하 추가
             </S.DeptTopGhostBtn>
             {onRegisterMilitaryUnit ? (
-              <S.DeptTopTealBtn onClick={onRegisterMilitaryUnit}>
-                <FiShield size={13} />
-                직할 군부대 등록
-              </S.DeptTopTealBtn>
+              isDefenseRelated ||
+              militaryUnits.length > 0 ||
+              department.kind === 'COLONIAL_GOVERNMENT' ? (
+                <S.DeptTopTealBtn onClick={onRegisterMilitaryUnit}>
+                  <FiShield size={13} />
+                  직할 군부대 등록
+                </S.DeptTopTealBtn>
+              ) : (
+                <S.DeptTopGhostBtn
+                  onClick={onRegisterMilitaryUnit}
+                  title="경비·직할 군부대가 있는 기관일 때 군부대를 연결합니다"
+                >
+                  <FiShield size={13} />
+                  부대 연결
+                </S.DeptTopGhostBtn>
+              )
             ) : null}
-            <S.DeptTopGhostBtn onClick={onGoToPositions}>
-              <FiLayers size={13} />
-              직위 정의
+            <S.DeptTopGhostBtn
+              onClick={onGoToPositions}
+              title="이 기관에 소속된 고유 관직·직제를 관리합니다"
+            >
+              <FiAward size={13} />
+              고유 관직
             </S.DeptTopGhostBtn>
             <S.DeptTopEditBtn onClick={onEdit}>
               <FiEdit2 size={13} />

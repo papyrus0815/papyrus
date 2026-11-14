@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import type { ReactNode } from 'react'
 import {
   FiBarChart2,
+  FiBookOpen,
   FiBriefcase,
   FiClock,
   FiLayers,
@@ -17,6 +18,7 @@ import {
   GOV_ACCENT as ACCENT,
   GOV_MAIN_COLOR as MAIN,
 } from '../model/constants'
+import type { GovernmentContentTab } from '../model/government-content-tab'
 import { useGovernmentStatisticsMockData } from '../model/use-government-statistics-mock'
 
 import { GOV_BRAND } from './government-ledger.styles'
@@ -25,15 +27,26 @@ import { GovSectionEyebrow } from './government-organizations-tab.styled'
 export interface GovernmentStatisticsTabProps {
   country?: UnifiedCountry
   effectiveCountryId?: string
+  onSelectTab?: (tab: GovernmentContentTab) => void
+  onSelectCategory?: (categoryId: string) => void
+  onSelectDepartment?: (departmentId: string) => void
+  onSelectCabinet?: (cabinetId: string) => void
+  onOpenMilitaryTab?: () => void
 }
 
 export function GovernmentStatisticsTab({
   country,
   effectiveCountryId,
+  onSelectTab,
+  onSelectCategory,
+  onSelectDepartment,
+  onSelectCabinet,
+  onOpenMilitaryTab,
 }: GovernmentStatisticsTabProps = {}) {
   const isDark = useThemeStore((state) => state.mode === 'dark')
   const palette = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
   const {
+    totalPoliticalSystems,
     totalDepartments,
     activeDepartmentCount,
     totalCabinets,
@@ -66,10 +79,19 @@ export function GovernmentStatisticsTab({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(175px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(158px, 1fr))',
             gap: 12,
           }}
         >
+          <StatCard
+            accentColor="#6366f1"
+            icon={<FiBookOpen size={18} />}
+            title="정체 · 헌정 체제"
+            value={totalPoliticalSystems}
+            unit="개"
+            subLabel="시대별 통치·헌정 연혁"
+            onClick={onSelectTab ? () => onSelectTab('system') : undefined}
+          />
           <StatCard
             accentColor={MAIN}
             icon={<FiBriefcase size={18} />}
@@ -77,6 +99,7 @@ export function GovernmentStatisticsTab({
             value={totalDepartments}
             unit="곳"
             subLabel={`현존 ${activeDepartmentCount}곳`}
+            onClick={onSelectTab ? () => onSelectTab('ministries') : undefined}
           />
           <StatCard
             accentColor={ACCENT.sky}
@@ -85,14 +108,16 @@ export function GovernmentStatisticsTab({
             value={totalCabinets}
             unit="개"
             subLabel="정권·내각 단위 기록"
+            onClick={onSelectTab ? () => onSelectTab('cabinets') : undefined}
           />
           <StatCard
             accentColor={ACCENT.emerald}
             icon={<FiLayers size={18} />}
-            title="직위 · 관직 정의"
+            title="국가 고유 관직"
             value={totalPositions}
             unit="개"
-            subLabel="원수·각료·관직 서열"
+            subLabel="이 국가 전용 관직·직제"
+            onClick={onSelectTab ? () => onSelectTab('positions') : undefined}
           />
           <StatCard
             accentColor={ACCENT.teal}
@@ -101,6 +126,7 @@ export function GovernmentStatisticsTab({
             value={totalMilitaryUnits}
             unit="개"
             subLabel="국방·군정 부처 직할"
+            onClick={onOpenMilitaryTab}
           />
           <StatCard
             accentColor={ACCENT.amber}
@@ -226,9 +252,36 @@ export function GovernmentStatisticsTab({
                     ? Math.round(((stat.budget || 0) / totalCategorizedCount) * 100)
                     : 0
 
+                const isClickableBar = Boolean(
+                  stat.categoryId && onSelectCategory,
+                )
+
                 return (
                   <div
                     key={stat.year}
+                    role={isClickableBar ? 'button' : undefined}
+                    tabIndex={isClickableBar ? 0 : undefined}
+                    title={
+                      isClickableBar
+                        ? `${stat.year} 분류 중앙부처 목록 보기`
+                        : undefined
+                    }
+                    onClick={() => {
+                      if (stat.categoryId && onSelectCategory) {
+                        onSelectCategory(stat.categoryId)
+                      }
+                    }}
+                    onKeyDown={(keyEvent) => {
+                      if (
+                        isClickableBar &&
+                        (keyEvent.key === 'Enter' || keyEvent.key === ' ')
+                      ) {
+                        keyEvent.preventDefault()
+                        if (stat.categoryId && onSelectCategory) {
+                          onSelectCategory(stat.categoryId)
+                        }
+                      }
+                    }}
                     style={{
                       flex: '1 1 72px',
                       minWidth: 68,
@@ -238,6 +291,7 @@ export function GovernmentStatisticsTab({
                       gap: 8,
                       position: 'relative',
                       zIndex: 1,
+                      cursor: isClickableBar ? 'pointer' : 'default',
                     }}
                   >
                     <div
@@ -354,7 +408,7 @@ export function GovernmentStatisticsTab({
                       letterSpacing: '-0.02em',
                     }}
                   >
-                    행정·군정 개편 타임라인
+                    헌정·내각·기관 통합 연혁 타임라인
                   </h3>
                   <p
                     style={{
@@ -363,7 +417,7 @@ export function GovernmentStatisticsTab({
                       margin: '2px 0 0',
                     }}
                   >
-                    설립·개편·통합·폐지 이력 자동 집계
+                    정체 수립·내각 출범·기관 개편 이력 통합 집계
                   </p>
                 </div>
               </div>
@@ -382,6 +436,16 @@ export function GovernmentStatisticsTab({
               >
                 {[
                   { key: 'all', label: '전체', count: eventCounts.all },
+                  {
+                    key: 'regime',
+                    label: '헌정',
+                    count: eventCounts.regime,
+                  },
+                  {
+                    key: 'cabinet',
+                    label: '내각',
+                    count: eventCounts.cabinet,
+                  },
                   {
                     key: 'establishment',
                     label: '설립',
@@ -402,7 +466,12 @@ export function GovernmentStatisticsTab({
                     label: '폐지',
                     count: eventCounts.crisis,
                   },
-                ].map((filterItem) => {
+                ]
+                  .filter(
+                    (filterItem) =>
+                      filterItem.key === 'all' || filterItem.count > 0,
+                  )
+                  .map((filterItem) => {
                   const isSelected = selectedEventType === filterItem.key
                   return (
                     <button
@@ -471,32 +540,82 @@ export function GovernmentStatisticsTab({
                     gap: 10,
                   }}
                 >
-                  {filteredEvents.slice(0, 25).map((eventItem) => {
+                  {filteredEvents.slice(0, 30).map((eventItem) => {
                     const imageUrl = eventItem.images?.[0]
                     const eventBadgeTone =
-                      eventItem.type === 'establishment'
+                      eventItem.type === 'regime'
                         ? {
-                            label: '설립',
-                            bg: isDark ? 'rgba(16,185,129,0.16)' : '#ecfdf5',
-                            color: isDark ? '#6ee7b7' : '#047857',
+                            label: '헌정',
+                            bg: isDark ? 'rgba(99,102,241,0.18)' : '#eef2ff',
+                            color: isDark ? '#a5b4fc' : '#4338ca',
                           }
-                        : eventItem.type === 'crisis'
+                        : eventItem.type === 'cabinet'
                           ? {
-                              label: '폐지',
-                              bg: isDark ? 'rgba(148,163,184,0.16)' : '#f1f5f9',
-                              color: isDark ? '#cbd5e1' : '#475569',
+                              label: '내각',
+                              bg: isDark ? 'rgba(14,165,233,0.18)' : '#e0f2fe',
+                              color: isDark ? '#7dd3fc' : '#0369a1',
                             }
-                          : eventItem.type === 'merger'
+                          : eventItem.type === 'establishment'
                             ? {
-                                label: '통합',
-                                bg: isDark ? 'rgba(245,158,11,0.16)' : '#fffbeb',
-                                color: isDark ? '#fcd34d' : '#b45309',
+                                label: '설립',
+                                bg: isDark
+                                  ? 'rgba(16,185,129,0.16)'
+                                  : '#ecfdf5',
+                                color: isDark ? '#6ee7b7' : '#047857',
                               }
-                            : {
-                                label: '개편',
-                                bg: palette.accentBg,
-                                color: palette.accent,
-                              }
+                            : eventItem.type === 'crisis'
+                              ? {
+                                  label: '폐지',
+                                  bg: isDark
+                                    ? 'rgba(148,163,184,0.16)'
+                                    : '#f1f5f9',
+                                  color: isDark ? '#cbd5e1' : '#475569',
+                                }
+                              : eventItem.type === 'merger'
+                                ? {
+                                    label: '통합',
+                                    bg: isDark
+                                      ? 'rgba(245,158,11,0.16)'
+                                      : '#fffbeb',
+                                    color: isDark ? '#fcd34d' : '#b45309',
+                                  }
+                                : {
+                                    label: '개편',
+                                    bg: palette.accentBg,
+                                    color: palette.accent,
+                                  }
+
+                    const handleOpenTimelineTarget = () => {
+                      if (
+                        eventItem.targetKind === 'cabinet' &&
+                        eventItem.targetId &&
+                        onSelectCabinet
+                      ) {
+                        onSelectCabinet(eventItem.targetId)
+                        return
+                      }
+                      if (
+                        eventItem.targetKind === 'department' &&
+                        eventItem.targetId &&
+                        onSelectDepartment
+                      ) {
+                        onSelectDepartment(eventItem.targetId)
+                        return
+                      }
+                      if (eventItem.targetKind === 'system' && onSelectTab) {
+                        onSelectTab('system')
+                      }
+                    }
+
+                    const isInteractiveItem = Boolean(
+                      (eventItem.targetKind === 'cabinet' &&
+                        eventItem.targetId &&
+                        onSelectCabinet) ||
+                        (eventItem.targetKind === 'department' &&
+                          eventItem.targetId &&
+                          onSelectDepartment) ||
+                        (eventItem.targetKind === 'system' && onSelectTab),
+                    )
 
                     return (
                       <div
@@ -526,6 +645,23 @@ export function GovernmentStatisticsTab({
                         </span>
 
                         <div
+                          role={isInteractiveItem ? 'button' : undefined}
+                          tabIndex={isInteractiveItem ? 0 : undefined}
+                          onClick={
+                            isInteractiveItem
+                              ? handleOpenTimelineTarget
+                              : undefined
+                          }
+                          onKeyDown={(keyEvent) => {
+                            if (
+                              isInteractiveItem &&
+                              (keyEvent.key === 'Enter' ||
+                                keyEvent.key === ' ')
+                            ) {
+                              keyEvent.preventDefault()
+                              handleOpenTimelineTarget()
+                            }
+                          }}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -534,6 +670,7 @@ export function GovernmentStatisticsTab({
                             borderRadius: 12,
                             background: palette.cardBg,
                             border: `1px solid ${palette.borderHairline}`,
+                            cursor: isInteractiveItem ? 'pointer' : 'default',
                           }}
                         >
                           {imageUrl ? (
@@ -686,6 +823,7 @@ function StatCard({
   value,
   unit,
   subLabel,
+  onClick,
 }: {
   accentColor?: string
   icon: ReactNode
@@ -693,12 +831,22 @@ function StatCard({
   value: string | number
   unit: string
   subLabel?: string
+  onClick?: () => void
 }) {
   const { mode } = useThemeStore()
   const isDark = mode === 'dark'
   const cardPalette = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
   return (
     <div
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={(keyEvent) => {
+        if (onClick && (keyEvent.key === 'Enter' || keyEvent.key === ' ')) {
+          keyEvent.preventDefault()
+          onClick()
+        }
+      }}
       style={{
         background: cardPalette.bgSubtle,
         border: `1px solid ${cardPalette.borderMid}`,
@@ -707,6 +855,7 @@ function StatCard({
         display: 'flex',
         flexDirection: 'column',
         gap: 10,
+        cursor: onClick ? 'pointer' : 'default',
       }}
     >
       <div

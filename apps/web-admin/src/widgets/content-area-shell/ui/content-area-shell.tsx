@@ -26,6 +26,7 @@ import {
   ContinentListSidebar,
   DynastyListSidebar,
   EthnicityListSidebar,
+  GovernmentListSidebar,
   MilitaryUnitListSidebar,
   OrganizationListSidebar,
   PersonGroupListSidebar,
@@ -123,6 +124,44 @@ function specFor(pathname: string): DomainSpec | null {
         <TreatyListSidebar selectedId={selectedTreatyId} {...context} />
       ),
     }
+  }
+  if (pathname.startsWith('/government')) {
+    /*
+     * 목록(/government)은 전체 폭(fullScreen) 카탈로그·동시대 비교 지면으로 두고,
+     * 내각 상세(/government/cabinets/:id) 및 기관 상세(/government/departments/:id)에만
+     * 좌측 목록 사이드바를 붙여 다른 국가·시대 내각/기관으로 바로 건너갈 수 있게 한다.
+     */
+    const cabinetMatch = /^\/government\/cabinets\/([^/]+)/.exec(pathname)
+    if (cabinetMatch) {
+      const selectedCabinetId = decodeURIComponent(cabinetMatch[1])
+      return {
+        storageKey: 'global-cabinets-list-collapsed',
+        defaultCollapsed: false,
+        render: (context) => (
+          <GovernmentListSidebar
+            mode="cabinets"
+            selectedId={selectedCabinetId}
+            {...context}
+          />
+        ),
+      }
+    }
+    const departmentMatch = /^\/government\/departments\/([^/]+)/.exec(pathname)
+    if (departmentMatch) {
+      const selectedDepartmentId = decodeURIComponent(departmentMatch[1])
+      return {
+        storageKey: 'global-departments-list-collapsed',
+        defaultCollapsed: false,
+        render: (context) => (
+          <GovernmentListSidebar
+            mode="departments"
+            selectedId={selectedDepartmentId}
+            {...context}
+          />
+        ),
+      }
+    }
+    return null
   }
   if (pathname.startsWith('/person-groups')) {
     const selectedGroupId = idFromPath(pathname, 'person-groups')

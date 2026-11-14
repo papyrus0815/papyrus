@@ -4,7 +4,7 @@
  * - organizationId: 행정기구 페이지에서 고정 주입
  * - 둘 다 없으면 전체 목록 + 직접 선택
  */
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import styled from 'styled-components'
 import {
@@ -20,6 +20,7 @@ import {
 } from 'react-icons/fi'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { useCountries } from '@/features/country/api'
+import { useConstituentHistoricalPolities } from '@/features/government-info/model/use-constituent-historical-polities'
 import { useHistoricalCountries } from '@/features/historical-country/use-historical-countries.hook'
 import { CountryPicker } from '@/shared/ui/country-picker'
 import { personCareerApi } from '@/shared/api/person-career'
@@ -29,6 +30,7 @@ import {
   administrationDepartmentsByCountryQueryKey,
   administrationDepartmentsByHistoricalCountryQueryKey,
 } from '@/shared/lib/ministry-department/ministry-department-query-keys'
+import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 import { SelectModal, type SelectOption } from '@/shared/ui/select-modal/select-modal'
@@ -69,23 +71,118 @@ const POSITION_TYPE_OPTIONS: SelectOption<string>[] = [
   { value: 'OTHER', label: '기타' },
 ]
 
-const POSITION_TYPE_COLOR: Record<string, { bg: string; text: string; border: string }> = {
-  HEAD_OF_STATE:      { bg: '#fef3c7', text: '#92400e', border: '#fde68a' },
-  HEAD_OF_GOVERNMENT: { bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe' },
-  DEPUTY_HEAD_OF_STATE: { bg: '#fef3c7', text: '#92400e', border: '#fcd34d' },
-  HEIR_APPARENT:      { bg: '#f3e8ff', text: '#6b21a8', border: '#e9d5ff' },
-  REGENT:             { bg: '#fce7f3', text: '#9d174d', border: '#fbcfe8' },
-  CABINET_MINISTER:   { bg: '#d1fae5', text: '#065f46', border: '#a7f3d0' },
-  VICE_MINISTER:      { bg: '#ecfdf5', text: '#047857', border: '#6ee7b7' },
-  LEGISLATOR:         { bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd' },
-  JUDICIARY:          { bg: '#fef9c3', text: '#713f12', border: '#fef08a' },
-  LOCAL_GOVERNMENT:   { bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0' },
-  SPECIAL_POSITION:   { bg: '#f1f5f9', text: '#475569', border: '#e2e8f0' },
-  DIPLOMATIC_POST:    { bg: '#e0e7ff', text: '#3730a3', border: '#c7d2fe' },
-  MILITARY_COMMANDER: { bg: '#fff7ed', text: '#9a3412', border: '#fed7aa' },
-  ROYAL_NOBLE_TITLE:  { bg: '#fdf4ff', text: '#86198f', border: '#f0abfc' },
-  OTHER:              { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' },
+const POSITION_TYPE_COLOR: Record<
+  string,
+  {
+    light: { bg: string; text: string; border: string }
+    dark: { bg: string; text: string; border: string }
+  }
+> = {
+  HEAD_OF_STATE: {
+    light: { bg: '#fef3c7', text: '#92400e', border: '#fde68a' },
+    dark: { bg: 'rgba(245, 158, 11, 0.16)', text: '#fcd34d', border: 'rgba(245, 158, 11, 0.35)' },
+  },
+  HEAD_OF_GOVERNMENT: {
+    light: { bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe' },
+    dark: { bg: 'rgba(59, 130, 246, 0.18)', text: '#93c5fd', border: 'rgba(59, 130, 246, 0.35)' },
+  },
+  DEPUTY_HEAD_OF_STATE: {
+    light: { bg: '#fef3c7', text: '#92400e', border: '#fcd34d' },
+    dark: { bg: 'rgba(245, 158, 11, 0.14)', text: '#fde68a', border: 'rgba(245, 158, 11, 0.3)' },
+  },
+  HEIR_APPARENT: {
+    light: { bg: '#f3e8ff', text: '#6b21a8', border: '#e9d5ff' },
+    dark: { bg: 'rgba(168, 85, 247, 0.18)', text: '#d8b4fe', border: 'rgba(168, 85, 247, 0.35)' },
+  },
+  REGENT: {
+    light: { bg: '#fce7f3', text: '#9d174d', border: '#fbcfe8' },
+    dark: { bg: 'rgba(236, 72, 153, 0.16)', text: '#f9a8d4', border: 'rgba(236, 72, 153, 0.34)' },
+  },
+  CABINET_MINISTER: {
+    light: { bg: '#d1fae5', text: '#065f46', border: '#a7f3d0' },
+    dark: { bg: 'rgba(16, 185, 129, 0.16)', text: '#6ee7b7', border: 'rgba(16, 185, 129, 0.34)' },
+  },
+  VICE_MINISTER: {
+    light: { bg: '#ecfdf5', text: '#047857', border: '#6ee7b7' },
+    dark: { bg: 'rgba(20, 184, 166, 0.16)', text: '#5eead4', border: 'rgba(20, 184, 166, 0.32)' },
+  },
+  LEGISLATOR: {
+    light: { bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd' },
+    dark: { bg: 'rgba(14, 165, 233, 0.16)', text: '#7dd3fc', border: 'rgba(14, 165, 233, 0.34)' },
+  },
+  JUDICIARY: {
+    light: { bg: '#fef9c3', text: '#713f12', border: '#fef08a' },
+    dark: { bg: 'rgba(234, 179, 8, 0.15)', text: '#fde047', border: 'rgba(234, 179, 8, 0.32)' },
+  },
+  LOCAL_GOVERNMENT: {
+    light: { bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0' },
+    dark: { bg: 'rgba(34, 197, 94, 0.15)', text: '#86efac', border: 'rgba(34, 197, 94, 0.32)' },
+  },
+  SPECIAL_POSITION: {
+    light: { bg: '#f1f5f9', text: '#475569', border: '#e2e8f0' },
+    dark: { bg: 'rgba(148, 163, 184, 0.14)', text: '#cbd5e1', border: 'rgba(148, 163, 184, 0.28)' },
+  },
+  DIPLOMATIC_POST: {
+    light: { bg: '#e0e7ff', text: '#3730a3', border: '#c7d2fe' },
+    dark: { bg: 'rgba(99, 102, 241, 0.18)', text: '#a5b4fc', border: 'rgba(99, 102, 241, 0.35)' },
+  },
+  MILITARY_COMMANDER: {
+    light: { bg: '#fff7ed', text: '#9a3412', border: '#fed7aa' },
+    dark: { bg: 'rgba(249, 115, 22, 0.16)', text: '#fdba74', border: 'rgba(249, 115, 22, 0.34)' },
+  },
+  ROYAL_NOBLE_TITLE: {
+    light: { bg: '#fdf4ff', text: '#86198f', border: '#f0abfc' },
+    dark: { bg: 'rgba(217, 70, 239, 0.16)', text: '#f0abfc', border: 'rgba(217, 70, 239, 0.34)' },
+  },
+  OTHER: {
+    light: { bg: '#f8fafc', text: '#64748b', border: '#e2e8f0' },
+    dark: { bg: 'rgba(148, 163, 184, 0.12)', text: '#94a3b8', border: 'rgba(148, 163, 184, 0.24)' },
+  },
 }
+
+type PositionHierarchyTierKey =
+  | 'SOVEREIGN'
+  | 'EXECUTIVE'
+  | 'BRANCHES'
+  | 'SPECIALIZED'
+
+const POSITION_HIERARCHY_TIERS: ReadonlyArray<{
+  key: PositionHierarchyTierKey
+  label: string
+  types: ReadonlySet<string>
+}> = [
+  {
+    key: 'SOVEREIGN',
+    label: '국가원수 · 왕실 · 섭정',
+    types: new Set([
+      'HEAD_OF_STATE',
+      'DEPUTY_HEAD_OF_STATE',
+      'REGENT',
+      'HEIR_APPARENT',
+      'ROYAL_NOBLE_TITLE',
+    ]),
+  },
+  {
+    key: 'EXECUTIVE',
+    label: '정부수반 · 내각 각료 · 차관',
+    types: new Set(['HEAD_OF_GOVERNMENT', 'CABINET_MINISTER', 'VICE_MINISTER']),
+  },
+  {
+    key: 'BRANCHES',
+    label: '입법 · 사법 · 지방정부',
+    types: new Set(['LEGISLATOR', 'JUDICIARY', 'LOCAL_GOVERNMENT']),
+  },
+  {
+    key: 'SPECIALIZED',
+    label: '외교 · 군 지휘관 · 특별직 · 기타',
+    types: new Set([
+      'DIPLOMATIC_POST',
+      'MILITARY_COMMANDER',
+      'SPECIAL_POSITION',
+      'OTHER',
+    ]),
+  },
+]
 
 export interface PositionDefinitionsSectionProps {
   /** 현재 보고 있는 국가(현대/역사) — 있으면 해당 국가 스코프 필터와 전용 직위 우선 정렬 제공 */
@@ -101,6 +198,10 @@ export interface PositionDefinitionsSectionProps {
   fixedOrganizationName?: string
   /** 중앙부처 탭에서 특정 부처·카테고리 문맥으로 넘어왔을 때 필터 해제 콜백 */
   onClearFixedFilter?: () => void
+  /** 소속 부처 배지 클릭 시 중앙부처·국가기관 탭의 해당 부처 상세로 바로 이동 */
+  onOpenDepartmentDetail?: (departmentId: string) => void
+  /** 초기 적용 범위 필터 (국가 고유 관직 패널에서는 'country_only' 기본 적용) */
+  defaultScopeFilter?: ScopeFilterMode
 }
 
 type ScopeFilterMode = 'applicable' | 'country_only' | 'global_only' | 'all'
@@ -389,9 +490,78 @@ const TypeBadge = styled.span<{ $type: string }>`
   font-size: 11.5px;
   font-weight: 600;
   line-height: 1.6;
-  background: ${(p) => POSITION_TYPE_COLOR[p.$type]?.bg ?? '#f1f5f9'};
-  color: ${(p) => POSITION_TYPE_COLOR[p.$type]?.text ?? '#475569'};
-  border: 1px solid ${(p) => POSITION_TYPE_COLOR[p.$type]?.border ?? '#e2e8f0'};
+  background: ${({ $type, theme }) => {
+    const tone = POSITION_TYPE_COLOR[$type] ?? POSITION_TYPE_COLOR.OTHER
+    return theme.mode === 'dark' ? tone.dark.bg : tone.light.bg
+  }};
+  color: ${({ $type, theme }) => {
+    const tone = POSITION_TYPE_COLOR[$type] ?? POSITION_TYPE_COLOR.OTHER
+    return theme.mode === 'dark' ? tone.dark.text : tone.light.text
+  }};
+  border: 1px solid
+    ${({ $type, theme }) => {
+      const tone = POSITION_TYPE_COLOR[$type] ?? POSITION_TYPE_COLOR.OTHER
+      return theme.mode === 'dark' ? tone.dark.border : tone.light.border
+    }};
+`
+
+const DepartmentJumpChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 6px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(59, 130, 246, 0.34)'
+        : 'rgba(37, 99, 235, 0.28)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(37, 99, 235, 0.14)'
+      : 'rgba(37, 99, 235, 0.06)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#2563eb')};
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 0.88;
+  }
+`
+
+const HierarchyStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+`
+
+const HierarchyGroupBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+`
+
+const HierarchyGroupHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-radius: 8px 8px 0 0;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f8fafc'};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: none;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const HierarchyCountBadge = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const Dot = styled.span`
@@ -688,12 +858,27 @@ export function PositionDefinitionsSection({
   fixedOrganizationId,
   fixedOrganizationName,
   onClearFixedFilter,
+  onOpenDepartmentDetail,
+  defaultScopeFilter,
 }: PositionDefinitionsSectionProps) {
   const queryClient = useQueryClient()
 
   const [view, setView] = useState<'list' | 'form'>('list')
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [scopeFilter, setScopeFilter] = useState<ScopeFilterMode>('applicable')
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilterMode>(
+    fixedAdministrationDepartmentId
+      ? 'applicable'
+      : (defaultScopeFilter ?? 'applicable'),
+  )
+
+  useEffect(() => {
+    if (fixedAdministrationDepartmentId) {
+      setScopeFilter('applicable')
+    } else if (defaultScopeFilter) {
+      setScopeFilter(defaultScopeFilter)
+    }
+  }, [fixedAdministrationDepartmentId, fixedCategoryId, defaultScopeFilter])
+  const [groupByHierarchy, setGroupByHierarchy] = useState<boolean>(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [scopeToCurrentCountryOnCreate, setScopeToCurrentCountryOnCreate] =
     useState<boolean>(false)
@@ -721,21 +906,28 @@ export function PositionDefinitionsSection({
     queryFn: () => personCareerApi.getPositionDefinitions({}),
   })
 
-  /** 현재 국가(현대 + 연결된 과거 국가, 또는 해당 역사국가)와 매칭되는 스코프 ID 집합 */
+  const { data: constituentPolities = [] } = useConstituentHistoricalPolities(
+    country?.type === 'historical' ? country.id : undefined,
+  )
+
+  /** 현재 국가(현대 + 연결된 과거 국가, 또는 해당 역사국가 + 구성국)와 매칭되는 스코프 ID 집합 */
   const matchingCountryIds = useMemo(() => {
     const modernIds = new Set<string>()
     const historicalIds = new Set<string>()
     if (!country) return { modernIds, historicalIds }
     if (country.type === 'historical') {
       historicalIds.add(country.id)
+      for (const constituentItem of constituentPolities) {
+        if (constituentItem.id) historicalIds.add(constituentItem.id)
+      }
     } else {
       modernIds.add(country.id)
-      for (const hc of country.historicalCountries ?? []) {
-        if (hc.id) historicalIds.add(hc.id)
+      for (const histCountry of country.historicalCountries ?? []) {
+        if (histCountry.id) historicalIds.add(histCountry.id)
       }
     }
     return { modernIds, historicalIds }
-  }, [country])
+  }, [country, constituentPolities])
 
   const isGlobalDefinition = (def: GovernmentPositionDefinition) =>
     (def.scopes ?? []).length === 0 &&
@@ -882,11 +1074,15 @@ export function PositionDefinitionsSection({
   const { data: countryDepartments = [] } = useQuery({
     queryKey:
       country?.type === 'historical'
-        ? administrationDepartmentsByHistoricalCountryQueryKey(country?.id)
+        ? administrationDepartmentsByHistoricalCountryQueryKey(country?.id, {
+            includeConstituents: true,
+          })
         : administrationDepartmentsByCountryQueryKey(country?.id),
     queryFn: () =>
       country?.type === 'historical'
-        ? administrationDepartmentApi.getByHistoricalCountryId(country.id)
+        ? administrationDepartmentApi.getByHistoricalCountryId(country.id, {
+            includeConstituents: true,
+          })
         : administrationDepartmentApi.getByCountryId(country!.id),
     enabled:
       Boolean(country?.id) &&
@@ -1015,12 +1211,8 @@ export function PositionDefinitionsSection({
       setInlineDeptNameEn('')
       setInlineDeptOpen(false)
       notify.success(`「${trimmedName}」 부처·기관을 생성하고 선택했습니다.`)
-    } catch (err: any) {
-      notify.error(
-        err?.response?.data?.message ||
-          err?.message ||
-          '부처·기관 생성에 실패했습니다.',
-      )
+    } catch (err) {
+      notify.error(getApiErrorMessage(err, '부처·기관 생성에 실패했습니다.'))
     } finally {
       setInlineDeptSaving(false)
     }
@@ -1250,6 +1442,22 @@ export function PositionDefinitionsSection({
                   </FilterResetButton>
                 </>
               )}
+              <FilterTabGroup role="group" aria-label="직위 목록 그룹화 방식">
+                <FilterTab
+                  type="button"
+                  $active={groupByHierarchy}
+                  onClick={() => setGroupByHierarchy(true)}
+                >
+                  위계 그룹별
+                </FilterTab>
+                <FilterTab
+                  type="button"
+                  $active={!groupByHierarchy}
+                  onClick={() => setGroupByHierarchy(false)}
+                >
+                  평면 목록
+                </FilterTab>
+              </FilterTabGroup>
               <SearchInputWrap>
                 <FiSearch size={14} color="#94a3b8" />
                 <input
@@ -1303,16 +1511,17 @@ export function PositionDefinitionsSection({
               </PositionEmptySpecCell>
             </PositionEmptySpecGrid>
           ) : (
-            <PositionLedgerGrid>
-              {definitions.map((def) => {
+            (() => {
+              const renderPositionRow = (def: GovernmentPositionDefinition) => {
                 const typeLabel =
-                  POSITION_TYPE_OPTIONS.find((option) => option.value === def.positionType)?.label ??
-                  def.positionType
-                const parentLabel =
-                  def.administrationDepartment?.name ??
-                  def.category?.name ??
-                  def.organization?.name ??
-                  null
+                  POSITION_TYPE_OPTIONS.find(
+                    (option) => option.value === def.positionType,
+                  )?.label ?? def.positionType
+                const linkedDeptId = def.administrationDepartment?.id ?? null
+                const linkedDeptName =
+                  def.administrationDepartment?.name ?? null
+                const fallbackParentLabel =
+                  def.category?.name ?? def.organization?.name ?? null
                 const scopeLabels = describeScopes(def)
 
                 return (
@@ -1320,13 +1529,32 @@ export function PositionDefinitionsSection({
                     <CardBody>
                       <CardTitle>{def.title}</CardTitle>
                       <CardMeta>
-                        <TypeBadge $type={def.positionType}>{typeLabel}</TypeBadge>
-                        {parentLabel && (
+                        <TypeBadge $type={def.positionType}>
+                          {typeLabel}
+                        </TypeBadge>
+                        {linkedDeptId && linkedDeptName ? (
                           <>
                             <Dot />
-                            <MetaText>{parentLabel}</MetaText>
+                            {onOpenDepartmentDetail ? (
+                              <DepartmentJumpChip
+                                type="button"
+                                onClick={() =>
+                                  onOpenDepartmentDetail(linkedDeptId)
+                                }
+                                title="클릭하여 소속 부처·기관 상세로 이동"
+                              >
+                                <span>🏛️ {linkedDeptName} →</span>
+                              </DepartmentJumpChip>
+                            ) : (
+                              <MetaText>{linkedDeptName}</MetaText>
+                            )}
                           </>
-                        )}
+                        ) : fallbackParentLabel ? (
+                          <>
+                            <Dot />
+                            <MetaText>{fallbackParentLabel}</MetaText>
+                          </>
+                        ) : null}
                         {def.titleEn && (
                           <>
                             <Dot />
@@ -1344,24 +1572,77 @@ export function PositionDefinitionsSection({
                           {scopeLabels.length === 0
                             ? '전역'
                             : `${scopeLabels.slice(0, 3).join(' · ')}${
-                                scopeLabels.length > 3 ? ` +${scopeLabels.length - 3}` : ''
+                                scopeLabels.length > 3
+                                  ? ` +${scopeLabels.length - 3}`
+                                  : ''
                               } 전용`}
                         </ScopeChip>
                       </CardMeta>
-                      {def.description && <CardDesc>{def.description}</CardDesc>}
+                      {def.description && (
+                        <CardDesc>{def.description}</CardDesc>
+                      )}
                     </CardBody>
                     <CardActions>
-                      <IconBtn type="button" onClick={() => openForm(def)} title="수정">
+                      <IconBtn
+                        type="button"
+                        onClick={() => openForm(def)}
+                        title="수정"
+                      >
                         <FiEdit2 size={15} />
                       </IconBtn>
-                      <IconBtn $danger type="button" onClick={() => handleDelete(def.id, def.title)} title="삭제">
+                      <IconBtn
+                        $danger
+                        type="button"
+                        onClick={() => handleDelete(def.id, def.title)}
+                        title="삭제"
+                      >
                         <FiTrash2 size={15} />
                       </IconBtn>
                     </CardActions>
                   </PositionLedgerRow>
                 )
-              })}
-            </PositionLedgerGrid>
+              }
+
+              if (!groupByHierarchy) {
+                return (
+                  <PositionLedgerGrid>
+                    {definitions.map((defItem) => renderPositionRow(defItem))}
+                  </PositionLedgerGrid>
+                )
+              }
+
+              const tierGroups = POSITION_HIERARCHY_TIERS.map((tierMeta) => ({
+                ...tierMeta,
+                items: definitions.filter((defItem) =>
+                  tierMeta.key === 'SPECIALIZED'
+                    ? tierMeta.types.has(defItem.positionType) ||
+                      !POSITION_HIERARCHY_TIERS.slice(0, 3).some((upperTier) =>
+                        upperTier.types.has(defItem.positionType),
+                      )
+                    : tierMeta.types.has(defItem.positionType),
+                ),
+              })).filter((tierGroup) => tierGroup.items.length > 0)
+
+              return (
+                <HierarchyStack>
+                  {tierGroups.map((tierGroup) => (
+                    <HierarchyGroupBlock key={tierGroup.key}>
+                      <HierarchyGroupHeader>
+                        <span>{tierGroup.label}</span>
+                        <HierarchyCountBadge>
+                          {tierGroup.items.length}개 직위
+                        </HierarchyCountBadge>
+                      </HierarchyGroupHeader>
+                      <PositionLedgerGrid>
+                        {tierGroup.items.map((defItem) =>
+                          renderPositionRow(defItem),
+                        )}
+                      </PositionLedgerGrid>
+                    </HierarchyGroupBlock>
+                  ))}
+                </HierarchyStack>
+              )
+            })()
           )}
         </>
       ) : (

@@ -45,11 +45,10 @@ export const GOV_TAB_META: Record<GovernmentContentTab, GovernmentTabMeta> = {
   },
 }
 
-/** 상단 서브탭 바에 실제 노출하는 5개 핵심 탭 */
+/** 상단 서브탭 바에 실제 노출하는 4개 핵심 탭 (직위 사전은 전역 허브 및 국가별 고유 관직 보조 패널로 분리) */
 export const GOVERNMENT_TAB_ORDER: readonly GovernmentContentTab[] = [
   'system',
   'cabinets',
   'ministries',
-  'positions',
   'statistics',
 ] as const

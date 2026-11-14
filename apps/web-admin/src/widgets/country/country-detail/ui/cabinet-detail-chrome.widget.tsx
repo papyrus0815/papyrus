@@ -3,7 +3,22 @@
  */
 import React from 'react'
 
-import { FiChevronLeft, FiEdit2, FiPrinter, FiTrash2 } from 'react-icons/fi'
+import {
+  FiChevronLeft,
+  FiEdit2,
+  FiGlobe,
+  FiPrinter,
+  FiTrash2,
+} from 'react-icons/fi'
+import styled from 'styled-components'
+
+import {
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentSubtle,
+  RADIUS,
+} from '@/entities/event/ui/ledger-tokens'
+import { parseSignedDateParts } from '@/shared/lib/tenure-person-utils'
 
 import {
   formatCabinetHeadBreadcrumbLabel,
@@ -49,6 +64,10 @@ export type CabinetDetailChromeProps = {
   onEditCabinet?: () => void
   /** 현재 화면(행정부 상세·재임 기록) 인쇄 */
   onPrint?: () => void
+  /** 목록으로 돌아갈 때 URL 쿼리 정리 등 추가 동기화 */
+  onBackToList?: () => void
+  /** 취임 연도 기준 전 국가 동시대 내각 비교 허브로 이동 */
+  onCompareContemporary?: (signedYear: number) => void
 }
 
 export function CabinetDetailChrome({
@@ -78,6 +97,8 @@ export function CabinetDetailChrome({
   onEditMinister,
   onEditCabinet,
   onPrint,
+  onBackToList,
+  onCompareContemporary,
 }: CabinetDetailChromeProps) {
   const cabinetSubtitle =
     selectedCabinet &&
@@ -85,6 +106,16 @@ export function CabinetDetailChrome({
     selectedCabinet.name.trim()
       ? selectedCabinet.name.trim()
       : null
+
+  const startDateParts = parseSignedDateParts(
+    selectedCabinet?.headTenure?.startDate ?? selectedCabinet?.startDate,
+  )
+  const contemporarySignedYear = startDateParts?.signedYear ?? null
+  const contemporaryYearLabel = startDateParts
+    ? startDateParts.era === 'BC'
+      ? `기원전 ${startDateParts.absYear}`
+      : String(startDateParts.absYear)
+    : null
 
   const isTenureHistoryArticleDetail =
     !!selectedHeadHistoryId || (!!selectedMinisterId && !!selectedHistoryId)
@@ -109,6 +140,7 @@ export function CabinetDetailChrome({
                 setSelectedCabinetId(null)
                 setSelectedMinisterId(null)
                 setSelectedHeadHistoryId(null)
+                onBackToList?.()
               }}
             >
               <FiChevronLeft size={14} />
@@ -176,6 +208,20 @@ export function CabinetDetailChrome({
           aria-label="행정부·각료 작업"
           style={{ flexShrink: 0, alignSelf: 'flex-start', paddingTop: 2 }}
         >
+          {selectedCabinet &&
+          !selectedMinisterId &&
+          !selectedHeadHistoryId &&
+          contemporarySignedYear != null &&
+          onCompareContemporary ? (
+            <ContemporaryCompareBtn
+              type="button"
+              onClick={() => onCompareContemporary(contemporarySignedYear)}
+              title={`${contemporaryYearLabel}년 시점 전 세계 행정부·내각 비교 허브로 이동`}
+            >
+              <FiGlobe size={13} />
+              <span>동시대 타국 비교 ({contemporaryYearLabel}년)</span>
+            </ContemporaryCompareBtn>
+          ) : null}
           {selectedCabinet && onPrint ? (
             <DetailHeaderIconBtn
               type="button"
@@ -294,3 +340,22 @@ export function CabinetDetailChrome({
     </>
   )
 }
+
+const ContemporaryCompareBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    opacity: 0.88;
+  }
+`

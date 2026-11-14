@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 
 import {
   FiBriefcase,
+  FiCalendar,
   FiColumns,
+  FiGitBranch,
   FiGrid,
+  FiList,
   FiMaximize2,
   FiPlus,
   FiSearch,
@@ -14,12 +17,15 @@ import styled from 'styled-components'
 
 import { useHistoricalCountriesByModernCountry } from '@/features/country/api/use-historical-countries-by-modern-country.hook'
 import type { GovernmentContentTab } from '@/features/government-info/model/government-content-tab'
+import { useConstituentHistoricalPolities } from '@/features/government-info/model/use-constituent-historical-polities'
 import { useMinistriesTab } from '@/features/government-info/model/use-ministries-tab'
+import type { AdministrationDepartment } from '@/shared/api/administration-department'
 import {
   ALL_DEPARTMENTS_CATEGORY_ID,
   UNCATEGORIZED_CATEGORY_ID,
   isDefenseRelatedCategory,
 } from '@/shared/lib/ministry-department/ministry-department-utils'
+import { parseSignedDateParts } from '@/shared/lib/tenure-person-utils'
 import {
   EmptyStateFeatureCard,
   EmptyStateFill,
@@ -52,10 +58,13 @@ import {
   GovToolbarShell,
   GovViewMeta,
 } from './government-ledger.styles'
+import { MinistriesLedgerView } from './ministries-ledger-view.widget'
 import { MinistryFormModal } from './ministry-form-modal.widget'
 import { UnlinkedCountryTenuresBar } from './unlinked-country-tenures-bar'
 
 type DepartmentKindGroup = 'ALL' | 'MINISTRY' | 'AGENCY' | 'SPECIAL'
+type DepartmentStatusFilter = 'ALL' | 'ACTIVE' | 'ABOLISHED'
+type BrowseViewMode = 'TREE' | 'LEDGER'
 
 type WorkspaceLayoutMode = 'SPLIT' | 'FOCUS'
 
@@ -66,15 +75,78 @@ const KIND_GROUP_LABEL: Record<DepartmentKindGroup, string> = {
   SPECIAL: '궁내·총독부',
 }
 
+const STATUS_FILTER_LABEL: Record<DepartmentStatusFilter, string> = {
+  ALL: '전체 상태',
+  ACTIVE: '현존',
+  ABOLISHED: '폐지',
+}
+
+function isDepartmentAbolished(deptItem: AdministrationDepartment): boolean {
+  if (
+    deptItem.abolished &&
+    typeof deptItem.abolished.year === 'number' &&
+    deptItem.abolished.year > 0
+  ) {
+    return true
+  }
+  return Boolean(deptItem.abolishedDate)
+}
+
+function parseSnapshotYearInput(rawInput: string): number | null {
+  const trimmed = rawInput.trim()
+  if (!trimmed) return null
+  const bcPrefixMatch = /^(?:bc|기원전)\s*(\d{1,5})$/i.exec(trimmed)
+  if (bcPrefixMatch) {
+    const absVal = Number(bcPrefixMatch[1])
+    return absVal > 0 ? -absVal : null
+  }
+  const signedMatch = /^([+-]?\d{1,5})$/.exec(trimmed)
+  if (signedMatch) {
+    const yearVal = Number(signedMatch[1])
+    return Number.isFinite(yearVal) && yearVal !== 0 ? yearVal : null
+  }
+  return null
+}
+
+function isDepartmentActiveAtYear(
+  deptItem: AdministrationDepartment,
+  targetSignedYear: number,
+): boolean {
+  const estYear =
+    deptItem.established &&
+    typeof deptItem.established.year === 'number' &&
+    deptItem.established.year > 0
+      ? deptItem.established.era === 'BC'
+        ? -Math.abs(deptItem.established.year)
+        : deptItem.established.year
+      : (parseSignedDateParts(deptItem.establishedDate)?.signedYear ?? null)
+
+  const abolYear =
+    deptItem.abolished &&
+    typeof deptItem.abolished.year === 'number' &&
+    deptItem.abolished.year > 0
+      ? deptItem.abolished.era === 'BC'
+        ? -Math.abs(deptItem.abolished.year)
+        : deptItem.abolished.year
+      : (parseSignedDateParts(deptItem.abolishedDate)?.signedYear ?? null)
+
+  if (estYear == null && abolYear == null) return false
+  if (estYear != null && targetSignedYear < estYear) return false
+  if (abolYear != null && targetSignedYear > abolYear) return false
+  return true
+}
+
 export type MinistriesTabSectionProps = {
   contentTab: GovernmentContentTab
   effectiveCountryId: string | undefined
+  countryName?: string
   isHistorical?: boolean
   isDark: boolean
   cabinetOpenMinistryIntent: { categoryId: string } | null
   onConsumedCabinetOpenMinistryIntent: () => void
   focusDepartmentId?: string | null
   onConsumedFocusDepartment?: () => void
+  onSelectedDepartmentChange?: (departmentId: string | null) => void
   onNavigateToPositions: (context?: {
     departmentId?: string
     departmentName?: string
@@ -88,23 +160,27 @@ export type MinistriesTabSectionProps = {
   onInspectMilitaryUnit?: (unitId: string) => void
   onEditMilitaryUnit: (unitId: string) => void
   onOpenMilitaryTab?: () => void
+  onSelectCabinet?: (cabinetId: string) => void
   openCategoryModal: () => void
 }
 
 export function MinistriesTabSection({
   contentTab,
   effectiveCountryId,
+  countryName,
   isHistorical = false,
   isDark,
   cabinetOpenMinistryIntent,
   onConsumedCabinetOpenMinistryIntent,
   focusDepartmentId,
   onConsumedFocusDepartment,
+  onSelectedDepartmentChange,
   onNavigateToPositions,
   onRegisterMilitaryUnit,
   onInspectMilitaryUnit,
   onEditMilitaryUnit,
   onOpenMilitaryTab,
+  onSelectCabinet,
   openCategoryModal,
 }: MinistriesTabSectionProps) {
   const ministriesTab = useMinistriesTab({
@@ -164,33 +240,72 @@ export function MinistriesTabSection({
   const [eraFilter, setEraFilter] = useState<string>('ALL')
   const [kindGroupFilter, setKindGroupFilter] =
     useState<DepartmentKindGroup>('ALL')
+  const [statusFilter, setStatusFilter] =
+    useState<DepartmentStatusFilter>('ALL')
+  const [snapshotYearInput, setSnapshotYearInput] = useState('')
+  const [browseViewMode, setBrowseViewMode] = useState<BrowseViewMode>('TREE')
   const [layoutMode, setLayoutMode] = useState<WorkspaceLayoutMode>('SPLIT')
+
+  const parsedSnapshotYear = useMemo(
+    () => parseSnapshotYearInput(snapshotYearInput),
+    [snapshotYearInput],
+  )
 
   const { data: linkedHistoricalCountries = [] } =
     useHistoricalCountriesByModernCountry(
       !isHistorical && effectiveCountryId ? effectiveCountryId : '',
     )
 
+  const { data: constituentPolities = [] } = useConstituentHistoricalPolities(
+    isHistorical ? effectiveCountryId : undefined,
+  )
+
   const historicalErasAvailable = useMemo(() => {
     const eraMap = new Map<string, string>()
-    for (const linkedItem of linkedHistoricalCountries) {
-      if (linkedItem.id && linkedItem.name) {
-        eraMap.set(linkedItem.id, linkedItem.name)
+    if (isHistorical) {
+      for (const constituentItem of constituentPolities) {
+        if (constituentItem.id && constituentItem.name) {
+          eraMap.set(constituentItem.id, constituentItem.name)
+        }
       }
-    }
-    for (const deptItem of ministriesList) {
-      if (deptItem.historicalCountry?.id && deptItem.historicalCountry.name) {
-        eraMap.set(
-          deptItem.historicalCountry.id,
-          deptItem.historicalCountry.name,
-        )
+      for (const deptItem of ministriesList) {
+        if (
+          deptItem.historicalCountry?.id &&
+          deptItem.historicalCountry.id !== effectiveCountryId &&
+          deptItem.historicalCountry.name
+        ) {
+          eraMap.set(
+            deptItem.historicalCountry.id,
+            deptItem.historicalCountry.name,
+          )
+        }
+      }
+    } else {
+      for (const linkedItem of linkedHistoricalCountries) {
+        if (linkedItem.id && linkedItem.name) {
+          eraMap.set(linkedItem.id, linkedItem.name)
+        }
+      }
+      for (const deptItem of ministriesList) {
+        if (deptItem.historicalCountry?.id && deptItem.historicalCountry.name) {
+          eraMap.set(
+            deptItem.historicalCountry.id,
+            deptItem.historicalCountry.name,
+          )
+        }
       }
     }
     return Array.from(eraMap.entries()).map(([histId, histName]) => ({
       id: histId,
       name: histName,
     }))
-  }, [linkedHistoricalCountries, ministriesList])
+  }, [
+    constituentPolities,
+    effectiveCountryId,
+    isHistorical,
+    linkedHistoricalCountries,
+    ministriesList,
+  ])
 
   const kpiStats = useMemo(() => {
     const totalCount = ministriesList.length
@@ -233,6 +348,18 @@ export function MinistriesTabSection({
         }
       }
     }
+    if (statusFilter === 'ACTIVE' && isDepartmentAbolished(deptItem)) {
+      return false
+    }
+    if (statusFilter === 'ABOLISHED' && !isDepartmentAbolished(deptItem)) {
+      return false
+    }
+    if (
+      parsedSnapshotYear != null &&
+      !isDepartmentActiveAtYear(deptItem, parsedSnapshotYear)
+    ) {
+      return false
+    }
     return true
   }
 
@@ -258,6 +385,8 @@ export function MinistriesTabSection({
     ministriesList,
     eraFilter,
     kindGroupFilter,
+    statusFilter,
+    parsedSnapshotYear,
     categoriesList,
   ])
 
@@ -292,8 +421,12 @@ export function MinistriesTabSection({
     return 'MINISTRY' as const
   }
 
-  const resolveDefaultCreateEra = () =>
-    eraFilter !== 'ALL' && eraFilter !== 'MODERN' ? eraFilter : ''
+  const resolveDefaultCreateEra = () => {
+    if (isHistorical) {
+      return eraFilter !== 'ALL' ? eraFilter : (effectiveCountryId ?? '')
+    }
+    return eraFilter !== 'ALL' && eraFilter !== 'MODERN' ? eraFilter : ''
+  }
 
   const isFocusDetailOnly =
     layoutMode === 'FOCUS' &&
@@ -303,13 +436,17 @@ export function MinistriesTabSection({
   const hasActiveFilters =
     Boolean(ministrySearchQuery.trim()) ||
     kindGroupFilter !== 'ALL' ||
+    statusFilter !== 'ALL' ||
+    parsedSnapshotYear != null ||
     eraFilter !== 'ALL'
 
   const activeEraName =
     eraFilter === 'MODERN'
       ? '현대 직속'
-      : historicalErasAvailable.find((eraItem) => eraItem.id === eraFilter)
-          ?.name ?? null
+      : isHistorical && eraFilter === effectiveCountryId
+        ? `${countryName ?? '본국'} 직속`
+        : historicalErasAvailable.find((eraItem) => eraItem.id === eraFilter)
+            ?.name ?? null
 
   return (
     <>
@@ -354,22 +491,74 @@ export function MinistriesTabSection({
                 ))}
               </GovToolbarGroup>
 
-              {!isHistorical && historicalErasAvailable.length > 0 ? (
+              <GovToolbarGroup role="group" aria-label="기관 존속 상태 필터">
+                {(['ALL', 'ACTIVE', 'ABOLISHED'] as const).map((statusKey) => (
+                  <GovToolbarBtn
+                    key={statusKey}
+                    type="button"
+                    $active={statusFilter === statusKey}
+                    onClick={() => setStatusFilter(statusKey)}
+                  >
+                    {STATUS_FILTER_LABEL[statusKey]}
+                  </GovToolbarBtn>
+                ))}
+              </GovToolbarGroup>
+
+              <SnapshotYearWrap title="특정 연도(예: 1941, BC 221)에 존재했던 기관만 스냅샷 필터링합니다">
+                <FiCalendar size={12.5} aria-hidden />
+                <SnapshotYearInput
+                  type="text"
+                  value={snapshotYearInput}
+                  onChange={(changeEvt) =>
+                    setSnapshotYearInput(changeEvt.target.value)
+                  }
+                  placeholder="기준 연도 (예: 1941)"
+                  aria-label="기준 연도 스냅샷 필터"
+                />
+                {snapshotYearInput ? (
+                  <GovPromSearchClear
+                    type="button"
+                    aria-label="기준 연도 지우기"
+                    onClick={() => setSnapshotYearInput('')}
+                  >
+                    <FiX size={11} />
+                  </GovPromSearchClear>
+                ) : null}
+              </SnapshotYearWrap>
+
+              {historicalErasAvailable.length > 0 ? (
                 <EraSelect
-                  aria-label="시대·정체 필터"
+                  aria-label={isHistorical ? '소속 정치체 필터' : '시대·정체 필터'}
                   value={eraFilter}
                   onChange={(event) => setEraFilter(event.target.value)}
                 >
-                  <option value="ALL">전체 시대 ({ministriesList.length})</option>
-                  <option value="MODERN">
-                    현대 직속 (
-                    {
-                      ministriesList.filter(
-                        (deptItem) => !deptItem.historicalCountryId,
-                      ).length
-                    }
-                    )
+                  <option value="ALL">
+                    {isHistorical
+                      ? `전체 본국·구성국 (${ministriesList.length})`
+                      : `전체 시대 (${ministriesList.length})`}
                   </option>
+                  {isHistorical && effectiveCountryId ? (
+                    <option value={effectiveCountryId}>
+                      {countryName ?? '본국'} 직속 (
+                      {
+                        ministriesList.filter(
+                          (deptItem) =>
+                            deptItem.historicalCountryId === effectiveCountryId,
+                        ).length
+                      }
+                      )
+                    </option>
+                  ) : (
+                    <option value="MODERN">
+                      현대 직속 (
+                      {
+                        ministriesList.filter(
+                          (deptItem) => !deptItem.historicalCountryId,
+                        ).length
+                      }
+                      )
+                    </option>
+                  )}
                   {historicalErasAvailable.map((eraItem) => {
                     const eraCount = ministriesList.filter(
                       (deptItem) => deptItem.historicalCountryId === eraItem.id,
@@ -403,6 +592,27 @@ export function MinistriesTabSection({
                 {effectiveCountryId ? (
                   <>
                     <GovToolbarDivider />
+                    <GovToolbarGroup role="group" aria-label="목록 표시 방식">
+                      <GovToolbarBtn
+                        type="button"
+                        $active={browseViewMode === 'TREE'}
+                        onClick={() => setBrowseViewMode('TREE')}
+                        title="상하 위계 편제 트리 보기"
+                      >
+                        <FiGitBranch size={12.5} />
+                        <span>편제 트리</span>
+                      </GovToolbarBtn>
+                      <GovToolbarBtn
+                        type="button"
+                        $active={browseViewMode === 'LEDGER'}
+                        onClick={() => setBrowseViewMode('LEDGER')}
+                        title="설립·폐지일, 상위기관, 계보·군부대 원장 표 보기"
+                      >
+                        <FiList size={12.5} />
+                        <span>원장 표</span>
+                      </GovToolbarBtn>
+                    </GovToolbarGroup>
+
                     <GovToolbarBtn
                       type="button"
                       $active={layoutMode === 'SPLIT'}
@@ -476,6 +686,27 @@ export function MinistriesTabSection({
                     <FiX size={11} />
                   </GovActiveFilterChip>
                 ) : null}
+                {statusFilter !== 'ALL' ? (
+                  <GovActiveFilterChip
+                    type="button"
+                    onClick={() => setStatusFilter('ALL')}
+                  >
+                    상태: {STATUS_FILTER_LABEL[statusFilter]}
+                    <FiX size={11} />
+                  </GovActiveFilterChip>
+                ) : null}
+                {parsedSnapshotYear != null ? (
+                  <GovActiveFilterChip
+                    type="button"
+                    onClick={() => setSnapshotYearInput('')}
+                  >
+                    기준 연도:{' '}
+                    {parsedSnapshotYear < 0
+                      ? `BC ${Math.abs(parsedSnapshotYear)}년`
+                      : `${parsedSnapshotYear}년`}
+                    <FiX size={11} />
+                  </GovActiveFilterChip>
+                ) : null}
                 {eraFilter !== 'ALL' && activeEraName ? (
                   <GovActiveFilterChip
                     type="button"
@@ -490,6 +721,8 @@ export function MinistriesTabSection({
                   onClick={() => {
                     setMinistrySearchQuery('')
                     setKindGroupFilter('ALL')
+                    setStatusFilter('ALL')
+                    setSnapshotYearInput('')
                     setEraFilter('ALL')
                   }}
                 >
@@ -594,9 +827,11 @@ export function MinistriesTabSection({
                     )
                   }
                   setMinistryBrowseDepartment(targetDept)
+                  onSelectedDepartmentChange?.(targetDept.id)
                 }}
                 onBack={() => {
                   setMinistryBrowseDepartment(null)
+                  onSelectedDepartmentChange?.(null)
                 }}
                 onEdit={() => openMinistryEdit(ministryBrowseResolved)}
                 onDelete={() => handleMinistryDelete(ministryBrowseResolved)}
@@ -630,6 +865,7 @@ export function MinistriesTabSection({
                     }
                     departmentName={ministryBrowseResolved.name}
                     departmentKind={ministryBrowseResolved.kind}
+                    onSelectCabinet={onSelectCabinet}
                   />
                 }
                 eventsSlot={
@@ -655,8 +891,11 @@ export function MinistriesTabSection({
                   icon={<FiBriefcase size={30} strokeWidth={1.75} />}
                   title="등록된 기관·부처가 없습니다"
                   description={
-                    eraFilter !== 'ALL' || kindGroupFilter !== 'ALL'
-                      ? '선택한 시대·성격 필터에 해당하는 기관이 없습니다. 바로 이 조건으로 새 기관을 등록하거나 필터를 변경해 보세요.'
+                    eraFilter !== 'ALL' ||
+                    kindGroupFilter !== 'ALL' ||
+                    statusFilter !== 'ALL' ||
+                    parsedSnapshotYear != null
+                      ? '선택한 시대·성격·상태·연도 조건에 해당하는 기관이 없습니다. 바로 이 조건으로 새 기관을 등록하거나 필터를 변경해 보세요.'
                       : '이 분류에 첫 중앙부처·국가기관을 등록하면 상하 계층과 전신·후신 계보가 표시됩니다.'
                   }
                   primaryAction={{
@@ -675,42 +914,64 @@ export function MinistriesTabSection({
                   onClearSearch={() => setMinistrySearchQuery('')}
                 />
               ) : layoutMode === 'SPLIT' ? (
-                <SplitWorkspaceGrid>
+                <SplitWorkspaceGrid $ledgerView={browseViewMode === 'LEDGER'}>
                   <TreeLedgerColumn>
-                    <MinistryDepartmentTree
-                      allDepartments={ministriesList}
-                      departmentsInCategory={deptsInActiveCatFiltered}
-                      isDark={isDark}
-                      selectedDepartmentId={ministryBrowseResolved?.id}
-                      onSelectDepartment={(dept) =>
-                        setMinistryBrowseDepartment(dept)
-                      }
-                      onAddRoot={() =>
-                        openMinistryCreateRootInCategory(
-                          activeCategory?.id ?? '',
-                          resolveDefaultCreateEra(),
-                          resolveDefaultCreateKind(),
-                        )
-                      }
-                      onAddChild={(parentDept) =>
-                        openMinistryCreateChild(
-                          parentDept,
-                          parentDept.categoryId ?? '',
-                        )
-                      }
-                      onGoToPositionDefinitions={() =>
-                        onNavigateToPositions(
-                          activeCategory &&
-                            activeCategory.id !== UNCATEGORIZED_CATEGORY_ID &&
-                            activeCategory.id !== ALL_DEPARTMENTS_CATEGORY_ID
-                            ? {
-                                categoryId: activeCategory.id,
-                                categoryName: activeCategory.name,
-                              }
-                            : undefined,
-                        )
-                      }
-                    />
+                    {browseViewMode === 'LEDGER' ? (
+                      <MinistriesLedgerView
+                        departments={deptsInActiveCatFiltered}
+                        allDepartments={ministriesList}
+                        categories={categoriesList}
+                        selectedDepartmentId={ministryBrowseResolved?.id}
+                        compact
+                        onSelectDepartment={(dept) => {
+                          setMinistryBrowseDepartment(dept)
+                          onSelectedDepartmentChange?.(dept.id)
+                        }}
+                        onAddRoot={() =>
+                          openMinistryCreateRootInCategory(
+                            activeCategory?.id ?? '',
+                            resolveDefaultCreateEra(),
+                            resolveDefaultCreateKind(),
+                          )
+                        }
+                      />
+                    ) : (
+                      <MinistryDepartmentTree
+                        allDepartments={ministriesList}
+                        departmentsInCategory={deptsInActiveCatFiltered}
+                        isDark={isDark}
+                        selectedDepartmentId={ministryBrowseResolved?.id}
+                        onSelectDepartment={(dept) => {
+                          setMinistryBrowseDepartment(dept)
+                          onSelectedDepartmentChange?.(dept.id)
+                        }}
+                        onAddRoot={() =>
+                          openMinistryCreateRootInCategory(
+                            activeCategory?.id ?? '',
+                            resolveDefaultCreateEra(),
+                            resolveDefaultCreateKind(),
+                          )
+                        }
+                        onAddChild={(parentDept) =>
+                          openMinistryCreateChild(
+                            parentDept,
+                            parentDept.categoryId ?? '',
+                          )
+                        }
+                        onGoToPositionDefinitions={() =>
+                          onNavigateToPositions(
+                            activeCategory &&
+                              activeCategory.id !== UNCATEGORIZED_CATEGORY_ID &&
+                              activeCategory.id !== ALL_DEPARTMENTS_CATEGORY_ID
+                              ? {
+                                  categoryId: activeCategory.id,
+                                  categoryName: activeCategory.name,
+                                }
+                              : undefined,
+                          )
+                        }
+                      />
+                    )}
                   </TreeLedgerColumn>
 
                   <GovLedgerPanel>
@@ -751,8 +1012,12 @@ export function MinistriesTabSection({
                           )
                           if (!targetDept) return
                           setMinistryBrowseDepartment(targetDept)
+                          onSelectedDepartmentChange?.(targetDept.id)
                         }}
-                        onBack={() => setMinistryBrowseDepartment(null)}
+                        onBack={() => {
+                          setMinistryBrowseDepartment(null)
+                          onSelectedDepartmentChange?.(null)
+                        }}
                         onEdit={() => openMinistryEdit(ministryBrowseResolved)}
                         onDelete={() =>
                           handleMinistryDelete(ministryBrowseResolved)
@@ -790,6 +1055,7 @@ export function MinistriesTabSection({
                             }
                             departmentName={ministryBrowseResolved.name}
                             departmentKind={ministryBrowseResolved.kind}
+                            onSelectCabinet={onSelectCabinet}
                           />
                         }
                         eventsSlot={
@@ -809,40 +1075,61 @@ export function MinistriesTabSection({
                 </SplitWorkspaceGrid>
               ) : (
                 <GovLedgerPanel>
-                  <MinistryDepartmentTree
-                    allDepartments={ministriesList}
-                    departmentsInCategory={deptsInActiveCatFiltered}
-                    isDark={isDark}
-                    selectedDepartmentId={ministryBrowseDepartment?.id}
-                    onSelectDepartment={(dept) =>
-                      setMinistryBrowseDepartment(dept)
-                    }
-                    onAddRoot={() =>
-                      openMinistryCreateRootInCategory(
-                        activeCategory?.id ?? '',
-                        resolveDefaultCreateEra(),
-                        resolveDefaultCreateKind(),
-                      )
-                    }
-                    onAddChild={(parentDept) =>
-                      openMinistryCreateChild(
-                        parentDept,
-                        parentDept.categoryId ?? '',
-                      )
-                    }
-                    onGoToPositionDefinitions={() =>
-                      onNavigateToPositions(
-                        activeCategory &&
-                          activeCategory.id !== UNCATEGORIZED_CATEGORY_ID &&
-                          activeCategory.id !== ALL_DEPARTMENTS_CATEGORY_ID
-                          ? {
-                              categoryId: activeCategory.id,
-                              categoryName: activeCategory.name,
-                            }
-                          : undefined,
-                      )
-                    }
-                  />
+                  {browseViewMode === 'LEDGER' ? (
+                    <MinistriesLedgerView
+                      departments={deptsInActiveCatFiltered}
+                      allDepartments={ministriesList}
+                      categories={categoriesList}
+                      selectedDepartmentId={ministryBrowseDepartment?.id}
+                      onSelectDepartment={(dept) => {
+                        setMinistryBrowseDepartment(dept)
+                        onSelectedDepartmentChange?.(dept.id)
+                      }}
+                      onAddRoot={() =>
+                        openMinistryCreateRootInCategory(
+                          activeCategory?.id ?? '',
+                          resolveDefaultCreateEra(),
+                          resolveDefaultCreateKind(),
+                        )
+                      }
+                    />
+                  ) : (
+                    <MinistryDepartmentTree
+                      allDepartments={ministriesList}
+                      departmentsInCategory={deptsInActiveCatFiltered}
+                      isDark={isDark}
+                      selectedDepartmentId={ministryBrowseDepartment?.id}
+                      onSelectDepartment={(dept) => {
+                        setMinistryBrowseDepartment(dept)
+                        onSelectedDepartmentChange?.(dept.id)
+                      }}
+                      onAddRoot={() =>
+                        openMinistryCreateRootInCategory(
+                          activeCategory?.id ?? '',
+                          resolveDefaultCreateEra(),
+                          resolveDefaultCreateKind(),
+                        )
+                      }
+                      onAddChild={(parentDept) =>
+                        openMinistryCreateChild(
+                          parentDept,
+                          parentDept.categoryId ?? '',
+                        )
+                      }
+                      onGoToPositionDefinitions={() =>
+                        onNavigateToPositions(
+                          activeCategory &&
+                            activeCategory.id !== UNCATEGORIZED_CATEGORY_ID &&
+                            activeCategory.id !== ALL_DEPARTMENTS_CATEGORY_ID
+                            ? {
+                                categoryId: activeCategory.id,
+                                categoryName: activeCategory.name,
+                              }
+                            : undefined,
+                        )
+                      }
+                    />
+                  )}
                 </GovLedgerPanel>
               )}
             </WorkspaceStack>
@@ -852,6 +1139,8 @@ export function MinistriesTabSection({
 
       <MinistryFormModal
         effectiveCountryId={effectiveCountryId}
+        countryName={countryName}
+        constituentPolities={constituentPolities}
         isHistorical={isHistorical}
         isOpen={ministryFormModalOpen}
         isDark={isDark}
@@ -928,9 +1217,48 @@ const WorkspaceStack = styled.div`
   gap: 12px;
 `
 
-const SplitWorkspaceGrid = styled.div`
+const SnapshotYearWrap = styled.div`
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 8px 0 10px;
+  border-radius: 8px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  background-color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#ffffff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.1)'
+        : 'rgba(20, 19, 34, 0.1)'};
+`
+
+const SnapshotYearInput = styled.input`
+  width: 118px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  &::placeholder {
+    font-weight: 500;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+const SplitWorkspaceGrid = styled.div<{ $ledgerView?: boolean }>`
   display: grid;
-  grid-template-columns: minmax(310px, 390px) minmax(0, 1fr);
+  grid-template-columns: ${({ $ledgerView }) =>
+    $ledgerView
+      ? 'minmax(420px, 1.05fr) minmax(0, 1fr)'
+      : 'minmax(310px, 390px) minmax(0, 1fr)'};
   gap: 16px;
   align-items: start;
   flex: 1;

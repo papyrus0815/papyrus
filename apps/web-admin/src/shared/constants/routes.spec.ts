@@ -13,6 +13,9 @@ describe('isContentAreaPath', () => {
     expect(isContentAreaPath('/persons-timeline/abc123/')).toBe(true)
     expect(isContentAreaPath('/country/kr/dashboard')).toBe(true)
     expect(isContentAreaPath('/heads-of-state/')).toBe(true)
+    expect(isContentAreaPath('/government/')).toBe(true)
+    expect(isContentAreaPath('/government/cabinets/cab-1')).toBe(true)
+    expect(isContentAreaPath('/government/departments/dept-1')).toBe(true)
     expect(isContentAreaPath('/ethnicity')).toBe(true)
   })
 

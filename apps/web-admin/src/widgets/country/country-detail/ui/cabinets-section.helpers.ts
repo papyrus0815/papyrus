@@ -926,29 +926,46 @@ export type CabinetTimelineCountryScope =
       modernCountryId: string
       linkedHistoricalCountryIds: readonly string[]
     }
-  | { kind: 'historical'; historicalCountryId: string }
+  | {
+      kind: 'historical'
+      historicalCountryId: string
+      constituentHistoricalCountryIds?: readonly string[]
+    }
 
 export function tenureInCabinetTimelineCountryScope(
-  t: {
+  tenureItem: {
     countryId?: string | null
     historicalCountryId?: string | null
   },
   scope: CabinetTimelineCountryScope,
 ): boolean {
   if (scope.kind === 'historical') {
-    return (
-      t.historicalCountryId === scope.historicalCountryId &&
-      t.historicalCountryId != null &&
-      t.historicalCountryId !== ''
+    if (
+      tenureItem.historicalCountryId == null ||
+      tenureItem.historicalCountryId === ''
+    ) {
+      return false
+    }
+    if (tenureItem.historicalCountryId === scope.historicalCountryId) {
+      return true
+    }
+    return Boolean(
+      scope.constituentHistoricalCountryIds?.includes(
+        tenureItem.historicalCountryId,
+      ),
     )
   }
   const linked = new Set(scope.linkedHistoricalCountryIds)
-  if (t.historicalCountryId != null && t.historicalCountryId !== '') {
-    return linked.has(t.historicalCountryId)
+  if (
+    tenureItem.historicalCountryId != null &&
+    tenureItem.historicalCountryId !== ''
+  ) {
+    return linked.has(tenureItem.historicalCountryId)
   }
   return (
-    t.countryId === scope.modernCountryId &&
-    (t.historicalCountryId == null || t.historicalCountryId === '')
+    tenureItem.countryId === scope.modernCountryId &&
+    (tenureItem.historicalCountryId == null ||
+      tenureItem.historicalCountryId === '')
   )
 }
 
@@ -1092,19 +1109,29 @@ export function overlappingMonarchTenureForExecutiveHead(
     allCountryTenures,
   )
   let best: GovernmentHeadTenureInCabinetList | null = null
+  let bestSamePolity = false
   let bestOverlap = -1
-  for (const m of monarchPool) {
-    if (!isSovereignMonarchTenureForCabinetTimeline(m)) continue
-    if (!headTenuresMatchForMonarchOverlap(m, execHead, scope)) continue
-    const mRange = headTenureDateRangeMs(m)
-    if (!mRange) continue
-    if (execRange.start <= mRange.end && mRange.start <= execRange.end) {
-      const ov =
-        Math.min(execRange.end, mRange.end) -
-        Math.max(execRange.start, mRange.start)
-      if (ov > bestOverlap) {
-        bestOverlap = ov
-        best = m
+  for (const monarchItem of monarchPool) {
+    if (!isSovereignMonarchTenureForCabinetTimeline(monarchItem)) continue
+    if (!headTenuresMatchForMonarchOverlap(monarchItem, execHead, scope))
+      continue
+    const monarchRange = headTenureDateRangeMs(monarchItem)
+    if (!monarchRange) continue
+    if (
+      execRange.start <= monarchRange.end &&
+      monarchRange.start <= execRange.end
+    ) {
+      const overlapMs =
+        Math.min(execRange.end, monarchRange.end) -
+        Math.max(execRange.start, monarchRange.start)
+      const samePolity = cabinetHeadSameTerritoryAsTenure(monarchItem, execHead)
+      if (
+        (samePolity && !bestSamePolity) ||
+        (samePolity === bestSamePolity && overlapMs > bestOverlap)
+      ) {
+        bestSamePolity = samePolity
+        bestOverlap = overlapMs
+        best = monarchItem
       }
     }
   }

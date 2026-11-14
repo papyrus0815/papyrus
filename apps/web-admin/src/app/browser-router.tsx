@@ -19,6 +19,7 @@ import { organizationsRoutes } from '@/pages/organizations/organizations.route'
 import { companiesRoutes } from '@/pages/companies/companies.route'
 import { sourcesRoutes } from '@/pages/sources/sources.route'
 import { treatiesRoutes } from '@/pages/treaties/treaties.route'
+import { governmentRoutes } from '@/pages/government/government.route'
 import { companyCategoriesRoutes } from '@/pages/company-categories/company-categories.route'
 import { eventFormRoutes, eventPageRoute } from '@/pages/events/event-route'
 import { countryRoute } from '@/pages/country/country.route'
@@ -214,6 +215,7 @@ const appRouterConfig = [
               ...personGroupsRoutes,
               ...companiesRoutes,
               ...treatiesRoutes,
+              ...governmentRoutes,
               ...sourcesRoutes,
               eventPageRoute,
             ],

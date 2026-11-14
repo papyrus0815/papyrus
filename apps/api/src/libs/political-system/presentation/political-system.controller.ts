@@ -19,6 +19,13 @@ import { Prisma } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 
 import { resolveCountryScopeOr } from '../../country/domain/country-scope.util'
+import {
+  doesIntervalOverlapConstituentWindows,
+  extractRecordPeriodKeys,
+  groupConstituentWindowsByMemberId,
+  parseIncludeConstituentsFlag,
+  resolveConstituentPolityWindows,
+} from '../../shared/historical-constituent-rollup'
 
 import type {
   CreatePoliticalSystemDto,
@@ -81,11 +88,29 @@ export class PoliticalSystemController {
   async list(
     @Query('countryId') countryId?: string,
     @Query('historicalCountryId') historicalCountryId?: string,
+    @Query('includeConstituents') includeConstituents?: string,
   ): Promise<PoliticalSystemResponseDto[]> {
+    const shouldIncludeConstituents =
+      Boolean(historicalCountryId) &&
+      parseIncludeConstituentsFlag(includeConstituents)
+
+    const constituentWindows =
+      historicalCountryId && shouldIncludeConstituents
+        ? await resolveConstituentPolityWindows(
+            this.prisma,
+            historicalCountryId,
+          )
+        : []
+    const constituentByMemberId =
+      groupConstituentWindowsByMemberId(constituentWindows)
+
     let where: Prisma.PoliticalSystemWhereInput = {}
 
     if (historicalCountryId) {
-      where.historicalCountryId = historicalCountryId
+      where.historicalCountryId =
+        constituentByMemberId.size > 0
+          ? { in: [historicalCountryId, ...constituentByMemberId.keys()] }
+          : historicalCountryId
     } else if (countryId) {
       where = (await resolveCountryScopeOr(
         this.prisma,
@@ -93,10 +118,38 @@ export class PoliticalSystemController {
       )) as Prisma.PoliticalSystemWhereInput
     }
 
-    const rows = await this.prisma.politicalSystem.findMany({
+    const rawRows = await this.prisma.politicalSystem.findMany({
       where: Object.keys(where).length ? where : undefined,
       include: RESPONSE_INCLUDE,
     })
+
+    const rows =
+      historicalCountryId && constituentByMemberId.size > 0
+        ? rawRows.filter((row) => {
+            if (row.historicalCountryId === historicalCountryId) return true
+            if (!row.historicalCountryId) return false
+            const memberWindows = constituentByMemberId.get(
+              row.historicalCountryId,
+            )
+            if (!memberWindows) return false
+            const bounds = extractRecordPeriodKeys({
+              startEra: row.startEra,
+              startYear: row.startYear,
+              startMonth: row.startMonth,
+              startDay: row.startDay,
+              endEra: row.endEra,
+              endYear: row.endYear,
+              endMonth: row.endMonth,
+              endDay: row.endDay,
+            })
+            return doesIntervalOverlapConstituentWindows(
+              bounds.startKey,
+              bounds.endKey,
+              memberWindows,
+              'institution',
+            )
+          })
+        : rawRows
 
     // 정렬은 부호 연·월·일로 — Prisma orderBy는 startYear만 보므로 BC가 뒤집히고 동년 내 교체 순서가 섞인다.
     // 연도 미상은 항상 끝(signedDateKey가 +Infinity).

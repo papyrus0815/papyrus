@@ -28,6 +28,13 @@ import {
 import { PrismaService } from '@prisma/prisma.service'
 import { serializeBigInt } from '../../shared/serialize.util'
 import {
+  doesIntervalOverlapConstituentWindows,
+  doesRecordOverlapSignedYear,
+  extractRecordPeriodKeys,
+  groupConstituentWindowsByMemberId,
+  resolveConstituentPolityWindows,
+} from '../../shared/historical-constituent-rollup'
+import {
   resolveCountryScopeOr,
   resolveLinkedHistoricalCountryIds,
   buildCountryScopeOr,
@@ -4719,6 +4726,33 @@ export class PersonPrismaRepository implements IPersonRepository {
     }
   }
 
+  async findCabinetById(cabinetId: string): Promise<any | null> {
+    const cabinet = await this.prisma.cabinet.findUnique({
+      where: { id: cabinetId },
+      include: {
+        linkageGroup: { select: this.LINKAGE_GROUP_EVENT_SELECT },
+        country: { select: { id: true, name: true, flagEmoji: true } },
+        historicalCountry: { select: { id: true, name: true } },
+        _count: {
+          select: { members: true, memberTenures: true },
+        },
+        headTenure: {
+          include: {
+            person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
+            positionDefinition: true,
+            country: { select: { id: true, name: true, flagEmoji: true } },
+            historicalCountry: { select: { id: true, name: true } },
+            achievements: TENURE_ACHIEVEMENTS_INCLUDE,
+            regnalEras: REGNAL_ERAS_ORDER,
+          },
+        },
+      },
+    })
+    if (!cabinet) return null
+    await this.mergeLinkagePeerHeadAchievementsForCabinets([cabinet as any])
+    return serializeBigInt(this.formatCabinetRow(cabinet))
+  }
+
   async findCabinetByHeadTenureId(headTenureId: string): Promise<any | null> {
     const cabinet = await this.prisma.cabinet.findFirst({
       where: { headTenureId },
@@ -4960,7 +4994,14 @@ export class PersonPrismaRepository implements IPersonRepository {
   async findCabinets(params: {
     countryId?: string
     historicalCountryId?: string
+    includeConstituents?: boolean
+    search?: string
+    activeAtYear?: number
+    currentOnly?: boolean
+    linkedOnly?: boolean
+    take?: number
   }): Promise<any[]> {
+    const trimmedSearch = params.search?.trim()
     let linkedHistoricalIds: string[] = []
     if (params.countryId && !params.historicalCountryId) {
       linkedHistoricalIds = await this.prisma.historicalCountryModernCountry
@@ -4971,13 +5012,37 @@ export class PersonPrismaRepository implements IPersonRepository {
         .then((rows) => rows.map((row) => row.historicalCountryId))
     }
 
-    const baseWhere: Prisma.CabinetWhereInput = params.historicalCountryId
-      ? {
-          OR: [
-            { historicalCountryId: params.historicalCountryId },
-            { headTenure: { historicalCountryId: params.historicalCountryId } },
-          ],
-        }
+    const constituentWindows =
+      params.historicalCountryId && params.includeConstituents
+        ? await resolveConstituentPolityWindows(
+            this.prisma,
+            params.historicalCountryId,
+          )
+        : []
+    const constituentByMemberId =
+      groupConstituentWindowsByMemberId(constituentWindows)
+    const targetHistoricalIds = params.historicalCountryId
+      ? [params.historicalCountryId, ...constituentByMemberId.keys()]
+      : []
+
+    const countryWhere: Prisma.CabinetWhereInput | null = params.historicalCountryId
+      ? targetHistoricalIds.length > 1
+        ? {
+            OR: [
+              { historicalCountryId: { in: targetHistoricalIds } },
+              {
+                headTenure: {
+                  historicalCountryId: { in: targetHistoricalIds },
+                },
+              },
+            ],
+          }
+        : {
+            OR: [
+              { historicalCountryId: params.historicalCountryId },
+              { headTenure: { historicalCountryId: params.historicalCountryId } },
+            ],
+          }
       : params.countryId
         ? {
             OR: [
@@ -4998,20 +5063,88 @@ export class PersonPrismaRepository implements IPersonRepository {
               },
             ],
           }
-        : {}
+        : null
 
-    const list = await this.prisma.cabinet.findMany({
-      where: Object.keys(baseWhere).length > 0 ? baseWhere : undefined,
+    const searchWhere: Prisma.CabinetWhereInput | null = trimmedSearch
+      ? {
+          OR: [
+            { name: { contains: trimmedSearch } },
+            { country: { name: { contains: trimmedSearch } } },
+            { historicalCountry: { name: { contains: trimmedSearch } } },
+            {
+              headTenure: {
+                OR: [
+                  { title: { contains: trimmedSearch } },
+                  { regnalName: { contains: trimmedSearch } },
+                  { positionDefinition: { title: { contains: trimmedSearch } } },
+                  { person: { name: { contains: trimmedSearch } } },
+                  { person: { surname: { contains: trimmedSearch } } },
+                  { country: { name: { contains: trimmedSearch } } },
+                  { historicalCountry: { name: { contains: trimmedSearch } } },
+                ],
+              },
+            },
+          ],
+        }
+      : null
+
+    const andClauses: Prisma.CabinetWhereInput[] = []
+    if (countryWhere) andClauses.push(countryWhere)
+    if (searchWhere) andClauses.push(searchWhere)
+    if (params.linkedOnly) {
+      andClauses.push({ linkageGroupId: { not: null } })
+    }
+    if (params.currentOnly) {
+      andClauses.push({
+        historicalCountryId: null,
+        OR: [
+          {
+            headTenureId: { not: null },
+            headTenure: {
+              historicalCountryId: null,
+              endYear: null,
+              endDate: null,
+            },
+          },
+          {
+            headTenureId: null,
+            endYear: null,
+          },
+        ],
+      })
+    }
+
+    const combinedWhere: Prisma.CabinetWhereInput | undefined =
+      andClauses.length === 1
+        ? andClauses[0]
+        : andClauses.length > 1
+          ? { AND: andClauses }
+          : undefined
+
+    const rawList = await this.prisma.cabinet.findMany({
+      where: combinedWhere,
       orderBy: [
         { headTenure: { startKey: 'desc' } },
         { headTenure: { startDate: 'desc' } },
         { startYear: 'desc' },
         { createdAt: 'desc' },
       ],
+      ...(params.take && params.activeAtYear == null
+        ? { take: Math.min(Math.max(params.take, 1), 500) }
+        : {}),
       include: {
         linkageGroup: { select: this.LINKAGE_GROUP_EVENT_SELECT },
-        country: { select: { id: true, name: true } },
-        historicalCountry: { select: { id: true, name: true } },
+        country: { select: { id: true, name: true, flagEmoji: true } },
+        historicalCountry: {
+          select: {
+            id: true,
+            name: true,
+            endEra: true,
+            endYear: true,
+            endMonth: true,
+            endDay: true,
+          },
+        },
         _count: {
           select: { members: true, memberTenures: true },
         },
@@ -5019,14 +5152,86 @@ export class PersonPrismaRepository implements IPersonRepository {
           include: {
             person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
             positionDefinition: true,
-            country: { select: { id: true, name: true } },
-            historicalCountry: { select: { id: true, name: true } },
+            country: { select: { id: true, name: true, flagEmoji: true } },
+            historicalCountry: {
+              select: {
+                id: true,
+                name: true,
+                endEra: true,
+                endYear: true,
+                endMonth: true,
+                endDay: true,
+              },
+            },
             achievements: TENURE_ACHIEVEMENTS_INCLUDE,
             regnalEras: REGNAL_ERAS_ORDER,
           },
         },
       },
     })
+
+    const rolledUpList =
+      params.historicalCountryId && constituentByMemberId.size > 0
+        ? rawList.filter((cab) => {
+            const effHistId =
+              cab.headTenure?.historicalCountryId ?? cab.historicalCountryId
+            if (!effHistId || effHistId === params.historicalCountryId) {
+              return effHistId === params.historicalCountryId
+            }
+            const memberWindows = constituentByMemberId.get(effHistId)
+            if (!memberWindows) return false
+            const headBounds = cab.headTenure
+              ? extractRecordPeriodKeys(cab.headTenure)
+              : { startKey: null, endKey: null }
+            const cabBounds = extractRecordPeriodKeys(cab)
+            const startKey = headBounds.startKey ?? cabBounds.startKey
+            const endKey = headBounds.endKey ?? cabBounds.endKey
+            return doesIntervalOverlapConstituentWindows(
+              startKey,
+              endKey,
+              memberWindows,
+              'person_or_cabinet',
+            )
+          })
+        : rawList
+
+    const yearFilteredList =
+      params.activeAtYear != null && Number.isFinite(params.activeAtYear)
+        ? rolledUpList.filter((cab) => {
+            const headBounds = cab.headTenure
+              ? extractRecordPeriodKeys(cab.headTenure)
+              : { startKey: null, endKey: null }
+            const cabBounds = extractRecordPeriodKeys(cab)
+            const startKey = headBounds.startKey ?? cabBounds.startKey
+            const endKey = headBounds.endKey ?? cabBounds.endKey
+            const effHist =
+              cab.headTenure?.historicalCountry ?? cab.historicalCountry
+            const polityBounds = effHist
+              ? extractRecordPeriodKeys({
+                  endEra: effHist.endEra,
+                  endYear: effHist.endYear,
+                  endMonth: effHist.endMonth,
+                  endDay: effHist.endDay,
+                })
+              : { endKey: null }
+            return doesRecordOverlapSignedYear({
+              startKey,
+              endKey,
+              activeAtYear: params.activeAtYear!,
+              kind: 'person_or_cabinet',
+              polityEndKey: polityBounds.endKey,
+              isHistoricalPolity: Boolean(
+                cab.headTenure?.historicalCountryId ?? cab.historicalCountryId,
+              ),
+            })
+          })
+        : rolledUpList
+
+    const list =
+      params.take && params.activeAtYear != null
+        ? yearFilteredList.slice(0, Math.min(Math.max(params.take, 1), 500))
+        : yearFilteredList
+
     await this.mergeLinkagePeerHeadAchievementsForCabinets(list as any[])
     return list.map((cab) => serializeBigInt(this.formatCabinetRow(cab)))
   }
@@ -6411,6 +6616,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     params?: {
       countryId?: string
       historicalCountryId?: string
+      includeConstituents?: boolean
     },
     options?: { forDefinitionScope?: boolean },
   ): Promise<Array<Record<string, any>>> {
@@ -6422,8 +6628,24 @@ export class PersonPrismaRepository implements IPersonRepository {
 
     // 역사적 국가가 명시된 경우:
     // - 다른 시대 역사국가(형제 정체)나 현대 국가 전용(historicalCountryId: null) 정의로 번지는 역방향 확장을 하지 않는다.
+    // - 단, includeConstituents=true일 때는 동시대 구성국(UNION·CONFEDERATION_MEMBER·DOMINION) 스코프 정의까지 포함한다.
     // - 전역(무스코프·무부처) 보편 칭호는 findPositionDefinitions의 별도 OR 절({ scopes: { none: {} }, administrationDepartmentId: null })에서 포함된다.
     if (params?.historicalCountryId) {
+      if (params.includeConstituents) {
+        const constituentWindows = await resolveConstituentPolityWindows(
+          this.prisma,
+          params.historicalCountryId,
+        )
+        const targetIds = Array.from(
+          new Set([
+            params.historicalCountryId,
+            ...constituentWindows.map((win) => win.memberCountryId),
+          ]),
+        )
+        return targetIds.length > 1
+          ? [{ historicalCountryId: { in: targetIds } }]
+          : [{ historicalCountryId: params.historicalCountryId }]
+      }
       return [{ historicalCountryId: params.historicalCountryId }]
     }
 
@@ -6460,6 +6682,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     countryId?: string
     historicalCountryId?: string
     includeIds?: string[]
+    includeConstituents?: boolean
   }): Promise<any[]> {
     const scopeOr = await this.buildCountryScopeOr(params, { forDefinitionScope: true })
     const includeIds = (params?.includeIds ?? []).filter(Boolean)
@@ -7680,6 +7903,39 @@ export class PersonPrismaRepository implements IPersonRepository {
     return buildCountryScopeOr(countryId!, linkedHistoricalIds)
   }
 
+  async findConstituentHistoricalPolities(
+    historicalCountryId: string,
+  ): Promise<any[]> {
+    const windows = await resolveConstituentPolityWindows(
+      this.prisma,
+      historicalCountryId,
+    )
+    const seen = new Set<string>()
+    const items: any[] = []
+    for (const win of windows) {
+      if (seen.has(win.memberCountryId)) continue
+      seen.add(win.memberCountryId)
+      items.push({
+        id: win.memberCountryId,
+        name: win.memberCountryName,
+        enName: win.memberCountryEnName,
+        role: win.role,
+        isLeadingMember: win.isLeadingMember,
+        startEra: win.startEra,
+        startYear: win.startYear,
+        startMonth: win.startMonth,
+        startDay: win.startDay,
+        endEra: win.endEra,
+        endYear: win.endYear,
+        endMonth: win.endMonth,
+        endDay: win.endDay,
+        windowStartKey: win.windowStartKey,
+        windowEndKey: win.windowEndKey,
+      })
+    }
+    return items
+  }
+
   /**
    * 국가 또는 역사적 국가별 재임 기록 조회 (연대표 국가 페이지 수장 목록용)
    * 재위(군주직)·재임 모두 — 행마다 isMonarchical
@@ -7687,8 +7943,26 @@ export class PersonPrismaRepository implements IPersonRepository {
   async findTenuresByCountry(params: {
     countryId?: string
     historicalCountryId?: string
+    includeConstituents?: boolean
   }): Promise<any[]> {
-    const where = await this.buildCountryScopeWhere(params)
+    const constituentWindows =
+      params.historicalCountryId && params.includeConstituents
+        ? await resolveConstituentPolityWindows(
+            this.prisma,
+            params.historicalCountryId,
+          )
+        : []
+    const constituentByMemberId =
+      groupConstituentWindowsByMemberId(constituentWindows)
+
+    const where =
+      params.historicalCountryId && constituentByMemberId.size > 0
+        ? {
+            historicalCountryId: {
+              in: [params.historicalCountryId, ...constituentByMemberId.keys()],
+            },
+          }
+        : await this.buildCountryScopeWhere(params)
     if (!where) return []
 
     const headPersonSelect = {
@@ -7754,13 +8028,34 @@ export class PersonPrismaRepository implements IPersonRepository {
     } as const
 
     // 재위·재임 한 번에 — 같은 재임 행 모양, 갈래는 isMonarchical. 정렬은 BC까지 맞는 구조화 키
-    const merged = (
-      await this.prisma.governmentPositionTenure.findMany({
-        where: where,
-        include: tenureInclude,
-        orderBy: [{ startKey: 'desc' }, { startDate: 'desc' }],
-      })
-    ).map(asChronologyRow)
+    const rawRows = await this.prisma.governmentPositionTenure.findMany({
+      where: where,
+      include: tenureInclude,
+      orderBy: [{ startKey: 'desc' }, { startDate: 'desc' }],
+    })
+
+    const filteredRows =
+      params.historicalCountryId && constituentByMemberId.size > 0
+        ? rawRows.filter((row) => {
+            if (row.historicalCountryId === params.historicalCountryId) {
+              return true
+            }
+            if (!row.historicalCountryId) return false
+            const memberWindows = constituentByMemberId.get(
+              row.historicalCountryId,
+            )
+            if (!memberWindows) return false
+            const bounds = extractRecordPeriodKeys(row)
+            return doesIntervalOverlapConstituentWindows(
+              bounds.startKey,
+              bounds.endKey,
+              memberWindows,
+              'person_or_cabinet',
+            )
+          })
+        : rawRows
+
+    const merged = filteredRows.map(asChronologyRow)
 
     return serializeBigInt(merged)
   }

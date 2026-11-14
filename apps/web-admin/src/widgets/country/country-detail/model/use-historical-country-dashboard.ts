@@ -209,9 +209,12 @@ export function useHistoricalCountryDashboard(
         staleTime: STALE_MS,
       },
       {
-        queryKey: historicalDashboardKeys.tenures(id),
+        queryKey: [...historicalDashboardKeys.tenures(id), 'with-constituents'],
         queryFn: () =>
-          personCareerApi.getTenuresByCountry({ historicalCountryId: id }),
+          personCareerApi.getTenuresByCountry({
+            historicalCountryId: id,
+            includeConstituents: true,
+          }),
         staleTime: STALE_MS,
       },
       {
@@ -251,8 +254,13 @@ export function useHistoricalCountryDashboard(
         staleTime: 1000 * 60,
       },
       {
-        queryKey: administrationDepartmentsByHistoricalCountryQueryKey(id),
-        queryFn: () => administrationDepartmentApi.getByHistoricalCountryId(id),
+        queryKey: administrationDepartmentsByHistoricalCountryQueryKey(id, {
+          includeConstituents: true,
+        }),
+        queryFn: () =>
+          administrationDepartmentApi.getByHistoricalCountryId(id, {
+            includeConstituents: true,
+          }),
         staleTime: STALE_MS,
       },
       {

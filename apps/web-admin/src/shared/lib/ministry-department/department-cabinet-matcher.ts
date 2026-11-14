@@ -22,6 +22,8 @@ import { DEPARTMENT_NAME_FRAMES } from './department-name-frames'
 export type CabinetScopeForDepartment = {
   countryId?: string | null
   historicalCountryId?: string | null
+  /** 복합 역사국가(예: 오스트리아-헝가리 제국 ↔ 헝가리 왕국) 조회 시 허용할 본국·구성국 ID 집합 */
+  allowedHistoricalCountryIds?: ReadonlySet<string> | null
   startDate?: string | null
   endDate?: string | null
   startEra?: string | null
@@ -287,7 +289,10 @@ export function filterDepartmentsForCabinet<
     // 2. 역사국가 소속 정권일 때
     if (cabHistId) {
       if (deptHistId) {
-        return deptHistId === cabHistId
+        return (
+          deptHistId === cabHistId ||
+          Boolean(cabinetScope.allowedHistoricalCountryIds?.has(deptHistId))
+        )
       }
       // 현대국가 소속으로만 등록된 부처는 설립일이 명시되어 정권 기간과 겹칠 때만 허용
       // (설립일 미입력 현대 부처가 과거 역사국가 내각에 섞여 나오는 현상 방지)
@@ -619,7 +624,11 @@ export function findActivePoliticalSystemForCabinet(
 
   const candidates = systems.filter((sys) => {
     if (cabHistId) {
-      if (sys.historicalCountryId && sys.historicalCountryId !== cabHistId) {
+      if (
+        sys.historicalCountryId &&
+        sys.historicalCountryId !== cabHistId &&
+        !cabinetScope.allowedHistoricalCountryIds?.has(sys.historicalCountryId)
+      ) {
         return false
       }
     } else if (sys.historicalCountryId) {

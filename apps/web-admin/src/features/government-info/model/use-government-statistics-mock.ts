@@ -3,6 +3,8 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import { usePoliticalSystems } from '@/entities/political-system/api'
+import { GOVERNMENT_FORM_LABEL } from '@/entities/political-system/model/political-system'
 import {
   DEPARTMENT_KIND_LABEL,
   administrationDepartmentApi,
@@ -15,6 +17,7 @@ import {
   administrationDepartmentsByHistoricalCountryQueryKey,
 } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { parseDepartmentDescription } from '@/shared/lib/ministry-department/ministry-department-utils'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { getUploadImageUrl } from '@/shared/api/upload'
 
 export type GovernmentStatisticTimelineItem = {
@@ -23,15 +26,25 @@ export type GovernmentStatisticTimelineItem = {
   sortYear: number
   title: string
   description: string
-  type: 'establishment' | 'reform' | 'achievement' | 'crisis' | 'merger'
+  type:
+    | 'establishment'
+    | 'reform'
+    | 'achievement'
+    | 'crisis'
+    | 'merger'
+    | 'regime'
+    | 'cabinet'
   orgName: string
   orgType: string
   images?: string[]
+  targetKind?: 'department' | 'cabinet' | 'system'
+  targetId?: string
 }
 
 export type GovernmentCategoryStatRow = {
   year: string
   budget: number
+  categoryId?: string | null
 }
 
 export type GovernmentStatisticsOptions = {
@@ -81,12 +94,16 @@ export function useGovernmentStatisticsMockData(
 
   const { data: departments = [] } = useQuery({
     queryKey: isHistorical
-      ? administrationDepartmentsByHistoricalCountryQueryKey(effectiveCountryId)
+      ? administrationDepartmentsByHistoricalCountryQueryKey(
+          effectiveCountryId,
+          { includeConstituents: true },
+        )
       : administrationDepartmentsByCountryQueryKey(effectiveCountryId),
     queryFn: () =>
       isHistorical
         ? administrationDepartmentApi.getByHistoricalCountryId(
             effectiveCountryId!,
+            { includeConstituents: true },
           )
         : administrationDepartmentApi.getByCountryId(effectiveCountryId!),
     enabled: Boolean(effectiveCountryId),
@@ -97,11 +114,13 @@ export function useGovernmentStatisticsMockData(
       'cabinets-by-country',
       queryCountryId ?? '',
       queryHistoricalCountryId ?? null,
+      ...(isHistorical ? (['with-constituents'] as const) : []),
     ],
     queryFn: () =>
       personCareerApi.getCabinets({
         countryId: queryCountryId || undefined,
         historicalCountryId: queryHistoricalCountryId || undefined,
+        includeConstituents: isHistorical || undefined,
       }),
     enabled: Boolean(effectiveCountryId),
   })
@@ -111,11 +130,13 @@ export function useGovernmentStatisticsMockData(
       'position-definitions-stats',
       queryCountryId ?? '',
       queryHistoricalCountryId ?? null,
+      ...(isHistorical ? (['with-constituents'] as const) : []),
     ],
     queryFn: () =>
       personCareerApi.getPositionDefinitions({
         countryId: queryCountryId || undefined,
         historicalCountryId: queryHistoricalCountryId || undefined,
+        includeConstituents: isHistorical || undefined,
       }),
     enabled: Boolean(effectiveCountryId),
   })
@@ -134,6 +155,12 @@ export function useGovernmentStatisticsMockData(
           : { countryId: effectiveCountryId },
       ),
     enabled: Boolean(effectiveCountryId),
+  })
+
+  const { data: politicalSystems = [] } = usePoliticalSystems({
+    countryId: queryCountryId,
+    historicalCountryId: queryHistoricalCountryId,
+    includeConstituents: isHistorical || undefined,
   })
 
   const base = useMemo(() => {
@@ -156,29 +183,113 @@ export function useGovernmentStatisticsMockData(
     const totalLocal = organizations.length
     const totalOrganizations = departments.length + organizations.length
     const totalCabinets = cabinets.length
-    const totalPositions = positionDefinitions.length
+    const totalPositions = positionDefinitions.filter((defItem) => {
+      const scopes = (defItem as { scopes?: unknown[] }).scopes ?? []
+      return (
+        scopes.length > 0 ||
+        Boolean(defItem.administrationDepartmentId) ||
+        Boolean(defItem.organizationId)
+      )
+    }).length
     const totalMilitaryUnits = departments.reduce(
       (sum, dept) => sum + (dept.militaryUnits?.length ?? 0),
       0,
     )
 
     // 카테고리별 기관 분포 (막대 차트용)
-    const categoryCountMap = new Map<string, number>()
+    const categoryCountMap = new Map<
+      string,
+      { count: number; categoryId: string | null }
+    >()
     for (const dept of departments) {
       const catName = dept.category?.name?.trim() || '미분류'
-      categoryCountMap.set(catName, (categoryCountMap.get(catName) ?? 0) + 1)
+      const prevEntry = categoryCountMap.get(catName)
+      categoryCountMap.set(catName, {
+        count: (prevEntry?.count ?? 0) + 1,
+        categoryId: prevEntry?.categoryId ?? dept.categoryId ?? null,
+      })
     }
     const budgetData: GovernmentCategoryStatRow[] = Array.from(
       categoryCountMap.entries(),
     )
-      .sort((entryA, entryB) => entryB[1] - entryA[1])
+      .sort((entryA, entryB) => entryB[1].count - entryA[1].count)
       .slice(0, 8)
-      .map(([catName, count]) => ({
+      .map(([catName, entryValue]) => ({
         year: catName,
-        budget: count,
+        budget: entryValue.count,
+        categoryId: entryValue.categoryId,
       }))
 
     const allEvents: GovernmentStatisticTimelineItem[] = []
+
+    for (const systemItem of politicalSystems) {
+      const sysYear = formatStructuredYear(
+        systemItem.startEra,
+        systemItem.startYear,
+        null,
+      )
+      if (!sysYear) continue
+      const formLabel = systemItem.governmentForm
+        ? GOVERNMENT_FORM_LABEL[systemItem.governmentForm]
+        : '정체 변천'
+      const systemDisplayName = systemItem.name?.trim() || formLabel
+      const polityPrefix = systemItem.historicalCountry?.name
+        ? `[${systemItem.historicalCountry.name}] `
+        : ''
+      allEvents.push({
+        id: `sys-${systemItem.id}`,
+        year: sysYear.label,
+        sortYear: sysYear.sortYear,
+        title: `${polityPrefix}${systemDisplayName} 체제 수립`,
+        description:
+          systemItem.notes?.trim() ||
+          `${formLabel} 중심의 헌정·통치 체제가 수립되었습니다.`,
+        type: 'regime',
+        orgName: formLabel,
+        orgType: '정체·헌정',
+        targetKind: 'system',
+        targetId: systemItem.id,
+      })
+    }
+
+    for (const cabItem of cabinets) {
+      const effIso = cabItem.headTenure?.startDate ?? cabItem.startDate
+      const cabYear = formatStructuredYear(
+        cabItem.startEra,
+        cabItem.startYear,
+        effIso,
+      )
+      if (!cabYear) continue
+      const headPersonName = cabItem.headTenure?.person
+        ? getPersonDisplayName(cabItem.headTenure.person)
+        : null
+      const posTitle =
+        cabItem.headTenure?.positionDefinition?.title ??
+        cabItem.headTenure?.title ??
+        '내각'
+      const cabTitle =
+        cabItem.name?.trim() ||
+        (headPersonName ? `${headPersonName} ${posTitle}` : '행정부 출범')
+      const headAvatar = cabItem.headTenure?.person?.profileImageUrl
+        ? [getUploadImageUrl(cabItem.headTenure.person.profileImageUrl)]
+        : undefined
+      allEvents.push({
+        id: `cab-${cabItem.id}`,
+        year: cabYear.label,
+        sortYear: cabYear.sortYear,
+        title: `${cabTitle} 출범`,
+        description: headPersonName
+          ? `수반: ${headPersonName} (${posTitle})`
+          : `${cabTitle} 정권·내각이 구성되었습니다.`,
+        type: 'cabinet',
+        orgName: headPersonName ?? cabTitle,
+        orgType: '행정부·내각',
+        images: headAvatar,
+        targetKind: 'cabinet',
+        targetId: cabItem.id,
+      })
+    }
+
     for (const dept of departments) {
       const kindLabel =
         DEPARTMENT_KIND_LABEL[dept.kind ?? 'MINISTRY'] ?? '중앙부처'
@@ -205,6 +316,8 @@ export function useGovernmentStatisticsMockData(
           orgName: dept.name,
           orgType: kindLabel,
           images: resolvedThumb,
+          targetKind: 'department',
+          targetId: dept.id,
         })
       }
       const abo = formatStructuredYear(
@@ -223,6 +336,8 @@ export function useGovernmentStatisticsMockData(
           orgName: dept.name,
           orgType: kindLabel,
           images: resolvedThumb,
+          targetKind: 'department',
+          targetId: dept.id,
         })
       }
       for (const succ of dept.successors ?? []) {
@@ -246,6 +361,8 @@ export function useGovernmentStatisticsMockData(
           orgName: dept.name,
           orgType: kindLabel,
           images: resolvedThumb,
+          targetKind: 'department',
+          targetId: succ.department.id,
         })
       }
       for (const milSucc of dept.militaryUnitSuccessors ?? []) {
@@ -274,6 +391,8 @@ export function useGovernmentStatisticsMockData(
           orgName: dept.name,
           orgType: '군제 개편',
           images: resolvedThumb,
+          targetKind: 'department',
+          targetId: dept.id,
         })
       }
     }
@@ -282,6 +401,8 @@ export function useGovernmentStatisticsMockData(
 
     const eventCounts = {
       all: allEvents.length,
+      regime: allEvents.filter((event) => event.type === 'regime').length,
+      cabinet: allEvents.filter((event) => event.type === 'cabinet').length,
       establishment: allEvents.filter((event) => event.type === 'establishment')
         .length,
       reform: allEvents.filter((event) => event.type === 'reform').length,
@@ -292,6 +413,7 @@ export function useGovernmentStatisticsMockData(
     }
 
     return {
+      totalPoliticalSystems: politicalSystems.length,
       totalDepartments: departments.length,
       activeDepartmentCount,
       totalMinistries,
@@ -312,7 +434,13 @@ export function useGovernmentStatisticsMockData(
       eventCounts,
       budgetData,
     }
-  }, [departments, cabinets, positionDefinitions, organizations])
+  }, [
+    departments,
+    cabinets,
+    positionDefinitions,
+    organizations,
+    politicalSystems,
+  ])
 
   const filteredEvents = useMemo(() => {
     if (selectedEventType === 'all') return base.allEvents

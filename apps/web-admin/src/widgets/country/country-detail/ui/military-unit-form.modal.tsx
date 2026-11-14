@@ -786,7 +786,6 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     if (!isOpen || !editingUnitId) return
     setActiveSection('basic')
     void loadMilitaryUnit(editingUnitId)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, editingUnitId])
 
   /** 신규: 모달을 열 때 폼·기본 국가·중앙부처·상위 부대 연결 */

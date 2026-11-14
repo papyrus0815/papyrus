@@ -20,16 +20,20 @@ describe('PoliticalSystemController & Country Deletion Guards (Round 6)', () => 
       const mock: any = {
         country: { findUnique: jest.fn() },
         historicalCountry: { findUnique: jest.fn() },
-        historicalCountryModernCountry: {
-          findFirst: jest.fn(),
-          findMany: jest.fn().mockResolvedValue([]),
-        },
-        governmentPositionDefinition: { findMany: jest.fn() },
-        politicalSystem: {
-          findUnique: jest.fn(),
-          create: jest.fn(),
-          update: jest.fn(),
-        },
+          historicalCountryModernCountry: {
+            findFirst: jest.fn(),
+            findMany: jest.fn().mockResolvedValue([]),
+          },
+          historicalCountryTransition: {
+            findMany: jest.fn().mockResolvedValue([]),
+          },
+          governmentPositionDefinition: { findMany: jest.fn() },
+          politicalSystem: {
+            findMany: jest.fn().mockResolvedValue([]),
+            findUnique: jest.fn(),
+            create: jest.fn(),
+            update: jest.fn(),
+          },
       }
       return mock
     }
@@ -173,6 +177,73 @@ describe('PoliticalSystemController & Country Deletion Guards (Round 6)', () => 
           }),
         }),
       )
+    })
+
+    it('list: includeConstituents=true rolls up constituent political systems overlapping the union period', async () => {
+      const prisma = createMockPrisma()
+      prisma.historicalCountry.findUnique.mockResolvedValue({
+        id: 'hist-ah',
+        name: '오스트리아-헝가리 제국',
+        startEra: 'AD',
+        startYear: 1867,
+        endEra: 'AD',
+        endYear: 1918,
+        membershipsParent: [
+          {
+            memberCountryId: 'hist-hu',
+            role: 'UNION',
+            isLeadingMember: false,
+            memberCountry: {
+              id: 'hist-hu',
+              name: '헝가리 왕국',
+              enName: 'Kingdom of Hungary',
+              startEra: 'AD',
+              startYear: 1000,
+              endEra: 'AD',
+              endYear: 1918,
+            },
+          },
+        ],
+      })
+      prisma.politicalSystem.findMany.mockResolvedValue([
+        {
+          id: 'ps-ah-dual',
+          name: '오스트리아-헝가리 대타협 이중군주제',
+          historicalCountryId: 'hist-ah',
+          startEra: 'AD',
+          startYear: 1867,
+          endEra: 'AD',
+          endYear: 1918,
+        },
+        {
+          id: 'ps-hu-1867',
+          name: '성 이슈트반 왕관령 입헌군주제',
+          historicalCountryId: 'hist-hu',
+          startEra: 'AD',
+          startYear: 1867,
+          endEra: 'AD',
+          endYear: 1918,
+        },
+        {
+          id: 'ps-hu-1222',
+          name: '금인칙서 귀족왕정',
+          historicalCountryId: 'hist-hu',
+          startEra: 'AD',
+          startYear: 1222,
+          endEra: 'AD',
+          endYear: 1526,
+        },
+      ])
+
+      const controller = new PoliticalSystemController(prisma)
+      const list = await controller.list(undefined, 'hist-ah', 'true')
+
+      expect(prisma.politicalSystem.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { historicalCountryId: { in: ['hist-ah', 'hist-hu'] } },
+        }),
+      )
+      expect(list.map((row) => row.id)).toEqual(['ps-ah-dual', 'ps-hu-1867'])
     })
   })
 

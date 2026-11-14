@@ -23,7 +23,12 @@ export const politicalSystemKeys = {
   /** 무효화는 이 프리픽스 하나로 — 스코프별 키가 모두 아래 달린다 */
   all: ['political-systems'] as const,
   list: (scope: PoliticalSystemScope) =>
-    ['political-systems', scope.countryId ?? null, scope.historicalCountryId ?? null] as const,
+    [
+      'political-systems',
+      scope.countryId ?? null,
+      scope.historicalCountryId ?? null,
+      ...(scope.includeConstituents ? (['with-constituents'] as const) : []),
+    ] as const,
 }
 
 export function usePoliticalSystems(scope: PoliticalSystemScope) {

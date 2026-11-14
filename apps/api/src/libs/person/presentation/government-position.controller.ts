@@ -20,6 +20,7 @@ import { Request } from 'express'
 import { ApiTags } from '@nestjs/swagger'
 import { PersonService } from '../application/person.service'
 import { requireActorId } from '../../shared/actor-context'
+import { parseIncludeConstituentsFlag } from '../../shared/historical-constituent-rollup'
 import { PrismaClient } from '@prisma/client'
 import {
   CreateGovernmentPositionTenureDto,
@@ -234,14 +235,30 @@ export class GovernmentPositionController {
   }
 
   /**
+   * 복합 역사국가의 동시대 구성국(UNION · CONFEDERATION_MEMBER · DOMINION) 목록
+   * GET /government-positions/historical-countries/:id/constituents
+   */
+  @Get('historical-countries/:historicalCountryId/constituents')
+  async getConstituentsByHistoricalCountryId(
+    @Param('historicalCountryId') historicalCountryId: string,
+  ): Promise<any[]> {
+    const list = await this.personService.findConstituentHistoricalPolities(
+      historicalCountryId,
+    )
+    return list.map(serializeBigInt)
+  }
+
+  /**
    * 역사적 국가별 재임 기록 (REST) - GET /government-positions/historical-countries/:id/tenures
    */
   @Get('historical-countries/:historicalCountryId/tenures')
   async getTenuresByHistoricalCountryId(
     @Param('historicalCountryId') historicalCountryId: string,
+    @Query('includeConstituents') includeConstituents?: string,
   ): Promise<any[]> {
     const list = await this.personService.findTenuresByCountry({
       historicalCountryId,
+      includeConstituents: parseIncludeConstituentsFlag(includeConstituents),
     })
     return list.map(serializeBigInt)
   }
@@ -280,11 +297,13 @@ export class GovernmentPositionController {
     @Query('historicalCountryId') historicalCountryId?: string,
     /** 수정 중인 정의 — 적용 범위 하드컷보다 먼저 통과시켜 편집 중 선택이 유실되지 않게 한다 */
     @Query('includeId') includeId?: string,
+    @Query('includeConstituents') includeConstituents?: string,
   ): Promise<any[]> {
     const list = await this.personService.findPositionDefinitions({
       countryId: countryId || undefined,
       historicalCountryId: historicalCountryId || undefined,
       includeIds: includeId ? [includeId] : undefined,
+      includeConstituents: parseIncludeConstituentsFlag(includeConstituents),
     })
     return list.map(serializeBigInt)
   }
@@ -401,10 +420,30 @@ export class GovernmentPositionController {
   async getCabinets(
     @Query('countryId') countryId?: string,
     @Query('historicalCountryId') historicalCountryId?: string,
+    @Query('includeConstituents') includeConstituents?: string,
+    @Query('search') search?: string,
+    @Query('activeAtYear') activeAtYear?: string,
+    @Query('currentOnly') currentOnly?: string,
+    @Query('linkedOnly') linkedOnly?: string,
+    @Query('take') take?: string,
   ): Promise<any[]> {
+    const parsedActiveAtYear =
+      activeAtYear != null && activeAtYear.trim() !== ''
+        ? parseInt(activeAtYear, 10)
+        : undefined
+    const parsedTake =
+      take != null && take.trim() !== '' ? parseInt(take, 10) : undefined
     const list = await this.personService.findCabinets({
       countryId,
       historicalCountryId,
+      includeConstituents: parseIncludeConstituentsFlag(includeConstituents),
+      search: search?.trim() || undefined,
+      activeAtYear: Number.isFinite(parsedActiveAtYear)
+        ? parsedActiveAtYear
+        : undefined,
+      currentOnly: parseIncludeConstituentsFlag(currentOnly),
+      linkedOnly: parseIncludeConstituentsFlag(linkedOnly),
+      take: Number.isFinite(parsedTake) ? parsedTake : undefined,
     })
     return list.map(serializeBigInt)
   }
@@ -475,6 +514,16 @@ export class GovernmentPositionController {
     if (!id) return []
     const list = await this.personService.findCabinetsByLinkageEventId(id)
     return list.map(serializeBigInt)
+  }
+
+  /**
+   * 행정부 단건 상세 조회 (전역 내각 카탈로그·직접 링크용, 워크스페이스 공유)
+   */
+  @Get('cabinets/:cabinetId')
+  async getCabinetById(@Param('cabinetId') cabinetId: string): Promise<any> {
+    const cabinet = await this.personService.findCabinetById(cabinetId)
+    if (!cabinet) throw new NotFoundException('행정부를 찾을 수 없습니다.')
+    return serializeBigInt(cabinet)
   }
 
   /**

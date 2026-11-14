@@ -15,6 +15,7 @@ import { AuthGuard } from '@nestjs/passport'
 import { ApiTags } from '@nestjs/swagger'
 
 import { AdministrationDepartmentService } from '../application/administration-department.service'
+import { parseIncludeConstituentsFlag } from '../../shared/historical-constituent-rollup'
 import {
   type AdministrationDepartmentCategoryDto,
   type AdministrationDepartmentResponseDto,
@@ -97,7 +98,7 @@ export class AdministrationDepartmentController {
   // ─── 기관 ───────────────────────────────────────────────────────────────
 
   /**
-   * 목록 — countryId·historicalCountryId(둘 다 주면 AND), search(이름·원어명·영문명·약칭), kind, take
+   * 목록 — countryId·historicalCountryId(둘 다 주면 historicalCountryId 우선), search, kind, categoryId, activeAtYear, take
    */
   @Get()
   async getAll(
@@ -106,14 +107,26 @@ export class AdministrationDepartmentController {
     @Query('search') search?: string,
     @Query('kind') kind?: string,
     @Query('take') take?: string,
+    @Query('includeConstituents') includeConstituents?: string,
+    @Query('categoryId') categoryId?: string,
+    @Query('activeAtYear') activeAtYear?: string,
   ): Promise<AdministrationDepartmentResponseDto[]> {
     const parsedTake = take ? parseInt(take, 10) : undefined
+    const parsedActiveAtYear =
+      activeAtYear != null && activeAtYear.trim() !== ''
+        ? parseInt(activeAtYear, 10)
+        : undefined
     return this.departments.list({
       countryId,
       historicalCountryId,
       search,
       kind,
+      categoryId: categoryId?.trim() || undefined,
+      activeAtYear: Number.isFinite(parsedActiveAtYear)
+        ? parsedActiveAtYear
+        : undefined,
       take: Number.isFinite(parsedTake) ? parsedTake : undefined,
+      includeConstituents: parseIncludeConstituentsFlag(includeConstituents),
     })
   }
 

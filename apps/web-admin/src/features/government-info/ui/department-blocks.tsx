@@ -1,4 +1,11 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import {
+  FiArrowDown,
+  FiArrowUp,
+  FiArrowUpRight,
+  FiSearch,
+  FiX,
+} from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -13,6 +20,7 @@ import { administrationDepartmentApi } from '@/shared/api/administration-departm
 import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
 import { personCareerApi } from '@/shared/api/person-career'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { getSignedDateChronologyKey } from '@/shared/lib/tenure-person-utils'
 import { useThemeStore } from '@/shared/styles/theme.store'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import type { EventPickerSelection } from '@/shared/ui/event-picker-modal/event-picker-modal'
@@ -61,8 +69,25 @@ function getBlockTokens(isDark: boolean) {
   }
 }
 
+function getDepartmentTenureChronologyKey(
+  tenureItem: AdministrationDepartmentTenureItem,
+): number {
+  if (typeof tenureItem.startYear === 'number' && tenureItem.startYear > 0) {
+    const signedYear =
+      tenureItem.startEra === 'BC'
+        ? -Math.abs(tenureItem.startYear)
+        : tenureItem.startYear
+    const monthVal = tenureItem.startMonth ?? 1
+    const dayVal = tenureItem.startDay ?? 1
+    return signedYear * 10000 + monthVal * 100 + dayVal
+  }
+  return getSignedDateChronologyKey(tenureItem.startDate, 0, tenureItem.startEra)
+}
+
+const INITIAL_VISIBLE_TENURES = 15
+
 /**
- * 부처에 연결된 역대 장관(재임) 원장 목록 + 인라인 임명/수정
+ * 부처에 연결된 역대 장관(재임) 원장 목록 + 인라인 임명/수정 + 소속 내각 점프
  */
 export function DepartmentTenuresBlock({
   departmentId,
@@ -70,17 +95,22 @@ export function DepartmentTenuresBlock({
   historicalCountryId,
   departmentName,
   departmentKind,
+  onSelectCabinet,
 }: {
   departmentId: string
   countryId?: string
   historicalCountryId?: string | null
   departmentName?: string
   departmentKind?: string | null
+  onSelectCabinet?: (cabinetId: string) => void
 }) {
   const queryClient = useQueryClient()
   const [appointmentOpen, setAppointmentOpen] = useState(false)
   const [editingTenure, setEditingTenure] =
     useState<AdministrationDepartmentTenureItem | null>(null)
+  const [tenureSearch, setTenureSearch] = useState('')
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
+  const [expandedAll, setExpandedAll] = useState(false)
 
   const closeAppointmentModal = () => {
     setAppointmentOpen(false)
@@ -141,8 +171,6 @@ export function DepartmentTenuresBlock({
     }
   }
 
-  if (isLoading) return null
-
   const formatName = (
     personObj: {
       name?: string
@@ -165,6 +193,51 @@ export function DepartmentTenuresBlock({
       '—'
     )
   }
+
+  const filteredAndSortedTenures = useMemo(() => {
+    const normalizedQuery = tenureSearch.trim().toLowerCase()
+    const matched = normalizedQuery
+      ? tenures.filter((tenureItem) => {
+          const personLabel = tenureItem.person
+            ? formatName({
+                name: tenureItem.person.name,
+                surname: tenureItem.person.surname ?? undefined,
+                middleName: tenureItem.person.middleName ?? undefined,
+                country: tenureItem.person.country ?? undefined,
+              })
+            : ''
+          const titleLabel =
+            tenureItem.title ?? tenureItem.positionDefinition?.title ?? ''
+          const cabinetNames = (tenureItem.cabinets ?? [])
+            .map((cabRef) => cabRef.name ?? '')
+            .join(' ')
+          const partyName =
+            tenureItem.party?.shortName || tenureItem.party?.name || ''
+          return [personLabel, titleLabel, cabinetNames, partyName].some(
+            (candidateText) =>
+              candidateText.toLowerCase().includes(normalizedQuery),
+          )
+        })
+      : tenures
+
+    const direction = sortOrder === 'asc' ? 1 : -1
+    return [...matched].sort((leftTenure, rightTenure) => {
+      const leftKey = getDepartmentTenureChronologyKey(leftTenure)
+      const rightKey = getDepartmentTenureChronologyKey(rightTenure)
+      if (leftKey !== rightKey) return (leftKey - rightKey) * direction
+      const leftOrd = leftTenure.ordinal ?? 0
+      const rightOrd = rightTenure.ordinal ?? 0
+      return (leftOrd - rightOrd) * direction
+    })
+  }, [tenures, tenureSearch, sortOrder])
+
+  if (isLoading) return null
+
+  const visibleTenures =
+    expandedAll || Boolean(tenureSearch.trim())
+      ? filteredAndSortedTenures
+      : filteredAndSortedTenures.slice(0, INITIAL_VISIBLE_TENURES)
+  const hiddenCount = filteredAndSortedTenures.length - visibleTenures.length
 
   const appointButtonLabel =
     departmentKind === 'COLONIAL_GOVERNMENT'
@@ -210,27 +283,137 @@ export function DepartmentTenuresBlock({
         >
           {tenures.length}
         </span>
-        <button
-          type="button"
-          onClick={() => {
-            setEditingTenure(null)
-            setAppointmentOpen(true)
-          }}
+
+        {tenures.length > 1 ? (
+          <button
+            type="button"
+            onClick={() =>
+              setSortOrder((prevOrder) =>
+                prevOrder === 'desc' ? 'asc' : 'desc',
+              )
+            }
+            title={
+              sortOrder === 'desc'
+                ? '현재 최신순 정렬 (클릭하여 과거순 전환)'
+                : '현재 과거순 정렬 (클릭하여 최신순 전환)'
+            }
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 3,
+              height: 24,
+              padding: '0 8px',
+              borderRadius: 6,
+              border: `1px solid ${tokens.border}`,
+              background: 'transparent',
+              color: tokens.textSub,
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            {sortOrder === 'desc' ? (
+              <>
+                <FiArrowDown size={11} />
+                최신순
+              </>
+            ) : (
+              <>
+                <FiArrowUp size={11} />
+                과거순
+              </>
+            )}
+          </button>
+        ) : null}
+
+        <div
           style={{
             marginLeft: 'auto',
-            height: 28,
-            padding: '0 10px',
-            borderRadius: 6,
-            border: `1px solid ${tokens.border}`,
-            background: 'transparent',
-            color: tokens.accent,
-            fontSize: 12,
-            fontWeight: 600,
-            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
           }}
         >
-          {appointButtonLabel}
-        </button>
+          {tenures.length > 5 ? (
+            <div
+              style={{
+                position: 'relative',
+                display: 'inline-flex',
+                alignItems: 'center',
+              }}
+            >
+              <FiSearch
+                size={12}
+                style={{
+                  position: 'absolute',
+                  left: 8,
+                  color: tokens.textFaint,
+                  pointerEvents: 'none',
+                }}
+              />
+              <input
+                type="text"
+                value={tenureSearch}
+                onChange={(changeEvt) => setTenureSearch(changeEvt.target.value)}
+                placeholder="인물·직위·내각 검색"
+                aria-label="부처 역대 인사 검색"
+                style={{
+                  height: 28,
+                  width: 156,
+                  padding: '0 24px 0 24px',
+                  borderRadius: 6,
+                  border: `1px solid ${tokens.border}`,
+                  background: tokens.subtleBg,
+                  color: tokens.text,
+                  fontSize: 11.5,
+                  outline: 'none',
+                }}
+              />
+              {tenureSearch ? (
+                <button
+                  type="button"
+                  onClick={() => setTenureSearch('')}
+                  aria-label="검색 지우기"
+                  style={{
+                    position: 'absolute',
+                    right: 5,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: 'none',
+                    background: 'transparent',
+                    color: tokens.textSub,
+                    cursor: 'pointer',
+                    padding: 2,
+                  }}
+                >
+                  <FiX size={11} />
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={() => {
+              setEditingTenure(null)
+              setAppointmentOpen(true)
+            }}
+            style={{
+              height: 28,
+              padding: '0 10px',
+              borderRadius: 6,
+              border: `1px solid ${tokens.border}`,
+              background: 'transparent',
+              color: tokens.accent,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            {appointButtonLabel}
+          </button>
+        </div>
       </div>
 
       {tenures.length === 0 ? (
@@ -243,6 +426,16 @@ export function DepartmentTenuresBlock({
         >
           등록된 수장·인사 재임 기록이 없습니다.
         </div>
+      ) : filteredAndSortedTenures.length === 0 ? (
+        <div
+          style={{
+            padding: '10px 0 2px',
+            fontSize: 12.5,
+            color: tokens.textFaint,
+          }}
+        >
+          검색 조건에 일치하는 재임 기록이 없습니다.
+        </div>
       ) : (
         <>
           <ul
@@ -254,7 +447,7 @@ export function DepartmentTenuresBlock({
               flexDirection: 'column',
             }}
           >
-            {tenures.slice(0, 20).map((tenure, index) => {
+            {visibleTenures.map((tenure, index) => {
               const startLabel = formatStructuredOrIsoDate(
                 {
                   era: tenure.startEra,
@@ -368,6 +561,49 @@ export function DepartmentTenuresBlock({
                   >
                     {startLabel} – {endLabel === '—' ? '재임·미상' : endLabel}
                   </span>
+                  {(tenure.cabinets ?? []).map((cabItem) =>
+                    onSelectCabinet ? (
+                      <button
+                        key={cabItem.id}
+                        type="button"
+                        onClick={() => onSelectCabinet(cabItem.id)}
+                        title={`${cabItem.name || '소속 내각'} 행정부 상세로 이동`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 3,
+                          padding: '1px 7px',
+                          borderRadius: 999,
+                          border: `1px solid ${tokens.border}`,
+                          background: tokens.accentSoft,
+                          color: tokens.accent,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        🏛️ {cabItem.name || '내각 상세'}
+                        <FiArrowUpRight size={10} />
+                      </button>
+                    ) : (
+                      <span
+                        key={cabItem.id}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 3,
+                          padding: '1px 7px',
+                          borderRadius: 999,
+                          background: tokens.chipBg,
+                          color: tokens.textSub,
+                          fontSize: 11,
+                          fontWeight: 600,
+                        }}
+                      >
+                        🏛️ {cabItem.name || '소속 내각'}
+                      </span>
+                    ),
+                  )}
                   <div
                     style={{
                       marginLeft: 'auto',
@@ -413,16 +649,29 @@ export function DepartmentTenuresBlock({
               )
             })}
           </ul>
-          {tenures.length > 20 && (
-            <div
-              style={{
-                fontSize: 12,
-                color: tokens.textSub,
-                marginTop: 6,
-                fontVariantNumeric: 'tabular-nums',
-              }}
-            >
-              외 {tenures.length - 20}명
+          {(hiddenCount > 0 ||
+            (expandedAll &&
+              filteredAndSortedTenures.length > INITIAL_VISIBLE_TENURES)) && (
+            <div style={{ marginTop: 8 }}>
+              <button
+                type="button"
+                onClick={() => setExpandedAll((prevVal) => !prevVal)}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: 6,
+                  border: `1px solid ${tokens.border}`,
+                  background: tokens.subtleBg,
+                  color: tokens.accent,
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {expandedAll
+                  ? `접기 (상위 ${INITIAL_VISIBLE_TENURES}명만 표시)`
+                  : `전체 ${filteredAndSortedTenures.length}명 모두 보기 (+${hiddenCount}명)`}
+              </button>
             </div>
           )}
         </>

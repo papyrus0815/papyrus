@@ -55,6 +55,34 @@ export const pathKeys = {
       `/${ROUTES.TREATIES}/${encodeURIComponent(treatyId)}`,
   },
 
+  /** 전 국가 정부·내각 카탈로그 — 모든 국가의 행정부·내각 및 중앙부처 통합 탐색·상세 */
+  government: {
+    list: (params?: {
+      tab?: 'cabinets' | 'departments'
+      year?: number
+      query?: string
+      categoryId?: string
+      current?: boolean
+      linked?: boolean
+    }) => {
+      const qs = new URLSearchParams()
+      if (params?.tab && params.tab !== 'cabinets') qs.set('tab', params.tab)
+      if (params?.year != null && Number.isFinite(params.year)) {
+        qs.set('year', String(Math.trunc(params.year)))
+      }
+      if (params?.query?.trim()) qs.set('q', params.query.trim())
+      if (params?.categoryId) qs.set('categoryId', params.categoryId)
+      if (params?.current) qs.set('current', '1')
+      if (params?.linked) qs.set('linked', '1')
+      const queryString = qs.toString()
+      return `/${ROUTES.GOVERNMENT}/${queryString ? `?${queryString}` : ''}`
+    },
+    cabinetDetail: (cabinetId: string) =>
+      `/${ROUTES.GOVERNMENT}/cabinets/${encodeURIComponent(cabinetId)}`,
+    departmentDetail: (departmentId: string) =>
+      `/${ROUTES.GOVERNMENT}/departments/${encodeURIComponent(departmentId)}`,
+  },
+
   /** 출처 서고 — sourceId를 주면 그 출처를 펼친 채로 */
   sources: (sourceId?: string) =>
     `/${ROUTES.SOURCES}/${sourceId ? `?id=${encodeURIComponent(sourceId)}` : ''}`,

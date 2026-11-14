@@ -111,3 +111,27 @@ export function calcAgeAtTenure(
   }
   return null
 }
+
+/**
+ * BC/AD 날짜 문자열을 단조 증가 정수 키로 변환한다.
+ * 예: BC 221-01-01(-2209899) < BC 221-07-15(-2209285) < BC 220-01-01(-2199899) < AD 1948-08-15(19480815)
+ */
+export function getSignedDateChronologyKey(
+  raw: string | Date | null | undefined,
+  fallback = 0,
+  eraHint?: 'BC' | 'AD' | string | null,
+): number {
+  const parts = parseSignedDateParts(raw, eraHint)
+  if (!parts) return fallback
+  return parts.signedYear * 10000 + parts.month * 100 + parts.day
+}
+
+/** BC/AD 안전 연도 라벨 (예: 'BC 221', '1919') */
+export function formatSignedYearLabel(
+  raw: string | Date | null | undefined,
+  eraHint?: 'BC' | 'AD' | string | null,
+): string | null {
+  const parts = parseSignedDateParts(raw, eraHint)
+  if (!parts) return null
+  return parts.era === 'BC' ? `BC ${parts.absYear}` : String(parts.absYear)
+}

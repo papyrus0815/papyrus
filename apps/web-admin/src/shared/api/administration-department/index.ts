@@ -212,8 +212,32 @@ export const administrationDepartmentApi = {
     historicalCountryId?: string
     search?: string
     kind?: string
+    categoryId?: string
+    activeAtYear?: number
     take?: number
   }): Promise<AdministrationDepartment[]> => {
+    if (
+      params?.categoryId != null ||
+      (params?.activeAtYear != null && Number.isFinite(params.activeAtYear))
+    ) {
+      const query = new URLSearchParams()
+      if (params?.countryId) query.set('countryId', params.countryId)
+      if (params?.historicalCountryId) {
+        query.set('historicalCountryId', params.historicalCountryId)
+      }
+      if (params?.search?.trim()) query.set('search', params.search.trim())
+      if (params?.kind) query.set('kind', params.kind)
+      if (params?.categoryId) query.set('categoryId', params.categoryId)
+      if (params?.activeAtYear != null && Number.isFinite(params.activeAtYear)) {
+        query.set('activeAtYear', String(Math.trunc(params.activeAtYear)))
+      }
+      if (params?.take != null && Number.isFinite(params.take)) {
+        query.set('take', String(Math.trunc(params.take)))
+      }
+      return fetchJsonList<AdministrationDepartment>(
+        `/administration-departments?${query.toString()}`,
+      )
+    }
     const list = await adminDeptApi.getAll(
       getApiConnection(),
       params?.countryId,
@@ -237,12 +261,18 @@ export const administrationDepartmentApi = {
 
   /**
    * 역사적 국가별 행정부처 목록 (조선 6조 등).
+   * `includeConstituents: true`일 때는 오스트리아-헝가리 제국 산하 헝가리 왕국 등 동시대 구성국 부처까지 함께 조회한다.
    */
   getByHistoricalCountryId: async (
     historicalCountryId: string,
+    options?: { includeConstituents?: boolean },
   ): Promise<AdministrationDepartment[]> => {
+    const query = new URLSearchParams({ historicalCountryId })
+    if (options?.includeConstituents) {
+      query.set('includeConstituents', 'true')
+    }
     return fetchJsonList<AdministrationDepartment>(
-      `/administration-departments?historicalCountryId=${encodeURIComponent(historicalCountryId)}`,
+      `/administration-departments?${query.toString()}`,
     )
   },
 

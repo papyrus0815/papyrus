@@ -418,12 +418,16 @@ export interface IPersonRepository {
   findTenuresByCountry(params: {
     countryId?: string
     historicalCountryId?: string
+    includeConstituents?: boolean
   }): Promise<any[]>
+  /** 복합 역사국가의 동시대 구성국(UNION · CONFEDERATION_MEMBER · DOMINION) 목록 */
+  findConstituentHistoricalPolities(historicalCountryId: string): Promise<any[]>
   /** 인물별 선거 후보 행 — 재임에 electionCandidacyId 연결용 */
   findElectionCandidaciesForTenureLink(personId: string): Promise<any[]>
   findGlobalTenures(): Promise<any[]>
   /** 특정 수반 재임(행정부 수반) 하의 각료 목록 — headTenureId로 Cabinet 조회 후 memberTenures */
   findSubordinateTenures(headTenureId: string): Promise<any[]>
+  findCabinetById(cabinetId: string): Promise<any | null>
   findCabinetByHeadTenureId(headTenureId: string): Promise<any | null>
   findTenuresByCabinetId(cabinetId: string, accountId?: string): Promise<any[]>
   /** 행정부 한눈에 보기 — 수반+각료+여당을 한 번에 (인물 상세 동료 표시용) */
@@ -431,6 +435,12 @@ export interface IPersonRepository {
   findCabinets(params: {
     countryId?: string
     historicalCountryId?: string
+    includeConstituents?: boolean
+    search?: string
+    activeAtYear?: number
+    currentOnly?: boolean
+    linkedOnly?: boolean
+    take?: number
   }): Promise<any[]>
   /** accountId 필수 — 소유자 없는 행정부(공유 정본)를 쓰기 경로로 만들지 않게 */
   createCabinet(
@@ -568,6 +578,7 @@ export interface IPersonRepository {
     historicalCountryId?: string
     /** 수정 중인 정의 — 스코프 하드컷보다 먼저 통과시킨다 */
     includeIds?: string[]
+    includeConstituents?: boolean
   }): Promise<any[]>
   /** 피커 전용 — 스코프 통과 정의 + 이 국가에서의 사용 실적 + 자유입력 직책명 */
   findPositionDefinitionsForPicker(params: {

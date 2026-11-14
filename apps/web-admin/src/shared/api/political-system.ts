@@ -29,11 +29,34 @@ function unwrap<T>(response: unknown): T {
 export interface PoliticalSystemScope {
   countryId?: string
   historicalCountryId?: string
+  includeConstituents?: boolean
 }
 
 export async function listPoliticalSystems(
   scope: PoliticalSystemScope,
 ): Promise<PoliticalSystem[]> {
+  if (scope.includeConstituents && scope.historicalCountryId) {
+    const query = new URLSearchParams()
+    if (scope.countryId) query.set('countryId', scope.countryId)
+    query.set('historicalCountryId', scope.historicalCountryId)
+    query.set('includeConstituents', 'true')
+    const conn = getApiConnection()
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(conn.headers as Record<string, string>),
+    }
+    const rawResponse = await fetch(
+      `${conn.host}/political-systems?${query.toString()}`,
+      { method: 'GET', headers },
+    )
+    if (!rawResponse.ok) {
+      const errorText = await rawResponse.text()
+      throw new Error(errorText || `HTTP ${rawResponse.status}`)
+    }
+    const parsedBody: unknown = await rawResponse.json()
+    const rows = unwrap<PoliticalSystem[]>(parsedBody)
+    return Array.isArray(rows) ? rows : []
+  }
   const response = await politicalSystemsApi.list(
     getApiConnection(),
     scope.countryId,

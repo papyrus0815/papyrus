@@ -601,6 +601,25 @@ export type CreateRegnalEraDto = {
   changeReason?: string | null
 }
 
+/** 복합 역사국가의 동시대 구성국(UNION · CONFEDERATION_MEMBER · DOMINION) 항목 */
+export type ConstituentHistoricalPolityDto = {
+  id: string
+  name: string
+  enName?: string | null
+  role: 'UNION' | 'CONFEDERATION_MEMBER' | 'DOMINION' | string
+  isLeadingMember?: boolean
+  startEra?: string | null
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
+  endEra?: string | null
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
+  windowStartKey?: number | null
+  windowEndKey?: number | null
+}
+
 /** 행정부 목록 API의 수반 재임(소속 국가·이름 포함) */
 export type GovernmentHeadTenureInCabinetList = {
   id: string
@@ -620,6 +639,12 @@ export type GovernmentHeadTenureInCabinetList = {
   regnalName?: string | null
   /** 비고(자유 서술) — 왕호는 regnalName */
   notes?: string | null
+  /** 취임·선출 방식 */
+  appointmentMethod?: string | null
+  /** 퇴임·종료 사유 */
+  endReason?: string | null
+  /** 퇴임·종료 상세 사유 */
+  endReasonDetail?: string | null
   /** 재위(군주직)인가 — 직위 보유 응답 공통 */
   isMonarchical?: boolean
   /** 대수 — 재위·재임 공통 */
@@ -714,6 +739,10 @@ export type CabinetListItemDto = {
     label?: string | null
     eventId?: string | null
     event?: { id: string; title: string } | null
+  } | null
+  _count?: {
+    members?: number
+    memberTenures?: number
   } | null
   headTenure: GovernmentHeadTenureInCabinetList | null
 }
@@ -1054,21 +1083,51 @@ export const personCareerApi = {
   },
 
   /**
-   * 행정부(Cabinet) 목록 — 국가/역사적 국가별
-   * GET /government-positions/cabinets?countryId=&historicalCountryId=
+   * 행정부(Cabinet) 목록 — 전 국가 통합 또는 국가/역사적 국가별
+   * GET /government-positions/cabinets
    */
-  getCabinets: async (params: {
+  getCabinets: async (params?: {
     countryId?: string
     historicalCountryId?: string
+    includeConstituents?: boolean
+    search?: string
+    activeAtYear?: number
+    currentOnly?: boolean
+    linkedOnly?: boolean
+    take?: number
   }): Promise<CabinetListItemDto[]> => {
     const search = new URLSearchParams()
-    if (params.countryId) search.set('countryId', params.countryId)
-    if (params.historicalCountryId)
+    if (params?.countryId) search.set('countryId', params.countryId)
+    if (params?.historicalCountryId)
       search.set('historicalCountryId', params.historicalCountryId)
+    if (params?.includeConstituents) search.set('includeConstituents', 'true')
+    if (params?.search?.trim()) search.set('search', params.search.trim())
+    if (params?.activeAtYear != null && Number.isFinite(params.activeAtYear)) {
+      search.set('activeAtYear', String(Math.trunc(params.activeAtYear)))
+    }
+    if (params?.currentOnly) search.set('currentOnly', 'true')
+    if (params?.linkedOnly) search.set('linkedOnly', 'true')
+    if (params?.take != null && Number.isFinite(params.take)) {
+      search.set('take', String(Math.trunc(params.take)))
+    }
+    const queryString = search.toString()
     const response = await apiClient.get(
-      `/government-positions/cabinets?${search.toString()}`,
+      `/government-positions/cabinets${queryString ? `?${queryString}` : ''}`,
     )
     return Array.isArray(response.data) ? response.data : []
+  },
+
+  /**
+   * 행정부 단건 상세 조회
+   * GET /government-positions/cabinets/:cabinetId
+   */
+  getCabinetById: async (
+    cabinetId: string,
+  ): Promise<CabinetListItemDto | null> => {
+    const response = await apiClient.get(
+      `/government-positions/cabinets/${encodeURIComponent(cabinetId)}`,
+    )
+    return response.data ?? null
   },
 
   /**
@@ -1123,6 +1182,8 @@ export const personCareerApi = {
       name?: string | null
       description?: string | null
       headTenureId?: string | null
+      countryId?: string | null
+      historicalCountryId?: string | null
       startDate?: string | null
       endDate?: string | null
       startDateInfo?: {
@@ -1363,6 +1424,20 @@ export const personCareerApi = {
   },
 
   /**
+   * 복합 역사국가의 동시대 구성국(UNION · CONFEDERATION_MEMBER · DOMINION) 목록 조회
+   * GET /government-positions/historical-countries/:historicalCountryId/constituents
+   */
+  getConstituentHistoricalPolities: async (
+    historicalCountryId: string,
+  ): Promise<ConstituentHistoricalPolityDto[]> => {
+    if (!historicalCountryId) return []
+    const response = await apiClient.get(
+      `/government-positions/historical-countries/${encodeURIComponent(historicalCountryId)}/constituents`,
+    )
+    return Array.isArray(response.data) ? response.data : []
+  },
+
+  /**
    * 국가 또는 역사적 국가별 재임 기록 목록 조회 (REST)
    * GET /government-positions/countries/:countryId/tenures
    * GET /government-positions/historical-countries/:historicalCountryId/tenures
@@ -1370,6 +1445,7 @@ export const personCareerApi = {
   getTenuresByCountry: async (params: {
     countryId?: string
     historicalCountryId?: string
+    includeConstituents?: boolean
   }) => {
     let raw: unknown
     if (params.countryId) {
@@ -1378,8 +1454,9 @@ export const personCareerApi = {
       )
       raw = response.data
     } else if (params.historicalCountryId) {
+      const suffix = params.includeConstituents ? '?includeConstituents=true' : ''
       const response = await apiClient.get(
-        `/government-positions/historical-countries/${encodeURIComponent(params.historicalCountryId)}/tenures`,
+        `/government-positions/historical-countries/${encodeURIComponent(params.historicalCountryId)}/tenures${suffix}`,
       )
       raw = response.data
     } else {
@@ -1406,6 +1483,7 @@ export const personCareerApi = {
       historicalCountryId?: string
       /** 수정 중인 정의 — 적용 범위 하드컷보다 먼저 통과시켜 편집 중 선택 유실을 막는다 */
       includeId?: string | null
+      includeConstituents?: boolean
     } = {},
   ) => {
     const query = new URLSearchParams()
@@ -1413,6 +1491,7 @@ export const personCareerApi = {
     if (params.historicalCountryId)
       query.set('historicalCountryId', params.historicalCountryId)
     if (params.includeId) query.set('includeId', params.includeId)
+    if (params.includeConstituents) query.set('includeConstituents', 'true')
     const response = await apiClient.get(
       `/government-positions/definitions?${query.toString()}`,
     )

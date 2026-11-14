@@ -35,6 +35,7 @@ import {
   militaryUnitApi,
   type MilitaryUnitTransitionKind,
 } from '@/shared/api/military-unit'
+import type { ConstituentHistoricalPolityDto } from '@/shared/api/person-career'
 import {
   getUploadImageUrl,
   uploadImage,
@@ -285,7 +286,9 @@ const KIND_CARD_META_LIST: ReadonlyArray<KindCardMeta> = [
 
 export type MinistryFormModalProps = {
   effectiveCountryId: string | undefined
+  countryName?: string
   isHistorical?: boolean
+  constituentPolities?: ConstituentHistoricalPolityDto[]
   isOpen: boolean
   isDark: boolean
   editingMinistry: AdministrationDepartment | null
@@ -320,7 +323,9 @@ export type MinistryFormModalProps = {
 export function MinistryFormModal(props: MinistryFormModalProps) {
   const {
     effectiveCountryId,
+    countryName,
     isHistorical = false,
+    constituentPolities = [],
     isOpen,
     editingMinistry,
     ministryForm,
@@ -406,9 +411,14 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
 
   const countryMilitaryUnits = useMemo(() => {
     if (!effectiveCountryId) return []
+    const targetHistoricalId =
+      ministryForm.historicalCountryId.trim() || effectiveCountryId
     return allMilitaryUnits.filter((unitItem) => {
       if (isHistorical) {
-        return unitItem.historicalCountryId === effectiveCountryId
+        return (
+          unitItem.historicalCountryId === targetHistoricalId ||
+          unitItem.historicalCountryId === effectiveCountryId
+        )
       }
       if (unitItem.countryId === effectiveCountryId) return true
       if (
@@ -419,7 +429,13 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
       }
       return false
     })
-  }, [allMilitaryUnits, effectiveCountryId, isHistorical, linkedHistIdSet])
+  }, [
+    allMilitaryUnits,
+    effectiveCountryId,
+    isHistorical,
+    linkedHistIdSet,
+    ministryForm.historicalCountryId,
+  ])
 
   const activeKindMeta = useMemo(
     () =>
@@ -1140,6 +1156,71 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
                 </FlatFieldControl>
               </FlatFormRow>
             )}
+
+            {isHistorical &&
+              effectiveCountryId &&
+              constituentPolities.length > 0 && (
+                <FlatFormRow>
+                  <FlatFormLabel>소속 정치체</FlatFormLabel>
+                  <FlatFieldControl>
+                    <PillChoiceRow role="radiogroup" aria-label="소속 정치체">
+                      <PillChoiceChip
+                        type="button"
+                        role="radio"
+                        aria-checked={
+                          !ministryForm.historicalCountryId ||
+                          ministryForm.historicalCountryId === effectiveCountryId
+                        }
+                        $selected={
+                          !ministryForm.historicalCountryId ||
+                          ministryForm.historicalCountryId === effectiveCountryId
+                        }
+                        onClick={() =>
+                          setMinistryForm((prev) => ({
+                            ...prev,
+                            historicalCountryId: effectiveCountryId,
+                          }))
+                        }
+                      >
+                        <PillChoiceIcon
+                          $selected={
+                            !ministryForm.historicalCountryId ||
+                            ministryForm.historicalCountryId ===
+                              effectiveCountryId
+                          }
+                        >
+                          🏛️
+                        </PillChoiceIcon>
+                        <span>{countryName ?? '본국'} 직속</span>
+                      </PillChoiceChip>
+                      {constituentPolities.map((polityItem) => {
+                        const isSelected =
+                          ministryForm.historicalCountryId === polityItem.id
+                        return (
+                          <PillChoiceChip
+                            key={polityItem.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={isSelected}
+                            $selected={isSelected}
+                            onClick={() =>
+                              setMinistryForm((prev) => ({
+                                ...prev,
+                                historicalCountryId: polityItem.id,
+                              }))
+                            }
+                          >
+                            <PillChoiceIcon $selected={isSelected}>
+                              👑
+                            </PillChoiceIcon>
+                            <span>{polityItem.name}</span>
+                          </PillChoiceChip>
+                        )
+                      })}
+                    </PillChoiceRow>
+                  </FlatFieldControl>
+                </FlatFormRow>
+              )}
 
             <FlatFormRow>
               <FlatFormLabel>상위 기관</FlatFormLabel>

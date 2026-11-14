@@ -9,6 +9,13 @@ import { PrismaService } from '@prisma/prisma.service'
 
 import { NotificationService } from '../../notification/application/notification.service'
 import {
+  doesIntervalOverlapConstituentWindows,
+  doesRecordOverlapSignedYear,
+  extractRecordPeriodKeys,
+  groupConstituentWindowsByMemberId,
+  resolveConstituentPolityWindows,
+} from '../../shared/historical-constituent-rollup'
+import {
   mapStructuredDateInput,
   structuredDateEndKey,
   structuredDateKey,
@@ -35,8 +42,17 @@ const REF_SELECT = { id: true, name: true, abbreviation: true, kind: true } as c
 
 const DEPARTMENT_INCLUDE = {
   category: true,
-  country: { select: { id: true, name: true } },
-  historicalCountry: { select: { id: true, name: true } },
+  country: { select: { id: true, name: true, flagEmoji: true } },
+  historicalCountry: {
+    select: {
+      id: true,
+      name: true,
+      endEra: true,
+      endYear: true,
+      endMonth: true,
+      endDay: true,
+    },
+  },
   parent: { select: REF_SELECT },
   children: { select: REF_SELECT, orderBy: { name: 'asc' as const } },
   successorTransitions: {
@@ -141,9 +157,19 @@ function toResponse(row: DepartmentRow): AdministrationDepartmentResponseDto {
     kind: row.kind as AdministrationDepartmentKindValue,
     thumbnailUrl: row.thumbnailUrl ?? null,
     countryId: row.countryId ?? null,
-    country: row.country ?? null,
+    country: row.country
+      ? {
+          id: row.country.id,
+          name: row.country.name,
+          ...((row.country as { flagEmoji?: string | null }).flagEmoji !== undefined
+            ? { flagEmoji: (row.country as { flagEmoji?: string | null }).flagEmoji }
+            : {}),
+        }
+      : null,
     historicalCountryId: row.historicalCountryId ?? null,
-    historicalCountry: row.historicalCountry ?? null,
+    historicalCountry: row.historicalCountry
+      ? { id: row.historicalCountry.id, name: row.historicalCountry.name }
+      : null,
     parentId: row.parentId ?? null,
     parent: row.parent ? toRef(row.parent) : null,
     children: (row.children ?? []).map(toRef),
@@ -307,7 +333,10 @@ export class AdministrationDepartmentService {
     historicalCountryId?: string
     search?: string
     kind?: string
+    categoryId?: string
+    activeAtYear?: number
     take?: number
+    includeConstituents?: boolean
   }): Promise<AdministrationDepartmentResponseDto[]> {
     const search = params.search?.trim()
     let linkedHistoricalIds: string[] = []
@@ -319,6 +348,19 @@ export class AdministrationDepartmentService {
         })
         .then((rows) => rows.map((row) => row.historicalCountryId))
     }
+
+    const constituentWindows =
+      params.historicalCountryId && params.includeConstituents
+        ? await resolveConstituentPolityWindows(
+            this.prisma,
+            params.historicalCountryId,
+          )
+        : []
+    const constituentByMemberId =
+      groupConstituentWindowsByMemberId(constituentWindows)
+    const targetHistoricalIds = params.historicalCountryId
+      ? [params.historicalCountryId, ...constituentByMemberId.keys()]
+      : []
 
     const countryOrClause =
       !params.historicalCountryId && params.countryId && linkedHistoricalIds.length > 0
@@ -338,17 +380,22 @@ export class AdministrationDepartmentService {
             { nameEn: { contains: search } },
             { abbreviation: { contains: search } },
             { headquarters: { contains: search } },
+            { country: { name: { contains: search } } },
+            { historicalCountry: { name: { contains: search } } },
           ],
         }
       : null
 
     const where: Prisma.AdministrationDepartmentWhereInput = {
       ...(params.historicalCountryId
-        ? { historicalCountryId: params.historicalCountryId }
+        ? targetHistoricalIds.length > 1
+          ? { historicalCountryId: { in: targetHistoricalIds } }
+          : { historicalCountryId: params.historicalCountryId }
         : params.countryId && !countryOrClause
           ? { countryId: params.countryId }
           : {}),
       ...(params.kind ? { kind: params.kind as AdministrationDepartmentKindValue } : {}),
+      ...(params.categoryId ? { categoryId: params.categoryId } : {}),
       ...(countryOrClause && searchOrClause
         ? { AND: [countryOrClause, searchOrClause] }
         : countryOrClause
@@ -357,13 +404,95 @@ export class AdministrationDepartmentService {
             ? searchOrClause
             : {}),
     }
-    const list = await this.prisma.administrationDepartment.findMany({
+    const rawList = await this.prisma.administrationDepartment.findMany({
       where,
       orderBy: [{ countryId: 'asc' }, { name: 'asc' }],
       include: DEPARTMENT_INCLUDE,
-      ...(params.take ? { take: Math.min(Math.max(params.take, 1), 200) } : {}),
+      ...(params.take && params.activeAtYear == null
+        ? { take: Math.min(Math.max(params.take, 1), 500) }
+        : {}),
     })
-    return list.map(toResponse)
+    const rolledUpList =
+      params.historicalCountryId && constituentByMemberId.size > 0
+        ? rawList.filter((row) => {
+            if (row.historicalCountryId === params.historicalCountryId) {
+              return true
+            }
+            if (!row.historicalCountryId) return false
+            const memberWindows = constituentByMemberId.get(
+              row.historicalCountryId,
+            )
+            if (!memberWindows) return false
+            const bounds = extractRecordPeriodKeys({
+              startEra: row.establishedEra,
+              startYear: row.establishedYear,
+              startMonth: row.establishedMonth,
+              startDay: row.establishedDay,
+              startDate: row.establishedDate,
+              endEra: row.abolishedEra,
+              endYear: row.abolishedYear,
+              endMonth: row.abolishedMonth,
+              endDay: row.abolishedDay,
+              endDate: row.abolishedDate,
+            })
+            return doesIntervalOverlapConstituentWindows(
+              bounds.startKey,
+              bounds.endKey,
+              memberWindows,
+              'institution',
+            )
+          })
+        : rawList
+
+    const yearFilteredList =
+      params.activeAtYear != null && Number.isFinite(params.activeAtYear)
+        ? rolledUpList.filter((row) => {
+            const bounds = extractRecordPeriodKeys({
+              startEra: row.establishedEra,
+              startYear: row.establishedYear,
+              startMonth: row.establishedMonth,
+              startDay: row.establishedDay,
+              startDate: row.establishedDate,
+              endEra: row.abolishedEra,
+              endYear: row.abolishedYear,
+              endMonth: row.abolishedMonth,
+              endDay: row.abolishedDay,
+              endDate: row.abolishedDate,
+            })
+            const histPolity = row.historicalCountry as
+              | {
+                  endEra?: string | null
+                  endYear?: number | null
+                  endMonth?: number | null
+                  endDay?: number | null
+                }
+              | null
+              | undefined
+            const polityBounds = histPolity
+              ? extractRecordPeriodKeys({
+                  endEra: histPolity.endEra,
+                  endYear: histPolity.endYear,
+                  endMonth: histPolity.endMonth,
+                  endDay: histPolity.endDay,
+                })
+              : { endKey: null }
+            return doesRecordOverlapSignedYear({
+              startKey: bounds.startKey,
+              endKey: bounds.endKey,
+              activeAtYear: params.activeAtYear!,
+              kind: 'institution',
+              polityEndKey: polityBounds.endKey,
+              isHistoricalPolity: Boolean(row.historicalCountryId),
+            })
+          })
+        : rolledUpList
+
+    const cappedList =
+      params.take && params.activeAtYear != null
+        ? yearFilteredList.slice(0, Math.min(Math.max(params.take, 1), 500))
+        : yearFilteredList
+
+    return cappedList.map(toResponse)
   }
 
   /**
@@ -426,8 +555,50 @@ export class AdministrationDepartmentService {
     }))
   }
 
-  /** 이 기관 소속 재임(역대 장관) — 직접 연결 또는 이 기관 전용 직위 정의를 통한 재임 포함 */
+  /** 이 기관 소속 재임(역대 장관) — 직접 연결, 이 기관 전용 직위 정의, 내각 각료 부처 지정을 모두 포함 */
   async listTenures(id: string): Promise<any[]> {
+    const cabinetSelect = {
+      id: true,
+      name: true,
+      headTenure: {
+        select: {
+          ordinal: true,
+          subTermNumber: true,
+          title: true,
+          positionDefinition: { select: { title: true } },
+          person: { select: { name: true, surname: true } },
+        },
+      },
+    } as const
+
+    const formatCabinetRef = (cab: {
+      id: string
+      name?: string | null
+      headTenure?: {
+        ordinal?: number | null
+        subTermNumber?: number | null
+        title?: string | null
+        positionDefinition?: { title?: string | null } | null
+        person?: { name?: string | null; surname?: string | null } | null
+      } | null
+    }) => {
+      const explicitName = cab.name?.trim()
+      if (explicitName) {
+        return { id: cab.id, name: explicitName }
+      }
+      const headPerson = cab.headTenure?.person
+      const headPersonName = [headPerson?.surname?.trim(), headPerson?.name?.trim()]
+        .filter(Boolean)
+        .join(' ')
+        .trim()
+      const ordPrefix =
+        cab.headTenure?.ordinal != null ? `제${cab.headTenure.ordinal}대 ` : ''
+      const fallbackLabel = headPersonName
+        ? `${ordPrefix}${headPersonName} 내각`
+        : '행정부'
+      return { id: cab.id, name: fallbackLabel }
+    }
+
     const list = await this.prisma.governmentPositionTenure.findMany({
       where: {
         OR: [
@@ -435,6 +606,9 @@ export class AdministrationDepartmentService {
           {
             administrationDepartmentId: null,
             positionDefinition: { is: { administrationDepartmentId: id } },
+          },
+          {
+            cabinetMemberships: { some: { administrationDepartmentId: id } },
           },
         ],
       },
@@ -465,48 +639,66 @@ export class AdministrationDepartmentService {
           select: { id: true, title: true, positionType: true, isMonarchical: true },
         },
         party: { select: { id: true, name: true, shortName: true, brandColor: true } },
+        cabinet: { select: cabinetSelect },
         cabinetMemberships: {
-          include: { cabinet: { select: { id: true, name: true } } },
+          include: { cabinet: { select: cabinetSelect } },
         },
         country: { select: { id: true, name: true } },
         historicalCountry: { select: { id: true, name: true } },
       },
     })
-    return list.map((row) => ({
-      id: row.id,
-      personId: row.personId,
-      ordinal: row.ordinal,
-      subTermNumber: row.subTermNumber ?? null,
-      isMonarchical: Boolean(row.positionDefinition?.isMonarchical),
-      startDate:
-        toSignedDateString(row.startEra, row.startYear, row.startMonth, row.startDay) ??
-        row.startDate?.toISOString() ??
-        null,
-      endDate:
-        toSignedDateString(row.endEra, row.endYear, row.endMonth, row.endDay) ??
-        row.endDate?.toISOString() ??
-        null,
-      startDatePrecision: row.startDatePrecision ?? null,
-      startEra: row.startEra ?? null,
-      startYear: row.startYear ?? null,
-      startMonth: row.startMonth ?? null,
-      startDay: row.startDay ?? null,
-      endEra: row.endEra ?? null,
-      endYear: row.endYear ?? null,
-      endMonth: row.endMonth ?? null,
-      endDay: row.endDay ?? null,
-      title: row.title,
-      rankTitle: row.rankTitle ?? null,
-      partyId: row.partyId ?? null,
-      party: row.party ?? null,
-      cabinetId: row.cabinetId ?? row.cabinetMemberships?.[0]?.cabinetId ?? null,
-      cabinets: (row.cabinetMemberships ?? []).map((membership) => membership.cabinet),
-      administrationDepartmentId: row.administrationDepartmentId ?? null,
-      positionDefinition: row.positionDefinition,
-      person: row.person,
-      country: row.country,
-      historicalCountry: row.historicalCountry,
-    }))
+    return list.map((row) => {
+      const cabinetMap = new Map<string, { id: string; name: string }>()
+      for (const membership of row.cabinetMemberships ?? []) {
+        if (membership.cabinet?.id) {
+          cabinetMap.set(membership.cabinet.id, formatCabinetRef(membership.cabinet))
+        }
+      }
+      if (row.cabinet?.id && !cabinetMap.has(row.cabinet.id)) {
+        cabinetMap.set(row.cabinet.id, formatCabinetRef(row.cabinet))
+      }
+      const resolvedCabinets = [...cabinetMap.values()]
+
+      return {
+        id: row.id,
+        personId: row.personId,
+        ordinal: row.ordinal,
+        subTermNumber: row.subTermNumber ?? null,
+        isMonarchical: Boolean(row.positionDefinition?.isMonarchical),
+        startDate:
+          toSignedDateString(row.startEra, row.startYear, row.startMonth, row.startDay) ??
+          row.startDate?.toISOString() ??
+          null,
+        endDate:
+          toSignedDateString(row.endEra, row.endYear, row.endMonth, row.endDay) ??
+          row.endDate?.toISOString() ??
+          null,
+        startDatePrecision: row.startDatePrecision ?? null,
+        startEra: row.startEra ?? null,
+        startYear: row.startYear ?? null,
+        startMonth: row.startMonth ?? null,
+        startDay: row.startDay ?? null,
+        endEra: row.endEra ?? null,
+        endYear: row.endYear ?? null,
+        endMonth: row.endMonth ?? null,
+        endDay: row.endDay ?? null,
+        title: row.title,
+        rankTitle: row.rankTitle ?? null,
+        partyId: row.partyId ?? null,
+        party: row.party ?? null,
+        cabinetId:
+          row.cabinetId ??
+          row.cabinetMemberships?.[0]?.cabinetId ??
+          resolvedCabinets[0]?.id ??
+          null,
+        cabinets: resolvedCabinets,
+        administrationDepartmentId: row.administrationDepartmentId ?? null,
+        positionDefinition: row.positionDefinition,
+        person: row.person,
+        country: row.country,
+        historicalCountry: row.historicalCountry,
+      }
+    })
   }
 
   // ─── 쓰기 ───────────────────────────────────────────────────────────────

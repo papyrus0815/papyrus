@@ -578,11 +578,17 @@ export function CurrentCabinetPanel({
    */
   const departmentsQuery = useQuery({
     queryKey: historicalCountryId
-      ? administrationDepartmentsByHistoricalCountryQueryKey(historicalCountryId)
+      ? administrationDepartmentsByHistoricalCountryQueryKey(
+          historicalCountryId,
+          { includeConstituents: true },
+        )
       : administrationDepartmentsByCountryQueryKey(countryId),
     queryFn: () =>
       historicalCountryId
-        ? administrationDepartmentApi.getByHistoricalCountryId(historicalCountryId)
+        ? administrationDepartmentApi.getByHistoricalCountryId(
+            historicalCountryId,
+            { includeConstituents: true },
+          )
         : administrationDepartmentApi.getByCountryId(countryId),
     enabled: Boolean(countryId || historicalCountryId),
     staleTime: 5 * 60_000,
@@ -590,11 +596,17 @@ export function CurrentCabinetPanel({
 
   /** 이 나라의 행정부 목록 — 카드 슬라이더의 모수 (대시보드 통계·행정부 탭과 동일 키 공유) */
   const cabinetsQuery = useQuery({
-    queryKey: ['cabinets-by-country', countryId || undefined, historicalCountryId],
+    queryKey: [
+      'cabinets-by-country',
+      countryId || undefined,
+      historicalCountryId,
+      ...(historicalCountryId ? (['with-constituents'] as const) : []),
+    ],
     queryFn: () =>
       personCareerApi.getCabinets({
         countryId: countryId || undefined,
         historicalCountryId,
+        includeConstituents: Boolean(historicalCountryId) || undefined,
       }),
     enabled: Boolean(countryId || historicalCountryId),
     staleTime: 60_000,
@@ -810,11 +822,17 @@ export function CurrentCabinetPanel({
 
   // 정부 변천 패널과 같은 키 — react-query가 한 번만 받아온다
   const query = useQuery({
-    queryKey: ['tenures-by-country', countryId || undefined, historicalCountryId],
+    queryKey: [
+      'tenures-by-country',
+      countryId || undefined,
+      historicalCountryId,
+      ...(historicalCountryId ? (['with-constituents'] as const) : []),
+    ],
     queryFn: () =>
       personCareerApi.getTenuresByCountry({
         countryId: countryId || undefined,
         historicalCountryId,
+        includeConstituents: Boolean(historicalCountryId) || undefined,
       }),
     enabled: Boolean(countryId || historicalCountryId),
     staleTime: 60_000,

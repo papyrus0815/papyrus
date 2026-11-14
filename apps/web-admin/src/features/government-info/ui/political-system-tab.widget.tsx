@@ -68,7 +68,11 @@ export function PoliticalSystemTab({
   countryName,
 }: Props) {
   const queryClient = useQueryClient()
-  const scope = { countryId, historicalCountryId }
+  const scope = {
+    countryId,
+    historicalCountryId,
+    includeConstituents: Boolean(historicalCountryId),
+  }
   const query = usePoliticalSystems(scope)
   const createMutation = useCreatePoliticalSystem()
   const updateMutation = useUpdatePoliticalSystem()
@@ -76,6 +80,7 @@ export function PoliticalSystemTab({
 
   const [editing, setEditing] = useState<PoliticalSystem | null>(null)
   const [formOpen, setFormOpen] = useState(false)
+  const [polityFilterId, setPolityFilterId] = useState<string>('ALL')
   const [headRegisterTarget, setHeadRegisterTarget] =
     useState<HeadRegisterTarget | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -115,14 +120,41 @@ export function PoliticalSystemTab({
     setHeadRegisterTarget(null)
   }
 
-  const systems = useMemo(
+  const allSystems = useMemo(
     () => [...(query.data ?? [])].sort(comparePoliticalSystems),
     [query.data],
   )
 
+  const polityChips = useMemo(() => {
+    const map = new Map<string, { id: string; label: string; count: number }>()
+    for (const sysItem of allSystems) {
+      const targetId = sysItem.historicalCountryId ?? '__MODERN__'
+      const targetLabel = sysItem.historicalCountryId
+        ? `🏛️ ${sysItem.historicalCountry?.name ?? '과거·구성 국가'}`
+        : `${countryName ?? '현대 본국'}`
+      const existing = map.get(targetId)
+      if (existing) {
+        existing.count += 1
+      } else {
+        map.set(targetId, { id: targetId, label: targetLabel, count: 1 })
+      }
+    }
+    return [...map.values()]
+  }, [allSystems, countryName])
+
+  const systems = useMemo(() => {
+    if (polityFilterId === 'ALL') return allSystems
+    if (polityFilterId === '__MODERN__') {
+      return allSystems.filter((sysItem) => !sysItem.historicalCountryId)
+    }
+    return allSystems.filter(
+      (sysItem) => sysItem.historicalCountryId === polityFilterId,
+    )
+  }, [allSystems, polityFilterId])
+
   const currentSystem = useMemo(
-    () => systems.find((sysItem) => sysItem.isCurrent) ?? null,
-    [systems],
+    () => allSystems.find((sysItem) => sysItem.isCurrent) ?? null,
+    [allSystems],
   )
 
   const openCreate = () => {
@@ -184,6 +216,32 @@ export function PoliticalSystemTab({
         </PrimaryAddBtn>
       </ToolbarSurface>
 
+      {polityChips.length > 1 && (
+        <PolityFilterRow role="tablist" aria-label="소속 국가·구성국 필터">
+          <PolityFilterChip
+            type="button"
+            role="tab"
+            aria-selected={polityFilterId === 'ALL'}
+            $active={polityFilterId === 'ALL'}
+            onClick={() => setPolityFilterId('ALL')}
+          >
+            전체 ({allSystems.length})
+          </PolityFilterChip>
+          {polityChips.map((chipItem) => (
+            <PolityFilterChip
+              key={chipItem.id}
+              type="button"
+              role="tab"
+              aria-selected={polityFilterId === chipItem.id}
+              $active={polityFilterId === chipItem.id}
+              onClick={() => setPolityFilterId(chipItem.id)}
+            >
+              {chipItem.label} ({chipItem.count})
+            </PolityFilterChip>
+          ))}
+        </PolityFilterRow>
+      )}
+
       {query.isLoading ? (
         <LoadingHint>헌정 체제 기록을 불러오는 중…</LoadingHint>
       ) : systems.length === 0 ? (
@@ -241,10 +299,11 @@ export function PoliticalSystemTab({
                         {system.isCurrent ? (
                           <CurrentChip>현행 체제</CurrentChip>
                         ) : null}
-                        {historicalCountryId == null &&
+                        {(historicalCountryId == null ||
+                          system.historicalCountryId !== historicalCountryId) &&
                         system.historicalCountryId != null ? (
                           <PastChip>
-                            🏛️ {system.historicalCountry?.name ?? '과거 국가'}
+                            🏛️ {system.historicalCountry?.name ?? '구성·과거 국가'}
                           </PastChip>
                         ) : null}
                       </TitleLine>
@@ -622,6 +681,47 @@ const PrimaryAddBtn = styled.button`
     background: #1d4ed8;
     border-color: #1d4ed8;
   }
+`
+
+const PolityFilterRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+`
+
+const PolityFilterChip = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(59, 130, 246, 0.48)'
+          : 'rgba(37, 99, 235, 0.36)'
+        : theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.1)'
+          : 'rgba(20, 19, 34, 0.1)'};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(37, 99, 235, 0.18)'
+        : 'rgba(37, 99, 235, 0.08)'
+      : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '#93c5fd'
+        : '#2563eb'
+      : theme.colors.text.secondary};
 `
 
 const LoadingHint = styled.p`

@@ -2948,8 +2948,17 @@ export class PersonService {
   async findTenuresByCountry(params: {
     countryId?: string
     historicalCountryId?: string
+    includeConstituents?: boolean
   }): Promise<any[]> {
     return this.personRepository.findTenuresByCountry(params)
+  }
+
+  async findConstituentHistoricalPolities(
+    historicalCountryId: string,
+  ): Promise<any[]> {
+    return this.personRepository.findConstituentHistoricalPolities(
+      historicalCountryId,
+    )
   }
 
   /**
@@ -2986,7 +2995,20 @@ export class PersonService {
     return this.personRepository.findCabinetOverview(cabinetId, requireActorId(accountId))
   }
 
-  async findCabinets(params: { countryId?: string; historicalCountryId?: string }): Promise<any[]> {
+  async findCabinetById(cabinetId: string): Promise<any | null> {
+    return this.personRepository.findCabinetById(cabinetId)
+  }
+
+  async findCabinets(params: {
+    countryId?: string
+    historicalCountryId?: string
+    includeConstituents?: boolean
+    search?: string
+    activeAtYear?: number
+    currentOnly?: boolean
+    linkedOnly?: boolean
+    take?: number
+  }): Promise<any[]> {
     return this.personRepository.findCabinets(params)
   }
 
@@ -3217,6 +3239,7 @@ export class PersonService {
     countryId?: string
     historicalCountryId?: string
     includeIds?: string[]
+    includeConstituents?: boolean
   }): Promise<any[]> {
     return this.personRepository.findPositionDefinitions(params)
   }

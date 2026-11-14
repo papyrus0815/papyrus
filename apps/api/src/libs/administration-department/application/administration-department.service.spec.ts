@@ -51,6 +51,9 @@ describe('AdministrationDepartmentService', () => {
     historicalCountry: {
       findUnique: jest.fn().mockResolvedValue({ id: 'mock-hist-country' }),
     },
+    historicalCountryTransition: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
   })
 
   const createMockNotification = () => ({
@@ -75,6 +78,133 @@ describe('AdministrationDepartmentService', () => {
         where: { historicalCountryId: 'hist-joseon' },
       }),
     )
+  })
+
+  it('list: includeConstituents=true일 때 구성국(UNION 등)의 존속 기간 내 부처만 병합 조회한다', async () => {
+    const prisma = createMockPrisma()
+    prisma.historicalCountry.findUnique.mockResolvedValue({
+      id: 'hist-ah',
+      startYear: 1867,
+      startEra: 'AD',
+      startMonth: 3,
+      startDay: 30,
+      endYear: 1918,
+      endEra: 'AD',
+      endMonth: 11,
+      endDay: 11,
+      membershipsParent: [
+        {
+          memberCountryId: 'hist-hungary',
+          role: 'UNION',
+          isLeadingMember: false,
+          membershipStartDate: null,
+          membershipEndDate: null,
+          startYear: null,
+          startEra: null,
+          startMonth: null,
+          startDay: null,
+          endYear: null,
+          endEra: null,
+          endMonth: null,
+          endDay: null,
+          memberCountry: {
+            id: 'hist-hungary',
+            name: '헝가리 왕국',
+            enName: 'Kingdom of Hungary',
+            startYear: 1000,
+            startEra: 'AD',
+            startMonth: null,
+            startDay: null,
+            endYear: 1918,
+            endEra: 'AD',
+            endMonth: 11,
+            endDay: 16,
+          },
+        },
+      ],
+    })
+    const mockTimestamp = new Date('2026-01-01T00:00:00.000Z')
+    prisma.administrationDepartment.findMany.mockResolvedValue([
+      {
+        id: 'dept-kuk-war',
+        name: '제국·왕국 공동전쟁성',
+        historicalCountryId: 'hist-ah',
+        establishedDate: new Date('1867-12-21T00:00:00.000Z'),
+        establishedEra: 'AD',
+        establishedYear: 1867,
+        establishedMonth: 12,
+        establishedDay: 21,
+        abolishedDate: new Date('1918-11-11T00:00:00.000Z'),
+        abolishedEra: 'AD',
+        abolishedYear: 1918,
+        abolishedMonth: 11,
+        abolishedDay: 11,
+        transitionsFrom: [],
+        transitionsTo: [],
+        createdAt: mockTimestamp,
+        updatedAt: mockTimestamp,
+      },
+      {
+        id: 'dept-hu-honved',
+        name: '헝가리 왕립 국방성',
+        historicalCountryId: 'hist-hungary',
+        establishedDate: new Date('1867-02-20T00:00:00.000Z'),
+        establishedEra: 'AD',
+        establishedYear: 1867,
+        establishedMonth: 2,
+        establishedDay: 20,
+        abolishedDate: new Date('1918-11-16T00:00:00.000Z'),
+        abolishedEra: 'AD',
+        abolishedYear: 1918,
+        abolishedMonth: 11,
+        abolishedDay: 16,
+        transitionsFrom: [],
+        transitionsTo: [],
+        createdAt: mockTimestamp,
+        updatedAt: mockTimestamp,
+      },
+      {
+        id: 'dept-hu-1848',
+        name: '1848 혁명 국방위원회',
+        historicalCountryId: 'hist-hungary',
+        establishedDate: new Date('1848-09-16T00:00:00.000Z'),
+        establishedEra: 'AD',
+        establishedYear: 1848,
+        establishedMonth: 9,
+        establishedDay: 16,
+        abolishedDate: new Date('1849-08-13T00:00:00.000Z'),
+        abolishedEra: 'AD',
+        abolishedYear: 1849,
+        abolishedMonth: 8,
+        abolishedDay: 13,
+        transitionsFrom: [],
+        transitionsTo: [],
+        createdAt: mockTimestamp,
+        updatedAt: mockTimestamp,
+      },
+    ])
+
+    const service = new AdministrationDepartmentService(
+      prisma as any,
+      createMockNotification() as any,
+    )
+
+    const result = await service.list({
+      historicalCountryId: 'hist-ah',
+      includeConstituents: true,
+    })
+
+    expect(prisma.administrationDepartment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          historicalCountryId: { in: ['hist-ah', 'hist-hungary'] },
+        },
+      }),
+    )
+    expect(result.map((dept) => dept.id)).toEqual([
+      'dept-kuk-war',
+      'dept-hu-honved',
+    ])
   })
 
   it('listTenures: 기원전(BC) 및 고대 연대 재임의 startDate/endDate를 부호 문자열로 복원하고 startKey 순으로 조회한다', async () => {
@@ -793,5 +923,161 @@ describe('AdministrationDepartmentService', () => {
     expect(created.headquarters).toBe('베를린 빌헬름가 74-76번지')
     expect(created.orgStructure).toBe('정무국·통상국·법무국')
     expect(created.budgetNote).toBe('정원 약 2,500명')
+  })
+
+  it('list: 전 국가 기관 허브에서 categoryId와 activeAtYear(부호 연도)로 동시대 존속 기관만 필터링한다', async () => {
+    const prisma = createMockPrisma()
+    const mockTimestamp = new Date('2026-01-01T00:00:00.000Z')
+    prisma.administrationDepartment.findMany.mockResolvedValue([
+      {
+        id: 'dept-1914-active',
+        name: '제국외무성',
+        categoryId: 'cat-foreign',
+        historicalCountryId: 'hist-de',
+        historicalCountry: {
+          id: 'hist-de',
+          name: '독일 제국',
+          startEra: 'AD',
+          startYear: 1871,
+          endEra: 'AD',
+          endYear: 1918,
+        },
+        establishedDate: new Date('1870-01-04T00:00:00.000Z'),
+        establishedEra: 'AD',
+        establishedYear: 1870,
+        abolishedDate: new Date('1919-02-11T00:00:00.000Z'),
+        abolishedEra: 'AD',
+        abolishedYear: 1919,
+        transitionsFrom: [],
+        transitionsTo: [],
+        createdAt: mockTimestamp,
+        updatedAt: mockTimestamp,
+      },
+      {
+        id: 'dept-1949-later',
+        name: '연방외무청',
+        categoryId: 'cat-foreign',
+        countryId: 'modern-de',
+        country: { id: 'modern-de', name: '독일', flagEmoji: '🇩🇪' },
+        establishedDate: new Date('1951-03-15T00:00:00.000Z'),
+        establishedEra: 'AD',
+        establishedYear: 1951,
+        abolishedDate: null,
+        abolishedEra: null,
+        abolishedYear: null,
+        transitionsFrom: [],
+        transitionsTo: [],
+        createdAt: mockTimestamp,
+        updatedAt: mockTimestamp,
+      },
+    ])
+
+    const service = new AdministrationDepartmentService(
+      prisma as never,
+      createMockNotification() as never,
+    )
+
+    const result = await service.list({
+      categoryId: 'cat-foreign',
+      activeAtYear: 1914,
+      take: 300,
+    })
+
+    expect(prisma.administrationDepartment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          categoryId: 'cat-foreign',
+        }),
+      }),
+    )
+    expect(result.map((dept) => dept.id)).toEqual(['dept-1914-active'])
+  })
+
+  it('listTenures: 직접 cabinet 및 cabinetMemberships의 소속 내각을 중복 없이 병합하고 수반명 기반 폴백 내각명을 반환한다', async () => {
+    const prisma = createMockPrisma()
+    prisma.governmentPositionTenure.findMany.mockResolvedValue([
+      {
+        id: 'tenure-minister-1',
+        startDate: new Date('1913-06-10T00:00:00.000Z'),
+        startEra: 'AD',
+        startYear: 1913,
+        startMonth: 6,
+        startDay: 10,
+        endDate: new Date('1917-06-15T00:00:00.000Z'),
+        endEra: 'AD',
+        endYear: 1917,
+        endMonth: 6,
+        endDay: 15,
+        cabinet: {
+          id: 'cab-1',
+          name: null,
+          headTenure: {
+            ordinal: 2,
+            person: {
+              name: '이슈트반',
+              surname: '티서',
+              nameDisplayOrder: 'SURNAME_FIRST',
+              country: null,
+            },
+          },
+        },
+        cabinetMemberships: [
+          {
+            cabinet: {
+              id: 'cab-1',
+              name: null,
+              headTenure: {
+                ordinal: 2,
+                person: {
+                  name: '이슈트반',
+                  surname: '티서',
+                  nameDisplayOrder: 'SURNAME_FIRST',
+                  country: null,
+                },
+              },
+            },
+          },
+          {
+            cabinet: {
+              id: 'cab-2',
+              name: '전시 비상 연립내각',
+              headTenure: null,
+            },
+          },
+        ],
+      },
+    ])
+
+    const service = new AdministrationDepartmentService(
+      prisma as never,
+      createMockNotification() as never,
+    )
+
+    const result = await service.listTenures('dept-hu-honved')
+
+    expect(prisma.governmentPositionTenure.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          OR: [
+            { administrationDepartmentId: 'dept-hu-honved' },
+            {
+              administrationDepartmentId: null,
+              positionDefinition: {
+                is: { administrationDepartmentId: 'dept-hu-honved' },
+              },
+            },
+            {
+              cabinetMemberships: {
+                some: { administrationDepartmentId: 'dept-hu-honved' },
+              },
+            },
+          ],
+        },
+      }),
+    )
+    expect(result[0].cabinets).toEqual([
+      { id: 'cab-1', name: '제2대 티서 이슈트반 내각' },
+      { id: 'cab-2', name: '전시 비상 연립내각' },
+    ])
   })
 })

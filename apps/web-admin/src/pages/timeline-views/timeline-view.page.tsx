@@ -59,12 +59,22 @@ export default function TimelineViewPage({ view }: Props) {
         <DashboardMenuContentTitle>{ph.title}</DashboardMenuContentTitle>
         <DashboardMenuContentDesc>{ph.desc}</DashboardMenuContentDesc>
         {ph.fullPath && ph.fullLabel && (
-          <DashboardMenuContentButton
-            type="button"
-            onClick={() => navigate(ph.fullPath!)}
-          >
-            {ph.fullLabel}
-          </DashboardMenuContentButton>
+          <ButtonGroup>
+            <DashboardMenuContentButton
+              type="button"
+              onClick={() => navigate(ph.fullPath!)}
+            >
+              {ph.fullLabel}
+            </DashboardMenuContentButton>
+            {view === 'legislature' && (
+              <DashboardMenuContentButton
+                type="button"
+                onClick={() => navigate('/government')}
+              >
+                전 국가 정부·내각 허브 보기
+              </DashboardMenuContentButton>
+            )}
+          </ButtonGroup>
         )}
       </DashboardMenuContentPanel>
     )
@@ -109,6 +119,14 @@ const DashboardMenuContentDesc = styled.p`
   color: ${({ theme }) => theme.colors.text.secondary};
   line-height: 1.5;
   max-width: 360px;
+`
+
+const ButtonGroup = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
 `
 
 const DashboardMenuContentButton = styled.button`
