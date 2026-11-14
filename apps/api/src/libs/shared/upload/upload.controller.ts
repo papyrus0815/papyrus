@@ -29,6 +29,7 @@ export const UPLOAD_IMAGE_CATEGORIES = [
   'persons',
   'events',
   'ministries',
+  'military-units',
   'political-parties',
   'dynasties',
   'attachments',
@@ -37,8 +38,11 @@ export const UPLOAD_IMAGE_CATEGORIES = [
 ] as const
 export type UploadImageCategory = (typeof UPLOAD_IMAGE_CATEGORIES)[number]
 
-function isUploadImageCategory(s: unknown): s is UploadImageCategory {
-  return typeof s === 'string' && UPLOAD_IMAGE_CATEGORIES.includes(s as UploadImageCategory)
+function isUploadImageCategory(value: unknown): value is UploadImageCategory {
+  return (
+    typeof value === 'string' &&
+    UPLOAD_IMAGE_CATEGORIES.includes(value as UploadImageCategory)
+  )
 }
 
 /** 현재 시각 기준 연/월 (저장 경로용, 서버 로컬) */

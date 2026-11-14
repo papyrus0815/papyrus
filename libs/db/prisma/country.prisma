@@ -493,10 +493,10 @@ model AdministrationDepartment {
   /// 현대 국가 ID (표시/그룹핑용. 역사적 국가 기관도 연결된 현대 국가를 넣는다)
   countryId String? @map("country_id") @db.Char(36)
 
-  /// 역사적 국가 ID (조선의 6조, 나치 독일의 OKW 등). null이면 현대 국가 기관만 해당
+  /// 역사적 국가 ID (조선의 6조, 나치 독일의 제국전쟁부 등). null이면 현대 국가 기관만 해당
   historicalCountryId String? @map("historical_country_id") @db.Char(36)
 
-  /// 상위 기관 ID (OKW → 국방군 지휘참모부). 순환 금지(서버 검증)
+  /// 상위 기관 ID (재무성 → 주세국, 내무성 → 치안총본부 등). 순환 금지(서버 검증)
   parentId String? @map("parent_id") @db.Char(36)
 
   /// 전세계 공통 카테고리 (국방·외교·재정·경제 등)
@@ -508,13 +508,13 @@ model AdministrationDepartment {
   /// 기관명 (한국어, 나라 이름 없이)
   name String @db.VarChar(100)
 
-  /// 원어명 (Oberkommando der Wehrmacht, 外務省)
+  /// 원어명 (Reichskriegsministerium, 外務省)
   nameLocal String? @map("name_local") @db.VarChar(200)
 
-  /// 영문명 (High Command of the Armed Forces)
+  /// 영문명 (Ministry of Foreign Affairs, Ministry of the War)
   nameEn String? @map("name_en") @db.VarChar(200)
 
-  /// 약칭 (OKW, OHL, NKVD, CIA) — 검색 대상
+  /// 약칭 (RKM, NKVD, CIA) — 검색 대상
   abbreviation String? @db.VarChar(40)
 
   /// 썸네일 이미지 URL
@@ -522,6 +522,18 @@ model AdministrationDepartment {
 
   /// 일반 설명 (소개, 연혁 등 — 리치 텍스트·긴 소개 허용)
   description String? @db.Text
+
+  /// 주요 임무 · 관할권 (외교·조약 교섭, 국가 재정·조세 총괄, 국방 군정·예산 등)
+  primaryMission String? @map("primary_mission") @db.Text
+
+  /// 본부 · 청사 소재지 (서울 정부청사, 베를린 빌헬름가 74번지 등)
+  headquarters String? @map("headquarters") @db.VarChar(500)
+
+  /// 산하 편제 · 내부 조직 구조 (국·실·외청 구성 요약)
+  orgStructure String? @map("org_structure") @db.Text
+
+  /// 예산 · 정원 · 규모 참고
+  budgetNote String? @map("budget_note") @db.Text
 
   /// 설립일 — 구조화(진실). 기원전·고대·연 단위 지원
   establishedEra       Era?    @map("established_era")

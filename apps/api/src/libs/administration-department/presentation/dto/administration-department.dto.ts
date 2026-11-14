@@ -112,6 +112,14 @@ export type AdministrationDepartmentResponseDto = {
   categoryId: string | null
   category: AdministrationDepartmentCategoryDto | null
   description: string | null
+  /** 주요 임무 · 관할권 */
+  primaryMission: string | null
+  /** 본부 · 청사 소재지 */
+  headquarters: string | null
+  /** 산하 편제 · 내부 조직 구조 */
+  orgStructure: string | null
+  /** 예산 · 정원 · 규모 참고 */
+  budgetNote: string | null
   /** 구조화 설립일(정본) */
   established: DepartmentDatePartsDto | null
   /** 구조화 폐지일(정본). null이면 현존 */
@@ -200,6 +208,23 @@ export class CreateAdministrationDepartmentDto {
   @IsString()
   description?: string | null
 
+  @IsOptional()
+  @IsString()
+  primaryMission?: string | null
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  headquarters?: string | null
+
+  @IsOptional()
+  @IsString()
+  orgStructure?: string | null
+
+  @IsOptional()
+  @IsString()
+  budgetNote?: string | null
+
   /** 구조화 설립일 — BC·고대·연 단위 */
   @IsOptional()
   @ValidateNested()
@@ -274,6 +299,23 @@ export class UpdateAdministrationDepartmentDto {
   @IsOptional()
   @IsString()
   description?: string | null
+
+  @IsOptional()
+  @IsString()
+  primaryMission?: string | null
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  headquarters?: string | null
+
+  @IsOptional()
+  @IsString()
+  orgStructure?: string | null
+
+  @IsOptional()
+  @IsString()
+  budgetNote?: string | null
 
   @IsOptional()
   @ValidateNested()

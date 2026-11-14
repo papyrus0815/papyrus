@@ -717,4 +717,81 @@ describe('AdministrationDepartmentService', () => {
       }),
     ).rejects.toThrow(BadRequestException)
   })
+
+  it('create & update persist structured institutional metadata columns (primaryMission, headquarters, orgStructure, budgetNote)', async () => {
+    const prisma = createMockPrisma()
+    const now = new Date('2026-11-11T00:00:00.000Z')
+    prisma.administrationDepartment.create.mockResolvedValue({
+      id: 'dept-meta-1',
+      name: '외무성',
+      nameLocal: 'Auswärtiges Amt',
+      nameEn: 'Foreign Office',
+      abbreviation: 'AA',
+      kind: 'MINISTRY',
+      countryId: 'mock-country',
+      historicalCountryId: null,
+      parentId: null,
+      categoryId: 'mock-cat',
+      thumbnailUrl: null,
+      description: '외교 총괄 부처',
+      primaryMission: '대외 외교 교섭 및 재외공관 지휘',
+      headquarters: '베를린 빌헬름가 74-76번지',
+      orgStructure: '정무국·통상국·법무국',
+      budgetNote: '정원 약 2,500명',
+      establishedEra: 'AD',
+      establishedYear: 1870,
+      establishedMonth: 1,
+      establishedDay: 4,
+      establishedPrecision: 'day',
+      establishedDate: new Date('1870-01-04T00:00:00.000Z'),
+      abolishedEra: null,
+      abolishedYear: null,
+      abolishedMonth: null,
+      abolishedDay: null,
+      abolishedPrecision: null,
+      abolishedDate: null,
+      country: { id: 'mock-country', name: '독일' },
+      historicalCountry: null,
+      category: { id: 'mock-cat', name: '외교', nameEn: 'Foreign Affairs' },
+      parent: null,
+      children: [],
+      predecessorTransitions: [],
+      successorTransitions: [],
+      militaryUnitSuccessors: [],
+      militaryUnits: [],
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    const service = new AdministrationDepartmentService(
+      prisma as never,
+      createMockNotification() as never,
+    )
+
+    const created = await service.create({
+      name: '외무성',
+      countryId: 'mock-country',
+      categoryId: 'mock-cat',
+      description: '외교 총괄 부처',
+      primaryMission: '  대외 외교 교섭 및 재외공관 지휘  ',
+      headquarters: '  베를린 빌헬름가 74-76번지  ',
+      orgStructure: '  정무국·통상국·법무국  ',
+      budgetNote: '  정원 약 2,500명  ',
+    })
+
+    expect(prisma.administrationDepartment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          primaryMission: '대외 외교 교섭 및 재외공관 지휘',
+          headquarters: '베를린 빌헬름가 74-76번지',
+          orgStructure: '정무국·통상국·법무국',
+          budgetNote: '정원 약 2,500명',
+        }),
+      }),
+    )
+    expect(created.primaryMission).toBe('대외 외교 교섭 및 재외공관 지휘')
+    expect(created.headquarters).toBe('베를린 빌헬름가 74-76번지')
+    expect(created.orgStructure).toBe('정무국·통상국·법무국')
+    expect(created.budgetNote).toBe('정원 약 2,500명')
+  })
 })

@@ -38,7 +38,7 @@ export type {
 } from './dto/administration-department.dto'
 
 /**
- * 국가 기관(부처·외청·군 최고사령부·총독부·궁내) API.
+ * 국가 기관(부처·외청·총독부·궁내) API.
  * 로직은 AdministrationDepartmentService — 2026-11-08 재설계 때 컨트롤러가 DB를 직접 다루던 것을 분리했다.
  */
 @ApiTags('administration-departments')
