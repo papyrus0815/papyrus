@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiExternalLink, FiPlus, FiX } from 'react-icons/fi'
+import { FiExternalLink, FiPlus, FiRepeat, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -11,6 +11,7 @@ import { getApiConnection } from '@/shared/api/client'
 import {
   type EventSide,
   listEventSideUnits,
+  listEventSideWeapons,
   type SideOutcome,
   type SideUnitView,
   syncEventSides,
@@ -33,6 +34,7 @@ import { PersonGroupCreateModal } from '@/widgets/person/person-group-create-mod
 import * as S from '../styles'
 import { type EventDetail, eventKeys } from '../use-event-detail'
 import { InlineSelect, InlineText } from './inline'
+import { LoadError } from './load-error'
 import { MODULE_COLOR } from './module-colors'
 import { SIDE_PALETTE, withSideColors } from './side-colors'
 import {
@@ -48,6 +50,22 @@ interface ModuleSidesProps {
   event: EventDetail
   onPatch: (patch: UpdateEventDto) => void
 }
+
+/**
+ * 진영 카드에 덧붙는 칸 — **기록이 있거나 이 방문에서 펼친 것만** 세운다.
+ * 예전엔 진영마다 계파 연결·전투서열·투입 병기·설명 네 칸이 빈 채로 늘 서 있어(실DB: 진영 132행 중 계파 0·병기 0·
+ * 부대 2·설명 12), 카드 하나가 빈 틀 4개를 달고 다녔다. 빈 칸은 카드 끝 '더 적기' 한 줄에 모은다.
+ */
+type SideExtra = 'faction' | 'orbat' | 'weapons' | 'description'
+
+const SIDE_EXTRA_LABEL: Record<SideExtra, string> = {
+  faction: '계파 연결',
+  orbat: '투입 부대',
+  weapons: '병기·장비',
+  description: '설명',
+}
+
+const SIDE_EXTRA_ORDER: readonly SideExtra[] = ['orbat', 'weapons', 'faction', 'description']
 
 const PARTICIPATION_LABEL: Record<string, string> = {
   FULL: '전면',
@@ -113,6 +131,10 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
   /* 표시용 색 — 저장된 색이 없으면 순서대로 팔레트(저장값 불변) */
   const coloredSides = useMemo(() => withSideColors(sides), [sides])
   const [busy, setBusy] = useState(false)
+  /** 이 방문에서 펼친 덧칸 — 'sideId:extra' */
+  const [openedExtras, setOpenedExtras] = useState<ReadonlySet<string>>(() => new Set())
+  const openExtra = (sideId: string, extra: SideExtra) =>
+    setOpenedExtras((prev) => new Set(prev).add(`${sideId}:${extra}`))
 
   const participants = useMemo(
     () => toParticipants(event.relatedCountries, event.relatedHistoricalCountries),
@@ -144,24 +166,47 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
   const [personPickerSide, setPersonPickerSide] = useState<EventSide | null>(null)
   const [creatingGroupSide, setCreatingGroupSide] = useState<EventSide | null>(null)
 
+  /* 계파 목록은 고르기 보조라 실패해도 '연결' 고르기만 빠진다 — 삼켜 둔다(등록 버튼은 남는다) */
   const groupsQuery = useQuery({
     queryKey: ['person-groups-all', 'module-sides'],
     queryFn: () => listPersonGroups().catch(() => [] as PersonGroup[]),
     staleTime: 30_000,
   })
 
-  const sideUnitsQuery = useQuery({
+  /*
+   * 아래 셋은 실패를 빈 배열로 삼키지 않는다. 삼키면 '못 불러옴'이 '없음'으로 보인다 —
+   * 2026-11-14 실측: 서버 500인데 부대 2개가 있는 독소전쟁이 '투입된 군사 부대가 없습니다'였다.
+   */
+  const sideUnitsQuery = useQuery<SideUnitView[]>({
     queryKey: eventKeys.sideUnits(event.id),
-    queryFn: () => listEventSideUnits(event.id).catch(() => [] as SideUnitView[]),
+    queryFn: () => listEventSideUnits(event.id),
     staleTime: 30_000,
   })
 
-  const allMilitaryUnitsQuery = useQuery({
+  const sideWeaponsQuery = useQuery({
+    queryKey: eventKeys.sideWeapons(event.id),
+    queryFn: () => listEventSideWeapons(event.id),
+    staleTime: 30_000,
+  })
+
+  /* 부대 고르기 목록(전체 군사 부대, 250KB) — 전투서열 칸이 하나라도 서 있을 때만 받는다 */
+  const anyOrbatShown =
+    (sideUnitsQuery.data?.length ?? 0) > 0 ||
+    [...openedExtras].some((key) => key.endsWith(':orbat'))
+  const allMilitaryUnitsQuery = useQuery<AvailableMilitaryUnitItem[]>({
     queryKey: ['military-units', 'all-for-event-sides'],
-    queryFn: () =>
-      militaryUnitApi.getAll().catch(() => [] as AvailableMilitaryUnitItem[]),
+    queryFn: () => militaryUnitApi.getAll() as Promise<AvailableMilitaryUnitItem[]>,
+    enabled: anyOrbatShown,
     staleTime: 60_000,
   })
+
+  const weaponCountBySideId = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const weapon of sideWeaponsQuery.data ?? []) {
+      counts.set(weapon.sideId, (counts.get(weapon.sideId) ?? 0) + 1)
+    }
+    return counts
+  }, [sideWeaponsQuery.data])
 
   const sideUnitsBySideId = useMemo(() => {
     const map = new Map<string, SideUnitView[]>()
@@ -286,6 +331,7 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
           nextPersons.push({
             personId: pid,
             role: member.roleLabel ?? undefined,
+            note: undefined,
             sideId,
           })
           addedCount += 1
@@ -378,6 +424,7 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
           nextPersons.push({
             personId: pid,
             role: member.roleTitle ?? organizationName,
+            note: undefined,
             sideId,
           })
           addedCount += 1
@@ -529,7 +576,8 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
         {sides.length > 0 && <S.SectionSubtitle>{sides.length}</S.SectionSubtitle>}
       </S.SectionHeader>
 
-      {sides.length >= 2 && (
+      {/* 소속이 하나도 없으면 맞세울 것이 없다 — 예전엔 '진영 1 VS 진영 2 VS 진영 3 VS 진영 4 (소속 0)'이 그림으로 섰다 */}
+      {sides.length >= 2 && totalAssignedAcrossSides > 0 && (
         <VsBanner role="region" aria-label="진영 대결 구도 요약">
           <VsTopRow>
             <VsTeamsWrap>
@@ -559,14 +607,14 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
               })}
             </VsTeamsWrap>
             <VsActionsWrap>
-              <VsDragHint>⠿ 항목을 끌어 진영 이동</VsDragHint>
+              <VsDragHint>항목을 끌어 진영 이동</VsDragHint>
               <VsSwapButton
                 type="button"
                 disabled={busy}
                 aria-label="1번·2번 진영 순서 맞바꾸기"
                 onClick={swapFirstTwoSides}
               >
-                ⇄ 순서 바꾸기
+                <FiRepeat size={11} aria-hidden /> 순서 바꾸기
               </VsSwapButton>
             </VsActionsWrap>
           </VsTopRow>
@@ -633,6 +681,23 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
                   : org.name,
               }
             })
+          const sideUnitRows = sideUnitsBySideId.get(side.id) ?? []
+          const isOpened = (extra: SideExtra) => openedExtras.has(`${side.id}:${extra}`)
+          const shownExtra: Record<SideExtra, boolean> = {
+            faction: Boolean(side.personGroupId) || isOpened('faction'),
+            /* 조회 실패는 접지 않는다 — 접으면 실패가 또 '없음'으로 보인다 */
+            orbat: sideUnitRows.length > 0 || isOpened('orbat') || sideUnitsQuery.isError,
+            weapons:
+              (weaponCountBySideId.get(side.id) ?? 0) > 0 || isOpened('weapons') || sideWeaponsQuery.isError,
+            description: Boolean(side.description?.trim()) || isOpened('description'),
+          }
+          /* 아직 받는 중인 칸은 '더 적기'에도 올리지 않는다 — 있는 부대가 뜨기 직전에 '+ 투입 부대'가 번쩍였다 */
+          const hiddenExtras = SIDE_EXTRA_ORDER.filter(
+            (extra) =>
+              !shownExtra[extra] &&
+              !(extra === 'orbat' && sideUnitsQuery.isLoading) &&
+              !(extra === 'weapons' && sideWeaponsQuery.isLoading),
+          )
           const groupOptions = sortedGroups.map((group) => ({
             value: group.id,
             label: `${group.name}${
@@ -675,6 +740,7 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
                 </RemoveButton>
               </SideHead>
 
+              {shownExtra.faction && (
               <FactionLinkRow aria-label={`${side.name} 영구 계파 연결`}>
                 {side.personGroupId ? (
                   <>
@@ -725,6 +791,7 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
                   </>
                 )}
               </FactionLinkRow>
+              )}
 
               <OutcomeRow aria-label={`${side.name}의 결과`}>
                 <OutcomeLabel>결과</OutcomeLabel>
@@ -902,7 +969,7 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
                           title="기관·조직 상세 및 소속 인물 관리"
                           style={{ color: 'inherit', textDecoration: 'none' }}
                         >
-                          🏢 {org.name}
+                          {org.name}
                         </Link>
                       </MemberName>
                       <FactionTinyBtn
@@ -967,12 +1034,18 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
                 )}
               </Pickers>
 
+              {shownExtra.orbat && (
               <SideOrbatSection
                 eventId={event.id}
                 sideId={side.id}
                 sideName={side.name}
                 sideColor={sideColor}
-                sideUnits={sideUnitsBySideId.get(side.id) ?? []}
+                sideUnits={sideUnitRows}
+                unitsError={sideUnitsQuery.isError}
+                onRetryUnits={() => void sideUnitsQuery.refetch()}
+                pickerError={allMilitaryUnitsQuery.isError}
+                onRetryPicker={() => void allMilitaryUnitsQuery.refetch()}
+                pickerLoading={allMilitaryUnitsQuery.isLoading}
                 allSideUnits={sideUnitsQuery.data ?? []}
                 availableUnits={(allMilitaryUnitsQuery.data ?? []) as AvailableMilitaryUnitItem[]}
                 sideCountryIds={
@@ -992,24 +1065,42 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
                 candidatePersonIds={persons.map((person) => person.personId)}
                 onRefresh={refresh}
               />
+              )}
 
+              {shownExtra.weapons && (
               <SideWeaponsSection
                 eventId={event.id}
                 sideId={side.id}
                 sideName={side.name}
                 sideColor={sideColor}
-                sideUnits={sideUnitsBySideId.get(side.id) ?? []}
+                sideUnits={sideUnitRows}
+                initialAdding={(weaponCountBySideId.get(side.id) ?? 0) === 0 && !sideWeaponsQuery.isError}
               />
+              )}
 
+              {shownExtra.description && (
               <SideDescription>
                 <InlineText
                   value={side.description ?? ''}
                   onSave={(next) => describeSide(side, next)}
                   placeholder="진영 설명"
+                  label={`${side.name} 설명`}
                   multiline
                   multilineEnter
                 />
               </SideDescription>
+              )}
+
+              {hiddenExtras.length > 0 && (
+                <ExtraAddRow aria-label={`${side.name}에 더 적기`}>
+                  {hiddenExtras.map((extra) => (
+                    <ExtraAddButton key={extra} type="button" onClick={() => openExtra(side.id, extra)}>
+                      <FiPlus size={11} aria-hidden />
+                      {SIDE_EXTRA_LABEL[extra]}
+                    </ExtraAddButton>
+                  ))}
+                </ExtraAddRow>
+              )}
             </SideCard>
           )
         })}
@@ -1079,7 +1170,7 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
             )
           })}
           {unassignedPersons.map((person) => {
-            const personName = [person.person.name, person.person.surname].filter(Boolean).join(' ')
+            const personName = [person.person?.name, person.person?.surname].filter(Boolean).join(' ')
             const dragPayload: DraggedDetailMember = {
               kind: 'person',
               key: person.personId,
@@ -1106,7 +1197,7 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
                   value=""
                   options={sides.map((side) => ({ value: side.id, label: `${side.name}에 넣기` }))}
                   onSave={(sideId) => assignPerson(person.personId, sideId)}
-                  placeholder={`👤 ${personName}`}
+                  placeholder={personName}
                   label={`${personName}의 진영`}
                   clearable={false}
                 />
@@ -1140,7 +1231,7 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
                   value=""
                   options={sides.map((side) => ({ value: side.id, label: `${side.name}에 넣기` }))}
                   onSave={(sideId) => void assignOrganization(org.relationId, sideId)}
-                  placeholder={`🏢 ${org.name}`}
+                  placeholder={org.name}
                   label={`${org.name}의 진영`}
                   clearable={false}
                 />
@@ -1176,9 +1267,10 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
             id: member.personId,
             name: [member.name, member.surname].filter(Boolean).join(' '),
           }))}
-          candidatePersons={(event.persons ?? []).map((person) => ({
-            id: person.id,
-            name: [person.name, person.surname].filter(Boolean).join(' '),
+          /* 사건의 참여 인물(relatedPersons) — 예전엔 없는 필드(event.persons)를 읽어 추천이 늘 비었다 */
+          candidatePersons={persons.map((related) => ({
+            id: related.personId,
+            name: [related.person?.name, related.person?.surname].filter(Boolean).join(' '),
           }))}
           onClose={() => setCreatingGroupSide(null)}
           onCreated={(createdGroup) => {
@@ -1611,6 +1703,38 @@ const Pickers = styled.div`
   flex-wrap: wrap;
   gap: 12px;
   font-size: 12.5px;
+`
+
+/** 진영 카드 끝 '더 적기' — 아직 비어 접어 둔 칸들 */
+const ExtraAddRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+`
+
+const ExtraAddButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px dashed
+    ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.22)' : 'rgba(15,23,42,0.24)')};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-style: solid;
+  }
+  &:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 2px;
+  }
 `
 
 const SideDescription = styled.div`

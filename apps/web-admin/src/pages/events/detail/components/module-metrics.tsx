@@ -130,9 +130,10 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
   /* 지표 추천·첫 대상·빈 안내는 형식이, 형식이 정하지 않으면 분야가 정한다(경제 사건에 '병력·사상자'를 권하지 않게) */
   const features = eventTypeFeatures(event.type, event.domain)
 
-  const { data: sideUnits = [] } = useQuery({
+  /* 진영 모듈과 같은 캐시 — 실패는 진영 카드의 전투서열 칸이 말한다(여기선 부대 줄 대상만 빠진다) */
+  const { data: sideUnits = [] } = useQuery<SideUnitView[]>({
     queryKey: eventKeys.sideUnits(event.id),
-    queryFn: () => listEventSideUnits(event.id).catch(() => [] as SideUnitView[]),
+    queryFn: () => listEventSideUnits(event.id),
     staleTime: 30_000,
     enabled: sides.length > 0,
   })
@@ -166,7 +167,7 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
       options.push({
         subjectType: 'EVENT_SIDE_UNIT',
         subjectId: sideUnit.id,
-        label: parentSide ? `⚔️ ${parentSide.name} · ${sideUnit.unit.name}` : `⚔️ ${sideUnit.unit.name}`,
+        label: parentSide ? `${parentSide.name} · ${sideUnit.unit.name}` : `부대 · ${sideUnit.unit.name}`,
         color: parentSide?.color ?? null,
       })
     }
@@ -502,7 +503,7 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
                           <MemberFigures>
                             {units.map((unitEntry) => (
                               <li key={unitEntry.observation.id}>
-                                <span>⚔️ {unitEntry.name}</span>
+                                <span>{unitEntry.name}</span>
                                 <span className="value" title={formatObservationExact(unitEntry.observation)}>
                                   {formatObservationValue(unitEntry.observation)}
                                 </span>
@@ -730,7 +731,7 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
         if (entries.length === 0) return null
         return (
           <SubjectBlock>
-            <SubjectName $color={NEUTRAL}>📊 하위 사건 수치 합산 (하위 전투 {descendants.length}건 기준)</SubjectName>
+            <SubjectName $color={NEUTRAL}>하위 사건 수치 합산 (하위 {descendants.length}건 기준)</SubjectName>
             <Rows>
               {entries.map((entry) => (
                 <Row key={`${entry.metricName}-${entry.scopeLabel}`}>
@@ -1121,6 +1122,20 @@ const SideTable = styled.table`
 
   td {
     min-width: 150px;
+  }
+
+  /* 휴대폰 폭 — 진영 둘이 한 화면에 들어오게(110+150×2는 둘째 진영이 화면 밖으로 잘렸다). 셋부터는 표가 가로로 민다 */
+  @media (max-width: 640px) {
+    thead th {
+      white-space: normal;
+      word-break: keep-all;
+    }
+    tbody th {
+      min-width: 84px;
+    }
+    td {
+      min-width: 112px;
+    }
   }
 `
 

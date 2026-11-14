@@ -5,7 +5,8 @@ import { FiChevronDown, FiChevronRight, FiPlus, FiShield, FiUser, FiX } from 're
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
-import { RADIUS } from '@/entities/event/ui/ledger-tokens'
+import { RADIUS, ledgerAccent } from '@/entities/event/ui/ledger-tokens'
+import { metaText } from '@/pages/events/styles/theme'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import {
   addEventSideUnit,
@@ -23,6 +24,7 @@ import { PersonPickerModal } from '@/shared/ui/person-picker'
 import { notify } from '@/shared/ui/toast'
 
 import { InlineSelect, InlineText } from './inline'
+import { LoadError } from './load-error'
 import {
   buildSideOrbatTree,
   formatSideUnitMetric,
@@ -59,6 +61,14 @@ interface SideOrbatSectionProps {
   sideHistoricalCountryIds: ReadonlySet<string>
   candidatePersonIds: string[]
   onRefresh: () => Promise<void>
+  /** 투입 부대 조회 실패 — '부대 없음'이 아니라 '못 불러옴'으로 말한다 */
+  unitsError?: boolean
+  onRetryUnits?: () => void
+  /** 고를 부대 목록(전체 군사 부대) 조회 실패 */
+  pickerError?: boolean
+  onRetryPicker?: () => void
+  /** 고를 부대 목록을 받는 중 — 받기 전엔 '새 부대 등록' 링크(목록이 빈 경우의 안내)를 세우지 않는다 */
+  pickerLoading?: boolean
 }
 
 export function SideOrbatSection({
@@ -73,6 +83,11 @@ export function SideOrbatSection({
   sideHistoricalCountryIds,
   candidatePersonIds,
   onRefresh,
+  unitsError = false,
+  onRetryUnits,
+  pickerError = false,
+  onRetryPicker,
+  pickerLoading = false,
 }: SideOrbatSectionProps) {
   const queryClient = useQueryClient()
   const [busy, setBusy] = useState(false)
@@ -84,7 +99,8 @@ export function SideOrbatSection({
 
   const sideWeaponsQuery = useQuery({
     queryKey: eventKeys.sideWeapons(eventId),
-    queryFn: () => listEventSideWeapons(eventId).catch(() => [] as SideWeaponView[]),
+    /* 실패는 '투입 병기·장비' 칸이 말한다(같은 캐시) — 여기선 부대 줄의 병기 알약만 빠진다 */
+    queryFn: () => listEventSideWeapons(eventId),
     staleTime: 30_000,
   })
 
@@ -151,7 +167,7 @@ export function SideOrbatSection({
       const typeLabel = unitItem.unitType ? militaryUnitTypeLabelKo(unitItem.unitType) : null
       const leadCommander = unitItem.commanders?.[0]
       const commanderHint = leadCommander?.person
-        ? `🎖️ ${[leadCommander.person.name, leadCommander.person.surname].filter(Boolean).join(' ')}`
+        ? `지휘 ${[leadCommander.person.name, leadCommander.person.surname].filter(Boolean).join(' ')}`
         : null
       const meta = [typeLabel, countryName, commanderHint].filter(Boolean).join(' · ')
       return {
@@ -362,7 +378,7 @@ export function SideOrbatSection({
                         : '부대 지휘관 임기 정본에서 자동 추론됨 — 인물 상세 보기'
                     }
                   >
-                    🎖️ {deployed.commander.name}
+                    <FiUser size={10} aria-hidden /> {deployed.commander.name}
                     {deployed.commander.rank ? ` (${deployed.commander.rank})` : ''}
                   </CommanderLink>
                   {deployed.commander.isOverride && !deployed.commander.tenureId && (
@@ -429,7 +445,7 @@ export function SideOrbatSection({
 
               {(weaponsBySideUnitId.get(deployed.id) ?? []).map((weaponItem) => (
                 <UnitMetricPill key={`weapon-${weaponItem.id}`} title={weaponItem.note ?? undefined}>
-                  🛡️ {weaponItem.name}
+                  {weaponItem.name}
                   {weaponItem.quantity != null ? ` ${weaponItem.quantity.toLocaleString()}` : ''}
                 </UnitMetricPill>
               ))}
@@ -477,13 +493,15 @@ export function SideOrbatSection({
         )}
       </OrbatHeader>
 
-      {tree.length > 0 ? (
+      {unitsError ? (
+        <LoadError message="투입 부대를 불러오지 못했습니다." onRetry={onRetryUnits} />
+      ) : tree.length > 0 ? (
         <DepartmentList>
           {departmentGroups.map((group) => (
             <DepartmentBlock key={group.key}>
               {group.label && (
                 <DepartmentBanner $color={sideColor}>
-                  🏛️ 최고사령부·지도부: <strong>{group.label}</strong>
+                  최고사령부·지도부 <strong>{group.label}</strong>
                 </DepartmentBanner>
               )}
               <RootTreeList>{group.nodes.map((node) => renderNode(node, 0))}</RootTreeList>
@@ -491,13 +509,17 @@ export function SideOrbatSection({
           ))}
         </DepartmentList>
       ) : (
-        <EmptyOrbat>
-          투입된 군사 부대가 없습니다 — 집단군·전선군·야전군·사단 등 참전 부대를 추가하면 지휘 계통(ORBAT) 도표가 자동으로 조립됩니다.
-        </EmptyOrbat>
+        <EmptyOrbat>참전 부대를 넣으면 지휘 계통이 도표로 짜입니다.</EmptyOrbat>
       )}
 
+      {/* 투입 부대를 못 읽었으면 넣기도 막는다 — 이미 있는 부대를 모르고 또 넣게 된다 */}
+      {!unitsError && (
       <OrbatFooter>
-        {unitPickerOptions.length > 0 ? (
+        {pickerError ? (
+          <LoadError message="고를 부대 목록을 불러오지 못했습니다." onRetry={onRetryPicker} />
+        ) : pickerLoading ? (
+          <EmptyOrbat>부대 목록을 불러오는 중…</EmptyOrbat>
+        ) : unitPickerOptions.length > 0 ? (
           <AddUnitSelectWrap>
             <FiPlus size={11} />
             <InlineSelect
@@ -511,10 +533,11 @@ export function SideOrbatSection({
           </AddUnitSelectWrap>
         ) : (
           <ManageUnitsLink to={pathKeys.militaryTimeline()}>
-            + 군사 부대 도메인에서 새 부대 등록하기
+            <FiPlus size={11} aria-hidden /> 군사 부대에서 새 부대 등록
           </ManageUnitsLink>
         )}
       </OrbatFooter>
+      )}
 
       {commanderPickerRow && (
         <PersonPickerModal
@@ -935,9 +958,10 @@ const UnitNoteWrap = styled.span`
 
 const EmptyOrbat = styled.p`
   margin: 0;
-  font-size: 11.5px;
+  font-size: 12px;
   line-height: 1.5;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  /* tertiary는 이 면 위에서 4.3:1 — AA 미달이라 metaText */
+  color: ${metaText};
 `
 
 const OrbatFooter = styled.div`
@@ -958,9 +982,13 @@ const AddUnitSelectWrap = styled.div`
 `
 
 const ManageUnitsLink = styled(Link)`
-  font-size: 11.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
   font-weight: 600;
-  color: ${({ theme }) => theme.colors.primary};
+  /* 강조색은 ledgerAccent만(theme.colors.primary는 모드 불변이라 라이트에서 4.0:1) */
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
   text-decoration: none;
 
   &:hover {

@@ -23,54 +23,38 @@ import {
 import { pathKeys } from '@/shared/router'
 import { notify } from '@/shared/ui/toast'
 
-import { InlineText } from './inline'
+import { InlineSelect, InlineText } from './inline'
+import { LoadError } from './load-error'
 
 export type DoctrineFieldKey = 'objective' | 'strategy' | 'tactics' | 'intelligence' | 'logistics'
 
+/**
+ * 자리표시는 **어느 사건에나 맞는 말**로 — 예전엔 바르바로사 작전의 예시('A-A선 진출', '케셀슐라흐트')가
+ * 박혀 있어 1792년 발미 전투의 빈 칸에도 2차대전 문구가 떴다. 글리프(🎯·🧭…)도 쓰지 않는다(장부 언어).
+ */
 const DOCTRINE_FIELDS: ReadonlyArray<{
   key: DoctrineFieldKey
-  icon: string
   label: string
   placeholder: string
 }> = [
-  {
-    key: 'objective',
-    icon: '🎯',
-    label: '작전 목표',
-    placeholder: '예: 아스트라한-아르한겔스크(A-A)선 진출 및 볼가강 서쪽 적 주력 섬멸',
-  },
-  {
-    key: 'strategy',
-    icon: '🧭',
-    label: '전략 기조',
-    placeholder: '예: 3개 집단군 분진합격·단기결전 vs 종심방어·총동원령 발령',
-  },
-  {
-    key: 'tactics',
-    icon: '⚔️',
-    label: '주요 전술',
-    placeholder: '예: 케셀슐라흐트(Kesselschlacht) 이중포위섬멸전 vs 기계화군단 역습',
-  },
-  {
-    key: 'intelligence',
-    icon: '🕵️',
-    label: '첩보·방첩',
-    placeholder: '예: 동방외국군처 예비전력 오판 vs 리하르트 조르게·루시 첩보망 경고',
-  },
-  {
-    key: 'logistics',
-    icon: '🚂',
-    label: '보급·병참',
-    placeholder: '예: 광궤/표준궤 철도 전환 지연·동계 장비 부족 vs 우랄 산맥 군수공장 이전',
-  },
+  { key: 'objective', label: '목표', placeholder: '이루려 한 것 — 차지할 곳, 꺾을 상대, 지킬 선' },
+  { key: 'strategy', label: '전략', placeholder: '큰 방침 — 단기 결전, 지구전, 버틴 뒤 반격' },
+  { key: 'tactics', label: '전술', placeholder: '싸운 방식 — 포위, 기동, 매복, 공성' },
+  { key: 'intelligence', label: '첩보', placeholder: '상대를 얼마나 알았나 — 정찰, 첩보, 오판' },
+  { key: 'logistics', label: '보급', placeholder: '보급 사정 — 식량, 탄약, 수송' },
 ]
 
-const ASSET_KIND_LABELS: Record<SideWeaponKind, { icon: string; label: string }> = {
-  GROUND_VEHICLE: { icon: '🛡️', label: '기갑·차량' },
-  AIRCRAFT: { icon: '✈️', label: '항공기' },
-  WEAPON: { icon: '🔫', label: '화포·보병화기' },
-  NAVAL_VESSEL: { icon: '🚢', label: '함선' },
+const ASSET_KIND_LABEL: Record<SideWeaponKind, string> = {
+  GROUND_VEHICLE: '기갑·차량',
+  AIRCRAFT: '항공기',
+  WEAPON: '화포·보병화기',
+  NAVAL_VESSEL: '함선',
 }
+
+const ASSET_KIND_OPTIONS = (Object.keys(ASSET_KIND_LABEL) as SideWeaponKind[]).map((kind) => ({
+  value: kind,
+  label: ASSET_KIND_LABEL[kind],
+}))
 
 export interface ColoredSideItem extends EventSide {
   color: string
@@ -109,8 +93,8 @@ export function SideDoctrineComparison({
         aria-expanded={expanded}
       >
         {expanded ? <FiChevronDown size={13} /> : <FiChevronRight size={13} />}
-        <span>진영별 작전 목표 · 전략 · 전술 · 첩보 · 보급 대칭 비교</span>
-        {!hasAnyFilled && <DoctrineBadge>작성 가능</DoctrineBadge>}
+        <span>진영별 목표 · 전략 · 전술 · 첩보 · 보급</span>
+        {!hasAnyFilled && <DoctrineBadge>아직 없음</DoctrineBadge>}
       </DoctrineHeaderButton>
 
       {expanded && (
@@ -130,10 +114,7 @@ export function SideDoctrineComparison({
             <tbody>
               {DOCTRINE_FIELDS.map((field) => (
                 <tr key={field.key}>
-                  <DoctrineAxisCell>
-                    <span>{field.icon}</span>
-                    <span>{field.label}</span>
-                  </DoctrineAxisCell>
+                  <DoctrineAxisCell>{field.label}</DoctrineAxisCell>
                   {sides.map((side) => {
                     const currentValue = side[field.key] ?? ''
                     return (
@@ -166,6 +147,8 @@ interface SideWeaponsSectionProps {
   sideName: string
   sideColor: string
   sideUnits: ReadonlyArray<SideUnitView>
+  /** 진영 카드의 '+ 병기·장비'로 막 펼친 경우 — 빈 머리만 보이지 않게 추가 칸을 바로 연다 */
+  initialAdding?: boolean
 }
 
 /** 저장된 줄 → 동기화 입력(서버 계약: kind·itemId·deployedUnitId·quantity·lost·role·note) */
@@ -190,9 +173,10 @@ export function SideWeaponsSection({
   sideName,
   sideColor,
   sideUnits,
+  initialAdding = false,
 }: SideWeaponsSectionProps) {
   const queryClient = useQueryClient()
-  const [adding, setAdding] = useState(false)
+  const [adding, setAdding] = useState(initialAdding)
   const [saving, setSaving] = useState(false)
   const [assetKind, setAssetKind] = useState<SideWeaponKind>('GROUND_VEHICLE')
   const [assetId, setAssetId] = useState('')
@@ -204,13 +188,14 @@ export function SideWeaponsSection({
 
   const sideWeaponsQuery = useQuery({
     queryKey: eventKeys.sideWeapons(eventId),
-    queryFn: () => listEventSideWeapons(eventId).catch(() => [] as SideWeaponView[]),
+    /* 실패를 빈 배열로 삼키지 않는다 — '병기 없음'과 '못 불러옴'은 다른 말이다(LoadError) */
+    queryFn: () => listEventSideWeapons(eventId),
     staleTime: 30_000,
   })
 
-  const catalogQuery = useQuery({
+  const catalogQuery = useQuery<WeaponCatalogItem[]>({
     queryKey: eventKeys.weaponCatalog(),
-    queryFn: () => getWeaponCatalog(eventId).catch(() => [] as WeaponCatalogItem[]),
+    queryFn: () => getWeaponCatalog(eventId),
     enabled: adding,
     staleTime: 60_000,
   })
@@ -222,8 +207,23 @@ export function SideWeaponsSection({
 
   /* 카탈로그는 서버가 한 줄 배열(kind 표지)로 준다 — 고른 분류만 */
   const catalogOptions = useMemo(
-    () => (catalogQuery.data ?? []).filter((option) => option.kind === assetKind),
+    () =>
+      (catalogQuery.data ?? [])
+        .filter((option) => option.kind === assetKind)
+        .map((option) => ({
+          value: option.id,
+          label: [
+            option.categoryLabel ? `${option.name} (${option.categoryLabel})` : option.name,
+            option.countryName,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+        })),
     [catalogQuery.data, assetKind],
+  )
+  const unitOptions = useMemo(
+    () => sideUnits.map((unitItem) => ({ value: unitItem.id, label: unitItem.unit.name })),
+    [sideUnits],
   )
 
   const refreshWeapons = async () => {
@@ -292,22 +292,31 @@ export function SideWeaponsSection({
     <WeaponsBox $color={sideColor} aria-label={`${sideName} 투입 병기·장비`}>
       <WeaponsHead>
         <WeaponsTitle>
-          🛡️ 투입 병기·장비
+          투입 병기·장비
           {weaponsForSide.length > 0 && <WeaponsCount>{weaponsForSide.length}</WeaponsCount>}
         </WeaponsTitle>
-        <AddWeaponToggleBtn type="button" onClick={() => setAdding((prev) => !prev)}>
-          <FiPlus size={11} /> {adding ? '닫기' : '병기·장비 추가'}
-        </AddWeaponToggleBtn>
+        {!sideWeaponsQuery.isError && (
+          <AddWeaponToggleBtn type="button" onClick={() => setAdding((prev) => !prev)}>
+            <FiPlus size={11} /> {adding ? '닫기' : '병기·장비 추가'}
+          </AddWeaponToggleBtn>
+        )}
       </WeaponsHead>
+
+      {sideWeaponsQuery.isError && (
+        <LoadError
+          message="투입 병기·장비를 불러오지 못했습니다."
+          onRetry={() => void sideWeaponsQuery.refetch()}
+          retrying={sideWeaponsQuery.isFetching}
+        />
+      )}
 
       {weaponsForSide.length > 0 && (
         <WeaponsList>
           {weaponsForSide.map((item) => {
-            const kindMeta = ASSET_KIND_LABELS[item.kind]
             return (
               <WeaponRow key={item.id}>
                 <WeaponMain>
-                  <WeaponKindBadge title={kindMeta.label}>{kindMeta.icon}</WeaponKindBadge>
+                  <WeaponKindBadge>{ASSET_KIND_LABEL[item.kind]}</WeaponKindBadge>
                   <WeaponName>{item.name}</WeaponName>
                   {item.categoryLabel && <WeaponCategoryTag>{item.categoryLabel}</WeaponCategoryTag>}
                   {item.deployedUnitName &&
@@ -322,10 +331,10 @@ export function SideWeaponsSection({
                           title={`${item.deployedUnitName} 부대 상세 대시보드 열기`}
                           style={{ textDecoration: 'none' }}
                         >
-                          ⚔️ {item.deployedUnitName}
+                          {item.deployedUnitName}
                         </WeaponUnitTag>
                       ) : (
-                        <WeaponUnitTag>⚔️ {item.deployedUnitName}</WeaponUnitTag>
+                        <WeaponUnitTag>{item.deployedUnitName}</WeaponUnitTag>
                       )
                     })()}
                   {item.role && <WeaponRoleTag>{item.role}</WeaponRoleTag>}
@@ -357,53 +366,62 @@ export function SideWeaponsSection({
         </WeaponsList>
       )}
 
-      {adding && (
+      {adding && !sideWeaponsQuery.isError && (
         <AddWeaponForm>
+          {/* 고르기는 지면 공용 피커(InlineSelect) — 네이티브 select는 다크 모드·터치에서 따로 논다 */}
           <FormRow>
-            <FormSelect
-              value={assetKind}
-              onChange={(changeEvent) => {
-                setAssetKind(changeEvent.target.value as SideWeaponKind)
-                setAssetId('')
-              }}
-              aria-label="병기·장비 분류"
-            >
-              <option value="GROUND_VEHICLE">🛡️ 기갑·지상차량</option>
-              <option value="AIRCRAFT">✈️ 군용 항공기</option>
-              <option value="WEAPON">🔫 화포·보병화기</option>
-              <option value="NAVAL_VESSEL">🚢 군함·함선</option>
-            </FormSelect>
+            <FormPick>
+              <FormPickLabel>분류</FormPickLabel>
+              <InlineSelect
+                value={assetKind}
+                options={ASSET_KIND_OPTIONS}
+                onSave={(next) => {
+                  setAssetKind(next as SideWeaponKind)
+                  setAssetId('')
+                }}
+                label="병기·장비 분류"
+                clearable={false}
+              />
+            </FormPick>
 
-            <FormSelect
-              value={assetId}
-              onChange={(changeEvent) => setAssetId(changeEvent.target.value)}
-              aria-label="투입 병기 선택"
-            >
-              <option value="">-- 장비 선택 ({catalogOptions.length}종) --</option>
-              {catalogOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.name}
-                  {option.categoryLabel ? ` (${option.categoryLabel})` : ''}
-                  {option.countryName ? ` · ${option.countryName}` : ''}
-                </option>
-              ))}
-            </FormSelect>
+            <FormPick>
+              <FormPickLabel>장비</FormPickLabel>
+              {catalogQuery.isLoading ? (
+                <FormPickNote>목록을 불러오는 중…</FormPickNote>
+              ) : catalogQuery.isError ? null : catalogOptions.length === 0 ? (
+                <FormPickNote>이 분류에 등록된 장비가 아직 없습니다</FormPickNote>
+              ) : (
+                <InlineSelect
+                  value={assetId}
+                  options={catalogOptions}
+                  onSave={setAssetId}
+                  placeholder={`고르기 (${catalogOptions.length}종)`}
+                  label="투입 병기·장비"
+                />
+              )}
+            </FormPick>
 
-            {sideUnits.length > 0 && (
-              <FormSelect
-                value={sideUnitId}
-                onChange={(changeEvent) => setSideUnitId(changeEvent.target.value)}
-                aria-label="운용 부대 선택"
-              >
-                <option value="">진영 전체 운용 (부대 미지정)</option>
-                {sideUnits.map((unitItem) => (
-                  <option key={unitItem.id} value={unitItem.id}>
-                    ⚔️ {unitItem.unit.name}
-                  </option>
-                ))}
-              </FormSelect>
+            {unitOptions.length > 0 && (
+              <FormPick>
+                <FormPickLabel>운용 부대</FormPickLabel>
+                <InlineSelect
+                  value={sideUnitId}
+                  options={unitOptions}
+                  onSave={setSideUnitId}
+                  placeholder="진영 전체"
+                  label="운용 부대"
+                />
+              </FormPick>
             )}
           </FormRow>
+
+          {catalogQuery.isError && (
+            <LoadError
+              message="장비 목록을 불러오지 못했습니다."
+              onRetry={() => void catalogQuery.refetch()}
+              retrying={catalogQuery.isFetching}
+            />
+          )}
 
           <FormRow>
             <FormInput
@@ -579,6 +597,12 @@ export function SubEventSidesRollupPanel({ eventId }: SubEventSidesRollupPanelPr
         <RollupBody>
           {overviewQuery.isLoading ? (
             <RollupEmpty>하위 사건 참전 내역을 집계하는 중…</RollupEmpty>
+          ) : overviewQuery.isError ? (
+            <LoadError
+              message="하위 사건 참전 내역을 불러오지 못했습니다."
+              onRetry={() => void overviewQuery.refetch()}
+              retrying={overviewQuery.isFetching}
+            />
           ) : aggregatedGroups.length === 0 ? (
             <RollupEmpty>하위 사건에 등록된 진영·부대·인물이 아직 없습니다.</RollupEmpty>
           ) : (
@@ -592,7 +616,7 @@ export function SubEventSidesRollupPanel({ eventId }: SubEventSidesRollupPanelPr
 
                   {group.units.size > 0 && (
                     <RollupGroupSection>
-                      <RollupGroupLabel>⚔️ 하위 전투 투입 부대 ({group.units.size})</RollupGroupLabel>
+                      <RollupGroupLabel>하위 전투 투입 부대 ({group.units.size})</RollupGroupLabel>
                       <RollupChipList>
                         {[...group.units.values()].map((unitItem) => (
                           <RollupChipLink
@@ -600,7 +624,7 @@ export function SubEventSidesRollupPanel({ eventId }: SubEventSidesRollupPanelPr
                             to={pathKeys.militaryUnitDetail(unitItem.militaryUnitId)}
                             title={`참전 하위 사건: ${[...unitItem.battleTitles].join(', ')}`}
                           >
-                            ⚔️ {unitItem.name}
+                            {unitItem.name}
                             <RollupCountBadge>{unitItem.battleTitles.size}전투</RollupCountBadge>
                           </RollupChipLink>
                         ))}
@@ -610,7 +634,7 @@ export function SubEventSidesRollupPanel({ eventId }: SubEventSidesRollupPanelPr
 
                   {group.persons.size > 0 && (
                     <RollupGroupSection>
-                      <RollupGroupLabel>👤 하위 전투 지휘관·인물 ({group.persons.size})</RollupGroupLabel>
+                      <RollupGroupLabel>하위 전투 지휘관·인물 ({group.persons.size})</RollupGroupLabel>
                       <RollupChipList>
                         {[...group.persons.values()].map((personItem) => (
                           <RollupChipLink
@@ -618,7 +642,7 @@ export function SubEventSidesRollupPanel({ eventId }: SubEventSidesRollupPanelPr
                             to={pathKeys.personsTimelineDetail(personItem.personId)}
                             title={`참전 하위 사건: ${[...personItem.battleTitles].join(', ')}`}
                           >
-                            👤 {personItem.name}
+                            {personItem.name}
                             <RollupCountBadge>{personItem.battleTitles.size}</RollupCountBadge>
                           </RollupChipLink>
                         ))}
@@ -628,7 +652,7 @@ export function SubEventSidesRollupPanel({ eventId }: SubEventSidesRollupPanelPr
 
                   {group.countries.size > 0 && (
                     <RollupGroupSection>
-                      <RollupGroupLabel>🏳️ 참전 국가 ({group.countries.size})</RollupGroupLabel>
+                      <RollupGroupLabel>참전 국가 ({group.countries.size})</RollupGroupLabel>
                       <RollupChipList>
                         {[...group.countries.values()].map((countryItem) => (
                           <RollupStaticChip
@@ -714,8 +738,9 @@ const DoctrineTable = styled.table`
 `
 
 const DoctrineAxisTh = styled.th`
-  width: 110px;
-  min-width: 100px;
+  /* 좁은 폭(390px)에서도 두 진영이 한 화면에 — 예전 110+200×2는 둘째 진영 열이 화면 밖으로 잘렸다 */
+  width: 64px;
+  min-width: 56px;
   font-size: 11px;
   font-weight: 600;
   color: ${metaText};
@@ -723,7 +748,7 @@ const DoctrineAxisTh = styled.th`
 `
 
 const DoctrineSideTh = styled.th<{ $color: string }>`
-  min-width: 200px;
+  min-width: 132px;
   font-size: 12px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
@@ -741,9 +766,6 @@ const SideDot = styled.span<{ $color: string }>`
 `
 
 const DoctrineAxisCell = styled.td`
-  display: flex;
-  align-items: center;
-  gap: 5px;
   font-size: 11.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
@@ -832,7 +854,12 @@ const WeaponMain = styled.div`
 `
 
 const WeaponKindBadge = styled.span`
-  font-size: 12px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: ${metaText};
+  background: ${({ theme }) => theme.colors.background.secondary};
 `
 
 const WeaponName = styled.span`
@@ -919,14 +946,26 @@ const FormRow = styled.div`
   gap: 6px;
 `
 
-const FormSelect = styled.select`
-  flex: 1 1 140px;
-  padding: 4px 6px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-radius: ${RADIUS.SM};
-  background: ${({ theme }) => theme.colors.background.secondary};
-  color: ${({ theme }) => theme.colors.text.primary};
+/** 고르기 한 칸 — 라벨 + 공용 피커 */
+const FormPick = styled.span`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  margin-right: 10px;
+  font-size: 12px;
+`
+
+const FormPickLabel = styled.span`
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${metaText};
+`
+
+const FormPickNote = styled.span`
   font-size: 11.5px;
+  color: ${metaText};
 `
 
 const FormInput = styled.input`
