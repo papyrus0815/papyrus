@@ -651,6 +651,13 @@ export type GovernmentHeadTenureInCabinetList = {
   ordinal?: number | null
   person?: GovernmentCabinetTenureItem['person']
   positionDefinition?: GovernmentCabinetTenureItem['positionDefinition']
+  partyId?: string | null
+  party?: {
+    id: string
+    name: string
+    shortName?: string | null
+    brandColor?: string | null
+  } | null
   /** 수반 업적·한일 — GET /government-positions/cabinets 응답에 포함됨 */
   achievements?: GovernmentTenureAchievementItem[]
   country?: {
@@ -740,9 +747,21 @@ export type CabinetListItemDto = {
     eventId?: string | null
     event?: { id: string; title: string } | null
   } | null
+  politicalParties?: Array<{
+    id: string
+    role: string
+    party: {
+      id: string
+      name: string
+      shortName?: string | null
+      brandColor?: string | null
+    }
+  }>
   _count?: {
     members?: number
     memberTenures?: number
+    events?: number
+    treatySignatories?: number
   } | null
   headTenure: GovernmentHeadTenureInCabinetList | null
 }
@@ -1217,7 +1236,13 @@ export const personCareerApi = {
     const response = await apiClient.get(
       `/government-positions/cabinets/${encodeURIComponent(cabinetId)}/suggested-members`,
     )
-    return Array.isArray(response.data) ? response.data : []
+    if (!Array.isArray(response.data)) return []
+    return response.data.map(
+      (rawRow: SuggestedCabinetMemberDto & { id?: string }) => ({
+        ...rawRow,
+        tenureId: rawRow.tenureId ?? rawRow.id ?? '',
+      }),
+    )
   },
 
   /**
@@ -1229,12 +1254,21 @@ export const personCareerApi = {
     items: Array<{
       tenureId: string
       administrationDepartmentId?: string | null
+      departmentId?: string | null
       roleTitle?: string | null
     }>,
   ) => {
+    const normalizedItems = items.map((memberItem) => ({
+      tenureId: memberItem.tenureId,
+      departmentId:
+        memberItem.departmentId ??
+        memberItem.administrationDepartmentId ??
+        null,
+      roleTitle: memberItem.roleTitle ?? null,
+    }))
     const response = await apiClient.post(
       `/government-positions/cabinets/${encodeURIComponent(cabinetId)}/members`,
-      { items },
+      { items: normalizedItems },
     )
     return response.data
   },

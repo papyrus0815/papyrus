@@ -770,15 +770,15 @@ export function CabinetsSection({
     enabled: !!countryId || !!historicalCountryId,
   })
 
-  /** 행정부 리스트: 수반 취임일(또는 내각 출범일) 기준 시간순(과거→현재) 정렬 */
+  /** 행정부 리스트: 내각 고유 출범일 우선(없으면 수반 취임일) 기준 시간순(과거→현재, BC 안전) 정렬 */
   const sortedCabinets = useMemo(() => {
     const list = [...cabinets]
     return list.sort((left, right) => {
-      const leftStart = left.headTenure?.startDate ?? left.startDate
-      const rightStart = right.headTenure?.startDate ?? right.startDate
-      const dateLeft = leftStart ? new Date(leftStart).getTime() : 0
-      const dateRight = rightStart ? new Date(rightStart).getTime() : 0
-      return dateLeft - dateRight
+      const leftStart = left.startDate ?? left.headTenure?.startDate ?? null
+      const rightStart = right.startDate ?? right.headTenure?.startDate ?? null
+      const keyLeft = getSignedDateChronologyKey(leftStart) ?? 0
+      const keyRight = getSignedDateChronologyKey(rightStart) ?? 0
+      return keyLeft - keyRight
     })
   }, [cabinets])
 
@@ -787,7 +787,10 @@ export function CabinetsSection({
     () =>
       sortedCabinets.filter(
         (cabinetItem) =>
-          !shouldHideCabinetFromExecutiveTimeline(cabinetItem.headTenure),
+          !shouldHideCabinetFromExecutiveTimeline(
+            cabinetItem.headTenure,
+            cabinetItem,
+          ),
       ),
     [sortedCabinets],
   )

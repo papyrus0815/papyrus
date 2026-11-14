@@ -9,7 +9,10 @@ export type AdministrationDepartmentCategory = Awaited<
 
 export type AdministrationDepartment = NonNullable<
   Awaited<ReturnType<typeof adminDeptApi.getById>>
->
+> & {
+  tenureCount?: number
+  eventCount?: number
+}
 
 export type AdministrationDepartmentMilitaryUnit =
   AdministrationDepartment['militaryUnits'][number]
@@ -216,37 +219,24 @@ export const administrationDepartmentApi = {
     activeAtYear?: number
     take?: number
   }): Promise<AdministrationDepartment[]> => {
-    if (
-      params?.categoryId != null ||
-      (params?.activeAtYear != null && Number.isFinite(params.activeAtYear))
-    ) {
-      const query = new URLSearchParams()
-      if (params?.countryId) query.set('countryId', params.countryId)
-      if (params?.historicalCountryId) {
-        query.set('historicalCountryId', params.historicalCountryId)
-      }
-      if (params?.search?.trim()) query.set('search', params.search.trim())
-      if (params?.kind) query.set('kind', params.kind)
-      if (params?.categoryId) query.set('categoryId', params.categoryId)
-      if (params?.activeAtYear != null && Number.isFinite(params.activeAtYear)) {
-        query.set('activeAtYear', String(Math.trunc(params.activeAtYear)))
-      }
-      if (params?.take != null && Number.isFinite(params.take)) {
-        query.set('take', String(Math.trunc(params.take)))
-      }
-      return fetchJsonList<AdministrationDepartment>(
-        `/administration-departments?${query.toString()}`,
-      )
+    const query = new URLSearchParams()
+    if (params?.countryId) query.set('countryId', params.countryId)
+    if (params?.historicalCountryId) {
+      query.set('historicalCountryId', params.historicalCountryId)
     }
-    const list = await adminDeptApi.getAll(
-      getApiConnection(),
-      params?.countryId,
-      params?.historicalCountryId,
-      params?.search,
-      params?.kind,
-      params?.take != null ? String(params.take) : undefined,
+    if (params?.search?.trim()) query.set('search', params.search.trim())
+    if (params?.kind) query.set('kind', params.kind)
+    if (params?.categoryId) query.set('categoryId', params.categoryId)
+    if (params?.activeAtYear != null && Number.isFinite(params.activeAtYear)) {
+      query.set('activeAtYear', String(Math.trunc(params.activeAtYear)))
+    }
+    if (params?.take != null && Number.isFinite(params.take)) {
+      query.set('take', String(Math.trunc(params.take)))
+    }
+    const qs = query.toString()
+    return fetchJsonList<AdministrationDepartment>(
+      `/administration-departments${qs ? `?${qs}` : ''}`,
     )
-    return Array.isArray(list) ? list : []
   },
 
   getByCountryId: async (

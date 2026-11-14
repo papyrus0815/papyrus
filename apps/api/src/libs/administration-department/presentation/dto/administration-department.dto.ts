@@ -135,6 +135,10 @@ export type AdministrationDepartmentResponseDto = {
   militaryUnitSuccessors?: DepartmentMilitaryUnitLineageDto[]
   /** 군부대(MilitaryUnit) FK 역방향 */
   militaryUnits: AdministrationDepartmentMilitaryUnitDto[]
+  /** 소속 역대 수장·인사 재임 건수 (목록 집계) */
+  tenureCount?: number
+  /** 관여 역사 사건 연결 건수 (목록 집계) */
+  eventCount?: number
   createdAt: string
   updatedAt: string
 }

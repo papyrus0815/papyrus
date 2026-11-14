@@ -59,6 +59,7 @@ export const pathKeys = {
   government: {
     list: (params?: {
       tab?: 'cabinets' | 'departments'
+      polity?: string
       year?: number
       query?: string
       categoryId?: string
@@ -67,6 +68,7 @@ export const pathKeys = {
     }) => {
       const qs = new URLSearchParams()
       if (params?.tab && params.tab !== 'cabinets') qs.set('tab', params.tab)
+      if (params?.polity?.trim()) qs.set('polity', params.polity.trim())
       if (params?.year != null && Number.isFinite(params.year)) {
         qs.set('year', String(Math.trunc(params.year)))
       }

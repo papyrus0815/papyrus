@@ -226,6 +226,24 @@ describe('shouldHideCabinetFromExecutiveTimeline', () => {
       } as any),
     ).toBe(false)
   })
+
+  it('황제·차르여도 명시적 내각 명칭·각료·친정 표기가 있으면 숨기지 않음', () => {
+    expect(
+      shouldHideCabinetFromExecutiveTimeline(
+        {
+          positionType: 'HEAD_OF_STATE',
+          positionDefinition: { title: '황제' },
+        } as any,
+        { name: '강희제 친정 내각' },
+      ),
+    ).toBe(false)
+    expect(
+      shouldHideCabinetFromExecutiveTimeline({
+        positionType: 'HEAD_OF_STATE',
+        title: '황제(친정)',
+      } as any),
+    ).toBe(false)
+  })
 })
 
 describe('lineColorForCabinetHeadPositionBadge', () => {

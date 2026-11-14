@@ -4733,13 +4733,41 @@ export class PersonPrismaRepository implements IPersonRepository {
         linkageGroup: { select: this.LINKAGE_GROUP_EVENT_SELECT },
         country: { select: { id: true, name: true, flagEmoji: true } },
         historicalCountry: { select: { id: true, name: true } },
+        politicalParties: {
+          orderBy: [{ createdAt: 'asc' }],
+          select: {
+            id: true,
+            role: true,
+            party: {
+              select: {
+                id: true,
+                name: true,
+                shortName: true,
+                brandColor: true,
+              },
+            },
+          },
+        },
         _count: {
-          select: { members: true, memberTenures: true },
+          select: {
+            members: true,
+            memberTenures: true,
+            events: true,
+            treatySignatories: true,
+          },
         },
         headTenure: {
           include: {
             person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
             positionDefinition: true,
+            party: {
+              select: {
+                id: true,
+                name: true,
+                shortName: true,
+                brandColor: true,
+              },
+            },
             country: { select: { id: true, name: true, flagEmoji: true } },
             historicalCountry: { select: { id: true, name: true } },
             achievements: TENURE_ACHIEVEMENTS_INCLUDE,
@@ -5069,8 +5097,23 @@ export class PersonPrismaRepository implements IPersonRepository {
       ? {
           OR: [
             { name: { contains: trimmedSearch } },
+            { description: { contains: trimmedSearch } },
             { country: { name: { contains: trimmedSearch } } },
             { historicalCountry: { name: { contains: trimmedSearch } } },
+            { linkageGroup: { label: { contains: trimmedSearch } } },
+            { linkageGroup: { event: { title: { contains: trimmedSearch } } } },
+            {
+              politicalParties: {
+                some: {
+                  party: {
+                    OR: [
+                      { name: { contains: trimmedSearch } },
+                      { shortName: { contains: trimmedSearch } },
+                    ],
+                  },
+                },
+              },
+            },
             {
               headTenure: {
                 OR: [
@@ -5079,6 +5122,8 @@ export class PersonPrismaRepository implements IPersonRepository {
                   { positionDefinition: { title: { contains: trimmedSearch } } },
                   { person: { name: { contains: trimmedSearch } } },
                   { person: { surname: { contains: trimmedSearch } } },
+                  { party: { name: { contains: trimmedSearch } } },
+                  { party: { shortName: { contains: trimmedSearch } } },
                   { country: { name: { contains: trimmedSearch } } },
                   { historicalCountry: { name: { contains: trimmedSearch } } },
                 ],
@@ -5097,6 +5142,7 @@ export class PersonPrismaRepository implements IPersonRepository {
     if (params.currentOnly) {
       andClauses.push({
         historicalCountryId: null,
+        endYear: null,
         OR: [
           {
             headTenureId: { not: null },
@@ -5121,6 +5167,11 @@ export class PersonPrismaRepository implements IPersonRepository {
           ? { AND: andClauses }
           : undefined
 
+    const maxTake =
+      params.take != null && Number.isFinite(params.take)
+        ? Math.min(Math.max(Math.trunc(params.take), 1), 5000)
+        : undefined
+
     const rawList = await this.prisma.cabinet.findMany({
       where: combinedWhere,
       orderBy: [
@@ -5129,9 +5180,7 @@ export class PersonPrismaRepository implements IPersonRepository {
         { startYear: 'desc' },
         { createdAt: 'desc' },
       ],
-      ...(params.take && params.activeAtYear == null
-        ? { take: Math.min(Math.max(params.take, 1), 500) }
-        : {}),
+      ...(maxTake && params.activeAtYear == null ? { take: maxTake } : {}),
       include: {
         linkageGroup: { select: this.LINKAGE_GROUP_EVENT_SELECT },
         country: { select: { id: true, name: true, flagEmoji: true } },
@@ -5145,13 +5194,41 @@ export class PersonPrismaRepository implements IPersonRepository {
             endDay: true,
           },
         },
+        politicalParties: {
+          orderBy: [{ createdAt: 'asc' }],
+          select: {
+            id: true,
+            role: true,
+            party: {
+              select: {
+                id: true,
+                name: true,
+                shortName: true,
+                brandColor: true,
+              },
+            },
+          },
+        },
         _count: {
-          select: { members: true, memberTenures: true },
+          select: {
+            members: true,
+            memberTenures: true,
+            events: true,
+            treatySignatories: true,
+          },
         },
         headTenure: {
           include: {
             person: { include: PERSON_INCLUDE_COUNTRY_FOR_NAME },
             positionDefinition: true,
+            party: {
+              select: {
+                id: true,
+                name: true,
+                shortName: true,
+                brandColor: true,
+              },
+            },
             country: { select: { id: true, name: true, flagEmoji: true } },
             historicalCountry: {
               select: {
@@ -5170,9 +5247,48 @@ export class PersonPrismaRepository implements IPersonRepository {
       },
     })
 
+    // 의례적 군주·천황 자동생성 빈 내각(명시적 명칭·설명·각료·친정 표기·연계그룹이 모두 없는 더미)은 목록에서 제외
+    const nonGhostList = rawList.filter((cab) => {
+      if (cab.name?.trim() || cab.description?.trim() || cab.linkageGroupId) {
+        return true
+      }
+      const memberTotal =
+        (cab._count?.members ?? 0) + (cab._count?.memberTenures ?? 0)
+      if (memberTotal > 0) return true
+      const head = cab.headTenure
+      if (!head) return true
+      const effectivePosType =
+        head.positionType ?? head.positionDefinition?.positionType ?? null
+      if (
+        effectivePosType != null &&
+        effectivePosType !== 'HEAD_OF_STATE'
+      ) {
+        return true
+      }
+      const titleBundle = [
+        head.title,
+        head.positionDefinition?.title,
+        head.positionDefinition?.titleEn,
+        head.positionDefinition?.titleLocal,
+      ]
+        .filter(Boolean)
+        .join(' ')
+      if (
+        /친정|親政|내각총리|內閣總理|内閣総理|首相|총리대신|Prime\s+Minister/i.test(
+          titleBundle,
+        )
+      ) {
+        return true
+      }
+      if (/천황|황제|皇帝|天皇|술탄|Sultan|차르|Tsar|Tsarina/i.test(titleBundle)) {
+        return false
+      }
+      return true
+    })
+
     const rolledUpList =
       params.historicalCountryId && constituentByMemberId.size > 0
-        ? rawList.filter((cab) => {
+        ? nonGhostList.filter((cab) => {
             const effHistId =
               cab.headTenure?.historicalCountryId ?? cab.historicalCountryId
             if (!effHistId || effHistId === params.historicalCountryId) {
@@ -5184,8 +5300,8 @@ export class PersonPrismaRepository implements IPersonRepository {
               ? extractRecordPeriodKeys(cab.headTenure)
               : { startKey: null, endKey: null }
             const cabBounds = extractRecordPeriodKeys(cab)
-            const startKey = headBounds.startKey ?? cabBounds.startKey
-            const endKey = headBounds.endKey ?? cabBounds.endKey
+            const startKey = cabBounds.startKey ?? headBounds.startKey
+            const endKey = cabBounds.endKey ?? headBounds.endKey
             return doesIntervalOverlapConstituentWindows(
               startKey,
               endKey,
@@ -5193,7 +5309,7 @@ export class PersonPrismaRepository implements IPersonRepository {
               'person_or_cabinet',
             )
           })
-        : rawList
+        : nonGhostList
 
     const yearFilteredList =
       params.activeAtYear != null && Number.isFinite(params.activeAtYear)
@@ -5202,8 +5318,8 @@ export class PersonPrismaRepository implements IPersonRepository {
               ? extractRecordPeriodKeys(cab.headTenure)
               : { startKey: null, endKey: null }
             const cabBounds = extractRecordPeriodKeys(cab)
-            const startKey = headBounds.startKey ?? cabBounds.startKey
-            const endKey = headBounds.endKey ?? cabBounds.endKey
+            const startKey = cabBounds.startKey ?? headBounds.startKey
+            const endKey = cabBounds.endKey ?? headBounds.endKey
             const effHist =
               cab.headTenure?.historicalCountry ?? cab.historicalCountry
             const polityBounds = effHist
@@ -5228,8 +5344,8 @@ export class PersonPrismaRepository implements IPersonRepository {
         : rolledUpList
 
     const list =
-      params.take && params.activeAtYear != null
-        ? yearFilteredList.slice(0, Math.min(Math.max(params.take, 1), 500))
+      maxTake && params.activeAtYear != null
+        ? yearFilteredList.slice(0, maxTake)
         : yearFilteredList
 
     await this.mergeLinkagePeerHeadAchievementsForCabinets(list as any[])
@@ -5315,21 +5431,34 @@ export class PersonPrismaRepository implements IPersonRepository {
         (cab) => (cab.name ?? null) === trimmedName || (!cab.name && trimmedName),
       )
       if (exactMatch) {
-        if (trimmedName && exactMatch.name !== trimmedName) {
-          const updated = await this.prisma.cabinet.update({
-            where: { id: exactMatch.id },
-            data: {
-              name: trimmedName,
-              ...(dto.description !== undefined && {
-                description: dto.description?.trim() || null,
-              }),
-              ...this.cabinetPeriodColumns(dto.startDateInfo, dto.endDateInfo),
-            },
-            include: cabinetInclude,
-          })
-          return serializeBigInt(this.formatCabinetRow(updated))
+        const shouldPatchExisting =
+          (trimmedName && exactMatch.name !== trimmedName) ||
+          dto.description !== undefined ||
+          dto.startDateInfo !== undefined ||
+          dto.endDateInfo !== undefined
+        const resolvedCabinet = shouldPatchExisting
+          ? await this.prisma.cabinet.update({
+              where: { id: exactMatch.id },
+              data: {
+                ...(trimmedName && exactMatch.name !== trimmedName
+                  ? { name: trimmedName }
+                  : {}),
+                ...(dto.description !== undefined && {
+                  description: dto.description?.trim() || null,
+                }),
+                ...this.cabinetPeriodColumns(dto.startDateInfo, dto.endDateInfo),
+              },
+              include: cabinetInclude,
+            })
+          : exactMatch
+        if (dto.memberTenureIds?.length) {
+          await this.attachCabinetMembers(
+            resolvedCabinet.id,
+            dto.memberTenureIds.map((tenureId) => ({ tenureId })),
+            accountId,
+          )
         }
-        return serializeBigInt(this.formatCabinetRow(exactMatch))
+        return serializeBigInt(this.formatCabinetRow(resolvedCabinet))
       }
     }
 

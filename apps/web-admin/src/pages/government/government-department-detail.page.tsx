@@ -1,14 +1,16 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   FiArrowLeft,
   FiArrowRight,
   FiCalendar,
   FiColumns,
+  FiEdit2,
   FiGitCommit,
   FiLayers,
   FiMapPin,
+  FiPlus,
   FiShield,
   FiUsers,
 } from 'react-icons/fi'
@@ -33,13 +35,21 @@ import {
   EVENT_DEPARTMENT_ROLE_LABEL,
   type EventDepartmentRoleValue,
 } from '@/shared/api/administration-department'
+import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
+import { personCareerApi } from '@/shared/api/person-career'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
 import { parseDepartmentDescription } from '@/shared/lib/ministry-department/ministry-department-utils'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
+import { InstitutionAppointmentModal } from '@/shared/ui/institution-appointment-modal'
+import {
+  CountryInlineModal,
+  type CountryInlineModalTarget,
+} from '@/widgets/country/country-inline-modal/country-inline-modal'
 import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 
+import { GovernmentDepartmentFormModal } from './components/government-department-form-modal'
 import {
   formatIsoShortPeriod,
   readGovernmentListSearch,
@@ -58,8 +68,14 @@ export function GovernmentDepartmentDetailPage() {
   const { departmentId } = useParams<{ departmentId: string }>()
   const navigate = useNavigate()
   const location = useLocation()
+  const queryClient = useQueryClient()
   const listSearch = readGovernmentListSearch(location.state)
+
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
+  const [countryModalTarget, setCountryModalTarget] =
+    useState<CountryInlineModalTarget | null>(null)
+  const [editModalOpen, setEditModalOpen] = useState<boolean>(false)
+  const [appointModalOpen, setAppointModalOpen] = useState<boolean>(false)
 
   const deptQuery = useQuery({
     queryKey: ['global-department-detail', departmentId],
@@ -85,6 +101,34 @@ export function GovernmentDepartmentDetailPage() {
   })
 
   const department = deptQuery.data ?? null
+  const resolvedPolity = useMemo(
+    () => (department ? resolveDepartmentPolityInfo(department) : null),
+    [department],
+  )
+
+  const polityCabinetsQuery = useQuery({
+    queryKey: [
+      'dept-detail-polity-cabinets',
+      resolvedPolity?.modernCountryId ?? '',
+      resolvedPolity?.historicalCountryId ?? '',
+    ],
+    queryFn: () =>
+      personCareerApi.getCabinets({
+        ...(resolvedPolity?.historicalCountryId
+          ? { historicalCountryId: resolvedPolity.historicalCountryId }
+          : resolvedPolity?.modernCountryId
+            ? { countryId: resolvedPolity.modernCountryId }
+            : {}),
+        take: 500,
+      }),
+    enabled: Boolean(
+      appointModalOpen &&
+        (resolvedPolity?.modernCountryId ||
+          resolvedPolity?.historicalCountryId),
+    ),
+    staleTime: 60_000,
+  })
+
   useDocumentTitle(
     department?.name ? `${department.name} · 전 국가 기관` : '국가기관 상세',
   )
@@ -99,7 +143,7 @@ export function GovernmentDepartmentDetailPage() {
     return <DetailShell>기관 정보를 불러오는 중입니다…</DetailShell>
   }
 
-  if (!department) {
+  if (!department || !resolvedPolity) {
     return (
       <DetailShell>
         <TopNavBar>
@@ -113,7 +157,7 @@ export function GovernmentDepartmentDetailPage() {
     )
   }
 
-  const polity = resolveDepartmentPolityInfo(department)
+  const polity = resolvedPolity
   const periodLabel = formatIsoShortPeriod(
     department.establishedDate,
     department.abolishedDate,
@@ -158,23 +202,55 @@ export function GovernmentDepartmentDetailPage() {
           <span>전 국가 부처·기관 목록</span>
         </BackBtn>
 
-        {polity.countryGovernmentUrl && (
-          <CountryOpenLink to={polity.countryGovernmentUrl}>
-            <span>{polity.polityName} 정부·행정 탭에서 열기·편집</span>
-            <FiArrowRight size={13} />
-          </CountryOpenLink>
-        )}
+        <NavActionGroup>
+          <ActionSecondaryBtn
+            type="button"
+            onClick={() => setEditModalOpen(true)}
+          >
+            <FiEdit2 size={13} />
+            <span>기관 정보 수정</span>
+          </ActionSecondaryBtn>
+          <ActionPrimaryBtn
+            type="button"
+            onClick={() => setAppointModalOpen(true)}
+          >
+            <FiPlus size={14} />
+            <span>수장 · 인사 임명</span>
+          </ActionPrimaryBtn>
+          {polity.countryGovernmentUrl && (
+            <CountryOpenLink to={polity.countryGovernmentUrl}>
+              <span>{polity.polityName} 정부 탭</span>
+              <FiArrowRight size={13} />
+            </CountryOpenLink>
+          )}
+        </NavActionGroup>
       </TopNavBar>
 
       <HeroCard>
         <HeroMetaRow>
           <MetaChips>
-            <PolityPill $historical={polity.isHistorical}>
-              <span>
-                {polity.flagEmoji ?? (polity.isHistorical ? '🏛️' : '🏳️')}
-              </span>
+            <PolityPillBtn
+              type="button"
+              $historical={polity.isHistorical}
+              onClick={() => {
+                if (polity.historicalCountryId) {
+                  setCountryModalTarget({
+                    kind: 'historical',
+                    id: polity.historicalCountryId,
+                    name: polity.polityName,
+                  })
+                } else if (polity.modernCountryId) {
+                  setCountryModalTarget({
+                    kind: 'modern',
+                    id: polity.modernCountryId,
+                    name: polity.polityName,
+                  })
+                }
+              }}
+            >
+              {polity.flagEmoji ? <span>{polity.flagEmoji}</span> : null}
               <span>{polity.polityName}</span>
-            </PolityPill>
+            </PolityPillBtn>
             {department.category && (
               <AccentPill>{department.category.name}</AccentPill>
             )}
@@ -314,7 +390,8 @@ export function GovernmentDepartmentDetailPage() {
                 to={pathKeys.militaryUnitDetail(milSucc.militaryUnit.id)}
               >
                 <LineageRole>
-                  군사 편제 개편 ({TRANSITION_KIND_KO[milSucc.kind] ?? milSucc.kind}
+                  군사 편제 개편 (
+                  {TRANSITION_KIND_KO[milSucc.kind] ?? milSucc.kind}
                   {milSucc.year ? ` · ${milSucc.year}` : ''})
                 </LineageRole>
                 <LineageName>
@@ -344,13 +421,25 @@ export function GovernmentDepartmentDetailPage() {
             <FiUsers size={14} />
             <span>역대 장관 · 기관장 재임 목록</span>
           </SectionTitle>
-          <SectionCount>{tenures.length}명</SectionCount>
+          <SectionHeaderRight>
+            <SectionCount>{tenures.length}명</SectionCount>
+            <SmallAddBtn
+              type="button"
+              onClick={() => setAppointModalOpen(true)}
+            >
+              <FiPlus size={12} />
+              <span>재임 추가</span>
+            </SmallAddBtn>
+          </SectionHeaderRight>
         </SectionHeader>
 
         {tenuresQuery.isLoading ? (
           <EmptyCard>역대 재임 기록을 불러오는 중입니다…</EmptyCard>
         ) : tenures.length === 0 ? (
-          <EmptyCard>등록된 장관·기관장 재임 기록이 없습니다.</EmptyCard>
+          <EmptyCard>
+            등록된 장관·기관장 재임 기록이 없습니다. 상단 [수장 · 인사 임명]
+            버튼으로 바로 추가할 수 있습니다.
+          </EmptyCard>
         ) : (
           <TenureTable>
             {tenures.map((tenureRow) => {
@@ -430,10 +519,52 @@ export function GovernmentDepartmentDetailPage() {
         </SectionBlock>
       )}
 
+      <GovernmentDepartmentFormModal
+        isOpen={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        editingDepartment={department}
+        onSaved={() => {
+          void queryClient.invalidateQueries({
+            queryKey: ['global-department-detail', departmentId],
+          })
+          void queryClient.invalidateQueries({
+            queryKey: ['global-departments'],
+          })
+        }}
+      />
+
+      <InstitutionAppointmentModal
+        isOpen={appointModalOpen}
+        onClose={() => setAppointModalOpen(false)}
+        contextType="DEPARTMENT"
+        countryId={polity.modernCountryId}
+        historicalCountryId={polity.historicalCountryId}
+        countryName={polity.polityName}
+        departmentId={department.id}
+        departmentName={department.name}
+        departmentKind={department.kind}
+        availableCabinets={polityCabinetsQuery.data ?? []}
+        onSaved={() => {
+          invalidateTenureQueries(queryClient)
+          void queryClient.invalidateQueries({
+            queryKey: ['administration-department-tenures', departmentId],
+          })
+          void queryClient.invalidateQueries({
+            queryKey: ['global-departments'],
+          })
+        }}
+      />
+
       <PersonInlineModal
         personId={selectedPersonId}
         onClose={() => setSelectedPersonId(null)}
         onEdit={() => setSelectedPersonId(null)}
+      />
+
+      <CountryInlineModal
+        target={countryModalTarget}
+        onClose={() => setCountryModalTarget(null)}
+        onSwitch={(nextTarget) => setCountryModalTarget(nextTarget)}
       />
     </DetailShell>
   )
@@ -444,7 +575,7 @@ export default GovernmentDepartmentDetailPage
 /* ─── Styled Components ─────────────────────────────────────────────────── */
 
 const DetailShell = styled.div`
-  max-width: 1020px;
+  max-width: 1040px;
   margin: 0 auto;
   padding: 24px 28px 64px;
   display: flex;
@@ -457,6 +588,13 @@ const TopNavBar = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
+`
+
+const NavActionGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
 `
 
@@ -479,11 +617,48 @@ const BackBtn = styled.button`
   }
 `
 
+const ActionPrimaryBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 13px;
+  border-radius: ${RADIUS.SM};
+  border: none;
+  background: #4f46e5;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover {
+    background: #4338ca;
+  }
+`
+
+const ActionSecondaryBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerSurface(theme.mode)};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+`
+
 const CountryOpenLink = styled(Link)`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 13px;
+  padding: 6px 12px;
   border-radius: ${RADIUS.SM};
   border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
   background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
@@ -518,14 +693,22 @@ const MetaChips = styled.div`
   flex-wrap: wrap;
 `
 
-const PolityPill = styled.span<{ $historical: boolean }>`
+const PolityPillBtn = styled.button<{ $historical: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 9px;
+  padding: 3px 10px;
   border-radius: ${RADIUS.SM};
+  border: 1px solid
+    ${({ theme, $historical }) =>
+      $historical
+        ? theme.mode === 'dark'
+          ? 'rgba(245, 158, 11, 0.32)'
+          : 'rgba(180, 83, 9, 0.24)'
+        : ledgerHairlineStrong(theme.mode)};
   font-size: 12px;
   font-weight: 700;
+  cursor: pointer;
   background: ${({ theme, $historical }) =>
     $historical
       ? theme.mode === 'dark'
@@ -538,6 +721,10 @@ const PolityPill = styled.span<{ $historical: boolean }>`
         ? '#fcd34d'
         : '#b45309'
       : theme.colors.text.primary};
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  }
 `
 
 const AccentPill = styled.span`
@@ -670,6 +857,26 @@ const SectionHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+`
+
+const SectionHeaderRight = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+`
+
+const SmallAddBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
 `
 
 const SectionTitle = styled.h2`

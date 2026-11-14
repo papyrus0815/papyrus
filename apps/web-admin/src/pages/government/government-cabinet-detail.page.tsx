@@ -1,15 +1,18 @@
 import React, { useMemo, useState } from 'react'
 
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   FiArrowLeft,
   FiArrowRight,
   FiAward,
   FiCalendar,
+  FiEdit2,
   FiFileText,
   FiFlag,
   FiLayers,
   FiLink2,
+  FiPlus,
+  FiRefreshCw,
   FiUser,
   FiUsers,
 } from 'react-icons/fi'
@@ -28,12 +31,14 @@ import {
   ledgerSurface,
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
+import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import {
   CABINET_EVENT_ROLE_LABELS,
   type CabinetEventRole,
   listEventsForCabinet,
 } from '@/shared/api/cabinet-events'
 import { getCabinetPoliticalParties } from '@/shared/api/election'
+import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
 import {
   type GovernmentCabinetTenureItem,
   personCareerApi,
@@ -41,22 +46,32 @@ import {
 import { treatyApi } from '@/shared/api/treaty'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
+import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
+import { InstitutionAppointmentModal } from '@/shared/ui/institution-appointment-modal'
+import { notify } from '@/shared/ui/toast'
+import { CabinetFormModal } from '@/widgets/country/country-detail/ui/cabinet-form-modal.widget'
 import {
   APPOINTMENT_METHOD_LABEL,
   END_REASON_LABEL,
   labelCabinetPartyRole,
 } from '@/widgets/country/country-detail/ui/cabinets-section.helpers'
+import {
+  CountryInlineModal,
+  type CountryInlineModalTarget,
+} from '@/widgets/country/country-inline-modal/country-inline-modal'
 import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 
 import {
   formatIsoShortPeriod,
   readGovernmentListSearch,
   resolveCabinetDisplayTitle,
+  resolveCabinetEffectiveDates,
   resolveCabinetHeadName,
   resolveCabinetPolityInfo,
   resolveCabinetPositionTitle,
+  toEditableCabinetRecord,
 } from './government-helpers'
 
 function stripHtmlPreview(rawHtml: string | null | undefined): string {
@@ -71,8 +86,14 @@ export function GovernmentCabinetDetailPage() {
   const { cabinetId } = useParams<{ cabinetId: string }>()
   const navigate = useNavigate()
   const location = useLocation()
+  const queryClient = useQueryClient()
   const listSearch = readGovernmentListSearch(location.state)
+
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
+  const [countryModalTarget, setCountryModalTarget] =
+    useState<CountryInlineModalTarget | null>(null)
+  const [editModalOpen, setEditModalOpen] = useState<boolean>(false)
+  const [appointModalOpen, setAppointModalOpen] = useState<boolean>(false)
 
   const cabinetQuery = useQuery({
     queryKey: ['global-cabinet-detail', cabinetId],
@@ -86,6 +107,13 @@ export function GovernmentCabinetDetailPage() {
     queryFn: () => personCareerApi.getTenuresByCabinetId(cabinetId!),
     enabled: Boolean(cabinetId),
     staleTime: 60_000,
+  })
+
+  const suggestedMinistersQuery = useQuery({
+    queryKey: ['cabinet-suggested-members', cabinetId],
+    queryFn: () => personCareerApi.getSuggestedCabinetMembers(cabinetId!),
+    enabled: Boolean(cabinetId),
+    staleTime: 30_000,
   })
 
   const linkageEventId = cabinetQuery.data?.linkageGroup?.eventId ?? null
@@ -118,18 +146,86 @@ export function GovernmentCabinetDetailPage() {
   })
 
   const cabinet = cabinetQuery.data ?? null
-  const displayTitle = cabinet ? resolveCabinetDisplayTitle(cabinet) : '내각 상세'
+  const resolvedPolity = useMemo(
+    () => (cabinet ? resolveCabinetPolityInfo(cabinet) : null),
+    [cabinet],
+  )
+
+  const polityDepartmentsQuery = useQuery({
+    queryKey: [
+      'cabinet-detail-polity-depts',
+      resolvedPolity?.modernCountryId ?? '',
+      resolvedPolity?.historicalCountryId ?? '',
+    ],
+    queryFn: () =>
+      administrationDepartmentApi.getAll({
+        ...(resolvedPolity?.historicalCountryId
+          ? { historicalCountryId: resolvedPolity.historicalCountryId }
+          : resolvedPolity?.modernCountryId
+            ? { countryId: resolvedPolity.modernCountryId }
+            : {}),
+        take: 500,
+      }),
+    enabled: Boolean(
+      appointModalOpen &&
+        (resolvedPolity?.modernCountryId ||
+          resolvedPolity?.historicalCountryId),
+    ),
+    staleTime: 60_000,
+  })
+
+  const attachSuggestedMutation = useMutation({
+    mutationFn: async () => {
+      const suggestions = suggestedMinistersQuery.data ?? []
+      if (!cabinetId || suggestions.length === 0) return
+      await personCareerApi.attachCabinetMembers(
+        cabinetId,
+        suggestions.map((candItem) => ({
+          tenureId: candItem.tenureId,
+          administrationDepartmentId:
+            candItem.administrationDepartment?.id ?? null,
+          roleTitle:
+            candItem.title ?? candItem.positionDefinition?.title ?? null,
+        })),
+      )
+    },
+    onSuccess: () => {
+      invalidateTenureQueries(queryClient, {
+        cabinetId: cabinetId ?? null,
+        countryId: resolvedPolity?.modernCountryId ?? null,
+        historicalCountryId: resolvedPolity?.historicalCountryId ?? null,
+      })
+      void queryClient.invalidateQueries({ queryKey: ['global-cabinets'] })
+      void queryClient.invalidateQueries({
+        queryKey: ['cabinet-suggested-members', cabinetId],
+      })
+      notify.success('동시대 기등록 부처 인사가 각료진에 일괄 편입되었습니다.')
+    },
+    onError: (mutationError) => {
+      notify.error(getApiErrorMessage(mutationError))
+    },
+  })
+
+  const displayTitle = cabinet
+    ? resolveCabinetDisplayTitle(cabinet)
+    : '내각 상세'
   useDocumentTitle(`${displayTitle} · 전 국가 내각`)
 
   const groupedMinisters = useMemo(() => {
-    const rawMinisters = (ministersQuery.data ?? []) as GovernmentCabinetTenureItem[]
+    const rawMinisters = (ministersQuery.data ??
+      []) as GovernmentCabinetTenureItem[]
     const headTenureId = cabinet?.headTenure?.id ?? null
     const nonHeadMinisters = rawMinisters.filter(
       (tenureItem) => tenureItem.id !== headTenureId,
     )
     const buckets = new Map<
       string,
-      { key: string; departmentName: string; departmentId: string | null; items: GovernmentCabinetTenureItem[] }
+      {
+        key: string
+        departmentName: string
+        departmentId: string | null
+        items: GovernmentCabinetTenureItem[]
+      }
     >()
     for (const ministerItem of nonHeadMinisters) {
       const deptId =
@@ -137,7 +233,8 @@ export function GovernmentCabinetDetailPage() {
         ministerItem.administrationDepartment?.id ??
         null
       const deptName =
-        ministerItem.administrationDepartment?.name ?? '무임소 · 부처 미지정 각료'
+        ministerItem.administrationDepartment?.name ??
+        '무임소 · 부처 미지정 각료'
       const bucketKey = deptId ?? '__unassigned__'
       const existing = buckets.get(bucketKey)
       if (existing) {
@@ -160,7 +257,7 @@ export function GovernmentCabinetDetailPage() {
     return <DetailShell>내각 정보를 불러오는 중입니다…</DetailShell>
   }
 
-  if (!cabinet) {
+  if (!cabinet || !resolvedPolity) {
     return (
       <DetailShell>
         <TopNavBar>
@@ -177,13 +274,14 @@ export function GovernmentCabinetDetailPage() {
     )
   }
 
-  const polity = resolveCabinetPolityInfo(cabinet)
+  const polity = resolvedPolity
   const headName = resolveCabinetHeadName(cabinet)
   const posTitle = resolveCabinetPositionTitle(cabinet)
+  const effectiveDates = resolveCabinetEffectiveDates(cabinet)
   const periodLabel = formatIsoShortPeriod(
-    cabinet.headTenure?.startDate ?? cabinet.startDate,
-    cabinet.headTenure ? cabinet.headTenure.endDate : cabinet.endDate,
-    !polity.isHistorical,
+    effectiveDates.startDate,
+    effectiveDates.endDate,
+    effectiveDates.isOngoing,
   )
   const headAvatarUrl = cabinet.headTenure?.person?.profileImageUrl
     ? getUploadImageUrl(cabinet.headTenure.person.profileImageUrl)
@@ -196,6 +294,7 @@ export function GovernmentCabinetDetailPage() {
   const treaties = treatiesQuery.data?.items ?? []
   const partyLinks = partiesQuery.data ?? []
   const cabinetEventLinks = cabinetEventsQuery.data ?? []
+  const suggestedList = suggestedMinistersQuery.data ?? []
   const appointmentMethodLabel = cabinet.headTenure?.appointmentMethod
     ? (APPOINTMENT_METHOD_LABEL[cabinet.headTenure.appointmentMethod] ??
       cabinet.headTenure.appointmentMethod)
@@ -220,21 +319,55 @@ export function GovernmentCabinetDetailPage() {
           <span>전 국가 내각 목록</span>
         </BackBtn>
 
-        {polity.countryGovernmentUrl && (
-          <CountryOpenLink to={polity.countryGovernmentUrl}>
-            <span>{polity.polityName} 정부·행정 탭에서 열기·편집</span>
-            <FiArrowRight size={13} />
-          </CountryOpenLink>
-        )}
+        <NavActionGroup>
+          <ActionSecondaryBtn
+            type="button"
+            onClick={() => setEditModalOpen(true)}
+          >
+            <FiEdit2 size={13} />
+            <span>내각 · 수반 수정</span>
+          </ActionSecondaryBtn>
+          <ActionPrimaryBtn
+            type="button"
+            onClick={() => setAppointModalOpen(true)}
+          >
+            <FiPlus size={14} />
+            <span>각료 임명</span>
+          </ActionPrimaryBtn>
+          {polity.countryGovernmentUrl && (
+            <CountryOpenLink to={polity.countryGovernmentUrl}>
+              <span>{polity.polityName} 정부 탭</span>
+              <FiArrowRight size={13} />
+            </CountryOpenLink>
+          )}
+        </NavActionGroup>
       </TopNavBar>
 
       <HeroCard>
         <HeroMetaRow>
           <HeroMetaChips>
-            <PolityPill $historical={polity.isHistorical}>
-              <span>{polity.flagEmoji ?? (polity.isHistorical ? '🏛️' : '🏳️')}</span>
+            <PolityPillBtn
+              type="button"
+              $historical={polity.isHistorical}
+              onClick={() => {
+                if (polity.historicalCountryId) {
+                  setCountryModalTarget({
+                    kind: 'historical',
+                    id: polity.historicalCountryId,
+                    name: polity.polityName,
+                  })
+                } else if (polity.modernCountryId) {
+                  setCountryModalTarget({
+                    kind: 'modern',
+                    id: polity.modernCountryId,
+                    name: polity.polityName,
+                  })
+                }
+              }}
+            >
+              {polity.flagEmoji ? <span>{polity.flagEmoji}</span> : null}
               <span>{polity.polityName}</span>
-            </PolityPill>
+            </PolityPillBtn>
             {appointmentMethodLabel && (
               <TenureMetaTag>취임: {appointmentMethodLabel}</TenureMetaTag>
             )}
@@ -281,6 +414,28 @@ export function GovernmentCabinetDetailPage() {
           </HeroInfoCol>
         </HeroMainRow>
       </HeroCard>
+
+      {suggestedList.length > 0 && (
+        <SuggestBannerCard>
+          <SuggestBannerText>
+            <FiRefreshCw size={14} />
+            <span>
+              이 내각 존속 기간과 겹치는 기등록 부처 재임 인사{' '}
+              <strong>{suggestedList.length}명</strong>이 아직 편입되지
+              않았습니다.
+            </span>
+          </SuggestBannerText>
+          <ActionPrimaryBtn
+            type="button"
+            disabled={attachSuggestedMutation.isPending}
+            onClick={() => attachSuggestedMutation.mutate()}
+          >
+            {attachSuggestedMutation.isPending
+              ? '편입 중…'
+              : `${suggestedList.length}명 일괄 편입`}
+          </ActionPrimaryBtn>
+        </SuggestBannerCard>
+      )}
 
       {partyLinks.length > 0 && (
         <SectionBlock>
@@ -354,27 +509,25 @@ export function GovernmentCabinetDetailPage() {
             <PeerGrid>
               {peerCabinets.map((peerCab) => {
                 const peerPolity = resolveCabinetPolityInfo(peerCab)
+                const peerDates = resolveCabinetEffectiveDates(peerCab)
                 return (
                   <PeerCard
                     key={peerCab.id}
                     to={pathKeys.government.cabinetDetail(peerCab.id)}
                     state={{ governmentListSearch: listSearch }}
                   >
-                    <PolityPill $historical={peerPolity.isHistorical}>
-                      <span>
-                        {peerPolity.flagEmoji ??
-                          (peerPolity.isHistorical ? '🏛️' : '🏳️')}
-                      </span>
+                    <PolityStaticPill $historical={peerPolity.isHistorical}>
+                      {peerPolity.flagEmoji ? (
+                        <span>{peerPolity.flagEmoji}</span>
+                      ) : null}
                       <span>{peerPolity.polityName}</span>
-                    </PolityPill>
+                    </PolityStaticPill>
                     <PeerTitle>{resolveCabinetDisplayTitle(peerCab)}</PeerTitle>
                     <PeerMeta>
                       {formatIsoShortPeriod(
-                        peerCab.headTenure?.startDate ?? peerCab.startDate,
-                        peerCab.headTenure
-                          ? peerCab.headTenure.endDate
-                          : peerCab.endDate,
-                        !peerPolity.isHistorical,
+                        peerDates.startDate,
+                        peerDates.endDate,
+                        peerDates.isOngoing,
                       )}
                     </PeerMeta>
                   </PeerCard>
@@ -382,7 +535,9 @@ export function GovernmentCabinetDetailPage() {
               })}
             </PeerGrid>
           ) : (
-            <EmptyCard>연결된 타국 행정부 내역을 불러오는 중이거나 단독 묶음입니다.</EmptyCard>
+            <EmptyCard>
+              연결된 타국 행정부 내역을 불러오는 중이거나 단독 묶음입니다.
+            </EmptyCard>
           )}
         </SectionBlock>
       )}
@@ -393,20 +548,30 @@ export function GovernmentCabinetDetailPage() {
             <FiUsers size={14} />
             <span>부처별 각료 진용</span>
           </SectionTitle>
-          <SectionCount>
-            {groupedMinisters.reduce(
-              (accCount, group) => accCount + group.items.length,
-              0,
-            )}
-            명
-          </SectionCount>
+          <SectionHeaderRight>
+            <SectionCount>
+              {groupedMinisters.reduce(
+                (accCount, group) => accCount + group.items.length,
+                0,
+              )}
+              명
+            </SectionCount>
+            <SmallAddBtn
+              type="button"
+              onClick={() => setAppointModalOpen(true)}
+            >
+              <FiPlus size={12} />
+              <span>각료 추가</span>
+            </SmallAddBtn>
+          </SectionHeaderRight>
         </SectionHeader>
 
         {ministersQuery.isLoading ? (
           <EmptyCard>소속 각료를 불러오는 중입니다…</EmptyCard>
         ) : groupedMinisters.length === 0 ? (
           <EmptyCard>
-            등록된 소속 각료가 없습니다. 국가 상세 페이지의 정부·행정 탭에서 각료를 편입할 수 있습니다.
+            등록된 소속 각료가 없습니다. 상단 [각료 임명] 버튼으로 바로 추가할 수
+            있습니다.
           </EmptyCard>
         ) : (
           <MinisterGrid>
@@ -592,10 +757,50 @@ export function GovernmentCabinetDetailPage() {
         </SectionBlock>
       )}
 
+      <CabinetFormModal
+        isOpen={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        editingCabinet={toEditableCabinetRecord(cabinet)}
+        onSaved={() => {
+          void queryClient.invalidateQueries({
+            queryKey: ['global-cabinet-detail', cabinetId],
+          })
+          void queryClient.invalidateQueries({ queryKey: ['global-cabinets'] })
+        }}
+      />
+
+      <InstitutionAppointmentModal
+        isOpen={appointModalOpen}
+        onClose={() => setAppointModalOpen(false)}
+        contextType="CABINET"
+        countryId={polity.modernCountryId}
+        historicalCountryId={polity.historicalCountryId}
+        countryName={polity.polityName}
+        cabinetId={cabinet.id}
+        cabinetName={displayTitle}
+        availableDepartments={polityDepartmentsQuery.data ?? []}
+        onSaved={() => {
+          invalidateTenureQueries(queryClient, { cabinetId: cabinet.id })
+          void queryClient.invalidateQueries({
+            queryKey: ['cabinet-tenures', cabinetId],
+          })
+          void queryClient.invalidateQueries({
+            queryKey: ['cabinet-suggested-members', cabinetId],
+          })
+          void queryClient.invalidateQueries({ queryKey: ['global-cabinets'] })
+        }}
+      />
+
       <PersonInlineModal
         personId={selectedPersonId}
         onClose={() => setSelectedPersonId(null)}
         onEdit={() => setSelectedPersonId(null)}
+      />
+
+      <CountryInlineModal
+        target={countryModalTarget}
+        onClose={() => setCountryModalTarget(null)}
+        onSwitch={(nextTarget) => setCountryModalTarget(nextTarget)}
       />
     </DetailShell>
   )
@@ -606,7 +811,7 @@ export default GovernmentCabinetDetailPage
 /* ─── Styled Components ─────────────────────────────────────────────────── */
 
 const DetailShell = styled.div`
-  max-width: 1020px;
+  max-width: 1040px;
   margin: 0 auto;
   padding: 24px 28px 64px;
   display: flex;
@@ -619,6 +824,13 @@ const TopNavBar = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
+`
+
+const NavActionGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
 `
 
@@ -641,11 +853,53 @@ const BackBtn = styled.button`
   }
 `
 
+const ActionPrimaryBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 13px;
+  border-radius: ${RADIUS.SM};
+  border: none;
+  background: #4f46e5;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: #4338ca;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`
+
+const ActionSecondaryBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerSurface(theme.mode)};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+`
+
 const CountryOpenLink = styled(Link)`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 13px;
+  padding: 6px 12px;
   border-radius: ${RADIUS.SM};
   border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
   background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
@@ -653,6 +907,31 @@ const CountryOpenLink = styled(Link)`
   font-size: 12.5px;
   font-weight: 700;
   text-decoration: none;
+`
+
+const SuggestBannerCard = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-radius: ${RADIUS.MD};
+  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+`
+
+const SuggestBannerText = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  strong {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    font-weight: 800;
+  }
 `
 
 const HeroCard = styled.section`
@@ -689,7 +968,42 @@ const TenureMetaTag = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-const PolityPill = styled.span<{ $historical: boolean }>`
+const PolityPillBtn = styled.button<{ $historical: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid
+    ${({ theme, $historical }) =>
+      $historical
+        ? theme.mode === 'dark'
+          ? 'rgba(245, 158, 11, 0.32)'
+          : 'rgba(180, 83, 9, 0.24)'
+        : ledgerHairlineStrong(theme.mode)};
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  background: ${({ theme, $historical }) =>
+    $historical
+      ? theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.14)'
+        : 'rgba(245, 158, 11, 0.1)'
+      : ledgerChipFill(theme.mode)};
+  color: ${({ theme, $historical }) =>
+    $historical
+      ? theme.mode === 'dark'
+        ? '#fcd34d'
+        : '#b45309'
+      : theme.colors.text.primary};
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  }
+`
+
+const PolityStaticPill = styled.span<{ $historical: boolean }>`
+  align-self: flex-start;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -811,6 +1125,26 @@ const SectionHeader = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+`
+
+const SectionHeaderRight = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+`
+
+const SmallAddBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
 `
 
 const SectionTitle = styled.h2`

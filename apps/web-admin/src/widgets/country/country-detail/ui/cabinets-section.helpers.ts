@@ -707,19 +707,47 @@ function tenureBundleHasCeremonialHeadCabinetHideTitle(
 ): boolean {
   if (!head) return false
   const tb = headTenureTitleBundleForSovereignCheck(head)
-  if (/내각총리|內閣總理|内閣総理|首相|총리대신|Prime\s+Minister/i.test(tb)) {
+  if (
+    /친정|親政|내각총리|內閣總理|内閣総理|首相|총리대신|Prime\s+Minister/i.test(tb)
+  ) {
     return false
   }
   return /천황|황제|皇帝|天皇|술탄|Sultan|차르|Tsar|Tsarina/i.test(tb)
 }
 
+export interface CabinetVisibilityContext {
+  name?: string | null
+  description?: string | null
+  linkageGroupId?: string | null
+  _count?: {
+    members?: number | null
+    memberTenures?: number | null
+  } | null
+}
+
 /**
  * 내각(행정부) 타임라인에서 숨길 수반인지 — `HEAD_OF_STATE`(또는 타입 없음)이면서
- * 의례적 원수(천황·황제·술탄·차르 등)로만 판별. 국왕 직함 수반 행정부는 표시한다.
+ * 의례적 원수(천황·황제·술탄·차르 등)로만 자동 생성된 빈 내각만 숨긴다.
+ * 사용자가 명시적으로 내각 명칭·설명·각료·다국 연계·친정 직함을 지정한 경우는 표시한다.
  */
 export function shouldHideCabinetFromExecutiveTimeline(
   head: GovernmentHeadTenureInCabinetList | null | undefined,
+  cabinet?: CabinetVisibilityContext | null,
 ): boolean {
+  if (cabinet) {
+    if (
+      cabinet.name?.trim() ||
+      cabinet.description?.trim() ||
+      cabinet.linkageGroupId
+    ) {
+      return false
+    }
+    const memberCount =
+      (cabinet._count?.members ?? 0) + (cabinet._count?.memberTenures ?? 0)
+    if (memberCount > 0) {
+      return false
+    }
+  }
   if (!head) return false
   const pt = head.positionType ?? head.positionDefinition?.positionType ?? null
 

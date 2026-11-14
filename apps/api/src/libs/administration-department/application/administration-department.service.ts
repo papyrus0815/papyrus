@@ -75,6 +75,9 @@ const DEPARTMENT_INCLUDE = {
     select: { id: true, name: true, abbreviation: true, unitType: true },
     orderBy: { name: 'asc' as const },
   },
+  _count: {
+    select: { tenures: true, eventRelations: true },
+  },
 } satisfies Prisma.AdministrationDepartmentInclude
 
 type DepartmentRow = Prisma.AdministrationDepartmentGetPayload<{ include: typeof DEPARTMENT_INCLUDE }>
@@ -225,6 +228,16 @@ function toResponse(row: DepartmentRow): AdministrationDepartmentResponseDto {
       abbreviation: unit.abbreviation ?? null,
       unitType: unit.unitType ?? null,
     })),
+    ...((row as { _count?: { tenures?: number; eventRelations?: number } })._count !==
+    undefined
+      ? {
+          tenureCount:
+            (row as { _count?: { tenures?: number } })._count?.tenures ?? 0,
+          eventCount:
+            (row as { _count?: { eventRelations?: number } })._count
+              ?.eventRelations ?? 0,
+        }
+      : {}),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }
@@ -404,13 +417,16 @@ export class AdministrationDepartmentService {
             ? searchOrClause
             : {}),
     }
+    const maxTake =
+      params.take != null && Number.isFinite(params.take)
+        ? Math.min(Math.max(Math.trunc(params.take), 1), 5000)
+        : undefined
+
     const rawList = await this.prisma.administrationDepartment.findMany({
       where,
       orderBy: [{ countryId: 'asc' }, { name: 'asc' }],
       include: DEPARTMENT_INCLUDE,
-      ...(params.take && params.activeAtYear == null
-        ? { take: Math.min(Math.max(params.take, 1), 500) }
-        : {}),
+      ...(maxTake && params.activeAtYear == null ? { take: maxTake } : {}),
     })
     const rolledUpList =
       params.historicalCountryId && constituentByMemberId.size > 0
@@ -488,8 +504,8 @@ export class AdministrationDepartmentService {
         : rolledUpList
 
     const cappedList =
-      params.take && params.activeAtYear != null
-        ? yearFilteredList.slice(0, Math.min(Math.max(params.take, 1), 500))
+      maxTake && params.activeAtYear != null
+        ? yearFilteredList.slice(0, maxTake)
         : yearFilteredList
 
     return cappedList.map(toResponse)

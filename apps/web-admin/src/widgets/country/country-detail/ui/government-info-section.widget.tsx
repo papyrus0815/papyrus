@@ -343,6 +343,7 @@ export function GovernmentInfoSection({
                           ? 'departments'
                           : 'cabinets',
                     }),
+                    { state: { skipGovernmentMemoryRestore: true } },
                   )
                 }
                 title="전 국가 행정부·내각 및 중앙부처 비교 카탈로그로 이동"
