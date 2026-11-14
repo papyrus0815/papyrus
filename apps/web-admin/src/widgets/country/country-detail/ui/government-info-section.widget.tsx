@@ -1,38 +1,42 @@
 /**
  * 국가 상세 화면의 「정부·행정」 블록.
- * 상단 탭(정체·헌정 · 역대 수반 · 행정부·내각 · 중앙부처·국가기관 · 통계) 전환 및
- * 부처 카테고리 설정 모달(`GovernmentCategoryModal`), 국방부 등 부처 상세에서 바로 여는 군부대 등록 모달을 포함한다.
- * (군사 사령부·부대 전체 편제는 국가 최상위 「군사」 탭에서 전담한다.)
+ * 사건 페이지 디자인 시스템을 참조한 플랫 원장형 서브탭 네비게이션(정체·헌정 · 행정부·내각 · 중앙부처·국가기관 · 직위·서열 · 통계·연혁)과
+ * 부처 카테고리 설정 모달(`GovernmentCategoryModal`), 국방부 등 부처 상세에서 바로 여는 군부대 등록 사이드 패널을 포함한다.
  */
-import { useQueryClient } from '@tanstack/react-query'
-import { motion } from 'framer-motion'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { FiSettings } from 'react-icons/fi'
+import { FiArrowUpRight, FiShield } from 'react-icons/fi'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import styled from 'styled-components'
 
+import { usePoliticalSystems } from '@/entities/political-system/api'
 import {
   GOVERNMENT_TAB_ORDER,
   GOV_TAB_META,
   type GovernmentContentTab,
 } from '@/features/government-info/model/government-content-tab'
+import {
+  GovLedgerPage,
+  GovSubNavBar,
+  GovSubTabBtn,
+  GovSubTabCount,
+  GovSubTabList,
+  GovToolbarBtn,
+} from '@/features/government-info/ui/government-ledger.styles'
 import { GovernmentStatisticsTab } from '@/features/government-info/ui/government-statistics-tab.widget'
 import { MinistriesTabSection } from '@/features/government-info/ui/ministries-tab-section.widget'
 import { PoliticalSystemTab } from '@/features/government-info/ui/political-system-tab.widget'
+import { administrationDepartmentApi } from '@/shared/api/administration-department'
+import { personCareerApi } from '@/shared/api/person-career'
 import {
   administrationDepartmentsByCountryQueryKey,
   administrationDepartmentsByHistoricalCountryQueryKey,
 } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { pathKeys } from '@/shared/router'
 import { useThemeStore } from '@/shared/styles/theme.store'
-import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
-import {
-  UnderlineTabButton,
-  UnderlineTabNav,
-} from '@/shared/ui/underline-tabs'
 
 import { CabinetsSection } from './cabinets-section.widget'
 import { GovernmentCategoryModal } from './government-category-modal.widget'
-import { HeadsOfStateSection } from './heads-of-state-section.widget'
 import { MilitaryUnitFormModal } from './military-unit-form.modal'
 import { PositionDefinitionsSection } from './position-definitions-section.widget'
 
@@ -58,15 +62,14 @@ export function GovernmentInfoSection({
   const rawSubQuery = searchParams.get('sub')?.trim() || ''
 
   const effectiveCountryId = countryId ?? country?.id
+  const isHistorical = country?.type === 'historical'
   const isDark = useThemeStore((state) => state.mode === 'dark')
 
   const validSubQuery = (
     GOVERNMENT_TAB_ORDER as readonly string[]
   ).includes(rawSubQuery)
     ? (rawSubQuery as GovernmentContentTab)
-    : rawSubQuery === 'positions'
-      ? ('positions' as const)
-      : null
+    : null
 
   const [contentTab, setContentTab] = useState<GovernmentContentTab>(
     departmentIdQuery
@@ -76,7 +79,7 @@ export function GovernmentInfoSection({
             ? initialContentTab
             : cabinetIdQuery
               ? 'cabinets'
-              : 'heads'),
+              : 'system'),
   )
 
   const [cabinetMinistryIntent, setCabinetMinistryIntent] = useState<{
@@ -95,10 +98,69 @@ export function GovernmentInfoSection({
   const [militaryDeptDefaultId, setMilitaryDeptDefaultId] = useState<
     string | null
   >(null)
+  const [militaryHistoricalDefaultId, setMilitaryHistoricalDefaultId] =
+    useState<string | null>(null)
   const [focusDepartmentId, setFocusDepartmentId] = useState<string | null>(
     departmentIdQuery || null,
   )
   const [categoryModalOpen, setCategoryModalOpen] = useState(false)
+
+  // 탭 배지용 경량 공유 쿼리 (각 서브탭과 동일한 queryKey 재사용)
+  const politicalSystemsQuery = usePoliticalSystems({
+    countryId: isHistorical ? undefined : effectiveCountryId,
+    historicalCountryId: isHistorical ? effectiveCountryId : undefined,
+  })
+
+  const departmentsQuery = useQuery({
+    queryKey: isHistorical
+      ? administrationDepartmentsByHistoricalCountryQueryKey(effectiveCountryId)
+      : administrationDepartmentsByCountryQueryKey(effectiveCountryId),
+    queryFn: () =>
+      isHistorical
+        ? administrationDepartmentApi.getByHistoricalCountryId(
+            effectiveCountryId!,
+          )
+        : administrationDepartmentApi.getByCountryId(effectiveCountryId!),
+    enabled: Boolean(effectiveCountryId),
+    staleTime: 60_000,
+  })
+
+  const cabinetsCountQuery = useQuery({
+    queryKey: [
+      'cabinets-by-country',
+      isHistorical ? '' : (effectiveCountryId ?? ''),
+      isHistorical ? (effectiveCountryId ?? null) : null,
+    ],
+    queryFn: () =>
+      personCareerApi.getCabinets({
+        countryId: isHistorical ? undefined : effectiveCountryId,
+        historicalCountryId: isHistorical ? effectiveCountryId : undefined,
+      }),
+    enabled: Boolean(effectiveCountryId),
+    staleTime: 60_000,
+  })
+
+  const positionsCountQuery = useQuery({
+    queryKey: [
+      'position-definitions-stats',
+      isHistorical ? '' : (effectiveCountryId ?? ''),
+      isHistorical ? (effectiveCountryId ?? null) : null,
+    ],
+    queryFn: () =>
+      personCareerApi.getPositionDefinitions({
+        countryId: isHistorical ? undefined : effectiveCountryId,
+        historicalCountryId: isHistorical ? effectiveCountryId : undefined,
+      }),
+    enabled: Boolean(effectiveCountryId),
+    staleTime: 60_000,
+  })
+
+  const tabCountByKey: Partial<Record<GovernmentContentTab, number>> = {
+    system: politicalSystemsQuery.data?.length,
+    cabinets: cabinetsCountQuery.data?.length,
+    ministries: departmentsQuery.data?.length,
+    positions: positionsCountQuery.data?.length,
+  }
 
   useEffect(() => {
     if (
@@ -141,94 +203,75 @@ export function GovernmentInfoSection({
 
   return (
     <>
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 24,
-          padding: '36px 32px 48px',
-          minHeight: 'calc(100vh - 200px)',
-          position: 'relative',
-          width: '100%',
-          minWidth: 0,
-          boxSizing: 'border-box',
-        }}
-      >
-        <SectionTabHeader
-          variant="plain"
-          title="정부·행정"
-          description="정체·헌정, 역대 수반(군주·원수·총리), 행정부·내각, 중앙부처·국가기관을 통합 관리합니다. (군 사령부·부대 편제는 상단 「군사」 탭에서 관리합니다.)"
-          rightSlot={
-            contentTab === 'ministries' ? (
-              <AddButton
-                type="button"
-                onClick={openCategoryModal}
-                aria-label="부처 카테고리 설정"
-              >
-                <FiSettings size={14} />
-                카테고리 설정
-              </AddButton>
-            ) : undefined
-          }
-        />
+      <GovLedgerPage>
+        <GovSubNavBar>
+          <GovSubTabList role="tablist" aria-label="정부·행정 하위 메뉴">
+            {GOVERNMENT_TAB_ORDER.map((tabKey) => {
+              const isActive = contentTab === tabKey
+              const countVal = tabCountByKey[tabKey]
+              return (
+                <GovSubTabBtn
+                  key={tabKey}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  $active={isActive}
+                  onClick={() => {
+                    setPositionFilterContext(null)
+                    setContentTab(tabKey)
+                  }}
+                  title={GOV_TAB_META[tabKey].hint}
+                >
+                  <span>{GOV_TAB_META[tabKey].label}</span>
+                  {typeof countVal === 'number' && countVal > 0 ? (
+                    <GovSubTabCount $active={isActive}>
+                      {countVal}
+                    </GovSubTabCount>
+                  ) : null}
+                </GovSubTabBtn>
+              )
+            })}
+          </GovSubTabList>
 
-        <div style={{ flexShrink: 0, width: '100%', minWidth: 0 }}>
-          <UnderlineTabNav
-            role="tablist"
-            aria-label="정부·행정 하위 메뉴"
-            style={{ marginBottom: 0 }}
-          >
-            {GOVERNMENT_TAB_ORDER.map((tabKey) => (
-              <UnderlineTabButton
-                key={tabKey}
+          {effectiveCountryId ? (
+            <GovSubNavActions>
+              <GovToolbarBtn
                 type="button"
-                role="tab"
-                aria-selected={contentTab === tabKey}
-                $active={contentTab === tabKey}
-                onClick={() => {
-                  setPositionFilterContext(null)
-                  setContentTab(tabKey)
-                }}
-                title={GOV_TAB_META[tabKey].hint}
+                onClick={() =>
+                  navigate(pathKeys.countryMilitary(effectiveCountryId))
+                }
+                title="군 최고사령부·야전군·사단 편제 탭으로 이동"
               >
-                {GOV_TAB_META[tabKey].label}
-              </UnderlineTabButton>
-            ))}
-          </UnderlineTabNav>
-        </div>
+                <FiShield size={13} />
+                <span>군사 사령부·편제</span>
+                <FiArrowUpRight size={12.5} />
+              </GovToolbarBtn>
+            </GovSubNavActions>
+          ) : null}
+        </GovSubNavBar>
 
         {contentTab === 'system' && (
-          <section aria-label="정체·헌정">
+          <GovContentStage aria-label="정체·헌정">
             <PoliticalSystemTab
-              countryId={
-                country?.type === 'historical' ? undefined : effectiveCountryId
-              }
-              historicalCountryId={
-                country?.type === 'historical' ? country.id : undefined
-              }
+              countryId={isHistorical ? undefined : effectiveCountryId}
+              historicalCountryId={isHistorical ? country?.id : undefined}
               countryName={country?.name}
             />
-          </section>
-        )}
-
-        {contentTab === 'heads' && country && (
-          <section aria-label="역대 수반">
-            <HeadsOfStateSection country={country} embedded />
-          </section>
+          </GovContentStage>
         )}
 
         {contentTab === 'statistics' && (
-          <GovernmentStatisticsTab
-            country={country}
-            effectiveCountryId={effectiveCountryId}
-          />
+          <GovContentStage aria-label="통계·연혁">
+            <GovernmentStatisticsTab
+              country={country}
+              effectiveCountryId={effectiveCountryId}
+            />
+          </GovContentStage>
         )}
 
         {contentTab === 'ministries' && (
-          <div
+          <GovContentStage
+            aria-label="중앙부처·국가기관"
             style={{
               flex: 1,
               minHeight: 0,
@@ -239,7 +282,7 @@ export function GovernmentInfoSection({
             <MinistriesTabSection
               contentTab={contentTab}
               effectiveCountryId={effectiveCountryId}
-              isHistorical={country?.type === 'historical'}
+              isHistorical={isHistorical}
               isDark={isDark}
               cabinetOpenMinistryIntent={cabinetMinistryIntent}
               onConsumedCabinetOpenMinistryIntent={() =>
@@ -251,8 +294,9 @@ export function GovernmentInfoSection({
                 setPositionFilterContext(ctx ?? null)
                 setContentTab('positions')
               }}
-              onRegisterMilitaryUnit={(departmentId) => {
+              onRegisterMilitaryUnit={(departmentId, historicalCountryId) => {
                 setMilitaryDeptDefaultId(departmentId)
+                setMilitaryHistoricalDefaultId(historicalCountryId ?? null)
                 setMilitaryUnitEditingId(null)
                 setMilitaryUnitModalOpen(true)
               }}
@@ -264,6 +308,7 @@ export function GovernmentInfoSection({
               onEditMilitaryUnit={(unitId) => {
                 setMilitaryUnitEditingId(unitId)
                 setMilitaryDeptDefaultId(null)
+                setMilitaryHistoricalDefaultId(null)
                 setMilitaryUnitModalOpen(true)
               }}
               onOpenMilitaryTab={() => {
@@ -273,11 +318,11 @@ export function GovernmentInfoSection({
               }}
               openCategoryModal={openCategoryModal}
             />
-          </div>
+          </GovContentStage>
         )}
 
         {contentTab === 'positions' && (
-          <section aria-label="직위·서열 사전">
+          <GovContentStage aria-label="직위·서열 사전">
             <PositionDefinitionsSection
               country={country}
               fixedAdministrationDepartmentId={
@@ -294,11 +339,11 @@ export function GovernmentInfoSection({
                   : undefined
               }
             />
-          </section>
+          </GovContentStage>
         )}
 
         {contentTab === 'cabinets' && country && (
-          <section
+          <GovContentStage
             aria-label="행정부·내각"
             style={{
               flex: 1,
@@ -320,9 +365,9 @@ export function GovernmentInfoSection({
                 setContentTab('ministries')
               }}
             />
-          </section>
+          </GovContentStage>
         )}
-      </motion.div>
+      </GovLedgerPage>
 
       <GovernmentCategoryModal
         open={categoryModalOpen}
@@ -335,17 +380,15 @@ export function GovernmentInfoSection({
           setMilitaryUnitModalOpen(false)
           setMilitaryUnitEditingId(null)
           setMilitaryDeptDefaultId(null)
+          setMilitaryHistoricalDefaultId(null)
         }}
         onSaved={() => {
           void queryClient.invalidateQueries({
-            queryKey:
-              country?.type === 'historical'
-                ? administrationDepartmentsByHistoricalCountryQueryKey(
-                    effectiveCountryId,
-                  )
-                : administrationDepartmentsByCountryQueryKey(
-                    effectiveCountryId,
-                  ),
+            queryKey: isHistorical
+              ? administrationDepartmentsByHistoricalCountryQueryKey(
+                  effectiveCountryId,
+                )
+              : administrationDepartmentsByCountryQueryKey(effectiveCountryId),
           })
           void queryClient.invalidateQueries({
             queryKey: ['military-units'],
@@ -354,13 +397,11 @@ export function GovernmentInfoSection({
             queryKey: ['military-unit'],
           })
         }}
-        defaultCountryId={
-          country?.type === 'historical'
-            ? (country.modernCountries?.[0]?.id ?? null)
-            : (effectiveCountryId ?? null)
-        }
+        defaultCountryId={isHistorical ? null : (effectiveCountryId ?? null)}
         defaultHistoricalCountryId={
-          country?.type === 'historical' ? (effectiveCountryId ?? null) : null
+          isHistorical
+            ? (effectiveCountryId ?? null)
+            : militaryHistoricalDefaultId
         }
         defaultAdministrationDepartmentId={militaryDeptDefaultId}
         editingUnitId={militaryUnitEditingId}
@@ -372,3 +413,19 @@ export function GovernmentInfoSection({
     </>
   )
 }
+
+const GovSubNavActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 6px;
+  flex-shrink: 0;
+`
+
+const GovContentStage = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+`

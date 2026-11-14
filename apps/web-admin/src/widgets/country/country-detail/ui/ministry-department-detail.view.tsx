@@ -1,30 +1,32 @@
 /**
- * 중앙부처 상세 — 행정부 상세(`cabinets-section`)와 동일 레이아웃:
- * CabDetailTopBar + HeadProfileBlock + HeadTenureInfoSection + ProfileSection
+ * 중앙부처·국가기관 상세 뷰
+ * - 가로형 기관 아이덴티티 카드 + 상하 위계·전신후신·군부대 매트릭스 + 개요·메타 + 재임·사건 슬롯
  */
 import type { ReactNode } from 'react'
 import {
+  FiAward,
   FiBriefcase,
   FiCalendar,
   FiChevronLeft,
   FiEdit2,
+  FiGlobe,
   FiLayers,
   FiPlus,
   FiShield,
   FiTrash2,
 } from 'react-icons/fi'
 
-import { getUploadImageUrl } from '@/shared/api/upload'
 import {
   type AdministrationDepartment,
   DEPARTMENT_KIND_LABEL,
 } from '@/shared/api/administration-department'
+import { getUploadImageUrl } from '@/shared/api/upload'
 import { militaryUnitTypeLabelKo } from '@/shared/lib/military-unit-type-label'
-
 import {
   hasDefenseExtensionContent,
   parseDepartmentDescription,
 } from '@/shared/lib/ministry-department/ministry-department-utils'
+
 import * as S from './ministry-department-detail.styles'
 
 type MinistryDepartmentDetailViewProps = {
@@ -123,9 +125,25 @@ export function MinistryDepartmentDetailView({
     department.description,
   )
   const hasDefense = Boolean(defense && hasDefenseExtensionContent(defense))
+  const primaryMission =
+    department.primaryMission?.trim() || defense?.missionScope?.trim() || ''
+  const headquarters =
+    department.headquarters?.trim() || defense?.headquarters?.trim() || ''
+  const orgStructure =
+    department.orgStructure?.trim() || defense?.orgStructure?.trim() || ''
+  const budgetNote =
+    department.budgetNote?.trim() || defense?.budgetOrForcesNote?.trim() || ''
+  const hasStructuredMeta = Boolean(
+    primaryMission || headquarters || orgStructure || budgetNote,
+  )
   const militaryUnits = department.militaryUnits ?? []
+  const milSuccessors = (department.militaryUnitSuccessors ?? []).filter(
+    (succLineage) => Boolean(succLineage.militaryUnit?.id),
+  )
   const est = formatDeptDate(department.established, department.establishedDate)
   const abol = formatDeptDate(department.abolished, department.abolishedDate)
+  const isAbolished = Boolean(abol)
+
   const parentDept = department.parentId
     ? (allDepartments.find((deptItem) => deptItem.id === department.parentId) ??
       (department as { parent?: { id: string; name: string } | null }).parent ??
@@ -150,18 +168,43 @@ export function MinistryDepartmentDetailView({
     department.nameEn?.trim() ||
       (hasDefense ? defense?.officialNameEn?.trim() : undefined),
   ].filter(Boolean)
-  const kindLabel =
-    department.kind && department.kind !== 'MINISTRY'
-      ? DEPT_KIND_LABEL_KO[department.kind]
-      : null
+
+  const kindLabel = department.kind
+    ? DEPT_KIND_LABEL_KO[department.kind]
+    : DEPT_KIND_LABEL_KO.MINISTRY
+
+  const hasRelationsMatrix = Boolean(
+    parentDept ||
+      childDepts.length > 0 ||
+      predecessors.length > 0 ||
+      successors.length > 0 ||
+      milSuccessors.length > 0 ||
+      militaryUnits.length > 0,
+  )
+
+  const renderEmblemIcon = () => {
+    if (isDefenseRelated || militaryUnits.length > 0) {
+      return <FiShield size={28} />
+    }
+    if (department.kind === 'ROYAL_HOUSEHOLD') {
+      return <FiAward size={28} />
+    }
+    if (department.kind === 'COLONIAL_GOVERNMENT') {
+      return <FiGlobe size={28} />
+    }
+    if (department.kind === 'AGENCY') {
+      return <FiLayers size={28} />
+    }
+    return <FiBriefcase size={28} />
+  }
 
   return (
     <S.DetailRoot>
-      {/* 행정부 상세 CabDetailTopBar 와 동일 구조 */}
+      {/* 상단 브레드크럼 & 통합 액션 바 */}
       <S.DeptDetailTopBar>
         <S.DeptDetailTopLeft>
           <S.DeptDetailBackBtn type="button" onClick={onBack}>
-            <FiChevronLeft size={14} />
+            <FiChevronLeft size={13} />
             {embeddedInSplitView ? '선택 해제' : '부처 목록'}
           </S.DeptDetailBackBtn>
           <S.DeptBreadcrumbSep>/</S.DeptBreadcrumbSep>
@@ -169,122 +212,132 @@ export function MinistryDepartmentDetailView({
             {department.name}
           </S.DeptCrumbTitle>
         </S.DeptDetailTopLeft>
+
         <S.DeptDetailTopBarRight>
-          {isDefenseRelated ? (
-            <S.DefenseBadge>
-              <FiShield size={13} aria-hidden />
-              국방·군사
-            </S.DefenseBadge>
-          ) : null}
-          <S.DeptDetailActionsGroup role="group" aria-label="부처 편집">
-            <S.DeptTopEditBtn onClick={onAddChild}>
-              <FiPlus size={14} />
-              산하 기관 추가
-            </S.DeptTopEditBtn>
+          <S.DeptDetailActionsGroup role="group" aria-label="기관 편집 및 관리">
+            <S.DeptTopGhostBtn onClick={onAddChild}>
+              <FiPlus size={13} />
+              산하 추가
+            </S.DeptTopGhostBtn>
             {onRegisterMilitaryUnit ? (
-              <S.DeptTopEditBtn onClick={onRegisterMilitaryUnit}>
-                <FiShield size={14} />
+              <S.DeptTopTealBtn onClick={onRegisterMilitaryUnit}>
+                <FiShield size={13} />
                 직할 군부대 등록
-              </S.DeptTopEditBtn>
+              </S.DeptTopTealBtn>
             ) : null}
+            <S.DeptTopGhostBtn onClick={onGoToPositions}>
+              <FiLayers size={13} />
+              직위 정의
+            </S.DeptTopGhostBtn>
             <S.DeptTopEditBtn onClick={onEdit}>
-              <FiEdit2 size={14} />
+              <FiEdit2 size={13} />
               수정
             </S.DeptTopEditBtn>
             <S.DeptTopDeleteBtn onClick={onDelete}>
-              <FiTrash2 size={14} />
+              <FiTrash2 size={13} />
               삭제
             </S.DeptTopDeleteBtn>
           </S.DeptDetailActionsGroup>
         </S.DeptDetailTopBarRight>
       </S.DeptDetailTopBar>
 
-      {/* 수반 HeadProfileBlock 과 동일 */}
-      <S.DeptProfileBlock>
-        <S.DeptProfileAvatar>
-          {department.thumbnailUrl ? (
-            <img
-              src={getUploadImageUrl(department.thumbnailUrl)}
-              alt=""
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                objectPosition: 'center center',
-              }}
-            />
-          ) : (
-            <FiBriefcase size={40} color="#c0cad8" />
-          )}
-        </S.DeptProfileAvatar>
-        <S.DeptProfileMeta>
-          <S.DeptProfileNameRow>
-            {department.historicalCountry?.name ? (
-              <S.DeptCategoryBadge>
-                {department.historicalCountry.name}
-              </S.DeptCategoryBadge>
-            ) : null}
-            {kindLabel ? (
-              <S.DeptCategoryBadge>{kindLabel}</S.DeptCategoryBadge>
-            ) : null}
-            {categoryLabel ? (
-              <S.DeptCategoryBadge>{categoryLabel}</S.DeptCategoryBadge>
-            ) : null}
+      {/* 가로형 기관 아이덴티티 카드 */}
+      <S.DeptIdentityCard>
+        <S.DeptIdentityMain>
+          <S.DeptEmblemFrame
+            $isDefense={isDefenseRelated || militaryUnits.length > 0}
+          >
+            {department.thumbnailUrl ? (
+              <img
+                src={getUploadImageUrl(department.thumbnailUrl)}
+                alt=""
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                }}
+              />
+            ) : (
+              renderEmblemIcon()
+            )}
+          </S.DeptEmblemFrame>
+
+          <S.DeptIdentityBody>
+            <S.DeptBadgeStrip>
+              <S.DeptStatusBadge $abolished={isAbolished}>
+                <S.DeptStatusDot $abolished={isAbolished} />
+                {isAbolished ? '폐지·개편' : '현존 기관'}
+              </S.DeptStatusBadge>
+              {department.historicalCountry?.name ? (
+                <S.DeptCategoryBadge>
+                  🏛️ {department.historicalCountry.name}
+                </S.DeptCategoryBadge>
+              ) : null}
+              {kindLabel ? (
+                <S.DeptCategoryBadge>{kindLabel}</S.DeptCategoryBadge>
+              ) : null}
+              {categoryLabel ? (
+                <S.DeptCategoryBadge>{categoryLabel}</S.DeptCategoryBadge>
+              ) : null}
+              {isDefenseRelated ? (
+                <S.DefenseBadge>
+                  <FiShield size={11} aria-hidden />
+                  국방·군정
+                </S.DefenseBadge>
+              ) : null}
+            </S.DeptBadgeStrip>
+
             <S.DeptProfileName>
               {department.name}
-              {department.abbreviation?.trim()
-                ? ` (${department.abbreviation.trim()})`
-                : ''}
-            </S.DeptProfileName>
-          </S.DeptProfileNameRow>
-          {subNameBits.length > 0 ? (
-            <S.DeptPosBadge style={{ alignSelf: 'center' }}>
-              {subNameBits.join(' · ')}
-            </S.DeptPosBadge>
-          ) : null}
-          <S.DeptTenureRow>
-            {dateBits.length > 0 ? (
-              <S.DeptTenureDates>
-                <FiCalendar size={10} />
-                {dateBits.join(' · ')}
-              </S.DeptTenureDates>
-            ) : (
-              <S.DeptTenureDates>
-                <FiCalendar size={10} />
-                날짜 미등록
-              </S.DeptTenureDates>
-            )}
-          </S.DeptTenureRow>
-          {(parentDept || childDepts.length > 0) && (
-            <S.UnitsRow>
-              {parentDept ? (
-                <>
-                  <S.UnitsLabel>상위 기관</S.UnitsLabel>
-                  <S.UnitChip
-                    key={`parent-${parentDept.id}`}
-                    role={onSelectDepartment ? 'button' : undefined}
-                    tabIndex={onSelectDepartment ? 0 : undefined}
-                    onClick={() => onSelectDepartment?.(parentDept.id)}
-                    onKeyDown={(event) => {
-                      if (
-                        !onSelectDepartment ||
-                        (event.key !== 'Enter' && event.key !== ' ')
-                      )
-                        return
-                      event.preventDefault()
-                      onSelectDepartment(parentDept.id)
-                    }}
-                    style={{
-                      cursor: onSelectDepartment ? 'pointer' : undefined,
-                    }}
-                  >
-                    {parentDept.name}
-                  </S.UnitChip>
-                </>
+              {department.abbreviation?.trim() ? (
+                <S.DeptAbbrSpan>
+                  ({department.abbreviation.trim()})
+                </S.DeptAbbrSpan>
               ) : null}
-              {childDepts.length > 0 ? (
-                <>
-                  <S.UnitsLabel>산하 기관</S.UnitsLabel>
+            </S.DeptProfileName>
+
+            <S.DeptSubMetaRow>
+              {subNameBits.length > 0 ? (
+                <S.DeptPosBadge>{subNameBits.join(' · ')}</S.DeptPosBadge>
+              ) : null}
+              <S.DeptTenureDates>
+                <FiCalendar size={11} />
+                {dateBits.length > 0 ? dateBits.join(' · ') : '설립·폐지일 미등록'}
+              </S.DeptTenureDates>
+            </S.DeptSubMetaRow>
+          </S.DeptIdentityBody>
+        </S.DeptIdentityMain>
+
+        {hasRelationsMatrix ? (
+          <S.DeptRelationsMatrix>
+            {(parentDept || childDepts.length > 0) && (
+              <S.DeptRelationRow>
+                <S.UnitsLabel>상하 위계</S.UnitsLabel>
+                <S.UnitsChipList>
+                  {parentDept ? (
+                    <S.UnitChip
+                      key={`parent-${parentDept.id}`}
+                      role={onSelectDepartment ? 'button' : undefined}
+                      tabIndex={onSelectDepartment ? 0 : undefined}
+                      onClick={() => onSelectDepartment?.(parentDept.id)}
+                      onKeyDown={(event) => {
+                        if (
+                          !onSelectDepartment ||
+                          (event.key !== 'Enter' && event.key !== ' ')
+                        ) {
+                          return
+                        }
+                        event.preventDefault()
+                        onSelectDepartment(parentDept.id)
+                      }}
+                      style={{
+                        cursor: onSelectDepartment ? 'pointer' : undefined,
+                      }}
+                    >
+                      <span style={{ opacity: 0.65, fontWeight: 500 }}>상위</span>
+                      {parentDept.name}
+                    </S.UnitChip>
+                  ) : null}
                   {childDepts.map((childDept) => (
                     <S.UnitChip
                       key={`child-${childDept.id}`}
@@ -295,8 +348,9 @@ export function MinistryDepartmentDetailView({
                         if (
                           !onSelectDepartment ||
                           (event.key !== 'Enter' && event.key !== ' ')
-                        )
+                        ) {
                           return
+                        }
                         event.preventDefault()
                         onSelectDepartment(childDept.id)
                       }}
@@ -304,18 +358,18 @@ export function MinistryDepartmentDetailView({
                         cursor: onSelectDepartment ? 'pointer' : undefined,
                       }}
                     >
+                      <span style={{ opacity: 0.65, fontWeight: 500 }}>산하</span>
                       {childDept.name}
                     </S.UnitChip>
                   ))}
-                </>
-              ) : null}
-            </S.UnitsRow>
-          )}
-          {(predecessors.length > 0 || successors.length > 0) && (
-            <S.UnitsRow>
-              {predecessors.length > 0 ? (
-                <>
-                  <S.UnitsLabel>전신</S.UnitsLabel>
+                </S.UnitsChipList>
+              </S.DeptRelationRow>
+            )}
+
+            {(predecessors.length > 0 || successors.length > 0) && (
+              <S.DeptRelationRow>
+                <S.UnitsLabel>역사 계보</S.UnitsLabel>
+                <S.UnitsChipList>
                   {predecessors.map((lineage) => {
                     const predId = lineage.department.id
                     const kindLabelKo = lineage.kind
@@ -339,8 +393,9 @@ export function MinistryDepartmentDetailView({
                           if (
                             !onSelectDepartment ||
                             (event.key !== 'Enter' && event.key !== ' ')
-                          )
+                          ) {
                             return
+                          }
                           event.preventDefault()
                           onSelectDepartment(predId)
                         }}
@@ -348,20 +403,18 @@ export function MinistryDepartmentDetailView({
                           cursor: onSelectDepartment ? 'pointer' : undefined,
                         }}
                       >
+                        <span style={{ opacity: 0.65, fontWeight: 500 }}>
+                          전신
+                        </span>
                         {lineage.department.name}
                         {metaSuffix ? (
-                          <span style={{ opacity: 0.75, fontWeight: 500 }}>
+                          <span style={{ opacity: 0.72, fontWeight: 500 }}>
                             · {metaSuffix}
                           </span>
                         ) : null}
                       </S.UnitChip>
                     )
                   })}
-                </>
-              ) : null}
-              {successors.length > 0 ? (
-                <>
-                  <S.UnitsLabel>후신</S.UnitsLabel>
                   {successors.map((lineage) => {
                     const succId = lineage.department.id
                     const kindLabelKo = lineage.kind
@@ -385,8 +438,9 @@ export function MinistryDepartmentDetailView({
                           if (
                             !onSelectDepartment ||
                             (event.key !== 'Enter' && event.key !== ' ')
-                          )
+                          ) {
                             return
+                          }
                           event.preventDefault()
                           onSelectDepartment(succId)
                         }}
@@ -394,207 +448,178 @@ export function MinistryDepartmentDetailView({
                           cursor: onSelectDepartment ? 'pointer' : undefined,
                         }}
                       >
+                        <span style={{ opacity: 0.65, fontWeight: 500 }}>
+                          후신
+                        </span>
                         {lineage.department.name}
                         {metaSuffix ? (
-                          <span style={{ opacity: 0.75, fontWeight: 500 }}>
+                          <span style={{ opacity: 0.72, fontWeight: 500 }}>
                             · {metaSuffix}
                           </span>
                         ) : null}
                       </S.UnitChip>
                     )
                   })}
-                </>
-              ) : null}
-            </S.UnitsRow>
-          )}
-          {(department.militaryUnitSuccessors?.length ?? 0) > 0 ? (
-            <S.UnitsRow>
-              <S.UnitsLabel>군 사령부 개편·이관</S.UnitsLabel>
-              {(department.militaryUnitSuccessors ?? []).map((succLineage) => {
-                const handleUnitClick =
-                  onInspectMilitaryUnit ?? onEditMilitaryUnit
-                const yearText = succLineage.year
-                  ? `${succLineage.era === 'BC' ? 'BC ' : ''}${succLineage.year}년`
-                  : null
-                return (
-                  <S.UnitChip
-                    key={`mil-succ-${succLineage.transitionId}`}
-                    title={
-                      succLineage.note ??
-                      `${succLineage.unit.name} — 군사 탭에서 편제·지휘관 보기`
-                    }
-                    role={handleUnitClick ? 'button' : undefined}
-                    tabIndex={handleUnitClick ? 0 : undefined}
-                    onClick={() => handleUnitClick?.(succLineage.unit.id)}
-                    onKeyDown={(keyEvent) => {
-                      if (
-                        !handleUnitClick ||
-                        (keyEvent.key !== 'Enter' && keyEvent.key !== ' ')
-                      )
-                        return
-                      keyEvent.preventDefault()
-                      handleUnitClick(succLineage.unit.id)
-                    }}
-                    style={{
-                      cursor: handleUnitClick ? 'pointer' : undefined,
-                    }}
-                  >
-                    → {succLineage.unit.name}
-                    {succLineage.unit.abbreviation
-                      ? ` (${succLineage.unit.abbreviation})`
-                      : ''}
-                    <span style={{ opacity: 0.75, fontWeight: 500 }}>
-                      · {militaryUnitTypeLabelKo(succLineage.unit.unitType)}
-                      {yearText ? ` · ${yearText}` : ''}
-                    </span>
-                  </S.UnitChip>
-                )
-              })}
-            </S.UnitsRow>
-          ) : null}
-          {militaryUnits.length > 0 ? (
-            <S.UnitsRow>
-              <S.UnitsLabel>연결 군부대</S.UnitsLabel>
-              {militaryUnits.map((unitRef) => {
-                const handleUnitClick =
-                  onInspectMilitaryUnit ?? onEditMilitaryUnit
-                return (
-                  <S.UnitChip
-                    key={unitRef.id}
-                    title={
-                      onInspectMilitaryUnit
-                        ? `${unitRef.name} — 군사 조직 편제·상세 보기`
-                        : unitRef.id
-                    }
-                    role={handleUnitClick ? 'button' : undefined}
-                    tabIndex={handleUnitClick ? 0 : undefined}
-                    onClick={() => handleUnitClick?.(unitRef.id)}
-                    onKeyDown={(keyEvent) => {
-                      if (
-                        !handleUnitClick ||
-                        (keyEvent.key !== 'Enter' && keyEvent.key !== ' ')
-                      )
-                        return
-                      keyEvent.preventDefault()
-                      handleUnitClick(unitRef.id)
-                    }}
-                    style={{
-                      cursor: handleUnitClick ? 'pointer' : undefined,
-                    }}
-                  >
-                    {unitRef.name}
-                    <span style={{ opacity: 0.75, fontWeight: 500 }}>
-                      · {militaryUnitTypeLabelKo(unitRef.unitType)}
-                    </span>
-                  </S.UnitChip>
-                )
-              })}
-            </S.UnitsRow>
-          ) : isDefenseRelated ? (
-            <S.DeptInfoText
-              style={{
-                fontSize: 12,
-                marginTop: 4,
-                textAlign: 'center',
-                maxWidth: 420,
-              }}
-            >
-              연결된 군부대 없음 — 아래「군부대 등록」에서 이 중앙부처와 연결해
-              등록할 수 있습니다.
-            </S.DeptInfoText>
-          ) : null}
-        </S.DeptProfileMeta>
-        <S.DeptProfileActions>
-          <S.DeptProfileActionsRow>
-            <S.DeptActionBtnPrimary type="button" onClick={onAddChild}>
-              <FiPlus size={14} />
-              하위 기관 추가
-            </S.DeptActionBtnPrimary>
-            {onRegisterMilitaryUnit ? (
-              <S.DeptActionBtnTeal
-                type="button"
-                onClick={onRegisterMilitaryUnit}
-              >
-                <FiShield size={13} />
-                군부대 등록
-              </S.DeptActionBtnTeal>
-            ) : null}
-          </S.DeptProfileActionsRow>
-          <S.DeptProfileActionsRow>
-            <S.DeptActionBtn type="button" onClick={onGoToPositions}>
-              <FiLayers size={14} />
-              직위 정의
-            </S.DeptActionBtn>
-          </S.DeptProfileActionsRow>
-        </S.DeptProfileActions>
-      </S.DeptProfileBlock>
+                </S.UnitsChipList>
+              </S.DeptRelationRow>
+            )}
 
-      {isDefenseRelated ? (
-        <S.DeptInfoSection style={{ marginTop: 12 }}>
+            {milSuccessors.length > 0 && (
+              <S.DeptRelationRow>
+                <S.UnitsLabel>군 사령부 개편</S.UnitsLabel>
+                <S.UnitsChipList>
+                  {milSuccessors.map((succLineage) => {
+                    const targetUnit = succLineage.militaryUnit
+                    const handleUnitClick =
+                      onInspectMilitaryUnit ?? onEditMilitaryUnit
+                    const kindLabelKo = succLineage.kind
+                      ? TRANSITION_KIND_LABEL_KO[succLineage.kind]
+                      : null
+                    const yearLabel = formatTransitionYearLabel(succLineage)
+                    return (
+                      <S.UnitChip
+                        key={`mil-succ-${succLineage.transitionId}`}
+                        $tone="military"
+                        title={
+                          succLineage.note ??
+                          `${targetUnit.name} — 군사 탭에서 편제·지휘관 보기`
+                        }
+                        role={handleUnitClick ? 'button' : undefined}
+                        tabIndex={handleUnitClick ? 0 : undefined}
+                        onClick={() => handleUnitClick?.(targetUnit.id)}
+                        onKeyDown={(keyEvent) => {
+                          if (
+                            !handleUnitClick ||
+                            (keyEvent.key !== 'Enter' && keyEvent.key !== ' ')
+                          ) {
+                            return
+                          }
+                          keyEvent.preventDefault()
+                          handleUnitClick(targetUnit.id)
+                        }}
+                        style={{
+                          cursor: handleUnitClick ? 'pointer' : undefined,
+                        }}
+                      >
+                        <FiShield size={11} />
+                        → {targetUnit.name}
+                        {targetUnit.abbreviation
+                          ? ` (${targetUnit.abbreviation})`
+                          : ''}
+                        <span style={{ opacity: 0.75, fontWeight: 500 }}>
+                          · {militaryUnitTypeLabelKo(targetUnit.unitType)}
+                          {kindLabelKo ? ` · ${kindLabelKo}` : ''}
+                          {yearLabel ? ` (${yearLabel})` : ''}
+                        </span>
+                      </S.UnitChip>
+                    )
+                  })}
+                </S.UnitsChipList>
+              </S.DeptRelationRow>
+            )}
+
+            {militaryUnits.length > 0 && (
+              <S.DeptRelationRow>
+                <S.UnitsLabel>소관 군부대</S.UnitsLabel>
+                <S.UnitsChipList>
+                  {militaryUnits.map((unitRef) => {
+                    const handleUnitClick =
+                      onInspectMilitaryUnit ?? onEditMilitaryUnit
+                    return (
+                      <S.UnitChip
+                        key={unitRef.id}
+                        $tone="military"
+                        title={
+                          onInspectMilitaryUnit
+                            ? `${unitRef.name} — 군사 조직 편제·상세 보기`
+                            : unitRef.id
+                        }
+                        role={handleUnitClick ? 'button' : undefined}
+                        tabIndex={handleUnitClick ? 0 : undefined}
+                        onClick={() => handleUnitClick?.(unitRef.id)}
+                        onKeyDown={(keyEvent) => {
+                          if (
+                            !handleUnitClick ||
+                            (keyEvent.key !== 'Enter' && keyEvent.key !== ' ')
+                          ) {
+                            return
+                          }
+                          keyEvent.preventDefault()
+                          handleUnitClick(unitRef.id)
+                        }}
+                        style={{
+                          cursor: handleUnitClick ? 'pointer' : undefined,
+                        }}
+                      >
+                        <FiShield size={11} />
+                        {unitRef.name}
+                        <span style={{ opacity: 0.75, fontWeight: 500 }}>
+                          · {militaryUnitTypeLabelKo(unitRef.unitType)}
+                        </span>
+                      </S.UnitChip>
+                    )
+                  })}
+                </S.UnitsChipList>
+              </S.DeptRelationRow>
+            )}
+          </S.DeptRelationsMatrix>
+        ) : null}
+      </S.DeptIdentityCard>
+
+      {isDefenseRelated && militaryUnits.length === 0 ? (
+        <S.DeptInfoSection>
           <S.DeptInfoSectionTitle>
-            <S.DeptInfoDot $color="#f59e0b" />
-            군 부대 vs 행정 기관
+            <S.DeptInfoDot $color="#0d9488" />
+            국방·군정 기관 안내
           </S.DeptInfoSectionTitle>
-          <S.DeptInfoText>
-            위「하위 행정 기관 추가」는 정부 조직도상의 또 다른 기관(청·실·국 등)
-            을 만듭니다. 사단·여단·함대 등{' '}
-            <strong>군사 부대</strong>는「군부대 등록」으로 추가하며, 이
-            중앙부처와 자동 연결됩니다. 상위 부대(parentUnitId)는 등록 폼에서
-            지정할 수 있습니다. 부대 자체가 부처가 되는 것은 아닙니다.
+          <S.DeptInfoText style={{ fontSize: 12 }}>
+            행정 조직도상의 청·실·국은 상단「산하 추가」로, 사령부·야전군·사단 등
+            군사 편제는「직할 군부대 등록」으로 연결해 등록합니다.
           </S.DeptInfoText>
         </S.DeptInfoSection>
       ) : null}
 
       {cleanDescription.trim() ? (
-        <S.DeptInfoSection style={{ marginTop: 12 }}>
+        <S.DeptInfoSection>
           <S.DeptInfoSectionTitle>
             <S.DeptInfoDot $color="#6366f1" />
-            개요
+            기관 개요
           </S.DeptInfoSectionTitle>
           <S.DeptInfoText>{cleanDescription.trim()}</S.DeptInfoText>
         </S.DeptInfoSection>
       ) : null}
 
-      {hasDefense && defense ? (
-        <S.MetaGrid style={{ marginTop: 14 }}>
-          {defense.missionScope?.trim() ? (
+      {hasStructuredMeta ? (
+        <S.MetaGrid>
+          {primaryMission ? (
             <S.MetaPanel>
               <S.MetaPanelLabel>주요 임무·관할</S.MetaPanelLabel>
-              <S.MetaPanelBody>{defense.missionScope.trim()}</S.MetaPanelBody>
+              <S.MetaPanelBody>{primaryMission}</S.MetaPanelBody>
             </S.MetaPanel>
           ) : null}
-          {defense.headquarters?.trim() ? (
+          {headquarters ? (
             <S.MetaPanel>
-              <S.MetaPanelLabel>본부·거점</S.MetaPanelLabel>
-              <S.MetaPanelBody>{defense.headquarters.trim()}</S.MetaPanelBody>
+              <S.MetaPanelLabel>청사·본부 소재지</S.MetaPanelLabel>
+              <S.MetaPanelBody>{headquarters}</S.MetaPanelBody>
             </S.MetaPanel>
           ) : null}
-          {defense.orgStructure?.trim() ? (
+          {orgStructure ? (
             <S.MetaPanel>
-              <S.MetaPanelLabel>지휘·산하</S.MetaPanelLabel>
-              <S.MetaPanelBody>{defense.orgStructure.trim()}</S.MetaPanelBody>
+              <S.MetaPanelLabel>산하 조직·편제</S.MetaPanelLabel>
+              <S.MetaPanelBody>{orgStructure}</S.MetaPanelBody>
             </S.MetaPanel>
           ) : null}
-          {defense.budgetOrForcesNote?.trim() ? (
+          {budgetNote ? (
             <S.MetaPanel>
-              <S.MetaPanelLabel>국방비·병력·참고</S.MetaPanelLabel>
-              <S.MetaPanelBody>
-                {defense.budgetOrForcesNote.trim()}
-              </S.MetaPanelBody>
+              <S.MetaPanelLabel>예산·정원·참고</S.MetaPanelLabel>
+              <S.MetaPanelBody>{budgetNote}</S.MetaPanelBody>
             </S.MetaPanel>
           ) : null}
         </S.MetaGrid>
       ) : null}
 
-      <S.ProfileSection>
-        <S.ProfileSectionLabel>역대 재임 · 장관</S.ProfileSectionLabel>
-        {tenuresSlot}
-      </S.ProfileSection>
-
-      <S.ProfileSection>
-        <S.ProfileSectionLabel>기관 사건 · 정책</S.ProfileSectionLabel>
-        {eventsSlot}
-      </S.ProfileSection>
+      {tenuresSlot}
+      {eventsSlot}
     </S.DetailRoot>
   )
 }

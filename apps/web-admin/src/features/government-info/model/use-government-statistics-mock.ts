@@ -15,6 +15,7 @@ import {
   administrationDepartmentsByHistoricalCountryQueryKey,
 } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { parseDepartmentDescription } from '@/shared/lib/ministry-department/ministry-department-utils'
+import { getUploadImageUrl } from '@/shared/api/upload'
 
 export type GovernmentStatisticTimelineItem = {
   id: string
@@ -147,7 +148,7 @@ export function useGovernmentStatisticsMockData(
         dept.kind !== 'AGENCY',
     )
     const activeDepartmentCount = departments.filter(
-      (dept) => !dept.abolishedDate && dept.abolishedYear == null,
+      (dept) => !dept.abolishedDate && dept.abolished?.year == null,
     ).length
     const totalMinistries = ministryDepts.length
     const totalConstitutional = specialDepts.length
@@ -184,9 +185,12 @@ export function useGovernmentStatisticsMockData(
       const cleanDesc = parseDepartmentDescription(
         dept.description,
       ).cleanDescription
+      const resolvedThumb = dept.thumbnailUrl
+        ? [getUploadImageUrl(dept.thumbnailUrl)]
+        : undefined
       const est = formatStructuredYear(
-        dept.establishedInfo?.era,
-        dept.establishedInfo?.year,
+        dept.established?.era,
+        dept.established?.year,
         dept.establishedDate,
       )
       if (est) {
@@ -200,12 +204,12 @@ export function useGovernmentStatisticsMockData(
           type: 'establishment',
           orgName: dept.name,
           orgType: kindLabel,
-          images: dept.thumbnailUrl ? [dept.thumbnailUrl] : undefined,
+          images: resolvedThumb,
         })
       }
       const abo = formatStructuredYear(
-        dept.abolishedInfo?.era,
-        dept.abolishedInfo?.year,
+        dept.abolished?.era,
+        dept.abolished?.year,
         dept.abolishedDate,
       )
       if (abo) {
@@ -218,7 +222,7 @@ export function useGovernmentStatisticsMockData(
           type: 'crisis',
           orgName: dept.name,
           orgType: kindLabel,
-          images: dept.thumbnailUrl ? [dept.thumbnailUrl] : undefined,
+          images: resolvedThumb,
         })
       }
       for (const succ of dept.successors ?? []) {
@@ -229,7 +233,7 @@ export function useGovernmentStatisticsMockData(
                 sortYear: succ.era === 'BC' ? -succ.year : succ.year,
               }
             : abo
-        const isMerger = succ.kind === 'MERGE' || succ.kind === 'ABSORB'
+        const isMerger = succ.kind === 'MERGE' || succ.kind === 'ABSORBED'
         allEvents.push({
           id: `tr-${succ.transitionId}`,
           year: trYear?.label ?? '개편',
@@ -241,7 +245,35 @@ export function useGovernmentStatisticsMockData(
           type: isMerger ? 'merger' : 'reform',
           orgName: dept.name,
           orgType: kindLabel,
-          images: dept.thumbnailUrl ? [dept.thumbnailUrl] : undefined,
+          images: resolvedThumb,
+        })
+      }
+      for (const milSucc of dept.militaryUnitSuccessors ?? []) {
+        if (!milSucc.militaryUnit?.name) continue
+        const trYear =
+          milSucc.year != null
+            ? {
+                label:
+                  milSucc.era === 'BC'
+                    ? `BC ${milSucc.year}`
+                    : `${milSucc.year}`,
+                sortYear:
+                  milSucc.era === 'BC' ? -milSucc.year : milSucc.year,
+              }
+            : abo
+        const isMerger = milSucc.kind === 'MERGE' || milSucc.kind === 'ABSORBED'
+        allEvents.push({
+          id: `tr-mil-${milSucc.transitionId}`,
+          year: trYear?.label ?? '군제 개편',
+          sortYear: trYear?.sortYear ?? 0,
+          title: `${dept.name} → ${milSucc.militaryUnit.name}`,
+          description:
+            milSucc.note ||
+            `행정부처 ${dept.name}에서 군사조직 ${milSucc.militaryUnit.name}(으)로 개편·이관되었습니다.`,
+          type: isMerger ? 'merger' : 'reform',
+          orgName: dept.name,
+          orgType: '군제 개편',
+          images: resolvedThumb,
         })
       }
     }

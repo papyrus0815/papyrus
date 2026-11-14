@@ -31,6 +31,7 @@ import {
   type MilitaryUnitTransitionKind,
 } from '@/shared/api/military-unit'
 import { personCareerApi } from '@/shared/api/person-career'
+import { getUploadImageUrl } from '@/shared/api/upload'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { militaryUnitTypeLabelKo } from '@/shared/lib/military-unit-type-label'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
@@ -41,6 +42,7 @@ import {
   InstitutionAppointmentModal,
 } from '@/shared/ui/institution-appointment-modal'
 import { notify } from '@/shared/ui/toast'
+import { MilitaryUnitFormModal } from '@/widgets/country/country-detail/ui/military-unit-form.modal'
 
 const TRANSITION_KIND_LABELS: Record<MilitaryUnitTransitionKind, string> = {
   REORGANIZE: '개편',
@@ -89,6 +91,8 @@ interface UnitDetailResponse {
   motto?: string | null
   garrison?: string | null
   strength?: string | null
+  insigniaUrl?: string | null
+  administrationDepartmentId?: string | null
   description?: string | null
   established?: MilitaryUnitDatePartsDto | null
   disbanded?: MilitaryUnitDatePartsDto | null
@@ -208,6 +212,18 @@ export function MilitaryUnitDetailSection() {
   const [appointmentOpen, setAppointmentOpen] = useState(false)
   const [editingTenure, setEditingTenure] =
     useState<EditableInstitutionTenure | null>(null)
+
+  const [unitFormOpen, setUnitFormOpen] = useState(false)
+  const [unitFormEditingId, setUnitFormEditingId] = useState<string | null>(
+    null,
+  )
+  const [unitFormDefaults, setUnitFormDefaults] = useState<{
+    countryId?: string | null
+    historicalCountryId?: string | null
+    parentUnitId?: string | null
+    administrationDepartmentId?: string | null
+    branch?: string | null
+  }>({})
 
   const [addTransitionOpen, setAddTransitionOpen] = useState(false)
   const [transitionDirection, setTransitionDirection] =
@@ -376,6 +392,16 @@ export function MilitaryUnitDetailSection() {
                 좌측 목록이나 아래 카드에서 부대를 선택하면 상급·예하 편제 트리, 역대 지휘관 임기, 참전 작전·전투 타임라인을 한눈에 볼 수 있습니다.
               </HeroSubtitle>
             </HeroTitleGroup>
+            <MiniOutlineBtn
+              type="button"
+              onClick={() => {
+                setUnitFormEditingId(null)
+                setUnitFormDefaults({})
+                setUnitFormOpen(true)
+              }}
+            >
+              <FiPlus size={13} /> 사령부·부대 등록
+            </MiniOutlineBtn>
           </HeroTopRow>
 
           {allUnits.length > 0 && (
@@ -447,7 +473,31 @@ export function MilitaryUnitDetailSection() {
                   onClick={() => selectUnit(unitItem.id)}
                 >
                   <UnitSummaryTop>
-                    {typeLabel && <SmallBadge>{typeLabel}</SmallBadge>}
+                    <div
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      {unitItem.insigniaUrl && (
+                        <img
+                          src={getUploadImageUrl(unitItem.insigniaUrl)}
+                          alt=""
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: '50%',
+                            objectFit: 'cover',
+                            flexShrink: 0,
+                          }}
+                          onError={(imgEvent) => {
+                            imgEvent.currentTarget.style.display = 'none'
+                          }}
+                        />
+                      )}
+                      {typeLabel && <SmallBadge>{typeLabel}</SmallBadge>}
+                    </div>
                     <CountryTag>{countryName}</CountryTag>
                   </UnitSummaryTop>
                   <UnitSummaryName>
@@ -460,6 +510,28 @@ export function MilitaryUnitDetailSection() {
             })}
           </UnitGrid>
         )}
+
+        <MilitaryUnitFormModal
+          isOpen={unitFormOpen}
+          onClose={() => {
+            setUnitFormOpen(false)
+            setUnitFormEditingId(null)
+            setUnitFormDefaults({})
+          }}
+          onSaved={() => {
+            void invalidateUnitLineageAndTenures()
+          }}
+          editingUnitId={unitFormEditingId}
+          defaultCountryId={unitFormDefaults.countryId ?? null}
+          defaultHistoricalCountryId={
+            unitFormDefaults.historicalCountryId ?? null
+          }
+          defaultParentUnitId={unitFormDefaults.parentUnitId ?? null}
+          defaultAdministrationDepartmentId={
+            unitFormDefaults.administrationDepartmentId ?? null
+          }
+          defaultBranch={unitFormDefaults.branch ?? null}
+        />
       </PageWrap>
     )
   }
@@ -647,7 +719,7 @@ export function MilitaryUnitDetailSection() {
     const ok = await confirm({
       title: '조직 계보 연결 삭제',
       message: `'${targetLabel}' 계보 연결을 삭제하시겠습니까? (부대·부처 자체는 삭제되지 않습니다)`,
-      confirmText: '삭제',
+      confirmLabel: '삭제',
       danger: true,
     })
     if (!ok) return
@@ -676,7 +748,7 @@ export function MilitaryUnitDetailSection() {
     const ok = await confirm({
       title: '지휘관·참모 재임 삭제',
       message: `'${roleLabel}' 재임 기록을 삭제하시겠습니까?`,
-      confirmText: '삭제',
+      confirmLabel: '삭제',
       danger: true,
     })
     if (!ok) return
@@ -753,38 +825,88 @@ export function MilitaryUnitDetailSection() {
     <PageWrap>
       <HeroCard>
         <HeroTopRow>
-          <HeroTitleGroup>
-            <BadgeRow>
-              {unitTypeLabel && <PrimaryBadge>{unitTypeLabel}</PrimaryBadge>}
-              {branchLabel && <SecondaryBadge>{branchLabel}</SecondaryBadge>}
-              {countryName && countryIdForLink && (
-                <CountryLink
-                  to={`${pathKeys.countryMilitary(countryIdForLink)}?unitId=${encodeURIComponent(unit.id)}`}
-                >
-                  🏳️ {countryName} 군사 편제 ↗
-                </CountryLink>
-              )}
-              {unit.administrationDepartment && (
-                <SecondaryBadge>
-                  🏛️ {unit.administrationDepartment.name}
-                  {unit.administrationDepartment.abbreviation
-                    ? ` (${unit.administrationDepartment.abbreviation})`
-                    : ''}
-                </SecondaryBadge>
-              )}
-            </BadgeRow>
-            <HeroTitle>
-              {unit.name}
-              {unit.abbreviation ? ` (${unit.abbreviation})` : ''}
-              {unit.nickname && <NicknameSpan> “{unit.nickname}”</NicknameSpan>}
-            </HeroTitle>
-            {(unit.nameLocal || unit.nameEn) && (
-              <HeroSubtitle>
-                {[unit.nameLocal, unit.nameEn].filter(Boolean).join(' · ')}
-              </HeroSubtitle>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
+            {unit.insigniaUrl && (
+              <img
+                src={getUploadImageUrl(unit.insigniaUrl)}
+                alt={`${unit.name} 휘장`}
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  flexShrink: 0,
+                  border: '1.5px solid rgba(99, 102, 241, 0.28)',
+                }}
+                onError={(imgEvent) => {
+                  imgEvent.currentTarget.style.display = 'none'
+                }}
+              />
             )}
-            {unit.motto && <HeroSubtitle>표어: {unit.motto}</HeroSubtitle>}
-          </HeroTitleGroup>
+            <HeroTitleGroup>
+              <BadgeRow>
+                {unitTypeLabel && <PrimaryBadge>{unitTypeLabel}</PrimaryBadge>}
+                {branchLabel && <SecondaryBadge>{branchLabel}</SecondaryBadge>}
+                {countryName && countryIdForLink && (
+                  <CountryLink
+                    to={`${pathKeys.countryMilitary(countryIdForLink)}?unitId=${encodeURIComponent(unit.id)}`}
+                  >
+                    🏳️ {countryName} 군사 편제 ↗
+                  </CountryLink>
+                )}
+                {unit.administrationDepartment && (
+                  <SecondaryBadge>
+                    🏛️ {unit.administrationDepartment.name}
+                    {unit.administrationDepartment.abbreviation
+                      ? ` (${unit.administrationDepartment.abbreviation})`
+                      : ''}
+                  </SecondaryBadge>
+                )}
+              </BadgeRow>
+              <HeroTitle>
+                {unit.name}
+                {unit.abbreviation ? ` (${unit.abbreviation})` : ''}
+                {unit.nickname && <NicknameSpan> “{unit.nickname}”</NicknameSpan>}
+              </HeroTitle>
+              {(unit.nameLocal || unit.nameEn) && (
+                <HeroSubtitle>
+                  {[unit.nameLocal, unit.nameEn].filter(Boolean).join(' · ')}
+                </HeroSubtitle>
+              )}
+              {unit.motto && <HeroSubtitle>표어: {unit.motto}</HeroSubtitle>}
+            </HeroTitleGroup>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+            <MiniOutlineBtn
+              type="button"
+              onClick={() => {
+                setUnitFormEditingId(null)
+                setUnitFormDefaults({
+                  parentUnitId: unit.id,
+                  countryId: unit.countryId ?? null,
+                  historicalCountryId: unit.historicalCountryId ?? null,
+                  administrationDepartmentId:
+                    unit.administrationDepartmentId ??
+                    unit.administrationDepartment?.id ??
+                    null,
+                  branch: unit.branch ?? null,
+                })
+                setUnitFormOpen(true)
+              }}
+            >
+              <FiPlus size={12} /> 예하 부대 추가
+            </MiniOutlineBtn>
+            <MiniOutlineBtn
+              type="button"
+              onClick={() => {
+                setUnitFormEditingId(unit.id)
+                setUnitFormDefaults({})
+                setUnitFormOpen(true)
+              }}
+            >
+              <FiEdit2 size={12} /> 부대 수정
+            </MiniOutlineBtn>
+          </div>
         </HeroTopRow>
 
         <MetaRow>
@@ -1590,6 +1712,28 @@ export function MilitaryUnitDetailSection() {
         militaryUnitType={unit.unitType ?? null}
         editingTenure={editingTenure}
       />
+
+      <MilitaryUnitFormModal
+        isOpen={unitFormOpen}
+        onClose={() => {
+          setUnitFormOpen(false)
+          setUnitFormEditingId(null)
+          setUnitFormDefaults({})
+        }}
+        onSaved={() => {
+          void invalidateUnitLineageAndTenures()
+        }}
+        editingUnitId={unitFormEditingId}
+        defaultCountryId={unitFormDefaults.countryId ?? null}
+        defaultHistoricalCountryId={
+          unitFormDefaults.historicalCountryId ?? null
+        }
+        defaultParentUnitId={unitFormDefaults.parentUnitId ?? null}
+        defaultAdministrationDepartmentId={
+          unitFormDefaults.administrationDepartmentId ?? null
+        }
+        defaultBranch={unitFormDefaults.branch ?? null}
+      />
     </PageWrap>
   )
 }
@@ -1749,7 +1893,7 @@ const DeploymentDetailStack = styled.div`
 
 const InlineActionLink = styled.button`
   padding: 1px 6px;
-  border: 1px solid ${({ theme }) => theme.colors.border.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: 999px;
   background: ${({ theme }) => theme.colors.background.secondary};
   color: ${({ theme }) => theme.colors.text.primary};

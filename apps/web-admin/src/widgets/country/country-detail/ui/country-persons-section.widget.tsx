@@ -268,9 +268,9 @@ export function CountryPersonsSection({ country }: CountryPersonsSectionProps) {
           <HeadActions>
             <HeadActionBtn
               type="button"
-              onClick={() => navigate(pathKeys.countryHeadsOfState(country.id))}
+              onClick={() => navigate(pathKeys.countryGovernment(country.id))}
             >
-              역대 수반 관리
+              정부·행정 →
             </HeadActionBtn>
             <HeadActionBtn
               type="button"
@@ -400,16 +400,16 @@ export function CountryPersonsSection({ country }: CountryPersonsSectionProps) {
             </EmptySpecCell>
             <EmptySpecCell>
               <EmptySpecTitle>
-                2. 역대 수반 · 내각 · 관직 재임 등록
+                2. 내각 · 행정기관 관직 재임 등록
               </EmptySpecTitle>
               <EmptySpecDesc>
-                행정조직 탭이나 역대 수반 관리에서 국가원수·정부수반·장관 재임 기록을 연결하면 별도 국적 설정 없이도 함께 묶입니다.
+                정부·행정 탭에서 행정부·내각 각료나 중앙부처 기관장 재임 기록을 연결하면 별도 국적 설정 없이도 함께 묶입니다.
               </EmptySpecDesc>
               <EmptyActionBtn
                 type="button"
-                onClick={() => navigate(pathKeys.countryHeadsOfState(country.id))}
+                onClick={() => navigate(pathKeys.countryGovernment(country.id))}
               >
-                역대 수반 관리로 이동 →
+                정부·행정으로 이동 →
               </EmptyActionBtn>
             </EmptySpecCell>
           </EmptySpecGrid>

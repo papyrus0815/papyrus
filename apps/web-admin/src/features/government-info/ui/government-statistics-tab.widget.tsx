@@ -1,5 +1,13 @@
 import { useMemo } from 'react'
 import type { ReactNode } from 'react'
+import {
+  FiBarChart2,
+  FiBriefcase,
+  FiClock,
+  FiLayers,
+  FiShield,
+  FiUsers,
+} from 'react-icons/fi'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
@@ -11,6 +19,7 @@ import {
 } from '../model/constants'
 import { useGovernmentStatisticsMockData } from '../model/use-government-statistics-mock'
 
+import { GOV_BRAND } from './government-ledger.styles'
 import { GovSectionEyebrow } from './government-organizations-tab.styled'
 
 export interface GovernmentStatisticsTabProps {
@@ -25,9 +34,11 @@ export function GovernmentStatisticsTab({
   const isDark = useThemeStore((state) => state.mode === 'dark')
   const palette = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
   const {
-    totalEmployees,
-    totalBudget,
-    totalOrganizations,
+    totalDepartments,
+    activeDepartmentCount,
+    totalCabinets,
+    totalPositions,
+    totalMilitaryUnits,
     totalMinistries,
     totalConstitutional,
     totalAgencies,
@@ -42,207 +53,75 @@ export function GovernmentStatisticsTab({
     selectedEventType,
     onSelectedEventTypeChange,
   } = useGovernmentStatisticsMockData({ country, effectiveCountryId })
-  return (
-    <>
-      {/* 핵심 수치 요약 */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 0,
-          borderBottom: `1px solid ${palette.divider}`,
-          paddingBottom: 20,
-          marginBottom: 4,
-        }}
-      >
-        {[
-          { label: '등록 직위 정의', value: totalEmployees, unit: '개' },
-          { label: '역대 행정부', value: totalBudget, unit: '개' },
-          { label: '전체 조직·기관', value: totalOrganizations, unit: '개' },
-          { label: '중앙부처', value: totalMinistries, unit: '개' },
-          { label: '특수·군령기관', value: totalConstitutional, unit: '개' },
-        ].map((kpi, kpiIndex, kpiRow) => (
-          <div
-            key={kpiIndex}
-            style={{
-              flex: '1 1 0',
-              paddingLeft: kpiIndex === 0 ? 0 : 24,
-              paddingRight: kpiIndex < kpiRow.length - 1 ? 24 : 0,
-              borderRight:
-                kpiIndex < kpiRow.length - 1
-                  ? `1px solid ${palette.divider}`
-                  : 'none',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 2,
-            }}
-          >
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: palette.iconColor,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase' as const,
-              }}
-            >
-              {kpi.label}
-            </span>
-            <span
-              style={{
-                fontSize: 20,
-                fontWeight: 700,
-                color: palette.text,
-                letterSpacing: '-0.03em',
-                lineHeight: 1.3,
-              }}
-            >
-              {kpi.value}
-              <span
-                style={{
-                  fontSize: 12,
-                  fontWeight: 500,
-                  color: palette.textFaint,
-                  marginLeft: 2,
-                }}
-              >
-                {kpi.unit}
-              </span>
-            </span>
-          </div>
-        ))}
-      </div>
 
-      {/* 요약 지표 */}
-      <section aria-label="행정조직 요약">
-        <GovSectionEyebrow>요약 지표</GovSectionEyebrow>
+  const totalCategorizedCount = useMemo(
+    () => budgetData.reduce((accSum, rowItem) => accSum + (rowItem.budget || 0), 0),
+    [budgetData],
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+      {/* 단일 핵심 지표 그리드 (중복 스트립 제거) */}
+      <section aria-label="정부·행정 핵심 지표">
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(5, 1fr)',
-            gap: 20,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(175px, 1fr))',
+            gap: 12,
           }}
         >
           <StatCard
             accentColor={MAIN}
-            icon={
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <rect x="3" y="3" width="7" height="7" />
-                <rect x="14" y="3" width="7" height="7" />
-                <rect x="14" y="14" width="7" height="7" />
-                <rect x="3" y="14" width="7" height="7" />
-              </svg>
-            }
-            title="전체 조직"
-            value={totalOrganizations}
-            unit="개"
-          />
-          <StatCard
-            accentColor={ACCENT.teal}
-            icon={
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M3 21h18M4 18h16M6 18V9m12 9V9M8 6l4-3 4 3M8 18V6h8v12" />
-              </svg>
-            }
-            title="중앙부처"
-            value={totalMinistries}
-            unit="개"
-          />
-          <StatCard
-            accentColor={ACCENT.amber}
-            icon={
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-                <line x1="4" y1="22" x2="4" y2="15" />
-              </svg>
-            }
-            title="특수·군령기관"
-            value={totalConstitutional}
-            unit="개"
-          />
-          <StatCard
-            accentColor={ACCENT.emerald}
-            icon={
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-                <circle cx="9" cy="7" r="4" />
-              </svg>
-            }
-            title="등록 직위 정의"
-            value={totalEmployees}
-            unit="개"
+            icon={<FiBriefcase size={18} />}
+            title="중앙부처 · 국가기관"
+            value={totalDepartments}
+            unit="곳"
+            subLabel={`현존 ${activeDepartmentCount}곳`}
           />
           <StatCard
             accentColor={ACCENT.sky}
-            icon={
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="12" y1="1" x2="12" y2="23" />
-                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-              </svg>
-            }
-            title="역대 행정부"
-            value={totalBudget}
+            icon={<FiUsers size={18} />}
+            title="역대 행정부 · 내각"
+            value={totalCabinets}
             unit="개"
+            subLabel="정권·내각 단위 기록"
+          />
+          <StatCard
+            accentColor={ACCENT.emerald}
+            icon={<FiLayers size={18} />}
+            title="직위 · 관직 정의"
+            value={totalPositions}
+            unit="개"
+            subLabel="원수·각료·관직 서열"
+          />
+          <StatCard
+            accentColor={ACCENT.teal}
+            icon={<FiShield size={18} />}
+            title="소관 연결 군부대"
+            value={totalMilitaryUnits}
+            unit="개"
+            subLabel="국방·군정 부처 직할"
+          />
+          <StatCard
+            accentColor={ACCENT.amber}
+            icon={<FiBarChart2 size={18} />}
+            title="유관 · 산하 조직"
+            value={totalLocal}
+            unit="개"
+            subLabel="행정·사회 산하 기구"
           />
         </div>
       </section>
 
-      {/* 분야별 부처 분포 — 요약 지표 바로 아래 */}
+      {/* 분야별 부처 분포 차트 */}
       <section aria-label="분야별 기관 분포">
         <GovSectionEyebrow>분야별 기관 분포</GovSectionEyebrow>
         <div
           style={{
             background: palette.bgSubtle,
             border: `1px solid ${palette.border}`,
-            borderRadius: 24,
-            padding: 28,
-            boxShadow: isDark
-              ? '0 2px 8px rgba(0,0,0,0.3)'
-              : '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
+            borderRadius: 16,
+            padding: '18px 20px',
           }}
         >
           <div
@@ -250,189 +129,193 @@ export function GovernmentStatisticsTab({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              marginBottom: 24,
+              marginBottom: budgetData.length > 0 ? 18 : 10,
               flexWrap: 'wrap',
-              gap: 12,
+              gap: 10,
             }}
           >
             <p
               style={{
                 margin: 0,
                 fontSize: 13,
-                color: palette.warmCaption,
-                fontWeight: 500,
+                color: palette.textMuted,
+                fontWeight: 600,
               }}
             >
-              카테고리별 등록 기관 수 (단위: 개)
+              행정 분야 카테고리별 등록 기관 수 (상위 8개 분류)
             </p>
-            {budgetData.length > 0 && (
+            {budgetData.length > 0 ? (
               <span
                 style={{
                   fontSize: 12,
-                  color: palette.warmCaptionMuted,
-                  fontWeight: 500,
+                  color: palette.textMuted,
+                  fontWeight: 600,
+                  padding: '3px 9px',
+                  borderRadius: 999,
+                  background: palette.cardBg,
+                  border: `1px solid ${palette.borderHairline}`,
                 }}
               >
-                최다 {Math.max(...budgetData.map((row) => row.budget || 0))}개
+                최다 분류 {Math.max(...budgetData.map((row) => row.budget || 0))}곳
               </span>
-            )}
+            ) : null}
           </div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'flex-end',
-              gap: 16,
-              height: 260,
-              padding: '0 8px 8px',
-              position: 'relative',
-            }}
-          >
-            {/* Y축 눈금 배경 */}
+
+          {budgetData.length === 0 ? (
             <div
               style={{
-                position: 'absolute',
-                left: 0,
-                right: 0,
-                top: 0,
-                bottom: 32,
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                pointerEvents: 'none',
+                padding: '28px 16px',
+                textAlign: 'center',
+                borderRadius: 12,
+                border: `1px dashed ${palette.borderMid}`,
+                background: palette.cardBg,
+                color: palette.textMuted,
+                fontSize: 13,
               }}
             >
-              {[100, 75, 50, 25].map((pct) => (
-                <div
-                  key={pct}
-                  style={{
-                    width: '100%',
-                    height: 1,
-                    background: isDark ? palette.divider : 'rgba(0,0,0,0.06)',
-                    marginLeft: 8,
-                    marginRight: 8,
-                  }}
-                />
-              ))}
+              아직 등록된 중앙부처·국가기관이 없어 분야별 분포를 집계할 수 없습니다.
             </div>
-            {budgetData.map((stat, budgetIndex) => {
-              const maxBudget = Math.max(
-                ...budgetData.map((row) => row.budget || 0),
-                1,
-              )
-              const height = maxBudget
-                ? ((stat.budget || 0) / maxBudget) * 200
-                : 0
-              const prevBudget =
-                budgetIndex > 0 ? budgetData[budgetIndex - 1].budget || 0 : 0
-              const currBudget = stat.budget || 0
-              const isUp = currBudget > prevBudget
-              const pctChange = prevBudget
-                ? Math.abs((currBudget - prevBudget) / prevBudget) * 100
-                : 0
-              return (
-                <div
-                  key={budgetIndex}
-                  style={{
-                    flex: 1,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 10,
-                    position: 'relative',
-                    zIndex: 1,
-                  }}
-                >
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'flex-end',
+                gap: 14,
+                height: 210,
+                padding: '8px 6px 4px',
+                position: 'relative',
+                overflowX: 'auto',
+              }}
+            >
+              {/* Y축 눈금 배경 */}
+              <div
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: 8,
+                  bottom: 42,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  pointerEvents: 'none',
+                }}
+              >
+                {[100, 75, 50, 25].map((pct) => (
                   <div
+                    key={pct}
                     style={{
                       width: '100%',
-                      maxWidth: 72,
-                      minHeight: 32,
-                      height: `${Math.max(height, 32)}px`,
-                      background: `linear-gradient(180deg, ${MAIN} 0%, rgba(99, 102, 241, 0.75) 70%, rgba(99, 102, 241, 0.5) 100%)`,
-                      borderRadius: '12px 12px 0 0',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'flex-start',
-                      padding: '10px 6px',
-                      color: '#ffffff',
-                      fontSize: 14,
-                      fontWeight: 700,
-                      boxShadow: '0 2px 12px rgba(99, 102, 241, 0.25)',
-                      transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                      height: 1,
+                      background: isDark ? palette.divider : 'rgba(15,23,42,0.06)',
                     }}
-                    onMouseEnter={(mouseEvent) => {
-                      mouseEvent.currentTarget.style.transform =
-                        'translateY(-4px)'
-                      mouseEvent.currentTarget.style.boxShadow =
-                        '0 8px 24px rgba(99, 102, 241, 0.35)'
-                    }}
-                    onMouseLeave={(mouseEvent) => {
-                      mouseEvent.currentTarget.style.transform = 'translateY(0)'
-                      mouseEvent.currentTarget.style.boxShadow =
-                        '0 2px 12px rgba(99, 102, 241, 0.25)'
-                    }}
-                  >
-                    {stat.budget}개
-                  </div>
+                  />
+                ))}
+              </div>
+
+              {budgetData.map((stat) => {
+                const maxCount = Math.max(
+                  ...budgetData.map((row) => row.budget || 0),
+                  1,
+                )
+                const barHeight = maxCount
+                  ? ((stat.budget || 0) / maxCount) * 145
+                  : 0
+                const sharePct =
+                  totalCategorizedCount > 0
+                    ? Math.round(((stat.budget || 0) / totalCategorizedCount) * 100)
+                    : 0
+
+                return (
                   <div
+                    key={stat.year}
                     style={{
+                      flex: '1 1 72px',
+                      minWidth: 68,
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
-                      gap: 2,
+                      gap: 8,
+                      position: 'relative',
+                      zIndex: 1,
                     }}
                   >
-                    <span
+                    <div
                       style={{
-                        fontSize: 14,
-                        fontWeight: 600,
-                        color: palette.text,
+                        width: '100%',
+                        maxWidth: 56,
+                        minHeight: 28,
+                        height: `${Math.max(barHeight, 28)}px`,
+                        background: GOV_BRAND.primary,
+                        borderRadius: '6px 6px 2px 2px',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        justifyContent: 'center',
+                        paddingTop: 6,
+                        color: '#ffffff',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        fontVariantNumeric: 'tabular-nums',
                       }}
                     >
-                      {stat.year}
-                    </span>
-                    {budgetIndex > 0 && prevBudget > 0 && (
+                      {stat.budget}
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 1,
+                        textAlign: 'center',
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 12.5,
+                          fontWeight: 700,
+                          color: palette.text,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {stat.year}
+                      </span>
                       <span
                         style={{
                           fontSize: 11,
                           fontWeight: 600,
-                          color: isUp ? ACCENT.emerald : '#78716c',
+                          color: palette.textFaint,
                         }}
                       >
-                        {isUp ? '↑' : '↓'} {pctChange.toFixed(1)}%
+                        비중 {sharePct}%
                       </span>
-                    )}
+                    </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </section>
 
-      {/* 좌: 타임라인 | 우: 조직 유형별 현황 — 5:5 */}
+      {/* 좌: 기관 변천 연혁 타임라인 | 우: 조직 성격별 분포 */}
       <section
-        aria-label="타임라인 및 조직 유형"
+        aria-label="기관 변천 연혁 및 성격별 현황"
         style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: 24,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+          gap: 18,
           alignItems: 'start',
         }}
       >
-        {/* 좌측: 주요 사건 타임라인 */}
+        {/* 좌측: 기관 설립·폐지·개편 연혁 */}
         <div style={{ minWidth: 0 }}>
-          <GovSectionEyebrow>주요 사건</GovSectionEyebrow>
+          <GovSectionEyebrow>기관 변천 연혁</GovSectionEyebrow>
           <div
             style={{
               background: palette.bgSubtle,
               border: `1px solid ${palette.border}`,
-              borderRadius: 24,
-              padding: 28,
-              boxShadow: isDark
-                ? '0 2px 8px rgba(0,0,0,0.3)'
-                : '0 2px 8px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)',
+              borderRadius: 16,
+              padding: '18px 20px',
             }}
           >
             <div
@@ -440,72 +323,61 @@ export function GovernmentStatisticsTab({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                marginBottom: 24,
+                marginBottom: 16,
                 flexWrap: 'wrap',
-                gap: 20,
+                gap: 12,
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div
                   style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 16,
-                    background: 'rgba(99, 102, 241, 0.1)',
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    background: palette.accentBg,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     color: MAIN,
+                    flexShrink: 0,
                   }}
                 >
-                  <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
-                  </svg>
+                  <FiClock size={17} />
                 </div>
                 <div>
                   <h3
                     style={{
-                      fontSize: 17,
-                      fontWeight: 600,
+                      fontSize: 15,
+                      fontWeight: 700,
                       color: palette.text,
                       margin: 0,
                       letterSpacing: '-0.02em',
                     }}
                   >
-                    타임라인
+                    행정·군정 개편 타임라인
                   </h3>
                   <p
                     style={{
-                      fontSize: 13,
-                      color: palette.warmCaption,
+                      fontSize: 12,
+                      color: palette.textMuted,
                       margin: '2px 0 0',
                     }}
                   >
-                    행정조직 관련 주요 사건
+                    설립·개편·통합·폐지 이력 자동 집계
                   </p>
                 </div>
               </div>
 
-              {/* 사건 타입 필터 — 세그먼트 스타일 */}
+              {/* 사건 타입 필터 */}
               <div
                 style={{
                   display: 'flex',
-                  gap: 0,
+                  gap: 2,
                   flexWrap: 'wrap',
-                  padding: 4,
-                  background: palette.cardBgHover,
-                  borderRadius: 14,
-                  border: `1px solid ${palette.border}`,
+                  padding: 3,
+                  background: palette.cardBg,
+                  borderRadius: 10,
+                  border: `1px solid ${palette.borderHairline}`,
                 }}
               >
                 {[
@@ -517,333 +389,250 @@ export function GovernmentStatisticsTab({
                   },
                   {
                     key: 'reform',
-                    label: '개혁',
+                    label: '개편',
                     count: eventCounts.reform,
-                  },
-                  {
-                    key: 'achievement',
-                    label: '성과',
-                    count: eventCounts.achievement,
-                  },
-                  {
-                    key: 'crisis',
-                    label: '위기',
-                    count: eventCounts.crisis,
                   },
                   {
                     key: 'merger',
                     label: '통합',
                     count: eventCounts.merger,
                   },
-                ].map((filter) => (
-                  <button
-                    key={filter.key}
-                    onClick={() => onSelectedEventTypeChange(filter.key)}
-                    style={{
-                      padding: '8px 14px',
-                      borderRadius: 10,
-                      border: 'none',
-                      background:
-                        selectedEventType === filter.key
-                          ? isDark
-                            ? palette.badge
-                            : '#ffffff'
-                          : 'transparent',
-                      color:
-                        selectedEventType === filter.key
-                          ? palette.text
-                          : palette.warmFilterIdle,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      boxShadow:
-                        selectedEventType === filter.key
-                          ? '0 1px 3px rgba(0,0,0,0.08)'
-                          : 'none',
-                    }}
-                    onMouseEnter={(mouseEvent) => {
-                      if (selectedEventType !== filter.key) {
-                        mouseEvent.currentTarget.style.background = isDark
-                          ? palette.btnHover
-                          : 'rgba(255,255,255,0.6)'
-                        mouseEvent.currentTarget.style.color = palette.text
-                      }
-                    }}
-                    onMouseLeave={(mouseEvent) => {
-                      if (selectedEventType !== filter.key) {
-                        mouseEvent.currentTarget.style.background =
-                          'transparent'
-                        mouseEvent.currentTarget.style.color =
-                          palette.warmFilterIdle
-                      }
-                    }}
-                  >
-                    {filter.label}
-                    <span
+                  {
+                    key: 'crisis',
+                    label: '폐지',
+                    count: eventCounts.crisis,
+                  },
+                ].map((filterItem) => {
+                  const isSelected = selectedEventType === filterItem.key
+                  return (
+                    <button
+                      key={filterItem.key}
+                      type="button"
+                      onClick={() => onSelectedEventTypeChange(filterItem.key)}
                       style={{
-                        fontSize: 10,
-                        background:
-                          selectedEventType === filter.key
-                            ? MAIN
-                            : isDark
-                              ? palette.badge
-                              : 'rgba(0,0,0,0.08)',
-                        color:
-                          selectedEventType === filter.key
-                            ? '#ffffff'
-                            : palette.warmFilterIdle,
-                        padding: '2px 6px',
-                        borderRadius: 8,
-                        fontWeight: 700,
+                        padding: '5px 10px',
+                        borderRadius: 7,
+                        border: 'none',
+                        background: isSelected
+                          ? palette.accentBg
+                          : 'transparent',
+                        color: isSelected ? palette.accent : palette.textMuted,
+                        fontSize: 11.5,
+                        fontWeight: isSelected ? 700 : 600,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
                       }}
                     >
-                      {filter.count}
-                    </span>
-                  </button>
-                ))}
+                      {filterItem.label}
+                      <span
+                        style={{
+                          fontSize: 10.5,
+                          fontWeight: 700,
+                          opacity: isSelected ? 1 : 0.7,
+                        }}
+                      >
+                        {filterItem.count}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
-            {/* 사건 리스트 — 세로 타임라인 (축선 + 노드 + 카드) */}
             <div
               style={{
                 position: 'relative',
-                maxHeight: 560,
+                maxHeight: 500,
                 overflowY: 'auto',
                 paddingRight: 4,
               }}
-              className="government-events-list"
             >
               {filteredEvents.length === 0 ? (
                 <div
                   style={{
-                    padding: '48px 24px',
+                    padding: '32px 16px',
                     textAlign: 'center',
-                    fontSize: 14,
-                    color: palette.warmCaption,
-                    background: palette.bgMuted,
-                    borderRadius: 18,
-                    border: `1px dashed ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'}`,
+                    fontSize: 13,
+                    color: palette.textMuted,
+                    background: palette.cardBg,
+                    borderRadius: 12,
+                    border: `1px dashed ${palette.borderMid}`,
                   }}
                 >
-                  해당 조건의 사건이 없습니다.
+                  해당 조건의 설립·개편 연혁이 없습니다.
                 </div>
               ) : (
-                <>
-                  {/* 세로 축선 */}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: 23,
-                      top: 12,
-                      bottom: 12,
-                      width: 2,
-                      background: `linear-gradient(180deg, ${MAIN} 0%, transparent 100%)`,
-                      borderRadius: 1,
-                      opacity: 0.8,
-                    }}
-                    aria-hidden
-                  />
-                  {filteredEvents.slice(0, 20).map((event, eventIndex) => {
-                    const eventWithImages = event as typeof event & {
-                      images?: string[]
-                    }
-                    const imageUrl = eventWithImages.images?.[0]
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10,
+                  }}
+                >
+                  {filteredEvents.slice(0, 25).map((eventItem) => {
+                    const imageUrl = eventItem.images?.[0]
+                    const eventBadgeTone =
+                      eventItem.type === 'establishment'
+                        ? {
+                            label: '설립',
+                            bg: isDark ? 'rgba(16,185,129,0.16)' : '#ecfdf5',
+                            color: isDark ? '#6ee7b7' : '#047857',
+                          }
+                        : eventItem.type === 'crisis'
+                          ? {
+                              label: '폐지',
+                              bg: isDark ? 'rgba(148,163,184,0.16)' : '#f1f5f9',
+                              color: isDark ? '#cbd5e1' : '#475569',
+                            }
+                          : eventItem.type === 'merger'
+                            ? {
+                                label: '통합',
+                                bg: isDark ? 'rgba(245,158,11,0.16)' : '#fffbeb',
+                                color: isDark ? '#fcd34d' : '#b45309',
+                              }
+                            : {
+                                label: '개편',
+                                bg: palette.accentBg,
+                                color: palette.accent,
+                              }
+
                     return (
                       <div
-                        key={eventIndex}
+                        key={eventItem.id}
                         style={{
-                          display: 'flex',
-                          alignItems: 'flex-start',
-                          gap: 0,
-                          position: 'relative',
-                          paddingBottom: 20,
+                          display: 'grid',
+                          gridTemplateColumns: '68px minmax(0, 1fr)',
+                          gap: 10,
+                          alignItems: 'start',
                         }}
                       >
-                        {/* 타임라인 노드 (연도) */}
-                        <div
+                        <span
                           style={{
-                            width: 48,
-                            flexShrink: 0,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            paddingTop: 14,
+                            marginTop: 10,
+                            padding: '3px 7px',
+                            borderRadius: 7,
+                            textAlign: 'center',
+                            fontSize: 11.5,
+                            fontWeight: 700,
+                            fontVariantNumeric: 'tabular-nums',
+                            background: palette.cardBg,
+                            border: `1px solid ${palette.borderHairline}`,
+                            color: MAIN,
                           }}
                         >
-                          <div
-                            style={{
-                              width: 14,
-                              height: 14,
-                              borderRadius: '50%',
-                              background: isDark ? palette.badge : '#ffffff',
-                              border: `3px solid ${MAIN}`,
-                              boxShadow: '0 0 0 2px rgba(0,0,0,0.08)',
-                              flexShrink: 0,
-                            }}
-                          />
-                          <span
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 700,
-                              color: MAIN,
-                              marginTop: 6,
-                              letterSpacing: '-0.02em',
-                            }}
-                          >
-                            {event.year}
-                          </span>
-                        </div>
+                          {eventItem.year}
+                        </span>
 
-                        {/* 카드 */}
                         <div
                           style={{
-                            flex: 1,
-                            minWidth: 0,
-                            background: palette.bgSubtle,
-                            borderRadius: 18,
-                            border: `1px solid ${palette.border}`,
-                            overflow: 'hidden',
-                            transition: 'all 0.2s ease',
-                            boxShadow: isDark
-                              ? '0 2px 8px rgba(0,0,0,0.3)'
-                              : '0 2px 8px rgba(0,0,0,0.04)',
-                          }}
-                          onMouseEnter={(mouseEvent) => {
-                            mouseEvent.currentTarget.style.boxShadow = isDark
-                              ? '0 8px 24px rgba(0,0,0,0.4)'
-                              : '0 8px 24px rgba(0,0,0,0.08)'
-                            mouseEvent.currentTarget.style.borderColor = MAIN
-                          }}
-                          onMouseLeave={(mouseEvent) => {
-                            mouseEvent.currentTarget.style.boxShadow = isDark
-                              ? '0 2px 8px rgba(0,0,0,0.3)'
-                              : '0 2px 8px rgba(0,0,0,0.04)'
-                            mouseEvent.currentTarget.style.borderColor =
-                              palette.border
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 12,
+                            padding: '11px 13px',
+                            borderRadius: 12,
+                            background: palette.cardBg,
+                            border: `1px solid ${palette.borderHairline}`,
                           }}
                         >
-                          <div
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'row',
-                              minHeight: 88,
-                            }}
-                          >
-                            <div
+                          {imageUrl ? (
+                            <img
+                              src={imageUrl}
+                              alt=""
                               style={{
-                                width: 100,
-                                minWidth: 100,
+                                width: 44,
+                                height: 44,
+                                borderRadius: 10,
+                                objectFit: 'cover',
                                 flexShrink: 0,
-                                background: imageUrl
-                                  ? `url(${imageUrl}) center/cover`
-                                  : `linear-gradient(135deg, #e7e5e4 0%, ${MAIN} 100%)`,
+                                border: `1px solid ${palette.border}`,
                               }}
                             />
+                          ) : null}
+                          <div style={{ flex: 1, minWidth: 0 }}>
                             <div
                               style={{
-                                padding: '12px 14px 14px',
-                                flex: 1,
-                                minWidth: 0,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                marginBottom: 4,
+                                flexWrap: 'wrap',
                               }}
                             >
-                              <div
+                              <span
                                 style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 8,
-                                  marginBottom: 6,
-                                  flexWrap: 'wrap',
-                                }}
-                              >
-                                {event.orgName && (
-                                  <span
-                                    style={{
-                                      fontSize: 11,
-                                      fontWeight: 600,
-                                      color: palette.warmFilterIdle,
-                                      background: isDark
-                                        ? palette.btnHover
-                                        : '#f5f5f4',
-                                      padding: '4px 8px',
-                                      borderRadius: 8,
-                                    }}
-                                  >
-                                    {event.orgName}
-                                  </span>
-                                )}
-                                <span
-                                  style={{
-                                    fontSize: 10,
-                                    fontWeight: 600,
-                                    color: palette.warmCaptionMuted,
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.04em',
-                                  }}
-                                >
-                                  {event.type === 'establishment' && '설립'}
-                                  {event.type === 'reform' && '개혁'}
-                                  {event.type === 'achievement' && '성과'}
-                                  {event.type === 'crisis' && '위기'}
-                                  {event.type === 'merger' && '통합'}
-                                </span>
-                              </div>
-                              <h4
-                                style={{
-                                  fontSize: 14,
+                                  fontSize: 10.5,
                                   fontWeight: 700,
-                                  color: palette.warmTitle,
-                                  margin: '0 0 4px',
-                                  lineHeight: 1.35,
+                                  padding: '2px 7px',
+                                  borderRadius: 5,
+                                  background: eventBadgeTone.bg,
+                                  color: eventBadgeTone.color,
                                 }}
                               >
-                                {event.title}
-                              </h4>
-                              <p
+                                {eventBadgeTone.label}
+                              </span>
+                              <span
                                 style={{
-                                  fontSize: 12,
-                                  color: palette.warmFilterIdle,
-                                  lineHeight: 1.5,
-                                  margin: 0,
-                                  display: '-webkit-box',
-                                  WebkitLineClamp: 2,
-                                  WebkitBoxOrient: 'vertical',
-                                  overflow: 'hidden',
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  color: palette.textMuted,
                                 }}
                               >
-                                {event.description}
-                              </p>
+                                {eventItem.orgType}
+                              </span>
                             </div>
+                            <h4
+                              style={{
+                                fontSize: 13.5,
+                                fontWeight: 700,
+                                color: palette.text,
+                                margin: '0 0 3px',
+                                lineHeight: 1.35,
+                              }}
+                            >
+                              {eventItem.title}
+                            </h4>
+                            <p
+                              style={{
+                                fontSize: 12,
+                                color: palette.textMuted,
+                                lineHeight: 1.45,
+                                margin: 0,
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                              }}
+                            >
+                              {eventItem.description}
+                            </p>
                           </div>
                         </div>
                       </div>
                     )
                   })}
-                </>
+                </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* 우측: 조직 유형별 현황 2x2 */}
+        {/* 우측: 조직 성격별 현황 2x2 */}
         <div style={{ minWidth: 0 }}>
-          <GovSectionEyebrow>조직 유형별 현황</GovSectionEyebrow>
+          <GovSectionEyebrow>성격별 기관 구성</GovSectionEyebrow>
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: 20,
+              gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+              gap: 12,
             }}
           >
             <OrgTypeCard
               accentColor={MAIN}
-              title="중앙행정기관"
+              title="중앙부처 (성·부·조)"
               count={totalMinistries}
-              description={`${totalMinistries}개 부처`}
+              description="내각·국무 핵심 행정부처"
               examples={
                 ministryExamples.length > 0
                   ? ministryExamples
@@ -851,21 +640,10 @@ export function GovernmentStatisticsTab({
               }
             />
             <OrgTypeCard
-              accentColor={ACCENT.teal}
-              title="특수·군령·궁내기관"
-              count={totalConstitutional}
-              description={`${totalConstitutional}개 기관`}
-              examples={
-                specialExamples.length > 0
-                  ? specialExamples
-                  : ['등록된 특수기관 없음']
-              }
-            />
-            <OrgTypeCard
               accentColor={ACCENT.amber}
-              title="외청·위원회"
+              title="외청 · 위원회 · 정보"
               count={totalAgencies}
-              description={`${totalAgencies}개 기관`}
+              description="독립 위원회 및 직할·외청 기구"
               examples={
                 agencyExamples.length > 0
                   ? agencyExamples
@@ -873,36 +651,48 @@ export function GovernmentStatisticsTab({
               }
             />
             <OrgTypeCard
+              accentColor={ACCENT.teal}
+              title="궁내 · 총독부 · 특수기관"
+              count={totalConstitutional}
+              description="왕실·식민통치·특수 통치기구"
+              examples={
+                specialExamples.length > 0
+                  ? specialExamples
+                  : ['등록된 특수기관 없음']
+              }
+            />
+            <OrgTypeCard
               accentColor={ACCENT.sky}
-              title="행정기구·산하조직"
+              title="유관 · 산하 행정조직"
               count={totalLocal}
-              description={`${totalLocal}개 조직`}
+              description="국가 연결 일반·사회 조직"
               examples={
                 organizationExamples.length > 0
                   ? organizationExamples
-                  : ['등록된 행정기구 없음']
+                  : ['등록된 산하조직 없음']
               }
             />
           </div>
         </div>
       </section>
-    </>
+    </div>
   )
 }
 
-// 통계 카드 (카드별 액센트 색)
 function StatCard({
   accentColor = MAIN,
   icon,
   title,
   value,
   unit,
+  subLabel,
 }: {
   accentColor?: string
   icon: ReactNode
   title: string
   value: string | number
   unit: string
+  subLabel?: string
 }) {
   const { mode } = useThemeStore()
   const isDark = mode === 'dark'
@@ -912,92 +702,93 @@ function StatCard({
       style={{
         background: cardPalette.bgSubtle,
         border: `1px solid ${cardPalette.borderMid}`,
-        borderRadius: 16,
-        padding: 22,
+        borderRadius: 14,
+        padding: '15px 16px',
         display: 'flex',
         flexDirection: 'column',
-        gap: 14,
-        transition:
-          'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
-        position: 'relative',
-        overflow: 'hidden',
-      }}
-      onMouseEnter={(mouseEvent) => {
-        mouseEvent.currentTarget.style.transform = 'translateY(-2px)'
-        mouseEvent.currentTarget.style.boxShadow = isDark
-          ? '0 8px 20px rgba(0,0,0,0.3)'
-          : '0 8px 20px rgba(0,0,0,0.06)'
-        mouseEvent.currentTarget.style.borderColor = cardPalette.borderEmphasis
-      }}
-      onMouseLeave={(mouseEvent) => {
-        mouseEvent.currentTarget.style.transform = 'translateY(0)'
-        mouseEvent.currentTarget.style.boxShadow = 'none'
-        mouseEvent.currentTarget.style.borderColor = cardPalette.borderMid
+        gap: 10,
       }}
     >
       <div
         style={{
-          width: 44,
-          height: 44,
-          borderRadius: 12,
-          background: cardPalette.avatarBg,
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          color: accentColor,
-          flexShrink: 0,
+          justifyContent: 'space-between',
+          gap: 8,
         }}
       >
-        {icon}
-      </div>
-      <div style={{ minWidth: 0 }}>
-        <div
+        <span
           style={{
-            fontSize: 11,
+            fontSize: 11.5,
             color: cardPalette.textMuted,
-            marginBottom: 4,
-            fontWeight: 600,
-            letterSpacing: '0.04em',
-            textTransform: 'uppercase',
+            fontWeight: 700,
           }}
         >
           {title}
+        </span>
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 9,
+            background: cardPalette.avatarBg,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: accentColor,
+            flexShrink: 0,
+          }}
+        >
+          {icon}
         </div>
+      </div>
+
+      <div>
         <div
           style={{
             display: 'flex',
             alignItems: 'baseline',
-            gap: 6,
-            flexWrap: 'wrap',
+            gap: 4,
           }}
         >
           <span
             style={{
-              fontSize: 24,
-              fontWeight: 700,
+              fontSize: 22,
+              fontWeight: 800,
               color: cardPalette.text,
               letterSpacing: '-0.03em',
-              lineHeight: 1.2,
+              lineHeight: 1.15,
             }}
           >
             {value}
           </span>
           <span
             style={{
-              fontSize: 13,
-              fontWeight: 500,
+              fontSize: 12.5,
+              fontWeight: 600,
               color: cardPalette.textMuted,
             }}
           >
             {unit}
           </span>
         </div>
+        {subLabel ? (
+          <div
+            style={{
+              marginTop: 3,
+              fontSize: 11,
+              color: cardPalette.textFaint,
+              fontWeight: 500,
+            }}
+          >
+            {subLabel}
+          </div>
+        ) : null}
       </div>
     </div>
   )
 }
 
-// 조직 타입 카드 (카드별 액센트 색)
 function OrgTypeCard({
   accentColor = MAIN,
   title,
@@ -1019,22 +810,11 @@ function OrgTypeCard({
       style={{
         background: cardPalette.bgSubtle,
         border: `1px solid ${cardPalette.borderMid}`,
-        borderRadius: 16,
-        padding: 22,
-        transition:
-          'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
-      }}
-      onMouseEnter={(mouseEvent) => {
-        mouseEvent.currentTarget.style.transform = 'translateY(-2px)'
-        mouseEvent.currentTarget.style.boxShadow = isDark
-          ? '0 8px 20px rgba(0,0,0,0.3)'
-          : '0 8px 20px rgba(0,0,0,0.06)'
-        mouseEvent.currentTarget.style.borderColor = cardPalette.borderEmphasis
-      }}
-      onMouseLeave={(mouseEvent) => {
-        mouseEvent.currentTarget.style.transform = 'translateY(0)'
-        mouseEvent.currentTarget.style.boxShadow = 'none'
-        mouseEvent.currentTarget.style.borderColor = cardPalette.borderMid
+        borderRadius: 14,
+        padding: '16px 17px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
       }}
     >
       <div
@@ -1042,13 +822,13 @@ function OrgTypeCard({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: 12,
+          gap: 8,
         }}
       >
         <h4
           style={{
-            fontSize: 15,
-            fontWeight: 600,
+            fontSize: 14,
+            fontWeight: 700,
             color: cardPalette.text,
             margin: 0,
             letterSpacing: '-0.02em',
@@ -1056,34 +836,42 @@ function OrgTypeCard({
         >
           {title}
         </h4>
-        <div
+        <span
           style={{
-            width: 40,
-            height: 40,
-            borderRadius: 12,
+            minWidth: 30,
+            height: 26,
+            padding: '0 8px',
+            borderRadius: 8,
             background: accentColor,
-            display: 'flex',
+            display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: '#ffffff',
-            fontSize: 16,
-            fontWeight: 700,
+            fontSize: 13,
+            fontWeight: 800,
           }}
         >
           {count}
-        </div>
+        </span>
       </div>
       <p
         style={{
-          fontSize: 13,
+          fontSize: 12,
           color: cardPalette.textMuted,
-          marginBottom: 12,
-          lineHeight: 1.45,
+          margin: 0,
+          lineHeight: 1.4,
         }}
       >
         {description}
       </p>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 5,
+          marginTop: 2,
+        }}
+      >
         {examples.map((example, exampleIndex) => (
           <div
             key={exampleIndex}
@@ -1092,10 +880,13 @@ function OrgTypeCard({
               color: isDark
                 ? cardPalette.textMuted
                 : cardPalette.sectionLabelTint,
-              padding: '8px 12px',
-              background: cardPalette.bgMuted,
-              borderRadius: 8,
-              border: `1px solid ${cardPalette.borderMid}`,
+              padding: '6px 10px',
+              background: cardPalette.cardBg,
+              borderRadius: 7,
+              border: `1px solid ${cardPalette.borderHairline}`,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
             }}
           >
             • {example}

@@ -222,7 +222,7 @@ export function CountryDetailDashboard({
   const goEventsCentury = (century: number) =>
     navigate(pathKeys.countryEvents(country.id, undefined, century))
   const goGovernment = (
-    subTab?: 'heads' | 'cabinets' | 'ministries' | 'system' | 'military',
+    subTab?: 'cabinets' | 'ministries' | 'system' | 'military',
     cabinetId?: string | null,
   ) => {
     if (subTab === 'military') {
@@ -458,7 +458,7 @@ export function CountryDetailDashboard({
       countryName={country.name}
       countryIsoCode={country.isoCode}
       onOpen={(cabinetId, isFallbackHead) =>
-        goGovernment(isFallbackHead ? 'heads' : 'cabinets', cabinetId)
+        goGovernment(isFallbackHead ? 'system' : 'cabinets', cabinetId)
       }
       onOpenElections={goElections}
       onSelectPerson={(personId) => setPreviewPersonId(personId)}
@@ -1535,7 +1535,7 @@ export function CountryDetailDashboard({
               onNavigateDomain={(kind, refId, personId) => {
                 if (kind === 'tenure') {
                   if (personId) setPreviewPersonId(personId)
-                  else goGovernment('heads')
+                  else goPersons()
                   return
                 }
                 if (kind === 'political-system') {

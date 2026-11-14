@@ -445,11 +445,10 @@ function CountryDetailInner({
                         (searchParams.get('sub') as
                           | import('./government-info-section.widget').GovernmentContentTab
                           | null) ??
-                        (initialDetailTab === 'heads'
-                          ? 'heads'
-                          : initialDetailTab === 'political-system'
-                            ? 'system'
-                            : undefined)
+                        (initialDetailTab === 'heads' ||
+                        initialDetailTab === 'political-system'
+                          ? 'system'
+                          : undefined)
                       }
                     />
                   </S.TabContentPane>

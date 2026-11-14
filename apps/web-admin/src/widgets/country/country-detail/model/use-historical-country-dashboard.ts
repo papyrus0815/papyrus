@@ -661,7 +661,7 @@ export function useHistoricalCountryDashboard(
       label: '초대 통치자',
       filled: (founding?.firstRulers?.length ?? 0) > 0,
       target: 'historical',
-      historicalTarget: 'heads',
+      historicalTarget: 'founding',
     },
     {
       key: 'politicalSystem',
@@ -693,13 +693,6 @@ export function useHistoricalCountryDashboard(
       filled: transitions.length > 0,
       target: 'historical',
       historicalTarget: 'succession',
-    },
-    {
-      key: 'rulers',
-      label: '역대 수반',
-      filled: rulers.length > 0,
-      target: 'government',
-      historicalTarget: 'heads',
     },
     {
       key: 'persons',

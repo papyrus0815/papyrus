@@ -108,7 +108,7 @@ export interface CompletenessField {
   filled: boolean
   target: CompletenessTarget
   /** target === 'government'일 때 행정조직 내부 하위 탭 딥링크 */
-  governmentSubTab?: 'heads' | 'cabinets' | 'ministries' | 'system' | 'military'
+  governmentSubTab?: 'cabinets' | 'ministries' | 'system' | 'military'
 }
 
 export interface DeltaCounts {
@@ -1366,13 +1366,6 @@ export function useCountryDashboardStats(
             filled: politicalSystemCount > 0,
             target: 'government',
             governmentSubTab: 'system',
-          },
-          {
-            key: 'head',
-            label: '수반',
-            filled: currentHeads.length > 0 || hasAnyHeadRecord,
-            target: 'government',
-            governmentSubTab: 'heads',
           },
           {
             key: 'cabinet',

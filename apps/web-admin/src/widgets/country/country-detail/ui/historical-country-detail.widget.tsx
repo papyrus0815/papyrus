@@ -50,7 +50,6 @@ import { CountryTradeSection } from './country-trade-section.widget'
 import { EthnicitySection } from './ethnicity-section.widget'
 import { EventsTimelineSection } from './events-timeline-section.widget'
 import { GovernmentInfoSection } from './government-info-section.widget'
-import { HeadsOfStateSection } from './heads-of-state-section.widget'
 import { PersonCard } from './person/person-card'
 import { TreatySectionWidget } from './treaty-section.widget'
 import { LoadingOverlay } from './loading-overlay'
@@ -109,7 +108,6 @@ import { CurrentCabinetPanel } from './dashboard-panels/current-cabinet-panel'
 import { DashboardGuideBanner } from './dashboard-panels/dashboard-guide-banner'
 import { EventCalendarPanel } from './dashboard-panels/event-calendar-panel'
 import { EventCenturyStrip } from './dashboard-panels/event-century-strip'
-import { HistoricalRulerTimeline } from './dashboard-panels/historical-ruler-timeline'
 import { LineageFlow } from './dashboard-panels/lineage-flow'
 import { PoliticalSystemPanel } from './dashboard-panels/political-system-panel'
 import { RecordLedger, type RecordLedgerRow } from './dashboard-panels/record-ledger'
@@ -218,10 +216,8 @@ export function HistoricalCountryDetail({
     return 'overview'
   })
   const [governmentSubTab, setGovernmentSubTab] = useState<
-    'system' | 'heads' | 'cabinets' | 'ministries'
-  >(() =>
-    initialTab === 'heads' || queryTabParam === 'heads' ? 'heads' : 'heads',
-  )
+    'system' | 'cabinets' | 'ministries'
+  >('system')
   const [focusEventsCentury, setFocusEventsCentury] = useState<number | null>(
     null,
   )
@@ -275,9 +271,6 @@ export function HistoricalCountryDetail({
   const tabCounts = useMemo<
     Partial<Record<HistoricalCountryTab, number>>
   >(() => {
-    const rulersInSpanCount = dashboardStats.rulers.filter(
-      (ruler) => !ruler.isOutOfSpan,
-    ).length
     const companyCount = allCompanies.filter(
       (company) => company.historicalCountryId === historicalCountryId,
     ).length
@@ -288,7 +281,6 @@ export function HistoricalCountryDetail({
       figures: dashboardStats.loading.persons
         ? undefined
         : dashboardStats.personCount,
-      heads: dashboardStats.loading.tenures ? undefined : rulersInSpanCount,
       regions: dashboardStats.loading.regions
         ? undefined
         : dashboardStats.divisionCount,
@@ -306,7 +298,7 @@ export function HistoricalCountryDetail({
         : dashboardStats.treatyCount,
       government: dashboardStats.loading.administration
         ? undefined
-        : dashboardStats.administrationCount + rulersInSpanCount,
+        : dashboardStats.administrationCount,
       military: dashboardStats.loading.military
         ? undefined
         : dashboardStats.militaryCount,
@@ -333,7 +325,7 @@ export function HistoricalCountryDetail({
       setFocusEventsCentury(null)
     }
     if (tab === 'heads') {
-      setGovernmentSubTab('heads')
+      setGovernmentSubTab('system')
       setActiveTab('government')
       onTabChangeToUrl?.('government')
       return
@@ -375,7 +367,7 @@ export function HistoricalCountryDetail({
   // URL에서 직접 진입·뒤로가기 시 탭 동기화 — initialTab이 있으면 그 탭, 없으면 synced 탭에 머물러 있을 때만 overview로 복귀.
   useEffect(() => {
     if (initialTab === 'heads' || queryTabParam === 'heads') {
-      setGovernmentSubTab('heads')
+      setGovernmentSubTab('system')
       setActiveTab('government')
       return
     }
@@ -528,11 +520,8 @@ export function HistoricalCountryDetail({
                   {activeTab === 'figures' && (
                     <HistoricalFiguresSection
                       country={country}
-                      onGoToHeads={() => handleTabChange('heads')}
+                      onGoToHeads={() => handleTabChange('government')}
                     />
-                  )}
-                  {activeTab === 'heads' && (
-                    <HeadsOfStateSection country={country} />
                   )}
                   {activeTab === 'regions' && (
                     <HistoricalRegionsSection country={country} />
@@ -872,7 +861,7 @@ function HistoricalOverviewSection({
   /** 요약 칸에서 해당 탭으로(역대 수반·사건·계승 …) */
   onGoToTab: (tab: HistoricalCountryTab) => void
   onOpenGovernmentSubTab?: (
-    subTab: 'system' | 'heads' | 'cabinets' | 'ministries' | 'military',
+    subTab: 'system' | 'cabinets' | 'ministries' | 'military',
   ) => void
   onOpenEventsCentury: (century: number) => void
 }) {
@@ -1007,14 +996,6 @@ function HistoricalOverviewSection({
   const [previewPersonId, setPreviewPersonId] = useState<string | null>(null)
   const goPerson = (personId: string) => setPreviewPersonId(personId)
   const capitalText = country.capital ? String(country.capital).trim() : ''
-  /*
-   * 역대 수반 수 — 지표 칸과 장 머리 칩이 같은 수를 말하게 한다. 예전엔 지표는 국가원수만
-   * (독일 제국 5명), 칩은 존속 기간 밖 기록까지(7명) 세어 한 화면에 두 숫자가 떴다.
-   * 존속 기간 밖 기록은 잘못 걸린 행일 가능성이 높아 따로 센다.
-   */
-  const rulersInSpan = stats.rulers.filter((ruler) => !ruler.isOutOfSpan)
-  const rulerCount = rulersInSpan.length
-  const outOfSpanRulerCount = stats.rulers.length - rulerCount
 
   /* 기록 원장 — 현대 국가 대시보드와 같은 막대 목록, 축만 역사 국가 것으로 */
   const recordAxes: RecordLedgerRow[] = [
@@ -1037,16 +1018,6 @@ function HistoricalOverviewSection({
       isLoading: stats.loading.events,
       icon: <IconCalendar />,
       onClick: () => onGoToTab('events'),
-    },
-    {
-      key: 'ruler',
-      label: '역대 수반',
-      unit: '명',
-      value: rulerCount,
-      delta: 0,
-      isLoading: stats.loading.tenures,
-      icon: <IconVote />,
-      onClick: () => onGoToTab('heads'),
     },
     {
       key: 'succession',
@@ -1224,11 +1195,6 @@ function HistoricalOverviewSection({
   )
   const foundingFilledCount =
     (foundingStartSigned != null ? 1 : 0) + (foundingEndSigned != null ? 1 : 0)
-  const firstRulerName = rulersInSpan[0]?.personName ?? null
-  const lastRulerName =
-    rulersInSpan.length > 1
-      ? rulersInSpan[rulersInSpan.length - 1]?.personName ?? null
-      : null
 
   return (
     <DashboardRoot ref={rootRef}>
@@ -1260,9 +1226,7 @@ function HistoricalOverviewSection({
             </DashboardStyles.FactValue>
             <DashboardStyles.FactSubNote>
               {durationYears != null
-                ? rulerCount > 0
-                  ? `수반 1인당 평균 약 ${Math.round((durationYears / rulerCount) * 10) / 10}년`
-                  : '성립~종료 통산 기간'
+                ? '성립~종료 통산 기간'
                 : '성립·종료 연도 입력 시 자동 계산'}
             </DashboardStyles.FactSubNote>
           </DashboardStyles.Fact>
@@ -1296,22 +1260,24 @@ function HistoricalOverviewSection({
                       : '국가 · 정권 · 시대 · 종족 분류'}
             </DashboardStyles.FactSubNote>
           </DashboardStyles.Fact>
-          <DashboardStyles.Fact $missing={rulerCount === 0}>
-            <DashboardStyles.FactLabel>역대 수반</DashboardStyles.FactLabel>
-            <DashboardStyles.FactValue $missing={rulerCount === 0}>
-              {rulerCount > 0 ? (
+          <DashboardStyles.Fact $missing={stats.administrationCount === 0}>
+            <DashboardStyles.FactLabel>행정조직</DashboardStyles.FactLabel>
+            <DashboardStyles.FactValue
+              $missing={stats.administrationCount === 0}
+            >
+              {stats.administrationCount > 0 ? (
                 <>
-                  {rulerCount}
-                  <DashboardStyles.FactUnit>명</DashboardStyles.FactUnit>
+                  {stats.administrationCount}
+                  <DashboardStyles.FactUnit>건</DashboardStyles.FactUnit>
                 </>
               ) : (
                 '미등록'
               )}
             </DashboardStyles.FactValue>
             <DashboardStyles.FactSubNote>
-              {firstRulerName
-                ? `${firstRulerName}${lastRulerName ? ` → ${lastRulerName}` : ' 재위'}`
-                : '군주·국가원수·정부수반 미등록'}
+              {stats.administrationCount > 0
+                ? '정체 · 내각 · 중앙 행정조직'
+                : '통치 정체 · 행정조직 미등록'}
             </DashboardStyles.FactSubNote>
           </DashboardStyles.Fact>
           <DashboardStyles.Fact $missing={!capitalText}>
@@ -1409,20 +1375,16 @@ function HistoricalOverviewSection({
           {
             key: 'rulers-governance',
             stepNumber: 2,
-            title: '역대 수반 · 정체',
+            title: '정체 · 행정조직',
             description:
-              '군주·국가원수의 재위 기간과 통치 정체, 중앙 행정조직을 등록합니다.',
-            status:
-              rulerCount > 0 && stats.administrationCount > 0
-                ? 'completed'
-                : rulerCount > 0 || stats.administrationCount > 0
-                  ? 'partial'
-                  : 'empty',
+              '통치 정체와 행정부·내각, 중앙 행정조직을 등록합니다.',
+            status: stats.administrationCount > 0 ? 'completed' : 'empty',
             statusLabel:
-              rulerCount > 0 ? `수반 ${rulerCount}명` : '수반 미등록',
-            actionLabel: rulerCount === 0 ? '역대 수반 등록' : '행정조직 관리',
-            onAction: () =>
-              onGoToTab(rulerCount === 0 ? 'heads' : 'government'),
+              stats.administrationCount > 0
+                ? `행정조직 ${stats.administrationCount}건`
+                : '행정조직 미등록',
+            actionLabel: '정부·행정 관리',
+            onAction: () => onGoToTab('government'),
           },
           {
             key: 'lineage-founding',
@@ -1472,17 +1434,6 @@ function HistoricalOverviewSection({
           },
         ]}
         diagnosticHints={[
-          ...(outOfSpanRulerCount > 0
-            ? [
-                {
-                  key: 'out-of-span-rulers',
-                  tone: 'warning' as const,
-                  message: `이 국가의 존속 기간(${period}) 밖에서 시작·종료한 수반 재임 기록이 ${outOfSpanRulerCount}건 있습니다. 재임 연도나 소속 국가를 확인해 보세요.`,
-                  actionLabel: '역대 수반 확인',
-                  onAction: () => onGoToTab('heads'),
-                },
-              ]
-            : []),
           ...(!capitalText && onEdit
             ? [
                 {
@@ -1755,7 +1706,6 @@ function HistoricalOverviewSection({
           entityKind={entityKind ?? null}
           startYear={foundingStartSigned}
           endYear={foundingEndSigned}
-          onGoToHeads={() => onGoToTab('heads')}
           onGoToSuccession={() => onGoToTab('succession')}
         />
       </DashboardStyles.Section>
@@ -1765,55 +1715,6 @@ function HistoricalOverviewSection({
 
       {/* 선전포고 · 참전 이력 — 선전포고(WAR_DECLARATION) 사건을 이 나라 쪽에서(선포 ──▶ 상대국 / 피선포 ◀── 상대국) */}
       <WarDeclarationsSection historicalCountryId={country.id} />
-
-      {/* 역대 수반 — 0명이어도 대시보드에 상시 노출해 등록 진입점을 제공한다 */}
-      <DashboardStyles.Section
-        id="section-rulers"
-        data-section-count={rulerCount > 0 ? String(rulerCount) : undefined}
-      >
-        <DashboardStyles.SectionTitleRow>
-          <DashboardStyles.SectionTitleIcon>
-            <IconVote />
-          </DashboardStyles.SectionTitleIcon>
-          <DashboardStyles.SectionTitleText>
-            역대 수반
-          </DashboardStyles.SectionTitleText>
-          <SectionHelpPopover sectionKey="rulers" />
-          {rulerCount > 0 && (
-            <DashboardStyles.SectionCountChip>
-              {rulerCount}명
-            </DashboardStyles.SectionCountChip>
-          )}
-          {outOfSpanRulerCount > 0 && (
-            <DashboardStyles.SectionCountChip title="존속 기간 밖에서 시작·종료한 기록 — 다른 나라에 걸려야 할 행일 수 있습니다">
-              기간 밖 {outOfSpanRulerCount}
-            </DashboardStyles.SectionCountChip>
-          )}
-          <DashboardStyles.SectionLink
-            type="button"
-            onClick={() => onGoToTab('heads')}
-          >
-            {stats.rulers.length > 0 ? '전체 보기' : '+ 수반 등록'}
-          </DashboardStyles.SectionLink>
-        </DashboardStyles.SectionTitleRow>
-        {stats.loading.tenures ? (
-          <ChartSkeleton variant="bars" />
-        ) : stats.rulers.length === 0 ? (
-          <SectionEmpty
-            text="이 국가의 역대 군주·국가원수·정부수반 재임 기록이 아직 없습니다. 등록하면 존속 기간 위 재위 띠와 2열 수반 원장이 생성됩니다."
-            hint="초대 통치자를 등록하면 상단 건국·멸망 원장에도 자동 연결됩니다"
-            actionLabel="역대 수반 등록"
-            onAction={() => onGoToTab('heads')}
-          />
-        ) : (
-          <HistoricalRulerTimeline
-            rulers={stats.rulers}
-            spanStart={span.start}
-            spanEnd={span.end}
-            onSelectPerson={goPerson}
-          />
-        )}
-      </DashboardStyles.Section>
 
       {/* 정체 — 어떤 체제였나(현대 국가와 같은 2열 원장 패널, 역사 국가 FK로 전체 폭 사용) */}
       <PoliticalSystemPanel
@@ -1829,7 +1730,7 @@ function HistoricalOverviewSection({
         countryName={country.name}
         onOpen={(_cabinetId, isFallbackHead) => {
           if (isFallbackHead) {
-            onGoToTab('heads')
+            onGoToTab('government')
             return
           }
           onOpenGovernmentSubTab?.('cabinets')
@@ -2163,7 +2064,7 @@ function HistoricalOverviewSection({
               onNavigateDomain={(kind, _refId, personId) => {
                 if (kind === 'tenure') {
                   if (personId) goPerson(personId)
-                  else onGoToTab('heads')
+                  else onGoToTab('figures')
                   return
                 }
                 if (
@@ -2853,11 +2754,6 @@ function HistoricalFiguresSection({
             </FiguresDescription>
           </FiguresHeadText>
           <FiguresHeadActions>
-            {onGoToHeads && (
-              <FiguresActionBtn type="button" onClick={onGoToHeads}>
-                역대 수반 관리
-              </FiguresActionBtn>
-            )}
             <FiguresActionBtn
               type="button"
               onClick={() => navigate(pathKeys.personsDashboard())}
@@ -2977,14 +2873,14 @@ function HistoricalFiguresSection({
             </FiguresEmptySpecCell>
             <FiguresEmptySpecCell>
               <FiguresEmptySpecTitle>
-                2. 역대 수반 · 관직 재임 등록
+                2. 행정부 · 관직 재임 등록
               </FiguresEmptySpecTitle>
               <FiguresEmptySpecDesc>
-                역대 수반 탭이나 행정조직 탭에서 군주·국가원수·관직 재임자를 등록하면 별도 국적 설정 없이도 이 국가 인물로 함께 묶입니다.
+                정부·행정 탭에서 행정부·중앙부처 관직 재임자를 등록하면 별도 국적 설정 없이도 이 국가 인물로 함께 묶입니다.
               </FiguresEmptySpecDesc>
               {onGoToHeads && (
                 <FiguresEmptySpecAction type="button" onClick={onGoToHeads}>
-                  역대 수반 탭으로 이동 →
+                  정부·행정 탭으로 이동 →
                 </FiguresEmptySpecAction>
               )}
             </FiguresEmptySpecCell>

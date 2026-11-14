@@ -141,8 +141,9 @@ const FilterTab = styled.button<{ $active: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 6px 12px;
-  border-radius: 999px;
+  height: 34px;
+  padding: 0 11px;
+  border-radius: 8px;
   font-family: inherit;
   font-size: 12.5px;
   font-weight: 600;
@@ -151,20 +152,22 @@ const FilterTab = styled.button<{ $active: boolean }>`
     ${({ $active, theme }) =>
       $active
         ? theme.mode === 'dark'
-          ? 'rgba(99, 102, 241, 0.5)'
-          : '#a5b4fc'
-        : theme.colors.border.default};
+          ? 'rgba(59, 130, 246, 0.45)'
+          : 'rgba(37, 99, 235, 0.35)'
+        : theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.1)'
+          : 'rgba(20, 19, 34, 0.1)'};
   background: ${({ $active, theme }) =>
     $active
       ? theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.2)'
-        : '#eef2ff'
+        ? 'rgba(37, 99, 235, 0.18)'
+        : 'rgba(37, 99, 235, 0.08)'
       : 'transparent'};
   color: ${({ $active, theme }) =>
     $active
       ? theme.mode === 'dark'
-        ? '#a5b4fc'
-        : '#4f46e5'
+        ? '#93c5fd'
+        : '#2563eb'
       : theme.colors.text.secondary};
 `
 
@@ -172,12 +175,22 @@ const SearchInputWrap = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px;
-  border-radius: 10px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.1)'
+        : 'rgba(20, 19, 34, 0.1)'};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
   min-width: 220px;
+
+  &:focus-within {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  }
 
   input {
     border: none;
@@ -193,40 +206,41 @@ const SearchInputWrap = styled.div`
 const SectionTitleBlock = styled.div``
 
 const SectionTitle = styled.h2`
-  margin: 0 0 5px;
-  font-size: 18px;
-  font-weight: 700;
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 800;
   color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.025em;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
 `
 
 const SectionSub = styled.p`
   margin: 0;
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const AddBtn = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 9px 16px;
-  font-size: 13px;
+  gap: 6px;
+  height: 34px;
+  padding: 0 13px;
+  font-family: inherit;
+  font-size: 12.5px;
   font-weight: 600;
-  color: ${({ theme }) => theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5'};
-  background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.15)' : '#eef2ff'};
-  border: 1px solid ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.35)' : '#c7d2fe'};
-  border-radius: 10px;
+  color: #ffffff;
+  background: #2563eb;
+  border: 1px solid #2563eb;
+  border-radius: 8px;
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+  transition: background 0.14s ease;
   &:hover {
-    background: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.25)' : '#e0e7ff'};
-    border-color: ${({ theme }) => theme.mode === 'dark' ? 'rgba(99,102,241,0.55)' : '#a5b4fc'};
-    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.14);
+    background: #1d4ed8;
+    border-color: #1d4ed8;
   }
 `
 

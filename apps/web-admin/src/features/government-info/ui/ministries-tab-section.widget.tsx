@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 
-import { motion } from 'framer-motion'
 import {
   FiBriefcase,
   FiColumns,
@@ -9,7 +8,9 @@ import {
   FiPlus,
   FiSearch,
   FiShield,
+  FiX,
 } from 'react-icons/fi'
+import styled from 'styled-components'
 
 import { useHistoricalCountriesByModernCountry } from '@/features/country/api/use-historical-countries-by-modern-country.hook'
 import type { GovernmentContentTab } from '@/features/government-info/model/government-content-tab'
@@ -19,7 +20,6 @@ import {
   UNCATEGORIZED_CATEGORY_ID,
   isDefenseRelatedCategory,
 } from '@/shared/lib/ministry-department/ministry-department-utils'
-import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import {
   EmptyStateFeatureCard,
   EmptyStateFill,
@@ -35,16 +35,36 @@ import {
   DepartmentEventsBlock,
   DepartmentTenuresBlock,
 } from './department-blocks'
+import {
+  GovActiveFilterChip,
+  GovActiveFiltersRow,
+  GovClearFiltersBtn,
+  GovLedgerPanel,
+  GovPrimaryBtn,
+  GovPromSearch,
+  GovPromSearchClear,
+  GovPromSearchInput,
+  GovToolbarBtn,
+  GovToolbarDivider,
+  GovToolbarGroup,
+  GovToolbarRight,
+  GovToolbarRow,
+  GovToolbarShell,
+  GovViewMeta,
+} from './government-ledger.styles'
 import { MinistryFormModal } from './ministry-form-modal.widget'
 import { UnlinkedCountryTenuresBar } from './unlinked-country-tenures-bar'
 
-type DepartmentKindGroup =
-  | 'ALL'
-  | 'MINISTRY'
-  | 'AGENCY'
-  | 'SPECIAL'
+type DepartmentKindGroup = 'ALL' | 'MINISTRY' | 'AGENCY' | 'SPECIAL'
 
 type WorkspaceLayoutMode = 'SPLIT' | 'FOCUS'
+
+const KIND_GROUP_LABEL: Record<DepartmentKindGroup, string> = {
+  ALL: '전체 성격',
+  MINISTRY: '중앙부처',
+  AGENCY: '외청·위원회',
+  SPECIAL: '궁내·총독부',
+}
 
 export type MinistriesTabSectionProps = {
   contentTab: GovernmentContentTab
@@ -61,12 +81,12 @@ export type MinistriesTabSectionProps = {
     categoryId?: string
     categoryName?: string
   }) => void
-  /** 군부대 등록 시 기본 연결 부처 ID */
-  onRegisterMilitaryUnit: (departmentId: string) => void
-  /** 연결 군부대 클릭 시 군사 탭의 해당 부대 상세/편제 트리로 이동 */
+  onRegisterMilitaryUnit: (
+    departmentId: string,
+    historicalCountryId?: string | null,
+  ) => void
   onInspectMilitaryUnit?: (unitId: string) => void
   onEditMilitaryUnit: (unitId: string) => void
-  /** 상단 「군사」 탭으로 바로 이동 */
   onOpenMilitaryTab?: () => void
   openCategoryModal: () => void
 }
@@ -141,7 +161,6 @@ export function MinistriesTabSection({
     setPredecessorSelectOpen,
   } = ministriesTab
 
-  const palette = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
   const [eraFilter, setEraFilter] = useState<string>('ALL')
   const [kindGroupFilter, setKindGroupFilter] =
     useState<DepartmentKindGroup>('ALL')
@@ -175,10 +194,6 @@ export function MinistriesTabSection({
 
   const kpiStats = useMemo(() => {
     const totalCount = ministriesList.length
-    const rootCount = ministriesList.filter(
-      (deptItem) => !deptItem.parentId,
-    ).length
-    const subCount = totalCount - rootCount
     const linkedUnitIdSet = new Set<string>()
     for (const deptItem of ministriesList) {
       for (const unitRef of deptItem.militaryUnits ?? []) {
@@ -187,8 +202,6 @@ export function MinistriesTabSection({
     }
     return {
       totalCount,
-      rootCount,
-      subCount,
       linkedUnitCount: linkedUnitIdSet.size,
     }
   }, [ministriesList])
@@ -240,14 +253,19 @@ export function MinistriesTabSection({
         ? !deptItem.categoryId
         : deptItem.categoryId === activeCategory.id
     })
-  }, [activeCategory, ministriesList, eraFilter, kindGroupFilter, categoriesList])
+  }, [
+    activeCategory,
+    ministriesList,
+    eraFilter,
+    kindGroupFilter,
+    categoriesList,
+  ])
 
   const deptsInActiveCatFiltered = useMemo(
     () => filterDepartmentsBySearchQuery(deptsInActiveCat, ministrySearchQuery),
     [deptsInActiveCat, filterDepartmentsBySearchQuery, ministrySearchQuery],
   )
 
-  // 분할 워크스페이스에서 아무 기관도 선택되지 않았으면 첫 번째 최상위 기관을 자동 선택
   useEffect(() => {
     if (
       layoutMode === 'SPLIT' &&
@@ -282,536 +300,230 @@ export function MinistriesTabSection({
     Boolean(ministryBrowseResolved) &&
     !ministryFormModalOpen
 
+  const hasActiveFilters =
+    Boolean(ministrySearchQuery.trim()) ||
+    kindGroupFilter !== 'ALL' ||
+    eraFilter !== 'ALL'
+
+  const activeEraName =
+    eraFilter === 'MODERN'
+      ? '현대 직속'
+      : historicalErasAvailable.find((eraItem) => eraItem.id === eraFilter)
+          ?.name ?? null
+
   return (
     <>
-      <section
-        aria-label="중앙부처 현황"
-        style={{
-          flex: 1,
-          minHeight: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          width: '100%',
-        }}
-      >
+      <SectionRoot aria-label="중앙부처 현황">
         {!isFocusDetailOnly ? (
-          <div
-            style={{
-              marginBottom: 16,
-              paddingBottom: 16,
-              borderBottom: `1px solid ${palette.divider}`,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 14,
-            }}
-          >
-            {/* 헤더 + 액션 버튼 */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                justifyContent: 'space-between',
-                gap: 12,
-                flexWrap: 'wrap',
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  <h3
-                    style={{
-                      margin: 0,
-                      fontSize: 20,
-                      fontWeight: 800,
-                      color: palette.text,
-                      letterSpacing: '-0.03em',
-                    }}
-                  >
-                    중앙부처 · 국가기관
-                  </h3>
-                  <span
-                    style={{
-                      padding: '3px 9px',
-                      borderRadius: 999,
-                      fontSize: 11.5,
-                      fontWeight: 700,
-                      background: palette.accentBg,
-                      color: palette.accent,
-                    }}
-                  >
-                    총 {kpiStats.totalCount}곳
-                  </span>
-                </div>
-                <p
-                  style={{
-                    margin: '6px 0 0',
-                    fontSize: 13,
-                    color: palette.textMuted,
-                    lineHeight: 1.45,
-                    maxWidth: 680,
-                  }}
-                >
-                  내각 부처(성·부·6조), 외청·정보·위원회, 총독부·궁내기관의 상하
-                  위계와 전신·후신 계보, 역대 장관·수장을 관리합니다. (군 최고사령부·야전군 편제는 상단 「군사」 탭에서 관리)
-                </p>
-              </div>
-
-              {effectiveCountryId ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  {/* 레이아웃 전환 토글 */}
-                  <div
-                    role="group"
-                    aria-label="화면 보기 방식"
-                    style={{
-                      display: 'inline-flex',
-                      borderRadius: 10,
-                      border: `1px solid ${palette.borderMid}`,
-                      background: palette.bgSubtle,
-                      padding: 2,
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setLayoutMode('SPLIT')}
-                      title="좌측 계층 트리 + 우측 기관 상세 분할 워크스페이스"
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 5,
-                        padding: '6px 10px',
-                        borderRadius: 8,
-                        border: 'none',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        background:
-                          layoutMode === 'SPLIT'
-                            ? palette.cardBg
-                            : 'transparent',
-                        color:
-                          layoutMode === 'SPLIT'
-                            ? palette.accent
-                            : palette.textMuted,
-                      }}
-                    >
-                      <FiColumns size={13} />
-                      트리+상세 분할
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLayoutMode('FOCUS')}
-                      title="목록/상세 단독 전환 보기"
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 5,
-                        padding: '6px 10px',
-                        borderRadius: 8,
-                        border: 'none',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        background:
-                          layoutMode === 'FOCUS'
-                            ? palette.cardBg
-                            : 'transparent',
-                        color:
-                          layoutMode === 'FOCUS'
-                            ? palette.accent
-                            : palette.textMuted,
-                      }}
-                    >
-                      <FiMaximize2 size={13} />
-                      단독 보기
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => openCategoryModal()}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      padding: '9px 13px',
-                      borderRadius: 10,
-                      border: `1px solid ${palette.borderMid}`,
-                      background: palette.cardBg,
-                      color: palette.text,
-                      fontSize: 12.5,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <FiGrid size={14} />
-                    분류 관리
-                  </button>
-
-                  {onOpenMilitaryTab && (
-                    <button
-                      type="button"
-                      onClick={onOpenMilitaryTab}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '9px 14px',
-                        borderRadius: 10,
-                        border: `1px solid ${palette.borderMid}`,
-                        background: palette.cardBg,
-                        color: palette.text,
-                        fontSize: 12.5,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <FiShield size={14} />
-                      군사 사령부·편제 이동 →
-                    </button>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      openMinistryCreateRootInCategory(
-                        ministryTreeCategoryId,
-                        resolveDefaultCreateEra(),
-                        resolveDefaultCreateKind(),
-                      )
-                    }
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 7,
-                      padding: '9px 16px',
-                      border: 'none',
-                      background: palette.accent,
-                      color: '#fff',
-                      borderRadius: 10,
-                      fontSize: 13,
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      flexShrink: 0,
-                      boxShadow: '0 2px 10px rgba(99, 102, 241, 0.28)',
-                    }}
-                  >
-                    <FiPlus size={16} />
-                    기관·부처 등록
-                  </button>
-                </div>
-              ) : null}
-            </div>
-
-            {/* KPI 요약 배지 바 */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-                gap: 10,
-              }}
-            >
-              {[
-                {
-                  label: '전체 행정부처·기관',
-                  value: `${kpiStats.totalCount}곳`,
-                  sub: `최상위 ${kpiStats.rootCount} · 산하 ${kpiStats.subCount}`,
-                },
-                {
-                  label: '시대별 국가 정체',
-                  value: isHistorical
-                    ? '단일 정체'
-                    : `${historicalErasAvailable.length}개`,
-                  sub: '왕조·제국·공화국 시대 구분',
-                },
-                {
-                  label: '소관 연결 군사조직',
-                  value: `${kpiStats.linkedUnitCount}개`,
-                  sub: '국방·군정 부처 소관 사령부·부대',
-                },
-                {
-                  label: '등록된 분야 카테고리',
-                  value: `${categoriesList.length}개`,
-                  sub: '미분류·직속 기구 별도 지원',
-                },
-              ].map((statCard) => (
-                <div
-                  key={statCard.label}
-                  style={{
-                    padding: '10px 14px',
-                    borderRadius: 12,
-                    border: `1px solid ${palette.borderHairline}`,
-                    background: palette.bgSubtle,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 2,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: palette.textMuted,
-                    }}
-                  >
-                    {statCard.label}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 17,
-                      fontWeight: 800,
-                      color: palette.text,
-                      letterSpacing: '-0.02em',
-                    }}
-                  >
-                    {statCard.value}
-                  </span>
-                  <span style={{ fontSize: 11, color: palette.textFaint }}>
-                    {statCard.sub}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <UnlinkedCountryTenuresBar
-              mode="DEPARTMENT"
-              effectiveCountryId={effectiveCountryId}
-              isHistorical={isHistorical}
-              targetOptions={ministriesList.map((deptRow) => ({
-                id: deptRow.id,
-                label: deptRow.historicalCountry?.name
-                  ? `[${deptRow.historicalCountry.name}] ${deptRow.name}`
-                  : deptRow.name,
-                historicalCountryId: deptRow.historicalCountryId ?? null,
-              }))}
-              onRequestCreateTarget={(tenureHistCountryId) =>
-                openMinistryCreateRootInCategory(
-                  ministryTreeCategoryId,
-                  tenureHistCountryId,
-                  'MINISTRY',
-                )
-              }
-            />
-
-            {/* 검색 + 성격·시대 필터 */}
-            <div
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                alignItems: 'center',
-                gap: 10,
-              }}
-            >
-              <div
-                style={{
-                  flex: '1 1 280px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '8px 13px',
-                  borderRadius: 11,
-                  border: `1px solid ${palette.borderMid}`,
-                  background: palette.bgMuted,
-                }}
-              >
-                <FiSearch
-                  size={16}
-                  style={{
-                    color: palette.iconColor,
-                    flexShrink: 0,
-                  }}
-                  aria-hidden
-                />
-                <input
-                  type="search"
+          <GovToolbarShell>
+            <GovToolbarRow>
+              <GovPromSearch>
+                <FiSearch size={14} aria-hidden />
+                <GovPromSearchInput
+                  type="text"
                   value={ministrySearchQuery}
                   onChange={(event) =>
                     setMinistrySearchQuery(event.target.value)
                   }
-                  placeholder="부처·사령부명, 약칭(OKW·합참), 원어명, 카테고리 검색…"
+                  placeholder="부처·기관명, 약칭, 원어·영문명 검색…"
                   aria-label="부처 이름 검색"
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    padding: '2px 0',
-                    fontSize: 13.5,
-                    border: 'none',
-                    background: 'transparent',
-                    color: palette.text,
-                    outline: 'none',
-                  }}
                 />
-              </div>
+                {ministrySearchQuery ? (
+                  <GovPromSearchClear
+                    type="button"
+                    aria-label="검색어 지우기"
+                    onClick={() => setMinistrySearchQuery('')}
+                  >
+                    <FiX size={12} />
+                  </GovPromSearchClear>
+                ) : null}
+              </GovPromSearch>
 
-              <div
-                role="group"
-                aria-label="기관 성격 필터"
-                style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: 6,
-                  alignItems: 'center',
-                }}
-              >
+              <GovToolbarGroup role="group" aria-label="기관 성격 필터">
                 {(
-                  [
-                    { key: 'ALL', label: '전체 성격' },
-                    { key: 'MINISTRY', label: '중앙부처 (성·부·조)' },
-                    { key: 'AGENCY', label: '외청·정보·위원회' },
-                    { key: 'SPECIAL', label: '궁내·총독부·기타' },
-                  ] as const
-                ).map((chipItem) => {
-                  const isActive = kindGroupFilter === chipItem.key
-                  return (
-                    <button
-                      key={chipItem.key}
-                      type="button"
-                      onClick={() => setKindGroupFilter(chipItem.key)}
-                      style={{
-                        padding: '6px 11px',
-                        borderRadius: 999,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        border: `1px solid ${
-                          isActive ? palette.accent : palette.borderMid
-                        }`,
-                        background: isActive ? palette.accentBg : 'transparent',
-                        color: isActive ? palette.accent : palette.textMuted,
-                      }}
-                    >
-                      {chipItem.label}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+                  ['ALL', 'MINISTRY', 'AGENCY', 'SPECIAL'] as const
+                ).map((groupKey) => (
+                  <GovToolbarBtn
+                    key={groupKey}
+                    type="button"
+                    $active={kindGroupFilter === groupKey}
+                    onClick={() => setKindGroupFilter(groupKey)}
+                  >
+                    {KIND_GROUP_LABEL[groupKey]}
+                  </GovToolbarBtn>
+                ))}
+              </GovToolbarGroup>
 
-            {/* 시대·정체 필터 칩 (항상 노출하여 빈 상태에서도 시대별 등록 가능) */}
-            {!isHistorical && historicalErasAvailable.length > 0 && (
-              <div
-                role="group"
-                aria-label="시대·정체 필터"
-                style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: 6,
-                  alignItems: 'center',
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 11.5,
-                    fontWeight: 700,
-                    color: palette.textMuted,
-                    marginRight: 4,
-                  }}
+              {!isHistorical && historicalErasAvailable.length > 0 ? (
+                <EraSelect
+                  aria-label="시대·정체 필터"
+                  value={eraFilter}
+                  onChange={(event) => setEraFilter(event.target.value)}
                 >
-                  시대·정체:
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setEraFilter('ALL')}
-                  style={{
-                    padding: '5px 11px',
-                    borderRadius: 999,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    border: `1px solid ${
-                      eraFilter === 'ALL' ? palette.accent : palette.borderMid
-                    }`,
-                    background:
-                      eraFilter === 'ALL' ? palette.accentBg : 'transparent',
-                    color:
-                      eraFilter === 'ALL' ? palette.accent : palette.textMuted,
-                  }}
-                >
-                  전체 시대 ({ministriesList.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEraFilter('MODERN')}
-                  style={{
-                    padding: '5px 11px',
-                    borderRadius: 999,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    border: `1px solid ${
-                      eraFilter === 'MODERN'
-                        ? palette.accent
-                        : palette.borderMid
-                    }`,
-                    background:
-                      eraFilter === 'MODERN' ? palette.accentBg : 'transparent',
-                    color:
-                      eraFilter === 'MODERN'
-                        ? palette.accent
-                        : palette.textMuted,
-                  }}
-                >
-                  현대 체제 직속 (
-                  {
-                    ministriesList.filter(
-                      (deptItem) => !deptItem.historicalCountryId,
+                  <option value="ALL">전체 시대 ({ministriesList.length})</option>
+                  <option value="MODERN">
+                    현대 직속 (
+                    {
+                      ministriesList.filter(
+                        (deptItem) => !deptItem.historicalCountryId,
+                      ).length
+                    }
+                    )
+                  </option>
+                  {historicalErasAvailable.map((eraItem) => {
+                    const eraCount = ministriesList.filter(
+                      (deptItem) => deptItem.historicalCountryId === eraItem.id,
                     ).length
-                  }
-                  )
-                </button>
-                {historicalErasAvailable.map((eraItem) => {
-                  const isActive = eraFilter === eraItem.id
-                  const eraCount = ministriesList.filter(
-                    (deptItem) => deptItem.historicalCountryId === eraItem.id,
-                  ).length
-                  return (
-                    <button
-                      key={eraItem.id}
+                    return (
+                      <option key={eraItem.id} value={eraItem.id}>
+                        {eraItem.name} ({eraCount})
+                      </option>
+                    )
+                  })}
+                </EraSelect>
+              ) : null}
+
+              <GovToolbarRight>
+                <GovViewMeta>
+                  표시 <strong>{deptsInActiveCatFiltered.length}</strong> · 전체{' '}
+                  <strong>{kpiStats.totalCount}</strong>
+                </GovViewMeta>
+
+                {kpiStats.linkedUnitCount > 0 ? (
+                  <GovToolbarBtn
+                    type="button"
+                    onClick={() => onOpenMilitaryTab?.()}
+                    title="군사 탭에서 소관 부대 편제 보기"
+                  >
+                    <FiShield size={12.5} />
+                    <span>군부대 {kpiStats.linkedUnitCount}</span>
+                  </GovToolbarBtn>
+                ) : null}
+
+                {effectiveCountryId ? (
+                  <>
+                    <GovToolbarDivider />
+                    <GovToolbarBtn
                       type="button"
-                      onClick={() => setEraFilter(eraItem.id)}
-                      style={{
-                        padding: '5px 11px',
-                        borderRadius: 999,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        border: `1px solid ${
-                          isActive ? palette.accent : palette.borderMid
-                        }`,
-                        background: isActive ? palette.accentBg : 'transparent',
-                        color: isActive ? palette.accent : palette.textMuted,
-                      }}
+                      $active={layoutMode === 'SPLIT'}
+                      onClick={() =>
+                        setLayoutMode((prev) =>
+                          prev === 'SPLIT' ? 'FOCUS' : 'SPLIT',
+                        )
+                      }
+                      title={
+                        layoutMode === 'SPLIT'
+                          ? '현재 분할 보기 (클릭하여 단독 보기 전환)'
+                          : '현재 단독 보기 (클릭하여 분할 보기 전환)'
+                      }
                     >
-                      🏛️ {eraItem.name} ({eraCount})
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
+                      {layoutMode === 'SPLIT' ? (
+                        <>
+                          <FiColumns size={13} />
+                          <span>분할</span>
+                        </>
+                      ) : (
+                        <>
+                          <FiMaximize2 size={13} />
+                          <span>단독</span>
+                        </>
+                      )}
+                    </GovToolbarBtn>
+
+                    <GovToolbarBtn
+                      type="button"
+                      onClick={() => openCategoryModal()}
+                    >
+                      <FiGrid size={13} />
+                      <span>분류 ({categoriesList.length})</span>
+                    </GovToolbarBtn>
+
+                    <GovPrimaryBtn
+                      type="button"
+                      onClick={() =>
+                        openMinistryCreateRootInCategory(
+                          ministryTreeCategoryId,
+                          resolveDefaultCreateEra(),
+                          resolveDefaultCreateKind(),
+                        )
+                      }
+                    >
+                      <FiPlus size={14} />
+                      <span>기관·부처 등록</span>
+                    </GovPrimaryBtn>
+                  </>
+                ) : null}
+              </GovToolbarRight>
+            </GovToolbarRow>
+
+            {hasActiveFilters ? (
+              <GovActiveFiltersRow>
+                {ministrySearchQuery.trim() ? (
+                  <GovActiveFilterChip
+                    type="button"
+                    onClick={() => setMinistrySearchQuery('')}
+                  >
+                    검색: &ldquo;{ministrySearchQuery.trim()}&rdquo;
+                    <FiX size={11} />
+                  </GovActiveFilterChip>
+                ) : null}
+                {kindGroupFilter !== 'ALL' ? (
+                  <GovActiveFilterChip
+                    type="button"
+                    onClick={() => setKindGroupFilter('ALL')}
+                  >
+                    성격: {KIND_GROUP_LABEL[kindGroupFilter]}
+                    <FiX size={11} />
+                  </GovActiveFilterChip>
+                ) : null}
+                {eraFilter !== 'ALL' && activeEraName ? (
+                  <GovActiveFilterChip
+                    type="button"
+                    onClick={() => setEraFilter('ALL')}
+                  >
+                    시대: {activeEraName}
+                    <FiX size={11} />
+                  </GovActiveFilterChip>
+                ) : null}
+                <GovClearFiltersBtn
+                  type="button"
+                  onClick={() => {
+                    setMinistrySearchQuery('')
+                    setKindGroupFilter('ALL')
+                    setEraFilter('ALL')
+                  }}
+                >
+                  필터 초기화
+                </GovClearFiltersBtn>
+              </GovActiveFiltersRow>
+            ) : null}
+          </GovToolbarShell>
+        ) : null}
+
+        {!isFocusDetailOnly ? (
+          <UnlinkedCountryTenuresBar
+            mode="DEPARTMENT"
+            effectiveCountryId={effectiveCountryId}
+            isHistorical={isHistorical}
+            targetOptions={ministriesList.map((deptRow) => ({
+              id: deptRow.id,
+              label: deptRow.historicalCountry?.name
+                ? `[${deptRow.historicalCountry.name}] ${deptRow.name}`
+                : deptRow.name,
+              historicalCountryId: deptRow.historicalCountryId ?? null,
+            }))}
+            onRequestCreateTarget={(tenureHistCountryId) =>
+              openMinistryCreateRootInCategory(
+                ministryTreeCategoryId,
+                tenureHistCountryId ?? undefined,
+                'MINISTRY',
+              )
+            }
+          />
         ) : null}
 
         {/* 본문 영역 */}
-        <div
-          style={{
-            flex: 1,
-            minHeight: 0,
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
+        <WorkspaceStage>
           {!effectiveCountryId ? (
             <EmptyStateFill>
               <EmptyStateSimple border="dashed">
@@ -843,18 +555,7 @@ export function MinistriesTabSection({
               />
             </EmptyStateFill>
           ) : isFocusDetailOnly && ministryBrowseResolved ? (
-            <motion.div
-              key="ministry-detail-focus"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2 }}
-              style={{
-                flex: 1,
-                minHeight: 0,
-                display: 'flex',
-                flexDirection: 'column',
-              }}
-            >
+            <GovLedgerPanel>
               <MinistryDepartmentDetailView
                 department={ministryBrowseResolved}
                 allDepartments={ministriesList}
@@ -873,7 +574,11 @@ export function MinistriesTabSection({
                 )}
                 onRegisterMilitaryUnit={
                   effectiveCountryId
-                    ? () => onRegisterMilitaryUnit(ministryBrowseResolved.id)
+                    ? () =>
+                        onRegisterMilitaryUnit(
+                          ministryBrowseResolved.id,
+                          ministryBrowseResolved.historicalCountryId ?? null,
+                        )
                     : undefined
                 }
                 onInspectMilitaryUnit={onInspectMilitaryUnit}
@@ -933,17 +638,9 @@ export function MinistriesTabSection({
                   />
                 }
               />
-            </motion.div>
+            </GovLedgerPanel>
           ) : (
-            <div
-              style={{
-                flex: 1,
-                minHeight: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 14,
-              }}
-            >
+            <WorkspaceStack>
               <MinistryCategoryTabBar
                 categories={displayCategoriesList}
                 counts={ministryCategoryDeptCounts}
@@ -960,7 +657,7 @@ export function MinistriesTabSection({
                   description={
                     eraFilter !== 'ALL' || kindGroupFilter !== 'ALL'
                       ? '선택한 시대·성격 필터에 해당하는 기관이 없습니다. 바로 이 조건으로 새 기관을 등록하거나 필터를 변경해 보세요.'
-                      : '이 분류에 첫 국가기관·중앙부처·최고사령부를 등록하면 상하 계층과 전신·후신 계보가 표시됩니다.'
+                      : '이 분류에 첫 중앙부처·국가기관을 등록하면 상하 계층과 전신·후신 계보가 표시됩니다.'
                   }
                   primaryAction={{
                     label: '기관·부처 등록',
@@ -978,28 +675,8 @@ export function MinistriesTabSection({
                   onClearSearch={() => setMinistrySearchQuery('')}
                 />
               ) : layoutMode === 'SPLIT' ? (
-                /* 2-Column Master-Detail Workspace (좌: 편제 트리 / 우: 선택 기관 인라인 상세) */
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns:
-                      'minmax(340px, 430px) minmax(0, 1fr)',
-                    gap: 18,
-                    alignItems: 'start',
-                    flex: 1,
-                    minHeight: 0,
-                  }}
-                >
-                  <div
-                    style={{
-                      padding: '14px',
-                      borderRadius: 16,
-                      border: `1px solid ${palette.borderMid}`,
-                      background: palette.bgSubtle,
-                      maxHeight: 'calc(100vh - 280px)',
-                      overflowY: 'auto',
-                    }}
-                  >
+                <SplitWorkspaceGrid>
+                  <TreeLedgerColumn>
                     <MinistryDepartmentTree
                       allDepartments={ministriesList}
                       departmentsInCategory={deptsInActiveCatFiltered}
@@ -1034,17 +711,9 @@ export function MinistriesTabSection({
                         )
                       }
                     />
-                  </div>
+                  </TreeLedgerColumn>
 
-                  <div
-                    style={{
-                      padding: '18px 20px',
-                      borderRadius: 16,
-                      border: `1px solid ${palette.borderMid}`,
-                      background: palette.cardBg,
-                      minWidth: 0,
-                    }}
-                  >
+                  <GovLedgerPanel>
                     {ministryBrowseResolved ? (
                       <MinistryDepartmentDetailView
                         department={ministryBrowseResolved}
@@ -1069,6 +738,8 @@ export function MinistriesTabSection({
                             ? () =>
                                 onRegisterMilitaryUnit(
                                   ministryBrowseResolved.id,
+                                  ministryBrowseResolved.historicalCountryId ??
+                                    null,
                                 )
                             : undefined
                         }
@@ -1128,61 +799,56 @@ export function MinistriesTabSection({
                         }
                       />
                     ) : (
-                      <div
-                        style={{
-                          padding: '48px 24px',
-                          textAlign: 'center',
-                          color: palette.textMuted,
-                          fontSize: 13.5,
-                        }}
-                      >
-                        좌측 편제 트리에서 기관·부처·사령부를 선택하면 상세
+                      <EmptyDetailPlaceholder>
+                        좌측 편제 트리에서 중앙부처·국가기관을 선택하면 상세
                         정보와 전신·후신 계보, 소관 군부대, 역대 재임 인사가
-                        여기에 표시됩니다.
-                      </div>
+                        표시됩니다.
+                      </EmptyDetailPlaceholder>
                     )}
-                  </div>
-                </div>
+                  </GovLedgerPanel>
+                </SplitWorkspaceGrid>
               ) : (
-                <MinistryDepartmentTree
-                  allDepartments={ministriesList}
-                  departmentsInCategory={deptsInActiveCatFiltered}
-                  isDark={isDark}
-                  selectedDepartmentId={ministryBrowseDepartment?.id}
-                  onSelectDepartment={(dept) =>
-                    setMinistryBrowseDepartment(dept)
-                  }
-                  onAddRoot={() =>
-                    openMinistryCreateRootInCategory(
-                      activeCategory?.id ?? '',
-                      resolveDefaultCreateEra(),
-                      resolveDefaultCreateKind(),
-                    )
-                  }
-                  onAddChild={(parentDept) =>
-                    openMinistryCreateChild(
-                      parentDept,
-                      parentDept.categoryId ?? '',
-                    )
-                  }
-                  onGoToPositionDefinitions={() =>
-                    onNavigateToPositions(
-                      activeCategory &&
-                        activeCategory.id !== UNCATEGORIZED_CATEGORY_ID &&
-                        activeCategory.id !== ALL_DEPARTMENTS_CATEGORY_ID
-                        ? {
-                            categoryId: activeCategory.id,
-                            categoryName: activeCategory.name,
-                          }
-                        : undefined,
-                    )
-                  }
-                />
+                <GovLedgerPanel>
+                  <MinistryDepartmentTree
+                    allDepartments={ministriesList}
+                    departmentsInCategory={deptsInActiveCatFiltered}
+                    isDark={isDark}
+                    selectedDepartmentId={ministryBrowseDepartment?.id}
+                    onSelectDepartment={(dept) =>
+                      setMinistryBrowseDepartment(dept)
+                    }
+                    onAddRoot={() =>
+                      openMinistryCreateRootInCategory(
+                        activeCategory?.id ?? '',
+                        resolveDefaultCreateEra(),
+                        resolveDefaultCreateKind(),
+                      )
+                    }
+                    onAddChild={(parentDept) =>
+                      openMinistryCreateChild(
+                        parentDept,
+                        parentDept.categoryId ?? '',
+                      )
+                    }
+                    onGoToPositionDefinitions={() =>
+                      onNavigateToPositions(
+                        activeCategory &&
+                          activeCategory.id !== UNCATEGORIZED_CATEGORY_ID &&
+                          activeCategory.id !== ALL_DEPARTMENTS_CATEGORY_ID
+                          ? {
+                              categoryId: activeCategory.id,
+                              categoryName: activeCategory.name,
+                            }
+                          : undefined,
+                      )
+                    }
+                  />
+                </GovLedgerPanel>
               )}
-            </div>
+            </WorkspaceStack>
           )}
-        </div>
-      </section>
+        </WorkspaceStage>
+      </SectionRoot>
 
       <MinistryFormModal
         effectiveCountryId={effectiveCountryId}
@@ -1218,3 +884,73 @@ export function MinistriesTabSection({
     </>
   )
 }
+
+const SectionRoot = styled.section`
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+`
+
+const EraSelect = styled.select`
+  height: 34px;
+  padding: 0 28px 0 10px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background-color: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#ffffff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.1)'
+        : 'rgba(20, 19, 34, 0.1)'};
+`
+
+const WorkspaceStage = styled.div`
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+`
+
+const WorkspaceStack = styled.div`
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`
+
+const SplitWorkspaceGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(310px, 390px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  flex: 1;
+  min-height: 0;
+
+  @media (max-width: 980px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const TreeLedgerColumn = styled(GovLedgerPanel)`
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 250px);
+`
+
+const EmptyDetailPlaceholder = styled.div`
+  padding: 48px 24px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.6;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`

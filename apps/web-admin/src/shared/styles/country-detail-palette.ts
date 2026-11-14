@@ -94,11 +94,11 @@ function buildCabinetsSectionPalette(isDark: boolean): CabinetsSectionPalette {
     text: isDark ? '#f1f5f9' : '#0f172a',
     textMuted: isDark ? '#94a3b8' : '#64748b',
     textFaint: isDark ? '#475569' : '#94a3b8',
-    accent: '#6366f1',
-    accentBg: isDark ? 'rgba(99,102,241,0.15)' : '#eef2ff',
-    accentBorder: isDark ? 'rgba(99,102,241,0.3)' : '#c7d2fe',
-    accentSecondaryBg: isDark ? 'rgba(99,102,241,0.18)' : '#eef2ff',
-    accentSecondaryBorder: isDark ? 'rgba(99,102,241,0.4)' : '#c7d2fe',
+    accent: '#2563eb',
+    accentBg: isDark ? 'rgba(37,99,235,0.16)' : '#eff6ff',
+    accentBorder: isDark ? 'rgba(59,130,246,0.32)' : '#bfdbfe',
+    accentSecondaryBg: isDark ? 'rgba(37,99,235,0.2)' : '#eff6ff',
+    accentSecondaryBorder: isDark ? 'rgba(59,130,246,0.4)' : '#bfdbfe',
     btnBg: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
     btnHover: isDark ? 'rgba(255,255,255,0.08)' : '#f9fafb',
     avatarBg: isDark ? 'rgba(255,255,255,0.07)' : '#f1f5f9',
@@ -106,7 +106,7 @@ function buildCabinetsSectionPalette(isDark: boolean): CabinetsSectionPalette {
     badge: isDark ? 'rgba(255,255,255,0.07)' : '#f1f5f9',
     badgeBorder: isDark ? 'rgba(255,255,255,0.1)' : '#e2e8f0',
     cardBg: isDark ? 'rgba(255,255,255,0.03)' : '#fff',
-    cardBgSelected: isDark ? 'rgba(99,102,241,0.12)' : '#eef2ff',
+    cardBgSelected: isDark ? 'rgba(37,99,235,0.14)' : '#eff6ff',
     cardBgHover: isDark ? 'rgba(255,255,255,0.06)' : '#f8fafc',
     divider: isDark ? 'rgba(255,255,255,0.06)' : '#f0f2f5',
     inputBg: isDark ? 'rgba(255,255,255,0.05)' : '#fff',
@@ -190,8 +190,10 @@ export function getMapRegionSectionPalette(
     blueBadgeBorder: isDark ? 'rgba(59,130,246,0.3)' : '#bfdbfe',
     blueBadgeText: isDark ? '#93c5fd' : '#1e40af',
     divider: isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0',
-    shadow: (a: string) =>
-      isDark ? `0 2px 8px rgba(0,0,0,${a})` : `0 2px 8px rgba(0,0,0,${a})`,
+    shadow: (alphaVal: string) =>
+      isDark
+        ? `0 2px 8px rgba(0,0,0,${alphaVal})`
+        : `0 2px 8px rgba(0,0,0,${alphaVal})`,
     shadowSelected: isDark
       ? '0 2px 8px rgba(99,102,241,0.2)'
       : '0 2px 8px rgba(99,102,241,0.12)',

@@ -62,6 +62,9 @@ export type AdministrationDepartmentTenureItem = {
   }>
   administrationDepartmentId?: string | null
   militaryUnitId?: string | null
+  positionType?: string | null
+  positionDefinitionId?: string | null
+  notes?: string | null
   positionDefinition?: {
     id: string
     title: string

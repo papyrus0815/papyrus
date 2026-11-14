@@ -4,28 +4,8 @@ import {
   FieldRow,
   FieldLabel,
 } from '@/shared/ui/register-form-layout'
-import {
-  ModalBody,
-  ModalBox,
-} from '@/shared/ui/modal/modal.styles'
 
 export { FieldLabel }
-
-/** 중앙부처 등록·수정 모달 */
-export const MinistryFormModalBox = styled(ModalBox)`
-  max-width: 880px;
-  width: 96vw;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-`
-export const MinistryFormModalBody = styled(ModalBody)`
-  flex: 1;
-  min-height: 0;
-  max-height: min(82vh, 780px);
-  overflow-y: auto;
-  padding: 20px 26px 28px;
-`
 
 /** 중앙부처 등록 폼 행 (170px 레이블 컬럼, FieldRow 기반) */
 export const FormFieldRow = styled(FieldRow)`

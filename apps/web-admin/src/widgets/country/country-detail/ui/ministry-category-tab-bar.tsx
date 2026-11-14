@@ -1,10 +1,11 @@
 /**
- * 중앙부처 — 카테고리 탭 (박스 없이 한 겹, 가로 스크롤)
+ * 중앙부처 — 카테고리 탭 (사건 페이지 플랫 언더라인 탭 규격)
  */
-import { useMemo } from 'react'
+import styled from 'styled-components'
 
+import { GOV_BRAND, GOV_ROW_HAIRLINE } from '@/features/government-info/ui/government-ledger.styles'
 import type { AdministrationDepartmentCategory } from '@/shared/api/administration-department'
-import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
+import { scrollbarMixin } from '@/shared/styles/mixins'
 
 type MinistryCategoryTabBarProps = {
   categories: AdministrationDepartmentCategory[]
@@ -12,7 +13,7 @@ type MinistryCategoryTabBarProps = {
   counts: Map<string, number>
   selectedCategoryId: string
   onSelectCategory: (categoryId: string) => void
-  isDark: boolean
+  isDark?: boolean
 }
 
 export function MinistryCategoryTabBar({
@@ -20,96 +21,94 @@ export function MinistryCategoryTabBar({
   counts,
   selectedCategoryId,
   onSelectCategory,
-  isDark,
 }: MinistryCategoryTabBarProps) {
-  const C = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
-
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 10,
-        paddingBottom: 14,
-        marginBottom: 4,
-        borderBottom: `1px solid ${C.divider}`,
-      }}
-    >
-      <div
-        role="tablist"
-        aria-label="부처 카테고리"
-        style={{
-          display: 'flex',
-          flexWrap: 'nowrap',
-          gap: 8,
-          alignItems: 'center',
-          overflowX: 'auto',
-          WebkitOverflowScrolling: 'touch',
-          paddingBottom: 2,
-          margin: '0 -2px',
-          scrollbarWidth: 'thin',
-        }}
-      >
-        {categories.map((cat) => {
-          const n = counts.get(cat.id) ?? 0
-          const active = selectedCategoryId === cat.id
-          return (
-            <button
-              key={cat.id}
-              type="button"
-              role="tab"
-              id={`ministry-cat-tab-${cat.id}`}
-              aria-selected={active}
-              tabIndex={active ? 0 : -1}
-              onClick={() => onSelectCategory(cat.id)}
-              style={{
-                flex: '0 0 auto',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '7px 13px',
-                fontSize: 12.5,
-                fontWeight: active ? 600 : 500,
-                letterSpacing: '-0.02em',
-                borderRadius: 999,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                border: active
-                  ? `1px solid ${C.accentBorder}`
-                  : '1px solid transparent',
-                background: active ? C.accentBg : 'transparent',
-                color: active ? (isDark ? '#e0e7ff' : C.accent) : C.textMuted,
-                transition: 'background 0.14s, border-color 0.14s, color 0.14s',
-              }}
-            >
-              {cat.name}
-              <span
-                style={{
-                  minWidth: 22,
-                  height: 22,
-                  padding: '0 7px',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: 999,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  background: active
-                    ? isDark
-                      ? 'rgba(0,0,0,0.28)'
-                      : 'rgba(99, 102, 241, 0.12)'
-                    : isDark
-                      ? 'rgba(255,255,255,0.06)'
-                      : C.badge,
-                  color: active ? (isDark ? '#e2e8f0' : C.accent) : C.textFaint,
-                }}
-              >
-                {n}
-              </span>
-            </button>
-          )
-        })}
-      </div>
-    </div>
+    <CatNavBar role="tablist" aria-label="부처 카테고리">
+      {categories.map((catItem) => {
+        const deptCount = counts.get(catItem.id) ?? 0
+        const active = selectedCategoryId === catItem.id
+        return (
+          <CatTabBtn
+            key={catItem.id}
+            type="button"
+            role="tab"
+            id={`ministry-cat-tab-${catItem.id}`}
+            aria-selected={active}
+            tabIndex={active ? 0 : -1}
+            $active={active}
+            onClick={() => onSelectCategory(catItem.id)}
+          >
+            <span>{catItem.name}</span>
+            <CatCountPill $active={active}>{deptCount}</CatCountPill>
+          </CatTabBtn>
+        )
+      })}
+    </CatNavBar>
   )
 }
+
+const CatNavBar = styled.div`
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  border-bottom: 1px solid ${GOV_ROW_HAIRLINE};
+  ${scrollbarMixin}
+`
+
+const CatTabBtn = styled.button<{ $active: boolean }>`
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 11px 9px;
+  margin-bottom: -1px;
+  border: none;
+  border-bottom: 2px solid
+    ${({ $active }) => ($active ? GOV_BRAND.primary : 'transparent')};
+  background: transparent;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+  cursor: pointer;
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.text.primary : theme.colors.text.secondary};
+  transition:
+    color 0.14s ease,
+    border-color 0.14s ease;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const CatCountPill = styled.span<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? GOV_BRAND.primarySoftDark
+        : GOV_BRAND.primarySoft
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.07)'
+        : 'rgba(20, 19, 34, 0.05)'};
+  color: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '#93c5fd'
+        : GOV_BRAND.primary
+      : theme.colors.text.tertiary};
+`

@@ -21,6 +21,7 @@ import {
 } from '@/shared/api/persons'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { Z_INDEX } from '@/shared/styles/z-index'
 
 export type InstitutionAppointmentContextType =
   | 'DEPARTMENT'
@@ -1047,7 +1048,7 @@ export const InstitutionAppointmentModal: React.FC<
                 {availableCabinets.map((cabinetItem) => {
                   const headPerson = cabinetItem.headTenure?.person
                   const fallbackLabel = headPerson
-                    ? `${getPersonDisplayName(headPerson)} 행정부`
+                    ? `${getPersonDisplayName({ ...headPerson, name: headPerson.name ?? '' })} 행정부`
                     : '내각'
                   const label = cabinetItem.name?.trim() || fallbackLabel
                   const checked = selectedCabinetIds.includes(cabinetItem.id)
@@ -1103,7 +1104,7 @@ export const InstitutionAppointmentModal: React.FC<
 const Backdrop = styled.div`
   position: fixed;
   inset: 0;
-  z-index: 1300;
+  z-index: ${Z_INDEX.MODAL_OVERLAY};
   background: rgba(15, 23, 42, 0.55);
   backdrop-filter: blur(3px);
   display: flex;

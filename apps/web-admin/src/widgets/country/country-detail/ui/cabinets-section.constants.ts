@@ -1,6 +1,6 @@
-/** 행정부(내각) UI 액센트 — `cabinets-section` 전용 */
-export const CABINET_SECTION_MAIN = '#6366f1'
-export const CABINET_SECTION_MAIN_HOVER = '#4f46e5'
+/** 행정부(내각) UI 액센트 — 사건 페이지 브랜드 블루(`#2563eb`)와 통일 */
+export const CABINET_SECTION_MAIN = '#2563eb'
+export const CABINET_SECTION_MAIN_HOVER = '#1d4ed8'
 
 /**
  * 수반(행정부 수반) 직위 선택 시 포함할 관직 유형
@@ -82,7 +82,7 @@ export const TL_TERRITORY_PALETTE = [
 
 /** 타임라인 직책 뱃지 테두리·글자색 — 직위 정의 id 또는 직함 문자열 해시로 순환 (직책마다 고정 색) */
 export const TL_POSITION_BADGE_LINE_HEXES: readonly string[] =
-  TL_TERRITORY_PALETTE.map((p) => p.line)
+  TL_TERRITORY_PALETTE.map((paletteItem) => paletteItem.line)
 
 /** 행정부–정당 연결 역할 (`CabinetPartyRole`) */
 export const CABINET_PARTY_ROLE_OPTIONS = [

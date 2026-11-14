@@ -34,6 +34,7 @@ import {
   type MilitaryUnitType,
 } from '@/shared/api/military-unit'
 import { personCareerApi } from '@/shared/api/person-career'
+import { getUploadImageUrl } from '@/shared/api/upload'
 import { signedYearFromIsoLike } from '@/shared/lib/country-period'
 import { formatSignedYear } from '@/shared/lib/lifespan-text'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
@@ -791,6 +792,23 @@ export function GovernmentMilitaryTab({
 
           <TreeNodeMain>
             <TreeNodeTitleLine>
+              {unitItem.insigniaUrl && (
+                <img
+                  src={getUploadImageUrl(unitItem.insigniaUrl)}
+                  alt=""
+                  style={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    flexShrink: 0,
+                    border: '1px solid rgba(99, 102, 241, 0.25)',
+                  }}
+                  onError={(imgEvent) => {
+                    imgEvent.currentTarget.style.display = 'none'
+                  }}
+                />
+              )}
               {unitItem.unitType && (
                 <EchelonBadge $echelon={unitItem.unitType}>
                   {UNIT_TYPE_LABELS[unitItem.unitType] ?? unitItem.unitType}
@@ -1226,29 +1244,57 @@ export function GovernmentMilitaryTab({
                   </ActionGroup>
                 </DetailTopBar>
 
-                <div>
-                  <DetailTitle>
-                    {selectedUnitFull.name}
-                    {selectedUnitFull.abbreviation
-                      ? ` (${selectedUnitFull.abbreviation})`
-                      : ''}
-                    {selectedUnitFull.nickname && (
-                      <UnitNickname>
-                        {' '}
-                        · &ldquo;{selectedUnitFull.nickname}&rdquo;
-                      </UnitNickname>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 14,
+                  }}
+                >
+                  {selectedUnitFull.insigniaUrl && (
+                    <img
+                      src={getUploadImageUrl(selectedUnitFull.insigniaUrl)}
+                      alt={`${selectedUnitFull.name} 휘장`}
+                      style={{
+                        width: 52,
+                        height: 52,
+                        borderRadius: '50%',
+                        objectFit: 'cover',
+                        flexShrink: 0,
+                        border: '1.5px solid rgba(99, 102, 241, 0.28)',
+                      }}
+                      onError={(imgEvent) => {
+                        imgEvent.currentTarget.style.display = 'none'
+                      }}
+                    />
+                  )}
+                  <div style={{ minWidth: 0 }}>
+                    <DetailTitle>
+                      {selectedUnitFull.name}
+                      {selectedUnitFull.abbreviation
+                        ? ` (${selectedUnitFull.abbreviation})`
+                        : ''}
+                      {selectedUnitFull.nickname && (
+                        <UnitNickname>
+                          {' '}
+                          · &ldquo;{selectedUnitFull.nickname}&rdquo;
+                        </UnitNickname>
+                      )}
+                    </DetailTitle>
+                    {(selectedUnitFull.nameLocal ||
+                      selectedUnitFull.nameEn) && (
+                      <DetailSubName>
+                        {[selectedUnitFull.nameLocal, selectedUnitFull.nameEn]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </DetailSubName>
                     )}
-                  </DetailTitle>
-                  {(selectedUnitFull.nameLocal || selectedUnitFull.nameEn) && (
-                    <DetailSubName>
-                      {[selectedUnitFull.nameLocal, selectedUnitFull.nameEn]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </DetailSubName>
-                  )}
-                  {selectedUnitFull.motto && (
-                    <DetailMotto>&ldquo;{selectedUnitFull.motto}&rdquo;</DetailMotto>
-                  )}
+                    {selectedUnitFull.motto && (
+                      <DetailMotto>
+                        &ldquo;{selectedUnitFull.motto}&rdquo;
+                      </DetailMotto>
+                    )}
+                  </div>
                 </div>
 
                 {/* 지휘 계통 (Command Chain) */}

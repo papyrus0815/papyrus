@@ -15,6 +15,10 @@ import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
 import { personCareerApi } from '@/shared/api/person-career'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
+import {
+  SearchableSelect,
+  type SearchableSelectOption,
+} from '@/shared/ui/searchable-select'
 import { notify } from '@/shared/ui/toast'
 
 export interface UnlinkedTenureTargetOption {
@@ -250,6 +254,19 @@ export function UnlinkedCountryTenuresBar({
               }
               return leftOpt.label.localeCompare(rightOpt.label, 'ko')
             })
+            const selectOptions: SearchableSelectOption[] = sortedOptions.map(
+              (optItem) => {
+                const isSameEra =
+                  Boolean(tenureItem.historicalCountryId) &&
+                  optItem.historicalCountryId === tenureItem.historicalCountryId
+                return {
+                  value: optItem.id,
+                  label: optItem.label,
+                  group: isSameEra ? '동일 시대·정체 기관' : '기타 기관',
+                  meta: isSameEra ? '동일 시대' : undefined,
+                }
+              },
+            )
             const chosenValue = selectedTargetByTenureId[tenureItem.id] ?? ''
             const isSaving = savingTenureId === tenureItem.id
 
@@ -261,7 +278,7 @@ export function UnlinkedCountryTenuresBar({
                     onClick={() => {
                       if (tenureItem.personId) {
                         navigate(
-                          pathKeys.persons.detail({ id: tenureItem.personId }),
+                          pathKeys.personsTimelineDetail(tenureItem.personId),
                         )
                       }
                     }}
@@ -279,30 +296,23 @@ export function UnlinkedCountryTenuresBar({
                 </TenureInfo>
 
                 <AssignControls>
-                  <TargetSelect
-                    value={chosenValue}
-                    disabled={isSaving}
-                    onChange={(changeEvent) => {
-                      const nextTargetId = changeEvent.target.value
-                      setSelectedTargetByTenureId((prevMap) => ({
-                        ...prevMap,
-                        [tenureItem.id]: nextTargetId,
-                      }))
-                    }}
-                  >
-                    <option value="">{targetNoun} 선택…</option>
-                    {sortedOptions.map((optItem) => {
-                      const isSameEra =
-                        Boolean(tenureItem.historicalCountryId) &&
-                        optItem.historicalCountryId ===
-                          tenureItem.historicalCountryId
-                      return (
-                        <option key={optItem.id} value={optItem.id}>
-                          {isSameEra ? `★ ${optItem.label}` : optItem.label}
-                        </option>
-                      )
-                    })}
-                  </TargetSelect>
+                  <SelectSlot>
+                    <SearchableSelect
+                      size="sm"
+                      options={selectOptions}
+                      value={chosenValue}
+                      disabled={isSaving}
+                      placeholder={`${targetNoun} 선택…`}
+                      searchPlaceholder={`${targetNoun} 이름 검색…`}
+                      ariaLabel={`${personLabel} ${targetNoun} 선택`}
+                      onChange={(nextTargetId) => {
+                        setSelectedTargetByTenureId((prevMap) => ({
+                          ...prevMap,
+                          [tenureItem.id]: nextTargetId,
+                        }))
+                      }}
+                    />
+                  </SelectSlot>
 
                   <LinkBtn
                     type="button"
@@ -344,8 +354,15 @@ export function UnlinkedCountryTenuresBar({
 }
 
 const BannerWrap = styled.div`
-  border: 1px solid rgba(245, 158, 11, 0.35);
-  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.32)'
+        : 'rgba(245, 158, 11, 0.35)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(245, 158, 11, 0.08)'
+      : 'rgba(245, 158, 11, 0.05)'};
   border-radius: 12px;
   overflow: hidden;
 `
@@ -356,12 +373,20 @@ const BannerHeader = styled.button`
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 11px 14px;
+  padding: 10px 14px;
   border: none;
   background: transparent;
   cursor: pointer;
   text-align: left;
   color: inherit;
+  transition: background 0.14s ease;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.06)'
+        : 'rgba(245, 158, 11, 0.04)'};
+  }
 `
 
 const HeaderLeft = styled.div`
@@ -376,7 +401,7 @@ const AlertIconBox = styled.span`
   height: 28px;
   border-radius: 8px;
   background: rgba(245, 158, 11, 0.16);
-  color: #d97706;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#d97706')};
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -391,14 +416,16 @@ const HeaderTextGroup = styled.div`
 `
 
 const HeaderTitle = styled.span`
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors?.text ?? '#111827'};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#fef3c7' : theme.colors.text.primary};
 `
 
 const HeaderSub = styled.span`
   font-size: 11.5px;
-  color: ${({ theme }) => theme.colors?.textSecondary ?? '#6b7280'};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#cbd5e1' : theme.colors.text.secondary};
 `
 
 const ToggleBadge = styled.span`
@@ -409,15 +436,15 @@ const ToggleBadge = styled.span`
   border-radius: 999px;
   font-size: 11.5px;
   font-weight: 700;
-  background: rgba(245, 158, 11, 0.14);
-  color: #b45309;
+  background: rgba(245, 158, 11, 0.16);
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fde68a' : '#b45309')};
   flex-shrink: 0;
 `
 
 const RowList = styled.div`
   display: flex;
   flex-direction: column;
-  border-top: 1px solid rgba(245, 158, 11, 0.22);
+  border-top: 1px solid rgba(245, 158, 11, 0.2);
   max-height: 280px;
   overflow-y: auto;
 `
@@ -451,7 +478,8 @@ const PersonLinkBtn = styled.button`
   padding: 0;
   font-size: 13px;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors?.primary ?? '#4f46e5'};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#a5b4fc' : theme.colors.primary};
   cursor: pointer;
 
   &:hover {
@@ -464,27 +492,31 @@ const RankChip = styled.span`
   font-weight: 700;
   padding: 2px 6px;
   border-radius: 5px;
-  background: rgba(99, 102, 241, 0.12);
-  color: #4f46e5;
+  background: rgba(99, 102, 241, 0.14);
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4f46e5')};
 `
 
 const RoleTitle = styled.span`
   font-size: 12.5px;
   font-weight: 600;
-  color: ${({ theme }) => theme.colors?.text ?? '#1f2937'};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#f1f5f9' : theme.colors.text.primary};
 `
 
 const EraChip = styled.span`
   font-size: 11px;
   padding: 2px 7px;
   border-radius: 999px;
-  background: rgba(107, 114, 128, 0.12);
-  color: ${({ theme }) => theme.colors?.textSecondary ?? '#4b5563'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(107, 114, 128, 0.12)'};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#cbd5e1' : theme.colors.text.secondary};
 `
 
 const PeriodSpan = styled.span`
   font-size: 11.5px;
-  color: ${({ theme }) => theme.colors?.textSecondary ?? '#6b7280'};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#94a3b8' : theme.colors.text.secondary};
 `
 
 const AssignControls = styled.div`
@@ -494,21 +526,15 @@ const AssignControls = styled.div`
   flex-shrink: 0;
 `
 
-const TargetSelect = styled.select`
-  height: 30px;
-  max-width: 240px;
-  padding: 0 8px;
-  border-radius: 7px;
-  border: 1px solid rgba(107, 114, 128, 0.3);
-  background: ${({ theme }) => theme.colors?.surface ?? '#ffffff'};
-  color: ${({ theme }) => theme.colors?.text ?? '#111827'};
-  font-size: 12px;
+const SelectSlot = styled.div`
+  width: 240px;
+  max-width: 56vw;
 `
 
 const LinkBtn = styled.button`
-  height: 30px;
-  padding: 0 10px;
-  border-radius: 7px;
+  height: 34px;
+  padding: 0 11px;
+  border-radius: 8px;
   border: none;
   background: #4f46e5;
   color: #ffffff;
@@ -518,6 +544,11 @@ const LinkBtn = styled.button`
   align-items: center;
   gap: 4px;
   cursor: pointer;
+  transition: background 0.14s ease;
+
+  &:hover:not(:disabled) {
+    background: #4338ca;
+  }
 
   &:disabled {
     opacity: 0.45;
@@ -526,16 +557,28 @@ const LinkBtn = styled.button`
 `
 
 const CreateShortcutBtn = styled.button`
-  height: 30px;
-  padding: 0 9px;
-  border-radius: 7px;
-  border: 1px solid rgba(107, 114, 128, 0.28);
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.16)'
+        : 'rgba(107, 114, 128, 0.28)'};
   background: transparent;
-  color: ${({ theme }) => theme.colors?.textSecondary ?? '#4b5563'};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#cbd5e1' : theme.colors.text.secondary};
   font-size: 11.5px;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
   gap: 3px;
   cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.06)'
+        : 'rgba(15, 23, 42, 0.04)'};
+  }
 `

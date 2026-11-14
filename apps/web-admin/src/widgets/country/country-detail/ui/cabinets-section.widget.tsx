@@ -2253,7 +2253,7 @@ export function CabinetsSection({
                       <EmptyStateSpotlight
                         icon={<FiUsers size={30} strokeWidth={1.75} />}
                         title="등록된 행정부가 없습니다"
-                        description="총리·대통령 등 정부 수반의 임기를 등록하면 행정부가 함께 만들어집니다. 군주 재위는 「역대 수반」 탭에서 별도로 관리되며 이 목록에는 표시되지 않습니다."
+                        description="총리·대통령 등 정부 수반의 임기를 등록하면 행정부가 함께 만들어집니다."
                         primaryAction={{
                           label: '수반 임기와 함께 행정부 등록',
                           onClick: () => setHeadPersonPickerOpen(true),

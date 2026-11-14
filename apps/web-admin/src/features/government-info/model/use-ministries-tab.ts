@@ -19,6 +19,7 @@ import { militaryUnitApi } from '@/shared/api/military-unit'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 
+import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
 import {
   administrationDepartmentsByCountryQueryKey,
   administrationDepartmentsByHistoricalCountryQueryKey,
@@ -26,13 +27,10 @@ import {
 import {
   ALL_DEPARTMENTS_CATEGORY_ID,
   UNCATEGORIZED_CATEGORY_ID,
-  buildDepartmentDescription,
   countDescendantsInDepartmentTree,
   countDepartmentsByCategoryId,
   emptyMinistryFormFields,
   filterDepartmentsBySearchQuery,
-  hasDefenseExtensionContent,
-  isDefenseRelatedCategory,
   ministryFormFieldsFromDepartment,
 } from '@/shared/lib/ministry-department/ministry-department-utils'
 
@@ -172,30 +170,6 @@ export function useMinistriesTab({
       notify.error('부처·기관명을 입력해주세요.')
       return
     }
-    const category = categoriesList.find(
-      (row) => row.id === ministryForm.categoryId,
-    )
-    const defenseCat = isDefenseRelatedCategory(
-      category ?? null,
-      ministryForm.kind,
-    )
-    const candidateDefensePayload = {
-      officialNameEn: ministryForm.defenseOfficialNameEn.trim(),
-      missionScope: ministryForm.defenseMissionScope.trim(),
-      headquarters: ministryForm.defenseHeadquarters.trim(),
-      orgStructure: ministryForm.defenseOrgStructure.trim(),
-      budgetOrForcesNote: ministryForm.defenseBudgetOrForcesNote.trim(),
-    }
-    const shouldSaveDefenseBlock =
-      defenseCat || hasDefenseExtensionContent(candidateDefensePayload)
-    const defensePayload = shouldSaveDefenseBlock
-      ? candidateDefensePayload
-      : null
-    const descriptionCombined = buildDepartmentDescription(
-      ministryForm.description.trim(),
-      defensePayload,
-      shouldSaveDefenseBlock,
-    )
     const effectiveNameEn =
       ministryForm.nameEn.trim() ||
       ministryForm.defenseOfficialNameEn.trim()
@@ -256,7 +230,11 @@ export function useMinistriesTab({
       parentId: ministryForm.parentId || null,
       categoryId: resolvedCategoryId,
       thumbnailUrl: ministryForm.thumbnailUrl.trim() || null,
-      description: descriptionCombined || null,
+      description: ministryForm.description.trim() || null,
+      primaryMission: ministryForm.defenseMissionScope.trim() || null,
+      headquarters: ministryForm.defenseHeadquarters.trim() || null,
+      orgStructure: ministryForm.defenseOrgStructure.trim() || null,
+      budgetNote: ministryForm.defenseBudgetOrForcesNote.trim() || null,
       establishedInfo,
       abolishedInfo,
       establishedDate: establishedInfo
@@ -302,12 +280,28 @@ export function useMinistriesTab({
       })
     })()
 
+    const desiredMilitarySuccessors = (() => {
+      const list = ministryForm.militaryUnitSuccessorTransitions ?? []
+      const seen = new Set<string>()
+      return list.filter((item) => {
+        const trimmedId = item.unitId.trim()
+        if (!trimmedId || seen.has(trimmedId)) return false
+        seen.add(trimmedId)
+        return true
+      })
+    })()
+
     const syncLineageAndUnits = async (
       deptId: string,
       prevPredecessors: AdministrationDepartment['predecessors'] = [],
       prevTransitions: AdministrationDepartment['successors'] = [],
+      prevMilitarySuccessors: NonNullable<
+        AdministrationDepartment['militaryUnitSuccessors']
+      > = [],
       prevUnitIds: string[] = [],
     ) => {
+      let touchedMilitary = false
+
       // 1. 전신 기관(predecessors) 동기화: predecessorId -> deptId
       const desiredByPredecessorId = new Map(
         desiredPredecessors.map((item) => [item.predecessorId.trim(), item]),
@@ -418,7 +412,70 @@ export function useMinistriesTab({
         }
       }
 
-      // 3. 연결 군부대(militaryUnits) 동기화
+      // 3. 군사조직으로의 후신 계보(부처 → 군사조직, 예: 제국전쟁성 → OKW) 동기화
+      const desiredMilitaryByUnitId = new Map(
+        desiredMilitarySuccessors.map((item) => [item.unitId.trim(), item]),
+      )
+      for (const prevMil of prevMilitarySuccessors) {
+        const prevTargetUnitId = prevMil.militaryUnit?.id
+        if (!prevTargetUnitId) continue
+        const matchedMil = desiredMilitaryByUnitId.get(prevTargetUnitId)
+        if (!matchedMil) {
+          await militaryUnitApi.deleteTransition(prevMil.transitionId)
+          touchedMilitary = true
+        } else {
+          const nextKind = matchedMil.kind ?? 'REORGANIZE'
+          const nextYear = matchedMil.year ?? null
+          const nextEra = matchedMil.era ?? (nextYear != null ? 'AD' : null)
+          const nextMonth = nextYear != null ? (matchedMil.month ?? null) : null
+          const nextNote = matchedMil.note?.trim()
+            ? matchedMil.note.trim()
+            : null
+          if (
+            prevMil.kind !== nextKind ||
+            (prevMil.era ?? null) !== nextEra ||
+            (prevMil.year ?? null) !== nextYear ||
+            (prevMil.month ?? null) !== nextMonth ||
+            (prevMil.note ?? null) !== nextNote
+          ) {
+            await militaryUnitApi.updateTransition(prevMil.transitionId, {
+              kind: nextKind,
+              era: nextEra,
+              year: nextYear,
+              month: nextMonth,
+              note: nextNote,
+            })
+            touchedMilitary = true
+          }
+        }
+      }
+      const prevMilitaryUnitIds = new Set(
+        prevMilitarySuccessors
+          .map((prevMil) => prevMil.militaryUnit?.id)
+          .filter((unitId): unitId is string => Boolean(unitId)),
+      )
+      for (const desiredMil of desiredMilitarySuccessors) {
+        const targetUnitId = desiredMil.unitId.trim()
+        if (!prevMilitaryUnitIds.has(targetUnitId)) {
+          const nextYear = desiredMil.year ?? null
+          const nextEra = desiredMil.era ?? (nextYear != null ? 'AD' : null)
+          const nextMonth = nextYear != null ? (desiredMil.month ?? null) : null
+          const nextNote = desiredMil.note?.trim()
+            ? desiredMil.note.trim()
+            : null
+          await militaryUnitApi.addTransition(targetUnitId, {
+            predecessorDepartmentId: deptId,
+            kind: desiredMil.kind ?? 'REORGANIZE',
+            era: nextEra,
+            year: nextYear,
+            month: nextMonth,
+            note: nextNote,
+          })
+          touchedMilitary = true
+        }
+      }
+
+      // 4. 연결 군부대(militaryUnits) 동기화
       const desiredUnitIds = new Set(
         (ministryForm.linkedMilitaryUnitIds ?? []).filter(Boolean),
       )
@@ -444,6 +501,9 @@ export function useMinistriesTab({
       }
       if (unitUpdatePromises.length > 0) {
         await Promise.all(unitUpdatePromises)
+        touchedMilitary = true
+      }
+      if (touchedMilitary) {
         void queryClient.invalidateQueries({ queryKey: ['military-units'] })
         void queryClient.invalidateQueries({ queryKey: ['military-unit'] })
       }
@@ -458,8 +518,18 @@ export function useMinistriesTab({
             updated.id,
             editingMinistry.predecessors ?? [],
             editingMinistry.successors ?? [],
+            editingMinistry.militaryUnitSuccessors ?? [],
             (editingMinistry.militaryUnits ?? []).map((unit) => unit.id),
-          ).then(() => updated),
+          ).then(async () => {
+            try {
+              const refreshed = await administrationDepartmentApi.getById(
+                updated.id,
+              )
+              return refreshed ?? updated
+            } catch {
+              return updated
+            }
+          }),
         )
         .then((updated) => {
           notify.success(`「${updated.name}」 기관 정보가 저장되었습니다.`)
@@ -468,14 +538,23 @@ export function useMinistriesTab({
           loadMinistries()
         })
         .catch((err) =>
-          notify.error(err instanceof Error ? err.message : '수정에 실패했습니다'),
+          notify.error(getApiErrorMessage(err, '수정에 실패했습니다.')),
         )
         .finally(() => setSubmittingMinistry(false))
     } else {
       administrationDepartmentApi
         .create(payload)
         .then((created) =>
-          syncLineageAndUnits(created.id, [], [], []).then(() => created),
+          syncLineageAndUnits(created.id, [], [], [], []).then(async () => {
+            try {
+              const refreshed = await administrationDepartmentApi.getById(
+                created.id,
+              )
+              return refreshed ?? created
+            } catch {
+              return created
+            }
+          }),
         )
         .then((created) => {
           notify.success(`「${created.name}」 기관이 등록되었습니다.`)
@@ -484,7 +563,7 @@ export function useMinistriesTab({
           loadMinistries()
         })
         .catch((err) =>
-          notify.error(err instanceof Error ? err.message : '등록에 실패했습니다'),
+          notify.error(getApiErrorMessage(err, '등록에 실패했습니다.')),
         )
         .finally(() => setSubmittingMinistry(false))
     }
@@ -494,7 +573,6 @@ export function useMinistriesTab({
     isHistorical,
     ministryForm,
     editingMinistry,
-    categoriesList,
     queryClient,
     loadMinistries,
     closeMinistryFormModal,
@@ -520,9 +598,7 @@ export function useMinistriesTab({
             loadMinistries()
           })
           .catch((err) => {
-            notify.error(
-              err instanceof Error ? err.message : '삭제에 실패했습니다.',
-            )
+            notify.error(getApiErrorMessage(err, '삭제에 실패했습니다.'))
           })
       }
     },

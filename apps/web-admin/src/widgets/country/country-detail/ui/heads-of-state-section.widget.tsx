@@ -1868,21 +1868,27 @@ export function HeadsOfStateSection({
                                   const maxY = years.length
                                     ? Math.max(...years)
                                     : null
-                                  const fmtY = (y: number | null) =>
-                                    y == null
+                                  const fmtY = (yearVal: number | null) =>
+                                    yearVal == null
                                       ? null
-                                      : y < 0
-                                        ? `BC ${Math.abs(y)}`
-                                        : String(y)
+                                      : yearVal < 0
+                                        ? `BC ${Math.abs(yearVal)}`
+                                        : String(yearVal)
                                   return (
                                     <div
                                       style={{
                                         display: 'flex',
                                         alignItems: 'center',
                                         gap: 10,
-                                        padding: '6px 20px 10px',
-                                        borderBottom: '1px solid #f0f2f5',
-                                        background: '#fafbfc',
+                                        padding: '8px 20px 10px',
+                                        borderBottom: `1px solid ${
+                                          isDark
+                                            ? 'rgba(255,255,255,0.08)'
+                                            : '#f0f2f5'
+                                        }`,
+                                        background: isDark
+                                          ? 'rgba(255,255,255,0.025)'
+                                          : '#fafbfc',
                                       }}
                                     >
                                       <div
@@ -1897,7 +1903,9 @@ export function HeadsOfStateSection({
                                           style={{
                                             fontSize: 12,
                                             fontWeight: 700,
-                                            color: '#334155',
+                                            color: isDark
+                                              ? '#e2e8f0'
+                                              : '#334155',
                                           }}
                                         >
                                           {filteredTenures.length}명
@@ -1909,7 +1917,9 @@ export function HeadsOfStateSection({
                                             style={{
                                               width: 1,
                                               height: 10,
-                                              background: '#e2e8f0',
+                                              background: isDark
+                                                ? 'rgba(255,255,255,0.14)'
+                                                : '#e2e8f0',
                                             }}
                                           />
                                           <div
@@ -1926,7 +1936,9 @@ export function HeadsOfStateSection({
                                             <span
                                               style={{
                                                 fontSize: 12,
-                                                color: '#64748b',
+                                                color: isDark
+                                                  ? '#94a3b8'
+                                                  : '#64748b',
                                               }}
                                             >
                                               {fmtY(minY)} – {fmtY(maxY) ?? '현재'}
@@ -1936,14 +1948,14 @@ export function HeadsOfStateSection({
                                       )}
                                       <div style={{ flex: 1 }} />
                                       <div style={{ display: 'flex', gap: 4 }}>
-                                        {HEADS_TL_ROWS.map((r, i) => (
+                                        {HEADS_TL_ROWS.map((tlRow, rowIndex) => (
                                           <div
-                                            key={i}
+                                            key={rowIndex}
                                             style={{
                                               width: 8,
                                               height: 8,
                                               borderRadius: '50%',
-                                              background: r.line,
+                                              background: tlRow.line,
                                             }}
                                           />
                                         ))}

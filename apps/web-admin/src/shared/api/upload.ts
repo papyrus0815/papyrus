@@ -38,9 +38,9 @@ export function getUploadImageUrl(path: string | null | undefined): string {
 
   if (/^https?:\/\//i.test(trimmed)) {
     try {
-      const u = new URL(trimmed)
-      if (u.pathname.startsWith(UPLOADS_PATH_PREFIX) && origin) {
-        return `${origin}${u.pathname}${u.search}`
+      const parsedUrl = new URL(trimmed)
+      if (parsedUrl.pathname.startsWith(UPLOADS_PATH_PREFIX) && origin) {
+        return `${origin}${parsedUrl.pathname}${parsedUrl.search}`
       }
     } catch {
       /* keep trimmed */
@@ -118,6 +118,7 @@ export type UploadImageCategory =
   | 'persons'
   | 'events'
   | 'ministries'
+  | 'military-units'
   | 'political-parties'
   | 'dynasties'
   | 'attachments'

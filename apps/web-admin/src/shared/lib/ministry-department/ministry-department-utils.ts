@@ -71,15 +71,10 @@ export function parseDepartmentDescription(raw: string | null | undefined): {
 
 export function buildDepartmentDescription(
   cleanDescription: string,
-  defense: DefenseDeptFormExtension | null,
+  _defense?: DefenseDeptFormExtension | null,
   _isDefenseCategory?: boolean,
 ): string {
-  let out = cleanDescription.trim()
-  if (defense && hasDefenseExtensionContent(defense)) {
-    const encoded = encodeDefenseExt(defense)
-    out += `\n\n${DEFENSE_MARKER_START}${encoded}${DEFENSE_MARKER_END}`
-  }
-  return out
+  return cleanDescription.trim()
 }
 
 /** 전체 부처·국가기관을 한눈에 보는 통합 탭 ID */
@@ -289,12 +284,24 @@ export function ministryFormFieldsFromDepartment(
       month: item.month ?? null,
       note: item.note ?? null,
     })),
+    militaryUnitSuccessorTransitions: (dept.militaryUnitSuccessors ?? [])
+      .filter((item) => Boolean(item.militaryUnit?.id))
+      .map((item) => ({
+        unitId: item.militaryUnit.id,
+        kind: ((item.kind as string) === 'ABSORB'
+          ? 'ABSORBED'
+          : (item.kind ?? 'REORGANIZE')) as AdministrationDepartment['successors'][number]['kind'],
+        era: item.era ?? null,
+        year: item.year ?? null,
+        month: item.month ?? null,
+        note: item.note ?? null,
+      })),
     linkedMilitaryUnitIds: (dept.militaryUnits ?? []).map((unit) => unit.id),
     defenseOfficialNameEn: dept.nameEn ?? d.officialNameEn,
-    defenseMissionScope: d.missionScope,
-    defenseHeadquarters: d.headquarters,
-    defenseOrgStructure: d.orgStructure,
-    defenseBudgetOrForcesNote: d.budgetOrForcesNote,
+    defenseMissionScope: dept.primaryMission ?? d.missionScope ?? '',
+    defenseHeadquarters: dept.headquarters ?? d.headquarters ?? '',
+    defenseOrgStructure: dept.orgStructure ?? d.orgStructure ?? '',
+    defenseBudgetOrForcesNote: dept.budgetNote ?? d.budgetOrForcesNote ?? '',
   }
 }
 
@@ -332,6 +339,7 @@ export function emptyMinistryFormFields(
     successorId: '',
     predecessorTransitions: [],
     successorTransitions: [],
+    militaryUnitSuccessorTransitions: [],
     linkedMilitaryUnitIds: [],
     defenseOfficialNameEn: '',
     defenseMissionScope: '',
@@ -341,7 +349,7 @@ export function emptyMinistryFormFields(
   }
 }
 
-/** 부처 이름·원어명·영문명·약칭·소속 카테고리·역사국가 표기(한/영)로 검색 */
+/** 부처 이름·원어명·영문명·약칭·주요 임무·청사·소속 카테고리·역사국가 표기(한/영)로 검색 */
 export function filterDepartmentsBySearchQuery(
   departments: AdministrationDepartment[],
   query: string,
@@ -353,6 +361,9 @@ export function filterDepartmentsBySearchQuery(
     if (d.nameLocal && d.nameLocal.toLowerCase().includes(q)) return true
     if (d.nameEn && d.nameEn.toLowerCase().includes(q)) return true
     if (d.abbreviation && d.abbreviation.toLowerCase().includes(q)) return true
+    if (d.primaryMission && d.primaryMission.toLowerCase().includes(q))
+      return true
+    if (d.headquarters && d.headquarters.toLowerCase().includes(q)) return true
     if (
       d.historicalCountry?.name &&
       d.historicalCountry.name.toLowerCase().includes(q)
