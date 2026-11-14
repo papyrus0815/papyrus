@@ -500,8 +500,15 @@ function MindmapFlow({
     return () => cancelAnimationFrame(frame)
     // centerOn은 positions·specs에서 나온다(signature가 그 변화를 잡는다). 높이가 그림에 맞춰 바뀌면 다시 맞춘다
   }, [signature, fittedHeight, fitView])
-  /* 칸이 열리고 닫히면 지도 폭이 바뀐다 — 다시 맞춘다 */
+  /*
+   * 칸이 열리고 닫히면 지도 폭이 바뀐다 — 다시 맞춘다. **첫 마운트는 건너뛴다**: 위 effect가 읽히는 배율로 잡아 둔
+   * 화면을 이 전체 맞춤이 두 프레임 뒤에 덮어써, '일부만 보입니다' 안내는 떠 있는데 그림은 전체가 깨알(글자 5px)로 보였다.
+   */
+  const previousDrawerOpenRef = useRef(drawerOpen)
   useEffect(() => {
+    /* 값이 실제로 바뀐 때만(개발 모드 StrictMode의 effect 재실행에도 흔들리지 않게 '이전 값'과 견준다) */
+    if (previousDrawerOpenRef.current === drawerOpen) return undefined
+    previousDrawerOpenRef.current = drawerOpen
     const frame = requestAnimationFrame(() => requestAnimationFrame(() => void fitView({ padding: 0.08, maxZoom: 1.1, duration: 200 })))
     return () => cancelAnimationFrame(frame)
   }, [drawerOpen, fitView])

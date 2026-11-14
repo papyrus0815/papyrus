@@ -5,7 +5,7 @@ import { FiPlus, FiTrash2 } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
-import { RADIUS, ledgerHairline } from '@/entities/event/ui/ledger-tokens'
+import { RADIUS, ledgerAccentSubtle, ledgerHairline } from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { getEventOverview } from '@/shared/api/event-overview'
 import {
@@ -20,62 +20,45 @@ import {
 } from '@/shared/api/event-context-links'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import { pathKeys } from '@/shared/router'
+import { confirm } from '@/shared/ui/confirm-dialog/confirm'
 import { notify } from '@/shared/ui/toast'
 
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
+import { InlineSelect } from './inline'
+import { LoadError } from './load-error'
 import { withSideColors } from './side-colors'
 
-const ENTITY_KIND_META: Record<
-  EventContextDomain,
-  { icon: string; label: string; hint: string }
-> = {
-  LAW: {
-    icon: '📜',
-    label: '법령·작전지침',
-    hint: '예: 총통 지침 제21호, 정치장교 사살 명령(Kommissarbefehl)',
-  },
-  SOCIAL_PHENOMENON: {
-    icon: '🌀',
-    label: '사회 현상·사상',
-    hint: '예: 레벤스라움(생존권), 소련군 대숙청, 홀로코스트',
-  },
-  NATURAL_FEATURE: {
-    icon: '⛰️',
-    label: '자연 지형·하천',
-    hint: '예: 프리퍄티 습지, 드네프르강, 다우가바강',
-  },
-  INFRASTRUCTURE: {
-    icon: '🛤️',
-    label: '인프라·철도·방어선',
-    hint: '예: 소련 광궤 철도망, 스탈린 방어선, 모스크바 운하',
-  },
-  CLIMATE: {
-    icon: '❄️',
-    label: '기후·기상 현상',
-    hint: '예: 가을 라스푸티차(진흙탕), 1941년 동장군 한파',
-  },
-  RESOURCE: {
-    icon: '🛢️',
-    label: '자원·전략 물자',
-    hint: '예: 캅카스(바쿠) 석유, 우크라이나 곡물, 크리보이로크 철광석',
-  },
-  COMPANY_FACILITY: {
-    icon: '🏭',
-    label: '군수공장·산업시설',
-    hint: '예: 우랄 산맥 이전 전차공장, 하리코프 기관차 공장',
-  },
+/**
+ * 분류·역할 이름 — 글리프 없이 글자로만(장부 언어). 예전엔 분류마다 이모지(📜·🌀·⛰️…)와
+ * 바르바로사 작전의 예시('총통 지침 제21호', '라스푸티차')가 붙어, 어느 사건에서나 2차대전 문구가 떴다.
+ */
+const DOMAIN_LABEL: Record<EventContextDomain, string> = {
+  LAW: '법령·지침',
+  SOCIAL_PHENOMENON: '사회 현상·사상',
+  NATURAL_FEATURE: '지형·하천',
+  INFRASTRUCTURE: '기반시설',
+  CLIMATE: '기후·기상',
+  RESOURCE: '자원·물자',
+  COMPANY_FACILITY: '공장·시설',
 }
 
-const CONTEXT_ROLE_META: Record<EventContextRole, { icon: string; label: string }> = {
-  OBJECTIVE: { icon: '🎯', label: '작전·전략 목표' },
-  OBSTACLE: { icon: '🚧', label: '장애·제약 요인' },
-  INSTRUMENT: { icon: '🛠️', label: '수단·도구·기반' },
-  CAUSE: { icon: '⚡', label: '원인·촉발 요인' },
-  BACKGROUND: { icon: '🌐', label: '배경·환경' },
-  OUTCOME: { icon: '📌', label: '결과·산물' },
-  OTHER: { icon: '📎', label: '기타 맥락' },
+const DOMAIN_ORDER = Object.keys(DOMAIN_LABEL) as EventContextDomain[]
+
+const ROLE_LABEL: Record<EventContextRole, string> = {
+  BACKGROUND: '배경',
+  CAUSE: '원인',
+  OBJECTIVE: '목표',
+  OBSTACLE: '장애·제약',
+  INSTRUMENT: '수단·기반',
+  OUTCOME: '결과',
+  OTHER: '기타',
 }
+
+const ROLE_OPTIONS = (Object.keys(ROLE_LABEL) as EventContextRole[]).map((role) => ({
+  value: role,
+  label: ROLE_LABEL[role],
+}))
 
 /** 저장된 줄 → 동기화 입력(서버 계약: domain·entityId·role·sideId·note) */
 function toLinkInput(item: EventContextLinkView): EventContextLinkInput {
@@ -94,34 +77,38 @@ interface DetailContextLinksProps {
 }
 
 /**
- * 사건과 7대 초유기체 도메인(법령·사회현상·자연지형·인프라·기후·자원·시설)을 연결하는 섹션.
+ * 맥락 연결 — 사건에 작용한 지형·기반시설·법령·기후·자원·시설·사회 현상을 잇는다.
+ *
+ * **기록이 없으면 섹션을 세우지 않는다**(한 줄 '맥락 연결' 버튼만). 예전엔 모든 사건의 연관 탭 끝에
+ * 큰 제목('🌐 다차원 초유기체 맥락 …')과 안내 문단이 늘 서 있었는데, 실DB 연결은 0행이었다.
  */
 export function DetailContextLinks({ event, readOnly = false }: DetailContextLinksProps) {
   const queryClient = useQueryClient()
   const [adding, setAdding] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [entityKind, setEntityKind] = useState<EventContextDomain>('LAW')
+  const [domain, setDomain] = useState<EventContextDomain>('NATURAL_FEATURE')
   const [entityId, setEntityId] = useState('')
   const [role, setRole] = useState<EventContextRole>('BACKGROUND')
   const [sideId, setSideId] = useState('')
-  const [descriptionText, setDescriptionText] = useState('')
+  const [noteText, setNoteText] = useState('')
 
   const sides = useMemo(() => withSideColors(event.sides ?? []), [event.sides])
 
+  /* 실패를 빈 배열로 삼키지 않는다 — '연결 없음'과 '못 불러옴'은 다른 말이다 */
   const linksQuery = useQuery({
     queryKey: eventKeys.contextLinks(event.id),
-    queryFn: () => listEventContextLinks(event.id).catch(() => [] as EventContextLinkView[]),
+    queryFn: () => listEventContextLinks(event.id),
     staleTime: 30_000,
   })
 
-  const catalogQuery = useQuery({
+  const catalogQuery = useQuery<EventContextCatalogItem[]>({
     queryKey: eventKeys.contextCatalog(),
-    queryFn: () => getEventContextCatalog(event.id).catch(() => [] as EventContextCatalogItem[]),
+    queryFn: () => getEventContextCatalog(event.id),
     enabled: adding,
     staleTime: 60_000,
   })
 
-  const links = linksQuery.data ?? []
+  const links = useMemo(() => linksQuery.data ?? [], [linksQuery.data])
 
   const hasSubEvents =
     event.kind === 'COLLECTION' || (event.childEvents?.length ?? 0) > 0
@@ -177,10 +164,39 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
     )
   }, [overviewQuery.data])
 
-  /* 카탈로그는 서버가 한 줄 배열(domain 표지)로 준다 — 고른 분류만 */
+  /* 카탈로그는 서버가 한 줄 배열(domain 표지)로 준다 — 분류마다 몇 건인지 세어 고르기에 싣는다 */
+  const catalogCountByDomain = useMemo(() => {
+    const counts = new Map<EventContextDomain, number>()
+    for (const option of catalogQuery.data ?? []) {
+      counts.set(option.domain, (counts.get(option.domain) ?? 0) + 1)
+    }
+    return counts
+  }, [catalogQuery.data])
+  const domainOptions = useMemo(
+    () =>
+      DOMAIN_ORDER.map((key) => ({
+        value: key,
+        label: catalogQuery.data ? `${DOMAIN_LABEL[key]} (${catalogCountByDomain.get(key) ?? 0})` : DOMAIN_LABEL[key],
+      })),
+    [catalogQuery.data, catalogCountByDomain],
+  )
+  const linkedIds = useMemo(
+    () => new Set(links.map((item) => `${item.domain}:${item.entityId}`)),
+    [links],
+  )
   const catalogOptions = useMemo(
-    () => (catalogQuery.data ?? []).filter((option) => option.domain === entityKind),
-    [catalogQuery.data, entityKind],
+    () =>
+      (catalogQuery.data ?? [])
+        .filter((option) => option.domain === domain && !linkedIds.has(`${option.domain}:${option.id}`))
+        .map((option) => ({
+          value: option.id,
+          label: option.subtitle ? `${option.title} (${option.subtitle})` : option.title,
+        })),
+    [catalogQuery.data, domain, linkedIds],
+  )
+  const sideOptions = useMemo(
+    () => sides.map((side) => ({ value: side.id, label: side.name })),
+    [sides],
   )
 
   const refreshLinks = async () => {
@@ -189,84 +205,97 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
 
   const handleAdd = async () => {
     if (!entityId) {
-      notify.error('연결할 대상을 선택해 주세요')
+      notify.error('연결할 대상을 골라 주세요')
       return
     }
     const newItem: EventContextLinkInput = {
-      domain: entityKind,
+      domain,
       entityId,
       role,
       sideId: sideId || null,
-      note: descriptionText.trim() || null,
+      note: noteText.trim() || null,
     }
     setSaving(true)
     try {
       await syncEventContextLinks(event.id, [...links.map(toLinkInput), newItem])
       await refreshLinks()
       setEntityId('')
-      setDescriptionText('')
+      setNoteText('')
       setAdding(false)
-      notify.success('다차원 맥락 연결을 추가했습니다')
+      notify.success('맥락 연결을 추가했습니다')
     } catch (error) {
-      notify.error(
-        error instanceof Error ? error.message : '다차원 맥락 연결 저장에 실패했습니다',
-      )
+      notify.error(error instanceof Error ? error.message : '맥락 연결을 저장하지 못했습니다')
     } finally {
       setSaving(false)
     }
   }
 
-  const handleRemove = async (targetId: string) => {
+  const handleRemove = async (target: EventContextLinkView) => {
+    const ok = await confirm({
+      title: '맥락 연결 끊기',
+      message: `‘${target.title}’ 연결을 끊을까요? 대상 자체는 지워지지 않습니다.`,
+      confirmLabel: '끊기',
+    })
+    if (!ok) return
     setSaving(true)
     try {
-      const remaining = links.filter((item) => item.id !== targetId).map(toLinkInput)
+      const remaining = links.filter((item) => item.id !== target.id).map(toLinkInput)
       await syncEventContextLinks(event.id, remaining)
       await refreshLinks()
-      notify.success('연결을 해제했습니다')
+      notify.success(`‘${target.title}’ 연결을 끊었습니다`)
     } catch (error) {
-      notify.error(error instanceof Error ? error.message : '연결 해제에 실패했습니다')
+      notify.error(error instanceof Error ? error.message : '연결을 끊지 못했습니다')
     } finally {
       setSaving(false)
     }
+  }
+
+  const hasContent = links.length > 0 || subEventContextRollup.length > 0
+
+  /* 기록도 없고 펼치지도 않았다 — 섹션 대신 한 줄(휴지통 사건은 그 한 줄도 없다) */
+  if (!hasContent && !adding && !linksQuery.isError) {
+    if (readOnly) return null
+    return (
+      <CollapsedRow id="context-links">
+        <span>이 사건에 작용한 지형·기반시설·법령·기후·자원을 이어 둘 수 있습니다.</span>
+        <AddToggleButton type="button" onClick={() => setAdding(true)}>
+          <FiPlus size={12} aria-hidden /> 맥락 연결
+        </AddToggleButton>
+      </CollapsedRow>
+    )
   }
 
   return (
     <S.Section id="context-links">
       <S.SectionHeader>
-        <S.SectionTitle>
-          🌐 다차원 초유기체 맥락 (법령 · 지형 · 기후 · 인프라 · 자원 · 산업 · 현상)
-        </S.SectionTitle>
+        <S.SectionTitle>맥락</S.SectionTitle>
         {links.length > 0 && <S.SectionSubtitle>{links.length}</S.SectionSubtitle>}
-        {!readOnly && (
+        {!readOnly && !linksQuery.isError && (
           <S.SectionActions>
             <AddToggleButton type="button" onClick={() => setAdding((prev) => !prev)}>
-              <FiPlus size={12} /> {adding ? '닫기' : '맥락 연결 추가'}
+              {!adding && <FiPlus size={12} aria-hidden />} {adding ? '닫기' : '맥락 연결'}
             </AddToggleButton>
           </S.SectionActions>
         )}
       </S.SectionHeader>
 
-      {links.length === 0 && subEventContextRollup.length === 0 && !adding && (
-        <EmptyHint>
-          이 사건에 작용한 법령·작전지침, 자연지형·하천, 기후(라스푸티차·한파), 철도·방어선 인프라, 전략 자원(유전·곡창), 군수공장, 사회현상을 연결해 초유기체 맥락을 완성할 수 있습니다.
-        </EmptyHint>
+      {linksQuery.isError && (
+        <LoadError
+          message="맥락 연결을 불러오지 못했습니다."
+          onRetry={() => void linksQuery.refetch()}
+          retrying={linksQuery.isFetching}
+        />
       )}
 
       {links.length > 0 && (
         <LinksGrid>
           {links.map((item) => {
-            const kindMeta = ENTITY_KIND_META[item.domain] ?? ENTITY_KIND_META.LAW
-            const roleMeta = CONTEXT_ROLE_META[item.role] ?? CONTEXT_ROLE_META.OTHER
             const sideColor = sides.find((side) => side.id === item.sideId)?.color ?? null
             return (
               <LinkCard key={item.id}>
                 <CardTop>
-                  <KindTag title={kindMeta.label}>
-                    {kindMeta.icon} {kindMeta.label}
-                  </KindTag>
-                  <RoleTag>
-                    {roleMeta.icon} {roleMeta.label}
-                  </RoleTag>
+                  <KindTag>{DOMAIN_LABEL[item.domain] ?? item.domain}</KindTag>
+                  <RoleTag>{ROLE_LABEL[item.role] ?? ROLE_LABEL.OTHER}</RoleTag>
                   {item.sideName && (
                     <SideTag $color={sideColor}>{item.sideName}</SideTag>
                   )}
@@ -274,8 +303,8 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
                     <RemoveBtn
                       type="button"
                       disabled={saving}
-                      onClick={() => void handleRemove(item.id)}
-                      aria-label={`${item.title} 연결 해제`}
+                      onClick={() => void handleRemove(item)}
+                      aria-label={`${item.title} 연결 끊기`}
                     >
                       <FiTrash2 size={12} />
                     </RemoveBtn>
@@ -294,124 +323,126 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
 
       {subEventContextRollup.length > 0 && (
         <SubRollupBox>
-          <SubRollupTitle>
-            ↳ 하위 사건에 작용한 다차원 맥락 롤업 ({subEventContextRollup.length}건)
-          </SubRollupTitle>
+          <SubRollupTitle>하위 사건의 맥락 {subEventContextRollup.length}</SubRollupTitle>
           <LinksGrid>
-            {subEventContextRollup.map((rollupItem) => {
-              const kindMeta = ENTITY_KIND_META[rollupItem.entityKind]
-              return (
-                <LinkCard key={rollupItem.key}>
-                  <CardTop>
-                    <KindTag title={kindMeta.label}>
-                      {kindMeta.icon} {kindMeta.label}
-                    </KindTag>
-                    <RoleTag>하위 {rollupItem.events.length}건</RoleTag>
-                  </CardTop>
-                  <EntityTitleRow>
-                    <EntityTitle>{rollupItem.entityName}</EntityTitle>
-                  </EntityTitleRow>
-                  <SubRollupEventList>
-                    {rollupItem.events.map((evItem, idx) => {
-                      const roleMeta = CONTEXT_ROLE_META[evItem.role] ?? CONTEXT_ROLE_META.OTHER
-                      return (
-                        <li key={`${evItem.eventId}-${idx}`}>
-                          <SubEventLink to={pathKeys.events.detail(evItem.eventId)}>
-                            {evItem.eventTitle}
-                          </SubEventLink>
-                          <span>
-                            {' · '}
-                            {roleMeta.icon} {roleMeta.label}
-                            {evItem.sideName ? ` (${evItem.sideName})` : ''}
-                            {evItem.description ? ` — ${evItem.description}` : ''}
-                          </span>
-                        </li>
-                      )
-                    })}
-                  </SubRollupEventList>
-                </LinkCard>
-              )
-            })}
+            {subEventContextRollup.map((rollupItem) => (
+              <LinkCard key={rollupItem.key}>
+                <CardTop>
+                  <KindTag>{DOMAIN_LABEL[rollupItem.entityKind] ?? rollupItem.entityKind}</KindTag>
+                  <RoleTag>하위 {rollupItem.events.length}건</RoleTag>
+                </CardTop>
+                <EntityTitleRow>
+                  <EntityTitle>{rollupItem.entityName}</EntityTitle>
+                </EntityTitleRow>
+                <SubRollupEventList>
+                  {rollupItem.events.map((eventItem, index) => (
+                    <li key={`${eventItem.eventId}-${index}`}>
+                      <SubEventLink to={pathKeys.events.detail(eventItem.eventId)}>
+                        {eventItem.eventTitle}
+                      </SubEventLink>
+                      <span>
+                        {' · '}
+                        {ROLE_LABEL[eventItem.role] ?? ROLE_LABEL.OTHER}
+                        {eventItem.sideName ? ` (${eventItem.sideName})` : ''}
+                        {eventItem.description ? ` — ${eventItem.description}` : ''}
+                      </span>
+                    </li>
+                  ))}
+                </SubRollupEventList>
+              </LinkCard>
+            ))}
           </LinksGrid>
         </SubRollupBox>
       )}
 
       {adding && !readOnly && (
         <AddFormBox>
+          {/* 고르기는 지면 공용 피커(InlineSelect) — 네이티브 select는 다크 모드·터치에서 따로 논다 */}
           <FormRow>
-            <FormSelect
-              value={entityKind}
-              onChange={(changeEvent) => {
-                setEntityKind(changeEvent.target.value as EventContextDomain)
-                setEntityId('')
-              }}
-              aria-label="연결 도메인 분류"
-            >
-              {(Object.keys(ENTITY_KIND_META) as EventContextDomain[]).map((kindKey) => (
-                <option key={kindKey} value={kindKey}>
-                  {ENTITY_KIND_META[kindKey].icon} {ENTITY_KIND_META[kindKey].label}
-                </option>
-              ))}
-            </FormSelect>
+            <FormPick>
+              <FormPickLabel>분류</FormPickLabel>
+              <InlineSelect
+                value={domain}
+                options={domainOptions}
+                onSave={(next) => {
+                  setDomain(next as EventContextDomain)
+                  setEntityId('')
+                }}
+                label="맥락 분류"
+                clearable={false}
+              />
+            </FormPick>
 
-            <FormSelect
-              value={entityId}
-              onChange={(changeEvent) => setEntityId(changeEvent.target.value)}
-              aria-label="연결 대상 항목"
-            >
-              <option value="">
-                -- {ENTITY_KIND_META[entityKind].label} 선택 ({catalogOptions.length}건) --
-              </option>
-              {catalogOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.title}
-                  {option.subtitle ? ` (${option.subtitle})` : ''}
-                </option>
-              ))}
-            </FormSelect>
+            <FormPick>
+              <FormPickLabel>대상</FormPickLabel>
+              {catalogQuery.isLoading ? (
+                <FormPickNote>목록을 불러오는 중…</FormPickNote>
+              ) : catalogQuery.isError ? null : catalogOptions.length === 0 ? (
+                <FormPickNote>이 분류에 고를 항목이 아직 없습니다</FormPickNote>
+              ) : (
+                <InlineSelect
+                  value={entityId}
+                  options={catalogOptions}
+                  onSave={setEntityId}
+                  placeholder={`고르기 (${catalogOptions.length}건)`}
+                  label={`연결할 ${DOMAIN_LABEL[domain]}`}
+                />
+              )}
+            </FormPick>
 
-            <FormSelect
-              value={role}
-              onChange={(changeEvent) => setRole(changeEvent.target.value as EventContextRole)}
-              aria-label="사건 내 역할"
-            >
-              {(Object.keys(CONTEXT_ROLE_META) as EventContextRole[]).map((roleKey) => (
-                <option key={roleKey} value={roleKey}>
-                  {CONTEXT_ROLE_META[roleKey].icon} {CONTEXT_ROLE_META[roleKey].label}
-                </option>
-              ))}
-            </FormSelect>
+            <FormPick>
+              <FormPickLabel>구실</FormPickLabel>
+              <InlineSelect
+                value={role}
+                options={ROLE_OPTIONS}
+                onSave={(next) => setRole(next as EventContextRole)}
+                label="사건에서 한 구실"
+                clearable={false}
+              />
+            </FormPick>
 
-            {sides.length > 0 && (
-              <FormSelect
-                value={sideId}
-                onChange={(changeEvent) => setSideId(changeEvent.target.value)}
-                aria-label="관련 진영"
-              >
-                <option value="">진영 무관 (공통)</option>
-                {sides.map((side) => (
-                  <option key={side.id} value={side.id}>
-                    {side.name}
-                  </option>
-                ))}
-              </FormSelect>
+            {sideOptions.length > 0 && (
+              <FormPick>
+                <FormPickLabel>진영</FormPickLabel>
+                <InlineSelect
+                  value={sideId}
+                  options={sideOptions}
+                  onSave={setSideId}
+                  placeholder="공통"
+                  label="관련 진영"
+                />
+              </FormPick>
             )}
           </FormRow>
+
+          {catalogQuery.isError && (
+            <LoadError
+              message="고를 목록을 불러오지 못했습니다."
+              onRetry={() => void catalogQuery.refetch()}
+              retrying={catalogQuery.isFetching}
+            />
+          )}
 
           <FormRow>
             <FormInput
               type="text"
-              placeholder={`맥락 설명 (${ENTITY_KIND_META[entityKind].hint})`}
-              value={descriptionText}
-              onChange={(changeEvent) => setDescriptionText(changeEvent.target.value)}
+              aria-label="맥락 설명"
+              placeholder="이 사건에서 어떤 구실을 했는지 (선택)"
+              value={noteText}
+              onChange={(changeEvent) => setNoteText(changeEvent.target.value)}
             />
             <SubmitBtn
               type="button"
               disabled={saving || !entityId}
               onClick={() => void handleAdd()}
             >
-              연결 저장
+              연결
             </SubmitBtn>
+            {!hasContent && (
+              <CancelBtn type="button" onClick={() => setAdding(false)}>
+                취소
+              </CancelBtn>
+            )}
           </FormRow>
         </AddFormBox>
       )}
@@ -431,13 +462,6 @@ const AddToggleButton = styled.button`
   font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
-`
-
-const EmptyHint = styled.p`
-  margin: 4px 0 0;
-  font-size: 12px;
-  line-height: 1.6;
-  color: ${metaText};
 `
 
 const LinksGrid = styled.div`
@@ -477,7 +501,7 @@ const RoleTag = styled.span`
   font-size: 10.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
-  background: rgba(59, 130, 246, 0.12);
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
 `
 
 const SideTag = styled.span<{ $color: string | null }>`
@@ -497,8 +521,11 @@ const RemoveBtn = styled.button`
   color: ${metaText};
   cursor: pointer;
 
-  &:hover {
-    color: #ef4444;
+  &:hover:not(:disabled) {
+    color: ${({ theme }) => theme.colors.error};
+  }
+  &:disabled {
+    cursor: progress;
   }
 `
 
@@ -578,14 +605,39 @@ const FormRow = styled.div`
   gap: 6px;
 `
 
-const FormSelect = styled.select`
-  flex: 1 1 150px;
-  padding: 5px 8px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-radius: ${RADIUS.SM};
-  background: ${({ theme }) => theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.primary};
+/** 고르기 한 칸 — 라벨 + 공용 피커(InlineSelect) */
+const FormPick = styled.span`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  margin-right: 12px;
+  font-size: 12.5px;
+`
+
+const FormPickLabel = styled.span`
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${metaText};
+`
+
+const FormPickNote = styled.span`
   font-size: 12px;
+  color: ${metaText};
+`
+
+/** 접힌 상태 — 기록이 없을 때 섹션 대신 서는 한 줄 */
+const CollapsedRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding-top: 14px;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  font-size: 12.5px;
+  color: ${metaText};
+  word-break: keep-all;
 `
 
 const FormInput = styled.input`
@@ -611,5 +663,18 @@ const SubmitBtn = styled.button`
   &:disabled {
     opacity: 0.45;
     cursor: not-allowed;
+  }
+`
+
+const CancelBtn = styled.button`
+  padding: 5px 10px;
+  border: none;
+  background: transparent;
+  color: ${metaText};
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `

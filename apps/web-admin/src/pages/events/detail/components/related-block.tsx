@@ -525,7 +525,7 @@ export function RelatedBlock({
             <CausalFlowArrow aria-hidden>──▶</CausalFlowArrow>
 
             <CausalFlowSelfNode>
-              <CausalFlowSelfBadge>★ 현재 사건</CausalFlowSelfBadge>
+              <CausalFlowSelfBadge>현재 사건</CausalFlowSelfBadge>
               <CausalFlowSelfTitle>{eventTitle}</CausalFlowSelfTitle>
               {selfDateText && (
                 <CausalFlowSelfDate>{selfDateText}</CausalFlowSelfDate>

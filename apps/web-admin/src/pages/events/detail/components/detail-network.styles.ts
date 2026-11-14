@@ -924,7 +924,9 @@ export const MembershipRow = styled.div<{ $reveal?: boolean }>`
    * 행에 들어오면 또렷하게.
    */
   ${TextBtn} {
-    opacity: 0.6;
+    /* 0.6이면 라이트 2.87:1·다크 3.39:1로 읽기 어려웠다 — 굵기를 낮춰 조용하게 하되 대비는 AA 위로 */
+    opacity: 0.85;
+    font-weight: 500;
   }
   &:hover ${TextBtn}, &:focus-within ${TextBtn}, ${TextBtn}:focus-visible {
     opacity: 1;
