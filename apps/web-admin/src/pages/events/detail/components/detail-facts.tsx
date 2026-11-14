@@ -264,7 +264,7 @@ export function DetailFacts({
             {(() => {
               const eventCity = (event as { city?: CityWithHistoricalNames | null }).city
               const cityLabel = formatHistoricalCityName(eventCity, year)
-              return cityLabel ? <LocationNote title="연결 도시(당시 지명 포함)">🏙️ {cityLabel}</LocationNote> : null
+              return cityLabel ? <LocationNote title="연결 도시(당시 지명 포함)">{cityLabel}</LocationNote> : null
             })()}
             {event.locationNote?.trim() && (
               <LocationNote title={event.locationNote}>{event.locationNote}</LocationNote>
@@ -944,12 +944,12 @@ const AddLine = styled.button`
   background: transparent;
   font: inherit;
   font-size: 13px;
+  /* 흐리게(opacity .85) 두었더니 라이트에서 3.60:1 — metaText 그대로가 AA 하한이다 */
   color: ${metaText};
-  opacity: 0.85;
   cursor: pointer;
 
   &:hover {
-    opacity: 1;
+    color: ${({ theme }) => theme.colors.text.primary};
     text-decoration: underline;
     text-underline-offset: 3px;
   }

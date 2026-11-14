@@ -321,6 +321,8 @@ export function DetailAppendix({ event, onPatch }: DetailAppendixProps) {
             <ImageCell key={image.id}>
               <ImageButton
                 type="button"
+                /* 캡션이 없으면 img alt가 비어 버튼에 이름이 없었다 */
+                aria-label={image.caption ? `${image.caption} 크게 보기` : '이미지 크게 보기'}
                 onClick={() => {
                   // 썸네일과 동일하게 API origin을 붙여 정규화 — raw '/uploads/...'
                   // 상대경로를 그대로 src에 넣으면 확대 시 web-admin origin 기준 404.

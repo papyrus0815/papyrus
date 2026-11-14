@@ -295,7 +295,6 @@ export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
                     })
                   }
                 >
-                  <span>📜</span>
                   <strong>{candidateTreaty.name}</strong>
                   {dateText && <RecommendChipSub>({dateText})</RecommendChipSub>}
                   <RecommendChipPlus>+ 체결 연결</RecommendChipPlus>
@@ -481,7 +480,7 @@ function TreatyCard({
                 value: option.value,
                 label: option.label,
               }))}
-              onSave={(nextLinkType) => onChangeLinkType(nextLinkType)}
+              onSave={(nextLinkType) => onChangeLinkType(nextLinkType as TreatyEventLinkType)}
               label={`${treaty.name} 관계 유형`}
             />
           </LinkKindBadge>

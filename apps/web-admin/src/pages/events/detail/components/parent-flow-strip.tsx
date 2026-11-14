@@ -211,6 +211,15 @@ const Strip = styled.nav`
   padding: 10px 12px 8px;
   border-radius: 10px;
   background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.035)' : 'rgba(20,19,34,0.03)')};
+
+  /*
+   * 휴대폰 폭 — 띠가 145px을 먹어 하위 사건의 탭이 첫 화면 끝(y=758/844)까지 밀렸다(2026-11-14 실측).
+   * 자리 문장은 한 줄로 자르고(전체는 연관 탭 '소속' 줄에 있다) 축 끝 날짜는 뺀다 — 띠와 앞뒤 사건은 남긴다.
+   */
+  @container eventdetail (max-width: 639px) {
+    margin: 10px 0 2px;
+    padding: 8px 10px 6px;
+  }
 `
 
 const Head = styled.div`
@@ -235,6 +244,13 @@ const Head = styled.div`
 
 const Where = styled.div`
   min-width: 0;
+
+  @container eventdetail (max-width: 639px) {
+    flex: 1 1 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 `
 
 const ParentLink = styled(Link)`
@@ -366,4 +382,8 @@ const Ends = styled.div`
   }
   color: ${({ theme }) => theme.colors.text.tertiary};
   font-variant-numeric: tabular-nums;
+
+  @container eventdetail (max-width: 639px) {
+    display: none;
+  }
 `

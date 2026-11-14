@@ -125,8 +125,9 @@ const LazyEventOverviewPanel = lazy(() =>
  * 단락 앵커(배경·전개·여파의 하위 항목)도 접두사로 개요에 묶인다.
  */
 function tabOfSection(id: string, promoteTreaties: boolean): EventTabId {
-  if (/^(background|narrative|aftermath|comments|development)/.test(id)) return 'overview'
-  if (/^(actors|war-declaration|statehood|territory|power|departments|organizations)/.test(id)) return 'actors'
+  /* 선전포고 당사국 보드는 개요에만 선다(그 사건의 핵심 사실) — 참여 탭에는 같은 나라의 목록이 이미 있다 */
+  if (/^(background|narrative|aftermath|comments|development|war-declaration)/.test(id)) return 'overview'
+  if (/^(actors|statehood|territory|power|departments|organizations)/.test(id)) return 'actors'
   if (id.startsWith('module-')) return 'modules'
   if (id === 'treaties') return promoteTreaties ? 'overview' : 'links'
   if (id === 'network') return 'links'
@@ -508,8 +509,8 @@ function EventDetailContent({
       (promoteTreaties ? 0 : countOf(event.treaties)) +
       (event.parentEvent ? 1 : 0) +
       countOf(event.extraParents) +
-      countOf(event.childEvents) +
-      countOf(event.extraChildren) +
+      // 묶음의 하위 사건은 조망 탭이 센다 — 1차세계대전이 '조망 18 · 연관 18'로 같은 18건을 두 번 셌다
+      (isCollection ? 0 : countOf(event.childEvents) + countOf(event.extraChildren)) +
       // 키워드는 세지 않는다 — 사라예보 '연관 15' 중 14가 키워드라 연결이 많은 사건처럼 보였다
       relatedCount,
     media: countOf(event.eventImages),
@@ -676,6 +677,8 @@ function EventDetailContent({
       return children.length >= 2 ? children : undefined
     }
 
+    /* 개요에서 요약 바로 뒤, 배경 앞에 선다 — 목차도 같은 차례 */
+    if (showWarDeclaration) items.push({ id: 'war-declaration', label: '선전포고 당사국' })
     if (shown('background'))
       items.push({
         id: 'background',
@@ -694,7 +697,6 @@ function EventDetailContent({
         label: '여파',
         children: withParagraphs('aftermath'),
       })
-    if (showWarDeclaration) items.push({ id: 'war-declaration', label: '선전포고 당사국' })
     if (showStatehood) items.push({ id: 'statehood', label: '성립·소멸' })
     if (showTerritory) items.push({ id: 'territory', label: '영토 이전' })
     if (showPower) items.push({ id: 'power', label: '권력 교체·선거' })
@@ -721,7 +723,7 @@ function EventDetailContent({
     if (!event.deletedAt) items.push({ id: 'comments', label: '댓글' })
 
     return items
-  }, [visibleKey, event, enabledModules, promoteTreaties, showStatehood, showTerritory, showPower, departmentCount, showOrganizations])
+  }, [visibleKey, event, enabledModules, promoteTreaties, showWarDeclaration, showStatehood, showTerritory, showPower, departmentCount, showOrganizations])
 
   /**
    * URL hash → 섹션 스크롤. 사건 id가 바뀐 첫 렌더에서 1회만 실행.
@@ -1008,6 +1010,11 @@ function EventDetailContent({
                 {visibleTabs.map((tab) => {
                   const count = tabCounts[tab.id]
                   const selected = activeTab === tab.id
+                  /* 묶음의 연관 탭은 건수가 0이어도(하위는 조망이 센다) 하위 사건 관리 칸이 있어 비어 있지 않다 */
+                  const isEmptyTab =
+                    tab.id !== 'overview' &&
+                    count === 0 &&
+                    !(tab.id === 'links' && countOf(event.childEvents) + countOf(event.extraChildren) > 0)
                   return (
                     <S.Tab
                       key={tab.id}
@@ -1019,8 +1026,8 @@ function EventDetailContent({
                       tabIndex={selected ? 0 : -1}
                       $active={selected}
                       /* 기록이 없는 탭은 한 단 흐리게 — 눌러 봐야 '아직 …없습니다'인 탭이 셋씩 서 있었다(누르면 그대로 추가 안내) */
-                      data-empty={tab.id !== 'overview' && count === 0 ? 'true' : undefined}
-                      title={tab.id !== 'overview' && count === 0 ? `${tab.hint} — 아직 없음` : tab.hint}
+                      data-empty={isEmptyTab ? 'true' : undefined}
+                      title={isEmptyTab ? `${tab.hint} — 아직 없음` : tab.hint}
                       onClick={() => setActiveTab(tab.id)}
                     >
                       {tab.label}
@@ -1122,14 +1129,8 @@ function EventDetailContent({
 
               {activeTab === 'actors' && (
                 <>
-                  {showWarDeclaration && (
-                    <DetailWarDeclaration
-                      event={event}
-                      expectWarDeclaration={features.expectWarDeclaration}
-                      onCountryClick={onCountryClick}
-                      onPatch={trashedView ? undefined : onPatch}
-                    />
-                  )}
+                  {/* (제거) 선전포고 당사국 보드 — 개요에 같은 보드가 있고, 바로 아래 국가 목록이 같은 두 나라를 역할과 함께
+                      다시 적는다. 히어로 카드까지 같은 사실이 네 곳이었다 */}
                   {isVisible('actors') && (
                     <DetailActors
                       event={event}
@@ -1162,17 +1163,6 @@ function EventDetailContent({
                       onPersonClick={onPersonClick}
                     />
                   )}
-                  {/* 국가 기관(부처·최고사령부·총독부) — 조직(정당·기업·국제기구)과 다른 표라 칸을 나눈다 */}
-                  <DetailDepartments
-                    event={event}
-                    expectDepartments={expectDepartments}
-                    readOnly={trashedView}
-                  />
-                  <DetailOrganizations
-                    event={event}
-                    expectOrganizations={features.expectOrganizations}
-                    onPatch={onPatch}
-                  />
                 </>
               )}
 
@@ -1225,7 +1215,6 @@ function EventDetailContent({
                       onAddTreaty={!promoteTreaties && !isVisible('treaties') ? () => revealSection('treaties') : undefined}
                     />
                   )}
-                  <DetailContextLinks event={event} readOnly={trashedView} />
                 </>
               )}
 
@@ -1263,6 +1252,32 @@ function EventDetailContent({
                   </S.TabEmptyActions>
                 </S.TabEmpty>
               )}
+
+              {/*
+                * 국가 기관(부처·최고사령부·총독부)과 조직(정당·기업·국제기구) — 다른 표라 칸을 나눈다.
+                * 기록이 없으면 둘 다 버튼 하나로 접혀 한 줄에 나란히 선다(예전엔 빈 블록 둘이 260~480px).
+                * 빈 탭 머리('아직 참여한 인물·국가가 없습니다') **뒤**에 둔다 — 주된 기록이 먼저다.
+                */}
+              {activeTab === 'actors' && (
+                <ActorLinkExtras>
+                  <DetailDepartments
+                    event={event}
+                    expectDepartments={expectDepartments}
+                    readOnly={trashedView}
+                  />
+                  {(!trashedView || showOrganizations) && (
+                    <DetailOrganizations
+                      event={event}
+                      expectOrganizations={features.expectOrganizations}
+                      onPatch={onPatch}
+                    />
+                  )}
+                </ActorLinkExtras>
+              )}
+
+              {/* 맥락 연결 — 기록이 없으면 한 줄로 접힌다. 빈 탭 머리('아직 이어 둔 사건·조약이 없습니다') **뒤**에 둔다
+                  (예전엔 빈 사건의 연관 탭 맨 위에, 탭에서 가장 큰 글자로 이 섹션 제목이 먼저 섰다) */}
+              {activeTab === 'links' && <DetailContextLinks event={event} readOnly={trashedView} />}
 
               {/* 이 탭에서 내용이 없어 접힌 섹션들 — 누르면 제자리에 펼쳐진다
                   (탭이 통째로 비었으면 위의 빈 탭 머리가 같은 버튼을 이미 든다) */}
@@ -1353,6 +1368,24 @@ function EventDetailContent({
     </InlineEditProvider>
   )
 }
+
+/** 참여 탭 끝 — 국가 기관·조직. 접힌 버튼은 한 줄에 나란히, 펼친 섹션은 줄 전체 */
+const ActorLinkExtras = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  /* 세로는 본문 섹션 리듬(Main의 64px), 가로는 버튼 사이 */
+  gap: 64px 8px;
+
+  > section {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  &:empty {
+    display: none;
+  }
+`
 
 /** 하위 사건 → 상위 사건 댓글로 유도하는 인라인 링크. */
 const ParentCommentsLink = styled(Link)`

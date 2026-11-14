@@ -21,7 +21,6 @@ import {
 } from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { type UpdateEventDto } from '@/shared/api/events'
-import { formatCountryYearShort } from '@/shared/lib/country-period'
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { pathKeys } from '@/shared/router'
 
@@ -95,7 +94,8 @@ function formatDeclarationDateLabel(
 ): string {
   const parts = parseIsoDateParts(startDate ?? null)
   if (!parts) return '선전포고'
-  const yearLabel = formatCountryYearShort(parts.year) ?? `${parts.year}년`
+  /* '1792 4월 20일'로 '년'이 빠져 나왔다(짧은 연도 표기는 '년'을 안 붙인다) — 날짜 문장에는 '년'을 단다 */
+  const yearLabel = parts.year < 0 ? `기원전 ${Math.abs(parts.year)}년` : `${parts.year}년`
   if (precision === 'year') return yearLabel
   if (precision === 'month') return `${yearLabel} ${parts.month}월`
   return `${yearLabel} ${parts.month}월 ${parts.day}일`
