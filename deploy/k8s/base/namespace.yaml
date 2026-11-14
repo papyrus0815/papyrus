@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: papyrus
+  labels:
+    # Pod Security Admission — 아래 모든 파드는 restricted 기준(비root·권한상승 금지·capability 전부 drop)을 지킨다
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest

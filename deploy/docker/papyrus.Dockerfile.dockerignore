@@ -1,0 +1,43 @@
+# papyrus.Dockerfile 전용 무시 목록 (BuildKit은 <Dockerfile>.dockerignore를 루트 .dockerignore보다 우선한다)
+# 루트 .dockerignore는 package-lock.json·scripts·*.svg를 빼서 npm ci와 웹 빌드가 깨지므로 따로 둔다.
+
+.git
+**/node_modules
+**/dist
+**/.nx
+**/coverage
+**/*.log
+**/.DS_Store
+
+# 비밀·로컬 환경 — env.development는 개발 DB(localhost:3307)를 가리키는 심볼릭 링크라 절대 들어가면 안 된다
+.env
+.env.*
+env.development
+env.production
+deploy/k8s/overlays/*/secrets.env
+
+# 런타임 데이터
+uploads
+apps/api/uploads
+logs
+docker/mysql/backups
+
+# 이미지와 무관한 앱·문서
+apps/desktop
+apps/mobile
+apps/service-manager
+apps/api-java
+docs
+memory
+
+# 생성물은 이미지 안에서 다시 만든다 (로컬 잔재가 섞이지 않게)
+apps/api/prisma/schema.prisma
+apps/api/src/api
+apps/api/swagger.json
+
+# 테스트
+**/*.spec.ts
+**/*.spec.tsx
+**/*.test.ts
+**/*.test.tsx
+**/__tests__

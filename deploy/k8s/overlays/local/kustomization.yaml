@@ -1,0 +1,31 @@
+# 로컬 k3d 클러스터용 overlay
+#   kubectl apply -k deploy/k8s/overlays/local
+#
+# 이미지는 레지스트리 없이 `k3d image import`로 노드에 직접 넣는다. 태그가 :latest가 아니라
+# 기본 pull 정책이 IfNotPresent → 노드에 넣은 이미지를 그대로 쓴다. 다시 빌드하면 같은 태그로
+# 재import 후 `kubectl rollout restart` (`deploy/scripts/k8s.sh deploy`가 한다).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# overlay에서 만든 Secret도 같은 네임스페이스에 있어야 base의 secretKeyRef가 해시 붙은 이름으로 치환된다
+# (빠뜨리면 Secret만 default 네임스페이스로 가고 참조는 'papyrus-secrets' 그대로 남아 파드가 못 뜬다)
+namespace: papyrus
+
+resources:
+  - ../../base
+
+images:
+  - name: papyrus/api
+    newTag: local
+  - name: papyrus/web
+    newTag: local
+  - name: papyrus/migrate
+    newTag: local
+
+# secrets.env는 gitignore — `deploy/scripts/k8s.sh up`이 처음 한 번 무작위 값으로 만든다(secrets.env.example 참고).
+# 이름 뒤에 내용 해시가 붙어 값이 바뀌면 참조하는 파드가 자동으로 다시 뜬다.
+# 단, MySQL 비밀번호는 데이터 디렉토리를 처음 만들 때만 반영된다 — 바꾸려면 PVC째 지워야 한다.
+secretGenerator:
+  - name: papyrus-secrets
+    envs:
+      - secrets.env

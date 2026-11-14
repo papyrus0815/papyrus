@@ -1,0 +1,45 @@
+# web 컨테이너 nginx — 이미지의 /etc/nginx/templates가 기동 시 envsubst로 ${API_UPSTREAM}을 채운다.
+# 경로 계약:
+#   /api/*      → API (접두사 제거: proxy_pass 끝 슬래시. API 라우트가 루트 직속이라서)
+#   /assets/*   → 해시가 붙은 번들, 1년 캐시
+#   그 외        → SPA index.html (클라이언트 라우팅)
+
+server {
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+
+    # 인물 전기 본문 상한 16MB + API body limit 18mb보다 크게
+    client_max_body_size 20m;
+
+    gzip on;
+    gzip_min_length 1024;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    location /api/ {
+        proxy_pass http://${API_UPSTREAM}/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        proxy_set_header X-Request-Id $request_id;
+        proxy_read_timeout 60s;
+    }
+
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    location / {
+        add_header Cache-Control "no-cache";
+        try_files $uri $uri/ /index.html;
+    }
+
+    # 파드 자체 probe용 — API 상태와 무관하게 nginx가 떠 있는지만 본다
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+}

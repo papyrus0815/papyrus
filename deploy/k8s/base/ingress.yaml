@@ -1,0 +1,21 @@
+# 바깥 → web 하나로만. /api 분기는 web nginx가 맡는다.
+#
+# Ingress에서 /api를 직접 API로 보내지 않는 이유: API 라우트는 루트 직속(/persons, /events …)이라
+# 접두사를 벗겨야 하는데, 표준 Ingress에는 rewrite가 없어 컨트롤러 전용 어노테이션/CRD
+# (Traefik Middleware 등)에 묶인다. nginx에서 벗기면 컨트롤러를 바꿔도 이 파일은 그대로다.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: papyrus
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: papyrus-web
+                port:
+                  name: http

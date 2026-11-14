@@ -1,0 +1,25 @@
+# 로컬 학습용 k3s 클러스터 (server 1 + agent 1)
+#   k3d cluster create --config deploy/k3d/cluster.yaml
+#
+# k3s를 고른 이유: 카페24 같은 소형 VPS에 그대로 올릴 수 있는 배포판이라
+# 로컬에서 검증한 매니페스트가 운영 경로와 같다. Traefik(Ingress)·local-path(PVC)·
+# NetworkPolicy 컨트롤러가 내장이라 애드온 설치가 없다.
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: papyrus
+servers: 1
+agents: 1
+image: rancher/k3s:v1.35.5-k3s1
+ports:
+  # 호스트 8088 → k3d 로드밸런서 80 → Traefik. (8080은 docker-compose nginx가 쓰고 있다)
+  - port: 8088:80
+    nodeFilters:
+      - loadbalancer
+options:
+  k3d:
+    wait: true
+    timeout: 120s
+  kubeconfig:
+    updateDefaultKubeconfig: true
+    switchCurrentContext: true

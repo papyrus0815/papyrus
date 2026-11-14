@@ -1,0 +1,125 @@
+# MySQL 8.0 — 학습용 클러스터 내부 DB. 운영이라면 관리형 DB(RDS·Cloud SQL 등)로 빼고 이 파일은 지운다.
+# 레플리카 1 고정: StatefulSet이라도 MySQL 복제는 저절로 생기지 않는다.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-config
+data:
+  papyrus.cnf: |
+    [mysqld]
+    # 개발 DB와 같은 콜레이션. 0900_ai_ci(MySQL 8 기본)와 섞이면 조인에서 illegal mix of collations
+    character-set-server = utf8mb4
+    collation-server     = utf8mb4_unicode_ci
+    # 개발 DB와 같은 세션 타임존(docker-compose: --default-time-zone=+09:00)
+    default-time-zone    = +09:00
+    # 앱 드라이버(mariadb 커넥터)가 TLS 없이 붙으므로 개발과 같은 인증 플러그인
+    default-authentication-plugin = mysql_native_password
+    # 마이그레이션이 트리거 5개를 만든다. 바이너리 로그가 켜진 MySQL 8은 이게 없으면
+    # SUPER 없는 계정의 CREATE TRIGGER를 거부한다(ERROR 1419)
+    log_bin_trust_function_creators = 1
+    # 컨테이너 메모리 한도(1Gi) 안에 들어가도록
+    innodb_buffer_pool_size = 256M
+    max_connections = 100
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  labels:
+    app.kubernetes.io/name: mysql
+spec:
+  # headless — StatefulSet 파드에 안정된 DNS(mysql-0.mysql)를 준다
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: mysql
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: mysql
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+  labels:
+    app.kubernetes.io/name: mysql
+spec:
+  serviceName: mysql
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mysql
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mysql
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999 # 공식 이미지의 mysql 사용자
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: mysql
+          image: mysql:8.0.45
+          ports:
+            - name: mysql
+              containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: papyrus-secrets, key: MYSQL_ROOT_PASSWORD } }
+            - name: MYSQL_DATABASE
+              valueFrom: { secretKeyRef: { name: papyrus-secrets, key: MYSQL_DATABASE } }
+            - name: MYSQL_USER
+              valueFrom: { secretKeyRef: { name: papyrus-secrets, key: MYSQL_USER } }
+            - name: MYSQL_PASSWORD
+              valueFrom: { secretKeyRef: { name: papyrus-secrets, key: MYSQL_PASSWORD } }
+            - name: TZ
+              value: Asia/Seoul
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { memory: 1Gi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          # 비밀번호를 커맨드라인에 쓰지 않으려고 소켓 + MYSQL_PWD 환경변수로 확인
+          startupProbe:
+            exec:
+              command: ["sh", "-c", "MYSQL_PWD=\"$MYSQL_ROOT_PASSWORD\" mysqladmin ping -uroot --silent"]
+            periodSeconds: 5
+            failureThreshold: 60 # 첫 기동(데이터 디렉토리 초기화)은 1분 가까이 걸린다
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "MYSQL_PWD=\"$MYSQL_ROOT_PASSWORD\" mysql -uroot -e 'SELECT 1' >/dev/null"]
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "MYSQL_PWD=\"$MYSQL_ROOT_PASSWORD\" mysqladmin ping -uroot --silent"]
+            periodSeconds: 20
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+            - name: config
+              mountPath: /etc/mysql/conf.d
+              readOnly: true
+            - name: run
+              mountPath: /var/run/mysqld
+      volumes:
+        - name: config
+          configMap:
+            name: mysql-config
+        - name: run
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
