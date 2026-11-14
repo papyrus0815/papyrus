@@ -11,12 +11,12 @@
 import { useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiPlus, FiX } from 'react-icons/fi'
+import { FiArrowRight, FiPlus, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
 import * as eventDepartmentsApi from '@api/functional/events/departments'
-import { ledgerHairlineStrong, RADIUS } from '@/entities/event/ui/ledger-tokens'
+import { ledgerAccent, ledgerHairlineStrong, RADIUS } from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import {
   administrationDepartmentApi,
@@ -37,6 +37,7 @@ import { notify } from '@/shared/ui/toast'
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
 import { InlineText } from './inline'
+import { LoadError } from './load-error'
 
 type EventDepartment = Awaited<ReturnType<typeof eventDepartmentsApi.list>>[number]
 
@@ -123,7 +124,12 @@ export function DetailDepartments({
   const queryClient = useQueryClient()
   const queryKey = eventDepartmentsQueryKey(event.id)
 
-  const { data: relations = [] } = useQuery({
+  const {
+    data: relations = [],
+    isError,
+    isFetching,
+    refetch,
+  } = useQuery({
     queryKey,
     queryFn: () => eventDepartmentsApi.list(getApiConnection(), event.id),
     staleTime: 30_000,
@@ -135,11 +141,8 @@ export function DetailDepartments({
   const [draggingRelationId, setDraggingRelationId] = useState<string | null>(null)
   const [dragOverLane, setDragOverLane] = useState<'issuer' | 'recipient' | null>(null)
 
-  const shouldExpandEmpty =
-    expectDepartments ??
-    (event.type === 'POLICY' ||
-      event.type === 'INSTITUTION' ||
-      event.domain === 'STATE')
+  /* 비어 있어도 펼칠지는 페이지가 정한다(형식·분야 → expectDepartments). 예전 폴백은 없는 값('POLICY'·'STATE')과 견줘 죽은 조건이었다 */
+  const shouldExpandEmpty = expectDepartments ?? false
 
   const { data: allDepartments = [], isLoading: isLoadingDepartments } = useQuery({
     queryKey: ['administration-departments', 'event-link-candidates'],
@@ -162,8 +165,8 @@ export function DetailDepartments({
       sortName: department.name,
       value: `dept:${department.id}`,
       label: department.abbreviation
-        ? `🏛️ ${department.name} (${department.abbreviation})`
-        : `🏛️ ${department.name}`,
+        ? `${department.name} (${department.abbreviation})`
+        : department.name,
       description: [
         DEPARTMENT_KIND_LABEL[department.kind],
         department.historicalCountry?.name ?? department.country?.name,
@@ -177,8 +180,8 @@ export function DetailDepartments({
       sortName: unitItem.name,
       value: `unit:${unitItem.id}`,
       label: unitItem.abbreviation
-        ? `🛡️ ${unitItem.name} (${unitItem.abbreviation})`
-        : `🛡️ ${unitItem.name}`,
+        ? `${unitItem.name} (${unitItem.abbreviation})`
+        : unitItem.name,
       description: [
         unitItem.unitType
           ? militaryUnitTypeLabelKo(unitItem.unitType)
@@ -311,14 +314,36 @@ export function DetailDepartments({
     updateMutation.mutate({ relationId: targetRelation.id, role: nextRole })
   }
 
-  if (relations.length === 0 && !shouldExpandEmpty) {
+  /*
+   * 조회 실패 — '연결 없음'으로 그리지 않는다. 2026-11-14 실측: 서버가 500을 내는데 기관 4곳이 걸린
+   * 총통 지령 제21호가 빈 '기관·사령부 연결' 버튼으로 보였다(다시 연결하면 409·중복).
+   */
+  if (isError) {
     return (
-      <CollapsedStrip id="departments" aria-label="관련 국가 기관·사령부 빠른 연결">
-        <CollapsedStripText>
-          <strong>관련 기관 · 사령부</strong> · 지령·법령을 발령하거나 집행한 국가 기관(부처·최고사령부·참모본부·총독부)
-        </CollapsedStripText>
-        <ActionButton type="button" onClick={() => setPickerOpen(true)}>
-          <FiPlus size={14} /> 기관 · 사령부 연결
+      <S.Section id="departments">
+        <S.SectionHeader>
+          <S.SectionTitle>관련 국가 기관·사령부</S.SectionTitle>
+        </S.SectionHeader>
+        <LoadError
+          message="관련 기관·사령부를 불러오지 못했습니다."
+          onRetry={() => void refetch()}
+          retrying={isFetching}
+        />
+      </S.Section>
+    )
+  }
+
+  if (relations.length === 0 && !shouldExpandEmpty) {
+    /* 기록이 없으면 칸을 세우지 않는다 — 버튼 하나(참여 탭 끝 '더 이을 수 있는 것' 줄에 조직 버튼과 나란히) */
+    if (readOnly) return null
+    return (
+      <CollapsedStrip id="departments">
+        <ActionButton
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          title="지령·법령을 내리거나 집행한 국가 기관(부처·최고사령부·참모본부·총독부)을 잇습니다"
+        >
+          <FiPlus size={14} aria-hidden /> 국가 기관·사령부
         </ActionButton>
         <SelectModal
           isOpen={pickerOpen}
@@ -327,7 +352,7 @@ export function DetailDepartments({
           options={targetOptions}
           isLoading={isLoadingCandidates}
           searchable
-          searchPlaceholder="이름·원어명·약칭(OKW, 합참, 전쟁부)으로 검색..."
+          searchPlaceholder="이름·원어명·약칭으로 검색..."
           onSelect={(selectedKey) => {
             setPickerOpen(false)
             setPendingTargetKey(selectedKey)
@@ -352,7 +377,7 @@ export function DetailDepartments({
   return (
     <S.Section id="departments">
       <S.SectionHeader>
-        <S.SectionTitle>관련 기관 · 사령부</S.SectionTitle>
+        <S.SectionTitle>관련 국가 기관·사령부</S.SectionTitle>
         {relations.length > 0 && <S.SectionSubtitle>{relations.length}곳</S.SectionSubtitle>}
       </S.SectionHeader>
 
@@ -400,7 +425,6 @@ export function DetailDepartments({
                       }}
                     >
                       <span>
-                        {meta.isMilitary ? '🛡️ ' : ''}
                         {meta.abbreviation || meta.name}
                       </span>
                       <DepartmentFlowPillRole>
@@ -413,14 +437,18 @@ export function DetailDepartments({
             )}
           </DepartmentFlowLane>
 
-          <DepartmentFlowArrow aria-hidden>──▶</DepartmentFlowArrow>
+          <DepartmentFlowArrow aria-hidden>
+            <FiArrowRight size={14} />
+          </DepartmentFlowArrow>
 
           <DepartmentFlowCenter>
-            <DepartmentFlowCenterBadge>★ 사건</DepartmentFlowCenterBadge>
+            <DepartmentFlowCenterBadge>이 사건</DepartmentFlowCenterBadge>
             <DepartmentFlowCenterTitle>{event.title}</DepartmentFlowCenterTitle>
           </DepartmentFlowCenter>
 
-          <DepartmentFlowArrow aria-hidden>──▶</DepartmentFlowArrow>
+          <DepartmentFlowArrow aria-hidden>
+            <FiArrowRight size={14} />
+          </DepartmentFlowArrow>
 
           <DepartmentFlowLane
             data-dept-lane="recipient"
@@ -464,7 +492,6 @@ export function DetailDepartments({
                       }}
                     >
                       <span>
-                        {meta.isMilitary ? '🛡️ ' : ''}
                         {meta.abbreviation || meta.name}
                       </span>
                       <DepartmentFlowPillRole>
@@ -550,8 +577,8 @@ export function DetailDepartments({
         </Rows>
       ) : (
         <S.HelperText>
-          지령·명령·법령처럼 국가 기관이나 군 최고사령부가 내리거나 받은 사건이면 그 기관·사령부를 잇습니다 — 예: 총통 지령 제21호 ← OKW가
-          하달, OKH·OKL·OKM이 집행. 정당·기업·국제기구는 아래 &lsquo;관련 기업·조직&rsquo;에.
+          지령·명령·법령처럼 국가 기관이나 군 최고사령부가 내리거나 받은 사건이면 내린 곳과 받은 곳을 잇습니다. 정당·기업·국제기구는
+          아래 &lsquo;관련 기업·조직&rsquo;에.
         </S.HelperText>
       )}
 
@@ -570,7 +597,7 @@ export function DetailDepartments({
         options={targetOptions}
         isLoading={isLoadingCandidates}
         searchable
-        searchPlaceholder="이름·원어명·약칭(OKW, 합참, 전쟁부)으로 검색..."
+        searchPlaceholder="이름·원어명·약칭으로 검색..."
         onSelect={(selectedKey) => {
           setPickerOpen(false)
           setPendingTargetKey(selectedKey)
@@ -605,28 +632,9 @@ export function DetailDepartments({
 
 /* ───────────────────────── styles ───────────────────────── */
 
+/** 접힌 상태 — 버튼 하나만(바깥 줄이 조직 버튼과 나란히 세운다) */
 const CollapsedStrip = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 12px;
-  padding: 10px 14px;
-  margin-bottom: 16px;
-  border-radius: ${RADIUS.MD};
-  border: 1px dashed ${({ theme }) => theme.colors.border};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.015)' : 'rgba(15,23,42,0.015)'};
-`
-
-const CollapsedStripText = styled.span`
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-
-  strong {
-    font-weight: 700;
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
+  display: inline-flex;
 `
 
 const DepartmentFlowBoard = styled.div`
@@ -719,9 +727,7 @@ const DepartmentFlowArrow = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.primary};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
   user-select: none;
 
   @media (max-width: 640px) {
@@ -744,9 +750,9 @@ const DepartmentFlowCenter = styled.div`
 `
 
 const DepartmentFlowCenterBadge = styled.span`
-  font-size: 10px;
-  font-weight: 800;
-  color: ${({ theme }) => theme.colors.primary};
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
 `
 
 const DepartmentFlowCenterTitle = styled.span`

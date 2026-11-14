@@ -16,7 +16,7 @@ import { FiExternalLink, FiPlus, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
-import { ledgerHairlineStrong, RADIUS } from '@/entities/event/ui/ledger-tokens'
+import { ledgerAccent, ledgerHairlineStrong, RADIUS } from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { getApiConnection } from '@/shared/api/client'
 import { eventKeys } from '@/shared/api/event-query-keys'
@@ -38,6 +38,7 @@ import { OrganizationQuickCreateModal } from '@/widgets/organization/organizatio
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
 import { InlineSelect } from './inline'
+import { organizationActiveDuring } from './organization-era.lib'
 import { withSideColors } from './side-colors'
 import { ORGANIZATION_ROLE_OPTIONS as ROLE_OPTIONS } from '@/features/event-facets/model/organization-roles'
 
@@ -107,6 +108,12 @@ export function DetailOrganizations({
   const [showAllRecommendedOrgs, setShowAllRecommendedOrgs] = useState(false)
   const [dragRelationId, setDragRelationId] = useState<string | null>(null)
   const [dragOverSideKey, setDragOverSideKey] = useState<string | null>(null)
+  /**
+   * 기록이 없으면 칸을 세우지 않는다 — 버튼 하나로 접어 두고, 누르면 이 방문 동안 펼친다.
+   * 예전엔 조직이 걸린 사건이 19/665건인데 모든 사건의 참여 탭 끝에 제목·안내·검색칸·버튼 2개(180~330px)가 서 있었다.
+   */
+  const [opened, setOpened] = useState(false)
+  const collapsed = organizations.length === 0 && !expectOrganizations && !opened
 
   const defaultCountryId =
     (event.relatedCountries ?? [])[0]?.id ?? undefined
@@ -121,7 +128,10 @@ export function DetailOrganizations({
   const { data: allOrganizations = [], isLoading } = useQuery({
     queryKey: ['organizations', 'event-link-candidates'],
     queryFn: () => getOrganizations(getApiConnection()),
-    enabled: pickerOpen || hasParticipantCountries || orgSearchFocused || orgQuery.trim().length > 0,
+    /* 접혀 있을 땐 받지 않는다(추천 칩도 안 보인다) */
+    enabled:
+      !collapsed &&
+      (pickerOpen || hasParticipantCountries || orgSearchFocused || orgQuery.trim().length > 0),
     staleTime: 60_000,
   })
 
@@ -170,6 +180,8 @@ export function DetailOrganizations({
     return allOrganizations
       .filter((organization) => {
         if (linkedOrgIds.has(organization.id)) return false
+        /* 그 사건 때 있던 조직만 — 1차세계대전에 스페이스X를 권하지 않는다 */
+        if (!organizationActiveDuring(organization, event)) return false
         const countryMatch =
           organization.countryId &&
           participantCountrySideMap.has(`C:${organization.countryId}`)
@@ -179,7 +191,7 @@ export function DetailOrganizations({
         return Boolean(countryMatch || histMatch)
       })
       .slice(0, 8)
-  }, [allOrganizations, organizations, participantCountrySideMap])
+  }, [allOrganizations, organizations, participantCountrySideMap, event])
 
   const organizationOptions = allOrganizations
     .map((organization) => ({
@@ -305,7 +317,8 @@ export function DetailOrganizations({
           nextPersons.push({
             personId: pid,
             role: member.roleTitle ?? relation.name,
-            ...(relation.sideId ? { sideId: relation.sideId } : {}),
+            note: undefined,
+            sideId: relation.sideId ?? undefined,
           })
           addedCount += 1
         }
@@ -337,10 +350,25 @@ export function DetailOrganizations({
     if (ok) removeMutation.mutate(relation.relationId)
   }
 
+  if (collapsed) {
+    return (
+      <CollapsedStrip id="organizations">
+        <ActionButton
+          type="button"
+          onClick={() => setOpened(true)}
+          title="정당·기업·국제기구처럼 이 사건에 관여한 조직을 잇습니다"
+        >
+          <FiPlus size={14} aria-hidden /> 기업·조직
+        </ActionButton>
+      </CollapsedStrip>
+    )
+  }
+
   return (
     <S.Section id="organizations">
       <S.SectionHeader>
-        <S.SectionTitle>관련 기관·조직·기업</S.SectionTitle>
+        {/* 국가 기관(부처·사령부)은 위 '관련 국가 기관·사령부' — 두 칸 이름이 거의 같아('관련 기관·사령부' / '관련 기관·조직·기업') 헷갈렸다 */}
+        <S.SectionTitle>관련 기업·조직</S.SectionTitle>
         {organizations.length > 1 && <S.SectionSubtitle>{organizations.length}곳</S.SectionSubtitle>}
       </S.SectionHeader>
 
@@ -436,7 +464,7 @@ export function DetailOrganizations({
         <S.HelperText>
           {expectOrganizations
             ? '상장·설립·인수처럼 기업·기관이 주체인 사건이면 연결하세요. 기업이면 최신 시가총액이 함께 보입니다.'
-            : '공안위원회·의회 같은 권력기구나 사건에 관여한 기관·조직·기업을 연결할 수 있습니다.'}
+            : '이 사건에 관여한 정당·기업·국제기구 같은 조직을 연결할 수 있습니다.'}
         </S.HelperText>
       )}
 
@@ -532,10 +560,10 @@ export function DetailOrganizations({
 
       <Actions>
         <ActionButton type="button" onClick={() => setPickerOpen(true)}>
-          <FiPlus size={14} /> 기관·조직 연결
+          <FiPlus size={14} /> 기업·조직 연결
         </ActionButton>
         <ActionButton type="button" onClick={() => setCreatingOrgOpen(true)}>
-          <FiPlus size={14} /> 새 기관·조직 등록
+          <FiPlus size={14} /> 새 기업·조직 등록
         </ActionButton>
       </Actions>
 
@@ -557,10 +585,11 @@ export function DetailOrganizations({
         <OrganizationQuickCreateModal
           defaultCountryId={defaultCountryId}
           defaultHistoricalCountryId={defaultHistoricalCountryId}
-          candidatePersons={(event.persons ?? []).map((person) => ({
-            id: person.id,
-            name: [person.name, person.surname].filter(Boolean).join(' '),
-            role: person.role ?? undefined,
+          /* 사건의 참여 인물(relatedPersons) — 예전엔 없는 필드(event.persons)를 읽어 추천이 늘 비었다 */
+          candidatePersons={(event.relatedPersons ?? []).map((related) => ({
+            id: related.personId,
+            name: [related.person?.name, related.person?.surname].filter(Boolean).join(' '),
+            role: related.role ?? undefined,
           }))}
           onClose={() => setCreatingOrgOpen(false)}
           onCreated={(created) => {
@@ -665,7 +694,7 @@ function OrganizationRow({
               title={`${relation.name} 소속 인물(위원·역할)을 사건 참여 인물로 불러오기`}
               onClick={onImportMembers}
             >
-              👥 소속 인물 불러오기
+              소속 인물 불러오기
             </ImportMembersBtn>
           )}
         </NameLine>
@@ -786,6 +815,11 @@ const Meta = styled.div`
   font-size: 13px;
   font-variant-numeric: tabular-nums;
   color: ${metaText};
+`
+
+/** 접힌 상태 — 버튼 하나만(바깥 줄이 국가 기관 버튼과 나란히 세운다) */
+const CollapsedStrip = styled.div`
+  display: inline-flex;
 `
 
 const Actions = styled.div`
@@ -988,7 +1022,8 @@ const RecommendChipPlus = styled.span`
   margin-left: 2px;
   font-size: 11px;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors.accent};
+  /* theme.colors.accent는 이 면에서 2.4:1 — 강조색은 ledgerAccent */
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
 `
 
 const RecommendMoreBtn = styled.button`

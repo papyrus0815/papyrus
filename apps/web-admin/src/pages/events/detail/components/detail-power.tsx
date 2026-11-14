@@ -18,7 +18,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/rea
 import { FiPlus, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { ledgerHairlineStrong, RADIUS } from '@/entities/event/ui/ledger-tokens'
+import { ledgerAccent, ledgerHairlineStrong, RADIUS } from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import {
   type ElectionDetailDto,
@@ -329,7 +329,7 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
                     setAccessionMutation.mutate({ record: candidate, eventId: event.id })
                   }
                 >
-                  <span>{candidate.isMonarchical ? '♛' : '⚡'}</span>
+                  <CandidateChipSub>{candidate.isMonarchical ? '즉위' : '취임'}</CandidateChipSub>
                   <strong>{candidate.regnalName ?? candidate.personName}</strong>
                   {candidate.title && <span>· {candidate.title}</span>}
                   {span && <CandidateChipSub>({span})</CandidateChipSub>}
@@ -367,7 +367,7 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
                 disabled={setElectionMutation.isPending}
                 onClick={() => void pickElection(electionCandidate.id)}
               >
-                <span>🗳️</span>
+                <CandidateChipSub>선거</CandidateChipSub>
                 <strong>{electionCandidate.name}</strong>
                 {electionCandidate.pollDate && (
                   <CandidateChipSub>({electionCandidate.pollDate.slice(0, 10)})</CandidateChipSub>
@@ -491,7 +491,7 @@ function AccessionRow({
           </HandoverSlot>
           <HandoverBridge aria-hidden>
             <HandoverEventBadge>
-              {record.isMonarchical ? '♛ 즉위' : '⚡ 취임'}
+              {record.isMonarchical ? '즉위' : '취임'}
             </HandoverEventBadge>
             <Arrow>──▶</Arrow>
             {record.countryName && (
@@ -869,7 +869,8 @@ const CandidateChipPlus = styled.span`
   margin-left: 2px;
   font-size: 11px;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors.accent};
+  /* theme.colors.accent는 이 면에서 2.4:1 — 강조색은 ledgerAccent */
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
 `
 
 const CandidateMoreBtn = styled.button`

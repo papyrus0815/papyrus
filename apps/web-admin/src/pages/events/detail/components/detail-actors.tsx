@@ -1,7 +1,7 @@
 import { type DragEvent, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
-import { FiSettings } from 'react-icons/fi'
+import { FiSettings, FiUsers } from 'react-icons/fi'
 
 import { getAllCountries } from '@/shared/api/countries'
 import { type UpdateEventDto } from '@/shared/api/events'
@@ -739,7 +739,9 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
         {!hasAnything && (
           <S.EmptyState>
             <S.EmptyStateHead>
-              <S.EmptyStateIcon aria-hidden>👥</S.EmptyStateIcon>
+              <S.EmptyStateIcon aria-hidden>
+                <FiUsers />
+              </S.EmptyStateIcon>
               <S.EmptyStateLine>
                 아직 등록된 인물·국가가 없습니다. <strong>인물 추가</strong>·
                 <strong>국가 추가</strong>로 시작하세요.
