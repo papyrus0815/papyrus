@@ -500,6 +500,10 @@ const ColumnHead = styled.div<{ $color: string | null }>`
     font-variant-numeric: tabular-nums;
     color: ${({ theme }) => theme.colors.text.tertiary};
   }
+
+  @media (max-width: 639px) {
+    padding: 5px 10px;
+  }
 `
 
 const Dot = styled.span`
@@ -557,6 +561,17 @@ const Card = styled(Link)`
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.primary};
     outline-offset: 1px;
+  }
+
+  /*
+   * 휴대폰 폭 — 카드를 낮춘다. 히어로의 참여국 카드가 190px을 먹어 본문(탭)이 첫 화면 끝으로 밀렸다
+   * (2026-11-14 실측: 독소전쟁 390px에서 탭 y=758/844). 당시 수장 줄은 여기서 빼고(아래 '당시 수장 비교' 링크와
+   * 참여 탭에 있다) 이름·배역만 남긴다.
+   */
+  @media (max-width: 639px) {
+    gap: 3px;
+    padding: 7px 10px;
+    border-radius: 10px;
   }
 `
 
@@ -633,6 +648,11 @@ const HeadsLine = styled.span`
   .arrow {
     color: ${metaText};
   }
+
+  /* 휴대폰 폭에선 뺀다(Card 주석) */
+  @media (max-width: 639px) {
+    display: none;
+  }
 `
 
 const VisuallyHidden = styled.span`
@@ -706,5 +726,11 @@ const MoreCard = styled.a`
   svg {
     width: 14px;
     height: 14px;
+  }
+
+  @media (max-width: 639px) {
+    min-height: 30px;
+    padding: 4px 10px;
+    border-radius: 10px;
   }
 `
