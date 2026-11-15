@@ -12,6 +12,7 @@ import { useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiArrowRight, FiPlus, FiX } from 'react-icons/fi'
+import { MdDragIndicator } from 'react-icons/md'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -525,7 +526,7 @@ export function DetailDepartments({
               >
                 <Body>
                   <NameLine>
-                    {!readOnly && <DragGrip aria-hidden title="드래그하여 위 역할 보드로 이동">⠿</DragGrip>}
+                    {!readOnly && <DragGrip aria-hidden title="드래그하여 위 역할 보드로 이동"><MdDragIndicator /></DragGrip>}
                     <DomainTag $military={meta.isMilitary}>
                       {meta.isMilitary ? '군사' : '행정'}
                     </DomainTag>
@@ -766,7 +767,9 @@ const DepartmentFlowCenterTitle = styled.span`
 `
 
 const DragGrip = styled.span`
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 14px;
   color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: grab;
   user-select: none;

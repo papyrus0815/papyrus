@@ -10,6 +10,7 @@
  */
 import { type DragEvent, useState } from 'react'
 
+import { MdDragIndicator } from 'react-icons/md'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -382,7 +383,10 @@ export function DetailWarDeclaration({
                   setDragOverRole(null)
                 }}
               >
-                <span>⠿ {participant.name}</span>
+                <DragName>
+                  <MdDragIndicator aria-hidden />
+                  {participant.name}
+                </DragName>
                 <QuickAssignBtn
                   type="button"
                   $initiator
@@ -663,6 +667,18 @@ const QuickAssignLabel = styled.span`
   font-size: 11.5px;
   font-weight: 700;
   color: ${metaText};
+`
+
+/** 끌 수 있는 이름 — 손잡이 아이콘 + 이름 */
+const DragName = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+
+  svg {
+    flex: none;
+    color: ${metaText};
+  }
 `
 
 const QuickAssignChip = styled.span`

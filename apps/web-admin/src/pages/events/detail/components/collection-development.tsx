@@ -11,6 +11,7 @@ import {
   FiLink2,
   FiPlus,
 } from 'react-icons/fi'
+import { FaCrown, FaLandmark } from 'react-icons/fa'
 import { flushSync } from 'react-dom'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
@@ -1115,7 +1116,8 @@ export function CollectionDevelopment({
       aria-label={`${marker.countries.join('·')} ${marker.name} ${marker.verb}`}
     >
       <AccessionNode aria-hidden $verb={marker.verb}>
-        {marker.verb === '즉위' ? '♛' : '★'}
+        {/* 목록 지면의 즉위·취임 표지와 같은 아이콘 — 글리프(♛·★)는 글꼴마다 모양·크기가 달랐다 */}
+        {marker.verb === '즉위' ? <FaCrown /> : <FaLandmark />}
       </AccessionNode>
       <AccessionBody>
         <AccessionDate>

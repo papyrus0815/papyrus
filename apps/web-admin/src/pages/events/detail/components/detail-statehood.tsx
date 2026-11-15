@@ -15,6 +15,7 @@
 import { type DragEvent, useState } from 'react'
 
 import { useQueries } from '@tanstack/react-query'
+import { MdDragIndicator } from 'react-icons/md'
 import styled from 'styled-components'
 
 import { ledgerAccent, ledgerAccentSubtle, ledgerHairlineStrong, RADIUS } from '@/entities/event/ui/ledger-tokens'
@@ -355,7 +356,10 @@ export function DetailStatehood({
                     setDragOverRole(null)
                   }}
                 >
-                  <span>⠿ {participant.name}</span>
+                  <DragName>
+                    <MdDragIndicator aria-hidden />
+                    {participant.name}
+                  </DragName>
                   <QuickAssignBtn
                     type="button"
                     $founded
@@ -905,6 +909,18 @@ const QuickAssignLabel = styled.span`
   font-size: 11.5px;
   font-weight: 700;
   color: ${metaText};
+`
+
+/** 끌 수 있는 이름 — 손잡이 아이콘 + 이름 */
+const DragName = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+
+  svg {
+    flex: none;
+    color: ${metaText};
+  }
 `
 
 const QuickAssignChip = styled.span`

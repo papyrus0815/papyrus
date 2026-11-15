@@ -1,6 +1,6 @@
 import { type DragEvent, type ReactNode, useState } from 'react'
 
-import { FiArrowDown, FiArrowUp, FiEdit2, FiX } from 'react-icons/fi'
+import { FiAlertTriangle, FiArrowDown, FiArrowUp, FiEdit2, FiX } from 'react-icons/fi'
 
 import { EVENT_COUNTRY_ROLE_OPTIONS, type EventCountryRole } from '@/entities/event/model'
 import { formatObservationExact, formatObservationValue } from '@/entities/evidence/lib/format-observation'
@@ -126,7 +126,8 @@ export function ActorCountryRow({
           </NameLink>
           {row.existenceWarning && (
             <MismatchNote role="note" title="막지는 않습니다 — 날짜나 연결을 한번 확인해 보세요">
-              ⚠ {row.existenceWarning}
+              <FiAlertTriangle aria-hidden size={11} />
+              {row.existenceWarning}
             </MismatchNote>
           )}
           <CountryRolePicker>

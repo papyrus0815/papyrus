@@ -1,6 +1,6 @@
 import { type DragEvent, useState } from 'react'
 
-import { FiArrowDown, FiArrowUp, FiEdit2, FiX } from 'react-icons/fi'
+import { FiAlertTriangle, FiArrowDown, FiArrowUp, FiEdit2, FiX } from 'react-icons/fi'
 
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { renderEmphasis } from '@/shared/lib/emphasis-markup'
@@ -164,7 +164,8 @@ export function ActorPersonRow({
             )}
             {entry.lifespanWarning && (
               <MismatchNote role="note" title="막지는 않습니다 — 날짜나 연결을 한번 확인해 보세요">
-                ⚠ {entry.lifespanWarning}
+                <FiAlertTriangle aria-hidden size={11} />
+              {entry.lifespanWarning}
               </MismatchNote>
             )}
           </PersonMetaLine>
