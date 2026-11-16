@@ -34,7 +34,7 @@ import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palett
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { CountryPicker } from '@/shared/ui/country-picker'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
-import { PersonSelectField } from '@/shared/ui/form-fields/person-select-field'
+import { PersonPickerButton } from '@/shared/ui/person-picker'
 import {
   DateFieldBtn,
   DateFieldsRow,
@@ -74,11 +74,30 @@ export interface TreatyLinkModalProps {
   countryId?: string | null
   historicalCountryId?: string | null
   cabinets: any[]
-  allPersons: PersonResponseDto[]
+  allPersons?: PersonResponseDto[]
   currentTreaties: TreatyDto[]
   isDark: boolean
   onClose: () => void
   onLinked: () => Promise<void>
+}
+
+function normalizeIsoDateOnly(raw?: string | null): string {
+  if (!raw?.trim()) return ''
+  const parts = parseIsoDateParts(raw)
+  if (!parts) return raw.trim()
+  const pad2 = (num: number) => String(num).padStart(2, '0')
+  const yearStr =
+    parts.year < 0
+      ? `-${String(-parts.year).padStart(4, '0')}`
+      : String(parts.year).padStart(4, '0')
+  return `${yearStr}-${pad2(parts.month)}-${pad2(parts.day)}`
+}
+
+function formatIsoYearShort(raw?: string | null): string {
+  if (!raw?.trim()) return '—'
+  const parts = parseIsoDateParts(raw)
+  if (!parts) return raw.trim().slice(0, 4) || '—'
+  return parts.year < 0 ? `BC ${-parts.year}` : String(parts.year)
 }
 
 export function TreatyLinkModal({
@@ -112,6 +131,7 @@ export function TreatyLinkModal({
     countryLabel: string
     cabinetId: string | null
     personId: string | null
+    personLabel?: string
     /** 행정부 관직 정의 (선택) */
     positionDefinitionId: string | null
     /** 직책 직접 입력 (선택, 마스터와 병행 가능) */
@@ -123,26 +143,30 @@ export function TreatyLinkModal({
     note: string
   }
 
-  const makeSignatoryRow = React.useCallback((): DraftSignatoryRow => {
-    const id =
-      typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `sr-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-    return {
-      id,
-      countryId: countryId ?? null,
-      historicalCountryId: historicalCountryId ?? null,
-      countryLabel: country.name,
-      cabinetId,
-      personId: null,
-      positionDefinitionId: null,
-      role: '',
-      positionInputMode: 'definition',
-      participationType: 'SIGNATORY',
-      signedAt: '',
-      note: '',
-    }
-  }, [cabinetId, country.name, countryId, historicalCountryId])
+  const makeSignatoryRow = React.useCallback(
+    (isPrimary = true): DraftSignatoryRow => {
+      const id =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `sr-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+      return {
+        id,
+        countryId: isPrimary ? (countryId ?? null) : null,
+        historicalCountryId: isPrimary ? (historicalCountryId ?? null) : null,
+        countryLabel: isPrimary ? country.name : '',
+        cabinetId: isPrimary ? cabinetId : null,
+        personId: null,
+        personLabel: '',
+        positionDefinitionId: null,
+        role: '',
+        positionInputMode: 'definition',
+        participationType: 'SIGNATORY',
+        signedAt: '',
+        note: '',
+      }
+    },
+    [cabinetId, country.name, countryId, historicalCountryId],
+  )
 
   const [tab, setTab] = React.useState<'link' | 'new'>('new')
   const [newSubTab, setNewSubTab] = React.useState<
@@ -150,9 +174,6 @@ export function TreatyLinkModal({
   >('basic')
   const [datePickerContext, setDatePickerContext] =
     React.useState<DatePickerCtx>(null)
-  const [personPickerRowIndex, setPersonPickerRowIndex] = React.useState<
-    number | null
-  >(null)
   const [countryPickerRowIndex, setCountryPickerRowIndex] = React.useState<
     number | null
   >(null)
@@ -243,10 +264,9 @@ export function TreatyLinkModal({
       if (rows.length === 0) return [makeSignatoryRow()]
       const [first, ...rest] = rows
       if (tab === 'link') return rows
-      const matchesContext =
-        country.type === 'modern'
-          ? first.countryId === countryId && !first.historicalCountryId
-          : first.historicalCountryId === historicalCountryId
+      const matchesContext = historicalCountryId
+        ? first.historicalCountryId === historicalCountryId
+        : first.countryId === countryId && !first.historicalCountryId
       if (matchesContext && first.cabinetId !== cabinetId) {
         return [{ ...first, cabinetId }, ...rest]
       }
@@ -301,15 +321,28 @@ export function TreatyLinkModal({
     return `${year} ${parts.month}월 ${parts.day}일`
   }
 
-  /** 기존 조약 연결: 국가 필터로만 불러오면 서명국이 다른 국가만 있는 조약이 전부 빠져 목록이 비어 보임 → 전체 조회 후 검색으로 좁힘 */
+  /** 기존 조약 연결: 서버 검색 + 충분한 페이지 크기로 조회 */
   React.useEffect(() => {
+    let cancelled = false
     setLoading(true)
     treatyApi
-      .getAll({})
-      .then((r) => setAllTreaties(r.items))
-      .catch(() => setAllTreaties([]))
-      .finally(() => setLoading(false))
-  }, [])
+      .getAll({
+        search: debouncedSearchQ.trim() || undefined,
+        take: 200,
+      })
+      .then((res) => {
+        if (!cancelled) setAllTreaties(res.items)
+      })
+      .catch(() => {
+        if (!cancelled) setAllTreaties([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [debouncedSearchQ])
 
   const linkedIds = new Set(currentTreaties.map((t) => t.id))
   const filtered = allTreaties
@@ -335,13 +368,16 @@ export function TreatyLinkModal({
       role = roleTrim
       positionDefinitionId = null
     }
+    const matchesCurrentContext = historicalCountryId
+      ? row.historicalCountryId === historicalCountryId
+      : row.countryId === countryId && !row.historicalCountryId
     return {
       personId: row.personId || null,
-      cabinetId: row.cabinetId || null,
+      cabinetId: matchesCurrentContext ? row.cabinetId || null : null,
       positionDefinitionId,
       role,
       participationType: row.participationType,
-      signedAt: row.signedAt || null,
+      signedAt: row.signedAt ? normalizeIsoDateOnly(row.signedAt) : null,
       note: row.note.trim() || null,
     }
   }
@@ -530,31 +566,31 @@ export function TreatyLinkModal({
       : '국가별 서명일 선택'
 
   const applyPickerDate = (iso: string) => {
-    const d = iso.slice(0, 10)
+    const normalizedDate = normalizeIsoDateOnly(iso)
     if (!datePickerContext) return
     if (datePickerContext.kind === 'treaty') {
       switch (datePickerContext.field) {
         case 'signDate':
-          setSignDate(d)
+          setSignDate(normalizedDate)
           break
         case 'effectiveDate':
-          setEffectiveDate(d)
+          setEffectiveDate(normalizedDate)
           break
         case 'expiryDate':
-          setExpiryDate(d)
+          setExpiryDate(normalizedDate)
           break
         case 'violationDate':
-          setViolationDate(d)
+          setViolationDate(normalizedDate)
           break
         default:
           break
       }
     } else {
-      const i = datePickerContext.rowIndex
+      const rowIdx = datePickerContext.rowIndex
       setSignatoryRows((rows) => {
         const next = [...rows]
-        const cur = next[i]
-        if (cur) next[i] = { ...cur, signedAt: d }
+        const cur = next[rowIdx]
+        if (cur) next[rowIdx] = { ...cur, signedAt: normalizedDate }
         return next
       })
     }
@@ -636,11 +672,15 @@ export function TreatyLinkModal({
 
       {signatoryRows.map((row, rowIndex) => {
         const selectedPerson =
-          row.personId != null
+          row.personId != null && allPersons && allPersons.length > 0
             ? (allPersons.find((p) => p.id === row.personId) ?? null)
             : null
+        const resolvedPersonLabel =
+          row.personLabel?.trim() ||
+          (selectedPerson ? getPersonName(selectedPerson) : null)
         const showCabinetList = isRowCurrentContextCountry(row)
         const isLinkSingle = tab === 'link'
+        const rowCountryScopeId = row.historicalCountryId ?? row.countryId ?? null
         return (
           <CabS.SignatoryRowCard key={row.id}>
             <CabS.SignatoryRowHead>
@@ -738,19 +778,35 @@ export function TreatyLinkModal({
               </FieldControl>
             </FieldRow>
 
-            <PersonSelectField
-              label="서명·대표 인물"
-              hint="해당 국가 기준 서명·대표 인물."
-              value={row.personId ?? ''}
-              selectedPerson={selectedPerson}
-              persons={allPersons}
-              isModalOpen={personPickerRowIndex === rowIndex}
-              onModalOpenChange={(open) =>
-                setPersonPickerRowIndex(open ? rowIndex : null)
-              }
-              onSelect={(id) => updateRow(rowIndex, { personId: id || null })}
-              placeholder="인물 선택"
-            />
+            <FieldRow>
+              <FieldLabel>서명·대표 인물</FieldLabel>
+              <FieldControl>
+                <PersonPickerButton
+                  value={row.personId}
+                  selectedLabel={resolvedPersonLabel}
+                  label="서명·대표 인물"
+                  title="서명·대표 인물 선택"
+                  placeholder="인물 선택"
+                  context={
+                    rowCountryScopeId
+                      ? {
+                          countryIds: [rowCountryScopeId],
+                          label: row.countryLabel
+                            ? `${row.countryLabel} 관련 인물`
+                            : undefined,
+                        }
+                      : undefined
+                  }
+                  onChange={(nextId, nextName) =>
+                    updateRow(rowIndex, {
+                      personId: nextId || null,
+                      personLabel: nextName || '',
+                    })
+                  }
+                />
+                <FieldHint>해당 국가 기준 서명·대표 인물.</FieldHint>
+              </FieldControl>
+            </FieldRow>
 
             <FieldRow>
               <FieldLabel>서명 대표 직위</FieldLabel>
@@ -904,7 +960,7 @@ export function TreatyLinkModal({
           <SubmitButton
             type="button"
             onClick={() =>
-              setSignatoryRows((rows) => [...rows, makeSignatoryRow()])
+              setSignatoryRows((rows) => [...rows, makeSignatoryRow(false)])
             }
             style={{
               background: 'transparent',
@@ -1430,6 +1486,9 @@ export function TreatyLinkModal({
                               base.countryLabel,
                             cabinetId: sig.cabinetId ?? cabinetId,
                             personId: sig.personId ?? null,
+                            personLabel: sig.person
+                              ? getPersonName(sig.person)
+                              : '',
                             positionDefinitionId:
                               sig.positionDefinitionId ?? null,
                             role: sig.role ?? '',
@@ -1440,9 +1499,7 @@ export function TreatyLinkModal({
                                 : 'definition',
                             participationType: sig.participationType,
                             signedAt: sig.signedAt
-                              ? new Date(sig.signedAt)
-                                  .toISOString()
-                                  .slice(0, 10)
+                              ? normalizeIsoDateOnly(sig.signedAt)
                               : '',
                             note: sig.note ?? '',
                           },
@@ -1484,9 +1541,7 @@ export function TreatyLinkModal({
                         ) : null}
                       </div>
                       <span style={{ fontSize: 12, color: '#94a3b8' }}>
-                        {treaty.signDate
-                          ? new Date(treaty.signDate).getUTCFullYear()
-                          : '—'}
+                        {formatIsoYearShort(treaty.signDate)}
                       </span>
                     </CabS.TreatyListRow>
                   ))}
@@ -1539,13 +1594,23 @@ export function TreatyLinkModal({
           historicalCountries={
             treatyHistoricalCountries as HistoricalCountryResponseDto[]
           }
-          onSelect={(c) => {
+          onSelect={(pickedCountry) => {
+            const nextCountryId = pickedCountry.isHistorical
+              ? null
+              : pickedCountry.id
+            const nextHistoricalId = pickedCountry.isHistorical
+              ? pickedCountry.id
+              : null
+            const matchesCurrentContext =
+              country.type === 'modern'
+                ? nextCountryId === countryId && !nextHistoricalId
+                : nextHistoricalId === historicalCountryId && !nextCountryId
             updateRow(countryPickerRowIndex, {
-              countryId: c.isHistorical ? null : c.id,
-              historicalCountryId: c.isHistorical ? c.id : null,
-              countryLabel: c.name,
-              /** 행정부 상세 모달: 국가만 바꿔도 이 행정부 연결은 유지 (null이면 새로고침 후 목록에서 사라짐) */
-              cabinetId,
+              countryId: nextCountryId,
+              historicalCountryId: nextHistoricalId,
+              countryLabel: pickedCountry.name,
+              /** 현재 내각과 동일한 국가·정체일 때만 현재 내각 ID 유지, 타국 선택 시 반드시 null로 초기화(외국 서명행 내각 오염 방지) */
+              cabinetId: matchesCurrentContext ? cabinetId : null,
             })
             setCountryPickerRowIndex(null)
           }}

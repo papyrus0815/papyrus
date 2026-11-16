@@ -334,11 +334,17 @@ export function PoliticalSystemPanel({
     setHeadRegisterTarget(null)
   }
 
+  const isModernScope = Boolean(countryId) && !historicalCountryId
   const systems = useMemo(
     () => [...(query.data ?? [])].sort(comparePoliticalSystems),
     [query.data],
   )
-  const current = useMemo(() => resolveCurrentSystem(systems), [systems])
+  const current = useMemo(
+    () => resolveCurrentSystem(systems, { preferModernDirect: isModernScope }),
+    [systems, isModernScope],
+  )
+  const isBridgedHistoricalPolity =
+    isModernScope && Boolean(current?.historicalCountryId)
   const pastSystems = useMemo(
     () =>
       [...systems]
@@ -458,17 +464,26 @@ export function PoliticalSystemPanel({
         <PolityStack>
           <S.SectionHeadlineStrip>
             <S.SectionHeadlineCell>
-              <S.SectionHeadlineLabel>현행 · 대표 정부 형태</S.SectionHeadlineLabel>
+              <S.SectionHeadlineLabel>
+                {isBridgedHistoricalPolity
+                  ? '전신 국가 기록 체제 (현행 미등록)'
+                  : '현행 · 대표 정부 형태'}
+              </S.SectionHeadlineLabel>
               <S.SectionHeadlineValue>
                 {current.governmentForm
                   ? GOVERNMENT_FORM_LABEL[current.governmentForm]
                   : summarize(current)}
-                {current.isCurrent && (
+                {current.isCurrent && !isBridgedHistoricalPolity && (
                   <S.SectionHeadlineUnit>현행</S.SectionHeadlineUnit>
                 )}
               </S.SectionHeadlineValue>
               <S.SectionHeadlineSub>
                 {[
+                  (
+                    current as PoliticalSystem & {
+                      historicalCountry?: { name?: string | null } | null
+                    }
+                  ).historicalCountry?.name,
                   current.name,
                   formatPeriod(current),
                   pastSystems.length > 0
@@ -745,7 +760,13 @@ export function PoliticalSystemPanel({
           loading={personsQuery.isLoading}
           title={`${headRegisterTarget.positionTitle} 등록 — 인물 선택`}
           searchPlaceholder="등록할 수장 인물을 검색..."
+          allowCreate
           defaultCountryId={countryId}
+          defaultHistoricalCountryId={
+            headRegisterTarget.historicalCountryId ??
+            historicalCountryId ??
+            undefined
+          }
           onSelect={(personId) => {
             setRegisterPersonId(personId)
             setPickerOpen(false)

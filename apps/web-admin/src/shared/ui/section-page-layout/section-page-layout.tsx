@@ -1,156 +1,87 @@
 /**
- * 섹션 페이지 공용 레이아웃
+ * 섹션 페이지 공용 레이아웃 (Event Ledger Flat Design)
  *
- * dynasty / ethnicity / events-timeline 등의 공통 구조를 추출한 컴포넌트 모음.
- * - SectionPageRoot     : motion.div 래퍼 (gap/padding/minHeight)
- * - SectionPageHeader   : h2 + 설명 + 우측 버튼 헤더
- * - SectionKpiPanel     : KPI 카운트 패널 (탭 아래)
- * - SectionEmptyState   : 빈 상태 (radial orb + 텍스트)
- * - SectionFormCard     : 등록/수정 폼 카드 래퍼
- * - SectionAddButton    : "+ 새 항목 추가" 버튼
- * - SectionErrorBox     : 폼 에러 메시지 박스
- * - SectionBackButton   : 폼 ← 목록으로 버튼
- * - SectionSaveButton   : 폼 저장/등록 버튼
+ * 사건 페이지(`entities/event/ui/ledger-tokens.ts` · `pages/events/styles/theme.ts`)의
+ * 평면 원장(Flat Ledger) 디자인 언어를 따른다:
+ * - SectionRoot       : 모든 하위 탭이 공유하는 표준 캔버스 패딩·배경
+ * - SectionTabHeader  : 글라스/보라 오브 없이 1px 잉크 헤어라인으로 마감되는 편집형 섹션 헤더
+ * - SectionKpiPanel   : 평면 1px 보더 + tabular-nums KPI 요약 바
+ * - SectionEmptyState : 블러 오브 없는 정갈한 점선 빈 상태
+ * - SectionFormCard   : 그림자 없는 10px(RADIUS.MD) 등록/수정 폼 카드
+ * - AddButton         : 34px 인디고 플랫 주 CTA 버튼
  */
 import React from 'react'
 
 import { motion } from 'framer-motion'
-import styled, { css, useTheme } from 'styled-components'
+import { FiArrowLeft, FiPlus } from 'react-icons/fi'
+import styled from 'styled-components'
 
 import {
-  emptyCardMixin,
-  kpiPanelMixin,
-  scrollbarMixin,
-} from '@/shared/styles/mixins'
+  DIGIT_DISPLAY,
+  MOTION,
+  RADIUS,
+  ledgerAccent,
+  ledgerAccentHover,
+  ledgerBackground,
+  ledgerHairlineHover,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  ledgerInkLine,
+  ledgerSubtleFill,
+} from '@/entities/event/ui/ledger-tokens'
+import { metaText, toolbarControlHeight } from '@/pages/events/styles/theme'
+import { scrollbarMixin } from '@/shared/styles/mixins'
 
 // ─── Styled Components ────────────────────────────────────────────────────────
 
 export const SectionRoot = styled(motion.div)`
   display: flex;
   flex-direction: column;
-  gap: 32px;
-  padding: 36px 32px 48px;
+  gap: 20px;
+  padding: 20px clamp(20px, 2.5vw, 32px) 48px;
   position: relative;
   min-height: calc(100vh - 200px);
-  background: ${({ theme }) => theme.colors.background.primary};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  box-sizing: border-box;
+
+  @media (max-width: 768px) {
+    padding: 14px 16px 36px;
+    gap: 16px;
+  }
 `
 
-// ─── SectionTabHeader (hero / flat / plain: 배경 없음) ─
+// ─── SectionTabHeader (모든 variant를 사건 페이지형 플랫 편집 헤더로 통일) ───
 
 const TabHeaderOuter = styled.header<{
   $variant: 'hero' | 'flat' | 'plain'
 }>`
-  border-radius: 20px;
   position: relative;
-
-  ${({ $variant, theme }) =>
-    $variant === 'plain'
-      ? css`
-          padding: 0 0 20px;
-          margin-bottom: 4px;
-          border-radius: 0;
-          border-bottom: 1px solid ${theme.colors.border.light};
-        `
-      : css`
-          padding: 28px 32px;
-        `}
+  padding: 0 0 16px;
+  margin: 0;
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid ${({ theme }) => ledgerInkLine(theme.mode)};
+  box-shadow: none;
 
   @media (max-width: 768px) {
-    ${({ $variant, theme }) =>
-      $variant === 'plain'
-        ? css`
-            padding: 0 0 16px;
-            margin-bottom: 2px;
-            border-radius: 0;
-            border-bottom: 1px solid ${theme.colors.border.light};
-          `
-        : css`
-            padding: 20px 22px;
-            border-radius: 16px;
-          `}
-  }
-
-  ${({ theme, $variant }) =>
-    $variant === 'plain'
-      ? css`
-          background: transparent;
-          border-top: none;
-          border-left: none;
-          border-right: none;
-          box-shadow: none;
-        `
-      : $variant === 'flat'
-        ? theme.mode === 'dark'
-          ? css`
-              background: rgba(255, 255, 255, 0.05);
-              border: 1px solid rgba(255, 255, 255, 0.08);
-              box-shadow: none;
-              backdrop-filter: none;
-              -webkit-backdrop-filter: none;
-            `
-          : css`
-              background: #f1f5f9;
-              border: none;
-              box-shadow: none;
-            `
-        : theme.mode === 'dark'
-          ? css`
-              background: rgba(255, 255, 255, 0.04);
-              backdrop-filter: blur(24px) saturate(180%);
-              -webkit-backdrop-filter: blur(24px) saturate(180%);
-              border: 1px solid rgba(255, 255, 255, 0.08);
-              box-shadow:
-                0 4px 24px rgba(0, 0, 0, 0.5),
-                inset 0 1px 0 rgba(255, 255, 255, 0.06);
-            `
-          : css`
-              background: ${theme.colors.background.primary};
-              border: 1px solid ${theme.colors.border.default};
-              box-shadow: 0 2px 8px ${theme.colors.shadow.sm};
-            `}
-
-  /* 히어로 전용: 보라 음영 오버레이 */
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    pointer-events: none;
-    z-index: 0;
-    ${({ $variant, theme }) =>
-      $variant === 'hero'
-        ? css`
-            background: radial-gradient(
-              ellipse at 85% 20%,
-              ${theme.mode === 'dark'
-                  ? 'rgba(159, 122, 234, 0.07)'
-                  : 'rgba(139, 92, 246, 0.04)'}
-                0%,
-              transparent 55%
-            );
-          `
-        : css`
-            display: none;
-          `}
+    padding: 0 0 14px;
   }
 `
 
 const TabHeaderInner = styled.div<{ $variant: 'hero' | 'flat' | 'plain' }>`
   display: flex;
-  align-items: ${({ $variant }) =>
-    $variant === 'plain' ? 'flex-start' : 'center'};
+  align-items: flex-start;
   justify-content: space-between;
-  gap: ${({ $variant }) => ($variant === 'plain' ? '16px 24px' : '20px')};
+  gap: 14px 20px;
   position: relative;
-  z-index: 1;
   flex-wrap: wrap;
 `
 
 const TabHeaderLeft = styled.div<{ $variant: 'hero' | 'flat' | 'plain' }>`
   display: flex;
-  align-items: ${({ $variant }) =>
-    $variant === 'plain' ? 'flex-start' : 'center'};
-  gap: ${({ $variant }) => ($variant === 'plain' ? '16px' : '20px')};
+  align-items: center;
+  gap: 14px;
   flex: 1;
   min-width: 0;
 `
@@ -160,7 +91,7 @@ const TabHeaderTextCol = styled.div<{ $variant: 'hero' | 'flat' | 'plain' }>`
   flex-direction: column;
   flex: 1;
   min-width: 0;
-  gap: ${({ $variant }) => ($variant === 'plain' ? 6 : 4)}px;
+  gap: 4px;
 `
 
 const TabHeaderTitle = styled.h1<{ $variant: 'hero' | 'flat' | 'plain' }>`
@@ -168,43 +99,21 @@ const TabHeaderTitle = styled.h1<{ $variant: 'hero' | 'flat' | 'plain' }>`
   font-size: 20px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.025em;
+  letter-spacing: -0.015em;
   line-height: 1.3;
-
-  ${({ $variant }) =>
-    $variant === 'plain' &&
-    css`
-      font-size: 21px;
-      font-weight: 600;
-      letter-spacing: -0.035em;
-      line-height: 1.28;
-    `}
 
   @media (max-width: 768px) {
     font-size: 18px;
-
-    ${({ $variant }) =>
-      $variant === 'plain' &&
-      css`
-        font-size: 18px;
-      `}
   }
 `
 
 const TabHeaderSubtitle = styled.p<{ $variant: 'hero' | 'flat' | 'plain' }>`
   margin: 0;
   font-size: 13px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-
-  ${({ $variant }) =>
-    $variant === 'plain' &&
-    css`
-      font-weight: 400;
-      line-height: 1.55;
-      max-width: min(100%, 40rem);
-      color: ${({ theme }) => theme.colors.text.secondary};
-    `}
+  font-weight: 400;
+  line-height: 1.5;
+  max-width: min(100%, 44rem);
+  ${metaText}
 
   @media (max-width: 768px) {
     font-size: 12px;
@@ -212,12 +121,11 @@ const TabHeaderSubtitle = styled.p<{ $variant: 'hero' | 'flat' | 'plain' }>`
 `
 
 const TabHeaderRightSlot = styled.div<{ $variant: 'hero' | 'flat' | 'plain' }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
   flex-shrink: 0;
-  ${({ $variant }) =>
-    $variant === 'plain' &&
-    css`
-      padding-top: 2px;
-    `}
 `
 
 export interface SectionTabHeaderProps {
@@ -227,11 +135,7 @@ export interface SectionTabHeaderProps {
   leftSlot?: React.ReactNode
   /** 우측 버튼 슬롯 */
   rightSlot?: React.ReactNode
-  /**
-   * `flat`: 행정구역 탭 줄과 같은 얕은 배경·무그림자
-   * `plain`: 배경·테두리 없음 (행정조직 등)
-   * 기본 `hero`: 글라스·그림자·보라 하이라이트
-   */
+  /** 하위 호환용 prop — 모든 모드가 플랫 원장 헤더로 렌더링된다 */
   variant?: 'hero' | 'flat' | 'plain'
 }
 
@@ -240,7 +144,7 @@ export function SectionTabHeader({
   description,
   leftSlot,
   rightSlot,
-  variant = 'hero',
+  variant = 'plain',
 }: SectionTabHeaderProps) {
   return (
     <TabHeaderOuter $variant={variant}>
@@ -263,68 +167,70 @@ export function SectionTabHeader({
 }
 
 const HeaderOuter = styled.header`
-  padding-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid ${({ theme }) => ledgerInkLine(theme.mode)};
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 24px;
+  gap: 16px 24px;
   flex-wrap: wrap;
 `
 
 const HeaderTitle = styled.h2`
   margin: 0;
-  font-size: 26px;
-  font-weight: 800;
+  font-size: 20px;
+  font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.04em;
-  line-height: 1.25;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
 `
 
 const HeaderDesc = styled.p`
-  margin: 10px 0 0;
-  font-size: 15px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  line-height: 1.55;
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
   max-width: 540px;
-  font-weight: 500;
+  font-weight: 400;
+  ${metaText}
 `
 
 const KpiOuter = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 `
 
 const KpiPanel = styled.div`
   display: flex;
   align-items: center;
-  gap: 28px;
+  gap: 24px;
   flex-wrap: wrap;
-  padding: 20px 28px;
-  border-radius: 16px;
-  ${({ theme }) => kpiPanelMixin(theme)}
+  padding: 12px 16px;
+  border-radius: ${RADIUS.MD};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  box-shadow: none;
 `
 
 const KpiLabel = styled.span`
   font-size: 12px;
   font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  ${metaText}
 `
 
 const KpiValue = styled.span`
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.03em;
+  ${DIGIT_DISPLAY}
 `
 
 const KpiUnit = styled.span`
-  font-size: 14px;
+  font-size: 12.5px;
   font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  margin-left: 2px;
+  margin-left: 3px;
+  ${metaText}
 `
 
 const EmptyOuter = styled(motion.div)`
@@ -333,49 +239,14 @@ const EmptyOuter = styled(motion.div)`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 64px 40px 72px;
-  border-radius: 20px;
-  overflow: hidden;
-  ${({ theme }) => emptyCardMixin(theme)}
-`
-
-const OrbPrimary = styled.div`
-  position: absolute;
-  left: 50%;
-  top: 20%;
-  width: 280px;
-  height: 280px;
-  margin-left: -140px;
-  margin-top: -140px;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    rgba(99, 102, 241, 0.06) 0%,
-    transparent 70%
-  );
-  filter: blur(32px);
-  pointer-events: none;
-`
-
-const OrbSecondary = styled.div`
-  position: absolute;
-  right: 10%;
-  bottom: 15%;
-  width: 160px;
-  height: 160px;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    rgba(99, 102, 241, 0.04) 0%,
-    transparent 70%
-  );
-  filter: blur(24px);
-  pointer-events: none;
+  padding: 48px 32px 52px;
+  border-radius: ${RADIUS.MD};
+  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  box-shadow: none;
 `
 
 const EmptyInner = styled.div`
-  position: relative;
-  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -384,42 +255,42 @@ const EmptyInner = styled.div`
 
 const EmptyTitle = styled.h3`
   margin: 0;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
 `
 
 const EmptyDesc = styled.p`
-  margin: 10px 0 0;
-  font-size: 14px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  max-width: 300px;
+  margin: 8px 0 0;
+  font-size: 13px;
+  max-width: 340px;
   line-height: 1.55;
-  font-weight: 500;
+  font-weight: 400;
+  ${metaText}
 `
 
 const FormCardOuter = styled.div`
-  background: ${({ theme }) => theme.colors.background.primary};
-  border-radius: 20px;
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  border-radius: ${RADIUS.MD};
   overflow: hidden;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  box-shadow: 0 1px 3px ${({ theme }) => theme.colors.shadow.sm};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  box-shadow: none;
 `
 
 const FormCardTopBar = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 28px;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  padding: 16px 20px;
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerInkLine(theme.mode)};
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 12px;
 `
 
 const FormCardBody = styled.div`
-  padding: 28px 32px 32px;
+  padding: 20px 24px 28px;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -427,132 +298,152 @@ const FormCardBody = styled.div`
 `
 
 export const AddButton = styled.button`
+  appearance: none;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  border-radius: 12px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.08)'
-      : theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.primary};
-  cursor: pointer;
-  font-size: 13px;
+  justify-content: center;
+  gap: 6px;
+  ${toolbarControlHeight}
+  padding: 0 13px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? ledgerBackground('dark') : '#ffffff'};
+  font-family: inherit;
+  font-size: 12.5px;
   font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  box-shadow: none;
+  cursor: pointer;
   flex-shrink: 0;
   transition:
-    background 0.2s,
-    border-color 0.2s;
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.12)'
-        : theme.colors.background.secondary};
-    border-color: ${({ theme }) => theme.colors.border.medium};
+    background ${MOTION.fast} ease,
+    opacity ${MOTION.fast} ease;
+
+  svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+
+  &:hover:not(:disabled) {
+    background: ${({ theme }) => ledgerAccentHover(theme.mode)};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px ${({ theme }) => ledgerBackground(theme.mode)},
+      0 0 0 4px ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+
+  &:disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
   }
 `
 
 export const ErrorBox = styled.div`
-  margin-bottom: 24px;
-  padding: 12px 16px;
+  margin-bottom: 20px;
+  padding: 10px 14px;
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,69,58,0.15)' : '#fee2e2'};
+    theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.14)' : '#fef2f2'};
   border: 1px solid
     ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,69,58,0.3)' : '#fecaca'};
-  border-radius: 10px;
+      theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.3)' : '#fecaca'};
+  border-radius: 8px;
   color: ${({ theme }) => theme.colors.error};
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
 `
 
 export const BackButton = styled.button`
+  appearance: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 14px;
-  font-size: 13px;
+  height: 32px;
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: 12.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
   background: transparent;
-  border: none;
-  border-radius: 12px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.SM};
   cursor: pointer;
   transition:
-    color 0.2s,
-    background 0.2s;
+    color ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    background ${MOTION.fast} ease;
+
+  svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
-    background: ${({ theme }) => theme.colors.background.tertiary};
+    border-color: ${({ theme }) => ledgerHairlineHover(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: -2px;
   }
 `
 
 export const SaveButton = styled.button<{ $saving?: boolean }>`
-  padding: 12px 24px;
-  background: ${({ theme }) => theme.colors.primary};
-  color: #fff;
-  border: none;
-  border-radius: 12px;
-  font-size: 14px;
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  ${toolbarControlHeight}
+  padding: 0 16px;
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? ledgerBackground('dark') : '#ffffff'};
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
   font-weight: 600;
   cursor: ${({ $saving }) => ($saving ? 'wait' : 'pointer')};
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
-  opacity: ${({ $saving }) => ($saving ? 0.7 : 1)};
+  box-shadow: none;
+  opacity: ${({ $saving }) => ($saving ? 0.65 : 1)};
   transition:
-    opacity 0.2s,
-    background 0.2s;
+    opacity ${MOTION.fast} ease,
+    background ${MOTION.fast} ease;
+
   &:hover:not(:disabled) {
-    background: ${({ theme }) => theme.colors.button.hover};
+    background: ${({ theme }) => ledgerAccentHover(theme.mode)};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px ${({ theme }) => ledgerBackground(theme.mode)},
+      0 0 0 4px ${({ theme }) => ledgerAccent(theme.mode)};
   }
 `
-
-// ─── 아이콘 ───────────────────────────────────────────────────────────────────
-
-const PlusIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <line x1="12" y1="5" x2="12" y2="19" />
-    <line x1="5" y1="12" x2="19" y2="12" />
-  </svg>
-)
-
-const BackArrowIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M19 12H5M12 19l-7-7 7-7" />
-  </svg>
-)
 
 // ─── 섹션 애니메이션 상수 ──────────────────────────────────────────────────────
 
 export const SECTION_MOTION = {
-  initial: { opacity: 0, y: 10 } as const,
+  initial: { opacity: 0, y: 6 } as const,
   animate: { opacity: 1, y: 0 } as const,
-  transition: { duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] as const },
+  transition: { duration: 0.22, ease: [0.25, 0.46, 0.45, 0.94] as const },
 }
 
 export const EMPTY_MOTION = {
-  initial: { opacity: 0, y: 12 } as const,
+  initial: { opacity: 0, y: 6 } as const,
   animate: { opacity: 1, y: 0 } as const,
-  transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] as const },
+  transition: { duration: 0.24, ease: [0.25, 0.46, 0.45, 0.94] as const },
 }
 
 // ─── 복합 컴포넌트 ────────────────────────────────────────────────────────────
@@ -589,7 +480,7 @@ export function SectionPageHeader({
             onClick={addButton.onClick}
             aria-label={addButton.ariaLabel ?? addButton.label}
           >
-            <PlusIcon />
+            <FiPlus aria-hidden />
             {addButton.label}
           </AddButton>
         ))}
@@ -601,7 +492,7 @@ interface SectionKpiPanelProps {
   label: string
   count: number
   unit?: string
-  /** PillTabNav 등 탭 컴포넌트 */
+  /** UnderlineTabNav 등 탭 컴포넌트 */
   tabSlot?: React.ReactNode
 }
 
@@ -630,45 +521,61 @@ export function SectionKpiPanel({
 interface SectionEmptyStateProps {
   title: string
   description: React.ReactNode
-  /** 아이콘 슬롯 (기본: 카드 스택 SVG) */
+  /** 아이콘 슬롯 (기본: 플랫 레저 아이콘) */
   icon?: React.ReactNode
 }
 
 const DefaultEmptyIcon = () => (
-  <div style={{ marginBottom: 28 }}>
+  <div style={{ marginBottom: 16 }}>
     <svg
-      width="120"
-      height="88"
-      viewBox="0 0 120 88"
+      width="72"
+      height="52"
+      viewBox="0 0 72 52"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden
-      style={{ display: 'block' }}
+      style={{ display: 'block', opacity: 0.7 }}
     >
-      <rect x="4" y="20" width="100" height="60" rx="14" fill="#e2e8f0" />
       <rect
-        x="14"
-        y="10"
-        width="100"
-        height="60"
-        rx="14"
-        fill="#f1f5f9"
-        stroke="#e2e8f0"
-        strokeWidth="1"
+        x="6"
+        y="8"
+        width="60"
+        height="38"
+        rx="6"
+        stroke="currentColor"
+        strokeOpacity="0.24"
+        strokeWidth="1.25"
       />
-      <rect
-        x="24"
-        y="0"
-        width="100"
-        height="60"
-        rx="14"
-        fill="#ffffff"
-        stroke="#c7d2fe"
-        strokeWidth="1.5"
+      <line
+        x1="16"
+        y1="20"
+        x2="42"
+        y2="20"
+        stroke="currentColor"
+        strokeOpacity="0.28"
+        strokeWidth="2"
+        strokeLinecap="round"
       />
-      <rect x="32" y="14" width="56" height="10" rx="5" fill="#eef2ff" />
-      <rect x="32" y="30" width="76" height="6" rx="3" fill="#e0e7ff" />
-      <rect x="32" y="42" width="64" height="6" rx="3" fill="#e0e7ff" />
+      <line
+        x1="16"
+        y1="29"
+        x2="54"
+        y2="29"
+        stroke="currentColor"
+        strokeOpacity="0.18"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+      <line
+        x1="16"
+        y1="36"
+        x2="48"
+        y2="36"
+        stroke="currentColor"
+        strokeOpacity="0.18"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
     </svg>
   </div>
 )
@@ -680,8 +587,6 @@ export function SectionEmptyState({
 }: SectionEmptyStateProps) {
   return (
     <EmptyOuter {...EMPTY_MOTION}>
-      <OrbPrimary />
-      <OrbSecondary />
       <EmptyInner>
         {icon ?? <DefaultEmptyIcon />}
         <EmptyTitle>{title}</EmptyTitle>
@@ -719,24 +624,24 @@ export function SectionFormCard({
   return (
     <FormCardOuter>
       <FormCardTopBar>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <BackButton type="button" onClick={onBack}>
-            <BackArrowIcon />
+            <FiArrowLeft aria-hidden />
             목록으로
           </BackButton>
           <h2
             style={{
               margin: 0,
-              fontSize: 20,
+              fontSize: 18,
               fontWeight: 700,
-              letterSpacing: '-0.025em',
+              letterSpacing: '-0.015em',
               color: 'inherit',
             }}
           >
             {formTitle}
           </h2>
         </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <SaveButton
             type="button"
             onClick={onSave}

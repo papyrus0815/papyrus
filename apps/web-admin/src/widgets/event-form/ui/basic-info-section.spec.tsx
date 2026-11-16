@@ -502,13 +502,15 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
       }),
     ])
 
-    // 5. 관계 설명 1줄 입력 ('+ 설명 메모' 토글로 펼친 뒤 입력)
-    fireEvent.click(
-      screen.getByRole('button', {
+    // 5. 관계 설명 메모는 별도 토글 버튼 없이 항상 textarea로 노출되어 바로 입력 가능
+    expect(
+      screen.queryByRole('button', {
         name: '사라예보 사건 관계 설명 입력 열기',
       }),
-    )
-    fireEvent.change(screen.getByLabelText('사라예보 사건 관계 설명'), {
+    ).not.toBeInTheDocument()
+    const memoTextarea = screen.getByLabelText('사라예보 사건 관계 설명')
+    expect(memoTextarea.tagName).toBe('TEXTAREA')
+    fireEvent.change(memoTextarea, {
       target: { value: '오스트리아-헝가리의 선전포고 촉발' },
     })
     expect(onChange).toHaveBeenLastCalledWith([

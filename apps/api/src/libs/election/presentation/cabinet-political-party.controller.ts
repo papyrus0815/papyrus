@@ -7,6 +7,7 @@ import {
   Get,
   NotFoundException,
   Param,
+  Patch,
   Post,
   Req,
   UnauthorizedException,
@@ -14,6 +15,7 @@ import {
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
+import { CabinetPartyRole } from '@prisma/client'
 import { PrismaService } from '@prisma/prisma.service'
 import { Request } from 'express'
 import { serializeElectionBigInt } from '../election-serialize.util'
@@ -26,19 +28,23 @@ export interface CreateCabinetPoliticalPartyBody {
   electionPartyResultId?: string | null
 }
 
+export interface UpdateCabinetPoliticalPartyBody {
+  role?: string
+  notes?: string | null
+}
+
 /**
  * 행정부(Cabinet)와 정당의 연정·여당 관계
  * 경로: /government-positions/cabinets/...
  */
 @ApiTags('government-positions')
 @Controller('government-positions/cabinets')
-@UseGuards(AuthGuard('jwt'))
 export class CabinetPoliticalPartyController {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * `PersonRepository`의 행정부 접근 규칙과 동일:
-   * - `Cabinet.accountId`가 null이면(레거시·공용) 로그인 사용자는 접근 가능
+   * `PersonRepository`의 행정부 쓰기 권한 규칙과 동일:
+   * - `Cabinet.accountId`가 null이면(레거시·공용) 로그인 사용자는 수정 가능
    * - 값이 있으면 현재 계정과 일치할 때만 허용
    */
   private async ensureCabinetAccess(cabinetId: string, req: Request) {
@@ -60,12 +66,20 @@ export class CabinetPoliticalPartyController {
   }
 
   @Get(':cabinetId/political-parties')
-  async list(@Param('cabinetId') cabinetId: string, @Req() req: Request): Promise<any> {
-    await this.ensureCabinetAccess(cabinetId, req)
+  async list(@Param('cabinetId') cabinetId: string): Promise<any> {
+    const cabinet = await this.prisma.cabinet.findUnique({
+      where: { id: cabinetId },
+      select: { id: true },
+    })
+    if (!cabinet) {
+      throw new NotFoundException('행정부를 찾을 수 없습니다.')
+    }
     const rows = await this.prisma.cabinetPoliticalParty.findMany({
       where: { cabinetId },
       include: {
-        party: { select: { id: true, name: true, shortName: true } },
+        party: {
+          select: { id: true, name: true, shortName: true, brandColor: true },
+        },
         electionPartyResult: {
           include: {
             election: {
@@ -79,6 +93,7 @@ export class CabinetPoliticalPartyController {
     return serializeElectionBigInt(rows)
   }
 
+  @UseGuards(AuthGuard('jwt'))
   @Post(':cabinetId/political-parties')
   async create(
     @Param('cabinetId') cabinetId: string,
@@ -143,22 +158,28 @@ export class CabinetPoliticalPartyController {
       }
 
       const ec = epr.election
-      const ht = cabinet.headTenure
+      const cabinetPolityScope = cabinet.headTenure ?? {
+        countryId: cabinet.countryId ?? null,
+        historicalCountryId: cabinet.historicalCountryId ?? null,
+      }
       const hasElectionScope = ec.countryId != null || ec.historicalCountryId != null
-      if (hasElectionScope && ht) {
+      const hasCabinetScope =
+        cabinetPolityScope.countryId != null ||
+        cabinetPolityScope.historicalCountryId != null
+      if (hasElectionScope && hasCabinetScope) {
         const match = await this.areElectionAndHeadCountriesCompatible(
           {
             countryId: ec.countryId ?? null,
             historicalCountryId: ec.historicalCountryId ?? null,
           },
           {
-            countryId: ht.countryId ?? null,
-            historicalCountryId: ht.historicalCountryId ?? null,
+            countryId: cabinetPolityScope.countryId ?? null,
+            historicalCountryId: cabinetPolityScope.historicalCountryId ?? null,
           },
         )
         if (!match) {
           throw new BadRequestException(
-            '선거 소속 국가가 이 행정부 수반 재임과 맞지 않습니다.',
+            '선거 소속 국가가 이 행정부 소속 국가·정체와 맞지 않습니다.',
           )
         }
       }
@@ -179,7 +200,9 @@ export class CabinetPoliticalPartyController {
         ...(electionPartyResultId != null && { electionPartyResultId }),
       },
       include: {
-        party: { select: { id: true, name: true, shortName: true } },
+        party: {
+          select: { id: true, name: true, shortName: true, brandColor: true },
+        },
         electionPartyResult: {
           include: {
             election: {
@@ -192,6 +215,46 @@ export class CabinetPoliticalPartyController {
     return serializeElectionBigInt(row)
   }
 
+  @UseGuards(AuthGuard('jwt'))
+  @Patch(':cabinetId/political-parties/:linkId')
+  async update(
+    @Param('cabinetId') cabinetId: string,
+    @Param('linkId') linkId: string,
+    @Req() req: Request,
+    @Body() body: UpdateCabinetPoliticalPartyBody,
+  ) {
+    await this.ensureCabinetAccess(cabinetId, req)
+    const existing = await this.prisma.cabinetPoliticalParty.findFirst({
+      where: { id: linkId, cabinetId },
+    })
+    if (!existing) throw new NotFoundException('연결 정보를 찾을 수 없습니다.')
+    const updated = await this.prisma.cabinetPoliticalParty.update({
+      where: { id: linkId },
+      data: {
+        ...(body.role !== undefined && {
+          role: body.role as CabinetPartyRole,
+        }),
+        ...(body.notes !== undefined && {
+          notes: body.notes?.trim() ? body.notes.trim() : null,
+        }),
+      },
+      include: {
+        party: {
+          select: { id: true, name: true, shortName: true, brandColor: true },
+        },
+        electionPartyResult: {
+          include: {
+            election: {
+              select: { id: true, name: true, pollDate: true },
+            },
+          },
+        },
+      },
+    })
+    return serializeElectionBigInt(updated)
+  }
+
+  @UseGuards(AuthGuard('jwt'))
   @Delete(':cabinetId/political-parties/:linkId')
   async remove(
     @Param('cabinetId') cabinetId: string,

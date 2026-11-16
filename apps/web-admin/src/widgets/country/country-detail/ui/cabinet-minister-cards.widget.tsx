@@ -6,7 +6,14 @@ import React from 'react'
 import { FiArrowUpRight, FiChevronRight, FiEdit2, FiUser } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import {
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentSubtle,
+  ledgerHoverFill,
+} from '@/entities/event/ui/ledger-tokens'
 import type { GovernmentCabinetTenureItem } from '@/shared/api/person-career'
+import { getUploadImageUrl } from '@/shared/api/upload'
 import { calcAgeAtTenure } from '@/shared/lib/tenure-person-utils'
 
 import {
@@ -23,8 +30,8 @@ const DeptJumpChip = styled.button`
   padding: 1px 6px;
   margin-right: 4px;
   border-radius: 4px;
-  border: 1px solid rgba(59, 130, 246, 0.24);
-  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
   color: inherit;
   font-size: 11px;
   font-weight: 600;
@@ -33,9 +40,8 @@ const DeptJumpChip = styled.button`
   transition: all 0.14s ease;
 
   &:hover {
-    border-color: rgba(59, 130, 246, 0.5);
-    background: rgba(59, 130, 246, 0.16);
-    color: #2563eb;
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 `
 
@@ -55,16 +61,15 @@ const CardEditButton = styled.button`
   border-radius: 6px;
   border: 1px solid transparent;
   background: transparent;
-  color: var(--c-text-muted, #64748b);
+  color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;
-  opacity: 0.65;
+  opacity: 0.75;
   transition: all 0.14s ease;
 
   &:hover {
     opacity: 1;
-    border-color: rgba(59, 130, 246, 0.35);
-    background: rgba(59, 130, 246, 0.1);
-    color: #2563eb;
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
@@ -93,7 +98,8 @@ export function CabinetMinisterCards({
   return (
     <CabS.MinisterCardGrid>
       {ministers.map((tenure) => {
-        const mThumb = tenure.person?.profileImageUrl ?? null
+        const rawThumb = tenure.person?.profileImageUrl ?? null
+        const mThumb = rawThumb ? getUploadImageUrl(rawThumb) || rawThumb : null
         const mName = getPersonName(tenure.person)
         const mPos = tenure.title ?? tenure.positionDefinition?.title ?? '—'
         const mStartFull = tenure.startDate ? formatDate(tenure.startDate) : '—'

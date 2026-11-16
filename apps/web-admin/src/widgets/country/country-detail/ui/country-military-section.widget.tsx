@@ -1,16 +1,15 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { motion } from 'framer-motion'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import { GovLedgerPage } from '@/features/government-info/ui/government-ledger.styles'
 import { GovernmentMilitaryTab } from '@/features/government-info/ui/government-military-tab.widget'
 import {
   administrationDepartmentsByCountryQueryKey,
   administrationDepartmentsByHistoricalCountryQueryKey,
 } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { pathKeys } from '@/shared/router'
-import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
 
 import { MilitaryUnitFormModal } from './military-unit-form.modal'
 
@@ -23,7 +22,7 @@ export function CountryMilitarySection({
 }: CountryMilitarySectionProps) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const unitIdQuery = searchParams.get('unitId')?.trim() || ''
 
   const [focusMilitaryUnitId, setFocusMilitaryUnitId] = useState<string | null>(
@@ -51,81 +50,56 @@ export function CountryMilitarySection({
     }
   }, [unitIdQuery])
 
-  const openCreateRootUnit = () => {
-    setMilitaryUnitEditingId(null)
-    setMilitaryDeptDefaultId(null)
-    setMilitaryParentDefaultId(null)
-    setMilitaryHistCountryDefaultId(
-      country.type === 'historical' ? country.id : null,
-    )
-    setMilitaryBranchDefault(null)
-    setMilitaryUnitModalOpen(true)
-  }
+  const syncSelectedUnitParam = useCallback(
+    (unitId: string | null) => {
+      const nextParams = new URLSearchParams(searchParams)
+      if (unitId) {
+        nextParams.set('unitId', unitId)
+      } else {
+        nextParams.delete('unitId')
+      }
+      setSearchParams(nextParams, { replace: true })
+    },
+    [searchParams, setSearchParams],
+  )
 
   return (
     <>
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 24,
-          padding: '36px 32px 48px',
-          minHeight: 'calc(100vh - 200px)',
-          position: 'relative',
-          width: '100%',
-          minWidth: 0,
-          boxSizing: 'border-box',
-        }}
-      >
-        <SectionTabHeader
-          variant="plain"
-          title="군사"
-          description="최고사령부·참모본부·각군 총사령부부터 전구·집단군·야전군·군단·사단·함대까지 지휘 계통, 개편 계보, 역대 지휘관 재임, 작전·전투 투입을 관리합니다."
-          rightSlot={
-            <AddButton type="button" onClick={openCreateRootUnit}>
-              + 사령부·군부대 등록
-            </AddButton>
-          }
+      <GovLedgerPage aria-label="군사 사령부 및 편제">
+        <GovernmentMilitaryTab
+          country={country}
+          effectiveCountryId={country.id}
+          focusUnitId={focusMilitaryUnitId}
+          onConsumedFocusUnit={() => setFocusMilitaryUnitId(null)}
+          onSelectedUnitChange={syncSelectedUnitParam}
+          onCreateUnit={(defaults) => {
+            setMilitaryUnitEditingId(null)
+            setMilitaryDeptDefaultId(
+              defaults?.administrationDepartmentId ?? null,
+            )
+            setMilitaryParentDefaultId(defaults?.parentUnitId ?? null)
+            setMilitaryHistCountryDefaultId(
+              defaults?.historicalCountryId ??
+                (country.type === 'historical' ? country.id : null),
+            )
+            setMilitaryBranchDefault(defaults?.branch ?? null)
+            setMilitaryUnitModalOpen(true)
+          }}
+          onEditUnit={(unitId) => {
+            setMilitaryUnitEditingId(unitId)
+            setMilitaryDeptDefaultId(null)
+            setMilitaryParentDefaultId(null)
+            setMilitaryHistCountryDefaultId(null)
+            setMilitaryBranchDefault(null)
+            setMilitaryUnitModalOpen(true)
+          }}
+          onNavigateToDepartment={(departmentId) => {
+            navigate(
+              `${pathKeys.countryGovernment(country.id)}?departmentId=${encodeURIComponent(departmentId)}`,
+            )
+          }}
         />
-
-        <section aria-label="군사 사령부 및 편제">
-          <GovernmentMilitaryTab
-            country={country}
-            effectiveCountryId={country.id}
-            focusUnitId={focusMilitaryUnitId}
-            onConsumedFocusUnit={() => setFocusMilitaryUnitId(null)}
-            onCreateUnit={(defaults) => {
-              setMilitaryUnitEditingId(null)
-              setMilitaryDeptDefaultId(
-                defaults?.administrationDepartmentId ?? null,
-              )
-              setMilitaryParentDefaultId(defaults?.parentUnitId ?? null)
-              setMilitaryHistCountryDefaultId(
-                defaults?.historicalCountryId ??
-                  (country.type === 'historical' ? country.id : null),
-              )
-              setMilitaryBranchDefault(defaults?.branch ?? null)
-              setMilitaryUnitModalOpen(true)
-            }}
-            onEditUnit={(unitId) => {
-              setMilitaryUnitEditingId(unitId)
-              setMilitaryDeptDefaultId(null)
-              setMilitaryParentDefaultId(null)
-              setMilitaryHistCountryDefaultId(null)
-              setMilitaryBranchDefault(null)
-              setMilitaryUnitModalOpen(true)
-            }}
-            onNavigateToDepartment={(departmentId) => {
-              navigate(
-                `${pathKeys.countryGovernment(country.id)}?departmentId=${encodeURIComponent(departmentId)}`,
-              )
-            }}
-          />
-        </section>
-      </motion.div>
+      </GovLedgerPage>
 
       <MilitaryUnitFormModal
         isOpen={militaryUnitModalOpen}

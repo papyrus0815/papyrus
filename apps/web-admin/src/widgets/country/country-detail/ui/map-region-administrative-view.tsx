@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { FiEdit2, FiPlus, FiRepeat, FiSettings } from 'react-icons/fi'
 import { useSearchParams } from 'react-router-dom'
 
 import {
@@ -712,52 +713,68 @@ export function MapRegionAdministrativeView({
           setSchemeModalOpen(true)
         }}
         style={{
-          padding: '5px 10px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 5,
+          height: 30,
+          padding: '0 10px',
           fontSize: 12,
           fontWeight: 600,
           border: `1px dashed ${palette.border}`,
           background: 'transparent',
           color: palette.textSecondary,
-          borderRadius: 9,
+          borderRadius: 6,
           cursor: 'pointer',
+          whiteSpace: 'nowrap',
         }}
       >
-        + 체계 등록
+        <FiPlus size={12} />
+        <span>체계 등록</span>
       </button>
       <span style={{ flex: 1 }} />
       <button
         type="button"
         onClick={() => setConfigModalOpen(true)}
         style={{
-          padding: '5px 11px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 5,
+          height: 30,
+          padding: '0 10px',
           fontSize: 12,
           fontWeight: 600,
           border: `1px solid ${palette.border}`,
-          background: palette.bg,
+          background: 'transparent',
           color: palette.textSecondary,
-          borderRadius: 9,
+          borderRadius: 6,
           cursor: 'pointer',
           whiteSpace: 'nowrap',
         }}
       >
-        ⚙ 단위 관리
+        <FiSettings size={13} />
+        <span>단위 관리</span>
       </button>
       <button
         type="button"
         onClick={() => setCompareOpen(true)}
         style={{
-          padding: '5px 11px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 5,
+          height: 30,
+          padding: '0 10px',
           fontSize: 12,
           fontWeight: 600,
           border: `1px solid ${palette.border}`,
-          background: palette.bg,
-          color: palette.primary,
-          borderRadius: 9,
+          background: 'transparent',
+          color: palette.textSecondary,
+          borderRadius: 6,
           cursor: 'pointer',
           whiteSpace: 'nowrap',
         }}
       >
-        ⇄ 체계 비교
+        <FiRepeat size={13} />
+        <span>체계 비교</span>
       </button>
     </div>
   )
@@ -1475,10 +1492,12 @@ function SchemeChip({
             background: 'transparent',
             color: palette.textSecondary,
             cursor: 'pointer',
-            fontSize: 12,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
-          ✎
+          <FiEdit2 size={11} />
         </button>
       )}
     </span>

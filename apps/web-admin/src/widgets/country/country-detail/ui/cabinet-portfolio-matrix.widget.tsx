@@ -14,7 +14,12 @@ import {
   DEPARTMENT_KIND_LABEL,
 } from '@/shared/api/administration-department'
 import type { GovernmentCabinetTenureItem } from '@/shared/api/person-career'
-import { findDepartmentForMember } from '@/shared/lib/ministry-department/department-cabinet-matcher'
+import { getUploadImageUrl } from '@/shared/api/upload'
+import {
+  findDepartmentForMember,
+  getTenureChronologyKey,
+  isNonCabinetStateOrgan,
+} from '@/shared/lib/ministry-department/department-cabinet-matcher'
 
 import {
   calcTenureDuration,
@@ -81,6 +86,7 @@ export function CabinetPortfolioMatrix({
 
       const visibleDepts = departments.filter((deptItem) => {
         if (assignedByDeptId.has(deptItem.id)) return true
+        if (isNonCabinetStateOrgan(deptItem)) return false
         if (includeSubAgencies) return true
         const deptKind = deptItem.kind ?? 'MINISTRY'
         return deptKind === 'MINISTRY' && !deptItem.parentId
@@ -93,10 +99,18 @@ export function CabinetPortfolioMatrix({
         return leftDept.name.localeCompare(rightDept.name, 'ko')
       })
 
-      const rows = sortedDepts.map((deptItem) => ({
-        department: deptItem,
-        holders: assignedByDeptId.get(deptItem.id) ?? [],
-      }))
+      const rows = sortedDepts.map((deptItem) => {
+        const rawHolders = assignedByDeptId.get(deptItem.id) ?? []
+        const sortedHolders = [...rawHolders].sort(
+          (leftHolder, rightHolder) =>
+            (getTenureChronologyKey(leftHolder) ?? Number.MAX_SAFE_INTEGER) -
+            (getTenureChronologyKey(rightHolder) ?? Number.MAX_SAFE_INTEGER),
+        )
+        return {
+          department: deptItem,
+          holders: sortedHolders,
+        }
+      })
 
       const filledCount = rows.filter(
         (rowItem) => rowItem.holders.length > 0,
@@ -113,8 +127,9 @@ export function CabinetPortfolioMatrix({
     () =>
       departments.some(
         (deptItem) =>
-          (deptItem.kind ?? 'MINISTRY') !== 'MINISTRY' ||
-          Boolean(deptItem.parentId),
+          !isNonCabinetStateOrgan(deptItem) &&
+          ((deptItem.kind ?? 'MINISTRY') !== 'MINISTRY' ||
+            Boolean(deptItem.parentId)),
       ),
     [departments],
   )
@@ -228,7 +243,7 @@ export function CabinetPortfolioMatrix({
                 <DeptMetaLine>
                   {department.historicalCountry?.name ? (
                     <DeptSmallTag>
-                      🏛️ {department.historicalCountry.name}
+                      {department.historicalCountry.name}
                     </DeptSmallTag>
                   ) : null}
                   {kindLabel ? <DeptSmallTag>{kindLabel}</DeptSmallTag> : null}
@@ -268,8 +283,11 @@ export function CabinetPortfolioMatrix({
                         holderItem.startDate,
                         holderItem.endDate,
                       )
-                      const thumbUrl =
+                      const rawThumbUrl =
                         holderItem.person?.profileImageUrl ?? null
+                      const thumbUrl = rawThumbUrl
+                        ? getUploadImageUrl(rawThumbUrl) || rawThumbUrl
+                        : null
 
                       return (
                         <HolderChipCard
@@ -354,6 +372,13 @@ export function CabinetPortfolioMatrix({
               const endStr = ministerItem.endDate
                 ? formatDate(ministerItem.endDate)
                 : '현재'
+              const explicitDeptName =
+                ministerItem.administrationDepartment?.name?.trim() || null
+              const rawUnassignedThumb =
+                ministerItem.person?.profileImageUrl ?? null
+              const unassignedThumb = rawUnassignedThumb
+                ? getUploadImageUrl(rawUnassignedThumb) || rawUnassignedThumb
+                : null
               return (
                 <HolderChipCard
                   key={ministerItem.id}
@@ -361,11 +386,8 @@ export function CabinetPortfolioMatrix({
                   onClick={() => onSelectMinister(ministerItem.id)}
                 >
                   <HolderAvatar>
-                    {ministerItem.person?.profileImageUrl ? (
-                      <img
-                        src={ministerItem.person.profileImageUrl}
-                        alt={personLabel}
-                      />
+                    {unassignedThumb ? (
+                      <img src={unassignedThumb} alt={personLabel} />
                     ) : (
                       <FiUser size={14} />
                     )}
@@ -374,6 +396,9 @@ export function CabinetPortfolioMatrix({
                     <HolderTopRow>
                       <HolderName>{personLabel}</HolderName>
                       <HolderRoleBadge>{roleLabel}</HolderRoleBadge>
+                      {explicitDeptName ? (
+                        <HolderPartyTag>{explicitDeptName}</HolderPartyTag>
+                      ) : null}
                     </HolderTopRow>
                     <HolderPeriod>
                       {startStr} – {endStr}

@@ -88,9 +88,9 @@ function CountryListInner({
   >(() => {
     try {
       const saved = localStorage.getItem('country-list-collapsed-groups')
-      return saved ? new Set(JSON.parse(saved) as string[]) : 'all'
+      return saved ? new Set(JSON.parse(saved) as string[]) : new Set<string>()
     } catch {
-      return 'all'
+      return new Set<string>()
     }
   })
 

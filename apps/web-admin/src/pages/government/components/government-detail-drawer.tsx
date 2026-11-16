@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  FiAlertCircle,
   FiArrowUpRight,
   FiCalendar,
   FiChevronDown,
@@ -17,6 +18,7 @@ import {
   FiMapPin,
   FiPlus,
   FiRefreshCw,
+  FiShare2,
   FiShield,
   FiUser,
   FiUsers,
@@ -59,9 +61,15 @@ import {
 import { treatyApi } from '@/shared/api/treaty'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
-import { parseDepartmentDescription } from '@/shared/lib/ministry-department/ministry-department-utils'
+import {
+  DEPARTMENT_LIFECYCLE_LABEL,
+  parseDepartmentDescription,
+  resolveDepartmentLifecycleStatus,
+} from '@/shared/lib/ministry-department/ministry-department-utils'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
+import { confirm } from '@/shared/ui/confirm-dialog'
+import { HeadquartersMapPreview } from '@/shared/ui/headquarters-location-field'
 import { notify } from '@/shared/ui/toast'
 import {
   APPOINTMENT_METHOD_LABEL,
@@ -96,6 +104,8 @@ export interface GovernmentDetailDrawerProps {
   listSearch: string
   hasPrev: boolean
   hasNext: boolean
+  isOutOfScope?: boolean
+  onResetFilters?: () => void
   onStepPrev: () => void
   onStepNext: () => void
   onClose: () => void
@@ -116,6 +126,8 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
   listSearch,
   hasPrev,
   hasNext,
+  isOutOfScope = false,
+  onResetFilters,
   onStepPrev,
   onStepNext,
   onClose,
@@ -237,6 +249,32 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
     },
   })
 
+  const detachMemberMutation = useMutation({
+    mutationFn: async (tenureId: string) => {
+      if (!selectedCabinetId) return
+      await personCareerApi.detachCabinetMember(selectedCabinetId, tenureId)
+    },
+    onSuccess: () => {
+      const cab = cabinetQuery.data
+      invalidateTenureQueries(queryClient, {
+        cabinetId: selectedCabinetId,
+        countryId: cab?.countryId ?? cab?.headTenure?.countryId ?? null,
+        historicalCountryId:
+          cab?.historicalCountryId ??
+          cab?.headTenure?.historicalCountryId ??
+          null,
+      })
+      void queryClient.invalidateQueries({ queryKey: ['global-cabinets'] })
+      void queryClient.invalidateQueries({
+        queryKey: ['cabinet-suggested-members', selectedCabinetId],
+      })
+      notify.success('내각 편입이 해제되었습니다. 인물 재임 기록은 유지됩니다.')
+    },
+    onError: (mutationError) => {
+      notify.error(getApiErrorMessage(mutationError))
+    },
+  })
+
   const groupedMinisters = useMemo(() => {
     const rawMinisters = (ministersQuery.data ?? []) as GovernmentCabinetTenureItem[]
     const headTenureId = cabinetQuery.data?.headTenure?.id ?? null
@@ -278,6 +316,37 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
   if (isCabinetMode && !selectedCabinetId) return null
   if (!isCabinetMode && !selectedDepartmentId) return null
 
+  const handleShare = async () => {
+    const detailPath =
+      isCabinetMode && selectedCabinetId
+        ? pathKeys.government.cabinetDetail(selectedCabinetId)
+        : !isCabinetMode && selectedDepartmentId
+          ? pathKeys.government.departmentDetail(selectedDepartmentId)
+          : null
+    if (!detailPath) return
+    const url = `${window.location.origin}${detailPath}`
+    const title = isCabinetMode
+      ? cabinetQuery.data
+        ? resolveCabinetDisplayTitle(cabinetQuery.data)
+        : '내각 상세'
+      : (deptQuery.data?.name ?? '국가 기관 상세')
+
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title, url })
+        return
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url)
+      notify.success('상세 지면 링크가 복사되었습니다')
+    } catch {
+      notify.error('링크 복사에 실패했습니다')
+    }
+  }
+
   return (
     <DrawerShell aria-label="선택 항목 상세 패널">
       <DrawerToolbar>
@@ -304,6 +373,14 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
         </StepGroup>
 
         <ActionGroup>
+          <IconBtn
+            type="button"
+            onClick={() => void handleShare()}
+            title="상세 지면 링크 공유/복사"
+            aria-label="상세 지면 링크 공유"
+          >
+            <FiShare2 size={13.5} />
+          </IconBtn>
           {isCabinetMode && selectedCabinetId ? (
             <OpenPageLink
               to={pathKeys.government.cabinetDetail(selectedCabinetId)}
@@ -332,6 +409,20 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
           </IconBtn>
         </ActionGroup>
       </DrawerToolbar>
+
+      {isOutOfScope ? (
+        <OutOfScopeBanner role="status">
+          <OutOfScopeText>
+            <FiAlertCircle size={13} aria-hidden="true" />
+            <span>현재 목록 필터 조건 밖의 항목입니다</span>
+          </OutOfScopeText>
+          {onResetFilters ? (
+            <OutOfScopeResetBtn type="button" onClick={onResetFilters}>
+              필터 초기화
+            </OutOfScopeResetBtn>
+          ) : null}
+        </OutOfScopeBanner>
+      ) : null}
 
       <DrawerScroll>
         {isCabinetMode ? (
@@ -561,7 +652,10 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
                             </CompactGroupHead>
                             {groupItem.items.map((ministerRow) => {
                               const ministerName = ministerRow.person
-                                ? getPersonDisplayName(ministerRow.person)
+                                ? getPersonDisplayName({
+                                    ...ministerRow.person,
+                                    name: ministerRow.person.name ?? '',
+                                  })
                                 : '인물 미상'
                               const roleText =
                                 ministerRow.title ??
@@ -570,25 +664,53 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
                               const ministerPersonId =
                                 ministerRow.person?.id ?? null
                               return (
-                                <CompactPersonRow
-                                  key={ministerRow.id}
-                                  type="button"
-                                  onClick={() => {
-                                    if (ministerPersonId) {
-                                      onOpenPersonModal(ministerPersonId)
-                                    }
-                                  }}
-                                >
-                                  <strong>{ministerName}</strong>
-                                  <span>
-                                    {roleText} ·{' '}
-                                    {formatIsoShortPeriod(
-                                      ministerRow.startDate,
-                                      ministerRow.endDate,
-                                      false,
-                                    )}
-                                  </span>
-                                </CompactPersonRow>
+                                <TenureCompactItem key={ministerRow.id}>
+                                  <CompactPersonRow
+                                    type="button"
+                                    onClick={() => {
+                                      if (ministerPersonId) {
+                                        onOpenPersonModal(ministerPersonId)
+                                      }
+                                    }}
+                                  >
+                                    <strong>
+                                      {ministerName}
+                                      {ministerRow.isActing ? (
+                                        <ActingBadge>직무대행</ActingBadge>
+                                      ) : null}
+                                    </strong>
+                                    <span>
+                                      {roleText} ·{' '}
+                                      {formatIsoShortPeriod(
+                                        ministerRow.startDate,
+                                        ministerRow.endDate,
+                                        false,
+                                      )}
+                                    </span>
+                                  </CompactPersonRow>
+                                  <DetachMiniBtn
+                                    type="button"
+                                    disabled={detachMemberMutation.isPending}
+                                    title="내각 편입 해제 (인물 재임 이력은 유지)"
+                                    aria-label={`${ministerName} 내각 편입 해제`}
+                                    onClick={async (clickEvent) => {
+                                      clickEvent.stopPropagation()
+                                      const ok = await confirm({
+                                        title: '각료 편입 해제',
+                                        message: `${ministerName} 인사를 이 내각에서 편입 해제할까요? 인물의 부처 재임 이력은 삭제되지 않고 그대로 남습니다.`,
+                                        confirmLabel: '편입 해제',
+                                        cancelLabel: '취소',
+                                        danger: true,
+                                      })
+                                      if (!ok) return
+                                      detachMemberMutation.mutate(
+                                        ministerRow.id,
+                                      )
+                                    }}
+                                  >
+                                    <FiX size={13} />
+                                  </DetachMiniBtn>
+                                </TenureCompactItem>
                               )
                             })}
                           </CompactGroupCard>
@@ -597,7 +719,8 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
                     )}
                   </DrawerSection>
 
-                  {cabinet.linkageGroup?.event ? (
+                  {cabinet.linkageGroup?.event ||
+                  cabinet.linkageGroup?.label ? (
                     <DrawerSection>
                       <DrawerSectionHeader>
                         <DrawerSectionTitle>
@@ -605,12 +728,21 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
                           <span>국제 사건 동시대 연계</span>
                         </DrawerSectionTitle>
                       </DrawerSectionHeader>
-                      <EventCardLink
-                        to={`/events/${cabinet.linkageGroup.event.id}`}
-                      >
-                        <span>{cabinet.linkageGroup.event.title}</span>
-                        <FiArrowUpRight size={13} />
-                      </EventCardLink>
+                      {cabinet.linkageGroup.event ? (
+                        <EventCardLink
+                          to={`/events/${cabinet.linkageGroup.event.id}`}
+                        >
+                          <span>
+                            {cabinet.linkageGroup.label ||
+                              cabinet.linkageGroup.event.title}
+                          </span>
+                          <FiArrowUpRight size={13} />
+                        </EventCardLink>
+                      ) : (
+                        <StaticCard>
+                          <strong>{cabinet.linkageGroup.label}</strong>
+                        </StaticCard>
+                      )}
                     </DrawerSection>
                   ) : null}
 
@@ -708,10 +840,12 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
           (() => {
             const dept = deptQuery.data
             const polity = resolveDepartmentPolityInfo(dept)
+            const lifecycleStatus = resolveDepartmentLifecycleStatus(dept)
+            const isOngoingDept = lifecycleStatus === 'ACTIVE'
             const periodLabel = formatIsoShortPeriod(
               dept.establishedDate,
               dept.abolishedDate,
-              !polity.isHistorical && !dept.abolished,
+              isOngoingDept,
             )
             const parsedDesc = parseDepartmentDescription(dept.description)
             const effectiveHq =
@@ -733,6 +867,7 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
               dept.children.length > 0 ||
               dept.predecessors.length > 0 ||
               dept.successors.length > 0 ||
+              (dept.militaryUnitSuccessors?.length ?? 0) > 0 ||
               dept.militaryUnits.length > 0
 
             return (
@@ -770,6 +905,11 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
                       <SubtleMetaTag>
                         {DEPARTMENT_KIND_LABEL[dept.kind] ?? dept.kind}
                       </SubtleMetaTag>
+                      {!isOngoingDept ? (
+                        <SubtleMetaTag>
+                          {DEPARTMENT_LIFECYCLE_LABEL[lifecycleStatus]}
+                        </SubtleMetaTag>
+                      ) : null}
                     </TagWrapRow>
                     <PeriodTag>
                       <FiCalendar size={11} />
@@ -801,11 +941,25 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
                     </HeroTitles>
                   </HeroPersonRow>
 
-                  {effectiveHq ? (
-                    <LocationLine>
-                      <FiMapPin size={11} />
-                      <span>{effectiveHq}</span>
-                    </LocationLine>
+                  {effectiveHq ||
+                  (dept.headquartersLatitude != null &&
+                    dept.headquartersLongitude != null) ? (
+                    <div>
+                      {effectiveHq ? (
+                        <LocationLine>
+                          <FiMapPin size={11} />
+                          <span>{effectiveHq}</span>
+                        </LocationLine>
+                      ) : null}
+                      <HeadquartersMapPreview
+                        headquarters={effectiveHq}
+                        latitude={dept.headquartersLatitude}
+                        longitude={dept.headquartersLongitude}
+                        countryName={polity.polityName}
+                        departmentName={dept.name}
+                        mapHeight={190}
+                      />
+                    </div>
                   ) : null}
 
                   {effectiveMission ? (
@@ -844,7 +998,12 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
                     <DrawerSectionHeader>
                       <DrawerSectionTitle>
                         <FiGitCommit size={13} />
-                        <span>편제 · 계보 · 산하 군부대</span>
+                        <span>
+                          편제 · 전후 계보
+                          {dept.militaryUnits.length > 0
+                            ? ' · 산하 군부대'
+                            : ''}
+                        </span>
                       </DrawerSectionTitle>
                     </DrawerSectionHeader>
                     <TagWrapRow>
@@ -890,6 +1049,20 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
                         >
                           후신: {succItem.department.name} →
                         </LineageJumpChip>
+                      ))}
+                      {(dept.militaryUnitSuccessors ?? []).map((milSucc) => (
+                        <EventCardLink
+                          key={milSucc.transitionId}
+                          to={pathKeys.militaryUnitDetail(
+                            milSucc.militaryUnit.id,
+                          )}
+                        >
+                          <div>
+                            <FiShield size={11} />
+                            <span>군조직 이관: {milSucc.militaryUnit.name}</span>
+                          </div>
+                          <FiArrowUpRight size={12} />
+                        </EventCardLink>
                       ))}
                       {dept.militaryUnits.map((unitItem) => (
                         <EventCardLink
@@ -1019,7 +1192,8 @@ const DrawerShell = styled.aside`
   min-height: 480px;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.MD};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: ${({ theme }) => ledgerSurface(theme.mode)};
   overflow: hidden;
 
@@ -1030,8 +1204,64 @@ const DrawerShell = styled.aside`
     bottom: 0;
     width: min(440px, 100vw);
     height: auto;
+    border-radius: 0;
     z-index: 60;
     box-shadow: -12px 0 32px rgba(0, 0, 0, 0.24);
+  }
+
+  @media (max-width: 640px) {
+    width: 100dvw;
+    border-left: none;
+  }
+`
+
+const OutOfScopeBanner = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.28)'
+        : 'rgba(217, 119, 6, 0.24)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(245, 158, 11, 0.12)'
+      : 'rgba(254, 243, 199, 0.65)'};
+  flex-shrink: 0;
+`
+
+const OutOfScopeText = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#92400e')};
+`
+
+const OutOfScopeResetBtn = styled.button`
+  padding: 3px 8px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.35)'
+        : 'rgba(180, 83, 9, 0.3)'};
+  background: transparent;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fde68a' : '#78350f')};
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.18)'
+        : 'rgba(245, 158, 11, 0.14)'};
   }
 `
 
@@ -1107,6 +1337,7 @@ const OpenPageLink = styled(Link)`
 const DrawerScroll = styled.div`
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -1521,6 +1752,45 @@ const MiniCabJumpBtn = styled.button`
   color: ${({ theme }) => ledgerAccent(theme.mode)};
   white-space: nowrap;
   cursor: pointer;
+`
+
+const ActingBadge = styled.span`
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(217, 119, 6, 0.38);
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: middle;
+`
+
+const DetachMiniBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 6px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid transparent;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover:not(:disabled) {
+    border-color: rgba(239, 68, 68, 0.35);
+    background: rgba(239, 68, 68, 0.08);
+    color: #dc2626;
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
 `
 
 const LineageJumpChip = styled.button`

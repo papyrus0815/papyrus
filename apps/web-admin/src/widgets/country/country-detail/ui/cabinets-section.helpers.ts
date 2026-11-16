@@ -70,6 +70,29 @@ export function getPersonBirthPlaceLabel(
   return text || null
 }
 
+/**
+ * 개각(제2·3차 내각 등) 고유 출범·종료일을 최우선으로 사용하고, 비어 있을 때만 수반 재임 기간으로 폴백한다.
+ */
+export function resolveCabinetEffectiveDates(
+  cabinet:
+    | {
+        startDate?: string | null
+        endDate?: string | null
+        headTenure?: {
+          startDate?: string | null
+          endDate?: string | null
+        } | null
+      }
+    | null
+    | undefined,
+): { startDate: string | null; endDate: string | null } {
+  if (!cabinet) return { startDate: null, endDate: null }
+  return {
+    startDate: cabinet.startDate ?? cabinet.headTenure?.startDate ?? null,
+    endDate: cabinet.endDate ?? cabinet.headTenure?.endDate ?? null,
+  }
+}
+
 /** 수반 재임 기준 상단 브레드크럼: 「제N대 [M기] 이름」 또는 이름만 / 없으면 행정부 명칭 또는 「행정부 상세」 */
 export function formatCabinetHeadBreadcrumbLabel(
   headTenure:
@@ -1064,15 +1087,20 @@ function parseHexRgb(hex: string): { r: number; g: number; b: number } {
   return { r: 99, g: 102, b: 241 }
 }
 
-/** 타임라인 가로 띠 — 스파인 위 얇은 하이라이트(과한 글로우 제거) */
+/** 타임라인 가로 띠 — 스파인 위 얇은 하이라이트(연속된 동일 군주 구간은 끊기지 않고 이어짐) */
 export function cabinetTimelineMonarchRailGradient(
   lineHex: string,
   isDark: boolean,
+  opts?: { connectPrev?: boolean; connectNext?: boolean },
 ): string {
-  const { r, g, b } = parseHexRgb(lineHex)
-  const e = isDark ? 0.18 : 0.12
-  const m = isDark ? 0.52 : 0.4
-  return `linear-gradient(90deg, rgba(${r},${g},${b},0) 0%, rgba(${r},${g},${b},${e}) 12%, rgba(${r},${g},${b},${m}) 50%, rgba(${r},${g},${b},${e}) 88%, rgba(${r},${g},${b},0) 100%)`
+  const [red, green, blue] = Object.values(parseHexRgb(lineHex))
+  const edgeAlpha = isDark ? 0.18 : 0.12
+  const midAlpha = isDark ? 0.52 : 0.4
+  const startAlpha = opts?.connectPrev ? midAlpha : 0
+  const nearStartAlpha = opts?.connectPrev ? midAlpha : edgeAlpha
+  const nearEndAlpha = opts?.connectNext ? midAlpha : edgeAlpha
+  const endAlpha = opts?.connectNext ? midAlpha : 0
+  return `linear-gradient(90deg, rgba(${red},${green},${blue},${startAlpha}) 0%, rgba(${red},${green},${blue},${nearStartAlpha}) 12%, rgba(${red},${green},${blue},${midAlpha}) 50%, rgba(${red},${green},${blue},${nearEndAlpha}) 88%, rgba(${red},${green},${blue},${endAlpha}) 100%)`
 }
 
 /** 군주 범례·연호 칩 테두리/배경 */
@@ -1117,7 +1145,7 @@ export function sovereignLegendPersonLabelFromMonarchTenure(
 }
 
 /**
- * 내각 수반 재임과 날짜로 겹치는 군주 재임 한 건(겹침 길이 최대).
+ * 내각(수반 재임 또는 개각·합의체 자체 기간)과 날짜로 겹치는 군주 재임 한 건(겹침 길이 최대).
  */
 export function overlappingMonarchTenureForExecutiveHead(
   execHead: GovernmentHeadTenureInCabinetList | null | undefined,
@@ -1126,11 +1154,44 @@ export function overlappingMonarchTenureForExecutiveHead(
     | null
     | undefined,
   scope?: CabinetTimelineCountryScope | null,
+  cabinetOverride?: {
+    startDate?: string | null
+    endDate?: string | null
+    countryId?: string | null
+    historicalCountryId?: string | null
+  } | null,
 ): GovernmentHeadTenureInCabinetList | null {
-  if (!execHead?.startDate || !allCountryTenures?.length) return null
-  if (shouldHideCabinetFromExecutiveTimeline(execHead)) return null
+  if (!allCountryTenures?.length) return null
+  if (execHead && shouldHideCabinetFromExecutiveTimeline(execHead)) return null
 
-  const execRange = headTenureDateRangeMs(execHead)
+  const effectiveStartDate =
+    cabinetOverride?.startDate?.trim() || execHead?.startDate || null
+  const effectiveEndDate =
+    cabinetOverride?.startDate?.trim()
+      ? (cabinetOverride.endDate ?? null)
+      : (execHead?.endDate ?? null)
+  if (!effectiveStartDate) return null
+
+  const syntheticSubject: GovernmentHeadTenureInCabinetList = execHead
+    ? {
+        ...execHead,
+        startDate: effectiveStartDate,
+        endDate: effectiveEndDate,
+        countryId: cabinetOverride?.countryId ?? execHead.countryId ?? null,
+        historicalCountryId:
+          cabinetOverride?.historicalCountryId ??
+          execHead.historicalCountryId ??
+          null,
+      }
+    : ({
+        id: '__collective__',
+        startDate: effectiveStartDate,
+        endDate: effectiveEndDate,
+        countryId: cabinetOverride?.countryId ?? null,
+        historicalCountryId: cabinetOverride?.historicalCountryId ?? null,
+      } as GovernmentHeadTenureInCabinetList)
+
+  const execRange = headTenureDateRangeMs(syntheticSubject)
   if (!execRange) return null
 
   const monarchPool = effectiveMonarchTenuresForCabinetTimeline(
@@ -1141,7 +1202,7 @@ export function overlappingMonarchTenureForExecutiveHead(
   let bestOverlap = -1
   for (const monarchItem of monarchPool) {
     if (!isSovereignMonarchTenureForCabinetTimeline(monarchItem)) continue
-    if (!headTenuresMatchForMonarchOverlap(monarchItem, execHead, scope))
+    if (!headTenuresMatchForMonarchOverlap(monarchItem, syntheticSubject, scope))
       continue
     const monarchRange = headTenureDateRangeMs(monarchItem)
     if (!monarchRange) continue
@@ -1152,7 +1213,10 @@ export function overlappingMonarchTenureForExecutiveHead(
       const overlapMs =
         Math.min(execRange.end, monarchRange.end) -
         Math.max(execRange.start, monarchRange.start)
-      const samePolity = cabinetHeadSameTerritoryAsTenure(monarchItem, execHead)
+      const samePolity = cabinetHeadSameTerritoryAsTenure(
+        monarchItem,
+        syntheticSubject,
+      )
       if (
         (samePolity && !bestSamePolity) ||
         (samePolity === bestSamePolity && overlapMs > bestOverlap)
@@ -1176,37 +1240,42 @@ export function overlappingMonarchCaptionForExecutiveHead(
     | null
     | undefined,
   scope?: CabinetTimelineCountryScope | null,
+  cabinetOverride?: {
+    startDate?: string | null
+    endDate?: string | null
+    countryId?: string | null
+    historicalCountryId?: string | null
+  } | null,
 ): string | null {
-  if (!execHead?.startDate) return null
+  const pivotStart =
+    cabinetOverride?.startDate?.trim() || execHead?.startDate || null
+  if (!pivotStart) return null
   const mon = overlappingMonarchTenureForExecutiveHead(
     execHead,
     allCountryTenures,
     scope,
+    cabinetOverride,
   )
   if (!mon) return null
-  return monarchCaptionFromTenure(mon, execHead.startDate)
+  return monarchCaptionFromTenure(mon, pivotStart)
 }
 
 function unionExecutiveHeadRangesMs(
-  timelineCabinets: readonly {
+  timelineCabinets: readonly ({
     headTenure: GovernmentHeadTenureInCabinetList | null
     startDate?: string | null
     endDate?: string | null
-  }[],
+  } & CabinetVisibilityContext)[],
 ): { start: number; end: number } | null {
   let minStart = Infinity
   let maxEnd = -Infinity
   for (const cabinetItem of timelineCabinets) {
     const headItem = cabinetItem.headTenure
-    if (headItem && shouldHideCabinetFromExecutiveTimeline(headItem)) continue
-    const rangeResult = headItem
-      ? headTenureDateRangeMs(headItem)
-      : cabinetItem.startDate
-        ? headTenureDateRangeMs({
-            startDate: cabinetItem.startDate,
-            endDate: cabinetItem.endDate,
-          })
-        : null
+    if (headItem && shouldHideCabinetFromExecutiveTimeline(headItem, cabinetItem)) continue
+    const effectiveDates = resolveCabinetEffectiveDates(cabinetItem)
+    const rangeResult = effectiveDates.startDate
+      ? headTenureDateRangeMs(effectiveDates)
+      : null
     if (!rangeResult) continue
     if (rangeResult.start < minStart) minStart = rangeResult.start
     if (rangeResult.end > maxEnd) maxEnd = rangeResult.end
@@ -1224,11 +1293,11 @@ export type MonarchReignLegendItem = {
 
 /** 타임라인에 올라온 행정부 기간과 겹치는 군주 재위 — 헤더 표기용 */
 export function monarchReignLegendForCabinetTimeline(
-  timelineCabinets: readonly {
+  timelineCabinets: readonly ({
     headTenure: GovernmentHeadTenureInCabinetList | null
     startDate?: string | null
     endDate?: string | null
-  }[],
+  } & CabinetVisibilityContext)[],
   allCountryTenures:
     | readonly GovernmentHeadTenureInCabinetList[]
     | null
@@ -1280,12 +1349,12 @@ export function monarchReignLegendForCabinetTimeline(
 
 /** 타임라인 헤더 연도 — 행정부 수반 재임 시작·끝 + (겹치는) 군주 재위 시작·끝 포함 */
 export function cabinetTimelineHeaderYearRange(
-  timelineCabinets: readonly {
+  timelineCabinets: readonly ({
     headTenure: GovernmentHeadTenureInCabinetList | null
     startDate?: string | null
     endDate?: string | null
-  }[],
-  allCountryTenures:
+  } & CabinetVisibilityContext)[],
+  allCountryTenures?:
     | readonly GovernmentHeadTenureInCabinetList[]
     | null
     | undefined,
@@ -1295,9 +1364,9 @@ export function cabinetTimelineHeaderYearRange(
   const nowYear = new Date().getFullYear()
 
   for (const cabinetItem of timelineCabinets) {
-    const headItem = cabinetItem.headTenure
-    const effStart = headItem?.startDate ?? cabinetItem.startDate
-    const effEnd = headItem ? headItem.endDate : cabinetItem.endDate
+    const effectiveDates = resolveCabinetEffectiveDates(cabinetItem)
+    const effStart = effectiveDates.startDate
+    const effEnd = effectiveDates.endDate
     if (!effStart) continue
     const startYear = parseSignedDateParts(effStart)?.signedYear
     if (startYear != null) years.push(startYear)
@@ -1311,8 +1380,14 @@ export function cabinetTimelineHeaderYearRange(
     )
     for (const cabinetItem of timelineCabinets) {
       const headItem = cabinetItem.headTenure
-      if (!headItem?.startDate || shouldHideCabinetFromExecutiveTimeline(headItem)) continue
-      const execRange = headTenureDateRangeMs(headItem)
+      if (
+        !headItem?.startDate ||
+        shouldHideCabinetFromExecutiveTimeline(headItem, cabinetItem)
+      ) {
+        continue
+      }
+      const effectiveDates = resolveCabinetEffectiveDates(cabinetItem)
+      const execRange = headTenureDateRangeMs(effectiveDates)
       if (!execRange) continue
       for (const monarchItem of monarchPool) {
         if (!isSovereignMonarchTenureForCabinetTimeline(monarchItem)) continue
@@ -1362,24 +1437,50 @@ export function resolveReignEraLineForCabinetHead(
     | null
     | undefined,
   scope?: CabinetTimelineCountryScope | null,
+  cabinetStartDateOverride?: string | null,
+  cabinetTerritoryOverride?: {
+    countryId?: string | null
+    historicalCountryId?: string | null
+  } | null,
 ): string | null {
-  if (!head?.startDate) return null
-  const iso = head.startDate
+  const pivotStartIso = cabinetStartDateOverride ?? head?.startDate ?? null
+  if (!pivotStartIso) return null
+  const iso = pivotStartIso
   /** 총리 등에 잘못 붙은 연호만으로 메이지 시대 등이 나오지 않게 — 군주 재임만 자기 연호 사용 */
-  const own = pickRegnalEraForDate(head.regnalEras, iso)
-  if (own && isSovereignMonarchTenureForCabinetTimeline(head)) {
-    return formatReignEraLineLabel(own)
+  if (head) {
+    const own = pickRegnalEraForDate(head.regnalEras, iso)
+    if (own && isSovereignMonarchTenureForCabinetTimeline(head)) {
+      return formatReignEraLineLabel(own)
+    }
   }
 
   if (!countryTenures?.length) return null
+  const territorySubject: GovernmentHeadTenureInCabinetList = head
+    ? {
+        ...head,
+        countryId: cabinetTerritoryOverride?.countryId ?? head.countryId ?? null,
+        historicalCountryId:
+          cabinetTerritoryOverride?.historicalCountryId ??
+          head.historicalCountryId ??
+          null,
+      }
+    : ({
+        id: '__collective__',
+        countryId: cabinetTerritoryOverride?.countryId ?? null,
+        historicalCountryId:
+          cabinetTerritoryOverride?.historicalCountryId ?? null,
+      } as GovernmentHeadTenureInCabinetList)
+  if (!territorySubject.countryId && !territorySubject.historicalCountryId) {
+    return null
+  }
   const monarchPool = effectiveMonarchTenuresForCabinetTimeline(countryTenures)
   const monarchs = monarchPool.filter((t) => {
     if (!tenureCoversIsoDate(t, iso)) return false
     if (!isSovereignMonarchTenureForCabinetTimeline(t)) return false
     if (scope) {
-      return headTenuresMatchForMonarchOverlap(t, head, scope)
+      return headTenuresMatchForMonarchOverlap(t, territorySubject, scope)
     }
-    return cabinetHeadSameTerritoryAsTenure(head, t)
+    return cabinetHeadSameTerritoryAsTenure(territorySubject, t)
   })
   for (const m of monarchs) {
     const era = pickRegnalEraForDate(m.regnalEras, iso)

@@ -52,9 +52,15 @@ export const LOSS_METRIC_PRIORITY = [
   'military.combat_deaths',
   'military.killed_in_action',
   'military.deaths_unspecified',
+  'human.deaths_total',
+  'human.executed',
+  'civilian.killed',
 ] as const
 
 export const PERSONNEL_METRIC = 'military.personnel'
+
+/** 동원·참여 인원 쪽 지표 — 정규군 병력이 없으면 봉기·시위의 참여 인원(society.participants)으로 가늠 */
+export const SIZE_METRIC_PRIORITY = ['military.personnel', 'society.participants'] as const
 
 /**
  * 한 칸의 대표값 — 값이 하나면 그것, 여럿이면 **채택(PREFERRED)이 정확히 하나**일 때 그것.
@@ -93,7 +99,7 @@ export function lossRate(
     const picked = representativeOf(rows.find((row) => row.key === key)?.cells.get(sideId) ?? [])
     return picked && !picked.atLeast ? picked : null
   }
-  const personnel = single(PERSONNEL_METRIC)
+  const personnel = single(PERSONNEL_METRIC) ?? single('society.participants')
   const personnelValue = personnel ? centerOf(personnel) : null
   if (!personnelValue || personnelValue <= 0) return null
   for (const key of LOSS_METRIC_PRIORITY) {

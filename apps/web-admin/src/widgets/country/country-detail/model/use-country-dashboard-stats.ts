@@ -569,21 +569,26 @@ export function useCountryDashboardStats(
     staleTime: 1000 * 60 * 2,
   })
 
-  // 활성 cabinet 중 가장 최신(headTenure.startDate desc)을 우선 선택하고,
-  // 모든 내각이 종료된 국가(프랑스·일본·독일 등 과거 내각만 등록된 경우)에서는 가장 최근 내각으로 폴백한다.
+  // 활성 cabinet 중 현대 국가 직속(historicalCountryId 없음)을 최우선 선택하고,
+  // 현대 직속 내각이 전혀 없는 경우에만 브리지된 과거 내각 중 최신으로 폴백한다.
   const latestActiveCabinetId = useMemo<string | null>(() => {
     const list = Array.isArray(cabinetsQuery.data)
       ? (cabinetsQuery.data as any[])
       : []
     if (list.length === 0) return null
     const now = Date.now()
-    const active = list.filter((c) => {
+    const isModernDirect = (c: any) =>
+      !c?.historicalCountryId && !c?.headTenure?.historicalCountryId
+    const modernPool = list.filter(isModernDirect)
+    const basePool = modernPool.length > 0 ? modernPool : list
+    const active = basePool.filter((c) => {
+      if (c.headTenure?.endYear != null) return false
       const end = c.headTenure?.endDate
       if (!end) return true
       const t = new Date(end).getTime()
       return !Number.isFinite(t) || t >= now
     })
-    const candidates = active.length > 0 ? active : list
+    const candidates = active.length > 0 ? active : basePool
     const sorted = [...candidates].sort((a, b) => {
       const da = new Date(a.headTenure?.startDate ?? 0).getTime()
       const db = new Date(b.headTenure?.startDate ?? 0).getTime()
@@ -1043,11 +1048,16 @@ export function useCountryDashboardStats(
     const tenures = (tenuresQuery.data ?? []) as any[]
     const now = Date.now()
     const matches = tenures.filter((t) => {
+      // 현대 국가 대시보드에서는 소멸한 전신 과거국가(historicalCountryId)의 미종료 행이 현직 수반으로 둔갑하지 않도록 차단
+      if (country?.type === 'modern' && t.historicalCountryId != null) {
+        return false
+      }
       const positionType =
         t.positionType ??
         t.positionDefinition?.positionType ??
         t.position?.positionType
       if (!HEAD_TYPES.has(positionType)) return false
+      if (t.endYear != null) return false
       const end = t.endDate ? new Date(t.endDate).getTime() : null
       return end == null || end >= now
     })

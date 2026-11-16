@@ -5,11 +5,13 @@ import React, {
   useRef,
   useState,
 } from 'react'
+import { createPortal } from 'react-dom'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   FiArrowUpRight,
   FiBookOpen,
+  FiCheck,
   FiChevronDown,
   FiChevronLeft,
   FiChevronRight,
@@ -25,8 +27,8 @@ import {
   FiUsers,
   FiX,
 } from 'react-icons/fi'
-import { Link, useLocation, useSearchParams } from 'react-router-dom'
-import styled, { css } from 'styled-components'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import styled, { css, keyframes } from 'styled-components'
 
 import {
   DIGIT_DISPLAY,
@@ -45,6 +47,14 @@ import type { PositionCategory } from '@/entities/government-position/model/type
 import { useCountries } from '@/features/country/api'
 import { useHistoricalCountries } from '@/features/historical-country/use-historical-countries.hook'
 import {
+  COLUMN_HEAD_BAND,
+  GROUP_BAND,
+  GROUP_BAND_HOVER,
+  META_TEXT,
+  RAIL_AXIS,
+  ROW_HAIRLINE,
+} from '@/pages/events/styles/theme'
+import {
   administrationDepartmentApi,
   type AdministrationDepartment,
   type AdministrationDepartmentKind,
@@ -58,16 +68,26 @@ import {
   personCareerApi,
 } from '@/shared/api/person-career'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { useAnchoredPosition } from '@/shared/hooks/use-anchored-position.hook'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
+import { useOverlayEscape } from '@/shared/hooks/use-overlay-escape.hook'
 import { formatCenturyLabel, getCenturyFromIso } from '@/shared/lib/iso-date'
+import { isNonCabinetStateOrgan } from '@/shared/lib/ministry-department/department-cabinet-matcher'
+import {
+  type HistoricalPolityYearSpan,
+  isDepartmentActiveAtSignedYear,
+  resolveDepartmentLifecycleStatus,
+} from '@/shared/lib/ministry-department/ministry-department-utils'
 import { pathKeys } from '@/shared/router'
+import { Z_INDEX } from '@/shared/styles/z-index'
 import { InstitutionAppointmentModal } from '@/shared/ui/institution-appointment-modal'
 import {
   SearchableSelect,
   type SearchableSelectOption,
 } from '@/shared/ui/searchable-select'
 import { SidePanel } from '@/shared/ui/side-panel'
+import { notify } from '@/shared/ui/toast'
 import {
   CabinetFormModal,
   type EditableCabinetRecord,
@@ -86,23 +106,28 @@ import { GovernmentDetailDrawer } from './components/government-detail-drawer'
 import {
   type GovernmentCenturyBucket,
   type GovernmentDecadeBucket,
+  type GovernmentEraSpanItem,
   GovernmentEraStrip,
 } from './components/government-era-strip'
 import {
   type CabinetDisplayMode,
   type CabinetSortKey,
+  calculateTenureSpanInfo,
+  computeCabinetReshuffleMetaMap,
   type DepartmentSortKey,
   type DepartmentStatusFilter,
   extractSignedStartYearFromIso,
-  formatIsoShortPeriod,
   formatSignedYearLabel,
   GLOBAL_CABINET_CATEGORY_LABELS,
+  GOVERNMENT_HIDEABLE_COLUMNS,
   type GovernmentCatalogTab,
+  type GovernmentHideableColumn,
   type GovernmentListDensity,
   type GovernmentListReturnState,
   readGovernmentCatalogMemory,
   resolveCabinetCategory,
   resolveCabinetDisplayTitle,
+  resolveCabinetDistinctSubMeta,
   resolveCabinetEffectiveDates,
   resolveCabinetHeadName,
   resolveCabinetLeadingParty,
@@ -175,12 +200,25 @@ function getDepartmentSignedYears(deptItem: AdministrationDepartment): {
 function doesDepartmentMatchActiveYear(
   deptItem: AdministrationDepartment,
   targetYear: number,
+  politySpanMap?: Map<string, HistoricalPolityYearSpan>,
 ): boolean {
-  const { startYear, endYear } = getDepartmentSignedYears(deptItem)
-  if (startYear == null && endYear == null) return false
-  const lower = startYear ?? -99999
-  const upper = endYear ?? Number.MAX_SAFE_INTEGER
-  return lower <= targetYear && targetYear <= upper
+  const politySpan = deptItem.historicalCountryId
+    ? politySpanMap?.get(deptItem.historicalCountryId)
+    : null
+  return isDepartmentActiveAtSignedYear(deptItem, targetYear, politySpan)
+}
+
+function doesDepartmentMatchStatusFilter(
+  deptItem: AdministrationDepartment,
+  statusFilter: DepartmentStatusFilter,
+): boolean {
+  if (statusFilter === 'all') return true
+  const lifecycle = resolveDepartmentLifecycleStatus(deptItem)
+  if (statusFilter === 'active') return lifecycle === 'ACTIVE'
+  if (statusFilter === 'superseded') return lifecycle === 'SUPERSEDED'
+  if (statusFilter === 'historical') return lifecycle === 'HISTORICAL_ENDED'
+  if (statusFilter === 'abolished') return lifecycle === 'ABOLISHED'
+  return true
 }
 
 interface FilterReleaseSuggestion {
@@ -194,6 +232,7 @@ export function GovernmentCatalogPage() {
   useDocumentTitle('전 국가 정부 · 내각 카탈로그')
   const queryClient = useQueryClient()
   const location = useLocation()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const savedMemory = useMemo(() => readGovernmentCatalogMemory(), [])
@@ -236,8 +275,12 @@ export function GovernmentCatalogPage() {
   const [density, setDensity] = useState<GovernmentListDensity>(
     () => savedMemory.density ?? 'cozy',
   )
+  const [hiddenColumns, setHiddenColumns] = useState<
+    ReadonlySet<GovernmentHideableColumn>
+  >(() => new Set(savedMemory.hiddenColumns ?? []))
   const [searchDraft, setSearchDraft] = useState<string>(urlQueryText)
   const debouncedSearch = useDebouncedValue(searchDraft, 250)
+  const isSearchPending = searchDraft.trim() !== debouncedSearch.trim()
   const [yearInputDraft, setYearInputDraft] = useState<string>(rawYearParam)
 
   const [positionDictOpen, setPositionDictOpen] = useState<boolean>(false)
@@ -267,6 +310,31 @@ export function GovernmentCatalogPage() {
   const searchInputRef = useRef<HTMLInputElement>(null)
   const ledgerScrollRef = useRef<HTMLDivElement>(null)
   const displayMenuWrapRef = useRef<HTMLDivElement>(null)
+  const displayTriggerRef = useRef<HTMLButtonElement>(null)
+  const displayPopoverRef = useRef<HTMLDivElement>(null)
+  const displayPopoverPos = useAnchoredPosition(
+    displayTriggerRef,
+    displayPopoverOpen,
+    { gap: 6, maxWidth: 280 },
+  )
+  const closeDisplayPopover = useCallback(
+    () => setDisplayPopoverOpen(false),
+    [],
+  )
+  useOverlayEscape(displayPopoverOpen, closeDisplayPopover)
+
+  const toggleHiddenColumn = useCallback(
+    (colKey: GovernmentHideableColumn) => {
+      setHiddenColumns((prevSet) => {
+        const nextSet = new Set(prevSet)
+        if (nextSet.has(colKey)) nextSet.delete(colKey)
+        else nextSet.add(colKey)
+        writeGovernmentCatalogMemory({ hiddenColumns: [...nextSet] })
+        return nextSet
+      })
+    },
+    [],
+  )
 
   // Restore remembered filter query once when visiting bare `/government`, and persist query updates
   useEffect(() => {
@@ -337,16 +405,14 @@ export function GovernmentCatalogPage() {
     updateParams({ [SEARCH_QUERY_PARAM]: trimmed || null })
   }, [debouncedSearch, urlQueryText, updateParams])
 
-  // Close display popover on outside click
+  // Close display popover on outside click (handles portal + trigger)
   useEffect(() => {
     if (!displayPopoverOpen) return
     const handleOutsideMouseDown = (mouseEvent: MouseEvent) => {
-      if (
-        displayMenuWrapRef.current &&
-        !displayMenuWrapRef.current.contains(mouseEvent.target as Node)
-      ) {
-        setDisplayPopoverOpen(false)
-      }
+      const targetNode = mouseEvent.target as Node
+      if (displayMenuWrapRef.current?.contains(targetNode)) return
+      if (displayPopoverRef.current?.contains(targetNode)) return
+      setDisplayPopoverOpen(false)
     }
     document.addEventListener('mousedown', handleOutsideMouseDown)
     return () => document.removeEventListener('mousedown', handleOutsideMouseDown)
@@ -660,7 +726,9 @@ export function GovernmentCatalogPage() {
           value: `C:${modernItem.id}`,
           label: recordCount > 0 ? `${baseLabel} (${recordCount})` : baseLabel,
           group: recordCount > 0 ? '기록 보유 · 현대 국가' : '현대 국가',
-          keywords: [modernItem.name, modernItem.isoCode ?? ''],
+          keywords: [modernItem.name, modernItem.isoCode ?? '']
+            .filter(Boolean)
+            .join(' '),
         }
       })
 
@@ -683,7 +751,9 @@ export function GovernmentCatalogPage() {
             recordCount > 0
               ? '기록 보유 · 역사적 국가'
               : '역사적 국가 · 왕조 · 정체',
-          keywords: [histItem.name, histItem.enName ?? ''],
+          keywords: [histItem.name, histItem.enName ?? '']
+            .filter(Boolean)
+            .join(' '),
         }
       })
 
@@ -719,11 +789,27 @@ export function GovernmentCatalogPage() {
     return countMap
   }, [activeRawCabinets])
 
+  const historicalPolitySpanMap = useMemo(() => {
+    const spanMap = new Map<string, HistoricalPolityYearSpan>()
+    for (const histItem of historicalCountries) {
+      if (!histItem.id) continue
+      spanMap.set(histItem.id, {
+        startEra: histItem.startEra,
+        startYear: histItem.startYear,
+        endEra: histItem.endEra,
+        endYear: histItem.endYear,
+      })
+    }
+    return spanMap
+  }, [historicalCountries])
+
   const { deptKindCounts, deptCategoryCounts, deptStatusCounts } =
     useMemo(() => {
       const kindMap = new Map<string, number>()
       const catMap = new Map<string, number>()
       let activeCount = 0
+      let supersededCount = 0
+      let historicalCount = 0
       let abolishedCount = 0
       for (const deptItem of allDepartments) {
         kindMap.set(deptItem.kind, (kindMap.get(deptItem.kind) ?? 0) + 1)
@@ -733,17 +819,19 @@ export function GovernmentCatalogPage() {
             (catMap.get(deptItem.categoryId) ?? 0) + 1,
           )
         }
-        const isAbolished = Boolean(
-          deptItem.abolished || deptItem.abolishedDate,
-        )
-        if (isAbolished) abolishedCount += 1
-        else activeCount += 1
+        const lifecycle = resolveDepartmentLifecycleStatus(deptItem)
+        if (lifecycle === 'ACTIVE') activeCount += 1
+        else if (lifecycle === 'SUPERSEDED') supersededCount += 1
+        else if (lifecycle === 'HISTORICAL_ENDED') historicalCount += 1
+        else abolishedCount += 1
       }
       return {
         deptKindCounts: kindMap,
         deptCategoryCounts: catMap,
         deptStatusCounts: {
           active: activeCount,
+          superseded: supersededCount,
+          historical: historicalCount,
           abolished: abolishedCount,
         },
       }
@@ -797,6 +885,26 @@ export function GovernmentCatalogPage() {
       const leftYear = extractSignedStartYearFromIso(leftEffective.startDate)
       const rightYear = extractSignedStartYearFromIso(rightEffective.startDate)
 
+      if (cabinetSort === 'duration_desc') {
+        const leftMonths =
+          calculateTenureSpanInfo(
+            leftEffective.startDate,
+            leftEffective.endDate,
+            leftEffective.isOngoing,
+          ).monthsSpan ?? -1
+        const rightMonths =
+          calculateTenureSpanInfo(
+            rightEffective.startDate,
+            rightEffective.endDate,
+            rightEffective.isOngoing,
+          ).monthsSpan ?? -1
+        if (rightMonths !== leftMonths) return rightMonths - leftMonths
+      }
+      if (cabinetSort === 'members_desc') {
+        const leftMinisters = resolveCabinetMinisterCount(leftCab)
+        const rightMinisters = resolveCabinetMinisterCount(rightCab)
+        if (rightMinisters !== leftMinisters) return rightMinisters - leftMinisters
+      }
       if (cabinetSort === 'country') {
         const leftCountry = resolveCabinetPolityInfo(leftCab).polityName
         const rightCountry = resolveCabinetPolityInfo(rightCab).polityName
@@ -836,6 +944,11 @@ export function GovernmentCatalogPage() {
     cabinetSort,
   ])
 
+  const cabinetReshuffleMetaMap = useMemo(
+    () => computeCabinetReshuffleMetaMap(filteredCabinets),
+    [filteredCabinets],
+  )
+
   const filteredDepartments = useMemo(() => {
     const needle = searchDraft.trim().toLowerCase()
     const filtered = activeRawDepartments.filter((deptItem) => {
@@ -851,11 +964,9 @@ export function GovernmentCatalogPage() {
         return false
       }
       if (deptStatusFilter !== 'all') {
-        const isAbolished = Boolean(
-          deptItem.abolished || deptItem.abolishedDate,
-        )
-        if (deptStatusFilter === 'active' && isAbolished) return false
-        if (deptStatusFilter === 'abolished' && !isAbolished) return false
+        if (!doesDepartmentMatchStatusFilter(deptItem, deptStatusFilter)) {
+          return false
+        }
       }
       if (!needle) return true
       const haystack = [
@@ -876,6 +987,34 @@ export function GovernmentCatalogPage() {
     return [...filtered].sort((leftDept, rightDept) => {
       if (deptSort === 'name') {
         return leftDept.name.localeCompare(rightDept.name, 'ko')
+      }
+      if (deptSort === 'tenures_desc') {
+        const leftTenures = leftDept.tenureCount ?? 0
+        const rightTenures = rightDept.tenureCount ?? 0
+        if (rightTenures !== leftTenures) return rightTenures - leftTenures
+      }
+      if (deptSort === 'duration_desc') {
+        const leftPolity = resolveDepartmentPolityInfo(leftDept)
+        const rightPolity = resolveDepartmentPolityInfo(rightDept)
+        const leftAbolished = Boolean(leftDept.abolished || leftDept.abolishedDate)
+        const rightAbolished = Boolean(
+          rightDept.abolished || rightDept.abolishedDate,
+        )
+        const leftMonths =
+          calculateTenureSpanInfo(
+            leftDept.establishedDate,
+            leftDept.abolishedDate,
+            !leftPolity.isHistorical && !leftAbolished,
+            1200,
+          ).monthsSpan ?? -1
+        const rightMonths =
+          calculateTenureSpanInfo(
+            rightDept.establishedDate,
+            rightDept.abolishedDate,
+            !rightPolity.isHistorical && !rightAbolished,
+            1200,
+          ).monthsSpan ?? -1
+        if (rightMonths !== leftMonths) return rightMonths - leftMonths
       }
       const { startYear: leftYear } = getDepartmentSignedYears(leftDept)
       const { startYear: rightYear } = getDepartmentSignedYears(rightDept)
@@ -966,89 +1105,117 @@ export function GovernmentCatalogPage() {
     return [...groups.values()]
   }, [filteredDepartments])
 
-  const { eraBuckets, eraDecadeBuckets, eraUndatedCount } = useMemo(() => {
-    const sourceChapters =
-      activeTab === 'cabinets' ? cabinetChapters : departmentChapters
-    const bucketList: GovernmentCenturyBucket[] = []
-    let undated = 0
-    for (const chapterItem of sourceChapters) {
-      if (chapterItem.century == null) {
-        undated += chapterItem.items.length
+  const { eraBuckets, eraDecadeBuckets, eraSpans, eraUndatedCount } =
+    useMemo(() => {
+      const sourceChapters =
+        activeTab === 'cabinets' ? cabinetChapters : departmentChapters
+      const bucketList: GovernmentCenturyBucket[] = []
+      let undated = 0
+      for (const chapterItem of sourceChapters) {
+        if (chapterItem.century == null) {
+          undated += chapterItem.items.length
+        } else {
+          bucketList.push({
+            key: chapterItem.key,
+            century: chapterItem.century,
+            count: chapterItem.items.length,
+          })
+        }
+      }
+
+      const decadeMap = new Map<number, { centuryKey: string; count: number }>()
+      const spanCandidates: GovernmentEraSpanItem[] = []
+      const nowYear = new Date().getFullYear()
+
+      if (activeTab === 'cabinets') {
+        for (const cabinetItem of filteredCabinets) {
+          const effective = resolveCabinetEffectiveDates(cabinetItem)
+          const startYear = extractSignedStartYearFromIso(effective.startDate)
+          const endYear =
+            extractSignedStartYearFromIso(effective.endDate) ??
+            (effective.isOngoing ? nowYear : null)
+          const century = getCenturyFromIso(effective.startDate)
+          if (startYear == null || century == null) continue
+          const decadeStart =
+            startYear >= 0
+              ? Math.floor(startYear / 10) * 10
+              : -Math.ceil(Math.abs(startYear) / 10) * 10
+          const prevEntry = decadeMap.get(decadeStart)
+          if (prevEntry) {
+            prevEntry.count += 1
+          } else {
+            decadeMap.set(decadeStart, {
+              centuryKey: String(century),
+              count: 1,
+            })
+          }
+          if (endYear != null && endYear - startYear >= 4) {
+            spanCandidates.push({
+              id: cabinetItem.id,
+              title: resolveCabinetDisplayTitle(cabinetItem),
+              from: startYear,
+              to: Math.max(startYear, endYear),
+            })
+          }
+        }
       } else {
-        bucketList.push({
-          key: chapterItem.key,
-          century: chapterItem.century,
-          count: chapterItem.items.length,
-        })
-      }
-    }
-
-    const decadeMap = new Map<number, { centuryKey: string; count: number }>()
-    if (activeTab === 'cabinets') {
-      for (const cabinetItem of filteredCabinets) {
-        const effective = resolveCabinetEffectiveDates(cabinetItem)
-        const startYear = extractSignedStartYearFromIso(effective.startDate)
-        const century = getCenturyFromIso(effective.startDate)
-        if (startYear == null || century == null) continue
-        const decadeStart =
-          startYear >= 0
-            ? Math.floor(startYear / 10) * 10
-            : -Math.ceil(Math.abs(startYear) / 10) * 10
-        const prevEntry = decadeMap.get(decadeStart)
-        if (prevEntry) {
-          prevEntry.count += 1
-        } else {
-          decadeMap.set(decadeStart, {
-            centuryKey: String(century),
-            count: 1,
-          })
+        for (const deptItem of filteredDepartments) {
+          const { startYear, endYear: rawEnd } = getDepartmentSignedYears(deptItem)
+          if (startYear == null) continue
+          const polity = resolveDepartmentPolityInfo(deptItem)
+          const isAbolished = Boolean(deptItem.abolished || deptItem.abolishedDate)
+          const endYear =
+            rawEnd ?? (!polity.isHistorical && !isAbolished ? nowYear : null)
+          const century =
+            startYear > 0
+              ? Math.ceil(startYear / 100)
+              : -Math.ceil(Math.abs(startYear) / 100)
+          const decadeStart =
+            startYear >= 0
+              ? Math.floor(startYear / 10) * 10
+              : -Math.ceil(Math.abs(startYear) / 10) * 10
+          const prevEntry = decadeMap.get(decadeStart)
+          if (prevEntry) {
+            prevEntry.count += 1
+          } else {
+            decadeMap.set(decadeStart, {
+              centuryKey: String(century),
+              count: 1,
+            })
+          }
+          if (endYear != null && endYear - startYear >= 15) {
+            spanCandidates.push({
+              id: deptItem.id,
+              title: deptItem.name,
+              from: startYear,
+              to: Math.max(startYear, endYear),
+            })
+          }
         }
       }
-    } else {
-      for (const deptItem of filteredDepartments) {
-        const { startYear } = getDepartmentSignedYears(deptItem)
-        if (startYear == null) continue
-        const century =
-          startYear > 0
-            ? Math.ceil(startYear / 100)
-            : -Math.ceil(Math.abs(startYear) / 100)
-        const decadeStart =
-          startYear >= 0
-            ? Math.floor(startYear / 10) * 10
-            : -Math.ceil(Math.abs(startYear) / 10) * 10
-        const prevEntry = decadeMap.get(decadeStart)
-        if (prevEntry) {
-          prevEntry.count += 1
-        } else {
-          decadeMap.set(decadeStart, {
-            centuryKey: String(century),
-            count: 1,
-          })
-        }
+
+      const decadeList: GovernmentDecadeBucket[] = [...decadeMap.entries()].map(
+        ([decadeStartYear, entryValue]) => ({
+          key: `dec:${decadeStartYear}`,
+          decadeStartYear,
+          centuryKey: entryValue.centuryKey,
+          count: entryValue.count,
+        }),
+      )
+
+      return {
+        eraBuckets: bucketList,
+        eraDecadeBuckets: decadeList,
+        eraSpans: spanCandidates.slice(0, 24),
+        eraUndatedCount: undated,
       }
-    }
-
-    const decadeList: GovernmentDecadeBucket[] = [...decadeMap.entries()].map(
-      ([decadeStartYear, entryValue]) => ({
-        key: `dec:${decadeStartYear}`,
-        decadeStartYear,
-        centuryKey: entryValue.centuryKey,
-        count: entryValue.count,
-      }),
-    )
-
-    return {
-      eraBuckets: bucketList,
-      eraDecadeBuckets: decadeList,
-      eraUndatedCount: undated,
-    }
-  }, [
-    activeTab,
-    cabinetChapters,
-    departmentChapters,
-    filteredCabinets,
-    filteredDepartments,
-  ])
+    }, [
+      activeTab,
+      cabinetChapters,
+      departmentChapters,
+      filteredCabinets,
+      filteredDepartments,
+    ])
 
   // Navigable visible IDs (excludes items hidden inside collapsed century chapters)
   const navigableIds = useMemo<string[]>(() => {
@@ -1091,6 +1258,8 @@ export function GovernmentCatalogPage() {
   const hasPrevSelection = selectedIndex > 0
   const hasNextSelection =
     selectedIndex >= 0 && selectedIndex < navigableIds.length - 1
+  const rovingTargetId =
+    selectedId && selectedIndex >= 0 ? selectedId : (navigableIds[0] ?? '')
 
   const stepSelection = useCallback(
     (delta: -1 | 1) => {
@@ -1456,9 +1625,17 @@ export function GovernmentCatalogPage() {
         })
       }
       if (deptStatusFilter !== 'all') {
+        const statusChipLabel =
+          deptStatusFilter === 'active'
+            ? '현존 기관만'
+            : deptStatusFilter === 'superseded'
+              ? '개편·이관 기관만'
+              : deptStatusFilter === 'historical'
+                ? '역사 기관만'
+                : '폐지 기관만'
         chips.push({
           key: 'status',
-          label: deptStatusFilter === 'active' ? '현존 기관만' : '폐지 기관만',
+          label: statusChipLabel,
           onRemove: () => updateParams({ status: null }),
         })
       }
@@ -1485,6 +1662,11 @@ export function GovernmentCatalogPage() {
   const hasAnyActiveFilter = activeFilterChips.length > 0
 
   const clearAllFilters = useCallback(() => {
+    const prevParamsSnapshot = new URLSearchParams(searchParams)
+    const prevSearchDraftSnapshot = searchDraft
+    const prevYearDraftSnapshot = yearInputDraft
+    const prevCollapsedSnapshot = new Set(collapsedChapters)
+
     setSearchDraft('')
     setYearInputDraft('')
     setSearchParams(
@@ -1506,7 +1688,24 @@ export function GovernmentCatalogPage() {
       },
       { replace: true },
     )
-  }, [setSearchParams])
+
+    notify.action('적용된 필터를 모두 초기화했습니다', {
+      label: '되돌리기',
+      onClick: () => {
+        setSearchDraft(prevSearchDraftSnapshot)
+        setYearInputDraft(prevYearDraftSnapshot)
+        applyCollapsedChapters(() => prevCollapsedSnapshot)
+        setSearchParams(prevParamsSnapshot, { replace: true })
+      },
+    })
+  }, [
+    applyCollapsedChapters,
+    collapsedChapters,
+    searchDraft,
+    searchParams,
+    setSearchParams,
+    yearInputDraft,
+  ])
 
   // Compute smart 0-result recovery suggestions against allCabinets / allDepartments
   const releaseSuggestions = useMemo<FilterReleaseSuggestion[]>(() => {
@@ -1694,7 +1893,11 @@ export function GovernmentCatalogPage() {
         if (
           omitAxis !== 'year' &&
           activeAtYear != null &&
-          !doesDepartmentMatchActiveYear(deptItem, activeAtYear)
+          !doesDepartmentMatchActiveYear(
+            deptItem,
+            activeAtYear,
+            historicalPolitySpanMap,
+          )
         ) {
           return false
         }
@@ -1712,12 +1915,11 @@ export function GovernmentCatalogPage() {
         ) {
           return false
         }
-        if (omitAxis !== 'status' && deptStatusFilter !== 'all') {
-          const isAbolished = Boolean(
-            deptItem.abolished || deptItem.abolishedDate,
-          )
-          if (deptStatusFilter === 'active' && isAbolished) return false
-          if (deptStatusFilter === 'abolished' && !isAbolished) return false
+        if (
+          omitAxis !== 'status' &&
+          !doesDepartmentMatchStatusFilter(deptItem, deptStatusFilter)
+        ) {
+          return false
         }
         if (omitAxis !== 'q' && needle) {
           const haystack = [
@@ -1843,6 +2045,7 @@ export function GovernmentCatalogPage() {
     deptCategoryFilter,
     selectedDeptCategoryName,
     deptStatusFilter,
+    historicalPolitySpanMap,
     updateParams,
   ])
 
@@ -1851,6 +2054,7 @@ export function GovernmentCatalogPage() {
     if (!appointingCabinet) return []
     const polity = resolveCabinetPolityInfo(appointingCabinet)
     return allDepartments.filter((deptItem) => {
+      if (isNonCabinetStateOrgan(deptItem)) return false
       if (polity.historicalCountryId) {
         return deptItem.historicalCountryId === polity.historicalCountryId
       }
@@ -1927,6 +2131,58 @@ export function GovernmentCatalogPage() {
     }
   }
 
+  const handleRowKeyDown = (
+    keyEvent: React.KeyboardEvent<HTMLElement>,
+    rowId: string,
+  ) => {
+    if (keyEvent.key === 'ArrowDown') {
+      keyEvent.preventDefault()
+      stepSelection(1)
+    } else if (keyEvent.key === 'ArrowUp') {
+      keyEvent.preventDefault()
+      stepSelection(-1)
+    } else if (keyEvent.key === 'Home') {
+      keyEvent.preventDefault()
+      if (navigableIds.length > 0) {
+        updateParams({ selected: navigableIds[0] })
+      }
+    } else if (keyEvent.key === 'End') {
+      keyEvent.preventDefault()
+      if (navigableIds.length > 0) {
+        updateParams({ selected: navigableIds[navigableIds.length - 1] })
+      }
+    } else if (keyEvent.key === 'Enter' || keyEvent.key === ' ') {
+      keyEvent.preventDefault()
+      updateParams({ selected: selectedId === rowId ? null : rowId })
+    }
+  }
+
+  const handleTogglePeriodSort = () => {
+    if (activeTab === 'cabinets') {
+      const nextSort: CabinetSortKey =
+        cabinetSort === 'period_desc' ? 'period_asc' : 'period_desc'
+      updateParams({ sort: nextSort === 'period_desc' ? null : nextSort })
+      writeGovernmentCatalogMemory({ cabinetSort: nextSort })
+    } else {
+      const nextSort: DepartmentSortKey =
+        deptSort === 'period_desc' ? 'period_asc' : 'period_desc'
+      updateParams({ deptSort: nextSort })
+      writeGovernmentCatalogMemory({ deptSort: nextSort })
+    }
+  }
+
+  const handleSelectCabinetSort = (nextSort: CabinetSortKey) => {
+    updateParams({ sort: nextSort === 'period_desc' ? null : nextSort })
+    writeGovernmentCatalogMemory({ cabinetSort: nextSort })
+  }
+
+  const handleSelectDeptSort = (nextSort: DepartmentSortKey) => {
+    updateParams({ deptSort: nextSort === 'country' ? null : nextSort })
+    writeGovernmentCatalogMemory({ deptSort: nextSort })
+  }
+
+  const hiddenColsAttr = Array.from(hiddenColumns).join(' ')
+
   const renderCabinetRow = (cabinetItem: CabinetListItemDto) => {
     const polity = resolveCabinetPolityInfo(cabinetItem)
     const effectiveDates = resolveCabinetEffectiveDates(cabinetItem)
@@ -1937,14 +2193,16 @@ export function GovernmentCatalogPage() {
           ? Math.floor(startYear / 10) * 10
           : -Math.ceil(Math.abs(startYear) / 10) * 10
         : undefined
-    const periodLabel = formatIsoShortPeriod(
+    const spanInfo = calculateTenureSpanInfo(
       effectiveDates.startDate,
       effectiveDates.endDate,
       effectiveDates.isOngoing,
+      240,
     )
     const headName = resolveCabinetHeadName(cabinetItem)
     const posTitle = resolveCabinetPositionTitle(cabinetItem)
     const displayTitle = resolveCabinetDisplayTitle(cabinetItem)
+    const distinctMeta = resolveCabinetDistinctSubMeta(cabinetItem)
     const ministerCount = resolveCabinetMinisterCount(cabinetItem)
     const eventCount = cabinetItem._count?.events ?? 0
     const treatyCount = cabinetItem._count?.treatySignatories ?? 0
@@ -1962,28 +2220,47 @@ export function GovernmentCatalogPage() {
       cabinetItem.linkageGroup?.event?.title ??
       cabinetItem.linkageGroup?.label ??
       null
+    const reshuffleMeta = cabinetReshuffleMetaMap.get(cabinetItem.id) ?? null
     const isRowSelected = selectedId === cabinetItem.id
 
     return (
       <CabinetLedgerRow
         key={cabinetItem.id}
+        role="listitem"
+        tabIndex={rovingTargetId === cabinetItem.id ? 0 : -1}
         data-gov-row-id={cabinetItem.id}
+        data-gov-row-year={startYear ?? undefined}
         data-decade-start={decadeStartAttr}
         $selected={isRowSelected}
         $density={density}
+        $reshuffleGrouped={Boolean(reshuffleMeta)}
+        onKeyDown={(keyEvent) => handleRowKeyDown(keyEvent, cabinetItem.id)}
         onClick={() =>
           updateParams({
             selected: isRowSelected ? null : cabinetItem.id,
           })
         }
+        onDoubleClick={() =>
+          navigate(pathKeys.government.cabinetDetail(cabinetItem.id), {
+            state: returnState,
+          })
+        }
       >
-        <PeriodCell>
+        <StartDateCell>
           <TimelineNodeDot
             $active={isRowSelected}
             $ongoing={effectiveDates.isOngoing}
           />
-          <span>{periodLabel}</span>
-        </PeriodCell>
+          <span>{spanInfo.startText}</span>
+        </StartDateCell>
+
+        <EndDateCell data-col="end">
+          {spanInfo.isOngoing ? (
+            <OngoingBadge>현직</OngoingBadge>
+          ) : (
+            <span>{spanInfo.endText}</span>
+          )}
+        </EndDateCell>
 
         <PolityCell>
           <PolityPillBtn
@@ -2009,36 +2286,55 @@ export function GovernmentCatalogPage() {
           )}
           <IdentityTexts>
             <TitleInlineGroup>
-              <EntryTitle>{displayTitle}</EntryTitle>
-              {effectiveDates.isOngoing ? (
-                <OngoingBadge>현직</OngoingBadge>
+              {reshuffleMeta ? (
+                <ReshuffleOrderPill
+                  title={`동일 수반 임기 내 총 ${reshuffleMeta.total}차 개각 중 제${reshuffleMeta.order}차 내각`}
+                >
+                  제{reshuffleMeta.order}차
+                </ReshuffleOrderPill>
               ) : null}
-            </TitleInlineGroup>
-            <SubMetaLine>
-              {headPersonId ? (
-                <PersonTriggerBtn
+              <EntryTitle>{displayTitle}</EntryTitle>
+              {!distinctMeta.hasExplicitCabinetName && headPersonId ? (
+                <InlinePersonQuickBtn
                   type="button"
                   onClick={(clickEvent) => {
                     if (!shouldInterceptEntityClick(clickEvent)) return
                     clickEvent.stopPropagation()
                     setPersonModalId(headPersonId)
                   }}
+                  title={`${headName} 인물 요약 보기`}
                 >
-                  {headName}
-                </PersonTriggerBtn>
-              ) : (
-                <span>{headName}</span>
-              )}
-              {posTitle ? <span>· {posTitle}</span> : null}
-            </SubMetaLine>
+                  인물
+                </InlinePersonQuickBtn>
+              ) : null}
+            </TitleInlineGroup>
+            {distinctMeta.hasExplicitCabinetName ? (
+              <SubMetaLine>
+                {headPersonId ? (
+                  <PersonTriggerBtn
+                    type="button"
+                    onClick={(clickEvent) => {
+                      if (!shouldInterceptEntityClick(clickEvent)) return
+                      clickEvent.stopPropagation()
+                      setPersonModalId(headPersonId)
+                    }}
+                  >
+                    {headName}
+                  </PersonTriggerBtn>
+                ) : (
+                  <span>{headName}</span>
+                )}
+                {posTitle ? <span>· {posTitle}</span> : null}
+              </SubMetaLine>
+            ) : null}
           </IdentityTexts>
         </MainIdentityCell>
 
-        <RegimeCell>
+        <RegimeCell data-col="regime">
           <SubtleBadge>{GLOBAL_CABINET_CATEGORY_LABELS[categoryKey]}</SubtleBadge>
         </RegimeCell>
 
-        <WideExtraCell className="col-wide-extra">
+        <PartyColCell data-col="party">
           {leadingParty ? (
             <PartyPill title={leadingParty.fullName}>
               <PartyColorDot $color={leadingParty.brandColor} />
@@ -2054,9 +2350,24 @@ export function GovernmentCatalogPage() {
           ) : (
             <MutedDash>—</MutedDash>
           )}
-        </WideExtraCell>
+        </PartyColCell>
 
-        <MetaBadgesCell>
+        <DurationBarCell
+          data-col="dur"
+          title={`재임 기간: ${spanInfo.durationLabel} (${spanInfo.startText} ~ ${spanInfo.endText})`}
+        >
+          <DurationTrack>
+            <DurationBarFill
+              $pct={spanInfo.barPct}
+              $ongoing={spanInfo.isOngoing}
+            />
+          </DurationTrack>
+          <DurationLabelText $ongoing={spanInfo.isOngoing}>
+            {spanInfo.durationLabel}
+          </DurationLabelText>
+        </DurationBarCell>
+
+        <MetaBadgesCell data-col="members">
           {ministerCount > 0 ? (
             <CountPill>
               <FiUsers size={11} />
@@ -2064,17 +2375,17 @@ export function GovernmentCatalogPage() {
             </CountPill>
           ) : null}
           {eventCount > 0 ? (
-            <CountPill>
+            <CountPill data-col="extra">
               <span>사건 {eventCount}</span>
             </CountPill>
           ) : null}
           {treatyCount > 0 ? (
-            <CountPill>
+            <CountPill data-col="extra">
               <span>조약 {treatyCount}</span>
             </CountPill>
           ) : null}
           {linkageText ? (
-            <LinkageBadge title={linkageText}>
+            <LinkageBadge data-col="extra" title={linkageText}>
               <FiLink2 size={10} />
               <span>{linkageText}</span>
             </LinkageBadge>
@@ -2104,7 +2415,10 @@ export function GovernmentCatalogPage() {
 
   const renderDepartmentRow = (deptItem: AdministrationDepartment) => {
     const polity = resolveDepartmentPolityInfo(deptItem)
-    const isAbolished = Boolean(deptItem.abolished || deptItem.abolishedDate)
+    const lifecycleStatus = resolveDepartmentLifecycleStatus(deptItem)
+    const isOngoingDept = lifecycleStatus === 'ACTIVE'
+    const isAbolished = lifecycleStatus === 'ABOLISHED'
+    const isSuperseded = lifecycleStatus === 'SUPERSEDED'
     const { startYear } = getDepartmentSignedYears(deptItem)
     const decadeStartAttr =
       startYear != null
@@ -2112,10 +2426,11 @@ export function GovernmentCatalogPage() {
           ? Math.floor(startYear / 10) * 10
           : -Math.ceil(Math.abs(startYear) / 10) * 10
         : undefined
-    const periodLabel = formatIsoShortPeriod(
+    const spanInfo = calculateTenureSpanInfo(
       deptItem.establishedDate,
       deptItem.abolishedDate,
-      !polity.isHistorical && !isAbolished,
+      isOngoingDept,
+      1200,
     )
     const logoUrl = deptItem.thumbnailUrl
       ? getUploadImageUrl(deptItem.thumbnailUrl)
@@ -2133,23 +2448,45 @@ export function GovernmentCatalogPage() {
     return (
       <DeptLedgerRow
         key={deptItem.id}
+        role="listitem"
+        tabIndex={rovingTargetId === deptItem.id ? 0 : -1}
         data-gov-row-id={deptItem.id}
+        data-gov-row-year={startYear ?? undefined}
         data-decade-start={decadeStartAttr}
         $selected={isRowSelected}
         $density={density}
+        onKeyDown={(keyEvent) => handleRowKeyDown(keyEvent, deptItem.id)}
         onClick={() =>
           updateParams({
             selected: isRowSelected ? null : deptItem.id,
           })
         }
       >
-        <PeriodCell>
+        <StartDateCell>
           <TimelineNodeDot
             $active={isRowSelected}
-            $ongoing={!polity.isHistorical && !isAbolished}
+            $ongoing={isOngoingDept}
           />
-          <span>{periodLabel}</span>
-        </PeriodCell>
+          <span>{spanInfo.startText}</span>
+        </StartDateCell>
+
+        <EndDateCell data-col="end">
+          {isOngoingDept ? (
+            <OngoingBadge>존속</OngoingBadge>
+          ) : isSuperseded ? (
+            <span>
+              {spanInfo.endText !== '—' ? spanInfo.endText : '개편'}
+            </span>
+          ) : isAbolished ? (
+            <span>
+              {spanInfo.endText !== '—' ? spanInfo.endText : '폐지'}
+            </span>
+          ) : (
+            <span>
+              {spanInfo.endText !== '—' ? spanInfo.endText : '역사'}
+            </span>
+          )}
+        </EndDateCell>
 
         <PolityCell>
           <PolityPillBtn
@@ -2181,7 +2518,13 @@ export function GovernmentCatalogPage() {
               {deptItem.abbreviation ? (
                 <AbbrevSpan>({deptItem.abbreviation})</AbbrevSpan>
               ) : null}
-              {isAbolished ? <AbolishedTag>폐지</AbolishedTag> : null}
+              {isSuperseded ? (
+                <AbolishedTag>개편·이관</AbolishedTag>
+              ) : isAbolished ? (
+                <AbolishedTag>폐지</AbolishedTag>
+              ) : !isOngoingDept ? (
+                <AbolishedTag>역사</AbolishedTag>
+              ) : null}
             </TitleInlineGroup>
             {(deptItem.nameLocal ||
               deptItem.nameEn ||
@@ -2195,7 +2538,7 @@ export function GovernmentCatalogPage() {
           </IdentityTexts>
         </MainIdentityCell>
 
-        <RegimeCell>
+        <RegimeCell data-col="regime">
           {deptItem.category ? (
             <AccentCategoryBadge>{deptItem.category.name}</AccentCategoryBadge>
           ) : (
@@ -2205,15 +2548,30 @@ export function GovernmentCatalogPage() {
           )}
         </RegimeCell>
 
-        <WideExtraCell className="col-wide-extra">
+        <PartyColCell data-col="party">
           {wideDeptMeta ? (
             <WideSubtleText title={wideDeptMeta}>{wideDeptMeta}</WideSubtleText>
           ) : (
             <MutedDash>—</MutedDash>
           )}
-        </WideExtraCell>
+        </PartyColCell>
 
-        <MetaBadgesCell>
+        <DurationBarCell
+          data-col="dur"
+          title={`존속 기간: ${spanInfo.durationLabel} (${spanInfo.startText} ~ ${spanInfo.endText})`}
+        >
+          <DurationTrack>
+            <DurationBarFill
+              $pct={spanInfo.barPct}
+              $ongoing={isOngoingDept}
+            />
+          </DurationTrack>
+          <DurationLabelText $ongoing={isOngoingDept}>
+            {spanInfo.durationLabel}
+          </DurationLabelText>
+        </DurationBarCell>
+
+        <MetaBadgesCell data-col="members">
           {tenureCount > 0 ? (
             <CountPill>
               <FiUsers size={11} />
@@ -2221,7 +2579,7 @@ export function GovernmentCatalogPage() {
             </CountPill>
           ) : null}
           {eventCount > 0 ? (
-            <CountPill>
+            <CountPill data-col="extra">
               <span>사건 {eventCount}</span>
             </CountPill>
           ) : null}
@@ -2250,6 +2608,10 @@ export function GovernmentCatalogPage() {
       <VisuallyHiddenPageTitle>
         전 국가 정부 · 내각 카탈로그
       </VisuallyHiddenPageTitle>
+
+      <DrawerAnnouncer role="status" aria-live="polite">
+        {selectedId ? '상세 패널 열림' : ''}
+      </DrawerAnnouncer>
 
       <PageWrapper>
         {/* ─── Top 1-Line 3-Zone Toolbar (Events Catalog Pattern) ─── */}
@@ -2287,8 +2649,12 @@ export function GovernmentCatalogPage() {
                 </SegmentBtn>
               </DomainSegment>
 
-              <PromSearchBox>
-                <FiSearch size={14} />
+              <PromSearchBox $active={Boolean(searchDraft.trim())}>
+                {isSearchPending ? (
+                  <SearchPendingSpinner aria-label="검색 반영 중" />
+                ) : (
+                  <FiSearch size={14} />
+                )}
                 <PromSearchInput
                   ref={searchInputRef}
                   value={searchDraft}
@@ -2430,7 +2796,7 @@ export function GovernmentCatalogPage() {
                     }
                   >
                     <FiLink2 size={12} />
-                    <span>다국 연계</span>
+                    <span className="btn-label">다국 연계</span>
                   </FilterToggleChip>
                 </>
               ) : (
@@ -2490,6 +2856,12 @@ export function GovernmentCatalogPage() {
                     <option value="active">
                       현존 기관 ({deptStatusCounts.active})
                     </option>
+                    <option value="superseded">
+                      개편·이관 ({deptStatusCounts.superseded})
+                    </option>
+                    <option value="historical">
+                      역사 기관 ({deptStatusCounts.historical})
+                    </option>
                     <option value="abolished">
                       폐지·해체 ({deptStatusCounts.abolished})
                     </option>
@@ -2526,167 +2898,224 @@ export function GovernmentCatalogPage() {
                 title="전 국가 표준 관직 사전 열기"
               >
                 <FiBookOpen size={13} />
-                <span>관직 사전</span>
+                <span className="btn-label">관직 사전</span>
               </UtilityBtn>
 
               <PopoverAnchor ref={displayMenuWrapRef}>
                 <UtilityBtn
+                  ref={displayTriggerRef}
                   type="button"
                   $active={displayPopoverOpen}
                   onClick={() => setDisplayPopoverOpen((prevOpen) => !prevOpen)}
                   aria-expanded={displayPopoverOpen}
-                  title="표시 방식 · 밀도 · 정렬 설정"
+                  title="표시 방식 · 밀도 · 정렬 · 표시 열 설정"
                 >
                   <FiMoreHorizontal size={15} />
-                  <span>표시</span>
+                  <span className="btn-label">표시</span>
                 </UtilityBtn>
 
-                {displayPopoverOpen ? (
-                  <DisplayPopover role="dialog" aria-label="목록 표시 설정">
-                    {activeTab === 'cabinets' ? (
-                      <PopoverField>
-                        <PopoverLabel>레이아웃</PopoverLabel>
-                        <PopoverSegment>
-                          <PopoverSegBtn
-                            type="button"
-                            $active={displayMode === 'ledger'}
-                            onClick={() => {
-                              updateParams({ view: null })
-                              writeGovernmentCatalogMemory({
-                                displayMode: 'ledger',
-                              })
-                            }}
-                          >
-                            <FiList size={12} />
-                            <span>원장 리스트</span>
-                          </PopoverSegBtn>
-                          <PopoverSegBtn
-                            type="button"
-                            $active={displayMode === 'cards'}
-                            onClick={() => {
-                              updateParams({ view: 'cards' })
-                              writeGovernmentCatalogMemory({
-                                displayMode: 'cards',
-                              })
-                            }}
-                          >
-                            <FiGrid size={12} />
-                            <span>비교 카드</span>
-                          </PopoverSegBtn>
-                        </PopoverSegment>
-                      </PopoverField>
-                    ) : null}
+                {displayPopoverOpen &&
+                displayPopoverPos &&
+                typeof document !== 'undefined'
+                  ? createPortal(
+                      <DisplayPopover
+                        ref={displayPopoverRef}
+                        role="dialog"
+                        aria-label="목록 표시 설정"
+                        style={{
+                          top: displayPopoverPos.top,
+                          left: displayPopoverPos.left,
+                        }}
+                      >
+                        {activeTab === 'cabinets' ? (
+                          <PopoverField>
+                            <PopoverLabel>레이아웃</PopoverLabel>
+                            <PopoverSegment>
+                              <PopoverSegBtn
+                                type="button"
+                                $active={displayMode === 'ledger'}
+                                onClick={() => {
+                                  updateParams({ view: null })
+                                  writeGovernmentCatalogMemory({
+                                    displayMode: 'ledger',
+                                  })
+                                }}
+                              >
+                                <FiList size={12} />
+                                <span>원장 리스트</span>
+                              </PopoverSegBtn>
+                              <PopoverSegBtn
+                                type="button"
+                                $active={displayMode === 'cards'}
+                                onClick={() => {
+                                  updateParams({ view: 'cards' })
+                                  writeGovernmentCatalogMemory({
+                                    displayMode: 'cards',
+                                  })
+                                }}
+                              >
+                                <FiGrid size={12} />
+                                <span>비교 카드</span>
+                              </PopoverSegBtn>
+                            </PopoverSegment>
+                          </PopoverField>
+                        ) : null}
 
-                    <PopoverField>
-                      <PopoverLabel>행 밀도</PopoverLabel>
-                      <PopoverSegment $cols={3}>
-                        <PopoverSegBtn
-                          type="button"
-                          $active={density === 'compact'}
-                          onClick={() => {
-                            setDensity('compact')
-                            writeGovernmentCatalogMemory({ density: 'compact' })
-                          }}
-                        >
-                          촘촘
-                        </PopoverSegBtn>
-                        <PopoverSegBtn
-                          type="button"
-                          $active={density === 'cozy'}
-                          onClick={() => {
-                            setDensity('cozy')
-                            writeGovernmentCatalogMemory({ density: 'cozy' })
-                          }}
-                        >
-                          보통
-                        </PopoverSegBtn>
-                        <PopoverSegBtn
-                          type="button"
-                          $active={density === 'roomy'}
-                          onClick={() => {
-                            setDensity('roomy')
-                            writeGovernmentCatalogMemory({ density: 'roomy' })
-                          }}
-                        >
-                          여유
-                        </PopoverSegBtn>
-                      </PopoverSegment>
-                    </PopoverField>
+                        <PopoverField>
+                          <PopoverLabel>행 밀도</PopoverLabel>
+                          <PopoverSegment $cols={3}>
+                            <PopoverSegBtn
+                              type="button"
+                              $active={density === 'compact'}
+                              onClick={() => {
+                                setDensity('compact')
+                                writeGovernmentCatalogMemory({
+                                  density: 'compact',
+                                })
+                              }}
+                            >
+                              촘촘
+                            </PopoverSegBtn>
+                            <PopoverSegBtn
+                              type="button"
+                              $active={density === 'cozy'}
+                              onClick={() => {
+                                setDensity('cozy')
+                                writeGovernmentCatalogMemory({
+                                  density: 'cozy',
+                                })
+                              }}
+                            >
+                              보통
+                            </PopoverSegBtn>
+                            <PopoverSegBtn
+                              type="button"
+                              $active={density === 'roomy'}
+                              onClick={() => {
+                                setDensity('roomy')
+                                writeGovernmentCatalogMemory({
+                                  density: 'roomy',
+                                })
+                              }}
+                            >
+                              여유
+                            </PopoverSegBtn>
+                          </PopoverSegment>
+                        </PopoverField>
 
-                    <PopoverField>
-                      <PopoverLabel>정렬 기준</PopoverLabel>
-                      {activeTab === 'cabinets' ? (
-                        <PopoverSelect
-                          value={cabinetSort}
-                          onChange={(changeEvent) => {
-                            const nextSort = changeEvent.target
-                              .value as CabinetSortKey
-                            updateParams({
-                              sort:
-                                nextSort === 'period_desc' ? null : nextSort,
-                            })
-                            writeGovernmentCatalogMemory({
-                              cabinetSort: nextSort,
-                            })
-                          }}
-                        >
-                          <option value="period_desc">
-                            최신 출범순 (세기 구분)
-                          </option>
-                          <option value="period_asc">
-                            고대·초기순 (세기 구분)
-                          </option>
-                          <option value="country">국가명 가나다순</option>
-                          <option value="name">내각명 가나다순</option>
-                        </PopoverSelect>
-                      ) : (
-                        <PopoverSelect
-                          value={deptSort}
-                          onChange={(changeEvent) => {
-                            const nextSort = changeEvent.target
-                              .value as DepartmentSortKey
-                            updateParams({
-                              deptSort:
-                                nextSort === 'country' ? null : nextSort,
-                            })
-                            writeGovernmentCatalogMemory({ deptSort: nextSort })
-                          }}
-                        >
-                          <option value="country">국가명 가나다순</option>
-                          <option value="period_desc">
-                            설립 최신순 (세기 구분)
-                          </option>
-                          <option value="period_asc">
-                            설립 초기순 (세기 구분)
-                          </option>
-                          <option value="name">기관명 가나다순</option>
-                        </PopoverSelect>
-                      )}
-                    </PopoverField>
+                        <PopoverField>
+                          <PopoverLabel>정렬 기준</PopoverLabel>
+                          {activeTab === 'cabinets' ? (
+                            <PopoverSelect
+                              value={cabinetSort}
+                              onChange={(changeEvent) => {
+                                const nextSort = changeEvent.target
+                                  .value as CabinetSortKey
+                                handleSelectCabinetSort(nextSort)
+                              }}
+                            >
+                              <option value="period_desc">
+                                최신 출범순 (세기 구분)
+                              </option>
+                              <option value="period_asc">
+                                고대·초기순 (세기 구분)
+                              </option>
+                              <option value="duration_desc">
+                                재임 기간 긴순
+                              </option>
+                              <option value="members_desc">
+                                각료·인사 많은순
+                              </option>
+                              <option value="country">국가명 가나다순</option>
+                              <option value="name">내각명 가나다순</option>
+                            </PopoverSelect>
+                          ) : (
+                            <PopoverSelect
+                              value={deptSort}
+                              onChange={(changeEvent) => {
+                                const nextSort = changeEvent.target
+                                  .value as DepartmentSortKey
+                                handleSelectDeptSort(nextSort)
+                              }}
+                            >
+                              <option value="country">국가명 가나다순</option>
+                              <option value="period_desc">
+                                설립 최신순 (세기 구분)
+                              </option>
+                              <option value="period_asc">
+                                설립 초기순 (세기 구분)
+                              </option>
+                              <option value="duration_desc">
+                                존속 기간 긴순
+                              </option>
+                              <option value="tenures_desc">
+                                역대 인사 많은순
+                              </option>
+                              <option value="name">기관명 가나다순</option>
+                            </PopoverSelect>
+                          )}
+                        </PopoverField>
 
-                    {allChapterKeys.length > 0 &&
-                    ((activeTab === 'cabinets' && isCabinetGroupedByCentury) ||
-                      (activeTab === 'departments' &&
-                        isDepartmentGroupedByCentury)) ? (
-                      <PopoverFooterRow>
-                        <PopoverTextBtn
-                          type="button"
-                          onClick={() => applyCollapsedChapters(() => new Set())}
-                        >
-                          모든 세기 펼치기
-                        </PopoverTextBtn>
-                        <PopoverTextBtn
-                          type="button"
-                          onClick={() =>
-                            applyCollapsedChapters(() => new Set(allChapterKeys))
-                          }
-                        >
-                          모든 세기 접기
-                        </PopoverTextBtn>
-                      </PopoverFooterRow>
-                    ) : null}
-                  </DisplayPopover>
-                ) : null}
+                        <PopoverField>
+                          <PopoverLabel>표시할 열</PopoverLabel>
+                          <ColumnChecklist>
+                            {GOVERNMENT_HIDEABLE_COLUMNS.map((colMeta) => {
+                              const isChecked = !hiddenColumns.has(colMeta.key)
+                              return (
+                                <ColumnCheckBtn
+                                  key={colMeta.key}
+                                  type="button"
+                                  role="checkbox"
+                                  aria-checked={isChecked}
+                                  $checked={isChecked}
+                                  onClick={() =>
+                                    toggleHiddenColumn(colMeta.key)
+                                  }
+                                >
+                                  <ColumnCheckBox $checked={isChecked}>
+                                    {isChecked ? <FiCheck size={10} /> : null}
+                                  </ColumnCheckBox>
+                                  <span>
+                                    {activeTab === 'cabinets'
+                                      ? colMeta.cabinetLabel
+                                      : colMeta.deptLabel}
+                                  </span>
+                                </ColumnCheckBtn>
+                              )
+                            })}
+                          </ColumnChecklist>
+                        </PopoverField>
+
+                        {allChapterKeys.length > 0 &&
+                        ((activeTab === 'cabinets' &&
+                          isCabinetGroupedByCentury) ||
+                          (activeTab === 'departments' &&
+                            isDepartmentGroupedByCentury)) ? (
+                          <PopoverFooterRow>
+                            <PopoverTextBtn
+                              type="button"
+                              onClick={() =>
+                                applyCollapsedChapters(() => new Set())
+                              }
+                            >
+                              모든 세기 펼치기
+                            </PopoverTextBtn>
+                            <PopoverTextBtn
+                              type="button"
+                              onClick={() =>
+                                applyCollapsedChapters(
+                                  () => new Set(allChapterKeys),
+                                )
+                              }
+                            >
+                              모든 세기 접기
+                            </PopoverTextBtn>
+                          </PopoverFooterRow>
+                        ) : null}
+                      </DisplayPopover>,
+                      document.body,
+                    )
+                  : null}
               </PopoverAnchor>
 
               <PrimaryRegisterBtn
@@ -2702,7 +3131,7 @@ export function GovernmentCatalogPage() {
                 }}
               >
                 <FiPlus size={14} />
-                <span>
+                <span className="btn-label">
                   {activeTab === 'cabinets' ? '새 내각 등록' : '새 기관 등록'}
                 </span>
               </PrimaryRegisterBtn>
@@ -2738,84 +3167,209 @@ export function GovernmentCatalogPage() {
           ) : null}
         </TopToolbarCard>
 
+        {/* ─── Top-Level Era Strip (Events Catalog Pattern: Above Split) ─── */}
+        <GovernmentEraStrip
+          buckets={eraBuckets}
+          decadeBuckets={eraDecadeBuckets}
+          spans={eraSpans}
+          activeCenturyKey={activeCenturyKey}
+          onJumpToCentury={handleJumpToCentury}
+          onJumpToDecade={handleJumpToDecade}
+          activeYearValue={rawYearParam}
+          currentOnly={currentOnly}
+          showCurrentToggle={activeTab === 'cabinets'}
+          onToggleCurrentOnly={() => {
+            if (currentOnly) {
+              updateParams({ current: null })
+            } else {
+              setYearInputDraft('')
+              updateParams({ current: '1', year: null })
+            }
+          }}
+          undatedCount={eraUndatedCount}
+        />
+
         {/* ─── Split Catalog Body (Left Ledger + Right Sticky Drawer) ─── */}
         <CatalogSplit $drawerOpen={isDrawerOpen}>
-          <LedgerCardSurface>
-            <GovernmentEraStrip
-              buckets={eraBuckets}
-              decadeBuckets={eraDecadeBuckets}
-              activeCenturyKey={activeCenturyKey}
-              onJumpToCentury={handleJumpToCentury}
-              onJumpToDecade={handleJumpToDecade}
-              activeYearValue={rawYearParam}
-              currentOnly={currentOnly}
-              showCurrentToggle={activeTab === 'cabinets'}
-              onSelectPresetYear={(presetYear) => {
-                const isSame =
-                  !currentOnly && rawYearParam.trim() === String(presetYear)
-                if (isSame) {
-                  setYearInputDraft('')
-                  updateParams({ year: null })
-                } else {
-                  setYearInputDraft(String(presetYear))
-                  updateParams({ year: String(presetYear), current: null })
-                }
-              }}
-              onToggleCurrentOnly={() => {
-                if (currentOnly) {
-                  updateParams({ current: null })
-                } else {
-                  setYearInputDraft('')
-                  updateParams({ current: '1', year: null })
-                }
-              }}
-              undatedCount={eraUndatedCount}
-            />
-
-            {/* Sticky Column Header */}
-            <StickyLedgerHead $cardsMode={activeTab === 'cabinets' && displayMode === 'cards'}>
-              <LedgerStatsSummary>
-                <strong>표시 {matchedCount.toLocaleString()}건</strong>
-                {hasAnyActiveFilter ? (
-                  <span>
-                    / 전체 {totalUnfilteredCount.toLocaleString()}건
-                  </span>
-                ) : null}
-                {activeAtYear != null ? (
-                  <ContextYearPill>
-                    {formatSignedYearLabel(activeAtYear)}년 동시대 단면
-                  </ContextYearPill>
-                ) : null}
-              </LedgerStatsSummary>
-
+          <LedgerCardSurface data-hidden-cols={hiddenColsAttr}>
+            <LedgerScrollViewport ref={ledgerScrollRef}>
+              {/* ─── Single Sticky Column Header (Events Ledger Pattern) ─── */}
               {!(activeTab === 'cabinets' && displayMode === 'cards') ? (
-                <ColumnHintsRow>
-                  <span>존속 기간</span>
-                  <span>국가 · 정체</span>
-                  <span>
-                    {activeTab === 'cabinets'
-                      ? '행정부 · 수반'
-                      : '기관명 · 임무'}
-                  </span>
-                  <span className="col-regime">
+                <ColumnHeader role="presentation">
+                  <SortHeaderBtn
+                    type="button"
+                    $active={
+                      activeTab === 'cabinets'
+                        ? cabinetSort === 'period_desc' ||
+                          cabinetSort === 'period_asc'
+                        : deptSort === 'period_desc' ||
+                          deptSort === 'period_asc'
+                    }
+                    onClick={handleTogglePeriodSort}
+                    title="출범·설립 시기순 정렬 전환"
+                  >
+                    <span>시작</span>
+                    {(activeTab === 'cabinets' &&
+                      (cabinetSort === 'period_desc' ||
+                        cabinetSort === 'period_asc')) ||
+                    (activeTab === 'departments' &&
+                      (deptSort === 'period_desc' ||
+                        deptSort === 'period_asc')) ? (
+                      <ColumnSortCaret aria-hidden="true">
+                        {(
+                          activeTab === 'cabinets'
+                            ? cabinetSort === 'period_asc'
+                            : deptSort === 'period_asc'
+                        )
+                          ? '↑'
+                          : '↓'}
+                      </ColumnSortCaret>
+                    ) : null}
+                  </SortHeaderBtn>
+
+                  <EndHeaderSpan data-col="end">종료</EndHeaderSpan>
+
+                  <SortHeaderBtn
+                    type="button"
+                    $active={
+                      activeTab === 'cabinets'
+                        ? cabinetSort === 'country'
+                        : deptSort === 'country'
+                    }
+                    onClick={() =>
+                      activeTab === 'cabinets'
+                        ? handleSelectCabinetSort('country')
+                        : handleSelectDeptSort('country')
+                    }
+                  >
+                    <span>국가 · 정체</span>
+                    {(activeTab === 'cabinets' && cabinetSort === 'country') ||
+                    (activeTab === 'departments' && deptSort === 'country') ? (
+                      <ColumnSortCaret aria-hidden="true">↓</ColumnSortCaret>
+                    ) : null}
+                  </SortHeaderBtn>
+
+                  <IdentityHeaderCell>
+                    <SortHeaderBtn
+                      type="button"
+                      $active={
+                        activeTab === 'cabinets'
+                          ? cabinetSort === 'name'
+                          : deptSort === 'name'
+                      }
+                      onClick={() =>
+                        activeTab === 'cabinets'
+                          ? handleSelectCabinetSort('name')
+                          : handleSelectDeptSort('name')
+                      }
+                    >
+                      <span>
+                        {activeTab === 'cabinets'
+                          ? '행정부 · 수반'
+                          : '기관명 · 임무'}
+                      </span>
+                      {(activeTab === 'cabinets' && cabinetSort === 'name') ||
+                      (activeTab === 'departments' && deptSort === 'name') ? (
+                        <ColumnSortCaret aria-hidden="true">↓</ColumnSortCaret>
+                      ) : null}
+                    </SortHeaderBtn>
+
+                    <HeaderStatsStrip>
+                      <strong>{matchedCount.toLocaleString()}건</strong>
+                      {hasAnyActiveFilter ? (
+                        <span>
+                          / 전체 {totalUnfilteredCount.toLocaleString()}건
+                        </span>
+                      ) : null}
+                      {activeAtYear != null ? (
+                        <ContextYearPill>
+                          {formatSignedYearLabel(activeAtYear)}년 단면
+                        </ContextYearPill>
+                      ) : null}
+                    </HeaderStatsStrip>
+                  </IdentityHeaderCell>
+
+                  <span data-col="regime">
                     {activeTab === 'cabinets' ? '체제' : '분류'}
                   </span>
-                  <span className="col-wide-extra">
-                    {activeTab === 'cabinets'
-                      ? '집권 정당 · 출범'
-                      : '상위기관 · 소재지'}
-                  </span>
-                  <span className="col-meta">
-                    {activeTab === 'cabinets'
-                      ? '각료 · 사건 · 연계'
-                      : '인사 · 사건'}
-                  </span>
-                  <span />
-                </ColumnHintsRow>
-              ) : null}
-            </StickyLedgerHead>
 
-            <LedgerScrollViewport ref={ledgerScrollRef}>
+                  <span data-col="party">
+                    {activeTab === 'cabinets' ? '여당 · 출범' : '상위 · 본부'}
+                  </span>
+
+                  <DurationHeaderCell data-col="dur">
+                    <SortHeaderBtn
+                      type="button"
+                      $active={
+                        activeTab === 'cabinets'
+                          ? cabinetSort === 'duration_desc'
+                          : deptSort === 'duration_desc'
+                      }
+                      onClick={() =>
+                        activeTab === 'cabinets'
+                          ? handleSelectCabinetSort('duration_desc')
+                          : handleSelectDeptSort('duration_desc')
+                      }
+                      title="재임·존속 기간 긴순 정렬"
+                    >
+                      <span>
+                        {activeTab === 'cabinets' ? '재임 기간' : '존속 기간'}
+                      </span>
+                      {(activeTab === 'cabinets' &&
+                        cabinetSort === 'duration_desc') ||
+                      (activeTab === 'departments' &&
+                        deptSort === 'duration_desc') ? (
+                        <ColumnSortCaret aria-hidden="true">↓</ColumnSortCaret>
+                      ) : null}
+                    </SortHeaderBtn>
+                    <DurationAxis aria-hidden="true">
+                      <span>단기</span>
+                      <span>{activeTab === 'cabinets' ? '20년+' : '100년+'}</span>
+                    </DurationAxis>
+                  </DurationHeaderCell>
+
+                  <SortHeaderBtn
+                    type="button"
+                    data-col="members"
+                    $active={
+                      activeTab === 'cabinets'
+                        ? cabinetSort === 'members_desc'
+                        : deptSort === 'tenures_desc'
+                    }
+                    onClick={() =>
+                      activeTab === 'cabinets'
+                        ? handleSelectCabinetSort('members_desc')
+                        : handleSelectDeptSort('tenures_desc')
+                    }
+                    title="인사·각료 수 많은순 정렬"
+                  >
+                    <span>
+                      {activeTab === 'cabinets' ? '각료 · 사건' : '인사 · 사건'}
+                    </span>
+                    {(activeTab === 'cabinets' &&
+                      cabinetSort === 'members_desc') ||
+                    (activeTab === 'departments' &&
+                      deptSort === 'tenures_desc') ? (
+                      <ColumnSortCaret aria-hidden="true">↓</ColumnSortCaret>
+                    ) : null}
+                  </SortHeaderBtn>
+
+                  <span />
+                </ColumnHeader>
+              ) : (
+                <CardsHeaderStrip>
+                  <strong>표시 {matchedCount.toLocaleString()}건</strong>
+                  {hasAnyActiveFilter ? (
+                    <span>/ 전체 {totalUnfilteredCount.toLocaleString()}건</span>
+                  ) : null}
+                  {activeAtYear != null ? (
+                    <ContextYearPill>
+                      {formatSignedYearLabel(activeAtYear)}년 단면
+                    </ContextYearPill>
+                  ) : null}
+                </CardsHeaderStrip>
+              )}
+
               {isCatalogLoading ? (
                 <EmptyStateBox>
                   <EmptyTitle>
@@ -2888,15 +3442,21 @@ export function GovernmentCatalogPage() {
                     {filteredCabinets.map((cabinetItem) => {
                       const polity = resolveCabinetPolityInfo(cabinetItem)
                       const effDates = resolveCabinetEffectiveDates(cabinetItem)
-                      const periodText = formatIsoShortPeriod(
+                      const startYear = extractSignedStartYearFromIso(
+                        effDates.startDate,
+                      )
+                      const spanInfo = calculateTenureSpanInfo(
                         effDates.startDate,
                         effDates.endDate,
                         effDates.isOngoing,
+                        240,
                       )
                       const headName = resolveCabinetHeadName(cabinetItem)
                       const posTitle = resolveCabinetPositionTitle(cabinetItem)
                       const displayTitle =
                         resolveCabinetDisplayTitle(cabinetItem)
+                      const distinctMeta =
+                        resolveCabinetDistinctSubMeta(cabinetItem)
                       const ministerCount =
                         resolveCabinetMinisterCount(cabinetItem)
                       const leadingParty =
@@ -2913,6 +3473,7 @@ export function GovernmentCatalogPage() {
                         <ComparisonCard
                           key={cabinetItem.id}
                           data-gov-row-id={cabinetItem.id}
+                          data-gov-row-year={startYear ?? undefined}
                           $selected={isSelected}
                           onClick={() =>
                             updateParams({
@@ -2935,9 +3496,14 @@ export function GovernmentCatalogPage() {
                               <PolityDot $historical={polity.isHistorical} />
                               <span>{polity.polityName}</span>
                             </PolityPillBtn>
-                            <PeriodCell>
-                              <span>{periodText}</span>
-                            </PeriodCell>
+                            <CardPeriodMeta>
+                              <span>
+                                {spanInfo.startText} ~ {spanInfo.endText}
+                              </span>
+                              <CardDurationBadge $ongoing={spanInfo.isOngoing}>
+                                {spanInfo.durationLabel}
+                              </CardDurationBadge>
+                            </CardPeriodMeta>
                           </CardTopRow>
 
                           <CardIdentityRow>
@@ -2950,10 +3516,12 @@ export function GovernmentCatalogPage() {
                             )}
                             <IdentityTexts>
                               <EntryTitle>{displayTitle}</EntryTitle>
-                              <SubMetaLine>
-                                {headName}
-                                {posTitle ? ` · ${posTitle}` : ''}
-                              </SubMetaLine>
+                              {distinctMeta.hasExplicitCabinetName ? (
+                                <SubMetaLine>
+                                  {headName}
+                                  {posTitle ? ` · ${posTitle}` : ''}
+                                </SubMetaLine>
+                              ) : null}
                             </IdentityTexts>
                           </CardIdentityRow>
 
@@ -3001,7 +3569,7 @@ export function GovernmentCatalogPage() {
                     })}
                   </CardsGrid>
                 ) : isCabinetGroupedByCentury ? (
-                  <ChapterStack>
+                  <ChapterStack role="list">
                     {cabinetChapters.map((chapterGroup) => {
                       const isCollapsed = collapsedChapters.has(
                         chapterGroup.key,
@@ -3019,26 +3587,25 @@ export function GovernmentCatalogPage() {
                           key={chapterGroup.key}
                           data-century-chapter={chapterGroup.key}
                         >
-                          <ChapterHeaderBtn
+                          <CenturyDivider
                             type="button"
                             onClick={() =>
                               toggleChapterCollapsed(chapterGroup.key)
                             }
                             aria-expanded={!isCollapsed}
                           >
-                            <ChapterTitleGroup>
-                              <ChevronWrap $collapsed={isCollapsed}>
-                                <FiChevronDown size={13} />
-                              </ChevronWrap>
-                              <ChapterTitle>{headingText}</ChapterTitle>
-                              {subtitleText ? (
-                                <ChapterRange>{subtitleText}</ChapterRange>
-                              ) : null}
-                            </ChapterTitleGroup>
+                            <CenturyRailDot aria-hidden="true" />
+                            <ChevronWrap $collapsed={isCollapsed}>
+                              <FiChevronDown size={13} />
+                            </ChevronWrap>
+                            <ChapterTitle>{headingText}</ChapterTitle>
+                            {subtitleText ? (
+                              <ChapterRange>{subtitleText}</ChapterRange>
+                            ) : null}
                             <ChapterCount>
                               {chapterGroup.items.length}개 내각
                             </ChapterCount>
-                          </ChapterHeaderBtn>
+                          </CenturyDivider>
                           {!isCollapsed ? (
                             <LedgerRowsContainer $withRail>
                               {chapterGroup.items.map(renderCabinetRow)}
@@ -3049,12 +3616,12 @@ export function GovernmentCatalogPage() {
                     })}
                   </ChapterStack>
                 ) : (
-                  <LedgerRowsContainer>
+                  <LedgerRowsContainer role="list">
                     {filteredCabinets.map(renderCabinetRow)}
                   </LedgerRowsContainer>
                 )
               ) : isDepartmentGroupedByCentury ? (
-                <ChapterStack>
+                <ChapterStack role="list">
                   {departmentChapters.map((chapterGroup) => {
                     const isCollapsed = collapsedChapters.has(chapterGroup.key)
                     const headingText =
@@ -3070,26 +3637,25 @@ export function GovernmentCatalogPage() {
                         key={chapterGroup.key}
                         data-century-chapter={chapterGroup.key}
                       >
-                        <ChapterHeaderBtn
+                        <CenturyDivider
                           type="button"
                           onClick={() =>
                             toggleChapterCollapsed(chapterGroup.key)
                           }
                           aria-expanded={!isCollapsed}
                         >
-                          <ChapterTitleGroup>
-                            <ChevronWrap $collapsed={isCollapsed}>
-                              <FiChevronDown size={13} />
-                            </ChevronWrap>
-                            <ChapterTitle>{headingText}</ChapterTitle>
-                            {subtitleText ? (
-                              <ChapterRange>{subtitleText}</ChapterRange>
-                            ) : null}
-                          </ChapterTitleGroup>
+                          <CenturyRailDot aria-hidden="true" />
+                          <ChevronWrap $collapsed={isCollapsed}>
+                            <FiChevronDown size={13} />
+                          </ChevronWrap>
+                          <ChapterTitle>{headingText}</ChapterTitle>
+                          {subtitleText ? (
+                            <ChapterRange>{subtitleText}</ChapterRange>
+                          ) : null}
                           <ChapterCount>
                             {chapterGroup.items.length}개 기관
                           </ChapterCount>
-                        </ChapterHeaderBtn>
+                        </CenturyDivider>
                         {!isCollapsed ? (
                           <LedgerRowsContainer $withRail>
                             {chapterGroup.items.map(renderDepartmentRow)}
@@ -3100,7 +3666,7 @@ export function GovernmentCatalogPage() {
                   })}
                 </ChapterStack>
               ) : (
-                <LedgerRowsContainer>
+                <LedgerRowsContainer role="list">
                   {filteredDepartments.map(renderDepartmentRow)}
                 </LedgerRowsContainer>
               )}
@@ -3125,6 +3691,8 @@ export function GovernmentCatalogPage() {
                   listSearch={location.search}
                   hasPrev={hasPrevSelection}
                   hasNext={hasNextSelection}
+                  isOutOfScope={Boolean(selectedId) && selectedIndex === -1}
+                  onResetFilters={clearAllFilters}
                   onStepPrev={() => stepSelection(-1)}
                   onStepNext={() => stepSelection(1)}
                   onClose={() => updateParams({ selected: null })}
@@ -3162,6 +3730,24 @@ export function GovernmentCatalogPage() {
           ) : null}
         </CatalogSplit>
       </PageWrapper>
+
+      {/* ─── Mobile Floating Action Button (Events Pattern) ─── */}
+      <CreateGovFab
+        type="button"
+        onClick={() => {
+          if (activeTab === 'cabinets') {
+            setEditingCabinetRecord(null)
+            setCabinetModalOpen(true)
+          } else {
+            setEditingDepartmentRecord(null)
+            setDeptModalOpen(true)
+          }
+        }}
+        aria-label={activeTab === 'cabinets' ? '새 내각 등록' : '새 기관 등록'}
+        title={activeTab === 'cabinets' ? '새 내각 등록' : '새 기관 등록'}
+      >
+        <FiPlus size={20} />
+      </CreateGovFab>
 
       {/* ─── In-Place Modals & Side Panels ─── */}
       <CabinetFormModal
@@ -3212,8 +3798,15 @@ export function GovernmentCatalogPage() {
           countryName={resolveCabinetPolityInfo(appointingCabinet).polityName}
           cabinetId={appointingCabinet.id}
           cabinetName={resolveCabinetDisplayTitle(appointingCabinet)}
+          cabinetStartDate={
+            resolveCabinetEffectiveDates(appointingCabinet).startDate
+          }
+          cabinetEndDate={
+            resolveCabinetEffectiveDates(appointingCabinet).endDate
+          }
           availableDepartments={appointingCabinetDepartments}
           onSaved={() => {
+            setAppointingCabinet(null)
             invalidateTenureQueries(queryClient, {
               cabinetId: appointingCabinet.id,
             })
@@ -3292,6 +3885,12 @@ export default GovernmentCatalogPage
 
 /* ─── Events-Style Full-Viewport Shell & Ledger Styled Components ───────── */
 
+const spinKeyframes = keyframes`
+  to {
+    transform: rotate(360deg);
+  }
+`
+
 const PageScene = styled.div`
   position: fixed;
   top: var(--header-height, 64px);
@@ -3323,6 +3922,18 @@ const VisuallyHiddenPageTitle = styled.h1`
   border: 0;
 `
 
+const DrawerAnnouncer = styled.div`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+`
+
 const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
@@ -3335,6 +3946,8 @@ const PageWrapper = styled.div`
 `
 
 const TopToolbarCard = styled.header`
+  container-type: inline-size;
+  container-name: govtoolbar;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -3372,23 +3985,34 @@ const ToolbarZoneRight = styled.div`
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+
+  @container govtoolbar (max-width: 980px) {
+    .btn-label {
+      display: none;
+    }
+  }
 `
 
 const DomainSegment = styled.div`
   display: inline-flex;
   align-items: center;
+  height: 34px;
   padding: 2px;
   border-radius: ${RADIUS.SM};
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f1f5f9'};
+
+  @media (pointer: coarse) {
+    height: 40px;
+  }
 `
 
 const SegmentBtn = styled.button<{ $active: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 28px;
+  height: 100%;
   padding: 0 10px;
   border-radius: ${RADIUS.XS};
   border: none;
@@ -3427,22 +4051,46 @@ const SegmentCount = styled.span<{ $active: boolean }>`
     $active ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
 `
 
-const PromSearchBox = styled.div`
+const PromSearchBox = styled.div<{ $active?: boolean }>`
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
+  height: 34px;
   width: clamp(210px, 19vw, 310px);
-  padding: 0 9px;
+  padding: 0 10px;
   border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? ledgerAccentBorder(theme.mode) : ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme, $active }) =>
+    $active
+      ? ledgerAccentSubtle(theme.mode)
+      : theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.03)'
+        : '#ffffff'};
   color: ${({ theme }) => theme.colors.text.tertiary};
+  transition:
+    border-color 0.14s ease,
+    box-shadow 0.14s ease;
 
   &:focus-within {
     border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    box-shadow: 0 0 0 2px ${({ theme }) => ledgerAccentSubtle(theme.mode)};
   }
+
+  @media (pointer: coarse) {
+    height: 40px;
+  }
+`
+
+const SearchPendingSpinner = styled.span`
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 2px solid ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  border-top-color: ${({ theme }) => ledgerAccent(theme.mode)};
+  animation: ${spinKeyframes} 0.65s linear infinite;
+  flex-shrink: 0;
 `
 
 const PromSearchInput = styled.input`
@@ -3485,7 +4133,7 @@ const ClearInputBtn = styled.button`
 `
 
 const FilterSelect = styled.select`
-  height: 32px;
+  height: 34px;
   max-width: 170px;
   padding: 0 8px;
   border-radius: ${RADIUS.SM};
@@ -3496,21 +4144,29 @@ const FilterSelect = styled.select`
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+
+  @media (pointer: coarse) {
+    height: 40px;
+  }
 `
 
 const PolitySelectWrap = styled.div`
-  width: clamp(190px, 16vw, 250px);
+  width: clamp(185px, 15vw, 245px);
 `
 
 const YearStepperGroup = styled.div`
   display: inline-flex;
   align-items: center;
-  height: 32px;
+  height: 34px;
   border-radius: ${RADIUS.SM};
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
   overflow: hidden;
+
+  @media (pointer: coarse) {
+    height: 40px;
+  }
 `
 
 const MiniIconBtn = styled.button`
@@ -3553,7 +4209,7 @@ const FilterToggleChip = styled.button<{ $active: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 32px;
+  height: 34px;
   padding: 0 10px;
   border-radius: ${RADIUS.SM};
   border: 1px solid
@@ -3574,13 +4230,23 @@ const FilterToggleChip = styled.button<{ $active: boolean }>`
     background: ${({ theme, $active }) =>
       $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
   }
+
+  @container govtoolbar (max-width: 1120px) {
+    .btn-label {
+      display: none;
+    }
+  }
+
+  @media (pointer: coarse) {
+    height: 40px;
+  }
 `
 
 const UtilityBtn = styled.button<{ $active?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 32px;
+  height: 34px;
   padding: 0 10px;
   border-radius: ${RADIUS.SM};
   border: 1px solid
@@ -3599,13 +4265,17 @@ const UtilityBtn = styled.button<{ $active?: boolean }>`
     color: ${({ theme }) => theme.colors.text.primary};
     background: ${({ theme }) => ledgerHoverFill(theme.mode)};
   }
+
+  @media (pointer: coarse) {
+    height: 40px;
+  }
 `
 
 const PrimaryRegisterBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 32px;
+  height: 34px;
   padding: 0 13px;
   border-radius: ${RADIUS.SM};
   border: none;
@@ -3619,6 +4289,36 @@ const PrimaryRegisterBtn = styled.button`
   &:hover {
     background: #4338ca;
   }
+
+  @media (max-width: 640px) {
+    display: none;
+  }
+
+  @media (pointer: coarse) {
+    height: 40px;
+  }
+`
+
+const CreateGovFab = styled.button`
+  display: none;
+
+  @media (max-width: 640px) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    right: 18px;
+    bottom: max(18px, env(safe-area-inset-bottom));
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: none;
+    background: #4f46e5;
+    color: #ffffff;
+    box-shadow: 0 8px 24px rgba(79, 70, 229, 0.38);
+    cursor: pointer;
+    z-index: ${Z_INDEX.ACTION_MENU};
+  }
 `
 
 const PopoverAnchor = styled.div`
@@ -3626,20 +4326,18 @@ const PopoverAnchor = styled.div`
 `
 
 const DisplayPopover = styled.div`
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  width: 268px;
-  padding: 12px;
+  position: fixed;
+  width: 284px;
+  padding: 13px;
   border-radius: ${RADIUS.MD};
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? '#18181b' : '#ffffff'};
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.22);
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.24);
   display: flex;
   flex-direction: column;
-  gap: 11px;
-  z-index: 40;
+  gap: 12px;
+  z-index: ${Z_INDEX.DROPDOWN};
 `
 
 const PopoverField = styled.div`
@@ -3695,6 +4393,47 @@ const PopoverSelect = styled.select`
   color: ${({ theme }) => theme.colors.text.primary};
   font-size: 12px;
   font-weight: 600;
+`
+
+const ColumnChecklist = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+`
+
+const ColumnCheckBtn = styled.button<{ $checked: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid
+    ${({ theme, $checked }) =>
+      $checked ? ledgerAccentBorder(theme.mode) : ledgerHairline(theme.mode)};
+  background: ${({ theme, $checked }) =>
+    $checked ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  color: ${({ theme, $checked }) =>
+    $checked ? theme.colors.text.primary : theme.colors.text.tertiary};
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+`
+
+const ColumnCheckBox = styled.span<{ $checked: boolean }>`
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: ${({ theme, $checked }) =>
+    $checked ? ledgerAccent(theme.mode) : 'transparent'};
+  border: 1px solid
+    ${({ theme, $checked }) =>
+      $checked ? ledgerAccent(theme.mode) : ledgerHairlineStrong(theme.mode)};
+  color: #ffffff;
 `
 
 const PopoverFooterRow = styled.div`
@@ -3789,7 +4528,9 @@ const ResetAllBtn = styled.button`
 const CatalogSplit = styled.div<{ $drawerOpen: boolean }>`
   display: grid;
   grid-template-columns: ${({ $drawerOpen }) =>
-    $drawerOpen ? 'minmax(0, 1fr) 440px' : 'minmax(0, 1fr)'};
+    $drawerOpen
+      ? 'minmax(0, 1fr) clamp(400px, 24vw, 560px)'
+      : 'minmax(0, 1fr)'};
   gap: 10px;
   flex: 1;
   min-height: 0;
@@ -3802,6 +4543,7 @@ const CatalogSplit = styled.div<{ $drawerOpen: boolean }>`
 
 const LedgerCardSurface = styled.main`
   container-type: inline-size;
+  container-name: govcard;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -3810,23 +4552,119 @@ const LedgerCardSurface = styled.main`
   border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   background: ${({ theme }) => ledgerSurface(theme.mode)};
   overflow: hidden;
+
+  /* User-toggled hidden columns */
+  &[data-hidden-cols~='end'] [data-col='end'] {
+    display: none;
+  }
+  &[data-hidden-cols~='party'] [data-col='party'] {
+    display: none;
+  }
+  &[data-hidden-cols~='dur'] [data-col='dur'] {
+    display: none;
+  }
+  &[data-hidden-cols~='members'] [data-col='members'] {
+    display: none;
+  }
+  &[data-hidden-cols~='extra'] [data-col='extra'] {
+    display: none;
+  }
 `
 
-const StickyLedgerHead = styled.div<{ $cardsMode: boolean }>`
-  display: flex;
-  flex-direction: column;
+const LEDGER_GRID_TEMPLATE = css`
+  display: grid;
+  grid-template-columns:
+    84px
+    64px
+    136px
+    minmax(210px, 1fr)
+    98px
+    144px
+    108px
+    158px
+    58px;
+  align-items: center;
+  gap: 10px;
+
+  @container govcard (max-width: 1180px) {
+    grid-template-columns:
+      82px
+      60px
+      130px
+      minmax(190px, 1fr)
+      94px
+      104px
+      146px
+      56px;
+
+    [data-col='party'],
+    [data-col='extra'] {
+      display: none;
+    }
+  }
+
+  @container govcard (max-width: 880px) {
+    grid-template-columns:
+      80px
+      124px
+      minmax(170px, 1fr)
+      100px
+      54px;
+
+    [data-col='end'],
+    [data-col='regime'],
+    [data-col='party'],
+    [data-col='members'],
+    [data-col='extra'] {
+      display: none;
+    }
+  }
+
+  @container govcard (max-width: 640px) {
+    grid-template-columns:
+      74px
+      110px
+      minmax(140px, 1fr)
+      50px;
+
+    [data-col='end'],
+    [data-col='regime'],
+    [data-col='party'],
+    [data-col='dur'],
+    [data-col='members'],
+    [data-col='extra'] {
+      display: none;
+    }
+  }
+`
+
+const ColumnHeader = styled.div`
+  ${LEDGER_GRID_TEMPLATE}
+  position: sticky;
+  top: 0;
+  z-index: ${Z_INDEX.STICKY_HEADER};
+  padding: 6px 16px;
   border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? '#141417' : '#f8fafc'};
-  flex-shrink: 0;
+  background: ${({ theme }) => COLUMN_HEAD_BAND[theme.mode]};
+  backdrop-filter: blur(8px);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: ${({ theme }) => META_TEXT[theme.mode]};
 `
 
-const LedgerStatsSummary = styled.div`
+const CardsHeaderStrip = styled.div`
   ${DIGIT_DISPLAY}
+  position: sticky;
+  top: 0;
+  z-index: ${Z_INDEX.STICKY_HEADER};
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 7px 16px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => COLUMN_HEAD_BAND[theme.mode]};
+  backdrop-filter: blur(8px);
   font-size: 12px;
   color: ${({ theme }) => theme.colors.text.secondary};
 
@@ -3836,55 +4674,89 @@ const LedgerStatsSummary = styled.div`
   }
 `
 
+const SortHeaderBtn = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : META_TEXT[theme.mode]};
+  font-size: 11px;
+  font-weight: ${({ $active }) => ($active ? 800 : 700)};
+  cursor: pointer;
+  white-space: nowrap;
+  text-align: left;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const ColumnSortCaret = styled.span`
+  font-size: 10px;
+  line-height: 1;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+`
+
+const EndHeaderSpan = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const IdentityHeaderCell = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+`
+
+const HeaderStatsStrip = styled.span`
+  ${DIGIT_DISPLAY}
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+
+  strong {
+    color: ${({ theme }) => theme.colors.text.secondary};
+    font-weight: 800;
+  }
+`
+
+const DurationHeaderCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+`
+
+const DurationAxis = styled.span`
+  ${DIGIT_DISPLAY}
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 9px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  opacity: 0.8;
+  line-height: 1;
+`
+
 const ContextYearPill = styled.span`
-  margin-left: 4px;
-  padding: 1px 7px;
+  margin-left: 3px;
+  padding: 1px 6px;
   border-radius: 999px;
   background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
   color: ${({ theme }) => ledgerAccent(theme.mode)};
-  font-size: 11px;
-  font-weight: 700;
-`
-
-const LEDGER_GRID_TEMPLATE = css`
-  display: grid;
-  grid-template-columns: 128px 146px minmax(220px, 1fr) 114px 168px 186px 64px;
-  align-items: center;
-  gap: 12px;
-
-  @container (max-width: 1240px) {
-    grid-template-columns: 124px 144px minmax(210px, 1fr) 114px 176px 64px;
-    .col-wide-extra {
-      display: none;
-    }
-  }
-
-  @container (max-width: 960px) {
-    grid-template-columns: 112px 132px minmax(180px, 1fr) 150px 58px;
-    .col-wide-extra,
-    .col-regime {
-      display: none;
-    }
-  }
-
-  @container (max-width: 720px) {
-    grid-template-columns: 102px 118px minmax(150px, 1fr) 54px;
-    .col-wide-extra,
-    .col-regime,
-    .col-meta {
-      display: none;
-    }
-  }
-`
-
-const ColumnHintsRow = styled.div`
-  ${LEDGER_GRID_TEMPLATE}
-  padding: 5px 16px;
-  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0.02em;
-  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const LedgerScrollViewport = styled.div`
@@ -3904,34 +4776,41 @@ const ChapterSection = styled.section`
   flex-direction: column;
 `
 
-const ChapterHeaderBtn = styled.button`
-  position: sticky;
-  top: 0;
-  z-index: 5;
+const CenturyDivider = styled.button`
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   width: 100%;
-  padding: 7px 16px;
+  padding: 12px 16px 8px 34px;
   border: none;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(22, 22, 26, 0.95)'
-      : 'rgba(241, 245, 249, 0.95)'};
-  backdrop-filter: blur(6px);
+  background: ${({ theme }) => GROUP_BAND[theme.mode].century};
   cursor: pointer;
   text-align: left;
 
+  &::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    margin-left: 6px;
+    background: ${({ theme }) => ROW_HAIRLINE[theme.mode]};
+  }
+
   &:hover {
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    background: ${({ theme }) => GROUP_BAND_HOVER[theme.mode].century};
   }
 `
 
-const ChapterTitleGroup = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
+const CenturyRailDot = styled.span`
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-25%);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
+  box-shadow: 0 0 0 3px ${({ theme }) => ledgerAccentSubtle(theme.mode)};
 `
 
 const ChevronWrap = styled.span<{ $collapsed: boolean }>`
@@ -3944,8 +4823,9 @@ const ChevronWrap = styled.span<{ $collapsed: boolean }>`
 
 const ChapterTitle = styled.h3`
   margin: 0;
-  font-size: 12.5px;
+  font-size: 15px;
   font-weight: 800;
+  letter-spacing: -0.02em;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
@@ -3959,6 +4839,9 @@ const ChapterCount = styled.span`
   ${DIGIT_DISPLAY}
   font-size: 11px;
   font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: ${({ theme }) => ledgerChipFill(theme.mode)};
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
@@ -3977,7 +4860,7 @@ const LedgerRowsContainer = styled.div<{ $withRail?: boolean }>`
             bottom: 0;
             left: 19px;
             width: 1px;
-            background: ${ledgerHairlineStrong(theme.mode)};
+            background: ${RAIL_AXIS[theme.mode]};
             pointer-events: none;
           }
         `
@@ -3995,25 +4878,54 @@ const baseLedgerRowCss = css<{
       : $density === 'cozy'
         ? '9px 16px'
         : '13px 16px'};
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ROW_HAIRLINE[theme.mode]};
   background: ${({ theme, $selected }) =>
     $selected ? ledgerAccentSubtle(theme.mode) : 'transparent'};
   box-shadow: ${({ theme, $selected }) =>
     $selected ? `inset 3px 0 0 ${ledgerAccent(theme.mode)}` : 'none'};
   cursor: pointer;
+  outline: none;
   transition: background 0.12s ease;
 
   &:hover {
     background: ${({ theme, $selected }) =>
       $selected ? ledgerAccentSubtle(theme.mode) : ledgerRowWash(theme.mode)};
   }
+
+  &:focus-visible {
+    box-shadow: inset 0 0 0 2px ${({ theme }) => ledgerAccent(theme.mode)};
+  }
 `
 
 const CabinetLedgerRow = styled.div<{
   $selected: boolean
   $density: GovernmentListDensity
+  $reshuffleGrouped?: boolean
 }>`
   ${baseLedgerRowCss}
+  ${({ $reshuffleGrouped, $selected, theme }) =>
+    $reshuffleGrouped && !$selected
+      ? `box-shadow: inset 3px 0 0 ${
+          theme.mode === 'dark'
+            ? 'rgba(96, 165, 250, 0.55)'
+            : 'rgba(37, 99, 235, 0.45)'
+        };`
+      : ''}
+`
+
+const ReshuffleOrderPill = styled.span`
+  ${DIGIT_DISPLAY}
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: ${RADIUS.XS};
+  font-size: 10.5px;
+  font-weight: 700;
+  border: 1px solid ${({ theme }) => ROW_HAIRLINE[theme.mode]};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.06)'
+      : 'rgba(15, 23, 42, 0.045)'};
+  color: ${({ theme }) => META_TEXT[theme.mode]};
 `
 
 const DeptLedgerRow = styled.div<{
@@ -4023,14 +4935,14 @@ const DeptLedgerRow = styled.div<{
   ${baseLedgerRowCss}
 `
 
-const PeriodCell = styled.span`
+const StartDateCell = styled.span`
   ${DIGIT_DISPLAY}
   display: inline-flex;
   align-items: center;
   gap: 7px;
   font-size: 12px;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme }) => theme.colors.text.primary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4039,6 +4951,18 @@ const PeriodCell = styled.span`
     overflow: hidden;
     text-overflow: ellipsis;
   }
+`
+
+const EndDateCell = styled.span`
+  ${DIGIT_DISPLAY}
+  display: inline-flex;
+  align-items: center;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => META_TEXT[theme.mode]};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `
 
 const TimelineNodeDot = styled.span<{ $active: boolean; $ongoing?: boolean }>`
@@ -4073,15 +4997,46 @@ const PolityDot = styled.span<{ $historical: boolean }>`
       : ledgerAccent(theme.mode)};
 `
 
-const WideExtraCell = styled.div`
+const PartyColCell = styled.div`
   display: flex;
   align-items: center;
   min-width: 0;
   overflow: hidden;
+`
 
-  @container (max-width: 1240px) {
-    display: none;
-  }
+const DurationBarCell = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+`
+
+const DurationTrack = styled.span`
+  flex: 1;
+  min-width: 34px;
+  height: 5px;
+  border-radius: 999px;
+  background: ${({ theme }) => ledgerChipFill(theme.mode)};
+  overflow: hidden;
+`
+
+const DurationBarFill = styled.span<{ $pct: number; $ongoing?: boolean }>`
+  display: block;
+  height: 100%;
+  width: ${({ $pct }) => Math.max(6, Math.min(100, $pct))}%;
+  border-radius: 999px;
+  background: ${({ theme, $ongoing }) =>
+    $ongoing ? '#10b981' : ledgerAccent(theme.mode)};
+`
+
+const DurationLabelText = styled.span<{ $ongoing?: boolean }>`
+  ${DIGIT_DISPLAY}
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme, $ongoing }) =>
+    $ongoing ? '#10b981' : META_TEXT[theme.mode]};
+  white-space: nowrap;
+  flex-shrink: 0;
 `
 
 const PartyPill = styled.span`
@@ -4122,7 +5077,7 @@ const PartyColorDot = styled.span<{ $color?: string | null }>`
 const WideSubtleText = styled.span`
   font-size: 11px;
   font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${({ theme }) => META_TEXT[theme.mode]};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4259,6 +5214,24 @@ const EntryTitle = styled.span`
   white-space: nowrap;
 `
 
+const InlinePersonQuickBtn = styled.button`
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: transparent;
+  color: ${({ theme }) => META_TEXT[theme.mode]};
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  }
+`
+
 const AbbrevSpan = styled.span`
   font-size: 11.5px;
   font-weight: 600;
@@ -4316,10 +5289,6 @@ const RegimeCell = styled.div`
   display: flex;
   align-items: center;
   min-width: 0;
-
-  @container (max-width: 960px) {
-    display: none;
-  }
 `
 
 const SubtleBadge = styled.span`
@@ -4352,10 +5321,6 @@ const MetaBadgesCell = styled.div`
   gap: 5px;
   min-width: 0;
   overflow: hidden;
-
-  @container (max-width: 720px) {
-    display: none;
-  }
 `
 
 const CountPill = styled.span`
@@ -4453,6 +5418,27 @@ const CardTopRow = styled.div`
   gap: 8px;
 `
 
+const CardPeriodMeta = styled.div`
+  ${DIGIT_DISPLAY}
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => META_TEXT[theme.mode]};
+`
+
+const CardDurationBadge = styled.span<{ $ongoing?: boolean }>`
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  background: ${({ theme, $ongoing }) =>
+    $ongoing ? 'rgba(16, 185, 129, 0.14)' : ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme, $ongoing }) =>
+    $ongoing ? '#10b981' : ledgerAccent(theme.mode)};
+`
+
 const CardIdentityRow = styled.div`
   display: flex;
   align-items: center;
@@ -4507,8 +5493,12 @@ const DrawerHostColumn = styled.aside`
     bottom: 0;
     width: min(440px, 94vw);
     border-radius: 0;
-    z-index: 1100;
+    z-index: ${Z_INDEX.DRAWER_CONTENT};
     box-shadow: -12px 0 32px rgba(15, 23, 42, 0.24);
+  }
+
+  @media (max-width: 640px) {
+    width: 100dvw;
   }
 `
 
@@ -4521,7 +5511,7 @@ const MobileDrawerBackdrop = styled.div`
     inset: 0;
     background: rgba(15, 23, 42, 0.42);
     backdrop-filter: blur(2px);
-    z-index: 1099;
+    z-index: ${Z_INDEX.DRAWER_OVERLAY};
   }
 `
 

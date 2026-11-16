@@ -142,8 +142,27 @@ const WAR_METRICS: EventTypeMetrics = {
     'military.killed_in_action',
     'military.wounded',
     'military.casualties_total',
+    'human.deaths_total',
+    'human.executed',
     'civilian.killed',
     'economy.war_expenditure',
+  ],
+  subject: 'side',
+}
+
+/** 봉기·혁명·정변 — 봉기 측(참여 인원·사상·체포) 대 진압 측(동원 병력·사상) 비교 */
+const UPRISING_METRICS: EventTypeMetrics = {
+  menuLabel: '수치 (참여 인원·병력·사상자·체포)',
+  emptyHint: '참여 인원·진압 병력·사망·처형·체포 같은 숫자를 출처와 함께 기록하면 진영별·사건별 비교가 여기 모입니다.',
+  presets: [
+    'society.participants',
+    'military.personnel',
+    'human.deaths_total',
+    'military.killed_in_action',
+    'human.executed',
+    'civilian.killed',
+    'civilian.wounded',
+    'society.arrested',
   ],
   subject: 'side',
 }
@@ -158,8 +177,15 @@ const MILITARY_DOMAIN_METRICS: EventTypeMetrics = {
 
 const SOCIETY_METRICS: EventTypeMetrics = {
   menuLabel: '수치 (참여 인원·피해 규모)',
-  emptyHint: '참여 인원이나 사망·부상 같은 피해 규모를 출처와 함께 기록하면 여기 모입니다.',
-  presets: ['society.participants', 'human.deaths_total', 'civilian.killed', 'civilian.wounded'],
+  emptyHint: '참여 인원이나 사망·부상·체포 같은 피해 규모를 출처와 함께 기록하면 여기 모입니다.',
+  presets: [
+    'society.participants',
+    'human.deaths_total',
+    'human.executed',
+    'civilian.killed',
+    'civilian.wounded',
+    'society.arrested',
+  ],
   subject: 'event',
 }
 
@@ -237,7 +263,7 @@ export const EVENT_TYPES: Record<EventTypeKey, EventTypeDef> = {
   UPRISING: {
     key: 'UPRISING', short: '봉기', label: '봉기·혁명·정변', examples: '우창봉기 · 청년 튀르크 혁명 · 5월정변', defaultDomain: 'POLITICS',
     core: ['sides', 'participants', 'persons'], optional: ['metrics'],
-    metrics: SOCIETY_METRICS,
+    metrics: UPRISING_METRICS,
   },
   ATTACK: {
     key: 'ATTACK', short: '암살', label: '암살·테러·학살', examples: '사라예보 암살 · 블랙 홀 사건 · 가스관 폭파', defaultDomain: 'POLITICS',

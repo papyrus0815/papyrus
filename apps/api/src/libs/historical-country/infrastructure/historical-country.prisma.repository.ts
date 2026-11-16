@@ -320,15 +320,25 @@ export class HistoricalCountryPrismaRepository
         })
         const prevModernIds = prevLinks.map((r) => r.modernCountryId)
 
-        // 1. 기존 연결 모두 삭제
-        await tx.historicalCountryModernCountry.deleteMany({
-          where: { historicalCountryId: id },
-        })
-
-        // 2. 새 연결 생성
-        if (nextModernIds.length > 0) {
+        // 1·2. 빠진 연결만 지우고 새 연결만 만든다. 남는 연결 행은 건드리지 않는다 —
+        //      예전처럼 전부 지우고 다시 만들면 연결 기간(중화민국 중국 1912~1949 등)이
+        //      역사국가를 한 번 수정할 때마다 조용히 사라진다.
+        const nextModernIdSet = new Set(nextModernIds)
+        const prevModernIdSet = new Set(prevModernIds)
+        const removedModernIds = prevModernIds.filter(
+          (modernCountryId) => !nextModernIdSet.has(modernCountryId),
+        )
+        const addedModernIds = nextModernIds.filter(
+          (modernCountryId) => !prevModernIdSet.has(modernCountryId),
+        )
+        if (removedModernIds.length > 0) {
+          await tx.historicalCountryModernCountry.deleteMany({
+            where: { historicalCountryId: id, modernCountryId: { in: removedModernIds } },
+          })
+        }
+        if (addedModernIds.length > 0) {
           await tx.historicalCountryModernCountry.createMany({
-            data: nextModernIds.map((modernCountryId) => ({
+            data: addedModernIds.map((modernCountryId) => ({
               historicalCountryId: id,
               modernCountryId,
             })),

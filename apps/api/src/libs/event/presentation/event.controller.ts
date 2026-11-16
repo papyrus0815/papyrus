@@ -22,6 +22,7 @@ import { AuthGuard } from '@nestjs/passport'
 import { ApiTags } from '@nestjs/swagger'
 import { EventService } from '../application/event.service'
 import {
+  describeDeathAtEvent,
   describeExistenceMismatch,
   describeLifespanMismatch,
   partsOf,
@@ -2090,7 +2091,16 @@ export class EventController {
       if (response.relatedPersons && response.relatedPersons.length > 0) {
         const lifespans = await this.prisma.person.findMany({
           where: { id: { in: response.relatedPersons.map((person) => person.personId) } },
-          select: { id: true, birthEra: true, birthDate: true, deathEra: true, deathDate: true },
+          select: {
+            id: true,
+            birthEra: true,
+            birthDate: true,
+            deathEra: true,
+            deathDate: true,
+            deathDatePrecision: true,
+            deathType: true,
+            deathCause: true,
+          },
         })
         const lifespanById = new Map(lifespans.map((row) => [row.id, row]))
         for (const person of response.relatedPersons) {
@@ -2102,6 +2112,7 @@ export class EventController {
                 signedYearOfDate(row.deathEra, row.deathDate),
               )
             : null
+          person.deathAtEvent = row ? describeDeathAtEvent(event, row) : null
         }
       }
       if (response.relatedHistoricalCountries) {

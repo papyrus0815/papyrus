@@ -474,6 +474,17 @@ model HistoricalCountryModernCountry {
   /// 현대 국가 ID
   modernCountryId     String @map("modern_country_id") @db.Char(36)
 
+  /// 연결 기간 — 이 나라가 그 현대 국가의 땅에 있었던 기간. **비우면 존속 기간 전체**(기존 행 호환).
+  /// 같은 나라가 땅을 옮긴 경우에만 쓴다: 중화민국 = 중국 1912-01~1949-12 / 대만 1945-10~(현재).
+  /// 국가 행을 나누지 않고(헌법·총통 대수·국적이 이어지므로) 연결 쪽에 기간을 둔다.
+  /// 구조화 칸(BC·연 정밀도 안전) — 월은 모르면 null.
+  startEra   Era? @map("start_era")
+  startYear  Int? @map("start_year")
+  startMonth Int? @map("start_month")
+  endEra     Era? @map("end_era")
+  endYear    Int? @map("end_year")
+  endMonth   Int? @map("end_month")
+
   // --- 관계 필드
   historicalCountry HistoricalCountry @relation(fields: [historicalCountryId], references: [id], onDelete: Cascade)
   modernCountry     Country           @relation(fields: [modernCountryId], references: [id], onDelete: Cascade)

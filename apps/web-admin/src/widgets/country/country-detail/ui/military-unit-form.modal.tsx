@@ -1,31 +1,44 @@
 /**
- * 군사 사령부·부대 등록/수정 — 우측 SidePanel 유지 + 사건 등록 모달(EventRegisterModal) 플랫 폼 규격
- * - 136px 좌측 라벨 · 우측 컨트롤 1px 헤어라인 행(`FlatFormRow`) 단일 스크롤 레이아웃
- * - 헤더 컨텍스트 배지 + 섹션 점프 내비게이션(`SectionJumpNav`)
- * - 하단 고정 검증 힌트 / 등록 준비 완료 + ⌘↵ 단축키 푸터(`EventStyleFooterBar`)
- * - 휘장 업로드, 시대 전환 칩, 구조화 날짜, 통합 지휘관 재임(`GovernmentPositionTenure`), 전신·후신 계보 지원
+ * 군사 사령부·부대 등록/수정 모달 — 사건 등록 모달(EventRegisterModal · BasicInfoSection · EventTypeField) 디자인·UX 정본 적용
+ * - 중앙 모달(`RegisterModal`) + 좌우 2단 분할(`split`) / 1단 세로(`single`) 전환 및 분할 비율 조절
+ * - 사건 등록 모달과 동일한 3대 섹션(`기본 정보` · `소속 · 지휘 · 계보` · `맥락 · 상세 기록`) 및 헤더 컨텍스트 배지
+ * - 소속 국가·시대: 선택 카드(`ParentEventCard`) + 인라인 빠른 검색(`CountryQuickSearchInput`) + 시대 일치 우선 2개 칩 + `+N개 시대 더보기` 접기/펼치기 + 존속기간 불일치 소프트 경고(`AlertBox`)
+ * - 창설·해산 시기: `InlineDateField`(`appearance="field"`) + `DatePickerModal` + `SegmentControl` 운용 상태 전환
+ * - 군종(`S.CategoryGrid` + `S.CategoryCard`) · 부대 유형(`KitChipGroup` + `KitChoiceChip` + `+ 다른 제대 더 보기` + 빠른 검색)
+ * - 부대 마크·휘장: `KitUploadStrip` / `KitUploadFilled` (`register-form-kit`)
+ * - 상위 부대 · 소관 부처 · 지휘관 · 계보: `ParentEventCard` · `ParticipantRow` · `ModalCausalFlowBoard`
  */
 import React, {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
 } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
+import type { IconType } from 'react-icons'
 import {
-  FiCalendar,
+  FiAnchor,
+  FiCheck,
+  FiColumns,
+  FiCompass,
+  FiCpu,
+  FiCrosshair,
   FiEdit2,
+  FiImage,
+  FiLayers,
   FiPlus,
+  FiRadio,
   FiShield,
-  FiTrash2,
-  FiUpload,
-  FiUser,
+  FiWind,
   FiX,
 } from 'react-icons/fi'
+import styled, { type DefaultTheme, useTheme } from 'styled-components'
 
 import { useHistoricalCountriesByModernCountry } from '@/features/country/api/use-historical-countries-by-modern-country.hook'
+import * as S from '@/pages/events/create/event-create.styles'
 import {
   administrationDepartmentApi,
   type AdministrationDepartment,
@@ -55,8 +68,19 @@ import {
   validateImageFile,
 } from '@/shared/api/upload'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
+import {
+  describeLifespanMismatch,
+  formatCountryPeriod,
+} from '@/shared/lib/country-period'
+import {
+  filterCountriesByQuery,
+  matchesHintYearRange,
+  type CountryHintYearRange,
+} from '@/shared/lib/country-picker-filter'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
+import { isDefenseRelatedCategory } from '@/shared/lib/ministry-department/ministry-department-utils'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { AlertBox } from '@/shared/ui/alert-box/alert-box'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { CountryPicker } from '@/shared/ui/country-picker'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
@@ -64,216 +88,282 @@ import {
   InstitutionAppointmentModal,
   type EditableInstitutionTenure,
 } from '@/shared/ui/institution-appointment-modal'
+import { InlineDateField } from '@/shared/ui/person-register-modal/sections/inline-date-field'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import {
   PlaceSelect,
   type PlaceResult,
 } from '@/shared/ui/place-autocomplete/place-autocomplete'
 import {
-  SearchableSelect,
-  type SearchableSelectOption,
-} from '@/shared/ui/searchable-select'
-import { SidePanel } from '@/shared/ui/side-panel'
+  KitBusyBar,
+  KitChipGroup,
+  KitChoiceChip,
+  KitFormLoading,
+  KitGroupLabel,
+  KitRemoveButton,
+  KitUploadActions,
+  KitUploadFilled,
+  KitUploadRemove,
+  KitUploadStrip,
+  KitUploadText,
+  KitUploadThumb,
+} from '@/shared/ui/register-form-kit/register-form-kit'
+import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
 import {
-  CompactUploadStrip,
-  CompactUploadThumb,
-  EventStyleFooterBar,
-  FlatFieldControl,
-  FlatFormLabel,
-  FlatFormRow,
-  FlatFormSection,
-  FlatFormStack,
-  FlatHint,
-  FlatInput,
-  FlatNameAbbrGrid,
-  FlatRequired,
-  FlatSectionHeader,
-  FlatSectionHint,
-  FlatSectionTitle,
-  FlatSelect,
-  FlatTextarea,
-  FlatTwoColGrid,
-  FooterActionGroup,
-  FooterCancelButton,
-  FooterHintArea,
-  FooterJumpBtn,
+  FooterHint,
+  FooterJumpArrow,
+  FooterJumpButton,
   FooterKbd,
+  FooterMissingCount,
   FooterReadyBadge,
-  FooterReadyDot,
   FooterReadyGroup,
-  FooterShortcutText,
-  FooterSubmitButton,
-  InlineDateRow,
-  InlineIconBtn,
-  LinkedRecordRow,
-  MobileSectionStrip,
-  OutlineAddBtn,
-  PanelHeaderActionsBar,
-  PanelHeaderContextBadge,
-  PillChoiceChip,
-  PillChoiceIcon,
-  PillChoiceRow,
-  QuickPresetChip,
-  SectionJumpBadge,
+  FooterShortcutItem,
+  HeaderActionsBar,
+  HeaderResetBtn,
   SectionJumpBtn,
-  SectionJumpDone,
   SectionJumpNav,
-} from '@/shared/ui/side-panel-form'
+} from '@/shared/ui/register-modal-shell/register-modal-chrome'
+import {
+  PersonRegisterModalCancelBtn,
+  PersonRegisterModalFormScroll,
+  PersonRegisterModalPrimaryBtn,
+  PersonRegisterModalStickyFooter,
+} from '@/shared/ui/register-modal-shell/register-modal-shell'
+import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
+import { MobileSectionStrip } from '@/shared/ui/side-panel-form'
 import { notify } from '@/shared/ui/toast'
 
-const UNIT_TYPES: Array<{
+const LAYOUT_STORAGE_KEY = 'papyrus:military-unit-register-layout'
+
+function readInitialLayoutMode(): 'split' | 'single' {
+  if (typeof window === 'undefined') return 'split'
+  try {
+    const saved = window.localStorage.getItem(LAYOUT_STORAGE_KEY)
+    return saved === 'single' ? 'single' : 'split'
+  } catch {
+    return 'split'
+  }
+}
+
+const CREATE_LEAVE_MESSAGE =
+  '작성 중인 군사 사령부·부대 내용이 있습니다. 저장하지 않고 창을 닫으시겠습니까?'
+const EDIT_LEAVE_MESSAGE =
+  '저장하지 않은 변경 사항이 있습니다. 창을 닫으시겠습니까?'
+const RESET_CONFIRM_MESSAGE =
+  '작성 중인 내용을 모두 지우고 처음 상태로 되돌리시겠습니까?'
+
+interface UnitTypeOptionDef {
   value: MilitaryUnitType
   label: string
+  shortLabel: string
   group: string
   keywords: string
-}> = [
+  primaryForBranches: string[]
+}
+
+const UNIT_TYPES: ReadonlyArray<UnitTypeOptionDef> = [
   {
     value: 'SUPREME_COMMAND',
     label: '최고사령부 (OKW · STAVKA · 대본영 등)',
-    group: '최고·상급 지휘기구',
+    shortLabel: '최고사령부',
+    group: '최고 · 상급 지휘기구',
     keywords: 'SUPREME_COMMAND OKW STAVKA 대본영 국방군 최고사령부 총사령부',
+    primaryForBranches: ['JOINT', 'OTHER', ''],
   },
   {
     value: 'GENERAL_STAFF',
     label: '참모본부 · 합동참모본부',
-    group: '최고·상급 지휘기구',
+    shortLabel: '참모본부 · 합참',
+    group: '최고 · 상급 지휘기구',
     keywords: 'GENERAL_STAFF JCS 합참 총참모부 참모본부 육군참모본부',
+    primaryForBranches: ['JOINT', 'ARMY', ''],
   },
   {
     value: 'SERVICE_HQ',
     label: '각군 총사령부 (OKH · OKM · OKL · 육본 등)',
-    group: '최고·상급 지휘기구',
+    shortLabel: '각군 총사령부 · 본부',
+    group: '최고 · 상급 지휘기구',
     keywords: 'SERVICE_HQ OKH OKM OKL 육군본부 해군본부 공군본부 총사령부',
+    primaryForBranches: ['JOINT', 'ARMY', 'NAVY', 'AIR_FORCE', 'MARINE_CORPS', ''],
   },
   {
     value: 'THEATER',
-    label: '전구·총사령부',
-    group: '전략·작전 제대',
+    label: '전구 · 방면 총사령부',
+    shortLabel: '전구 · 방면사령부',
+    group: '전략 · 작전 제대',
     keywords: 'THEATER SHAEF 전구사령부 방면총사령부',
+    primaryForBranches: ['JOINT'],
   },
   {
     value: 'ARMY_GROUP',
-    label: '집단군',
-    group: '전략·작전 제대',
+    label: '집단군 (Heeresgruppe · 총군)',
+    shortLabel: '집단군',
+    group: '전략 · 작전 제대',
     keywords: 'ARMY_GROUP Heeresgruppe 집단군 총군',
+    primaryForBranches: ['ARMY', 'JOINT', ''],
   },
   {
     value: 'FRONT',
-    label: '전선군·방면군',
-    group: '전략·작전 제대',
+    label: '전선군 · 방면군',
+    shortLabel: '전선군 · 방면군',
+    group: '전략 · 작전 제대',
     keywords: 'FRONT 전선군 방면군 프론트',
+    primaryForBranches: ['ARMY'],
   },
   {
     value: 'MILITARY_DISTRICT',
-    label: '군관구',
-    group: '전략·작전 제대',
+    label: '군관구 · 진수부',
+    shortLabel: '군관구',
+    group: '전략 · 작전 제대',
     keywords: 'MILITARY_DISTRICT Wehrkreis 군관구 관구 진수부',
+    primaryForBranches: ['ARMY', 'JOINT'],
   },
   {
     value: 'FIELD_ARMY',
-    label: '야전군',
-    group: '전략·작전 제대',
+    label: '야전군 · 기갑군',
+    shortLabel: '야전군',
+    group: '전략 · 작전 제대',
     keywords: 'FIELD_ARMY Armee 야전군 기갑군 군사령부',
+    primaryForBranches: ['ARMY', ''],
   },
   {
     value: 'CORPS',
-    label: '군단',
-    group: '전략·작전 제대',
+    label: '군단 (Korps)',
+    shortLabel: '군단',
+    group: '전략 · 작전 제대',
     keywords: 'CORPS Korps 군단 기갑군단',
+    primaryForBranches: ['ARMY', 'MARINE_CORPS', ''],
   },
   {
     value: 'DIVISION',
-    label: '사단',
+    label: '사단 (Division)',
+    shortLabel: '사단',
     group: '전술 제대',
     keywords: 'DIVISION 보병사단 기갑사단 기계화사단 공수사단 사단',
+    primaryForBranches: ['ARMY', 'MARINE_CORPS', 'OTHER', ''],
   },
   {
     value: 'BRIGADE',
-    label: '여단',
+    label: '여단 (Brigade)',
+    shortLabel: '여단',
     group: '전술 제대',
     keywords: 'BRIGADE 여단 독립여단',
+    primaryForBranches: ['ARMY', 'MARINE_CORPS'],
   },
   {
     value: 'REGIMENT',
-    label: '연대',
+    label: '연대 (Regiment)',
+    shortLabel: '연대',
     group: '전술 제대',
     keywords: 'REGIMENT 연대 보병연대 기갑연대',
+    primaryForBranches: ['ARMY'],
   },
   {
     value: 'BATTALION',
-    label: '대대',
+    label: '대대 (Battalion)',
+    shortLabel: '대대',
     group: '전술 제대',
     keywords: 'BATTALION 대대 중전차대대',
+    primaryForBranches: [],
   },
   {
     value: 'COMPANY',
-    label: '중대',
+    label: '중대 (Company)',
+    shortLabel: '중대',
     group: '전술 제대',
     keywords: 'COMPANY 중대',
+    primaryForBranches: [],
   },
   {
     value: 'PLATOON',
-    label: '소대',
+    label: '소대 (Platoon)',
+    shortLabel: '소대',
     group: '전술 제대',
     keywords: 'PLATOON 소대',
+    primaryForBranches: [],
   },
   {
     value: 'SQUAD',
-    label: '분대',
+    label: '분대 (Squad)',
+    shortLabel: '분대',
     group: '전술 제대',
     keywords: 'SQUAD 분대',
+    primaryForBranches: [],
   },
   {
     value: 'FLEET',
-    label: '함대',
-    group: '해군·공군·특수·기타',
+    label: '함대 (Fleet · 연합함대)',
+    shortLabel: '함대',
+    group: '해군 · 공군 · 특수 · 기타',
     keywords: 'FLEET 연합함대 기동함대 함대 해군',
+    primaryForBranches: ['NAVY', 'COAST_GUARD', ''],
   },
   {
     value: 'AIR_FLEET',
-    label: '항공함대',
-    group: '해군·공군·특수·기타',
+    label: '항공함대 (Luftflotte)',
+    shortLabel: '항공함대',
+    group: '해군 · 공군 · 특수 · 기타',
     keywords: 'AIR_FLEET Luftflotte 항공함대 공군',
+    primaryForBranches: ['AIR_FORCE'],
   },
   {
     value: 'AIR_CORPS',
-    label: '항공군단',
-    group: '해군·공군·특수·기타',
+    label: '항공군단 · 비행군단',
+    shortLabel: '항공군단',
+    group: '해군 · 공군 · 특수 · 기타',
     keywords: 'AIR_CORPS Fliegerkorps 항공군단 비행군단',
-  },
-  {
-    value: 'SQUADRON',
-    label: '전대',
-    group: '해군·공군·특수·기타',
-    keywords: 'SQUADRON 전대 비행전대 전단',
+    primaryForBranches: ['AIR_FORCE'],
   },
   {
     value: 'WING',
-    label: '비행단',
-    group: '해군·공군·특수·기타',
+    label: '비행단 (Wing · Geschwader)',
+    shortLabel: '비행단',
+    group: '해군 · 공군 · 특수 · 기타',
     keywords: 'WING Geschwader 전투비행단 비행단',
+    primaryForBranches: ['AIR_FORCE', 'SPACE_FORCE'],
+  },
+  {
+    value: 'SQUADRON',
+    label: '전대 · 비행전대 (Squadron)',
+    shortLabel: '전대 · 비행전대',
+    group: '해군 · 공군 · 특수 · 기타',
+    keywords: 'SQUADRON 전대 비행전대 전단 해군전대',
+    primaryForBranches: ['NAVY', 'AIR_FORCE', 'COAST_GUARD', 'SPACE_FORCE'],
   },
   {
     value: 'SPECIAL_FORCES',
-    label: '특수부대',
-    group: '해군·공군·특수·기타',
+    label: '특수부대 · 특전사',
+    shortLabel: '특수부대',
+    group: '해군 · 공군 · 특수 · 기타',
     keywords: 'SPECIAL_FORCES 특전사 특수부대 코만도 SAS',
+    primaryForBranches: ['OTHER', 'MARINE_CORPS'],
   },
   {
     value: 'DETACHMENT',
-    label: '파견대 · 분견대',
-    group: '해군·공군·특수·기타',
+    label: '파견대 · 분견군',
+    shortLabel: '파견대 · 분견군',
+    group: '해군 · 공군 · 특수 · 기타',
     keywords: 'DETACHMENT Armeeabteilung 분견군 파견대 지대',
+    primaryForBranches: ['OTHER', 'COAST_GUARD'],
   },
   {
     value: 'OTHER',
-    label: '기타 편제',
-    group: '해군·공군·특수·기타',
+    label: '기타 편제 · 군사학교 · 기지',
+    shortLabel: '기타 편제',
+    group: '해군 · 공군 · 특수 · 기타',
     keywords: 'OTHER 기타 사관학교 기지',
+    primaryForBranches: ['SPACE_FORCE', 'COAST_GUARD', 'OTHER'],
   },
 ]
 
-const HIGH_COMMAND_PRESETS: Array<{
+const UNIT_TYPE_GROUPS = [
+  '최고 · 상급 지휘기구',
+  '전략 · 작전 제대',
+  '전술 제대',
+  '해군 · 공군 · 특수 · 기타',
+] as const
+
+const HIGH_COMMAND_PRESETS: ReadonlyArray<{
   label: string
   name: string
   abbreviation: string
@@ -283,43 +373,23 @@ const HIGH_COMMAND_PRESETS: Array<{
   branch: string
 }> = [
   {
-    label: 'OKW (국방군 최고사령부)',
-    name: '국방군 최고사령부',
-    abbreviation: 'OKW',
-    nameLocal: 'Oberkommando der Wehrmacht',
-    nameEn: 'Armed Forces High Command',
+    label: '합동참모본부 (합참)',
+    name: '합동참모본부',
+    abbreviation: '합참',
+    nameEn: 'Joint Chiefs of Staff',
+    unitType: 'GENERAL_STAFF',
+    branch: 'JOINT',
+  },
+  {
+    label: '연합군 최고사령부 (SHAEF)',
+    name: '연합군 원정군 최고사령부',
+    abbreviation: 'SHAEF',
+    nameEn: 'Supreme Headquarters Allied Expeditionary Force',
     unitType: 'SUPREME_COMMAND',
     branch: 'JOINT',
   },
   {
-    label: 'OKH (육군 총사령부)',
-    name: '육군 총사령부',
-    abbreviation: 'OKH',
-    nameLocal: 'Oberkommando des Heeres',
-    nameEn: 'Army High Command',
-    unitType: 'SERVICE_HQ',
-    branch: 'ARMY',
-  },
-  {
-    label: 'OKM (해군 총사령부)',
-    name: '해군 총사령부',
-    abbreviation: 'OKM',
-    nameLocal: 'Oberkommando der Marine',
-    nameEn: 'Navy High Command',
-    unitType: 'SERVICE_HQ',
-    branch: 'NAVY',
-  },
-  {
-    label: 'OKL (공군 총사령부)',
-    name: '공군 총사령부',
-    abbreviation: 'OKL',
-    nameLocal: 'Oberkommando der Luftwaffe',
-    nameEn: 'Air Force High Command',
-    unitType: 'SERVICE_HQ',
-    branch: 'AIR_FORCE',
-  },
-  {
-    label: 'STAVKA (소련 최고사령부)',
+    label: 'STAVKA (최고사령부)',
     name: '최고사령부 스타프카',
     abbreviation: 'STAVKA',
     nameLocal: 'Ставка Верховного Главнокомандования',
@@ -328,25 +398,40 @@ const HIGH_COMMAND_PRESETS: Array<{
     branch: 'JOINT',
   },
   {
-    label: '대본영 (일본 제국)',
-    name: '대본영',
-    abbreviation: '대본영',
-    nameLocal: '大本営',
-    nameEn: 'Imperial General Headquarters',
-    unitType: 'SUPREME_COMMAND',
-    branch: 'JOINT',
+    label: '육군본부 (육본)',
+    name: '육군본부',
+    abbreviation: '육본',
+    nameEn: 'Army Headquarters',
+    unitType: 'SERVICE_HQ',
+    branch: 'ARMY',
   },
   {
-    label: '합동참모본부 (합참)',
-    name: '합동참모본부',
-    abbreviation: '합참',
-    nameEn: 'Joint Chiefs of Staff',
-    unitType: 'GENERAL_STAFF',
-    branch: 'JOINT',
+    label: '해군본부 · 연합함대',
+    name: '해군본부',
+    abbreviation: '해본',
+    nameEn: 'Naval Headquarters',
+    unitType: 'SERVICE_HQ',
+    branch: 'NAVY',
+  },
+  {
+    label: '공군본부 (공본)',
+    name: '공군본부',
+    abbreviation: '공본',
+    nameEn: 'Air Force Headquarters',
+    unitType: 'SERVICE_HQ',
+    branch: 'AIR_FORCE',
+  },
+  {
+    label: '전략공군사령부 (SAC)',
+    name: '전략공군사령부',
+    abbreviation: 'SAC',
+    nameEn: 'Strategic Air Command',
+    unitType: 'THEATER',
+    branch: 'AIR_FORCE',
   },
 ]
 
-const TRANSITION_KIND_OPTIONS: Array<{
+const TRANSITION_KIND_OPTIONS: ReadonlyArray<{
   value: MilitaryUnitTransitionKind
   label: string
 }> = [
@@ -357,48 +442,111 @@ const TRANSITION_KIND_OPTIONS: Array<{
   { value: 'ABSORBED', label: '흡수' },
 ]
 
-const MILITARY_BRANCHES: Array<{
+/**
+ * 사건 등록 모달(`S.CategoryGrid` + `S.CategoryCard`)과 동일한 톤 토큰을 갖는 군종 정의
+ */
+const MILITARY_BRANCHES: ReadonlyArray<{
   value: string
-  icon: string
+  Icon: IconType
   label: string
-  keywords: string
+  rgb: string
+  text: string
+  textDark: string
+  accent: string
 }> = [
-  { value: 'JOINT', icon: '⚔️', label: '합동·통합군', keywords: 'JOINT Wehrmacht 합동군 통합군 국방군' },
-  { value: 'ARMY', icon: '🪖', label: '육군', keywords: 'ARMY Heer 지상군 육군' },
-  { value: 'NAVY', icon: '⚓', label: '해군', keywords: 'NAVY Kriegsmarine 함대 해군' },
+  {
+    value: 'JOINT',
+    Icon: FiLayers,
+    label: '합동 · 통합군',
+    rgb: '30, 64, 175',
+    text: '#1e3a8a',
+    textDark: '#93c5fd',
+    accent: '#1d4ed8',
+  },
+  {
+    value: 'ARMY',
+    Icon: FiShield,
+    label: '육군',
+    rgb: '21, 128, 61',
+    text: '#166534',
+    textDark: '#86efac',
+    accent: '#15803d',
+  },
+  {
+    value: 'NAVY',
+    Icon: FiAnchor,
+    label: '해군',
+    rgb: '2, 132, 199',
+    text: '#0369a1',
+    textDark: '#7dd3fc',
+    accent: '#0284c7',
+  },
   {
     value: 'AIR_FORCE',
-    icon: '✈️',
+    Icon: FiWind,
     label: '공군',
-    keywords: 'AIR_FORCE Luftwaffe 항공군 공군',
+    rgb: '37, 99, 235',
+    text: '#1d4ed8',
+    textDark: '#93c5fd',
+    accent: '#2563eb',
   },
   {
     value: 'MARINE_CORPS',
-    icon: '🔱',
+    Icon: FiCrosshair,
     label: '해병대',
-    keywords: 'MARINE_CORPS Marines 상륙군 해병대',
+    rgb: '220, 38, 38',
+    text: '#b91c1c',
+    textDark: '#fca5a5',
+    accent: '#dc2626',
   },
   {
     value: 'COAST_GUARD',
-    icon: '🛟',
+    Icon: FiCompass,
     label: '해안경비대',
-    keywords: 'COAST_GUARD 해안경비대 해양경찰',
+    rgb: '13, 148, 136',
+    text: '#0f766e',
+    textDark: '#5eead4',
+    accent: '#0d9488',
   },
   {
     value: 'SPACE_FORCE',
-    icon: '🛰️',
-    label: '우주군',
-    keywords: 'SPACE_FORCE 전략로켓군 우주군',
+    Icon: FiCpu,
+    label: '우주 · 전략군',
+    rgb: '14, 116, 144',
+    text: '#0e7490',
+    textDark: '#67e8f9',
+    accent: '#0891b2',
   },
   {
     value: 'OTHER',
-    icon: '🛡️',
-    label: '기타·독립군종',
-    keywords: 'OTHER 친위대 SS 헌병 방공군 기타',
+    Icon: FiRadio,
+    label: '기타 · 독립군종',
+    rgb: '71, 85, 105',
+    text: '#334155',
+    textDark: '#cbd5e1',
+    accent: '#475569',
   },
 ]
 
-type FormSectionKey = 'basic' | 'military' | 'lineage' | 'description'
+type FormSectionKey = 'basic' | 'command' | 'context'
+
+const FORM_SECTION_META: ReadonlyArray<{
+  key: FormSectionKey
+  id: string
+  label: string
+}> = [
+  { key: 'basic', id: 'military-unit-section-basic', label: '기본 정보' },
+  {
+    key: 'command',
+    id: 'military-unit-section-command',
+    label: '소속 · 지휘 · 계보',
+  },
+  {
+    key: 'context',
+    id: 'military-unit-section-context',
+    label: '맥락 · 상세 기록',
+  },
+]
 
 type TransitionDirection =
   | 'PREDECESSOR_DEPARTMENT'
@@ -431,6 +579,143 @@ export type CommanderDraftRow = {
   endYear: string
   endMonth: string
   endDay: string
+}
+
+function inferMilitaryUnitMetaFromName(
+  nameValue: string,
+  abbrValue: string,
+): {
+  inferredUnitType: MilitaryUnitType | null
+  inferredBranch: string | null
+  inferredYear: { era: 'AD' | 'BC'; year: string } | null
+} {
+  const combined = `${nameValue.trim()} ${abbrValue.trim()}`.trim()
+  if (combined.length < 2) {
+    return {
+      inferredUnitType: null,
+      inferredBranch: null,
+      inferredYear: null,
+    }
+  }
+
+  let inferredYear: { era: 'AD' | 'BC'; year: string } | null = null
+  const bcYearMatch = /(?:기원전|BC|B\.C\.)\s*(\d{1,4})\s*년?/i.exec(combined)
+  if (bcYearMatch?.[1]) {
+    const parsedBc = Number.parseInt(bcYearMatch[1], 10)
+    if (Number.isInteger(parsedBc) && parsedBc >= 1 && parsedBc <= 4000) {
+      inferredYear = { era: 'BC', year: String(parsedBc) }
+    }
+  } else {
+    const adYearMatch =
+      /(?:서기\s*)?(\d{3,4})\s*년|(?:[(（[])(\d{4})(?:[)）\]~-])/.exec(
+        combined,
+      )
+    const rawAdYear = adYearMatch?.[1] ?? adYearMatch?.[2]
+    if (rawAdYear) {
+      const parsedAd = Number.parseInt(rawAdYear, 10)
+      if (Number.isInteger(parsedAd) && parsedAd >= 100 && parsedAd <= 2100) {
+        inferredYear = { era: 'AD', year: String(parsedAd) }
+      }
+    }
+  }
+
+  let inferredUnitType: MilitaryUnitType | null = null
+  if (/최고사령부|대본영|스타프카|\bOKW\b|\bSTAVKA\b/i.test(combined)) {
+    inferredUnitType = 'SUPREME_COMMAND'
+  } else if (
+    /합동참모본부|참모본부|총참모부|\bJCS\b|\b합참\b/i.test(combined)
+  ) {
+    inferredUnitType = 'GENERAL_STAFF'
+  } else if (
+    /육군\s*총사령부|해군\s*총사령부|공군\s*총사령부|육군본부|해군본부|공군본부|\bOKH\b|\bOKM\b|\bOKL\b/i.test(
+      combined,
+    )
+  ) {
+    inferredUnitType = 'SERVICE_HQ'
+  } else if (
+    /전구사령부|방면총사령부|연합군\s*최고사령부|\bSHAEF\b/i.test(combined)
+  ) {
+    inferredUnitType = 'THEATER'
+  } else if (/집단군|총군|Heeresgruppe/i.test(combined)) {
+    inferredUnitType = 'ARMY_GROUP'
+  } else if (/전선군|방면군/i.test(combined)) {
+    inferredUnitType = 'FRONT'
+  } else if (/군관구|진수부|Wehrkreis/i.test(combined)) {
+    inferredUnitType = 'MILITARY_DISTRICT'
+  } else if (/항공함대|Luftflotte/i.test(combined)) {
+    inferredUnitType = 'AIR_FLEET'
+  } else if (/함대|연합함대|기동함대/i.test(combined)) {
+    inferredUnitType = 'FLEET'
+  } else if (/항공군단|비행군단|Fliegerkorps/i.test(combined)) {
+    inferredUnitType = 'AIR_CORPS'
+  } else if (/비행단|전투비행단|폭격비행단|Geschwader/i.test(combined)) {
+    inferredUnitType = 'WING'
+  } else if (/비행전대|전대|전단/i.test(combined)) {
+    inferredUnitType = 'SQUADRON'
+  } else if (
+    /특수전|특전사|특수부대|코만도|\bSAS\b|\bSEAL/i.test(combined)
+  ) {
+    inferredUnitType = 'SPECIAL_FORCES'
+  } else if (/분견군|분견대|파견대|지대|Armeeabteilung/i.test(combined)) {
+    inferredUnitType = 'DETACHMENT'
+  } else if (
+    /야전군|기갑군|제\d+\s*군(?!단|관구)|군사령부/i.test(combined)
+  ) {
+    inferredUnitType = 'FIELD_ARMY'
+  } else if (/군단|기갑군단|\bKorps\b/i.test(combined)) {
+    inferredUnitType = 'CORPS'
+  } else if (/사단|\bDivision\b/i.test(combined)) {
+    inferredUnitType = 'DIVISION'
+  } else if (/여단|\bBrigade\b/i.test(combined)) {
+    inferredUnitType = 'BRIGADE'
+  } else if (/연대|\bRegiment\b/i.test(combined)) {
+    inferredUnitType = 'REGIMENT'
+  } else if (/대대|\bBattalion\b/i.test(combined)) {
+    inferredUnitType = 'BATTALION'
+  } else if (/중대|\bCompany\b/i.test(combined)) {
+    inferredUnitType = 'COMPANY'
+  } else if (/소대|\bPlatoon\b/i.test(combined)) {
+    inferredUnitType = 'PLATOON'
+  } else if (/분대|\bSquad\b/i.test(combined)) {
+    inferredUnitType = 'SQUAD'
+  }
+
+  let inferredBranch: string | null = null
+  if (/해병|상륙군|\bMarine/i.test(combined)) {
+    inferredBranch = 'MARINE_CORPS'
+  } else if (/해안경비대|해양경찰/i.test(combined)) {
+    inferredBranch = 'COAST_GUARD'
+  } else if (/우주군|전략로켓군/i.test(combined)) {
+    inferredBranch = 'SPACE_FORCE'
+  } else if (
+    /공군|항공함대|항공군단|비행단|비행전대|전투비행단|\bOKL\b|\bLuftwaffe\b|\bLuftflotte\b/i.test(
+      combined,
+    )
+  ) {
+    inferredBranch = 'AIR_FORCE'
+  } else if (
+    /해군|함대|연합함대|기동함대|진수부|\bOKM\b|\bKriegsmarine\b/i.test(
+      combined,
+    )
+  ) {
+    inferredBranch = 'NAVY'
+  } else if (
+    /국방군\s*최고사령부|합동참모본부|대본영|스타프카|\bOKW\b|\bSTAVKA\b|\b합참\b|통합군|합동군/i.test(
+      combined,
+    )
+  ) {
+    inferredBranch = 'JOINT'
+  } else if (/친위대|\bWaffen-SS\b|\bSS\b/i.test(combined)) {
+    inferredBranch = 'OTHER'
+  } else if (
+    /육군|집단군|전선군|야전군|기갑군|군단|보병|기갑|기계화|포병|기병|공수|\bOKH\b|\bHeer\b/i.test(
+      combined,
+    )
+  ) {
+    inferredBranch = 'ARMY'
+  }
+
+  return { inferredUnitType, inferredBranch, inferredYear }
 }
 
 function buildCommanderRolePresets(
@@ -526,6 +811,17 @@ function toCalendarInitialIso(
       : 1,
   ).padStart(2, '0')
   return `${String(parsedYear).padStart(4, '0')}-${monthPadded}-${dayPadded}`
+}
+
+function toSignedComparableYear(
+  eraVal: 'AD' | 'BC',
+  yearStr: string,
+): number | null {
+  const trimmed = yearStr.trim()
+  if (!trimmed) return null
+  const parsed = Number.parseInt(trimmed, 10)
+  if (!Number.isInteger(parsed) || parsed < 1) return null
+  return eraVal === 'BC' ? -parsed : parsed
 }
 
 function collectDescendantUnitIds(
@@ -628,11 +924,28 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
 }) => {
   const queryClient = useQueryClient()
   const playClickSound = useClickSound()
+  const theme = useTheme()
+  const isDarkMode = theme.mode === 'dark'
   const isEdit = Boolean(editingUnitId)
 
+  const estCalendarAnchorId = useId()
+  const disbCalendarAnchorId = useId()
+
   const [loading, setLoading] = useState(false)
+  const [hydratingUnit, setHydratingUnit] = useState(false)
   const [insigniaUploading, setInsigniaUploading] = useState(false)
+  const [insigniaDragOver, setInsigniaDragOver] = useState(false)
   const [activeSection, setActiveSection] = useState<FormSectionKey>('basic')
+  const [layoutMode, setLayoutMode] = useState<'split' | 'single'>(
+    readInitialLayoutMode,
+  )
+  const [splitRatio, setSplitRatio] = useState<
+    'left-wide' | 'equal' | 'right-wide'
+  >('equal')
+  const [isDirty, setIsDirty] = useState(false)
+  const isDirtyRef = useRef(false)
+  isDirtyRef.current = isDirty
+
   const [modernCountries, setModernCountries] = useState<CountryResponseDto[]>(
     [],
   )
@@ -643,9 +956,11 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   const [allPersons, setAllPersons] = useState<PersonResponseDto[]>([])
   const [personsLoading, setPersonsLoading] = useState(false)
 
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const formRootRef = useRef<HTMLDivElement>(null)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const insigniaInputRef = useRef<HTMLInputElement>(null)
+  const continueAfterSaveRef = useRef(false)
 
   // Modals
   const [countryModalOpen, setCountryModalOpen] = useState(false)
@@ -657,6 +972,37 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   const [appointmentModalOpen, setAppointmentModalOpen] = useState(false)
   const [editingAppointmentTenure, setEditingAppointmentTenure] =
     useState<EditableInstitutionTenure | null>(null)
+
+  // Compact UI toggles & inline quick search states (BasicInfoSection · EventTypeField 규격)
+  const [showHighCommandPresets, setShowHighCommandPresets] = useState(false)
+  const [showAllLinkedEras, setShowAllLinkedEras] = useState(false)
+  const [eraFilterQuery, setEraFilterQuery] = useState('')
+  const [isInlineCountryChangeOpen, setIsInlineCountryChangeOpen] =
+    useState(false)
+  const [countryQuickQuery, setCountryQuickQuery] = useState('')
+  const [countryQuickFocused, setCountryQuickFocused] = useState(false)
+  const countryQuickInputRef = useRef<HTMLInputElement>(null)
+
+  const [unitTypeSearchQuery, setUnitTypeSearchQuery] = useState('')
+  const [unitTypeSearchOpen, setUnitTypeSearchOpen] = useState(false)
+  const [showAllUnitTypes, setShowAllUnitTypes] = useState(false)
+  const unitTypeSearchWrapRef = useRef<HTMLDivElement>(null)
+
+  const [parentUnitQuickQuery, setParentUnitQuickQuery] = useState('')
+  const [parentUnitQuickFocused, setParentUnitQuickFocused] = useState(false)
+  const [showAllParentUnitCandidates, setShowAllParentUnitCandidates] =
+    useState(false)
+
+  const [adminDeptQuickQuery, setAdminDeptQuickQuery] = useState('')
+  const [adminDeptQuickFocused, setAdminDeptQuickFocused] = useState(false)
+  const [showAllAdminDeptCandidates, setShowAllAdminDeptCandidates] =
+    useState(false)
+
+  const [commanderQuickQuery, setCommanderQuickQuery] = useState('')
+  const [commanderQuickFocused, setCommanderQuickFocused] = useState(false)
+
+  const [lineageQuickQuery, setLineageQuickQuery] = useState('')
+  const [lineageQuickFocused, setLineageQuickFocused] = useState(false)
 
   // Form fields - 기본 정보
   const [name, setName] = useState('')
@@ -733,16 +1079,122 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   const [editTransYear, setEditTransYear] = useState('')
   const [editTransMonth, setEditTransMonth] = useState('')
   const [editTransNote, setEditTransNote] = useState('')
+  const [lastCreatedUnit, setLastCreatedUnit] = useState<{
+    id: string
+    name: string
+    abbreviation: string | null
+  } | null>(null)
+
+  const markDirty = useCallback((nextDirty = true) => {
+    isDirtyRef.current = nextDirty
+    setIsDirty(nextDirty)
+  }, [])
+
+  useEffect(() => {
+    if (!unitTypeSearchOpen) return
+    const handlePointerDown = (mouseEvent: MouseEvent) => {
+      if (
+        unitTypeSearchWrapRef.current &&
+        !unitTypeSearchWrapRef.current.contains(mouseEvent.target as Node)
+      ) {
+        setUnitTypeSearchOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [unitTypeSearchOpen])
+
+  const toggleLayoutMode = useCallback(() => {
+    playClickSound()
+    setLayoutMode((prev) => {
+      const next = prev === 'split' ? 'single' : 'split'
+      try {
+        window.localStorage.setItem(LAYOUT_STORAGE_KEY, next)
+      } catch {
+        // ignore storage errors
+      }
+      return next
+    })
+  }, [playClickSound])
 
   const scrollToSection = useCallback((sectionKey: FormSectionKey) => {
     setActiveSection(sectionKey)
-    const targetNode = formRootRef.current?.querySelector<HTMLElement>(
-      `[data-form-section="${sectionKey}"]`,
-    )
+    const sectionMeta = FORM_SECTION_META.find((item) => item.key === sectionKey)
+    const targetNode =
+      (sectionMeta ? document.getElementById(sectionMeta.id) : null) ??
+      formRootRef.current?.querySelector<HTMLElement>(
+        `[data-form-section="${sectionKey}"]`,
+      )
+    const leftPane = document.getElementById('military-unit-form-split-left')
+    const rightPane = document.getElementById('military-unit-form-split-right')
+    if (sectionKey === 'basic' && leftPane) {
+      leftPane.scrollTo?.({ top: 0, behavior: 'smooth' })
+      leftPane.scrollTop = 0
+      return
+    }
+    if (sectionKey === 'command' && rightPane) {
+      rightPane.scrollTo?.({ top: 0, behavior: 'smooth' })
+      rightPane.scrollTop = 0
+      return
+    }
     targetNode?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [])
 
-  const modernAnchorCountryId = countryId || defaultCountryId || ''
+  const handleFormScroll = useCallback(
+    (scrollEvent: React.UIEvent<HTMLDivElement>) => {
+      const target = scrollEvent.target as HTMLElement | null
+      if (target?.id === 'military-unit-form-split-right') {
+        const rightRect = target.getBoundingClientRect()
+        const contextEl = document.getElementById(
+          'military-unit-section-context',
+        )
+        const nextKey: FormSectionKey =
+          contextEl &&
+          contextEl.getBoundingClientRect().top <= rightRect.top + 110
+            ? 'context'
+            : 'command'
+        setActiveSection((prev) => (prev === nextKey ? prev : nextKey))
+        return
+      }
+      if (target?.id === 'military-unit-form-split-left') {
+        setActiveSection((prev) => (prev === 'basic' ? prev : 'basic'))
+        return
+      }
+      const container = scrollEvent.currentTarget
+      const containerRect = container.getBoundingClientRect()
+      const threshold = containerRect.top + 110
+      let currentKey: FormSectionKey = 'basic'
+      for (const item of FORM_SECTION_META) {
+        const sectionEl = document.getElementById(item.id)
+        if (!sectionEl) continue
+        if (sectionEl.getBoundingClientRect().top <= threshold) {
+          currentKey = item.key
+        }
+      }
+      setActiveSection((prev) => (prev === currentKey ? prev : currentKey))
+    },
+    [],
+  )
+
+  const selectedHistoricalCountry = useMemo(
+    () =>
+      historicalCountryId
+        ? (historicalCountries.find(
+            (item) => item.id === historicalCountryId,
+          ) ?? null)
+        : null,
+    [historicalCountries, historicalCountryId],
+  )
+
+  const modernAnchorCountryId = useMemo(() => {
+    if (countryId) return countryId
+    if (defaultCountryId) return defaultCountryId
+    if (selectedHistoricalCountry?.countries?.length) {
+      return selectedHistoricalCountry.countries[0]?.id ?? ''
+    }
+    return ''
+  }, [countryId, defaultCountryId, selectedHistoricalCountry])
+
   const { data: linkedHistoricalCountries = [] } =
     useHistoricalCountriesByModernCountry(modernAnchorCountryId)
 
@@ -757,11 +1209,187 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   const modernAnchorCountry = useMemo(
     () =>
       modernAnchorCountryId
-        ? modernCountries.find((item) => item.id === modernAnchorCountryId) ??
-          null
+        ? (modernCountries.find((item) => item.id === modernAnchorCountryId) ??
+          null)
         : null,
     [modernAnchorCountryId, modernCountries],
   )
+
+  const resolvedSelectedHistorical = useMemo(
+    () =>
+      selectedHistoricalCountry ??
+      (historicalCountryId
+        ? (linkedHistoricalCountries.find(
+            (item) => item.id === historicalCountryId,
+          ) ?? null)
+        : null),
+    [
+      historicalCountryId,
+      linkedHistoricalCountries,
+      selectedHistoricalCountry,
+    ],
+  )
+
+  const selectedHistoricalSpan = useMemo(() => {
+    if (!resolvedSelectedHistorical) return null
+    if ('startYear' in resolvedSelectedHistorical) {
+      const startParts = resolvedSelectedHistorical.startYear
+        ? {
+            era: (resolvedSelectedHistorical.startEra === 'BC'
+              ? 'BC'
+              : 'AD') as 'AD' | 'BC',
+            year: String(Math.abs(resolvedSelectedHistorical.startYear)),
+          }
+        : null
+      const endParts = resolvedSelectedHistorical.endYear
+        ? {
+            era: (resolvedSelectedHistorical.endEra === 'BC' ? 'BC' : 'AD') as
+              | 'AD'
+              | 'BC',
+            year: String(Math.abs(resolvedSelectedHistorical.endYear)),
+          }
+        : null
+      return {
+        name: resolvedSelectedHistorical.name,
+        start: startParts,
+        end: endParts,
+      }
+    }
+    const startParts = parseIsoPartsFallback(
+      resolvedSelectedHistorical.startDate,
+    )
+    const endParts = parseIsoPartsFallback(resolvedSelectedHistorical.endDate)
+    return {
+      name: resolvedSelectedHistorical.name,
+      start: startParts.year ? startParts : null,
+      end: endParts.year ? endParts : null,
+    }
+  }, [resolvedSelectedHistorical])
+
+  // 창설·해산 부호 연도 힌트 (시대 일치 배지 및 역사국가 존속기간 대조용)
+  const unitHintYearRange = useMemo<CountryHintYearRange | null>(() => {
+    const startSigned = toSignedComparableYear(establishedEra, establishedYear)
+    const endSigned = isActive
+      ? null
+      : toSignedComparableYear(disbandedEra, disbandedYear)
+    if (startSigned == null && endSigned == null) return null
+    return {
+      startYear: startSigned,
+      endYear: endSigned ?? startSigned,
+    }
+  }, [
+    disbandedEra,
+    disbandedYear,
+    establishedEra,
+    establishedYear,
+    isActive,
+  ])
+
+  // 연결된 시대 목록 정렬: 입력된 창설·해산 연도와 시대 일치하는 역사국가를 최우선 배치
+  const prioritizedLinkedEras = useMemo(() => {
+    if (linkedHistoricalCountries.length === 0) return []
+    const matched: typeof linkedHistoricalCountries = []
+    const unmatched: typeof linkedHistoricalCountries = []
+    for (const eraItem of linkedHistoricalCountries) {
+      if (unitHintYearRange && matchesHintYearRange(eraItem, unitHintYearRange)) {
+        matched.push(eraItem)
+      } else {
+        unmatched.push(eraItem)
+      }
+    }
+    return [...matched, ...unmatched]
+  }, [linkedHistoricalCountries, unitHintYearRange])
+
+  // 역사국가 존속기간 vs 창설 연도 불일치 소프트 경고 + 대안 시대 추천 (BasicInfoSection F33 규격)
+  const historicalLifespanWarning = useMemo(() => {
+    if (!resolvedSelectedHistorical) return null
+    const startSigned = toSignedComparableYear(establishedEra, establishedYear)
+    if (startSigned == null) return null
+    const mismatchMessage = describeLifespanMismatch(
+      resolvedSelectedHistorical,
+      startSigned,
+      { recordSupportsBc: true },
+    )
+    if (!mismatchMessage) return null
+
+    const replacementEra = linkedHistoricalCountries.find(
+      (candidate) =>
+        candidate.id !== resolvedSelectedHistorical.id &&
+        matchesHintYearRange(candidate, {
+          startYear: startSigned,
+          endYear: startSigned,
+        }),
+    )
+
+    return {
+      countryName: resolvedSelectedHistorical.name,
+      message: mismatchMessage,
+      replacementEra: replacementEra ?? null,
+    }
+  }, [
+    establishedEra,
+    establishedYear,
+    linkedHistoricalCountries,
+    resolvedSelectedHistorical,
+  ])
+
+  // 국가·시대 인라인 빠른 검색 후보 (BasicInfoSection CountryQuickSearchInput 규격)
+  const countryQuickCandidates = useMemo(() => {
+    const trimmed = countryQuickQuery.trim()
+    if (!trimmed) return []
+    const matchedModern = filterCountriesByQuery(modernCountries, trimmed)
+      .slice(0, 4)
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        flagEmoji: item.flagEmoji || '🏳️',
+        isHistorical: false as const,
+        periodLabel: '',
+        eraMatch: false,
+      }))
+    const matchedHistorical = filterCountriesByQuery(
+      historicalCountries,
+      trimmed,
+    )
+      .sort((left, right) => {
+        const leftMatch = Boolean(
+          unitHintYearRange && matchesHintYearRange(left, unitHintYearRange),
+        )
+        const rightMatch = Boolean(
+          unitHintYearRange && matchesHintYearRange(right, unitHintYearRange),
+        )
+        if (leftMatch !== rightMatch) return leftMatch ? -1 : 1
+        return 0
+      })
+      .slice(0, 6)
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        flagEmoji: '🏛️',
+        isHistorical: true as const,
+        periodLabel: formatCountryPeriod(item, { variant: 'short' }),
+        eraMatch: Boolean(
+          unitHintYearRange && matchesHintYearRange(item, unitHintYearRange),
+        ),
+        enName: item.enName ?? '',
+        parentModernCountryId: item.countries?.[0]?.id ?? '',
+      }))
+    return [...matchedHistorical, ...matchedModern].slice(0, 8)
+  }, [
+    countryQuickQuery,
+    historicalCountries,
+    modernCountries,
+    unitHintYearRange,
+  ])
+
+  const ensurePersonsLoaded = useCallback(() => {
+    if (allPersons.length > 0 || personsLoading) return
+    setPersonsLoading(true)
+    getAllPersons()
+      .then((list) => setAllPersons(Array.isArray(list) ? list : []))
+      .catch(() => setAllPersons([]))
+      .finally(() => setPersonsLoading(false))
+  }, [allPersons.length, personsLoading])
 
   useEffect(() => {
     void loadCountries()
@@ -774,94 +1402,114 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   }, [isOpen])
 
   useEffect(() => {
-    if (!commanderPersonModalOpen || allPersons.length > 0) return
-    setPersonsLoading(true)
-    getAllPersons()
-      .then((list) => setAllPersons(Array.isArray(list) ? list : []))
-      .catch(() => setAllPersons([]))
-      .finally(() => setPersonsLoading(false))
-  }, [commanderPersonModalOpen, allPersons.length])
+    if (commanderPersonModalOpen) {
+      ensurePersonsLoaded()
+    }
+  }, [commanderPersonModalOpen, ensurePersonsLoaded])
 
   useEffect(() => {
     if (!isOpen || !editingUnitId) return
     setActiveSection('basic')
+    markDirty(false)
     void loadMilitaryUnit(editingUnitId)
-  }, [isOpen, editingUnitId])
+  }, [isOpen, editingUnitId, markDirty])
+
+  const resetCreateFields = useCallback(
+    (options?: { keepContext?: boolean }) => {
+      setName('')
+      setAbbreviation('')
+      setNameLocal('')
+      setNameEn('')
+      setUnitType('')
+      setIsActive(true)
+      setEstablishedEra('AD')
+      setEstablishedYear('')
+      setEstablishedMonth('')
+      setEstablishedDay('')
+      setDisbandedEra('AD')
+      setDisbandedYear('')
+      setDisbandedMonth('')
+      setDisbandedDay('')
+      setDescription('')
+      setNickname('')
+      setMotto('')
+      setGarrisonPlace(null)
+      setStrength('')
+      setInsigniaUrl('')
+      setNotableBattles('')
+      setHonors('')
+      setPrimaryMission('')
+      setJurisdiction('')
+      setCommanderRows([])
+      setUnitTenures([])
+      setPredecessors([])
+      setSuccessors([])
+      setPendingTransitions([])
+      setEditingTransitionId(null)
+      setNewTransitionDirection('PREDECESSOR_DEPARTMENT')
+      setNewTransitionTargetId('')
+      setNewTransitionKind('REORGANIZE')
+      setNewTransitionEra('AD')
+      setNewTransitionYear('')
+      setNewTransitionMonth('')
+      setNewTransitionNote('')
+      setCountryQuickQuery('')
+      setIsInlineCountryChangeOpen(false)
+      setEraFilterQuery('')
+      setUnitTypeSearchQuery('')
+      setParentUnitQuickQuery('')
+      setAdminDeptQuickQuery('')
+      setCommanderQuickQuery('')
+      setLineageQuickQuery('')
+      setShowAllLinkedEras(false)
+      setShowAllUnitTypes(false)
+      setActiveSection('basic')
+      markDirty(false)
+
+      if (!options?.keepContext) {
+        setBranch(defaultBranch ?? '')
+        setParentUnitId(defaultParentUnitId ?? '')
+        setAdministrationDepartmentId(defaultAdministrationDepartmentId ?? '')
+        if (defaultHistoricalCountryId) {
+          setHistoricalCountryId(defaultHistoricalCountryId)
+          setCountryId(defaultCountryId ?? '')
+        } else {
+          setHistoricalCountryId('')
+          if (defaultCountryId) {
+            setCountryId(defaultCountryId)
+          } else {
+            setCountryId('')
+            setCountryName('')
+            setCountryFlagEmoji('')
+            setCountryEnglishName('')
+          }
+        }
+      }
+    },
+    [
+      defaultAdministrationDepartmentId,
+      defaultBranch,
+      defaultCountryId,
+      defaultHistoricalCountryId,
+      defaultParentUnitId,
+      markDirty,
+    ],
+  )
 
   /** 신규: 모달을 열 때 폼·기본 국가·중앙부처·상위 부대 연결 */
   useEffect(() => {
     if (!isOpen || editingUnitId) return
-    setName('')
-    setAbbreviation('')
-    setNameLocal('')
-    setNameEn('')
-    setUnitType('')
-    const resolvedBranch = defaultBranch ?? ''
-    setBranch(resolvedBranch)
-    setParentUnitId(defaultParentUnitId ?? '')
-    setIsActive(true)
-    setEstablishedEra('AD')
-    setEstablishedYear('')
-    setEstablishedMonth('')
-    setEstablishedDay('')
-    setDisbandedEra('AD')
-    setDisbandedYear('')
-    setDisbandedMonth('')
-    setDisbandedDay('')
-    setDescription('')
-    setNickname('')
-    setMotto('')
-    setGarrisonPlace(null)
-    setStrength('')
-    setInsigniaUrl('')
-    setNotableBattles('')
-    setHonors('')
-    setPrimaryMission('')
-    setJurisdiction('')
-    setCommanderRows([])
-    setUnitTenures([])
-    setPredecessors([])
-    setSuccessors([])
-    setPendingTransitions([])
-    setEditingTransitionId(null)
-    setNewTransitionDirection('PREDECESSOR_DEPARTMENT')
-    setNewTransitionTargetId('')
-    setNewTransitionKind('REORGANIZE')
-    setNewTransitionEra('AD')
-    setNewTransitionYear('')
-    setNewTransitionMonth('')
-    setNewTransitionNote('')
-    setActiveSection('basic')
-    setAdministrationDepartmentId(defaultAdministrationDepartmentId ?? '')
-    if (defaultHistoricalCountryId) {
-      setHistoricalCountryId(defaultHistoricalCountryId)
-      setCountryId(defaultCountryId ?? '')
-    } else {
-      setHistoricalCountryId('')
-      if (defaultCountryId) {
-        setCountryId(defaultCountryId)
-      } else {
-        setCountryId('')
-        setCountryName('')
-        setCountryFlagEmoji('')
-        setCountryEnglishName('')
-      }
-    }
-  }, [
-    isOpen,
-    editingUnitId,
-    defaultCountryId,
-    defaultHistoricalCountryId,
-    defaultAdministrationDepartmentId,
-    defaultParentUnitId,
-    defaultBranch,
-  ])
+    setLastCreatedUnit(null)
+    resetCreateFields({ keepContext: false })
+  }, [isOpen, editingUnitId, resetCreateFields])
 
   /** 신규 생성 시 상위 부대(defaultParentUnitId)가 있으면 이름·군종·소속 국가·중앙부처 자동 상속 */
   useEffect(() => {
     if (!isOpen || editingUnitId || !parentUnitId || allUnits.length === 0)
       return
-    const matchedParent = allUnits.find((unitItem) => unitItem.id === parentUnitId)
+    const matchedParent = allUnits.find(
+      (unitItem) => unitItem.id === parentUnitId,
+    )
     if (!matchedParent) return
     if (!branch && matchedParent.branch) {
       setBranch(matchedParent.branch)
@@ -1025,6 +1673,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   const loadMilitaryUnit = async (unitId: string) => {
     try {
       setLoading(true)
+      setHydratingUnit(true)
       const unit = await militaryUnitApi.getById(unitId)
       setName(unit.name)
       setAbbreviation(unit.abbreviation || '')
@@ -1095,6 +1744,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
           : [],
       )
       setCommanderRows([])
+      markDirty(false)
     } catch (loadError) {
       notify.error(
         getApiErrorMessage(loadError, '군부대 정보를 불러오는데 실패했습니다.'),
@@ -1102,6 +1752,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       onClose()
     } finally {
       setLoading(false)
+      setHydratingUnit(false)
     }
   }
 
@@ -1123,6 +1774,27 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       // ignore background refresh error
     }
   }
+
+  const handleInsigniaFileUpload = useCallback(
+    async (selectedFile: File) => {
+      try {
+        validateImageFile(selectedFile)
+        setInsigniaUploading(true)
+        const uploaded = await uploadImage(selectedFile, 'military-units')
+        setInsigniaUrl(toUploadStoragePath(uploaded.url) || uploaded.url)
+        markDirty(true)
+      } catch (uploadError) {
+        notify.error(
+          uploadError instanceof Error
+            ? uploadError.message
+            : '이미지 업로드에 실패했습니다.',
+        )
+      } finally {
+        setInsigniaUploading(false)
+      }
+    },
+    [markDirty],
+  )
 
   const handleDeleteUnitTenure = async (tenureItem: MilitaryUnitTenureItem) => {
     const personLabel = tenureItem.person
@@ -1263,8 +1935,9 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     linkedHistoricalIdSet,
   ])
 
-  const handleAddTransition = async () => {
-    if (!newTransitionTargetId || transitionBusy) return
+  const handleAddTransition = async (overrideTargetId?: string) => {
+    const targetIdToUse = overrideTargetId ?? newTransitionTargetId
+    if (!targetIdToUse || transitionBusy) return
     const timeFields = parseTransitionTimeFields(
       newTransitionEra,
       newTransitionYear,
@@ -1277,19 +1950,19 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
         newTransitionDirection === 'PREDECESSOR_DEPARTMENT'
           ? (() => {
               const foundDept = lineageDepartments.find(
-                (deptItem) => deptItem.id === newTransitionTargetId,
+                (deptItem) => deptItem.id === targetIdToUse,
               )
               return foundDept
                 ? `🏛️ ${foundDept.name}${foundDept.abbreviation ? ` (${foundDept.abbreviation})` : ''}`
-                : newTransitionTargetId
+                : targetIdToUse
             })()
           : (() => {
               const foundUnit = lineageCandidateUnits.find(
-                (unitCandidate) => unitCandidate.id === newTransitionTargetId,
+                (unitCandidate) => unitCandidate.id === targetIdToUse,
               )
               return foundUnit
                 ? `🛡️ ${foundUnit.name}${foundUnit.abbreviation ? ` (${foundUnit.abbreviation})` : ''}`
-                : newTransitionTargetId
+                : targetIdToUse
             })()
 
       setPendingTransitions((prev) => [
@@ -1297,7 +1970,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
         {
           localKey: `${Date.now()}-${Math.random()}`,
           direction: newTransitionDirection,
-          targetId: newTransitionTargetId,
+          targetId: targetIdToUse,
           targetLabel,
           kind: newTransitionKind,
           era: newTransitionEra,
@@ -1307,9 +1980,11 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
         },
       ])
       setNewTransitionTargetId('')
+      setLineageQuickQuery('')
       setNewTransitionYear('')
       setNewTransitionMonth('')
       setNewTransitionNote('')
+      markDirty(true)
       return
     }
 
@@ -1320,16 +1995,17 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       month: timeFields.month,
       note: newTransitionNote.trim() || null,
       ...(newTransitionDirection === 'PREDECESSOR_DEPARTMENT'
-        ? { predecessorDepartmentId: newTransitionTargetId }
+        ? { predecessorDepartmentId: targetIdToUse }
         : newTransitionDirection === 'PREDECESSOR_UNIT'
-          ? { predecessorUnitId: newTransitionTargetId }
-          : { successorUnitId: newTransitionTargetId }),
+          ? { predecessorUnitId: targetIdToUse }
+          : { successorUnitId: targetIdToUse }),
     }
     try {
       setTransitionBusy(true)
       await militaryUnitApi.addTransition(editingUnitId, transitionPayload)
       await refreshUnitTenuresAndLineage(editingUnitId)
       setNewTransitionTargetId('')
+      setLineageQuickQuery('')
       setNewTransitionYear('')
       setNewTransitionMonth('')
       setNewTransitionNote('')
@@ -1477,7 +2153,145 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     }
   }
 
-  const submitUnitForm = async () => {
+  // 날짜 역전 및 존속기간 배지 계산
+  const { isDateOrderInverted, lifespanBadgeLabel } = useMemo(() => {
+    const startSigned = toSignedComparableYear(establishedEra, establishedYear)
+    const effectiveDisbandedYear = isActive ? '' : disbandedYear
+    const endSigned = toSignedComparableYear(
+      disbandedEra,
+      effectiveDisbandedYear,
+    )
+
+    if (startSigned != null && endSigned != null) {
+      if (endSigned < startSigned) {
+        return { isDateOrderInverted: true, lifespanBadgeLabel: null }
+      }
+      const spanYears = endSigned - startSigned
+      return {
+        isDateOrderInverted: false,
+        lifespanBadgeLabel:
+          spanYears === 0 ? '당해 해산 (1년 미만)' : `약 ${spanYears}년 존속`,
+      }
+    }
+    if (startSigned != null) {
+      return {
+        isDateOrderInverted: false,
+        lifespanBadgeLabel: isActive ? '현역 운용 중' : '창설 연도 기록됨',
+      }
+    }
+    if (endSigned != null) {
+      return {
+        isDateOrderInverted: false,
+        lifespanBadgeLabel: '해산·비운용',
+      }
+    }
+    return {
+      isDateOrderInverted: false,
+      lifespanBadgeLabel: isActive ? '운용 중' : '해산·비운용',
+    }
+  }, [
+    disbandedEra,
+    disbandedYear,
+    establishedEra,
+    establishedYear,
+    isActive,
+  ])
+
+  const hasCountry = Boolean(countryId || historicalCountryId)
+
+  // 필수 입력/검증 누락 목록 계산 (사건 등록 모달 푸터 규격)
+  const validationIssues = useMemo(() => {
+    const issues: Array<{
+      key: 'name' | 'country' | 'date-order' | 'commander'
+      label: string
+    }> = []
+    if (!name.trim()) {
+      issues.push({ key: 'name', label: '군부대·사령부명' })
+    }
+    if (!hasCountry) {
+      issues.push({ key: 'country', label: '소속 국가 · 시대' })
+    }
+    if (isDateOrderInverted) {
+      issues.push({
+        key: 'date-order',
+        label: '해산 시점이 창설 시점보다 앞설 수 없습니다',
+      })
+    }
+    if (!isEdit && commanderRows.length > 0) {
+      for (const cmdRow of commanderRows) {
+        if (!cmdRow.roleTitle.trim() || !cmdRow.startYear.trim()) {
+          issues.push({
+            key: 'commander',
+            label: `지휘관 ${cmdRow.personName} 직책·부임연도`,
+          })
+          break
+        }
+      }
+    }
+    return issues
+  }, [commanderRows, hasCountry, isDateOrderInverted, isEdit, name])
+
+  const isFormValid = validationIssues.length === 0
+  const firstValidationIssue = validationIssues[0] ?? null
+
+  const focusFirstMissingField = useCallback(() => {
+    if (!firstValidationIssue) return
+    if (firstValidationIssue.key === 'name') {
+      scrollToSection('basic')
+      window.setTimeout(() => nameInputRef.current?.focus(), 100)
+      return
+    }
+    if (firstValidationIssue.key === 'country') {
+      scrollToSection('basic')
+      if (!lockCountryAndDepartment) {
+        setCountryModalOpen(true)
+      }
+      return
+    }
+    if (firstValidationIssue.key === 'date-order') {
+      scrollToSection('basic')
+      return
+    }
+    if (firstValidationIssue.key === 'commander') {
+      scrollToSection('command')
+    }
+  }, [firstValidationIssue, lockCountryAndDepartment, scrollToSection])
+
+  const requestClose = useCallback(async () => {
+    if (loading || insigniaUploading) return
+    const leaveMsg = isEdit ? EDIT_LEAVE_MESSAGE : CREATE_LEAVE_MESSAGE
+    if (
+      isDirtyRef.current &&
+      !(await confirm({ title: '확인', message: leaveMsg }))
+    ) {
+      return
+    }
+    markDirty(false)
+    onClose()
+  }, [insigniaUploading, isEdit, loading, markDirty, onClose])
+
+  const handleResetForm = useCallback(async () => {
+    if (loading || insigniaUploading) return
+    if (
+      isDirtyRef.current &&
+      !(await confirm({ title: '초기화 확인', message: RESET_CONFIRM_MESSAGE }))
+    ) {
+      return
+    }
+    playClickSound()
+    resetCreateFields({ keepContext: false })
+    scrollToSection('basic')
+    window.setTimeout(() => nameInputRef.current?.focus(), 80)
+  }, [
+    insigniaUploading,
+    loading,
+    playClickSound,
+    resetCreateFields,
+    scrollToSection,
+  ])
+
+  const submitUnitForm = async (options?: { continueAfterSave?: boolean }) => {
+    const shouldContinue = Boolean(options?.continueAfterSave && !isEdit)
     if (loading || insigniaUploading) return
 
     if (!name.trim()) {
@@ -1489,6 +2303,12 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
 
     if (!countryId && !historicalCountryId) {
       notify.error('소속 국가를 선택해주세요.')
+      scrollToSection('basic')
+      return
+    }
+
+    if (isDateOrderInverted) {
+      notify.error('해산 시점이 창설 시점보다 앞설 수 없습니다.')
       scrollToSection('basic')
       return
     }
@@ -1520,14 +2340,13 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       return
     }
 
-    // 신규 생성 시 함께 입력한 지휘관 초안 사전 검증
     if (!isEdit && commanderRows.length > 0) {
       for (const cmdRow of commanderRows) {
         if (!cmdRow.roleTitle.trim()) {
           notify.error(
             `지휘관 ${cmdRow.personName}의 직책·보직명을 입력해주세요.`,
           )
-          scrollToSection('military')
+          scrollToSection('command')
           return
         }
         const parsedStartYear = Number.parseInt(cmdRow.startYear.trim(), 10)
@@ -1535,7 +2354,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
           notify.error(
             `지휘관 ${cmdRow.personName}의 부임 연도를 자연수로 입력해주세요.`,
           )
-          scrollToSection('military')
+          scrollToSection('command')
           return
         }
         if (cmdRow.endYear.trim()) {
@@ -1544,14 +2363,13 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
             notify.error(
               `지휘관 ${cmdRow.personName}의 이임 연도가 올바르지 않습니다.`,
             )
-            scrollToSection('military')
+            scrollToSection('command')
             return
           }
         }
       }
     }
 
-    // 신규 생성 시 미추가 상태로 입력란에만 남아있는 계보도 검증 후 함께 처리
     const queuedTransitions = [...pendingTransitions]
     if (!isEdit && newTransitionTargetId) {
       const draftTime = parseTransitionTimeFields(
@@ -1560,7 +2378,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
         newTransitionMonth,
       )
       if (!draftTime) {
-        scrollToSection('lineage')
+        scrollToSection('command')
         return
       }
       queuedTransitions.push({
@@ -1613,7 +2431,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
           editingUnitId,
           baseData as CreateMilitaryUnitInput,
         )
-        notify.success('군부대가 수정되었습니다.')
+        notify.success('군사 사령부·부대가 수정되었습니다.')
       } else {
         const createdUnit = await militaryUnitApi.create(
           baseData as CreateMilitaryUnitInput,
@@ -1729,14 +2547,38 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
           }
         }
 
-        notify.success('군부대가 생성되었습니다.')
+        if (shouldContinue) {
+          setLastCreatedUnit({
+            id: createdUnit.id,
+            name: createdUnit.name,
+            abbreviation: createdUnit.abbreviation ?? null,
+          })
+        }
+
+        notify.success(
+          shouldContinue
+            ? `'${createdUnit.name}' 등록 완료 — 같은 소속으로 다음 부대를 이어서 등록합니다.`
+            : '군사 사령부·부대가 등록되었습니다.',
+        )
       }
+
       void queryClient.invalidateQueries({ queryKey: ['military-units'] })
       void queryClient.invalidateQueries({ queryKey: ['military-unit'] })
       void queryClient.invalidateQueries({
         queryKey: ['administration-departments'],
       })
+      void loadAllUnits()
+      markDirty(false)
       onSaved?.()
+
+      if (shouldContinue) {
+        continueAfterSaveRef.current = false
+        resetCreateFields({ keepContext: true })
+        scrollToSection('basic')
+        window.setTimeout(() => nameInputRef.current?.focus(), 80)
+        return
+      }
+
       onClose()
     } catch (submitError) {
       notify.error(
@@ -1749,11 +2591,18 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
 
   const handleSubmit = (formEvent: React.FormEvent) => {
     formEvent.preventDefault()
-    void submitUnitForm()
+    void submitUnitForm({ continueAfterSave: continueAfterSaveRef.current })
   }
 
   const submitUnitFormRef = useRef(submitUnitForm)
   submitUnitFormRef.current = submitUnitForm
+
+  const anyChildModalOpen =
+    countryModalOpen ||
+    establishedDateModalOpen ||
+    disbandedDateModalOpen ||
+    commanderPersonModalOpen ||
+    appointmentModalOpen
 
   useEffect(() => {
     if (!isOpen) return
@@ -1763,104 +2612,180 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
         keyEvent.key === 'Enter' &&
         !loading &&
         !insigniaUploading &&
-        name.trim() &&
-        (countryId || historicalCountryId)
+        !anyChildModalOpen &&
+        isFormValid
       ) {
         keyEvent.preventDefault()
-        void submitUnitFormRef.current()
+        const shouldContinue = Boolean(keyEvent.shiftKey && !isEdit)
+        continueAfterSaveRef.current = shouldContinue
+        void submitUnitFormRef.current({ continueAfterSave: shouldContinue })
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [countryId, historicalCountryId, insigniaUploading, isOpen, loading, name])
+  }, [
+    anyChildModalOpen,
+    insigniaUploading,
+    isEdit,
+    isFormValid,
+    isOpen,
+    loading,
+  ])
 
-  const unitTypeSelectOptions = useMemo<SearchableSelectOption[]>(
-    () =>
-      UNIT_TYPES.map((typeItem) => ({
-        value: typeItem.value,
-        label: typeItem.label,
-        group: typeItem.group,
-        keywords: typeItem.keywords,
-      })),
-    [],
-  )
-
-  const parentUnitSelectOptions = useMemo<SearchableSelectOption[]>(
-    () =>
-      availableParentUnits.map((unitItem) => {
-        const unitTypeLabel = unitItem.unitType
-          ? UNIT_TYPES.find((typeOpt) => typeOpt.value === unitItem.unitType)
-              ?.label
-          : undefined
-        const eraOrCountry = unitItem.historicalCountry?.name
-          ? `🏛️ ${unitItem.historicalCountry.name}`
-          : unitItem.country?.name
-            ? `${unitItem.country.flagEmoji ?? '🏳️'} ${unitItem.country.name}`
-            : undefined
-        return {
-          value: unitItem.id,
-          label: `${unitItem.name}${unitItem.abbreviation ? ` (${unitItem.abbreviation})` : ''}`,
-          meta: eraOrCountry,
-          description: unitTypeLabel,
-          keywords: [
-            unitItem.abbreviation,
-            unitItem.nameEn,
-            unitItem.nameLocal,
-            unitTypeLabel,
-          ]
-            .filter(Boolean)
-            .join(' '),
+  // 클립보드 이미지 붙여넣기(⌘V / Ctrl+V)로 부대 마크·휘장 업로드
+  useEffect(() => {
+    if (!isOpen || anyChildModalOpen || insigniaUploading) return
+    const handlePaste = (pasteEvent: ClipboardEvent) => {
+      const items = pasteEvent.clipboardData?.items
+      if (!items) return
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          const imageFile = item.getAsFile()
+          if (imageFile) {
+            pasteEvent.preventDefault()
+            void handleInsigniaFileUpload(imageFile)
+            break
+          }
         }
-      }),
-    [availableParentUnits],
-  )
+      }
+    }
+    window.addEventListener('paste', handlePaste)
+    return () => window.removeEventListener('paste', handlePaste)
+  }, [anyChildModalOpen, handleInsigniaFileUpload, insigniaUploading, isOpen])
 
-  const adminDeptSelectOptions = useMemo<SearchableSelectOption[]>(
-    () =>
-      adminDepartments.map((deptItem) => ({
-        value: deptItem.id,
-        label: `${deptItem.name}${deptItem.abbreviation ? ` (${deptItem.abbreviation})` : ''}`,
-        meta:
-          deptItem.historicalCountry?.name && !historicalCountryId
-            ? `🏛️ ${deptItem.historicalCountry.name}`
-            : undefined,
-        keywords: [deptItem.abbreviation, deptItem.nameEn, deptItem.nameLocal]
-          .filter(Boolean)
-          .join(' '),
-      })),
-    [adminDepartments, historicalCountryId],
-  )
+  // 군종에 맞춘 추천 제대 칩 목록 & 추가 그룹 (EventTypeField 규격)
+  const { primaryUnitTypes, extraUnitTypeCount } = useMemo(() => {
+    const primary = UNIT_TYPES.filter(
+      (item) =>
+        item.primaryForBranches.includes(branch) || item.value === unitType,
+    )
+    const fallbackPrimary =
+      primary.length > 0 ? primary : UNIT_TYPES.slice(0, 7)
+    return {
+      primaryUnitTypes: fallbackPrimary,
+      extraUnitTypeCount: Math.max(
+        0,
+        UNIT_TYPES.length - fallbackPrimary.length,
+      ),
+    }
+  }, [branch, unitType])
 
-  const lineageTargetSelectOptions = useMemo<SearchableSelectOption[]>(() => {
+  const unitTypeQuickMatches = useMemo(() => {
+    const queryText = unitTypeSearchQuery.trim().toLowerCase()
+    if (!queryText) return []
+    return UNIT_TYPES.filter(
+      (item) =>
+        item.label.toLowerCase().includes(queryText) ||
+        item.shortLabel.toLowerCase().includes(queryText) ||
+        item.group.toLowerCase().includes(queryText) ||
+        item.keywords.toLowerCase().includes(queryText),
+    ).slice(0, 8)
+  }, [unitTypeSearchQuery])
+
+  // 상위 부대 빠른 검색 및 상급 사령부 추천 칩
+  const prioritizedParentUnits = useMemo(() => {
+    const highCommandSet = new Set<MilitaryUnitType>([
+      'SUPREME_COMMAND',
+      'GENERAL_STAFF',
+      'SERVICE_HQ',
+      'THEATER',
+      'ARMY_GROUP',
+      'FRONT',
+      'MILITARY_DISTRICT',
+      'FIELD_ARMY',
+      'CORPS',
+      'FLEET',
+      'AIR_FLEET',
+    ])
+    return [...availableParentUnits].sort((left, right) => {
+      const leftHigh =
+        left.unitType && highCommandSet.has(left.unitType) ? 0 : 1
+      const rightHigh =
+        right.unitType && highCommandSet.has(right.unitType) ? 0 : 1
+      if (leftHigh !== rightHigh) return leftHigh - rightHigh
+      return left.name.localeCompare(right.name, 'ko')
+    })
+  }, [availableParentUnits])
+
+  const parentUnitQuickMatches = useMemo(() => {
+    const queryText = parentUnitQuickQuery.trim().toLowerCase()
+    if (!queryText) return []
+    return prioritizedParentUnits
+      .filter((item) => {
+        const hay =
+          `${item.name} ${item.abbreviation ?? ''} ${item.nameEn ?? ''} ${item.nameLocal ?? ''}`.toLowerCase()
+        return hay.includes(queryText)
+      })
+      .slice(0, 8)
+  }, [parentUnitQuickQuery, prioritizedParentUnits])
+
+  // 소관 군정 부처 정렬(국방·전쟁성 우선) 및 빠른 검색
+  const prioritizedAdminDepts = useMemo(() => {
+    const isDefenseLikeDept = (deptItem: AdministrationDepartment): boolean =>
+      isDefenseRelatedCategory(deptItem.category, deptItem.kind) ||
+      deptItem.kind === 'COLONIAL_GOVERNMENT' ||
+      /국방|전쟁|군사|육군|해군|공군|방위|병조|병부|군부|안보|참모|방위사업|원수부/i.test(
+        `${deptItem.name} ${deptItem.nameEn ?? ''}`,
+      )
+
+    return [...adminDepartments].sort((leftDept, rightDept) => {
+      const leftDefense = isDefenseLikeDept(leftDept) ? 0 : 1
+      const rightDefense = isDefenseLikeDept(rightDept) ? 0 : 1
+      if (leftDefense !== rightDefense) return leftDefense - rightDefense
+      return leftDept.name.localeCompare(rightDept.name, 'ko')
+    })
+  }, [adminDepartments])
+
+  const adminDeptQuickMatches = useMemo(() => {
+    const queryText = adminDeptQuickQuery.trim().toLowerCase()
+    if (!queryText) return []
+    return prioritizedAdminDepts
+      .filter((deptItem) => {
+        const hay =
+          `${deptItem.name} ${deptItem.abbreviation ?? ''} ${deptItem.nameEn ?? ''} ${deptItem.nameLocal ?? ''}`.toLowerCase()
+        return hay.includes(queryText)
+      })
+      .slice(0, 8)
+  }, [adminDeptQuickQuery, prioritizedAdminDepts])
+
+  // 계보 대상 빠른 검색 후보
+  const lineageQuickMatches = useMemo(() => {
+    const queryText = lineageQuickQuery.trim().toLowerCase()
     if (newTransitionDirection === 'PREDECESSOR_DEPARTMENT') {
-      return lineageDepartments.map((deptItem) => ({
-        value: deptItem.id,
+      const pool = queryText
+        ? lineageDepartments.filter((deptItem) =>
+            `${deptItem.name} ${deptItem.abbreviation ?? ''} ${deptItem.nameEn ?? ''}`
+              .toLowerCase()
+              .includes(queryText),
+          )
+        : lineageDepartments
+      return pool.slice(0, 8).map((deptItem) => ({
+        id: deptItem.id,
         label: `${deptItem.name}${deptItem.abbreviation ? ` (${deptItem.abbreviation})` : ''}`,
-        icon: '🏛️',
-        meta: deptItem.historicalCountry?.name
-          ? deptItem.historicalCountry.name
-          : undefined,
-        keywords: [deptItem.abbreviation, deptItem.nameEn, deptItem.nameLocal]
-          .filter(Boolean)
-          .join(' '),
+        meta: deptItem.historicalCountry?.name ?? '행정부처',
+        badge: '전신 부처',
       }))
     }
-    return lineageCandidateUnits.map((unitCandidate) => ({
-      value: unitCandidate.id,
-      label: `${unitCandidate.name}${unitCandidate.abbreviation ? ` (${unitCandidate.abbreviation})` : ''}`,
-      icon: '🛡️',
-      meta: unitCandidate.historicalCountry?.name
-        ? unitCandidate.historicalCountry.name
-        : undefined,
-      keywords: [
-        unitCandidate.abbreviation,
-        unitCandidate.nameEn,
-        unitCandidate.nameLocal,
-      ]
-        .filter(Boolean)
-        .join(' '),
+    const pool = queryText
+      ? lineageCandidateUnits.filter((unitItem) =>
+          `${unitItem.name} ${unitItem.abbreviation ?? ''} ${unitItem.nameEn ?? ''}`
+            .toLowerCase()
+            .includes(queryText),
+        )
+      : lineageCandidateUnits
+    return pool.slice(0, 8).map((unitItem) => ({
+      id: unitItem.id,
+      label: `${unitItem.name}${unitItem.abbreviation ? ` (${unitItem.abbreviation})` : ''}`,
+      meta: unitItem.historicalCountry?.name ?? unitItem.country?.name ?? '군부대',
+      badge:
+        newTransitionDirection === 'PREDECESSOR_UNIT' ? '전신 부대' : '후신 부대',
     }))
-  }, [newTransitionDirection, lineageDepartments, lineageCandidateUnits])
+  }, [
+    lineageCandidateUnits,
+    lineageDepartments,
+    lineageQuickQuery,
+    newTransitionDirection,
+  ])
 
   const selectedParentUnit = useMemo(
     () =>
@@ -1870,10 +2795,241 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     [allUnits, parentUnitId],
   )
 
+  const selectedAdminDept = useMemo(
+    () =>
+      administrationDepartmentId
+        ? (adminDepartments.find(
+            (deptItem) => deptItem.id === administrationDepartmentId,
+          ) ?? null)
+        : null,
+    [adminDepartments, administrationDepartmentId],
+  )
+
   const commanderRolePresets = useMemo(
     () => buildCommanderRolePresets(unitType),
     [unitType],
   )
+
+  const commanderQuickMatches = useMemo(() => {
+    const queryText = commanderQuickQuery.trim().toLowerCase()
+    if (!queryText) return []
+    const existingIds = new Set(
+      isEdit
+        ? unitTenures
+            .map((tenureItem) => tenureItem.personId ?? tenureItem.person?.id)
+            .filter(Boolean)
+        : commanderRows.map((rowItem) => rowItem.personId),
+    )
+    return allPersons
+      .filter((personItem) => {
+        if (existingIds.has(personItem.id)) return false
+        const display = getPersonDisplayName({
+          name: personItem.name ?? '',
+          surname: personItem.surname ?? undefined,
+          middleName: personItem.middleName ?? undefined,
+          nameDisplayOrder: personItem.nameDisplayOrder ?? null,
+          country: personItem.country ?? undefined,
+        })
+        const hay =
+          `${display} ${personItem.name ?? ''} ${personItem.surname ?? ''} ${personItem.enName ?? ''}`.toLowerCase()
+        return hay.includes(queryText)
+      })
+      .sort((leftPerson, rightPerson) => {
+        const leftSameCountry = Boolean(
+          (historicalCountryId &&
+            leftPerson.historicalCountryId === historicalCountryId) ||
+            (countryId && leftPerson.countryId === countryId),
+        )
+        const rightSameCountry = Boolean(
+          (historicalCountryId &&
+            rightPerson.historicalCountryId === historicalCountryId) ||
+            (countryId && rightPerson.countryId === countryId),
+        )
+        if (leftSameCountry !== rightSameCountry) {
+          return leftSameCountry ? -1 : 1
+        }
+        return (leftPerson.name ?? '').localeCompare(
+          rightPerson.name ?? '',
+          'ko',
+        )
+      })
+      .slice(0, 8)
+  }, [
+    allPersons,
+    commanderQuickQuery,
+    commanderRows,
+    countryId,
+    historicalCountryId,
+    isEdit,
+    unitTenures,
+  ])
+
+  const handleQuickSelectCommander = useCallback(
+    (personItem: PersonResponseDto) => {
+      playClickSound()
+      const displayPersonName =
+        getPersonDisplayName({
+          name: personItem.name ?? '',
+          surname: personItem.surname ?? undefined,
+          middleName: personItem.middleName ?? undefined,
+          nameDisplayOrder: personItem.nameDisplayOrder ?? null,
+          country: personItem.country ?? undefined,
+        }) || personItem.name
+
+      setCommanderQuickQuery('')
+      setCommanderQuickFocused(false)
+
+      if (isEdit && editingUnitId) {
+        setEditingAppointmentTenure({
+          personId: personItem.id,
+          personName: displayPersonName,
+          positionType: 'MILITARY_COMMANDER',
+          title: commanderRolePresets[0] ?? '사령관',
+          militaryUnitId: editingUnitId,
+          startEra: establishedEra,
+          startYear: establishedYear ? Number(establishedYear) : null,
+        })
+        setAppointmentModalOpen(true)
+        return
+      }
+
+      setCommanderRows((prev) => [
+        ...prev,
+        {
+          personId: personItem.id,
+          personName: displayPersonName,
+          rankTitle: '',
+          roleTitle: commanderRolePresets[0] ?? '사령관',
+          ordinal: String(prev.length + 1),
+          startEra: establishedEra,
+          startYear: establishedYear,
+          startMonth: '',
+          startDay: '',
+          endEra: 'AD',
+          endYear: '',
+          endMonth: '',
+          endDay: '',
+        },
+      ])
+      markDirty(true)
+    },
+    [
+      commanderRolePresets,
+      editingUnitId,
+      establishedEra,
+      establishedYear,
+      isEdit,
+      markDirty,
+      playClickSound,
+    ],
+  )
+
+  const activeBranchStyle = useMemo<React.CSSProperties>(() => {
+    const foundBranch = MILITARY_BRANCHES.find(
+      (branchItem) => branchItem.value === branch,
+    )
+    const rgbVal = foundBranch ? foundBranch.rgb : '37, 99, 235'
+    const lightText = foundBranch ? foundBranch.text : '#1d4ed8'
+    const darkText = foundBranch ? foundBranch.textDark : '#93c5fd'
+    const accentColor = foundBranch ? foundBranch.accent : '#2563eb'
+    return {
+      '--active-domain-rgb': rgbVal,
+      '--active-domain-text': isDarkMode ? darkText : lightText,
+      '--active-domain-accent': accentColor,
+      '--chip-rgb': rgbVal,
+      '--chip-text': lightText,
+      '--chip-text-dark': darkText,
+    } as React.CSSProperties
+  }, [branch, isDarkMode])
+
+  const inferredNameMeta = useMemo(
+    () => inferMilitaryUnitMetaFromName(name, abbreviation),
+    [name, abbreviation],
+  )
+
+  const inferredUnitTypeOption = useMemo(
+    () =>
+      inferredNameMeta.inferredUnitType
+        ? (UNIT_TYPES.find(
+            (typeItem) => typeItem.value === inferredNameMeta.inferredUnitType,
+          ) ?? null)
+        : null,
+    [inferredNameMeta.inferredUnitType],
+  )
+
+  const inferredBranchOption = useMemo(
+    () =>
+      inferredNameMeta.inferredBranch
+        ? (MILITARY_BRANCHES.find(
+            (branchItem) =>
+              branchItem.value === inferredNameMeta.inferredBranch,
+          ) ?? null)
+        : null,
+    [inferredNameMeta.inferredBranch],
+  )
+
+  const canSuggestUnitType = Boolean(
+    inferredUnitTypeOption && unitType !== inferredUnitTypeOption.value,
+  )
+  const canSuggestBranch = Boolean(
+    inferredBranchOption && branch !== inferredBranchOption.value,
+  )
+  const canSuggestYear = Boolean(
+    inferredNameMeta.inferredYear &&
+      (establishedYear !== inferredNameMeta.inferredYear.year ||
+        establishedEra !== inferredNameMeta.inferredYear.era),
+  )
+  const suggestionCount =
+    (canSuggestBranch ? 1 : 0) +
+    (canSuggestUnitType ? 1 : 0) +
+    (canSuggestYear ? 1 : 0)
+
+  const similarExistingUnits = useMemo(() => {
+    const trimmedName = name.trim().toLowerCase()
+    const trimmedAbbr = abbreviation.trim().toLowerCase()
+    if (trimmedName.length < 2 && trimmedAbbr.length < 2) return []
+
+    return allUnits
+      .filter((candidateUnit) => {
+        if (candidateUnit.id === editingUnitId) return false
+        if (historicalCountryId) {
+          if (candidateUnit.historicalCountryId !== historicalCountryId) {
+            return false
+          }
+        } else if (countryId) {
+          if (candidateUnit.countryId !== countryId) return false
+        }
+        const candName = candidateUnit.name.trim().toLowerCase()
+        const candAbbr = (candidateUnit.abbreviation ?? '').trim().toLowerCase()
+        const nameMatch =
+          trimmedName.length >= 2 &&
+          (candName === trimmedName ||
+            candName.includes(trimmedName) ||
+            trimmedName.includes(candName))
+        const abbrMatch =
+          trimmedAbbr.length >= 2 &&
+          candAbbr.length >= 2 &&
+          candAbbr === trimmedAbbr
+        return nameMatch || abbrMatch
+      })
+      .slice(0, 3)
+  }, [
+    abbreviation,
+    allUnits,
+    countryId,
+    editingUnitId,
+    historicalCountryId,
+    name,
+  ])
+
+  const parentInheritedEstParts = useMemo(() => {
+    if (!selectedParentUnit) return null
+    const hydrated = hydrateStructuredParts(
+      selectedParentUnit.established,
+      selectedParentUnit.establishedDate,
+    )
+    return hydrated.year ? hydrated : null
+  }, [selectedParentUnit])
 
   const totalLineageCount = isEdit
     ? predecessors.length + successors.length
@@ -1883,318 +3039,3029 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     ? unitTenures.length
     : commanderRows.length
 
-  const hasDetailContent = Boolean(
-    description.trim() || notableBattles.trim() || honors.trim(),
+  const totalCommandGroupCount =
+    (parentUnitId ? 1 : 0) +
+    (administrationDepartmentId ? 1 : 0) +
+    totalCommanderCount +
+    totalLineageCount
+
+  const hasContextContent = Boolean(
+    garrisonPlace?.displayName?.trim() ||
+      strength.trim() ||
+      primaryMission.trim() ||
+      jurisdiction.trim() ||
+      description.trim() ||
+      notableBattles.trim() ||
+      honors.trim(),
   )
+
+  // 계보 3단 시각 보드용 데이터 (전신 ──▶ ★ 현재 부대 ──▶ 후신)
+  const lineageBoardData = useMemo(() => {
+    if (isEdit) {
+      return {
+        predecessorLabels: predecessors.map((item) =>
+          item.targetType === 'DEPARTMENT'
+            ? `🏛️ ${item.department?.name ?? '전신 부처'}`
+            : `🛡️ ${item.unit?.name ?? '전신 부대'}`,
+        ),
+        successorLabels: successors.map(
+          (item) => `🛡️ ${item.unit?.name ?? '후신 부대'}`,
+        ),
+      }
+    }
+    return {
+      predecessorLabels: pendingTransitions
+        .filter((item) => item.direction !== 'SUCCESSOR_UNIT')
+        .map((item) => item.targetLabel),
+      successorLabels: pendingTransitions
+        .filter((item) => item.direction === 'SUCCESSOR_UNIT')
+        .map((item) => item.targetLabel),
+    }
+  }, [isEdit, pendingTransitions, predecessors, successors])
 
   const renderLineageRow = (
     lineageItem: MilitaryUnitLineageDto,
     directionKind: 'PREDECESSOR' | 'SUCCESSOR',
   ) => {
     const isRowEditing = editingTransitionId === lineageItem.transitionId
-    const targetLabel =
+    const badgeLabel =
       directionKind === 'PREDECESSOR'
         ? lineageItem.targetType === 'DEPARTMENT'
-          ? `🏛️ [전신 부처] ${lineageItem.department?.name ?? ''}`
-          : `🛡️ [전신 부대] ${lineageItem.unit?.name ?? ''}`
-        : `🛡️ [후신 부대] ${lineageItem.unit?.name ?? ''}`
+          ? '전신 부처'
+          : '전신 부대'
+        : '후신 부대'
+    const targetName =
+      lineageItem.targetType === 'DEPARTMENT'
+        ? (lineageItem.department?.name ?? '부처 미상')
+        : (lineageItem.unit?.name ?? '부대 미상')
     const kindLabel =
-      TRANSITION_KIND_OPTIONS.find((optItem) => optItem.value === lineageItem.kind)
-        ?.label ?? lineageItem.kind
+      TRANSITION_KIND_OPTIONS.find(
+        (optItem) => optItem.value === lineageItem.kind,
+      )?.label ?? lineageItem.kind
+    const timeText = lineageItem.year
+      ? `${lineageItem.era === 'BC' ? 'BC ' : ''}${lineageItem.year}년${lineageItem.month ? ` ${lineageItem.month}월` : ''}`
+      : ''
 
-    if (isRowEditing) {
-      return (
-        <LinkedRecordRow key={lineageItem.transitionId}>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>{targetLabel}</div>
-          <FlatTwoColGrid>
-            <FlatSelect
-              aria-label="변동 유형"
-              value={editTransKind}
-              onChange={(changeEvent) =>
-                setEditTransKind(
-                  changeEvent.target.value as MilitaryUnitTransitionKind,
-                )
+    return (
+      <ParticipantRow key={lineageItem.transitionId}>
+        <ParticipantHeaderRow>
+          <ParentEventBadge>{badgeLabel}</ParentEventBadge>
+          <ParentEventTitle>{targetName}</ParentEventTitle>
+          <RelatedEventDateMeta>
+            {kindLabel}
+            {timeText ? ` · ${timeText}` : ''}
+          </RelatedEventDateMeta>
+          <ParticipantActionCluster>
+            <S.AddButton
+              type="button"
+              disabled={transitionBusy}
+              onClick={() =>
+                isRowEditing
+                  ? setEditingTransitionId(null)
+                  : startInlineEditTransition(lineageItem)
               }
             >
+              <FiEdit2 size={12} />
+              {isRowEditing ? '접기' : '편집'}
+            </S.AddButton>
+            <ParticipantRemove
+              type="button"
+              disabled={transitionBusy}
+              aria-label="계보 연결 해제"
+              title="계보 연결 해제"
+              onClick={() =>
+                void handleDeleteTransition(lineageItem.transitionId)
+              }
+            >
+              <FiX size={15} />
+            </ParticipantRemove>
+          </ParticipantActionCluster>
+        </ParticipantHeaderRow>
+
+        {lineageItem.note && !isRowEditing && (
+          <ParticipantSubNote>{lineageItem.note}</ParticipantSubNote>
+        )}
+
+        {isRowEditing && (
+          <ParticipantRoleBar>
+            <ParticipantRoleChipGroup
+              role="radiogroup"
+              aria-label="계보 변동 유형"
+            >
               {TRANSITION_KIND_OPTIONS.map((optItem) => (
-                <option key={optItem.value} value={optItem.value}>
+                <ParticipantRoleChipBtn
+                  key={optItem.value}
+                  type="button"
+                  $selected={editTransKind === optItem.value}
+                  onClick={() => setEditTransKind(optItem.value)}
+                >
                   {optItem.label}
-                </option>
+                </ParticipantRoleChipBtn>
               ))}
-            </FlatSelect>
-            <InlineDateRow>
-              <FlatSelect
+            </ParticipantRoleChipGroup>
+            <CompactInlineFieldsRow>
+              <CompactEraSelect
                 aria-label="개편 기원"
                 value={editTransEra}
                 onChange={(changeEvent) =>
                   setEditTransEra(changeEvent.target.value as 'AD' | 'BC')
                 }
-                style={{ width: 72 }}
               >
                 <option value="AD">서기</option>
                 <option value="BC">BC</option>
-              </FlatSelect>
-              <FlatInput
+              </CompactEraSelect>
+              <ParticipantNoteInput
                 type="number"
                 min={1}
                 placeholder="연도"
                 value={editTransYear}
-                onChange={(changeEvent) =>
-                  setEditTransYear(changeEvent.target.value)
-                }
-                style={{ flex: '1 1 92px' }}
+                onChange={(changeEvent) => setEditTransYear(changeEvent.target.value)}
+                style={{ maxWidth: 88 }}
               />
-              <FlatInput
+              <ParticipantNoteInput
                 type="number"
                 min={1}
                 max={12}
                 placeholder="월"
                 value={editTransMonth}
-                onChange={(changeEvent) =>
-                  setEditTransMonth(changeEvent.target.value)
-                }
-                style={{ width: 68 }}
+                onChange={(changeEvent) => setEditTransMonth(changeEvent.target.value)}
+                style={{ maxWidth: 64 }}
               />
-            </InlineDateRow>
-          </FlatTwoColGrid>
-          <FlatInput
-            type="text"
-            placeholder="개편 비고 (선택)"
-            value={editTransNote}
-            onChange={(changeEvent) =>
-              setEditTransNote(changeEvent.target.value)
-            }
-          />
-          <InlineDateRow style={{ justifyContent: 'flex-end' }}>
-            <InlineIconBtn
-              type="button"
-              onClick={() => setEditingTransitionId(null)}
-            >
-              취소
-            </InlineIconBtn>
-            <InlineIconBtn
-              type="button"
-              disabled={transitionBusy}
-              onClick={() =>
-                void handleSaveInlineTransition(lineageItem.transitionId)
-              }
-            >
-              저장
-            </InlineIconBtn>
-          </InlineDateRow>
-        </LinkedRecordRow>
-      )
-    }
-
-    const timeText = lineageItem.year
-      ? ` · ${lineageItem.era === 'BC' ? 'BC ' : ''}${lineageItem.year}년${lineageItem.month ? ` ${lineageItem.month}월` : ''}`
-      : ''
-
-    return (
-      <LinkedRecordRow key={lineageItem.transitionId}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 10,
-          }}
-        >
-          <div style={{ fontSize: 13, minWidth: 0 }}>
-            {directionKind === 'PREDECESSOR' ? (
-              <>
-                <strong>{targetLabel}</strong>{' '}
-                <span style={{ opacity: 0.72 }}>
-                  → 현재 부대 ({kindLabel}
-                  {timeText})
-                </span>
-              </>
-            ) : (
-              <>
-                <span style={{ opacity: 0.72 }}>현재 부대 → </span>
-                <strong>{targetLabel}</strong>{' '}
-                <span style={{ opacity: 0.72 }}>
-                  ({kindLabel}
-                  {timeText})
-                </span>
-              </>
-            )}
-            {lineageItem.note && (
-              <div style={{ fontSize: 12, opacity: 0.7, marginTop: 2 }}>
-                {lineageItem.note}
-              </div>
-            )}
-          </div>
-          <InlineDateRow>
-            <InlineIconBtn
-              type="button"
-              disabled={transitionBusy}
-              onClick={() => startInlineEditTransition(lineageItem)}
-              title="계보 연도·유형 수정"
-            >
-              <FiEdit2 size={13} />
-            </InlineIconBtn>
-            <InlineIconBtn
-              type="button"
-              $danger
-              disabled={transitionBusy}
-              onClick={() =>
-                void handleDeleteTransition(lineageItem.transitionId)
-              }
-              title="계보 연결 해제"
-            >
-              <FiTrash2 size={13} />
-            </InlineIconBtn>
-          </InlineDateRow>
-        </div>
-      </LinkedRecordRow>
+              <ParticipantNoteInput
+                type="text"
+                placeholder="개편 비고 (선택)"
+                value={editTransNote}
+                onChange={(changeEvent) => setEditTransNote(changeEvent.target.value)}
+              />
+              <S.AddButton
+                type="button"
+                disabled={transitionBusy}
+                onClick={() =>
+                  void handleSaveInlineTransition(lineageItem.transitionId)
+                }
+              >
+                <FiCheck size={13} />
+                저장
+              </S.AddButton>
+            </CompactInlineFieldsRow>
+          </ParticipantRoleBar>
+        )}
+      </ParticipantRow>
     )
   }
 
   if (!isOpen) return null
 
-  const hasCountry = Boolean(countryId || historicalCountryId)
-  const isFormValid = Boolean(name.trim() && hasCountry)
+  const renderSectionJumpButtons = () =>
+    FORM_SECTION_META.map((secItem) => {
+      const isActiveSec = activeSection === secItem.key
+      let badgeNode: React.ReactNode = null
+      if (secItem.key === 'basic' && isFormValid && !hydratingUnit) {
+        badgeNode = <SectionBadge $done>✓</SectionBadge>
+      } else if (secItem.key === 'command' && totalCommandGroupCount > 0) {
+        badgeNode = <SectionBadge>{totalCommandGroupCount}</SectionBadge>
+      } else if (secItem.key === 'context' && hasContextContent) {
+        badgeNode = <SectionBadge $done>✓</SectionBadge>
+      }
 
-  const anyChildModalOpen =
-    countryModalOpen ||
-    establishedDateModalOpen ||
-    disbandedDateModalOpen ||
-    commanderPersonModalOpen ||
-    appointmentModalOpen
+      return (
+        <SectionJumpBtn
+          key={secItem.key}
+          type="button"
+          $active={isActiveSec}
+          aria-current={isActiveSec ? 'location' : undefined}
+          onClick={() => scrollToSection(secItem.key)}
+        >
+          <span>{secItem.label}</span>
+          {badgeNode}
+        </SectionJumpBtn>
+      )
+    })
 
-  const renderSectionJumpButtons = () => (
-    <>
-      <SectionJumpBtn
-        type="button"
-        $active={activeSection === 'basic'}
-        onClick={() => scrollToSection('basic')}
-      >
-        기본 편제
-        {isFormValid ? <SectionJumpDone>✓</SectionJumpDone> : null}
-      </SectionJumpBtn>
-      <SectionJumpBtn
-        type="button"
-        $active={activeSection === 'military'}
-        onClick={() => scrollToSection('military')}
-      >
-        지휘관 · 임무
-        {totalCommanderCount > 0 ? (
-          <SectionJumpBadge>{totalCommanderCount}</SectionJumpBadge>
-        ) : null}
-      </SectionJumpBtn>
-      <SectionJumpBtn
-        type="button"
-        $active={activeSection === 'lineage'}
-        onClick={() => scrollToSection('lineage')}
-      >
-        계보
-        {totalLineageCount > 0 ? (
-          <SectionJumpBadge>{totalLineageCount}</SectionJumpBadge>
-        ) : null}
-      </SectionJumpBtn>
-      <SectionJumpBtn
-        type="button"
-        $active={activeSection === 'description'}
-        onClick={() => scrollToSection('description')}
-      >
-        상세 기록
-        {hasDetailContent ? <SectionJumpDone>✓</SectionJumpDone> : null}
-      </SectionJumpBtn>
-    </>
+  // 선택된 국가/시대의 존속기간 라벨
+  const selectedCountryPeriodLabel = resolvedSelectedHistorical
+    ? formatCountryPeriod(resolvedSelectedHistorical, { variant: 'short' })
+    : ''
+
+  // 시대 전환 칩 표시 개수 제한 (최대 2개 노출 + 더보기 토글 + 시대 필터)
+  const filteredPrioritizedLinkedEras = eraFilterQuery.trim()
+    ? prioritizedLinkedEras.filter((eraItem) => {
+        const queryLower = eraFilterQuery.trim().toLowerCase()
+        const spanLabel = formatCountryPeriod(eraItem, { variant: 'short' })
+        return `${eraItem.name} ${eraItem.enName ?? ''} ${spanLabel}`
+          .toLowerCase()
+          .includes(queryLower)
+      })
+    : prioritizedLinkedEras
+
+  const visibleLinkedEras = showAllLinkedEras
+    ? filteredPrioritizedLinkedEras
+    : prioritizedLinkedEras.slice(0, 2)
+  const hiddenLinkedEraCount = Math.max(
+    0,
+    prioritizedLinkedEras.length - 2,
+  )
+
+  const handleSelectQuickCountryCandidate = (
+    cand: (typeof countryQuickCandidates)[number],
+  ) => {
+    playClickSound()
+    if (cand.isHistorical) {
+      setCountryId(cand.parentModernCountryId || '')
+      setHistoricalCountryId(cand.id)
+      setCountryFlagEmoji('🏛️')
+      setCountryEnglishName(cand.enName || '')
+    } else {
+      setHistoricalCountryId('')
+      setCountryId(cand.id)
+      setCountryFlagEmoji(cand.flagEmoji)
+      setCountryEnglishName('')
+    }
+    setCountryName(cand.name)
+    setAdministrationDepartmentId('')
+    setCountryQuickQuery('')
+    setCountryQuickFocused(false)
+    setIsInlineCountryChangeOpen(false)
+    markDirty(true)
+  }
+
+  // ==========================================================================
+  // 1. 기본 정보 섹션 (사건 등록 모달 BasicInfoSection 정본 규격)
+  // ==========================================================================
+  const basicSectionNode = (
+    <FormGroupSection
+      id="military-unit-section-basic"
+      data-form-section="basic"
+      onFocusCapture={() => setActiveSection('basic')}
+    >
+      <FormGroupHeader>
+        <FormGroupTitle>기본 정보</FormGroupTitle>
+        <FormGroupSummaryBadge>
+          명칭 · 시기 · 소속 국가 · 군종 · 제대
+        </FormGroupSummaryBadge>
+      </FormGroupHeader>
+
+      {/* 군부대·사령부명 + 약칭 */}
+      <S.FormRow>
+        <S.FormLabel htmlFor="military-unit-name">
+          군부대·사령부명 <S.Required>*</S.Required>
+        </S.FormLabel>
+        <S.FormField>
+          <NameAbbrGrid>
+            <TitleInput
+              ref={nameInputRef}
+              id="military-unit-name"
+              data-autofocus=""
+              type="text"
+              placeholder="예: 합동참모본부, 연합군 최고사령부, 중부집단군, 제1보병사단, 연합함대"
+              value={name}
+              onChange={(changeEvent) => {
+                setName(changeEvent.target.value)
+                markDirty(true)
+              }}
+              required
+            />
+            <AbbrInput
+              id="military-unit-abbr"
+              type="text"
+              aria-label="약칭·부호"
+              placeholder="약칭 (예: 합참, SHAEF)"
+              value={abbreviation}
+              onChange={(changeEvent) => {
+                setAbbreviation(changeEvent.target.value)
+                markDirty(true)
+              }}
+            />
+          </NameAbbrGrid>
+
+          {/* 신규 등록 시 주요 최고사령부 빠른 예시 바 (접기/펼치기 가능) */}
+          {!isEdit && (
+            <RecentParticipantBar>
+              <RecentParticipantLabel>사령부 예시</RecentParticipantLabel>
+              {(showHighCommandPresets
+                ? HIGH_COMMAND_PRESETS
+                : HIGH_COMMAND_PRESETS.slice(0, 4)
+              ).map((presetItem) => (
+                <RecentParticipantChip
+                  key={presetItem.abbreviation}
+                  type="button"
+                  onClick={() => {
+                    playClickSound()
+                    setName(presetItem.name)
+                    setAbbreviation(presetItem.abbreviation)
+                    setNameLocal(presetItem.nameLocal ?? '')
+                    setNameEn(presetItem.nameEn ?? '')
+                    setUnitType(presetItem.unitType)
+                    setBranch(presetItem.branch)
+                    markDirty(true)
+                  }}
+                >
+                  <span>+</span>
+                  <span>{presetItem.label}</span>
+                </RecentParticipantChip>
+              ))}
+              {HIGH_COMMAND_PRESETS.length > 4 && (
+                <RecentMoreChip
+                  type="button"
+                  onClick={() => setShowHighCommandPresets((prev) => !prev)}
+                >
+                  {showHighCommandPresets
+                    ? '접기'
+                    : `+${HIGH_COMMAND_PRESETS.length - 4} 더보기`}
+                </RecentMoreChip>
+              )}
+            </RecentParticipantBar>
+          )}
+
+          {/* 부대명 기반 자동 추론 제안 (BasicInfoSection TitleSuggestionRow 규격) */}
+          {(canSuggestUnitType || canSuggestBranch || canSuggestYear) && (
+            <TitleSuggestionRow>
+              <TitleSuggestionLabel>부대명에서 찾음</TitleSuggestionLabel>
+              {canSuggestBranch && inferredBranchOption && (
+                <TitleSuggestionButton
+                  type="button"
+                  onClick={() => {
+                    playClickSound()
+                    setBranch(inferredBranchOption.value)
+                    markDirty(true)
+                  }}
+                >
+                  + 군종 {inferredBranchOption.label}
+                </TitleSuggestionButton>
+              )}
+              {canSuggestUnitType && inferredUnitTypeOption && (
+                <TitleSuggestionButton
+                  type="button"
+                  onClick={() => {
+                    playClickSound()
+                    setUnitType(inferredUnitTypeOption.value)
+                    markDirty(true)
+                  }}
+                >
+                  + 제대 {inferredUnitTypeOption.shortLabel}
+                </TitleSuggestionButton>
+              )}
+              {canSuggestYear && inferredNameMeta.inferredYear && (
+                <TitleSuggestionButton
+                  type="button"
+                  onClick={() => {
+                    const yrHint = inferredNameMeta.inferredYear!
+                    playClickSound()
+                    setEstablishedEra(yrHint.era)
+                    setEstablishedYear(yrHint.year)
+                    markDirty(true)
+                  }}
+                >
+                  + 창설연도{' '}
+                  {inferredNameMeta.inferredYear.era === 'BC' ? 'BC ' : ''}
+                  {inferredNameMeta.inferredYear.year}년
+                </TitleSuggestionButton>
+              )}
+              {suggestionCount >= 2 && (
+                <TitleApplyAllButton
+                  type="button"
+                  onClick={() => {
+                    playClickSound()
+                    if (canSuggestBranch && inferredBranchOption) {
+                      setBranch(inferredBranchOption.value)
+                    }
+                    if (canSuggestUnitType && inferredUnitTypeOption) {
+                      setUnitType(inferredUnitTypeOption.value)
+                    }
+                    if (canSuggestYear && inferredNameMeta.inferredYear) {
+                      setEstablishedEra(inferredNameMeta.inferredYear.era)
+                      setEstablishedYear(inferredNameMeta.inferredYear.year)
+                    }
+                    markDirty(true)
+                  }}
+                >
+                  한 번에 채우기
+                </TitleApplyAllButton>
+              )}
+            </TitleSuggestionRow>
+          )}
+
+          {/* 동일·유사 부대 탐지 및 원클릭 상위/전신 연결 (BasicInfoSection SimilarEventsBar 규격) */}
+          {similarExistingUnits.length > 0 && (
+            <SimilarEventsBar role="status" aria-live="polite">
+              <SimilarEventsLabel>
+                유사 부대 {similarExistingUnits.length}건
+              </SimilarEventsLabel>
+              <SimilarEventsList>
+                {similarExistingUnits.map((dupUnit) => (
+                  <SimilarEventItem key={dupUnit.id}>
+                    <SimilarEventTitle>
+                      🛡️ {dupUnit.name}
+                      {dupUnit.abbreviation ? ` (${dupUnit.abbreviation})` : ''}
+                    </SimilarEventTitle>
+                    {dupUnit.historicalCountry?.name && (
+                      <SimilarEventMeta>
+                        ({dupUnit.historicalCountry.name})
+                      </SimilarEventMeta>
+                    )}
+                    {parentUnitId !== dupUnit.id && (
+                      <SimilarEventActionBtn
+                        type="button"
+                        onClick={() => {
+                          playClickSound()
+                          setParentUnitId(dupUnit.id)
+                          markDirty(true)
+                        }}
+                      >
+                        상위 부대로 지정
+                      </SimilarEventActionBtn>
+                    )}
+                    {!isEdit &&
+                      !pendingTransitions.some(
+                        (item) => item.targetId === dupUnit.id,
+                      ) && (
+                        <SimilarEventActionBtn
+                          type="button"
+                          onClick={() => {
+                            playClickSound()
+                            setPendingTransitions((prev) => [
+                              ...prev,
+                              {
+                                localKey: `${Date.now()}-${Math.random()}`,
+                                direction: 'PREDECESSOR_UNIT',
+                                targetId: dupUnit.id,
+                                targetLabel: `🛡️ ${dupUnit.name}${dupUnit.abbreviation ? ` (${dupUnit.abbreviation})` : ''}`,
+                                kind: 'REORGANIZE',
+                                era: establishedEra,
+                                year: establishedYear.trim(),
+                                month: establishedMonth.trim(),
+                                note: '',
+                              },
+                            ])
+                            markDirty(true)
+                          }}
+                        >
+                          전신 부대로 연결
+                        </SimilarEventActionBtn>
+                      )}
+                  </SimilarEventItem>
+                ))}
+              </SimilarEventsList>
+            </SimilarEventsBar>
+          )}
+        </S.FormField>
+      </S.FormRow>
+
+      {/* 원어 · 영문 · 별칭 · 표어 (SubTitleGrid 2열 규격) */}
+      <S.FormRow>
+        <S.FormLabel>
+          이명 · 외국어 표기<OptionalTag>(선택)</OptionalTag>
+        </S.FormLabel>
+        <S.FormField>
+          <SubTitleGrid>
+            <SubTitleField>
+              <SubTitleLabel>
+                원어 표기<OptionalTag>(선택)</OptionalTag>
+              </SubTitleLabel>
+              <S.Input
+                type="text"
+                aria-label="원어 표기"
+                placeholder="예: Grand Quartier Général, Ставка"
+                value={nameLocal}
+                onChange={(changeEvent) => {
+                  setNameLocal(changeEvent.target.value)
+                  markDirty(true)
+                }}
+              />
+            </SubTitleField>
+            <SubTitleField>
+              <SubTitleLabel>
+                영문 표기<OptionalTag>(선택)</OptionalTag>
+              </SubTitleLabel>
+              <S.Input
+                type="text"
+                aria-label="영문 표기"
+                placeholder="예: Armed Forces High Command"
+                value={nameEn}
+                onChange={(changeEvent) => {
+                  setNameEn(changeEvent.target.value)
+                  markDirty(true)
+                }}
+              />
+            </SubTitleField>
+            <SubTitleField>
+              <SubTitleLabel>
+                별칭 · 통칭<OptionalTag>(선택)</OptionalTag>
+              </SubTitleLabel>
+              <S.Input
+                type="text"
+                aria-label="별명·통칭"
+                placeholder="예: 맹호부대, 백골부대, 아프리카 군단"
+                value={nickname}
+                onChange={(changeEvent) => {
+                  setNickname(changeEvent.target.value)
+                  markDirty(true)
+                }}
+              />
+            </SubTitleField>
+            <SubTitleField>
+              <SubTitleLabel>
+                부대 표어 · 모토<OptionalTag>(선택)</OptionalTag>
+              </SubTitleLabel>
+              <S.Input
+                type="text"
+                aria-label="부대 표어"
+                placeholder="예: 필승, 충성, Semper Fidelis"
+                value={motto}
+                onChange={(changeEvent) => {
+                  setMotto(changeEvent.target.value)
+                  markDirty(true)
+                }}
+              />
+            </SubTitleField>
+          </SubTitleGrid>
+        </S.FormField>
+      </S.FormRow>
+
+      {/* 창설 · 해산 시기 (EventRegisterModal InlineDateField + DateRangeGrid 규격) */}
+      <S.FormRow>
+        <S.FormLabel as="div">
+          창설 · 해산 시기<OptionalTag>(선택)</OptionalTag>
+          {lifespanBadgeLabel && (
+            <S.PeriodBadge>{lifespanBadgeLabel}</S.PeriodBadge>
+          )}
+        </S.FormLabel>
+        <S.FormField>
+          <DateRangeHeaderBar>
+            <SegmentControl
+              ariaLabel="부대 운용 상태"
+              size="sm"
+              value={isActive ? 'active' : 'disbanded'}
+              onChange={(nextMode) => {
+                playClickSound()
+                const nextActive = nextMode === 'active'
+                setIsActive(nextActive)
+                if (nextActive) {
+                  setDisbandedYear('')
+                  setDisbandedMonth('')
+                  setDisbandedDay('')
+                }
+                markDirty(true)
+              }}
+              options={[
+                { value: 'active', label: '현역 운용 중' },
+                { value: 'disbanded', label: '해산 · 비운용' },
+              ]}
+            />
+            {selectedHistoricalSpan?.start && (
+              <DateQuickActionBtn
+                type="button"
+                title={`선택한 시대(${selectedHistoricalSpan.name})의 존속 시작·종료 연도를 채웁니다`}
+                onClick={() => {
+                  playClickSound()
+                  if (selectedHistoricalSpan.start) {
+                    setEstablishedEra(selectedHistoricalSpan.start.era)
+                    setEstablishedYear(selectedHistoricalSpan.start.year)
+                  }
+                  if (selectedHistoricalSpan.end) {
+                    setDisbandedEra(selectedHistoricalSpan.end.era)
+                    setDisbandedYear(selectedHistoricalSpan.end.year)
+                    setIsActive(false)
+                  }
+                  markDirty(true)
+                }}
+              >
+                시대 존속기간 맞춤
+              </DateQuickActionBtn>
+            )}
+          </DateRangeHeaderBar>
+
+          <DateRangeGrid $singleColumn={isActive && !disbandedYear}>
+            <S.DateRangeColumn>
+              <DateColumnHeaderRow>
+                <S.DateRangeLabel>창설일</S.DateRangeLabel>
+                <DateQuickActions>
+                  {(establishedYear || establishedMonth || establishedDay) && (
+                    <DateQuickActionBtn
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        setEstablishedEra('AD')
+                        setEstablishedYear('')
+                        setEstablishedMonth('')
+                        setEstablishedDay('')
+                        markDirty(true)
+                      }}
+                    >
+                      비우기
+                    </DateQuickActionBtn>
+                  )}
+                </DateQuickActions>
+              </DateColumnHeaderRow>
+              <InlineDateField
+                appearance="field"
+                ariaLabelPrefix="창설일"
+                era={establishedEra}
+                year={establishedYear}
+                month={establishedMonth}
+                day={establishedDay}
+                yearPlaceholder="연도"
+                calendarAnchorId={estCalendarAnchorId}
+                onOpenCalendar={() => {
+                  playClickSound()
+                  setEstablishedDateModalOpen(true)
+                }}
+                onChange={(patch) => {
+                  if (patch.era !== undefined) setEstablishedEra(patch.era)
+                  if (patch.year !== undefined) setEstablishedYear(patch.year)
+                  if (patch.month !== undefined)
+                    setEstablishedMonth(patch.month)
+                  if (patch.day !== undefined) setEstablishedDay(patch.day)
+                  markDirty(true)
+                }}
+              />
+            </S.DateRangeColumn>
+
+            {(!isActive || Boolean(disbandedYear)) && (
+              <S.DateRangeColumn>
+                <DateColumnHeaderRow>
+                  <S.DateRangeLabel>해산일</S.DateRangeLabel>
+                  <DateQuickActions>
+                    {establishedYear &&
+                      (!disbandedYear ||
+                        disbandedYear !== establishedYear ||
+                        disbandedEra !== establishedEra) && (
+                        <DateQuickActionBtn
+                          type="button"
+                          onClick={() => {
+                            playClickSound()
+                            setDisbandedEra(establishedEra)
+                            setDisbandedYear(establishedYear)
+                            setDisbandedMonth(establishedMonth)
+                            setDisbandedDay(establishedDay)
+                            setIsActive(false)
+                            markDirty(true)
+                          }}
+                        >
+                          창설일과 같음
+                        </DateQuickActionBtn>
+                      )}
+                    {(disbandedYear || disbandedMonth || disbandedDay) && (
+                      <DateQuickActionBtn
+                        type="button"
+                        onClick={() => {
+                          playClickSound()
+                          setDisbandedEra('AD')
+                          setDisbandedYear('')
+                          setDisbandedMonth('')
+                          setDisbandedDay('')
+                          markDirty(true)
+                        }}
+                      >
+                        비우기
+                      </DateQuickActionBtn>
+                    )}
+                  </DateQuickActions>
+                </DateColumnHeaderRow>
+                <InlineDateField
+                  appearance="field"
+                  ariaLabelPrefix="해산일"
+                  era={disbandedEra}
+                  year={disbandedYear}
+                  month={disbandedMonth}
+                  day={disbandedDay}
+                  yearPlaceholder="연도"
+                  calendarAnchorId={disbCalendarAnchorId}
+                  onOpenCalendar={() => {
+                    playClickSound()
+                    setDisbandedDateModalOpen(true)
+                  }}
+                  onChange={(patch) => {
+                    if (patch.era !== undefined) setDisbandedEra(patch.era)
+                    if (patch.year !== undefined) {
+                      setDisbandedYear(patch.year)
+                      if (patch.year.trim()) setIsActive(false)
+                    }
+                    if (patch.month !== undefined) {
+                      setDisbandedMonth(patch.month)
+                      if (patch.month.trim()) setIsActive(false)
+                    }
+                    if (patch.day !== undefined) {
+                      setDisbandedDay(patch.day)
+                      if (patch.day.trim()) setIsActive(false)
+                    }
+                    markDirty(true)
+                  }}
+                />
+              </S.DateRangeColumn>
+            )}
+          </DateRangeGrid>
+
+          {isDateOrderInverted && (
+            <S.ErrorMessage role="alert">
+              해산일이 창설일보다 앞설 수 없습니다. 연도·기원(BC/서기)을
+              확인해주세요.
+            </S.ErrorMessage>
+          )}
+        </S.FormField>
+      </S.FormRow>
+
+      {/* 소속 국가 · 시대 (사건 등록 모달 BasicInfoSection 컴팩트 카드 + 빠른 검색 + 2칩 접기/펼치기 규격) */}
+      <S.FormRow>
+        <S.FormLabel as="div">
+          소속 국가 · 시대 <S.Required>*</S.Required>
+        </S.FormLabel>
+        <S.FormField>
+          {hasCountry ? (
+            <ParentEventCard>
+              <ParentEventHeaderRow>
+                <ParentEventBadge>
+                  {historicalCountryId ? '역사 국가' : '현대 국가'}
+                </ParentEventBadge>
+                <ParentEventTitle>
+                  {countryFlagEmoji || '🏳️'} {countryName}
+                  {countryEnglishName ? ` (${countryEnglishName})` : ''}
+                </ParentEventTitle>
+                {selectedCountryPeriodLabel && (
+                  <RelatedEventDateMeta>
+                    {selectedCountryPeriodLabel}
+                  </RelatedEventDateMeta>
+                )}
+                {!lockCountryAndDepartment && (
+                  <ParticipantActionCluster>
+                    <S.AddButton
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        setIsInlineCountryChangeOpen((prev) => {
+                          const nextOpen = !prev
+                          if (nextOpen) {
+                            window.setTimeout(
+                              () => countryQuickInputRef.current?.focus(),
+                              50,
+                            )
+                          }
+                          return nextOpen
+                        })
+                      }}
+                    >
+                      {isInlineCountryChangeOpen ? '검색 닫기' : '빠른 검색'}
+                    </S.AddButton>
+                    <S.AddButton
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        setCountryModalOpen(true)
+                      }}
+                    >
+                      목록 변경
+                    </S.AddButton>
+                    <ParticipantRemove
+                      type="button"
+                      aria-label="소속 국가 선택 해제"
+                      title="소속 국가 선택 해제"
+                      onClick={() => {
+                        playClickSound()
+                        setCountryId('')
+                        setHistoricalCountryId('')
+                        setCountryName('')
+                        setCountryFlagEmoji('')
+                        setCountryEnglishName('')
+                        setAdministrationDepartmentId('')
+                        setIsInlineCountryChangeOpen(false)
+                        markDirty(true)
+                      }}
+                    >
+                      <FiX size={15} />
+                    </ParticipantRemove>
+                  </ParticipantActionCluster>
+                )}
+              </ParentEventHeaderRow>
+
+              {isInlineCountryChangeOpen && !lockCountryAndDepartment && (
+                <CountryQuickSearchRow>
+                  <CountryQuickSearchWrap>
+                    <CountryQuickSearchInput
+                      ref={countryQuickInputRef}
+                      type="text"
+                      value={countryQuickQuery}
+                      placeholder="교체할 국가·시대 이름 입력 후 Enter…"
+                      aria-label="교체할 소속 국가·시대 빠른 검색"
+                      onFocus={() => setCountryQuickFocused(true)}
+                      onBlur={() => {
+                        window.setTimeout(
+                          () => setCountryQuickFocused(false),
+                          160,
+                        )
+                      }}
+                      onKeyDown={(keyEvent) => {
+                        if (keyEvent.key === 'Escape') {
+                          keyEvent.stopPropagation()
+                          setCountryQuickFocused(false)
+                          setIsInlineCountryChangeOpen(false)
+                          return
+                        }
+                        if (
+                          keyEvent.key === 'Enter' &&
+                          countryQuickCandidates.length > 0
+                        ) {
+                          keyEvent.preventDefault()
+                          handleSelectQuickCountryCandidate(
+                            countryQuickCandidates[0]!,
+                          )
+                        }
+                      }}
+                      onChange={(changeEvent) =>
+                        setCountryQuickQuery(changeEvent.target.value)
+                      }
+                    />
+                    {countryQuickFocused &&
+                      countryQuickQuery.trim().length > 0 && (
+                        <CountryQuickResultBox
+                          role="listbox"
+                          aria-label="국가 빠른 검색 결과"
+                        >
+                          {countryQuickCandidates.length > 0 ? (
+                            countryQuickCandidates.map((cand) => (
+                              <CountryQuickResultItem
+                                key={`${cand.isHistorical ? 'H' : 'M'}-${cand.id}`}
+                                type="button"
+                                onMouseDown={(mouseEvent) =>
+                                  mouseEvent.preventDefault()
+                                }
+                                onClick={() =>
+                                  handleSelectQuickCountryCandidate(cand)
+                                }
+                              >
+                                <CountryQuickResultFlag>
+                                  {cand.flagEmoji}
+                                </CountryQuickResultFlag>
+                                <CountryQuickResultName>
+                                  {cand.name}
+                                </CountryQuickResultName>
+                                {cand.eraMatch && (
+                                  <CountryEraBadge>시대 일치</CountryEraBadge>
+                                )}
+                                <CountryQuickResultMeta>
+                                  {cand.isHistorical
+                                    ? cand.periodLabel
+                                      ? `역사 · ${cand.periodLabel}`
+                                      : '역사 국가'
+                                    : '현대 국가'}
+                                </CountryQuickResultMeta>
+                              </CountryQuickResultItem>
+                            ))
+                          ) : (
+                            <CountryQuickEmpty>
+                              일치하는 국가가 없습니다. 「목록 변경」에서 전체
+                              목록을 확인하세요.
+                            </CountryQuickEmpty>
+                          )}
+                        </CountryQuickResultBox>
+                      )}
+                  </CountryQuickSearchWrap>
+                </CountryQuickSearchRow>
+              )}
+
+              {/* 연결된 역사국가가 있을 때: 최대 2개(시대 일치 우선) + +N개 시대 더보기 토글로 깔끔하게 표시 */}
+              {!lockCountryAndDepartment &&
+                modernAnchorCountry &&
+                prioritizedLinkedEras.length > 0 && (
+                  <ParticipantRoleBar>
+                    {showAllLinkedEras && prioritizedLinkedEras.length > 4 && (
+                      <CompactInlineFieldsRow>
+                        <ParticipantNoteInput
+                          type="text"
+                          value={eraFilterQuery}
+                          placeholder={`시대 이름·존속연도 필터 (총 ${prioritizedLinkedEras.length}개 시대)…`}
+                          aria-label="연결된 역사 시대 필터"
+                          onKeyDown={(keyEvent) => {
+                            if (keyEvent.key === 'Escape') {
+                              keyEvent.stopPropagation()
+                              setEraFilterQuery('')
+                            } else if (
+                              keyEvent.key === 'Enter' &&
+                              visibleLinkedEras.length > 0
+                            ) {
+                              keyEvent.preventDefault()
+                              const topEra = visibleLinkedEras[0]!
+                              playClickSound()
+                              setCountryId(modernAnchorCountry.id)
+                              setHistoricalCountryId(topEra.id)
+                              setCountryName(topEra.name)
+                              setCountryFlagEmoji('🏛️')
+                              setCountryEnglishName(topEra.enName || '')
+                              setAdministrationDepartmentId('')
+                              setEraFilterQuery('')
+                              markDirty(true)
+                            }
+                          }}
+                          onChange={(changeEvent) =>
+                            setEraFilterQuery(changeEvent.target.value)
+                          }
+                        />
+                        {eraFilterQuery && (
+                          <DateQuickActionBtn
+                            type="button"
+                            onClick={() => setEraFilterQuery('')}
+                          >
+                            필터 지우기
+                          </DateQuickActionBtn>
+                        )}
+                      </CompactInlineFieldsRow>
+                    )}
+
+                    <RecentParticipantBar>
+                      <RecentParticipantLabel>시대 전환</RecentParticipantLabel>
+                      <RecentParticipantChip
+                        type="button"
+                        $active={
+                          !historicalCountryId &&
+                          countryId === modernAnchorCountry.id
+                        }
+                        onClick={() => {
+                          playClickSound()
+                          setHistoricalCountryId('')
+                          setCountryId(modernAnchorCountry.id)
+                          setCountryName(modernAnchorCountry.name)
+                          setCountryFlagEmoji(
+                            modernAnchorCountry.flagEmoji || '🏳️',
+                          )
+                          setCountryEnglishName('')
+                          setAdministrationDepartmentId('')
+                          markDirty(true)
+                        }}
+                      >
+                        <span>{modernAnchorCountry.flagEmoji || '🏳️'}</span>
+                        <span>{modernAnchorCountry.name} (현대)</span>
+                      </RecentParticipantChip>
+
+                      {visibleLinkedEras.map((histEra) => {
+                        const isEraMatched = Boolean(
+                          unitHintYearRange &&
+                            matchesHintYearRange(histEra, unitHintYearRange),
+                        )
+                        const shortSpan = formatCountryPeriod(histEra, {
+                          variant: 'short',
+                        })
+                        return (
+                          <RecentParticipantChip
+                            key={histEra.id}
+                            type="button"
+                            $active={historicalCountryId === histEra.id}
+                            onClick={() => {
+                              playClickSound()
+                              setCountryId(modernAnchorCountry.id)
+                              setHistoricalCountryId(histEra.id)
+                              setCountryName(histEra.name)
+                              setCountryFlagEmoji('🏛️')
+                              setCountryEnglishName(histEra.enName || '')
+                              setAdministrationDepartmentId('')
+                              markDirty(true)
+                            }}
+                          >
+                            <span>🏛️</span>
+                            <span>{histEra.name}</span>
+                            {shortSpan && (
+                              <EraSpanMuted>({shortSpan})</EraSpanMuted>
+                            )}
+                            {isEraMatched && (
+                              <CountryEraBadge>시대 일치</CountryEraBadge>
+                            )}
+                          </RecentParticipantChip>
+                        )
+                      })}
+
+                      {prioritizedLinkedEras.length > 2 && (
+                        <RecentMoreChip
+                          type="button"
+                          onClick={() => {
+                            setShowAllLinkedEras((prev) => {
+                              if (prev) setEraFilterQuery('')
+                              return !prev
+                            })
+                          }}
+                        >
+                          {showAllLinkedEras
+                            ? '접기'
+                            : `+${hiddenLinkedEraCount}개 시대 더보기`}
+                        </RecentMoreChip>
+                      )}
+                    </RecentParticipantBar>
+                  </ParticipantRoleBar>
+                )}
+            </ParentEventCard>
+          ) : (
+            <CountryQuickSearchRow>
+              <CountryQuickSearchWrap>
+                <CountryQuickSearchInput
+                  ref={countryQuickInputRef}
+                  type="text"
+                  disabled={lockCountryAndDepartment}
+                  value={countryQuickQuery}
+                  placeholder="국가·시대 빠른 검색 후 Enter (예: 한국, 고구려, 미합중국, 영국…)"
+                  aria-label="소속 국가·시대 빠른 검색"
+                  onFocus={() => setCountryQuickFocused(true)}
+                  onBlur={() => {
+                    window.setTimeout(() => setCountryQuickFocused(false), 160)
+                  }}
+                  onKeyDown={(keyEvent) => {
+                    if (keyEvent.key === 'Escape') {
+                      keyEvent.stopPropagation()
+                      setCountryQuickFocused(false)
+                      return
+                    }
+                    if (
+                      keyEvent.key === 'Enter' &&
+                      countryQuickCandidates.length > 0
+                    ) {
+                      keyEvent.preventDefault()
+                      handleSelectQuickCountryCandidate(
+                        countryQuickCandidates[0]!,
+                      )
+                    }
+                  }}
+                  onChange={(changeEvent) =>
+                    setCountryQuickQuery(changeEvent.target.value)
+                  }
+                />
+                {countryQuickFocused && countryQuickQuery.trim().length > 0 && (
+                  <CountryQuickResultBox
+                    role="listbox"
+                    aria-label="국가 빠른 검색 결과"
+                  >
+                    {countryQuickCandidates.length > 0 ? (
+                      countryQuickCandidates.map((cand) => (
+                        <CountryQuickResultItem
+                          key={`${cand.isHistorical ? 'H' : 'M'}-${cand.id}`}
+                          type="button"
+                          onMouseDown={(mouseEvent) =>
+                            mouseEvent.preventDefault()
+                          }
+                          onClick={() =>
+                            handleSelectQuickCountryCandidate(cand)
+                          }
+                        >
+                          <CountryQuickResultFlag>
+                            {cand.flagEmoji}
+                          </CountryQuickResultFlag>
+                          <CountryQuickResultName>
+                            {cand.name}
+                          </CountryQuickResultName>
+                          {cand.eraMatch && (
+                            <CountryEraBadge>시대 일치</CountryEraBadge>
+                          )}
+                          <CountryQuickResultMeta>
+                            {cand.isHistorical
+                              ? cand.periodLabel
+                                ? `역사 · ${cand.periodLabel}`
+                                : '역사 국가'
+                              : '현대 국가'}
+                          </CountryQuickResultMeta>
+                        </CountryQuickResultItem>
+                      ))
+                    ) : (
+                      <CountryQuickEmpty>
+                        일치하는 국가가 없습니다. 우측 「국가 · 시대 선택」에서
+                        전체 목록을 확인하세요.
+                      </CountryQuickEmpty>
+                    )}
+                  </CountryQuickResultBox>
+                )}
+              </CountryQuickSearchWrap>
+
+              <S.AddButton
+                type="button"
+                disabled={lockCountryAndDepartment}
+                onClick={() => {
+                  playClickSound()
+                  setCountryModalOpen(true)
+                }}
+              >
+                <FiPlus size={15} />
+                국가 · 시대 선택
+              </S.AddButton>
+            </CountryQuickSearchRow>
+          )}
+
+          {/* 역사국가 존속기간 불일치 소프트 경고 + 원클릭 시대 교체 (BasicInfoSection F33 규격) */}
+          {historicalLifespanWarning && (
+            <AlertBox variant="warning">
+              <LifespanWarnRow>
+                <span>
+                  <strong>{historicalLifespanWarning.countryName}</strong> —{' '}
+                  {historicalLifespanWarning.message}.
+                </span>
+                {!lockCountryAndDepartment &&
+                  historicalLifespanWarning.replacementEra && (
+                    <LifespanReplaceBtn
+                      type="button"
+                      onClick={() => {
+                        const rep = historicalLifespanWarning.replacementEra!
+                        playClickSound()
+                        setHistoricalCountryId(rep.id)
+                        setCountryName(rep.name)
+                        setCountryFlagEmoji('🏛️')
+                        setCountryEnglishName(rep.enName || '')
+                        setAdministrationDepartmentId('')
+                        markDirty(true)
+                      }}
+                    >
+                      {historicalLifespanWarning.replacementEra.name}(
+                      {formatCountryPeriod(
+                        historicalLifespanWarning.replacementEra,
+                        { variant: 'short' },
+                      )}
+                      )으로 바꾸기
+                    </LifespanReplaceBtn>
+                  )}
+              </LifespanWarnRow>
+            </AlertBox>
+          )}
+        </S.FormField>
+      </S.FormRow>
+
+      {/* 군종 (EventRegisterModal S.CategoryGrid + S.CategoryCard 규격) */}
+      <S.FormRow>
+        <S.FormLabel as="div">
+          군종<OptionalTag>(선택)</OptionalTag>
+        </S.FormLabel>
+        <S.FormField>
+          <S.CategoryGrid role="radiogroup" aria-label="군종 선택">
+            {MILITARY_BRANCHES.map((branchItem) => {
+              const isSelected = branch === branchItem.value
+              const Icon = branchItem.Icon
+              const catCssVars = {
+                '--cat-rgb': branchItem.rgb,
+                '--cat-text': isDarkMode
+                  ? branchItem.textDark
+                  : branchItem.text,
+                '--cat-accent': branchItem.accent,
+              } as React.CSSProperties
+
+              return (
+                <S.CategoryCard
+                  key={branchItem.value}
+                  type="button"
+                  $selected={isSelected}
+                  style={catCssVars}
+                  aria-pressed={isSelected}
+                  onClick={() => {
+                    playClickSound()
+                    setBranch(isSelected ? '' : branchItem.value)
+                    markDirty(true)
+                  }}
+                >
+                  <S.CategoryIcon $selected={isSelected}>
+                    <Icon size={13} strokeWidth={2.2} />
+                  </S.CategoryIcon>
+                  <S.CategoryLabel>{branchItem.label}</S.CategoryLabel>
+                </S.CategoryCard>
+              )
+            })}
+          </S.CategoryGrid>
+        </S.FormField>
+      </S.FormRow>
+
+      {/* 부대 유형 · 제대 (EventRegisterModal EventTypeField 규격: 빠른 검색 + 추천 칩 + 다른 제대 더보기) */}
+      <S.FormRow>
+        <S.FormLabel as="div">
+          부대 유형 · 제대<OptionalTag>(선택)</OptionalTag>
+        </S.FormLabel>
+        <S.FormField>
+          <UnitTypeContainer>
+            <UnitTypeQuickSearchWrap ref={unitTypeSearchWrapRef}>
+              <CountryQuickSearchInput
+                type="text"
+                value={unitTypeSearchQuery}
+                placeholder="제대 빠른 검색 후 Enter (예: 최고사령부, 집단군, 야전군, 사단, 함대, 비행단…)"
+                aria-label="부대 유형 · 제대 빠른 검색"
+                onFocus={() => setUnitTypeSearchOpen(true)}
+                onKeyDown={(keyEvent) => {
+                  if (keyEvent.key === 'Escape') {
+                    keyEvent.stopPropagation()
+                    setUnitTypeSearchOpen(false)
+                    return
+                  }
+                  if (
+                    keyEvent.key === 'Enter' &&
+                    unitTypeQuickMatches.length > 0
+                  ) {
+                    keyEvent.preventDefault()
+                    const firstMatch = unitTypeQuickMatches[0]!
+                    playClickSound()
+                    setUnitType(firstMatch.value)
+                    setUnitTypeSearchQuery('')
+                    setUnitTypeSearchOpen(false)
+                    markDirty(true)
+                  }
+                }}
+                onChange={(changeEvent) => {
+                  setUnitTypeSearchQuery(changeEvent.target.value)
+                  setUnitTypeSearchOpen(true)
+                }}
+              />
+              {unitTypeSearchOpen && unitTypeSearchQuery.trim().length > 0 && (
+                <CountryQuickResultBox
+                  role="listbox"
+                  aria-label="부대 유형 검색 결과"
+                >
+                  {unitTypeQuickMatches.length > 0 ? (
+                    unitTypeQuickMatches.map((item) => (
+                      <CountryQuickResultItem
+                        key={item.value}
+                        type="button"
+                        onMouseDown={(mouseEvent) => mouseEvent.preventDefault()}
+                        onClick={() => {
+                          playClickSound()
+                          setUnitType(item.value)
+                          setUnitTypeSearchQuery('')
+                          setUnitTypeSearchOpen(false)
+                          markDirty(true)
+                        }}
+                      >
+                        <CountryQuickResultName>
+                          {item.label}
+                        </CountryQuickResultName>
+                        <CountryQuickResultMeta>
+                          {item.group}
+                        </CountryQuickResultMeta>
+                      </CountryQuickResultItem>
+                    ))
+                  ) : (
+                    <CountryQuickEmpty>
+                      일치하는 부대 유형이 없습니다
+                    </CountryQuickEmpty>
+                  )}
+                </CountryQuickResultBox>
+              )}
+            </UnitTypeQuickSearchWrap>
+
+            <KitChipGroup role="radiogroup" aria-label="주요 부대 유형">
+              <KitChoiceChip
+                type="button"
+                $selected={!unitType}
+                aria-pressed={!unitType}
+                onClick={() => {
+                  playClickSound()
+                  setUnitType('')
+                  markDirty(true)
+                }}
+              >
+                선택 안 함
+              </KitChoiceChip>
+              {primaryUnitTypes.map((item) => {
+                const selected = unitType === item.value
+                return (
+                  <KitChoiceChip
+                    key={item.value}
+                    type="button"
+                    $selected={selected}
+                    aria-pressed={selected}
+                    title={item.label}
+                    onClick={() => {
+                      playClickSound()
+                      setUnitType(selected ? '' : item.value)
+                      markDirty(true)
+                    }}
+                  >
+                    {item.shortLabel}
+                  </KitChoiceChip>
+                )
+              })}
+              {extraUnitTypeCount > 0 && (
+                <MoreToggleChip
+                  type="button"
+                  aria-expanded={showAllUnitTypes}
+                  onClick={() => setShowAllUnitTypes((prev) => !prev)}
+                >
+                  {showAllUnitTypes
+                    ? '접기'
+                    : `+ 다른 제대 더 보기 (${extraUnitTypeCount})`}
+                </MoreToggleChip>
+              )}
+            </KitChipGroup>
+
+            {showAllUnitTypes && (
+              <ExtraGroupsStack>
+                {UNIT_TYPE_GROUPS.map((groupLabel) => {
+                  const groupItems = UNIT_TYPES.filter(
+                    (item) => item.group === groupLabel,
+                  )
+                  return (
+                    <ExtraGroupBlock key={groupLabel}>
+                      <KitGroupLabel>{groupLabel}</KitGroupLabel>
+                      <KitChipGroup>
+                        {groupItems.map((item) => {
+                          const selected = unitType === item.value
+                          return (
+                            <KitChoiceChip
+                              key={item.value}
+                              type="button"
+                              $selected={selected}
+                              aria-pressed={selected}
+                              title={item.label}
+                              onClick={() => {
+                                playClickSound()
+                                setUnitType(selected ? '' : item.value)
+                                markDirty(true)
+                              }}
+                            >
+                              {item.shortLabel}
+                            </KitChoiceChip>
+                          )
+                        })}
+                      </KitChipGroup>
+                    </ExtraGroupBlock>
+                  )
+                })}
+              </ExtraGroupsStack>
+            )}
+          </UnitTypeContainer>
+        </S.FormField>
+      </S.FormRow>
+
+      {/* 부대 마크 · 휘장 (register-form-kit KitUploadStrip / KitUploadFilled 정본 규격) */}
+      <S.FormRow $noBorder>
+        <S.FormLabel as="div">
+          부대 마크 · 휘장<OptionalTag>(선택)</OptionalTag>
+        </S.FormLabel>
+        <S.FormField>
+          {insigniaUrl ? (
+            <KitUploadFilled
+              $dragging={insigniaDragOver}
+              onDragOver={(dragEvent) => {
+                dragEvent.preventDefault()
+                if (!insigniaUploading) setInsigniaDragOver(true)
+              }}
+              onDragLeave={() => setInsigniaDragOver(false)}
+              onDrop={(dropEvent) => {
+                dropEvent.preventDefault()
+                setInsigniaDragOver(false)
+                const droppedFile = dropEvent.dataTransfer.files?.[0]
+                if (droppedFile) void handleInsigniaFileUpload(droppedFile)
+              }}
+            >
+              <KitUploadThumb
+                src={getUploadImageUrl(insigniaUrl)}
+                alt="부대 휘장 미리보기"
+                onClick={() => {
+                  if (!insigniaUploading) insigniaInputRef.current?.click()
+                }}
+              />
+              <KitUploadText>
+                <strong>부대 마크 · 휘장이 등록되었습니다</strong>
+                <span>
+                  드래그 · 클립보드 붙여넣기(⌘V) 또는 변경 버튼으로 교체할 수
+                  있습니다
+                </span>
+              </KitUploadText>
+              <KitUploadActions>
+                <S.UploadButton
+                  type="button"
+                  disabled={insigniaUploading}
+                  onClick={() => insigniaInputRef.current?.click()}
+                >
+                  {insigniaUploading ? '업로드 중…' : '변경'}
+                </S.UploadButton>
+                <KitUploadRemove
+                  type="button"
+                  disabled={insigniaUploading}
+                  aria-label="부대 휘장 제거"
+                  title="부대 휘장 제거"
+                  onClick={() => {
+                    playClickSound()
+                    setInsigniaUrl('')
+                    markDirty(true)
+                  }}
+                >
+                  <FiX size={16} />
+                </KitUploadRemove>
+              </KitUploadActions>
+            </KitUploadFilled>
+          ) : (
+            <KitUploadStrip
+              type="button"
+              $dragging={insigniaDragOver}
+              disabled={insigniaUploading}
+              onClick={() => insigniaInputRef.current?.click()}
+              onDragOver={(dragEvent) => {
+                dragEvent.preventDefault()
+                if (!insigniaUploading) setInsigniaDragOver(true)
+              }}
+              onDragLeave={() => setInsigniaDragOver(false)}
+              onDrop={(dropEvent) => {
+                dropEvent.preventDefault()
+                setInsigniaDragOver(false)
+                const droppedFile = dropEvent.dataTransfer.files?.[0]
+                if (droppedFile) void handleInsigniaFileUpload(droppedFile)
+              }}
+            >
+              <FiImage size={16} />
+              <span>
+                {insigniaUploading
+                  ? '휘장 업로드 중…'
+                  : '클릭하거나 이미지를 드래그 · 붙여넣기(⌘V)하여 휘장 추가'}
+              </span>
+              <small>PNG, JPG, WEBP, SVG · 최대 10MB</small>
+            </KitUploadStrip>
+          )}
+        </S.FormField>
+      </S.FormRow>
+    </FormGroupSection>
+  )
+
+  // ==========================================================================
+  // 2. 소속 · 지휘 · 계보 섹션 (BasicInfoSection ParentEventCard + ParticipantRow 규격)
+  // ==========================================================================
+  const commandSectionNode = (
+    <FormGroupSection
+      id="military-unit-section-command"
+      data-form-section="command"
+      onFocusCapture={() => setActiveSection('command')}
+    >
+      <FormGroupHeader>
+        <FormGroupTitle>소속 · 지휘 · 계보</FormGroupTitle>
+        <FormGroupRightCluster>
+          <FormGroupSummaryBadge>
+            지휘관 {totalCommanderCount}명 · 계보 {totalLineageCount}건
+          </FormGroupSummaryBadge>
+          {layoutMode === 'split' && (
+            <SplitRatioGroup
+              role="group"
+              aria-label="좌우 분할 폭 비율"
+              title="좌우 컬럼 폭 비율 조절"
+            >
+              <SplitRatioBtn
+                type="button"
+                $active={splitRatio === 'left-wide'}
+                onClick={() => setSplitRatio('left-wide')}
+              >
+                좌측 넓게
+              </SplitRatioBtn>
+              <SplitRatioBtn
+                type="button"
+                $active={splitRatio === 'equal'}
+                onClick={() => setSplitRatio('equal')}
+              >
+                5:5
+              </SplitRatioBtn>
+              <SplitRatioBtn
+                type="button"
+                $active={splitRatio === 'right-wide'}
+                onClick={() => setSplitRatio('right-wide')}
+              >
+                우측 넓게
+              </SplitRatioBtn>
+            </SplitRatioGroup>
+          )}
+        </FormGroupRightCluster>
+      </FormGroupHeader>
+
+      {/* 상위 부대 · 사령부 (BasicInfoSection ParentEventCard + 빠른 검색 + 상급부대 칩 규격) */}
+      <S.FormRow>
+        <S.FormLabel as="div">
+          상위 부대 · 사령부<OptionalTag>(선택)</OptionalTag>
+        </S.FormLabel>
+        <S.FormField>
+          {selectedParentUnit ? (
+            <ParentEventCard>
+              <ParentEventHeaderRow>
+                <ParentEventBadge>상위 편제</ParentEventBadge>
+                <ParentEventTitle>
+                  🛡️ {selectedParentUnit.name}
+                  {selectedParentUnit.abbreviation
+                    ? ` (${selectedParentUnit.abbreviation})`
+                    : ''}
+                </ParentEventTitle>
+                {selectedParentUnit.unitType && (
+                  <RelatedEventDateMeta>
+                    {UNIT_TYPES.find(
+                      (typeOpt) => typeOpt.value === selectedParentUnit.unitType,
+                    )?.shortLabel ?? selectedParentUnit.unitType}
+                  </RelatedEventDateMeta>
+                )}
+                <ParticipantRemove
+                  type="button"
+                  aria-label="상위 부대 연결 해제"
+                  title="상위 부대 연결 해제 (독립 편제로 전환)"
+                  onClick={() => {
+                    playClickSound()
+                    setParentUnitId('')
+                    markDirty(true)
+                  }}
+                >
+                  <FiX size={15} />
+                </ParticipantRemove>
+              </ParentEventHeaderRow>
+
+              {((parentInheritedEstParts &&
+                (establishedYear !== parentInheritedEstParts.year ||
+                  establishedEra !== parentInheritedEstParts.era)) ||
+                (selectedParentUnit.garrison &&
+                  garrisonPlace?.displayName !== selectedParentUnit.garrison) ||
+                (!lockCountryAndDepartment &&
+                  selectedParentUnit.administrationDepartmentId &&
+                  administrationDepartmentId !==
+                    selectedParentUnit.administrationDepartmentId) ||
+                (selectedParentUnit.branch &&
+                  branch !== selectedParentUnit.branch)) && (
+                <ParticipantRoleBar>
+                  <RecentParticipantBar>
+                    <RecentParticipantLabel>이어받기</RecentParticipantLabel>
+                    {parentInheritedEstParts &&
+                      (establishedYear !== parentInheritedEstParts.year ||
+                        establishedEra !== parentInheritedEstParts.era) && (
+                        <RecentParticipantChip
+                          type="button"
+                          onClick={() => {
+                            playClickSound()
+                            setEstablishedEra(parentInheritedEstParts.era)
+                            setEstablishedYear(parentInheritedEstParts.year)
+                            markDirty(true)
+                          }}
+                        >
+                          <span>+</span>
+                          <span>
+                            창설 연도 맞춤 (
+                            {parentInheritedEstParts.era === 'BC' ? 'BC ' : ''}
+                            {parentInheritedEstParts.year}년)
+                          </span>
+                        </RecentParticipantChip>
+                      )}
+                    {selectedParentUnit.garrison &&
+                      garrisonPlace?.displayName !==
+                        selectedParentUnit.garrison && (
+                        <RecentParticipantChip
+                          type="button"
+                          onClick={() => {
+                            playClickSound()
+                            const parentGarrison = selectedParentUnit.garrison!
+                            setGarrisonPlace({
+                              displayName: parentGarrison,
+                              shortName: parentGarrison,
+                              isManual: true,
+                            })
+                            markDirty(true)
+                          }}
+                        >
+                          <span>+</span>
+                          <span>
+                            주둔지 불러오기 ({selectedParentUnit.garrison})
+                          </span>
+                        </RecentParticipantChip>
+                      )}
+                    {!lockCountryAndDepartment &&
+                      selectedParentUnit.administrationDepartmentId &&
+                      administrationDepartmentId !==
+                        selectedParentUnit.administrationDepartmentId && (
+                        <RecentParticipantChip
+                          type="button"
+                          onClick={() => {
+                            playClickSound()
+                            setAdministrationDepartmentId(
+                              selectedParentUnit.administrationDepartmentId!,
+                            )
+                            markDirty(true)
+                          }}
+                        >
+                          <span>+</span>
+                          <span>소관 부처 맞춤</span>
+                        </RecentParticipantChip>
+                      )}
+                    {selectedParentUnit.branch &&
+                      branch !== selectedParentUnit.branch && (
+                        <RecentParticipantChip
+                          type="button"
+                          onClick={() => {
+                            playClickSound()
+                            setBranch(selectedParentUnit.branch!)
+                            markDirty(true)
+                          }}
+                        >
+                          <span>+</span>
+                          <span>군종 맞춤</span>
+                        </RecentParticipantChip>
+                      )}
+                  </RecentParticipantBar>
+                </ParticipantRoleBar>
+              )}
+            </ParentEventCard>
+          ) : (
+            <>
+              <CountryQuickSearchRow>
+                <CountryQuickSearchWrap>
+                  <CountryQuickSearchInput
+                    type="text"
+                    value={parentUnitQuickQuery}
+                    placeholder="상위 부대·사령부 빠른 검색 후 Enter (비워두면 최상위 독립 편제)"
+                    aria-label="상위 부대·사령부 빠른 검색"
+                    onFocus={() => setParentUnitQuickFocused(true)}
+                    onBlur={() => {
+                      window.setTimeout(
+                        () => setParentUnitQuickFocused(false),
+                        160,
+                      )
+                    }}
+                    onKeyDown={(keyEvent) => {
+                      if (keyEvent.key === 'Escape') {
+                        keyEvent.stopPropagation()
+                        setParentUnitQuickFocused(false)
+                        return
+                      }
+                      if (
+                        keyEvent.key === 'Enter' &&
+                        parentUnitQuickMatches.length > 0
+                      ) {
+                        keyEvent.preventDefault()
+                        const topUnit = parentUnitQuickMatches[0]!
+                        playClickSound()
+                        setParentUnitId(topUnit.id)
+                        setParentUnitQuickQuery('')
+                        setParentUnitQuickFocused(false)
+                        markDirty(true)
+                      }
+                    }}
+                    onChange={(changeEvent) =>
+                      setParentUnitQuickQuery(changeEvent.target.value)
+                    }
+                  />
+                  {parentUnitQuickFocused &&
+                    parentUnitQuickQuery.trim().length > 0 && (
+                      <CountryQuickResultBox
+                        role="listbox"
+                        aria-label="상위 부대 검색 결과"
+                      >
+                        {parentUnitQuickMatches.length > 0 ? (
+                          parentUnitQuickMatches.map((candUnit) => (
+                            <CountryQuickResultItem
+                              key={candUnit.id}
+                              type="button"
+                              onMouseDown={(mouseEvent) =>
+                                mouseEvent.preventDefault()
+                              }
+                              onClick={() => {
+                                playClickSound()
+                                setParentUnitId(candUnit.id)
+                                setParentUnitQuickQuery('')
+                                setParentUnitQuickFocused(false)
+                                markDirty(true)
+                              }}
+                            >
+                              <CountryQuickResultFlag>🛡️</CountryQuickResultFlag>
+                              <CountryQuickResultName>
+                                {candUnit.name}
+                                {candUnit.abbreviation
+                                  ? ` (${candUnit.abbreviation})`
+                                  : ''}
+                              </CountryQuickResultName>
+                              <CountryQuickResultMeta>
+                                {candUnit.historicalCountry?.name ??
+                                  candUnit.country?.name ??
+                                  ''}
+                              </CountryQuickResultMeta>
+                            </CountryQuickResultItem>
+                          ))
+                        ) : (
+                          <CountryQuickEmpty>
+                            일치하는 상위 부대가 없습니다
+                          </CountryQuickEmpty>
+                        )}
+                      </CountryQuickResultBox>
+                    )}
+                </CountryQuickSearchWrap>
+              </CountryQuickSearchRow>
+
+              {(!isEdit && lastCreatedUnit) ||
+              prioritizedParentUnits.length > 0 ? (
+                <RecentParticipantBar>
+                  <RecentParticipantLabel>상급 사령부</RecentParticipantLabel>
+                  {!isEdit && lastCreatedUnit && (
+                    <RecentParticipantChip
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        setParentUnitId(lastCreatedUnit.id)
+                        markDirty(true)
+                      }}
+                    >
+                      <span>↳</span>
+                      <span>방금 등록: {lastCreatedUnit.name}</span>
+                    </RecentParticipantChip>
+                  )}
+                  {(showAllParentUnitCandidates
+                    ? prioritizedParentUnits.slice(0, 8)
+                    : prioritizedParentUnits.slice(0, 3)
+                  ).map((candUnit) => (
+                    <RecentParticipantChip
+                      key={candUnit.id}
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        setParentUnitId(candUnit.id)
+                        markDirty(true)
+                      }}
+                    >
+                      <span>+</span>
+                      <span>
+                        {candUnit.name}
+                        {candUnit.abbreviation
+                          ? ` (${candUnit.abbreviation})`
+                          : ''}
+                      </span>
+                    </RecentParticipantChip>
+                  ))}
+                  {prioritizedParentUnits.length > 3 && (
+                    <RecentMoreChip
+                      type="button"
+                      onClick={() =>
+                        setShowAllParentUnitCandidates((prev) => !prev)
+                      }
+                    >
+                      {showAllParentUnitCandidates
+                        ? '접기'
+                        : `+${Math.min(5, prioritizedParentUnits.length - 3)} 더보기`}
+                    </RecentMoreChip>
+                  )}
+                </RecentParticipantBar>
+              ) : null}
+            </>
+          )}
+        </S.FormField>
+      </S.FormRow>
+
+      {/* 소관 군정 부처 (ParentEventCard + 빠른 검색 + 국방·군정 추천 칩 규격) */}
+      <S.FormRow>
+        <S.FormLabel as="div">
+          소관 군정 부처<OptionalTag>(선택)</OptionalTag>
+        </S.FormLabel>
+        <S.FormField>
+          {selectedAdminDept ? (
+            <ParentEventCard>
+              <ParentEventHeaderRow>
+                <ParentEventBadge>소관 부처</ParentEventBadge>
+                <ParentEventTitle>
+                  🏛️ {selectedAdminDept.name}
+                  {selectedAdminDept.abbreviation
+                    ? ` (${selectedAdminDept.abbreviation})`
+                    : ''}
+                </ParentEventTitle>
+                {selectedAdminDept.historicalCountry?.name && (
+                  <RelatedEventDateMeta>
+                    {selectedAdminDept.historicalCountry.name}
+                  </RelatedEventDateMeta>
+                )}
+                {!lockCountryAndDepartment && (
+                  <ParticipantRemove
+                    type="button"
+                    aria-label="소관 부처 연결 해제"
+                    title="소관 부처 연결 해제 (독립 최고사령부 등)"
+                    onClick={() => {
+                      playClickSound()
+                      setAdministrationDepartmentId('')
+                      markDirty(true)
+                    }}
+                  >
+                    <FiX size={15} />
+                  </ParticipantRemove>
+                )}
+              </ParentEventHeaderRow>
+            </ParentEventCard>
+          ) : (
+            <>
+              <CountryQuickSearchRow>
+                <CountryQuickSearchWrap>
+                  <CountryQuickSearchInput
+                    type="text"
+                    disabled={!hasCountry || lockCountryAndDepartment}
+                    value={adminDeptQuickQuery}
+                    placeholder={
+                      hasCountry
+                        ? '국방부·전쟁성·병조 등 소관 부처 검색 후 Enter (독립 사령부는 비워둠)'
+                        : '먼저 소속 국가 · 시대를 선택하세요'
+                    }
+                    aria-label="소관 국방·군정 부처 빠른 검색"
+                    onFocus={() => setAdminDeptQuickFocused(true)}
+                    onBlur={() => {
+                      window.setTimeout(
+                        () => setAdminDeptQuickFocused(false),
+                        160,
+                      )
+                    }}
+                    onKeyDown={(keyEvent) => {
+                      if (keyEvent.key === 'Escape') {
+                        keyEvent.stopPropagation()
+                        setAdminDeptQuickFocused(false)
+                        return
+                      }
+                      if (
+                        keyEvent.key === 'Enter' &&
+                        adminDeptQuickMatches.length > 0
+                      ) {
+                        keyEvent.preventDefault()
+                        const topDept = adminDeptQuickMatches[0]!
+                        playClickSound()
+                        setAdministrationDepartmentId(topDept.id)
+                        setAdminDeptQuickQuery('')
+                        setAdminDeptQuickFocused(false)
+                        markDirty(true)
+                      }
+                    }}
+                    onChange={(changeEvent) =>
+                      setAdminDeptQuickQuery(changeEvent.target.value)
+                    }
+                  />
+                  {adminDeptQuickFocused &&
+                    adminDeptQuickQuery.trim().length > 0 && (
+                      <CountryQuickResultBox
+                        role="listbox"
+                        aria-label="소관 부처 검색 결과"
+                      >
+                        {adminDeptQuickMatches.length > 0 ? (
+                          adminDeptQuickMatches.map((deptItem) => (
+                            <CountryQuickResultItem
+                              key={deptItem.id}
+                              type="button"
+                              onMouseDown={(mouseEvent) =>
+                                mouseEvent.preventDefault()
+                              }
+                              onClick={() => {
+                                playClickSound()
+                                setAdministrationDepartmentId(deptItem.id)
+                                setAdminDeptQuickQuery('')
+                                setAdminDeptQuickFocused(false)
+                                markDirty(true)
+                              }}
+                            >
+                              <CountryQuickResultFlag>🏛️</CountryQuickResultFlag>
+                              <CountryQuickResultName>
+                                {deptItem.name}
+                                {deptItem.abbreviation
+                                  ? ` (${deptItem.abbreviation})`
+                                  : ''}
+                              </CountryQuickResultName>
+                              <CountryQuickResultMeta>
+                                {deptItem.historicalCountry?.name ?? '중앙부처'}
+                              </CountryQuickResultMeta>
+                            </CountryQuickResultItem>
+                          ))
+                        ) : (
+                          <CountryQuickEmpty>
+                            일치하는 행정부처가 없습니다
+                          </CountryQuickEmpty>
+                        )}
+                      </CountryQuickResultBox>
+                    )}
+                </CountryQuickSearchWrap>
+              </CountryQuickSearchRow>
+
+              {!lockCountryAndDepartment && prioritizedAdminDepts.length > 0 && (
+                <RecentParticipantBar>
+                  <RecentParticipantLabel>군정 · 부처</RecentParticipantLabel>
+                  {(showAllAdminDeptCandidates
+                    ? prioritizedAdminDepts.slice(0, 8)
+                    : prioritizedAdminDepts.slice(0, 3)
+                  ).map((deptItem) => (
+                    <RecentParticipantChip
+                      key={deptItem.id}
+                      type="button"
+                      onClick={() => {
+                        playClickSound()
+                        setAdministrationDepartmentId(deptItem.id)
+                        markDirty(true)
+                      }}
+                    >
+                      <span>+</span>
+                      <span>
+                        🏛️ {deptItem.name}
+                        {deptItem.abbreviation
+                          ? ` (${deptItem.abbreviation})`
+                          : ''}
+                      </span>
+                    </RecentParticipantChip>
+                  ))}
+                  {prioritizedAdminDepts.length > 3 && (
+                    <RecentMoreChip
+                      type="button"
+                      onClick={() =>
+                        setShowAllAdminDeptCandidates((prev) => !prev)
+                      }
+                    >
+                      {showAllAdminDeptCandidates
+                        ? '접기'
+                        : `+${Math.min(5, prioritizedAdminDepts.length - 3)} 더보기`}
+                    </RecentMoreChip>
+                  )}
+                </RecentParticipantBar>
+              )}
+            </>
+          )}
+        </S.FormField>
+      </S.FormRow>
+
+      {/* 역대 지휘관 · 참모 (ParticipantRow 카드 + 인라인 인물 빠른 검색 + InlineDateField 규격) */}
+      <S.FormRow>
+        <S.FormLabel as="div">
+          역대 지휘관 · 참모<OptionalTag>(선택)</OptionalTag>
+        </S.FormLabel>
+        <S.FormField>
+          <ParticipantList>
+            {isEdit && editingUnitId ? (
+              <>
+                {unitTenures.map((tenureItem) => {
+                  const personDisplay = tenureItem.person
+                    ? getPersonDisplayName(tenureItem.person)
+                    : '인물 미상'
+                  return (
+                    <ParticipantRow key={tenureItem.id}>
+                      <ParticipantHeaderRow>
+                        <ParentEventBadge>
+                          {tenureItem.ordinal != null
+                            ? `제${tenureItem.ordinal}대`
+                            : '지휘관'}
+                        </ParentEventBadge>
+                        {tenureItem.rankTitle && (
+                          <CommanderRankBadge>
+                            {tenureItem.rankTitle}
+                          </CommanderRankBadge>
+                        )}
+                        <ParentEventTitle>{personDisplay}</ParentEventTitle>
+                        {tenureItem.title && (
+                          <RelatedEventDateMeta>
+                            {tenureItem.title}
+                          </RelatedEventDateMeta>
+                        )}
+                        <RelatedEventDateMeta>
+                          {formatTenureDateSpan(tenureItem)}
+                        </RelatedEventDateMeta>
+                        <ParticipantActionCluster>
+                          <S.AddButton
+                            type="button"
+                            onClick={() => {
+                              playClickSound()
+                              setEditingAppointmentTenure({
+                                id: tenureItem.id,
+                                personId:
+                                  tenureItem.personId ??
+                                  tenureItem.person?.id ??
+                                  null,
+                                personName: personDisplay,
+                                positionType:
+                                  tenureItem.positionDefinition?.positionType ??
+                                  'MILITARY_COMMANDER',
+                                positionDefinitionId:
+                                  tenureItem.positionDefinition?.id ?? null,
+                                title:
+                                  tenureItem.title ??
+                                  tenureItem.positionDefinition?.title ??
+                                  null,
+                                rankTitle: tenureItem.rankTitle ?? null,
+                                ordinal: tenureItem.ordinal ?? null,
+                                partyId: tenureItem.partyId ?? null,
+                                militaryUnitId: editingUnitId,
+                                startDate: tenureItem.startDate,
+                                endDate: tenureItem.endDate,
+                                startEra: tenureItem.startEra,
+                                startYear: tenureItem.startYear,
+                                startMonth: tenureItem.startMonth,
+                                startDay: tenureItem.startDay,
+                                endEra: tenureItem.endEra,
+                                endYear: tenureItem.endYear,
+                                endMonth: tenureItem.endMonth,
+                                endDay: tenureItem.endDay,
+                              })
+                              setAppointmentModalOpen(true)
+                            }}
+                          >
+                            <FiEdit2 size={12} />
+                            편집
+                          </S.AddButton>
+                          <KitRemoveButton
+                            type="button"
+                            aria-label="지휘관 재임 삭제"
+                            title="지휘관 재임 삭제"
+                            onClick={() =>
+                              void handleDeleteUnitTenure(tenureItem)
+                            }
+                          >
+                            <FiX size={15} />
+                          </KitRemoveButton>
+                        </ParticipantActionCluster>
+                      </ParticipantHeaderRow>
+                    </ParticipantRow>
+                  )
+                })}
+                <CountryQuickSearchRow>
+                  <CountryQuickSearchWrap>
+                    <CountryQuickSearchInput
+                      type="text"
+                      value={commanderQuickQuery}
+                      placeholder="인물 이름 빠른 검색 후 Enter (또는 우측 임명 추가 클릭)…"
+                      aria-label="지휘관 인물 빠른 검색"
+                      onFocus={() => {
+                        setCommanderQuickFocused(true)
+                        ensurePersonsLoaded()
+                      }}
+                      onBlur={() => {
+                        window.setTimeout(
+                          () => setCommanderQuickFocused(false),
+                          160,
+                        )
+                      }}
+                      onKeyDown={(keyEvent) => {
+                        if (keyEvent.key === 'Escape') {
+                          keyEvent.stopPropagation()
+                          setCommanderQuickFocused(false)
+                          return
+                        }
+                        if (
+                          keyEvent.key === 'Enter' &&
+                          commanderQuickMatches.length > 0
+                        ) {
+                          keyEvent.preventDefault()
+                          handleQuickSelectCommander(commanderQuickMatches[0]!)
+                        }
+                      }}
+                      onChange={(changeEvent) =>
+                        setCommanderQuickQuery(changeEvent.target.value)
+                      }
+                    />
+                    {commanderQuickFocused &&
+                      commanderQuickQuery.trim().length > 0 && (
+                        <CountryQuickResultBox
+                          role="listbox"
+                          aria-label="지휘관 인물 검색 결과"
+                        >
+                          {personsLoading ? (
+                            <CountryQuickEmpty>
+                              인물 목록을 불러오는 중…
+                            </CountryQuickEmpty>
+                          ) : commanderQuickMatches.length > 0 ? (
+                            commanderQuickMatches.map((personItem) => {
+                              const display =
+                                getPersonDisplayName({
+                                  name: personItem.name ?? '',
+                                  surname: personItem.surname ?? undefined,
+                                  middleName:
+                                    personItem.middleName ?? undefined,
+                                  nameDisplayOrder:
+                                    personItem.nameDisplayOrder ?? null,
+                                  country: personItem.country ?? undefined,
+                                }) || personItem.name
+                              return (
+                                <CountryQuickResultItem
+                                  key={personItem.id}
+                                  type="button"
+                                  onMouseDown={(mouseEvent) =>
+                                    mouseEvent.preventDefault()
+                                  }
+                                  onClick={() =>
+                                    handleQuickSelectCommander(personItem)
+                                  }
+                                >
+                                  <CountryQuickResultFlag>
+                                    👤
+                                  </CountryQuickResultFlag>
+                                  <CountryQuickResultName>
+                                    {display}
+                                  </CountryQuickResultName>
+                                  <CountryQuickResultMeta>
+                                    {personItem.historicalCountry?.name ??
+                                      personItem.country?.name ??
+                                      ''}
+                                  </CountryQuickResultMeta>
+                                </CountryQuickResultItem>
+                              )
+                            })
+                          ) : (
+                            <CountryQuickEmpty>
+                              일치하는 인물이 없습니다
+                            </CountryQuickEmpty>
+                          )}
+                        </CountryQuickResultBox>
+                      )}
+                  </CountryQuickSearchWrap>
+                  <S.AddButton
+                    type="button"
+                    onClick={() => {
+                      playClickSound()
+                      setEditingAppointmentTenure(null)
+                      setAppointmentModalOpen(true)
+                    }}
+                  >
+                    <FiPlus size={15} />
+                    지휘관 · 참모 임명 추가
+                  </S.AddButton>
+                </CountryQuickSearchRow>
+              </>
+            ) : (
+              <>
+                {commanderRows.map((rowItem, rowIndex) => (
+                  <ParticipantRow key={`${rowItem.personId}-${rowIndex}`}>
+                    <ParticipantHeaderRow>
+                      <ParentEventBadge>
+                        {rowItem.ordinal
+                          ? `제${rowItem.ordinal}대`
+                          : `지휘관 ${rowIndex + 1}`}
+                      </ParentEventBadge>
+                      <ParentEventTitle>{rowItem.personName}</ParentEventTitle>
+                      <ParticipantRemove
+                        type="button"
+                        aria-label={`${rowItem.personName} 제거`}
+                        onClick={() => {
+                          playClickSound()
+                          setCommanderRows((prev) =>
+                            prev.filter((_, idx) => idx !== rowIndex),
+                          )
+                          markDirty(true)
+                        }}
+                      >
+                        <FiX size={15} />
+                      </ParticipantRemove>
+                    </ParticipantHeaderRow>
+
+                    <ParticipantRoleBar>
+                      <ParticipantRoleChipGroup
+                        role="radiogroup"
+                        aria-label="지휘관 보직 빠른 선택"
+                      >
+                        {commanderRolePresets.map((presetRole) => (
+                          <ParticipantRoleChipBtn
+                            key={presetRole}
+                            type="button"
+                            $selected={rowItem.roleTitle === presetRole}
+                            onClick={() => {
+                              setCommanderRows((prev) =>
+                                prev.map((item, idx) =>
+                                  idx === rowIndex
+                                    ? { ...item, roleTitle: presetRole }
+                                    : item,
+                                ),
+                              )
+                              markDirty(true)
+                            }}
+                          >
+                            {presetRole}
+                          </ParticipantRoleChipBtn>
+                        ))}
+                      </ParticipantRoleChipGroup>
+
+                      <CompactInlineFieldsRow>
+                        <ParticipantNoteInput
+                          type="text"
+                          placeholder="직책·보직명 * (예: 사령관, 참모장)"
+                          value={rowItem.roleTitle}
+                          onChange={(changeEvent) => {
+                            const nextRole = changeEvent.target.value
+                            setCommanderRows((prev) =>
+                              prev.map((item, idx) =>
+                                idx === rowIndex
+                                  ? { ...item, roleTitle: nextRole }
+                                  : item,
+                              ),
+                            )
+                            markDirty(true)
+                          }}
+                        />
+                        <ParticipantNoteInput
+                          type="text"
+                          placeholder="계급 (예: 원수, 상장, 중장)"
+                          value={rowItem.rankTitle}
+                          onChange={(changeEvent) => {
+                            const nextRank = changeEvent.target.value
+                            setCommanderRows((prev) =>
+                              prev.map((item, idx) =>
+                                idx === rowIndex
+                                  ? { ...item, rankTitle: nextRank }
+                                  : item,
+                              ),
+                            )
+                            markDirty(true)
+                          }}
+                          style={{ maxWidth: 150 }}
+                        />
+                        <ParticipantNoteInput
+                          type="number"
+                          min={1}
+                          placeholder="대수"
+                          value={rowItem.ordinal}
+                          onChange={(changeEvent) => {
+                            const nextOrd = changeEvent.target.value
+                            setCommanderRows((prev) =>
+                              prev.map((item, idx) =>
+                                idx === rowIndex
+                                  ? { ...item, ordinal: nextOrd }
+                                  : item,
+                              ),
+                            )
+                            markDirty(true)
+                          }}
+                          style={{ maxWidth: 74 }}
+                        />
+                      </CompactInlineFieldsRow>
+
+                      <DateRangeGrid>
+                        <S.DateRangeColumn>
+                          <DateColumnHeaderRow>
+                            <S.DateRangeLabel>부임일 *</S.DateRangeLabel>
+                            <DateQuickActions>
+                              {establishedYear &&
+                                (rowItem.startYear !== establishedYear ||
+                                  rowItem.startEra !== establishedEra) && (
+                                  <DateQuickActionBtn
+                                    type="button"
+                                    onClick={() => {
+                                      playClickSound()
+                                      setCommanderRows((prev) =>
+                                        prev.map((item, idx) =>
+                                          idx === rowIndex
+                                            ? {
+                                                ...item,
+                                                startEra: establishedEra,
+                                                startYear: establishedYear,
+                                                startMonth:
+                                                  establishedMonth ||
+                                                  item.startMonth,
+                                                startDay:
+                                                  establishedDay ||
+                                                  item.startDay,
+                                              }
+                                            : item,
+                                        ),
+                                      )
+                                      markDirty(true)
+                                    }}
+                                  >
+                                    창설일 맞춤
+                                  </DateQuickActionBtn>
+                                )}
+                            </DateQuickActions>
+                          </DateColumnHeaderRow>
+                          <InlineDateField
+                            appearance="field"
+                            ariaLabelPrefix={`${rowItem.personName} 부임일`}
+                            era={rowItem.startEra}
+                            year={rowItem.startYear}
+                            month={rowItem.startMonth}
+                            day={rowItem.startDay}
+                            yearPlaceholder="부임 연도 *"
+                            onChange={(patch) => {
+                              setCommanderRows((prev) =>
+                                prev.map((item, idx) =>
+                                  idx === rowIndex
+                                    ? {
+                                        ...item,
+                                        ...(patch.era !== undefined
+                                          ? { startEra: patch.era }
+                                          : {}),
+                                        ...(patch.year !== undefined
+                                          ? { startYear: patch.year }
+                                          : {}),
+                                        ...(patch.month !== undefined
+                                          ? { startMonth: patch.month }
+                                          : {}),
+                                        ...(patch.day !== undefined
+                                          ? { startDay: patch.day }
+                                          : {}),
+                                      }
+                                    : item,
+                                ),
+                              )
+                              markDirty(true)
+                            }}
+                          />
+                        </S.DateRangeColumn>
+                        <S.DateRangeColumn>
+                          <DateColumnHeaderRow>
+                            <S.DateRangeLabel>이임일 (선택)</S.DateRangeLabel>
+                            <DateQuickActions>
+                              {!isActive &&
+                                disbandedYear &&
+                                (rowItem.endYear !== disbandedYear ||
+                                  rowItem.endEra !== disbandedEra) && (
+                                  <DateQuickActionBtn
+                                    type="button"
+                                    onClick={() => {
+                                      playClickSound()
+                                      setCommanderRows((prev) =>
+                                        prev.map((item, idx) =>
+                                          idx === rowIndex
+                                            ? {
+                                                ...item,
+                                                endEra: disbandedEra,
+                                                endYear: disbandedYear,
+                                                endMonth:
+                                                  disbandedMonth ||
+                                                  item.endMonth,
+                                                endDay:
+                                                  disbandedDay || item.endDay,
+                                              }
+                                            : item,
+                                        ),
+                                      )
+                                      markDirty(true)
+                                    }}
+                                  >
+                                    해산일 맞춤
+                                  </DateQuickActionBtn>
+                                )}
+                            </DateQuickActions>
+                          </DateColumnHeaderRow>
+                          <InlineDateField
+                            appearance="field"
+                            ariaLabelPrefix={`${rowItem.personName} 이임일`}
+                            era={rowItem.endEra}
+                            year={rowItem.endYear}
+                            month={rowItem.endMonth}
+                            day={rowItem.endDay}
+                            yearPlaceholder="이임 연도"
+                            onChange={(patch) => {
+                              setCommanderRows((prev) =>
+                                prev.map((item, idx) =>
+                                  idx === rowIndex
+                                    ? {
+                                        ...item,
+                                        ...(patch.era !== undefined
+                                          ? { endEra: patch.era }
+                                          : {}),
+                                        ...(patch.year !== undefined
+                                          ? { endYear: patch.year }
+                                          : {}),
+                                        ...(patch.month !== undefined
+                                          ? { endMonth: patch.month }
+                                          : {}),
+                                        ...(patch.day !== undefined
+                                          ? { endDay: patch.day }
+                                          : {}),
+                                      }
+                                    : item,
+                                ),
+                              )
+                              markDirty(true)
+                            }}
+                          />
+                        </S.DateRangeColumn>
+                      </DateRangeGrid>
+                    </ParticipantRoleBar>
+                  </ParticipantRow>
+                ))}
+                <CountryQuickSearchRow>
+                  <CountryQuickSearchWrap>
+                    <CountryQuickSearchInput
+                      type="text"
+                      value={commanderQuickQuery}
+                      placeholder="인물 이름 빠른 검색 후 Enter (또는 우측 인물 선택)…"
+                      aria-label="지휘관 인물 빠른 검색"
+                      onFocus={() => {
+                        setCommanderQuickFocused(true)
+                        ensurePersonsLoaded()
+                      }}
+                      onBlur={() => {
+                        window.setTimeout(
+                          () => setCommanderQuickFocused(false),
+                          160,
+                        )
+                      }}
+                      onKeyDown={(keyEvent) => {
+                        if (keyEvent.key === 'Escape') {
+                          keyEvent.stopPropagation()
+                          setCommanderQuickFocused(false)
+                          return
+                        }
+                        if (
+                          keyEvent.key === 'Enter' &&
+                          commanderQuickMatches.length > 0
+                        ) {
+                          keyEvent.preventDefault()
+                          handleQuickSelectCommander(commanderQuickMatches[0]!)
+                        }
+                      }}
+                      onChange={(changeEvent) =>
+                        setCommanderQuickQuery(changeEvent.target.value)
+                      }
+                    />
+                    {commanderQuickFocused &&
+                      commanderQuickQuery.trim().length > 0 && (
+                        <CountryQuickResultBox
+                          role="listbox"
+                          aria-label="지휘관 인물 검색 결과"
+                        >
+                          {personsLoading ? (
+                            <CountryQuickEmpty>
+                              인물 목록을 불러오는 중…
+                            </CountryQuickEmpty>
+                          ) : commanderQuickMatches.length > 0 ? (
+                            commanderQuickMatches.map((personItem) => {
+                              const display =
+                                getPersonDisplayName({
+                                  name: personItem.name ?? '',
+                                  surname: personItem.surname ?? undefined,
+                                  middleName:
+                                    personItem.middleName ?? undefined,
+                                  nameDisplayOrder:
+                                    personItem.nameDisplayOrder ?? null,
+                                  country: personItem.country ?? undefined,
+                                }) || personItem.name
+                              return (
+                                <CountryQuickResultItem
+                                  key={personItem.id}
+                                  type="button"
+                                  onMouseDown={(mouseEvent) =>
+                                    mouseEvent.preventDefault()
+                                  }
+                                  onClick={() =>
+                                    handleQuickSelectCommander(personItem)
+                                  }
+                                >
+                                  <CountryQuickResultFlag>
+                                    👤
+                                  </CountryQuickResultFlag>
+                                  <CountryQuickResultName>
+                                    {display}
+                                  </CountryQuickResultName>
+                                  <CountryQuickResultMeta>
+                                    {personItem.historicalCountry?.name ??
+                                      personItem.country?.name ??
+                                      ''}
+                                  </CountryQuickResultMeta>
+                                </CountryQuickResultItem>
+                              )
+                            })
+                          ) : (
+                            <CountryQuickEmpty>
+                              일치하는 인물이 없습니다. 우측 「인물 목록에서
+                              선택」을 이용하세요.
+                            </CountryQuickEmpty>
+                          )}
+                        </CountryQuickResultBox>
+                      )}
+                  </CountryQuickSearchWrap>
+                  <S.AddButton
+                    type="button"
+                    onClick={() => {
+                      playClickSound()
+                      setCommanderPersonModalOpen(true)
+                    }}
+                  >
+                    <FiPlus size={15} />
+                    인물 목록에서 선택
+                  </S.AddButton>
+                </CountryQuickSearchRow>
+              </>
+            )}
+          </ParticipantList>
+        </S.FormField>
+      </S.FormRow>
+
+      {/* 전신 · 후신 계보 (BasicInfoSection ModalCausalFlowBoard + ParticipantRow 규격) */}
+      <S.FormRow $noBorder>
+        <S.FormLabel as="div">
+          전신 · 후신 계보<OptionalTag>(선택)</OptionalTag>
+        </S.FormLabel>
+        <S.FormField>
+          {/* 3단 시각적 계보 흐름 보드 (전신 ──▶ ★ 현재 부대 ──▶ 후신) */}
+          {(lineageBoardData.predecessorLabels.length > 0 ||
+            lineageBoardData.successorLabels.length > 0) && (
+            <ModalCausalFlowBoard aria-label="전신·후신 계보 흐름 요약">
+              <ModalCausalLane>
+                <ModalCausalLaneHeader $tone="cause">
+                  ← 전신 ({lineageBoardData.predecessorLabels.length})
+                </ModalCausalLaneHeader>
+                {lineageBoardData.predecessorLabels.length > 0 ? (
+                  lineageBoardData.predecessorLabels.map((lbl, idx) => (
+                    <ModalCausalMiniChip key={`${lbl}-${idx}`}>
+                      {lbl}
+                    </ModalCausalMiniChip>
+                  ))
+                ) : (
+                  <ModalCausalEmptyHint>없음</ModalCausalEmptyHint>
+                )}
+              </ModalCausalLane>
+              <ModalCausalCenterNode>
+                <ModalCausalCenterTag>현재 부대</ModalCausalCenterTag>
+                <ModalCausalCenterTitle>
+                  {name.trim() || '(부대명 입력 중)'}
+                </ModalCausalCenterTitle>
+              </ModalCausalCenterNode>
+              <ModalCausalLane>
+                <ModalCausalLaneHeader $tone="effect">
+                  후신 ({lineageBoardData.successorLabels.length}) →
+                </ModalCausalLaneHeader>
+                {lineageBoardData.successorLabels.length > 0 ? (
+                  lineageBoardData.successorLabels.map((lbl, idx) => (
+                    <ModalCausalMiniChip key={`${lbl}-${idx}`}>
+                      {lbl}
+                    </ModalCausalMiniChip>
+                  ))
+                ) : (
+                  <ModalCausalEmptyHint>없음</ModalCausalEmptyHint>
+                )}
+              </ModalCausalLane>
+            </ModalCausalFlowBoard>
+          )}
+
+          {/* 연결된 계보 목록 */}
+          <ParticipantList>
+            {isEdit && (predecessors.length > 0 || successors.length > 0) && (
+              <>
+                {predecessors.map((predItem) =>
+                  renderLineageRow(predItem, 'PREDECESSOR'),
+                )}
+                {successors.map((succItem) =>
+                  renderLineageRow(succItem, 'SUCCESSOR'),
+                )}
+              </>
+            )}
+
+            {!isEdit &&
+              pendingTransitions.map((draftItem) => {
+                const kindLabel =
+                  TRANSITION_KIND_OPTIONS.find(
+                    (optItem) => optItem.value === draftItem.kind,
+                  )?.label ?? draftItem.kind
+                const timeLabel = draftItem.year
+                  ? `${draftItem.era === 'BC' ? 'BC ' : ''}${draftItem.year}년${draftItem.month ? ` ${draftItem.month}월` : ''}`
+                  : ''
+                const badgeText =
+                  draftItem.direction === 'PREDECESSOR_DEPARTMENT'
+                    ? '전신 부처'
+                    : draftItem.direction === 'PREDECESSOR_UNIT'
+                      ? '전신 부대'
+                      : '후신 부대'
+                return (
+                  <ParticipantRow key={draftItem.localKey}>
+                    <ParticipantHeaderRow>
+                      <ParentEventBadge>{badgeText}</ParentEventBadge>
+                      <ParentEventTitle>
+                        {draftItem.targetLabel}
+                      </ParentEventTitle>
+                      <RelatedEventDateMeta>
+                        {kindLabel}
+                        {timeLabel ? ` · ${timeLabel}` : ''}
+                      </RelatedEventDateMeta>
+                      <ParticipantRemove
+                        type="button"
+                        aria-label="계보 항목 삭제"
+                        onClick={() => {
+                          setPendingTransitions((prev) =>
+                            prev.filter(
+                              (item) => item.localKey !== draftItem.localKey,
+                            ),
+                          )
+                          markDirty(true)
+                        }}
+                      >
+                        <FiX size={15} />
+                      </ParticipantRemove>
+                    </ParticipantHeaderRow>
+                    {draftItem.note && (
+                      <ParticipantSubNote>{draftItem.note}</ParticipantSubNote>
+                    )}
+                  </ParticipantRow>
+                )
+              })}
+
+            {/* 새 계보 연결 카드 */}
+            <ParticipantRow>
+              <ParticipantRoleBar style={{ borderTop: 'none', paddingTop: 0 }}>
+                <ParticipantRoleChipGroup
+                  role="radiogroup"
+                  aria-label="계보 연결 방향"
+                >
+                  <ParticipantRoleChipBtn
+                    type="button"
+                    $selected={
+                      newTransitionDirection === 'PREDECESSOR_DEPARTMENT'
+                    }
+                    onClick={() => {
+                      setNewTransitionDirection('PREDECESSOR_DEPARTMENT')
+                      setNewTransitionTargetId('')
+                      setLineageQuickQuery('')
+                    }}
+                  >
+                    🏛️ 전신 부처 → 이 부대
+                  </ParticipantRoleChipBtn>
+                  <ParticipantRoleChipBtn
+                    type="button"
+                    $selected={newTransitionDirection === 'PREDECESSOR_UNIT'}
+                    onClick={() => {
+                      setNewTransitionDirection('PREDECESSOR_UNIT')
+                      setNewTransitionTargetId('')
+                      setLineageQuickQuery('')
+                    }}
+                  >
+                    🛡️ 전신 부대 → 이 부대
+                  </ParticipantRoleChipBtn>
+                  <ParticipantRoleChipBtn
+                    type="button"
+                    $selected={newTransitionDirection === 'SUCCESSOR_UNIT'}
+                    onClick={() => {
+                      setNewTransitionDirection('SUCCESSOR_UNIT')
+                      setNewTransitionTargetId('')
+                      setLineageQuickQuery('')
+                    }}
+                  >
+                    이 부대 → 후신 부대 🛡️
+                  </ParticipantRoleChipBtn>
+                </ParticipantRoleChipGroup>
+
+                <ParticipantRoleChipGroup
+                  role="radiogroup"
+                  aria-label="변동 유형"
+                >
+                  {TRANSITION_KIND_OPTIONS.map((optItem) => (
+                    <ParticipantRoleChipBtn
+                      key={optItem.value}
+                      type="button"
+                      $selected={newTransitionKind === optItem.value}
+                      onClick={() => setNewTransitionKind(optItem.value)}
+                    >
+                      {optItem.label}
+                    </ParticipantRoleChipBtn>
+                  ))}
+                </ParticipantRoleChipGroup>
+
+                <CountryQuickSearchRow>
+                  <CountryQuickSearchWrap>
+                    <CountryQuickSearchInput
+                      type="text"
+                      value={lineageQuickQuery}
+                      placeholder={
+                        newTransitionDirection === 'PREDECESSOR_DEPARTMENT'
+                          ? '전신 행정부처 검색·선택 후 Enter (예: 전쟁성, 국방성, 병조…)'
+                          : '전신·후신 군부대 검색·선택 후 Enter…'
+                      }
+                      aria-label="계보 연결 대상 검색"
+                      onFocus={() => setLineageQuickFocused(true)}
+                      onBlur={() => {
+                        window.setTimeout(
+                          () => setLineageQuickFocused(false),
+                          160,
+                        )
+                      }}
+                      onKeyDown={(keyEvent) => {
+                        if (keyEvent.key === 'Escape') {
+                          keyEvent.stopPropagation()
+                          setLineageQuickFocused(false)
+                          return
+                        }
+                        if (
+                          keyEvent.key === 'Enter' &&
+                          lineageQuickMatches.length > 0
+                        ) {
+                          keyEvent.preventDefault()
+                          const topCand = lineageQuickMatches[0]!
+                          playClickSound()
+                          setNewTransitionTargetId(topCand.id)
+                          setLineageQuickQuery(topCand.label)
+                          setLineageQuickFocused(false)
+                        }
+                      }}
+                      onChange={(changeEvent) => {
+                        setLineageQuickQuery(changeEvent.target.value)
+                        setNewTransitionTargetId('')
+                      }}
+                    />
+                    {lineageQuickFocused && (
+                      <CountryQuickResultBox
+                        role="listbox"
+                        aria-label="계보 연결 후보"
+                      >
+                        {lineageQuickMatches.length > 0 ? (
+                          lineageQuickMatches.map((cand) => (
+                            <CountryQuickResultItem
+                              key={cand.id}
+                              type="button"
+                              onMouseDown={(mouseEvent) =>
+                                mouseEvent.preventDefault()
+                              }
+                              onClick={() => {
+                                playClickSound()
+                                setNewTransitionTargetId(cand.id)
+                                setLineageQuickQuery(cand.label)
+                                setLineageQuickFocused(false)
+                              }}
+                            >
+                              <ParentEventBadge>{cand.badge}</ParentEventBadge>
+                              <CountryQuickResultName>
+                                {cand.label}
+                              </CountryQuickResultName>
+                              <CountryQuickResultMeta>
+                                {cand.meta}
+                              </CountryQuickResultMeta>
+                            </CountryQuickResultItem>
+                          ))
+                        ) : (
+                          <CountryQuickEmpty>
+                            연결 가능한 기관·부대가 없습니다
+                          </CountryQuickEmpty>
+                        )}
+                      </CountryQuickResultBox>
+                    )}
+                  </CountryQuickSearchWrap>
+                </CountryQuickSearchRow>
+
+                <CompactInlineFieldsRow>
+                  <CompactEraSelect
+                    aria-label="개편 기원"
+                    value={newTransitionEra}
+                    onChange={(changeEvent) =>
+                      setNewTransitionEra(
+                        changeEvent.target.value as 'AD' | 'BC',
+                      )
+                    }
+                  >
+                    <option value="AD">서기</option>
+                    <option value="BC">BC</option>
+                  </CompactEraSelect>
+                  <ParticipantNoteInput
+                    type="number"
+                    min={1}
+                    placeholder="개편 연도 (예: 1948)"
+                    value={newTransitionYear}
+                    onChange={(changeEvent) =>
+                      setNewTransitionYear(changeEvent.target.value)
+                    }
+                    style={{ maxWidth: 132 }}
+                  />
+                  <ParticipantNoteInput
+                    type="number"
+                    min={1}
+                    max={12}
+                    placeholder="월"
+                    value={newTransitionMonth}
+                    onChange={(changeEvent) =>
+                      setNewTransitionMonth(changeEvent.target.value)
+                    }
+                    style={{ maxWidth: 68 }}
+                  />
+                  <ParticipantNoteInput
+                    type="text"
+                    placeholder="개편 비고 (선택 — 예: 국방경비대 개편 후 창설)"
+                    value={newTransitionNote}
+                    onChange={(changeEvent) =>
+                      setNewTransitionNote(changeEvent.target.value)
+                    }
+                  />
+                  <S.AddButton
+                    type="button"
+                    disabled={!newTransitionTargetId || transitionBusy}
+                    onClick={() => void handleAddTransition()}
+                  >
+                    <FiPlus size={14} />
+                    {transitionBusy ? '추가 중…' : '계보 추가'}
+                  </S.AddButton>
+                </CompactInlineFieldsRow>
+              </ParticipantRoleBar>
+            </ParticipantRow>
+          </ParticipantList>
+        </S.FormField>
+      </S.FormRow>
+    </FormGroupSection>
+  )
+
+  // ==========================================================================
+  // 3. 맥락 · 상세 기록 섹션
+  // ==========================================================================
+  const contextSectionNode = (
+    <FormGroupSection
+      id="military-unit-section-context"
+      data-form-section="context"
+      onFocusCapture={() => setActiveSection('context')}
+    >
+      <FormGroupHeader>
+        <FormGroupTitle>맥락 · 상세 기록</FormGroupTitle>
+        <FormGroupSummaryBadge>
+          주둔지 · 병력 · 임무 · 전투 · 수훈 · 설명
+        </FormGroupSummaryBadge>
+      </FormGroupHeader>
+
+      <S.FormRow>
+        <S.FormLabel as="div">
+          주둔지 · 본부<OptionalTag>(선택)</OptionalTag>
+        </S.FormLabel>
+        <S.FormField>
+          <PlaceSelect
+            countryId={countryId || defaultCountryId || undefined}
+            disabled={!hasCountry}
+            value={garrisonPlace}
+            onChange={(placeVal) => {
+              setGarrisonPlace(placeVal)
+              markDirty(true)
+            }}
+          />
+          <S.Hint>
+            소속 국가 선택 후 본부 소재지·주둔지를 입력합니다 (예: 용산, 계룡대,
+            펜타곤, 포츠담 등).
+          </S.Hint>
+        </S.FormField>
+      </S.FormRow>
+
+      <S.FormRow>
+        <S.FormLabel as="div">
+          병력 · 작전구역<OptionalTag>(선택)</OptionalTag>
+        </S.FormLabel>
+        <S.FormField>
+          <SubTitleGrid>
+            <SubTitleField>
+              <SubTitleLabel>
+                병력 · 편제 규모<OptionalTag>(선택)</OptionalTag>
+              </SubTitleLabel>
+              <S.Input
+                type="text"
+                placeholder="예: 약 15,000명 / 3개 군단 9개 사단"
+                value={strength}
+                onChange={(changeEvent) => {
+                  setStrength(changeEvent.target.value)
+                  markDirty(true)
+                }}
+              />
+            </SubTitleField>
+            <SubTitleField>
+              <SubTitleLabel>
+                관할 · 작전구역<OptionalTag>(선택)</OptionalTag>
+              </SubTitleLabel>
+              <S.Input
+                type="text"
+                placeholder="예: 서부·북아프리카 전구, 중부전선"
+                value={jurisdiction}
+                onChange={(changeEvent) => {
+                  setJurisdiction(changeEvent.target.value)
+                  markDirty(true)
+                }}
+              />
+            </SubTitleField>
+          </SubTitleGrid>
+        </S.FormField>
+      </S.FormRow>
+
+      <S.FormRow>
+        <S.FormLabel as="div">
+          임무 · 전투 · 수훈<OptionalTag>(선택)</OptionalTag>
+        </S.FormLabel>
+        <S.FormField>
+          <SubTitleGrid>
+            <SubTitleField>
+              <SubTitleLabel>
+                주요 임무 · 역할<OptionalTag>(선택)</OptionalTag>
+              </SubTitleLabel>
+              <S.Textarea
+                rows={2}
+                placeholder="예: 합동 작전 총괄 지휘, 기동 타격, 해상 호위"
+                value={primaryMission}
+                onChange={(changeEvent) => {
+                  setPrimaryMission(changeEvent.target.value)
+                  markDirty(true)
+                }}
+              />
+            </SubTitleField>
+            <SubTitleField>
+              <SubTitleLabel>
+                주요 전투 · 작전<OptionalTag>(선택)</OptionalTag>
+              </SubTitleLabel>
+              <S.Textarea
+                rows={2}
+                placeholder="예: 노르망디 상륙작전, 인천상륙작전, 다부동 전투"
+                value={notableBattles}
+                onChange={(changeEvent) => {
+                  setNotableBattles(changeEvent.target.value)
+                  markDirty(true)
+                }}
+              />
+            </SubTitleField>
+          </SubTitleGrid>
+          <SubTitleField>
+            <SubTitleLabel>
+              훈장 · 표창 내역<OptionalTag>(선택)</OptionalTag>
+            </SubTitleLabel>
+            <S.Input
+              type="text"
+              aria-label="훈장·표창 내역"
+              placeholder="예: 대통령 부대표창 5회, 미 대통령 부대표창(PUC)"
+              value={honors}
+              onChange={(changeEvent) => {
+                setHonors(changeEvent.target.value)
+                markDirty(true)
+              }}
+            />
+          </SubTitleField>
+        </S.FormField>
+      </S.FormRow>
+
+      <S.FormRow $noBorder>
+        <S.FormLabel as="div">
+          부대 상세 설명<OptionalTag>(선택)</OptionalTag>
+        </S.FormLabel>
+        <S.FormField>
+          <S.Textarea
+            rows={4}
+            placeholder="부대·사령부의 창설 배경, 지휘 구조, 편제 변천사 및 작전사적 의의를 기록하세요."
+            value={description}
+            onChange={(changeEvent) => {
+              setDescription(changeEvent.target.value)
+              markDirty(true)
+            }}
+          />
+          <DescriptionFooterRow>
+            <S.Hint>
+              편제 변천·지휘 체계 및 주요 작전 배경을 자유롭게 기술할 수 있습니다.
+            </S.Hint>
+            {description.length > 0 && (
+              <CharCountText>{description.length}자</CharCountText>
+            )}
+          </DescriptionFooterRow>
+        </S.FormField>
+      </S.FormRow>
+    </FormGroupSection>
   )
 
   return (
     <>
-      <SidePanel
+      <RegisterModal
         isOpen={isOpen}
         onClose={() => {
-          playClickSound()
-          onClose()
+          void requestClose()
         }}
-        width="min(900px, 100vw)"
-        closeOnEscape={!anyChildModalOpen}
         title={isEdit ? '군사 사령부 · 부대 수정' : '군사 사령부 · 부대 등록'}
+        maxWidth={
+          layoutMode === 'split' ? 'min(1440px, 96vw)' : 'min(1040px, 96vw)'
+        }
+        minHeight="90vh"
+        height={layoutMode === 'split' ? '90vh' : undefined}
+        fullBleedOnMobile
+        closeOnEsc={!loading && !insigniaUploading && !anyChildModalOpen}
+        closeOnOverlayClick={
+          !loading && !insigniaUploading && !anyChildModalOpen
+        }
         headerActions={
-          <PanelHeaderActionsBar>
-            {selectedParentUnit ? (
-              <PanelHeaderContextBadge
-                title={`상위 부대: ${selectedParentUnit.name}`}
+          <HeaderActionsBar>
+            {selectedParentUnit && (
+              <HeaderContextBadge
+                type="button"
+                title={`상위 부대: ${selectedParentUnit.name} (소속·지휘·계보 섹션으로 이동)`}
+                onClick={() => scrollToSection('command')}
               >
-                ↳ 상위: {selectedParentUnit.name}
-              </PanelHeaderContextBadge>
-            ) : countryName ? (
-              <PanelHeaderContextBadge title={`소속 국가: ${countryName}`}>
-                {countryFlagEmoji || '🏳️'} {countryName}
-              </PanelHeaderContextBadge>
-            ) : null}
+                <span>↳</span>
+                <HeaderContextBadgeText>
+                  상위: {selectedParentUnit.name}
+                </HeaderContextBadgeText>
+              </HeaderContextBadge>
+            )}
+            {countryName && (
+              <HeaderContextBadge
+                type="button"
+                title={`소속 국가: ${countryName} (기본 정보 섹션으로 이동)`}
+                onClick={() => scrollToSection('basic')}
+              >
+                <span>{countryFlagEmoji || '🏳️'}</span>
+                <HeaderContextBadgeText>{countryName}</HeaderContextBadgeText>
+              </HeaderContextBadge>
+            )}
+            {selectedAdminDept && (
+              <HeaderContextBadge
+                type="button"
+                title={`소관 부처: ${selectedAdminDept.name} (소속·지휘·계보 섹션으로 이동)`}
+                onClick={() => scrollToSection('command')}
+              >
+                <span>🏛️</span>
+                <HeaderContextBadgeText>
+                  {selectedAdminDept.name}
+                </HeaderContextBadgeText>
+              </HeaderContextBadge>
+            )}
+
             <SectionJumpNav aria-label="군부대 등록 섹션 이동">
               {renderSectionJumpButtons()}
             </SectionJumpNav>
-          </PanelHeaderActionsBar>
-        }
-        footer={
-          <EventStyleFooterBar>
-            <FooterHintArea>
-              {!name.trim() ? (
-                <FooterJumpBtn
-                  type="button"
-                  onClick={() => {
-                    scrollToSection('basic')
-                    window.setTimeout(() => nameInputRef.current?.focus(), 120)
-                  }}
-                >
-                  필수 입력: 군부대·사령부명 →
-                </FooterJumpBtn>
-              ) : !hasCountry ? (
-                <FooterJumpBtn
-                  type="button"
-                  onClick={() => {
-                    scrollToSection('basic')
-                    if (!lockCountryAndDepartment) {
-                      setCountryModalOpen(true)
-                    }
-                  }}
-                >
-                  필수 선택: 소속 국가 →
-                </FooterJumpBtn>
-              ) : (
-                <FooterReadyGroup>
-                  <FooterReadyBadge>
-                    <FooterReadyDot />
-                    {isEdit ? '수정 준비 완료' : '등록 준비 완료'}
-                  </FooterReadyBadge>
-                  <FooterShortcutText>
-                    <FooterKbd>⌘↵</FooterKbd> 저장
-                  </FooterShortcutText>
-                </FooterReadyGroup>
-              )}
-            </FooterHintArea>
 
-            <FooterActionGroup>
-              <FooterCancelButton
+            <LayoutModeToggleBtn
+              type="button"
+              $active={layoutMode === 'split'}
+              aria-pressed={layoutMode === 'split'}
+              aria-label={
+                layoutMode === 'split'
+                  ? '1단 세로 보기로 전환'
+                  : '2단 좌우 분할 보기로 전환'
+              }
+              title={
+                layoutMode === 'split'
+                  ? '좌우 2단 분할 보기 중 (클릭 시 1단 세로 보기로 전환)'
+                  : '1단 세로 보기 중 (클릭 시 좌우 2단 분할 보기로 전환)'
+              }
+              onClick={toggleLayoutMode}
+            >
+              <FiColumns size={13} />
+              <span>{layoutMode === 'split' ? '2단 분할' : '1단 보기'}</span>
+            </LayoutModeToggleBtn>
+
+            {!isEdit && isDirty && !loading && !insigniaUploading && (
+              <HeaderResetBtn
                 type="button"
+                aria-label="작성 내용 초기화"
+                title="입력한 내용을 모두 비우고 처음 상태로 되돌립니다"
                 onClick={() => {
-                  playClickSound()
-                  onClose()
+                  void handleResetForm()
                 }}
               >
-                취소
-              </FooterCancelButton>
-              <FooterSubmitButton
-                type="submit"
-                form="military-unit-form"
-                disabled={loading || insigniaUploading || !isFormValid}
-                aria-busy={loading}
-              >
-                {loading
-                  ? '저장 중…'
-                  : isEdit
-                    ? '변경사항 저장'
-                    : '부대 등록'}
-              </FooterSubmitButton>
-            </FooterActionGroup>
-          </EventStyleFooterBar>
+                초기화
+              </HeaderResetBtn>
+            )}
+          </HeaderActionsBar>
         }
       >
         <input
@@ -2207,1401 +6074,152 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
             const selectedFile = fileEvent.target.files?.[0]
             fileEvent.target.value = ''
             if (!selectedFile) return
-            try {
-              validateImageFile(selectedFile)
-              setInsigniaUploading(true)
-              const uploaded = await uploadImage(selectedFile, 'military-units')
-              setInsigniaUrl(toUploadStoragePath(uploaded.url) || uploaded.url)
-            } catch (uploadError) {
-              notify.error(
-                uploadError instanceof Error
-                  ? uploadError.message
-                  : '이미지 업로드에 실패했습니다.',
-              )
-            } finally {
-              setInsigniaUploading(false)
-            }
+            await handleInsigniaFileUpload(selectedFile)
           }}
         />
 
-        <MobileSectionStrip>{renderSectionJumpButtons()}</MobileSectionStrip>
+        <MilitaryModalFormScroll
+          ref={scrollContainerRef}
+          $layoutMode={layoutMode}
+          onScroll={handleFormScroll}
+          onScrollCapture={handleFormScroll}
+        >
+          {(loading || insigniaUploading) && !hydratingUnit && (
+            <KitBusyBar role="status" aria-live="polite">
+              {insigniaUploading
+                ? '부대 마크·휘장 이미지를 업로드하는 중...'
+                : isEdit
+                  ? '수정 사항을 저장하는 중...'
+                  : '군사 사령부·부대를 등록하는 중...'}
+            </KitBusyBar>
+          )}
 
-        <form id="military-unit-form" onSubmit={handleSubmit}>
-          <FlatFormStack ref={formRootRef}>
-            {/* 1. 기본 편제 · 소속 · 시기 */}
-            <FlatFormSection
-              data-form-section="basic"
-              onFocusCapture={() => setActiveSection('basic')}
+          <MobileSectionStrip>{renderSectionJumpButtons()}</MobileSectionStrip>
+
+          {hydratingUnit ? (
+            <KitFormLoading role="status" aria-live="polite">
+              군사 사령부·부대 정보를 불러오는 중...
+            </KitFormLoading>
+          ) : (
+            <form id="military-unit-form" onSubmit={handleSubmit}>
+              <S.FormSection ref={formRootRef} style={activeBranchStyle}>
+                {layoutMode === 'split' ? (
+                  <SplitColumnsGrid
+                    data-split-ratio={splitRatio}
+                    $ratio={splitRatio}
+                  >
+                    <SplitColumnLeft id="military-unit-form-split-left">
+                      {basicSectionNode}
+                    </SplitColumnLeft>
+                    <SplitColumnRight id="military-unit-form-split-right">
+                      {commandSectionNode}
+                      {contextSectionNode}
+                    </SplitColumnRight>
+                  </SplitColumnsGrid>
+                ) : (
+                  <SingleColumnStack>
+                    {basicSectionNode}
+                    {commandSectionNode}
+                    {contextSectionNode}
+                  </SingleColumnStack>
+                )}
+              </S.FormSection>
+            </form>
+          )}
+        </MilitaryModalFormScroll>
+
+        <PersonRegisterModalStickyFooter>
+          <FooterHint $warning={!isFormValid && Boolean(firstValidationIssue)}>
+            {!isFormValid && firstValidationIssue ? (
+              <FooterJumpButton
+                type="button"
+                onClick={focusFirstMissingField}
+                title="클릭하면 해당 필수 입력 칸으로 이동합니다"
+              >
+                <span>필수 입력: {firstValidationIssue.label}</span>
+                {validationIssues.length > 1 && (
+                  <FooterMissingCount>
+                    외 {validationIssues.length - 1}건
+                  </FooterMissingCount>
+                )}
+                <FooterJumpArrow aria-hidden="true">→</FooterJumpArrow>
+              </FooterJumpButton>
+            ) : isEdit ? (
+              <FooterReadyGroup>
+                <FooterReadyBadge>수정 준비 완료</FooterReadyBadge>
+                <FooterShortcutItem>
+                  <FooterKbd>⌘↵</FooterKbd>
+                  <span>바로 저장</span>
+                </FooterShortcutItem>
+              </FooterReadyGroup>
+            ) : (
+              <FooterReadyGroup>
+                <FooterReadyBadge>등록 준비 완료</FooterReadyBadge>
+                <FooterShortcutItem>
+                  <FooterKbd>⌘↵</FooterKbd>
+                  <span>저장</span>
+                </FooterShortcutItem>
+                <FooterShortcutItem>
+                  <FooterKbd>⇧⌘↵</FooterKbd>
+                  <span>등록 후 계속</span>
+                </FooterShortcutItem>
+              </FooterReadyGroup>
+            )}
+          </FooterHint>
+
+          <FooterActions>
+            <PersonRegisterModalCancelBtn
+              type="button"
+              disabled={loading || insigniaUploading}
+              onClick={() => {
+                playClickSound()
+                void requestClose()
+              }}
             >
-              <FlatSectionHeader>
-                <FlatSectionTitle>기본 편제 · 소속 · 시기</FlatSectionTitle>
-                <FlatSectionHint>
-                  최고사령부(OKW·STAVKA)부터 야전군·사단·함대까지 편제 기록
-                </FlatSectionHint>
-              </FlatSectionHeader>
-
-              {!isEdit && (
-                <FlatFormRow>
-                  <FlatFormLabel>사령부 프리셋</FlatFormLabel>
-                  <FlatFieldControl>
-                    <InlineDateRow>
-                      {HIGH_COMMAND_PRESETS.map((presetItem) => (
-                        <QuickPresetChip
-                          key={presetItem.abbreviation}
-                          type="button"
-                          $active={
-                            name === presetItem.name &&
-                            abbreviation === presetItem.abbreviation
-                          }
-                          onClick={() => {
-                            playClickSound()
-                            setName(presetItem.name)
-                            setAbbreviation(presetItem.abbreviation)
-                            setNameLocal(presetItem.nameLocal ?? '')
-                            setNameEn(presetItem.nameEn ?? '')
-                            setUnitType(presetItem.unitType)
-                            setBranch(presetItem.branch)
-                          }}
-                        >
-                          ⚡ {presetItem.label}
-                        </QuickPresetChip>
-                      ))}
-                    </InlineDateRow>
-                  </FlatFieldControl>
-                </FlatFormRow>
-              )}
-
-              <FlatFormRow>
-                <FlatFormLabel htmlFor="military-unit-name">
-                  군부대·사령부명
-                  <FlatRequired>*</FlatRequired>
-                </FlatFormLabel>
-                <FlatFieldControl>
-                  <FlatNameAbbrGrid>
-                    <FlatInput
-                      ref={nameInputRef}
-                      id="military-unit-name"
-                      type="text"
-                      placeholder="예: 국방군 최고사령부, 중부집단군, 제1보병사단"
-                      value={name}
-                      onChange={(changeEvent) =>
-                        setName(changeEvent.target.value)
-                      }
-                      required
-                    />
-                    <FlatInput
-                      id="military-unit-abbr"
-                      type="text"
-                      aria-label="약칭·부호"
-                      placeholder="약칭 (예: OKW, 합참)"
-                      value={abbreviation}
-                      onChange={(changeEvent) =>
-                        setAbbreviation(changeEvent.target.value)
-                      }
-                    />
-                  </FlatNameAbbrGrid>
-                </FlatFieldControl>
-              </FlatFormRow>
-
-              <FlatFormRow>
-                <FlatFormLabel>원어 · 영문 표기</FlatFormLabel>
-                <FlatFieldControl>
-                  <FlatTwoColGrid>
-                    <FlatInput
-                      type="text"
-                      aria-label="원어 표기"
-                      placeholder="원어명 (예: Oberkommando der Wehrmacht)"
-                      value={nameLocal}
-                      onChange={(changeEvent) =>
-                        setNameLocal(changeEvent.target.value)
-                      }
-                    />
-                    <FlatInput
-                      type="text"
-                      aria-label="영문 표기"
-                      placeholder="영문명 (예: Armed Forces High Command)"
-                      value={nameEn}
-                      onChange={(changeEvent) =>
-                        setNameEn(changeEvent.target.value)
-                      }
-                    />
-                  </FlatTwoColGrid>
-                </FlatFieldControl>
-              </FlatFormRow>
-
-              <FlatFormRow>
-                <FlatFormLabel>부대 마크 · 휘장</FlatFormLabel>
-                <FlatFieldControl>
-                  <CompactUploadStrip>
-                    <CompactUploadThumb>
-                      {insigniaUrl ? (
-                        <img
-                          src={getUploadImageUrl(insigniaUrl)}
-                          alt="부대 휘장"
-                          onError={(imgEvent) => {
-                            imgEvent.currentTarget.style.display = 'none'
-                          }}
-                        />
-                      ) : (
-                        <FiShield size={16} />
-                      )}
-                    </CompactUploadThumb>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <FlatHint>
-                        {insigniaUploading
-                          ? '휘장 이미지를 업로드하는 중입니다…'
-                          : insigniaUrl
-                            ? '등록된 부대 마크·휘장 이미지가 적용되어 있습니다.'
-                            : '사령부·부대의 공식 마크나 휘장 이미지를 업로드합니다 (선택)'}
-                      </FlatHint>
-                    </div>
-                    <InlineDateRow>
-                      <InlineIconBtn
-                        type="button"
-                        disabled={insigniaUploading}
-                        onClick={() => insigniaInputRef.current?.click()}
-                      >
-                        <FiUpload size={13} />
-                        {insigniaUrl ? '변경' : '업로드'}
-                      </InlineIconBtn>
-                      {insigniaUrl ? (
-                        <InlineIconBtn
-                          type="button"
-                          $danger
-                          disabled={insigniaUploading}
-                          onClick={() => {
-                            playClickSound()
-                            setInsigniaUrl('')
-                          }}
-                        >
-                          <FiTrash2 size={13} />
-                          제거
-                        </InlineIconBtn>
-                      ) : null}
-                    </InlineDateRow>
-                  </CompactUploadStrip>
-                </FlatFieldControl>
-              </FlatFormRow>
-
-              <FlatFormRow>
-                <FlatFormLabel>
-                  소속 국가 · 시대
-                  <FlatRequired>*</FlatRequired>
-                </FlatFormLabel>
-                <FlatFieldControl>
-                  <InlineDateRow>
-                    {hasCountry ? (
-                      <>
-                        <PillChoiceChip
-                          type="button"
-                          $selected
-                          onClick={() => {
-                            if (!lockCountryAndDepartment) {
-                              playClickSound()
-                              setCountryModalOpen(true)
-                            }
-                          }}
-                        >
-                          <PillChoiceIcon $selected>
-                            {countryFlagEmoji || '🏳️'}
-                          </PillChoiceIcon>
-                          <span>
-                            {countryName}
-                            {countryEnglishName
-                              ? ` (${countryEnglishName})`
-                              : ''}
-                          </span>
-                        </PillChoiceChip>
-                        {!lockCountryAndDepartment && (
-                          <>
-                            <InlineIconBtn
-                              type="button"
-                              onClick={() => {
-                                playClickSound()
-                                setCountryModalOpen(true)
-                              }}
-                            >
-                              변경
-                            </InlineIconBtn>
-                            <InlineIconBtn
-                              type="button"
-                              $danger
-                              onClick={() => {
-                                playClickSound()
-                                setCountryId('')
-                                setHistoricalCountryId('')
-                                setCountryName('')
-                                setCountryFlagEmoji('')
-                                setCountryEnglishName('')
-                                setAdministrationDepartmentId('')
-                              }}
-                            >
-                              <FiX size={14} />
-                            </InlineIconBtn>
-                          </>
-                        )}
-                      </>
-                    ) : (
-                      <OutlineAddBtn
-                        type="button"
-                        disabled={lockCountryAndDepartment}
-                        onClick={() => {
-                          playClickSound()
-                          if (!lockCountryAndDepartment) {
-                            setCountryModalOpen(true)
-                          }
-                        }}
-                      >
-                        🏳️ 소속 국가 선택…
-                      </OutlineAddBtn>
-                    )}
-                  </InlineDateRow>
-
-                  {!lockCountryAndDepartment &&
-                    modernAnchorCountry &&
-                    linkedHistoricalCountries.length > 0 && (
-                      <InlineDateRow>
-                        <FlatHint>시대 전환:</FlatHint>
-                        <QuickPresetChip
-                          type="button"
-                          $active={
-                            !historicalCountryId &&
-                            countryId === modernAnchorCountry.id
-                          }
-                          onClick={() => {
-                            playClickSound()
-                            setHistoricalCountryId('')
-                            setCountryId(modernAnchorCountry.id)
-                            setCountryName(modernAnchorCountry.name)
-                            setCountryFlagEmoji(
-                              modernAnchorCountry.flagEmoji || '🏳️',
-                            )
-                            setCountryEnglishName('')
-                            setAdministrationDepartmentId('')
-                          }}
-                        >
-                          {modernAnchorCountry.flagEmoji || '🏳️'}{' '}
-                          {modernAnchorCountry.name} (현대)
-                        </QuickPresetChip>
-                        {linkedHistoricalCountries.map((histEra) => (
-                          <QuickPresetChip
-                            key={histEra.id}
-                            type="button"
-                            $active={historicalCountryId === histEra.id}
-                            onClick={() => {
-                              playClickSound()
-                              setCountryId(modernAnchorCountry.id)
-                              setHistoricalCountryId(histEra.id)
-                              setCountryName(histEra.name)
-                              setCountryFlagEmoji('🏛️')
-                              setCountryEnglishName(histEra.enName || '')
-                              setAdministrationDepartmentId('')
-                            }}
-                          >
-                            🏛️ {histEra.name}
-                          </QuickPresetChip>
-                        ))}
-                      </InlineDateRow>
-                    )}
-                </FlatFieldControl>
-              </FlatFormRow>
-
-              <FlatFormRow>
-                <FlatFormLabel>군종</FlatFormLabel>
-                <FlatFieldControl>
-                  <PillChoiceRow role="group" aria-label="군종 선택">
-                    {MILITARY_BRANCHES.map((branchItem) => {
-                      const isSelected = branch === branchItem.value
-                      return (
-                        <PillChoiceChip
-                          key={branchItem.value}
-                          type="button"
-                          $selected={isSelected}
-                          onClick={() => {
-                            playClickSound()
-                            setBranch(isSelected ? '' : branchItem.value)
-                          }}
-                        >
-                          <PillChoiceIcon $selected={isSelected}>
-                            {branchItem.icon}
-                          </PillChoiceIcon>
-                          <span>{branchItem.label}</span>
-                        </PillChoiceChip>
-                      )
-                    })}
-                  </PillChoiceRow>
-                </FlatFieldControl>
-              </FlatFormRow>
-
-              <FlatFormRow>
-                <FlatFormLabel>부대 유형 · 제대</FlatFormLabel>
-                <FlatFieldControl>
-                  <SearchableSelect
-                    options={unitTypeSelectOptions}
-                    value={unitType}
-                    onChange={(nextVal) => {
-                      playClickSound()
-                      setUnitType(nextVal as MilitaryUnitType | '')
-                    }}
-                    placeholder="부대 유형 · 제대 검색 · 선택"
-                    searchPlaceholder="최고사령부, 집단군, 야전군, 사단, 함대 등 검색…"
-                    ariaLabel="부대 유형 · 제대"
-                  />
-                </FlatFieldControl>
-              </FlatFormRow>
-
-              <FlatFormRow>
-                <FlatFormLabel>상위 부대 · 사령부</FlatFormLabel>
-                <FlatFieldControl>
-                  <SearchableSelect
-                    options={parentUnitSelectOptions}
-                    value={parentUnitId}
-                    onChange={(nextVal) => {
-                      playClickSound()
-                      setParentUnitId(nextVal)
-                    }}
-                    placeholder="최상위 독립 편제 (상위 부대·사령부 없음)"
-                    searchPlaceholder="상위 사령부·부대명, 약칭(OKW 등) 검색…"
-                    ariaLabel="상위 부대·사령부"
-                    emptyMessage="선택 가능한 상위 부대가 없습니다"
-                  />
-                </FlatFieldControl>
-              </FlatFormRow>
-
-              <FlatFormRow>
-                <FlatFormLabel>소관 군정 부처</FlatFormLabel>
-                <FlatFieldControl>
-                  <SearchableSelect
-                    options={adminDeptSelectOptions}
-                    value={administrationDepartmentId}
-                    onChange={(nextDeptId) => {
-                      playClickSound()
-                      setAdministrationDepartmentId(nextDeptId)
-                      const nextDept = adminDepartments.find(
-                        (deptItem) => deptItem.id === nextDeptId,
-                      )
-                      if (nextDept) {
-                        if (nextDept.historicalCountryId) {
-                          setHistoricalCountryId(nextDept.historicalCountryId)
-                        } else if (
-                          nextDept.countryId &&
-                          !defaultHistoricalCountryId
-                        ) {
-                          setHistoricalCountryId('')
-                        }
-                      }
-                    }}
-                    disabled={!hasCountry || lockCountryAndDepartment}
-                    placeholder="없음 (독립 최고사령부 등)"
-                    searchPlaceholder="국방부, 전쟁성, 병조 등 부처 검색…"
-                    ariaLabel="소관 국방·군정 부처"
-                    emptyMessage="이 국가에 등록된 행정부처가 없습니다"
-                  />
-                  <FlatHint>
-                    민간 국방부·병조 등 군정 부처 산하일 때 선택합니다. (전쟁성
-                    폐지 → OKW 개편처럼 전신 부처에서 이어진 경우는 아래 「계보」
-                    섹션에서 연결하세요.)
-                  </FlatHint>
-                </FlatFieldControl>
-              </FlatFormRow>
-
-              <FlatFormRow>
-                <FlatFormLabel>창설 시점</FlatFormLabel>
-                <FlatFieldControl>
-                  <InlineDateRow>
-                    <FlatSelect
-                      aria-label="창설 기원"
-                      value={establishedEra}
-                      onChange={(changeEvent) =>
-                        setEstablishedEra(
-                          changeEvent.target.value as 'AD' | 'BC',
-                        )
-                      }
-                      style={{ width: 74 }}
-                    >
-                      <option value="AD">서기</option>
-                      <option value="BC">BC</option>
-                    </FlatSelect>
-                    <FlatInput
-                      type="number"
-                      min={1}
-                      placeholder="연도 (예: 1938)"
-                      value={establishedYear}
-                      onChange={(changeEvent) =>
-                        setEstablishedYear(changeEvent.target.value)
-                      }
-                      style={{ width: 136 }}
-                    />
-                    <FlatInput
-                      type="number"
-                      min={1}
-                      max={12}
-                      placeholder="월"
-                      value={establishedMonth}
-                      onChange={(changeEvent) =>
-                        setEstablishedMonth(changeEvent.target.value)
-                      }
-                      style={{ width: 72 }}
-                    />
-                    <FlatInput
-                      type="number"
-                      min={1}
-                      max={31}
-                      placeholder="일"
-                      value={establishedDay}
-                      onChange={(changeEvent) =>
-                        setEstablishedDay(changeEvent.target.value)
-                      }
-                      style={{ width: 72 }}
-                    />
-                    <InlineIconBtn
-                      type="button"
-                      title="달력에서 날짜 선택"
-                      onClick={() => {
-                        playClickSound()
-                        setEstablishedDateModalOpen(true)
-                      }}
-                    >
-                      <FiCalendar size={14} />
-                      달력
-                    </InlineIconBtn>
-                    {(establishedYear || establishedMonth || establishedDay) && (
-                      <InlineIconBtn
-                        type="button"
-                        title="창설 시점 비우기"
-                        onClick={() => {
-                          playClickSound()
-                          setEstablishedEra('AD')
-                          setEstablishedYear('')
-                          setEstablishedMonth('')
-                          setEstablishedDay('')
-                        }}
-                      >
-                        <FiX size={14} />
-                      </InlineIconBtn>
-                    )}
-                  </InlineDateRow>
-                </FlatFieldControl>
-              </FlatFormRow>
-
-              <FlatFormRow>
-                <FlatFormLabel>해산 시점 · 상태</FlatFormLabel>
-                <FlatFieldControl>
-                  <InlineDateRow>
-                    <FlatSelect
-                      aria-label="해산 기원"
-                      value={disbandedEra}
-                      onChange={(changeEvent) =>
-                        setDisbandedEra(
-                          changeEvent.target.value as 'AD' | 'BC',
-                        )
-                      }
-                      style={{ width: 74 }}
-                    >
-                      <option value="AD">서기</option>
-                      <option value="BC">BC</option>
-                    </FlatSelect>
-                    <FlatInput
-                      type="number"
-                      min={1}
-                      placeholder="해산 연도 (예: 1945)"
-                      value={disbandedYear}
-                      onChange={(changeEvent) => {
-                        const nextVal = changeEvent.target.value
-                        setDisbandedYear(nextVal)
-                        if (nextVal.trim()) {
-                          setIsActive(false)
-                        }
-                      }}
-                      style={{ width: 146 }}
-                    />
-                    <FlatInput
-                      type="number"
-                      min={1}
-                      max={12}
-                      placeholder="월"
-                      value={disbandedMonth}
-                      onChange={(changeEvent) => {
-                        const nextVal = changeEvent.target.value
-                        setDisbandedMonth(nextVal)
-                        if (nextVal.trim()) {
-                          setIsActive(false)
-                        }
-                      }}
-                      style={{ width: 72 }}
-                    />
-                    <FlatInput
-                      type="number"
-                      min={1}
-                      max={31}
-                      placeholder="일"
-                      value={disbandedDay}
-                      onChange={(changeEvent) => {
-                        const nextVal = changeEvent.target.value
-                        setDisbandedDay(nextVal)
-                        if (nextVal.trim()) {
-                          setIsActive(false)
-                        }
-                      }}
-                      style={{ width: 72 }}
-                    />
-                    <InlineIconBtn
-                      type="button"
-                      title="달력에서 날짜 선택"
-                      onClick={() => {
-                        playClickSound()
-                        setDisbandedDateModalOpen(true)
-                      }}
-                    >
-                      <FiCalendar size={14} />
-                      달력
-                    </InlineIconBtn>
-                    {(disbandedYear || disbandedMonth || disbandedDay) && (
-                      <InlineIconBtn
-                        type="button"
-                        title="해산 시점 비우기"
-                        onClick={() => {
-                          playClickSound()
-                          setDisbandedEra('AD')
-                          setDisbandedYear('')
-                          setDisbandedMonth('')
-                          setDisbandedDay('')
-                        }}
-                      >
-                        <FiX size={14} />
-                      </InlineIconBtn>
-                    )}
-                    <QuickPresetChip
-                      type="button"
-                      $active={isActive}
-                      onClick={() => {
-                        playClickSound()
-                        const nextActive = !isActive
-                        setIsActive(nextActive)
-                        if (nextActive) {
-                          setDisbandedYear('')
-                          setDisbandedMonth('')
-                          setDisbandedDay('')
-                        }
-                      }}
-                    >
-                      {isActive ? '● 현역 운용 중' : '○ 해산·비운용'}
-                    </QuickPresetChip>
-                  </InlineDateRow>
-                  <FlatHint>
-                    연도만 입력해도 저장되며, 해산 연도를 입력하면 자동으로
-                    해산·비운용 상태로 전환됩니다.
-                  </FlatHint>
-                </FlatFieldControl>
-              </FlatFormRow>
-            </FlatFormSection>
-
-            {/* 2. 지휘관 · 주둔지 · 임무 */}
-            <FlatFormSection
-              data-form-section="military"
-              onFocusCapture={() => setActiveSection('military')}
+              취소
+            </PersonRegisterModalCancelBtn>
+            {!isEdit && (
+              <PersonRegisterModalCancelBtn
+                type="button"
+                disabled={loading || insigniaUploading || !isFormValid}
+                title="저장 후 창을 닫지 않고 같은 국가·소속 맥락으로 다음 사령부·부대를 바로 이어 등록합니다 (단축키: ⌘/Ctrl + Shift + Enter)"
+                onClick={() => {
+                  playClickSound()
+                  continueAfterSaveRef.current = true
+                  void submitUnitForm({ continueAfterSave: true })
+                }}
+              >
+                등록 후 계속
+              </PersonRegisterModalCancelBtn>
+            )}
+            <ModalPrimarySubmitBtn
+              type="submit"
+              form="military-unit-form"
+              disabled={loading || insigniaUploading || !isFormValid}
+              aria-busy={loading}
+              onClick={() => {
+                continueAfterSaveRef.current = false
+              }}
+              title={
+                loading
+                  ? '저장 중...'
+                  : !isFormValid
+                    ? (firstValidationIssue?.label ??
+                      '필수 항목을 입력해야 저장할 수 있습니다')
+                    : '단축키: ⌘/Ctrl + Enter'
+              }
             >
-              <FlatSectionHeader>
-                <FlatSectionTitle>
-                  역대 지휘관 · 주둔지 · 작전 임무
-                </FlatSectionTitle>
-                <FlatSectionHint>
-                  인물 상세 경력과 자동 동기화 ({totalCommanderCount}명)
-                </FlatSectionHint>
-              </FlatSectionHeader>
-
-              <FlatFormRow>
-                <FlatFormLabel>역대 지휘관·참모</FlatFormLabel>
-                <FlatFieldControl>
-                  {isEdit && editingUnitId ? (
-                    <>
-                      {unitTenures.map((tenureItem) => {
-                        const personDisplay = tenureItem.person
-                          ? getPersonDisplayName(tenureItem.person)
-                          : '인물 미상'
-                        return (
-                          <LinkedRecordRow key={tenureItem.id}>
-                            <div
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                gap: 10,
-                              }}
-                            >
-                              <div style={{ minWidth: 0 }}>
-                                <div
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 6,
-                                    flexWrap: 'wrap',
-                                    fontSize: 13.5,
-                                  }}
-                                >
-                                  {tenureItem.ordinal != null && (
-                                    <span
-                                      style={{
-                                        fontSize: 11.5,
-                                        fontWeight: 700,
-                                        color: '#2563eb',
-                                      }}
-                                    >
-                                      제{tenureItem.ordinal}대
-                                    </span>
-                                  )}
-                                  {tenureItem.rankTitle && (
-                                    <span
-                                      style={{
-                                        fontSize: 11.5,
-                                        padding: '1px 7px',
-                                        borderRadius: 6,
-                                        background: 'rgba(37, 99, 235, 0.1)',
-                                        color: '#2563eb',
-                                        fontWeight: 600,
-                                      }}
-                                    >
-                                      {tenureItem.rankTitle}
-                                    </span>
-                                  )}
-                                  <strong>{personDisplay}</strong>
-                                  {tenureItem.title && (
-                                    <span style={{ opacity: 0.76 }}>
-                                      · {tenureItem.title}
-                                    </span>
-                                  )}
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: 12,
-                                    opacity: 0.7,
-                                    marginTop: 2,
-                                  }}
-                                >
-                                  {formatTenureDateSpan(tenureItem)}
-                                </div>
-                              </div>
-                              <InlineDateRow>
-                                <InlineIconBtn
-                                  type="button"
-                                  title="지휘관 재임 수정"
-                                  onClick={() => {
-                                    playClickSound()
-                                    setEditingAppointmentTenure({
-                                      id: tenureItem.id,
-                                      personId:
-                                        tenureItem.personId ??
-                                        tenureItem.person?.id ??
-                                        null,
-                                      personName: personDisplay,
-                                      positionType:
-                                        tenureItem.positionDefinition
-                                          ?.positionType ??
-                                        'MILITARY_COMMANDER',
-                                      positionDefinitionId:
-                                        tenureItem.positionDefinition?.id ??
-                                        null,
-                                      title:
-                                        tenureItem.title ??
-                                        tenureItem.positionDefinition?.title ??
-                                        null,
-                                      rankTitle: tenureItem.rankTitle ?? null,
-                                      ordinal: tenureItem.ordinal ?? null,
-                                      partyId: tenureItem.partyId ?? null,
-                                      militaryUnitId: editingUnitId,
-                                      startDate: tenureItem.startDate,
-                                      endDate: tenureItem.endDate,
-                                      startEra: tenureItem.startEra,
-                                      startYear: tenureItem.startYear,
-                                      startMonth: tenureItem.startMonth,
-                                      startDay: tenureItem.startDay,
-                                      endEra: tenureItem.endEra,
-                                      endYear: tenureItem.endYear,
-                                      endMonth: tenureItem.endMonth,
-                                      endDay: tenureItem.endDay,
-                                    })
-                                    setAppointmentModalOpen(true)
-                                  }}
-                                >
-                                  <FiEdit2 size={13} />
-                                </InlineIconBtn>
-                                <InlineIconBtn
-                                  type="button"
-                                  $danger
-                                  title="지휘관 재임 삭제"
-                                  onClick={() =>
-                                    void handleDeleteUnitTenure(tenureItem)
-                                  }
-                                >
-                                  <FiTrash2 size={13} />
-                                </InlineIconBtn>
-                              </InlineDateRow>
-                            </div>
-                          </LinkedRecordRow>
-                        )
-                      })}
-                      <OutlineAddBtn
-                        type="button"
-                        onClick={() => {
-                          playClickSound()
-                          setEditingAppointmentTenure(null)
-                          setAppointmentModalOpen(true)
-                        }}
-                      >
-                        <FiPlus size={14} />
-                        지휘관 · 참모 임명 추가
-                      </OutlineAddBtn>
-                    </>
-                  ) : (
-                    <>
-                      {commanderRows.map((rowItem, rowIndex) => (
-                        <LinkedRecordRow
-                          key={`${rowItem.personId}-${rowIndex}`}
-                        >
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              gap: 8,
-                            }}
-                          >
-                            <div
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                fontWeight: 700,
-                                fontSize: 13.5,
-                              }}
-                            >
-                              <FiUser size={14} color="#2563eb" />
-                              {rowItem.personName}
-                            </div>
-                            <InlineIconBtn
-                              type="button"
-                              $danger
-                              onClick={() => {
-                                playClickSound()
-                                setCommanderRows((prev) =>
-                                  prev.filter((_, idx) => idx !== rowIndex),
-                                )
-                              }}
-                            >
-                              <FiTrash2 size={13} />
-                            </InlineIconBtn>
-                          </div>
-
-                          <InlineDateRow>
-                            {commanderRolePresets.map((presetRole) => (
-                              <QuickPresetChip
-                                key={presetRole}
-                                type="button"
-                                $active={rowItem.roleTitle === presetRole}
-                                onClick={() =>
-                                  setCommanderRows((prev) =>
-                                    prev.map((item, idx) =>
-                                      idx === rowIndex
-                                        ? { ...item, roleTitle: presetRole }
-                                        : item,
-                                    ),
-                                  )
-                                }
-                              >
-                                {presetRole}
-                              </QuickPresetChip>
-                            ))}
-                          </InlineDateRow>
-
-                          <FlatTwoColGrid>
-                            <FlatInput
-                              type="text"
-                              placeholder="직책·보직명 * (예: 사령관, 총장, 참모장)"
-                              value={rowItem.roleTitle}
-                              onChange={(changeEvent) => {
-                                const nextRole = changeEvent.target.value
-                                setCommanderRows((prev) =>
-                                  prev.map((item, idx) =>
-                                    idx === rowIndex
-                                      ? { ...item, roleTitle: nextRole }
-                                      : item,
-                                  ),
-                                )
-                              }}
-                            />
-                            <InlineDateRow>
-                              <FlatInput
-                                type="text"
-                                placeholder="계급 (예: 원수, 중장)"
-                                value={rowItem.rankTitle}
-                                onChange={(changeEvent) => {
-                                  const nextRank = changeEvent.target.value
-                                  setCommanderRows((prev) =>
-                                    prev.map((item, idx) =>
-                                      idx === rowIndex
-                                        ? { ...item, rankTitle: nextRank }
-                                        : item,
-                                    ),
-                                  )
-                                }}
-                                style={{ flex: '1 1 110px' }}
-                              />
-                              <FlatInput
-                                type="number"
-                                min={1}
-                                placeholder="대수"
-                                value={rowItem.ordinal}
-                                onChange={(changeEvent) => {
-                                  const nextOrd = changeEvent.target.value
-                                  setCommanderRows((prev) =>
-                                    prev.map((item, idx) =>
-                                      idx === rowIndex
-                                        ? { ...item, ordinal: nextOrd }
-                                        : item,
-                                    ),
-                                  )
-                                }}
-                                style={{ width: 76 }}
-                              />
-                            </InlineDateRow>
-                          </FlatTwoColGrid>
-
-                          <FlatTwoColGrid>
-                            <InlineDateRow>
-                              <FlatSelect
-                                aria-label="부임 기원"
-                                value={rowItem.startEra}
-                                onChange={(changeEvent) => {
-                                  const nextEra = changeEvent.target.value as
-                                    | 'AD'
-                                    | 'BC'
-                                  setCommanderRows((prev) =>
-                                    prev.map((item, idx) =>
-                                      idx === rowIndex
-                                        ? { ...item, startEra: nextEra }
-                                        : item,
-                                    ),
-                                  )
-                                }}
-                                style={{ width: 68 }}
-                              >
-                                <option value="AD">서기</option>
-                                <option value="BC">BC</option>
-                              </FlatSelect>
-                              <FlatInput
-                                type="number"
-                                min={1}
-                                placeholder="부임 연도 *"
-                                value={rowItem.startYear}
-                                onChange={(changeEvent) => {
-                                  const nextYear = changeEvent.target.value
-                                  setCommanderRows((prev) =>
-                                    prev.map((item, idx) =>
-                                      idx === rowIndex
-                                        ? { ...item, startYear: nextYear }
-                                        : item,
-                                    ),
-                                  )
-                                }}
-                                style={{ flex: '1 1 92px' }}
-                              />
-                              <FlatInput
-                                type="number"
-                                min={1}
-                                max={12}
-                                placeholder="월"
-                                value={rowItem.startMonth}
-                                onChange={(changeEvent) => {
-                                  const nextMonth = changeEvent.target.value
-                                  setCommanderRows((prev) =>
-                                    prev.map((item, idx) =>
-                                      idx === rowIndex
-                                        ? { ...item, startMonth: nextMonth }
-                                        : item,
-                                    ),
-                                  )
-                                }}
-                                style={{ width: 58 }}
-                              />
-                              <FlatInput
-                                type="number"
-                                min={1}
-                                max={31}
-                                placeholder="일"
-                                value={rowItem.startDay}
-                                onChange={(changeEvent) => {
-                                  const nextDay = changeEvent.target.value
-                                  setCommanderRows((prev) =>
-                                    prev.map((item, idx) =>
-                                      idx === rowIndex
-                                        ? { ...item, startDay: nextDay }
-                                        : item,
-                                    ),
-                                  )
-                                }}
-                                style={{ width: 58 }}
-                              />
-                            </InlineDateRow>
-
-                            <InlineDateRow>
-                              <FlatSelect
-                                aria-label="이임 기원"
-                                value={rowItem.endEra}
-                                onChange={(changeEvent) => {
-                                  const nextEra = changeEvent.target.value as
-                                    | 'AD'
-                                    | 'BC'
-                                  setCommanderRows((prev) =>
-                                    prev.map((item, idx) =>
-                                      idx === rowIndex
-                                        ? { ...item, endEra: nextEra }
-                                        : item,
-                                    ),
-                                  )
-                                }}
-                                style={{ width: 68 }}
-                              >
-                                <option value="AD">서기</option>
-                                <option value="BC">BC</option>
-                              </FlatSelect>
-                              <FlatInput
-                                type="number"
-                                min={1}
-                                placeholder="이임 연도(선택)"
-                                value={rowItem.endYear}
-                                onChange={(changeEvent) => {
-                                  const nextYear = changeEvent.target.value
-                                  setCommanderRows((prev) =>
-                                    prev.map((item, idx) =>
-                                      idx === rowIndex
-                                        ? { ...item, endYear: nextYear }
-                                        : item,
-                                    ),
-                                  )
-                                }}
-                                style={{ flex: '1 1 92px' }}
-                              />
-                              <FlatInput
-                                type="number"
-                                min={1}
-                                max={12}
-                                placeholder="월"
-                                value={rowItem.endMonth}
-                                onChange={(changeEvent) => {
-                                  const nextMonth = changeEvent.target.value
-                                  setCommanderRows((prev) =>
-                                    prev.map((item, idx) =>
-                                      idx === rowIndex
-                                        ? { ...item, endMonth: nextMonth }
-                                        : item,
-                                    ),
-                                  )
-                                }}
-                                style={{ width: 58 }}
-                              />
-                              <FlatInput
-                                type="number"
-                                min={1}
-                                max={31}
-                                placeholder="일"
-                                value={rowItem.endDay}
-                                onChange={(changeEvent) => {
-                                  const nextDay = changeEvent.target.value
-                                  setCommanderRows((prev) =>
-                                    prev.map((item, idx) =>
-                                      idx === rowIndex
-                                        ? { ...item, endDay: nextDay }
-                                        : item,
-                                    ),
-                                  )
-                                }}
-                                style={{ width: 58 }}
-                              />
-                            </InlineDateRow>
-                          </FlatTwoColGrid>
-                        </LinkedRecordRow>
-                      ))}
-                      <OutlineAddBtn
-                        type="button"
-                        onClick={() => {
-                          playClickSound()
-                          setCommanderPersonModalOpen(true)
-                        }}
-                      >
-                        <FiPlus size={14} />
-                        지휘관 인물 추가 (생성 시 자동 임명)
-                      </OutlineAddBtn>
-                    </>
-                  )}
-                </FlatFieldControl>
-              </FlatFormRow>
-
-              <FlatFormRow>
-                <FlatFormLabel>주둔지 · 본부</FlatFormLabel>
-                <FlatFieldControl>
-                  <PlaceSelect
-                    countryId={countryId || defaultCountryId || undefined}
-                    disabled={!hasCountry}
-                    value={garrisonPlace}
-                    onChange={(placeVal) => setGarrisonPlace(placeVal)}
-                  />
-                  <FlatHint>
-                    소속 국가 선택 후 본부 소재지·주둔지를 입력합니다 (예: 베를린
-                    벤들러블로크, 츠카 Zossen, 도쿄 미야케자카 등 자유 입력 가능).
-                  </FlatHint>
-                </FlatFieldControl>
-              </FlatFormRow>
-
-              <FlatFormRow>
-                <FlatFormLabel>별칭 · 표어</FlatFormLabel>
-                <FlatFieldControl>
-                  <FlatTwoColGrid>
-                    <FlatInput
-                      type="text"
-                      aria-label="별명·통칭"
-                      placeholder="별칭·통칭 (예: 맹호부대, 불사조 사단)"
-                      value={nickname}
-                      onChange={(changeEvent) =>
-                        setNickname(changeEvent.target.value)
-                      }
-                    />
-                    <FlatInput
-                      type="text"
-                      aria-label="부대 표어"
-                      placeholder="부대 표어·모토 (예: 필승, 충성)"
-                      value={motto}
-                      onChange={(changeEvent) =>
-                        setMotto(changeEvent.target.value)
-                      }
-                    />
-                  </FlatTwoColGrid>
-                </FlatFieldControl>
-              </FlatFormRow>
-
-              <FlatFormRow>
-                <FlatFormLabel>병력 규모</FlatFormLabel>
-                <FlatFieldControl>
-                  <FlatInput
-                    type="text"
-                    placeholder="예: 약 10,000명 / 3개 군단 9개 사단"
-                    value={strength}
-                    onChange={(changeEvent) =>
-                      setStrength(changeEvent.target.value)
-                    }
-                  />
-                </FlatFieldControl>
-              </FlatFormRow>
-
-              <FlatFormRow>
-                <FlatFormLabel>주요 임무</FlatFormLabel>
-                <FlatFieldControl>
-                  <FlatTextarea
-                    rows={2}
-                    placeholder="예: 국방군 작전 총괄 지휘, 기동 타격, 해상 호위 등"
-                    value={primaryMission}
-                    onChange={(changeEvent) =>
-                      setPrimaryMission(changeEvent.target.value)
-                    }
-                  />
-                </FlatFieldControl>
-              </FlatFormRow>
-
-              <FlatFormRow>
-                <FlatFormLabel>관할 · 작전구역</FlatFormLabel>
-                <FlatFieldControl>
-                  <FlatTextarea
-                    rows={2}
-                    placeholder="예: 서부·북아프리카·발칸 전구, 동부전선 중부 작전구역 등"
-                    value={jurisdiction}
-                    onChange={(changeEvent) =>
-                      setJurisdiction(changeEvent.target.value)
-                    }
-                  />
-                </FlatFieldControl>
-              </FlatFormRow>
-            </FlatFormSection>
-
-            {/* 3. 전신 · 후신 계보 */}
-            <FlatFormSection
-              data-form-section="lineage"
-              onFocusCapture={() => setActiveSection('lineage')}
-            >
-              <FlatSectionHeader>
-                <FlatSectionTitle>
-                  전신 · 후신 계보 (부처 → 사령부 포함)
-                </FlatSectionTitle>
-                <FlatSectionHint>
-                  개칭 · 분리 · 통합 · 부처 이관 ({totalLineageCount}건)
-                </FlatSectionHint>
-              </FlatSectionHeader>
-
-              <FlatFormRow>
-                <FlatFormLabel>계보 연결</FlatFormLabel>
-                <FlatFieldControl>
-                  {isEdit &&
-                    (predecessors.length > 0 || successors.length > 0) && (
-                      <>
-                        {predecessors.map((predItem) =>
-                          renderLineageRow(predItem, 'PREDECESSOR'),
-                        )}
-                        {successors.map((succItem) =>
-                          renderLineageRow(succItem, 'SUCCESSOR'),
-                        )}
-                      </>
-                    )}
-
-                  {!isEdit &&
-                    pendingTransitions.map((draftItem) => {
-                      const kindLabel =
-                        TRANSITION_KIND_OPTIONS.find(
-                          (optItem) => optItem.value === draftItem.kind,
-                        )?.label ?? draftItem.kind
-                      const timeLabel = draftItem.year
-                        ? ` · ${draftItem.era === 'BC' ? 'BC ' : ''}${draftItem.year}년${draftItem.month ? ` ${draftItem.month}월` : ''}`
-                        : ''
-                      return (
-                        <LinkedRecordRow key={draftItem.localKey}>
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              gap: 10,
-                            }}
-                          >
-                            <div style={{ fontSize: 13 }}>
-                              {draftItem.direction === 'SUCCESSOR_UNIT' ? (
-                                <>
-                                  <span style={{ opacity: 0.72 }}>
-                                    신규 부대 →{' '}
-                                  </span>
-                                  <strong>{draftItem.targetLabel}</strong>{' '}
-                                  <span style={{ opacity: 0.72 }}>
-                                    ({kindLabel}
-                                    {timeLabel})
-                                  </span>
-                                </>
-                              ) : (
-                                <>
-                                  <strong>{draftItem.targetLabel}</strong>{' '}
-                                  <span style={{ opacity: 0.72 }}>
-                                    → 신규 부대 ({kindLabel}
-                                    {timeLabel})
-                                  </span>
-                                </>
-                              )}
-                              {draftItem.note && (
-                                <div
-                                  style={{
-                                    fontSize: 12,
-                                    opacity: 0.7,
-                                    marginTop: 2,
-                                  }}
-                                >
-                                  {draftItem.note}
-                                </div>
-                              )}
-                            </div>
-                            <InlineIconBtn
-                              type="button"
-                              $danger
-                              onClick={() =>
-                                setPendingTransitions((prev) =>
-                                  prev.filter(
-                                    (item) =>
-                                      item.localKey !== draftItem.localKey,
-                                  ),
-                                )
-                              }
-                            >
-                              <FiTrash2 size={13} />
-                            </InlineIconBtn>
-                          </div>
-                        </LinkedRecordRow>
-                      )
-                    })}
-
-                  <LinkedRecordRow>
-                    <FlatTwoColGrid>
-                      <FlatSelect
-                        aria-label="계보 연결 방향"
-                        value={newTransitionDirection}
-                        onChange={(changeEvent) => {
-                          setNewTransitionDirection(
-                            changeEvent.target.value as TransitionDirection,
-                          )
-                          setNewTransitionTargetId('')
-                        }}
-                      >
-                        <option value="PREDECESSOR_DEPARTMENT">
-                          전신 행정부처 → 이 사령부·부대 (예: 전쟁성 → OKW)
-                        </option>
-                        <option value="PREDECESSOR_UNIT">
-                          전신 군부대 → 이 부대
-                        </option>
-                        <option value="SUCCESSOR_UNIT">
-                          이 부대 → 후신 군부대
-                        </option>
-                      </FlatSelect>
-
-                      <FlatSelect
-                        aria-label="변동 유형"
-                        value={newTransitionKind}
-                        onChange={(changeEvent) =>
-                          setNewTransitionKind(
-                            changeEvent.target
-                              .value as MilitaryUnitTransitionKind,
-                          )
-                        }
-                      >
-                        {TRANSITION_KIND_OPTIONS.map((optItem) => (
-                          <option key={optItem.value} value={optItem.value}>
-                            {optItem.label}
-                          </option>
-                        ))}
-                      </FlatSelect>
-                    </FlatTwoColGrid>
-
-                    <FlatTwoColGrid>
-                      <SearchableSelect
-                        options={lineageTargetSelectOptions}
-                        value={newTransitionTargetId}
-                        onChange={(nextTargetId) =>
-                          setNewTransitionTargetId(nextTargetId)
-                        }
-                        placeholder={
-                          newTransitionDirection === 'PREDECESSOR_DEPARTMENT'
-                            ? '전신 행정부처 검색 · 선택…'
-                            : '대상 군부대 검색 · 선택…'
-                        }
-                        searchPlaceholder="기관·부대명, 약칭, 시대명 검색…"
-                        ariaLabel="계보 연결 대상 기관·부대"
-                        emptyMessage="선택 가능한 대상이 없습니다"
-                      />
-
-                      <InlineDateRow>
-                        <FlatSelect
-                          aria-label="개편 기원"
-                          value={newTransitionEra}
-                          onChange={(changeEvent) =>
-                            setNewTransitionEra(
-                              changeEvent.target.value as 'AD' | 'BC',
-                            )
-                          }
-                          style={{ width: 72 }}
-                        >
-                          <option value="AD">서기</option>
-                          <option value="BC">BC</option>
-                        </FlatSelect>
-                        <FlatInput
-                          type="number"
-                          min={1}
-                          placeholder="연도 (예: 1938)"
-                          value={newTransitionYear}
-                          onChange={(changeEvent) =>
-                            setNewTransitionYear(changeEvent.target.value)
-                          }
-                          style={{ flex: '1 1 104px' }}
-                        />
-                        <FlatInput
-                          type="number"
-                          min={1}
-                          max={12}
-                          placeholder="월"
-                          value={newTransitionMonth}
-                          onChange={(changeEvent) =>
-                            setNewTransitionMonth(changeEvent.target.value)
-                          }
-                          style={{ width: 68 }}
-                        />
-                      </InlineDateRow>
-                    </FlatTwoColGrid>
-
-                    <InlineDateRow>
-                      <FlatInput
-                        type="text"
-                        placeholder="비고 (선택 — 예: 블롬베르크-프리치 사건으로 전쟁성 폐지 후 총통 직할 최고사령부로 개편)"
-                        value={newTransitionNote}
-                        onChange={(changeEvent) =>
-                          setNewTransitionNote(changeEvent.target.value)
-                        }
-                        style={{ flex: '1 1 240px' }}
-                      />
-                      <OutlineAddBtn
-                        type="button"
-                        disabled={!newTransitionTargetId || transitionBusy}
-                        onClick={() => void handleAddTransition()}
-                      >
-                        <FiPlus size={14} />
-                        {transitionBusy
-                          ? '연결 중…'
-                          : isEdit
-                            ? '계보 연결 추가'
-                            : '계보 목록에 추가'}
-                      </OutlineAddBtn>
-                    </InlineDateRow>
-                  </LinkedRecordRow>
-                </FlatFieldControl>
-              </FlatFormRow>
-            </FlatFormSection>
-
-            {/* 4. 주요 전투 · 표창 · 상세 설명 */}
-            <FlatFormSection
-              data-form-section="description"
-              onFocusCapture={() => setActiveSection('description')}
-            >
-              <FlatSectionHeader>
-                <FlatSectionTitle>
-                  주요 전투 · 표창 · 상세 설명
-                </FlatSectionTitle>
-                <FlatSectionHint>선택 입력</FlatSectionHint>
-              </FlatSectionHeader>
-
-              <FlatFormRow>
-                <FlatFormLabel>주요 전투 · 작전</FlatFormLabel>
-                <FlatFieldControl>
-                  <FlatTextarea
-                    rows={3}
-                    placeholder="예: 바르바로사 작전, 타이푼 작전, 인천상륙작전 등"
-                    value={notableBattles}
-                    onChange={(changeEvent) =>
-                      setNotableBattles(changeEvent.target.value)
-                    }
-                  />
-                </FlatFieldControl>
-              </FlatFormRow>
-
-              <FlatFormRow>
-                <FlatFormLabel>훈장 · 표창</FlatFormLabel>
-                <FlatFieldControl>
-                  <FlatTextarea
-                    rows={2}
-                    placeholder="예: 대통령부대표창(2020), 국방부장관표창(2018)"
-                    value={honors}
-                    onChange={(changeEvent) =>
-                      setHonors(changeEvent.target.value)
-                    }
-                  />
-                </FlatFieldControl>
-              </FlatFormRow>
-
-              <FlatFormRow>
-                <FlatFormLabel>부대 상세 설명</FlatFormLabel>
-                <FlatFieldControl>
-                  <FlatTextarea
-                    rows={5}
-                    placeholder="부대·사령부의 창설 배경, 지휘 구조, 작전사적 의의 등을 입력하세요."
-                    value={description}
-                    onChange={(changeEvent) =>
-                      setDescription(changeEvent.target.value)
-                    }
-                  />
-                </FlatFieldControl>
-              </FlatFormRow>
-            </FlatFormSection>
-          </FlatFormStack>
-        </form>
-      </SidePanel>
+              {loading
+                ? isEdit
+                  ? '수정 중…'
+                  : '등록 중…'
+                : isEdit
+                  ? '수정 완료'
+                  : '사령부·부대 등록'}
+            </ModalPrimarySubmitBtn>
+          </FooterActions>
+        </PersonRegisterModalStickyFooter>
+      </RegisterModal>
 
       {/* 국가 선택 모달 */}
       <CountryPicker
@@ -3613,7 +6231,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
             const historical = historicalCountries.find(
               (candidate) => candidate.id === country.id,
             )
-            setCountryId('')
+            setCountryId(historical?.countries?.[0]?.id ?? '')
             setHistoricalCountryId(country.id)
             setCountryFlagEmoji('🏛️')
             setCountryEnglishName(historical?.enName || '')
@@ -3628,6 +6246,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
           }
           setCountryName(country.name)
           setAdministrationDepartmentId('')
+          markDirty(true)
           setCountryModalOpen(false)
         }}
         modernCountries={modernCountries}
@@ -3638,6 +6257,11 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       <DatePickerModal
         isOpen={establishedDateModalOpen}
         onClose={() => setEstablishedDateModalOpen(false)}
+        anchorEl={
+          typeof document !== 'undefined'
+            ? document.getElementById(estCalendarAnchorId)
+            : null
+        }
         onSelect={(selectedIso) => {
           const parsedParts = parseIsoPartsFallback(selectedIso)
           if (parsedParts.year) {
@@ -3645,6 +6269,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
             setEstablishedYear(parsedParts.year)
             setEstablishedMonth(parsedParts.month)
             setEstablishedDay(parsedParts.day)
+            markDirty(true)
           }
           setEstablishedDateModalOpen(false)
         }}
@@ -3660,6 +6285,11 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       <DatePickerModal
         isOpen={disbandedDateModalOpen}
         onClose={() => setDisbandedDateModalOpen(false)}
+        anchorEl={
+          typeof document !== 'undefined'
+            ? document.getElementById(disbCalendarAnchorId)
+            : null
+        }
         onSelect={(selectedIso) => {
           const parsedParts = parseIsoPartsFallback(selectedIso)
           if (parsedParts.year) {
@@ -3668,6 +6298,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
             setDisbandedMonth(parsedParts.month)
             setDisbandedDay(parsedParts.day)
             setIsActive(false)
+            markDirty(true)
           }
           setDisbandedDateModalOpen(false)
         }}
@@ -3719,6 +6350,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                 endDay: '',
               },
             ])
+            markDirty(true)
             setCommanderPersonModalOpen(false)
           }}
           onClose={() => setCommanderPersonModalOpen(false)}
@@ -3751,3 +6383,1138 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     </>
   )
 }
+
+// ============================================================================
+// Styled Components (사건 등록 모달 EventRegisterModal + BasicInfoSection + EventTypeField 정본)
+// ============================================================================
+
+const MilitaryModalFormScroll = styled(PersonRegisterModalFormScroll)<{
+  $layoutMode: 'split' | 'single'
+}>`
+  overflow-x: hidden;
+
+  ${({ $layoutMode }) =>
+    $layoutMode === 'split'
+      ? `
+    @media (min-width: 1180px) {
+      overflow-y: hidden;
+      padding: 22px 28px;
+    }
+  `
+      : ''}
+`
+
+const ModalPrimarySubmitBtn = styled(PersonRegisterModalPrimaryBtn)`
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#2563eb' : '#1d4ed8')};
+  box-shadow: 0 1px 2px rgba(29, 78, 216, 0.2);
+
+  &:hover:not(:disabled) {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? '#3b82f6' : '#1e40af'};
+  }
+`
+
+const HeaderContextBadge = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 210px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(148, 163, 184, 0.24)'
+        : 'rgba(15, 23, 42, 0.12)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f8fafc'};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease;
+
+  &:hover,
+  &:focus-visible {
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#f1f5f9'};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(148, 163, 184, 0.45)' : '#94a3b8'};
+    outline: none;
+  }
+`
+
+const HeaderContextBadgeText = styled.span`
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const SectionBadge = styled.span<{ $done?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  margin-left: 4px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  background: ${({ $done, theme }) =>
+    $done
+      ? theme.mode === 'dark'
+        ? 'rgba(16, 185, 129, 0.2)'
+        : 'rgba(16, 185, 129, 0.14)'
+      : theme.mode === 'dark'
+        ? 'rgba(59, 130, 246, 0.2)'
+        : 'rgba(37, 99, 235, 0.1)'};
+  color: ${({ $done, theme }) =>
+    $done
+      ? theme.mode === 'dark'
+        ? '#6ee7b7'
+        : '#047857'
+      : theme.mode === 'dark'
+        ? '#93c5fd'
+        : '#1d4ed8'};
+`
+
+const LayoutModeToggleBtn = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? 'rgba(148, 163, 184, 0.32)'
+          : '#cbd5e1'
+        : theme.colors.border.light};
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.08)'
+        : '#f1f5f9'
+      : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.text.primary : theme.colors.text.secondary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color 0.14s ease,
+    border-color 0.14s ease,
+    background-color 0.14s ease;
+
+  @media (max-width: 1180px) {
+    display: none;
+  }
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(148, 163, 184, 0.45)' : '#94a3b8'};
+    outline: none;
+  }
+`
+
+const FooterActions = styled.div`
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+`
+
+const SingleColumnStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+`
+
+const FormGroupSection = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 0 8px;
+
+  & + & {
+    margin-top: 20px;
+    padding-top: 4px;
+  }
+
+  > ${S.FormRow} {
+    padding: 10px 0;
+    border-bottom: none;
+  }
+`
+
+const FormGroupHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  margin: 0 0 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid ${({ theme }) => S.getC(theme).border.light};
+`
+
+const FormGroupTitle = styled.h3`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  &::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--active-domain-accent, #2563eb);
+    transition: background-color 0.16s ease;
+  }
+`
+
+const FormGroupRightCluster = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+`
+
+const FormGroupSummaryBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) =>
+    `var(--active-domain-text, ${theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8'})`};
+  background: ${({ theme }) =>
+    `rgba(var(--active-domain-rgb, 37, 99, 235), ${
+      theme.mode === 'dark' ? 0.14 : 0.07
+    })`};
+  border: 1px solid rgba(var(--active-domain-rgb, 37, 99, 235), 0.22);
+  transition:
+    color 0.16s ease,
+    background-color 0.16s ease,
+    border-color 0.16s ease;
+`
+
+const SplitRatioGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f1f5f9'};
+
+  @media (max-width: 1179px) {
+    display: none;
+  }
+`
+
+const SplitRatioBtn = styled.button<{ $active: boolean }>`
+  height: 22px;
+  padding: 0 7px;
+  border: none;
+  border-radius: 5px;
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.12)'
+        : '#ffffff'
+      : 'transparent'};
+  box-shadow: ${({ $active, theme }) =>
+    $active && theme.mode !== 'dark'
+      ? '0 1px 2px rgba(15, 23, 42, 0.08)'
+      : 'none'};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.text.primary : theme.colors.text.tertiary};
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const SplitColumnsGrid = styled.div<{
+  $ratio?: 'left-wide' | 'equal' | 'right-wide'
+}>`
+  display: grid;
+  grid-template-columns: ${({ $ratio }) =>
+    $ratio === 'left-wide'
+      ? 'minmax(0, 1.2fr) minmax(0, 0.85fr)'
+      : $ratio === 'right-wide'
+        ? 'minmax(0, 0.85fr) minmax(0, 1.2fr)'
+        : 'minmax(0, 1fr) minmax(0, 1fr)'};
+  gap: 0;
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+
+  @media (min-width: 1180px) {
+    ${S.FormRow} {
+      grid-template-columns: 104px minmax(0, 1fr);
+      gap: 14px;
+    }
+  }
+
+  @media (max-width: 1179px) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+`
+
+const splitPaneScrollStyles = ({ theme }: { theme: DefaultTheme }) => `
+  min-width: 0;
+  overflow-x: hidden;
+
+  @media (min-width: 1180px) {
+    max-height: calc(90vh - 172px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: 56px;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: ${theme.colors.border.default};
+      border-radius: 2px;
+    }
+  }
+`
+
+const SplitColumnLeft = styled.div`
+  ${splitPaneScrollStyles}
+
+  @media (min-width: 1180px) {
+    padding-left: 3px;
+    padding-right: 26px;
+  }
+`
+
+const SplitColumnRight = styled.div`
+  ${splitPaneScrollStyles}
+
+  @media (min-width: 1180px) {
+    padding-left: 26px;
+    padding-right: 3px;
+    border-left: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  }
+`
+
+const OptionalTag = styled.span`
+  margin-left: 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: ${({ theme }) => S.getC(theme).text.muted};
+`
+
+const NameAbbrGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 172px;
+  gap: 10px;
+  width: 100%;
+
+  @media (max-width: 640px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+const TitleInput = styled(S.Input)`
+  height: 40px;
+  padding: 0 13px;
+  font-size: 14.5px;
+  font-weight: 600;
+`
+
+const AbbrInput = styled(S.Input)`
+  height: 40px;
+  padding: 0 12px;
+  font-size: 13.5px;
+  font-weight: 600;
+`
+
+const SubTitleGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  min-width: 0;
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const SubTitleField = styled.label`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+`
+
+const SubTitleLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => S.getC(theme).text.secondary};
+`
+
+const TitleSuggestionRow = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+`
+
+const TitleSuggestionLabel = styled.span`
+  color: ${({ theme }) => S.getC(theme).text.muted};
+`
+
+const TitleSuggestionButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--active-domain-rgb, 37, 99, 235), 0.35);
+  background: ${({ theme }) =>
+    `rgba(var(--active-domain-rgb, 37, 99, 235), ${theme.mode === 'dark' ? 0.16 : 0.08})`};
+  color: ${({ theme }) =>
+    `var(--active-domain-text, ${theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8'})`};
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) =>
+      `rgba(var(--active-domain-rgb, 37, 99, 235), ${theme.mode === 'dark' ? 0.24 : 0.14})`};
+  }
+`
+
+const TitleApplyAllButton = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--active-domain-rgb, 37, 99, 235), 0.45);
+  background: ${({ theme }) =>
+    `rgba(var(--active-domain-rgb, 37, 99, 235), ${theme.mode === 'dark' ? 0.22 : 0.12})`};
+  color: ${({ theme }) =>
+    `var(--active-domain-text, ${theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8'})`};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.14s ease;
+
+  &:hover {
+    background: ${({ theme }) =>
+      `rgba(var(--active-domain-rgb, 37, 99, 235), ${theme.mode === 'dark' ? 0.3 : 0.18})`};
+  }
+`
+
+const SimilarEventsBar = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 11px;
+  border-radius: 8px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.28)'
+        : 'rgba(245, 158, 11, 0.3)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(245, 158, 11, 0.08)'
+      : 'rgba(254, 243, 199, 0.45)'};
+  font-size: 12px;
+`
+
+const SimilarEventsLabel = styled.span`
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(245, 158, 11, 0.18)'
+      : 'rgba(245, 158, 11, 0.16)'};
+`
+
+const SimilarEventsList = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  min-width: 0;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const SimilarEventItem = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+`
+
+const SimilarEventTitle = styled.span`
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const SimilarEventMeta = styled.span`
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const SimilarEventActionBtn = styled.button`
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.35)'
+        : 'rgba(180, 83, 9, 0.28)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(245, 158, 11, 0.14)'
+      : 'rgba(255, 255, 255, 0.75)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#92400e')};
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#fbbf24' : '#b45309'};
+  }
+`
+
+const DateRangeHeaderBar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+`
+
+const DateRangeGrid = styled(S.DateRangeRow)<{ $singleColumn?: boolean }>`
+  grid-template-columns: ${({ $singleColumn }) =>
+    $singleColumn ? 'minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1fr)'};
+
+  @media (max-width: 640px) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+`
+
+const DateColumnHeaderRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 20px;
+`
+
+const DateQuickActions = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+`
+
+const DateQuickActionBtn = styled.button`
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
+  background: transparent;
+  color: ${({ theme }) => S.getC(theme).text.muted};
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease,
+    background-color 0.14s ease;
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) =>
+      `var(--active-domain-text, ${theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8'})`};
+    border-color: rgba(var(--active-domain-rgb, 37, 99, 235), 0.45);
+    background: ${({ theme }) =>
+      `rgba(var(--active-domain-rgb, 37, 99, 235), ${theme.mode === 'dark' ? 0.14 : 0.07})`};
+    outline: none;
+  }
+`
+
+const ParentEventCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
+  border-radius: 12px;
+  background: ${({ theme }) => S.getC(theme).background.subtle};
+`
+
+const ParentEventHeaderRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+`
+
+const ParentEventBadge = styled.span`
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) =>
+    `var(--active-domain-text, ${theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8'})`};
+  background: ${({ theme }) =>
+    `rgba(var(--active-domain-rgb, 37, 99, 235), ${theme.mode === 'dark' ? 0.16 : 0.08})`};
+  border: 1px solid rgba(var(--active-domain-rgb, 37, 99, 235), 0.22);
+`
+
+const CommanderRankBadge = styled.span`
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => S.getC(theme).text.secondary};
+  background: ${({ theme }) => S.getC(theme).background.content};
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
+`
+
+const ParentEventTitle = styled.span`
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: ${({ theme }) => S.getC(theme).text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const RelatedEventDateMeta = styled.span`
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => S.getC(theme).text.muted};
+  background: ${({ theme }) => S.getC(theme).background.content};
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
+`
+
+const ParticipantActionCluster = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: auto;
+`
+
+const ParticipantList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+const ParticipantRow = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
+  border-radius: 12px;
+  background: ${({ theme }) => S.getC(theme).background.subtle};
+  transition: border-color 0.15s ease, background 0.15s ease;
+
+  &:focus-within {
+    border-color: rgba(var(--active-domain-rgb, 37, 99, 235), 0.5);
+    background: ${({ theme }) => S.getC(theme).background.content};
+  }
+`
+
+const ParticipantHeaderRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+`
+
+const ParticipantSubNote = styled.div`
+  font-size: 12px;
+  color: ${({ theme }) => S.getC(theme).text.secondary};
+  padding-left: 4px;
+`
+
+const ParticipantRoleBar = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed ${({ theme }) => S.getC(theme).border.light};
+`
+
+const ParticipantRoleChipGroup = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+`
+
+const ParticipantRoleChipBtn = styled.button<{ $selected: boolean }>`
+  height: 25px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ $selected, theme }) =>
+      $selected
+        ? 'rgba(var(--active-domain-rgb, 37, 99, 235), 0.45)'
+        : S.getC(theme).border.default};
+  background: ${({ $selected, theme }) =>
+    $selected
+      ? `rgba(var(--active-domain-rgb, 37, 99, 235), ${theme.mode === 'dark' ? 0.18 : 0.09})`
+      : S.getC(theme).background.content};
+  color: ${({ $selected, theme }) =>
+    $selected
+      ? `var(--active-domain-text, ${theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8'})`
+      : S.getC(theme).text.secondary};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: ${({ $selected }) => ($selected ? 700 : 500)};
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.14s ease;
+
+  &:hover {
+    border-color: rgba(var(--active-domain-rgb, 37, 99, 235), 0.55);
+    color: ${({ theme }) =>
+      `var(--active-domain-text, ${theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8'})`};
+  }
+`
+
+const CompactInlineFieldsRow = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+`
+
+const CompactEraSelect = styled.select`
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
+  border-radius: 8px;
+  background: ${({ theme }) => S.getC(theme).background.content};
+  color: ${({ theme }) => S.getC(theme).text.primary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+`
+
+const ParticipantNoteInput = styled(S.Input)`
+  flex: 1 1 140px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  border-radius: 8px;
+`
+
+const ParticipantRemove = styled(KitRemoveButton)`
+  margin-left: auto;
+`
+
+const CountryQuickSearchRow = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+`
+
+const CountryQuickSearchWrap = styled.div`
+  position: relative;
+  flex: 1 1 220px;
+  min-width: 0;
+`
+
+const CountryQuickSearchInput = styled(S.Input)`
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  font-size: 13px;
+`
+
+const CountryQuickResultBox = styled.div`
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
+  background: ${({ theme }) => S.getC(theme).background.content};
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+`
+
+const CountryQuickResultItem = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: ${({ theme }) => S.getC(theme).text.primary};
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: ${({ theme }) => S.getC(theme).background.subtle};
+    outline: none;
+  }
+`
+
+const CountryQuickResultFlag = styled.span`
+  flex-shrink: 0;
+  font-size: 14px;
+`
+
+const CountryQuickResultName = styled.span`
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const CountryQuickResultMeta = styled.span`
+  flex-shrink: 0;
+  font-size: 11px;
+  color: ${({ theme }) => S.getC(theme).text.muted};
+`
+
+const CountryEraBadge = styled.span`
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#6ee7b7' : '#047857')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(16, 185, 129, 0.18)'
+      : 'rgba(16, 185, 129, 0.12)'};
+`
+
+const EraSpanMuted = styled.span`
+  font-size: 11px;
+  font-weight: 500;
+  color: ${({ theme }) => S.getC(theme).text.muted};
+`
+
+const CountryQuickEmpty = styled.div`
+  padding: 10px 12px;
+  font-size: 12px;
+  color: ${({ theme }) => S.getC(theme).text.muted};
+`
+
+const RecentParticipantBar = styled.div`
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const RecentParticipantLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => S.getC(theme).text.muted};
+  margin-right: 2px;
+`
+
+const RecentParticipantChip = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active
+        ? 'rgba(var(--active-domain-rgb, 37, 99, 235), 0.45)'
+        : S.getC(theme).border.default};
+  background: ${({ $active, theme }) =>
+    $active
+      ? `rgba(var(--active-domain-rgb, 37, 99, 235), ${theme.mode === 'dark' ? 0.18 : 0.09})`
+      : S.getC(theme).background.subtle};
+  color: ${({ $active, theme }) =>
+    $active
+      ? `var(--active-domain-text, ${theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8'})`
+      : S.getC(theme).text.secondary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  cursor: pointer;
+  transition: border-color 0.14s ease, color 0.14s ease,
+    background-color 0.14s ease;
+
+  &:hover,
+  &:focus-visible {
+    border-color: rgba(var(--active-domain-rgb, 37, 99, 235), 0.55);
+    color: ${({ theme }) =>
+      `var(--active-domain-text, ${theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8'})`};
+    background: ${({ theme }) =>
+      `rgba(var(--active-domain-rgb, 37, 99, 235), ${theme.mode === 'dark' ? 0.14 : 0.06})`};
+    outline: none;
+  }
+`
+
+const RecentMoreChip = styled.button`
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px dashed ${({ theme }) => S.getC(theme).border.default};
+  background: transparent;
+  color: ${({ theme }) => S.getC(theme).text.muted};
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) =>
+      `var(--active-domain-text, ${theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8'})`};
+    border-color: rgba(var(--active-domain-rgb, 37, 99, 235), 0.5);
+  }
+`
+
+const LifespanWarnRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+`
+
+const LifespanReplaceBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(180, 83, 9, 0.45);
+  background: rgba(245, 158, 11, 0.14);
+  color: inherit;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover,
+  &:focus-visible {
+    background: rgba(245, 158, 11, 0.24);
+    border-color: rgba(180, 83, 9, 0.7);
+    outline: none;
+  }
+`
+
+const UnitTypeContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+const UnitTypeQuickSearchWrap = styled.div`
+  position: relative;
+  max-width: 440px;
+`
+
+const MoreToggleChip = styled.button`
+  height: 32px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px dashed ${({ theme }) => S.getC(theme).border.default};
+  background: transparent;
+  color: ${({ theme }) => S.getC(theme).text.muted};
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.14s ease, border-color 0.14s ease;
+
+  &:hover {
+    color: ${({ theme }) =>
+      `var(--active-domain-text, ${theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8'})`};
+    border-color: rgba(var(--active-domain-rgb, 37, 99, 235), 0.5);
+  }
+`
+
+const ExtraGroupsStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px dashed ${({ theme }) => S.getC(theme).border.light};
+`
+
+const ExtraGroupBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const ModalCausalFlowBoard = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(130px, 0.9fr) minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  background: ${({ theme }) => S.getC(theme).background.subtle};
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const ModalCausalLane = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+`
+
+const ModalCausalLaneHeader = styled.span<{ $tone: 'cause' | 'effect' }>`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ $tone, theme }) =>
+    $tone === 'cause'
+      ? theme.mode === 'dark'
+        ? '#fcd34d'
+        : '#b45309'
+      : theme.mode === 'dark'
+        ? '#93c5fd'
+        : '#1d4ed8'};
+`
+
+const ModalCausalMiniChip = styled.span`
+  display: block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: ${({ theme }) => S.getC(theme).background.content};
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => S.getC(theme).text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const ModalCausalEmptyHint = styled.span`
+  font-size: 11px;
+  color: ${({ theme }) => S.getC(theme).text.muted};
+`
+
+const ModalCausalCenterNode = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1.5px solid rgba(var(--active-domain-rgb, 37, 99, 235), 0.45);
+  background: ${({ theme }) =>
+    `rgba(var(--active-domain-rgb, 37, 99, 235), ${theme.mode === 'dark' ? 0.14 : 0.07})`};
+  text-align: center;
+  min-width: 0;
+`
+
+const ModalCausalCenterTag = styled.span`
+  font-size: 10px;
+  font-weight: 700;
+  color: ${({ theme }) =>
+    `var(--active-domain-text, ${theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8'})`};
+`
+
+const ModalCausalCenterTitle = styled.span`
+  max-width: 100%;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => S.getC(theme).text.primary};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const DescriptionFooterRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+`
+
+const CharCountText = styled.span`
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`

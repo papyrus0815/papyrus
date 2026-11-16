@@ -115,23 +115,17 @@ export class GovernmentPositionController {
   ) {}
 
   /**
-   * 행정부에 연결된 사건 목록 (CabinetEvent N:M)
+   * 행정부에 연결된 사건 목록 (CabinetEvent N:M, 워크스페이스 공유 읽기)
    */
-  @UseGuards(AuthGuard('jwt'))
   @Get('cabinets/:cabinetId/events')
   async getCabinetEvents(
-    @Req() req: Request,
     @Param('cabinetId') cabinetId: string,
   ): Promise<any[]> {
-    const accountId = (req as any).user?.id ?? (req as any).user?.sub
     const cabinet = await this.prisma.cabinet.findUnique({
       where: { id: cabinetId },
-      select: { accountId: true },
+      select: { id: true },
     })
     if (!cabinet) throw new NotFoundException('행정부를 찾을 수 없습니다.')
-    if (cabinet.accountId && cabinet.accountId !== requireActorId(accountId)) {
-      throw new ForbiddenException('이 행정부에 대한 권한이 없습니다.')
-    }
     const rows = await this.prisma.cabinetEvent.findMany({
       where: { cabinetId, event: { deletedAt: null } },
       include: { event: true },
@@ -556,16 +550,13 @@ export class GovernmentPositionController {
   }
 
   /**
-   * 행정부 ID로 소속 각료(재임) 목록. 로그인 시 해당 계정 소유 행정부만 접근 가능.
+   * 행정부 ID로 소속 각료(재임) 목록 (워크스페이스 공유 읽기)
    */
-  @UseGuards(AuthGuard('jwt'))
   @Get('cabinets/:cabinetId/tenures')
   async getTenuresByCabinetId(
-    @Req() req: Request,
     @Param('cabinetId') cabinetId: string,
   ): Promise<any[]> {
-    const accountId = (req as any).user?.id ?? (req as any).user?.sub
-    const list = await this.personService.findTenuresByCabinetId(cabinetId, accountId)
+    const list = await this.personService.findTenuresByCabinetId(cabinetId)
     return list.map(serializeBigInt)
   }
 
@@ -644,16 +635,13 @@ export class GovernmentPositionController {
   }
 
   /**
-   * 같은 묶음에 속한 다른 행정부 목록 (행정부 단위 다국 연결)
+   * 같은 묶음에 속한 다른 행정부 목록 (행정부 단위 다국 연결, 워크스페이스 공유 읽기)
    */
-  @UseGuards(AuthGuard('jwt'))
   @Get('cabinets/:cabinetId/linked-cabinets')
   async getLinkedCabinets(
-    @Req() req: Request,
     @Param('cabinetId') cabinetId: string,
   ): Promise<any[]> {
-    const accountId = (req as any).user?.id ?? (req as any).user?.sub
-    const list = await this.personService.findLinkedCabinets(cabinetId, accountId)
+    const list = await this.personService.findLinkedCabinets(cabinetId)
     return list.map(serializeBigInt)
   }
 

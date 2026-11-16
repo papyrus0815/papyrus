@@ -1,5 +1,6 @@
 import { withOfficeHoldingRouter } from '../../person/infrastructure/office-holding.testing'
 import {
+  describeDeathAtEvent,
   describeExistenceMismatch,
   describeLifespanMismatch,
   inferParticipationCountries,
@@ -187,5 +188,55 @@ describe('앞뒤 안 맞는 연결 경고', () => {
     expect(describeExistenceMismatch(-100, 'PARTICIPANT', -27, 476)).toBe(
       '존속(기원전 27~476) 밖의 사건입니다',
     )
+  })
+})
+
+describe('describeDeathAtEvent — 사건 중 전사·처형·피살 파생', () => {
+  it('단기 전투·진압 기간 중 또는 직후(7일 이내) 처형·전사한 인물을 표시한다', () => {
+    const suppressionEvent = {
+      kind: 'SINGLE',
+      startEra: 'AD',
+      startYear: 1919,
+      startDate: new Date('1919-01-10T00:00:00.000Z'),
+      startDatePrecision: 'day',
+      endEra: 'AD',
+      endYear: 1919,
+      endDate: new Date('1919-01-12T00:00:00.000Z'),
+      endDatePrecision: 'day',
+    }
+    const liebknecht = {
+      deathEra: 'AD',
+      deathDate: new Date('1919-01-15T00:00:00.000Z'),
+      deathDatePrecision: 'day',
+      deathType: 'EXECUTION',
+      deathCause: '근위기병소총사단(자유군단)에 체포되어 즉결 처형',
+    }
+    expect(describeDeathAtEvent(suppressionEvent, liebknecht)).toEqual({
+      label: '처형',
+      dateLabel: '1919.1.15',
+      cause: '근위기병소총사단(자유군단)에 체포되어 즉결 처형',
+    })
+  })
+
+  it('같은 해라도 사건과 무관한 시점의 사망은 표시하지 않는다', () => {
+    const suppressionEvent = {
+      kind: 'SINGLE',
+      startEra: 'AD',
+      startYear: 1919,
+      startDate: new Date('1919-01-10T00:00:00.000Z'),
+      startDatePrecision: 'day',
+      endEra: 'AD',
+      endYear: 1919,
+      endDate: new Date('1919-01-12T00:00:00.000Z'),
+      endDatePrecision: 'day',
+    }
+    const laterDeath = {
+      deathEra: 'AD',
+      deathDate: new Date('1919-11-10T00:00:00.000Z'),
+      deathDatePrecision: 'day',
+      deathType: 'ASSASSINATION',
+      deathCause: null,
+    }
+    expect(describeDeathAtEvent(suppressionEvent, laterDeath)).toBeNull()
   })
 })

@@ -12,7 +12,7 @@
  */
 import React from 'react'
 
-import { FaStar, FaRegStar, FaLandmark } from 'react-icons/fa'
+import { FiChevronRight, FiCompass, FiStar } from 'react-icons/fi'
 import styled, { useTheme } from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
@@ -185,7 +185,7 @@ export function CountryListRow({
                     country.name.slice(0, 2)
                   )
                 ) : (
-                  <FaLandmark />
+                  <FiCompass size={13} aria-hidden />
                 )}
               </S.IsoBadge>
             )}
@@ -239,7 +239,11 @@ export function CountryListRow({
                 onTogglePin(country.id)
               }}
             >
-              {pinned ? <FaStar size={11} /> : <FaRegStar size={11} />}
+              <FiStar
+                size={12}
+                fill={pinned ? 'currentColor' : 'none'}
+                aria-hidden
+              />
             </S.PinButton>
             {hasChildren && (
               <S.HasChildrenChevron
@@ -253,16 +257,7 @@ export function CountryListRow({
                 }}
               >
                 <span>{country.historicalCountries!.length}</span>
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M9 18l6-6-6-6" />
-                </svg>
+                <FiChevronRight size={12} aria-hidden />
               </S.HasChildrenChevron>
             )}
           </S.RowRight>

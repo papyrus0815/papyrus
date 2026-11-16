@@ -91,6 +91,38 @@ function formatClauseLabel(
   return `제${paragraphNumber}항`
 }
 
+function toDateInputString(raw: string | null | undefined): string {
+  if (!raw) return ''
+  const dateObj = new Date(raw)
+  if (Number.isNaN(dateObj.getTime())) return ''
+  const year = dateObj.getUTCFullYear()
+  const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(dateObj.getUTCDate()).padStart(2, '0')
+  return `${String(year).padStart(4, '0')}-${month}-${day}`
+}
+
+function formatLawDotDate(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  const dateObj = new Date(raw)
+  if (Number.isNaN(dateObj.getTime())) return null
+  const year = dateObj.getUTCFullYear()
+  const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(dateObj.getUTCDate()).padStart(2, '0')
+  return `${year}.${month}.${day}`
+}
+
+function formatLawDateBadge(
+  startDate: string | null | undefined,
+  endDate: string | null | undefined,
+): string | null {
+  const startLabel = formatLawDotDate(startDate)
+  const endLabel = formatLawDotDate(endDate)
+  if (startLabel && endLabel) return `${startLabel} ~ ${endLabel}`
+  if (startLabel) return `${startLabel} 시행`
+  if (endLabel) return `~ ${endLabel} 폐지`
+  return null
+}
+
 export function CountryLawsSection({
   countryId,
   historicalCountryId,
@@ -108,6 +140,9 @@ export function CountryLawsSection({
   const [summary, setSummary] = useState('')
   const [articleInput, setArticleInput] = useState('')
   const [paragraphInput, setParagraphInput] = useState('')
+  const [startDateInput, setStartDateInput] = useState('')
+  const [endDateInput, setEndDateInput] = useState('')
+  const [noteInput, setNoteInput] = useState('')
   const [lawTypeId, setLawTypeId] = useState('')
   const [newLawTypeName, setNewLawTypeName] = useState('')
   const [lawTypeAddOpen, setLawTypeAddOpen] = useState(false)
@@ -127,6 +162,9 @@ export function CountryLawsSection({
     setSummary('')
     setArticleInput('')
     setParagraphInput('')
+    setStartDateInput('')
+    setEndDateInput('')
+    setNoteInput('')
     setLawTypeId('')
   }, [])
 
@@ -143,9 +181,19 @@ export function CountryLawsSection({
 
   const sorted = useMemo(
     () =>
-      [...rows].sort((left, right) =>
-        left.name.localeCompare(right.name, 'ko'),
-      ),
+      [...rows].sort((left, right) => {
+        const leftTime = left.startDate ? Date.parse(left.startDate) : NaN
+        const rightTime = right.startDate ? Date.parse(right.startDate) : NaN
+        const leftHasDate = Number.isFinite(leftTime)
+        const rightHasDate = Number.isFinite(rightTime)
+        if (leftHasDate && rightHasDate && leftTime !== rightTime) {
+          return leftTime - rightTime
+        }
+        if (leftHasDate !== rightHasDate) {
+          return leftHasDate ? -1 : 1
+        }
+        return left.name.localeCompare(right.name, 'ko')
+      }),
     [rows],
   )
 
@@ -238,8 +286,10 @@ export function CountryLawsSection({
       return [
         row.name,
         row.lawType?.name,
+        row.historicalCountry?.name,
         clauseLabel,
         row.summary,
+        row.note,
       ].some((field) => field?.toLowerCase().includes(keyword))
     })
   }, [sorted, typeFilter, searchQuery])
@@ -327,6 +377,9 @@ export function CountryLawsSection({
     setParagraphInput(
       row.paragraphNumber != null ? String(row.paragraphNumber) : '',
     )
+    setStartDateInput(toDateInputString(row.startDate))
+    setEndDateInput(toDateInputString(row.endDate))
+    setNoteInput(row.note ?? '')
     setLawTypeId(row.lawTypeId ?? row.lawType?.id ?? '')
     setEditorOpen(true)
   }
@@ -353,11 +406,21 @@ export function CountryLawsSection({
       return
     }
 
+    const startDate = startDateInput.trim() || null
+    const endDate = endDateInput.trim() || null
+    if (startDate && endDate && Date.parse(endDate) < Date.parse(startDate)) {
+      notify.error('폐지·종료일은 제정·시행일보다 빠를 수 없습니다.')
+      return
+    }
+
     const payload = {
       name: name.trim(),
       summary: summary.trim() || null,
       articleNumber: article,
       paragraphNumber: paragraph,
+      startDate,
+      endDate,
+      note: noteInput.trim() || null,
       lawTypeId: lawTypeId || null,
       countryId: countryId ?? null,
       historicalCountryId: historicalCountryId ?? null,
@@ -369,6 +432,9 @@ export function CountryLawsSection({
         summary: payload.summary,
         articleNumber: payload.articleNumber,
         paragraphNumber: payload.paragraphNumber,
+        startDate: payload.startDate,
+        endDate: payload.endDate,
+        note: payload.note,
         lawTypeId: payload.lawTypeId,
       })
     } else {
@@ -647,7 +713,16 @@ export function CountryLawsSection({
                       row.articleNumber,
                       row.paragraphNumber,
                     )
+                    const dateBadgeLabel = formatLawDateBadge(
+                      row.startDate,
+                      row.endDate,
+                    )
+                    const historicalPolityLabel =
+                      !historicalCountryId && row.historicalCountry?.name
+                        ? row.historicalCountry.name
+                        : null
                     const summaryText = row.summary?.trim() || ''
+                    const noteText = row.note?.trim() || ''
 
                     return (
                       <LawsLedgerRow
@@ -661,6 +736,14 @@ export function CountryLawsSection({
                             {resolvedTypeLabel && (
                               <LawTypeBadge>{resolvedTypeLabel}</LawTypeBadge>
                             )}
+                            {historicalPolityLabel && (
+                              <HistoricalPolityBadge>
+                                {historicalPolityLabel}
+                              </HistoricalPolityBadge>
+                            )}
+                            {dateBadgeLabel && (
+                              <LawDateBadge>{dateBadgeLabel}</LawDateBadge>
+                            )}
                             {clauseLabel && (
                               <ClauseBadge>{clauseLabel}</ClauseBadge>
                             )}
@@ -668,6 +751,7 @@ export function CountryLawsSection({
                           <LawSummaryText $muted={!summaryText}>
                             {summaryText || '등록된 법령 요약 설명이 없습니다.'}
                           </LawSummaryText>
+                          {noteText && <LawNoteText>{noteText}</LawNoteText>}
                         </LawsLedgerMain>
 
                         <LawsRowActions>
@@ -820,6 +904,38 @@ export function CountryLawsSection({
                 </ModalFieldWide>
               </FieldRow>
               <FieldRow>
+                <FieldLabel htmlFor="country-law-start-date">
+                  제정·시행일
+                </FieldLabel>
+                <ModalFieldWide>
+                  <Input
+                    id="country-law-start-date"
+                    type="date"
+                    value={startDateInput}
+                    onChange={(changeEvent) =>
+                      setStartDateInput(changeEvent.target.value)
+                    }
+                    style={{ maxWidth: 220 }}
+                  />
+                </ModalFieldWide>
+              </FieldRow>
+              <FieldRow>
+                <FieldLabel htmlFor="country-law-end-date">
+                  폐지·종료일
+                </FieldLabel>
+                <ModalFieldWide>
+                  <Input
+                    id="country-law-end-date"
+                    type="date"
+                    value={endDateInput}
+                    onChange={(changeEvent) =>
+                      setEndDateInput(changeEvent.target.value)
+                    }
+                    style={{ maxWidth: 220 }}
+                  />
+                </ModalFieldWide>
+              </FieldRow>
+              <FieldRow>
                 <FieldLabel>요약</FieldLabel>
                 <FullWidthControl>
                   <Textarea
@@ -828,6 +944,19 @@ export function CountryLawsSection({
                       setSummary(changeEvent.target.value)
                     }
                     rows={4}
+                  />
+                </FullWidthControl>
+              </FieldRow>
+              <FieldRow>
+                <FieldLabel>비고·제헌 경위</FieldLabel>
+                <FullWidthControl>
+                  <Textarea
+                    value={noteInput}
+                    onChange={(changeEvent) =>
+                      setNoteInput(changeEvent.target.value)
+                    }
+                    rows={2}
+                    placeholder="예: 제헌의회 의결·국민투표 경위, 개정 연혁 등"
                   />
                 </FullWidthControl>
               </FieldRow>
@@ -1280,6 +1409,34 @@ const ClauseBadge = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
   background: ${({ theme }) => theme.colors.background.secondary};
   border: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const HistoricalPolityBadge = styled.span`
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+`
+
+const LawDateBadge = styled.span`
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  background: transparent;
+  border: 1px dashed ${({ theme }) => theme.colors.border.light};
+`
+
+const LawNoteText = styled.p`
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const LawSummaryText = styled.p<{ $muted?: boolean }>`

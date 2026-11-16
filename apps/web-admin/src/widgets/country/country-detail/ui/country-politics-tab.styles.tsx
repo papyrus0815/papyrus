@@ -5,23 +5,33 @@ import styled, { css } from 'styled-components'
 
 import {
   DIGIT_DISPLAY,
+  RADIUS,
   ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentHover,
+  ledgerAccentSubtle,
+  ledgerBackground,
   ledgerExpandedFill,
   ledgerHairline,
   ledgerHairlineStrong,
+  ledgerHoverFill,
   ledgerRowWash,
 } from '@/entities/event/ui/ledger-tokens'
 import { glassOrSolidMixin } from '@/shared/styles/mixins'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
-import { MapRegionTabNav } from './map-region-section.styles'
+import { UnderlineTabNav } from '@/shared/ui/underline-tabs'
 
 /** 본문 패널 */
 export const PoliticsTabPanel = styled.div`
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 20px 24px 32px;
+  padding: 20px clamp(20px, 2.5vw, 32px) 48px;
   min-height: 320px;
+
+  @media (max-width: 768px) {
+    padding: 16px 16px 36px;
+  }
 `
 
 export const SectionHeaderRow = styled.div`
@@ -32,8 +42,8 @@ export const SectionHeaderRow = styled.div`
   gap: 12px;
 `
 
-/** 선거 탭 하위 — 상단 SectionTabHeader와 간격만 맞춤 */
-export const PoliticsElectionSubTabNav = styled(MapRegionTabNav)`
+/** 선거 탭 하위 — 플랫 언더라인 탭 */
+export const PoliticsElectionSubTabNav = styled(UnderlineTabNav)`
   margin-bottom: 0;
 `
 
@@ -523,27 +533,37 @@ export const PartyShareStats = styled.span`
   white-space: normal;
 `
 
-/** 툴바 버튼 — 인물 등록 SubmitButton 계열 */
+/** 툴바 버튼 — 사건 페이지 플랫 원장 규격 (34px / 8px) */
 export const ToolbarPrimaryBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 16px;
-  border-radius: 12px;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 8px;
   border: none;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
-  color: #fff;
-  background: #6366f1;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#0e0f12' : '#ffffff')};
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25);
-  transition: background 0.2s ease;
+  box-shadow: none;
+  transition: background 0.14s ease;
   &:hover:not(:disabled) {
-    background: #4f46e5;
+    background: ${({ theme }) => ledgerAccentHover(theme.mode)};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px ${({ theme }) => ledgerBackground(theme.mode)},
+      0 0 0 4px ${({ theme }) => ledgerAccent(theme.mode)};
   }
   &:disabled {
     opacity: 0.55;
     cursor: not-allowed;
+  }
+  @media (max-width: 768px) {
+    height: 40px;
   }
 `
 
@@ -551,130 +571,126 @@ export const ToolbarGhostBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 13px;
+  height: 34px;
+  padding: 0 11px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12.5px;
+  font-weight: 600;
   cursor: pointer;
   transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
+    border-color 0.14s ease,
+    background 0.14s ease,
+    color 0.14s ease;
   &:hover:not(:disabled) {
-    border-color: ${({ theme }) => theme.colors.border.medium};
-    background: ${({ theme }) => theme.colors.background.tertiary};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  @media (max-width: 768px) {
+    height: 40px;
   }
 `
 
 export const ToolbarDangerBtn = styled(ToolbarGhostBtn)`
-  border-color: rgba(220, 38, 38, 0.45);
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#fca5a5' : '#b91c1c')};
   &:hover:not(:disabled) {
-    border-color: rgba(220, 38, 38, 0.65);
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(248, 113, 113, 0.45)' : '#fecaca'};
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(220,38,38,0.12)' : '#fef2f2'};
+      theme.mode === 'dark' ? 'rgba(220, 38, 38, 0.14)' : '#fef2f2'};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#fca5a5' : '#dc2626')};
   }
 `
 
 export const ToolbarGhostBtnSm = styled(ToolbarGhostBtn)`
-  padding: 5px 9px;
-  font-size: 11px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: ${RADIUS.SM};
+  font-size: 11.5px;
+  @media (max-width: 768px) {
+    height: 32px;
+  }
 `
 
 export const ToolbarDangerBtnSm = styled(ToolbarDangerBtn)`
-  padding: 5px 9px;
-  font-size: 11px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: ${RADIUS.SM};
+  font-size: 11.5px;
+  @media (max-width: 768px) {
+    height: 32px;
+  }
 `
 
-/** 선거·정당 상단 — 아이콘 전용 (원형, 얇은 테두리) */
+/** 선거·정당·내각 상단 — 플랫 아이콘 전용 (30×30px / 6px, 위험 동작은 호버 시에만 레드) */
 export const DetailHeaderIconBtn = styled.button<{
   $variant?: 'default' | 'danger'
 }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 30px;
+  height: 30px;
   padding: 0;
-  border: 1px solid
-    ${({ theme, $variant }) =>
-      $variant === 'danger'
-        ? 'transparent'
-        : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.1)'
-          : 'rgba(15, 23, 42, 0.08)'};
-  border-radius: 999px;
-  background: ${({ theme, $variant }) =>
-    $variant === 'danger'
-      ? 'transparent'
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.04)'
-        : 'rgba(255,255,255,0.92)'};
-  color: ${({ theme, $variant }) =>
-    $variant === 'danger'
-      ? theme.mode === 'dark'
-        ? '#f87171'
-        : '#dc2626'
-      : theme.colors.text.secondary};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.SM};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
   flex-shrink: 0;
+  box-shadow: none;
   transition:
-    background 0.18s ease,
-    border-color 0.18s ease,
-    color 0.18s ease,
-    box-shadow 0.18s ease;
+    background 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
   &:hover {
     border-color: ${({ theme, $variant }) =>
       $variant === 'danger'
-        ? 'rgba(220, 38, 38, 0.4)'
-        : 'rgba(99, 102, 241, 0.35)'};
+        ? theme.mode === 'dark'
+          ? 'rgba(248, 113, 113, 0.45)'
+          : '#fecaca'
+        : ledgerHairlineStrong(theme.mode)};
     background: ${({ theme, $variant }) =>
       $variant === 'danger'
         ? theme.mode === 'dark'
           ? 'rgba(220, 38, 38, 0.14)'
           : '#fef2f2'
-        : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.1)'
-          : '#f8fafc'};
+        : ledgerHoverFill(theme.mode)};
     color: ${({ theme, $variant }) =>
       $variant === 'danger'
         ? theme.mode === 'dark'
           ? '#fca5a5'
-          : '#b91c1c'
+          : '#dc2626'
         : theme.colors.text.primary};
-    box-shadow: ${({ $variant }) =>
-      $variant === 'danger' ? 'none' : '0 2px 12px rgba(99, 102, 241, 0.12)'};
+    box-shadow: none;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
   }
 `
 
-/** 섹션별 「추가」 — 채움색 버튼 대신 라인·캡슐형 */
+/** 섹션별 「추가」 — 컴팩트 보조 액션 (28px / 6px) */
 export const SubsectionAddBtn = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.01em;
-  color: #4f46e5;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.1)'
-      : 'rgba(99, 102, 241, 0.06)'};
-  border: 1px solid rgba(99, 102, 241, 0.28);
-  border-radius: 8px;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  border-radius: ${RADIUS.SM};
   cursor: pointer;
   transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
+    background 0.14s ease,
+    border-color 0.14s ease;
   &:hover:not(:disabled) {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.18)'
-        : 'rgba(99, 102, 241, 0.12)'};
-    border-color: rgba(99, 102, 241, 0.45);
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
   &:disabled {
     opacity: 0.5;
@@ -695,37 +711,29 @@ export const RowIconBtn = styled.button<{ $variant?: 'default' | 'danger' }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: none;
-  border-radius: 8px;
+  border-radius: ${RADIUS.SM};
   background: transparent;
-  color: ${({ theme, $variant }) =>
-    $variant === 'danger'
-      ? theme.mode === 'dark'
-        ? '#f87171'
-        : '#dc2626'
-      : theme.colors.text.secondary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;
-  flex-shrink: 0;
   transition:
-    background 0.12s ease,
-    color 0.12s ease;
-  &:hover {
+    background 0.14s ease,
+    color 0.14s ease;
+  &:hover:not(:disabled) {
     background: ${({ theme, $variant }) =>
       $variant === 'danger'
         ? theme.mode === 'dark'
           ? 'rgba(220, 38, 38, 0.14)'
           : '#fef2f2'
-        : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.08)'
-          : '#f1f5f9'};
+        : ledgerHoverFill(theme.mode)};
     color: ${({ theme, $variant }) =>
       $variant === 'danger'
         ? theme.mode === 'dark'
           ? '#fca5a5'
-          : '#b91c1c'
+          : '#dc2626'
         : theme.colors.text.primary};
   }
 `
@@ -1130,16 +1138,9 @@ export const PartyRowCard = styled.button<{ $active?: boolean }>`
 
   &:hover {
     border-color: ${({ $active, theme }) =>
-      $active ? 'rgba(99, 102, 241, 0.55)' : theme.colors.border.medium};
+      $active ? ledgerAccentBorder(theme.mode) : theme.colors.border.medium};
     background: ${({ $active, theme }) =>
-      $active
-        ? theme.mode === 'dark'
-          ? 'rgba(99, 102, 241, 0.16)'
-          : 'rgba(99, 102, 241, 0.09)'
-        : theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.07)'
-          : '#f1f5f9'};
-    transform: translateY(-1px);
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
   }
 
   &:focus {
@@ -2211,21 +2212,19 @@ export const PartyDescPrimaryBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 16px;
+  height: 34px;
+  padding: 0 14px;
   font-size: 12.5px;
   font-weight: 600;
-  color: #fff;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#0e0f12' : '#ffffff')};
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
   border: none;
-  border-radius: 9px;
+  border-radius: 8px;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.28);
-  transition:
-    box-shadow 0.15s,
-    opacity 0.15s;
+  box-shadow: none;
+  transition: background 0.14s ease;
   &:hover:not(:disabled) {
-    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.38);
-    opacity: 0.95;
+    background: ${({ theme }) => ledgerAccentHover(theme.mode)};
   }
   &:disabled {
     opacity: 0.5;

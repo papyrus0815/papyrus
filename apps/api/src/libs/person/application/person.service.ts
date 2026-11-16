@@ -2695,8 +2695,8 @@ export class PersonService {
 
   /**
    * 국가원수/왕위 재임 기록 추가.
-   * 정부 수반·국가 원수 재임(HEAD_OF_STATE/HEAD_OF_GOVERNMENT)은 기본적으로 행정부(Cabinet)를 자동 생성.
-   * 군주 재위도 같은 경로 — 직위 정의가 군주직이면 재위로 읽힌다(직위 보유 단일 모델).
+   * 행정부(Cabinet)는 수반 재임과 별도로 명시적 생성(내각 등록 모달 또는 createCabinet)하며,
+   * 군주 재위·수반·각료·군 지휘관 모두 단일 재임 모델(GovernmentPositionTenure)로 저장된다.
    * @param accountId 로그인 계정 ID — 계정별 행정부·각료 구분용
    */
   async addGovernmentPositionTenure(dto: CreateGovernmentPositionTenureDto, accountId?: string): Promise<any> {
@@ -2712,7 +2712,6 @@ export class PersonService {
     const person = tenure?.person
     const label = person ? `${personDisplayName(person)} - ${tenurePositionTitle(tenure, '재임')}` : tenurePositionTitle(tenure, '재임 기록')
     await this.notificationService.notifyTenure(label, EventMethod.CREATE, tenure?.personId ?? tenure?.id, tenurePreview(tenure))
-    // 행정부는 DB 트리거(trg_tenure_cabinet_ins)가 비군주 수반 재임에 자동으로 만든다 — 시드·스크립트 경로도 같은 규칙
     return tenure
   }
 
@@ -2725,8 +2724,8 @@ export class PersonService {
     accountId?: string,
   ): Promise<any> {
     await this.assertSubResourceOwnershipById(this.prisma.governmentPositionTenure, id, accountId)
-    // 가드: 행정부의 수반인 임기를 수반이 아닌 직위(또는 군주직)로 바꾸려 하면 차단 (Cabinet 무결성 보호).
-    // 종류는 직위 정의가 정본 — 정의를 바꾸면 그 정의로, 종류만 오면 그 종류의 일반 정의로 판정한다
+    // 가드: 행정부 수반으로 연결된 임기를 수반이 아닌 직위(각료·군지휘관·기타)로 바꾸려 하면 차단 (Cabinet 무결성 보호).
+    // 단, 군주 친정·섭정 등 HEAD_OF_STATE / HEAD_OF_GOVERNMENT 범위 내 수정(isMonarchical 포함)은 허용한다.
     const target = dto.positionDefinitionId
       ? await this.prisma.governmentPositionDefinition.findUnique({
           where: { id: dto.positionDefinitionId },
@@ -2737,7 +2736,8 @@ export class PersonService {
         : null
     if (
       target &&
-      (target.isMonarchical || (target.positionType !== 'HEAD_OF_STATE' && target.positionType !== 'HEAD_OF_GOVERNMENT'))
+      target.positionType !== 'HEAD_OF_STATE' &&
+      target.positionType !== 'HEAD_OF_GOVERNMENT'
     ) {
       const cabinet = await this.personRepository.findCabinetByHeadTenureId(id)
       if (cabinet) {
@@ -2987,8 +2987,8 @@ export class PersonService {
   }
 
   async findTenuresByCabinetId(cabinetId: string, accountId?: string): Promise<any[]> {
-    // 레포지토리는 계정 없이 부르면 범위를 걸지 않는다(내부 하위 재임 조회용) — 요청 경로는 행위자 필수
-    return this.personRepository.findTenuresByCabinetId(cabinetId, requireActorId(accountId))
+    // 워크스페이스 공유 읽기: 내각 본체(GET /cabinets/:id)와 동일하게 비로그인·타 계정 열람 허용
+    return this.personRepository.findTenuresByCabinetId(cabinetId, accountId)
   }
 
   async findCabinetOverview(cabinetId: string, accountId?: string): Promise<any | null> {
@@ -3121,8 +3121,8 @@ export class PersonService {
     return this.personRepository.leaveCabinetLinkageGroup(cabinetId, accountId)
   }
 
-  async findLinkedCabinets(cabinetId: string, accountId: string): Promise<any[]> {
-    return this.personRepository.findLinkedCabinets(cabinetId, accountId)
+  async findLinkedCabinets(cabinetId: string, accountId?: string): Promise<any[]> {
+    return this.personRepository.findLinkedCabinets(cabinetId, accountId ?? '')
   }
 
   async searchCabinetsForLinkage(

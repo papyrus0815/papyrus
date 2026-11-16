@@ -1,8 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { motion } from 'framer-motion'
+import { FiEdit2, FiMoreHorizontal, FiTrash2 } from 'react-icons/fi'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import { useCurrencies } from '@/features/currency/use-currencies.hook'
+import { useLanguages } from '@/features/language/use-languages.hook'
 import { getUploadImageUrl } from '@/shared/api/upload'
 
 import * as S from './country-detail.styles'
@@ -64,12 +67,36 @@ export function CountryDetailHeader({
     }
   }, [menuOpen])
 
+  const { data: currencies = [] } = useCurrencies()
+  const { data: languages = [] } = useLanguages()
+
   const isoCode = country.isoCode?.trim() || null
+  const trimmedFullName = country.fullName?.trim() || null
+  const fullName =
+    trimmedFullName && trimmedFullName !== country.name.trim()
+      ? trimmedFullName
+      : null
   const trimmedLocalName = country.localName?.trim() || null
   const localName =
-    trimmedLocalName && trimmedLocalName !== country.name.trim()
+    trimmedLocalName &&
+    trimmedLocalName !== country.name.trim() &&
+    trimmedLocalName !== fullName
       ? trimmedLocalName
       : null
+
+  const currencyLabel = useMemo(() => {
+    if (!country.currencyId) return null
+    const found = currencies.find((item) => item.id === country.currencyId)
+    if (!found) return null
+    return `${found.name} (${found.code}${found.symbol ? ` · ${found.symbol}` : ''})`
+  }, [country.currencyId, currencies])
+
+  const languageLabel = useMemo(() => {
+    if (!country.languageId) return null
+    const found = languages.find((item) => item.id === country.languageId)
+    if (!found) return null
+    return found.name
+  }, [country.languageId, languages])
 
   return (
     <S.HeroBand
@@ -101,11 +128,20 @@ export function CountryDetailHeader({
           {meta}
           {!meta && (
           <>
-          {/* 현지명이 이름과 같으면(대한민국·대한민국) 두 번 적지 않는다 */}
-          {localName && <S.HeroLocalName>{localName}</S.HeroLocalName>}
-          {localName && (continentName || isoCode) && (
+          {fullName && (
+            <S.HeroLocalName title="공식 국호">{fullName}</S.HeroLocalName>
+          )}
+          {fullName && localName && (
             <S.HeroMetaSep aria-hidden>·</S.HeroMetaSep>
           )}
+          {/* 현지명이 이름·정식국호와 같으면 두 번 적지 않는다 */}
+          {localName && (
+            <S.HeroLocalName title="현지어 표기">{localName}</S.HeroLocalName>
+          )}
+          {(fullName || localName) &&
+            (continentName || isoCode || languageLabel || currencyLabel) && (
+              <S.HeroMetaSep aria-hidden>·</S.HeroMetaSep>
+            )}
           {continentName && <S.HeroMetaChip>{continentName}</S.HeroMetaChip>}
           {/*
             ISO는 규모 지표가 아니라 식별자다. 예전엔 규모 바에서 인구·면적과 같은
@@ -113,6 +149,12 @@ export function CountryDetailHeader({
           */}
           {isoCode && (
             <S.HeroMetaChip title="ISO 국가 코드">{isoCode}</S.HeroMetaChip>
+          )}
+          {languageLabel && (
+            <S.HeroMetaChip title="공용어">공용어 {languageLabel}</S.HeroMetaChip>
+          )}
+          {currencyLabel && (
+            <S.HeroMetaChip title="공식 통화">{currencyLabel}</S.HeroMetaChip>
           )}
           </>
           )}
@@ -129,17 +171,7 @@ export function CountryDetailHeader({
               onEdit(country)
             }}
           >
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-            </svg>
+            <FiEdit2 aria-hidden />
             정보 수정
           </S.HeroEditButton>
         )}
@@ -155,16 +187,7 @@ export function CountryDetailHeader({
                 setMenuOpen((open) => !open)
               }}
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <circle cx="12" cy="5" r="1.5" />
-                <circle cx="12" cy="12" r="1.5" />
-                <circle cx="12" cy="19" r="1.5" />
-              </svg>
+              <FiMoreHorizontal aria-hidden />
             </S.KebabButton>
             <S.DropdownMenu
               role="menu"
@@ -180,18 +203,8 @@ export function CountryDetailHeader({
                     onEdit(country)
                   }}
                 >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                  </svg>
-                  수정
+                  <FiEdit2 aria-hidden />
+                  정보 수정
                 </S.DropdownButton>
               )}
               {onDelete && (
@@ -205,17 +218,8 @@ export function CountryDetailHeader({
                     onDelete(country.id)
                   }}
                 >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                  </svg>
-                  삭제
+                  <FiTrash2 aria-hidden />
+                  국가 삭제
                 </S.DropdownButton>
               )}
             </S.DropdownMenu>

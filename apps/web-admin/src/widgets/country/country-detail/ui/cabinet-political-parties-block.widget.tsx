@@ -5,28 +5,117 @@
 import React, { useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiPlus, FiTrash2, FiUsers } from 'react-icons/fi'
+import { FiCheck, FiPlus, FiTrash2, FiUsers } from 'react-icons/fi'
+import styled from 'styled-components'
 
 import {
+  addCabinetPoliticalParty,
   getCabinetPoliticalParties,
   removeCabinetPoliticalParty,
+  updateCabinetPoliticalParty,
 } from '@/shared/api/election'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
+import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 
 import { CabinetPartyLinkModal } from './cabinet-party-link-modal'
-import { labelCabinetPartyRole } from './cabinets-section.helpers'
 import {
+  CABINET_PARTY_ROLE_OPTIONS,
   CABINET_SECTION_MAIN as MAIN,
 } from './cabinets-section.constants'
 import * as CabS from './cabinets-section.styled'
 import { SubsectionAddBtn } from './country-politics-tab.styles'
 
+const BrandDot = styled.span<{ $color: string }>`
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: ${({ $color }) => $color};
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.12);
+`
+
+const InlineRoleSelect = styled.select`
+  padding: 3px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  border: 1px solid
+    ${({ theme }) =>
+      getCabinetsSectionPalette(theme.mode === 'dark').borderMid};
+  background: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').inputBg};
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').text};
+  cursor: pointer;
+  outline: none;
+
+  &:focus {
+    border-color: ${MAIN};
+  }
+`
+
+const HeadPartySuggestBanner = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  border: 1px dashed rgba(37, 99, 235, 0.35);
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(37, 99, 235, 0.12)'
+      : 'rgba(37, 99, 235, 0.05)'};
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const QuickLinkBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 1px solid ${MAIN};
+  background: ${MAIN};
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+`
+
+function formatPollDateSafe(raw?: string | null): string {
+  if (!raw?.trim()) return ''
+  const parts = parseIsoDateParts(raw)
+  if (parts) {
+    const yearStr = parts.year < 0 ? `BC ${-parts.year}` : `${parts.year}`
+    return `${yearStr}.${String(parts.month).padStart(2, '0')}.${String(parts.day).padStart(2, '0')}`
+  }
+  const parsed = new Date(raw)
+  if (Number.isNaN(parsed.getTime())) return ''
+  return parsed.toLocaleDateString('ko-KR', { timeZone: 'UTC' })
+}
+
 export type CabinetPoliticalPartiesBlockProps = {
   cabinetId: string
   countryId?: string
   historicalCountryId?: string
+  headTenureParty?: {
+    id: string
+    name: string
+    shortName?: string | null
+    brandColor?: string | null
+  } | null
   isDark: boolean
 }
 
@@ -34,6 +123,7 @@ export function CabinetPoliticalPartiesBlock({
   cabinetId,
   countryId,
   historicalCountryId,
+  headTenureParty = null,
   isDark,
 }: CabinetPoliticalPartiesBlockProps) {
   const queryClient = useQueryClient()
@@ -47,19 +137,60 @@ export function CabinetPoliticalPartiesBlock({
 
   const countryQueryEnabled = !!(countryId || historicalCountryId)
 
+  const invalidatePartyCaches = () => {
+    void queryClient.invalidateQueries({
+      queryKey: ['cabinet-political-parties', cabinetId],
+    })
+    void queryClient.invalidateQueries({ queryKey: ['cabinets-by-country'] })
+    void queryClient.invalidateQueries({ queryKey: ['cabinets'] })
+    void queryClient.invalidateQueries({ queryKey: ['global-cabinets'] })
+    void queryClient.invalidateQueries({ queryKey: ['global-cabinet-detail'] })
+    void queryClient.invalidateQueries({ queryKey: ['cabinet-overview'] })
+  }
+
   const removeMut = useMutation({
     mutationFn: (linkId: string) =>
       removeCabinetPoliticalParty(cabinetId, linkId),
     onSuccess: () => {
       notify.success('연결을 해제했습니다.')
-      void queryClient.invalidateQueries({
-        queryKey: ['cabinet-political-parties', cabinetId],
+      invalidatePartyCaches()
+    },
+    onError: (error: unknown) => notify.error(getApiErrorMessage(error)),
+  })
+
+  const updateRoleMut = useMutation({
+    mutationFn: ({ linkId, role }: { linkId: string; role: string }) =>
+      updateCabinetPoliticalParty(cabinetId, linkId, { role }),
+    onSuccess: () => {
+      notify.success('정당 역할을 변경했습니다.')
+      invalidatePartyCaches()
+    },
+    onError: (error: unknown) => notify.error(getApiErrorMessage(error)),
+  })
+
+  const quickLinkHeadPartyMut = useMutation({
+    mutationFn: () => {
+      if (!headTenureParty?.id) throw new Error('수반 소속 정당이 없습니다.')
+      return addCabinetPoliticalParty(cabinetId, {
+        partyId: headTenureParty.id,
+        role: 'LEADING',
+        provenance: 'FROM_HEAD_CANDIDACY',
       })
+    },
+    onSuccess: () => {
+      notify.success('수반 소속 정당을 집권·주도 정당으로 연결했습니다.')
+      invalidatePartyCaches()
     },
     onError: (error: unknown) => notify.error(getApiErrorMessage(error)),
   })
 
   const loading = linksPending
+  const headPartyDisplayName =
+    headTenureParty?.shortName?.trim() || headTenureParty?.name || null
+  const showHeadPartyQuickLink =
+    Boolean(headTenureParty?.id) &&
+    !loading &&
+    !links.some((linkItem) => linkItem.partyId === headTenureParty?.id)
 
   return (
     <>
@@ -85,6 +216,23 @@ export function CabinetPoliticalPartiesBlock({
             정당 연결
           </SubsectionAddBtn>
         </CabS.CabDetailMinistersSectionHeader>
+
+        {showHeadPartyQuickLink && headPartyDisplayName ? (
+          <HeadPartySuggestBanner>
+            <span>
+              수반 재임에 소속 정당 <strong>{headPartyDisplayName}</strong>이(가)
+              지정되어 있으나 내각 집권·연정 구성에는 아직 연결되지 않았습니다.
+            </span>
+            <QuickLinkBtn
+              type="button"
+              disabled={quickLinkHeadPartyMut.isPending}
+              onClick={() => quickLinkHeadPartyMut.mutate()}
+            >
+              <FiCheck size={12.5} />
+              <span>집권당으로 바로 연결</span>
+            </QuickLinkBtn>
+          </HeadPartySuggestBanner>
+        ) : null}
 
         {loading ? (
           <CabS.CabMinistersLoadingBox aria-busy="true" aria-live="polite">
@@ -115,16 +263,41 @@ export function CabinetPoliticalPartiesBlock({
                 link.party?.shortName?.trim() ||
                 link.party?.name ||
                 '알 수 없음'
+              const brandColor = link.party?.brandColor?.trim() || null
               const notesText = link.notes?.trim()
+              const pollLabel = formatPollDateSafe(
+                link.electionPartyResult?.election?.pollDate,
+              )
+              const roleKnown = CABINET_PARTY_ROLE_OPTIONS.some(
+                (opt) => opt.value === link.role,
+              )
               return (
                 <CabS.CabDetailPartyRow key={link.id}>
                   <CabS.CabDetailPartyRowMain>
+                    {brandColor ? <BrandDot $color={brandColor} /> : null}
                     <CabS.CabDetailPartyName title={name}>
                       {name}
                     </CabS.CabDetailPartyName>
-                    <CabS.CabDetailPartyRoleChip>
-                      {labelCabinetPartyRole(link.role)}
-                    </CabS.CabDetailPartyRoleChip>
+                    <InlineRoleSelect
+                      value={link.role}
+                      disabled={updateRoleMut.isPending}
+                      aria-label={`${name} 내각 정당 역할`}
+                      onChange={(changeEvent) =>
+                        updateRoleMut.mutate({
+                          linkId: link.id,
+                          role: changeEvent.target.value,
+                        })
+                      }
+                    >
+                      {!roleKnown ? (
+                        <option value={link.role}>{link.role}</option>
+                      ) : null}
+                      {CABINET_PARTY_ROLE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </InlineRoleSelect>
                     <CabS.CabDetailPartyRemoveBtn
                       title="연결 해제"
                       disabled={removeMut.isPending}
@@ -149,11 +322,7 @@ export function CabinetPoliticalPartiesBlock({
                     <CabS.CabDetailPartyNotes style={{ fontStyle: 'normal' }}>
                       출처: 선거 집계 —{' '}
                       {link.electionPartyResult.election.name}
-                      {link.electionPartyResult.election.pollDate
-                        ? ` (${new Date(
-                            link.electionPartyResult.election.pollDate,
-                          ).toLocaleDateString('ko-KR', { timeZone: 'UTC' })})`
-                        : ''}
+                      {pollLabel ? ` (${pollLabel})` : ''}
                     </CabS.CabDetailPartyNotes>
                   ) : null}
                   {notesText ? (

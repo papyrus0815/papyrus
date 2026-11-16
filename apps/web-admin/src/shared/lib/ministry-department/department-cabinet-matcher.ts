@@ -170,10 +170,16 @@ export function getTenureChronologyKey(
 
 /**
  * 행정부(Cabinet) 목록을 최신 정권 우선(내림차순)으로 비교한다.
+ * 개각(제2·3차 내각) 고유 출범일(startYear/startDate)을 최우선 사용하고, 없을 때만 수반 재임(headTenure)으로 폴백한다.
  * 문자열 localeCompare 대신 부호 정수 연대기 키를 사용하여 기원전(BC) 및 고대 연대 역전을 방지한다.
  */
 export function compareCabinetsNewestFirst(
   left: {
+    startEra?: string | null
+    startYear?: number | null
+    startMonth?: number | null
+    startDay?: number | null
+    startDate?: string | null
     headTenure?: {
       startKey?: number | null
       startEra?: string | null
@@ -185,6 +191,11 @@ export function compareCabinetsNewestFirst(
     } | null
   },
   right: {
+    startEra?: string | null
+    startYear?: number | null
+    startMonth?: number | null
+    startDay?: number | null
+    startDate?: string | null
     headTenure?: {
       startKey?: number | null
       startEra?: string | null
@@ -196,8 +207,16 @@ export function compareCabinetsNewestFirst(
     } | null
   },
 ): number {
-  const leftKey = getTenureChronologyKey(left.headTenure)
-  const rightKey = getTenureChronologyKey(right.headTenure)
+  const leftOwnKey =
+    left.startYear != null || left.startDate
+      ? getTenureChronologyKey(left)
+      : null
+  const rightOwnKey =
+    right.startYear != null || right.startDate
+      ? getTenureChronologyKey(right)
+      : null
+  const leftKey = leftOwnKey ?? getTenureChronologyKey(left.headTenure)
+  const rightKey = rightOwnKey ?? getTenureChronologyKey(right.headTenure)
   if (leftKey != null && rightKey != null && leftKey !== rightKey) {
     return rightKey - leftKey
   }
@@ -209,9 +228,41 @@ export function compareCabinetsNewestFirst(
   if (leftOrd != null && rightOrd != null && leftOrd !== rightOrd) {
     return rightOrd - leftOrd
   }
-  return (right.headTenure?.startDate ?? '').localeCompare(
-    left.headTenure?.startDate ?? '',
+  const leftIso = left.startDate ?? left.headTenure?.startDate ?? ''
+  const rightIso = right.startDate ?? right.headTenure?.startDate ?? ''
+  return rightIso.localeCompare(leftIso)
+}
+
+/**
+ * 삼권분립상 사법부·입법부·헌법독립기관(선거관리위원회·인권위 등)처럼
+ * 행정부 내각(Cabinet) 각료 편제표에 공석 슬롯으로 노출되면 안 되는 비내각 국가기관인지 판별한다.
+ */
+export function isConstitutionalNonExecutiveOrgan(dept: {
+  name?: string | null
+  kind?: string | null
+}): boolean {
+  if (dept.kind === 'OTHER') return true
+  const normalizedName = (dept.name ?? '').replace(/\s+/g, '')
+  if (!normalizedName) return false
+  return /(대법원|헌법재판소|대심원|최고재판소|연방대법원|최고법원|고등법원|국회|의회|상원|하원|원로원|중의원|참의원|국민의회|연방의회|제국의회|추밀원|중추원|선거관리위원회|선관위|국가인권위원회)/.test(
+    normalizedName,
   )
+}
+
+/**
+ * 내각(Cabinet) 기본 각료 포트폴리오 표에서 공석 행으로 자동 나열하지 않을 기관인지 판별한다.
+ * - 사법·입법·헌법독립·기타(`OTHER`), 원수직속·궁내(`ROYAL_HOUSEHOLD`), 총독부(`COLONIAL_GOVERNMENT`) 포함
+ * - 단, 실제 내각 각료가 해당 기관에 명시적으로 임명된 경우에는 호출부에서 표시할 수 있다.
+ */
+export function isNonCabinetStateOrgan(dept: {
+  name?: string | null
+  kind?: string | null
+}): boolean {
+  if (isConstitutionalNonExecutiveOrgan(dept)) return true
+  if (dept.kind === 'ROYAL_HOUSEHOLD' || dept.kind === 'COLONIAL_GOVERNMENT') {
+    return true
+  }
+  return false
 }
 
 /**
@@ -232,6 +283,7 @@ export function filterDepartmentsForCabinet<
     AdministrationDepartment,
     'id' | 'name' | 'countryId' | 'historicalCountryId' | 'establishedDate' | 'abolishedDate'
   > & {
+    kind?: string | null
     established?: {
       era?: string | null
       year?: number | null
@@ -249,7 +301,10 @@ export function filterDepartmentsForCabinet<
   departments: readonly T[],
   cabinetScope?: CabinetScopeForDepartment | null,
 ): T[] {
-  if (!cabinetScope) return [...departments]
+  const executiveEligible = departments.filter(
+    (dept) => !isConstitutionalNonExecutiveOrgan(dept),
+  )
+  if (!cabinetScope) return [...executiveEligible]
   const cabHistId = cabinetScope.historicalCountryId || null
   const cabStartKey =
     structuredPartsToKey(
@@ -266,7 +321,7 @@ export function filterDepartmentsForCabinet<
       true,
     ) ?? parseDateKeyFromString(cabinetScope.endDate, true)
 
-  const filtered = departments.filter((dept) => {
+  const filtered = executiveEligible.filter((dept) => {
     const deptHistId = dept.historicalCountryId || null
     const deptStartKey =
       structuredPartsToKey(dept.established, false) ??
@@ -679,5 +734,233 @@ export function findActivePoliticalSystemForCabinet(
     candidates.find((s) => !cabHistId && !s.historicalCountryId && s.endYear == null) ??
     candidates[0] ??
     null
+  )
+}
+
+/**
+ * 특정 헌정 체제(`PoliticalSystem`) 시기에 존속·출범한 행정부·내각인지 판별한다.
+ * 정체·헌정 카드의 당대 내각 집계 및 `행정부·내각` 탭의 헌정 체제 필터링에 공통 사용한다.
+ */
+export function doesCabinetMatchPoliticalSystem(
+  cabinet: {
+    startDate?: string | null
+    endDate?: string | null
+    historicalCountryId?: string | null
+    headTenure?: {
+      startDate?: string | null
+      endDate?: string | null
+      historicalCountryId?: string | null
+    } | null
+  },
+  system: Pick<
+    PoliticalSystem,
+    | 'historicalCountryId'
+    | 'startEra'
+    | 'startYear'
+    | 'endEra'
+    | 'endYear'
+    | 'isCurrent'
+  >,
+): boolean {
+  const cabHistId =
+    cabinet.historicalCountryId ??
+    cabinet.headTenure?.historicalCountryId ??
+    null
+  const sysHistId = system.historicalCountryId ?? null
+  if (sysHistId && cabHistId) {
+    if (cabHistId !== sysHistId) return false
+  } else if (sysHistId && !cabHistId) {
+    if (!system.isCurrent) return false
+  } else if (!sysHistId && cabHistId) {
+    if (!system.isCurrent) return false
+  }
+
+  const sysStart =
+    system.startYear != null
+      ? system.startEra === 'BC'
+        ? -Math.abs(system.startYear)
+        : system.startYear
+      : null
+  const sysEnd =
+    system.endYear != null
+      ? system.endEra === 'BC'
+        ? -Math.abs(system.endYear)
+        : system.endYear
+      : null
+
+  if (sysStart == null && sysEnd == null) return true
+
+  const effStart = cabinet.startDate ?? cabinet.headTenure?.startDate ?? null
+  const effEnd = cabinet.endDate ?? cabinet.headTenure?.endDate ?? null
+  const cabStartYear = extractSignedYear(effStart)
+  const cabEndYear = extractSignedYear(effEnd)
+
+  if (cabStartYear == null && cabEndYear == null) return false
+
+  if (cabStartYear != null) {
+    if (sysEnd != null && cabStartYear > sysEnd) return false
+    if (sysStart != null && cabEndYear != null && cabEndYear < sysStart) {
+      return false
+    }
+    // 체제 교체 경계 연도(예: 1988년 퇴임 vs 1988년 새 공화국 출범) 중복 산입 방지
+    if (
+      sysStart != null &&
+      cabStartYear < sysStart &&
+      cabEndYear != null &&
+      cabEndYear <= sysStart
+    ) {
+      return false
+    }
+    if (
+      sysEnd != null &&
+      (sysStart == null || sysStart < sysEnd) &&
+      cabStartYear === sysEnd &&
+      (cabEndYear == null || cabEndYear > sysEnd)
+    ) {
+      return false
+    }
+    if (
+      sysStart != null &&
+      cabEndYear == null &&
+      !system.isCurrent &&
+      sysEnd != null &&
+      cabStartYear < sysStart
+    ) {
+      return false
+    }
+    return true
+  }
+
+  if (cabEndYear != null && sysStart != null && cabEndYear < sysStart) {
+    return false
+  }
+  return true
+}
+
+/**
+ * 내각(행정부)의 실효 출범일·종료일을 반환한다.
+ * 한 수반 재임 아래 여러 개각 내각(제1차·제2차 내각 등)이 등록된 경우
+ * 내각 고유의 `cabinet.startDate / endDate`가 수반 전체 재임 기간보다 우선한다.
+ */
+export function resolveCabinetEffectiveDates(
+  cabinet:
+    | {
+        startDate?: string | null
+        endDate?: string | null
+        headTenure?: {
+          startDate?: string | null
+          endDate?: string | null
+        } | null
+      }
+    | null
+    | undefined,
+): { startDate: string | null; endDate: string | null } {
+  if (!cabinet) return { startDate: null, endDate: null }
+  const head = cabinet.headTenure
+  const startDate = cabinet.startDate ?? head?.startDate ?? null
+  const endDate =
+    cabinet.startDate != null
+      ? (cabinet.endDate ?? head?.endDate ?? null)
+      : head
+        ? (head.endDate ?? cabinet.endDate ?? null)
+        : (cabinet.endDate ?? null)
+  return { startDate, endDate }
+}
+
+export interface CabinetVisibilityContext {
+  name?: string | null
+  description?: string | null
+  linkageGroupId?: string | null
+  _count?: {
+    members?: number | null
+    memberTenures?: number | null
+  } | null
+}
+
+export interface CabinetHeadVisibilityInfo {
+  positionType?: string | null
+  title?: string | null
+  titleEn?: string | null
+  positionDefinition?: {
+    positionType?: string | null
+    title?: string | null
+    titleEn?: string | null
+    titleLocal?: string | null
+  } | null
+}
+
+/**
+ * 내각 각료 수 단일 정규화 헬퍼:
+ * 백엔드가 N:M `CabinetMember`(`_count.members`)와 레거시 1:N `tenure.cabinetId`(`_count.memberTenures`)를
+ * 이중 기록하므로 단순 합산(`+`)하면 최대 2배로 부풀려진다. 항상 `Math.max`로 일관 집계한다.
+ */
+export function resolveCabinetMinisterCount(
+  counts?: { members?: number | null; memberTenures?: number | null } | null,
+): number {
+  if (!counts) return 0
+  return Math.max(counts.members ?? 0, counts.memberTenures ?? 0)
+}
+
+/**
+ * 내각(행정부) 목록·배지·통계에서 숨길 수반인지 판별.
+ * `HEAD_OF_STATE`(또는 타입 없음)이면서 의례적 원수(천황·황제·국왕·여왕·술탄·차르 등)로만 자동 생성된 빈 내각만 숨긴다.
+ * 사용자가 명시적으로 내각 명칭·설명·각료·다국 연계·친정/섭정 직함을 지정한 경우는 표시한다.
+ */
+export function shouldHideCabinetFromExecutiveTimeline(
+  head: CabinetHeadVisibilityInfo | null | undefined,
+  cabinet?: CabinetVisibilityContext | null,
+): boolean {
+  if (cabinet) {
+    if (
+      cabinet.name?.trim() ||
+      cabinet.description?.trim() ||
+      cabinet.linkageGroupId
+    ) {
+      return false
+    }
+    if (resolveCabinetMinisterCount(cabinet._count) > 0) {
+      return false
+    }
+  }
+  if (!head) return false
+  const posType =
+    head.positionType ?? head.positionDefinition?.positionType ?? null
+  if (posType != null && posType !== '' && posType !== 'HEAD_OF_STATE') {
+    return false
+  }
+  const def = head.positionDefinition as
+    | (NonNullable<CabinetHeadVisibilityInfo['positionDefinition']> & {
+        isMonarchical?: boolean | null
+      })
+    | null
+    | undefined
+  const parts = [
+    def?.title,
+    def?.titleEn,
+    def?.titleLocal,
+    head.title,
+    head.titleEn,
+  ].filter(
+    (partItem): partItem is string =>
+      typeof partItem === 'string' && partItem.trim().length > 0,
+  )
+  let normalizedBundle = parts.join(' ')
+  try {
+    normalizedBundle = normalizedBundle.normalize('NFKC')
+  } catch {
+    // fallback
+  }
+  if (
+    /친정|親政|섭정|攝政|내각총리|內閣總理|内閣総理|首相|총리대신|Prime\s+Minister|Regent/i.test(
+      normalizedBundle,
+    )
+  ) {
+    return false
+  }
+  if (def?.isMonarchical) {
+    return true
+  }
+  return /천황|황제|皇帝|天皇|국왕|여왕|대공|술탄|Sultan|차르|Tsar|Tsarina|\bKing\b|\bQueen\b|\bMonarch\b/i.test(
+    normalizedBundle,
   )
 }

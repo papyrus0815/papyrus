@@ -1,6 +1,6 @@
-/** 행정부(내각) UI 액센트 — 사건 페이지 브랜드 블루(`#2563eb`)와 통일 */
-export const CABINET_SECTION_MAIN = '#2563eb'
-export const CABINET_SECTION_MAIN_HOVER = '#1d4ed8'
+/** 행정부(내각) UI 액센트 — 사건 페이지 원장 인디고(`#4f46e5`)와 통일 */
+export const CABINET_SECTION_MAIN = '#4f46e5'
+export const CABINET_SECTION_MAIN_HOVER = '#4338ca'
 
 /**
  * 수반(행정부 수반) 직위 선택 시 포함할 관직 유형
@@ -80,9 +80,27 @@ export const TL_TERRITORY_PALETTE = [
   { line: '#db2777', textColor: '#831843' },
 ] as const
 
-/** 타임라인 직책 뱃지 테두리·글자색 — 직위 정의 id 또는 직함 문자열 해시로 순환 (직책마다 고정 색) */
-export const TL_POSITION_BADGE_LINE_HEXES: readonly string[] =
-  TL_TERRITORY_PALETTE.map((paletteItem) => paletteItem.line)
+/** 타임라인 군주 재위 상단 레일·칩 전용 웜 로열 팔레트 — 영토/정체 팔레트(TL_TERRITORY_PALETTE)와 시각 충돌 방지 */
+export const TL_MONARCH_LINE_HEXES: readonly string[] = [
+  '#b45309',
+  '#92400e',
+  '#a16207',
+  '#9f1239',
+  '#7e22ce',
+  '#be185d',
+  '#854d0e',
+  '#7c2d12',
+] as const
+
+/** 타임라인 직책 뱃지 테두리·글자색 — 영토 강조색·정당색과 겹치지 않는 차분한 슬레이트/스틸 톤 */
+export const TL_POSITION_BADGE_LINE_HEXES: readonly string[] = [
+  '#475569',
+  '#334155',
+  '#1e40af',
+  '#155e75',
+  '#3730a3',
+  '#52525b',
+] as const
 
 /** 행정부–정당 연결 역할 (`CabinetPartyRole`) */
 export const CABINET_PARTY_ROLE_OPTIONS = [

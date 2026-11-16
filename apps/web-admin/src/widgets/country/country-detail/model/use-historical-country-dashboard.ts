@@ -4,6 +4,7 @@ import { useQueries, useQuery } from '@tanstack/react-query'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { politicalSystemKeys } from '@/entities/political-system/api'
+import { useConstituentHistoricalPolities } from '@/features/government-info/model/use-constituent-historical-polities'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import { type AdministrativeDivision, cityApi } from '@/shared/api/city'
 import { getElections, getLaws } from '@/shared/api/election'
@@ -297,6 +298,10 @@ export function useHistoricalCountryDashboard(
     enabled: Boolean(id),
     staleTime: 1000 * 60 * 2,
   })
+
+  const { data: constituentPolities = [] } = useConstituentHistoricalPolities(
+    id || undefined,
+  )
 
   const transitions: HistoricalCountryTransitionDto[] = useMemo(
     () => (Array.isArray(transitionsQuery.data) ? transitionsQuery.data : []),
@@ -627,14 +632,35 @@ export function useHistoricalCountryDashboard(
       ? countTree(divisionsQuery.data)
       : 0
   }, [divisionsQuery.data])
+  const capitalDivisionName = useMemo(() => {
+    const findCapital = (nodes: AdministrativeDivision[]): string | null => {
+      for (const node of nodes) {
+        if ((node as { isCapital?: boolean }).isCapital) {
+          return node.name
+        }
+        const childHit = findCapital(node.children ?? [])
+        if (childHit) return childHit
+      }
+      return null
+    }
+    return Array.isArray(divisionsQuery.data)
+      ? findCapital(divisionsQuery.data)
+      : null
+  }, [divisionsQuery.data])
   const electionCount = elections.length
   const departmentCount = departments.length
   const militaryCount = useMemo(() => {
     if (!id || !Array.isArray(militaryUnitsQuery.data)) return 0
+    const constituentIdSet = new Set(
+      constituentPolities.map((polity) => polity.id).filter(Boolean),
+    )
     return militaryUnitsQuery.data.filter(
-      (unitItem) => unitItem.historicalCountryId === id,
+      (unitItem) =>
+        unitItem.historicalCountryId === id ||
+        (unitItem.historicalCountryId != null &&
+          constituentIdSet.has(unitItem.historicalCountryId)),
     ).length
-  }, [id, militaryUnitsQuery.data])
+  }, [id, militaryUnitsQuery.data, constituentPolities])
   const administrationCount = departments.length + politicalSystems.length
   const lawCount = laws.length
   const ethnicityCount = ethnicities.length
@@ -678,6 +704,14 @@ export function useHistoricalCountryDashboard(
       target: 'government',
       historicalTarget: 'government',
       governmentSubTab: 'system',
+    },
+    {
+      key: 'rulers',
+      label: '역대 통치자',
+      filled: rulers.length > 0,
+      target: 'government',
+      historicalTarget: 'government',
+      governmentSubTab: 'cabinets',
     },
     {
       key: 'departments',
@@ -780,6 +814,7 @@ export function useHistoricalCountryDashboard(
     departmentCount,
     militaryCount,
     divisionCount,
+    capitalDivisionName,
     electionCount,
     lawCount,
     ethnicityCount,

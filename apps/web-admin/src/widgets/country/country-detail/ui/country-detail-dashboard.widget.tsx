@@ -15,9 +15,16 @@ import { useExportImports } from '@/entities/country/api.trade'
 import { toPyramidRows } from '@/entities/country/model/population-pyramid'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { usePoliticalSystems } from '@/entities/political-system/api'
+import {
+  formatPeriod,
+  GOVERNMENT_FORM_LABEL,
+  LEGISLATURE_TYPE_LABEL,
+  resolveCurrentSystem,
+} from '@/entities/political-system/model/political-system'
 import { useTradeRecords } from '@/entities/trade/api'
 import { companyApi } from '@/shared/api/company'
 import type { DemographicIndicator } from '@/shared/api/country-indicators'
+import { getUploadImageUrl } from '@/shared/api/upload'
 import { compareByCountryStart } from '@/shared/lib/country-period'
 import { pathKeys } from '@/shared/router'
 
@@ -140,10 +147,11 @@ export function CountryDetailDashboard({
   const [dataManagerTab, setDataManagerTab] = useState<MainTab | null>(null)
   const [expandEmptyIndicators, setExpandEmptyIndicators] = useState(false)
   const [expandNotes, setExpandNotes] = useState(false)
+  const [mapCollapsed, setMapCollapsed] = useState(false)
   const [companyRegisterOpen, setCompanyRegisterOpen] = useState(false)
   const [indicatorDomainFilter, setIndicatorDomainFilter] = useState<
-    'ALL' | 'trends' | 'pyramid' | 'bonds' | 'trade' | 'companies'
-  >('ALL')
+    'NONE' | 'ALL' | 'trends' | 'pyramid' | 'bonds' | 'trade' | 'companies'
+  >('NONE')
 
   const latestDemographicPop = useMemo(() => {
     const sorted = [...demographicIndicators]
@@ -457,9 +465,7 @@ export function CountryDetailDashboard({
       countryId={country.id}
       countryName={country.name}
       countryIsoCode={country.isoCode}
-      onOpen={(cabinetId, isFallbackHead) =>
-        goGovernment(isFallbackHead ? 'system' : 'cabinets', cabinetId)
-      }
+      onOpen={(cabinetId) => goGovernment('cabinets', cabinetId)}
       onOpenElections={goElections}
       onSelectPerson={(personId) => setPreviewPersonId(personId)}
     >
@@ -476,17 +482,102 @@ export function CountryDetailDashboard({
     </CurrentCabinetPanel>
   )
 
+  const currentPolity = useMemo(
+    () =>
+      resolveCurrentSystem(politicalSystemsQuery.data ?? [], {
+        preferModernDirect: isModern,
+      }),
+    [politicalSystemsQuery.data, isModern],
+  )
+  const isBridgedPolity =
+    isModern && Boolean(currentPolity?.historicalCountryId)
+  const polityHeadline = useMemo(() => {
+    if (!currentPolity) return null
+    const parts = [
+      currentPolity.governmentForm &&
+        GOVERNMENT_FORM_LABEL[currentPolity.governmentForm],
+      currentPolity.legislatureType &&
+        LEGISLATURE_TYPE_LABEL[currentPolity.legislatureType],
+    ].filter(Boolean)
+    return parts.join(' · ') || currentPolity.name
+  }, [currentPolity])
+  const politySubText = useMemo(() => {
+    if (!currentPolity) return '대통령제 · 의원내각제 등 정체 기록 열기'
+    const bridgedName = (
+      currentPolity as typeof currentPolity & {
+        historicalCountry?: { name?: string | null } | null
+      }
+    ).historicalCountry?.name
+    return (
+      [
+        isBridgedPolity && bridgedName ? `전신(${bridgedName})` : null,
+        currentPolity.name,
+        formatPeriod(currentPolity),
+      ]
+        .filter(Boolean)
+        .join(' · ') || '정체·헌정 상세 보기'
+    )
+  }, [currentPolity, isBridgedPolity])
+
+  const primaryCurrentHead = stats.currentHeads[0] ?? null
+  const currentHeadsLabel = useMemo(() => {
+    if (stats.currentHeads.length > 0) {
+      return stats.currentHeads
+        .slice(0, 2)
+        .map((head) => `${head.positionTitle} ${head.personName}`)
+        .join(' · ')
+    }
+    if (stats.currentCabinet) return stats.currentCabinet.name
+    return null
+  }, [stats.currentHeads, stats.currentCabinet])
+
+  const recentPredecessors = useMemo(
+    () => [...lineageSorted].slice(-3).reverse(),
+    [lineageSorted],
+  )
+
+  const activateOnKey =
+    (handler: () => void) => (event: React.KeyboardEvent) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        handler()
+      }
+    }
+
+  const goStatsIndicators = () =>
+    navigate(pathKeys.countryStatistics(country.id, 'indicators'))
+
   const missingCoreFactCount =
     (popNum == null ? 1 : 0) +
     (country.areaSqKm == null ? 1 : 0) +
     (!capitalText ? 1 : 0) +
     (isModern && latestEconomicGdp?.gdp == null ? 1 : 0)
 
-  /* 무컨테이너 헤어라인 국가 규모 스펙 바 — 입력된 제원과 미입력 제원을 한눈에 비교하고 보완 동선을 연결 */
+  /* 무컨테이너 헤어라인 국가 규모 스펙 바 — 입력된 제원과 첫 화면 핵심 정체성(정체·현직 수반·직계 계보)을 스크롤 없이 즉시 제시 */
   const factBar = (
     <S.FactBar aria-label="국가 기본 제원 및 규모">
       <S.FactSpecGrid>
-        <S.Fact $missing={popNum == null}>
+        <S.Fact
+          $missing={popNum == null}
+          $clickable
+          role="button"
+          tabIndex={0}
+          onClick={() => {
+            if (popNum != null) goStatsIndicators()
+            else if (onEdit) onEdit()
+            else setDataManagerTab('indicators')
+          }}
+          onKeyDown={activateOnKey(() => {
+            if (popNum != null) goStatsIndicators()
+            else if (onEdit) onEdit()
+            else setDataManagerTab('indicators')
+          })}
+          title={
+            popNum != null
+              ? '클릭하여 경제·인구 통계 탭 열기'
+              : '클릭하여 기본 인구 입력'
+          }
+        >
           <S.FactLabel>인구</S.FactLabel>
           {popNum != null ? (
             <>
@@ -511,7 +602,25 @@ export function CountryDetailDashboard({
           )}
         </S.Fact>
 
-        <S.Fact $missing={country.areaSqKm == null}>
+        <S.Fact
+          $missing={country.areaSqKm == null}
+          $clickable
+          role="button"
+          tabIndex={0}
+          onClick={() => {
+            if (country.areaSqKm != null) goRegions()
+            else if (onEdit) onEdit()
+          }}
+          onKeyDown={activateOnKey(() => {
+            if (country.areaSqKm != null) goRegions()
+            else if (onEdit) onEdit()
+          })}
+          title={
+            country.areaSqKm != null
+              ? '클릭하여 지리·행정구역 탭 열기'
+              : '클릭하여 영토 면적 입력'
+          }
+        >
           <S.FactLabel>면적</S.FactLabel>
           {country.areaSqKm != null ? (
             <>
@@ -547,12 +656,34 @@ export function CountryDetailDashboard({
           )}
         </S.Fact>
 
-        <S.Fact $missing={!capitalText}>
+        <S.Fact
+          $missing={!capitalText}
+          $clickable
+          role="button"
+          tabIndex={0}
+          onClick={() => {
+            if (capitalText) goRegions()
+            else if (onEdit) onEdit()
+          }}
+          onKeyDown={activateOnKey(() => {
+            if (capitalText) goRegions()
+            else if (onEdit) onEdit()
+          })}
+          title={
+            capitalText
+              ? '클릭하여 지리·행정구역 탭 열기'
+              : '클릭하여 수도 입력'
+          }
+        >
           <S.FactLabel>수도</S.FactLabel>
           {capitalText ? (
             <>
               <S.FactValue>{capitalText}</S.FactValue>
-              <S.FactSubNote>공식 수도</S.FactSubNote>
+              <S.FactSubNote>
+                {stats.cityCount > 0
+                  ? `공식 수도 · 행정구역 ${stats.cityCount}곳`
+                  : '공식 수도'}
+              </S.FactSubNote>
             </>
           ) : (
             <>
@@ -563,7 +694,21 @@ export function CountryDetailDashboard({
         </S.Fact>
 
         {(isModern || latestEconomicGdp?.gdp != null) && (
-          <S.Fact $missing={latestEconomicGdp?.gdp == null}>
+          <S.Fact
+            $missing={latestEconomicGdp?.gdp == null}
+            $clickable
+            role="button"
+            tabIndex={0}
+            onClick={() => {
+              if (latestEconomicGdp?.gdp != null) goStatsIndicators()
+              else setDataManagerTab('indicators')
+            }}
+            onKeyDown={activateOnKey(() => {
+              if (latestEconomicGdp?.gdp != null) goStatsIndicators()
+              else setDataManagerTab('indicators')
+            })}
+            title="클릭하여 경제·통계 지표 열기"
+          >
             <S.FactLabel>명목 GDP</S.FactLabel>
             {latestEconomicGdp?.gdp != null ? (
               <>
@@ -594,6 +739,30 @@ export function CountryDetailDashboard({
               latestEconomicGdpPerCapita?.gdpPerCapita == null &&
               latestDevelopmentHdi?.hdi == null
             }
+            $clickable
+            role="button"
+            tabIndex={0}
+            onClick={() => {
+              if (
+                latestEconomicGdpPerCapita?.gdpPerCapita != null ||
+                latestDevelopmentHdi?.hdi != null
+              ) {
+                goStatsIndicators()
+              } else {
+                setDataManagerTab('indicators')
+              }
+            }}
+            onKeyDown={activateOnKey(() => {
+              if (
+                latestEconomicGdpPerCapita?.gdpPerCapita != null ||
+                latestDevelopmentHdi?.hdi != null
+              ) {
+                goStatsIndicators()
+              } else {
+                setDataManagerTab('indicators')
+              }
+            })}
+            title="클릭하여 1인당 소득 · 사회발전 통계 열기"
           >
             <S.FactLabel>1인당 GDP · HDI</S.FactLabel>
             {latestEconomicGdpPerCapita?.gdpPerCapita != null ? (
@@ -629,6 +798,85 @@ export function CountryDetailDashboard({
           </S.Fact>
         )}
       </S.FactSpecGrid>
+
+      {/* 첫 화면(Above-the-Fold) 국가 핵심 정체성 3단 요약 — 스크롤 없이 체제·현직 수반·직계 계보를 즉시 확인 */}
+      <S.AtAGlanceStrip aria-label="국가 핵심 정체성 요약">
+        <S.AtAGlanceCell type="button" onClick={goPoliticalSystem}>
+          <S.AtAGlanceLabelRow>
+            <S.AtAGlanceLabel>
+              {isBridgedPolity ? '기록된 전신 체제' : '현행 정체 · 헌정'}
+            </S.AtAGlanceLabel>
+            <S.AtAGlanceArrow>정체·헌정 →</S.AtAGlanceArrow>
+          </S.AtAGlanceLabelRow>
+          <S.AtAGlanceMainRow>
+            <S.AtAGlanceValue $muted={!polityHeadline}>
+              {polityHeadline ?? '정체 미등록'}
+            </S.AtAGlanceValue>
+          </S.AtAGlanceMainRow>
+          <S.AtAGlanceSub>{politySubText}</S.AtAGlanceSub>
+        </S.AtAGlanceCell>
+
+        <S.AtAGlanceCell
+          type="button"
+          onClick={() => {
+            if (stats.currentCabinet?.cabinetId) {
+              goGovernment('cabinets', stats.currentCabinet.cabinetId)
+            } else if (primaryCurrentHead?.personId) {
+              setPreviewPersonId(primaryCurrentHead.personId)
+            } else {
+              goGovernment('cabinets')
+            }
+          }}
+        >
+          <S.AtAGlanceLabelRow>
+            <S.AtAGlanceLabel>현직 국가원수 · 행정부</S.AtAGlanceLabel>
+            <S.AtAGlanceArrow>행정부·내각 →</S.AtAGlanceArrow>
+          </S.AtAGlanceLabelRow>
+          <S.AtAGlanceMainRow>
+            {primaryCurrentHead && (
+              <S.AtAGlanceAvatar aria-hidden>
+                {primaryCurrentHead.profileImageUrl ? (
+                  <img
+                    src={getUploadImageUrl(primaryCurrentHead.profileImageUrl)}
+                    alt=""
+                  />
+                ) : (
+                  primaryCurrentHead.personName.slice(0, 1)
+                )}
+              </S.AtAGlanceAvatar>
+            )}
+            <S.AtAGlanceValue $muted={!currentHeadsLabel}>
+              {currentHeadsLabel ?? '현직 수반 · 내각 미등록'}
+            </S.AtAGlanceValue>
+          </S.AtAGlanceMainRow>
+          <S.AtAGlanceSub>
+            {stats.currentCabinet
+              ? `${stats.currentCabinet.name}${stats.currentCabinet.ministerCount > 0 ? ` · 각료 ${stats.currentCabinet.ministerCount}명` : ''}`
+              : stats.administrationCount > 0
+                ? `행정조직·정권 기록 ${stats.administrationCount}건`
+                : '국가원수·정부수반 및 현 행정부 구성'}
+          </S.AtAGlanceSub>
+        </S.AtAGlanceCell>
+
+        <S.AtAGlanceCell type="button" onClick={goHistorical}>
+          <S.AtAGlanceLabelRow>
+            <S.AtAGlanceLabel>역사 계보 · 직계 전신</S.AtAGlanceLabel>
+            <S.AtAGlanceArrow>과거국가 →</S.AtAGlanceArrow>
+          </S.AtAGlanceLabelRow>
+          <S.AtAGlanceMainRow>
+            <S.AtAGlanceValue $muted={recentPredecessors.length === 0}>
+              {recentPredecessors.length > 0
+                ? recentPredecessors.map((item) => item.name).join(' ← ')
+                : '연결된 과거 국가 없음'}
+            </S.AtAGlanceValue>
+          </S.AtAGlanceMainRow>
+          <S.AtAGlanceSub>
+            {lineageAll.length > 0
+              ? `연결된 과거 국가 총 ${lineageAll.length}개${lineagePredecessors.length > 0 ? ` (직계 전신 ${lineagePredecessors.length}개)` : ''}`
+              : '전신 왕조·정권을 연결해 국가 계보 완성'}
+          </S.AtAGlanceSub>
+        </S.AtAGlanceCell>
+      </S.AtAGlanceStrip>
 
       {missingCoreFactCount > 0 && (onEdit || isModern) && (
         <S.FactEmptyRow aria-label="국가 기본 제원 보완 안내">
@@ -1248,31 +1496,19 @@ export function CountryDetailDashboard({
       */}
       <SectionNav rootRef={rootRef} />
 
-      {/* 지리 · 국가 구글 지도 — 국가의 지리적 위치·수도·행정구역 분포를 대시보드에서 즉시 탐색 */}
-      <S.Section>
-        <S.SectionTitleRow>
-          <S.SectionTitleIcon>
-            <IconPin />
-          </S.SectionTitleIcon>
-          <S.SectionTitleText>지리 · 국가 구글 지도</S.SectionTitleText>
-          <SectionHelpPopover sectionKey="geography" />
-          {stats.cityCount > 0 && (
-            <S.SectionCountChip>
-              행정구역 {stats.cityCount.toLocaleString('ko-KR')}곳
-            </S.SectionCountChip>
-          )}
-          <S.SectionLink type="button" onClick={() => goRegions()}>
-            행정구역 관리
-          </S.SectionLink>
-        </S.SectionTitleRow>
-        <CountryMapDashboardPanel
-          country={country}
-          onEdit={onEdit}
-          onOpenRegionsTab={(divisionId) => goRegions(divisionId)}
-        />
-      </S.Section>
+      {/*
+        2. 정체 · 행정부 — 이 나라가 지금 어떤 헌정 체제이고 누가 통치하는지 먼저 보여준다.
+      */}
+      <PoliticalSystemPanel
+        countryId={isModern ? country.id : undefined}
+        historicalCountryId={isModern ? undefined : country.id}
+        countryName={country.name}
+        onOpenAll={goPoliticalSystem}
+      />
 
-      {/* 2. 계보 — 이 국가의 시간축. 예전엔 맨 아래에 있어 사실상 보이지 않았다. */}
+      {governmentSection}
+
+      {/* 3. 계보 — 이 국가로 이어지는 역사적 시간축 */}
       {lineageAll.length === 0 ? (
         <S.Section>
           <S.SectionTitleRow>
@@ -1360,17 +1596,39 @@ export function CountryDetailDashboard({
         </S.Section>
       )}
 
-      {/*
-       * 3. 행정부 — 정권 카드로 고르고 그 정권의 수반·각료를 본다.
-       */}
-      <PoliticalSystemPanel
-        countryId={isModern ? country.id : undefined}
-        historicalCountryId={isModern ? undefined : country.id}
-        countryName={country.name}
-        onOpenAll={goPoliticalSystem}
-      />
-
-      {governmentSection}
+      {/* 4. 지리 · 국가 지도 — 국가의 지리적 위치·수도·행정구역 분포 탐색 (접기 지원) */}
+      <S.Section>
+        <S.SectionTitleRow>
+          <S.SectionTitleIcon>
+            <IconPin />
+          </S.SectionTitleIcon>
+          <S.SectionTitleText>지리 · 행정구역 지도</S.SectionTitleText>
+          <SectionHelpPopover sectionKey="geography" />
+          {stats.cityCount > 0 && (
+            <S.SectionCountChip>
+              행정구역 {stats.cityCount.toLocaleString('ko-KR')}곳
+            </S.SectionCountChip>
+          )}
+          <S.SectionHeaderActions>
+            <S.SectionAction
+              type="button"
+              onClick={() => setMapCollapsed((prev) => !prev)}
+            >
+              {mapCollapsed ? '지도 펼치기' : '지도 접기'}
+            </S.SectionAction>
+            <S.SectionLink type="button" onClick={() => goRegions()}>
+              지리·행정구역 관리
+            </S.SectionLink>
+          </S.SectionHeaderActions>
+        </S.SectionTitleRow>
+        {!mapCollapsed && (
+          <CountryMapDashboardPanel
+            country={country}
+            onEdit={onEdit}
+            onOpenRegionsTab={(divisionId) => goRegions(divisionId)}
+          />
+        )}
+      </S.Section>
 
       {/*
         4. 기록 · 완성도 — 10대 아카이빙 축의 완성도 헤드라인 요약과 2열 헤어라인 비교 원장을 통합 표시한다.
@@ -1604,7 +1862,13 @@ export function CountryDetailDashboard({
             {emptyIndicatorCount > 0 && (
               <S.SectionLink
                 type="button"
-                onClick={() => setExpandEmptyIndicators((prev) => !prev)}
+                onClick={() => {
+                  const next = !expandEmptyIndicators
+                  setExpandEmptyIndicators(next)
+                  if (next && indicatorDomainFilter === 'NONE') {
+                    setIndicatorDomainFilter('ALL')
+                  }
+                }}
               >
                 {expandEmptyIndicators
                   ? '빈 섹션 접기'
@@ -1738,13 +2002,13 @@ export function CountryDetailDashboard({
                         $active={indicatorDomainFilter === spec.key}
                         onClick={() =>
                           setIndicatorDomainFilter((prev) =>
-                            prev === spec.key ? 'ALL' : spec.key,
+                            prev === spec.key ? 'NONE' : spec.key,
                           )
                         }
                       >
                         {indicatorDomainFilter === spec.key
-                          ? '전체 보기'
-                          : '차트 집중'}
+                          ? '차트 접기'
+                          : '차트 미리보기'}
                       </S.IndicatorsLedgerFocusBtn>
                     )}
                     <S.IndicatorsLedgerActionBtn
@@ -1766,7 +2030,7 @@ export function CountryDetailDashboard({
             ))}
           </S.IndicatorsLedgerList>
 
-          {(filledIndicatorSpecs.length > 1 || expandEmptyIndicators) && (
+          {(filledIndicatorSpecs.length > 0 || expandEmptyIndicators) && (
             <S.IndicatorsFilterBar
               role="tablist"
               aria-label="지표 차트 표시 분야 선택"
@@ -1774,11 +2038,24 @@ export function CountryDetailDashboard({
               <S.IndicatorsFilterChip
                 type="button"
                 role="tab"
+                aria-selected={indicatorDomainFilter === 'NONE'}
+                $active={indicatorDomainFilter === 'NONE'}
+                onClick={() => setIndicatorDomainFilter('NONE')}
+              >
+                요약만 보기
+              </S.IndicatorsFilterChip>
+              <S.IndicatorsFilterChip
+                type="button"
+                role="tab"
                 aria-selected={indicatorDomainFilter === 'ALL'}
                 $active={indicatorDomainFilter === 'ALL'}
-                onClick={() => setIndicatorDomainFilter('ALL')}
+                onClick={() =>
+                  setIndicatorDomainFilter((prev) =>
+                    prev === 'ALL' ? 'NONE' : 'ALL',
+                  )
+                }
               >
-                전체 차트 (
+                전체 차트 펼치기 (
                 {expandEmptyIndicators
                   ? indicatorHubSpecs.length
                   : filledIndicatorSpecs.length}
@@ -1795,7 +2072,7 @@ export function CountryDetailDashboard({
                     $active={indicatorDomainFilter === spec.key}
                     onClick={() =>
                       setIndicatorDomainFilter((prev) =>
-                        prev === spec.key ? 'ALL' : spec.key,
+                        prev === spec.key ? 'NONE' : spec.key,
                       )
                     }
                   >

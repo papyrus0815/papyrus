@@ -566,6 +566,11 @@ export type GovernmentCabinetTenureItem = {
     administrationDepartmentId?: string | null
     positionType?: string | null
   } | null
+  /** CabinetMember 슬롯 메타데이터 (직무대행·정렬 순서·슬롯 비고) */
+  isActing?: boolean
+  sortOrder?: number
+  memberNote?: string | null
+  notes?: string | null
   achievements?: GovernmentTenureAchievementItem[]
 }
 
@@ -641,6 +646,8 @@ export type GovernmentHeadTenureInCabinetList = {
   notes?: string | null
   /** 취임·선출 방식 */
   appointmentMethod?: string | null
+  /** 취임·선출 상세 서사 */
+  appointmentDetail?: string | null
   /** 퇴임·종료 사유 */
   endReason?: string | null
   /** 퇴임·종료 상세 사유 */

@@ -3,7 +3,7 @@
  */
 import React from 'react'
 
-import { FiSearch } from 'react-icons/fi'
+import { FiPlus, FiSearch } from 'react-icons/fi'
 
 import type { CountryTypeFilter } from '@/entities/country/model/unified-types'
 
@@ -70,7 +70,7 @@ export function CountryListEmpty({
       </S.EmptyFilterText>
       <S.EmptyFilterActions>
         <S.AddButton onClick={onAdd}>
-          <S.AddButtonIcon>➕</S.AddButtonIcon>새 국가 등록
+          <FiPlus size={14} aria-hidden />새 국가 등록
         </S.AddButton>
       </S.EmptyFilterActions>
     </S.EmptyFilterState>

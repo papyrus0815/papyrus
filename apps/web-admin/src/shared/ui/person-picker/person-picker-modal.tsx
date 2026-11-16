@@ -53,7 +53,9 @@ export interface PersonPickerModalProps {
   searchPlaceholder?: string
   /** 새 인물 즉석 등록의 국가 기본값 */
   defaultCountryId?: string
-  /** 새 인물 즉석 등록 노출 — 미지정이면 defaultCountryId가 있을 때만(기존 동작) */
+  /** 새 인물 즉석 등록의 역사 국가 기본값 */
+  defaultHistoricalCountryId?: string
+  /** 새 인물 즉석 등록 노출 — 미지정이면 defaultCountryId/defaultHistoricalCountryId가 있을 때만(기존 동작) */
   allowCreate?: boolean
   onCreatedPerson?: (person: PersonResponseDto) => void
   /** 연속 추가 — 골라도 닫히지 않고 방금 넣은 인물은 '추가됨'. 하단 '완료'로 닫는다 */
@@ -89,6 +91,7 @@ export function PersonPickerModal({
   title,
   searchPlaceholder,
   defaultCountryId,
+  defaultHistoricalCountryId,
   allowCreate,
   onCreatedPerson,
   multiSelect = false,
@@ -117,7 +120,8 @@ export function PersonPickerModal({
   const [createMode, setCreateMode] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
-  const canCreate = allowCreate ?? Boolean(defaultCountryId)
+  const canCreate =
+    allowCreate ?? Boolean(defaultCountryId || defaultHistoricalCountryId)
   const addedIds = useMemo(() => new Set(added.map((entry) => entry.id)), [added])
   const excludeSet = useMemo(() => new Set((excludeIds ?? []).filter(Boolean)), [excludeIds])
 
@@ -255,6 +259,7 @@ export function PersonPickerModal({
           <PersonPickerCreateForm
             initialName={query.trim()}
             defaultCountryId={defaultCountryId}
+            defaultHistoricalCountryId={defaultHistoricalCountryId}
             onCancel={() => setCreateMode(false)}
             onCreated={(person, name) => {
               onCreatedPerson?.(person)

@@ -51,6 +51,17 @@ const COUNTRIES: CountryData[] = [
     areaSqKm: 9596961.0,
     continentName: '아시아',
   },
+  // 대만 — 지역 단위로 등록한다(ISO 3166 TW). 정치체는 역사국가 '중화민국'이 맡고,
+  // 그 연결 기간(1945-10~)으로 중국 쪽(1912-01~1949-12)과 구분한다.
+  {
+    name: '대만',
+    localName: '臺灣',
+    flagEmoji: '🇹🇼',
+    isoCode: 'TW',
+    population: 23400000,
+    areaSqKm: 36197.0,
+    continentName: '아시아',
+  },
   {
     name: '이란',
     localName: 'ایران',

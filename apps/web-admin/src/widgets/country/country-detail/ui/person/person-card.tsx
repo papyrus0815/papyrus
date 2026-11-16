@@ -121,25 +121,21 @@ const Card = styled.button`
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: rgba(255, 255, 255, 0.05);
-          box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset,
-            0 2px 12px rgba(0, 0, 0, 0.28);
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          box-shadow: none;
           &:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset,
-              0 10px 32px rgba(0, 0, 0, 0.42);
+            border-color: rgba(255, 255, 255, 0.18);
+            background: rgba(255, 255, 255, 0.05);
           }
         `
       : css`
           background: #ffffff;
-          box-shadow:
-            0 1px 3px rgba(0, 0, 0, 0.06),
-            0 4px 12px rgba(0, 0, 0, 0.04);
+          border: 1px solid #e5e7eb;
+          box-shadow: none;
           &:hover {
-            transform: translateY(-2px);
-            box-shadow:
-              0 4px 8px rgba(0, 0, 0, 0.06),
-              0 12px 28px rgba(0, 0, 0, 0.08);
+            border-color: #d1d5db;
+            background: #fafafa;
           }
         `}
 `

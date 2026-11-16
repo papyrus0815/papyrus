@@ -102,6 +102,7 @@ export function useMinistriesTab({
   const thumbnailInputRef = useRef<HTMLInputElement>(null)
   const [thumbnailUploading, setThumbnailUploading] = useState(false)
   const [submittingMinistry, setSubmittingMinistry] = useState(false)
+  const [batchSavedCount, setBatchSavedCount] = useState(0)
   const [establishedDateModalOpen, setEstablishedDateModalOpen] =
     useState(false)
   const [abolishedDateModalOpen, setAbolishedDateModalOpen] = useState(false)
@@ -112,9 +113,12 @@ export function useMinistriesTab({
 
   const loadMinistries = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: departmentsQueryKey })
+    void queryClient.invalidateQueries({ queryKey: ['global-departments'] })
+    void queryClient.invalidateQueries({ queryKey: ['ministry-category-peers'] })
   }, [queryClient, departmentsQueryKey])
 
   const openMinistryEdit = useCallback((dept: AdministrationDepartment) => {
+    setBatchSavedCount(0)
     setEditingMinistry(dept)
     setMinistryForm(ministryFormFieldsFromDepartment(dept))
     setMinistryFormModalOpen(true)
@@ -122,6 +126,7 @@ export function useMinistriesTab({
 
   const openMinistryCreateChild = useCallback(
     (parent: AdministrationDepartment, categoryId: string) => {
+      setBatchSavedCount(0)
       setEditingMinistry(null)
       setMinistryForm(
         emptyMinistryFormFields(
@@ -142,6 +147,7 @@ export function useMinistriesTab({
       defaultHistoricalCountryId = '',
       defaultKind: NonNullable<AdministrationDepartment['kind']> = 'MINISTRY',
     ) => {
+      setBatchSavedCount(0)
       setEditingMinistry(null)
       const resolvedCatId =
         categoryId === UNCATEGORIZED_CATEGORY_ID ||
@@ -164,14 +170,41 @@ export function useMinistriesTab({
   const closeMinistryFormModal = useCallback(() => {
     setMinistryFormModalOpen(false)
     setEditingMinistry(null)
+    setBatchSavedCount(0)
   }, [])
 
-  const submitMinistryForm = useCallback(() => {
-    if (!effectiveCountryId || submittingMinistry) return
-    if (!ministryForm.name.trim()) {
-      notify.error('부처·기관명을 입력해주세요.')
-      return
-    }
+  const submitMinistryForm = useCallback(
+    (submitOptions?: { continueAfterSave?: boolean }) => {
+      if (!effectiveCountryId || submittingMinistry) return
+      if (!ministryForm.name.trim()) {
+        notify.error('부처·기관명을 입력해주세요.')
+        return
+      }
+      if (
+        ministryForm.establishedYear != null &&
+        ministryForm.abolishedYear != null
+      ) {
+        const estSigned =
+          ministryForm.establishedEra === 'BC'
+            ? -Math.abs(ministryForm.establishedYear)
+            : Math.abs(ministryForm.establishedYear)
+        const abolSigned =
+          ministryForm.abolishedEra === 'BC'
+            ? -Math.abs(ministryForm.abolishedYear)
+            : Math.abs(ministryForm.abolishedYear)
+        const estKey =
+          estSigned * 10000 +
+          (ministryForm.establishedMonth ?? 1) * 100 +
+          (ministryForm.establishedDay ?? 1)
+        const abolKey =
+          abolSigned * 10000 +
+          (ministryForm.abolishedMonth ?? 12) * 100 +
+          (ministryForm.abolishedDay ?? 31)
+        if (abolKey < estKey) {
+          notify.error('폐지 시점이 설립 시점보다 앞설 수 없습니다.')
+          return
+        }
+      }
     const effectiveNameEn =
       ministryForm.nameEn.trim() ||
       ministryForm.defenseOfficialNameEn.trim()
@@ -225,6 +258,12 @@ export function useMinistriesTab({
       ministryForm.abolishedDay,
     )
 
+    const hasValidHqCoords =
+      ministryForm.headquartersLatitude != null &&
+      ministryForm.headquartersLongitude != null &&
+      Number.isFinite(ministryForm.headquartersLatitude) &&
+      Number.isFinite(ministryForm.headquartersLongitude)
+
     const payload: CreateAdministrationDepartmentInput = {
       name: ministryForm.name.trim(),
       nameLocal: ministryForm.nameLocal.trim() || null,
@@ -237,6 +276,12 @@ export function useMinistriesTab({
       description: ministryForm.description.trim() || null,
       primaryMission: ministryForm.defenseMissionScope.trim() || null,
       headquarters: ministryForm.defenseHeadquarters.trim() || null,
+      headquartersLatitude: hasValidHqCoords
+        ? ministryForm.headquartersLatitude
+        : null,
+      headquartersLongitude: hasValidHqCoords
+        ? ministryForm.headquartersLongitude
+        : null,
       orgStructure: ministryForm.defenseOrgStructure.trim() || null,
       budgetNote: ministryForm.defenseBudgetOrForcesNote.trim() || null,
       establishedInfo,
@@ -295,14 +340,13 @@ export function useMinistriesTab({
       })
     })()
 
-    const syncLineageAndUnits = async (
+    const syncLineage = async (
       deptId: string,
       prevPredecessors: AdministrationDepartment['predecessors'] = [],
       prevTransitions: AdministrationDepartment['successors'] = [],
       prevMilitarySuccessors: NonNullable<
         AdministrationDepartment['militaryUnitSuccessors']
       > = [],
-      prevUnitIds: string[] = [],
     ) => {
       let touchedMilitary = false
 
@@ -479,34 +523,6 @@ export function useMinistriesTab({
         }
       }
 
-      // 4. 연결 군부대(militaryUnits) 동기화
-      const desiredUnitIds = new Set(
-        (ministryForm.linkedMilitaryUnitIds ?? []).filter(Boolean),
-      )
-      const prevUnitIdSet = new Set(prevUnitIds.filter(Boolean))
-      const unitUpdatePromises: Promise<unknown>[] = []
-      for (const prevUnitId of prevUnitIdSet) {
-        if (!desiredUnitIds.has(prevUnitId)) {
-          unitUpdatePromises.push(
-            militaryUnitApi.update(prevUnitId, {
-              administrationDepartmentId: null,
-            }),
-          )
-        }
-      }
-      for (const nextUnitId of desiredUnitIds) {
-        if (!prevUnitIdSet.has(nextUnitId)) {
-          unitUpdatePromises.push(
-            militaryUnitApi.update(nextUnitId, {
-              administrationDepartmentId: deptId,
-            }),
-          )
-        }
-      }
-      if (unitUpdatePromises.length > 0) {
-        await Promise.all(unitUpdatePromises)
-        touchedMilitary = true
-      }
       if (touchedMilitary) {
         void queryClient.invalidateQueries({ queryKey: ['military-units'] })
         void queryClient.invalidateQueries({ queryKey: ['military-unit'] })
@@ -518,12 +534,11 @@ export function useMinistriesTab({
       administrationDepartmentApi
         .update(editingMinistry.id, payload)
         .then((updated) =>
-          syncLineageAndUnits(
+          syncLineage(
             updated.id,
             editingMinistry.predecessors ?? [],
             editingMinistry.successors ?? [],
             editingMinistry.militaryUnitSuccessors ?? [],
-            (editingMinistry.militaryUnits ?? []).map((unit) => unit.id),
           ).then(async () => {
             try {
               const refreshed = await administrationDepartmentApi.getById(
@@ -549,7 +564,7 @@ export function useMinistriesTab({
       administrationDepartmentApi
         .create(payload)
         .then((created) =>
-          syncLineageAndUnits(created.id, [], [], [], []).then(async () => {
+          syncLineage(created.id, [], [], []).then(async () => {
             try {
               const refreshed = await administrationDepartmentApi.getById(
                 created.id,
@@ -561,10 +576,30 @@ export function useMinistriesTab({
           }),
         )
         .then((created) => {
-          notify.success(`「${created.name}」 기관이 등록되었습니다.`)
           setMinistryBrowseDepartment(created)
-          closeMinistryFormModal()
           loadMinistries()
+          if (submitOptions?.continueAfterSave) {
+            setBatchSavedCount((prevCount) => prevCount + 1)
+            setMinistryForm((prev) => ({
+              ...emptyMinistryFormFields(
+                '',
+                '',
+                prev.historicalCountryId,
+                prev.kind || 'MINISTRY',
+              ),
+              establishedDate: prev.establishedDate,
+              establishedEra: prev.establishedEra,
+              establishedYear: prev.establishedYear,
+              establishedMonth: prev.establishedMonth,
+              establishedDay: prev.establishedDay,
+            }))
+            notify.success(
+              `「${created.name}」 등록 완료! 소속·설립 시기를 유지한 채 다음 기관을 이어서 추가할 수 있습니다.`,
+            )
+            return
+          }
+          notify.success(`「${created.name}」 기관이 등록되었습니다.`)
+          closeMinistryFormModal()
         })
         .catch((err) =>
           notify.error(getApiErrorMessage(err, '등록에 실패했습니다.')),
@@ -744,6 +779,7 @@ export function useMinistriesTab({
     closeMinistryFormModal,
     submitMinistryForm,
     submittingMinistry,
+    batchSavedCount,
     handleMinistryDelete,
     ministryCategoryDeptCounts,
     ministryBrowseResolved,

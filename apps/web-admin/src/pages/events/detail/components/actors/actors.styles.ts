@@ -315,6 +315,22 @@ export const MismatchNote = styled.span`
   white-space: nowrap;
 `
 
+/** 이 사건에서 전사·처형·피살·사망한 인물 배지 — 붉은 잉크·옅은 바탕 */
+export const DeathAtEventBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fca5a5' : '#b91c1c')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(239, 68, 68, 0.16)' : 'rgba(185, 28, 28, 0.09)'};
+  border-radius: 999px;
+  white-space: nowrap;
+  cursor: ${({ title }) => (title ? 'help' : 'default')};
+`
+
 export const PersonRoleLine = styled.div`
   font-size: 13.5px;
   line-height: 1.5;

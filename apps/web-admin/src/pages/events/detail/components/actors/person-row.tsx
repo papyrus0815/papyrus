@@ -13,6 +13,7 @@ import {
   personNameOf,
 } from './actors.lib'
 import {
+  DeathAtEventBadge,
   MismatchNote,
   OfficeAtEvent,
   PersonAvatar,
@@ -101,6 +102,7 @@ export function ActorPersonRow({
     showSidePicker ||
     showParticipation ||
     offices.length > 0 ||
+    Boolean(entry.deathAtEvent) ||
     Boolean(entry.lifespanWarning)
 
   return (
@@ -161,6 +163,18 @@ export function ActorPersonRow({
               <OfficeAtEvent title="재임·재위 기록에서 사건 날짜에 맞춰 자동으로 보여 줍니다">
                 당시 {offices.join(' · ')}
               </OfficeAtEvent>
+            )}
+            {entry.deathAtEvent && (
+              <DeathAtEventBadge
+                title={
+                  entry.deathAtEvent.cause
+                    ? `${entry.deathAtEvent.label}${entry.deathAtEvent.dateLabel ? ` (${entry.deathAtEvent.dateLabel})` : ''} — ${entry.deathAtEvent.cause}`
+                    : undefined
+                }
+              >
+                {entry.deathAtEvent.label}
+                {entry.deathAtEvent.dateLabel ? ` · ${entry.deathAtEvent.dateLabel}` : ''}
+              </DeathAtEventBadge>
             )}
             {entry.lifespanWarning && (
               <MismatchNote role="note" title="막지는 않습니다 — 날짜나 연결을 한번 확인해 보세요">

@@ -137,6 +137,7 @@ export interface FamilySectionProps {
   // 폼 컨텍스트
   editPersonId?: string | null
   countryId: string
+  historicalCountryId?: string
   /** 수정 모드 상세 응답에서 확보된 조부모 등 상위 직계 존속 ID 목록 */
   initialAncestorIds?: string[]
   /** 수정 모드 상세 응답에서 확보된 자녀 등 직계 비속 ID 목록 */
@@ -186,6 +187,7 @@ export function FamilySection({
   recentCandidates,
   editPersonId,
   countryId,
+  historicalCountryId,
   initialAncestorIds,
   initialDescendantIds,
   initialSiblingIds,
@@ -1105,7 +1107,9 @@ export function FamilySection({
             excludeReason={slot.excludeReason}
             title={slot.title}
             searchPlaceholder={slot.searchPlaceholder}
+            allowCreate
             defaultCountryId={countryId || undefined}
+            defaultHistoricalCountryId={historicalCountryId || undefined}
             onCreatedPerson={handleCreatedPerson}
           />
         ) : null,
@@ -1170,7 +1174,9 @@ export function FamilySection({
           excludeReason="자기 자신, 직계 존비속(부모·양부모·조부모·자녀 등)·형제자매·이미 지정된 배우자는 배우자로 선택할 수 없습니다."
           title="배우자 선택"
           searchPlaceholder="배우자로 등록할 인물을 검색…"
+          allowCreate
           defaultCountryId={countryId || undefined}
+          defaultHistoricalCountryId={historicalCountryId || undefined}
           onCreatedPerson={handleCreatedPerson}
         />
       )}
@@ -1215,7 +1221,7 @@ const BirthOrderGroup = styled.div`
   gap: 6px;
   margin-left: 12px;
   padding-left: 12px;
-  border-left: 1px solid ${({ theme }) => theme.colors.border};
+  border-left: 1px solid ${({ theme }) => theme.colors.border.default};
 `
 
 const BirthOrderLabel = styled.label`
@@ -1228,13 +1234,14 @@ const BirthOrderInput = styled.input`
   width: 64px;
   height: 28px;
   padding: 0 8px;
-  font-size: ${FONT.xs};
-  border-radius: ${RADIUS.sm};
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  background: ${({ theme }) => theme.colors.surface};
+  font-size: ${FONT.meta};
+  border-radius: ${RADIUS.control};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#f9fafb'};
   color: ${({ theme }) => theme.colors.text.primary};
   ${mobileInputFontMixin}
-  ${inputFocusMixin}
+  ${({ theme }) => inputFocusMixin(theme)}
 `
 
 const BirthOrderUnit = styled.span`

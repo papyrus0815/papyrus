@@ -1,5 +1,20 @@
 import styled, { css } from 'styled-components'
 
+import {
+  DIGIT_DISPLAY,
+  MOTION,
+  RADIUS,
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentSubtle,
+  ledgerBackground,
+  ledgerHairlineHover,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  ledgerInkLine,
+  ledgerSubtleFill,
+} from './country-ledger-primitives'
+
 /* ─── Design tokens ───────────────────────────────────────────────────── */
 
 const radius = { sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, pill: 999 }
@@ -93,51 +108,28 @@ const ACCENTS: Record<AccentKey, AccentDef> = {
 const accent = ($k: AccentKey | undefined, key: keyof AccentDef) =>
   ACCENTS[$k ?? 'indigo'][key]
 
-/* ─── Surface helpers ─────────────────────────────────────────────────── */
+/* ─── Surface helpers (Flat Ledger — 무그림자·무들썩임) ───────────────── */
 
 const surfaceStatic = css`
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.035);
-          backdrop-filter: blur(10px) saturate(120%);
-          -webkit-backdrop-filter: blur(10px) saturate(120%);
-          border: 1px solid rgba(255, 255, 255, 0.07);
-        `
-      : css`
-          background: #ffffff;
-          border: 1px solid rgba(15, 23, 42, 0.07);
-          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-        `}
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  box-shadow: none;
 `
 
 const surfaceInteractive = css<{ $accent?: AccentKey }>`
   ${surfaceStatic}
   cursor: pointer;
   transition:
-    transform 0.18s ease,
-    box-shadow 0.18s ease,
-    border-color 0.18s ease,
-    background 0.18s ease;
+    border-color ${MOTION.fast} ease,
+    background ${MOTION.fast} ease;
   &:hover {
-    transform: translateY(-2px);
-    ${({ theme, $accent }) => {
-      const glow = accent($accent, 'glow')
-      const softGlow = glow.replace(/0\.\d+\)/, '0.12)')
-      return theme.mode === 'dark'
-        ? css`
-            background: rgba(255, 255, 255, 0.05);
-            border-color: ${accent($accent, 'border')};
-            box-shadow: 0 4px 14px ${softGlow};
-          `
-        : css`
-            border-color: ${accent($accent, 'border')};
-            box-shadow: 0 4px 14px ${softGlow};
-          `
-    }}
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    border-color: ${({ theme, $accent }) =>
+      $accent ? accent($accent, 'border') : ledgerHairlineHover(theme.mode)};
   }
   &:focus-visible {
-    outline: 2px solid ${({ $accent }) => accent($accent, 'base')};
+    outline: 2px solid ${({ theme, $accent }) =>
+      $accent ? accent($accent, 'base') : ledgerAccent(theme.mode)};
     outline-offset: 2px;
   }
 `
@@ -149,46 +141,21 @@ export const DashboardRoot = styled.div`
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: ${space.xxxl}px 40px 48px;
-  gap: ${space.xxxl}px;
+  padding: 24px clamp(20px, 2.5vw, 32px) 48px;
+  gap: 28px;
 
-  /*
-   * 예전엔 머리 아래에 옅은 남색 띠를 깔았다. 히어로 띠가 이미 경계를 긋고 있어
-   * 띠가 두 겹이 됐고, 이 지면에서 남색은 '누를 수 있는 것'의 색이라 뜻도 흐렸다.
-   */
-
-  @media (max-width: 1024px) {
-    padding: ${space.xxl}px 28px 36px;
-    gap: 28px;
-  }
   @media (max-width: 768px) {
-    padding: ${space.xl}px ${space.xl}px 28px;
-    gap: ${space.xxl}px;
-  }
-  @media (max-width: 480px) {
-    padding: ${space.lg}px ${space.lg}px ${space.xxl}px;
-    gap: ${space.xl}px;
+    padding: 16px 16px 32px;
+    gap: 22px;
   }
 `
 
-/**
- * 대시보드의 한 장(章).
- *
- * 예전엔 섹션 사이가 32px 여백뿐이라, 스크롤을 내리면 '교역이 어디서 끝나고 인구
- * 피라미드가 어디서 시작하는지'가 안 보였다. 특히 섹션 안에도 소제목·카드가 있어
- * 같은 굵기의 글자가 계속 나오면 층위가 통째로 뭉갠다.
- *
- * 그래서 장 머리에 **가로선 + 넉넉한 위 여백**을 둔다. 배경 밴드나 카드 테두리는
- * 쓰지 않는다 — 이 지면은 이미 안쪽에 카드가 많아, 밖에 또 상자를 두르면 상자 안
- * 상자가 된다.
- */
 export const Section = styled.section<{ $wide?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: ${space.lg}px;
-  padding-top: 30px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
-  /* 목차에서 건너올 때 장 머리가 붙어 있는 탭바+목차 밑에 깔리지 않게 */
+  padding-top: 26px;
+  border-top: 1px solid ${({ theme }) => ledgerInkLine(theme.mode)};
   scroll-margin-top: 112px;
   min-width: 0;
 
@@ -198,13 +165,11 @@ export const Section = styled.section<{ $wide?: boolean }>`
       grid-column: 1 / -1;
     `}
 
-  /* 첫 장 위에는 선을 긋지 않는다 — 위가 이미 히어로·요약이다 */
   &:first-of-type {
     padding-top: 0;
     border-top: none;
   }
 
-  /* 섹션 안에 섹션이 들어가면 선이 겹친다 (행정부 안의 내각 등) */
   & & {
     padding-top: 0;
     border-top: none;
@@ -215,29 +180,20 @@ export const SectionTitleRow = styled.div`
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: ${space.sm}px;
+  margin-bottom: ${space.xs}px;
 `
 
-/**
- * 장 머리 아이콘 — 한 가지 색.
- *
- * 예전엔 장마다 제 색(계보 호박, 행정부 장미, 기록 보라, 지표 하늘, 활동 초록…)을
- * 입혔다. 열 개 넘는 장이 여섯 색으로 돌아가 지면이 알록달록했고, 색이 뜻하는 바도
- * 없었다(같은 호박색이 계보·캘린더·최근 활동에 겹쳤다). 아이콘은 장을 알아보는
- * 표지일 뿐이라 무채색으로 묶고, 색은 값(막대·차트)에 양보한다.
- */
 export const SectionTitleIcon = styled.div`
   width: 26px;
   height: 26px;
-  border-radius: 8px;
+  border-radius: ${RADIUS.SM};
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15, 23, 42, 0.045)'};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
   color: ${({ theme }) => theme.colors.text.secondary};
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 
   svg {
     width: 14px;
@@ -245,46 +201,54 @@ export const SectionTitleIcon = styled.div`
   }
 `
 
-/* 장 제목은 섹션 안의 어떤 글자보다 커야 한다 — 안쪽 소제목이 14.5px까지 올라왔다 */
 export const SectionTitleText = styled.h2`
   margin: 0;
-  font-size: 19px;
-  font-weight: 800;
+  font-size: 18px;
+  font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
 `
 
-/**
- * 섹션 머리의 동작 버튼 — '등록'·'관리' 같은 것.
- *
- * 섹션마다 제 색으로 버튼을 만들어 썼다: 행정부는 분홍, 인구 피라미드는 파랑,
- * 지표 추이는 보라, 교역·기업은 남색 링크. 같은 성격의 버튼이 네 가지 색으로 흩어져
- * 지면이 알록달록했고, 어느 것이 더 중요한 동작인지도 색이 거짓으로 말했다.
- * 섹션 머리의 버튼은 **크롬**이다 — 하나의 조용한 모양으로 묶고, 진짜 유도가 필요한
- * 자리(빈 섹션의 CTA)만 파란 버튼을 쓴다.
- */
 export const SectionAction = styled.button`
+  appearance: none;
   margin-left: auto;
   flex-shrink: 0;
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border.medium};
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 12.5px;
+  font-family: inherit;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
+  transition:
+    color ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    background ${MOTION.fast} ease;
+
+  svg {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+  }
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.05)'
-        : 'rgba(15,23,42,0.035)'};
+    border-color: ${({ theme }) => ledgerHairlineHover(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
   }
 
-  /* 머리에 버튼이 둘이면 둘째부터는 자동 여백을 물린다 */
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: -2px;
+  }
+
   & + & {
     margin-left: 0;
   }
@@ -294,7 +258,7 @@ export const SectionHeaderActions = styled.div`
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 
   > button {
@@ -302,34 +266,28 @@ export const SectionHeaderActions = styled.div`
   }
 `
 
-export const SectionCountChip = styled.span.attrs({
+export const SectionCountChip = styled.span.attrs<{
+  'data-section-count'?: string
+}>({
   'data-section-count': '',
 })`
   display: inline-flex;
   align-items: center;
   gap: 4px;
   margin-left: ${space.xs}px;
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-size: 12px;
+  padding: 2px 7px;
+  border-radius: ${RADIUS.SM};
+  font-size: 11.5px;
   font-weight: 600;
+  ${DIGIT_DISPLAY}
   color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.06)'
-      : 'rgba(15, 23, 42, 0.05)'};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
 `
 
-/* ─── 보조 카드 (기록 완성도·선거 등) ────────────────────────────────── */
-
-/**
- * 보조 카드(기록 완성도·선거 등). 예전엔 왼쪽에 제 색 줄(남색·장미·보라·초록)을 세웠다 —
- * 장 머리 아이콘을 단색으로 묶은 뒤로 이 줄만 옛 무지개 언어로 남아 있었다. 면과 테두리로만.
- */
 export const CardPanel = styled.div`
   position: relative;
-  border-radius: 12px;
-  padding: ${space.xl}px ${space.xxl}px;
+  border-radius: ${RADIUS.MD};
+  padding: ${space.lg}px ${space.xl}px;
   ${surfaceStatic}
   display: flex;
   flex-direction: column;
@@ -523,18 +481,16 @@ export const MissingChipButton = styled.button`
   cursor: pointer;
   font-family: inherit;
   transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease,
-    transform 0.15s ease;
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    color ${MOTION.fast} ease;
   &:hover {
-    background: ${PRIMARY_SOFT_BG};
-    border-color: ${PRIMARY_SOFT_BORDER};
-    color: ${PRIMARY_INK};
-    transform: translateY(-1px);
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
   &:focus-visible {
-    outline: 2px solid ${PRIMARY};
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
   }
 `
@@ -1168,13 +1124,30 @@ export const FactSpecGrid = styled.div`
   }
 `
 
-export const Fact = styled.div<{ $missing?: boolean }>`
+export const Fact = styled.div<{ $missing?: boolean; $clickable?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 3px;
   min-width: 0;
   padding: 12px 16px;
   border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  transition: background 0.14s ease;
+
+  ${({ $clickable, theme }) =>
+    $clickable &&
+    css`
+      cursor: pointer;
+      &:hover {
+        background: ${theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.035)'
+          : 'rgba(99, 102, 241, 0.035)'};
+      }
+      &:focus-visible {
+        outline: 2px solid ${PRIMARY};
+        outline-offset: -2px;
+        border-radius: 4px;
+      }
+    `}
 
   &:first-child {
     padding-left: 2px;
@@ -1281,21 +1254,29 @@ export const FactEmptyActions = styled.div`
 
 export const FactEmptyAction = styled.button`
   appearance: none;
-  padding: 4px 10px;
-  border-radius: 5px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
-  color: ${({ theme }) => theme.colors.text.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-family: inherit;
   font-size: 11.5px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  transition:
+    border-color ${MOTION.fast} ease,
+    color ${MOTION.fast} ease,
+    background ${MOTION.fast} ease;
 
   &:hover {
-    border-color: #6366f1;
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
-    background: ${({ theme }) => theme.colors.hover};
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
   }
 `
 
@@ -1345,6 +1326,140 @@ export const FactDescriptionEditBtn = styled.button`
     border-color: #6366f1;
     color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
   }
+`
+
+/**
+ * 첫 화면(Above-the-Fold) 국가 정체성 3단 요약 바 —
+ * 스크롤 없이 "현행 정체·헌정 / 현직 국가원수·정부수반 / 직계 전신·역사 계보"를 한눈에 읽고 바로 이동한다.
+ */
+export const AtAGlanceStrip = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  @media (max-width: 900px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+export const AtAGlanceCell = styled.button`
+  appearance: none;
+  border: none;
+  border-right: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 11px 16px;
+  cursor: pointer;
+  transition: background 0.14s ease;
+
+  &:first-child {
+    padding-left: 2px;
+  }
+
+  &:last-child {
+    border-right: none;
+    padding-right: 2px;
+  }
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.035)'
+        : 'rgba(99, 102, 241, 0.035)'};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${PRIMARY};
+    outline-offset: -2px;
+    border-radius: 4px;
+  }
+
+  @media (max-width: 900px) {
+    padding: 10px 4px;
+    border-right: none;
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+`
+
+export const AtAGlanceLabelRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+`
+
+export const AtAGlanceLabel = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const AtAGlanceArrow = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.primary};
+  opacity: 0.78;
+`
+
+export const AtAGlanceMainRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+`
+
+export const AtAGlanceAvatar = styled.span`
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: ${({ theme }) => theme.colors.background.secondary};
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top;
+  }
+`
+
+export const AtAGlanceValue = styled.span<{ $muted?: boolean }>`
+  font-size: 14px;
+  font-weight: ${({ $muted }) => ($muted ? 600 : 800)};
+  letter-spacing: -0.02em;
+  color: ${({ theme, $muted }) =>
+    $muted ? theme.colors.text.tertiary : theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+export const AtAGlanceSub = styled.span`
+  font-size: 11.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 `
 
 /** 하단 보조 — 최근 활동과 완성도를 나란히 */
@@ -2110,49 +2225,42 @@ export const IndicatorsLedgerFocusBtn = styled.button<{ $active?: boolean }>`
 
 export const IndicatorsLedgerActionBtn = styled.button<{ $filled?: boolean }>`
   appearance: none;
-  padding: 6px 12px;
-  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: ${RADIUS.SM};
   border: 1px solid
     ${({ theme, $filled }) =>
       $filled
-        ? theme.colors.border.medium
-        : theme.mode === 'dark'
-          ? 'rgba(99,102,241,0.42)'
-          : 'rgba(99,102,241,0.28)'};
+        ? ledgerHairlineStrong(theme.mode)
+        : ledgerAccentBorder(theme.mode)};
   background: ${({ theme, $filled }) =>
-    $filled
-      ? 'transparent'
-      : theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.16)'
-        : 'rgba(99,102,241,0.08)'};
+    $filled ? 'transparent' : ledgerAccentSubtle(theme.mode)};
   color: ${({ theme, $filled }) =>
-    $filled
-      ? theme.colors.text.secondary
-      : theme.mode === 'dark'
-        ? '#a5b4fc'
-        : '#4f46e5'};
+    $filled ? theme.colors.text.secondary : ledgerAccent(theme.mode)};
   font-family: inherit;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
   transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    color ${MOTION.fast} ease;
 
   &:hover {
     color: ${({ theme, $filled }) =>
+      $filled ? theme.colors.text.primary : ledgerAccent(theme.mode)};
+    border-color: ${({ theme, $filled }) =>
       $filled
-        ? theme.colors.text.primary
-        : theme.mode === 'dark'
-          ? '#a5b4fc'
-          : '#4f46e5'};
+        ? ledgerHairlineHover(theme.mode)
+        : ledgerAccent(theme.mode)};
     background: ${({ theme, $filled }) =>
       $filled
-        ? theme.colors.hover
-        : theme.mode === 'dark'
-          ? 'rgba(99,102,241,0.26)'
-          : 'rgba(99,102,241,0.16)'};
+        ? ledgerHoverFill(theme.mode)
+        : ledgerAccentSubtle(theme.mode)};
   }
 `
 

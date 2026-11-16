@@ -74,6 +74,7 @@ const TenureHistoryHorizAchievementColumn = memo(
           )}
           onClick={() => onSelectAchievement(achievement.id)}
           onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault()
               onSelectAchievement(achievement.id)
@@ -112,7 +113,7 @@ const TenureHistoryHorizAchievementColumn = memo(
                   {excerpt}
                 </CabS.TenureHistoryInfographicExcerpt>
               ) : null}
-              {showPeersRow ? (
+              {showPeersRow && linkagePeer ? (
                 <CabS.TenureHistoryTimelinePeersSlot>
                   <LinkedCabinetPeersRow
                     variant="card"

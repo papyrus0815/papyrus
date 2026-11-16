@@ -45,8 +45,12 @@ type FormState = {
   historicalCountryId: string
   startEra: 'BC' | 'AD'
   startYear: string
+  startMonth: string
+  startDay: string
   endEra: 'BC' | 'AD'
   endYear: string
+  endMonth: string
+  endDay: string
   isCurrent: boolean
   governmentForm: string
   legislatureType: string
@@ -74,8 +78,12 @@ const EMPTY: FormState = {
   historicalCountryId: '',
   startEra: 'AD',
   startYear: '',
+  startMonth: '',
+  startDay: '',
   endEra: 'AD',
   endYear: '',
+  endMonth: '',
+  endDay: '',
   isCurrent: false,
   governmentForm: '',
   legislatureType: '',
@@ -130,8 +138,12 @@ function hydrate(system: PoliticalSystem): FormState {
     historicalCountryId: system.historicalCountryId ?? '',
     startEra: system.startEra ?? 'AD',
     startYear: toText(system.startYear),
+    startMonth: toText(system.startMonth),
+    startDay: toText(system.startDay),
     endEra: system.endEra ?? 'AD',
     endYear: toText(system.endYear),
+    endMonth: toText(system.endMonth),
+    endDay: toText(system.endDay),
     isCurrent: system.isCurrent,
     governmentForm: system.governmentForm ?? '',
     legislatureType: system.legislatureType ?? '',
@@ -359,12 +371,47 @@ export function PoliticalSystemFormModal({
 
   const handleSubmit = async () => {
     const startYear = numberOrNull(form.startYear)
-    const endYear = numberOrNull(form.endYear)
+    const startMonth = startYear == null ? null : numberOrNull(form.startMonth)
+    const startDay =
+      startYear == null || startMonth == null
+        ? null
+        : numberOrNull(form.startDay)
+    const endYear = form.isCurrent ? null : numberOrNull(form.endYear)
+    const endMonth =
+      form.isCurrent || endYear == null ? null : numberOrNull(form.endMonth)
+    const endDay =
+      form.isCurrent || endYear == null || endMonth == null
+        ? null
+        : numberOrNull(form.endDay)
+
+    if (startMonth != null && (startMonth < 1 || startMonth > 12)) {
+      notify.error('시작 월은 1~12 사이여야 합니다')
+      return
+    }
+    if (startDay != null && (startDay < 1 || startDay > 31)) {
+      notify.error('시작 일은 1~31 사이여야 합니다')
+      return
+    }
+    if (endMonth != null && (endMonth < 1 || endMonth > 12)) {
+      notify.error('종료 월은 1~12 사이여야 합니다')
+      return
+    }
+    if (endDay != null && (endDay < 1 || endDay > 31)) {
+      notify.error('종료 일은 1~31 사이여야 합니다')
+      return
+    }
+
     if (startYear != null && endYear != null) {
-      const signedStart = form.startEra === 'BC' ? -startYear : startYear
-      const signedEnd = form.endEra === 'BC' ? -endYear : endYear
+      const signedStart =
+        (form.startEra === 'BC' ? -startYear : startYear) * 10000 +
+        (startMonth ?? 1) * 100 +
+        (startDay ?? 1)
+      const signedEnd =
+        (form.endEra === 'BC' ? -endYear : endYear) * 10000 +
+        (endMonth ?? 12) * 100 +
+        (endDay ?? 31)
       if (signedStart > signedEnd) {
-        notify.error('시작 연도가 종료 연도보다 뒤일 수 없습니다')
+        notify.error('시작 시점이 종료 시점보다 뒤일 수 없습니다')
         return
       }
     }
@@ -379,8 +426,12 @@ export function PoliticalSystemFormModal({
         : {}),
       startEra: startYear == null ? null : form.startEra,
       startYear,
+      startMonth,
+      startDay,
       endEra: endYear == null ? null : form.endEra,
       endYear,
+      endMonth,
+      endDay,
       isCurrent: form.isCurrent,
       governmentForm: (form.governmentForm ||
         null) as UpdatePoliticalSystemInput['governmentForm'],
@@ -474,7 +525,7 @@ export function PoliticalSystemFormModal({
             </Field>
           )}
           <Field>
-            시작
+            시작 (연 · 월 · 일)
             <Inline>
               <Select
                 value={form.startEra}
@@ -490,13 +541,33 @@ export function PoliticalSystemFormModal({
                 type="number"
                 value={form.startYear}
                 onChange={(event) => set('startYear', event.target.value)}
-                placeholder="1958"
+                placeholder="1948"
                 aria-label="시작 연도"
+              />
+              <Input
+                type="number"
+                min={1}
+                max={12}
+                value={form.startMonth}
+                onChange={(event) => set('startMonth', event.target.value)}
+                placeholder="월"
+                aria-label="시작 월"
+                style={{ width: 64 }}
+              />
+              <Input
+                type="number"
+                min={1}
+                max={31}
+                value={form.startDay}
+                onChange={(event) => set('startDay', event.target.value)}
+                placeholder="일"
+                aria-label="시작 일"
+                style={{ width: 64 }}
               />
             </Inline>
           </Field>
           <Field>
-            종료
+            종료 (연 · 월 · 일)
             <Inline>
               <Select
                 value={form.endEra}
@@ -513,9 +584,31 @@ export function PoliticalSystemFormModal({
                 type="number"
                 value={form.endYear}
                 onChange={(event) => set('endYear', event.target.value)}
-                placeholder={form.isCurrent ? '현행' : '1940'}
+                placeholder={form.isCurrent ? '현행' : '1960'}
                 aria-label="종료 연도"
                 disabled={form.isCurrent}
+              />
+              <Input
+                type="number"
+                min={1}
+                max={12}
+                value={form.endMonth}
+                onChange={(event) => set('endMonth', event.target.value)}
+                placeholder="월"
+                aria-label="종료 월"
+                disabled={form.isCurrent}
+                style={{ width: 64 }}
+              />
+              <Input
+                type="number"
+                min={1}
+                max={31}
+                value={form.endDay}
+                onChange={(event) => set('endDay', event.target.value)}
+                placeholder="일"
+                aria-label="종료 일"
+                disabled={form.isCurrent}
+                style={{ width: 64 }}
               />
             </Inline>
           </Field>
@@ -526,7 +619,11 @@ export function PoliticalSystemFormModal({
                 checked={form.isCurrent}
                 onChange={(event) => {
                   set('isCurrent', event.target.checked)
-                  if (event.target.checked) set('endYear', '')
+                  if (event.target.checked) {
+                    set('endYear', '')
+                    set('endMonth', '')
+                    set('endDay', '')
+                  }
                 }}
               />
               지금도 이 정체

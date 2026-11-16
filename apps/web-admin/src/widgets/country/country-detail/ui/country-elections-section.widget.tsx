@@ -144,6 +144,10 @@ import {
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { RichTextProseWithEntityClicks } from '@/shared/ui/rich-text-read-view'
 import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
+import {
+  UnderlineTabBadge,
+  UnderlineTabButton,
+} from '@/shared/ui/underline-tabs'
 import { notify } from '@/shared/ui/toast'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 
@@ -278,7 +282,6 @@ import {
   SubsectionLabel,
   ToolbarGhostBtnSm,
 } from './country-politics-tab.styles'
-import { MapRegionTabButton } from './map-region-section.styles'
 
 /** RichTextEditor HTML — 시각적 빈 본문이면 null (저장 시) */
 function optionalRichTextHtmlOrNull(html: string): string | null {
@@ -2183,24 +2186,32 @@ export function CountryElectionsSection({
           role="tablist"
           aria-label="정당·선거 하위 메뉴"
         >
-          <MapRegionTabButton
+          <UnderlineTabButton
             type="button"
             role="tab"
             aria-selected={politicsViewTab === 'parties'}
             $active={politicsViewTab === 'parties'}
+            data-empty={parties.length === 0 ? 'true' : undefined}
             onClick={() => handlePoliticsViewTab('parties')}
           >
-            정당 ({parties.length})
-          </MapRegionTabButton>
-          <MapRegionTabButton
+            <span>정당</span>
+            <UnderlineTabBadge $active={politicsViewTab === 'parties'}>
+              {parties.length}
+            </UnderlineTabBadge>
+          </UnderlineTabButton>
+          <UnderlineTabButton
             type="button"
             role="tab"
             aria-selected={politicsViewTab === 'elections'}
             $active={politicsViewTab === 'elections'}
+            data-empty={list.length === 0 ? 'true' : undefined}
             onClick={() => handlePoliticsViewTab('elections')}
           >
-            선거·투표 ({list.length})
-          </MapRegionTabButton>
+            <span>선거·투표</span>
+            <UnderlineTabBadge $active={politicsViewTab === 'elections'}>
+              {list.length}
+            </UnderlineTabBadge>
+          </UnderlineTabButton>
         </PoliticsElectionSubTabNav>
 
         {politicsViewTab === 'parties' ? (

@@ -1,9 +1,12 @@
 import {
   buildCabinetTerritoryLegendEntries,
   buildCabinetTerritoryOrdinalMap,
+  cabinetTimelineHeaderYearRange,
   effectiveMonarchTenuresForCabinetTimeline,
   isSovereignMonarchTenureForCabinetTimeline,
   lineColorForCabinetHeadPositionBadge,
+  resolveCabinetEffectiveDates,
+  resolveReignEraLineForCabinetHead,
   shouldHideCabinetFromExecutiveTimeline,
   sovereignLegendPersonLabelFromMonarchTenure,
   territoryKeyFromCabinet,
@@ -276,5 +279,102 @@ describe('lineColorForCabinetHeadPositionBadge', () => {
 
   it('id·직함이 모두 없으면 기본색', () => {
     expect(lineColorForCabinetHeadPositionBadge({}, def)).toBe(def)
+  })
+})
+
+describe('개각 내각(cabinet.startDate 우선) 및 연호·연도 범위 계산', () => {
+  it('resolveCabinetEffectiveDates: 개각 내각의 고유 출범·종료일이 수반 전체 임기보다 우선한다', () => {
+    expect(
+      resolveCabinetEffectiveDates({
+        startDate: '2019-09-11',
+        endDate: '2020-09-16',
+        headTenure: {
+          startDate: '2012-12-26',
+          endDate: '2020-09-16',
+        } as any,
+      }),
+    ).toEqual({
+      startDate: '2019-09-11',
+      endDate: '2020-09-16',
+    })
+  })
+
+  it('resolveReignEraLineForCabinetHead: 개각 내각 출범일(cabinetStartDateOverride) 기준으로 군주 연호를 매칭한다', () => {
+    const pmHead = {
+      id: 'pm-abe',
+      countryId: 'jp',
+      positionType: 'HEAD_OF_GOVERNMENT',
+      startDate: '2012-12-26',
+      endDate: '2020-09-16',
+    } as any
+
+    const monarchs = [
+      {
+        id: 'emp-heisei',
+        countryId: 'jp',
+        isMonarchical: true,
+        startDate: '1989-01-07',
+        endDate: '2019-04-30',
+        regnalEras: [
+          {
+            eraName: '헤이세이',
+            startEra: 'AD',
+            startYear: 1989,
+            startMonth: 1,
+            startDay: 8,
+            endEra: 'AD',
+            endYear: 2019,
+            endMonth: 4,
+            endDay: 30,
+          },
+        ],
+      },
+      {
+        id: 'emp-reiwa',
+        countryId: 'jp',
+        isMonarchical: true,
+        startDate: '2019-05-01',
+        endDate: null,
+        regnalEras: [
+          {
+            eraName: '레이와',
+            startEra: 'AD',
+            startYear: 2019,
+            startMonth: 5,
+            startDay: 1,
+            endEra: null,
+            endYear: null,
+          },
+        ],
+      },
+    ] as any[]
+
+    const scope = {
+      kind: 'modern' as const,
+      modernCountryId: 'jp',
+      linkedHistoricalCountryIds: [],
+    }
+
+    expect(
+      resolveReignEraLineForCabinetHead(pmHead, monarchs, scope, '2012-12-26'),
+    ).toContain('헤이세이')
+    expect(
+      resolveReignEraLineForCabinetHead(pmHead, monarchs, scope, '2019-09-11'),
+    ).toContain('레이와')
+  })
+
+  it('cabinetTimelineHeaderYearRange: 개각 내각만 필터링되었을 때 해당 내각의 고유 연도 범위를 반환한다', () => {
+    const range = cabinetTimelineHeaderYearRange([
+      {
+        startDate: '2019-09-11',
+        endDate: '2020-09-16',
+        headTenure: {
+          positionType: 'HEAD_OF_GOVERNMENT',
+          startDate: '2012-12-26',
+          endDate: '2020-09-16',
+        } as any,
+      },
+    ])
+    expect(range).toEqual({ minY: 2019, maxY: 2020 })
   })
 })

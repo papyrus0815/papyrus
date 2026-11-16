@@ -7,6 +7,8 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 
+import { FiZap } from 'react-icons/fi'
+
 import {
   type Infrastructure,
   type InfrastructureType,
@@ -367,7 +369,7 @@ export function MapRegionInfrastructureView({
           <RegionDetailPanel
             palette={palette}
             isSelected={!!selectedItem}
-            emptyIcon="⚡"
+            emptyIcon={<FiZap size={22} />}
             emptyTitle="인프라를 선택해주세요"
             emptyDescription="좌측 목록에서 항목을 선택하면 지도가 해당 위치로 이동합니다 (↑↓ Esc)"
             header={

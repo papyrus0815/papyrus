@@ -470,6 +470,12 @@ export class EventResponseDto {
     officesAtEvent?: string[]
     /** 생몰년 밖 사건이면 안내 문구(표시만) — 상세 응답에서만 */
     lifespanWarning?: string | null
+    /** 이 사건 중(또는 직후) 사망·전사·처형·피살 정보(Person 사망 필드에서 파생) — 상세 응답에서만 */
+    deathAtEvent?: {
+      label: string
+      dateLabel: string | null
+      cause: string | null
+    } | null
     person?: {
       id: string
       name?: string | null

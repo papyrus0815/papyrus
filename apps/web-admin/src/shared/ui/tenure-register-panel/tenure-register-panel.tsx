@@ -3891,12 +3891,18 @@ export function TenureRegisterPanel({
                     </FieldControl>
                   </FieldRow>
 
-                  {/* 소속 구분 — 국가원수·수반 / 중앙부처·행정기관 / 군사 사령부·부대 / 의회·외교·기타 */}
+                  {/* 소속 구분 — 각료 추가(isMinisterFlow) 시 군정/민간 부처·무임소 트랙만 표시하여 군령 지휘관 오등록 및 내각 연결 유실 방지 */}
                   <FieldRow>
                     <FieldLabel as="span">소속 구분</FieldLabel>
                     <FieldControl>
                       <TrackGrid role="radiogroup" aria-label="소속 구분">
-                        {AFFILIATION_TRACK_OPTIONS.map((trackOption) => {
+                        {(isMinisterFlow
+                          ? AFFILIATION_TRACK_OPTIONS.filter(
+                              (opt) =>
+                                opt.value === 'DEPARTMENT' || opt.value === 'OTHER',
+                            )
+                          : AFFILIATION_TRACK_OPTIONS
+                        ).map((trackOption) => {
                           const isTrackActive = affiliationTrack === trackOption.value
                           return (
                             <TrackCardBtn

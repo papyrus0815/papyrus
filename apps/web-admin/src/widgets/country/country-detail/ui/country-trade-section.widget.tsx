@@ -6,6 +6,7 @@ import { SectionTabHeader } from '@/shared/ui/section-page-layout'
 import { TradePanel } from './country-data-manager/trade-panel'
 import * as S from './country-detail-dashboard.styles'
 import { IconArchive } from './country-detail-dashboard.icons'
+import { countryTabCanvasPadding } from './country-ledger-primitives'
 import { TradeSection } from './dashboard-panels/trade-section'
 
 export interface CountryTradeSectionProps {
@@ -65,17 +66,12 @@ export function CountryTradeSection({
 const Root = styled(motion.div)`
   display: flex;
   flex-direction: column;
-  gap: 32px;
-  padding: 36px 32px 48px;
+  gap: 20px;
+  ${countryTabCanvasPadding}
   min-height: calc(100vh - 200px);
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
-
-  @media (max-width: 768px) {
-    padding: 24px 20px 36px;
-    gap: 24px;
-  }
 `
 
 const LedgerCard = styled.div`

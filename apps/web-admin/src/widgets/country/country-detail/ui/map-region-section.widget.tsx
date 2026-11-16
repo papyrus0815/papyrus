@@ -49,9 +49,8 @@ export function MapRegionSection({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 24,
-        // 좁은 화면에서 좌우 패딩을 줄여 콘텐츠 폭 확보
-        padding: '32px clamp(12px, 3vw, 32px) 48px',
+        gap: 20,
+        padding: '20px clamp(20px, 2.5vw, 32px) 48px',
         minHeight: 'calc(100vh - 200px)',
         position: 'relative',
       }}

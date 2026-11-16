@@ -104,6 +104,10 @@ import {
   seedSanFranciscoTreatyPersons,
   seedSanFranciscoTreatyEnrich,
   seedPrcFounding,
+  seedChinaHistoricalCountries,
+  seedChinaHistoricalCountryRelations,
+  seedLithuaniaHistoricalCountries,
+  seedLithuaniaHistoricalCountryRelations,
   seedKurofune,
   seedAnseiEarthquakes,
   seedAnseiPurge,
@@ -149,6 +153,7 @@ import {
   seedWorldWarOnePersonGroups,
   seedWorldWarOneAppointmentDetails,
   seedEventTypeBackfill,
+  seedPoliticalSystemsAndConstitutions,
 } from './seeds'
 
 const options = {
@@ -434,6 +439,14 @@ async function main() {
         //    ·나치 독일(국민통합정부 PROTECTORATE 소속 대상)
         //    — 아직 없으면 warn+skip, 재실행에서 채움(루마니아 7-24와 같은 사정)
         await seedHungaryHistoricalCountryRelations(prisma)
+
+        // 7-41. 리투아니아 1915년 이후 역사 국가 시딩 (오버 오스트~리투아니아 공화국 5건)
+        //  · 의존: seedCountries(LT·LV·EE·BY·PL). 대공국·연방·리투아니아 SSR은 poland/russia 시드 소유
+        await seedLithuaniaHistoricalCountries(prisma)
+
+        // 7-42. 리투아니아 계승·소속 관계 시딩 (오버 오스트→제1공화국→SSR↔오스트란트→공화국, 중부 리투아니아)
+        //  · 의존: russia(러시아 제국·SSR·소련)·germany(독일 제국·나치 독일)·poland(폴란드 제2공화국)
+        await seedLithuaniaHistoricalCountryRelations(prisma)
 
         // 8. 관직 정의 시딩 (군주 시딩보다 먼저 실행)
         await seedGovernmentPositionDefinitions(prisma)
@@ -749,6 +762,12 @@ async function main() {
         //  · Event + 8섹션(논문급) + EventCountryRelation 6 + PersonEvent 8
         await seedPrcFounding(prisma)
 
+        // 13-14-1. 중국 계열 역사 국가 — 중화민국(연결 기간: 중국 1912-01~1949-12 / 대만 1945-10~)·중화인민공화국
+        //  · 의존: seedCountries(CN·TW) + 바로 위 seedPrcFounding(중화민국 행) + 아편전쟁 시드(청나라)
+        //  · 중화민국은 행을 나누지 않는다 — 1949년은 정권이 아니라 땅이 바뀐 것(헌법·총통 대수 연속)
+        await seedChinaHistoricalCountries(prisma)
+        await seedChinaHistoricalCountryRelations(prisma)
+
         // 13-15. 1853-07-08 ~ 1854-03-31 쿠로후네 내항 — 외교 카테고리
         //  · 도쿠가와 막부(에도 막부) historicalCountry 인라인 등록
         //  · 페리·필모어·이에요시·아베 마사히로·하야시 아키라·도쿠가와 나리아키(신규)
@@ -878,6 +897,10 @@ async function main() {
         //    두 시드 모두 멱등이라 재실행이 안전하다.
         await seedJoseonHistoricalCountryRelations(prisma)
         await seedGovernmentPositionDefinitionScopes(prisma)
+
+        // 16-0. 국가별 제헌(헌법·기본법·법전) 및 시대별 정체·헌정 체제(PoliticalSystem) 시딩
+        //  · 의존: 모든 국가·역사국가(도쿠가와 막부·일본 제국·일본국·중화민국 등) + 관직 정의·스코프
+        await seedPoliticalSystemsAndConstitutions(prisma)
 
         // 16-1. Person.countryId 백필 재실행 — 13-5 이후에도 인물 시드(Dimitrijevic~트럼프 내각 등)가
         //  여럿 더 있어 그 사이 생성된 인물은 13-5 시점엔 아직 없었다. 멱등(countryId가 NULL인

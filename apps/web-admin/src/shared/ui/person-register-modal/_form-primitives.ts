@@ -200,7 +200,13 @@ export const mobileInputFontMixin = css`
  * bespoke input/select가 border-color만 바꾸고 box-shadow 링을 빠뜨려 "절반만 링이 뜨는"
  * 키보드 포커스 비일관을 낳았다 → 이 믹스인으로 통일(링 색은 focusRing 토큰 경유, 하드코딩 금지).
  */
-export function inputFocusMixin(theme: DefaultTheme) {
+export function inputFocusMixin(
+  themeOrProps: DefaultTheme | { theme: DefaultTheme },
+) {
+  const theme =
+    'theme' in themeOrProps && themeOrProps.theme
+      ? themeOrProps.theme
+      : (themeOrProps as DefaultTheme)
   return css`
     &:focus {
       outline: none;

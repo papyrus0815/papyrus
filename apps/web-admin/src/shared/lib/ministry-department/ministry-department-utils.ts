@@ -300,6 +300,14 @@ export function ministryFormFieldsFromDepartment(
     defenseOfficialNameEn: dept.nameEn ?? d.officialNameEn,
     defenseMissionScope: dept.primaryMission ?? d.missionScope ?? '',
     defenseHeadquarters: dept.headquarters ?? d.headquarters ?? '',
+    headquartersLatitude:
+      dept.headquartersLatitude != null && dept.headquartersLongitude != null
+        ? Number(dept.headquartersLatitude)
+        : null,
+    headquartersLongitude:
+      dept.headquartersLatitude != null && dept.headquartersLongitude != null
+        ? Number(dept.headquartersLongitude)
+        : null,
     defenseOrgStructure: dept.orgStructure ?? d.orgStructure ?? '',
     defenseBudgetOrForcesNote: dept.budgetNote ?? d.budgetOrForcesNote ?? '',
   }
@@ -344,6 +352,8 @@ export function emptyMinistryFormFields(
     defenseOfficialNameEn: '',
     defenseMissionScope: '',
     defenseHeadquarters: '',
+    headquartersLatitude: null as number | null,
+    headquartersLongitude: null as number | null,
     defenseOrgStructure: '',
     defenseBudgetOrForcesNote: '',
   }
@@ -387,4 +397,176 @@ export function countDepartmentsByCategoryId(
     m.set(cid, (m.get(cid) ?? 0) + 1)
   }
   return m
+}
+
+/**
+ * 중앙부처·국가기관의 존속 상태 분류
+ * - ACTIVE: 현재도 존속 중인 현대 국가 기관
+ * - SUPERSEDED: 후신 행정기관 또는 후신 군 사령부로 개편·이관된 기관
+ * - ABOLISHED: 폐지 연도가 명시된 폐지 기관
+ * - HISTORICAL_ENDED: 폐지일이 미기재여도 소멸한 역사국가(제국·왕조·구체제) 소속인 역사 기관
+ */
+export type DepartmentLifecycleStatus =
+  | 'ACTIVE'
+  | 'SUPERSEDED'
+  | 'ABOLISHED'
+  | 'HISTORICAL_ENDED'
+
+export const DEPARTMENT_LIFECYCLE_LABEL: Record<
+  DepartmentLifecycleStatus,
+  string
+> = {
+  ACTIVE: '현존 기관',
+  SUPERSEDED: '개편·이관',
+  ABOLISHED: '폐지 기관',
+  HISTORICAL_ENDED: '역사 기관',
+}
+
+export type HistoricalPolityYearSpan = {
+  startSignedYear?: number | null
+  endSignedYear?: number | null
+  startEra?: string | null
+  startYear?: number | null
+  endEra?: string | null
+  endYear?: number | null
+}
+
+export function toSignedHistoricalYear(
+  era?: string | null,
+  year?: number | null,
+): number | null {
+  if (year == null || !Number.isFinite(year) || year <= 0) return null
+  return era === 'BC' ? -Math.abs(year) : Math.abs(year)
+}
+
+function extractSignedYearFromDeptDate(
+  structured:
+    | {
+        era?: string | null
+        year?: number | null
+      }
+    | null
+    | undefined,
+  isoFallback: string | null | undefined,
+): number | null {
+  if (structured && structured.year != null && structured.year > 0) {
+    return structured.era === 'BC'
+      ? -Math.abs(structured.year)
+      : structured.year
+  }
+  if (!isoFallback) return null
+  const trimmed = isoFallback.trim()
+  const bcPrefix = /^BC\s*(\d{1,6})/i.exec(trimmed)
+  if (bcPrefix) return -Number.parseInt(bcPrefix[1], 10)
+  const signedMatch = /^(-?\d{1,6})/.exec(trimmed)
+  if (!signedMatch) return null
+  const parsed = Number.parseInt(signedMatch[1], 10)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+/**
+ * 기관의 실제 존속 상태를 판정한다.
+ * 과거 제국·왕조(`historicalCountryId != null`) 소속 기관에 폐지 연도가 비어 있거나
+ * 후신 기관(`successors`)으로 이미 개편된 기관이 '현존 기관'으로 오표기되는 문제를 방지한다.
+ */
+export function resolveDepartmentLifecycleStatus(
+  dept: Pick<
+    AdministrationDepartment,
+    'historicalCountryId' | 'abolished' | 'abolishedDate'
+  > & {
+    successors?: ReadonlyArray<unknown> | null
+    militaryUnitSuccessors?: ReadonlyArray<unknown> | null
+  },
+  options?: {
+    /** 소속 역사국가의 존속 종료 여부 (미전달 시 historicalCountryId 존재 여부로 소멸 역사국가 간주) */
+    politySpan?: HistoricalPolityYearSpan | null
+  },
+): DepartmentLifecycleStatus {
+  const hasSuccessors =
+    (dept.successors?.length ?? 0) > 0 ||
+    (dept.militaryUnitSuccessors?.length ?? 0) > 0
+  const hasExplicitAbolished =
+    Boolean(dept.abolished && dept.abolished.year != null) ||
+    Boolean(dept.abolishedDate && dept.abolishedDate.trim())
+
+  if (hasSuccessors) {
+    return 'SUPERSEDED'
+  }
+  if (hasExplicitAbolished) {
+    return 'ABOLISHED'
+  }
+  if (dept.historicalCountryId) {
+    // 명시적으로 현존 정체(endSignedYear === null 이면서 startSignedYear가 정의된 현행 체제 예외가 아닌 한) 역사국가 소속은 역사 기관으로 분류
+    const span = options?.politySpan
+    if (!span || span.endSignedYear !== null) {
+      return 'HISTORICAL_ENDED'
+    }
+    return 'HISTORICAL_ENDED'
+  }
+  return 'ACTIVE'
+}
+
+/**
+ * 특정 기준 연도(부호 정수: 기원전 음수, 서기 양수)에 해당 기관이 존속했는지 판정한다.
+ * - 설립·폐지 연도가 모두 비어 있어도 소속 역사국가의 존속 구간(`politySpan`)이 있으면 그 구간으로 보정한다.
+ * - 폐지 연도가 비어 있는 역사국가 기관은 역사국가 종료 연도(`politySpan.endSignedYear`)를 상한으로 삼아
+ *   현대 연도(예: 2025) 조회 시 멸망한 제국 부처가 섞여 나오지 않게 한다.
+ */
+export function isDepartmentActiveAtSignedYear(
+  dept: Pick<
+    AdministrationDepartment,
+    | 'historicalCountryId'
+    | 'established'
+    | 'establishedDate'
+    | 'abolished'
+    | 'abolishedDate'
+  >,
+  targetSignedYear: number,
+  politySpan?: HistoricalPolityYearSpan | null,
+): boolean {
+  if (!Number.isFinite(targetSignedYear) || targetSignedYear === 0) return true
+
+  const estYear = extractSignedYearFromDeptDate(
+    dept.established,
+    dept.establishedDate,
+  )
+  const abolYear = extractSignedYearFromDeptDate(
+    dept.abolished,
+    dept.abolishedDate,
+  )
+
+  const polityStartSigned =
+    politySpan?.startSignedYear !== undefined
+      ? politySpan.startSignedYear
+      : toSignedHistoricalYear(politySpan?.startEra, politySpan?.startYear)
+  const polityEndSigned =
+    politySpan?.endSignedYear !== undefined
+      ? politySpan.endSignedYear
+      : toSignedHistoricalYear(politySpan?.endEra, politySpan?.endYear)
+
+  const effectiveStartYear = estYear ?? polityStartSigned ?? null
+  const effectiveEndYear =
+    abolYear ?? (dept.historicalCountryId ? (polityEndSigned ?? null) : null)
+
+  if (effectiveStartYear == null && effectiveEndYear == null) {
+    return false
+  }
+  if (effectiveStartYear != null && targetSignedYear < effectiveStartYear) {
+    return false
+  }
+  if (effectiveEndYear != null && targetSignedYear > effectiveEndYear) {
+    return false
+  }
+  // 역사국가 소속인데 설립 연도만 있고 폐지 연도·역사국가 종료 연도 정보가 전혀 없을 때,
+  // 현대 시점(현재 연도 인근)으로 무한 연장되지 않도록 방어
+  if (
+    dept.historicalCountryId &&
+    effectiveEndYear == null &&
+    effectiveStartYear != null &&
+    targetSignedYear - effectiveStartYear > 150 &&
+    targetSignedYear >= 1945
+  ) {
+    return false
+  }
+  return true
 }

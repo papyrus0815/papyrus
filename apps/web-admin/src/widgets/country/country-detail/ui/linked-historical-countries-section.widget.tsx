@@ -5,6 +5,13 @@
 import { useMemo, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
+import {
+  FiArrowRight,
+  FiChevronRight,
+  FiLayers,
+  FiPlus,
+  FiRepeat,
+} from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -23,7 +30,12 @@ import {
   updateHistoricalCountry,
 } from '@/shared/api/historical-countries'
 import { getUploadImageUrl } from '@/shared/api/upload'
-import { compareByCountryStart, formatCountryPeriod } from '@/shared/lib/country-period'
+import {
+  compareByCountryStart,
+  formatCountryPeriod,
+  formatModernLinkPeriod,
+  toLinkScopedPeriod,
+} from '@/shared/lib/country-period'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { CountryPicker, type CountryPickerPick } from '@/shared/ui/country-picker'
@@ -38,6 +50,12 @@ import {
 } from '../model/linked-historical-labels'
 import { useLinkedHistoricalData } from '../model/use-linked-historical-data.hook'
 import * as DashboardStyles from './country-detail-dashboard.styles'
+import {
+  LedgerFilterChip,
+  LedgerPrimaryButton,
+  LedgerViewSwitch,
+  LedgerViewSwitchItem,
+} from './country-ledger-primitives'
 import { ChartSkeleton } from './dashboard-panels/chart-skeleton'
 import { LineageFlow } from './dashboard-panels/lineage-flow'
 
@@ -88,7 +106,11 @@ export function LinkedHistoricalCountriesSection({
   const queryClient = useQueryClient()
   const rawList = country.historicalCountries ?? []
   const list = useMemo(
-    () => [...rawList].sort(compareByCountryStart),
+    // 이 땅에 있었던 기간으로 정렬 — 대만 목록의 중화민국은 1912가 아니라 1945 자리에 선다
+    () =>
+      [...rawList].sort((left, right) =>
+        compareByCountryStart(toLinkScopedPeriod(left), toLinkScopedPeriod(right)),
+      ),
     [rawList],
   )
   const count = list.length
@@ -204,7 +226,7 @@ export function LinkedHistoricalCountriesSection({
     const confirmed = await confirm({
       title: '과거 국가 연결 해제',
       message: `${item.name}와(과) ${country.name}의 연결을 해제하시겠습니까? (과거 국가 자체는 삭제되지 않습니다.)`,
-      confirmText: '연결 해제',
+      confirmLabel: '연결 해제',
       danger: true,
     })
     if (!confirmed) return
@@ -283,11 +305,15 @@ export function LinkedHistoricalCountriesSection({
       }
     } else {
       const { kindById: clientKind } = classifyLinkedHistorical({
-        nodes: list.map((item) => ({
-          id: item.id,
-          startYear: toSignedYear(item.startEra, item.startYear),
-          endYear: toSignedYear(item.endEra, item.endYear),
-        })),
+        // 이 땅에서의 기간 — 중국 목록에서 존속 중인 중화민국이 '진행 중 앵커'로 잡히지 않게(끝=1949)
+        nodes: list.map((item) => {
+          const scoped = toLinkScopedPeriod(item)
+          return {
+            id: item.id,
+            startYear: toSignedYear(scoped.startEra, scoped.startYear),
+            endYear: toSignedYear(scoped.endEra, scoped.endYear),
+          }
+        }),
         transitions: transitions.map((transition) => ({
           predecessorId: transition.predecessorId,
           successorId: transition.successorId,
@@ -320,8 +346,9 @@ export function LinkedHistoricalCountriesSection({
     let minSigned: number | null = null
     let maxSigned: number | null = null
     for (const item of list) {
-      const startSigned = toSignedYear(item.startEra, item.startYear)
-      const endSigned = toSignedYear(item.endEra, item.endYear)
+      const scoped = toLinkScopedPeriod(item)
+      const startSigned = toSignedYear(scoped.startEra, scoped.startYear)
+      const endSigned = toSignedYear(scoped.endEra, scoped.endYear)
       if (startSigned != null) {
         minSigned =
           minSigned == null ? startSigned : Math.min(minSigned, startSigned)
@@ -402,8 +429,9 @@ export function LinkedHistoricalCountriesSection({
 
   const enrichedForLineage = useMemo(
     () =>
+      // 계보도는 이 땅에서의 기간으로 그린다(중국 계보의 중화민국은 1949에서 끝난다)
       filteredList.map((item) => ({
-        ...item,
+        ...toLinkScopedPeriod(item),
         linkKind:
           classification.kindById.get(item.id) ?? item.linkKind ?? null,
       })),
@@ -550,8 +578,8 @@ export function LinkedHistoricalCountriesSection({
 
           <HeadActions>
             {count > 0 && (
-              <ModeSwitchGroup role="tablist" aria-label="과거 국가 보기 방식">
-                <ModeSwitchBtn
+              <LedgerViewSwitch role="tablist" aria-label="과거 국가 보기 방식">
+                <LedgerViewSwitchItem
                   type="button"
                   role="tab"
                   aria-selected={viewMode === 'list'}
@@ -559,8 +587,8 @@ export function LinkedHistoricalCountriesSection({
                   onClick={() => setViewMode('list')}
                 >
                   2열 원장
-                </ModeSwitchBtn>
-                <ModeSwitchBtn
+                </LedgerViewSwitchItem>
+                <LedgerViewSwitchItem
                   type="button"
                   role="tab"
                   aria-selected={viewMode === 'flow'}
@@ -568,16 +596,17 @@ export function LinkedHistoricalCountriesSection({
                   onClick={() => setViewMode('flow')}
                 >
                   계보 흐름도
-                </ModeSwitchBtn>
-              </ModeSwitchGroup>
+                </LedgerViewSwitchItem>
+              </LedgerViewSwitch>
             )}
-            <LinkAddButton
+            <LedgerPrimaryButton
               type="button"
               disabled={isMutatingLink}
               onClick={() => setIsPickerOpen(true)}
             >
-              + 과거 국가 연결
-            </LinkAddButton>
+              <FiPlus size={14} />
+              <span>과거 국가 연결</span>
+            </LedgerPrimaryButton>
           </HeadActions>
         </HeadRow>
 
@@ -687,7 +716,8 @@ export function LinkedHistoricalCountriesSection({
                 disabled={isMutatingLink}
                 onClick={() => setIsPickerOpen(true)}
               >
-                + 과거 국가 연결하기
+                <FiPlus size={12} />
+                <span>과거 국가 연결하기</span>
               </EmptyActionBtn>
             </EmptySpecCell>
             <EmptySpecCell>
@@ -754,7 +784,9 @@ export function LinkedHistoricalCountriesSection({
                             transition.predecessorName ??
                             '전임'}
                         </RelationNodeBtn>
-                        <RelationArrow>→</RelationArrow>
+                        <RelationArrow>
+                          <FiArrowRight size={12} />
+                        </RelationArrow>
                         <RelationNodeBtn
                           type="button"
                           onClick={() =>
@@ -796,7 +828,9 @@ export function LinkedHistoricalCountriesSection({
                             membership.parentName ??
                             '상위'}
                         </RelationNodeBtn>
-                        <RelationArrow>⊃</RelationArrow>
+                        <RelationArrow>
+                          <FiLayers size={11} />
+                        </RelationArrow>
                         <RelationNodeBtn
                           type="button"
                           onClick={() =>
@@ -836,7 +870,9 @@ export function LinkedHistoricalCountriesSection({
                             relation.subjectCountryName ??
                             '주체'}
                         </RelationNodeBtn>
-                        <RelationArrow>↔</RelationArrow>
+                        <RelationArrow>
+                          <FiRepeat size={11} />
+                        </RelationArrow>
                         <RelationNodeBtn
                           type="button"
                           onClick={() =>
@@ -889,6 +925,7 @@ export function LinkedHistoricalCountriesSection({
                     ? getStateTypeLabel(item.stateType)
                     : null
                   const periodLabel = formatCountryPeriod(item)
+                  const linkPeriodLabel = formatModernLinkPeriod(item)
                   const relationChips = renderRelationSummaries(item)
 
                   return (
@@ -929,6 +966,11 @@ export function LinkedHistoricalCountriesSection({
                               <StateBadge>{stateTypeLabel}</StateBadge>
                             )}
                             <PeriodText>{periodLabel}</PeriodText>
+                            {linkPeriodLabel && (
+                              <LinkPeriodText title="이 나라가 이 땅에 있었던 기간 — 존속 기간과 다르다">
+                                이 땅에서 {linkPeriodLabel}
+                              </LinkPeriodText>
+                            )}
                           </CountryMetaRow>
 
                           {relationChips.length > 0 && (
@@ -950,7 +992,10 @@ export function LinkedHistoricalCountriesSection({
                           )}
                         </CountryMainCol>
 
-                        <DetailActionLabel>상세 →</DetailActionLabel>
+                        <DetailActionLabel>
+                          <span>상세</span>
+                          <FiChevronRight size={13} />
+                        </DetailActionLabel>
                       </CountryRowButton>
 
                       <CountryRowActions>
@@ -1016,33 +1061,11 @@ const HeadActions = styled.div`
   flex-wrap: wrap;
 `
 
-const LinkAddButton = styled.button`
-  padding: 5px 11px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 6px;
-  background: transparent;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-  white-space: nowrap;
-
-  &:hover:not(:disabled) {
-    border-color: ${({ theme }) => theme.colors.active};
-    color: ${({ theme }) => theme.colors.active};
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`
-
 const Title = styled.h3`
   margin: 0;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 700;
+  letter-spacing: -0.02em;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
@@ -1050,34 +1073,6 @@ const Description = styled.p`
   margin: 0;
   font-size: 13px;
   color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const ModeSwitchGroup = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 6px;
-`
-
-const ModeSwitchBtn = styled.button<{ $active: boolean }>`
-  padding: 5px 11px;
-  border: none;
-  border-radius: 4px;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: ${({ $active }) => ($active ? 700 : 500)};
-  color: ${({ theme, $active }) =>
-    $active ? theme.colors.active : theme.colors.text.secondary};
-  background: ${({ theme, $active }) =>
-    $active ? theme.colors.activeLight : 'transparent'};
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme, $active }) =>
-      $active ? theme.colors.active : theme.colors.text.primary};
-  }
 `
 
 const FilterToolbar = styled.div`
@@ -1097,27 +1092,7 @@ const FilterChipGroup = styled.div`
   flex-wrap: wrap;
 `
 
-const FilterChip = styled.button<{ $active: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border: none;
-  border-radius: 4px;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: ${({ $active }) => ($active ? 700 : 500)};
-  color: ${({ theme, $active }) =>
-    $active ? theme.colors.active : theme.colors.text.secondary};
-  background: ${({ theme, $active }) =>
-    $active ? theme.colors.activeLight : 'transparent'};
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme, $active }) =>
-      $active ? theme.colors.active : theme.colors.text.primary};
-  }
-`
+const FilterChip = styled(LedgerFilterChip)``
 
 const FilterChipCount = styled.span`
   font-size: 11px;
@@ -1128,10 +1103,10 @@ const FilterChipCount = styled.span`
 
 const SearchInput = styled.input`
   width: min(260px, 100%);
-  height: 30px;
-  padding: 0 10px;
+  height: 34px;
+  padding: 0 11px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
   font-family: inherit;
   font-size: 12.5px;
@@ -1140,6 +1115,10 @@ const SearchInput = styled.input`
   &:focus {
     outline: none;
     border-color: ${({ theme }) => theme.colors.active};
+  }
+
+  @media (max-width: 768px) {
+    height: 40px;
   }
 `
 
@@ -1316,6 +1295,14 @@ const PeriodText = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
+/** 연결 기간 — 존속 기간과 다를 때만 보인다(중화민국: 중국 1912.1–1949.12 / 대만 1945.10–) */
+const LinkPeriodText = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
 const RelationChipRow = styled.div`
   display: flex;
   align-items: center;
@@ -1336,6 +1323,9 @@ const RelationChip = styled.span<{ $highlight?: boolean }>`
 `
 
 const DetailActionLabel = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
@@ -1462,6 +1452,8 @@ const RelationNodeBtn = styled.button`
 `
 
 const RelationArrow = styled.span`
+  display: inline-flex;
+  align-items: center;
   font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
@@ -1518,6 +1510,9 @@ const EmptySpecDesc = styled.p`
 `
 
 const EmptyActionBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   align-self: flex-start;
   margin-top: 4px;
   padding: 0;

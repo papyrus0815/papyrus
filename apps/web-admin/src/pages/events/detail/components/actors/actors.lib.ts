@@ -16,7 +16,13 @@ export const PERSON_PREVIEW_COUNT = 6
 /** 대표단은 나라마다 앞 N명 — 일본 대표단 7명이 화면 한 장을 먹었다 */
 export const DELEGATION_PREVIEW_COUNT = 3
 
-export type EventPersonEntry = NonNullable<EventDetail['relatedPersons']>[number]
+export type EventPersonEntry = NonNullable<EventDetail['relatedPersons']>[number] & {
+  deathAtEvent?: {
+    label: string
+    dateLabel: string | null
+    cause: string | null
+  } | null
+}
 
 /** 참여 인물 한 줄 — 참여 자격 국가는 3상(생략=유지 / null=비움 / 값=설정) */
 export type PersonPayload = {

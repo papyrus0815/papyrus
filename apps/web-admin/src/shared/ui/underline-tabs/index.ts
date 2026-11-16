@@ -1,1 +1,5 @@
-export { UnderlineTabButton, UnderlineTabNav } from './underline-tabs'
+export {
+  UnderlineTabBadge,
+  UnderlineTabButton,
+  UnderlineTabNav,
+} from './underline-tabs'

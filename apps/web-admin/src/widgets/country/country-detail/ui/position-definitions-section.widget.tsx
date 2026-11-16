@@ -10,6 +10,7 @@ import styled from 'styled-components'
 import {
   FiPlus,
   FiArrowLeft,
+  FiArrowUpRight,
   FiEdit2,
   FiTrash2,
   FiChevronDown,
@@ -19,6 +20,14 @@ import {
   FiX,
 } from 'react-icons/fi'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import {
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentHover,
+  ledgerAccentSubtle,
+  ledgerBackground,
+  ledgerHairlineStrong,
+} from '@/entities/event/ui/ledger-tokens'
 import { useCountries } from '@/features/country/api'
 import { useConstituentHistoricalPolities } from '@/features/government-info/model/use-constituent-historical-polities'
 import { useHistoricalCountries } from '@/features/historical-country/use-historical-countries.hook'
@@ -252,24 +261,12 @@ const FilterTab = styled.button<{ $active: boolean }>`
   border: 1px solid
     ${({ $active, theme }) =>
       $active
-        ? theme.mode === 'dark'
-          ? 'rgba(59, 130, 246, 0.45)'
-          : 'rgba(37, 99, 235, 0.35)'
-        : theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.1)'
-          : 'rgba(20, 19, 34, 0.1)'};
+        ? ledgerAccentBorder(theme.mode)
+        : ledgerHairlineStrong(theme.mode)};
   background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? 'rgba(37, 99, 235, 0.18)'
-        : 'rgba(37, 99, 235, 0.08)'
-      : 'transparent'};
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
   color: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? '#93c5fd'
-        : '#2563eb'
-      : theme.colors.text.secondary};
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
 `
 
 const SearchInputWrap = styled.div`
@@ -279,18 +276,18 @@ const SearchInputWrap = styled.div`
   height: 34px;
   padding: 0 10px;
   border-radius: 8px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.1)'
-        : 'rgba(20, 19, 34, 0.1)'};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
   min-width: 220px;
 
   &:focus-within {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    box-shadow: 0 0 0 2px
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(165, 180, 252, 0.22)'
+          : 'rgba(79, 70, 229, 0.14)'};
   }
 
   input {
@@ -309,9 +306,9 @@ const SectionTitleBlock = styled.div``
 const SectionTitle = styled.h2`
   margin: 0 0 4px;
   font-size: 16px;
-  font-weight: 800;
+  font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -332,16 +329,24 @@ const AddBtn = styled.button`
   font-family: inherit;
   font-size: 12.5px;
   font-weight: 600;
-  color: #ffffff;
-  background: #2563eb;
-  border: 1px solid #2563eb;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#0e0f12' : '#ffffff')};
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
+  border: none;
   border-radius: 8px;
   cursor: pointer;
   flex-shrink: 0;
   transition: background 0.14s ease;
   &:hover {
-    background: #1d4ed8;
-    border-color: #1d4ed8;
+    background: ${({ theme }) => ledgerAccentHover(theme.mode)};
+  }
+  &:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px ${({ theme }) => ledgerBackground(theme.mode)},
+      0 0 0 4px ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+  @media (max-width: 768px) {
+    height: 40px;
   }
 `
 
@@ -511,23 +516,16 @@ const DepartmentJumpChip = styled.button`
   gap: 4px;
   padding: 1px 7px;
   border-radius: 6px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(59, 130, 246, 0.34)'
-        : 'rgba(37, 99, 235, 0.28)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(37, 99, 235, 0.14)'
-      : 'rgba(37, 99, 235, 0.06)'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#2563eb')};
+  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
   font-family: inherit;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
 
   &:hover {
-    opacity: 0.88;
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 `
 
@@ -1543,7 +1541,8 @@ export function PositionDefinitionsSection({
                                 }
                                 title="클릭하여 소속 부처·기관 상세로 이동"
                               >
-                                <span>🏛️ {linkedDeptName} →</span>
+                                <span>{linkedDeptName}</span>
+                                <FiArrowUpRight size={11} />
                               </DepartmentJumpChip>
                             ) : (
                               <MetaText>{linkedDeptName}</MetaText>

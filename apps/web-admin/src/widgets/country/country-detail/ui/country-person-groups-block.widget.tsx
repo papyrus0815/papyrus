@@ -70,10 +70,10 @@ export function CountryPersonGroupsBlock({
 
 const Wrap = styled.div`
   margin-bottom: 18px;
-  padding: 16px;
-  border-radius: 14px;
+  padding: 14px 16px;
+  border-radius: 10px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) => theme.colors.background.secondary};
+  background: transparent;
 `
 
 const Head = styled.div`
@@ -127,15 +127,15 @@ const GroupChip = styled(Link)`
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 7px 12px;
-  border-radius: 999px;
+  padding: 6px 11px;
+  border-radius: 8px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.primary};
+  background: transparent;
   text-decoration: none;
-  transition: border-color 0.13s ease, transform 0.13s ease;
+  transition: border-color 0.13s ease, background 0.13s ease;
   &:hover {
     border-color: ${({ theme }) => theme.colors.primary};
-    transform: translateY(-1px);
+    background: ${({ theme }) => theme.colors.hover};
   }
 `
 

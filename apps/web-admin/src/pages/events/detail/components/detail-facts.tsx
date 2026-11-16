@@ -93,6 +93,10 @@ const CASUALTY_METRIC_PRIORITY = [
   'military.combat_deaths',
   'military.killed_in_action',
   'military.deaths_unspecified',
+  'human.deaths_total',
+  'human.executed',
+  'civilian.killed',
+  'civilian.wounded',
 ]
 
 export function DetailFacts({
@@ -164,10 +168,11 @@ export function DetailFacts({
   const unnamedSides = sides.length >= 2 && sides.every((side) => isPlaceholderSideName(side.name))
   /*
    * 사상자 — 측정값(D3)에서 진영마다 한 줄. 정의가 다른 지표를 섞지 않도록 우선순위대로 하나만 고른다.
-   * (군 손실 합계 → 총사망 → 전투 사망 → 전사 → 정의 미상 사망)
+   * (군 손실 합계 → 총사망 → 전투 사망 → 전사 → 정의 미상 사망 → 사망 합계 → 처형·학살 사망 → 민간인 사망 → 민간인 부상)
+   * 진영이 없거나 진영별 사상자가 비었을 때는 사건 전체(EVENT) 인명 피해 측정값을 보여 준다.
    */
   const { data: observations = [] } = useQuery(eventObservationsQueryOptions(event.id))
-  const casualties = sides
+  const sideCasualties = sides
     .map((side) => {
       const own = observations.filter(
         (observation) => observation.subjectType === 'EVENT_SIDE' && observation.subjectId === side.id,
@@ -181,6 +186,19 @@ export function DetailFacts({
       return null
     })
     .filter((line): line is string => Boolean(line))
+  const eventCasualties = (() => {
+    if (sideCasualties.length > 0) return []
+    const own = observations.filter(
+      (observation) => observation.subjectType === 'EVENT' && observation.subjectId === event.id,
+    )
+    for (const key of CASUALTY_METRIC_PRIORITY) {
+      const candidates = own.filter((observation) => observation.metric.key === key)
+      const hit = representativeOf(candidates) ?? candidates[0]
+      if (hit) return [`${hit.metric.name} ${formatObservationValue(hit)}`]
+    }
+    return []
+  })()
+  const casualties = sideCasualties.length > 0 ? sideCasualties : eventCasualties
 
   const roleGroups = groupCountriesByRole(
     [

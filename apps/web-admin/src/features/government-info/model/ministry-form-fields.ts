@@ -74,6 +74,8 @@ export type MinistryFormFields = {
   defenseOfficialNameEn: string
   defenseMissionScope: string
   defenseHeadquarters: string
+  headquartersLatitude: number | null
+  headquartersLongitude: number | null
   defenseOrgStructure: string
   defenseBudgetOrForcesNote: string
 }

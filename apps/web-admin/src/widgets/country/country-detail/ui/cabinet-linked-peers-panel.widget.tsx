@@ -13,13 +13,29 @@ import * as CabS from './cabinets-section.styled'
 
 function territoryName(cab: CabinetListItemDto): string {
   const ht = cab.headTenure
-  return ht?.historicalCountry?.name ?? ht?.country?.name ?? '—'
+  return (
+    ht?.historicalCountry?.name ??
+    cab.historicalCountry?.name ??
+    ht?.country?.name ??
+    cab.country?.name ??
+    '—'
+  )
 }
 
 function territoryGovernmentUrl(cab: CabinetListItemDto): string | null {
   const ht = cab.headTenure
-  const id = ht?.country?.id ?? ht?.historicalCountry?.id
-  return id ? pathKeys.countryGovernment(id) : null
+  const targetPolityId =
+    cab.historicalCountryId ??
+    ht?.historicalCountryId ??
+    ht?.historicalCountry?.id ??
+    cab.historicalCountry?.id ??
+    cab.countryId ??
+    ht?.countryId ??
+    ht?.country?.id ??
+    cab.country?.id ??
+    null
+  if (!targetPolityId) return null
+  return `${pathKeys.countryGovernment(targetPolityId)}?sub=cabinets&cabinetId=${encodeURIComponent(cab.id)}`
 }
 
 function PeerVisual({
@@ -30,10 +46,13 @@ function PeerVisual({
   variant: 'card' | 'article'
 }) {
   const ht = cab.headTenure
-  const co = ht?.country
-  const hc = ht?.historicalCountry
-  const name = co?.name ?? hc?.name ?? '—'
-  const thumbRaw = co?.thumbnailUrl ?? hc?.thumbnailUrl ?? null
+  const co = ht?.country ?? cab.country
+  const hc = ht?.historicalCountry ?? cab.historicalCountry
+  const name = hc?.name ?? co?.name ?? '—'
+  const thumbRaw =
+    (hc as { thumbnailUrl?: string | null } | null)?.thumbnailUrl ??
+    (co as { thumbnailUrl?: string | null } | null)?.thumbnailUrl ??
+    null
   const emoji = co?.flagEmoji?.trim() ?? ''
   const thumb = thumbRaw ? getUploadImageUrl(thumbRaw) || thumbRaw : null
 

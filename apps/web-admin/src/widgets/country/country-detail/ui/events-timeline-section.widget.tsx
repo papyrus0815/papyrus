@@ -9,6 +9,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 
 import { motion } from 'framer-motion'
+import { FiPlus, FiSearch } from 'react-icons/fi'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import styled, { useTheme } from 'styled-components'
 
@@ -24,16 +25,23 @@ import { EventRegisterModal } from '@/widgets/event-form/ui/event-register-modal
 
 import type { CalendarEventItem } from '../model/use-country-dashboard-stats'
 import * as DashboardStyles from './country-detail-dashboard.styles'
+import {
+  countryTabCanvasPadding,
+  LedgerFilterChip,
+  LedgerPrimaryButton,
+  LedgerToolbarButton,
+  LedgerViewSwitch,
+  LedgerViewSwitchItem,
+  ledgerHairlineStrong,
+} from './country-ledger-primitives'
 import { EventCalendarPanel } from './dashboard-panels/event-calendar-panel'
 import { EventCenturyStrip } from './dashboard-panels/event-century-strip'
-
-const MAIN = '#6366f1'
 
 const Root = styled(motion.div)`
   display: flex;
   flex-direction: column;
-  gap: 32px;
-  padding: 36px 32px 48px;
+  gap: 20px;
+  ${countryTabCanvasPadding}
   position: relative;
   min-height: calc(100vh - 200px);
   box-sizing: border-box;
@@ -192,10 +200,10 @@ const HeaderTitleRow = styled.div`
 
 const HeaderTitle = styled.h2`
   margin: 0;
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.25;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
@@ -207,7 +215,7 @@ const HeaderCount = styled.span`
 `
 
 const HeaderDesc = styled.p`
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   max-width: 540px;
   font-size: 13px;
   font-weight: 500;
@@ -218,49 +226,9 @@ const HeaderDesc = styled.p`
 const HeaderActions = styled.div`
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
-`
-
-const CreateButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 14px;
-  border-radius: 10px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#fff'};
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.hover};
-  }
-`
-
-const OrderToggle = styled.div`
-  display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 8px;
-  background: ${({ theme }) => theme.colors.background.secondary};
-`
-
-const OrderButton = styled.button<{ $active: boolean }>`
-  padding: 5px 10px;
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  color: ${({ theme, $active }) =>
-    $active ? theme.colors.text.primary : theme.colors.text.tertiary};
-  background: ${({ theme, $active }) =>
-    $active ? theme.colors.background.primary : 'transparent'};
+  flex-wrap: wrap;
 `
 
 /** 사건 카드 하단 관련 국가 칩 줄 */
@@ -334,36 +302,7 @@ const ScopeChipGroup = styled.div`
   flex-wrap: wrap;
 `
 
-const ScopeFilterChip = styled.button<{ $active: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 11px;
-  border-radius: 999px;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  border: 1px solid
-    ${({ $active, theme }) =>
-      $active
-        ? theme.mode === 'dark'
-          ? 'rgba(99, 102, 241, 0.5)'
-          : '#a5b4fc'
-        : theme.colors.border.default};
-  background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.2)'
-        : '#eef2ff'
-      : 'transparent'};
-  color: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? '#a5b4fc'
-        : '#4f46e5'
-      : theme.colors.text.secondary};
-`
+const ScopeFilterChip = styled(LedgerFilterChip)``
 
 const SearchControlsGroup = styled.div`
   display: flex;
@@ -375,22 +314,31 @@ const SearchControlsGroup = styled.div`
 const SearchInputWrap = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: 7px;
+  height: 34px;
+  padding: 0 11px;
   border-radius: 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#fff'};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   min-width: 240px;
+
+  &:focus-within {
+    border-color: ${({ theme }) => theme.colors.active};
+  }
 
   input {
     border: none;
     background: transparent;
     color: ${({ theme }) => theme.colors.text.primary};
     font-family: inherit;
-    font-size: 13px;
+    font-size: 12.5px;
     outline: none;
     width: 100%;
+  }
+
+  @media (max-width: 768px) {
+    height: 40px;
   }
 `
 
@@ -498,7 +446,6 @@ export function EventsTimelineSection({
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const theme = useTheme()
-  const isDark = theme.mode === 'dark'
   const [pageSize] = useState(50)
   const [isCreateOpen, setIsCreateOpen] = useState(
     Boolean(initialFormFromSearchParams),
@@ -907,66 +854,54 @@ export function EventsTimelineSection({
         <HeaderActions>
           {list.length > 0 && (
             <>
-              <OrderToggle role="group" aria-label="보기 방식">
-                <OrderButton
+              <LedgerViewSwitch role="group" aria-label="보기 방식">
+                <LedgerViewSwitchItem
                   type="button"
                   $active={viewMode === 'list'}
                   aria-pressed={viewMode === 'list'}
                   onClick={() => setViewMode('list')}
                 >
                   연표 목록
-                </OrderButton>
-                <OrderButton
+                </LedgerViewSwitchItem>
+                <LedgerViewSwitchItem
                   type="button"
                   $active={viewMode === 'calendar'}
                   aria-pressed={viewMode === 'calendar'}
                   onClick={() => setViewMode('calendar')}
                 >
                   캘린더
-                </OrderButton>
-              </OrderToggle>
+                </LedgerViewSwitchItem>
+              </LedgerViewSwitch>
               {viewMode === 'list' && (
-                <OrderToggle role="group" aria-label="정렬 방향">
-                  <OrderButton
+                <LedgerViewSwitch role="group" aria-label="정렬 방향">
+                  <LedgerViewSwitchItem
                     type="button"
                     $active={order === 'asc'}
                     aria-pressed={order === 'asc'}
                     onClick={() => setOrder('asc')}
                   >
                     오래된순
-                  </OrderButton>
-                  <OrderButton
+                  </LedgerViewSwitchItem>
+                  <LedgerViewSwitchItem
                     type="button"
                     $active={order === 'desc'}
                     aria-pressed={order === 'desc'}
                     onClick={() => setOrder('desc')}
                   >
                     최신순
-                  </OrderButton>
-                </OrderToggle>
+                  </LedgerViewSwitchItem>
+                </LedgerViewSwitch>
               )}
             </>
           )}
-          <CreateButton
+          <LedgerPrimaryButton
             type="button"
             onClick={openCreate}
             aria-label="새 사건 등록"
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            새 사건 등록
-          </CreateButton>
+            <FiPlus size={14} />
+            <span>새 사건 등록</span>
+          </LedgerPrimaryButton>
         </HeaderActions>
       </Header>
 
@@ -1082,6 +1017,7 @@ export function EventsTimelineSection({
               </>
             )}
             <SearchInputWrap>
+              <FiSearch size={13} />
               <input
                 type="search"
                 value={searchQuery}
@@ -1230,22 +1166,12 @@ export function EventsTimelineSection({
             >
               일부 사건을 불러오지 못했습니다.
             </div>
-            <button
+            <LedgerToolbarButton
               type="button"
               onClick={() => fetchMoreEvents()}
-              style={{
-                padding: '12px 24px',
-                borderRadius: 12,
-                border: `1px solid ${theme.colors.border.default}`,
-                background: isDark ? 'rgba(255,255,255,0.06)' : '#fff',
-                color: theme.colors.text.secondary,
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
             >
               다시 시도
-            </button>
+            </LedgerToolbarButton>
           </div>
         )}
       </section>

@@ -858,9 +858,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   )
   const [dragOverCausalLane, setDragOverCausalLane] =
     useState<ModalCausalLane | null>(null)
-  const [expandedRelatedDescIds, setExpandedRelatedDescIds] = useState<
-    Record<string, boolean>
-  >({})
 
   const getModalCausalLane = (item: EventRelatedDraft): ModalCausalLane => {
     if (item.relationType === 'CONCURRENT' || item.relationType === 'RELATED') {
@@ -3332,15 +3329,26 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       const isCoreRelation = coreRelationPills.some(
                         (pill) => pill.key === roleKey,
                       )
+                      const causalLane = getModalCausalLane(item)
+                      const causalDirectionBadgeLabel =
+                        causalLane === 'cause'
+                          ? '← 선행·원인'
+                          : causalLane === 'effect'
+                            ? '후속·결과 →'
+                            : '↔ 동시대'
+                      const memoPlaceholder =
+                        causalLane === 'cause'
+                          ? '이 선행 사건이 어떻게 계기·배경이 되었는지 메모를 남겨 주세요 (선택 · 줄바꿈 가능)'
+                          : causalLane === 'effect'
+                            ? '이 사건이 어떤 결과·파생 사건으로 이어졌는지 메모를 남겨 주세요 (선택 · 줄바꿈 가능)'
+                            : '두 사건이 같은 시기에 어떻게 맞물려 전개되었는지 메모를 남겨 주세요 (선택 · 줄바꿈 가능)'
                       const hasRelatedDescription = Boolean(
                         (item.description ?? '').trim(),
                       )
-                      const isRelatedDescOpen =
-                        hasRelatedDescription ||
-                        Boolean(expandedRelatedDescIds[item.relatedEventId])
                       return (
                         <ParticipantRow
                           key={item.relatedEventId}
+                          $causalLane={causalLane}
                           draggable
                           onDragStart={(dragEvent) => {
                             setDraggingRelatedId(item.relatedEventId)
@@ -3362,151 +3370,127 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                               >
                                 ⠿
                               </ParticipantDragHandle>
+                              <RelatedDirectionBadge $lane={causalLane}>
+                                {causalDirectionBadgeLabel}
+                              </RelatedDirectionBadge>
                               <ParticipantName>{item.title}</ParticipantName>
+                              {item.dateLabel && (
+                                <RelatedEventDateMeta>
+                                  {item.dateLabel}
+                                </RelatedEventDateMeta>
+                              )}
                             </ParticipantNameWrap>
-                            {item.dateLabel && (
-                              <RelatedEventDateMeta>
-                                {item.dateLabel}
-                              </RelatedEventDateMeta>
-                            )}
-                          <ParticipantHeaderRight>
-                            <ParticipantActions>
-                              <ParticipantRemove
-                                type="button"
-                                aria-label={`${item.title} 연관 해제`}
-                                onClick={() => {
-                                  playClickSound()
-                                  relatedEventsSlot.onChange(
-                                    relatedEventsSlot.items.filter(
-                                      (row) =>
-                                        row.relatedEventId !==
-                                        item.relatedEventId,
-                                    ),
-                                  )
-                                }}
-                              >
-                                <FiX size={14} />
-                              </ParticipantRemove>
-                            </ParticipantActions>
-                          </ParticipantHeaderRight>
-                        </ParticipantHeaderRow>
-                        <ParticipantRoleBar>
-                          <ParticipantRoleBarLabel>관계</ParticipantRoleBarLabel>
-                          <ParticipantRoleChipGroup
-                            role="group"
-                            aria-label={`${item.title} 빠른 관계 선택`}
-                          >
-                            {coreRelationPills.map((pill) => {
-                              const isActive = roleKey === pill.key
-                              return (
-                                <ParticipantRoleChipBtn
-                                  key={pill.key}
+                            <ParticipantHeaderRight>
+                              <ParticipantActions>
+                                <ParticipantRemove
                                   type="button"
-                                  aria-pressed={isActive}
-                                  aria-label={`${item.title} 관계 ${pill.shortLabel} 선택`}
-                                  title={pill.fullLabel}
-                                  $active={isActive}
+                                  aria-label={`${item.title} 연관 해제`}
                                   onClick={() => {
                                     playClickSound()
-                                    const parsed = parseRelationRoleKey(
-                                      pill.key,
+                                    relatedEventsSlot.onChange(
+                                      relatedEventsSlot.items.filter(
+                                        (row) =>
+                                          row.relatedEventId !==
+                                          item.relatedEventId,
+                                      ),
                                     )
-                                    patchItem({
-                                      relationType: parsed.relationType,
-                                      direction: parsed.direction,
-                                    })
                                   }}
                                 >
-                                  {pill.shortLabel}
-                                </ParticipantRoleChipBtn>
-                              )
-                            })}
-                          </ParticipantRoleChipGroup>
-                          <RoleSelect
-                            value={roleKey}
-                            aria-label={`${item.title} 관계 역할`}
-                            $highlighted={!isCoreRelation}
-                            onChange={(changeEvent) => {
-                              const parsed = parseRelationRoleKey(
-                                changeEvent.target
-                                  .value as EventRelationRoleKey,
-                              )
-                              patchItem({
-                                relationType: parsed.relationType,
-                                direction: parsed.direction,
-                              })
-                            }}
-                          >
-                            {EVENT_RELATION_ROLE_OPTIONS.map((option) => (
-                              <option key={option.key} value={option.key}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </RoleSelect>
-                          {!isRelatedDescOpen && (
-                            <ParticipantDescToggleBtn
-                              type="button"
-                              aria-label={`${item.title} 관계 설명 입력 열기`}
-                              onClick={() => {
-                                playClickSound()
-                                setExpandedRelatedDescIds((previous) => ({
-                                  ...previous,
-                                  [item.relatedEventId]: true,
-                                }))
+                                  <FiX size={14} />
+                                </ParticipantRemove>
+                              </ParticipantActions>
+                            </ParticipantHeaderRight>
+                          </ParticipantHeaderRow>
+                          <ParticipantRoleBar>
+                            <ParticipantRoleBarLabel>관계</ParticipantRoleBarLabel>
+                            <ParticipantRoleChipGroup
+                              role="group"
+                              aria-label={`${item.title} 빠른 관계 선택`}
+                            >
+                              {coreRelationPills.map((pill) => {
+                                const isActive = roleKey === pill.key
+                                return (
+                                  <ParticipantRoleChipBtn
+                                    key={pill.key}
+                                    type="button"
+                                    aria-pressed={isActive}
+                                    aria-label={`${item.title} 관계 ${pill.shortLabel} 선택`}
+                                    title={pill.fullLabel}
+                                    $active={isActive}
+                                    onClick={() => {
+                                      playClickSound()
+                                      const parsed = parseRelationRoleKey(
+                                        pill.key,
+                                      )
+                                      patchItem({
+                                        relationType: parsed.relationType,
+                                        direction: parsed.direction,
+                                      })
+                                    }}
+                                  >
+                                    {pill.shortLabel}
+                                  </ParticipantRoleChipBtn>
+                                )
+                              })}
+                            </ParticipantRoleChipGroup>
+                            <RoleSelect
+                              value={roleKey}
+                              aria-label={`${item.title} 관계 역할`}
+                              $highlighted={!isCoreRelation}
+                              onChange={(changeEvent) => {
+                                const parsed = parseRelationRoleKey(
+                                  changeEvent.target
+                                    .value as EventRelationRoleKey,
+                                )
+                                patchItem({
+                                  relationType: parsed.relationType,
+                                  direction: parsed.direction,
+                                })
                               }}
                             >
-                              + 설명 메모
-                            </ParticipantDescToggleBtn>
-                          )}
-                        </ParticipantRoleBar>
-                        {isRelatedDescOpen && (
-                          <RoleDescriptionWrap>
-                            <RoleDescriptionTextarea
+                              {EVENT_RELATION_ROLE_OPTIONS.map((option) => (
+                                <option key={option.key} value={option.key}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </RoleSelect>
+                          </ParticipantRoleBar>
+                          <RelatedMemoSection>
+                            <RelatedMemoHeaderRow>
+                              <RelatedMemoLabel>관계 설명 메모</RelatedMemoLabel>
+                              {hasRelatedDescription && (
+                                <ParticipantDescClearBtn
+                                  type="button"
+                                  aria-label={`${item.title} 관계 설명 비우기`}
+                                  onClick={() => {
+                                    playClickSound()
+                                    patchItem({ description: '' })
+                                  }}
+                                >
+                                  비우기
+                                </ParticipantDescClearBtn>
+                              )}
+                            </RelatedMemoHeaderRow>
+                            <RelatedMemoTextarea
                               rows={Math.max(
-                                1,
+                                2,
                                 Math.min(
                                   5,
-                                  Math.max(
-                                    (item.description ?? '').split('\n').length,
-                                    (item.description ?? '').length > 56 ? 2 : 1,
-                                  ),
+                                  (item.description ?? '').split('\n').length,
                                 ),
                               )}
                               value={item.description ?? ''}
                               aria-label={`${item.title} 관계 설명`}
-                              placeholder="어떻게 이어지는지 한 줄 설명 (선택 · 줄바꿈 가능)"
+                              placeholder={memoPlaceholder}
                               onChange={(changeEvent) =>
                                 patchItem({
                                   description: changeEvent.target.value,
                                 })
                               }
                             />
-                            <ParticipantDescFooterRow>
-                              <ParticipantDescClearBtn
-                                type="button"
-                                aria-label={
-                                  hasRelatedDescription
-                                    ? `${item.title} 관계 설명 비우기`
-                                    : `${item.title} 관계 설명 접기`
-                                }
-                                onClick={() => {
-                                  playClickSound()
-                                  if (hasRelatedDescription) {
-                                    patchItem({ description: '' })
-                                  }
-                                  setExpandedRelatedDescIds((previous) => ({
-                                    ...previous,
-                                    [item.relatedEventId]: false,
-                                  }))
-                                }}
-                              >
-                                {hasRelatedDescription ? '비우기' : '접기'}
-                              </ParticipantDescClearBtn>
-                            </ParticipantDescFooterRow>
-                          </RoleDescriptionWrap>
-                        )}
-                      </ParticipantRow>
-                    )
+                          </RelatedMemoSection>
+                        </ParticipantRow>
+                      )
                   })}
                   </ParticipantList>
                 </>
@@ -4705,15 +4689,26 @@ const ModalCausalConcurrentLabel = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-const ParticipantRow = styled.div<{ $role?: EventCountryRole; $dragOver?: boolean }>`
+const ParticipantRow = styled.div<{
+  $role?: EventCountryRole
+  $dragOver?: boolean
+  $causalLane?: 'cause' | 'effect' | 'concurrent'
+}>`
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-  border-radius: 11px;
+  gap: ${({ $causalLane }) => ($causalLane ? '8px' : '6px')};
+  padding: ${({ $causalLane }) => ($causalLane ? '12px 14px' : '10px 12px')};
+  border-radius: 12px;
   border: 1px solid
     ${({ $dragOver, theme }) =>
       $dragOver ? theme.colors.primary : S.getC(theme).border.light};
+  border-left: ${({ $causalLane, $dragOver, theme }) => {
+    if ($dragOver) return `3px solid ${theme.colors.primary}`
+    if ($causalLane === 'cause') return '3px solid #d97706'
+    if ($causalLane === 'effect') return `3px solid ${theme.colors.primary}`
+    if ($causalLane === 'concurrent') return '3px solid #64748b'
+    return `1px solid ${S.getC(theme).border.light}`
+  }};
   background: ${({ $dragOver, theme }) =>
     $dragOver
       ? `${theme.colors.primary}10`
@@ -5686,9 +5681,20 @@ const KindInlineLabel = styled.span`
 `
 
 const RelatedEventDateMeta = styled.span`
-  font-size: 12px;
-  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f8fafc'};
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: nowrap;
+  flex-shrink: 0;
 `
 
 const DateColumnHeaderRow = styled.div`
@@ -5959,27 +5965,71 @@ const SplitColumnRight = styled.div`
   }
 `
 
-const ParticipantDescToggleBtn = styled.button`
-  height: 26px;
-  padding: 0 9px;
-  margin-left: auto;
-  border: 1px dashed ${({ theme }) => S.getC(theme).border.default};
-  border-radius: 999px;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  font: inherit;
-  font-size: 11.5px;
-  font-weight: 600;
+const RelatedDirectionBadge = styled.span<{
+  $lane: 'cause' | 'effect' | 'concurrent'
+}>`
+  display: inline-flex;
+  align-items: center;
+  height: 21px;
+  padding: 0 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   white-space: nowrap;
-  cursor: pointer;
-  transition: color 0.14s ease, border-color 0.14s ease;
+  flex-shrink: 0;
+  color: ${({ $lane, theme }) => {
+    if ($lane === 'cause') return theme.mode === 'dark' ? '#fbbf24' : '#b45309'
+    if ($lane === 'effect') return theme.colors.primary
+    return theme.colors.text.secondary
+  }};
+  background: ${({ $lane, theme }) => {
+    if ($lane === 'cause')
+      return theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.16)'
+        : 'rgba(245, 158, 11, 0.12)'
+    if ($lane === 'effect')
+      return theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.18)'
+        : 'rgba(99, 102, 241, 0.1)'
+    return theme.mode === 'dark'
+      ? 'rgba(148, 163, 184, 0.14)'
+      : 'rgba(148, 163, 184, 0.14)'
+  }};
+`
 
-  &:hover,
-  &:focus-visible {
-    color: ${({ theme }) => theme.colors.primary};
-    border-color: ${({ theme }) => theme.colors.primary};
-    outline: none;
-  }
+const RelatedMemoSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  min-width: 0;
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px dashed ${({ theme }) => S.getC(theme).border.light};
+`
+
+const RelatedMemoHeaderRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 20px;
+`
+
+const RelatedMemoLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  letter-spacing: -0.01em;
+`
+
+const RelatedMemoTextarea = styled(RoleDescriptionTextarea)`
+  min-height: 54px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  font-size: 13px;
+  line-height: 1.5;
 `
 
 const SplitEditModeHint = styled.p`

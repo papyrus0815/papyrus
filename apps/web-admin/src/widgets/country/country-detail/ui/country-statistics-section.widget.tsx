@@ -14,6 +14,10 @@ import { INDICATOR_META, type IndicatorType } from './country-data-manager/field
 import { IndicatorEditorPanel } from './country-data-manager/indicator-editor-panel'
 import { PopulationPyramidPanel } from './country-data-manager/population-pyramid-panel'
 import { RecordsPanel } from './country-data-manager/records-panel'
+import {
+  countryTabCanvasPadding,
+  LedgerFilterChip,
+} from './country-ledger-primitives'
 import { BondYieldSection } from './dashboard-panels/bond-yield-section'
 import { IndicatorTrendsSection } from './dashboard-panels/indicator-trends-section'
 import { PopulationPyramidSection } from './dashboard-panels/population-pyramid-section'
@@ -238,6 +242,8 @@ const Wrap = styled.div`
   display: flex;
   flex-direction: column;
   gap: 20px;
+  ${countryTabCanvasPadding}
+  box-sizing: border-box;
 `
 
 const TabBody = styled.div`
@@ -284,28 +290,7 @@ const CategoryChips = styled.div`
   gap: 6px;
 `
 
-const CategoryChip = styled.button<{ $active: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid
-    ${({ $active, theme }) =>
-      $active ? theme.colors.primary : theme.colors.border.default};
-  background: ${({ $active, theme }) =>
-    $active ? theme.colors.activeLight : 'transparent'};
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: ${({ $active, theme }) =>
-    $active ? theme.colors.primary : theme.colors.text.secondary};
-  cursor: pointer;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-  }
-`
+const CategoryChip = styled(LedgerFilterChip)``
 
 const ChipCount = styled.span`
   font-size: 11px;

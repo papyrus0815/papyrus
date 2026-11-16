@@ -208,3 +208,57 @@ export function describeLifespanMismatch(
   if (!rangeText) return null
   return `존속 기간(${rangeText}) 밖입니다`
 }
+
+/**
+ * 현대 국가 연결 기간 — "이 나라가 그 현대 국가의 땅에 있었던 기간"(서버 `linkStart*`/`linkEnd*`).
+ * 같은 나라가 땅을 옮긴 경우에만 채워진다. 예) 중화민국: 중국 1912.1–1949.12 / 대만 1945.10–.
+ * 비어 있으면 존속 기간 전체를 뜻한다.
+ */
+export interface ModernLinkPeriodShape {
+  linkStartEra?: CountryEra
+  linkStartYear?: number | null
+  linkStartMonth?: number | null
+  linkEndEra?: CountryEra
+  linkEndYear?: number | null
+  linkEndMonth?: number | null
+}
+
+export function hasModernLinkPeriod(input: CountryPeriodShape & ModernLinkPeriodShape): boolean {
+  return input.linkStartYear != null || input.linkEndYear != null
+}
+
+/**
+ * 그 땅에서의 기간으로 바꾼 존속 기간 모양 — 정렬·분류·계보도가 그대로 받아 쓴다.
+ * 시작·끝을 따로 고른다: 연결 시작만 있으면(대만 1945–) 끝은 존속 기간(진행 중)을 이어받는다.
+ */
+export function toLinkScopedPeriod<T extends CountryPeriodShape & ModernLinkPeriodShape>(input: T): T {
+  if (!hasModernLinkPeriod(input)) return input
+  const scoped = { ...input }
+  if (input.linkStartYear != null) {
+    scoped.startEra = input.linkStartEra ?? 'AD'
+    scoped.startYear = input.linkStartYear
+  }
+  if (input.linkEndYear != null) {
+    scoped.endEra = input.linkEndEra ?? 'AD'
+    scoped.endYear = input.linkEndYear
+  }
+  return scoped
+}
+
+function formatLinkPoint(era: CountryEra, year: number | null | undefined, month: number | null | undefined) {
+  const signedYear = toSignedYear(era ?? 'AD', year)
+  const yearText = formatCountryYearShort(signedYear)
+  if (yearText == null) return null
+  return month != null ? `${yearText}.${month}` : yearText
+}
+
+/**
+ * 연결 기간 표기 — 없으면 null. '1912.1–1949.12', 끝이 비면 '1945.10–'(열린 구간).
+ * 끝이 빈 것은 "존속 기간 끝까지"라 '현재'라고 쓰지 않는다(고대 국가 오독 방지 규약과 같은 이유).
+ */
+export function formatModernLinkPeriod(input: CountryPeriodShape & ModernLinkPeriodShape): string | null {
+  if (!hasModernLinkPeriod(input)) return null
+  const start = formatLinkPoint(input.linkStartEra, input.linkStartYear, input.linkStartMonth)
+  const end = formatLinkPoint(input.linkEndEra, input.linkEndYear, input.linkEndMonth)
+  return `${start ?? ''}–${end ?? ''}`
+}

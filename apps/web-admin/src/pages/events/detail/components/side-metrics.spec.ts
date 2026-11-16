@@ -70,6 +70,19 @@ describe('lossRate', () => {
     expect(formatRate(lossRate(rows, 'A')!.rate)).toBe('5.0%')
   })
 
+  it('봉기·진압처럼 human.deaths_total·human.executed 및 society.participants로 기록된 진영도 손실률을 계산한다', () => {
+    const rows = buildSideMetricRows(
+      [
+        obs('1', 'rebels', 'society.participants', '3000'),
+        obs('2', 'rebels', 'human.deaths_total', '156'),
+      ],
+      ['rebels'],
+    )
+    const result = lossRate(rows, 'rebels')!
+    expect(result.lossName).toBe('human.deaths_total')
+    expect(formatRate(result.rate)).toBe('5.2%')
+  })
+
   it('동원이 없거나, 값이 여럿이거나, ~이상이면 내지 않는다', () => {
     const noPersonnel = buildSideMetricRows([obs('1', 'A', 'military.casualties_total', '10')], ['A'])
     expect(lossRate(noPersonnel, 'A')).toBeNull()

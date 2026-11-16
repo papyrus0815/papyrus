@@ -2,10 +2,12 @@ import { useMemo, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  FiArrowRight,
   FiBookOpen,
   FiEdit2,
   FiPlus,
   FiTrash2,
+  FiUsers,
 } from 'react-icons/fi'
 import styled from 'styled-components'
 
@@ -27,8 +29,19 @@ import {
   primaryHouseLabel,
   STATE_STRUCTURE_LABEL,
 } from '@/entities/political-system/model/political-system'
-import { personCareerApi } from '@/shared/api/person-career'
+import { GOV_BRAND } from '@/features/government-info/ui/government-ledger.styles'
+import {
+  type CabinetListItemDto,
+  personCareerApi,
+} from '@/shared/api/person-career'
 import { getAllPersons } from '@/shared/api/persons'
+import {
+  doesCabinetMatchPoliticalSystem,
+  resolveCabinetEffectiveDates,
+  shouldHideCabinetFromExecutiveTimeline,
+} from '@/shared/lib/ministry-department/department-cabinet-matcher'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { getSignedDateChronologyKey } from '@/shared/lib/tenure-person-utils'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
@@ -57,6 +70,8 @@ interface Props {
   historicalCountryId?: string
   /** 새로 등록할 때 어느 국가에 붙일지. 보통 위 둘 중 채워진 쪽 */
   countryName?: string
+  /** 해당 헌정 체제 시기의 역대 내각 목록으로 이동 */
+  onOpenCabinetsByRegime?: (regimeId: string) => void
 }
 
 /**
@@ -66,12 +81,14 @@ export function PoliticalSystemTab({
   countryId,
   historicalCountryId,
   countryName,
+  onOpenCabinetsByRegime,
 }: Props) {
   const queryClient = useQueryClient()
+  const isHistoricalPolity = Boolean(historicalCountryId)
   const scope = {
     countryId,
     historicalCountryId,
-    includeConstituents: Boolean(historicalCountryId),
+    includeConstituents: isHistoricalPolity,
   }
   const query = usePoliticalSystems(scope)
   const createMutation = useCreatePoliticalSystem()
@@ -91,11 +108,30 @@ export function PoliticalSystemTab({
       'tenures-by-country',
       countryId || undefined,
       historicalCountryId,
+      isHistoricalPolity ? 'with-constituents' : 'direct',
     ],
     queryFn: () =>
       personCareerApi.getTenuresByCountry({
         countryId: countryId || undefined,
         historicalCountryId,
+        includeConstituents: isHistoricalPolity || undefined,
+      }),
+    enabled: Boolean(countryId || historicalCountryId),
+    staleTime: 60_000,
+  })
+
+  const cabinetsQuery = useQuery<CabinetListItemDto[]>({
+    queryKey: [
+      'cabinets-by-country',
+      countryId ?? '',
+      historicalCountryId ?? null,
+      ...(isHistoricalPolity ? (['with-constituents'] as const) : []),
+    ],
+    queryFn: () =>
+      personCareerApi.getCabinets({
+        countryId: countryId || undefined,
+        historicalCountryId: historicalCountryId || undefined,
+        includeConstituents: isHistoricalPolity || undefined,
       }),
     enabled: Boolean(countryId || historicalCountryId),
     staleTime: 60_000,
@@ -130,7 +166,7 @@ export function PoliticalSystemTab({
     for (const sysItem of allSystems) {
       const targetId = sysItem.historicalCountryId ?? '__MODERN__'
       const targetLabel = sysItem.historicalCountryId
-        ? `🏛️ ${sysItem.historicalCountry?.name ?? '과거·구성 국가'}`
+        ? `${sysItem.historicalCountry?.name ?? '과거·구성 국가'}`
         : `${countryName ?? '현대 본국'}`
       const existing = map.get(targetId)
       if (existing) {
@@ -141,6 +177,60 @@ export function PoliticalSystemTab({
     }
     return [...map.values()]
   }, [allSystems, countryName])
+
+  const matchedCabinetsBySystemId = useMemo(() => {
+    const resultMap = new Map<
+      string,
+      { count: number; leaderNames: string[]; extraLeaderCount: number }
+    >()
+    const rawCabinets = cabinetsQuery.data ?? []
+    if (rawCabinets.length === 0) return resultMap
+
+    const visibleCabinets = rawCabinets
+      .filter(
+        (cabItem) =>
+          !shouldHideCabinetFromExecutiveTimeline(cabItem.headTenure, cabItem),
+      )
+      .sort((left, right) => {
+        const leftKey =
+          getSignedDateChronologyKey(
+            resolveCabinetEffectiveDates(left).startDate,
+          ) ?? 0
+        const rightKey =
+          getSignedDateChronologyKey(
+            resolveCabinetEffectiveDates(right).startDate,
+          ) ?? 0
+        return leftKey - rightKey
+      })
+
+    for (const sysItem of allSystems) {
+      const matching = visibleCabinets.filter((cabItem) =>
+        doesCabinetMatchPoliticalSystem(cabItem, sysItem),
+      )
+      if (matching.length === 0) continue
+
+      const distinctNames: string[] = []
+      const seenNames = new Set<string>()
+      for (const cabItem of matching) {
+        const label = cabItem.headTenure?.person
+          ? getPersonDisplayName({
+              ...cabItem.headTenure.person,
+              name: cabItem.headTenure.person.name ?? '',
+            })
+          : cabItem.name?.trim() || ''
+        if (label && label !== '—' && !seenNames.has(label)) {
+          seenNames.add(label)
+          distinctNames.push(label)
+        }
+      }
+      resultMap.set(sysItem.id, {
+        count: matching.length,
+        leaderNames: distinctNames.slice(0, 3),
+        extraLeaderCount: Math.max(0, distinctNames.length - 3),
+      })
+    }
+    return resultMap
+  }, [allSystems, cabinetsQuery.data])
 
   const systems = useMemo(() => {
     if (polityFilterId === 'ALL') return allSystems
@@ -303,7 +393,8 @@ export function PoliticalSystemTab({
                           system.historicalCountryId !== historicalCountryId) &&
                         system.historicalCountryId != null ? (
                           <PastChip>
-                            🏛️ {system.historicalCountry?.name ?? '구성·과거 국가'}
+                            <PolityDot aria-hidden />
+                            {system.historicalCountry?.name ?? '구성·과거 국가'}
                           </PastChip>
                         ) : null}
                       </TitleLine>
@@ -449,6 +540,42 @@ export function PoliticalSystemTab({
                   ) : null}
 
                   {system.notes ? <Notes>{system.notes}</Notes> : null}
+
+                  {(() => {
+                    const matchedInfo = matchedCabinetsBySystemId.get(system.id)
+                    if (!matchedInfo || matchedInfo.count === 0) return null
+                    return (
+                      <RegimeCabinetLinkBar>
+                        <RegimeCabinetSummary>
+                          <FiUsers size={12.5} />
+                          <span>
+                            {matchedInfo.leaderNames.length > 0 ? (
+                              <>
+                                수반:{' '}
+                                <strong>
+                                  {matchedInfo.leaderNames.join(' · ')}
+                                </strong>
+                                {matchedInfo.extraLeaderCount > 0
+                                  ? ` 외 ${matchedInfo.extraLeaderCount}명`
+                                  : ''}
+                              </>
+                            ) : (
+                              `연결된 행정부·내각 ${matchedInfo.count}개`
+                            )}
+                          </span>
+                        </RegimeCabinetSummary>
+                        {onOpenCabinetsByRegime ? (
+                          <RegimeCabinetBtn
+                            type="button"
+                            onClick={() => onOpenCabinetsByRegime(system.id)}
+                          >
+                            <span>역대 내각 {matchedInfo.count}개 보기</span>
+                            <FiArrowRight size={12.5} />
+                          </RegimeCabinetBtn>
+                        ) : null}
+                      </RegimeCabinetLinkBar>
+                    )
+                  })()}
                 </RegimeCard>
               </TimelineRow>
             )
@@ -551,7 +678,13 @@ export function PoliticalSystemTab({
           loading={personsQuery.isLoading}
           title={`${headRegisterTarget.positionTitle} 등록 — 인물 선택`}
           searchPlaceholder="등록할 수장 인물을 검색..."
+          allowCreate
           defaultCountryId={countryId}
+          defaultHistoricalCountryId={
+            headRegisterTarget.historicalCountryId ??
+            historicalCountryId ??
+            undefined
+          }
           onSelect={(personId) => {
             setRegisterPersonId(personId)
             setPickerOpen(false)
@@ -663,13 +796,14 @@ const ToolbarCaption = styled.span`
 const PrimaryAddBtn = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   height: 34px;
   padding: 0 13px;
   border-radius: 8px;
-  border: 1px solid #2563eb;
-  background: #2563eb;
-  color: #ffffff;
+  border: none;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#0e0f12' : '#ffffff')};
   font-family: inherit;
   font-size: 12.5px;
   font-weight: 600;
@@ -678,8 +812,14 @@ const PrimaryAddBtn = styled.button`
   transition: background 0.14s ease;
 
   &:hover {
-    background: #1d4ed8;
-    border-color: #1d4ed8;
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? GOV_BRAND.primaryHoverDark
+        : GOV_BRAND.primaryHover};
+  }
+
+  @media (max-width: 768px) {
+    height: 40px;
   }
 `
 
@@ -696,7 +836,7 @@ const PolityFilterChip = styled.button<{ $active: boolean }>`
   gap: 5px;
   height: 30px;
   padding: 0 11px;
-  border-radius: 999px;
+  border-radius: 8px;
   font-family: inherit;
   font-size: 12px;
   font-weight: 600;
@@ -705,22 +845,22 @@ const PolityFilterChip = styled.button<{ $active: boolean }>`
     ${({ $active, theme }) =>
       $active
         ? theme.mode === 'dark'
-          ? 'rgba(59, 130, 246, 0.48)'
-          : 'rgba(37, 99, 235, 0.36)'
+          ? GOV_BRAND.primaryBorderDark
+          : GOV_BRAND.primaryBorder
         : theme.mode === 'dark'
           ? 'rgba(255, 255, 255, 0.1)'
           : 'rgba(20, 19, 34, 0.1)'};
   background: ${({ $active, theme }) =>
     $active
       ? theme.mode === 'dark'
-        ? 'rgba(37, 99, 235, 0.18)'
-        : 'rgba(37, 99, 235, 0.08)'
+        ? GOV_BRAND.primarySoftDark
+        : GOV_BRAND.primarySoft
       : 'transparent'};
   color: ${({ $active, theme }) =>
     $active
       ? theme.mode === 'dark'
-        ? '#93c5fd'
-        : '#2563eb'
+        ? GOV_BRAND.primaryInkDark
+        : GOV_BRAND.primary
       : theme.colors.text.secondary};
 `
 
@@ -738,7 +878,7 @@ const EmptyCard = styled.div`
   text-align: center;
   gap: 10px;
   padding: 36px 24px;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark'
@@ -756,10 +896,9 @@ const EmptyIconCircle = styled.div`
   align-items: center;
   justify-content: center;
   background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(37, 99, 235, 0.16)'
-      : 'rgba(37, 99, 235, 0.08)'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#2563eb')};
+    theme.mode === 'dark' ? GOV_BRAND.primarySoftDark : GOV_BRAND.primarySoft};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? GOV_BRAND.primaryInkDark : GOV_BRAND.primary};
 `
 
 const EmptyHeadline = styled.h4`
@@ -1025,18 +1164,19 @@ const InlineRegisterBtn = styled.button`
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(59, 130, 246, 0.35)'
-        : 'rgba(37, 99, 235, 0.25)'};
+        ? GOV_BRAND.primaryBorderDark
+        : GOV_BRAND.primaryBorder};
   background: transparent;
   font-family: inherit;
   font-size: 11px;
   font-weight: 600;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#2563eb')};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? GOV_BRAND.primaryInkDark : GOV_BRAND.primary};
   cursor: pointer;
 
   &:hover {
-    background: rgba(37, 99, 235, 0.08);
-    border-color: #2563eb;
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? GOV_BRAND.primarySoftDark : GOV_BRAND.primarySoft};
   }
 `
 
@@ -1097,5 +1237,73 @@ const ActionBtn = styled.button<{ $danger?: boolean }>`
         : theme.mode === 'dark'
           ? 'rgba(255,255,255,0.08)'
           : '#f8fafc'};
+  }
+`
+
+const PolityDot = styled.span`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.72;
+  flex-shrink: 0;
+`
+
+const RegimeCabinetLinkBar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.08)'
+        : 'rgba(15, 23, 42, 0.08)'};
+`
+
+const RegimeCabinetSummary = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  min-width: 0;
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const RegimeCabinetBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(59, 130, 246, 0.35)'
+        : 'rgba(37, 99, 235, 0.24)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(37, 99, 235, 0.14)'
+      : 'rgba(37, 99, 235, 0.06)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8')};
+  transition:
+    background 0.14s,
+    border-color 0.14s;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(37, 99, 235, 0.24)'
+        : 'rgba(37, 99, 235, 0.12)'};
   }
 `

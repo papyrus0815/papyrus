@@ -20,6 +20,7 @@ import {
   type SearchableSelectOption,
 } from '@/shared/ui/searchable-select'
 import { notify } from '@/shared/ui/toast'
+import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 
 export interface UnlinkedTenureTargetOption {
   id: string
@@ -110,6 +111,7 @@ export function UnlinkedCountryTenuresBar({
     Record<string, string>
   >({})
   const [savingTenureId, setSavingTenureId] = useState<string | null>(null)
+  const [inspectPersonId, setInspectPersonId] = useState<string | null>(null)
 
   const tenuresQuery = useQuery({
     queryKey: [
@@ -117,12 +119,16 @@ export function UnlinkedCountryTenuresBar({
       'country-tenures',
       isHistorical ? 'historical' : 'modern',
       effectiveCountryId ?? '',
+      isHistorical ? 'with-constituents' : 'direct',
     ],
     queryFn: async () => {
       if (!effectiveCountryId) return []
       const rows = await personCareerApi.getTenuresByCountry(
         isHistorical
-          ? { historicalCountryId: effectiveCountryId }
+          ? {
+              historicalCountryId: effectiveCountryId,
+              includeConstituents: true,
+            }
           : { countryId: effectiveCountryId },
       )
       return (Array.isArray(rows) ? rows : []) as CountryTenureRow[]
@@ -277,9 +283,7 @@ export function UnlinkedCountryTenuresBar({
                     type="button"
                     onClick={() => {
                       if (tenureItem.personId) {
-                        navigate(
-                          pathKeys.personsTimelineDetail(tenureItem.personId),
-                        )
+                        setInspectPersonId(tenureItem.personId)
                       }
                     }}
                   >
@@ -290,7 +294,7 @@ export function UnlinkedCountryTenuresBar({
                   )}
                   <RoleTitle>{roleTitle}</RoleTitle>
                   {!isHistorical && tenureItem.historicalCountry?.name && (
-                    <EraChip>🏛️ {tenureItem.historicalCountry.name}</EraChip>
+                    <EraChip>{tenureItem.historicalCountry.name}</EraChip>
                   )}
                   {periodLabel && <PeriodSpan>{periodLabel}</PeriodSpan>}
                 </TenureInfo>
@@ -349,6 +353,14 @@ export function UnlinkedCountryTenuresBar({
           })}
         </RowList>
       )}
+
+      <PersonInlineModal
+        personId={inspectPersonId}
+        onClose={() => setInspectPersonId(null)}
+        onOpenDetail={(targetPersonId) =>
+          navigate(pathKeys.personsTimelineDetail(targetPersonId))
+        }
+      />
     </BannerWrap>
   )
 }

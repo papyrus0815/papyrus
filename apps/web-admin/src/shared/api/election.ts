@@ -50,14 +50,55 @@ export async function getPoliticalParties(params?: {
   )
 }
 
+/**
+ * 역사 정치체(`historicalCountryId`)와 상위 현대국가(`countryId`)가 모두 있을 때
+ * 백엔드의 배타 분기(`if (historicalCountryId) else if (countryId)`)로 인해
+ * 현대국가 소속 정당이 누락되지 않도록 양쪽 스코프를 병합·중복제거해 반환한다.
+ */
+export async function getScopedPoliticalParties(params?: {
+  countryId?: string | null
+  historicalCountryId?: string | null
+}): Promise<PoliticalPartyRow[]> {
+  const cleanCountryId = params?.countryId?.trim() || undefined
+  const cleanHistoricalId = params?.historicalCountryId?.trim() || undefined
+  if (cleanCountryId && cleanHistoricalId) {
+    const [historicalRows, modernBridgeRows] = await Promise.all([
+      getPoliticalParties({ historicalCountryId: cleanHistoricalId }),
+      getPoliticalParties({ countryId: cleanCountryId }),
+    ])
+    const mergedMap = new Map<string, PoliticalPartyRow>()
+    for (const partyRow of historicalRows) {
+      mergedMap.set(partyRow.id, partyRow)
+    }
+    for (const partyRow of modernBridgeRows) {
+      if (!mergedMap.has(partyRow.id)) {
+        mergedMap.set(partyRow.id, partyRow)
+      }
+    }
+    return Array.from(mergedMap.values())
+  }
+  if (cleanHistoricalId) {
+    return getPoliticalParties({ historicalCountryId: cleanHistoricalId })
+  }
+  if (cleanCountryId) {
+    return getPoliticalParties({ countryId: cleanCountryId })
+  }
+  return []
+}
+
 export type PoliticalPartyRow = {
   id: string
   name: string
   shortName?: string | null
+  localName?: string | null
   logoUrl?: string | null
   brandColor?: string | null
+  foundedDate?: string | null
+  dissolvedDate?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
+  country?: { id: string; name: string } | null
+  historicalCountry?: { id: string; name: string } | null
 }
 
 // --- Party membership ---
@@ -208,6 +249,46 @@ export async function getElections(params?: {
   return requestJson<ElectionListRow[]>(`/elections${qs ? `?${qs}` : ''}`)
 }
 
+export async function getScopedElections(params?: {
+  countryId?: string | null
+  historicalCountryId?: string | null
+  hasPartyResults?: boolean
+  electionTypes?: readonly string[]
+}): Promise<ElectionListRow[]> {
+  const cleanCountryId = params?.countryId?.trim() || undefined
+  const cleanHistoricalId = params?.historicalCountryId?.trim() || undefined
+  const sharedFilter = {
+    hasPartyResults: params?.hasPartyResults,
+    electionTypes: params?.electionTypes,
+  }
+  if (cleanCountryId && cleanHistoricalId) {
+    const [historicalRows, modernBridgeRows] = await Promise.all([
+      getElections({ ...sharedFilter, historicalCountryId: cleanHistoricalId }),
+      getElections({ ...sharedFilter, countryId: cleanCountryId }),
+    ])
+    const mergedMap = new Map<string, ElectionListRow>()
+    for (const electionRow of historicalRows) {
+      mergedMap.set(electionRow.id, electionRow)
+    }
+    for (const electionRow of modernBridgeRows) {
+      if (!mergedMap.has(electionRow.id)) {
+        mergedMap.set(electionRow.id, electionRow)
+      }
+    }
+    return Array.from(mergedMap.values())
+  }
+  if (cleanHistoricalId) {
+    return getElections({
+      ...sharedFilter,
+      historicalCountryId: cleanHistoricalId,
+    })
+  }
+  if (cleanCountryId) {
+    return getElections({ ...sharedFilter, countryId: cleanCountryId })
+  }
+  return []
+}
+
 export type ElectionResultDto = {
   id: string
   candidacyId: string
@@ -238,7 +319,12 @@ export type ElectionCandidacyDto = {
     nameDisplayOrder?: string | null
     country?: { defaultNameDisplayOrder?: string | null } | null
   } | null
-  party?: { id: string; name: string; shortName?: string | null } | null
+  party?: {
+    id: string
+    name: string
+    shortName?: string | null
+    brandColor?: string | null
+  } | null
   electoralDistrict?: { id: string; name: string; code?: string | null } | null
   result?: ElectionResultDto | null
 }
@@ -298,10 +384,15 @@ export type LawRow = {
   articleNumber?: number | null
   /** 제M항 */
   paragraphNumber?: number | null
+  startDate?: string | null
+  endDate?: string | null
+  note?: string | null
   lawTypeId?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
   lawType?: LawTypeRow | null
+  country?: { id: string; name: string } | null
+  historicalCountry?: { id: string; name: string } | null
 }
 
 export async function getLawTypes() {
@@ -415,6 +506,9 @@ export async function createLaw(body: {
   summary?: string | null
   articleNumber?: number | null
   paragraphNumber?: number | null
+  startDate?: string | null
+  endDate?: string | null
+  note?: string | null
   lawTypeId?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
@@ -432,6 +526,9 @@ export async function updateLaw(
     summary: string | null
     articleNumber: number | null
     paragraphNumber: number | null
+    startDate: string | null
+    endDate: string | null
+    note: string | null
     lawTypeId: string | null
   }>,
 ) {
@@ -755,15 +852,24 @@ export const NOMINATION_TYPE_OPTIONS: { value: string; label: string }[] = [
 ]
 
 export function labelElectionType(value: string) {
-  return ELECTION_TYPE_OPTIONS.find((o) => o.value === value)?.label ?? value
+  return (
+    ELECTION_TYPE_OPTIONS.find((optionItem) => optionItem.value === value)
+      ?.label ?? value
+  )
 }
 
 export function labelElectionStatus(value: string) {
-  return ELECTION_STATUS_OPTIONS.find((o) => o.value === value)?.label ?? value
+  return (
+    ELECTION_STATUS_OPTIONS.find((optionItem) => optionItem.value === value)
+      ?.label ?? value
+  )
 }
 
 export function labelNominationType(value: string) {
-  return NOMINATION_TYPE_OPTIONS.find((o) => o.value === value)?.label ?? value
+  return (
+    NOMINATION_TYPE_OPTIONS.find((optionItem) => optionItem.value === value)
+      ?.label ?? value
+  )
 }
 
 export const LEGISLATURE_CLOSURE_KIND_OPTIONS: { value: string; label: string }[] =
@@ -779,8 +885,9 @@ export const LEGISLATURE_CLOSURE_KIND_OPTIONS: { value: string; label: string }[
 
 export function labelLegislatureClosureKind(value: string) {
   return (
-    LEGISLATURE_CLOSURE_KIND_OPTIONS.find((o) => o.value === value)?.label ??
-    value
+    LEGISLATURE_CLOSURE_KIND_OPTIONS.find(
+      (optionItem) => optionItem.value === value,
+    )?.label ?? value
   )
 }
 
@@ -799,7 +906,12 @@ export type CabinetPartyLink = {
   notes?: string | null
   provenance?: CabinetPartyProvenanceValue
   electionPartyResultId?: string | null
-  party?: { id: string; name: string; shortName?: string | null }
+  party?: {
+    id: string
+    name: string
+    shortName?: string | null
+    brandColor?: string | null
+  }
   electionPartyResult?: {
     id: string
     election?: { id: string; name: string; pollDate?: string | null } | null
@@ -825,6 +937,20 @@ export async function addCabinetPoliticalParty(
   return requestJson<CabinetPartyLink>(
     `/government-positions/cabinets/${encodeURIComponent(cabinetId)}/political-parties`,
     { method: 'POST', body: JSON.stringify(body) },
+  )
+}
+
+export async function updateCabinetPoliticalParty(
+  cabinetId: string,
+  linkId: string,
+  body: {
+    role?: string
+    notes?: string | null
+  },
+) {
+  return requestJson<CabinetPartyLink>(
+    `/government-positions/cabinets/${encodeURIComponent(cabinetId)}/political-parties/${encodeURIComponent(linkId)}`,
+    { method: 'PATCH', body: JSON.stringify(body) },
   )
 }
 

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
+import { FiArrowLeft, FiArrowRight } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -11,6 +12,7 @@ import { pathKeys } from '@/shared/router'
 
 import { IconMilitary } from './country-detail-dashboard.icons'
 import * as DashboardStyles from './country-detail-dashboard.styles'
+import { LedgerFilterChip } from './country-ledger-primitives'
 
 /**
  * 선전포고 · 참전 이력 — 이 나라(또는 연결된 전신 역사국가)가 관여한 선전포고(WAR_DECLARATION) 사건을
@@ -276,11 +278,19 @@ export function WarDeclarationsSection({
               <Body>
                 <Headline>
                   <DirectionBadge data-direction={row.direction}>
-                    {row.direction === 'declared'
-                      ? '선포 ──▶'
-                      : row.direction === 'targeted'
-                        ? '피선포 ◀──'
-                        : '참전 ·'}
+                    {row.direction === 'declared' ? (
+                      <>
+                        <span>선포</span>
+                        <FiArrowRight size={12} />
+                      </>
+                    ) : row.direction === 'targeted' ? (
+                      <>
+                        <span>피선포</span>
+                        <FiArrowLeft size={12} />
+                      </>
+                    ) : (
+                      <span>참전 ·</span>
+                    )}
                   </DirectionBadge>
                   {row.counterparts.length > 0 ? (
                     row.counterparts.map((party, index) => (
@@ -338,20 +348,10 @@ const FilterGroup = styled.div`
   margin-left: auto;
 `
 
-const FilterPill = styled.button<{ $active: boolean }>`
-  height: 24px;
+const FilterPill = styled(LedgerFilterChip)`
+  height: 28px;
   padding: 0 9px;
-  border-radius: 999px;
-  border: 1px solid
-    ${({ theme, $active }) =>
-      $active ? theme.colors.text.primary : theme.colors.border.default};
-  background: ${({ theme, $active }) =>
-    $active ? theme.colors.text.primary : 'transparent'};
-  color: ${({ theme, $active }) =>
-    $active ? theme.colors.background.primary : theme.colors.text.secondary};
   font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
 `
 
 const Timeline = styled.ol`
@@ -398,6 +398,9 @@ const Headline = styled.div`
 `
 
 const DirectionBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12.5px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;

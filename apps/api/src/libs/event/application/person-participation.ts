@@ -349,3 +349,150 @@ export function describeExistenceMismatch(
   const range = `${startYear != null ? formatSignedYear(startYear) : '?'}~${endYear != null ? formatSignedYear(endYear) : ''}`
   return `존속(${range}) 밖의 사건입니다`
 }
+
+// ─── 사건 당시 사망·전사·처형·피살 파생 ─────────────────────────────────────
+
+export interface DeathAtEventInfo {
+  /** 표시 라벨 — '전사' · '처형' · '피살' · '자결' · '병사' · '사고사' · '사망' */
+  label: string
+  /** 사망 시점 짧은 표기 — '1919.1.15' */
+  dateLabel: string | null
+  /** 사망 원인 상세(Person.deathCause) */
+  cause: string | null
+}
+
+const DEATH_TYPE_LABEL: Record<string, string> = {
+  BATTLE: '전사',
+  EXECUTION: '처형',
+  ASSASSINATION: '피살',
+  SUICIDE: '자결',
+  ACCIDENT: '사고사',
+  ILLNESS: '병사',
+  NATURAL: '사망',
+  UNKNOWN: '사망',
+}
+
+const VIOLENT_DEATH_TYPES = new Set(['BATTLE', 'EXECUTION', 'ASSASSINATION', 'SUICIDE'])
+
+function extractEventDateParts(
+  era: string | null | undefined,
+  year: number | null | undefined,
+  month: number | null | undefined,
+  day: number | null | undefined,
+  date: Date | null | undefined,
+  precision: string | null | undefined,
+): DateParts {
+  const prec = precision ?? 'day'
+  const base = partsOf(era, year, month, day, date)
+  if (base.year == null) return base
+  const resolvedMonth =
+    prec === 'year' ? null : (base.month ?? (date ? date.getUTCMonth() + 1 : null))
+  const resolvedDay =
+    prec === 'day' ? (base.day ?? (date ? date.getUTCDate() : null)) : null
+  return { year: base.year, month: resolvedMonth, day: resolvedDay }
+}
+
+/**
+ * 참여 인물이 이 사건 도중(또는 교전·진압 직후 체포·부상으로 수일 내) 사망했으면
+ * `{ label, dateLabel, cause }`를 돌려준다. 저장하지 않는 읽기 파생.
+ */
+export function describeDeathAtEvent(
+  event: {
+    kind?: string | null
+    startEra?: string | null
+    startYear?: number | null
+    startMonth?: number | null
+    startDay?: number | null
+    startDate?: Date | null
+    startDatePrecision?: string | null
+    endEra?: string | null
+    endYear?: number | null
+    endMonth?: number | null
+    endDay?: number | null
+    endDate?: Date | null
+    endDatePrecision?: string | null
+  },
+  person: {
+    deathEra?: string | null
+    deathDate?: Date | null
+    deathDatePrecision?: string | null
+    deathType?: string | null
+    deathCause?: string | null
+  },
+): DeathAtEventInfo | null {
+  if (!person.deathDate) return null
+  const deathYear = signedYearOfDate(person.deathEra, person.deathDate)
+  if (deathYear == null) return null
+
+  const deathPrecision = person.deathDatePrecision ?? 'day'
+  const deathMonth = deathPrecision === 'year' ? null : person.deathDate.getUTCMonth() + 1
+  const deathDay = deathPrecision === 'day' ? person.deathDate.getUTCDate() : null
+
+  const start = extractEventDateParts(
+    event.startEra,
+    event.startYear,
+    event.startMonth,
+    event.startDay,
+    event.startDate,
+    event.startDatePrecision,
+  )
+  if (start.year == null) return null
+
+  const rawEnd = extractEventDateParts(
+    event.endEra,
+    event.endYear,
+    event.endMonth,
+    event.endDay,
+    event.endDate,
+    event.endDatePrecision,
+  )
+  const end = rawEnd.year != null ? rawEnd : start
+
+  // 다년 묶음 사건(예: 제1차 세계 대전)에서는 개별 하위 전투·사건에서 표시하므로 생략
+  if (event.kind === 'COLLECTION' && end.year! - start.year > 1) return null
+
+  const isViolent = VIOLENT_DEATH_TYPES.has(person.deathType ?? '')
+
+  if (
+    start.year > 0 &&
+    end.year! > 0 &&
+    start.month != null &&
+    start.day != null &&
+    end.month != null &&
+    end.day != null &&
+    deathYear > 0 &&
+    deathMonth != null &&
+    deathDay != null
+  ) {
+    const startMs = Date.UTC(start.year, start.month - 1, start.day)
+    const endMs = Date.UTC(end.year!, end.month - 1, end.day)
+    const deathMs = Date.UTC(deathYear, deathMonth - 1, deathDay)
+    const durationDays = Math.max(0, Math.round((endMs - startMs) / 86_400_000))
+    if (durationDays > 365) return null
+    // 단기 교전·봉기·진압 직후 포로 처형·부상 사망(예: 1.10~12 진압 후 1.15 리프크네히트·룩셈부르크 처형)은 7일 유예
+    const graceDays = isViolent && durationDays <= 60 ? 7 : 0
+    if (deathMs < startMs || deathMs > endMs + graceDays * 86_400_000) return null
+  } else {
+    // 연·월 단위 정밀도일 때는 전사·처형·피살·자결 같은 비자연사만 매칭(같은 해 자연사 오탐 방지)
+    if (!isViolent || end.year! - start.year > 1) return null
+    const startRange = keyRange(start.year, start.month, start.day)
+    const endRange = keyRange(end.year, end.month, end.day)
+    const deathRange = keyRange(deathYear, deathMonth, deathDay)
+    if (!startRange || !endRange || !deathRange) return null
+    if (deathRange[1] < startRange[0] || deathRange[0] > endRange[1]) return null
+  }
+
+  const yearStr = formatSignedYear(deathYear)
+  const dateLabel =
+    deathMonth != null
+      ? deathDay != null
+        ? `${yearStr}.${deathMonth}.${deathDay}`
+        : `${yearStr}.${deathMonth}`
+      : yearStr
+
+  return {
+    label: DEATH_TYPE_LABEL[person.deathType ?? ''] ?? '사망',
+    dateLabel,
+    cause: person.deathCause?.trim() || null,
+  }
+}

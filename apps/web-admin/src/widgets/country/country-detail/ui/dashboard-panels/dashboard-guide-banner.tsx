@@ -55,9 +55,9 @@ export function DashboardGuideBanner({
     return null
   })
 
-  // 기본값: 완료된 단계가 1개 이하이고 진행 중인 단계도 적을 때는 자동으로 펼쳐 온보딩을 돕고,
-  // 데이터가 어느 정도 찬 국가에서는 한 줄 요약 바로 접어 둔다.
-  const defaultOpen = !isLoading && completedCount + partialCount <= 1
+  // 기본값은 한 줄 요약 바로 접어 두어 첫 화면에서 국가 핵심 정체성·제원이 먼저 읽히게 한다.
+  // 사용자가 '4단계 가이드 보기'를 열면 sessionStorage에 국가별 펼침 상태가 유지된다.
+  const defaultOpen = false
   const isOpen =
     manualToggle && manualToggle.countryId === countryId
       ? manualToggle.open

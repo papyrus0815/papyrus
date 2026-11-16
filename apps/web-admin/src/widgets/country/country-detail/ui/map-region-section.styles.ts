@@ -407,23 +407,18 @@ export const BackButton = styled.button`
     theme.mode === 'dark'
       ? css`
           background: rgba(255,255,255,0.06);
-          border: 1.5px solid rgba(255,255,255,0.12);
+          border: 1px solid rgba(255,255,255,0.12);
           &:hover {
-            background: ${theme.colors.primary};
-            border-color: ${theme.colors.primary};
-            transform: translateX(-2px);
-            svg { stroke: #ffffff; }
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.22);
           }
         `
       : css`
           background: #ffffff;
-          border: 1.5px solid #e5e7eb;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+          border: 1px solid #e5e7eb;
           &:hover {
-            background: #6366f1;
-            border-color: #6366f1;
-            transform: translateX(-2px);
-            svg { stroke: #ffffff; }
+            background: #f4f4f5;
+            border-color: #d4d4d8;
           }
         `}
 
@@ -524,19 +519,14 @@ export const ListItem = styled.div<{ $isSelected?: boolean }>`
       !$isSelected &&
       (theme.mode === 'dark'
         ? css`
-            background: rgba(99,106,242,0.08);
-            border-color: rgba(99,106,242,0.25);
-            transform: translateY(-1px);
+            background: rgba(165, 180, 252, 0.08);
+            border-color: rgba(165, 180, 252, 0.28);
           `
         : css`
             border-color: #d1d5db;
             background: #fafafa;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-            transform: translateY(-1px);
           `)}
   }
-
-  &:active { transform: translateY(0); }
 `
 
 export const GradientOverlay = styled.div`
@@ -734,21 +724,15 @@ export const StatCard = styled.div`
           background: rgba(255,255,255,0.04);
           ${darkBlur}
           border: 1px solid rgba(255,255,255,0.08);
-          box-shadow: 0 2px 8px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06);
           &:hover {
-            border-color: rgba(99,106,242,0.35);
-            box-shadow: 0 6px 18px rgba(0,0,0,0.5);
-            transform: translateY(-4px);
+            border-color: rgba(165, 180, 252, 0.32);
           }
         `
       : css`
-          background: linear-gradient(135deg, #ffffff 0%, #fafbfc 100%);
+          background: #ffffff;
           border: 1px solid #e5e7eb;
           &:hover {
-            border-color: #6366f1;
-            box-shadow: 0 6px 20px rgba(59,130,246,0.12);
-            transform: translateY(-4px);
-            background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%);
+            border-color: #4f46e5;
           }
         `}
 `
@@ -802,27 +786,21 @@ export const TabButton = styled.button<{ $isActive?: boolean }>`
   ${({ $isActive, theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: ${$isActive ? theme.colors.primary : 'rgba(255,255,255,0.05)'};
-          border: 1.5px solid ${$isActive ? theme.colors.primary : 'transparent'};
-          color: ${$isActive ? '#ffffff' : theme.colors.text.secondary};
-          box-shadow: ${$isActive ? '0 3px 10px rgba(99,106,242,0.3)' : 'none'};
+          background: ${$isActive ? '#a5b4fc' : 'rgba(255,255,255,0.05)'};
+          border: 1px solid ${$isActive ? '#a5b4fc' : 'transparent'};
+          color: ${$isActive ? '#0e0f12' : theme.colors.text.secondary};
           &:hover {
-            background: ${$isActive ? 'rgba(99,106,242,0.85)' : 'rgba(255,255,255,0.1)'};
-            transform: translateY(-1px);
+            background: ${$isActive ? '#c7d2fe' : 'rgba(255,255,255,0.1)'};
           }
         `
       : css`
-          background: ${$isActive ? '#6366f1' : '#f4f4f5'};
-          border: 1.5px solid ${$isActive ? '#6366f1' : 'transparent'};
+          background: ${$isActive ? '#4f46e5' : '#f4f4f5'};
+          border: 1px solid ${$isActive ? '#4f46e5' : 'transparent'};
           color: ${$isActive ? '#ffffff' : '#52525b'};
-          box-shadow: ${$isActive ? '0 1px 2px rgba(0,0,0,0.05)' : 'none'};
           &:hover {
-            background: ${$isActive ? '#4f46e5' : '#e4e4e7'};
-            transform: translateY(-1px);
+            background: ${$isActive ? '#4338ca' : '#e4e4e7'};
           }
         `}
-
-  &:active { transform: translateY(0); }
 
   span:first-child {
     font-size: 18px;
@@ -874,21 +852,15 @@ export const DetailCard = styled.div`
           background: rgba(255,255,255,0.04);
           ${darkBlur}
           border: 1px solid rgba(255,255,255,0.08);
-          box-shadow: 0 1px 4px rgba(0,0,0,0.3);
           &:hover {
-            border-color: rgba(99,106,242,0.3);
-            box-shadow: 0 4px 14px rgba(0,0,0,0.4);
-            transform: translateY(-2px);
+            border-color: rgba(165, 180, 252, 0.28);
           }
         `
       : css`
           background: #ffffff;
           border: 1px solid #e5e7eb;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.05);
           &:hover {
             border-color: #d1d5db;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-            transform: translateY(-2px);
           }
         `}
 `
@@ -932,17 +904,15 @@ export const DetailMetaItem = styled.div`
       ? css`
           background: rgba(255,255,255,0.03);
           &:hover {
-            background: rgba(99,106,242,0.1);
-            border-color: rgba(99,106,242,0.3);
-            transform: translateY(-2px);
+            background: rgba(165, 180, 252, 0.08);
+            border-color: rgba(165, 180, 252, 0.28);
           }
         `
       : css`
-          background: linear-gradient(135deg, #fafbfc 0%, #f8fafc 100%);
+          background: #f8fafc;
           &:hover {
-            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-            border-color: #bfdbfe;
-            transform: translateY(-2px);
+            background: #eef2ff;
+            border-color: #c7d2fe;
           }
         `}
 `
@@ -1016,21 +986,21 @@ export const GreenBadge = styled.div`
 
 export const YellowBadge = styled.div`
   padding: 5px 12px;
-  border-radius: 20px;
+  border-radius: 6px;
   font-weight: 600;
   font-size: 12px;
 
   ${({ theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: rgba(139,92,246,0.15);
-          color: #c4b5fd;
-          border: 1px solid rgba(139,92,246,0.25);
+          background: rgba(245, 158, 11, 0.15);
+          color: #fcd34d;
+          border: 1px solid rgba(245, 158, 11, 0.28);
         `
       : css`
-          background: #f3e8ff;
-          color: #6b21a8;
-          border: 1px solid #e9d5ff;
+          background: #fef3c7;
+          color: #92400e;
+          border: 1px solid #fde68a;
         `}
 `
 
@@ -1554,9 +1524,9 @@ export const InfraLeftStats = styled.div`
 `
 
 export const InfraStatCard = styled.div`
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 20px;
-  transition: all 0.2s;
+  transition: border-color 0.15s ease;
 
   ${({ theme }) =>
     theme.mode === 'dark'
@@ -1564,13 +1534,12 @@ export const InfraStatCard = styled.div`
           background: rgba(255,255,255,0.04);
           ${darkBlur}
           border: 1px solid rgba(255,255,255,0.08);
-          &:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,0.4); }
+          &:hover { border-color: rgba(165, 180, 252, 0.28); }
         `
       : css`
           background: #ffffff;
           border: 1px solid #e8eaed;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-          &:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+          &:hover { border-color: #d1d5db; }
         `}
 `
 
@@ -1689,30 +1658,25 @@ export const InfraRightList = styled.div`
 `
 
 export const InfraListCard = styled.div<{ $active?: boolean }>`
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 16px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
 
   ${({ $active, theme }) =>
     theme.mode === 'dark'
       ? css`
-          background: ${$active ? 'rgba(99,106,242,0.12)' : 'rgba(255,255,255,0.04)'};
-          border: 1px solid ${$active ? 'rgba(99,106,242,0.4)' : 'rgba(255,255,255,0.08)'};
-          box-shadow: ${$active ? '0 4px 12px rgba(99,106,242,0.2)' : 'none'};
+          background: ${$active ? 'rgba(165, 180, 252, 0.12)' : 'rgba(255,255,255,0.04)'};
+          border: 1px solid ${$active ? 'rgba(165, 180, 252, 0.4)' : 'rgba(255,255,255,0.08)'};
           &:hover {
-            transform: translateY(-2px);
-            border-color: rgba(99,106,242,0.4);
+            border-color: rgba(165, 180, 252, 0.4);
           }
         `
       : css`
           background: #ffffff;
-          border: 1px solid ${$active ? '#4285f4' : '#e8eaed'};
-          box-shadow: ${$active ? '0 4px 12px rgba(66,133,244,0.15)' : '0 1px 2px rgba(0,0,0,0.04)'};
+          border: 1px solid ${$active ? '#4f46e5' : '#e8eaed'};
           &:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            border-color: #4285f4;
+            border-color: #4f46e5;
           }
         `}
 `

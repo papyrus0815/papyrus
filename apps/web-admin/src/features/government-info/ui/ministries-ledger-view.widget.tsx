@@ -5,6 +5,7 @@ import {
   FiGitCommit,
   FiPlus,
   FiShield,
+  FiUsers,
 } from 'react-icons/fi'
 import styled from 'styled-components'
 
@@ -13,6 +14,10 @@ import {
   type AdministrationDepartmentCategory,
   DEPARTMENT_KIND_LABEL,
 } from '@/shared/api/administration-department'
+import {
+  type DepartmentLifecycleStatus,
+  resolveDepartmentLifecycleStatus,
+} from '@/shared/lib/ministry-department/ministry-department-utils'
 import { parseSignedDateParts } from '@/shared/lib/tenure-person-utils'
 
 import { GOV_BRAND } from './government-ledger.styles'
@@ -27,7 +32,7 @@ export interface MinistriesLedgerViewProps {
   onAddRoot?: () => void
 }
 
-type SortField = 'established' | 'name'
+type SortField = 'established' | 'name' | 'tenures'
 type SortDirection = 'asc' | 'desc'
 
 function formatDepartmentYearPoint(
@@ -106,6 +111,14 @@ export function MinistriesLedgerView({
           leftDept.name.localeCompare(rightDept.name, 'ko') * dirMultiplier
         )
       }
+      if (sortField === 'tenures') {
+        const leftTenures = leftDept.tenureCount ?? 0
+        const rightTenures = rightDept.tenureCount ?? 0
+        if (leftTenures !== rightTenures) {
+          return (leftTenures - rightTenures) * dirMultiplier
+        }
+        return leftDept.name.localeCompare(rightDept.name, 'ko')
+      }
       const leftKey = getDepartmentEstablishedSortKey(leftDept)
       const rightKey = getDepartmentEstablishedSortKey(rightDept)
       if (leftKey !== rightKey) {
@@ -122,7 +135,7 @@ export function MinistriesLedgerView({
       setSortDirection((prevDir) => (prevDir === 'asc' ? 'desc' : 'asc'))
     } else {
       setSortField(targetField)
-      setSortDirection('asc')
+      setSortDirection(targetField === 'tenures' ? 'desc' : 'asc')
     }
   }
 
@@ -161,7 +174,21 @@ export function MinistriesLedgerView({
               )
             ) : null}
           </SortPillBtn>
-          {onAddRoot ? (
+          <SortPillBtn
+            type="button"
+            $active={sortField === 'tenures'}
+            onClick={() => toggleSort('tenures')}
+          >
+            인사순
+            {sortField === 'tenures' ? (
+              sortDirection === 'asc' ? (
+                <FiArrowUp size={11} />
+              ) : (
+                <FiArrowDown size={11} />
+              )
+            ) : null}
+          </SortPillBtn>
+          {!compact && onAddRoot ? (
             <AddInlineBtn type="button" onClick={onAddRoot}>
               <FiPlus size={12} />
               등록
@@ -178,8 +205,8 @@ export function MinistriesLedgerView({
               <Th>기관명</Th>
               <Th style={{ width: compact ? 112 : 160 }}>성격 · 분류</Th>
               {!compact ? <Th style={{ width: 150 }}>상위 기관</Th> : null}
-              <Th style={{ width: compact ? 88 : 130, textAlign: 'right' }}>
-                계보 · 부대
+              <Th style={{ width: compact ? 98 : 136, textAlign: 'right' }}>
+                역대 인사 · 계보
               </Th>
             </tr>
           </thead>
@@ -193,11 +220,21 @@ export function MinistriesLedgerView({
                 deptRow.abolished,
                 deptRow.abolishedDate,
               )
-              const isAbolished = Boolean(abolLabel)
+              const lifecycleStatus = resolveDepartmentLifecycleStatus(deptRow)
+              const endFallbackLabel =
+                lifecycleStatus === 'SUPERSEDED'
+                  ? '개편'
+                  : lifecycleStatus === 'HISTORICAL_ENDED'
+                    ? '시대 종료'
+                    : lifecycleStatus === 'ABOLISHED'
+                      ? '폐지'
+                      : '현존'
               const periodText =
                 estLabel || abolLabel
-                  ? `${estLabel ?? '?'} ~ ${abolLabel ?? '현존'}`
-                  : '연도 미등록'
+                  ? `${estLabel ?? '?'} ~ ${abolLabel ?? endFallbackLabel}`
+                  : lifecycleStatus === 'HISTORICAL_ENDED'
+                    ? '역사 기관'
+                    : '연도 미등록'
               const kindText =
                 (deptRow.kind && DEPARTMENT_KIND_LABEL[deptRow.kind]) || '부처'
               const catText = deptRow.categoryId
@@ -207,8 +244,11 @@ export function MinistriesLedgerView({
                 ? departmentById.get(deptRow.parentId) ?? null
                 : null
               const predCount = (deptRow.predecessors ?? []).length
-              const succCount = (deptRow.successors ?? []).length
+              const succCount =
+                (deptRow.successors ?? []).length +
+                (deptRow.militaryUnitSuccessors ?? []).length
               const lineageTotal = predCount + succCount
+              const tenureCount = deptRow.tenureCount ?? 0
               const unitCount = (deptRow.militaryUnits ?? []).length
               const isSelected = selectedDepartmentId === deptRow.id
 
@@ -220,7 +260,7 @@ export function MinistriesLedgerView({
                 >
                   <Td>
                     <PeriodStack>
-                      <StatusDot $abolished={isAbolished} />
+                      <StatusDot $status={lifecycleStatus} />
                       <PeriodText $muted={!estLabel && !abolLabel}>
                         {periodText}
                       </PeriodText>
@@ -235,7 +275,7 @@ export function MinistriesLedgerView({
                     </NamePrimary>
                     <SubInfoRow>
                       {deptRow.historicalCountry?.name ? (
-                        <EraTag>🏛️ {deptRow.historicalCountry.name}</EraTag>
+                        <EraTag>{deptRow.historicalCountry.name}</EraTag>
                       ) : null}
                       {compact && parentRef ? (
                         <ParentHint>↳ {parentRef.name}</ParentHint>
@@ -269,6 +309,12 @@ export function MinistriesLedgerView({
                   ) : null}
                   <Td style={{ textAlign: 'right' }}>
                     <MetricGroup>
+                      {tenureCount > 0 ? (
+                        <MetricChip $primary title={`역대 수장·인사 재임 ${tenureCount}명`}>
+                          <FiUsers size={11} />
+                          {tenureCount}
+                        </MetricChip>
+                      ) : null}
                       {lineageTotal > 0 ? (
                         <MetricChip title={`전신 ${predCount} · 후신 ${succCount}`}>
                           <FiGitCommit size={11} />
@@ -281,7 +327,9 @@ export function MinistriesLedgerView({
                           {unitCount}
                         </MetricChip>
                       ) : null}
-                      {lineageTotal === 0 && unitCount === 0 ? (
+                      {tenureCount === 0 &&
+                      lineageTotal === 0 &&
+                      unitCount === 0 ? (
                         <DashText>—</DashText>
                       ) : null}
                     </MetricGroup>
@@ -451,12 +499,19 @@ const PeriodStack = styled.div`
   gap: 6px;
 `
 
-const StatusDot = styled.span<{ $abolished: boolean }>`
+const StatusDot = styled.span<{ $status: DepartmentLifecycleStatus }>`
   width: 6px;
   height: 6px;
   border-radius: 999px;
   flex-shrink: 0;
-  background: ${({ $abolished }) => ($abolished ? '#94a3b8' : '#10b981')};
+  background: ${({ $status }) =>
+    $status === 'ACTIVE'
+      ? '#10b981'
+      : $status === 'SUPERSEDED'
+        ? '#6366f1'
+        : $status === 'HISTORICAL_ENDED'
+          ? '#f59e0b'
+          : '#94a3b8'};
 `
 
 const PeriodText = styled.span<{ $muted: boolean }>`
@@ -550,7 +605,7 @@ const MetricGroup = styled.div`
   gap: 5px;
 `
 
-const MetricChip = styled.span<{ $defense?: boolean }>`
+const MetricChip = styled.span<{ $defense?: boolean; $primary?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 3px;
@@ -559,18 +614,26 @@ const MetricChip = styled.span<{ $defense?: boolean }>`
   font-size: 11px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  background: ${({ theme, $defense }) =>
+  background: ${({ theme, $defense, $primary }) =>
     $defense
       ? theme.mode === 'dark'
         ? 'rgba(16, 185, 129, 0.16)'
         : 'rgba(16, 185, 129, 0.1)'
-      : theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.06)'
-        : 'rgba(20, 19, 34, 0.05)'};
-  color: ${({ theme, $defense }) =>
+      : $primary
+        ? theme.mode === 'dark'
+          ? GOV_BRAND.primarySoftDark
+          : GOV_BRAND.primarySoft
+        : theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.06)'
+          : 'rgba(20, 19, 34, 0.05)'};
+  color: ${({ theme, $defense, $primary }) =>
     $defense
       ? theme.mode === 'dark'
         ? '#6ee7b7'
         : '#047857'
-      : theme.colors.text.secondary};
+      : $primary
+        ? theme.mode === 'dark'
+          ? '#93c5fd'
+          : GOV_BRAND.primary
+        : theme.colors.text.secondary};
 `

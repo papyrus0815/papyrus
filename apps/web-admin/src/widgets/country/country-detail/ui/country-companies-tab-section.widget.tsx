@@ -33,6 +33,10 @@ import {
 } from '@/widgets/company-form'
 
 import * as DashboardStyles from './country-detail-dashboard.styles'
+import {
+  countryTabCanvasPadding,
+  LedgerToolbarButton,
+} from './country-ledger-primitives'
 
 export interface CountryCompaniesTabSectionProps {
   country: UnifiedCountry
@@ -703,15 +707,11 @@ const Root = styled(motion.div)`
   display: flex;
   flex-direction: column;
   gap: 20px;
-  padding: 28px 32px 48px;
+  ${countryTabCanvasPadding}
   min-height: calc(100vh - 200px);
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
-
-  @media (max-width: 768px) {
-    padding: 20px 16px 36px;
-  }
 `
 
 const HeaderButtons = styled.div`
@@ -720,25 +720,7 @@ const HeaderButtons = styled.div`
   gap: 8px;
 `
 
-const SecondaryBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.primary};
-    background: ${({ theme }) => theme.colors.hover};
-  }
-`
+const SecondaryBtn = styled(LedgerToolbarButton)``
 
 const CompaniesEmptySpecGrid = styled.div`
   display: grid;

@@ -94,6 +94,33 @@ export class HistoricalCountrySimpleResponseDto {
   longitude!: number | null
 
   /**
+   * 연결 기간 시작 기원 — 이 나라가 이 현대 국가의 땅에 들어온 때. 연결 기간이 비면 존속 기간 전체.
+   * 예) 중화민국: 중국 쪽 1912-01~1949-12, 대만 쪽 1945-10~(현재).
+   */
+  @ApiProperty({ description: '연결 기간 시작 기원 (비면 존속 기간 시작)', required: false, enum: Era })
+  linkStartEra!: Era | null
+
+  /** 연결 기간 시작 연도 */
+  @ApiProperty({ description: '연결 기간 시작 연도', required: false })
+  linkStartYear!: number | null
+
+  /** 연결 기간 시작 월 (1~12) */
+  @ApiProperty({ description: '연결 기간 시작 월', required: false })
+  linkStartMonth!: number | null
+
+  /** 연결 기간 종료 기원 — 비면 존속 기간 끝(현존국이면 진행 중) */
+  @ApiProperty({ description: '연결 기간 종료 기원 (비면 존속 기간 끝)', required: false, enum: Era })
+  linkEndEra!: Era | null
+
+  /** 연결 기간 종료 연도 */
+  @ApiProperty({ description: '연결 기간 종료 연도', required: false })
+  linkEndYear!: number | null
+
+  /** 연결 기간 종료 월 (1~12) */
+  @ApiProperty({ description: '연결 기간 종료 월', required: false })
+  linkEndMonth!: number | null
+
+  /**
    * 표시용 관계 분류 — PREDECESSOR(직계 전신) / CONSTITUENT(당대 구성국) /
    * HERITAGE(관련·유산). 현대 국가 상세에서만 파생·채워지며, 목록·피커에서는 null.
    * 표시 전용 파생이라 스코프 합산과 무관하다.

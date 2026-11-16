@@ -197,6 +197,8 @@ const GhostBtn = styled.button`
 
 export interface CabinetEventAttachModalProps {
   cabinetId: string
+  countryId?: string | null
+  historicalCountryId?: string | null
   /** 이미 연결돼 있어 검색 결과에서 제외할 eventId 집합 */
   excludeEventIds?: Set<string>
   onClose: () => void
@@ -207,6 +209,8 @@ type Mode = 'existing' | 'new'
 
 export function CabinetEventAttachModal({
   cabinetId,
+  countryId,
+  historicalCountryId,
   excludeEventIds,
   onClose,
   onAttached,
@@ -254,11 +258,18 @@ export function CabinetEventAttachModal({
     try {
       let eventId = selectedId
       if (mode === 'new') {
+        const relatedCountries = historicalCountryId
+          ? [{ historicalCountryId, role: 'PARTICIPANT' as const }]
+          : countryId
+            ? [{ countryId, role: 'PARTICIPANT' as const }]
+            : undefined
         const created = await createEvent({
           title: newTitle.trim(),
           description: newDesc.trim() || undefined,
           startDate: newStart || undefined,
           endDate: newEnd || undefined,
+          ...(historicalCountryId ? { historicalCountryId } : {}),
+          ...(relatedCountries ? { relatedCountries } : {}),
         } as any)
         eventId = created.id
         // 새 사건 — 사건 목록·사이드바·국가 대시보드가 바로 보이도록

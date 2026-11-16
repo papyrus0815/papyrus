@@ -6,7 +6,7 @@ import {
   FiSearch,
   FiX,
 } from 'react-icons/fi'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
@@ -21,12 +21,14 @@ import { invalidateTenureQueries } from '@/shared/api/invalidate-tenure'
 import { personCareerApi } from '@/shared/api/person-career'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { getSignedDateChronologyKey } from '@/shared/lib/tenure-person-utils'
+import { pathKeys } from '@/shared/router'
 import { useThemeStore } from '@/shared/styles/theme.store'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import type { EventPickerSelection } from '@/shared/ui/event-picker-modal/event-picker-modal'
 import { EventPickerModal } from '@/shared/ui/event-picker-modal/event-picker-modal'
 import { InstitutionAppointmentModal } from '@/shared/ui/institution-appointment-modal'
 import { notify } from '@/shared/ui/toast'
+import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 
 function formatStructuredOrIsoDate(
   parts: {
@@ -60,12 +62,14 @@ function getBlockTokens(isDark: boolean) {
     hairline: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(20, 19, 34, 0.06)',
     border: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(20, 19, 34, 0.1)',
     text: isDark ? '#f1f5f9' : '#0f172a',
-    textSub: isDark ? '#94a3b8' : '#64748b',
-    textFaint: isDark ? '#64748b' : '#94a3b8',
+    textSub: isDark ? '#a1a1aa' : '#64748b',
+    textFaint: isDark ? '#71717a' : '#94a3b8',
     chipBg: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(20, 19, 34, 0.045)',
     subtleBg: isDark ? 'rgba(255, 255, 255, 0.025)' : '#f8fafc',
-    accent: isDark ? '#93c5fd' : GOV_BRAND.primary,
+    accent: isDark ? GOV_BRAND.primaryInkDark : GOV_BRAND.primary,
     accentSoft: isDark ? GOV_BRAND.primarySoftDark : GOV_BRAND.primarySoft,
+    primaryFill: isDark ? GOV_BRAND.primaryDark : GOV_BRAND.primary,
+    primaryText: isDark ? '#0e0f12' : '#ffffff',
   }
 }
 
@@ -108,9 +112,11 @@ export function DepartmentTenuresBlock({
   const [appointmentOpen, setAppointmentOpen] = useState(false)
   const [editingTenure, setEditingTenure] =
     useState<AdministrationDepartmentTenureItem | null>(null)
+  const navigate = useNavigate()
   const [tenureSearch, setTenureSearch] = useState('')
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
   const [expandedAll, setExpandedAll] = useState(false)
+  const [inspectPersonId, setInspectPersonId] = useState<string | null>(null)
 
   const closeAppointmentModal = () => {
     setAppointmentOpen(false)
@@ -127,16 +133,19 @@ export function DepartmentTenuresBlock({
       administrationDepartmentApi.getTenuresByDepartmentId(departmentId),
     enabled: !!departmentId,
   })
+  const includeConstituentsForCab = Boolean(!countryId && historicalCountryId)
   const { data: availableCabinets = [] } = useQuery({
     queryKey: [
       'cabinets-by-country',
       countryId ?? '',
-      historicalCountryId ?? '',
+      historicalCountryId ?? null,
+      ...(includeConstituentsForCab ? (['with-constituents'] as const) : []),
     ],
     queryFn: () =>
       personCareerApi.getCabinets({
         ...(countryId ? { countryId } : {}),
         ...(historicalCountryId ? { historicalCountryId } : {}),
+        ...(includeConstituentsForCab ? { includeConstituents: true } : {}),
       }),
     enabled:
       Boolean(appointmentOpen || editingTenure) &&
@@ -509,16 +518,24 @@ export function DepartmentTenuresBlock({
                     </span>
                   )}
                   {personIdVal ? (
-                    <Link
-                      to={`/persons-timeline/${encodeURIComponent(personIdVal)}/`}
+                    <button
+                      type="button"
+                      onClick={() => setInspectPersonId(personIdVal)}
+                      title={`${displayPersonName} 인물 요약 보기`}
                       style={{
                         fontWeight: 700,
                         color: tokens.text,
-                        textDecoration: 'none',
+                        background: 'transparent',
+                        border: 'none',
+                        padding: 0,
+                        fontSize: 'inherit',
+                        fontFamily: 'inherit',
+                        cursor: 'pointer',
+                        textAlign: 'left',
                       }}
                     >
                       {displayPersonName}
-                    </Link>
+                    </button>
                   ) : (
                     <span style={{ fontWeight: 700 }}>{displayPersonName}</span>
                   )}
@@ -582,7 +599,7 @@ export function DepartmentTenuresBlock({
                           cursor: 'pointer',
                         }}
                       >
-                        🏛️ {cabItem.name || '내각 상세'}
+                        {cabItem.name || '내각 상세'}
                         <FiArrowUpRight size={10} />
                       </button>
                     ) : (
@@ -600,7 +617,7 @@ export function DepartmentTenuresBlock({
                           fontWeight: 600,
                         }}
                       >
-                        🏛️ {cabItem.name || '소속 내각'}
+                        {cabItem.name || '소속 내각'}
                       </span>
                     ),
                   )}
@@ -638,7 +655,7 @@ export function DepartmentTenuresBlock({
                         borderRadius: 5,
                         border: `1px solid ${tokens.border}`,
                         background: 'transparent',
-                        color: '#ef4444',
+                        color: tokens.textSub,
                         cursor: 'pointer',
                       }}
                     >
@@ -729,6 +746,14 @@ export function DepartmentTenuresBlock({
                 endDay: editingTenure.endDay,
               }
             : null
+        }
+      />
+
+      <PersonInlineModal
+        personId={inspectPersonId}
+        onClose={() => setInspectPersonId(null)}
+        onOpenDetail={(targetPersonId) =>
+          navigate(pathKeys.personsTimelineDetail(targetPersonId))
         }
       />
     </div>
@@ -964,8 +989,8 @@ export function DepartmentEventsBlock({
                 padding: '5px 12px',
                 fontSize: 12,
                 fontWeight: 600,
-                background: GOV_BRAND.primary,
-                color: '#fff',
+                background: tokens.primaryFill,
+                color: tokens.primaryText,
                 border: 'none',
                 borderRadius: 6,
                 cursor: 'pointer',
@@ -1101,8 +1126,8 @@ export function DepartmentEventsBlock({
                           padding: '5px 12px',
                           fontSize: 12,
                           fontWeight: 600,
-                          background: GOV_BRAND.primary,
-                          color: '#fff',
+                          background: tokens.primaryFill,
+                          color: tokens.primaryText,
                           border: 'none',
                           borderRadius: 6,
                           cursor: 'pointer',
@@ -1234,7 +1259,7 @@ export function DepartmentEventsBlock({
                           border: `1px solid ${tokens.border}`,
                           borderRadius: 5,
                           background: 'transparent',
-                          color: '#ef4444',
+                          color: tokens.textSub,
                           cursor: 'pointer',
                         }}
                       >

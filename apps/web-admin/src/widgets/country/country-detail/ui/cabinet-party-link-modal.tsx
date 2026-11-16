@@ -11,11 +11,12 @@ import {
   addCabinetPoliticalParty,
   CABINET_PARTY_LINK_ELECTION_TYPES,
   getElection,
-  getElections,
-  getPoliticalParties,
+  getScopedElections,
+  getScopedPoliticalParties,
   labelElectionType,
 } from '@/shared/api/election'
 import { getApiErrorMessage } from '@/shared/lib/get-api-error-message'
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { notify } from '@/shared/ui/toast'
 import {
@@ -70,7 +71,7 @@ export function CabinetPartyLinkModal({
   const { data: parties = [], isPending: partiesPending } = useQuery({
     queryKey: ['political-parties', countryId ?? '', historicalCountryId ?? ''],
     queryFn: () =>
-      getPoliticalParties({
+      getScopedPoliticalParties({
         countryId: countryId || undefined,
         historicalCountryId: historicalCountryId || undefined,
       }),
@@ -86,7 +87,7 @@ export function CabinetPartyLinkModal({
       CABINET_PARTY_LINK_ELECTION_TYPES.join(','),
     ],
     queryFn: () =>
-      getElections({
+      getScopedElections({
         countryId: countryId || undefined,
         historicalCountryId: historicalCountryId || undefined,
         hasPartyResults: true,
@@ -115,7 +116,9 @@ export function CabinetPartyLinkModal({
   const addMut = useMutation({
     mutationFn: () => {
       if (linkMode === 'election') {
-        const row = electionDetail?.partyResults?.find((r) => r.id === partyResultId)
+        const row = electionDetail?.partyResults?.find(
+          (resultItem) => resultItem.id === partyResultId,
+        )
         if (!row) throw new Error('선거 집계를 선택하세요.')
         return addCabinetPoliticalParty(cabinetId, {
           partyId: row.partyId,
@@ -137,6 +140,11 @@ export function CabinetPartyLinkModal({
       void queryClient.invalidateQueries({
         queryKey: ['cabinet-political-parties', cabinetId],
       })
+      void queryClient.invalidateQueries({ queryKey: ['cabinets-by-country'] })
+      void queryClient.invalidateQueries({ queryKey: ['cabinets'] })
+      void queryClient.invalidateQueries({ queryKey: ['global-cabinets'] })
+      void queryClient.invalidateQueries({ queryKey: ['global-cabinet-detail'] })
+      void queryClient.invalidateQueries({ queryKey: ['cabinet-overview'] })
       onClose()
     },
     onError: (error: unknown) => notify.error(getApiErrorMessage(error)),
@@ -331,13 +339,21 @@ export function CabinetPartyLinkModal({
                         style={{ maxWidth: '100%' }}
                       >
                         <option value="">선택…</option>
-                        {electionsList.map((el) => (
-                          <option key={el.id} value={el.id}>
-                            {el.shortName?.trim() || el.name} ·{' '}
-                            {labelElectionType(el.electionType)} ·{' '}
-                            {new Date(el.pollDate).toLocaleDateString('ko-KR', { timeZone: 'UTC' })}
-                          </option>
-                        ))}
+                        {electionsList.map((el) => {
+                          const pollParts = el.pollDate
+                            ? parseIsoDateParts(el.pollDate)
+                            : null
+                          const pollLabel = pollParts
+                            ? `${pollParts.year < 0 ? `BC ${-pollParts.year}` : pollParts.year}.${String(pollParts.month).padStart(2, '0')}.${String(pollParts.day).padStart(2, '0')}`
+                            : el.pollDate || ''
+                          return (
+                            <option key={el.id} value={el.id}>
+                              {el.shortName?.trim() || el.name} ·{' '}
+                              {labelElectionType(el.electionType)}
+                              {pollLabel ? ` · ${pollLabel}` : ''}
+                            </option>
+                          )
+                        })}
                       </CabS.CabinetSelectNative>
                     </FieldControl>
                   </FieldRow>

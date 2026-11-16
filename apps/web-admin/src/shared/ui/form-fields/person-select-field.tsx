@@ -29,13 +29,16 @@ export interface PersonSelectFieldProps {
   /** 인물 목록 로딩 등으로 선택 비활성화 */
   disabled?: boolean
   value: string
-  selectedPerson: Pick<
-    PersonResponseDto,
-    'id' | 'name' | 'surname' | 'middleName' | 'nameDisplayOrder' | 'profileImageUrl'
-  > & {
-    country?: { defaultNameDisplayOrder?: string | null } | null
-  } | null
-  persons: PersonResponseDto[]
+  selectedPerson:
+    | (Pick<
+        PersonResponseDto,
+        'id' | 'name' | 'surname' | 'middleName' | 'nameDisplayOrder' | 'profileImageUrl'
+      > & {
+        country?: { defaultNameDisplayOrder?: string | null } | null
+      })
+    | null
+  /** 생략 시 PersonSelectModal이 자체 서버/캐시 목록을 조회한다 */
+  persons?: PersonResponseDto[]
   isModalOpen: boolean
   onModalOpenChange: (open: boolean) => void
   onSelect: (personId: string) => void

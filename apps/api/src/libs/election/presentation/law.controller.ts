@@ -46,11 +46,40 @@ function parseOptionalPositiveInt(
   return { ok: false, message: '조·항 번호 형식이 올바르지 않습니다.' }
 }
 
+function parseOptionalDate(
+  raw: unknown,
+  label: string,
+): { ok: true; value: Date | null } | { ok: false; message: string } {
+  if (raw === null || raw === undefined) return { ok: true, value: null }
+  if (raw instanceof Date) {
+    if (Number.isNaN(raw.getTime())) {
+      return { ok: false, message: `${label} 날짜 형식이 올바르지 않습니다.` }
+    }
+    return { ok: true, value: raw }
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    if (!trimmed) return { ok: true, value: null }
+    const normalized = /^\d{4}-\d{2}-\d{2}$/.test(trimmed)
+      ? `${trimmed}T00:00:00.000Z`
+      : trimmed
+    const parsed = new Date(normalized)
+    if (Number.isNaN(parsed.getTime())) {
+      return { ok: false, message: `${label} 날짜 형식이 올바르지 않습니다.` }
+    }
+    return { ok: true, value: parsed }
+  }
+  return { ok: false, message: `${label} 날짜 형식이 올바르지 않습니다.` }
+}
+
 export interface CreateLawBody {
   name: string
   summary?: string | null
   articleNumber?: number | null
   paragraphNumber?: number | null
+  startDate?: string | null
+  endDate?: string | null
+  note?: string | null
   lawTypeId?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
@@ -61,6 +90,9 @@ export interface UpdateLawBody {
   summary?: string | null
   articleNumber?: number | null
   paragraphNumber?: number | null
+  startDate?: string | null
+  endDate?: string | null
+  note?: string | null
   lawTypeId?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
@@ -111,12 +143,28 @@ export class LawController {
         '항을 입력하려면 조 번호를 먼저 입력하세요.',
       )
     }
+    const startDate = parseOptionalDate(body.startDate, '제정·시행일')
+    if (!startDate.ok) throw new BadRequestException(startDate.message)
+    const endDate = parseOptionalDate(body.endDate, '폐지일')
+    if (!endDate.ok) throw new BadRequestException(endDate.message)
+    if (
+      startDate.value &&
+      endDate.value &&
+      startDate.value.getTime() > endDate.value.getTime()
+    ) {
+      throw new BadRequestException(
+        '제정·시행일이 폐지일보다 뒤일 수 없습니다.',
+      )
+    }
     const row = await this.prisma.law.create({
       data: {
         name: body.name,
         summary: body.summary ?? undefined,
         articleNumber: article.value ?? undefined,
         paragraphNumber: paragraph.value ?? undefined,
+        startDate: startDate.value ?? undefined,
+        endDate: endDate.value ?? undefined,
+        note: body.note ?? undefined,
         lawTypeId: body.lawTypeId ?? undefined,
         countryId: body.countryId ?? undefined,
         historicalCountryId: body.historicalCountryId ?? undefined,
@@ -137,6 +185,30 @@ export class LawController {
     const data: Prisma.LawUpdateInput = {}
     if (body.name !== undefined) data.name = body.name
     if (body.summary !== undefined) data.summary = body.summary
+    if (body.note !== undefined) data.note = body.note
+    if (body.startDate !== undefined) {
+      const parsedStart = parseOptionalDate(body.startDate, '제정·시행일')
+      if (!parsedStart.ok) throw new BadRequestException(parsedStart.message)
+      data.startDate = parsedStart.value
+    }
+    if (body.endDate !== undefined) {
+      const parsedEnd = parseOptionalDate(body.endDate, '폐지일')
+      if (!parsedEnd.ok) throw new BadRequestException(parsedEnd.message)
+      data.endDate = parsedEnd.value
+    }
+    const effStart =
+      body.startDate !== undefined
+        ? (data.startDate as Date | null)
+        : existing.startDate
+    const effEnd =
+      body.endDate !== undefined
+        ? (data.endDate as Date | null)
+        : existing.endDate
+    if (effStart && effEnd && effStart.getTime() > effEnd.getTime()) {
+      throw new BadRequestException(
+        '제정·시행일이 폐지일보다 뒤일 수 없습니다.',
+      )
+    }
     let finalArticle = existing.articleNumber
     let finalParagraph = existing.paragraphNumber
     if (body.articleNumber !== undefined) {

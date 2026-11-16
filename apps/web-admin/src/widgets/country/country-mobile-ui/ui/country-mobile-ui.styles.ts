@@ -5,6 +5,18 @@
 import { motion } from 'framer-motion'
 import styled from 'styled-components'
 
+import {
+  DIGIT_DISPLAY,
+  MOTION,
+  RADIUS,
+  ledgerAccent,
+  ledgerAccentHover,
+  ledgerBackground,
+  ledgerHairlineHover,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  ledgerSubtleFill,
+} from '@/entities/event/ui/ledger-tokens'
 import { OVERLAY_STYLES, Z_INDEX } from '@/shared/styles/z-index'
 
 export const MobileListOverlay = styled(motion.div)`
@@ -60,26 +72,30 @@ export const DragHandle = styled.div`
 export const MobileListHeader = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 0 20px 16px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) => theme.colors.background.secondary};
+  gap: 10px;
+  padding: 0 16px 14px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
   flex-shrink: 0;
-  box-shadow: 0 1px 3px ${({ theme }) => theme.colors.shadow.sm};
+  box-shadow: none;
 `
 
 export const MobileListTitleRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding-top: 4px;
 `
 
 export const MobileListTitle = styled.h2`
   margin: 0;
-  font-size: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
 `
 
 export const MobileListClose = styled.button`
@@ -192,13 +208,14 @@ export const MobileTabButton = styled.button<{ $active?: boolean }>`
 
 export const MobileTabBadge = styled.span`
   min-width: 20px;
-  height: 20px;
+  height: 19px;
   padding: 0 6px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.25);
-  color: #fff;
+  border-radius: ${RADIUS.PILL};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
+  ${DIGIT_DISPLAY}
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -207,29 +224,45 @@ export const MobileTabBadge = styled.span`
 export const MobileActionRow = styled.div`
   display: flex;
   gap: 8px;
-  padding: 12px 0 0 0;
 `
 
-export const MobileAddButton = styled.button`
+export const MobileAddButton = styled.button<{ $primary?: boolean }>`
   flex: 1;
   min-width: 0;
-  display: flex;
+  height: 38px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 10px 12px;
-  border: 1.5px dashed ${({ theme }) => theme.colors.border.medium};
-  border-radius: 12px;
-  background: ${({ theme }) => theme.colors.activeLight};
-  color: ${({ theme }) => theme.colors.primary};
-  font-size: 13px;
+  padding: 0 12px;
+  border: 1px solid
+    ${({ theme, $primary }) =>
+      $primary ? 'transparent' : ledgerHairlineStrong(theme.mode)};
+  border-radius: 8px;
+  background: ${({ theme, $primary }) =>
+    $primary ? ledgerAccent(theme.mode) : 'transparent'};
+  color: ${({ theme, $primary }) =>
+    $primary
+      ? theme.mode === 'dark'
+        ? ledgerBackground('dark')
+        : '#ffffff'
+      : theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease;
   white-space: nowrap;
 
   &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme, $primary }) =>
+      $primary
+        ? ledgerAccentHover(theme.mode)
+        : ledgerHoverFill(theme.mode)};
+    border-color: ${({ theme, $primary }) =>
+      $primary ? 'transparent' : ledgerHairlineHover(theme.mode)};
   }
 `
 

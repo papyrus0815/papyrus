@@ -1080,4 +1080,89 @@ describe('AdministrationDepartmentService', () => {
       { id: 'cab-2', name: '전시 비상 연립내각' },
     ])
   })
+
+  it('create / update: 청사·본부 소재지 위·경도(WGS84)를 짝으로 저장·직렬화하고 한쪽만 전달되면 BadRequestException을 던진다', async () => {
+    const prisma = createMockPrisma()
+    const now = new Date('2026-11-15T00:00:00.000Z')
+    prisma.administrationDepartment.create.mockResolvedValue({
+      id: 'dept-mofa',
+      name: '외교부',
+      countryId: 'kr',
+      historicalCountryId: null,
+      headquarters: '서울 정부서울청사 별관',
+      headquartersLatitude: '37.5735120',
+      headquartersLongitude: '126.9756410',
+      createdAt: now,
+      updatedAt: now,
+    })
+    const service = new AdministrationDepartmentService(
+      prisma as never,
+      createMockNotification() as never,
+    )
+
+    await expect(
+      service.create({
+        name: '외교부',
+        countryId: 'kr',
+        headquarters: '서울 정부서울청사 별관',
+        headquartersLatitude: 37.573512,
+      }),
+    ).rejects.toThrow(BadRequestException)
+
+    const created = await service.create({
+      name: '외교부',
+      countryId: 'kr',
+      headquarters: '서울 정부서울청사 별관',
+      headquartersLatitude: 37.573512,
+      headquartersLongitude: 126.975641,
+    })
+
+    expect(prisma.administrationDepartment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          headquarters: '서울 정부서울청사 별관',
+          headquartersLatitude: 37.573512,
+          headquartersLongitude: 126.975641,
+        }),
+      }),
+    )
+    expect(created.headquartersLatitude).toBe(37.573512)
+    expect(created.headquartersLongitude).toBe(126.975641)
+
+    prisma.administrationDepartment.findUnique.mockResolvedValue({
+      id: 'dept-mofa',
+      name: '외교부',
+      countryId: 'kr',
+      historicalCountryId: null,
+      parentId: null,
+      categoryId: null,
+    })
+    prisma.administrationDepartment.update.mockResolvedValue({
+      id: 'dept-mofa',
+      name: '외교부',
+      countryId: 'kr',
+      historicalCountryId: null,
+      headquarters: '서울 정부서울청사 별관',
+      headquartersLatitude: null,
+      headquartersLongitude: null,
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    const cleared = await service.update('dept-mofa', {
+      headquartersLatitude: null,
+      headquartersLongitude: null,
+    })
+
+    expect(prisma.administrationDepartment.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          headquartersLatitude: null,
+          headquartersLongitude: null,
+        }),
+      }),
+    )
+    expect(cleared.headquartersLatitude).toBeNull()
+    expect(cleared.headquartersLongitude).toBeNull()
+  })
 })

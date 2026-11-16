@@ -5,7 +5,9 @@
  * - 항목 클릭 시 지도가 좌표로 이동·핀 표시
  * - 검색 / 정렬 / 키보드 네비 / URL 동기화 지원
  */
-import { useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
+
+import { FiCompass, FiDroplet, FiLayers, FiMapPin } from 'react-icons/fi'
 
 import {
   type NaturalFeature,
@@ -85,11 +87,11 @@ const TYPE_BADGE: Record<
   coast: { label: '해안', color: '#92400e', bg: '#fef3c7' },
 }
 
-const EMPTY_ICON_BY_TYPE: Record<NaturalFeatureType, string> = {
-  mountain: '🏔️',
-  river: '🏞️',
-  lake: '🏞️',
-  coast: '🏖️',
+const EMPTY_ICON_BY_TYPE: Record<NaturalFeatureType, ReactNode> = {
+  mountain: <FiCompass size={22} />,
+  river: <FiDroplet size={22} />,
+  lake: <FiLayers size={22} />,
+  coast: <FiMapPin size={22} />,
 }
 
 function buildSubtitle(item: NaturalFeature): string {
@@ -377,9 +379,11 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
             palette={palette}
             isSelected={!!selectedItem}
             emptyIcon={
-              url.filter !== 'all'
-                ? EMPTY_ICON_BY_TYPE[url.filter as NaturalFeatureType]
-                : '🏔️'
+              url.filter !== 'all' ? (
+                EMPTY_ICON_BY_TYPE[url.filter as NaturalFeatureType]
+              ) : (
+                <FiCompass size={22} />
+              )
             }
             emptyTitle="자연 지형을 선택해주세요"
             emptyDescription="좌측 목록에서 항목을 선택하면 지도가 해당 위치로 이동합니다 (↑↓ Esc)"

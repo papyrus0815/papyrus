@@ -1,15 +1,24 @@
 /**
  * 국가/역사/인물 등록 — SidebarHeader action 슬롯에서 호출.
- *
- * 이전엔 + 버튼 클릭 → 풀스크린 모달이었으나, 클릭 한 번에 옵션 3개만 보여주는
- * inline dropdown으로 단순화 (다른 필터들과 일관성).
+ * 사건 페이지 EventActionsMenu와 동일한 플랫 헤어라인 드롭다운 + Feather 선형 아이콘.
  */
 import React, { useEffect, useRef, useState } from 'react'
 
 import { AnimatePresence, motion } from 'framer-motion'
-import { FaGlobeAsia, FaLandmark, FaUserPlus } from 'react-icons/fa'
+import { FiCompass, FiGlobe, FiPlus, FiUserPlus } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import {
+  MOTION,
+  RADIUS,
+  ledgerAccent,
+  ledgerAccentSubtle,
+  ledgerBackground,
+  ledgerHairlineHover,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+} from '@/entities/event/ui/ledger-tokens'
+import { metaText } from '@/pages/events/styles/theme'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
 interface CountryListAddMenuProps {
@@ -59,25 +68,20 @@ export function CountryListAddMenu({
         title="등록"
         onClick={() => setOpen((isOpen) => !isOpen)}
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-          <path
-            d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"
-            fill="currentColor"
-          />
-        </svg>
+        <FiPlus size={16} aria-hidden />
       </Trigger>
       <AnimatePresence>
         {open && (
           <Menu
             as={motion.div}
-            initial={{ opacity: 0, y: -4, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.96 }}
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.12 }}
           >
             <Item type="button" onClick={select(onAddModern)}>
               <ItemIcon>
-                <FaGlobeAsia />
+                <FiGlobe aria-hidden />
               </ItemIcon>
               <ItemText>
                 <ItemLabel>현대 국가</ItemLabel>
@@ -86,7 +90,7 @@ export function CountryListAddMenu({
             </Item>
             <Item type="button" onClick={select(onAddHistorical)}>
               <ItemIcon>
-                <FaLandmark />
+                <FiCompass aria-hidden />
               </ItemIcon>
               <ItemText>
                 <ItemLabel>역사 국가</ItemLabel>
@@ -95,7 +99,7 @@ export function CountryListAddMenu({
             </Item>
             <Item type="button" onClick={select(onAddPerson)}>
               <ItemIcon>
-                <FaUserPlus />
+                <FiUserPlus aria-hidden />
               </ItemIcon>
               <ItemText>
                 <ItemLabel>인물</ItemLabel>
@@ -115,90 +119,109 @@ const Wrap = styled.div`
 `
 
 const Trigger = styled.button`
+  appearance: none;
   width: 30px;
   height: 30px;
-  border: none;
+  padding: 0;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
-  border-radius: 6px;
+  border-radius: ${RADIUS.SM};
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition:
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    color ${MOTION.fast} ease;
 
   &:hover {
-    background: ${({ theme }) => theme.colors.hover};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    border-color: ${({ theme }) => ledgerHairlineHover(theme.mode)};
     color: ${({ theme }) => theme.colors.text.primary};
   }
 
   &[aria-expanded='true'] {
-    background: ${({ theme }) => theme.colors.activeLight};
-    color: ${({ theme }) => theme.colors.active};
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: -2px;
   }
 `
 
 const Menu = styled.div`
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 5px);
   right: 0;
-  min-width: 200px;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 10px;
-  box-shadow: 0 8px 24px ${({ theme }) => theme.colors.shadow.md};
+  min-width: 196px;
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.SM};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 8px 24px rgba(0, 0, 0, 0.55)'
+      : '0 8px 24px rgba(15, 23, 42, 0.1)'};
   padding: 4px;
   z-index: ${Z_INDEX.DROPDOWN};
-  transform-origin: top right;
 `
 
 const Item = styled.button`
+  appearance: none;
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 8px 10px;
+  padding: 7px 10px;
   border: none;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.primary};
-  border-radius: 6px;
+  border-radius: 4px;
+  font-family: inherit;
   cursor: pointer;
   text-align: left;
+  transition: background ${MOTION.fast} ease;
 
   &:hover,
   &:focus-visible {
-    background: ${({ theme }) => theme.colors.hover};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
     outline: none;
   }
 `
 
 const ItemIcon = styled.span`
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  color: ${({ theme }) => theme.colors.text.secondary};
   flex-shrink: 0;
 
   > svg {
-    width: 18px;
-    height: 18px;
+    width: 15px;
+    height: 15px;
   }
 `
 
 const ItemText = styled.div`
   display: flex;
   flex-direction: column;
+  gap: 1px;
   min-width: 0;
 `
 
 const ItemLabel = styled.span`
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const ItemDesc = styled.span`
   font-size: 11px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${metaText}
 `

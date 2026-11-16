@@ -7,8 +7,14 @@
  */
 import { useMemo, useState } from 'react'
 
-import { useQuery } from '@tanstack/react-query'
-import { FiChevronDown } from 'react-icons/fi'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  FiArrowUpRight,
+  FiChevronDown,
+  FiGrid,
+  FiList,
+  FiPlus,
+} from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -18,9 +24,17 @@ import type { PersonResponseDto as Person } from '@/shared/api/persons'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
+import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
 import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 
 import * as DashboardStyles from './country-detail-dashboard.styles'
+import {
+  LedgerFilterChip,
+  LedgerPrimaryButton,
+  LedgerToolbarButton,
+  LedgerViewSwitch,
+  LedgerViewSwitchItem,
+} from './country-ledger-primitives'
 import { CountryPersonGroupsBlock } from './country-person-groups-block.widget'
 import { ChartSkeleton } from './dashboard-panels/chart-skeleton'
 import { PersonCard } from './person/person-card'
@@ -118,12 +132,14 @@ function formatPersonLifespan(person: Person): string {
 
 export function CountryPersonsSection({ country }: CountryPersonsSectionProps) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [query, setQuery] = useState('')
   const [categoryFilter, setCategoryFilter] =
     useState<CategoryFilterKey>('all')
   const [viewMode, setViewMode] = useState<'ledger' | 'cards'>('ledger')
   const [previewPersonId, setPreviewPersonId] = useState<string | null>(null)
+  const [registerModalOpen, setRegisterModalOpen] = useState(false)
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['persons', 'by-country-grouped', country.id],
@@ -266,18 +282,27 @@ export function CountryPersonsSection({ country }: CountryPersonsSectionProps) {
           </HeadText>
 
           <HeadActions>
-            <HeadActionBtn
+            <LedgerToolbarButton
               type="button"
               onClick={() => navigate(pathKeys.countryGovernment(country.id))}
             >
-              정부·행정 →
-            </HeadActionBtn>
-            <HeadActionBtn
+              <span>정부·행정</span>
+              <FiArrowUpRight size={13} />
+            </LedgerToolbarButton>
+            <LedgerToolbarButton
               type="button"
               onClick={() => navigate(pathKeys.personsTimeline())}
             >
-              인물 타임라인 →
-            </HeadActionBtn>
+              <span>인물 타임라인</span>
+              <FiArrowUpRight size={13} />
+            </LedgerToolbarButton>
+            <LedgerPrimaryButton
+              type="button"
+              onClick={() => setRegisterModalOpen(true)}
+            >
+              <FiPlus size={14} />
+              <span>인물 등록</span>
+            </LedgerPrimaryButton>
           </HeadActions>
         </HeadRow>
 
@@ -393,9 +418,10 @@ export function CountryPersonsSection({ country }: CountryPersonsSectionProps) {
               </EmptySpecDesc>
               <EmptyActionBtn
                 type="button"
-                onClick={() => navigate(pathKeys.personsTimelineCreate())}
+                onClick={() => setRegisterModalOpen(true)}
               >
-                + 인물 등록하기
+                <FiPlus size={12} />
+                <span>인물 등록하기</span>
               </EmptyActionBtn>
             </EmptySpecCell>
             <EmptySpecCell>
@@ -409,7 +435,8 @@ export function CountryPersonsSection({ country }: CountryPersonsSectionProps) {
                 type="button"
                 onClick={() => navigate(pathKeys.countryGovernment(country.id))}
               >
-                정부·행정으로 이동 →
+                <span>정부·행정으로 이동</span>
+                <FiArrowUpRight size={12} />
               </EmptyActionBtn>
             </EmptySpecCell>
           </EmptySpecGrid>
@@ -519,22 +546,24 @@ export function CountryPersonsSection({ country }: CountryPersonsSectionProps) {
                   placeholder="이름 · 시호 · 직책 · 국가 검색…"
                   aria-label="인물 이름 검색"
                 />
-                <ViewToggle role="group" aria-label="인물 보기 방식">
-                  <ViewBtn
+                <LedgerViewSwitch role="group" aria-label="인물 보기 방식">
+                  <LedgerViewSwitchItem
                     type="button"
                     $active={viewMode === 'ledger'}
                     onClick={() => setViewMode('ledger')}
                   >
-                    2열 원장
-                  </ViewBtn>
-                  <ViewBtn
+                    <FiList size={13} />
+                    <span>2열 원장</span>
+                  </LedgerViewSwitchItem>
+                  <LedgerViewSwitchItem
                     type="button"
                     $active={viewMode === 'cards'}
                     onClick={() => setViewMode('cards')}
                   >
-                    초상 카드
-                  </ViewBtn>
-                </ViewToggle>
+                    <FiGrid size={13} />
+                    <span>초상 카드</span>
+                  </LedgerViewSwitchItem>
+                </LedgerViewSwitch>
               </ToolbarRight>
             </FilterToolbar>
 
@@ -573,7 +602,8 @@ export function CountryPersonsSection({ country }: CountryPersonsSectionProps) {
                             navigate(pathKeys.countryDetail(historicalTargetId))
                           }
                         >
-                          국가 상세 →
+                          <span>국가 상세</span>
+                          <FiArrowUpRight size={12} />
                         </GroupCountryLinkBtn>
                       )}
                     </GroupHeadRow>
@@ -666,6 +696,21 @@ export function CountryPersonsSection({ country }: CountryPersonsSectionProps) {
           personId={previewPersonId}
           onClose={() => setPreviewPersonId(null)}
         />
+
+        <PersonRegisterViewModal
+          isOpen={registerModalOpen}
+          onClose={() => setRegisterModalOpen(false)}
+          initialCountryId={country.id}
+          onSuccess={() => {
+            void queryClient.invalidateQueries({
+              queryKey: ['persons', 'by-country-grouped', country.id],
+            })
+            void queryClient.invalidateQueries({
+              queryKey: ['country-persons', country.id],
+            })
+            void queryClient.invalidateQueries({ queryKey: ['persons'] })
+          }}
+        />
       </SectionWrap>
     </DashboardStyles.DashboardRoot>
   )
@@ -713,23 +758,6 @@ const HeadActions = styled.div`
   flex-wrap: wrap;
 `
 
-const HeadActionBtn = styled.button`
-  padding: 5px 11px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 6px;
-  background: transparent;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.active};
-    color: ${({ theme }) => theme.colors.active};
-  }
-`
-
 const FilterToolbar = styled.div`
   display: flex;
   align-items: center;
@@ -747,27 +775,7 @@ const FilterChipGroup = styled.div`
   flex-wrap: wrap;
 `
 
-const FilterChip = styled.button<{ $active: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border: none;
-  border-radius: 4px;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: ${({ $active }) => ($active ? 700 : 500)};
-  color: ${({ theme, $active }) =>
-    $active ? theme.colors.active : theme.colors.text.secondary};
-  background: ${({ theme, $active }) =>
-    $active ? theme.colors.activeLight : 'transparent'};
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme, $active }) =>
-      $active ? theme.colors.active : theme.colors.text.primary};
-  }
-`
+const FilterChip = styled(LedgerFilterChip)``
 
 const FilterChipCount = styled.span`
   font-size: 11px;
@@ -814,9 +822,9 @@ const FilterResetBtn = styled.button`
 
 const SearchInput = styled.input`
   width: min(240px, 100%);
-  height: 30px;
-  padding: 0 10px;
-  border-radius: 6px;
+  height: 34px;
+  padding: 0 11px;
+  border-radius: 8px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   background: transparent;
   font-family: inherit;
@@ -827,29 +835,6 @@ const SearchInput = styled.input`
     outline: none;
     border-color: ${({ theme }) => theme.colors.active};
   }
-`
-
-const ViewToggle = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 6px;
-`
-
-const ViewBtn = styled.button<{ $active: boolean }>`
-  padding: 4px 9px;
-  border: none;
-  border-radius: 4px;
-  font-family: inherit;
-  font-size: 11.5px;
-  font-weight: ${({ $active }) => ($active ? 700 : 500)};
-  color: ${({ theme, $active }) =>
-    $active ? theme.colors.active : theme.colors.text.secondary};
-  background: ${({ theme, $active }) =>
-    $active ? theme.colors.activeLight : 'transparent'};
-  cursor: pointer;
 `
 
 const Group = styled.section`
@@ -881,6 +866,9 @@ const GroupToggleBtn = styled.button`
 `
 
 const GroupCountryLinkBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   padding: 4px 6px;
   border: none;
   background: transparent;

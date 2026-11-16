@@ -10,9 +10,44 @@ import type { EditableCabinetRecord } from '@/widgets/country/country-detail/ui/
 export type GovernmentCatalogTab = 'cabinets' | 'departments'
 export type CabinetDisplayMode = 'ledger' | 'cards'
 export type GovernmentListDensity = 'compact' | 'cozy' | 'roomy'
-export type CabinetSortKey = 'period_desc' | 'period_asc' | 'country' | 'name'
-export type DepartmentSortKey = 'country' | 'period_asc' | 'period_desc' | 'name'
-export type DepartmentStatusFilter = 'all' | 'active' | 'abolished'
+export type CabinetSortKey =
+  | 'period_desc'
+  | 'period_asc'
+  | 'duration_desc'
+  | 'members_desc'
+  | 'country'
+  | 'name'
+export type DepartmentSortKey =
+  | 'country'
+  | 'period_asc'
+  | 'period_desc'
+  | 'duration_desc'
+  | 'tenures_desc'
+  | 'name'
+export type DepartmentStatusFilter =
+  | 'all'
+  | 'active'
+  | 'superseded'
+  | 'historical'
+  | 'abolished'
+export type GovernmentHideableColumn =
+  | 'end'
+  | 'party'
+  | 'dur'
+  | 'members'
+  | 'extra'
+
+export const GOVERNMENT_HIDEABLE_COLUMNS: ReadonlyArray<{
+  key: GovernmentHideableColumn
+  cabinetLabel: string
+  deptLabel: string
+}> = [
+  { key: 'end', cabinetLabel: '종료 시점', deptLabel: '폐지 시점' },
+  { key: 'party', cabinetLabel: '집권·연정 정당', deptLabel: '상위·전신 계보' },
+  { key: 'dur', cabinetLabel: '재임 기간 막대', deptLabel: '존속 기간 막대' },
+  { key: 'members', cabinetLabel: '각료 수', deptLabel: '역대 수장 수' },
+  { key: 'extra', cabinetLabel: '관여 사건·업적', deptLabel: '산하·관여 사건' },
+]
 
 export interface GovernmentListReturnState {
   governmentListSearch?: string
@@ -25,6 +60,7 @@ export interface GovernmentCatalogMemory {
   deptSort?: DepartmentSortKey
   lastQuery?: string
   collapsedChapters?: string[]
+  hiddenColumns?: GovernmentHideableColumn[]
 }
 
 const CATALOG_MEMORY_STORAGE_KEY = 'papyrus:government-catalog-prefs:v1'
@@ -159,6 +195,152 @@ export function extractSignedStartYearFromIso(
   return parts ? parts.year : null
 }
 
+export function compareIsoDateChronological(
+  leftIso: string | null | undefined,
+  rightIso: string | null | undefined,
+  direction: 'asc' | 'desc' = 'asc',
+): number {
+  const leftParts = parseIsoDateParts(leftIso)
+  const rightParts = parseIsoDateParts(rightIso)
+  if (!leftParts && !rightParts) return 0
+  if (!leftParts) return 1
+  if (!rightParts) return -1
+  const leftScore =
+    leftParts.year * 10000 +
+    (leftParts.month ?? 1) * 100 +
+    (leftParts.day ?? 1)
+  const rightScore =
+    rightParts.year * 10000 +
+    (rightParts.month ?? 1) * 100 +
+    (rightParts.day ?? 1)
+  return direction === 'asc' ? leftScore - rightScore : rightScore - leftScore
+}
+
+export interface TenureSpanInfo {
+  startText: string
+  endText: string
+  durationLabel: string
+  monthsSpan: number | null
+  /** 0~100: 기간 열의 수평 막대 폭 비율 */
+  barPct: number
+  isOngoing: boolean
+}
+
+/**
+ * 시작일·종료일을 [시작], [종료], [기간 막대+라벨] 3요소로 분해한다.
+ * `/events` 페이지의 "시간을 문자열이 아닌 위치·길이로 부호화" 원칙을 내각/기관 재임 기간에 적용한다.
+ */
+export function calculateTenureSpanInfo(
+  startIso: string | null | undefined,
+  endIso: string | null | undefined,
+  isOngoing = false,
+  referenceMaxMonths = 144,
+): TenureSpanInfo {
+  const startParts = parseIsoDateParts(startIso)
+  const endParts = parseIsoDateParts(endIso)
+
+  const startText = startParts
+    ? `${formatSignedYearLabel(startParts.year)}${
+        startParts.month ? `.${String(startParts.month).padStart(2, '0')}` : ''
+      }`
+    : '미상'
+
+  const endText = endParts
+    ? `${formatSignedYearLabel(endParts.year)}${
+        endParts.month ? `.${String(endParts.month).padStart(2, '0')}` : ''
+      }`
+    : isOngoing
+      ? '현재'
+      : '—'
+
+  if (!startParts) {
+    return {
+      startText,
+      endText,
+      durationLabel: '',
+      monthsSpan: null,
+      barPct: 0,
+      isOngoing,
+    }
+  }
+
+  const currentYear = new Date().getFullYear()
+  const currentMonth = new Date().getMonth() + 1
+
+  const effectiveEndYear = endParts
+    ? endParts.year
+    : isOngoing
+      ? currentYear
+      : null
+  const effectiveEndMonth = endParts
+    ? (endParts.month ?? 12)
+    : isOngoing
+      ? currentMonth
+      : null
+
+  if (effectiveEndYear == null) {
+    return {
+      startText,
+      endText,
+      durationLabel: '단기·미상',
+      monthsSpan: 1,
+      barPct: 12,
+      isOngoing,
+    }
+  }
+
+  const startMonthIndex = startParts.year * 12 + (startParts.month ?? 1)
+  const endMonthIndex = effectiveEndYear * 12 + (effectiveEndMonth ?? 1)
+  const rawMonths = Math.max(1, endMonthIndex - startMonthIndex)
+
+  const years = Math.floor(rawMonths / 12)
+  const remMonths = rawMonths % 12
+  let durationLabel = ''
+  if (years > 0 && remMonths > 0) {
+    durationLabel = `${years}년 ${remMonths}개월`
+  } else if (years > 0) {
+    durationLabel = `${years}년`
+  } else {
+    durationLabel = `${rawMonths}개월`
+  }
+
+  const normalized = Math.min(1, rawMonths / Math.max(12, referenceMaxMonths))
+  const barPct = Math.round(Math.max(10, Math.sqrt(normalized) * 100))
+
+  return {
+    startText,
+    endText: startText === endText && !isOngoing ? '당해' : endText,
+    durationLabel,
+    monthsSpan: rawMonths,
+    barPct,
+    isOngoing,
+  }
+}
+
+export function resolveCabinetDistinctSubMeta(cabinet: CabinetListItemDto): {
+  hasExplicitCabinetName: boolean
+  headName: string
+  posTitle: string
+} {
+  const explicitName = cabinet.name?.trim() ?? ''
+  const headName = resolveCabinetHeadName(cabinet)
+  const posTitle = resolveCabinetPositionTitle(cabinet)
+  const fallbackTitle = `${headName} ${
+    cabinet.headTenure?.title?.trim() ||
+    cabinet.headTenure?.positionDefinition?.title?.trim() ||
+    '내각'
+  }`.trim()
+  const hasExplicitCabinetName =
+    Boolean(explicitName) &&
+    explicitName !== fallbackTitle &&
+    explicitName !== headName
+  return {
+    hasExplicitCabinetName,
+    headName,
+    posTitle,
+  }
+}
+
 export function resolveCabinetPolityInfo(cabinet: CabinetListItemDto): {
   polityId: string | null
   modernCountryId: string | null
@@ -187,7 +369,7 @@ export function resolveCabinetPolityInfo(cabinet: CabinetListItemDto): {
       polityName: historicalCountry.name,
       isHistorical: true,
       flagEmoji: null,
-      countryGovernmentUrl: `${pathKeys.countryGovernment(historicalId)}?cabinetId=${encodeURIComponent(cabinet.id)}`,
+      countryGovernmentUrl: `${pathKeys.countryGovernment(historicalId)}?sub=cabinets&cabinetId=${encodeURIComponent(cabinet.id)}`,
     }
   }
   if (modernId && modernCountry?.name) {
@@ -198,7 +380,7 @@ export function resolveCabinetPolityInfo(cabinet: CabinetListItemDto): {
       polityName: modernCountry.name,
       isHistorical: false,
       flagEmoji: modernCountry.flagEmoji ?? null,
-      countryGovernmentUrl: `${pathKeys.countryGovernment(modernId)}?cabinetId=${encodeURIComponent(cabinet.id)}`,
+      countryGovernmentUrl: `${pathKeys.countryGovernment(modernId)}?sub=cabinets&cabinetId=${encodeURIComponent(cabinet.id)}`,
     }
   }
   return {
@@ -210,7 +392,7 @@ export function resolveCabinetPolityInfo(cabinet: CabinetListItemDto): {
     flagEmoji: modernCountry?.flagEmoji ?? null,
     countryGovernmentUrl:
       historicalId || modernId
-        ? `${pathKeys.countryGovernment((historicalId ?? modernId)!)}?cabinetId=${encodeURIComponent(cabinet.id)}`
+        ? `${pathKeys.countryGovernment((historicalId ?? modernId)!)}?sub=cabinets&cabinetId=${encodeURIComponent(cabinet.id)}`
         : null,
   }
 }
@@ -270,7 +452,10 @@ export function resolveCabinetHeadName(cabinet: CabinetListItemDto): string {
   const regnal = head.regnalName?.trim()
   if (regnal) return regnal
   if (head.person) {
-    const formatted = getPersonDisplayName(head.person)
+    const formatted = getPersonDisplayName({
+      ...head.person,
+      name: head.person.name ?? '',
+    })
     if (formatted && formatted !== '—') return formatted
   }
   return cabinet.name?.trim() || head.title?.trim() || '수반 미상'
@@ -358,16 +543,79 @@ export function resolveCabinetCategory(
     positionType:
       head.positionDefinition?.positionType ?? head.positionType ?? null,
     isMonarchical: head.isMonarchical ?? false,
-    title: head.title ?? head.positionDefinition?.title ?? null,
+    positionTitle: head.title ?? head.positionDefinition?.title ?? null,
+    appointmentMethod: head.appointmentMethod ?? null,
   })
 }
 
 export const GLOBAL_CABINET_CATEGORY_LABELS: Record<PositionCategory, string> = {
-  PRESIDENT: '대통령제',
-  PM: '총리·내각책임',
-  MONARCH: '군주 친정',
-  POPE: '종교 수장',
-  OTHER: '집단지도·기타',
+  PRESIDENT: '국가원수 · 대통령',
+  PM: '정부수반 · 총리 · 재상',
+  MONARCH: '군주 친정 · 섭정',
+  POPE: '종교 · 신정 수장',
+  OTHER: '집단지도 · 임시정부',
+}
+
+export interface CabinetReshuffleMeta {
+  /** 동일 수반 임기(`headTenure.id`) 내 시간순 개각 회차 (1부터 시작) */
+  order: number
+  /** 동일 수반 임기 내 총 내각 수 */
+  total: number
+  /** 현재 정렬 목록에서 바로 위 행과 동일 수반 임기인지 여부 */
+  isContinuationFromPrev: boolean
+  /** 현재 정렬 목록에서 바로 아래 행으로 동일 수반 임기가 이어지는지 여부 */
+  isContinuedInNext: boolean
+}
+
+/**
+ * 동일 수반 임기(`headTenure.id`) 아래 복수의 개각(제1·2·3차 내각)이 존재하는 경우
+ * 회차(order/total)와 인접 행 연속 여부를 계산한다.
+ */
+export function computeCabinetReshuffleMetaMap(
+  cabinets: CabinetListItemDto[],
+): Map<string, CabinetReshuffleMeta> {
+  const byHeadTenureId = new Map<string, CabinetListItemDto[]>()
+  for (const cab of cabinets) {
+    const htId = cab.headTenure?.id
+    if (!htId) continue
+    const bucket = byHeadTenureId.get(htId)
+    if (bucket) {
+      bucket.push(cab)
+    } else {
+      byHeadTenureId.set(htId, [cab])
+    }
+  }
+
+  const orderMap = new Map<string, { order: number; total: number }>()
+  for (const [, group] of byHeadTenureId) {
+    if (group.length <= 1) continue
+    const sortedAsc = [...group].sort((leftCab, rightCab) => {
+      const leftStart = resolveCabinetEffectiveDates(leftCab).startDate
+      const rightStart = resolveCabinetEffectiveDates(rightCab).startDate
+      return compareIsoDateChronological(leftStart, rightStart, 'asc')
+    })
+    sortedAsc.forEach((cab, idx) => {
+      orderMap.set(cab.id, { order: idx + 1, total: sortedAsc.length })
+    })
+  }
+
+  const result = new Map<string, CabinetReshuffleMeta>()
+  cabinets.forEach((cab, index) => {
+    const htId = cab.headTenure?.id
+    if (!htId) return
+    const orderInfo = orderMap.get(cab.id)
+    if (!orderInfo) return
+    const prevHtId = index > 0 ? cabinets[index - 1]?.headTenure?.id : null
+    const nextHtId =
+      index < cabinets.length - 1 ? cabinets[index + 1]?.headTenure?.id : null
+    result.set(cab.id, {
+      order: orderInfo.order,
+      total: orderInfo.total,
+      isContinuationFromPrev: prevHtId === htId,
+      isContinuedInNext: nextHtId === htId,
+    })
+  })
+  return result
 }
 
 /**
@@ -435,6 +683,9 @@ export function toEditableCabinetRecord(
           endMonth: (head as { endMonth?: number | null }).endMonth ?? null,
           endDay: (head as { endDay?: number | null }).endDay ?? null,
           appointmentMethod: head.appointmentMethod ?? null,
+          appointmentDetail:
+            (head as { appointmentDetail?: string | null }).appointmentDetail ??
+            null,
           endReason: head.endReason ?? null,
           endReasonDetail: head.endReasonDetail ?? null,
           notes: head.notes ?? null,

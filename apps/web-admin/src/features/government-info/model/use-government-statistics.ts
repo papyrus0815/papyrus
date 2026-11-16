@@ -12,13 +12,20 @@ import {
 import { apiConnection } from '@/shared/api/client'
 import { getOrganizations } from '@/shared/api/organizations'
 import { personCareerApi } from '@/shared/api/person-career'
+import { getUploadImageUrl } from '@/shared/api/upload'
+import {
+  resolveCabinetEffectiveDates,
+  shouldHideCabinetFromExecutiveTimeline,
+} from '@/shared/lib/ministry-department/department-cabinet-matcher'
 import {
   administrationDepartmentsByCountryQueryKey,
   administrationDepartmentsByHistoricalCountryQueryKey,
 } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { parseDepartmentDescription } from '@/shared/lib/ministry-department/ministry-department-utils'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
-import { getUploadImageUrl } from '@/shared/api/upload'
+
+import { countCountryScopedPositions } from './count-country-scoped-positions'
+import { useConstituentHistoricalPolities } from './use-constituent-historical-polities'
 
 export type GovernmentStatisticTimelineItem = {
   id: string
@@ -42,8 +49,8 @@ export type GovernmentStatisticTimelineItem = {
 }
 
 export type GovernmentCategoryStatRow = {
-  year: string
-  budget: number
+  categoryName: string
+  departmentCount: number
   categoryId?: string | null
 }
 
@@ -80,17 +87,19 @@ function formatStructuredYear(
 }
 
 /**
- * 통계 탭 전용 — 조회 중인 국가의 실제 행정부처·내각·직위 정의·산하조직 데이터를 기반으로 집계한다.
+ * 통계·연혁 탭 전용 — 조회 중인 국가의 실제 정체·행정부·중앙부처·고유 관직·산하조직 데이터를 집계한다.
  */
-export function useGovernmentStatisticsMockData(
-  options?: GovernmentStatisticsOptions,
-) {
+export function useGovernmentStatistics(options?: GovernmentStatisticsOptions) {
   const [selectedEventType, setSelectedEventType] = useState<string>('all')
   const country = options?.country
   const effectiveCountryId = options?.effectiveCountryId ?? country?.id
   const isHistorical = country?.type === 'historical'
   const queryCountryId = isHistorical ? undefined : effectiveCountryId
   const queryHistoricalCountryId = isHistorical ? effectiveCountryId : undefined
+
+  const { data: constituentPolities = [] } = useConstituentHistoricalPolities(
+    isHistorical ? effectiveCountryId : undefined,
+  )
 
   const { data: departments = [] } = useQuery({
     queryKey: isHistorical
@@ -126,18 +135,8 @@ export function useGovernmentStatisticsMockData(
   })
 
   const { data: positionDefinitions = [] } = useQuery({
-    queryKey: [
-      'position-definitions-stats',
-      queryCountryId ?? '',
-      queryHistoricalCountryId ?? null,
-      ...(isHistorical ? (['with-constituents'] as const) : []),
-    ],
-    queryFn: () =>
-      personCareerApi.getPositionDefinitions({
-        countryId: queryCountryId || undefined,
-        historicalCountryId: queryHistoricalCountryId || undefined,
-        includeConstituents: isHistorical || undefined,
-      }),
+    queryKey: ['position-definitions', 'all'],
+    queryFn: () => personCareerApi.getPositionDefinitions({}),
     enabled: Boolean(effectiveCountryId),
   })
 
@@ -182,21 +181,26 @@ export function useGovernmentStatisticsMockData(
     const totalAgencies = agencyDepts.length
     const totalLocal = organizations.length
     const totalOrganizations = departments.length + organizations.length
-    const totalCabinets = cabinets.length
-    const totalPositions = positionDefinitions.filter((defItem) => {
-      const scopes = (defItem as { scopes?: unknown[] }).scopes ?? []
-      return (
-        scopes.length > 0 ||
-        Boolean(defItem.administrationDepartmentId) ||
-        Boolean(defItem.organizationId)
-      )
-    }).length
-    const totalMilitaryUnits = departments.reduce(
-      (sum, dept) => sum + (dept.militaryUnits?.length ?? 0),
-      0,
+
+    const visibleCabinets = cabinets.filter(
+      (cabItem) =>
+        !shouldHideCabinetFromExecutiveTimeline(cabItem.headTenure, cabItem),
+    )
+    const totalCabinets = visibleCabinets.length
+    const totalPositions = countCountryScopedPositions(
+      positionDefinitions,
+      country,
+      constituentPolities,
     )
 
-    // 카테고리별 기관 분포 (막대 차트용)
+    const uniqueMilitaryUnitIds = new Set<string>()
+    for (const dept of departments) {
+      for (const unitRef of dept.militaryUnits ?? []) {
+        if (unitRef.id) uniqueMilitaryUnitIds.add(unitRef.id)
+      }
+    }
+    const totalMilitaryUnits = uniqueMilitaryUnitIds.size
+
     const categoryCountMap = new Map<
       string,
       { count: number; categoryId: string | null }
@@ -209,14 +213,14 @@ export function useGovernmentStatisticsMockData(
         categoryId: prevEntry?.categoryId ?? dept.categoryId ?? null,
       })
     }
-    const budgetData: GovernmentCategoryStatRow[] = Array.from(
+    const categoryStats: GovernmentCategoryStatRow[] = Array.from(
       categoryCountMap.entries(),
     )
       .sort((entryA, entryB) => entryB[1].count - entryA[1].count)
       .slice(0, 8)
       .map(([catName, entryValue]) => ({
-        year: catName,
-        budget: entryValue.count,
+        categoryName: catName,
+        departmentCount: entryValue.count,
         categoryId: entryValue.categoryId,
       }))
 
@@ -252,8 +256,8 @@ export function useGovernmentStatisticsMockData(
       })
     }
 
-    for (const cabItem of cabinets) {
-      const effIso = cabItem.headTenure?.startDate ?? cabItem.startDate
+    for (const cabItem of visibleCabinets) {
+      const effIso = resolveCabinetEffectiveDates(cabItem).startDate
       const cabYear = formatStructuredYear(
         cabItem.startEra,
         cabItem.startYear,
@@ -424,20 +428,20 @@ export function useGovernmentStatisticsMockData(
       totalCabinets,
       totalPositions,
       totalMilitaryUnits,
-      totalBudget: String(totalCabinets),
-      totalEmployees: totalPositions.toLocaleString(),
       ministryExamples: ministryDepts.slice(0, 3).map((dept) => dept.name),
       agencyExamples: agencyDepts.slice(0, 3).map((dept) => dept.name),
       specialExamples: specialDepts.slice(0, 3).map((dept) => dept.name),
       organizationExamples: organizations.slice(0, 3).map((org) => org.name),
       allEvents,
       eventCounts,
-      budgetData,
+      categoryStats,
     }
   }, [
     departments,
     cabinets,
     positionDefinitions,
+    country,
+    constituentPolities,
     organizations,
     politicalSystems,
   ])

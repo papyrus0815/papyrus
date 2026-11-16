@@ -30,6 +30,8 @@ export interface CabinetMindMapProps {
   onSelectCabinet?: (cabinetId: string) => void
   /** 군주 중심 보기에서 동시대 내각·수반을 새로 등록할 때 */
   onRegisterCabinetHead?: () => void
+  /** 내각 원스톱 등록 모달을 열 때 */
+  onRegisterCabinet?: () => void
   /** 내각 중심 보기에서 동시대 군주·국가원수를 새로 등록할 때 */
   onRegisterCounterpartHead?: () => void
   /** 현재 정권·치세에 각료(장관·대신 등)를 바로 등록할 때 */
@@ -161,6 +163,7 @@ export function CabinetMindMap({
   onSelectCounterpartHead,
   onSelectCabinet,
   onRegisterCabinetHead,
+  onRegisterCabinet,
   onRegisterCounterpartHead,
   onRegisterMinister,
   emptyHeadRoleLabel,
@@ -209,7 +212,9 @@ export function CabinetMindMap({
         : []
   const isMonarchCenter = Boolean(head?.isMonarchical)
   const showSovereignAbove = !isMonarchCenter && counterparts.length > 0
-  const showReignCabinetsBelow = isMonarchCenter && counterparts.length > 0
+  const showReignCabinetsBelow =
+    isMonarchCenter &&
+    (counterparts.length > 0 || Boolean(onRegisterCabinet || onRegisterCabinetHead))
 
   /*
    * 좌우로 반씩 가른다. 섞지 않고 앞쪽 절반을 왼쪽에 두어, 좁은 화면에서 한 줄로 접혔을 때
@@ -446,59 +451,61 @@ export function CabinetMindMap({
                       <ReignCabinetsCount>
                         {counterparts.length}대
                       </ReignCabinetsCount>
-                      {counterparts.length > 0 && onRegisterCabinetHead && (
+                      {(onRegisterCabinet || onRegisterCabinetHead) && (
                         <ReignCabinetsAddBtn
                           type="button"
-                          onClick={onRegisterCabinetHead}
+                          onClick={onRegisterCabinet ?? onRegisterCabinetHead}
                         >
                           + 내각 등록
                         </ReignCabinetsAddBtn>
                       )}
                     </ReignCabinetsHeaderRight>
                   </ReignCabinetsHeader>
-                  <ReignCabinetsList $branches={hasBranches}>
-                    {counterparts.map((cp) => (
-                      <ReignCabinetItem
-                        key={cp.id}
-                        type="button"
-                        onClick={() => {
-                          if (cp.cabinetId && onSelectCabinet) {
-                            onSelectCabinet(cp.cabinetId)
-                            return
+                  {counterparts.length > 0 && (
+                    <ReignCabinetsList $branches={hasBranches}>
+                      {counterparts.map((cp) => (
+                        <ReignCabinetItem
+                          key={cp.id}
+                          type="button"
+                          onClick={() => {
+                            if (cp.cabinetId && onSelectCabinet) {
+                              onSelectCabinet(cp.cabinetId)
+                              return
+                            }
+                            if (cp.personId) {
+                              onSelectPerson(cp.personId)
+                            }
+                          }}
+                          title={
+                            cp.cabinetId
+                              ? `${cp.cabinetLabel ?? cp.name} 내각 보기로 전환`
+                              : `${cp.name} 상세`
                           }
-                          if (cp.personId) {
-                            onSelectPerson(cp.personId)
-                          }
-                        }}
-                        title={
-                          cp.cabinetId
-                            ? `${cp.cabinetLabel ?? cp.name} 내각 보기로 전환`
-                            : `${cp.name} 상세`
-                        }
-                      >
-                        <ReignCabinetAvatar>
-                          {renderFace(cp, 32)}
-                        </ReignCabinetAvatar>
-                        <ReignCabinetInfo>
-                          <ReignCabinetLabel>
-                            {cp.cabinetLabel ??
-                              (cp.ordinal != null
-                                ? `제${cp.ordinal}대 ${cp.title}`
-                                : cp.title)}
-                          </ReignCabinetLabel>
-                          <ReignCabinetSub>
-                            <strong>{cp.name}</strong>
-                            {cp.cabinetLabel && cp.title ? ` · ${cp.title}` : ''}
-                            {(cp.startDate || cp.endDate) &&
-                              ` · ${formatPeriodText(cp.startDate, cp.endDate)}`}
-                          </ReignCabinetSub>
-                        </ReignCabinetInfo>
-                        {cp.cabinetId && onSelectCabinet && (
-                          <ReignCabinetGo>내각 보기 ›</ReignCabinetGo>
-                        )}
-                      </ReignCabinetItem>
-                    ))}
-                  </ReignCabinetsList>
+                        >
+                          <ReignCabinetAvatar>
+                            {renderFace(cp, 32)}
+                          </ReignCabinetAvatar>
+                          <ReignCabinetInfo>
+                            <ReignCabinetLabel>
+                              {cp.cabinetLabel ??
+                                (cp.ordinal != null
+                                  ? `제${cp.ordinal}대 ${cp.title}`
+                                  : cp.title)}
+                            </ReignCabinetLabel>
+                            <ReignCabinetSub>
+                              <strong>{cp.name}</strong>
+                              {cp.cabinetLabel && cp.title ? ` · ${cp.title}` : ''}
+                              {(cp.startDate || cp.endDate) &&
+                                ` · ${formatPeriodText(cp.startDate, cp.endDate)}`}
+                            </ReignCabinetSub>
+                          </ReignCabinetInfo>
+                          {cp.cabinetId && onSelectCabinet && (
+                            <ReignCabinetGo>내각 보기 ›</ReignCabinetGo>
+                          )}
+                        </ReignCabinetItem>
+                      ))}
+                    </ReignCabinetsList>
+                  )}
                 </ReignCabinetsDeck>
               </>
             )}

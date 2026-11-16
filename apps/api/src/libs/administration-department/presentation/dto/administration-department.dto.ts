@@ -3,6 +3,7 @@ import {
   IsIn,
   IsInt,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -116,6 +117,10 @@ export type AdministrationDepartmentResponseDto = {
   primaryMission: string | null
   /** 본부 · 청사 소재지 */
   headquarters: string | null
+  /** 본부 · 청사 대표 위치 위도(WGS84) */
+  headquartersLatitude: number | null
+  /** 본부 · 청사 대표 위치 경도(WGS84) */
+  headquartersLongitude: number | null
   /** 산하 편제 · 내부 조직 구조 */
   orgStructure: string | null
   /** 예산 · 정원 · 규모 참고 */
@@ -222,6 +227,18 @@ export class CreateAdministrationDepartmentDto {
   headquarters?: string | null
 
   @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 7 })
+  @Min(-90)
+  @Max(90)
+  headquartersLatitude?: number | null
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 7 })
+  @Min(-180)
+  @Max(180)
+  headquartersLongitude?: number | null
+
+  @IsOptional()
   @IsString()
   orgStructure?: string | null
 
@@ -312,6 +329,18 @@ export class UpdateAdministrationDepartmentDto {
   @IsString()
   @MaxLength(500)
   headquarters?: string | null
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 7 })
+  @Min(-90)
+  @Max(90)
+  headquartersLatitude?: number | null
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 7 })
+  @Min(-180)
+  @Max(180)
+  headquartersLongitude?: number | null
 
   @IsOptional()
   @IsString()

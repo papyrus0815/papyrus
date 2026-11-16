@@ -171,9 +171,11 @@ export function GovernmentCategoryModal({
             <div>
               <CategoryModalTitle id="category-modal-title">
                 <FiGrid size={24} strokeWidth={2} />
-                부처 카테고리
+                전역 직능 분류 사전
               </CategoryModalTitle>
-              <CategoryModalDesc>국방·외교 등 공통 분류 관리</CategoryModalDesc>
+              <CategoryModalDesc>
+                모든 국가·시대 기관이 공유하는 공통 직능 분류(외교·국방·재정 등)입니다. 수정·삭제 시 전체 국가에 반영됩니다.
+              </CategoryModalDesc>
             </div>
             <CategoryModalCloseBtn
               type="button"

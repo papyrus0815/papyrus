@@ -1,20 +1,22 @@
 /**
  * 국가 상세 화면의 「정부·행정」 블록.
- * 사건 페이지 디자인 시스템을 참조한 플랫 원장형 서브탭 네비게이션(정체·헌정 · 행정부·내각 · 중앙부처·국가기관 · 직위·서열 · 통계·연혁)과
- * 부처 카테고리 설정 모달(`GovernmentCategoryModal`), 국방부 등 부처 상세에서 바로 여는 군부대 등록 사이드 패널을 포함한다.
+ * 사건 페이지 디자인 시스템을 참조한 플랫 원장형 서브탭 네비게이션(정체·헌정 · 행정부·내각 · 중앙부처·국가기관 · 통계·연혁)과
+ * 전역 직능 분류 사전 모달(`GovernmentCategoryModal`), 고유 관직 사이드 패널을 포함한다.
  */
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { FiArrowUpRight, FiAward, FiGlobe, FiShield } from 'react-icons/fi'
+import { useQuery } from '@tanstack/react-query'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { FiArrowUpRight, FiAward, FiGlobe } from 'react-icons/fi'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { usePoliticalSystems } from '@/entities/political-system/api'
+import { countCountryScopedPositions } from '@/features/government-info/model/count-country-scoped-positions'
 import {
   GOVERNMENT_TAB_ORDER,
   GOV_TAB_META,
   type GovernmentContentTab,
 } from '@/features/government-info/model/government-content-tab'
+import { useConstituentHistoricalPolities } from '@/features/government-info/model/use-constituent-historical-polities'
 import {
   GovLedgerPage,
   GovSubNavBar,
@@ -28,6 +30,7 @@ import { MinistriesTabSection } from '@/features/government-info/ui/ministries-t
 import { PoliticalSystemTab } from '@/features/government-info/ui/political-system-tab.widget'
 import { administrationDepartmentApi } from '@/shared/api/administration-department'
 import { personCareerApi } from '@/shared/api/person-career'
+import { shouldHideCabinetFromExecutiveTimeline } from '@/shared/lib/ministry-department/department-cabinet-matcher'
 import {
   administrationDepartmentsByCountryQueryKey,
   administrationDepartmentsByHistoricalCountryQueryKey,
@@ -38,7 +41,6 @@ import { SidePanel } from '@/shared/ui/side-panel'
 
 import { CabinetsSection } from './cabinets-section.widget'
 import { GovernmentCategoryModal } from './government-category-modal.widget'
-import { MilitaryUnitFormModal } from './military-unit-form.modal'
 import { PositionDefinitionsSection } from './position-definitions-section.widget'
 
 export type { GovernmentContentTab }
@@ -54,7 +56,6 @@ export function GovernmentInfoSection({
   countryId,
   initialContentTab,
 }: GovernmentInfoSectionProps) {
-  const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const cabinetIdQuery = searchParams.get('cabinetId')?.trim() || ''
@@ -97,25 +98,27 @@ export function GovernmentInfoSection({
     categoryId?: string
     categoryName?: string
   } | null>(null)
-  const [militaryUnitModalOpen, setMilitaryUnitModalOpen] = useState(false)
-  const [militaryUnitEditingId, setMilitaryUnitEditingId] = useState<
-    string | null
-  >(null)
-  const [militaryDeptDefaultId, setMilitaryDeptDefaultId] = useState<
-    string | null
-  >(null)
-  const [militaryHistoricalDefaultId, setMilitaryHistoricalDefaultId] =
-    useState<string | null>(null)
   const [focusDepartmentId, setFocusDepartmentId] = useState<string | null>(
     departmentIdQuery || null,
   )
   const [categoryModalOpen, setCategoryModalOpen] = useState(false)
+  const userManuallyPickedTabRef = useRef(false)
+  const autoFallbackScopeRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    userManuallyPickedTabRef.current = false
+  }, [effectiveCountryId])
 
   const switchSubTab = useCallback(
     (
       nextTab: GovernmentContentTab,
-      extra?: { cabinetId?: string | null; departmentId?: string | null },
+      extra?: {
+        cabinetId?: string | null
+        departmentId?: string | null
+        regimeId?: string | null
+      },
     ) => {
+      userManuallyPickedTabRef.current = true
       setContentTab(nextTab)
       const nextParams = new URLSearchParams(searchParams)
       if (nextTab === 'system') {
@@ -132,6 +135,11 @@ export function GovernmentInfoSection({
         nextParams.set('departmentId', extra.departmentId)
       } else {
         nextParams.delete('departmentId')
+      }
+      if (extra?.regimeId) {
+        nextParams.set('regimeId', extra.regimeId)
+      } else {
+        nextParams.delete('regimeId')
       }
       setSearchParams(nextParams, { replace: true })
     },
@@ -194,40 +202,85 @@ export function GovernmentInfoSection({
     staleTime: 60_000,
   })
 
+  const { data: constituentPolities = [] } = useConstituentHistoricalPolities(
+    isHistorical ? effectiveCountryId : undefined,
+  )
+
   const positionsCountQuery = useQuery({
-    queryKey: [
-      'position-definitions-stats',
-      isHistorical ? '' : (effectiveCountryId ?? ''),
-      isHistorical ? (effectiveCountryId ?? null) : null,
-      ...(isHistorical ? (['with-constituents'] as const) : []),
-    ],
-    queryFn: () =>
-      personCareerApi.getPositionDefinitions({
-        countryId: isHistorical ? undefined : effectiveCountryId,
-        historicalCountryId: isHistorical ? effectiveCountryId : undefined,
-        includeConstituents: isHistorical || undefined,
-      }),
+    queryKey: ['position-definitions', 'all'],
+    queryFn: () => personCareerApi.getPositionDefinitions({}),
     enabled: Boolean(effectiveCountryId),
     staleTime: 60_000,
   })
 
-  const dedicatedPositionCount = useMemo(() => {
-    const defs = positionsCountQuery.data ?? []
-    return defs.filter((defItem) => {
-      const scopes = (defItem as { scopes?: unknown[] }).scopes ?? []
-      return (
-        scopes.length > 0 ||
-        Boolean(defItem.administrationDepartmentId) ||
-        Boolean(defItem.organizationId)
-      )
-    }).length
-  }, [positionsCountQuery.data])
+  const dedicatedPositionCount = useMemo(
+    () =>
+      countCountryScopedPositions(
+        positionsCountQuery.data ?? [],
+        country,
+        constituentPolities,
+      ),
+    [positionsCountQuery.data, country, constituentPolities],
+  )
+
+  const visibleCabinetCount = useMemo(() => {
+    if (!cabinetsCountQuery.data) return undefined
+    return cabinetsCountQuery.data.filter(
+      (cabItem) =>
+        !shouldHideCabinetFromExecutiveTimeline(cabItem.headTenure, cabItem),
+    ).length
+  }, [cabinetsCountQuery.data])
 
   const tabCountByKey: Partial<Record<GovernmentContentTab, number>> = {
     system: politicalSystemsQuery.data?.length,
-    cabinets: cabinetsCountQuery.data?.length,
+    cabinets: visibleCabinetCount,
     ministries: departmentsQuery.data?.length,
   }
+
+  // URL에 서브탭이 명시되지 않았고 「정체·헌정」이 비어 있는 국가는 데이터가 있는 탭(내각 → 부처)으로 스마트 폴백
+  useEffect(() => {
+    if (!effectiveCountryId) return
+    if (autoFallbackScopeRef.current === effectiveCountryId) return
+    if (
+      userManuallyPickedTabRef.current ||
+      rawSubQuery ||
+      cabinetIdQuery ||
+      departmentIdQuery ||
+      unitIdQuery ||
+      initialContentTab
+    ) {
+      autoFallbackScopeRef.current = effectiveCountryId
+      return
+    }
+    if (
+      !politicalSystemsQuery.isFetched ||
+      !cabinetsCountQuery.isFetched ||
+      !departmentsQuery.isFetched
+    ) {
+      return
+    }
+    autoFallbackScopeRef.current = effectiveCountryId
+    const systemLen = politicalSystemsQuery.data?.length ?? 0
+    if (systemLen > 0) return
+    if ((visibleCabinetCount ?? 0) > 0) {
+      setContentTab('cabinets')
+    } else if ((departmentsQuery.data?.length ?? 0) > 0) {
+      setContentTab('ministries')
+    }
+  }, [
+    effectiveCountryId,
+    rawSubQuery,
+    cabinetIdQuery,
+    departmentIdQuery,
+    unitIdQuery,
+    initialContentTab,
+    politicalSystemsQuery.isFetched,
+    politicalSystemsQuery.data,
+    cabinetsCountQuery.isFetched,
+    visibleCabinetCount,
+    departmentsQuery.isFetched,
+    departmentsQuery.data,
+  ])
 
   useEffect(() => {
     if (
@@ -352,18 +405,6 @@ export function GovernmentInfoSection({
                 <span>전 국가 정부·내각 허브</span>
                 <FiArrowUpRight size={12.5} />
               </GovToolbarBtn>
-
-              <GovToolbarBtn
-                type="button"
-                onClick={() =>
-                  navigate(pathKeys.countryMilitary(effectiveCountryId))
-                }
-                title="군 최고사령부·야전군·사단 편제 탭으로 이동"
-              >
-                <FiShield size={13} />
-                <span>군사 사령부·편제</span>
-                <FiArrowUpRight size={12.5} />
-              </GovToolbarBtn>
             </GovSubNavActions>
           ) : null}
         </GovSubNavBar>
@@ -374,6 +415,9 @@ export function GovernmentInfoSection({
               countryId={isHistorical ? undefined : effectiveCountryId}
               historicalCountryId={isHistorical ? country?.id : undefined}
               countryName={country?.name}
+              onOpenCabinetsByRegime={(targetRegimeId) =>
+                switchSubTab('cabinets', { regimeId: targetRegimeId })
+              }
             />
           </GovContentStage>
         )}
@@ -440,22 +484,10 @@ export function GovernmentInfoSection({
                 setPositionFilterContext(ctx ?? null)
                 setPositionsDrawerOpen(true)
               }}
-              onRegisterMilitaryUnit={(departmentId, historicalCountryId) => {
-                setMilitaryDeptDefaultId(departmentId)
-                setMilitaryHistoricalDefaultId(historicalCountryId ?? null)
-                setMilitaryUnitEditingId(null)
-                setMilitaryUnitModalOpen(true)
-              }}
               onInspectMilitaryUnit={(unitId) => {
                 if (effectiveCountryId) {
                   navigate(pathKeys.countryMilitary(effectiveCountryId, unitId))
                 }
-              }}
-              onEditMilitaryUnit={(unitId) => {
-                setMilitaryUnitEditingId(unitId)
-                setMilitaryDeptDefaultId(null)
-                setMilitaryHistoricalDefaultId(null)
-                setMilitaryUnitModalOpen(true)
               }}
               onOpenMilitaryTab={() => {
                 if (effectiveCountryId) {
@@ -538,43 +570,6 @@ export function GovernmentInfoSection({
       <GovernmentCategoryModal
         open={categoryModalOpen}
         onClose={closeCategoryModal}
-      />
-
-      <MilitaryUnitFormModal
-        isOpen={militaryUnitModalOpen}
-        onClose={() => {
-          setMilitaryUnitModalOpen(false)
-          setMilitaryUnitEditingId(null)
-          setMilitaryDeptDefaultId(null)
-          setMilitaryHistoricalDefaultId(null)
-        }}
-        onSaved={() => {
-          void queryClient.invalidateQueries({
-            queryKey: isHistorical
-              ? administrationDepartmentsByHistoricalCountryQueryKey(
-                  effectiveCountryId,
-                )
-              : administrationDepartmentsByCountryQueryKey(effectiveCountryId),
-          })
-          void queryClient.invalidateQueries({
-            queryKey: ['military-units'],
-          })
-          void queryClient.invalidateQueries({
-            queryKey: ['military-unit'],
-          })
-        }}
-        defaultCountryId={isHistorical ? null : (effectiveCountryId ?? null)}
-        defaultHistoricalCountryId={
-          isHistorical
-            ? (effectiveCountryId ?? null)
-            : militaryHistoricalDefaultId
-        }
-        defaultAdministrationDepartmentId={militaryDeptDefaultId}
-        editingUnitId={militaryUnitEditingId}
-        lockCountryAndDepartment={
-          !militaryUnitEditingId &&
-          Boolean(effectiveCountryId && militaryDeptDefaultId)
-        }
       />
     </>
   )

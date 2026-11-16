@@ -46,8 +46,8 @@ const TAB_LABELS: Array<{
   { key: 'linked-historical', label: '과거국가', groupEnd: true },
   { key: 'government', label: '정부·행정' },
   { key: 'military', label: '군사' },
-  { key: 'regions', label: '행정구역' },
-  { key: 'elections', label: '선거·투표' },
+  { key: 'regions', label: '지리·행정구역' },
+  { key: 'elections', label: '정당·선거' },
   { key: 'laws', label: '법령', groupEnd: true },
   { key: 'treaty', label: '조약' },
   { key: 'ethnicity', label: '민족', groupEnd: true },
@@ -133,6 +133,7 @@ export function OverviewSubTabs({
                     aria-controls={panelId(key)}
                     tabIndex={active ? 0 : -1}
                     $active={active}
+                    data-empty={isEmptyTab ? '' : undefined}
                     onClick={() => onSubTabChange(key)}
                   >
                     <S.TabLabelWrap $empty={isEmptyTab}>

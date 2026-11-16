@@ -1,5 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 
+import { FiEdit2, FiMoreHorizontal, FiPlus, FiTrash2 } from 'react-icons/fi'
+
 import { type RegionPalette } from './use-region-palette'
 
 interface RegionListPanelProps {
@@ -32,7 +34,7 @@ export function RegionListPanel({
       style={{
         background: palette.bg,
         border: `1px solid ${palette.border}`,
-        borderRadius: 16,
+        borderRadius: 10,
         overflow: 'hidden',
         boxShadow: palette.shadowNone,
         display: 'flex',
@@ -77,19 +79,15 @@ export function FilterPill({
       type="button"
       onClick={onClick}
       style={{
-        padding: '8px 14px',
-        borderRadius: 14,
-        border: 'none',
-        background: active
-          ? palette.isDark
-            ? 'rgba(255,255,255,0.15)'
-            : '#ffffff'
-          : 'transparent',
-        color: active ? palette.primaryLight : palette.textSecondary,
-        fontSize: 13,
-        fontWeight: active ? 600 : 500,
+        height: 28,
+        padding: '0 10px',
+        borderRadius: 8,
+        border: `1px solid ${active ? palette.primary : palette.border}`,
+        background: active ? palette.bgSelected : 'transparent',
+        color: active ? palette.primary : palette.textSecondary,
+        fontSize: 12,
+        fontWeight: active ? 700 : 500,
         cursor: 'pointer',
-        boxShadow: active ? palette.shadowSelected : 'none',
       }}
     >
       {children}
@@ -151,41 +149,32 @@ export function RegisterButton({
       type="button"
       onClick={onClick}
       style={{
-        display: 'flex',
+        display: 'inline-flex',
         alignItems: 'center',
-        gap: 4,
-        padding: '7px 12px',
-        fontSize: 12,
+        gap: 6,
+        height: 34,
+        padding: '0 13px',
+        fontSize: 12.5,
         fontWeight: 600,
-        color: '#ffffff',
+        color: palette.isDark ? '#0e0f12' : '#ffffff',
         background: palette.primary,
         border: 'none',
-        borderRadius: 10,
+        borderRadius: 8,
         cursor: 'pointer',
         whiteSpace: 'nowrap',
         flexShrink: 0,
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.background = '#4f46e5'
+        e.currentTarget.style.background = palette.isDark
+          ? '#c7d2fe'
+          : '#4338ca'
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.background = palette.primary
       }}
     >
-      <svg
-        width="13"
-        height="13"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <line x1="12" y1="5" x2="12" y2="19" />
-        <line x1="5" y1="12" x2="19" y2="12" />
-      </svg>
-      {label}
+      <FiPlus size={14} />
+      <span>{label}</span>
     </button>
   )
 }
@@ -235,17 +224,15 @@ export function RegionListItem({
       }}
       className="region-list-item"
       style={{
-        padding: '12px 14px',
+        padding: '11px 14px',
         margin: '6px 12px',
-        borderRadius: 12,
+        borderRadius: 8,
         borderLeft: `3px solid ${selected ? palette.primary : 'transparent'}`,
         background: selected ? palette.bgSelected : palette.bg,
         border: `1px solid ${selected ? palette.primary : palette.border}`,
-        boxShadow: selected
-          ? '0 4px 12px rgba(99, 102, 241, 0.18)'
-          : 'none',
+        boxShadow: 'none',
         cursor: 'pointer',
-        transition: 'all 0.15s ease',
+        transition: 'background-color 0.14s ease, border-color 0.14s ease',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -391,16 +378,7 @@ function ListItemActions({ palette, onEdit, onDelete }: ListItemActionsProps) {
           if (!open) e.currentTarget.style.background = 'transparent'
         }}
       >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-        >
-          <circle cx="5" cy="12" r="1.6" />
-          <circle cx="12" cy="12" r="1.6" />
-          <circle cx="19" cy="12" r="1.6" />
-        </svg>
+        <FiMoreHorizontal size={14} />
       </button>
       {open && (
         <ul
@@ -411,13 +389,15 @@ function ListItemActions({ palette, onEdit, onDelete }: ListItemActionsProps) {
             top: '100%',
             marginTop: 4,
             minWidth: 120,
-            padding: '4px 0',
+            padding: '4px',
             margin: 0,
             listStyle: 'none',
             background: palette.bg,
             border: `1px solid ${palette.border}`,
             borderRadius: 8,
-            boxShadow: '0 8px 24px rgba(15, 23, 42, 0.12)',
+            boxShadow: palette.isDark
+              ? '0 8px 24px rgba(0, 0, 0, 0.45)'
+              : '0 8px 24px rgba(15, 23, 42, 0.1)',
             zIndex: 20,
           }}
         >
@@ -432,11 +412,14 @@ function ListItemActions({ palette, onEdit, onDelete }: ListItemActionsProps) {
                   onEdit()
                 }}
                 style={{
-                  display: 'block',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
                   width: '100%',
-                  padding: '8px 12px',
+                  padding: '7px 10px',
                   textAlign: 'left',
                   border: 'none',
+                  borderRadius: 6,
                   background: 'transparent',
                   color: palette.text,
                   fontSize: 12,
@@ -450,7 +433,8 @@ function ListItemActions({ palette, onEdit, onDelete }: ListItemActionsProps) {
                   e.currentTarget.style.background = 'transparent'
                 }}
               >
-                ✎ 수정
+                <FiEdit2 size={13} />
+                <span>수정</span>
               </button>
             </li>
           )}
@@ -465,25 +449,35 @@ function ListItemActions({ palette, onEdit, onDelete }: ListItemActionsProps) {
                   onDelete()
                 }}
                 style={{
-                  display: 'block',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
                   width: '100%',
-                  padding: '8px 12px',
+                  padding: '7px 10px',
                   textAlign: 'left',
                   border: 'none',
+                  borderRadius: 6,
                   background: 'transparent',
-                  color: '#dc2626',
+                  color: palette.textSecondary,
                   fontSize: 12,
                   fontWeight: 500,
                   cursor: 'pointer',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#fef2f2'
+                  e.currentTarget.style.background = palette.isDark
+                    ? 'rgba(239, 68, 68, 0.14)'
+                    : '#fef2f2'
+                  e.currentTarget.style.color = palette.isDark
+                    ? '#f87171'
+                    : '#dc2626'
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.background = 'transparent'
+                  e.currentTarget.style.color = palette.textSecondary
                 }}
               >
-                🗑 삭제
+                <FiTrash2 size={13} />
+                <span>삭제</span>
               </button>
             </li>
           )}

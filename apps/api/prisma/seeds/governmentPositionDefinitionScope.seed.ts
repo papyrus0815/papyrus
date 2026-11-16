@@ -55,19 +55,19 @@ const SCOPES: ScopeEntry[] = [
   {
     title: '천황',
     positionType: 'HEAD_OF_STATE',
-    historicalCountries: ['일본 제국', '일본국'],
+    historicalCountries: ['일본 제국', '일본국', '도쿠가와 막부'],
     countries: ['일본'],
     localTitle: '天皇',
   },
   {
     title: '내각총리대신',
     positionType: 'HEAD_OF_GOVERNMENT',
-    // 대한제국(1907~1910, 이완용 등)의 공식 직함도 內閣總理大臣이라 함께 넣는다 —
-    // 일본 전속으로 좁히면 대한제국 재임을 등록할 때 자유입력으로 되돌아간다.
-    historicalCountries: ['일본 제국', '일본국', '대한제국'],
-    countries: ['일본'],
+    // 대한제국(1907~1910, 이완용 등)과 청나라 말기(1911 황족내각·위안스카이 내각)의 공식 직함도
+    // 內閣總理大臣이라 함께 넣는다 — 일본 전속으로 좁히면 재임·정체를 수정할 때 자유입력으로 되돌아간다.
+    historicalCountries: ['일본 제국', '일본국', '대한제국', '청나라'],
+    countries: ['일본', '대한민국', '중국'],
     localTitle: '内閣総理大臣',
-    note: '실측 재임 19건은 일본 제국·일본국. 대한제국은 같은 직함의 별개 정체',
+    note: '실측 재임 19건은 일본 제국·일본국. 대한제국·청나라 말기는 같은 직함의 별개 정체',
   },
   // 막부 전속 각료 — governmentPositionDefinition.seed.ts에서 신설
   { title: '로주', positionType: 'CABINET_MINISTER', historicalCountries: ['도쿠가와 막부'], countries: ['일본'], localTitle: '老中' },
@@ -96,9 +96,21 @@ const SCOPES: ScopeEntry[] = [
   { title: '주택도시개발장관', positionType: 'CABINET_MINISTER', countries: ['미국'] },
   { title: '국토안보장관', positionType: 'CABINET_MINISTER', countries: ['미국'] },
 
-  // ── 중국·이란 ───────────────────────────────────────────
-  { title: '국가주석', positionType: 'HEAD_OF_STATE', countries: ['중국'], localTitle: '国家主席' },
-  { title: '총리(국무원)', positionType: 'HEAD_OF_GOVERNMENT', countries: ['중국'], localTitle: '总理' },
+  // ── 중국·이란·비시 프랑스 ───────────────────────────────────
+  {
+    title: '국가주석',
+    positionType: 'HEAD_OF_STATE',
+    historicalCountries: ['중화인민공화국', '비시 프랑스'],
+    countries: ['중국', '프랑스'],
+    localTitle: '国家主席',
+  },
+  {
+    title: '총리(국무원)',
+    positionType: 'HEAD_OF_GOVERNMENT',
+    historicalCountries: ['중화인민공화국'],
+    countries: ['중국'],
+    localTitle: '总理',
+  },
   { title: '최고지도자(라흐바르)', positionType: 'HEAD_OF_STATE', countries: ['이란'] },
 
   // ── 소련·독일권 ─────────────────────────────────────────

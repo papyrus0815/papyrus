@@ -4,6 +4,8 @@
  */
 import { useState } from 'react'
 
+import { useQueryClient } from '@tanstack/react-query'
+
 import { createPerson, type PersonResponseDto } from '@/shared/api/persons'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { notify } from '@/shared/ui/toast'
@@ -13,15 +15,18 @@ import * as S from './person-picker.styles'
 export function PersonPickerCreateForm({
   initialName,
   defaultCountryId,
+  defaultHistoricalCountryId,
   onCancel,
   onCreated,
 }: {
   /** 검색어 — 이름 칸에 미리 채운다('찾다가 없음 → 등록'을 빠르게) */
   initialName: string
   defaultCountryId?: string
+  defaultHistoricalCountryId?: string
   onCancel: () => void
   onCreated: (person: PersonResponseDto, displayName: string) => void
 }) {
+  const queryClient = useQueryClient()
   const [surname, setSurname] = useState('')
   const [name, setName] = useState(initialName)
   const [gender, setGender] = useState<'' | 'MALE' | 'FEMALE'>('')
@@ -48,9 +53,13 @@ export function PersonPickerCreateForm({
         ...(surname.trim() ? { surname: surname.trim() } : {}),
         gender,
         ...(defaultCountryId ? { countryId: defaultCountryId } : {}),
+        ...(defaultHistoricalCountryId
+          ? { historicalCountryId: defaultHistoricalCountryId }
+          : {}),
         ...(birth ? { birth: { era, year: birth } } : {}),
         ...(death ? { death: { era, year: death } } : {}),
       } as Parameters<typeof createPerson>[0])
+      void queryClient.invalidateQueries({ queryKey: ['persons'] })
       notify.success('인물을 등록했습니다.')
       onCreated(created, getPersonDisplayName(created))
     } catch (error) {
@@ -64,6 +73,7 @@ export function PersonPickerCreateForm({
     <S.CreateBody
       onSubmit={(submitEvent) => {
         submitEvent.preventDefault()
+        submitEvent.stopPropagation()
         void submit()
       }}
     >

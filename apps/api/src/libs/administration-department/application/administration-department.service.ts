@@ -129,6 +129,45 @@ function transitionSortKey(transition: {
   )
 }
 
+function normalizeHeadquartersCoordinates(dto: {
+  headquartersLatitude?: number | null
+  headquartersLongitude?: number | null
+}): {
+  headquartersLatitude?: number | null
+  headquartersLongitude?: number | null
+} {
+  const latitude = dto.headquartersLatitude
+  const longitude = dto.headquartersLongitude
+  if (latitude === undefined && longitude === undefined) return {}
+  const latitudeSet = latitude != null
+  const longitudeSet = longitude != null
+  if (latitudeSet !== longitudeSet) {
+    throw new BadRequestException(
+      '청사·본부 위도와 경도는 함께 전달해야 합니다(지울 때는 둘 다 null).',
+    )
+  }
+  if (
+    latitude != null &&
+    (!Number.isFinite(latitude) || latitude < -90 || latitude > 90)
+  ) {
+    throw new BadRequestException('청사·본부 위도는 -90 ~ 90 범위여야 합니다.')
+  }
+  if (
+    longitude != null &&
+    (!Number.isFinite(longitude) || longitude < -180 || longitude > 180)
+  ) {
+    throw new BadRequestException(
+      '청사·본부 경도는 -180 ~ 180 범위여야 합니다.',
+    )
+  }
+  return {
+    headquartersLatitude:
+      latitude != null ? Number(latitude.toFixed(7)) : null,
+    headquartersLongitude:
+      longitude != null ? Number(longitude.toFixed(7)) : null,
+  }
+}
+
 function toResponse(row: DepartmentRow): AdministrationDepartmentResponseDto {
   const lineage = (
     transition: { id: string; kind: string; era: Era | null; year: number | null; month: number | null; note: string | null },
@@ -183,6 +222,14 @@ function toResponse(row: DepartmentRow): AdministrationDepartmentResponseDto {
     description: row.description ?? null,
     primaryMission: row.primaryMission ?? null,
     headquarters: row.headquarters ?? null,
+    headquartersLatitude:
+      row.headquartersLatitude != null && row.headquartersLongitude != null
+        ? Number(row.headquartersLatitude)
+        : null,
+    headquartersLongitude:
+      row.headquartersLatitude != null && row.headquartersLongitude != null
+        ? Number(row.headquartersLongitude)
+        : null,
     orgStructure: row.orgStructure ?? null,
     budgetNote: row.budgetNote ?? null,
     established: toDateParts(
@@ -721,6 +768,7 @@ export class AdministrationDepartmentService {
 
   async create(body: CreateAdministrationDepartmentDto): Promise<AdministrationDepartmentResponseDto> {
     this.assertCountryAxis(body.countryId, body.historicalCountryId)
+    const hqCoords = normalizeHeadquartersCoordinates(body)
     await this.assertReferencesExist({
       countryId: body.countryId,
       historicalCountryId: body.historicalCountryId,
@@ -761,6 +809,12 @@ export class AdministrationDepartmentService {
         description: body.description?.trim() || null,
         primaryMission: body.primaryMission?.trim() || null,
         headquarters: body.headquarters?.trim() || null,
+        ...(hqCoords.headquartersLatitude !== undefined && {
+          headquartersLatitude: hqCoords.headquartersLatitude,
+        }),
+        ...(hqCoords.headquartersLongitude !== undefined && {
+          headquartersLongitude: hqCoords.headquartersLongitude,
+        }),
         orgStructure: body.orgStructure?.trim() || null,
         budgetNote: body.budgetNote?.trim() || null,
         ...this.establishedData(established),
@@ -778,6 +832,7 @@ export class AdministrationDepartmentService {
   }
 
   async update(id: string, body: UpdateAdministrationDepartmentDto): Promise<AdministrationDepartmentResponseDto> {
+    const hqCoords = normalizeHeadquartersCoordinates(body)
     const current = await this.prisma.administrationDepartment.findUnique({ where: { id } })
     if (!current) throw new NotFoundException('기관을 찾을 수 없습니다.')
 
@@ -882,6 +937,12 @@ export class AdministrationDepartmentService {
         ...(body.description !== undefined && { description: body.description?.trim() || null }),
         ...(body.primaryMission !== undefined && { primaryMission: body.primaryMission?.trim() || null }),
         ...(body.headquarters !== undefined && { headquarters: body.headquarters?.trim() || null }),
+        ...(hqCoords.headquartersLatitude !== undefined && {
+          headquartersLatitude: hqCoords.headquartersLatitude,
+        }),
+        ...(hqCoords.headquartersLongitude !== undefined && {
+          headquartersLongitude: hqCoords.headquartersLongitude,
+        }),
         ...(body.orgStructure !== undefined && { orgStructure: body.orgStructure?.trim() || null }),
         ...(body.budgetNote !== undefined && { budgetNote: body.budgetNote?.trim() || null }),
         ...(establishedTouched && this.establishedData(established)),

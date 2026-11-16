@@ -10,27 +10,27 @@
  */
 import styled, { css } from 'styled-components'
 
-import { scrollbarMixin } from '@/shared/styles/mixins'
-
 export const GOV_BRAND = {
-  primary: '#2563eb',
-  primaryHover: '#1d4ed8',
+  primary: '#1d4ed8',
+  primaryDark: '#60a5fa',
+  primaryHover: '#1e40af',
+  primaryHoverDark: '#93c5fd',
   primarySoft: 'rgba(37, 99, 235, 0.08)',
   primarySoftDark: 'rgba(96, 165, 250, 0.14)',
-  primaryBorder: 'rgba(37, 99, 235, 0.28)',
-  primaryBorderDark: 'rgba(96, 165, 250, 0.34)',
+  primaryBorder: 'rgba(37, 99, 235, 0.34)',
+  primaryBorderDark: 'rgba(96, 165, 250, 0.4)',
   primaryInk: '#1d4ed8',
   primaryInkDark: '#93c5fd',
 } as const
 
 export const GOV_ROW_HAIRLINE = {
   light: 'rgba(15, 23, 42, 0.08)',
-  dark: 'rgba(255, 255, 255, 0.1)',
+  dark: 'rgba(255, 255, 255, 0.08)',
 } as const
 
 export const GOV_PANEL_BORDER = {
-  light: 'rgba(20, 19, 34, 0.08)',
-  dark: 'rgba(255, 255, 255, 0.08)',
+  light: 'rgba(15, 23, 42, 0.1)',
+  dark: 'rgba(255, 255, 255, 0.1)',
 } as const
 
 export const GOV_RAIL_AXIS = {
@@ -47,14 +47,14 @@ export const GovLedgerPage = styled.div`
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 16px 28px 48px;
+  padding: 20px clamp(20px, 2.5vw, 32px) 48px;
   min-height: calc(100vh - 200px);
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
 
   @media (max-width: 768px) {
-    padding: 12px 16px 36px;
+    padding: 14px 16px 36px;
     gap: 14px;
   }
 `
@@ -74,20 +74,31 @@ export const GovSubNavBar = styled.div`
 
 export const GovSubTabList = styled.div`
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 2px;
   overflow-x: auto;
+  overflow-y: hidden;
   min-width: 0;
-  ${scrollbarMixin}
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 `
 
 export const GovSubTabBtn = styled.button<{ $active?: boolean }>`
   position: relative;
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 40px;
+  height: 42px;
   padding: 0 13px;
+  margin: 0;
   border: none;
   background: transparent;
   font-family: inherit;
@@ -109,16 +120,28 @@ export const GovSubTabBtn = styled.button<{ $active?: boolean }>`
     position: absolute;
     left: 10px;
     right: 10px;
-    bottom: -1px;
+    bottom: 0;
     height: 2px;
     border-radius: 2px 2px 0 0;
-    background: ${({ $active }) =>
-      $active ? GOV_BRAND.primary : 'transparent'};
+    background: ${({ $active, theme }) =>
+      $active
+        ? theme.mode === 'dark'
+          ? GOV_BRAND.primaryDark
+          : GOV_BRAND.primary
+        : 'transparent'};
     transition: background 0.14s ease;
   }
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  &:focus-visible {
+    outline: 2px solid
+      ${({ theme }) =>
+        theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
+    outline-offset: -2px;
+    border-radius: 6px;
   }
 `
 
@@ -190,7 +213,9 @@ export const GovPromSearch = styled.div`
     background: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#ffffff'};
     border-color: transparent;
-    box-shadow: 0 0 0 2px ${GOV_BRAND.primary};
+    box-shadow: 0 0 0 2px
+      ${({ theme }) =>
+        theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
   }
 
   & > svg {
@@ -330,28 +355,44 @@ export const GovToolbarBtn = styled.button<{ $active?: boolean }>`
   }
 `
 
-/** 34px 주 등록 버튼 — 한 줄에서 단 하나만 솔리드 블루(#2563eb) */
+/** 34px 주 등록 버튼 — 사건 상세 LedgerAccent와 동일한 인디고 플랫 CTA */
 export const GovPrimaryBtn = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 6px;
   height: 34px;
   padding: 0 13px;
   border-radius: 8px;
   border: 1px solid transparent;
-  background: ${GOV_BRAND.primary};
-  color: #ffffff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#0e0f12' : '#ffffff')};
   font-family: inherit;
   font-size: 12.5px;
   font-weight: 600;
   letter-spacing: -0.01em;
   white-space: nowrap;
+  box-shadow: none;
   cursor: pointer;
-  transition: background 0.14s ease, opacity 0.14s ease;
+  transition:
+    background 0.14s ease,
+    opacity 0.14s ease;
 
   &:hover:not(:disabled) {
-    background: ${GOV_BRAND.primaryHover};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? GOV_BRAND.primaryHoverDark
+        : GOV_BRAND.primaryHover};
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px ${({ theme }) => (theme.mode === 'dark' ? '#0e0f12' : '#ffffff')},
+      0 0 0 4px
+        ${({ theme }) =>
+          theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
   }
 
   &:disabled {
@@ -439,7 +480,7 @@ export const GovClearFiltersBtn = styled.button`
 
 /** 플랫 원장 패널 — 그림자·그라데이션 없이 1px 보더만 */
 export const GovLedgerPanel = styled.div`
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? GOV_PANEL_BORDER.dark : GOV_PANEL_BORDER.light};

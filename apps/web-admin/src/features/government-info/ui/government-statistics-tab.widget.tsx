@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   FiBarChart2,
@@ -19,7 +19,7 @@ import {
   GOV_MAIN_COLOR as MAIN,
 } from '../model/constants'
 import type { GovernmentContentTab } from '../model/government-content-tab'
-import { useGovernmentStatisticsMockData } from '../model/use-government-statistics-mock'
+import { useGovernmentStatistics } from '../model/use-government-statistics'
 
 import { GOV_BRAND } from './government-ledger.styles'
 import { GovSectionEyebrow } from './government-organizations-tab.styled'
@@ -60,17 +60,31 @@ export function GovernmentStatisticsTab({
     agencyExamples,
     specialExamples,
     organizationExamples,
-    budgetData,
+    categoryStats,
     filteredEvents,
     eventCounts,
     selectedEventType,
     onSelectedEventTypeChange,
-  } = useGovernmentStatisticsMockData({ country, effectiveCountryId })
+  } = useGovernmentStatistics({ country, effectiveCountryId })
+
+  const [showAllEvents, setShowAllEvents] = useState(false)
+
+  useEffect(() => {
+    setShowAllEvents(false)
+  }, [effectiveCountryId, selectedEventType])
 
   const totalCategorizedCount = useMemo(
-    () => budgetData.reduce((accSum, rowItem) => accSum + (rowItem.budget || 0), 0),
-    [budgetData],
+    () =>
+      categoryStats.reduce(
+        (accSum, rowItem) => accSum + (rowItem.departmentCount || 0),
+        0,
+      ),
+    [categoryStats],
   )
+
+  const displayedEvents = showAllEvents
+    ? filteredEvents
+    : filteredEvents.slice(0, 30)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
@@ -155,7 +169,7 @@ export function GovernmentStatisticsTab({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              marginBottom: budgetData.length > 0 ? 18 : 10,
+              marginBottom: categoryStats.length > 0 ? 18 : 10,
               flexWrap: 'wrap',
               gap: 10,
             }}
@@ -170,7 +184,7 @@ export function GovernmentStatisticsTab({
             >
               행정 분야 카테고리별 등록 기관 수 (상위 8개 분류)
             </p>
-            {budgetData.length > 0 ? (
+            {categoryStats.length > 0 ? (
               <span
                 style={{
                   fontSize: 12,
@@ -182,12 +196,16 @@ export function GovernmentStatisticsTab({
                   border: `1px solid ${palette.borderHairline}`,
                 }}
               >
-                최다 분류 {Math.max(...budgetData.map((row) => row.budget || 0))}곳
+                최다 분류{' '}
+                {Math.max(
+                  ...categoryStats.map((row) => row.departmentCount || 0),
+                )}
+                곳
               </span>
             ) : null}
           </div>
 
-          {budgetData.length === 0 ? (
+          {categoryStats.length === 0 ? (
             <div
               style={{
                 padding: '28px 16px',
@@ -239,17 +257,20 @@ export function GovernmentStatisticsTab({
                 ))}
               </div>
 
-              {budgetData.map((stat) => {
+              {categoryStats.map((stat) => {
                 const maxCount = Math.max(
-                  ...budgetData.map((row) => row.budget || 0),
+                  ...categoryStats.map((row) => row.departmentCount || 0),
                   1,
                 )
                 const barHeight = maxCount
-                  ? ((stat.budget || 0) / maxCount) * 145
+                  ? ((stat.departmentCount || 0) / maxCount) * 145
                   : 0
                 const sharePct =
                   totalCategorizedCount > 0
-                    ? Math.round(((stat.budget || 0) / totalCategorizedCount) * 100)
+                    ? Math.round(
+                        ((stat.departmentCount || 0) / totalCategorizedCount) *
+                          100,
+                      )
                     : 0
 
                 const isClickableBar = Boolean(
@@ -258,12 +279,12 @@ export function GovernmentStatisticsTab({
 
                 return (
                   <div
-                    key={stat.year}
+                    key={stat.categoryName}
                     role={isClickableBar ? 'button' : undefined}
                     tabIndex={isClickableBar ? 0 : undefined}
                     title={
                       isClickableBar
-                        ? `${stat.year} 분류 중앙부처 목록 보기`
+                        ? `${stat.categoryName} 분류 중앙부처 목록 보기`
                         : undefined
                     }
                     onClick={() => {
@@ -312,7 +333,7 @@ export function GovernmentStatisticsTab({
                         fontVariantNumeric: 'tabular-nums',
                       }}
                     >
-                      {stat.budget}
+                      {stat.departmentCount}
                     </div>
                     <div
                       style={{
@@ -331,7 +352,7 @@ export function GovernmentStatisticsTab({
                           whiteSpace: 'nowrap',
                         }}
                       >
-                        {stat.year}
+                        {stat.categoryName}
                       </span>
                       <span
                         style={{
@@ -540,7 +561,7 @@ export function GovernmentStatisticsTab({
                     gap: 10,
                   }}
                 >
-                  {filteredEvents.slice(0, 30).map((eventItem) => {
+                  {displayedEvents.map((eventItem) => {
                     const imageUrl = eventItem.images?.[0]
                     const eventBadgeTone =
                       eventItem.type === 'regime'
@@ -749,6 +770,30 @@ export function GovernmentStatisticsTab({
                       </div>
                     )
                   })}
+
+                  {filteredEvents.length > 30 ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllEvents((prev) => !prev)}
+                      style={{
+                        alignSelf: 'center',
+                        marginTop: 4,
+                        padding: '6px 14px',
+                        borderRadius: 8,
+                        border: `1px solid ${palette.border}`,
+                        background: palette.cardBg,
+                        color: palette.textMuted,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      {showAllEvents
+                        ? '접기 (최근 30건만 보기)'
+                        : `이전 연혁 더 보기 (+${filteredEvents.length - 30}건)`}
+                    </button>
+                  ) : null}
                 </div>
               )}
             </div>

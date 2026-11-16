@@ -11,10 +11,15 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { createPortal } from 'react-dom'
 
-import { FaLandmark } from 'react-icons/fa'
+import { FiCompass } from 'react-icons/fi'
 import styled, { useTheme } from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import {
+  RADIUS,
+  ledgerBackground,
+  ledgerHairlineStrong,
+} from '@/entities/event/ui/ledger-tokens'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { formatCountryPeriod } from '@/shared/lib/country-period'
 import { Z_INDEX } from '@/shared/styles/z-index'
@@ -23,7 +28,7 @@ import { getBadgeTextColor, withAlpha } from '../model/continent-colors'
 import * as S from './country-list.styles'
 
 const POPOVER_WIDTH = 240
-const POPOVER_GAP = 18 // anchor와 popover 사이 간격 (말풍선 꼬리 + 여백)
+const POPOVER_GAP = 8
 const POPOVER_MAX_HEIGHT = 480 // popover 최대 높이 — 더 길면 내부 스크롤
 const ROW_HEIGHT = 46 // 자식 행 + 헤더 추정 — max-height 계산용
 const HEADER_HEIGHT = 70
@@ -188,32 +193,6 @@ export function CountryListChildrenPopover({
       $flipped={pos.flipped}
       style={{ top: pos.top, left: pos.left }}
     >
-      <Arrow $flipped={pos.flipped} style={{ top: pos.arrowTop }}>
-        <svg
-          width="12"
-          height="20"
-          viewBox="0 0 12 20"
-          preserveAspectRatio="none"
-          aria-hidden
-        >
-          <path
-            d="M12 0 L0 10 L12 20 Z"
-            fill="var(--pop-bg)"
-            stroke="var(--pop-border)"
-            strokeWidth="1"
-            strokeLinejoin="miter"
-          />
-          {/* Inner 테두리와 만나는 우측 모서리 — 1px 흰 선으로 stroke 가림 */}
-          <line
-            x1="12"
-            y1="0"
-            x2="12"
-            y2="20"
-            stroke="var(--pop-bg)"
-            strokeWidth="2"
-          />
-        </svg>
-      </Arrow>
       <Inner>
       <S.ChildrenHeader>
         <S.ChildrenHeaderTopRow>
@@ -288,7 +267,7 @@ export function CountryListChildrenPopover({
                       style={isoBadgeStyle(accentColor, isDark)}
                       aria-hidden
                     >
-                      <FaLandmark />
+                      <FiCompass size={12} aria-hidden />
                     </S.IsoBadge>
                   )}
                   <S.TextStack>
@@ -317,55 +296,33 @@ const Pop = styled.div<{ $flipped: boolean }>`
   width: ${POPOVER_WIDTH}px;
   max-height: min(${POPOVER_MAX_HEIGHT}px, calc(100vh - 24px));
   z-index: ${Z_INDEX.DROPDOWN};
-  /* overflow visible — arrow가 Pop 밖으로 나갈 수 있게. 둥근 모서리는 Inner가 처리 */
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.06))
-    drop-shadow(0 14px 30px rgba(0, 0, 0, 0.18));
-  animation: popoverIn 0.16s cubic-bezier(0.34, 1.4, 0.64, 1);
-  /* flipped 시 우측에서 등장하므로 origin도 right로 */
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 8px 24px rgba(0, 0, 0, 0.55)'
+      : '0 8px 24px rgba(15, 23, 42, 0.12)'};
+  border-radius: 8px;
+  animation: popoverIn 0.12s ease-out;
   transform-origin: ${({ $flipped }) =>
     $flipped ? 'right center' : 'left center'};
-  /* Arrow SVG에서 fill/stroke 사용 */
-  --pop-bg: ${({ theme }) => theme.colors.background.primary};
-  --pop-border: ${({ theme }) => theme.colors.border.default};
 
   @keyframes popoverIn {
     from {
       opacity: 0;
-      transform: scale(0.92);
+      transform: translateY(-2px);
     }
     to {
       opacity: 1;
-      transform: scale(1);
+      transform: translateY(0);
     }
   }
 `
 
 const Inner = styled.div`
-  background: ${({ theme }) => theme.colors.background.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 14px;
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.MD};
   overflow: hidden;
   display: flex;
   flex-direction: column;
   max-height: min(${POPOVER_MAX_HEIGHT}px, calc(100vh - 24px));
-  /* height: 100% 제거 — 자식 적을 땐 콘텐츠 기반으로 자연스럽게 줄어듦 */
-`
-
-/** 말풍선 꼬리 — SVG path 삼각형. flipped 시 좌우 반전 */
-const Arrow = styled.div<{ $flipped: boolean }>`
-  position: absolute;
-  width: 12px;
-  height: 20px;
-  pointer-events: none;
-  margin-top: -10px;
-  ${({ $flipped }) =>
-    $flipped
-      ? `right: -12px; transform: scaleX(-1);`
-      : `left: -12px;`}
-
-  > svg {
-    display: block;
-    width: 100%;
-    height: 100%;
-  }
 `

@@ -41,11 +41,19 @@ export function invalidateTenureQueries(
   }
 
   // ── 행정부(내각) 계열 ──
+  invalidate(['cabinets'])
   invalidate(['cabinets-by-country'])
+  invalidate(['global-cabinets'])
+  invalidate(['global-cabinet-detail'])
+  invalidate(['cabinet-detail-polity-cabinets'])
   invalidate(['cabinet-tenures'])
   invalidate(['cabinet-overview'])
   invalidate(['cabinet-linked-cabinets'])
+  invalidate(['cabinets-by-linkage-event'])
   invalidate(['cabinet-suggested-members'])
+  invalidate(['cabinet-political-parties'])
+  invalidate(['cabinet-linked-events'])
+  invalidate(['treaties-by-cabinet'])
 
   // ── 중앙부처·군사 사령부·부대 재임 및 상세 ──
   invalidate(['administration-department'])

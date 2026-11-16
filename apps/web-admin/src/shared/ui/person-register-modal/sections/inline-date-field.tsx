@@ -168,6 +168,11 @@ export function InlineDateField({
   const yearRef = useRef<HTMLInputElement>(null)
   const monthRef = useRef<HTMLInputElement>(null)
   const dayRef = useRef<HTMLInputElement>(null)
+  const latestMonthRef = useRef(month)
+  const latestDayRef = useRef(day)
+  latestMonthRef.current = month
+  latestDayRef.current = day
+
   if (disabled) {
     return appearance === 'field' ? (
       <FieldBox id={anchorId} $disabled aria-label={ariaLabel}>
@@ -241,25 +246,29 @@ export function InlineDateField({
           value={month}
           onChange={(event) => {
             const next = normalizeMonthInput(event.target.value, month)
+            latestMonthRef.current = next
             onMonth(next)
             if (next.length === 2 && (month.length < 2 || next !== month)) {
               dayRef.current?.focus()
             }
           }}
           onBlur={() => {
-            if (month === '1') {
+            if (latestMonthRef.current === '1') {
+              latestMonthRef.current = '01'
               onMonth('01')
             }
           }}
           onKeyDown={(event) => {
             if ((event.key === '.' || event.key === '/') && month.length > 0) {
               event.preventDefault()
-              if (month === '1') {
+              if (latestMonthRef.current === '1') {
+                latestMonthRef.current = '01'
                 onMonth('01')
               }
               dayRef.current?.focus()
             } else if (event.key === 'Backspace' && /^0[1-9]$/.test(month)) {
               event.preventDefault()
+              latestMonthRef.current = ''
               onMonth('')
             } else if (event.key === 'Backspace' && month === '') {
               event.preventDefault()
@@ -276,15 +285,27 @@ export function InlineDateField({
           aria-label="일"
           aria-invalid={error || undefined}
           value={day}
-          onChange={(event) => onDay(normalizeDayInput(event.target.value, day))}
+          onChange={(event) => {
+            const nextDay = normalizeDayInput(event.target.value, day)
+            latestDayRef.current = nextDay
+            onDay(nextDay)
+          }}
           onBlur={() => {
-            if (day.length === 1 && Number(day) >= 1 && Number(day) <= 3) {
-              onDay(`0${day}`)
+            const currentDay = latestDayRef.current
+            if (
+              currentDay.length === 1 &&
+              Number(currentDay) >= 1 &&
+              Number(currentDay) <= 3
+            ) {
+              const paddedDay = `0${currentDay}`
+              latestDayRef.current = paddedDay
+              onDay(paddedDay)
             }
           }}
           onKeyDown={(event) => {
             if (event.key === 'Backspace' && /^0[1-9]$/.test(day)) {
               event.preventDefault()
+              latestDayRef.current = ''
               onDay('')
             } else if (event.key === 'Backspace' && day === '') {
               event.preventDefault()
@@ -351,9 +372,14 @@ export function InlineDateField({
           aria-label="월"
           aria-invalid={error || undefined}
           value={month}
-          onChange={(event) => onMonth(normalizeMonthInput(event.target.value, month))}
+          onChange={(event) => {
+            const nextMonth = normalizeMonthInput(event.target.value, month)
+            latestMonthRef.current = nextMonth
+            onMonth(nextMonth)
+          }}
           onBlur={() => {
-            if (month === '1') {
+            if (latestMonthRef.current === '1') {
+              latestMonthRef.current = '01'
               onMonth('01')
             }
           }}
@@ -367,10 +393,21 @@ export function InlineDateField({
           aria-label="일"
           aria-invalid={error || undefined}
           value={day}
-          onChange={(event) => onDay(normalizeDayInput(event.target.value, day))}
+          onChange={(event) => {
+            const nextDay = normalizeDayInput(event.target.value, day)
+            latestDayRef.current = nextDay
+            onDay(nextDay)
+          }}
           onBlur={() => {
-            if (day.length === 1 && Number(day) >= 1 && Number(day) <= 3) {
-              onDay(`0${day}`)
+            const currentDay = latestDayRef.current
+            if (
+              currentDay.length === 1 &&
+              Number(currentDay) >= 1 &&
+              Number(currentDay) <= 3
+            ) {
+              const paddedDay = `0${currentDay}`
+              latestDayRef.current = paddedDay
+              onDay(paddedDay)
             }
           }}
         />

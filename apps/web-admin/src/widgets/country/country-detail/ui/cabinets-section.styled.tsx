@@ -5,6 +5,13 @@ import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import styled, { createGlobalStyle, css } from 'styled-components'
 
+import {
+  ledgerAccent,
+  ledgerAccentHover,
+  ledgerBackground,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+} from '@/entities/event/ui/ledger-tokens'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { glassCardMixin } from '@/shared/styles/mixins'
 import { proseHrSmallStyles, proseHrStyles } from '@/shared/styles/prose-hr'
@@ -902,7 +909,7 @@ export const CabListControlsRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px 12px;
+  gap: 8px;
 `
 export const CabListSearchBox = styled.div`
   position: relative;
@@ -911,183 +918,189 @@ export const CabListSearchBox = styled.div`
 `
 export const CabListSearchIcon = styled.span`
   position: absolute;
-  left: 14px;
+  left: 11px;
   top: 50%;
   transform: translateY(-50%);
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   display: flex;
   align-items: center;
   pointer-events: none;
 `
 export const CabListSearchInput = styled.input<{ $hasTrailing: boolean }>`
   width: 100%;
-  height: 40px;
+  height: 34px;
   box-sizing: border-box;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.09)' : '#e2e8f0'};
-  border-radius: 12px;
-  padding: 0 ${(p) => (p.$hasTrailing ? '52px' : '14px')} 0 44px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: 8px;
+  padding: 0 ${(p) => (p.$hasTrailing ? '46px' : '12px')} 0 34px;
   font-size: 13px;
   font-weight: 500;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#f1f5f9' : '#0f172a')};
+  color: ${({ theme }) => theme.colors.text.primary};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#fff'};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
   transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease,
-    background 0.15s ease;
+    border-color 0.14s ease,
+    box-shadow 0.14s ease,
+    background 0.14s ease;
   &::placeholder {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#64748b' : '#94a3b8')};
+    color: ${({ theme }) => theme.colors.text.tertiary};
     font-weight: 400;
   }
   &:hover {
     border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.16)' : '#d1d5db'};
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : '#fff'};
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : '#d1d5db'};
   }
   &:focus {
     outline: none;
-    border-color: #6366f1;
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : '#fff'};
-    box-shadow: none;
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    box-shadow: 0 0 0 2px
+      ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(165, 180, 252, 0.22)'
+          : 'rgba(79, 70, 229, 0.14)'};
+  }
+  @media (max-width: 768px) {
+    height: 40px;
   }
 `
 export const CabListSearchClearBtn = styled.button`
   position: absolute;
-  right: 8px;
+  right: 6px;
   top: 50%;
   transform: translateY(-50%);
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   cursor: pointer;
-  color: #94a3b8;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   transition:
     background 0.12s ease,
     color 0.12s ease;
   &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#f1f5f9'};
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#e2e8f0' : '#475569')};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
   &:focus-visible {
-    outline: none;
-    box-shadow: none;
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 1px;
   }
 `
 export const CabListSearchCount = styled.span`
   position: absolute;
-  right: 14px;
+  right: 11px;
   top: 50%;
   transform: translateY(-50%);
   font-size: 11px;
-  font-weight: 700;
-  color: #94a3b8;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.tertiary};
   pointer-events: none;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
 `
-/** 정렬 표시 및 토글 버튼 — SectionTabHeader `AddButton`과 동일 톤 */
+/** 정렬 표시 및 토글 버튼 — 플랫 모노크롬 툴바 규격 (34px / 8px) */
 export const CabListSortBadge = styled.button.attrs({ type: 'button' })`
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  min-height: 40px;
+  gap: 6px;
+  padding: 0 11px;
+  height: 34px;
   box-sizing: border-box;
-  border-radius: 12px;
-  font-size: 13px;
+  border-radius: 8px;
+  font-size: 12.5px;
   font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255,255,255,0.08)'
-      : theme.colors.background.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: transparent;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   flex-shrink: 0;
   cursor: pointer;
   user-select: none;
   transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
+    background 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
   &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.12)'
-        : theme.colors.background.secondary};
-    border-color: ${({ theme }) => theme.colors.border.medium};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
   &:focus-visible {
-    outline: 2px solid #6366f1;
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
+  }
+  @media (max-width: 768px) {
+    height: 40px;
   }
 `
 
-/** 행정부 등록 — 동일 반경, 채움형 CTA */
+/** 행정부 등록 — 사건 페이지 Primary CTA 규격 (34px / 8px / 플랫 인디고) */
 export const CabListRegisterBtn = styled.button`
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 10px 18px;
-  min-height: 40px;
+  gap: 6px;
+  padding: 0 13px;
+  height: 34px;
   box-sizing: border-box;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
-  color: #fff;
-  background: ${({ theme }) => theme.colors.primary};
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#0e0f12' : '#ffffff')};
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
   border: none;
-  border-radius: 12px;
+  border-radius: 8px;
   cursor: pointer;
   box-shadow: none;
-  transition:
-    background 0.2s,
-    box-shadow 0.2s;
+  transition: background 0.14s ease;
   &:hover {
-    background: ${({ theme }) => theme.colors.button.hover};
-    box-shadow: none;
+    background: ${({ theme }) => ledgerAccentHover(theme.mode)};
   }
   &:focus-visible {
     outline: none;
-    box-shadow: none;
+    box-shadow:
+      0 0 0 2px ${({ theme }) => ledgerBackground(theme.mode)},
+      0 0 0 4px ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+  @media (max-width: 768px) {
+    height: 40px;
   }
 `
 
-/** 군주 등록 — 행정부 등록 옆 보조 CTA (윤곽선) */
+/** 군주 등록 — 행정부 등록 옆 보조 CTA (플랫 모노크롬 윤곽선) */
 export const CabListMonarchRegisterBtn = styled.button`
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 10px 18px;
-  min-height: 40px;
+  gap: 5px;
+  padding: 0 11px;
+  height: 34px;
   box-sizing: border-box;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
-  color: ${({ theme }) => theme.colors.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
   background: transparent;
-  border: 1px solid ${({ theme }) => theme.colors.primary};
-  border-radius: 12px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: 8px;
   cursor: pointer;
   transition:
-    background 0.2s,
-    color 0.2s,
-    box-shadow 0.2s;
+    background 0.14s ease,
+    color 0.14s ease,
+    border-color 0.14s ease;
   &:hover {
-    background: rgba(99, 102, 241, 0.08);
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
   &:focus-visible {
-    outline: none;
-    box-shadow: none;
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+  }
+  @media (max-width: 768px) {
+    height: 40px;
   }
 `
 
@@ -2667,13 +2680,8 @@ export const TenureHistoryHorizCard = styled.div<{ $linkagePeer?: boolean }>`
   }
 
   &:hover {
-    transform: translateY(-1px);
-    ${({ theme, $linkagePeer }) => {
+    ${({ theme }) => {
       const p = getCabinetsSectionPalette(theme.mode === 'dark')
-      const hoverDrop =
-        theme.mode === 'dark'
-          ? '0 8px 24px rgba(0, 0, 0, 0.4)'
-          : '0 6px 18px rgba(15, 23, 42, 0.08)'
       return css`
         border-color: ${p.accentSecondaryBorder};
         background: ${p.cardBgHover};
@@ -3679,7 +3687,7 @@ export const HistoryArticleProse = styled(RichTextReadView)`
 
   .mention,
   .entity-link {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#6366f1' : '#2563eb')};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
     text-decoration: none;
     cursor: pointer;
     border-radius: 2px;
@@ -3687,7 +3695,7 @@ export const HistoryArticleProse = styled(RichTextReadView)`
   }
   .mention:hover,
   .entity-link:hover {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#1d4ed8')};
+    color: ${({ theme }) => ledgerAccentHover(theme.mode)};
     text-decoration: underline;
     text-underline-offset: 2px;
   }

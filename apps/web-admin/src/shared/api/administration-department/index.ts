@@ -110,9 +110,9 @@ export const DEPARTMENT_KIND_OPTIONS: ReadonlyArray<{
 }> = [
   { value: 'MINISTRY', label: '부처' },
   { value: 'AGENCY', label: '외청·위원회' },
+  { value: 'ROYAL_HOUSEHOLD', label: '원수직속·궁내' },
   { value: 'COLONIAL_GOVERNMENT', label: '총독부·속령' },
-  { value: 'ROYAL_HOUSEHOLD', label: '궁내·왕실' },
-  { value: 'OTHER', label: '기타' },
+  { value: 'OTHER', label: '헌법·독립·기타' },
 ]
 
 export const DEPARTMENT_KIND_LABEL = Object.fromEntries(

@@ -17,7 +17,7 @@ import {
   LOSS_METRIC_PRIORITY,
   lossRate,
   type MetricObservationLike,
-  PERSONNEL_METRIC,
+  SIZE_METRIC_PRIORITY,
   type SideMetricRow,
 } from './side-metrics.lib'
 
@@ -94,9 +94,14 @@ export function buildSideCommentary(
   if (sides.length !== 2) return []
   const pair = [sides[0], sides[1]] as const
   const lines: CommentaryLine[] = []
-  const personnel = rows.find((row) => row.key === PERSONNEL_METRIC)
-  const personnelLine = personnel ? compareLine(personnel, pair, 'size', format) : null
-  if (personnelLine) lines.push(personnelLine)
+  for (const key of SIZE_METRIC_PRIORITY) {
+    const row = rows.find((candidate) => candidate.key === key)
+    const line = row ? compareLine(row, pair, 'size', format) : null
+    if (line) {
+      lines.push(line)
+      break
+    }
+  }
   for (const key of LOSS_METRIC_PRIORITY) {
     const row = rows.find((candidate) => candidate.key === key)
     const line = row ? compareLine(row, pair, 'loss', format) : null

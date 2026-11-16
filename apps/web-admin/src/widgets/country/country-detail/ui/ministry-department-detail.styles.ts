@@ -2,9 +2,13 @@
  * 중앙부처·국가기관 상세 스타일 — 사건 페이지 DetailPanel 플랫 원장 규격
  * 중첩 카드 박스를 없애고 1px 헤어라인 섹션 분할 + 중성 타이포그래피로 구성
  */
+import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { GOV_BRAND, GOV_ROW_HAIRLINE } from '@/features/government-info/ui/government-ledger.styles'
+
+const govHairline = ({ theme }: { theme: { mode?: string } }) =>
+  theme.mode === 'dark' ? GOV_ROW_HAIRLINE.dark : GOV_ROW_HAIRLINE.light
 
 export const DetailRoot = styled.div`
   display: flex;
@@ -21,7 +25,7 @@ export const DeptDetailTopBar = styled.div`
   gap: 10px;
   flex-wrap: wrap;
   padding: 11px 18px;
-  border-bottom: 1px solid ${GOV_ROW_HAIRLINE};
+  border-bottom: 1px solid ${govHairline};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.015)' : '#fafafa'};
   flex-shrink: 0;
@@ -105,12 +109,11 @@ export const DeptTopGhostBtn = styled.button.attrs({ type: 'button' })`
   font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
+  background: transparent;
   border: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(20,19,34,0.1)'};
-  border-radius: 7px;
+  border-radius: 6px;
   cursor: pointer;
   transition:
     border-color 0.14s ease,
@@ -122,57 +125,77 @@ export const DeptTopGhostBtn = styled.button.attrs({ type: 'button' })`
     border-color: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(20,19,34,0.2)'};
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#f8fafc'};
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(20,19,34,0.04)'};
+  }
+`
+
+export const DeptTopGhostLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  background: transparent;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(20,19,34,0.1)'};
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    border-color 0.14s ease,
+    background 0.14s ease,
+    color 0.14s ease;
+
+  &:hover {
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? GOV_BRAND.primaryInkDark : GOV_BRAND.primary};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? GOV_BRAND.primaryBorderDark
+        : GOV_BRAND.primaryBorder};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? GOV_BRAND.primarySoftDark : GOV_BRAND.primarySoft};
   }
 `
 
 export const DeptTopTealBtn = styled(DeptTopGhostBtn)`
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#5eead4' : '#0f766e')};
-  border-color: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(45, 212, 191, 0.28)' : '#99f6e4'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(13, 148, 136, 0.12)' : '#f0fdfa'};
-
   &:hover {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#99f6e4' : '#0f766e')};
-    border-color: #14b8a6;
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? GOV_BRAND.primaryInkDark : GOV_BRAND.primary};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? GOV_BRAND.primaryBorderDark
+        : GOV_BRAND.primaryBorder};
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(13, 148, 136, 0.2)' : '#ccfbf1'};
+      theme.mode === 'dark' ? GOV_BRAND.primarySoftDark : GOV_BRAND.primarySoft};
   }
 `
 
 export const DeptTopEditBtn = styled(DeptTopGhostBtn)`
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? '#93c5fd' : GOV_BRAND.primary};
-  border-color: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(59, 130, 246, 0.35)'
-      : 'rgba(37, 99, 235, 0.25)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? GOV_BRAND.primarySoftDark : GOV_BRAND.primarySoft};
-
   &:hover {
     color: ${({ theme }) =>
-      theme.mode === 'dark' ? '#bfdbfe' : GOV_BRAND.primaryHover};
-    border-color: ${GOV_BRAND.primary};
-    background: ${({ theme }) =>
+      theme.mode === 'dark' ? GOV_BRAND.primaryInkDark : GOV_BRAND.primary};
+    border-color: ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(37, 99, 235, 0.26)'
-        : 'rgba(37, 99, 235, 0.12)'};
+        ? GOV_BRAND.primaryBorderDark
+        : GOV_BRAND.primaryBorder};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? GOV_BRAND.primarySoftDark : GOV_BRAND.primarySoft};
   }
 `
 
 export const DeptTopDeleteBtn = styled(DeptTopGhostBtn)`
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#fca5a5' : '#dc2626')};
-  border-color: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(220, 38, 38, 0.32)' : '#fecaca'};
-
   &:hover {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#fecaca' : '#b91c1c')};
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#fca5a5' : '#dc2626')};
     background: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(220, 38, 38, 0.14)' : '#fff1f2'};
     border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(248, 113, 113, 0.5)' : '#f87171'};
+      theme.mode === 'dark' ? 'rgba(248, 113, 113, 0.45)' : '#fecaca'};
   }
 `
 
@@ -180,7 +203,7 @@ export const DeptTopDeleteBtn = styled(DeptTopGhostBtn)`
 export const DeptIdentityCard = styled.div`
   display: flex;
   flex-direction: column;
-  border-bottom: 1px solid ${GOV_ROW_HAIRLINE};
+  border-bottom: 1px solid ${govHairline};
 `
 
 export const DeptIdentityMain = styled.div`
@@ -244,7 +267,16 @@ export const DeptBadgeStrip = styled.div`
   flex-wrap: wrap;
 `
 
-export const DeptStatusBadge = styled.span<{ $abolished?: boolean }>`
+export type DeptStatusVisualTone =
+  | 'active'
+  | 'superseded'
+  | 'historical'
+  | 'abolished'
+
+export const DeptStatusBadge = styled.span<{
+  $abolished?: boolean
+  $tone?: DeptStatusVisualTone
+}>`
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -252,27 +284,50 @@ export const DeptStatusBadge = styled.span<{ $abolished?: boolean }>`
   font-weight: 700;
   padding: 2px 7px;
   border-radius: 5px;
-  color: ${({ theme, $abolished }) =>
-    $abolished
-      ? theme.colors.text.secondary
-      : theme.mode === 'dark'
-        ? '#6ee7b7'
-        : '#047857'};
-  background: ${({ theme, $abolished }) =>
-    $abolished
-      ? theme.mode === 'dark'
+  color: ${({ theme, $abolished, $tone }) => {
+    const resolved = $tone ?? ($abolished ? 'abolished' : 'active')
+    if (resolved === 'superseded') {
+      return theme.mode === 'dark' ? '#a5b4fc' : '#4338ca'
+    }
+    if (resolved === 'historical') {
+      return theme.mode === 'dark' ? '#fcd34d' : '#b45309'
+    }
+    if (resolved === 'abolished') {
+      return theme.colors.text.secondary
+    }
+    return theme.mode === 'dark' ? '#6ee7b7' : '#047857'
+  }};
+  background: ${({ theme, $abolished, $tone }) => {
+    const resolved = $tone ?? ($abolished ? 'abolished' : 'active')
+    if (resolved === 'superseded') {
+      return theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.16)' : '#eef2ff'
+    }
+    if (resolved === 'historical') {
+      return theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.16)' : '#fffbeb'
+    }
+    if (resolved === 'abolished') {
+      return theme.mode === 'dark'
         ? 'rgba(255, 255, 255, 0.06)'
         : 'rgba(20, 19, 34, 0.05)'
-      : theme.mode === 'dark'
-        ? 'rgba(16, 185, 129, 0.14)'
-        : '#ecfdf5'};
+    }
+    return theme.mode === 'dark' ? 'rgba(16, 185, 129, 0.14)' : '#ecfdf5'
+  }};
 `
 
-export const DeptStatusDot = styled.span<{ $abolished?: boolean }>`
+export const DeptStatusDot = styled.span<{
+  $abolished?: boolean
+  $tone?: DeptStatusVisualTone
+}>`
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: ${({ $abolished }) => ($abolished ? '#94a3b8' : '#10b981')};
+  background: ${({ $abolished, $tone }) => {
+    const resolved = $tone ?? ($abolished ? 'abolished' : 'active')
+    if (resolved === 'superseded') return '#6366f1'
+    if (resolved === 'historical') return '#f59e0b'
+    if (resolved === 'abolished') return '#94a3b8'
+    return '#10b981'
+  }};
 `
 
 export const DeptCategoryBadge = styled.span`
@@ -286,6 +341,35 @@ export const DeptCategoryBadge = styled.span`
   border-radius: 5px;
   padding: 2px 7px;
   flex-shrink: 0;
+`
+
+export const DeptCategoryCompareLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? GOV_BRAND.primaryInkDark : GOV_BRAND.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? GOV_BRAND.primarySoftDark : GOV_BRAND.primarySoft};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? GOV_BRAND.primaryBorderDark
+        : GOV_BRAND.primaryBorder};
+  border-radius: 5px;
+  padding: 2px 7px;
+  flex-shrink: 0;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease;
+
+  &:hover {
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
+  }
 `
 
 export const DefenseBadge = styled.span`
@@ -305,7 +389,7 @@ export const DefenseBadge = styled.span`
 export const DeptProfileName = styled.h3`
   margin: 0;
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.025em;
   line-height: 1.3;
@@ -349,7 +433,7 @@ export const DeptRelationsMatrix = styled.div`
   flex-direction: column;
   gap: 8px;
   padding: 12px 20px 14px;
-  border-top: 1px solid ${GOV_ROW_HAIRLINE};
+  border-top: 1px solid ${govHairline};
 `
 
 export const DeptRelationRow = styled.div`
@@ -438,7 +522,7 @@ export const DeptInfoSection = styled.div`
   display: flex;
   flex-direction: column;
   gap: 6px;
-  border-bottom: 1px solid ${GOV_ROW_HAIRLINE};
+  border-bottom: 1px solid ${govHairline};
 `
 
 export const DeptInfoSectionTitle = styled.div`
@@ -471,12 +555,12 @@ export const DeptInfoText = styled.p`
 export const MetaGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  border-bottom: 1px solid ${GOV_ROW_HAIRLINE};
+  border-bottom: 1px solid ${govHairline};
 `
 
 export const MetaPanel = styled.div`
   padding: 14px 20px;
-  border-right: 1px solid ${GOV_ROW_HAIRLINE};
+  border-right: 1px solid ${govHairline};
 
   &:last-child {
     border-right: none;

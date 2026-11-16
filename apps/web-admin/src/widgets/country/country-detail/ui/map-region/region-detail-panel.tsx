@@ -32,7 +32,7 @@ export function RegionDetailPanel({
       style={{
         background: palette.bg,
         border: `1px solid ${palette.border}`,
-        borderRadius: 16,
+        borderRadius: 10,
         overflow: 'auto',
         boxShadow: palette.shadowNone,
         padding: 24,
@@ -57,16 +57,17 @@ export function RegionDetailPanel({
             {emptyIcon && (
               <div
                 style={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: '50%',
+                  width: 44,
+                  height: 44,
+                  borderRadius: 10,
                   background: palette.bgSecondary,
                   border: `1px solid ${palette.border}`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginBottom: 12,
-                  fontSize: 28,
+                  color: palette.textSecondary,
+                  fontSize: 20,
                 }}
               >
                 {emptyIcon}

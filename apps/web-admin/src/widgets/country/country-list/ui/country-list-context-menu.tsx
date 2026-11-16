@@ -1,17 +1,23 @@
 /**
- * 행 우클릭 컨텍스트 메뉴 — 편집/고정/삭제 등 자주 쓰는 액션.
- *
- * 행 컴포넌트에서 onContextMenu로 좌표 + country를 넘겨 호출.
- * 편집은 역사 국가만 onEditHistorical 호출 (현대 국가는 별도 폼).
+ * 행 우클릭 컨텍스트 메뉴 — 고정 / 편집 등 빠른 액션.
+ * 사건 상세 EventActionsMenu와 동일한 6px 플랫 메뉴 규격.
  */
 import React, { useEffect, useRef } from 'react'
 
 import { createPortal } from 'react-dom'
 
-import { FaEdit, FaRegStar, FaStar } from 'react-icons/fa'
+import { FiEdit2, FiStar } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import {
+  MOTION,
+  RADIUS,
+  ledgerBackground,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+} from '@/entities/event/ui/ledger-tokens'
+import { DANGER, metaText } from '@/pages/events/styles/theme'
 import { Z_INDEX } from '@/shared/styles/z-index'
 
 interface ContextMenuItem {
@@ -51,7 +57,6 @@ export function CountryListContextMenu({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
-    // 다음 틱부터 listener 등록 (현재 우클릭이 즉시 닫지 않도록)
     const t = setTimeout(() => {
       document.addEventListener('mousedown', handler)
       document.addEventListener('contextmenu', handler)
@@ -69,7 +74,13 @@ export function CountryListContextMenu({
     {
       id: 'pin',
       label: pinned ? '고정 해제' : '고정',
-      icon: pinned ? <FaStar /> : <FaRegStar />,
+      icon: (
+        <FiStar
+          size={13}
+          fill={pinned ? 'currentColor' : 'none'}
+          aria-hidden
+        />
+      ),
       onClick: () => {
         onTogglePin(country.id)
         onClose()
@@ -80,8 +91,8 @@ export function CountryListContextMenu({
   if (onEdit) {
     items.push({
       id: 'edit',
-      label: '편집',
-      icon: <FaEdit />,
+      label: '정보 수정',
+      icon: <FiEdit2 size={13} aria-hidden />,
       onClick: () => {
         onEdit(country)
         onClose()
@@ -89,9 +100,8 @@ export function CountryListContextMenu({
     })
   }
 
-  // 화면 밖으로 안 나가게 좌표 보정 (대략적)
   const left = Math.min(position.x, window.innerWidth - 180)
-  const top = Math.min(position.y, window.innerHeight - items.length * 40 - 16)
+  const top = Math.min(position.y, window.innerHeight - items.length * 36 - 24)
 
   return createPortal(
     <Menu
@@ -122,21 +132,24 @@ export function CountryListContextMenu({
 
 const Menu = styled.div`
   position: fixed;
-  min-width: 170px;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 10px;
-  box-shadow: 0 8px 24px ${({ theme }) => theme.colors.shadow.md};
+  min-width: 168px;
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.SM};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 8px 24px rgba(0, 0, 0, 0.55)'
+      : '0 8px 24px rgba(15, 23, 42, 0.1)'};
   padding: 4px;
   z-index: ${Z_INDEX.DROPDOWN + 10};
 `
 
 const MenuTitle = styled.div`
-  padding: 6px 10px 8px;
+  padding: 5px 10px 6px;
   font-size: 11px;
   font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  ${metaText}
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   margin-bottom: 4px;
   white-space: nowrap;
   overflow: hidden;
@@ -144,23 +157,32 @@ const MenuTitle = styled.div`
 `
 
 const MenuItem = styled.button<{ $variant: 'default' | 'danger' }>`
+  appearance: none;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 8px 10px;
+  padding: 7px 10px;
   border: none;
   background: transparent;
   color: ${({ $variant, theme }) =>
-    $variant === 'danger' ? theme.colors.error : theme.colors.text.primary};
-  border-radius: 6px;
+    $variant === 'danger' ? theme.colors.text.secondary : theme.colors.text.primary};
+  border-radius: 4px;
+  font-family: inherit;
   cursor: pointer;
   text-align: left;
-  font-size: 13px;
+  font-size: 12.5px;
+  font-weight: 500;
+  transition:
+    background ${MOTION.fast} ease,
+    color ${MOTION.fast} ease;
 
   &:hover:not(:disabled),
   &:focus-visible {
-    background: ${({ theme }) => theme.colors.hover};
+    background: ${({ $variant, theme }) =>
+      $variant === 'danger' ? DANGER.soft : ledgerHoverFill(theme.mode)};
+    color: ${({ $variant, theme }) =>
+      $variant === 'danger' ? theme.colors.error : theme.colors.text.primary};
     outline: none;
   }
 
@@ -178,11 +200,6 @@ const ItemIcon = styled.span`
   justify-content: center;
   flex-shrink: 0;
   color: ${({ theme }) => theme.colors.text.tertiary};
-
-  > svg {
-    width: 12px;
-    height: 12px;
-  }
 `
 
 const ItemLabel = styled.span`

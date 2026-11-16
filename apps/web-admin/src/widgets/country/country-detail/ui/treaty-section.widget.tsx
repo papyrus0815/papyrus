@@ -11,6 +11,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   FiChevronLeft,
+  FiChevronRight,
   FiEdit2,
   FiExternalLink,
   FiFileText,
@@ -72,9 +73,16 @@ import {
 } from '@/widgets/country/country-inline-modal'
 
 import * as DashboardStyles from './country-detail-dashboard.styles'
+import {
+  countryTabCanvasPadding,
+  LedgerFilterChip,
+  LedgerToolbarButton,
+  LedgerViewSwitch,
+  LedgerViewSwitchItem,
+} from './country-ledger-primitives'
 import * as TD from './treaty-detail.styles'
 
-const fadeIn = keyframes`from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; }`
+const fadeIn = keyframes`from { opacity: 0; } to { opacity: 1; }`
 
 // ──────────────────────────────────────────────
 // Styled Components
@@ -84,13 +92,9 @@ const Wrap = styled.div`
   display: flex;
   flex-direction: column;
   gap: 20px;
-  padding: 28px 32px 48px;
+  ${countryTabCanvasPadding}
   min-height: 400px;
-  animation: ${fadeIn} 0.18s ease;
-
-  @media (max-width: 768px) {
-    padding: 20px 16px 36px;
-  }
+  animation: ${fadeIn} 0.16s ease;
 `
 
 const TreatyHeaderActions = styled.div`
@@ -100,25 +104,7 @@ const TreatyHeaderActions = styled.div`
   flex-wrap: wrap;
 `
 
-const TreatySecondaryBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.primary};
-    background: ${({ theme }) => theme.colors.hover};
-  }
-`
+const TreatySecondaryBtn = styled(LedgerToolbarButton)``
 
 const Empty = styled.div`
   padding: 28px 0;
@@ -172,8 +158,12 @@ const TreatyEmptySpecDesc = styled.p`
 `
 
 const TreatyEmptySpecAction = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   margin-top: 4px;
-  padding: 5px 10px;
+  height: 30px;
+  padding: 0 10px;
   border-radius: 6px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   background: transparent;
@@ -204,27 +194,7 @@ const TreatyFilterGroup = styled.div`
   gap: 6px;
 `
 
-const TreatyFilterChip = styled.button<{ $active: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid
-    ${({ $active, theme }) =>
-      $active ? theme.colors.primary : theme.colors.border.light};
-  background: ${({ $active, theme }) =>
-    $active ? theme.colors.activeLight : 'transparent'};
-  color: ${({ $active, theme }) =>
-    $active ? theme.colors.primary : theme.colors.text.secondary};
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
+const TreatyFilterChip = styled(LedgerFilterChip)``
 
 const TreatyFilterCount = styled.span`
   font-size: 11px;
@@ -267,11 +237,20 @@ const TreatySearchBox = styled.label`
   gap: 7px;
   width: 240px;
   max-width: 100%;
-  padding: 6px 10px;
-  border-radius: 7px;
+  height: 34px;
+  padding: 0 11px;
+  border-radius: 8px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
+
+  &:focus-within {
+    border-color: ${({ theme }) => theme.colors.primary};
+  }
+
+  @media (max-width: 768px) {
+    height: 40px;
+  }
 `
 
 const TreatySearchInput = styled.input`
@@ -281,28 +260,6 @@ const TreatySearchInput = styled.input`
   background: transparent;
   font-size: 12.5px;
   color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const TreatyViewToggle = styled.div`
-  display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 7px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) => theme.colors.background.secondary};
-`
-
-const TreatyViewBtn = styled.button<{ $active: boolean }>`
-  padding: 4px 9px;
-  border: none;
-  border-radius: 5px;
-  font-size: 11.5px;
-  font-weight: 700;
-  cursor: pointer;
-  color: ${({ $active, theme }) =>
-    $active ? theme.colors.text.primary : theme.colors.text.tertiary};
-  background: ${({ $active, theme }) =>
-    $active ? theme.colors.background.primary : 'transparent'};
 `
 
 const TreatyLedgerGrid = styled.div`
@@ -395,8 +352,12 @@ const TreatyMetaLine = styled.div`
 `
 
 const TreatyDetailBtn = styled.button`
-  padding: 4px 8px;
-  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
@@ -421,25 +382,21 @@ const Grid = styled.div`
 const Card = styled.div`
   background: ${({ theme }) => theme.ts!.card};
   border: 1px solid ${({ theme }) => theme.ts!.border};
-  border-radius: 14px;
+  border-radius: 10px;
   overflow: hidden;
   cursor: pointer;
-  transition:
-    box-shadow 0.15s,
-    transform 0.15s;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
   &:hover {
-    box-shadow: ${({ theme }) => theme.ts!.cardHoverShadow};
-    transform: translateY(-2px);
+    border-color: ${({ theme }) => theme.ts!.main};
   }
 `
 
 const CardThumb = styled.div<{ $url?: string | null }>`
   width: 100%;
   height: 140px;
-  background: ${({ $url }) =>
-    $url
-      ? `url(${$url}) center/cover no-repeat`
-      : `linear-gradient(135deg, #667eea 0%, #764ba2 100%)`};
+  background: ${({ $url, theme }) =>
+    $url ? `url(${$url}) center/cover no-repeat` : theme.ts!.bg};
+  border-bottom: 1px solid ${({ theme }) => theme.ts!.border};
   position: relative;
 `
 
@@ -1050,7 +1007,8 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
               type="button"
               onClick={() => setCreateOpen(true)}
             >
-              + 첫 조약 등록 →
+              <FiPlus size={12} />
+              <span>첫 조약 등록</span>
             </TreatyEmptySpecAction>
           </TreatyEmptySpecCell>
 
@@ -1065,7 +1023,8 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
               type="button"
               onClick={() => navigate(pathKeys.treaties.list())}
             >
-              조약 카탈로그로 이동 →
+              <span>조약 카탈로그로 이동</span>
+              <FiExternalLink size={12} />
             </TreatyEmptySpecAction>
           </TreatyEmptySpecCell>
         </TreatyEmptySpecGrid>
@@ -1126,22 +1085,22 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
                   aria-label="조약 검색"
                 />
               </TreatySearchBox>
-              <TreatyViewToggle role="group" aria-label="조약 보기 방식">
-                <TreatyViewBtn
+              <LedgerViewSwitch role="group" aria-label="조약 보기 방식">
+                <LedgerViewSwitchItem
                   type="button"
                   $active={viewMode === 'ledger'}
                   onClick={() => setViewMode('ledger')}
                 >
                   2열 원장
-                </TreatyViewBtn>
-                <TreatyViewBtn
+                </LedgerViewSwitchItem>
+                <LedgerViewSwitchItem
                   type="button"
                   $active={viewMode === 'cards'}
                   onClick={() => setViewMode('cards')}
                 >
                   카드
-                </TreatyViewBtn>
-              </TreatyViewToggle>
+                </LedgerViewSwitchItem>
+              </LedgerViewSwitch>
             </TreatyToolbarRight>
           </TreatyToolbar>
 
@@ -1198,7 +1157,8 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
                       setDetailId(treatyItem.id)
                     }}
                   >
-                    상세 →
+                    <span>상세</span>
+                    <FiChevronRight size={12} />
                   </TreatyDetailBtn>
                 </TreatyLedgerRow>
               ))}
@@ -2981,7 +2941,7 @@ const SignatoryTenurePicker: React.FC<{
           targetKey <= endKey
         return (
           <option key={tenureItem.id} value={tenureItem.id}>
-            {isContemporary ? '★ [체결 당시 재임] ' : ''}
+            {isContemporary ? '[체결 당시 재임] ' : ''}
             {formatSignatoryTenureLabel(tenureItem)}
           </option>
         )

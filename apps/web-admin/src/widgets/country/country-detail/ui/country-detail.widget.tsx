@@ -2,7 +2,15 @@ import React, { useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
+import {
+  FiArrowLeft,
+  FiArrowUpRight,
+  FiCompass,
+  FiEdit2,
+  FiGlobe,
+} from 'react-icons/fi'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import styled from 'styled-components'
 
 import { type ContinentOption } from '@/entities/country/api'
 import {
@@ -14,6 +22,7 @@ import { useExportImports } from '@/entities/country/api.trade'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { companyApi } from '@/shared/api/company'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { formatCountryPeriod } from '@/shared/lib/country-period'
 import { pathKeys } from '@/shared/router'
 import { useCountryListState } from '@/widgets/country/country-list/country-list-state.context'
 
@@ -40,6 +49,22 @@ import {
   tabId,
 } from './overview-sub-tabs'
 import * as TabStyles from './overview-sub-tabs.styles'
+import {
+  DIGIT_DISPLAY,
+  MOTION,
+  RADIUS,
+  countryTabCanvasPadding,
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentSubtle,
+  ledgerBackground,
+  ledgerHairlineHover,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  ledgerInkLine,
+  ledgerSubtleFill,
+  metaText,
+} from './country-ledger-primitives'
 import { CountryPersonsSection } from './country-persons-section.widget'
 import { EventsTimelineSection } from './events-timeline-section.widget'
 import { TreatySectionWidget } from './treaty-section.widget'
@@ -311,8 +336,9 @@ function CountryDetailInner({
                       <TabStyles.CompactCountryBtn
                         type="button"
                         onClick={() => handleOverviewSubTabChange('dashboard')}
-                        title="클릭하여 대시보드로 돌아가기"
+                        title="대시보드로 돌아가기"
                       >
+                        <FiArrowLeft aria-hidden />
                         <TabStyles.CompactFlag aria-hidden>
                           {country.thumbnailUrl ? (
                             <img
@@ -334,24 +360,17 @@ function CountryDetailInner({
                           </TabStyles.CompactMeta>
                         )}
                       </TabStyles.CompactCountryBtn>
-                      <TabStyles.CompactActions>
-                        <TabStyles.CompactActionBtn
-                          type="button"
-                          onClick={() =>
-                            handleOverviewSubTabChange('dashboard')
-                          }
-                        >
-                          ← 대시보드
-                        </TabStyles.CompactActionBtn>
-                        {onEdit && (
+                      {onEdit && (
+                        <TabStyles.CompactActions>
                           <TabStyles.CompactActionBtn
                             type="button"
                             onClick={() => onEdit(country)}
                           >
+                            <FiEdit2 aria-hidden />
                             기본 정보 수정
                           </TabStyles.CompactActionBtn>
-                        )}
-                      </TabStyles.CompactActions>
+                        </TabStyles.CompactActions>
+                      )}
                     </TabStyles.CompactContextBar>
                   ) : undefined
                 }
@@ -445,10 +464,11 @@ function CountryDetailInner({
                         (searchParams.get('sub') as
                           | import('./government-info-section.widget').GovernmentContentTab
                           | null) ??
-                        (initialDetailTab === 'heads' ||
-                        initialDetailTab === 'political-system'
-                          ? 'system'
-                          : undefined)
+                        (initialDetailTab === 'heads'
+                          ? 'cabinets'
+                          : initialDetailTab === 'political-system'
+                            ? 'system'
+                            : undefined)
                       }
                     />
                   </S.TabContentPane>
@@ -535,19 +555,17 @@ function NotFoundState({
       as={motion.div}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.25 }}
+      transition={{ duration: 0.2 }}
     >
-      <S.EmptyStateBgOrb $x="20%" $y="25%" $size="280px" />
-      <S.EmptyStateBgOrb $x="70%" $y="65%" $size="240px" />
       <S.EmptyStateCard
-        initial={{ y: 8, opacity: 0 }}
+        initial={{ y: 6, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+        transition={{ duration: 0.22, ease: [0.25, 0.46, 0.45, 0.94] }}
       >
         <S.EmptyStateIllustration>
           <svg
-            width="120"
-            height="120"
+            width="80"
+            height="80"
             viewBox="0 0 120 120"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
@@ -556,14 +574,14 @@ function NotFoundState({
               cx="60"
               cy="60"
               r="42"
-              stroke="#fee2e2"
-              strokeWidth="3"
-              fill="#fef2f2"
+              stroke="rgba(239, 68, 68, 0.28)"
+              strokeWidth="2.5"
+              fill="rgba(239, 68, 68, 0.06)"
             />
             <path
-              d="M44 44l32 32M76 44l-32 32"
+              d="M46 46l28 28M74 46l-28 28"
               stroke="#ef4444"
-              strokeWidth="3"
+              strokeWidth="2.5"
               strokeLinecap="round"
             />
           </svg>
@@ -575,7 +593,12 @@ function NotFoundState({
           해당 ID의 국가가 삭제되었거나 잘못된 링크일 수 있습니다.
         </S.EmptyStateDescription>
         <S.EmptyStateHint>
-          ← 목록에서 다시 선택
+          <FiArrowLeft
+            size={13}
+            style={{ verticalAlign: '-2px', marginRight: 4 }}
+            aria-hidden
+          />
+          목록에서 다시 선택
         </S.EmptyStateHint>
         {onOpenMobileList && (
           <S.EmptyStateMobileButton type="button" onClick={onOpenMobileList}>
@@ -585,6 +608,22 @@ function NotFoundState({
       </S.EmptyStateCard>
     </S.EmptyStateContainer>
   )
+}
+
+function formatExplorerPopulation(raw: unknown): string | null {
+  if (raw == null || raw === '') return null
+  const num =
+    typeof raw === 'number'
+      ? raw
+      : Number(String(raw).replace(/,/g, '').trim())
+  if (!Number.isFinite(num) || num <= 0) return null
+  if (num >= 100_000_000) {
+    return `${(num / 100_000_000).toFixed(1).replace(/\.0$/, '')}억`
+  }
+  if (num >= 10_000) {
+    return `${Math.round(num / 10_000).toLocaleString('ko-KR')}만`
+  }
+  return `${Math.round(num).toLocaleString('ko-KR')}명`
 }
 
 function EmptyState({
@@ -592,80 +631,573 @@ function EmptyState({
 }: {
   onOpenMobileList?: () => void
 }) {
-  const { unifiedCountries, historicalCount } = useCountryListState()
-  const hasCounts = unifiedCountries.length > 0 || historicalCount > 0
+  const navigate = useNavigate()
+  const {
+    countries,
+    unifiedCountries,
+    continents,
+    historicalCount,
+    apiHistoricalCountries,
+    continentFilter,
+    setContinentFilter,
+    setCountryTypeFilter,
+  } = useCountryListState()
+
+  const continentCounts = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const c of countries) {
+      if (c.continentId) {
+        map.set(c.continentId, (map.get(c.continentId) ?? 0) + 1)
+      }
+    }
+    return continents
+      .map((cont) => ({
+        id: cont.id,
+        name: cont.name,
+        count: map.get(cont.id) ?? 0,
+      }))
+      .filter((item) => item.count > 0)
+  }, [countries, continents])
+
+  const totalPopulation = useMemo(() => {
+    let sum = 0
+    for (const c of countries) {
+      const pop =
+        typeof c.population === 'number'
+          ? c.population
+          : Number(String(c.population ?? '').replace(/,/g, ''))
+      if (Number.isFinite(pop) && pop > 0) sum += pop
+    }
+    return sum
+  }, [countries])
+
+  const topModernCountries = useMemo(() => {
+    const pool = continentFilter
+      ? unifiedCountries.filter((c) => c.continentId === continentFilter)
+      : unifiedCountries
+    return [...pool]
+      .sort((a, b) => {
+        const popA = Number(String(a.population ?? 0).replace(/,/g, '')) || 0
+        const popB = Number(String(b.population ?? 0).replace(/,/g, '')) || 0
+        if (popB !== popA) return popB - popA
+        return a.name.localeCompare(b.name, 'ko')
+      })
+      .slice(0, 8)
+  }, [unifiedCountries, continentFilter])
+
+  const featuredHistoricalCountries = useMemo(() => {
+    if (!apiHistoricalCountries?.length) return []
+    return [...apiHistoricalCountries]
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+      .slice(0, 8)
+  }, [apiHistoricalCountries])
 
   return (
-    <S.EmptyStateContainer
+    <ExplorerContainer
       as={motion.div}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.25 }}
+      transition={{ duration: 0.2 }}
     >
-      <S.EmptyStateBgOrb $x="10%" $y="20%" $size="320px" />
-      <S.EmptyStateBgOrb $x="75%" $y="60%" $size="280px" />
-      <S.EmptyStateBgOrb $x="50%" $y="85%" $size="200px" />
-      <S.EmptyStateCard
-        initial={{ y: 8, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-      >
-        <S.EmptyStateIllustration>
-          <svg
-            width="120"
-            height="120"
-            viewBox="0 0 120 120"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
+      <ExplorerInner>
+        <ExplorerHeader>
+          <ExplorerHeaderText>
+            <ExplorerEyebrow>국가 아카이브 탐색기</ExplorerEyebrow>
+            <ExplorerTitle>현대 주권국과 역사 국가를 한눈에 탐색하세요</ExplorerTitle>
+            <ExplorerDescription>
+              좌측 목록에서 국가를 선택하거나, 아래 대륙·주요 국가 바로가기로 즉시 진입할 수 있습니다.
+            </ExplorerDescription>
+          </ExplorerHeaderText>
+          {onOpenMobileList && (
+            <S.EmptyStateMobileButton type="button" onClick={onOpenMobileList}>
+              목록에서 국가 선택하기
+            </S.EmptyStateMobileButton>
+          )}
+        </ExplorerHeader>
+
+        <ExplorerKpiStrip aria-label="전체 국가 아카이브 요약">
+          <ExplorerKpiCell
+            type="button"
+            onClick={() => {
+              setCountryTypeFilter('modern')
+              setContinentFilter('')
+            }}
           >
-            <circle
-              cx="60"
-              cy="54"
-              r="38"
-              stroke="#e5e7eb"
-              strokeWidth="2"
-              fill="none"
-            />
-            <path
-              d="M22 54h76M60 16v76"
-              stroke="#e5e7eb"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-            <path
-              d="M60 92c-6 0-10-4-10-10 0-8 10-20 10-20s10 12 10 20c0 6-4 10-10 10z"
-              fill="#6366f1"
-              stroke="#fff"
-              strokeWidth="2"
-              strokeLinejoin="round"
-            />
-            <circle cx="60" cy="82" r="3" fill="#fff" />
-          </svg>
-        </S.EmptyStateIllustration>
-        <S.EmptyStateTitle>
-          국가를 선택해주세요
-        </S.EmptyStateTitle>
-        <S.EmptyStateDescription>
-          왼쪽 목록에서 국가를 선택하면 상세 정보를 볼 수 있습니다
-        </S.EmptyStateDescription>
-        {hasCounts && (
-          <S.EmptyStateCorpusBadge>
-            <span>현대 국가 {unifiedCountries.length}개</span>
-            <span>·</span>
-            <span>과거 국가 {historicalCount}개</span>
-          </S.EmptyStateCorpusBadge>
+            <ExplorerKpiLabel>등록 현대 국가</ExplorerKpiLabel>
+            <ExplorerKpiValue>
+              {unifiedCountries.length.toLocaleString('ko-KR')}
+              <ExplorerKpiUnit>개국</ExplorerKpiUnit>
+            </ExplorerKpiValue>
+            <ExplorerKpiSub>현존 주권국 · 대시보드 바로가기</ExplorerKpiSub>
+          </ExplorerKpiCell>
+
+          <ExplorerKpiCell
+            type="button"
+            onClick={() => setCountryTypeFilter('historical')}
+          >
+            <ExplorerKpiLabel>등록 과거 국가</ExplorerKpiLabel>
+            <ExplorerKpiValue>
+              {historicalCount.toLocaleString('ko-KR')}
+              <ExplorerKpiUnit>개국</ExplorerKpiUnit>
+            </ExplorerKpiValue>
+            <ExplorerKpiSub>왕조 · 제국 · 역사 정권 아카이브</ExplorerKpiSub>
+          </ExplorerKpiCell>
+
+          <ExplorerKpiCell
+            type="button"
+            onClick={() => {
+              setCountryTypeFilter('all')
+              setContinentFilter('')
+            }}
+          >
+            <ExplorerKpiLabel>대륙 권역</ExplorerKpiLabel>
+            <ExplorerKpiValue>
+              {continentCounts.length}
+              <ExplorerKpiUnit>개 대륙</ExplorerKpiUnit>
+            </ExplorerKpiValue>
+            <ExplorerKpiSub>대륙별 국가 목록 필터 연동</ExplorerKpiSub>
+          </ExplorerKpiCell>
+
+          <ExplorerKpiCell as="div">
+            <ExplorerKpiLabel>집계 등록 인구</ExplorerKpiLabel>
+            <ExplorerKpiValue>
+              {formatExplorerPopulation(totalPopulation) ?? '—'}
+            </ExplorerKpiValue>
+            <ExplorerKpiSub>현대 국가 기준 인구 합산</ExplorerKpiSub>
+          </ExplorerKpiCell>
+        </ExplorerKpiStrip>
+
+        {continentCounts.length > 0 && (
+          <ExplorerSection>
+            <ExplorerSectionHead>
+              <ExplorerSectionTitle>대륙별 빠른 필터</ExplorerSectionTitle>
+              {continentFilter && (
+                <ExplorerResetBtn
+                  type="button"
+                  onClick={() => setContinentFilter('')}
+                >
+                  대륙 필터 해제
+                </ExplorerResetBtn>
+              )}
+            </ExplorerSectionHead>
+            <ExplorerChipRow>
+              <ExplorerChip
+                type="button"
+                $active={!continentFilter}
+                onClick={() => {
+                  setCountryTypeFilter('modern')
+                  setContinentFilter('')
+                }}
+              >
+                전체 대륙 ({unifiedCountries.length})
+              </ExplorerChip>
+              {continentCounts.map((cont) => (
+                <ExplorerChip
+                  key={cont.id}
+                  type="button"
+                  $active={continentFilter === cont.id}
+                  onClick={() => {
+                    setCountryTypeFilter('modern')
+                    setContinentFilter(
+                      continentFilter === cont.id ? '' : cont.id,
+                    )
+                  }}
+                >
+                  {cont.name} ({cont.count})
+                </ExplorerChip>
+              ))}
+            </ExplorerChipRow>
+          </ExplorerSection>
         )}
-        <S.EmptyStateHint>
-          ← 목록에서 선택
-        </S.EmptyStateHint>
-        {onOpenMobileList && (
-          <S.EmptyStateMobileButton type="button" onClick={onOpenMobileList}>
-            목록에서 국가 선택하기
-          </S.EmptyStateMobileButton>
+
+        {topModernCountries.length > 0 && (
+          <ExplorerSection>
+            <ExplorerSectionHead>
+              <ExplorerSectionTitle>
+                주요 현대 국가 바로가기
+                {continentFilter
+                  ? ` · ${continentCounts.find((c) => c.id === continentFilter)?.name ?? ''}`
+                  : ''}
+              </ExplorerSectionTitle>
+            </ExplorerSectionHead>
+            <ExplorerGrid>
+              {topModernCountries.map((item) => {
+                const popLabel = formatExplorerPopulation(item.population)
+                const flagSrc = item.thumbnailUrl
+                  ? getUploadImageUrl(item.thumbnailUrl)
+                  : null
+                return (
+                  <ExplorerCountryCard
+                    key={item.id}
+                    type="button"
+                    onClick={() => navigate(pathKeys.countryDetail(item.id))}
+                  >
+                    <ExplorerFlagBox>
+                      {flagSrc ? (
+                        <img src={flagSrc} alt="" />
+                      ) : item.flagEmoji ? (
+                        <span>{item.flagEmoji}</span>
+                      ) : item.isoCode ? (
+                        <ExplorerFlagCode>{item.isoCode}</ExplorerFlagCode>
+                      ) : (
+                        <FiGlobe size={13} aria-hidden />
+                      )}
+                    </ExplorerFlagBox>
+                    <ExplorerCardBody>
+                      <ExplorerCardName>{item.name}</ExplorerCardName>
+                      <ExplorerCardMeta>
+                        {[
+                          item.capital ? `수도 ${item.capital}` : null,
+                          popLabel ? `인구 ${popLabel}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ') || item.localName || '상세 보기'}
+                      </ExplorerCardMeta>
+                    </ExplorerCardBody>
+                  </ExplorerCountryCard>
+                )
+              })}
+            </ExplorerGrid>
+          </ExplorerSection>
         )}
-      </S.EmptyStateCard>
-    </S.EmptyStateContainer>
+
+        {featuredHistoricalCountries.length > 0 && (
+          <ExplorerSection>
+            <ExplorerSectionHead>
+              <ExplorerSectionTitle>역사 국가 · 왕조 바로가기</ExplorerSectionTitle>
+              <ExplorerResetBtn
+                type="button"
+                onClick={() => setCountryTypeFilter('historical')}
+              >
+                과거 국가 전체 목록 ({historicalCount})
+                <FiArrowUpRight size={13} aria-hidden />
+              </ExplorerResetBtn>
+            </ExplorerSectionHead>
+            <ExplorerGrid>
+              {featuredHistoricalCountries.map((hist) => {
+                const periodLabel = formatCountryPeriod(hist)
+                const flagSrc = hist.thumbnailUrl
+                  ? getUploadImageUrl(hist.thumbnailUrl)
+                  : null
+                return (
+                  <ExplorerCountryCard
+                    key={hist.id}
+                    type="button"
+                    onClick={() => navigate(pathKeys.countryDetail(hist.id))}
+                  >
+                    <ExplorerFlagBox>
+                      {flagSrc ? (
+                        <img src={flagSrc} alt="" />
+                      ) : (
+                        <FiCompass size={13} aria-hidden />
+                      )}
+                    </ExplorerFlagBox>
+                    <ExplorerCardBody>
+                      <ExplorerCardName>{hist.name}</ExplorerCardName>
+                      <ExplorerCardMeta>
+                        {periodLabel || hist.enName || '역사 국가'}
+                      </ExplorerCardMeta>
+                    </ExplorerCardBody>
+                  </ExplorerCountryCard>
+                )
+              })}
+            </ExplorerGrid>
+          </ExplorerSection>
+        )}
+      </ExplorerInner>
+    </ExplorerContainer>
   )
 }
+
+const ExplorerContainer = styled.div`
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  ${countryTabCanvasPadding}
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+`
+
+const ExplorerInner = styled.div`
+  max-width: 980px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+`
+
+const ExplorerHeader = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 16px;
+  border-bottom: 1px solid ${({ theme }) => ledgerInkLine(theme.mode)};
+`
+
+const ExplorerHeaderText = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const ExplorerEyebrow = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+`
+
+const ExplorerTitle = styled.h1`
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const ExplorerDescription = styled.p`
+  margin: 0;
+  font-size: 13px;
+  ${metaText}
+`
+
+const ExplorerKpiStrip = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+
+  @media (max-width: 820px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+const ExplorerKpiCell = styled.button`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 14px 16px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background ${MOTION.fast} ease;
+
+  & + & {
+    border-left: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  }
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+
+  @media (max-width: 820px) {
+    &:nth-child(2n + 1) {
+      border-left: none;
+    }
+    &:nth-child(n + 3) {
+      border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+    }
+  }
+`
+
+const ExplorerKpiLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  ${metaText}
+`
+
+const ExplorerKpiValue = styled.span`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 21px;
+  font-weight: 700;
+  ${DIGIT_DISPLAY}
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const ExplorerKpiUnit = styled.span`
+  font-size: 12px;
+  font-weight: 500;
+  ${metaText}
+`
+
+const ExplorerKpiSub = styled.span`
+  font-size: 11.5px;
+  ${metaText}
+`
+
+const ExplorerSection = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+const ExplorerSectionHead = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+`
+
+const ExplorerSectionTitle = styled.h2`
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const ExplorerResetBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 8px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.SM};
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  transition:
+    color ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    background ${MOTION.fast} ease;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => ledgerHairlineHover(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+`
+
+const ExplorerChipRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
+const ExplorerChip = styled.button<{ $active: boolean }>`
+  height: 28px;
+  padding: 0 10px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active
+        ? ledgerAccentBorder(theme.mode)
+        : ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
+  ${DIGIT_DISPLAY}
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  cursor: pointer;
+  transition:
+    border-color ${MOTION.fast} ease,
+    background ${MOTION.fast} ease,
+    color ${MOTION.fast} ease;
+
+  &:hover {
+    border-color: ${({ theme, $active }) =>
+      $active
+        ? ledgerAccentBorder(theme.mode)
+        : ledgerHairlineHover(theme.mode)};
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+    color: ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
+  }
+`
+
+const ExplorerGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+  gap: 8px;
+`
+
+const ExplorerCountryCard = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: 8px;
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  min-width: 0;
+  box-shadow: none;
+  transition:
+    border-color ${MOTION.fast} ease,
+    background ${MOTION.fast} ease;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerHairlineHover(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+`
+
+const ExplorerFlagBox = styled.span`
+  width: 32px;
+  height: 22px;
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 13px;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+`
+
+const ExplorerFlagCode = styled.span`
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+`
+
+const ExplorerCardBody = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+`
+
+const ExplorerCardName = styled.span`
+  font-size: 13px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const ExplorerCardMeta = styled.span`
+  font-size: 11.5px;
+  ${metaText}
+  ${DIGIT_DISPLAY}
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
 
 export const CountryDetail = React.memo(CountryDetailInner)

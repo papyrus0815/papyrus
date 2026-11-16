@@ -73,6 +73,12 @@ export class CountryController {
         endDay: hc.endDay,
         latitude: hc.latitude,
         longitude: hc.longitude,
+        linkStartEra: hc.linkStartEra ?? null,
+        linkStartYear: hc.linkStartYear ?? null,
+        linkStartMonth: hc.linkStartMonth ?? null,
+        linkEndEra: hc.linkEndEra ?? null,
+        linkEndYear: hc.linkEndYear ?? null,
+        linkEndMonth: hc.linkEndMonth ?? null,
         linkKind: hc.linkKind ?? null,
       })),
     }
@@ -127,6 +133,12 @@ export class CountryController {
       endDay: hc.endDay,
       latitude: hc.latitude,
       longitude: hc.longitude,
+      linkStartEra: hc.linkStartEra ?? null,
+      linkStartYear: hc.linkStartYear ?? null,
+      linkStartMonth: hc.linkStartMonth ?? null,
+      linkEndEra: hc.linkEndEra ?? null,
+      linkEndYear: hc.linkEndYear ?? null,
+      linkEndMonth: hc.linkEndMonth ?? null,
       linkKind: hc.linkKind ?? null,
     }))
   }

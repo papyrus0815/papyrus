@@ -631,14 +631,16 @@ export function PersonRegisterView({
   // 인물 수가 늘어났을 때 모달 진입 비용을 낮춤.
   useEffect(() => {
     Promise.all([
-      getAllCountries(),
-      getAllHistoricalCountries(),
-      dynastyApi.getAll(),
-      getAllReligions(),
+      getAllCountries().catch(() => [] as CountryResponseDto[]),
+      getAllHistoricalCountries().catch(
+        () => [] as HistoricalCountryResponseDto[],
+      ),
+      dynastyApi.getAll().catch(() => []),
+      getAllReligions().catch(() => []),
     ])
       .then(([modern, historical, dyn, rel]) => {
-        setModernCountries(modern)
-        setHistoricalCountries(historical)
+        setModernCountries(Array.isArray(modern) ? modern : [])
+        setHistoricalCountries(Array.isArray(historical) ? historical : [])
         setDynasties(Array.isArray(dyn) ? dyn : [])
         setReligions(Array.isArray(rel) ? rel : [])
       })
@@ -1212,6 +1214,10 @@ export function PersonRegisterView({
         setCountryName(historical.name ?? '')
         return
       }
+      if (!editPersonId && modernCountries.length > 0 && historicalCountries.length > 0) {
+        setCountryId('')
+        setCountryName('')
+      }
     } else if (historicalCountryId) {
       const historical = historicalCountries.find(
         (country) =>
@@ -1222,9 +1228,12 @@ export function PersonRegisterView({
         if (historicalCountryId !== historical.id)
           setHistoricalCountryId(historical.id)
         setCountryName(historical.name ?? '')
+      } else if (!editPersonId && modernCountries.length > 0 && historicalCountries.length > 0) {
+        setHistoricalCountryId('')
+        setCountryName('')
       }
     }
-  }, [countryId, historicalCountryId, primaryCountryId, modernCountries, historicalCountries])
+  }, [countryId, historicalCountryId, primaryCountryId, modernCountries, historicalCountries, editPersonId])
 
 
   // ─── Draft (localStorage) ──────────────────────────────────────────────────
@@ -2543,31 +2552,65 @@ export function PersonRegisterView({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (e.target !== e.currentTarget) return
     // 재진입 가드 — 버튼 disabled·⌘Enter 가드와 별개로 핸들러 자체에서도 이중 제출 차단.
     if (isSubmitting || uploadingThumbnail) return
     const validationErrors = validate()
     if (Object.keys(validationErrors).length > 0) {
       // 검증 실패 시 첫 오류 필드로 스크롤·포커스 — 긴 폼에서 놓치지 않도록.
-      // (성별 SegmentControl처럼 aria-invalid를 렌더하지 않는 컨트롤은 data-field-error로 매칭)
-      const hasFieldAnchor = Object.keys(validationErrors).some(
-        (key) => key !== '_form',
-      )
+      // (성별 SegmentControl처럼 aria-invalid를 렌더하지 않는 컨트롤은 data-field-error/data-jump-target으로 매칭)
+      const firstErrorKey = [
+        'name',
+        'countryId',
+        'gender',
+        'birth',
+        'death',
+        '_form',
+      ].find((key) => Boolean(validationErrors[key]))
+      const firstErrorMessage =
+        (firstErrorKey ? validationErrors[firstErrorKey] : undefined) ??
+        Object.values(validationErrors)[0]
+
       requestAnimationFrame(() => {
-        const el = formRef.current?.querySelector<HTMLElement>(
-          '[aria-invalid="true"], [data-field-error="true"]',
-        )
+        const root = formRef.current
+        let el: HTMLElement | null = null
+        if (root && firstErrorKey && firstErrorKey !== '_form') {
+          if (
+            firstErrorKey === 'name' ||
+            firstErrorKey === 'countryId' ||
+            firstErrorKey === 'gender'
+          ) {
+            el = root.querySelector<HTMLElement>(
+              `[data-jump-target="${firstErrorKey}"]`,
+            )
+          } else if (firstErrorKey === 'birth') {
+            el = document.getElementById(fid('birth-date'))
+          } else if (firstErrorKey === 'death') {
+            el = document.getElementById(fid('death-date'))
+          }
+        }
+        if (!el && root) {
+          el = root.querySelector<HTMLElement>(
+            '[aria-invalid="true"], [data-field-error="true"]',
+          )
+        }
         if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          el.focus?.()
+          const focusable = el.matches('input, button, select, textarea')
+            ? el
+            : el.querySelector<HTMLElement>(
+                'input:not([disabled]), button:not([disabled]), select:not([disabled]), textarea:not([disabled])',
+              ) ?? el
+          focusable.focus?.()
         } else if (validationErrors._form) {
           // 필드 앵커가 없는 _form-only 실패(배우자 orphan·중복·기간역전 등)는
           // 스크롤이 착지할 곳이 없어 제출이 '먹통'처럼 보인다 → 최상단 TopAlert로 폴백 스크롤.
           layoutRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
         }
       })
-      // 필드 오류 없이 _form만 선 경우 토스트로도 원인을 알린다(가시 피드백 보장).
-      if (validationErrors._form && !hasFieldAnchor) {
-        notify.error(validationErrors._form)
+      // 2단 분할 레이아웃이나 하단 스크롤 상태에서도 왜 등록이 막혔는지 즉시 알 수 있도록 토스트 피드백 보장.
+      if (firstErrorMessage) {
+        notify.error(firstErrorMessage)
       }
       return
     }
@@ -3452,6 +3495,7 @@ export function PersonRegisterView({
         recentCandidates={recentCandidates}
         editPersonId={editPersonId}
         countryId={countryId}
+        historicalCountryId={historicalCountryId}
         initialAncestorIds={editFamilyCache.ancestorIds}
         initialDescendantIds={editFamilyCache.descendantIds}
         initialSiblingIds={editFamilyCache.siblingIds}
@@ -3516,6 +3560,7 @@ export function PersonRegisterView({
       <form
         ref={formRef}
         id="person-register-form"
+        noValidate
         onSubmit={handleSubmit}
         onKeyDown={handleFormKeyDown}
         onChange={markDirty}

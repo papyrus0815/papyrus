@@ -6,6 +6,54 @@ import {
   HistoricalCountrySimple,
 } from '../domain/country.repository'
 import { classifyLinkedHistorical } from '../domain/linked-historical-classify'
+import {
+  effectiveSignedRange,
+  pickModernLinkPeriod,
+} from '../domain/modern-link-period'
+
+/**
+ * 연결 행(historicalConnections / modernCountry 쪽 findMany) → 목록 항목.
+ * 나라 자체의 존속 기간과 함께 **연결 기간**(그 땅에 있었던 기간)을 싣는다.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function toHistoricalCountrySimple(conn: any): HistoricalCountrySimple {
+  const hc = conn.historicalCountry
+  return {
+    id: hc.id,
+    name: hc.name,
+    enName: hc.enName,
+    thumbnailUrl: hc.thumbnailUrl,
+    stateType: hc.stateType,
+    startEra: hc.startEra,
+    startYear: hc.startYear,
+    startMonth: hc.startMonth,
+    startDay: hc.startDay,
+    endEra: hc.endEra,
+    endYear: hc.endYear,
+    endMonth: hc.endMonth,
+    endDay: hc.endDay,
+    latitude: hc.latitude != null ? Number(hc.latitude) : null,
+    longitude: hc.longitude != null ? Number(hc.longitude) : null,
+    ...pickModernLinkPeriod(conn),
+  }
+}
+
+/**
+ * 최근에 이 땅에 들어온 나라가 위로. 연결 기간이 있으면 그 시작을 쓴다
+ * (중국 목록의 중화민국은 1912, 대만 목록의 중화민국은 1945 자리에 선다).
+ * 동률이면 월·일 내림차순. 시작 미상은 맨 아래.
+ */
+function compareByEffectiveStartDesc(
+  a: HistoricalCountrySimple,
+  b: HistoricalCountrySimple,
+): number {
+  const av = effectiveSignedRange(a).start ?? Number.NEGATIVE_INFINITY
+  const bv = effectiveSignedRange(b).start ?? Number.NEGATIVE_INFINITY
+  if (av !== bv) return bv - av
+  const aMonth = (a.linkStartYear != null ? a.linkStartMonth : a.startMonth) ?? 0
+  const bMonth = (b.linkStartYear != null ? b.linkStartMonth : b.startMonth) ?? 0
+  return bMonth - aMonth || (b.startDay ?? 0) - (a.startDay ?? 0)
+}
 
 @Injectable()
 export class CountryPrismaRepository implements CountryRepository {
@@ -78,19 +126,13 @@ export class CountryPrismaRepository implements CountryRepository {
         },
       }),
     ])
-    const toSigned = (
-      era: string | null,
-      year: number | null,
-    ): number | null => {
-      if (year == null) return null
-      return era === 'BC' ? -Math.abs(year) : Math.abs(year)
-    }
+    // 그 땅에 있었던 기간으로 분류한다 — 중국 목록에서 중화민국(존속 중)이 '진행 중 앵커'로
+    // 잡혀 중화인민공화국을 밀어내지 않도록, 연결 끝(1949)을 종료로 본다.
     const { kindById } = classifyLinkedHistorical({
-      nodes: items.map((item) => ({
-        id: item.id,
-        startYear: toSigned(item.startEra, item.startYear),
-        endYear: toSigned(item.endEra, item.endYear),
-      })),
+      nodes: items.map((item) => {
+        const range = effectiveSignedRange(item)
+        return { id: item.id, startYear: range.start, endYear: range.end }
+      }),
       transitions,
       memberships,
     })
@@ -123,45 +165,8 @@ export class CountryPrismaRepository implements CountryRepository {
       })
 
     const items: HistoricalCountrySimple[] = connections
-      .map((conn) => ({
-        id: conn.historicalCountry.id,
-        name: conn.historicalCountry.name,
-        enName: conn.historicalCountry.enName,
-        thumbnailUrl: conn.historicalCountry.thumbnailUrl,
-        stateType: conn.historicalCountry.stateType,
-        startEra: conn.historicalCountry.startEra,
-        startYear: conn.historicalCountry.startYear,
-        startMonth: conn.historicalCountry.startMonth,
-        startDay: conn.historicalCountry.startDay,
-        endEra: conn.historicalCountry.endEra,
-        endYear: conn.historicalCountry.endYear,
-        endMonth: conn.historicalCountry.endMonth,
-        endDay: conn.historicalCountry.endDay,
-        latitude:
-          conn.historicalCountry.latitude != null
-            ? Number(conn.historicalCountry.latitude)
-            : null,
-        longitude:
-          conn.historicalCountry.longitude != null
-            ? Number(conn.historicalCountry.longitude)
-            : null,
-      }))
-      .sort((a, b) => {
-        // 시작일이 최근일수록 위로 (BC는 아래, AD는 최근 연도가 위).
-        // BC는 음수, AD는 양수로 환산해 비교.
-        const toNum = (era: string | null, year: number | null) => {
-          if (year == null) return Number.NEGATIVE_INFINITY
-          return era === 'BC' ? -year : year
-        }
-        const av = toNum(a.startEra, a.startYear)
-        const bv = toNum(b.startEra, b.startYear)
-        if (av !== bv) return bv - av
-        // 동률이면 월·일도 내림차순
-        return (
-          (b.startMonth ?? 0) - (a.startMonth ?? 0) ||
-          (b.startDay ?? 0) - (a.startDay ?? 0)
-        )
-      })
+      .map(toHistoricalCountrySimple)
+      .sort(compareByEffectiveStartDesc)
     await this.attachLinkKinds(items)
     return items
   }
@@ -508,44 +513,10 @@ export class CountryPrismaRepository implements CountryRepository {
   }
 
   private toEntity(data: any): Country {
-    const historicalCountries = data.historicalConnections
-      ?.map((conn: any) => ({
-        id: conn.historicalCountry.id,
-        name: conn.historicalCountry.name,
-        enName: conn.historicalCountry.enName,
-        thumbnailUrl: conn.historicalCountry.thumbnailUrl,
-        stateType: conn.historicalCountry.stateType,
-        startEra: conn.historicalCountry.startEra,
-        startYear: conn.historicalCountry.startYear,
-        startMonth: conn.historicalCountry.startMonth,
-        startDay: conn.historicalCountry.startDay,
-        endEra: conn.historicalCountry.endEra,
-        endYear: conn.historicalCountry.endYear,
-        endMonth: conn.historicalCountry.endMonth,
-        endDay: conn.historicalCountry.endDay,
-        latitude:
-          conn.historicalCountry.latitude != null
-            ? Number(conn.historicalCountry.latitude)
-            : null,
-        longitude:
-          conn.historicalCountry.longitude != null
-            ? Number(conn.historicalCountry.longitude)
-            : null,
-      }))
-      .sort((a: any, b: any) => {
-        // 시작일이 최근일수록 위로 (BC는 음수, AD는 양수로 환산해 비교)
-        const toNum = (era: string | null, year: number | null) => {
-          if (year == null) return Number.NEGATIVE_INFINITY
-          return era === 'BC' ? -year : year
-        }
-        const av = toNum(a.startEra, a.startYear)
-        const bv = toNum(b.startEra, b.startYear)
-        if (av !== bv) return bv - av
-        return (
-          (b.startMonth ?? 0) - (a.startMonth ?? 0) ||
-          (b.startDay ?? 0) - (a.startDay ?? 0)
-        )
-      })
+    const historicalCountries: HistoricalCountrySimple[] | undefined =
+      data.historicalConnections
+        ?.map(toHistoricalCountrySimple)
+        .sort(compareByEffectiveStartDesc)
 
     return new Country({
       id: data.id,

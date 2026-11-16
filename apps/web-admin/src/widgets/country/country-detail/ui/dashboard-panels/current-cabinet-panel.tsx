@@ -57,10 +57,12 @@ import {
   FiX,
 } from 'react-icons/fi'
 
+import { CabinetFormModal } from '../cabinet-form-modal.widget'
 import { IconBriefcase } from '../country-detail-dashboard.icons'
 import * as S from '../country-detail-dashboard.styles'
 import type { CabinetMember } from './cabinet-member.types'
 import { type CabinetBranchSlot, CabinetMindMap } from './cabinet-mind-map'
+import { SectionEmpty } from './section-empty'
 import { SectionHelpPopover } from './section-help-popover'
 
 interface Props {
@@ -540,9 +542,12 @@ export function CurrentCabinetPanel({
   onSelectPerson,
   children,
 }: Props) {
+  const isModernScope = Boolean(countryId) && !historicalCountryId
   const [expanded, setExpanded] = useState(false)
+  const [showEmptyMindMap, setShowEmptyMindMap] = useState(false)
   const [headViewMode, setHeadViewMode] = useState<'cabinet' | 'fallback'>('cabinet')
   const [showAllEraDepartments, setShowAllEraDepartments] = useState(false)
+  const [cabinetFormOpen, setCabinetFormOpen] = useState(false)
   const queryClient = useQueryClient()
 
   /*
@@ -635,19 +640,24 @@ export function CurrentCabinetPanel({
 
   const [selectedCabinetId, setSelectedCabinetId] = useState<string | null>(null)
 
-  // 기본 선택은 현직(종료일 없는) 행정부, 없으면 가장 최근
+  // 기본 선택은 현대 국가일 때 현대 직속(historicalCountryId 없음) 현직/최신을 우선하고, 없을 때만 전신 내각으로 폴백
   useEffect(() => {
     if (cabinets.length === 0) {
       setSelectedCabinetId(null)
       return
     }
-    setSelectedCabinetId((prev) =>
-      prev && cabinets.some((cabinet) => cabinet.id === prev)
-        ? prev
-        : (cabinets.find((cabinet) => !cabinet.headTenure?.endDate) ??
-            cabinets[0]).id,
-    )
-  }, [cabinets])
+    setSelectedCabinetId((prev) => {
+      if (prev && cabinets.some((cabinet) => cabinet.id === prev)) return prev
+      const modernPool = isModernScope
+        ? cabinets.filter((cabinet) => !cabinet.headTenure?.historicalCountryId)
+        : []
+      const pool = modernPool.length > 0 ? modernPool : cabinets
+      const activeCab = pool.find(
+        (cabinet) => !cabinet.headTenure?.endDate,
+      )
+      return (activeCab ?? pool[0]).id
+    })
+  }, [cabinets, isModernScope])
 
   const selectCabinet = (cabinetId: string) => {
     setHeadViewMode('cabinet')
@@ -882,16 +892,19 @@ export function CurrentCabinetPanel({
       setSelectedFallbackHeadId(null)
       return
     }
-    setSelectedFallbackHeadId((prev) =>
-      prev && fallbackHeadTenures.some((row) => row.id === prev)
-        ? prev
-        : (
-            fallbackHeadTenures.find(
-              (row) => !row.endDate && row.endYear == null,
-            ) ?? fallbackHeadTenures[0]
-          ).id,
-    )
-  }, [fallbackHeadTenures])
+    setSelectedFallbackHeadId((prev) => {
+      if (prev && fallbackHeadTenures.some((row) => row.id === prev)) {
+        return prev
+      }
+      const modernPool = isModernScope
+        ? fallbackHeadTenures.filter((row) => !row.historicalCountryId)
+        : []
+      const pool = modernPool.length > 0 ? modernPool : fallbackHeadTenures
+      return (
+        pool.find((row) => !row.endDate && row.endYear == null) ?? pool[0]
+      ).id
+    })
+  }, [fallbackHeadTenures, isModernScope])
 
   const selectFallbackHead = (tenureId: string) => {
     setSelectedFallbackHeadId(tenureId)
@@ -2274,26 +2287,44 @@ export function CurrentCabinetPanel({
           )
         )}
         <HeaderActions>
-          <CabinetViewSwitch role="tablist" aria-label="행정부 보기 방식 전환">
-            <CabinetViewSwitchBtn
+          {cabinets.length === 0 &&
+          fallbackHeadTenures.length === 0 &&
+          heads.length === 0 &&
+          members.length === 0 ? (
+            <S.SectionAction
               type="button"
-              role="tab"
-              aria-selected={cabinetViewMode === 'mindmap'}
-              $active={cabinetViewMode === 'mindmap'}
-              onClick={() => setCabinetViewMode('mindmap')}
+              onClick={() => setShowEmptyMindMap((prev) => !prev)}
             >
-              마인드맵
-            </CabinetViewSwitchBtn>
-            <CabinetViewSwitchBtn
-              type="button"
-              role="tab"
-              aria-selected={cabinetViewMode === 'ledger'}
-              $active={cabinetViewMode === 'ledger'}
-              onClick={() => setCabinetViewMode('ledger')}
-            >
-              2열 원장
-            </CabinetViewSwitchBtn>
-          </CabinetViewSwitch>
+              {showEmptyMindMap ? '빈 편제 접기' : '편제 마인드맵 미리보기'}
+            </S.SectionAction>
+          ) : (
+            <CabinetViewSwitch role="tablist" aria-label="행정부 보기 방식 전환">
+              <CabinetViewSwitchBtn
+                type="button"
+                role="tab"
+                aria-selected={cabinetViewMode === 'mindmap'}
+                $active={cabinetViewMode === 'mindmap'}
+                onClick={() => setCabinetViewMode('mindmap')}
+              >
+                마인드맵
+              </CabinetViewSwitchBtn>
+              <CabinetViewSwitchBtn
+                type="button"
+                role="tab"
+                aria-selected={cabinetViewMode === 'ledger'}
+                $active={cabinetViewMode === 'ledger'}
+                onClick={() => setCabinetViewMode('ledger')}
+              >
+                2열 원장
+              </CabinetViewSwitchBtn>
+            </CabinetViewSwitch>
+          )}
+          <S.SectionAction
+            type="button"
+            onClick={() => setCabinetFormOpen(true)}
+          >
+            + 내각 등록
+          </S.SectionAction>
           <S.SectionAction
             type="button"
             onClick={() =>
@@ -2445,6 +2476,31 @@ export function CurrentCabinetPanel({
       <SwitchFade $switching={overviewSwitching} aria-busy={overviewSwitching}>
       {isLoading ? (
         <GovernmentSkeleton />
+      ) : cabinets.length === 0 &&
+        fallbackHeadTenures.length === 0 &&
+        heads.length === 0 &&
+        members.length === 0 &&
+        !showEmptyMindMap ? (
+        <SectionEmpty
+          text={`${countryName}에 등록된 행정부·내각 또는 수반·군주 재임 기록이 아직 없습니다.`}
+          hint={
+            departments.length > 0
+              ? `등록된 중앙부처 ${departments.length}곳이 있습니다. 상단 '편제 마인드맵 미리보기'를 열거나 바로 수반·내각을 등록해 보세요.`
+              : '국가원수·정부수반 또는 제1대 내각을 등록하면 시대별 정권 띠와 각료 편제가 자동으로 그려집니다.'
+          }
+          actionLabel={`+ ${primaryHeadSpec.title} 등록`}
+          onAction={() =>
+            openRegister(
+              null,
+              primaryHeadSpec.title,
+              'head',
+              null,
+              polityHosTitle || polityHogTitle ? primaryHeadSpec.title : null,
+              primaryHeadSpec.positionDefinitionId,
+              primaryHeadSpec.positionType,
+            )
+          }
+        />
       ) : cabinetViewMode === 'ledger' ? (
         <CabinetLedgerWrap>
           <CabinetLedgerLeaderGrid>
@@ -2526,23 +2582,33 @@ export function CurrentCabinetPanel({
                     ? `동시대 출범 내각 (${counterpartHeads.length}대)`
                     : `동시대 대응 수반 · 군주 (${counterpartHeads.length}명)`}
                 </span>
-                {showDualCounterpartRegister && counterpartHeadSpec && (
+                {effectiveFallbackMode && counterpartHeads.length > 0 ? (
                   <CabinetLedgerInlineBtn
                     type="button"
-                    onClick={() =>
-                      openRegister(
-                        null,
-                        counterpartHeadSpec.title,
-                        'head',
-                        null,
-                        polityHosTitle ? counterpartHeadSpec.title : null,
-                        counterpartHeadSpec.positionDefinitionId,
-                        counterpartHeadSpec.positionType,
-                      )
-                    }
+                    onClick={() => setCabinetFormOpen(true)}
                   >
-                    + {counterpartHeadSpec.title} 등록
+                    + 내각 등록
                   </CabinetLedgerInlineBtn>
+                ) : (
+                  showDualCounterpartRegister &&
+                  counterpartHeadSpec && (
+                    <CabinetLedgerInlineBtn
+                      type="button"
+                      onClick={() =>
+                        openRegister(
+                          null,
+                          counterpartHeadSpec.title,
+                          'head',
+                          null,
+                          polityHosTitle ? counterpartHeadSpec.title : null,
+                          counterpartHeadSpec.positionDefinitionId,
+                          counterpartHeadSpec.positionType,
+                        )
+                      }
+                    >
+                      + {counterpartHeadSpec.title} 등록
+                    </CabinetLedgerInlineBtn>
+                  )
                 )}
               </CabinetLedgerSectionTitle>
               {counterpartHeads.length > 0 ? (
@@ -2603,19 +2669,7 @@ export function CurrentCabinetPanel({
                   {effectiveFallbackMode && (
                     <CabinetLedgerInlineBtn
                       type="button"
-                      onClick={() =>
-                        openRegister(
-                          null,
-                          primaryHeadSpec.title,
-                          'head',
-                          null,
-                          polityHosTitle || polityHogTitle
-                            ? primaryHeadSpec.title
-                            : null,
-                          primaryHeadSpec.positionDefinitionId,
-                          primaryHeadSpec.positionType,
-                        )
-                      }
+                      onClick={() => setCabinetFormOpen(true)}
                     >
                       + 내각 수반 등록
                     </CabinetLedgerInlineBtn>
@@ -2727,6 +2781,7 @@ export function CurrentCabinetPanel({
               : undefined
           }
           onSelectCabinet={(cabinetId) => selectCabinet(cabinetId)}
+          onRegisterCabinet={() => setCabinetFormOpen(true)}
           onRegisterCabinetHead={() =>
             openRegister(
               null,
@@ -2967,7 +3022,11 @@ export function CurrentCabinetPanel({
           loading={personsQuery.isLoading}
           title={`${registerTarget.label} 등록 — 인물 선택`}
           searchPlaceholder="등록할 인물을 검색..."
+          allowCreate
           defaultCountryId={countryId}
+          defaultHistoricalCountryId={
+            activeHistoricalCountryId ?? historicalCountryId ?? undefined
+          }
           onSelect={(personId) => {
             setRegisterPersonId(personId)
             setPickerOpen(false)
@@ -3010,6 +3069,45 @@ export function CurrentCabinetPanel({
           initialPositionTitle={registerTarget.positionTitle}
           initialPositionDefinitionId={registerTarget.positionDefinitionId}
           initialPositionType={registerTarget.positionType}
+        />
+      )}
+
+      {cabinetFormOpen && (
+        <CabinetFormModal
+          isOpen={cabinetFormOpen}
+          onClose={() => setCabinetFormOpen(false)}
+          onSaved={(savedCabinetId) => {
+            setCabinetFormOpen(false)
+            void queryClient.invalidateQueries({ queryKey: ['cabinets'] })
+            void queryClient.invalidateQueries({
+              queryKey: ['cabinets-by-country'],
+            })
+            void queryClient.invalidateQueries({
+              queryKey: ['tenures-by-country'],
+            })
+            if (savedCabinetId) {
+              selectCabinet(savedCabinetId)
+            }
+          }}
+          country={
+            historicalCountryId
+              ? ({
+                  id: historicalCountryId,
+                  type: 'historical',
+                  name: countryName ?? '역사국가',
+                } as any)
+              : countryId
+                ? ({
+                    id: countryId,
+                    type: 'modern',
+                    name: countryName ?? '국가',
+                    isoCode: countryIsoCode ?? undefined,
+                  } as any)
+                : null
+          }
+          defaultPolityFilterId={
+            activeHistoricalCountryId ?? (historicalCountryId || countryId)
+          }
         />
       )}
     </S.Section>
@@ -3494,13 +3592,11 @@ const GhostSlot = styled.button`
   transition:
     opacity 0.15s ease,
     border-color 0.15s ease,
-    background 0.15s ease,
-    transform 0.15s ease;
+    background 0.15s ease;
 
   &:hover:not(:disabled) {
     opacity: 1;
-    transform: translateY(-1px);
-    border-color: rgba(99, 102, 241, 0.48);
+    border-color: rgba(99, 102, 241, 0.45);
     background: ${({ theme }) => theme.colors.hover};
   }
   &:disabled {
@@ -3550,36 +3646,25 @@ const DualEmptyCard = styled.button<{ $monarch?: boolean }>`
   align-items: center;
   gap: 14px;
   width: 100%;
-  padding: 16px 18px;
-  border-radius: 16px;
-  border: 1px solid
-    ${({ $monarch, theme }) =>
-      $monarch
-        ? theme.mode === 'dark'
-          ? 'rgba(251, 191, 36, 0.38)'
-          : 'rgba(217, 119, 6, 0.36)'
-        : theme.colors.border.medium};
-  background: ${({ $monarch, theme }) =>
-    $monarch
-      ? theme.mode === 'dark'
-        ? 'linear-gradient(135deg, rgba(251, 191, 36, 0.07), rgba(255, 255, 255, 0.02))'
-        : 'linear-gradient(135deg, rgba(255, 251, 235, 0.8), #ffffff)'
-      : theme.mode === 'dark'
-        ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.07), rgba(255, 255, 255, 0.02))'
-        : 'linear-gradient(135deg, rgba(238, 242, 255, 0.65), #ffffff)'};
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.02)'
+      : 'rgba(15, 23, 42, 0.015)'};
   font-family: inherit;
   text-align: left;
   cursor: pointer;
   transition:
-    transform 0.16s ease,
-    border-color 0.16s ease,
-    background 0.16s ease;
+    border-color 0.15s ease,
+    background 0.15s ease;
 
   &:hover {
-    transform: translateY(-1px);
     border-style: solid;
     border-color: ${({ $monarch }) =>
-      $monarch ? 'rgba(217, 119, 6, 0.58)' : 'rgba(99, 102, 241, 0.52)'};
+      $monarch ? 'rgba(217, 119, 6, 0.48)' : 'rgba(99, 102, 241, 0.45)'};
+    background: ${({ theme }) => theme.colors.hover};
   }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.active};
@@ -3661,9 +3746,9 @@ const DualEmptyMetaChip = styled.span`
 `
 
 const DualEmptyTitle = styled.span`
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
   color: ${({ theme }) => theme.colors.text.primary};
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3672,26 +3757,26 @@ const DualEmptyTitle = styled.span`
 
 const DualEmptyCta = styled.span<{ $monarch?: boolean }>`
   flex-shrink: 0;
-  padding: 7px 14px;
-  border-radius: 999px;
-  font-size: 12.5px;
-  font-weight: 800;
+  padding: 5px 11px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
   color: ${({ $monarch, theme }) =>
     $monarch
       ? theme.mode === 'dark'
         ? '#fde68a'
         : '#92400e'
       : theme.mode === 'dark'
-        ? '#c7d2fe'
-        : '#4338ca'};
+        ? '#a5b4fc'
+        : '#4f46e5'};
   background: ${({ $monarch, theme }) =>
     $monarch
       ? theme.mode === 'dark'
-        ? 'rgba(245, 158, 11, 0.2)'
-        : '#fde68a'
+        ? 'rgba(245, 158, 11, 0.16)'
+        : '#fef3c7'
       : theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.22)'
-        : '#e0e7ff'};
+        ? 'rgba(165, 180, 252, 0.14)'
+        : 'rgba(99, 102, 241, 0.08)'};
 `
 
 /* 얼굴 자리 — 채워진 칸의 36px 얼굴과 같은 지름 */
@@ -3762,12 +3847,12 @@ const EmptyHeadCard = styled.button`
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 22px;
+  gap: 20px;
   width: 100%;
   margin-bottom: 16px;
-  padding: 18px 22px;
-  border-radius: 20px;
-  border: 1px solid ${({ theme }) => theme.colors.border.medium};
+  padding: 16px 20px;
+  border-radius: 10px;
+  border: 1px dashed ${({ theme }) => theme.colors.border.medium};
   background: ${({ theme }) => theme.colors.background.primary};
   font-family: inherit;
   text-align: left;
@@ -3777,6 +3862,7 @@ const EmptyHeadCard = styled.button`
     background 0.15s ease;
 
   &:hover {
+    border-style: solid;
     border-color: rgba(99, 102, 241, 0.45);
     background: ${({ theme }) => theme.colors.hover};
   }

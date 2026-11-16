@@ -131,7 +131,7 @@ export function summarize(system: PoliticalSystem): string {
   return parts.length > 0 ? parts.join(' · ') : '내용 없음'
 }
 
-/** 목록 정렬 — 오래된 순, 연도 미상은 끝. */
+/** 목록 정렬 — 오래된 순(연·월·일), 연도 미상은 끝. */
 export function comparePoliticalSystems(
   left: PoliticalSystem,
   right: PoliticalSystem,
@@ -141,7 +141,11 @@ export function comparePoliticalSystems(
   if (leftYear == null && rightYear == null) return 0
   if (leftYear == null) return 1
   if (rightYear == null) return -1
-  return leftYear - rightYear
+  if (leftYear !== rightYear) return leftYear - rightYear
+  const leftMonth = left.startMonth ?? 1
+  const rightMonth = right.startMonth ?? 1
+  if (leftMonth !== rightMonth) return leftMonth - rightMonth
+  return (left.startDay ?? 1) - (right.startDay ?? 1)
 }
 
 /**
@@ -154,9 +158,21 @@ export function comparePoliticalSystems(
  */
 export function resolveCurrentSystem(
   systems: PoliticalSystem[],
+  options?: { preferModernDirect?: boolean },
 ): PoliticalSystem | null {
   if (systems.length === 0) return null
   const sorted = [...systems].sort(comparePoliticalSystems)
+  if (options?.preferModernDirect) {
+    const modernDirect = sorted.filter(
+      (system) => !system.historicalCountryId,
+    )
+    if (modernDirect.length > 0) {
+      const modernCurrent = modernDirect.filter((system) => system.isCurrent)
+      const modernPool =
+        modernCurrent.length > 0 ? modernCurrent : modernDirect
+      return modernPool[modernPool.length - 1] ?? null
+    }
+  }
   const current = sorted.filter((system) => system.isCurrent)
   const pool = current.length > 0 ? current : sorted
   return pool[pool.length - 1] ?? null

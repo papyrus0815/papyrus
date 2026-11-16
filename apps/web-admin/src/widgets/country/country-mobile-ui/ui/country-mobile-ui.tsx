@@ -1,6 +1,13 @@
 import { motion, AnimatePresence } from 'framer-motion'
-import { FaLandmark } from 'react-icons/fa'
-import { FiCheck, FiList, FiPlus, FiSearch, FiX } from 'react-icons/fi'
+import {
+  FiCheck,
+  FiCompass,
+  FiGlobe,
+  FiList,
+  FiPlus,
+  FiSearch,
+  FiX,
+} from 'react-icons/fi'
 
 import {
   COUNTRY_TYPE_LABELS,
@@ -107,30 +114,26 @@ export function CountryMobileUI({
               <PageS.MobileListHeader>
                 <PageS.DragHandle />
                 <PageS.MobileListTitleRow>
-                  <PageS.MobileListTitle>메뉴</PageS.MobileListTitle>
+                  <PageS.MobileListTitle>
+                    국가 목록
+                    <PageS.MobileTabBadge>{filtered.length}</PageS.MobileTabBadge>
+                  </PageS.MobileListTitle>
                   <PageS.MobileListClose
                     onClick={() => onMobileListOpenChange(false)}
                     aria-label="목록 닫기"
                   >
-                    <FiX size={22} />
+                    <FiX size={20} />
                   </PageS.MobileListClose>
                 </PageS.MobileListTitleRow>
-                <PageS.MobileTabBar>
-                  <PageS.MobileTabButton $active>
-                    <FiList size={18} />
-                    국가 목록
-                    {/* 배지는 검색·필터 후 결과 수와 일치 — 사용자가 보는 행 수와 동기 */}
-                    <PageS.MobileTabBadge>{filtered.length}</PageS.MobileTabBadge>
-                  </PageS.MobileTabButton>
-                </PageS.MobileTabBar>
                 <PageS.MobileActionRow>
                   <PageS.MobileAddButton
+                    $primary
                     onClick={() => {
                       onAddCountry()
                       onMobileListOpenChange(false)
                     }}
                   >
-                    <FiPlus size={16} />
+                    <FiPlus size={15} />
                     새 국가 등록
                   </PageS.MobileAddButton>
                   {onAddHistoricalCountry && (
@@ -140,7 +143,7 @@ export function CountryMobileUI({
                         onMobileListOpenChange(false)
                       }}
                     >
-                      <FaLandmark size={14} />
+                      <FiCompass size={14} />
                       새 역사 국가 등록
                     </PageS.MobileAddButton>
                   )}
@@ -275,9 +278,11 @@ export function CountryMobileUI({
                               <ListS.RowLeft>
                                 <ListS.FlagBadge>
                                   {isHistorical ? (
-                                    <FaLandmark size={16} />
+                                    <FiCompass size={15} />
+                                  ) : country.flagEmoji ? (
+                                    country.flagEmoji
                                   ) : (
-                                    country.flagEmoji || '🏳️'
+                                    <FiGlobe size={15} />
                                   )}
                                 </ListS.FlagBadge>
                                 <ListS.TextCol>

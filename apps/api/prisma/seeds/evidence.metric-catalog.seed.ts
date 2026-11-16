@@ -353,6 +353,27 @@ const METRICS: MetricSeed[] = [
     unit: 'building',
     definition: '전파·전소된 건물 수(반파 제외). 가옥 수로 기록된 경우 그대로 센다.',
   },
+  // ── 봉기·진압·학살 추가 지표 (sortOrder 유지를 위해 끝에 추가) ──
+  {
+    key: 'human.executed',
+    name: '처형·학살 사망',
+    domain: 'civilian',
+    valueKind: COUNT,
+    aggregation: SUM,
+    unit: 'person',
+    definition:
+      '포로·체포자·민간인이 전투 밖에서 처형·학살·피살된 사망자 수. 교전 중 사망(전사)과 구분될 때 따로 적는다.',
+  },
+  {
+    key: 'society.arrested',
+    name: '체포·구금 인원',
+    domain: 'society',
+    valueKind: COUNT,
+    aggregation: SUM,
+    unit: 'person',
+    definition:
+      '진압·숙청·탄압 등으로 체포·구금·기소된 인원. 전투 포로(military.captured)가 아닌 시위대·봉기자·시민 대상.',
+  },
 ]
 
 interface CurrencySeed {

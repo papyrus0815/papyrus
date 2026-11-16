@@ -126,8 +126,12 @@ describe('기록 — 세부가 정하고 분야가 얹는다', () => {
 })
 
 describe('수치 성격 — 세부가 정하면 세부, 아니면 분야', () => {
-  it('교전·조약·재해는 세부가 정한다(분야와 무관)', () => {
+  it('교전·봉기·조약·재해는 세부가 정한다(분야와 무관)', () => {
     expect(metricsFor('BATTLE', 'POLITICS').subject).toBe('side')
+    expect(metricsFor('UPRISING', 'POLITICS').subject).toBe('side')
+    expect(metricsFor('UPRISING', 'POLITICS').presets).toEqual(
+      expect.arrayContaining(['society.participants', 'human.deaths_total', 'human.executed', 'society.arrested']),
+    )
     expect(metricsFor('TREATY', 'ECONOMY').presets).toContain('economy.indemnity')
     expect(metricsFor('DISASTER', null).presets).toContain('human.deaths_total')
   })

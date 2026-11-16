@@ -1,24 +1,32 @@
 /**
- * 행정부 상세 — 상단 툴바(뒤로·브레드크럼·각료 편집)
+ * 행정부 상세 — 상단 툴바(뒤로·브레드크럼·전후임/개각 탐색·다국 묶음·각료 편집)
  */
 import React from 'react'
 
 import {
+  FiArrowUpRight,
   FiChevronLeft,
+  FiChevronRight,
   FiEdit2,
   FiGlobe,
+  FiLayers,
+  FiLink2,
   FiPrinter,
   FiTrash2,
 } from 'react-icons/fi'
+import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
 import {
   ledgerAccent,
   ledgerAccentBorder,
   ledgerAccentSubtle,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
 import { parseSignedDateParts } from '@/shared/lib/tenure-person-utils'
+import { pathKeys } from '@/shared/router'
 
 import {
   formatCabinetHeadBreadcrumbLabel,
@@ -29,6 +37,12 @@ import {
   DetailHeaderIconBtn,
   DetailToolbar,
 } from './country-politics-tab.styles'
+
+export type CabinetNavTarget = {
+  id: string
+  label: string
+  period?: string | null
+}
 
 export type CabinetDetailChromeProps = {
   cabDetailBackBtnRef: React.RefObject<HTMLButtonElement | null>
@@ -48,20 +62,21 @@ export type CabinetDetailChromeProps = {
   setSelectedHistoryId: (id: string | null) => void
   setEditingHistoryContent: (editing: boolean) => void
   setEditingHistoryMeta: (editing: boolean) => void
-  setMinisterFormPositionDefId: (id: string | null) => void
-  setMinisterFormTitle: (title: string) => void
-  setMinisterFormStartDate: (startDate: string) => void
-  setMinisterFormEndDate: (endDate: string) => void
-  setMinisterFormTermNumber: (termNumber: string) => void
-  setMinisterFormDeptId: (id: string | null) => void
-  setSelectedPersonIdForAdd: (id: string | null) => void
-  setAddMinisterCabinet: (cab: unknown) => void
-  setPersonSelectOpen: (open: boolean) => void
   handleDeleteCabinet: (cabinetId: string, e: React.MouseEvent) => void
   /** 각료 수정(1스텝 임명 모달) */
   onEditMinister?: (minister: unknown) => void
   /** 행정부 메타·수반 재임 수정 모달 (상단 툴바) */
   onEditCabinet?: () => void
+  /** 다국 행정부 묶기 모달 열기 */
+  onOpenLinkageModal?: () => void
+  linkedPeerCount?: number
+  /** 전임·후임 내각 빠른 이동 */
+  prevCabinet?: CabinetNavTarget | null
+  nextCabinet?: CabinetNavTarget | null
+  cabinetPositionBadge?: string | null
+  /** 동일 수반 산하 개각 내각 목록(2건 이상일 때 탭 표시) */
+  siblingCabinets?: CabinetNavTarget[]
+  onNavigateCabinet?: (cabinetId: string) => void
   /** 현재 화면(행정부 상세·재임 기록) 인쇄 */
   onPrint?: () => void
   /** 목록으로 돌아갈 때 URL 쿼리 정리 등 추가 동기화 */
@@ -84,18 +99,16 @@ export function CabinetDetailChrome({
   setSelectedHistoryId,
   setEditingHistoryContent,
   setEditingHistoryMeta,
-  setMinisterFormPositionDefId,
-  setMinisterFormTitle,
-  setMinisterFormStartDate,
-  setMinisterFormEndDate,
-  setMinisterFormTermNumber,
-  setMinisterFormDeptId,
-  setSelectedPersonIdForAdd,
-  setAddMinisterCabinet,
-  setPersonSelectOpen,
   handleDeleteCabinet,
   onEditMinister,
   onEditCabinet,
+  onOpenLinkageModal,
+  linkedPeerCount = 0,
+  prevCabinet = null,
+  nextCabinet = null,
+  cabinetPositionBadge = null,
+  siblingCabinets = [],
+  onNavigateCabinet,
   onPrint,
   onBackToList,
   onCompareContemporary,
@@ -108,7 +121,7 @@ export function CabinetDetailChrome({
       : null
 
   const startDateParts = parseSignedDateParts(
-    selectedCabinet?.headTenure?.startDate ?? selectedCabinet?.startDate,
+    selectedCabinet?.startDate ?? selectedCabinet?.headTenure?.startDate,
   )
   const contemporarySignedYear = startDateParts?.signedYear ?? null
   const contemporaryYearLabel = startDateParts
@@ -119,6 +132,12 @@ export function CabinetDetailChrome({
 
   const isTenureHistoryArticleDetail =
     !!selectedHeadHistoryId || (!!selectedMinisterId && !!selectedHistoryId)
+  const showCabinetContinuityStrip =
+    Boolean(selectedCabinet) &&
+    !selectedMinisterId &&
+    !isTenureHistoryArticleDetail &&
+    Boolean(onNavigateCabinet) &&
+    (Boolean(prevCabinet) || Boolean(nextCabinet) || siblingCabinets.length > 1)
 
   return (
     <>
@@ -136,6 +155,14 @@ export function CabinetDetailChrome({
                   setEditingHistoryMeta(false)
                   return
                 }
+                if (selectedMinisterId) {
+                  setSelectedMinisterId(null)
+                  setSelectedHistoryId(null)
+                  setSelectedHeadHistoryId(null)
+                  setEditingHistoryContent(false)
+                  setEditingHistoryMeta(false)
+                  return
+                }
                 setCabinetView('list')
                 setSelectedCabinetId(null)
                 setSelectedMinisterId(null)
@@ -144,7 +171,11 @@ export function CabinetDetailChrome({
               }}
             >
               <FiChevronLeft size={14} />
-              {isTenureHistoryArticleDetail ? '재임 기록 목록' : '행정부 목록'}
+              {isTenureHistoryArticleDetail
+                ? '재임 기록 목록'
+                : selectedMinisterId
+                  ? '내각 상세로'
+                  : '행정부 목록'}
             </CabS.CabDetailBackBtn>
             {selectedCabinet && (
               <>
@@ -211,6 +242,22 @@ export function CabinetDetailChrome({
           {selectedCabinet &&
           !selectedMinisterId &&
           !selectedHeadHistoryId &&
+          onOpenLinkageModal ? (
+            <SecondaryToolbarPillBtn
+              type="button"
+              onClick={() => onOpenLinkageModal()}
+              title="동시대 사건을 축으로 다른 나라 행정부와 연결"
+            >
+              <FiLink2 size={13} />
+              <span>
+                다국 행정부 묶기
+                {linkedPeerCount > 0 ? ` (${linkedPeerCount})` : ''}
+              </span>
+            </SecondaryToolbarPillBtn>
+          ) : null}
+          {selectedCabinet &&
+          !selectedMinisterId &&
+          !selectedHeadHistoryId &&
           contemporarySignedYear != null &&
           onCompareContemporary ? (
             <ContemporaryCompareBtn
@@ -222,6 +269,18 @@ export function CabinetDetailChrome({
               <span>동시대 타국 비교 ({contemporaryYearLabel}년)</span>
             </ContemporaryCompareBtn>
           ) : null}
+          {selectedCabinet &&
+          !selectedMinisterId &&
+          !selectedHeadHistoryId &&
+          selectedCabinet.id ? (
+            <StandaloneDetailLink
+              to={pathKeys.government.cabinetDetail(String(selectedCabinet.id))}
+              title="2컬럼 전용 행정부 상세 워크스페이스 지면으로 열기"
+            >
+              <span>상세 지면</span>
+              <FiArrowUpRight size={13} />
+            </StandaloneDetailLink>
+          ) : null}
           {selectedCabinet && onPrint ? (
             <DetailHeaderIconBtn
               type="button"
@@ -229,83 +288,25 @@ export function CabinetDetailChrome({
               title="인쇄"
               onClick={() => onPrint()}
             >
-              <FiPrinter size={17} strokeWidth={2} />
+              <FiPrinter size={15} strokeWidth={2} />
             </DetailHeaderIconBtn>
           ) : null}
           {selectedMinisterId &&
             !selectedHistoryId &&
+            onEditMinister &&
             (() => {
               const minister = (
-                sortedVisibleMinisters as {
-                  id: string
-                  personId?: string | null
-                  person?: { id?: string | null } | null
-                  title?: string | null
-                  startDate?: string | null
-                  endDate?: string | null
-                  ordinal?: number | null
-                  administrationDepartmentId?: string | null
-                  positionDefinitionId?: string | null
-                  positionDefinition?: { id?: string | null } | null
-                }[]
-              ).find((row) => row.id === selectedMinisterId) as
-                | {
-                    id: string
-                    personId?: string | null
-                    person?: { id?: string | null } | null
-                    title?: string | null
-                    startDate?: string | null
-                    endDate?: string | null
-                    ordinal?: number | null
-                    administrationDepartmentId?: string | null
-                    positionDefinitionId?: string | null
-                    positionDefinition?: { id?: string | null } | null
-                  }
-                | undefined
+                sortedVisibleMinisters as { id: string }[]
+              ).find((row) => row.id === selectedMinisterId)
               if (!minister) return null
               return (
                 <DetailHeaderIconBtn
                   type="button"
                   aria-label="각료 수정"
                   title="각료 수정"
-                  onClick={() => {
-                    if (onEditMinister) {
-                      onEditMinister(minister)
-                      return
-                    }
-                    const defId =
-                      minister.positionDefinition?.id ??
-                      minister.positionDefinitionId ??
-                      null
-                    setSelectedPersonIdForAdd(
-                      minister.personId ?? minister.person?.id ?? null,
-                    )
-                    setMinisterFormPositionDefId(
-                      defId ?? (minister.title ? '__OTHER__' : null),
-                    )
-                    setMinisterFormTitle(defId ? '' : (minister.title ?? ''))
-                    setMinisterFormStartDate(
-                      minister.startDate ? minister.startDate.slice(0, 10) : '',
-                    )
-                    setMinisterFormEndDate(
-                      minister.endDate ? minister.endDate.slice(0, 10) : '',
-                    )
-                    setMinisterFormTermNumber(
-                      minister.ordinal != null
-                        ? String(minister.ordinal)
-                        : '',
-                    )
-                    setMinisterFormDeptId(
-                      minister.administrationDepartmentId ?? null,
-                    )
-                    setAddMinisterCabinet({
-                      ...selectedCabinet,
-                      _editingTenureId: minister.id,
-                    })
-                    setPersonSelectOpen(true)
-                  }}
+                  onClick={() => onEditMinister(minister)}
                 >
-                  <FiEdit2 size={17} strokeWidth={2} />
+                  <FiEdit2 size={15} strokeWidth={2} />
                 </DetailHeaderIconBtn>
               )
             })()}
@@ -319,7 +320,7 @@ export function CabinetDetailChrome({
               title="행정부 수정"
               onClick={() => onEditCabinet()}
             >
-              <FiEdit2 size={17} strokeWidth={2} />
+              <FiEdit2 size={15} strokeWidth={2} />
             </DetailHeaderIconBtn>
           ) : null}
           {!selectedMinisterId && selectedCabinet && !selectedHeadHistoryId && (
@@ -332,30 +333,285 @@ export function CabinetDetailChrome({
                 handleDeleteCabinet(selectedCabinet.id, clickEvent)
               }
             >
-              <FiTrash2 size={17} strokeWidth={2} />
+              <FiTrash2 size={15} strokeWidth={2} />
             </DetailHeaderIconBtn>
           )}
         </DetailToolbar>
       </CabS.CabDetailTopBar>
+
+      {showCabinetContinuityStrip && onNavigateCabinet ? (
+        <ContinuityStripWrap aria-label="전임·후임 행정부 및 개각 연속 이동">
+          <ContinuityNavRow>
+            <ContinuityNavBtn
+              type="button"
+              disabled={!prevCabinet}
+              onClick={() => prevCabinet && onNavigateCabinet(prevCabinet.id)}
+              title={
+                prevCabinet
+                  ? `전임 내각: ${prevCabinet.label}`
+                  : '기록된 전임 내각이 없습니다'
+              }
+            >
+              <FiChevronLeft size={14} />
+              <ContinuityNavTextGroup>
+                <ContinuityNavCaption>전임 내각</ContinuityNavCaption>
+                <ContinuityNavTitle>
+                  {prevCabinet ? prevCabinet.label : '이전 내각 없음'}
+                </ContinuityNavTitle>
+              </ContinuityNavTextGroup>
+            </ContinuityNavBtn>
+
+            {cabinetPositionBadge ? (
+              <ContinuityIndexPill>{cabinetPositionBadge}</ContinuityIndexPill>
+            ) : null}
+
+            <ContinuityNavBtn
+              type="button"
+              $alignRight
+              disabled={!nextCabinet}
+              onClick={() => nextCabinet && onNavigateCabinet(nextCabinet.id)}
+              title={
+                nextCabinet
+                  ? `후임 내각: ${nextCabinet.label}`
+                  : '기록된 후임 내각이 없습니다'
+              }
+            >
+              <ContinuityNavTextGroup $alignRight>
+                <ContinuityNavCaption>후임 내각</ContinuityNavCaption>
+                <ContinuityNavTitle>
+                  {nextCabinet ? nextCabinet.label : '후속 내각 없음'}
+                </ContinuityNavTitle>
+              </ContinuityNavTextGroup>
+              <FiChevronRight size={14} />
+            </ContinuityNavBtn>
+          </ContinuityNavRow>
+
+          {siblingCabinets.length > 1 ? (
+            <ReshuffleSiblingBar role="tablist" aria-label="동일 수반 개각 내각 전환">
+              <ReshuffleLabel>
+                <FiLayers size={12} />
+                <span>동일 임기 개각</span>
+              </ReshuffleLabel>
+              <ReshufflePills>
+                {siblingCabinets.map((sib) => {
+                  const isCurrent = sib.id === selectedCabinet?.id
+                  return (
+                    <ReshufflePillBtn
+                      key={sib.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={isCurrent}
+                      $active={isCurrent}
+                      onClick={() => {
+                        if (!isCurrent) onNavigateCabinet(sib.id)
+                      }}
+                    >
+                      <span>{sib.label}</span>
+                      {sib.period ? (
+                        <ReshufflePillPeriod>{sib.period}</ReshufflePillPeriod>
+                      ) : null}
+                    </ReshufflePillBtn>
+                  )
+                })}
+              </ReshufflePills>
+            </ReshuffleSiblingBar>
+          ) : null}
+        </ContinuityStripWrap>
+      ) : null}
     </>
   )
 }
+
+const SecondaryToolbarPillBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const ContinuityStripWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.025)' : '#f8fafc'};
+`
+
+const ContinuityNavRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+`
+
+const ContinuityNavBtn = styled.button<{ $alignRight?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 42%;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.primary};
+  cursor: pointer;
+  text-align: ${({ $alignRight }) => ($alignRight ? 'right' : 'left')};
+
+  &:hover:not(:disabled) {
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  }
+
+  &:disabled {
+    opacity: 0.42;
+    cursor: default;
+  }
+
+  @media (max-width: 640px) {
+    max-width: 46%;
+  }
+`
+
+const ContinuityNavTextGroup = styled.span<{ $alignRight?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  align-items: ${({ $alignRight }) => ($alignRight ? 'flex-end' : 'flex-start')};
+  min-width: 0;
+`
+
+const ContinuityNavCaption = styled.span`
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ContinuityNavTitle = styled.span`
+  font-size: 12.5px;
+  font-weight: 600;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const ContinuityIndexPill = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.07)' : '#e2e8f0'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const ReshuffleSiblingBar = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 7px;
+  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+const ReshuffleLabel = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ReshufflePills = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+`
+
+const ReshufflePillBtn = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active ? ledgerAccentBorder(theme.mode) : theme.colors.border.default};
+  background: ${({ $active, theme }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : theme.colors.background.primary};
+  color: ${({ $active, theme }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  font-size: 11.5px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  cursor: pointer;
+`
+
+const ReshufflePillPeriod = styled.span`
+  font-size: 10.5px;
+  opacity: 0.78;
+`
 
 const ContemporaryCompareBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 5px 10px;
+  height: 30px;
+  padding: 0 10px;
   border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
-  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-  font-size: 11.5px;
-  font-weight: 700;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
 
   &:hover {
-    opacity: 0.88;
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+`
+
+const StandaloneDetailLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `

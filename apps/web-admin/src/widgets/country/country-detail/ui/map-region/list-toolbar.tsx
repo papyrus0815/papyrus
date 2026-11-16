@@ -4,6 +4,8 @@
  */
 import type { ChangeEvent } from 'react'
 
+import { FiSearch, FiX } from 'react-icons/fi'
+
 import { type RegionPalette } from './use-region-palette'
 
 interface SearchInputProps {
@@ -29,24 +31,15 @@ export function SearchInput({
         minWidth: 0,
       }}
     >
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke={palette.textSecondary}
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+      <FiSearch
+        size={13}
         style={{
           position: 'absolute',
-          left: 12,
+          left: 11,
+          color: palette.textSecondary,
           pointerEvents: 'none',
         }}
-      >
-        <circle cx="11" cy="11" r="8" />
-        <path d="m21 21-4.35-4.35" />
-      </svg>
+      />
       <input
         type="text"
         aria-label={placeholder}
@@ -55,22 +48,21 @@ export function SearchInput({
         onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
         style={{
           width: '100%',
-          padding: '8px 32px 8px 34px',
-          fontSize: 13,
+          height: 34,
+          padding: '0 30px 0 32px',
+          fontSize: 12.5,
           border: `1px solid ${palette.border}`,
-          borderRadius: 10,
-          background: palette.bg,
+          borderRadius: 8,
+          background: 'transparent',
           color: palette.text,
           outline: 'none',
-          transition: 'border-color 0.15s, box-shadow 0.15s',
+          transition: 'border-color 0.14s ease',
         }}
         onFocus={(e) => {
           e.currentTarget.style.borderColor = palette.primary
-          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(99, 102, 241, 0.12)'
         }}
         onBlur={(e) => {
           e.currentTarget.style.borderColor = palette.border
-          e.currentTarget.style.boxShadow = 'none'
         }}
       />
       {value && (
@@ -80,22 +72,21 @@ export function SearchInput({
           onClick={() => onChange('')}
           style={{
             position: 'absolute',
-            right: 8,
+            right: 7,
             width: 20,
             height: 20,
             border: 'none',
-            background: palette.bgSecondary,
+            background: 'transparent',
             color: palette.textSecondary,
-            borderRadius: '50%',
+            borderRadius: 4,
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: 12,
             padding: 0,
           }}
         >
-          ×
+          <FiX size={13} />
         </button>
       )}
     </div>
@@ -126,12 +117,13 @@ export function SortSelect<V extends string>({
       value={value}
       onChange={(e) => onChange(e.target.value as V)}
       style={{
-        padding: '8px 28px 8px 12px',
+        height: 34,
+        padding: '0 26px 0 11px',
         fontSize: 12,
-        fontWeight: 500,
+        fontWeight: 600,
         border: `1px solid ${palette.border}`,
-        borderRadius: 10,
-        background: palette.bg,
+        borderRadius: 8,
+        background: 'transparent',
         color: palette.text,
         outline: 'none',
         cursor: 'pointer',

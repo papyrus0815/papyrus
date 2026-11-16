@@ -9,6 +9,7 @@ import {
   FiCalendar,
   FiChevronLeft,
   FiEdit2,
+  FiExternalLink,
   FiGlobe,
   FiLayers,
   FiPlus,
@@ -23,9 +24,13 @@ import {
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { militaryUnitTypeLabelKo } from '@/shared/lib/military-unit-type-label'
 import {
+  DEPARTMENT_LIFECYCLE_LABEL,
   hasDefenseExtensionContent,
   parseDepartmentDescription,
+  resolveDepartmentLifecycleStatus,
 } from '@/shared/lib/ministry-department/ministry-department-utils'
+import { pathKeys } from '@/shared/router'
+import { HeadquartersMapPreview } from '@/shared/ui/headquarters-location-field'
 
 import * as S from './ministry-department-detail.styles'
 
@@ -36,12 +41,10 @@ type MinistryDepartmentDetailViewProps = {
   categoryLabel?: string | null
   isDefenseRelated?: boolean
   embeddedInSplitView?: boolean
-  /** 국가·행정조직 컨텍스트에서 군부대 등록 */
-  onRegisterMilitaryUnit?: () => void
-  /** 연결된 군부대 편제·상세 보기(군사 조직 탭 이동) */
+  /** 연결된 군부대 편제·상세 보기(군사 탭 이동) */
   onInspectMilitaryUnit?: (unitId: string) => void
-  /** 연결된 군부대 수정(모달) */
-  onEditMilitaryUnit?: (unitId: string) => void
+  /** 국가 군사 탭으로 이동(국방·군정 부처의 군사 편제 관리 진입점) */
+  onOpenMilitaryTab?: () => void
   /** 상위·하위·전신·후신 기관 클릭 시 해당 기관 상세로 이동 */
   onSelectDepartment?: (departmentId: string) => void
   tenuresSlot: ReactNode
@@ -109,9 +112,8 @@ export function MinistryDepartmentDetailView({
   categoryLabel,
   isDefenseRelated = false,
   embeddedInSplitView = false,
-  onRegisterMilitaryUnit,
   onInspectMilitaryUnit,
-  onEditMilitaryUnit,
+  onOpenMilitaryTab,
   onSelectDepartment,
   tenuresSlot,
   eventsSlot,
@@ -129,12 +131,19 @@ export function MinistryDepartmentDetailView({
     department.primaryMission?.trim() || defense?.missionScope?.trim() || ''
   const headquarters =
     department.headquarters?.trim() || defense?.headquarters?.trim() || ''
+  const hasHeadquartersCoords =
+    department.headquartersLatitude != null &&
+    department.headquartersLongitude != null
   const orgStructure =
     department.orgStructure?.trim() || defense?.orgStructure?.trim() || ''
   const budgetNote =
     department.budgetNote?.trim() || defense?.budgetOrForcesNote?.trim() || ''
   const hasStructuredMeta = Boolean(
-    primaryMission || headquarters || orgStructure || budgetNote,
+    primaryMission ||
+      headquarters ||
+      hasHeadquartersCoords ||
+      orgStructure ||
+      budgetNote,
   )
   const militaryUnits = department.militaryUnits ?? []
   const milSuccessors = (department.militaryUnitSuccessors ?? []).filter(
@@ -142,7 +151,16 @@ export function MinistryDepartmentDetailView({
   )
   const est = formatDeptDate(department.established, department.establishedDate)
   const abol = formatDeptDate(department.abolished, department.abolishedDate)
-  const isAbolished = Boolean(abol)
+  const lifecycleStatus = resolveDepartmentLifecycleStatus(department)
+  const lifecycleTone =
+    lifecycleStatus === 'ACTIVE'
+      ? 'active'
+      : lifecycleStatus === 'SUPERSEDED'
+        ? 'superseded'
+        : lifecycleStatus === 'HISTORICAL_ENDED'
+          ? 'historical'
+          : 'abolished'
+  const lifecycleLabel = DEPARTMENT_LIFECYCLE_LABEL[lifecycleStatus]
 
   const parentDept = department.parentId
     ? (allDepartments.find((deptItem) => deptItem.id === department.parentId) ??
@@ -172,6 +190,17 @@ export function MinistryDepartmentDetailView({
   const kindLabel = department.kind
     ? DEPT_KIND_LABEL_KO[department.kind]
     : DEPT_KIND_LABEL_KO.MINISTRY
+  const resolvedCategoryId =
+    department.categoryId ?? department.category?.id ?? null
+  const resolvedCategoryLabel =
+    categoryLabel?.trim() || department.category?.name?.trim() || null
+  const crossCountryCompareHref =
+    resolvedCategoryId && resolvedCategoryLabel
+      ? pathKeys.government.list({
+          tab: 'departments',
+          categoryId: resolvedCategoryId,
+        })
+      : null
 
   const hasRelationsMatrix = Boolean(
     parentDept ||
@@ -219,23 +248,15 @@ export function MinistryDepartmentDetailView({
               <FiPlus size={13} />
               산하 추가
             </S.DeptTopGhostBtn>
-            {onRegisterMilitaryUnit ? (
-              isDefenseRelated ||
-              militaryUnits.length > 0 ||
-              department.kind === 'COLONIAL_GOVERNMENT' ? (
-                <S.DeptTopTealBtn onClick={onRegisterMilitaryUnit}>
-                  <FiShield size={13} />
-                  직할 군부대 등록
-                </S.DeptTopTealBtn>
-              ) : (
-                <S.DeptTopGhostBtn
-                  onClick={onRegisterMilitaryUnit}
-                  title="경비·직할 군부대가 있는 기관일 때 군부대를 연결합니다"
-                >
-                  <FiShield size={13} />
-                  부대 연결
-                </S.DeptTopGhostBtn>
-              )
+            {(isDefenseRelated || militaryUnits.length > 0) &&
+            onOpenMilitaryTab ? (
+              <S.DeptTopTealBtn
+                onClick={onOpenMilitaryTab}
+                title="국가 군사 탭으로 이동하여 소관 군 사령부·부대 편제를 조회하고 관리합니다"
+              >
+                <FiShield size={13} />
+                군사 편제 보기
+              </S.DeptTopTealBtn>
             ) : null}
             <S.DeptTopGhostBtn
               onClick={onGoToPositions}
@@ -244,6 +265,15 @@ export function MinistryDepartmentDetailView({
               <FiAward size={13} />
               고유 관직
             </S.DeptTopGhostBtn>
+            {crossCountryCompareHref && resolvedCategoryLabel ? (
+              <S.DeptTopGhostLink
+                to={crossCountryCompareHref}
+                title={`다른 국가·시대의 「${resolvedCategoryLabel}」 직능 부처·기관을 함께 비교합니다`}
+              >
+                <FiGlobe size={13} />
+                타국 {resolvedCategoryLabel} 비교
+              </S.DeptTopGhostLink>
+            ) : null}
             <S.DeptTopEditBtn onClick={onEdit}>
               <FiEdit2 size={13} />
               수정
@@ -279,20 +309,32 @@ export function MinistryDepartmentDetailView({
 
           <S.DeptIdentityBody>
             <S.DeptBadgeStrip>
-              <S.DeptStatusBadge $abolished={isAbolished}>
-                <S.DeptStatusDot $abolished={isAbolished} />
-                {isAbolished ? '폐지·개편' : '현존 기관'}
+              <S.DeptStatusBadge $tone={lifecycleTone}>
+                <S.DeptStatusDot $tone={lifecycleTone} />
+                {lifecycleLabel}
               </S.DeptStatusBadge>
               {department.historicalCountry?.name ? (
                 <S.DeptCategoryBadge>
-                  🏛️ {department.historicalCountry.name}
+                  {department.historicalCountry.name}
                 </S.DeptCategoryBadge>
               ) : null}
               {kindLabel ? (
                 <S.DeptCategoryBadge>{kindLabel}</S.DeptCategoryBadge>
               ) : null}
-              {categoryLabel ? (
-                <S.DeptCategoryBadge>{categoryLabel}</S.DeptCategoryBadge>
+              {resolvedCategoryLabel ? (
+                crossCountryCompareHref ? (
+                  <S.DeptCategoryCompareLink
+                    to={crossCountryCompareHref}
+                    title={`클릭하면 전 세계·시대별 「${resolvedCategoryLabel}」 직능 기관을 한눈에 비교합니다`}
+                  >
+                    {resolvedCategoryLabel}
+                    <FiExternalLink size={10} aria-hidden />
+                  </S.DeptCategoryCompareLink>
+                ) : (
+                  <S.DeptCategoryBadge>
+                    {resolvedCategoryLabel}
+                  </S.DeptCategoryBadge>
+                )
               ) : null}
               {isDefenseRelated ? (
                 <S.DefenseBadge>
@@ -485,8 +527,7 @@ export function MinistryDepartmentDetailView({
                 <S.UnitsChipList>
                   {milSuccessors.map((succLineage) => {
                     const targetUnit = succLineage.militaryUnit
-                    const handleUnitClick =
-                      onInspectMilitaryUnit ?? onEditMilitaryUnit
+                    const handleUnitClick = onInspectMilitaryUnit
                     const kindLabelKo = succLineage.kind
                       ? TRANSITION_KIND_LABEL_KO[succLineage.kind]
                       : null
@@ -538,8 +579,7 @@ export function MinistryDepartmentDetailView({
                 <S.UnitsLabel>소관 군부대</S.UnitsLabel>
                 <S.UnitsChipList>
                   {militaryUnits.map((unitRef) => {
-                    const handleUnitClick =
-                      onInspectMilitaryUnit ?? onEditMilitaryUnit
+                    const handleUnitClick = onInspectMilitaryUnit
                     return (
                       <S.UnitChip
                         key={unitRef.id}
@@ -588,8 +628,8 @@ export function MinistryDepartmentDetailView({
             국방·군정 기관 안내
           </S.DeptInfoSectionTitle>
           <S.DeptInfoText style={{ fontSize: 12 }}>
-            행정 조직도상의 청·실·국은 상단「산하 추가」로, 사령부·야전군·사단 등
-            군사 편제는「직할 군부대 등록」으로 연결해 등록합니다.
+            행정 조직도상의 청·실·국은 상단「산하 추가」로 등록하고, 사령부·야전군·사단 등
+            군사 편제는 국가「군사」탭에서 등록 후 소관 군정 부처로 연결합니다.
           </S.DeptInfoText>
         </S.DeptInfoSection>
       ) : null}
@@ -612,10 +652,23 @@ export function MinistryDepartmentDetailView({
               <S.MetaPanelBody>{primaryMission}</S.MetaPanelBody>
             </S.MetaPanel>
           ) : null}
-          {headquarters ? (
+          {headquarters || hasHeadquartersCoords ? (
             <S.MetaPanel>
               <S.MetaPanelLabel>청사·본부 소재지</S.MetaPanelLabel>
-              <S.MetaPanelBody>{headquarters}</S.MetaPanelBody>
+              {headquarters ? (
+                <S.MetaPanelBody>{headquarters}</S.MetaPanelBody>
+              ) : null}
+              <HeadquartersMapPreview
+                headquarters={headquarters}
+                latitude={department.headquartersLatitude}
+                longitude={department.headquartersLongitude}
+                countryName={
+                  department.historicalCountry?.name ??
+                  department.country?.name ??
+                  null
+                }
+                departmentName={department.name}
+              />
             </S.MetaPanel>
           ) : null}
           {orgStructure ? (

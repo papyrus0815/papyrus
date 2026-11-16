@@ -1,5 +1,6 @@
 import { FiAward, FiHome, FiUser } from 'react-icons/fi'
 
+import { getUploadImageUrl } from '@/shared/api/upload'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 
 import * as CabS from './cabinets-section.styled'
@@ -54,6 +55,7 @@ export function cabinetTimelineCellAriaLabel(
 export function TlItem({
   thumbUrl,
   personName,
+  cabinetName,
   posTitle,
   range,
   ageAtStart,
@@ -81,6 +83,7 @@ export function TlItem({
 }: {
   thumbUrl: string | null
   personName: string
+  cabinetName?: string | null
   posTitle: string
   range: string
   ageAtStart: number | null
@@ -105,6 +108,7 @@ export function TlItem({
   isDark: boolean
 }) {
   const C = getCabinetsSectionPalette(isDark)
+  const mutedTextColor = getCabinetsSectionPalette(isDark).textMuted
   const showMonarchBadge =
     Boolean(monarchEraAccentColor) && !hideMonarchBadge
   const R = TL_THUMB / 2
@@ -120,6 +124,12 @@ export function TlItem({
 
   const ringColor = thumbRingColor ?? lineColor
   const posPillColor = posPillLineColor ?? lineColor
+  const resolvedThumbUrl = thumbUrl
+    ? getUploadImageUrl(thumbUrl) || thumbUrl
+    : null
+  const resolvedMonarchThumbUrl = monarchThumbUrl
+    ? getUploadImageUrl(monarchThumbUrl) || monarchThumbUrl
+    : null
 
   const monarchBadgeFace = (
     <CabS.TlItemMonarchBadgeVisual
@@ -127,8 +137,8 @@ export function TlItem({
       $accentColor={monarchEraAccentColor ?? null}
       $panelBg={C.bg}
     >
-      {monarchThumbUrl ? (
-        <CabS.TlItemMonarchBadgeImg src={monarchThumbUrl} alt="" />
+      {resolvedMonarchThumbUrl ? (
+        <CabS.TlItemMonarchBadgeImg src={resolvedMonarchThumbUrl} alt="" />
       ) : (
         <FiUser
           size={28}
@@ -143,8 +153,8 @@ export function TlItem({
     <CabS.TlItemRoot $thumbOnEnd={thumbOnEnd}>
       <CabS.TlItemAvatarCol>
         <CabS.TlItemAvatarRing $lineColor={ringColor}>
-          {thumbUrl ? (
-            <CabS.TlItemAvatarImg src={thumbUrl} alt={personName} />
+          {resolvedThumbUrl ? (
+            <CabS.TlItemAvatarImg src={resolvedThumbUrl} alt={personName} />
           ) : (
             <FiUser size={62} color={lineColor} style={{ opacity: 0.3 }} />
           )}
@@ -212,6 +222,15 @@ export function TlItem({
             {personName}
           </CabS.TlItemPersonName>
         </CabS.TlItemTitleRow>
+        {cabinetName && cabinetName !== personName ? (
+          <CabS.TlItemTerritoryLine
+            $color={mutedTextColor}
+            $thumbOnEnd={thumbOnEnd}
+            title={cabinetName}
+          >
+            {cabinetName}
+          </CabS.TlItemTerritoryLine>
+        ) : null}
         <CabS.TlItemMetaRow $thumbOnEnd={thumbOnEnd}>
           <CabS.TlItemRangeChip $lineColor={lineColor}>{range}</CabS.TlItemRangeChip>
           {ageAtStart != null && (

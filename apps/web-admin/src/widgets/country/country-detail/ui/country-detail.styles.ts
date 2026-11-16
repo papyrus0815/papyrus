@@ -1,6 +1,23 @@
 import { motion } from 'framer-motion'
 import styled, { css } from 'styled-components'
 
+import {
+  DANGER,
+  DIGIT_DISPLAY,
+  MOTION,
+  RADIUS,
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentSubtle,
+  ledgerBackground,
+  ledgerHairlineHover,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  ledgerInkLine,
+  ledgerSubtleFill,
+  metaText,
+} from './country-ledger-primitives'
+
 // ─── 최상위 레이아웃 컨테이너 ────────────────────────────────────────────────
 
 export const DetailPaneRelative = styled.div`
@@ -53,12 +70,7 @@ export const StickyTopBar = styled.div`
   top: 0;
   z-index: 12;
   flex-shrink: 0;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(20, 20, 20, 0.92)'
-      : 'rgba(255, 255, 255, 0.94)'};
-  backdrop-filter: saturate(160%) blur(12px);
-  -webkit-backdrop-filter: saturate(160%) blur(12px);
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
 `
 
 export const AnalyticsDashboard = styled.div`
@@ -124,101 +136,62 @@ export const ChartGrid = styled(DashboardGrid)`
   }
 `
 
-// Card Components - Enhanced Modern Design
+// Card Components - Flat Ledger Design
 export const Card = styled.div`
-  background: ${({ theme }) => theme.colors.background.primary};
-  padding: 20px 22px;
-  border-radius: 12px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  box-shadow:
-    0 2px 4px ${({ theme }) => theme.colors.shadow.sm},
-    0 1px 2px ${({ theme }) => theme.colors.shadow.sm};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  padding: 18px 20px;
+  border-radius: ${RADIUS.MD};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  box-shadow: none;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   flex: 1;
   min-width: 0;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    border-color ${MOTION.fast} ease,
+    background ${MOTION.fast} ease;
   position: relative;
   overflow: hidden;
 
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, #4285f4, #34a853, #fbbc04, #ea4335);
-    opacity: 0;
-    transition: opacity 0.25s ease;
-  }
-
   &:hover {
-    transform: translateY(-2px);
-    border-color: ${({ theme }) => theme.colors.border.medium};
-    box-shadow:
-      0 8px 16px ${({ theme }) => theme.colors.shadow.md},
-      0 4px 8px ${({ theme }) => theme.colors.shadow.sm};
-
-    &::before {
-      opacity: 1;
-    }
+    border-color: ${({ theme }) => ledgerHairlineHover(theme.mode)};
   }
 
   @media (max-width: 768px) {
-    padding: 18px 20px;
+    padding: 16px 18px;
   }
 `
 
 export const CardHeader = styled.div`
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 2px;
 
   svg {
-    color: #4285f4;
+    color: ${({ theme }) => theme.colors.text.tertiary};
     flex-shrink: 0;
-    transition: all 0.25s ease;
-  }
-
-  ${Card}:hover & svg {
-    transform: scale(1.1);
-    filter: drop-shadow(0 2px 4px rgba(66, 133, 244, 0.3));
   }
 `
 
 export const CardLabel = styled.span`
   font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.secondary};
   font-weight: 600;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  transition: color 0.25s ease;
-
-  ${Card}:hover & {
-    color: #4285f4;
-  }
+  letter-spacing: -0.01em;
+  ${metaText}
 `
 
 export const CardValue = styled.div`
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
-  line-height: 1.1;
+  line-height: 1.15;
   letter-spacing: -0.02em;
-  transition: all 0.25s ease;
-
-  ${Card}:hover & {
-    background: linear-gradient(135deg, #4285f4 0%, #34a853 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
+  ${DIGIT_DISPLAY}
 
   @media (max-width: 768px) {
-    font-size: 24px;
+    font-size: 21px;
   }
 `
 
@@ -298,12 +271,12 @@ export const EmptyStateCard = styled(motion.div)`
   flex-direction: column;
   align-items: center;
   text-align: center;
-  max-width: 360px;
-  padding: 56px 40px;
-  background: ${({ theme }) => theme.colors.background.secondary};
-  border-radius: 24px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  box-shadow: 0 1px 3px ${({ theme }) => theme.colors.shadow.sm};
+  max-width: 380px;
+  padding: 40px 32px;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  border-radius: ${RADIUS.MD};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  box-shadow: none;
 `
 
 // Compact Hero Section
@@ -472,8 +445,6 @@ export const MetaBadge = styled.div`
     background: ${({ theme }) => theme.colors.activeLight};
     border-color: ${({ theme }) => theme.colors.primary};
     color: ${({ theme }) => theme.colors.primary};
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.sm};
 
     svg {
       opacity: 1;
@@ -862,21 +833,24 @@ export const EmptyStateMobileButton = styled.button`
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    margin-top: 20px;
-    padding: 10px 20px;
-    border-radius: 10px;
-    border: 1px solid ${({ theme }) => theme.colors.border.default};
-    background: ${({ theme }) => theme.colors.background.secondary};
-    color: ${({ theme }) => theme.colors.primary};
-    font-size: 14px;
+    gap: 6px;
+    margin-top: 16px;
+    height: 36px;
+    padding: 0 14px;
+    border-radius: 8px;
+    border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    font-family: inherit;
+    font-size: 13px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition:
+      background ${MOTION.fast} ease,
+      border-color ${MOTION.fast} ease;
 
     &:hover {
-      background: ${({ theme }) => theme.colors.activeLight};
-      border-color: ${({ theme }) => theme.colors.primary};
+      border-color: ${({ theme }) => ledgerAccent(theme.mode)};
     }
   }
 `
@@ -967,96 +941,97 @@ export const CountryLocalName = styled(motion.p)`
   font-weight: 500;
 `
 
-// Kebab Menu
+// Kebab Menu — 사건 상세 EventActionsButton · EventActionsMenu 규격
 export const KebabMenuWrapper = styled.div`
   position: relative;
 `
 
 export const KebabButton = styled.button`
-  padding: 10px;
-  background: ${({ theme }) => theme.colors.background.primary};
-  backdrop-filter: blur(12px);
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 12px;
+  appearance: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.SM};
   color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
-  transition: all 0.25s ease;
-  display: flex;
+  transition:
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    color ${MOTION.fast} ease;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.sm};
+  box-shadow: none;
+
+  svg {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+  }
 
   &:hover {
-    background: ${({ theme }) => theme.colors.background.secondary};
-    border-color: ${({ theme }) => theme.colors.activeLight};
-    color: ${({ theme }) => theme.colors.primary};
-    box-shadow: 0 4px 16px ${({ theme }) => theme.colors.shadow.sm};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    border-color: ${({ theme }) => ledgerHairlineHover(theme.mode)};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: -2px;
   }
 `
 
 export const DropdownMenu = styled.div`
   display: none;
   position: absolute;
-  top: 100%;
+  top: calc(100% + 6px);
   right: 0;
-  margin-top: 8px;
-  background: ${({ theme }) => theme.colors.background.primary};
-  backdrop-filter: blur(12px);
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 12px;
-  box-shadow:
-    0 8px 32px ${({ theme }) => theme.colors.shadow.md},
-    0 4px 16px ${({ theme }) => theme.colors.shadow.sm};
-  min-width: 160px;
+  padding: 4px;
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.SM};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 8px 24px rgba(0, 0, 0, 0.55)'
+      : '0 8px 24px rgba(15, 23, 42, 0.1)'};
+  min-width: 168px;
   z-index: 20;
-  overflow: hidden;
-  animation: dropdownFadeIn 0.2s ease-out;
-
-  @keyframes dropdownFadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(-8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
 `
 
 export const DropdownButton = styled.button<{ $isDelete?: boolean }>`
+  appearance: none;
   width: 100%;
-  padding: 12px 16px;
+  padding: 7px 10px;
   background: transparent;
   border: none;
+  border-radius: 4px;
   text-align: left;
-  font-size: 14px;
-  font-weight: 600;
-  color: ${(props) =>
-    props.$isDelete
-      ? props.theme.colors.error
-      : props.theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: ${({ theme, $isDelete }) =>
+    $isDelete ? theme.colors.text.secondary : theme.colors.text.primary};
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 10px;
-  border-bottom: ${(props) =>
-    props.$isDelete ? 'none' : `1px solid ${props.theme.colors.border.light}`};
-  transition: all 0.2s ease;
+  gap: 8px;
+  transition:
+    background ${MOTION.fast} ease,
+    color ${MOTION.fast} ease;
 
   svg {
-    transition: transform 0.2s ease;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
   }
 
   &:hover {
-    background: ${(props) =>
-      props.$isDelete
-        ? `rgba(255, 69, 58, 0.1)`
-        : props.theme.colors.background.secondary};
-
-    svg {
-      transform: translateX(2px);
-    }
+    background: ${({ theme, $isDelete }) =>
+      $isDelete ? DANGER.soft : ledgerHoverFill(theme.mode)};
+    color: ${({ theme, $isDelete }) =>
+      $isDelete ? theme.colors.error : theme.colors.text.primary};
   }
 `
 
@@ -1591,47 +1566,22 @@ export const ChartGridTwoCol = styled.div`
   }
 `
 
-// Chart Card (Simplified Design)
+// Chart Card (Simplified Flat Ledger Design)
 export const ChartCardModern = styled.div`
   background: ${({ theme }) => theme.colors.background.primary};
   border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 14px;
+  border-radius: 10px;
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  box-shadow: 0 2px 8px ${({ theme }) => theme.colors.shadow.sm};
-  transition: all 0.3s ease;
+  box-shadow: none;
+  transition: border-color 0.14s ease;
   position: relative;
   overflow: hidden;
 
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(
-      90deg,
-      #4285f4 0%,
-      #34a853 25%,
-      #fbbc04 50%,
-      #ea4335 75%,
-      #4285f4 100%
-    );
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-
   &:hover {
-    transform: translateY(-2px);
     border-color: ${({ theme }) => theme.colors.border.medium};
-    box-shadow: 0 8px 24px ${({ theme }) => theme.colors.shadow.md};
-
-    &::before {
-      opacity: 1;
-    }
   }
 `
 
@@ -2423,9 +2373,7 @@ export const EventListCard = styled.div`
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 
   &:hover {
-    transform: translateY(-1px);
-    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#2a2a2a' : '#dadce0')};
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#3a3a3a' : '#d1d5db')};
   }
 `
 
@@ -3119,19 +3067,13 @@ export const HeroBand = styled.div`
   display: flex;
   align-items: center;
   gap: 16px;
-  min-height: 96px;
-  padding: 16px 40px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.012))'
-      : 'linear-gradient(180deg, #fbfcfe, #ffffff)'};
+  min-height: 84px;
+  padding: 16px clamp(20px, 2.5vw, 32px);
+  border-bottom: 1px solid ${({ theme }) => ledgerInkLine(theme.mode)};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
 
-  @media (max-width: 1024px) {
-    padding: 14px 28px;
-  }
   @media (max-width: 768px) {
-    padding: 12px 20px;
+    padding: 12px 16px;
     gap: 12px;
   }
 `
@@ -3139,19 +3081,19 @@ export const HeroBand = styled.div`
 /** 국기 타일 — 썸네일이면 이미지, 없으면 이모지, 그것도 없으면 이니셜 */
 export const HeroFlagTile = styled.div`
   flex-shrink: 0;
-  width: 68px;
-  height: 46px;
-  border-radius: 8px;
+  width: 64px;
+  height: 44px;
+  border-radius: ${RADIUS.SM};
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 30px;
+  font-size: 28px;
   line-height: 1;
-  background: ${({ theme }) => theme.colors.background.secondary};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   color: ${({ theme }) => theme.colors.text.tertiary};
-  box-shadow: 0 1px 3px ${({ theme }) => theme.colors.shadow.sm};
+  box-shadow: none;
 
   img {
     width: 100%;
@@ -3160,41 +3102,41 @@ export const HeroFlagTile = styled.div`
   }
 
   @media (max-width: 768px) {
-    width: 56px;
-    height: 38px;
-    font-size: 25px;
+    width: 54px;
+    height: 36px;
+    font-size: 24px;
   }
 `
 
 /** 이니셜 폴백 — 이모지도 없는 국가 */
 export const HeroFlagInitial = styled.span`
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 export const HeroTitleCol = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
   flex: 1;
 `
 
 export const HeroName = styled.h1`
   margin: 0;
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
   color: ${({ theme }) => theme.colors.text.primary};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 
   @media (max-width: 768px) {
-    font-size: 21px;
+    font-size: 20px;
   }
 `
 
@@ -3204,8 +3146,8 @@ export const HeroMetaRow = styled.div`
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 8px;
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12.5px;
+  ${metaText}
   min-width: 0;
 `
 
@@ -3220,14 +3162,13 @@ export const HeroLocalName = styled.span`
 export const HeroMetaChip = styled.span`
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-size: 12px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.01em;
   color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)'};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
 `
 
 export const HeroMetaSep = styled.span`
@@ -3239,21 +3180,21 @@ export const HeroActions = styled.div`
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 `
 
-/** 헤더 우측 인라인 정보 수정 버튼 — 케밥을 열지 않고 기본 제원을 즉시 편집 */
+/** 헤더 우측 인라인 정보 수정 버튼 — 사건 상세 EditIconButton 규격 */
 export const HeroEditButton = styled.button`
   appearance: none;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 34px;
-  padding: 0 12px;
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.secondary};
+  height: 32px;
+  padding: 0 11px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
   font-family: inherit;
   font-size: 12.5px;
@@ -3261,23 +3202,25 @@ export const HeroEditButton = styled.button`
   white-space: nowrap;
   cursor: pointer;
   transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    color ${MOTION.fast} ease;
 
   svg {
+    width: 13px;
+    height: 13px;
     flex-shrink: 0;
-    opacity: 0.8;
   }
 
   &:hover {
-    background: ${({ theme }) => theme.colors.hover};
-    border-color: ${({ theme }) => theme.colors.border.medium};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    border-color: ${({ theme }) => ledgerHairlineHover(theme.mode)};
     color: ${({ theme }) => theme.colors.text.primary};
+  }
 
-    svg {
-      opacity: 1;
-    }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: -2px;
   }
 `
 

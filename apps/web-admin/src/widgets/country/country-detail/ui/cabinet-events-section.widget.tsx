@@ -5,9 +5,11 @@
  * - "사건 연결" 버튼 → 모달에서 사건 검색·역할 선택 후 연결
  * - 각 사건 카드에서 역할 변경/연결 해제 가능
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import styled from 'styled-components'
-import { FiCalendar, FiLink, FiTrash2 } from 'react-icons/fi'
+import { FiArrowUpRight, FiCalendar, FiLink, FiTrash2 } from 'react-icons/fi'
 import {
   CABINET_EVENT_ROLE_LABELS,
   CabinetEventLink,
@@ -16,6 +18,7 @@ import {
   unlinkCabinetFromEvent,
   updateCabinetEventLink,
 } from '@/shared/api/cabinet-events'
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { getCabinetsSectionPalette } from '@/shared/styles/country-detail-palette'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
@@ -53,6 +56,23 @@ const Card = styled.li`
 const CardBody = styled.div`
   flex: 1;
   min-width: 0;
+`
+const CardTitleLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: ${({ theme }) =>
+    getCabinetsSectionPalette(theme.mode === 'dark').treatyTitleText};
+  margin-bottom: 3px;
+  word-break: keep-all;
+  text-decoration: none;
+
+  &:hover {
+    color: ${MAIN};
+    text-decoration: underline;
+  }
 `
 const CardTitle = styled.div`
   font-size: 13.5px;
@@ -95,36 +115,42 @@ const RoleSelect = styled.select`
 // ────────────────────────────────────────────────────────────────────────────
 export interface CabinetEventsSectionProps {
   cabinetId: string
+  countryId?: string | null
+  historicalCountryId?: string | null
 }
 
-export function CabinetEventsSection({ cabinetId }: CabinetEventsSectionProps) {
-  const [links, setLinks] = useState<CabinetEventLink[]>([])
-  const [loading, setLoading] = useState(false)
+export function CabinetEventsSection({
+  cabinetId,
+  countryId,
+  historicalCountryId,
+}: CabinetEventsSectionProps) {
+  const queryClient = useQueryClient()
   const [showModal, setShowModal] = useState(false)
 
-  const reload = useCallback(async () => {
-    if (!cabinetId) return
-    setLoading(true)
-    try {
-      const rows = await listEventsForCabinet(cabinetId)
-      setLinks(rows)
-    } catch (e) {
-      console.error('[CabinetEventsSection] load failed', e)
-    } finally {
-      setLoading(false)
-    }
-  }, [cabinetId])
+  const { data: links = [], isPending: loading } = useQuery({
+    queryKey: ['cabinet-linked-events', cabinetId],
+    queryFn: () => listEventsForCabinet(cabinetId),
+    enabled: Boolean(cabinetId),
+    staleTime: 60_000,
+  })
 
-  useEffect(() => {
-    reload()
-  }, [reload])
+  const invalidateCabinetEventCaches = () => {
+    void queryClient.invalidateQueries({
+      queryKey: ['cabinet-linked-events', cabinetId],
+    })
+    void queryClient.invalidateQueries({ queryKey: ['cabinets-by-country'] })
+    void queryClient.invalidateQueries({ queryKey: ['cabinets'] })
+    void queryClient.invalidateQueries({ queryKey: ['global-cabinets'] })
+    void queryClient.invalidateQueries({ queryKey: ['global-cabinet-detail'] })
+    void queryClient.invalidateQueries({ queryKey: ['cabinet-overview'] })
+  }
 
   const onChangeRole = async (link: CabinetEventLink, role: CabinetEventRole | '') => {
     try {
       await updateCabinetEventLink(link.eventId, link.cabinetId, {
         role: role === '' ? null : role,
       })
-      reload()
+      invalidateCabinetEventCaches()
     } catch (e) {
       console.error(e)
       notify.error('역할 변경에 실패했습니다.')
@@ -142,7 +168,7 @@ export function CabinetEventsSection({ cabinetId }: CabinetEventsSectionProps) {
       return
     try {
       await unlinkCabinetFromEvent(link.eventId, link.cabinetId)
-      reload()
+      invalidateCabinetEventCaches()
     } catch (e) {
       console.error(e)
       notify.error('연결 해제에 실패했습니다.')
@@ -188,14 +214,23 @@ export function CabinetEventsSection({ cabinetId }: CabinetEventsSectionProps) {
         <List>
           {links.map((link) => {
             const ev = link.event ?? {}
+            const targetEventId = (ev as { id?: string }).id ?? link.eventId
             const period = formatPeriod(ev.startDate, ev.endDate)
             return (
               <Card key={link.id}>
                 <CardBody>
-                  <CardTitle>{ev.title ?? '(제목 없음)'}</CardTitle>
+                  {targetEventId ? (
+                    <CardTitleLink to={`/events/${encodeURIComponent(targetEventId)}`}>
+                      <span>{ev.title ?? '(제목 없음)'}</span>
+                      <FiArrowUpRight size={13} aria-hidden />
+                    </CardTitleLink>
+                  ) : (
+                    <CardTitle>{ev.title ?? '(제목 없음)'}</CardTitle>
+                  )}
                   <CardMeta>
                     {period && <span>{period}</span>}
                     {ev.category?.name && <span>· {ev.category.name}</span>}
+                    {link.note?.trim() ? <span>· {link.note.trim()}</span> : null}
                   </CardMeta>
                 </CardBody>
                 <RoleSelect
@@ -229,11 +264,13 @@ export function CabinetEventsSection({ cabinetId }: CabinetEventsSectionProps) {
       {showModal && (
         <CabinetEventAttachModal
           cabinetId={cabinetId}
+          countryId={countryId}
+          historicalCountryId={historicalCountryId}
           excludeEventIds={new Set(links.map((l) => l.eventId))}
           onClose={() => setShowModal(false)}
           onAttached={async () => {
             setShowModal(false)
-            await reload()
+            invalidateCabinetEventCaches()
           }}
         />
       )}
@@ -245,14 +282,20 @@ export function CabinetEventsSection({ cabinetId }: CabinetEventsSectionProps) {
 // utils
 // ────────────────────────────────────────────────────────────────────────────
 function formatPeriod(start?: string | null, end?: string | null): string {
-  const fmt = (d?: string | null) => {
-    if (!d) return ''
-    const dt = new Date(d)
+  const fmt = (dateValue?: string | null) => {
+    if (!dateValue?.trim()) return ''
+    const parts = parseIsoDateParts(dateValue)
+    if (parts) {
+      return parts.year < 0 ? `BC ${-parts.year}` : `${parts.year}`
+    }
+    const dt = new Date(dateValue)
     if (isNaN(dt.getTime())) return ''
     return `${dt.getUTCFullYear()}`
   }
-  const s = fmt(start)
-  const e = fmt(end)
-  if (s && e) return s === e ? s : `${s}–${e}`
-  return s || e
+  const startLabel = fmt(start)
+  const endLabel = fmt(end)
+  if (startLabel && endLabel) {
+    return startLabel === endLabel ? startLabel : `${startLabel}–${endLabel}`
+  }
+  return startLabel || endLabel
 }

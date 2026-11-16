@@ -145,10 +145,9 @@ export const ChildrenHeaderName = styled.div`
 `
 
 export const ChildrenHeaderMeta = styled.div`
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.tertiary};
   margin-top: 6px;
   display: flex;
@@ -157,8 +156,6 @@ export const ChildrenHeaderMeta = styled.div`
 
   > span.count {
     font-variant-numeric: tabular-nums;
-    text-transform: none;
-    letter-spacing: 0;
     color: ${({ theme }) => theme.colors.text.secondary};
     font-weight: 700;
   }
@@ -310,32 +307,27 @@ export const AddIconButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   padding: 0;
   border: none;
   border-radius: 8px;
-  background: ${({ theme }) => theme.colors.primary};
-  color: #fff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#0e0f12' : '#ffffff')};
   cursor: pointer;
+  box-shadow: none;
   transition:
-    background 0.15s ease,
-    opacity 0.15s ease,
-    transform 0.15s ease;
-  box-shadow: 0 4px 12px
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99, 106, 242, 0.4)'
-        : 'rgba(99, 102, 241, 0.3)'};
+    background 0.14s ease,
+    opacity 0.14s ease;
 
   &:hover {
-    background: ${({ theme }) => theme.colors.button.hover};
-    transform: translateY(-1px);
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? '#c7d2fe' : '#4338ca'};
   }
 
   &:active {
-    opacity: 0.9;
-    transform: translateY(0);
+    opacity: 0.92;
   }
 
   svg {
@@ -492,10 +484,9 @@ export const QuickAccessHeader = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.tertiary};
   padding: 8px 10px 4px;
 `

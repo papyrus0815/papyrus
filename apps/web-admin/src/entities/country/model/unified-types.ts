@@ -36,7 +36,7 @@ export interface UnifiedCountry {
   continentId?: string | null
   latitude?: number | null
   longitude?: number | null
-  // 헤더 배지 표시용 (modernToUnified는 현재 채우지 않음 — 값 없으면 미표시)
+  // 통화 · 공용어 마스터 참조 ID (현대 국가)
   currencyId?: string | null
   languageId?: string | null
   /** 인물 이름 표시 순서 (현대 국가) */
@@ -84,6 +84,8 @@ export function modernToUnified(country: Country): UnifiedCountry {
     continentId: country.continentId,
     latitude: country.latitude,
     longitude: country.longitude,
+    currencyId: country.currencyId ?? null,
+    languageId: country.languageId ?? null,
     historicalCountries: country.historicalCountries,
     defaultNameDisplayOrder: country.defaultNameDisplayOrder ?? null,
   }
