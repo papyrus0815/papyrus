@@ -1482,38 +1482,6 @@ export function GovernmentMilitaryTab({
               </TreeMetaStrip>
             </div>
           </TreeMainBtn>
-
-          <TreeRowActionCluster
-            onClick={(clickEvent) => clickEvent.stopPropagation()}
-          >
-            <TreeAddSubBtn
-              type="button"
-              title={`${unitItem.name} 산하에 예하 부대 추가`}
-              onClick={() => {
-                onCreateUnit({
-                  parentUnitId: unitItem.id,
-                  administrationDepartmentId:
-                    unitItem.administrationDepartmentId ??
-                    unitItem.administrationDepartment?.id ??
-                    resolveEffectiveDepartment(unitItem)?.id ??
-                    null,
-                  historicalCountryId: unitItem.historicalCountryId ?? null,
-                  branch: unitItem.branch ?? null,
-                })
-              }}
-            >
-              <FiPlus size={11} />
-              예하
-            </TreeAddSubBtn>
-            <TreeEditIconBtn
-              type="button"
-              title={`${unitItem.name} 정보 수정`}
-              aria-label={`${unitItem.name} 정보 수정`}
-              onClick={() => onEditUnit(unitItem.id)}
-            >
-              <FiEdit2 size={11.5} />
-            </TreeEditIconBtn>
-          </TreeRowActionCluster>
         </TreeRow>
 
         {hasChildren && !isCollapsed ? (
@@ -3048,20 +3016,6 @@ export function GovernmentMilitaryTab({
                         onAddRoot={() =>
                           onCreateUnit(resolveDefaultCreateOptions())
                         }
-                        onEditUnit={(unitItem) => onEditUnit(unitItem.id)}
-                        onAddSubUnit={(unitItem) =>
-                          onCreateUnit({
-                            parentUnitId: unitItem.id,
-                            administrationDepartmentId:
-                              unitItem.administrationDepartmentId ??
-                              unitItem.administrationDepartment?.id ??
-                              resolveEffectiveDepartment(unitItem)?.id ??
-                              null,
-                            historicalCountryId:
-                              unitItem.historicalCountryId ?? null,
-                            branch: unitItem.branch ?? null,
-                          })
-                        }
                       />
                     ) : (
                       <TreeContainer>
@@ -3185,20 +3139,6 @@ export function GovernmentMilitaryTab({
                       onSelectUnit={(unitItem) => selectUnit(unitItem.id)}
                       onAddRoot={() =>
                         onCreateUnit(resolveDefaultCreateOptions())
-                      }
-                      onEditUnit={(unitItem) => onEditUnit(unitItem.id)}
-                      onAddSubUnit={(unitItem) =>
-                        onCreateUnit({
-                          parentUnitId: unitItem.id,
-                          administrationDepartmentId:
-                            unitItem.administrationDepartmentId ??
-                            unitItem.administrationDepartment?.id ??
-                            resolveEffectiveDepartment(unitItem)?.id ??
-                            null,
-                          historicalCountryId:
-                            unitItem.historicalCountryId ?? null,
-                          branch: unitItem.branch ?? null,
-                        })
                       }
                     />
                   ) : (
@@ -3463,6 +3403,57 @@ const SnapshotYearInput = styled.input`
   }
 `
 
+const ToolbarSegmentTrack = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  height: 34px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f1f5f9'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.08)'
+        : 'rgba(15, 23, 42, 0.08)'};
+`
+
+const ToolbarSegmentBtn = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 6px;
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.12)'
+        : '#ffffff'
+      : 'transparent'};
+  box-shadow: ${({ $active, theme }) =>
+    $active && theme.mode !== 'dark'
+      ? '0 1px 2px rgba(15, 23, 42, 0.08)'
+      : 'none'};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.text.primary : theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 0.14s ease,
+    background-color 0.14s ease;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
 const WorkspaceStage = styled.div`
   flex: 1;
   min-height: 0;
@@ -3478,6 +3469,72 @@ const WorkspaceStack = styled.div`
   gap: 12px;
 `
 
+const SubFilterHeaderRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? GOV_ROW_HAIRLINE.dark : GOV_ROW_HAIRLINE.light};
+`
+
+const SubFilterPillsCluster = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0;
+  margin-left: auto;
+`
+
+const SubFilterSegmentTrack = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 7px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.035)' : '#f1f5f9'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.07)'
+        : 'rgba(15, 23, 42, 0.07)'};
+`
+
+const SubFilterSegmentBtn = styled.button<{ $active: boolean }>`
+  height: 24px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 5px;
+  background: ${({ $active, theme }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.12)'
+        : '#ffffff'
+      : 'transparent'};
+  box-shadow: ${({ $active, theme }) =>
+    $active && theme.mode !== 'dark'
+      ? '0 1px 2px rgba(15, 23, 42, 0.07)'
+      : 'none'};
+  color: ${({ $active, theme }) =>
+    $active ? theme.colors.text.primary : theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color 0.14s ease,
+    background-color 0.14s ease;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
 const BranchNavBar = styled.div`
   display: flex;
   flex-wrap: nowrap;
@@ -3490,9 +3547,6 @@ const BranchNavBar = styled.div`
   overscroll-behavior-x: contain;
   scrollbar-width: none;
   -ms-overflow-style: none;
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? GOV_ROW_HAIRLINE.dark : GOV_ROW_HAIRLINE.light};
 
   &::-webkit-scrollbar {
     display: none;
@@ -3717,17 +3771,22 @@ const DeptHeaderAddBtn = styled.button`
   }
 `
 
+const TreeChildrenGroup = styled.div`
+  position: relative;
+`
+
 const TreeRow = styled.div<{ $selected: boolean; $depth: number }>`
+  position: relative;
   display: flex;
   align-items: center;
-  min-height: 46px;
+  min-height: 44px;
   padding-left: ${({ $depth }) => 8 + $depth * 18}px;
   padding-right: 10px;
   border-bottom: 1px solid
     ${({ theme }) =>
       theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.06)'
-        : 'rgba(20, 19, 34, 0.06)'};
+        ? 'rgba(255, 255, 255, 0.05)'
+        : 'rgba(20, 19, 34, 0.05)'};
   border-left: 2.5px solid
     ${({ $selected }) => ($selected ? GOV_BRAND.primary : 'transparent')};
   background: ${({ theme, $selected }) =>
@@ -3737,6 +3796,26 @@ const TreeRow = styled.div<{ $selected: boolean; $depth: number }>`
         : GOV_BRAND.primarySoft
       : 'transparent'};
   transition: background 0.12s ease;
+
+  ${({ $depth, theme }) =>
+    $depth > 0
+      ? `
+    &::before {
+      content: '';
+      position: absolute;
+      left: ${($depth - 1) * 18 + 18}px;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: ${
+        theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.08)'
+          : 'rgba(15, 23, 42, 0.08)'
+      };
+      pointer-events: none;
+    }
+  `
+      : ''}
 
   &:hover {
     background: ${({ theme, $selected }) =>
@@ -3800,7 +3879,7 @@ const TreeMainBtn = styled.button`
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 8px 6px 8px 0;
+  padding: 7px 6px 7px 0;
   border: none;
   background: transparent;
   cursor: pointer;
@@ -3813,7 +3892,7 @@ const TreeTitleLine = styled.div<{ $selected: boolean }>`
   align-items: center;
   gap: 5px;
   flex-wrap: wrap;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: ${({ $selected }) => ($selected ? 700 : 600)};
   color: ${({ theme }) => theme.colors.text.primary};
   letter-spacing: -0.015em;
@@ -3836,8 +3915,8 @@ const TreeMetaStrip = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
-  margin-top: 3px;
+  gap: 6px;
+  margin-top: 2px;
 `
 
 const TreeLifespanSpan = styled.span`
@@ -3867,67 +3946,49 @@ const EchelonMiniBadge = styled.span<{ $echelon: string }>`
   background: ${({ theme, $echelon }) =>
     ['SUPREME_COMMAND', 'GENERAL_STAFF', 'SERVICE_HQ'].includes($echelon)
       ? theme.mode === 'dark'
-        ? 'rgba(139, 92, 246, 0.18)'
-        : 'rgba(139, 92, 246, 0.1)'
+        ? 'rgba(245, 158, 11, 0.16)'
+        : 'rgba(245, 158, 11, 0.12)'
       : ['THEATER', 'ARMY_GROUP', 'FRONT', 'MILITARY_DISTRICT'].includes(
             $echelon,
           )
         ? theme.mode === 'dark'
-          ? 'rgba(245, 158, 11, 0.16)'
-          : 'rgba(245, 158, 11, 0.1)'
+          ? GOV_BRAND.primarySoftDark
+          : GOV_BRAND.primarySoft
         : ['FIELD_ARMY', 'FLEET', 'AIR_FLEET', 'CORPS', 'AIR_CORPS'].includes(
               $echelon,
             )
           ? theme.mode === 'dark'
-            ? GOV_BRAND.primarySoftDark
-            : GOV_BRAND.primarySoft
+            ? 'rgba(13, 148, 136, 0.16)'
+            : 'rgba(13, 148, 136, 0.1)'
           : theme.mode === 'dark'
             ? 'rgba(255, 255, 255, 0.06)'
             : 'rgba(20, 19, 34, 0.045)'};
   color: ${({ theme, $echelon }) =>
     ['SUPREME_COMMAND', 'GENERAL_STAFF', 'SERVICE_HQ'].includes($echelon)
       ? theme.mode === 'dark'
-        ? '#c4b5fd'
-        : '#6d28d9'
+        ? '#fcd34d'
+        : '#b45309'
       : ['THEATER', 'ARMY_GROUP', 'FRONT', 'MILITARY_DISTRICT'].includes(
             $echelon,
           )
         ? theme.mode === 'dark'
-          ? '#fcd34d'
-          : '#b45309'
+          ? '#93c5fd'
+          : GOV_BRAND.primary
         : ['FIELD_ARMY', 'FLEET', 'AIR_FLEET', 'CORPS', 'AIR_CORPS'].includes(
               $echelon,
             )
           ? theme.mode === 'dark'
-            ? '#93c5fd'
-            : GOV_BRAND.primary
+            ? '#5eead4'
+            : '#0f766e'
           : theme.colors.text.secondary};
-`
-
-const TreeNeutralBadge = styled.span`
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 10.5px;
-  font-weight: 600;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.06)'
-      : 'rgba(20, 19, 34, 0.045)'};
-  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const TreeCommanderBadge = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 10.5px;
-  font-weight: 600;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.06)'
-      : 'rgba(20, 19, 34, 0.045)'};
+  font-size: 11px;
+  font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
@@ -3942,51 +4003,14 @@ const TreeBattleBadge = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 1px 6px;
+  padding: 1px 5px;
   border-radius: 4px;
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(13, 148, 136, 0.16)' : '#f0fdfa'};
   color: ${({ theme }) => (theme.mode === 'dark' ? '#5eead4' : '#0f766e')};
-`
-
-const TreeAddSubBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  height: 24px;
-  padding: 0 7px;
-  border-radius: 6px;
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.1)'
-        : 'rgba(20, 19, 34, 0.1)'};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-  flex-shrink: 0;
-  opacity: 0.72;
-  transition:
-    opacity 0.12s ease,
-    border-color 0.12s ease,
-    color 0.12s ease;
-
-  ${TreeRow}:hover & {
-    opacity: 1;
-  }
-
-  &:hover {
-    opacity: 1;
-    color: ${({ theme }) =>
-      theme.mode === 'dark' ? '#93c5fd' : GOV_BRAND.primary};
-    border-color: ${GOV_BRAND.primary};
-  }
 `
 
 const TreeFooterBar = styled.div`

@@ -6,7 +6,6 @@ import {
   FiAward,
   FiCompass,
   FiCrosshair,
-  FiEdit2,
   FiGitCommit,
   FiLayers,
   FiNavigation,
@@ -77,8 +76,6 @@ export interface MilitaryUnitsLedgerViewProps {
   ) => { id: string; name: string; abbreviation?: string | null } | null
   onSelectUnit: (unitItem: LedgerMilitaryUnitItem) => void
   onAddRoot?: () => void
-  onEditUnit?: (unitItem: LedgerMilitaryUnitItem) => void
-  onAddSubUnit?: (unitItem: LedgerMilitaryUnitItem) => void
 }
 
 type SortField = 'echelon' | 'established' | 'name'
@@ -202,8 +199,6 @@ export function MilitaryUnitsLedgerView({
   resolveEffectiveDepartment,
   onSelectUnit,
   onAddRoot,
-  onEditUnit,
-  onAddSubUnit,
 }: MilitaryUnitsLedgerViewProps) {
   const [sortField, setSortField] = useState<SortField>('echelon')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
@@ -368,8 +363,8 @@ export function MilitaryUnitsLedgerView({
               {!compact ? (
                 <Th style={{ width: 170 }}>상급 편제 · 소관 부처</Th>
               ) : null}
-              <Th style={{ width: compact ? 124 : 186, textAlign: 'right' }}>
-                지휘관 · 전과 · 관리
+              <Th style={{ width: compact ? 104 : 158, textAlign: 'right' }}>
+                지휘관 · 개편 · 전과
               </Th>
             </tr>
           </thead>
@@ -511,73 +506,45 @@ export function MilitaryUnitsLedgerView({
                     </Td>
                   ) : null}
                   <Td style={{ textAlign: 'right' }}>
-                    <RightCellCluster>
-                      <MetricGroup>
-                        {commanderText && !compact ? (
-                          <CommanderChip
-                            title={`대표 지휘관: ${commanderText}`}
-                          >
+                    <MetricGroup>
+                      {commanderText && !compact ? (
+                        <CommanderChip
+                          title={`대표 지휘관: ${commanderText}`}
+                        >
+                          <FiUser size={10.5} />
+                          {commanderText}
+                        </CommanderChip>
+                      ) : null}
+                      {lineageTotal > 0 ? (
+                        <MetricChip
+                          title={`전신 ${predCount} · 후신 ${succCount}`}
+                        >
+                          <FiGitCommit size={11} />
+                          {lineageTotal}
+                        </MetricChip>
+                      ) : null}
+                      {battleCount > 0 ? (
+                        <MetricChip
+                          $combat
+                          title={`참전 사건·전투 ${battleCount}건`}
+                        >
+                          <FiCompass size={11} />
+                          {battleCount}
+                        </MetricChip>
+                      ) : null}
+                      {(!commanderText || compact) &&
+                      lineageTotal === 0 &&
+                      battleCount === 0 ? (
+                        commanderText ? (
+                          <CommanderChip title={commanderText}>
                             <FiUser size={10.5} />
                             {commanderText}
                           </CommanderChip>
-                        ) : null}
-                        {lineageTotal > 0 ? (
-                          <MetricChip
-                            title={`전신 ${predCount} · 후신 ${succCount}`}
-                          >
-                            <FiGitCommit size={11} />
-                            {lineageTotal}
-                          </MetricChip>
-                        ) : null}
-                        {battleCount > 0 ? (
-                          <MetricChip
-                            $combat
-                            title={`참전 사건·전투 ${battleCount}건`}
-                          >
-                            <FiCompass size={11} />
-                            {battleCount}
-                          </MetricChip>
-                        ) : null}
-                        {(!commanderText || compact) &&
-                        lineageTotal === 0 &&
-                        battleCount === 0 ? (
-                          commanderText ? (
-                            <CommanderChip title={commanderText}>
-                              <FiUser size={10.5} />
-                              {commanderText}
-                            </CommanderChip>
-                          ) : (
-                            <DashText>—</DashText>
-                          )
-                        ) : null}
-                      </MetricGroup>
-
-                      {(onAddSubUnit || onEditUnit) && (
-                        <RowQuickActionGroup
-                          onClick={(clickEvent) => clickEvent.stopPropagation()}
-                        >
-                          {onAddSubUnit && (
-                            <RowQuickActionBtn
-                              type="button"
-                              title={`${unitRow.name} 예하 부대 추가`}
-                              onClick={() => onAddSubUnit(unitRow)}
-                            >
-                              <FiPlus size={11} />
-                              <span>예하</span>
-                            </RowQuickActionBtn>
-                          )}
-                          {onEditUnit && (
-                            <RowQuickActionBtn
-                              type="button"
-                              title={`${unitRow.name} 정보 수정`}
-                              onClick={() => onEditUnit(unitRow)}
-                            >
-                              <FiEdit2 size={11} />
-                            </RowQuickActionBtn>
-                          )}
-                        </RowQuickActionGroup>
-                      )}
-                    </RightCellCluster>
+                        ) : (
+                          <DashText>—</DashText>
+                        )
+                      ) : null}
+                    </MetricGroup>
                   </Td>
                 </Tr>
               )
@@ -973,59 +940,12 @@ const DashText = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const RightCellCluster = styled.div`
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  flex-wrap: wrap;
-`
-
 const MetricGroup = styled.div`
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 5px;
-`
-
-const RowQuickActionGroup = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  opacity: 0.72;
-  transition: opacity 0.12s ease;
-
-  ${Tr}:hover & {
-    opacity: 1;
-  }
-`
-
-const RowQuickActionBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  height: 22px;
-  padding: 0 6px;
-  border-radius: 5px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.12)'
-        : 'rgba(15, 23, 42, 0.1)'};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font: inherit;
-  font-size: 10.5px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) =>
-      theme.mode === 'dark' ? '#93c5fd' : GOV_BRAND.primary};
-    border-color: ${GOV_BRAND.primary};
-  }
 `
 
 const CommanderChip = styled.span`
