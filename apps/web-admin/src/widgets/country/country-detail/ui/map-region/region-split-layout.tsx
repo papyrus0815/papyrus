@@ -1,9 +1,19 @@
 import { useEffect, useState, type ReactNode } from 'react'
 
-import * as Styled from '../map-region-section.styles'
+import styled from 'styled-components'
+
+const SectionLabel = styled.div`
+  margin-bottom: 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+`
 
 /** 뷰포트가 좁은지(모바일/태블릿) — 2컬럼을 세로 스택으로 전환하는 기준 */
-function useIsNarrow(breakpoint = 900): boolean {
+function useIsNarrow(breakpoint = 960): boolean {
   const [narrow, setNarrow] = useState(
     () =>
       typeof window !== 'undefined' &&
@@ -23,26 +33,21 @@ interface RegionSplitLayoutProps {
   ariaLabel: string
   /** 섹션 라벨 텍스트 — 페이지 제목과 중복되면 생략 */
   sectionLabel?: string
-  /** 섹션 라벨 아래 KPI 스트립 (옵션) */
+  /** 상단 요약/체계 영역 (옵션) */
   kpiStrip?: ReactNode
   left: ReactNode
   right: ReactNode
-  /** 좌측 컬럼 너비 — 기본 360px */
+  /** 좌측 컬럼 너비 — 기본 380px */
   leftWidth?: number
-  /** 그리드 maxHeight — 행정구역 뷰처럼 vh 기반 제약을 줄 때 */
+  /** 좌측 목록 컬럼 maxHeight — 우측(지도+상세)은 자연 흐름 또는 독립 스크롤 */
   maxHeight?: string
   /** 그리드 minHeight */
   minHeight?: number
 }
 
 /**
- * 좌측 목록 + 우측 상세의 2-컬럼 레이아웃.
+ * 좌측 목록 + 우측(지도 + 상세) 2-컬럼 아틀라스 데스크 레이아웃.
  * 행정구역/자연지리/인프라 뷰가 공유하는 골격.
- *
- * maxHeight는 그리드가 아니라 *각 컬럼 래퍼*에 건다 — 그리드에만 걸면
- * alignItems:start인 항목이 캡을 무시하고 섹션 하단 여백 너머(페이지 바닥)까지
- * 흘러내린다. 래퍼는 flex라 내용이 캡을 넘으면 자식 패널이 줄어들며
- * 내부 스크롤(overflow:auto)이 걸린다.
  */
 export function RegionSplitLayout({
   ariaLabel,
@@ -50,43 +55,54 @@ export function RegionSplitLayout({
   kpiStrip,
   left,
   right,
-  leftWidth = 360,
+  leftWidth = 380,
   maxHeight,
-  minHeight = 320,
+  minHeight = 420,
 }: RegionSplitLayoutProps) {
-  // 좁은 화면에선 세로 스택 — 목록 위, 상세 아래. 높이 캡 없이 페이지 흐름에 맡겨
-  // 터치 환경에서 중첩 스크롤박스를 피한다.
   const isNarrow = useIsNarrow()
-  const columnStyle: React.CSSProperties = {
+
+  const leftColStyle: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
     minHeight: 0,
     minWidth: 0,
-    ...(!isNarrow && maxHeight ? { maxHeight } : {}),
+    ...(!isNarrow
+      ? {
+          position: 'sticky',
+          top: 12,
+          maxHeight: maxHeight ?? 'calc(100vh - 140px)',
+        }
+      : {}),
   }
+
+  const rightColStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 14,
+    minHeight: 0,
+    minWidth: 0,
+  }
+
   return (
-    <section aria-label={ariaLabel}>
-      {sectionLabel && (
-        <Styled.MapRegionSectionLabel>
-          {sectionLabel}
-        </Styled.MapRegionSectionLabel>
-      )}
+    <section
+      aria-label={ariaLabel}
+      style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+    >
+      {sectionLabel && <SectionLabel>{sectionLabel}</SectionLabel>}
       {kpiStrip}
       <div
         style={{
           display: 'grid',
-          // minmax(0, 1fr) — 1fr만 쓰면 트랙이 내용물의 min-content 아래로 줄지 않아
-          // 패널 안의 nowrap 한 줄이 페이지 전체 가로폭을 밀어낸다(모바일 가로 스크롤).
           gridTemplateColumns: isNarrow
             ? 'minmax(0, 1fr)'
             : `${leftWidth}px minmax(0, 1fr)`,
-          gap: isNarrow ? 16 : 24,
+          gap: isNarrow ? 14 : 16,
           alignItems: 'start',
           minHeight: isNarrow ? undefined : minHeight,
         }}
       >
-        <div style={columnStyle}>{left}</div>
-        <div style={columnStyle}>{right}</div>
+        <div style={leftColStyle}>{left}</div>
+        <div style={rightColStyle}>{right}</div>
       </div>
     </section>
   )

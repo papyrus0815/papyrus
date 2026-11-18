@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -11,6 +11,8 @@ import {
   FiExternalLink,
   FiGitCommit,
   FiGlobe,
+  FiMapPin,
+  FiMoreHorizontal,
   FiShield,
   FiUser,
   FiUsers,
@@ -24,6 +26,7 @@ import {
   ledgerAccentBorder,
   ledgerAccentSubtle,
   ledgerBackground,
+  ledgerElevated,
   ledgerHairline,
   ledgerHairlineStrong,
   ledgerHoverFill,
@@ -45,7 +48,13 @@ import { pathKeys } from '@/shared/router'
 import { HeadquartersMapPreview } from '@/shared/ui/headquarters-location-field'
 import { SidePanel } from '@/shared/ui/side-panel'
 import {
+  UnderlineTabBadge,
+  UnderlineTabButton,
+  UnderlineTabNav,
+} from '@/shared/ui/underline-tabs'
+import {
   LedgerCompactAction,
+  LedgerIconButton,
   LedgerToolbarButton,
 } from '@/widgets/country/country-detail/ui/country-ledger-primitives'
 import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal/country-inline-modal'
@@ -157,13 +166,15 @@ function formatPartsOrIso(
 ): string {
   if (parts?.year && parts.year > 0) {
     const prefix = parts.era === 'BC' ? 'BC ' : ''
-    const m =
+    const monthPart =
       parts.month != null ? `.${String(parts.month).padStart(2, '0')}` : ''
-    return `${prefix}${parts.year}${m}`
+    return `${prefix}${parts.year}${monthPart}`
   }
   if (iso) return iso.slice(0, 10)
   return ''
 }
+
+type DrawerTabKey = 'overview' | 'commanders' | 'operations'
 
 export interface MilitaryUnitDetailDrawerProps {
   unitId: string | null
@@ -182,6 +193,26 @@ export function MilitaryUnitDetailDrawer({
 }: MilitaryUnitDetailDrawerProps) {
   const navigate = useNavigate()
   const [inspectPersonId, setInspectPersonId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<DrawerTabKey>('overview')
+  const [showMap, setShowMap] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  useEffect(() => {
+    setActiveTab('overview')
+    setShowMap(false)
+    setMenuOpen(false)
+  }, [unitId])
+
+  useEffect(() => {
+    if (!menuOpen) return
+    const handlePointerDown = (evt: MouseEvent) => {
+      const target = evt.target as HTMLElement | null
+      if (target?.closest('[data-drawer-more-menu]')) return
+      setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [menuOpen])
 
   const detailQuery = useQuery({
     queryKey: ['military-unit', 'detail', unitId],
@@ -233,13 +264,7 @@ export function MilitaryUnitDetailDrawer({
         }
         headerActions={
           unit ? (
-            <DrawerHeaderActions>
-              <LedgerCompactAction
-                type="button"
-                onClick={() => onEditUnit(unit.id)}
-              >
-                <FiEdit2 size={12} /> 수정
-              </LedgerCompactAction>
+            <DrawerHeaderActions data-drawer-more-menu>
               <LedgerToolbarButton
                 type="button"
                 $active
@@ -249,8 +274,49 @@ export function MilitaryUnitDetailDrawer({
                   })
                 }
               >
-                <FiExternalLink size={13} /> 단독 상세 열기
+                <FiExternalLink size={13} /> 단독 상세
               </LedgerToolbarButton>
+
+              <MoreMenuWrap>
+                <LedgerIconButton
+                  type="button"
+                  aria-label="부대 작업 및 설정 메뉴"
+                  aria-expanded={menuOpen}
+                  title="부대 정보 수정 · 국가 군사 탭 이동"
+                  onClick={() => setMenuOpen((prev) => !prev)}
+                >
+                  <FiMoreHorizontal size={16} />
+                </LedgerIconButton>
+
+                {menuOpen ? (
+                  <MoreDropdownMenu role="menu">
+                    <MoreDropdownItem
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        onEditUnit(unit.id)
+                      }}
+                    >
+                      <FiEdit2 size={12.5} />
+                      <span>사령부·부대 정보 수정</span>
+                    </MoreDropdownItem>
+                    {countryName && countryIdForLink ? (
+                      <MoreDropdownItem
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false)
+                          navigate(
+                            pathKeys.countryMilitary(countryIdForLink, unit.id),
+                          )
+                        }}
+                      >
+                        <FiGlobe size={12.5} />
+                        <span>{countryName} 군사 탭 열기</span>
+                      </MoreDropdownItem>
+                    ) : null}
+                  </MoreDropdownMenu>
+                ) : null}
+              </MoreMenuWrap>
             </DrawerHeaderActions>
           ) : undefined
         }
@@ -326,6 +392,31 @@ export function MilitaryUnitDetailDrawer({
                   )}
                 </MetaVal>
               </MetaCell>
+              {unit.garrison?.trim() ? (
+                <MetaCell>
+                  <MetaLabel>
+                    <FiMapPin size={11} /> 본부 · 주둔지
+                  </MetaLabel>
+                  <MetaVal>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 6,
+                      }}
+                    >
+                      <span>{unit.garrison}</span>
+                      <LedgerCompactAction
+                        type="button"
+                        onClick={() => setShowMap((prev) => !prev)}
+                      >
+                        {showMap ? '지도 닫기' : '지도 보기'}
+                      </LedgerCompactAction>
+                    </span>
+                  </MetaVal>
+                </MetaCell>
+              ) : null}
               {unit.strength ? (
                 <MetaCell>
                   <MetaLabel>
@@ -352,7 +443,7 @@ export function MilitaryUnitDetailDrawer({
               ) : null}
             </MetaStrip>
 
-            {unit.garrison?.trim() ? (
+            {showMap && unit.garrison?.trim() ? (
               <HeadquartersMapPreview
                 headquarters={unit.garrison}
                 countryName={countryName}
@@ -361,237 +452,294 @@ export function MilitaryUnitDetailDrawer({
               />
             ) : null}
 
-            {unit.primaryMission ||
-            unit.jurisdiction ||
-            unit.notableBattles ||
-            unit.honors ? (
-              <ContextGrid>
-                {unit.primaryMission ? (
-                  <ContextCard>
-                    <ContextLabel>주요 임무 · 역할</ContextLabel>
-                    <ContextText>{unit.primaryMission}</ContextText>
-                  </ContextCard>
-                ) : null}
-                {unit.jurisdiction ? (
-                  <ContextCard>
-                    <ContextLabel>관할 · 작전구역</ContextLabel>
-                    <ContextText>{unit.jurisdiction}</ContextText>
-                  </ContextCard>
-                ) : null}
-                {unit.notableBattles ? (
-                  <ContextCard>
-                    <ContextLabel>주요 전투 · 작전</ContextLabel>
-                    <ContextText>{unit.notableBattles}</ContextText>
-                  </ContextCard>
-                ) : null}
-                {unit.honors ? (
-                  <ContextCard>
-                    <ContextLabel>부대 표창 · 수훈</ContextLabel>
-                    <ContextText>{unit.honors}</ContextText>
-                  </ContextCard>
-                ) : null}
-              </ContextGrid>
-            ) : null}
+            <UnderlineTabNav aria-label="사령부 요약 지면">
+              <UnderlineTabButton
+                type="button"
+                $active={activeTab === 'overview'}
+                onClick={() => setActiveTab('overview')}
+              >
+                <span>편제 · 개요</span>
+                <UnderlineTabBadge $active={activeTab === 'overview'}>
+                  {(unit.subUnits ?? []).length +
+                    (unit.predecessors ?? []).length +
+                    (unit.successors ?? []).length}
+                </UnderlineTabBadge>
+              </UnderlineTabButton>
+              <UnderlineTabButton
+                type="button"
+                $active={activeTab === 'commanders'}
+                onClick={() => setActiveTab('commanders')}
+              >
+                <span>역대 지휘관</span>
+                <UnderlineTabBadge $active={activeTab === 'commanders'}>
+                  {(unit.tenures ?? []).length}
+                </UnderlineTabBadge>
+              </UnderlineTabButton>
+              <UnderlineTabButton
+                type="button"
+                $active={activeTab === 'operations'}
+                onClick={() => setActiveTab('operations')}
+              >
+                <span>참전 · 작전</span>
+                <UnderlineTabBadge $active={activeTab === 'operations'}>
+                  {
+                    (unit.sideDeployedUnits ?? []).filter(
+                      (depItem) => depItem.side?.event,
+                    ).length
+                  }
+                </UnderlineTabBadge>
+              </UnderlineTabButton>
+            </UnderlineTabNav>
 
-            {unit.description ? <ProseBox>{unit.description}</ProseBox> : null}
+            {activeTab === 'overview' && (
+              <>
+                {/* 지휘 계통 및 예하 편제 */}
+                <DrawerSection style={{ borderTop: 'none', paddingTop: 4 }}>
+                  <SectionTitle>지휘 계통 · 예하 편제</SectionTitle>
+                  <ChainLine>
+                    {unit.parentUnit ? (
+                      <UnitChipBtn
+                        type="button"
+                        onClick={() => onSelectUnit(unit.parentUnit!.id)}
+                      >
+                        {unit.parentUnit.unitType
+                          ? `${militaryUnitTypeLabelKo(unit.parentUnit.unitType)} · `
+                          : ''}
+                        {unit.parentUnit.name}
+                      </UnitChipBtn>
+                    ) : (
+                      <MutedText>최상위 편제</MutedText>
+                    )}
+                    <FiArrowRight size={12} />
+                    <AccentBadge>{unit.name}</AccentBadge>
+                  </ChainLine>
 
-            {/* 지휘 계통 및 예하 편제 */}
-            <DrawerSection>
-              <SectionTitle>지휘 계통 · 예하 편제</SectionTitle>
-              <ChainLine>
-                {unit.parentUnit ? (
-                  <UnitChipBtn
-                    type="button"
-                    onClick={() => onSelectUnit(unit.parentUnit!.id)}
-                  >
-                    {unit.parentUnit.unitType
-                      ? `${militaryUnitTypeLabelKo(unit.parentUnit.unitType)} · `
-                      : ''}
-                    {unit.parentUnit.name}
-                  </UnitChipBtn>
-                ) : (
-                  <MutedText>최상위 편제</MutedText>
-                )}
-                <FiArrowRight size={12} />
-                <AccentBadge>{unit.name}</AccentBadge>
-              </ChainLine>
-
-              {(unit.subUnits ?? []).length > 0 ? (
-                <ChipWrap>
-                  {(unit.subUnits ?? []).map((sub) => (
-                    <UnitChipBtn
-                      key={sub.id}
-                      type="button"
-                      onClick={() => onSelectUnit(sub.id)}
-                    >
-                      {sub.unitType
-                        ? `${militaryUnitTypeLabelKo(sub.unitType)} · `
-                        : ''}
-                      {sub.name}
-                    </UnitChipBtn>
-                  ))}
-                </ChipWrap>
-              ) : null}
-
-              {(unit.predecessors ?? []).length > 0 ||
-              (unit.successors ?? []).length > 0 ? (
-                <ChipWrap style={{ marginTop: 4 }}>
-                  {(unit.predecessors ?? []).map((pred) => (
-                    <LineageTag key={pred.transitionId}>
-                      <FiGitCommit size={11} />← 전신(
-                      {TRANSITION_KIND_KO[pred.kind] ?? pred.kind}):{' '}
-                      {pred.unit ? (
-                        <InlineBtn
+                  {(unit.subUnits ?? []).length > 0 ? (
+                    <ChipWrap>
+                      {(unit.subUnits ?? []).map((sub) => (
+                        <UnitChipBtn
+                          key={sub.id}
                           type="button"
-                          onClick={() => onSelectUnit(pred.unit!.id)}
+                          onClick={() => onSelectUnit(sub.id)}
                         >
-                          {pred.unit.name}
-                        </InlineBtn>
-                      ) : (
-                        pred.department?.name
-                      )}
-                    </LineageTag>
-                  ))}
-                  {(unit.successors ?? []).map((succ) => (
-                    <LineageTag key={succ.transitionId}>
-                      <FiGitCommit size={11} />→ 후신(
-                      {TRANSITION_KIND_KO[succ.kind] ?? succ.kind}):{' '}
-                      {succ.unit ? (
-                        <InlineBtn
-                          type="button"
-                          onClick={() => onSelectUnit(succ.unit!.id)}
-                        >
-                          {succ.unit.name}
-                        </InlineBtn>
-                      ) : null}
-                    </LineageTag>
-                  ))}
-                </ChipWrap>
-              ) : null}
-            </DrawerSection>
+                          {sub.unitType
+                            ? `${militaryUnitTypeLabelKo(sub.unitType)} · `
+                            : ''}
+                          {sub.name}
+                        </UnitChipBtn>
+                      ))}
+                    </ChipWrap>
+                  ) : null}
 
-            {(unit.assignedNavalVessels ?? []).length > 0 ? (
-              <DrawerSection>
-                <SectionTitle>
-                  <FiAnchor size={12} /> 배속 함정 (
-                  {(unit.assignedNavalVessels ?? []).length}척)
-                </SectionTitle>
-                <ChipWrap>
-                  {(unit.assignedNavalVessels ?? []).map((v) => (
-                    <NeutralBadge key={v.id}>
-                      {v.vesselType ? `${v.vesselType} · ` : ''}
-                      {v.name}
-                    </NeutralBadge>
-                  ))}
-                </ChipWrap>
-              </DrawerSection>
-            ) : null}
+                  {(unit.predecessors ?? []).length > 0 ||
+                  (unit.successors ?? []).length > 0 ? (
+                    <ChipWrap style={{ marginTop: 4 }}>
+                      {(unit.predecessors ?? []).map((pred) => (
+                        <LineageTag key={pred.transitionId}>
+                          <FiGitCommit size={11} />← 전신(
+                          {TRANSITION_KIND_KO[pred.kind] ?? pred.kind}):{' '}
+                          {pred.unit ? (
+                            <InlineBtn
+                              type="button"
+                              onClick={() => onSelectUnit(pred.unit!.id)}
+                            >
+                              {pred.unit.name}
+                            </InlineBtn>
+                          ) : (
+                            pred.department?.name
+                          )}
+                        </LineageTag>
+                      ))}
+                      {(unit.successors ?? []).map((succ) => (
+                        <LineageTag key={succ.transitionId}>
+                          <FiGitCommit size={11} />→ 후신(
+                          {TRANSITION_KIND_KO[succ.kind] ?? succ.kind}):{' '}
+                          {succ.unit ? (
+                            <InlineBtn
+                              type="button"
+                              onClick={() => onSelectUnit(succ.unit!.id)}
+                            >
+                              {succ.unit.name}
+                            </InlineBtn>
+                          ) : null}
+                        </LineageTag>
+                      ))}
+                    </ChipWrap>
+                  ) : null}
+                </DrawerSection>
+
+                {(unit.assignedNavalVessels ?? []).length > 0 ? (
+                  <DrawerSection>
+                    <SectionTitle>
+                      <FiAnchor size={12} /> 배속 함정 (
+                      {(unit.assignedNavalVessels ?? []).length}척)
+                    </SectionTitle>
+                    <ChipWrap>
+                      {(unit.assignedNavalVessels ?? []).map((vesselItem) => (
+                        <NeutralBadge key={vesselItem.id}>
+                          {vesselItem.vesselType
+                            ? `${vesselItem.vesselType} · `
+                            : ''}
+                          {vesselItem.name}
+                        </NeutralBadge>
+                      ))}
+                    </ChipWrap>
+                  </DrawerSection>
+                ) : null}
+
+                {unit.primaryMission ||
+                unit.jurisdiction ||
+                unit.notableBattles ||
+                unit.honors ? (
+                  <ContextGrid>
+                    {unit.primaryMission ? (
+                      <ContextCard>
+                        <ContextLabel>주요 임무 · 역할</ContextLabel>
+                        <ContextText>{unit.primaryMission}</ContextText>
+                      </ContextCard>
+                    ) : null}
+                    {unit.jurisdiction ? (
+                      <ContextCard>
+                        <ContextLabel>관할 · 작전구역</ContextLabel>
+                        <ContextText>{unit.jurisdiction}</ContextText>
+                      </ContextCard>
+                    ) : null}
+                    {unit.notableBattles ? (
+                      <ContextCard>
+                        <ContextLabel>주요 전투 · 작전</ContextLabel>
+                        <ContextText>{unit.notableBattles}</ContextText>
+                      </ContextCard>
+                    ) : null}
+                    {unit.honors ? (
+                      <ContextCard>
+                        <ContextLabel>부대 표창 · 수훈</ContextLabel>
+                        <ContextText>{unit.honors}</ContextText>
+                      </ContextCard>
+                    ) : null}
+                  </ContextGrid>
+                ) : null}
+
+                {unit.description ? (
+                  <ProseBox>{unit.description}</ProseBox>
+                ) : null}
+              </>
+            )}
 
             {/* 역대 지휘관 */}
-            <DrawerSection>
-              <SectionTitle>
-                역대 지휘관 · 참모 ({(unit.tenures ?? []).length}건)
-              </SectionTitle>
-              {(unit.tenures ?? []).length === 0 ? (
-                <MutedText>등록된 지휘관 재임 기록이 없습니다.</MutedText>
-              ) : (
-                <ListStack>
-                  {(unit.tenures ?? []).slice(0, 10).map((t) => {
-                    const pid = t.person?.id ?? t.personId
-                    const pName = t.person
-                      ? getPersonDisplayName({
-                          name: t.person.name ?? '',
-                          surname: t.person.surname ?? undefined,
-                          middleName: t.person.middleName ?? undefined,
-                          country: t.person.country ?? undefined,
-                        }) || t.person.name
-                      : '인물 미상'
-                    const roleText = [
-                      t.rankTitle,
-                      t.title ?? t.positionDefinition?.title,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')
-                    return (
-                      <ListRow key={t.id}>
-                        <InlineBtn
-                          type="button"
-                          onClick={(evt) => {
-                            if (!pid) return
-                            if (!shouldInterceptEntityClick(evt)) {
-                              navigate(pathKeys.personsTimelineDetail(pid))
-                              return
-                            }
-                            setInspectPersonId(pid)
-                          }}
-                        >
-                          <FiUser size={11.5} /> {pName}
-                        </InlineBtn>
-                        <MutedText>{roleText || '지휘관'}</MutedText>
-                      </ListRow>
-                    )
-                  })}
-                </ListStack>
-              )}
-            </DrawerSection>
-
-            {/* 참전 전투 */}
-            <DrawerSection>
-              <SectionTitle>
-                참전 전투 · 작전 (
-                {(unit.sideDeployedUnits ?? []).filter((d) => d.side?.event)
-                  .length}
-                건)
-              </SectionTitle>
-              {(unit.sideDeployedUnits ?? []).filter((d) => d.side?.event)
-                .length === 0 ? (
-                <MutedText>참전(전투서열 투입) 기록이 없습니다.</MutedText>
-              ) : (
-                <ListStack>
-                  {(unit.sideDeployedUnits ?? [])
-                    .filter((d) => d.side?.event)
-                    .map((dep) => {
-                      const ev = dep.side!.event!
-                      const outcomeKo =
-                        dep.side?.outcome &&
-                        dep.side.outcome in SIDE_OUTCOME_LABEL
-                          ? SIDE_OUTCOME_LABEL[
-                              dep.side
-                                .outcome as keyof typeof SIDE_OUTCOME_LABEL
-                            ]
-                          : null
-                      const roleKo =
-                        dep.role && dep.role in SIDE_UNIT_ROLE_LABEL
-                          ? SIDE_UNIT_ROLE_LABEL[
-                              dep.role as keyof typeof SIDE_UNIT_ROLE_LABEL
-                            ]
-                          : null
-                      const targetHref =
-                        ev.kind === 'COLLECTION'
-                          ? `${pathKeys.events.detail(ev.id)}?tab=survey&unit=${encodeURIComponent(unit.id)}`
-                          : `${pathKeys.events.detail(ev.id)}?tab=modules&unit=${encodeURIComponent(unit.id)}#module-sides`
+            {activeTab === 'commanders' && (
+              <DrawerSection style={{ borderTop: 'none', paddingTop: 4 }}>
+                <SectionTitle>
+                  역대 지휘관 · 참모 ({(unit.tenures ?? []).length}건)
+                </SectionTitle>
+                {(unit.tenures ?? []).length === 0 ? (
+                  <MutedText>등록된 지휘관 재임 기록이 없습니다.</MutedText>
+                ) : (
+                  <ListStack>
+                    {(unit.tenures ?? []).slice(0, 12).map((tenureItem) => {
+                      const pid = tenureItem.person?.id ?? tenureItem.personId
+                      const pName = tenureItem.person
+                        ? getPersonDisplayName({
+                            name: tenureItem.person.name ?? '',
+                            surname: tenureItem.person.surname ?? undefined,
+                            middleName:
+                              tenureItem.person.middleName ?? undefined,
+                            country: tenureItem.person.country ?? undefined,
+                          }) || tenureItem.person.name
+                        : '인물 미상'
+                      const roleText = [
+                        tenureItem.rankTitle,
+                        tenureItem.title ??
+                          tenureItem.positionDefinition?.title,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')
                       return (
-                        <ListRow key={dep.id}>
-                          <div>
-                            <InlineJumpLink to={pathKeys.events.detail(ev.id)}>
-                              {ev.title}
-                            </InlineJumpLink>
-                            <MutedText style={{ marginLeft: 6 }}>
-                              {[dep.side?.name, outcomeKo, roleKo]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </MutedText>
-                          </div>
-                          <MiniSurveyLink to={targetHref}>
-                            <FiCompass size={11} />
-                            {ev.kind === 'COLLECTION' ? '조망' : '전투서열'}
-                          </MiniSurveyLink>
+                        <ListRow key={tenureItem.id}>
+                          <InlineBtn
+                            type="button"
+                            onClick={(evt) => {
+                              if (!pid) return
+                              if (!shouldInterceptEntityClick(evt)) {
+                                navigate(pathKeys.personsTimelineDetail(pid))
+                                return
+                              }
+                              setInspectPersonId(pid)
+                            }}
+                          >
+                            <FiUser size={11.5} /> {pName}
+                          </InlineBtn>
+                          <MutedText>{roleText || '지휘관'}</MutedText>
                         </ListRow>
                       )
                     })}
-                </ListStack>
-              )}
-            </DrawerSection>
+                  </ListStack>
+                )}
+              </DrawerSection>
+            )}
+
+            {/* 참전 전투 */}
+            {activeTab === 'operations' && (
+              <DrawerSection style={{ borderTop: 'none', paddingTop: 4 }}>
+                <SectionTitle>
+                  참전 전투 · 작전 (
+                  {
+                    (unit.sideDeployedUnits ?? []).filter(
+                      (depItem) => depItem.side?.event,
+                    ).length
+                  }
+                  건)
+                </SectionTitle>
+                {(unit.sideDeployedUnits ?? []).filter(
+                  (depItem) => depItem.side?.event,
+                ).length === 0 ? (
+                  <MutedText>참전(전투서열 투입) 기록이 없습니다.</MutedText>
+                ) : (
+                  <ListStack>
+                    {(unit.sideDeployedUnits ?? [])
+                      .filter((depItem) => depItem.side?.event)
+                      .map((dep) => {
+                        const ev = dep.side!.event!
+                        const outcomeKo =
+                          dep.side?.outcome &&
+                          dep.side.outcome in SIDE_OUTCOME_LABEL
+                            ? SIDE_OUTCOME_LABEL[
+                                dep.side
+                                  .outcome as keyof typeof SIDE_OUTCOME_LABEL
+                              ]
+                            : null
+                        const roleKo =
+                          dep.role && dep.role in SIDE_UNIT_ROLE_LABEL
+                            ? SIDE_UNIT_ROLE_LABEL[
+                                dep.role as keyof typeof SIDE_UNIT_ROLE_LABEL
+                              ]
+                            : null
+                        const targetHref =
+                          ev.kind === 'COLLECTION'
+                            ? `${pathKeys.events.detail(ev.id)}?tab=survey&unit=${encodeURIComponent(unit.id)}`
+                            : `${pathKeys.events.detail(ev.id)}?tab=modules&unit=${encodeURIComponent(unit.id)}#module-sides`
+                        return (
+                          <ListRow key={dep.id}>
+                            <div>
+                              <InlineJumpLink to={pathKeys.events.detail(ev.id)}>
+                                {ev.title}
+                              </InlineJumpLink>
+                              <MutedText style={{ marginLeft: 6 }}>
+                                {[dep.side?.name, outcomeKo, roleKo]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </MutedText>
+                            </div>
+                            <MiniSurveyLink to={targetHref}>
+                              <FiCompass size={11} />
+                              {ev.kind === 'COLLECTION' ? '조망' : '전투서열'}
+                            </MiniSurveyLink>
+                          </ListRow>
+                        )
+                      })}
+                  </ListStack>
+                )}
+              </DrawerSection>
+            )}
           </DrawerBody>
         )}
       </SidePanel>
@@ -916,3 +1064,46 @@ const MutedText = styled.span`
   font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
+
+const MoreMenuWrap = styled.div`
+  position: relative;
+  display: inline-flex;
+`
+
+const MoreDropdownMenu = styled.div`
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  min-width: 196px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerElevated(theme.mode)};
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
+const MoreDropdownItem = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+`
+

@@ -1,13 +1,15 @@
-import { type MouseEvent, useMemo, useState } from 'react'
+import { type MouseEvent, useEffect, useMemo, useState } from 'react'
 import {
   FiAnchor,
   FiArrowDown,
   FiArrowUp,
   FiAward,
+  FiCheck,
   FiCompass,
   FiCrosshair,
   FiGitCommit,
   FiLayers,
+  FiMoreHorizontal,
   FiNavigation,
   FiPlus,
   FiShield,
@@ -270,6 +272,18 @@ export function MilitaryUnitsLedgerView({
 }: MilitaryUnitsLedgerViewProps) {
   const [sortField, setSortField] = useState<SortField>('echelon')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
+
+  useEffect(() => {
+    if (!headerMenuOpen) return
+    const handlePointerDown = (mouseEvent: globalThis.MouseEvent) => {
+      const targetEl = mouseEvent.target as HTMLElement | null
+      if (targetEl?.closest('[data-ledger-more-menu]')) return
+      setHeaderMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [headerMenuOpen])
 
   const unitById = useMemo(() => {
     const lookup = new Map<string, LedgerMilitaryUnitItem>()
@@ -324,55 +338,73 @@ export function MilitaryUnitsLedgerView({
         <LedgerMetaText>
           원장 목록 <strong>{sortedUnits.length}</strong>개 편제
         </LedgerMetaText>
-        <LedgerHeaderActions>
-          <SortPillBtn
-            type="button"
-            $active={sortField === 'echelon'}
-            onClick={() => toggleSort('echelon')}
-          >
-            위계순
-            {sortField === 'echelon' ? (
-              sortDirection === 'asc' ? (
-                <FiArrowUp size={11} />
-              ) : (
-                <FiArrowDown size={11} />
-              )
+        <LedgerHeaderActions data-ledger-more-menu>
+          <HeaderMenuAnchor>
+            <HeaderMoreBtn
+              type="button"
+              $active={headerMenuOpen}
+              aria-expanded={headerMenuOpen}
+              aria-label="원장 정렬 및 작업 메뉴"
+              title="정렬 기준 변경 · 부대 등록"
+              onClick={() => setHeaderMenuOpen((prev) => !prev)}
+            >
+              <FiMoreHorizontal size={15} />
+            </HeaderMoreBtn>
+            {headerMenuOpen ? (
+              <HeaderMorePopover role="menu">
+                <HeaderMoreLabel>정렬 기준</HeaderMoreLabel>
+                <HeaderMoreItem
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    toggleSort('echelon')
+                    setHeaderMenuOpen(false)
+                  }}
+                >
+                  <span>위계순</span>
+                  {sortField === 'echelon' && <FiCheck size={12.5} />}
+                </HeaderMoreItem>
+                <HeaderMoreItem
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    toggleSort('established')
+                    setHeaderMenuOpen(false)
+                  }}
+                >
+                  <span>창설연도순</span>
+                  {sortField === 'established' && <FiCheck size={12.5} />}
+                </HeaderMoreItem>
+                <HeaderMoreItem
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    toggleSort('name')
+                    setHeaderMenuOpen(false)
+                  }}
+                >
+                  <span>이름순</span>
+                  {sortField === 'name' && <FiCheck size={12.5} />}
+                </HeaderMoreItem>
+                {onAddRoot ? (
+                  <>
+                    <HeaderMoreDivider />
+                    <HeaderMoreItem
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setHeaderMenuOpen(false)
+                        onAddRoot()
+                      }}
+                    >
+                      <FiPlus size={12.5} />
+                      <span>새 사령부·부대 등록</span>
+                    </HeaderMoreItem>
+                  </>
+                ) : null}
+              </HeaderMorePopover>
             ) : null}
-          </SortPillBtn>
-          <SortPillBtn
-            type="button"
-            $active={sortField === 'established'}
-            onClick={() => toggleSort('established')}
-          >
-            창설연도순
-            {sortField === 'established' ? (
-              sortDirection === 'asc' ? (
-                <FiArrowUp size={11} />
-              ) : (
-                <FiArrowDown size={11} />
-              )
-            ) : null}
-          </SortPillBtn>
-          <SortPillBtn
-            type="button"
-            $active={sortField === 'name'}
-            onClick={() => toggleSort('name')}
-          >
-            이름순
-            {sortField === 'name' ? (
-              sortDirection === 'asc' ? (
-                <FiArrowUp size={11} />
-              ) : (
-                <FiArrowDown size={11} />
-              )
-            ) : null}
-          </SortPillBtn>
-          {onAddRoot ? (
-            <AddInlineBtn type="button" onClick={onAddRoot}>
-              <FiPlus size={12} />
-              등록
-            </AddInlineBtn>
-          ) : null}
+          </HeaderMenuAnchor>
         </LedgerHeaderActions>
       </LedgerHeaderBar>
 
@@ -434,9 +466,11 @@ export function MilitaryUnitsLedgerView({
               {!compact ? (
                 <Th style={{ width: 170 }}>상급 편제 · 소관 부처</Th>
               ) : null}
-              <Th style={{ width: compact ? 104 : 158, textAlign: 'right' }}>
-                지휘관 · 개편 · 전과
-              </Th>
+              {!compact ? (
+                <Th style={{ width: 158, textAlign: 'right' }}>
+                  지휘관 · 개편 · 전과
+                </Th>
+              ) : null}
             </tr>
           </thead>
           <tbody>
@@ -536,34 +570,20 @@ export function MilitaryUnitsLedgerView({
                           {unitRow.abbreviation?.trim() ? (
                             <AbbrTag>({unitRow.abbreviation.trim()})</AbbrTag>
                           ) : null}
-                          {unitRow.nickname?.trim() ? (
-                            <NicknameTag>
-                              &ldquo;{unitRow.nickname.trim()}&rdquo;
-                            </NicknameTag>
-                          ) : null}
                         </NamePrimary>
-                        <SubInfoRow>
-                          {showConstituentPolityBadge ? (
-                            <EraTag>{unitRow.historicalCountry!.name}</EraTag>
-                          ) : null}
-                          {compact && parentRef ? (
-                            <ParentHint>↳ {parentRef.name}</ParentHint>
-                          ) : compact && effDept ? (
-                            <ParentHint>소관: {effDept.name}</ParentHint>
-                          ) : null}
-                          {!compact &&
-                          (unitRow.nameLocal?.trim() ||
-                            unitRow.nameEn?.trim()) ? (
-                            <ForeignNameText>
-                              {[
-                                unitRow.nameLocal?.trim(),
-                                unitRow.nameEn?.trim(),
-                              ]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </ForeignNameText>
-                          ) : null}
-                        </SubInfoRow>
+                        {(showConstituentPolityBadge ||
+                          (compact && (parentRef || effDept))) && (
+                          <SubInfoRow>
+                            {showConstituentPolityBadge ? (
+                              <EraTag>{unitRow.historicalCountry!.name}</EraTag>
+                            ) : null}
+                            {compact && parentRef ? (
+                              <ParentHint>↳ {parentRef.name}</ParentHint>
+                            ) : compact && effDept ? (
+                              <ParentHint>소관: {effDept.name}</ParentHint>
+                            ) : null}
+                          </SubInfoRow>
+                        )}
                       </NameCellBody>
                     </NameCellRow>
                   </Td>
@@ -618,54 +638,49 @@ export function MilitaryUnitsLedgerView({
                       )}
                     </Td>
                   ) : null}
-                  <Td style={{ textAlign: 'right' }}>
-                    <MetricGroup>
-                      {commanderText && !compact ? (
-                        <CommanderChip
-                          title={`대표 지휘관: ${commanderText}`}
-                        >
-                          <FiUser size={10.5} />
-                          {commanderText}
-                        </CommanderChip>
-                      ) : null}
-                      {vesselCount > 0 ? (
-                        <MetricChip title={`배속 함정 ${vesselCount}척`}>
-                          <FiAnchor size={10.5} />
-                          {vesselCount}
-                        </MetricChip>
-                      ) : null}
-                      {lineageTotal > 0 ? (
-                        <MetricChip
-                          title={`전신 ${predCount} · 후신 ${succCount}`}
-                        >
-                          <FiGitCommit size={11} />
-                          {lineageTotal}
-                        </MetricChip>
-                      ) : null}
-                      {battleCount > 0 ? (
-                        <MetricChip
-                          $combat
-                          title={`참전 사건·전투 ${battleCount}건`}
-                        >
-                          <FiCompass size={11} />
-                          {battleCount}
-                        </MetricChip>
-                      ) : null}
-                      {(!commanderText || compact) &&
-                      vesselCount === 0 &&
-                      lineageTotal === 0 &&
-                      battleCount === 0 ? (
-                        commanderText ? (
-                          <CommanderChip title={commanderText}>
+                  {!compact ? (
+                    <Td style={{ textAlign: 'right' }}>
+                      <MetricGroup>
+                        {commanderText ? (
+                          <CommanderChip
+                            title={`대표 지휘관: ${commanderText}`}
+                          >
                             <FiUser size={10.5} />
                             {commanderText}
                           </CommanderChip>
-                        ) : (
+                        ) : null}
+                        {vesselCount > 0 ? (
+                          <MetricChip title={`배속 함정 ${vesselCount}척`}>
+                            <FiAnchor size={10.5} />
+                            {vesselCount}
+                          </MetricChip>
+                        ) : null}
+                        {lineageTotal > 0 ? (
+                          <MetricChip
+                            title={`전신 ${predCount} · 후신 ${succCount}`}
+                          >
+                            <FiGitCommit size={11} />
+                            {lineageTotal}
+                          </MetricChip>
+                        ) : null}
+                        {battleCount > 0 ? (
+                          <MetricChip
+                            $combat
+                            title={`참전 사건·전투 ${battleCount}건`}
+                          >
+                            <FiCompass size={11} />
+                            {battleCount}
+                          </MetricChip>
+                        ) : null}
+                        {!commanderText &&
+                        vesselCount === 0 &&
+                        lineageTotal === 0 &&
+                        battleCount === 0 ? (
                           <DashText>—</DashText>
-                        )
-                      ) : null}
-                    </MetricGroup>
-                  </Td>
+                        ) : null}
+                      </MetricGroup>
+                    </Td>
+                  ) : null}
                 </Tr>
               )
             })}
@@ -713,16 +728,20 @@ const LedgerHeaderActions = styled.div`
   gap: 5px;
 `
 
-const SortPillBtn = styled.button<{ $active: boolean }>`
+const HeaderMenuAnchor = styled.div`
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  height: 26px;
-  padding: 0 9px;
+`
+
+const HeaderMoreBtn = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
   border: 1px solid
     ${({ theme, $active }) =>
       $active
@@ -732,31 +751,64 @@ const SortPillBtn = styled.button<{ $active: boolean }>`
     $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
   color: ${({ theme, $active }) =>
     $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease,
-    color 0.12s ease;
+  cursor: pointer;
 
   &:hover {
-    background: ${({ theme, $active }) =>
-      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
   }
 `
 
-const AddInlineBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  height: 26px;
-  padding: 0 9px;
-  border-radius: 6px;
+const HeaderMorePopover = styled.div`
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  z-index: 30;
+  min-width: 176px;
+  padding: 5px;
+  border-radius: 9px;
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? '#141925' : '#ffffff'};
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
+const HeaderMoreLabel = styled.div`
+  padding: 4px 8px 2px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const HeaderMoreDivider = styled.div`
+  height: 1px;
+  margin: 4px 2px;
+  background: ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const HeaderMoreItem = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 11px;
-  font-weight: 600;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
   cursor: pointer;
-  transition: background 0.12s ease;
+
+  > span {
+    flex: 1;
+    min-width: 0;
+  }
 
   &:hover {
     background: ${({ theme }) => ledgerHoverFill(theme.mode)};
@@ -927,12 +979,6 @@ const AbbrTag = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const NicknameTag = styled.span`
-  font-size: 11px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
 const SubInfoRow = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -949,11 +995,6 @@ const EraTag = styled.span`
 
 const ParentHint = styled.span`
   font-size: 10.5px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const ForeignNameText = styled.span`
-  font-size: 11px;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 

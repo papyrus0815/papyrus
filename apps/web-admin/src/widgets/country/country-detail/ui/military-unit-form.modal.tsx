@@ -29,9 +29,12 @@ import {
   FiEdit2,
   FiImage,
   FiLayers,
+  FiMoreHorizontal,
   FiPlus,
   FiRadio,
+  FiRotateCcw,
   FiShield,
+  FiTrash2,
   FiWind,
   FiX,
 } from 'react-icons/fi'
@@ -119,7 +122,6 @@ import {
   FooterReadyGroup,
   FooterShortcutItem,
   HeaderActionsBar,
-  HeaderResetBtn,
   SectionJumpBtn,
   SectionJumpNav,
 } from '@/shared/ui/register-modal-shell/register-modal-chrome'
@@ -133,15 +135,15 @@ import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
 import { MobileSectionStrip } from '@/shared/ui/side-panel-form'
 import { notify } from '@/shared/ui/toast'
 
-const LAYOUT_STORAGE_KEY = 'papyrus:military-unit-register-layout'
+const LAYOUT_STORAGE_KEY = 'papyrus:military-unit-register-layout-v2'
 
 function readInitialLayoutMode(): 'split' | 'single' {
-  if (typeof window === 'undefined') return 'split'
+  if (typeof window === 'undefined') return 'single'
   try {
     const saved = window.localStorage.getItem(LAYOUT_STORAGE_KEY)
-    return saved === 'single' ? 'single' : 'split'
+    return saved === 'split' ? 'split' : 'single'
   } catch {
-    return 'split'
+    return 'single'
   }
 }
 
@@ -971,6 +973,8 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     useState<EditableInstitutionTenure | null>(null)
 
   // Compact UI toggles & inline quick search states (BasicInfoSection · EventTypeField 규격)
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
+  const [openRowMenuKey, setOpenRowMenuKey] = useState<string | null>(null)
   const [showHighCommandPresets, setShowHighCommandPresets] = useState(false)
   const [showForeignAndMottoFields, setShowForeignAndMottoFields] =
     useState(false)
@@ -1087,6 +1091,18 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     isDirtyRef.current = nextDirty
     setIsDirty(nextDirty)
   }, [])
+
+  useEffect(() => {
+    if (!headerMenuOpen && !openRowMenuKey) return
+    const handlePointerDown = (mouseEvent: MouseEvent) => {
+      const targetEl = mouseEvent.target as HTMLElement | null
+      if (targetEl?.closest('[data-more-menu-root]')) return
+      setHeaderMenuOpen(false)
+      setOpenRowMenuKey(null)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [headerMenuOpen, openRowMenuKey])
 
   const toggleLayoutMode = useCallback(() => {
     playClickSound()
@@ -1446,9 +1462,12 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       setLineageQuickQuery('')
       setShowAllLinkedEras(false)
       setShowAllUnitTypes(false)
+      setShowHighCommandPresets(false)
       setShowForeignAndMottoFields(false)
       setShowNewLineageForm(false)
       setShowDetailedSpecs(false)
+      setHeaderMenuOpen(false)
+      setOpenRowMenuKey(null)
       setActiveSection('basic')
       markDirty(false)
 
@@ -3106,30 +3125,55 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
             {kindLabel}
             {timeText ? ` · ${timeText}` : ''}
           </RelatedEventDateMeta>
-          <ParticipantActionCluster>
-            <S.AddButton
-              type="button"
-              disabled={transitionBusy}
-              onClick={() =>
-                isRowEditing
-                  ? setEditingTransitionId(null)
-                  : startInlineEditTransition(lineageItem)
-              }
-            >
-              <FiEdit2 size={12} />
-              {isRowEditing ? '접기' : '편집'}
-            </S.AddButton>
-            <ParticipantRemove
-              type="button"
-              disabled={transitionBusy}
-              aria-label="계보 연결 해제"
-              title="계보 연결 해제"
-              onClick={() =>
-                void handleDeleteTransition(lineageItem.transitionId)
-              }
-            >
-              <FiX size={15} />
-            </ParticipantRemove>
+          <ParticipantActionCluster data-more-menu-root>
+            <MoreMenuWrap>
+              <MoreTriggerBtn
+                type="button"
+                disabled={transitionBusy}
+                aria-label="계보 항목 설정"
+                title="계보 항목 설정"
+                onClick={() =>
+                  setOpenRowMenuKey((prev) =>
+                    prev === `lineage:${lineageItem.transitionId}`
+                      ? null
+                      : `lineage:${lineageItem.transitionId}`,
+                  )
+                }
+              >
+                <FiMoreHorizontal size={15} />
+              </MoreTriggerBtn>
+              {openRowMenuKey === `lineage:${lineageItem.transitionId}` && (
+                <MorePopoverMenu role="menu">
+                  <MorePopoverItem
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setOpenRowMenuKey(null)
+                      if (isRowEditing) {
+                        setEditingTransitionId(null)
+                      } else {
+                        startInlineEditTransition(lineageItem)
+                      }
+                    }}
+                  >
+                    <FiEdit2 size={13} />
+                    <span>{isRowEditing ? '편집 닫기' : '계보 정보 편집'}</span>
+                  </MorePopoverItem>
+                  <MorePopoverItem
+                    type="button"
+                    role="menuitem"
+                    $danger
+                    onClick={() => {
+                      setOpenRowMenuKey(null)
+                      void handleDeleteTransition(lineageItem.transitionId)
+                    }}
+                  >
+                    <FiTrash2 size={13} />
+                    <span>계보 연결 해제</span>
+                  </MorePopoverItem>
+                </MorePopoverMenu>
+              )}
+            </MoreMenuWrap>
           </ParticipantActionCluster>
         </ParticipantHeaderRow>
 
@@ -3337,14 +3381,11 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
             />
           </NameAbbrGrid>
 
-          {/* 신규 등록 시 이름을 아직 입력하지 않았고 상위부대 미지정일 때만 예시 노출 */}
-          {!isEdit && !name.trim() && !parentUnitId && (
+          {/* 우측 상단 ⋯ 메뉴에서 '사령부 예시 프리셋 표시'를 켰을 때만 예시 칩 노출 */}
+          {!isEdit && showHighCommandPresets && (
             <RecentParticipantBar>
               <RecentParticipantLabel>사령부 예시</RecentParticipantLabel>
-              {(showHighCommandPresets
-                ? HIGH_COMMAND_PRESETS
-                : HIGH_COMMAND_PRESETS.slice(0, 4)
-              ).map((presetItem) => (
+              {HIGH_COMMAND_PRESETS.map((presetItem) => (
                 <RecentParticipantChip
                   key={presetItem.abbreviation}
                   type="button"
@@ -3366,16 +3407,12 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                   <span>{presetItem.label}</span>
                 </RecentParticipantChip>
               ))}
-              {HIGH_COMMAND_PRESETS.length > 4 && (
-                <RecentMoreChip
-                  type="button"
-                  onClick={() => setShowHighCommandPresets((prev) => !prev)}
-                >
-                  {showHighCommandPresets
-                    ? '접기'
-                    : `+${HIGH_COMMAND_PRESETS.length - 4} 더보기`}
-                </RecentMoreChip>
-              )}
+              <RecentMoreChip
+                type="button"
+                onClick={() => setShowHighCommandPresets(false)}
+              >
+                숨기기
+              </RecentMoreChip>
             </RecentParticipantBar>
           )}
 
@@ -3796,43 +3833,83 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                   </RelatedEventDateMeta>
                 )}
                 {!lockCountryAndDepartment && (
-                  <ParticipantActionCluster>
-                    <S.AddButton
-                      type="button"
-                      onClick={() => {
-                        playClickSound()
-                        setIsInlineCountryChangeOpen((prev) => {
-                          const nextOpen = !prev
-                          if (nextOpen) {
-                            window.setTimeout(
-                              () => countryQuickInputRef.current?.focus(),
-                              50,
-                            )
-                          }
-                          return nextOpen
-                        })
-                      }}
-                    >
-                      {isInlineCountryChangeOpen ? '닫기' : '변경'}
-                    </S.AddButton>
-                    <ParticipantRemove
-                      type="button"
-                      aria-label="소속 국가 선택 해제"
-                      title="소속 국가 선택 해제"
-                      onClick={() => {
-                        playClickSound()
-                        setCountryId('')
-                        setHistoricalCountryId('')
-                        setCountryName('')
-                        setCountryFlagEmoji('')
-                        setCountryEnglishName('')
-                        setAdministrationDepartmentId('')
-                        setIsInlineCountryChangeOpen(false)
-                        markDirty(true)
-                      }}
-                    >
-                      <FiX size={15} />
-                    </ParticipantRemove>
+                  <ParticipantActionCluster data-more-menu-root>
+                    <MoreMenuWrap>
+                      <MoreTriggerBtn
+                        type="button"
+                        aria-label="소속 국가 · 시대 설정"
+                        title="소속 국가 · 시대 변경 또는 해제"
+                        onClick={() =>
+                          setOpenRowMenuKey((prev) =>
+                            prev === 'country-card' ? null : 'country-card',
+                          )
+                        }
+                      >
+                        <FiMoreHorizontal size={15} />
+                      </MoreTriggerBtn>
+                      {openRowMenuKey === 'country-card' && (
+                        <MorePopoverMenu role="menu">
+                          <MorePopoverItem
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              playClickSound()
+                              setOpenRowMenuKey(null)
+                              setIsInlineCountryChangeOpen((prev) => {
+                                const nextOpen = !prev
+                                if (nextOpen) {
+                                  window.setTimeout(
+                                    () => countryQuickInputRef.current?.focus(),
+                                    50,
+                                  )
+                                }
+                                return nextOpen
+                              })
+                            }}
+                          >
+                            <FiEdit2 size={13} />
+                            <span>
+                              {isInlineCountryChangeOpen
+                                ? '빠른 검색 닫기'
+                                : '빠른 검색으로 변경'}
+                            </span>
+                          </MorePopoverItem>
+                          <MorePopoverItem
+                            type="button"
+                            role="menuitem"
+                            onClick={() => {
+                              playClickSound()
+                              setOpenRowMenuKey(null)
+                              setCountryModalOpen(true)
+                            }}
+                          >
+                            <FiLayers size={13} />
+                            <span>국가 · 시대 전체 목록에서 선택</span>
+                          </MorePopoverItem>
+                          <MorePopoverDivider />
+                          <MorePopoverItem
+                            type="button"
+                            role="menuitem"
+                            $danger
+                            onClick={() => {
+                              playClickSound()
+                              setOpenRowMenuKey(null)
+                              setCountryId('')
+                              setHistoricalCountryId('')
+                              setCountryName('')
+                              setCountryFlagEmoji('')
+                              setCountryEnglishName('')
+                              setAdministrationDepartmentId('')
+                              setIsInlineCountryChangeOpen(false)
+                              markDirty(true)
+                            }}
+                          >
+                            <FiX size={13} />
+                            <span>소속 국가 선택 해제</span>
+                          </MorePopoverItem>
+                        </MorePopoverMenu>
+                      )}
+                    </MoreMenuWrap>
                   </ParticipantActionCluster>
                 )}
               </ParentEventHeaderRow>
@@ -4820,58 +4897,84 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                         <RelatedEventDateMeta>
                           {formatTenureDateSpan(tenureItem)}
                         </RelatedEventDateMeta>
-                        <ParticipantActionCluster>
-                          <S.AddButton
-                            type="button"
-                            onClick={() => {
-                              playClickSound()
-                              setEditingAppointmentTenure({
-                                id: tenureItem.id,
-                                personId:
-                                  tenureItem.personId ??
-                                  tenureItem.person?.id ??
-                                  null,
-                                personName: personDisplay,
-                                positionType:
-                                  tenureItem.positionDefinition?.positionType ??
-                                  'MILITARY_COMMANDER',
-                                positionDefinitionId:
-                                  tenureItem.positionDefinition?.id ?? null,
-                                title:
-                                  tenureItem.title ??
-                                  tenureItem.positionDefinition?.title ??
-                                  null,
-                                rankTitle: tenureItem.rankTitle ?? null,
-                                ordinal: tenureItem.ordinal ?? null,
-                                partyId: tenureItem.partyId ?? null,
-                                militaryUnitId: editingUnitId,
-                                startDate: tenureItem.startDate,
-                                endDate: tenureItem.endDate,
-                                startEra: tenureItem.startEra,
-                                startYear: tenureItem.startYear,
-                                startMonth: tenureItem.startMonth,
-                                startDay: tenureItem.startDay,
-                                endEra: tenureItem.endEra,
-                                endYear: tenureItem.endYear,
-                                endMonth: tenureItem.endMonth,
-                                endDay: tenureItem.endDay,
-                              })
-                              setAppointmentModalOpen(true)
-                            }}
-                          >
-                            <FiEdit2 size={12} />
-                            편집
-                          </S.AddButton>
-                          <KitRemoveButton
-                            type="button"
-                            aria-label="지휘관 재임 삭제"
-                            title="지휘관 재임 삭제"
-                            onClick={() =>
-                              void handleDeleteUnitTenure(tenureItem)
-                            }
-                          >
-                            <FiX size={15} />
-                          </KitRemoveButton>
+                        <ParticipantActionCluster data-more-menu-root>
+                          <MoreMenuWrap>
+                            <MoreTriggerBtn
+                              type="button"
+                              aria-label={`${personDisplay} 지휘관 설정`}
+                              title="지휘관 재임 수정 또는 삭제"
+                              onClick={() =>
+                                setOpenRowMenuKey((prev) =>
+                                  prev === `tenure:${tenureItem.id}`
+                                    ? null
+                                    : `tenure:${tenureItem.id}`,
+                                )
+                              }
+                            >
+                              <FiMoreHorizontal size={15} />
+                            </MoreTriggerBtn>
+                            {openRowMenuKey === `tenure:${tenureItem.id}` && (
+                              <MorePopoverMenu role="menu">
+                                <MorePopoverItem
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    playClickSound()
+                                    setOpenRowMenuKey(null)
+                                    setEditingAppointmentTenure({
+                                      id: tenureItem.id,
+                                      personId:
+                                        tenureItem.personId ??
+                                        tenureItem.person?.id ??
+                                        null,
+                                      personName: personDisplay,
+                                      positionType:
+                                        tenureItem.positionDefinition
+                                          ?.positionType ??
+                                        'MILITARY_COMMANDER',
+                                      positionDefinitionId:
+                                        tenureItem.positionDefinition?.id ??
+                                        null,
+                                      title:
+                                        tenureItem.title ??
+                                        tenureItem.positionDefinition?.title ??
+                                        null,
+                                      rankTitle: tenureItem.rankTitle ?? null,
+                                      ordinal: tenureItem.ordinal ?? null,
+                                      partyId: tenureItem.partyId ?? null,
+                                      militaryUnitId: editingUnitId,
+                                      startDate: tenureItem.startDate,
+                                      endDate: tenureItem.endDate,
+                                      startEra: tenureItem.startEra,
+                                      startYear: tenureItem.startYear,
+                                      startMonth: tenureItem.startMonth,
+                                      startDay: tenureItem.startDay,
+                                      endEra: tenureItem.endEra,
+                                      endYear: tenureItem.endYear,
+                                      endMonth: tenureItem.endMonth,
+                                      endDay: tenureItem.endDay,
+                                    })
+                                    setAppointmentModalOpen(true)
+                                  }}
+                                >
+                                  <FiEdit2 size={13} />
+                                  <span>재임 정보 편집</span>
+                                </MorePopoverItem>
+                                <MorePopoverItem
+                                  type="button"
+                                  role="menuitem"
+                                  $danger
+                                  onClick={() => {
+                                    setOpenRowMenuKey(null)
+                                    void handleDeleteUnitTenure(tenureItem)
+                                  }}
+                                >
+                                  <FiTrash2 size={13} />
+                                  <span>재임 기록 삭제</span>
+                                </MorePopoverItem>
+                              </MorePopoverMenu>
+                            )}
+                          </MoreMenuWrap>
                         </ParticipantActionCluster>
                       </ParticipantHeaderRow>
                     </ParticipantRow>
@@ -5906,9 +6009,9 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
         }}
         title={isEdit ? '군사 사령부 · 부대 수정' : '군사 사령부 · 부대 등록'}
         maxWidth={
-          layoutMode === 'split' ? 'min(1440px, 96vw)' : 'min(1040px, 96vw)'
+          layoutMode === 'split' ? 'min(1440px, 96vw)' : 'min(820px, 95vw)'
         }
-        minHeight="90vh"
+        minHeight={layoutMode === 'split' ? '90vh' : '72vh'}
         height={layoutMode === 'split' ? '90vh' : undefined}
         fullBleedOnMobile
         closeOnEsc={!loading && !insigniaUploading && !anyChildModalOpen}
@@ -5934,38 +6037,114 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
               {renderSectionJumpButtons()}
             </SectionJumpNav>
 
-            <LayoutModeToggleBtn
-              type="button"
-              $active={layoutMode === 'split'}
-              aria-pressed={layoutMode === 'split'}
-              aria-label={
-                layoutMode === 'split'
-                  ? '1단 세로 보기로 전환'
-                  : '2단 좌우 분할 보기로 전환'
-              }
-              title={
-                layoutMode === 'split'
-                  ? '좌우 2단 분할 보기 중 (클릭 시 1단 세로 보기로 전환)'
-                  : '1단 세로 보기 중 (클릭 시 좌우 2단 분할 보기로 전환)'
-              }
-              onClick={toggleLayoutMode}
-            >
-              <FiColumns size={13} />
-              <span>{layoutMode === 'split' ? '2단 분할' : '1단 보기'}</span>
-            </LayoutModeToggleBtn>
-
-            {!isEdit && isDirty && !loading && !insigniaUploading && (
-              <HeaderResetBtn
+            <MoreMenuWrap data-more-menu-root>
+              <MoreTriggerBtn
                 type="button"
-                aria-label="작성 내용 초기화"
-                title="입력한 내용을 모두 비우고 처음 상태로 되돌립니다"
-                onClick={() => {
-                  void handleResetForm()
-                }}
+                $active={headerMenuOpen}
+                aria-expanded={headerMenuOpen}
+                aria-label="화면 및 입력 항목 설정"
+                title="화면 보기 방식 · 입력 항목 설정"
+                onClick={() => setHeaderMenuOpen((prev) => !prev)}
               >
-                초기화
-              </HeaderResetBtn>
-            )}
+                <FiMoreHorizontal size={16} />
+              </MoreTriggerBtn>
+
+              {headerMenuOpen && (
+                <MorePopoverMenu role="menu" aria-label="모달 표시 설정">
+                  <MorePopoverSectionLabel>화면 보기 방식</MorePopoverSectionLabel>
+                  <MorePopoverItem
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={layoutMode === 'single'}
+                    $selected={layoutMode === 'single'}
+                    onClick={() => {
+                      if (layoutMode !== 'single') toggleLayoutMode()
+                      setHeaderMenuOpen(false)
+                    }}
+                  >
+                    <FiLayers size={13} />
+                    <span>탭별 집중 보기 (권장)</span>
+                    {layoutMode === 'single' && <FiCheck size={13} />}
+                  </MorePopoverItem>
+                  <MorePopoverItem
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={layoutMode === 'split'}
+                    $selected={layoutMode === 'split'}
+                    onClick={() => {
+                      if (layoutMode !== 'split') toggleLayoutMode()
+                      setHeaderMenuOpen(false)
+                    }}
+                  >
+                    <FiColumns size={13} />
+                    <span>2단 분할로 전체 보기</span>
+                    {layoutMode === 'split' && <FiCheck size={13} />}
+                  </MorePopoverItem>
+
+                  <MorePopoverDivider />
+                  <MorePopoverSectionLabel>선택 입력란 표시</MorePopoverSectionLabel>
+                  <MorePopoverItem
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={showForeignAndMottoFields}
+                    $selected={showForeignAndMottoFields}
+                    onClick={() => {
+                      setShowForeignAndMottoFields((prev) => !prev)
+                      setHeaderMenuOpen(false)
+                    }}
+                  >
+                    <span>원어 · 영문 표기 · 별칭 · 표어</span>
+                    {showForeignAndMottoFields && <FiCheck size={13} />}
+                  </MorePopoverItem>
+                  <MorePopoverItem
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={showDetailedSpecs}
+                    $selected={showDetailedSpecs}
+                    onClick={() => {
+                      setShowDetailedSpecs((prev) => !prev)
+                      setHeaderMenuOpen(false)
+                    }}
+                  >
+                    <span>병력 규모 · 관할 · 임무 · 전투 · 수훈</span>
+                    {showDetailedSpecs && <FiCheck size={13} />}
+                  </MorePopoverItem>
+                  {!isEdit && (
+                    <MorePopoverItem
+                      type="button"
+                      role="menuitemcheckbox"
+                      aria-checked={showHighCommandPresets}
+                      $selected={showHighCommandPresets}
+                      onClick={() => {
+                        setShowHighCommandPresets((prev) => !prev)
+                        setHeaderMenuOpen(false)
+                      }}
+                    >
+                      <span>대표 사령부 예시 프리셋 표시</span>
+                      {showHighCommandPresets && <FiCheck size={13} />}
+                    </MorePopoverItem>
+                  )}
+
+                  {!isEdit && isDirty && !loading && !insigniaUploading && (
+                    <>
+                      <MorePopoverDivider />
+                      <MorePopoverItem
+                        type="button"
+                        role="menuitem"
+                        $danger
+                        onClick={() => {
+                          setHeaderMenuOpen(false)
+                          void handleResetForm()
+                        }}
+                      >
+                        <FiRotateCcw size={13} />
+                        <span>작성 내용 초기화</span>
+                      </MorePopoverItem>
+                    </>
+                  )}
+                </MorePopoverMenu>
+              )}
+            </MoreMenuWrap>
           </HeaderActionsBar>
         }
       >
@@ -5986,8 +6165,8 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
         <MilitaryModalFormScroll
           ref={scrollContainerRef}
           $layoutMode={layoutMode}
-          onScroll={handleFormScroll}
-          onScrollCapture={handleFormScroll}
+          onScroll={layoutMode === 'split' ? handleFormScroll : undefined}
+          onScrollCapture={layoutMode === 'split' ? handleFormScroll : undefined}
         >
           {(loading || insigniaUploading) && !hydratingUnit && (
             <KitBusyBar role="status" aria-live="polite">
@@ -6020,9 +6199,46 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                   </SplitColumnsGrid>
                 ) : (
                   <SingleColumnStack>
-                    {basicSectionNode}
-                    {commandSectionNode}
-                    {contextSectionNode}
+                    {activeSection === 'basic' && basicSectionNode}
+                    {activeSection === 'command' && commandSectionNode}
+                    {activeSection === 'context' && contextSectionNode}
+
+                    <StepNavFooter>
+                      {activeSection !== 'basic' ? (
+                        <StepNavBtn
+                          type="button"
+                          onClick={() =>
+                            scrollToSection(
+                              activeSection === 'context' ? 'command' : 'basic',
+                            )
+                          }
+                        >
+                          ← 이전:{' '}
+                          {activeSection === 'context'
+                            ? '소속 · 지휘 · 계보'
+                            : '기본 정보'}
+                        </StepNavBtn>
+                      ) : (
+                        <span />
+                      )}
+
+                      {activeSection !== 'context' && (
+                        <StepNavBtn
+                          type="button"
+                          onClick={() =>
+                            scrollToSection(
+                              activeSection === 'basic' ? 'command' : 'context',
+                            )
+                          }
+                        >
+                          다음:{' '}
+                          {activeSection === 'basic'
+                            ? '소속 · 지휘 · 계보 (선택)'
+                            : '맥락 · 상세 기록 (선택)'}{' '}
+                          →
+                        </StepNavBtn>
+                      )}
+                    </StepNavFooter>
                   </SingleColumnStack>
                 )}
               </S.FormSection>
@@ -6385,20 +6601,23 @@ const SectionBadge = styled.span<{ $done?: boolean }>`
         : '#1d4ed8'};
 `
 
-const LayoutModeToggleBtn = styled.button<{ $active?: boolean }>`
+const MoreMenuWrap = styled.div`
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+`
+
+const MoreTriggerBtn = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
   height: 28px;
-  padding: 0 10px;
+  padding: 0;
   border-radius: 8px;
   border: 1px solid
     ${({ $active, theme }) =>
-      $active
-        ? theme.mode === 'dark'
-          ? 'rgba(148, 163, 184, 0.32)'
-          : '#cbd5e1'
-        : theme.colors.border.light};
+      $active ? S.getC(theme).border.default : 'transparent'};
   background: ${({ $active, theme }) =>
     $active
       ? theme.mode === 'dark'
@@ -6407,8 +6626,124 @@ const LayoutModeToggleBtn = styled.button<{ $active?: boolean }>`
       : 'transparent'};
   color: ${({ $active, theme }) =>
     $active ? theme.colors.text.primary : theme.colors.text.secondary};
+  cursor: pointer;
+  transition:
+    color 0.14s ease,
+    border-color 0.14s ease,
+    background-color 0.14s ease;
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#f1f5f9'};
+    border-color: ${({ theme }) => S.getC(theme).border.light};
+    outline: none;
+  }
+`
+
+const MorePopoverMenu = styled.div`
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  min-width: 224px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
+  background: ${({ theme }) => S.getC(theme).background.content};
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
+const MorePopoverSectionLabel = styled.div`
+  padding: 5px 8px 3px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => S.getC(theme).text.muted};
+  letter-spacing: 0.02em;
+`
+
+const MorePopoverDivider = styled.div`
+  height: 1px;
+  margin: 4px 2px;
+  background: ${({ theme }) => S.getC(theme).border.light};
+`
+
+const MorePopoverItem = styled.button<{
+  $selected?: boolean
+  $danger?: boolean
+}>`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 9px;
+  border: none;
+  border-radius: 7px;
+  background: ${({ $selected, theme }) =>
+    $selected
+      ? theme.mode === 'dark'
+        ? 'rgba(59, 130, 246, 0.15)'
+        : 'rgba(37, 99, 235, 0.07)'
+      : 'transparent'};
+  color: ${({ $danger, $selected, theme }) =>
+    $danger
+      ? theme.mode === 'dark'
+        ? '#fca5a5'
+        : '#dc2626'
+      : $selected
+        ? theme.mode === 'dark'
+          ? '#93c5fd'
+          : '#1d4ed8'
+        : S.getC(theme).text.primary};
   font: inherit;
-  font-size: 11.5px;
+  font-size: 12.5px;
+  font-weight: ${({ $selected }) => ($selected ? 600 : 500)};
+  text-align: left;
+  cursor: pointer;
+
+  > span {
+    flex: 1;
+    min-width: 0;
+  }
+
+  &:hover,
+  &:focus-visible {
+    background: ${({ $danger, theme }) =>
+      $danger
+        ? theme.mode === 'dark'
+          ? 'rgba(239, 68, 68, 0.16)'
+          : 'rgba(239, 68, 68, 0.08)'
+        : S.getC(theme).background.subtle};
+    outline: none;
+  }
+`
+
+const StepNavFooter = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 12px;
+  margin-top: 4px;
+  border-top: 1px dashed ${({ theme }) => S.getC(theme).border.light};
+`
+
+const StepNavBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.default};
+  background: ${({ theme }) => S.getC(theme).background.subtle};
+  color: ${({ theme }) => S.getC(theme).text.secondary};
+  font: inherit;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -6416,15 +6751,13 @@ const LayoutModeToggleBtn = styled.button<{ $active?: boolean }>`
     border-color 0.14s ease,
     background-color 0.14s ease;
 
-  @media (max-width: 1180px) {
-    display: none;
-  }
-
   &:hover,
   &:focus-visible {
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(148, 163, 184, 0.45)' : '#94a3b8'};
+    color: ${({ theme }) =>
+      `var(--active-domain-text, ${theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8'})`};
+    border-color: rgba(var(--active-domain-rgb, 37, 99, 235), 0.45);
+    background: ${({ theme }) =>
+      `rgba(var(--active-domain-rgb, 37, 99, 235), ${theme.mode === 'dark' ? 0.14 : 0.06})`};
     outline: none;
   }
 `

@@ -1,6 +1,5 @@
 /**
- * 자연/인프라 뷰의 상단 툴바 — 검색 input + 정렬 select + 등록 버튼.
- * pill 필터 위에 별도 row로 배치된다.
+ * 행정구역·자연·인프라 뷰 상단 툴바 — 검색 input + 정렬 select + 액션 row.
  */
 import type { ChangeEvent } from 'react'
 
@@ -35,7 +34,7 @@ export function SearchInput({
         size={13}
         style={{
           position: 'absolute',
-          left: 11,
+          left: 10,
           color: palette.textSecondary,
           pointerEvents: 'none',
         }}
@@ -48,15 +47,15 @@ export function SearchInput({
         onChange={(e: ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
         style={{
           width: '100%',
-          height: 34,
-          padding: '0 30px 0 32px',
+          height: 30,
+          padding: '0 28px 0 30px',
           fontSize: 12.5,
           border: `1px solid ${palette.border}`,
-          borderRadius: 8,
+          borderRadius: 6,
           background: 'transparent',
           color: palette.text,
           outline: 'none',
-          transition: 'border-color 0.14s ease',
+          transition: 'border-color 0.12s ease',
         }}
         onFocus={(e) => {
           e.currentTarget.style.borderColor = palette.primary
@@ -72,9 +71,9 @@ export function SearchInput({
           onClick={() => onChange('')}
           style={{
             position: 'absolute',
-            right: 7,
-            width: 20,
-            height: 20,
+            right: 6,
+            width: 18,
+            height: 18,
             border: 'none',
             background: 'transparent',
             color: palette.textSecondary,
@@ -86,7 +85,7 @@ export function SearchInput({
             padding: 0,
           }}
         >
-          <FiX size={13} />
+          <FiX size={12} />
         </button>
       )}
     </div>
@@ -117,12 +116,12 @@ export function SortSelect<V extends string>({
       value={value}
       onChange={(e) => onChange(e.target.value as V)}
       style={{
-        height: 34,
-        padding: '0 26px 0 11px',
-        fontSize: 12,
+        height: 30,
+        padding: '0 24px 0 9px',
+        fontSize: 11.5,
         fontWeight: 600,
         border: `1px solid ${palette.border}`,
-        borderRadius: 8,
+        borderRadius: 6,
         background: 'transparent',
         color: palette.text,
         outline: 'none',
@@ -158,12 +157,12 @@ export function ListToolbarRow({
   return (
     <div
       style={{
-        padding: '12px 16px',
+        padding: '10px 12px',
         borderBottom: `1px solid ${palette.border}`,
         background: palette.bg,
         display: 'flex',
         alignItems: 'center',
-        gap: 8,
+        gap: 6,
         flexShrink: 0,
       }}
     >

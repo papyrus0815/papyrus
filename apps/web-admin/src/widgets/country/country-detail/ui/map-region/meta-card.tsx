@@ -8,33 +8,40 @@ interface MetaCardProps {
 }
 
 /**
- * 라벨 + 값 단일 카드. 우측 상세 패널의 메타 그리드 구성 단위.
- * (이전엔 nature/infra 뷰가 같은 함수를 따로 정의)
+ * 라벨 + 값 단일 메타 셀 — Event-Ledger 플랫 1px 헤어라인 박스.
  */
 export function MetaCard({ palette, label, value, fullWidth }: MetaCardProps) {
   return (
     <div
       style={{
-        padding: '14px 16px',
+        padding: '11px 13px',
         background: palette.bgSecondary,
-        borderRadius: 12,
+        borderRadius: 6,
         border: `1px solid ${palette.border}`,
+        boxShadow: 'none',
         gridColumn: fullWidth ? '1 / -1' : undefined,
       }}
     >
       <div
         style={{
-          fontSize: 11,
-          fontWeight: 600,
+          fontSize: 10.5,
+          fontWeight: 700,
           color: palette.textSecondary,
-          marginBottom: 6,
+          marginBottom: 4,
           textTransform: 'uppercase',
           letterSpacing: '0.04em',
         }}
       >
         {label}
       </div>
-      <div style={{ fontSize: 15, fontWeight: 600, color: palette.text }}>
+      <div
+        style={{
+          fontSize: 14,
+          fontWeight: 700,
+          color: palette.text,
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
         {value}
       </div>
     </div>

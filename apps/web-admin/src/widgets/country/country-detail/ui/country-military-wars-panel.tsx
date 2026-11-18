@@ -1,15 +1,17 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import {
   FiArrowDown,
   FiArrowUp,
   FiArrowUpRight,
+  FiCheck,
   FiChevronDown,
   FiChevronRight,
   FiCompass,
   FiCornerDownRight,
-  FiPlus,
+  FiMoreHorizontal,
+  FiRotateCcw,
   FiSearch,
   FiShield,
   FiX,
@@ -24,6 +26,7 @@ import {
   ledgerAccentBorder,
   ledgerAccentSubtle,
   ledgerBackground,
+  ledgerElevated,
   ledgerHairline,
   ledgerHairlineStrong,
   ledgerHoverFill,
@@ -47,12 +50,10 @@ import { EmptyStateSpotlight } from '@/shared/ui/empty-state/empty-state'
 import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal/country-inline-modal'
 
 import {
-  LedgerCompactAction,
   LedgerFilterChip,
+  LedgerIconButton,
   LedgerSearchBox,
   LedgerSearchInput,
-  LedgerViewSwitch,
-  LedgerViewSwitchItem,
 } from './country-ledger-primitives'
 import { WarDeclarationsSection } from './war-declarations-section'
 
@@ -181,16 +182,16 @@ function formatMilitaryEventPeriod(ev: EventResponseDto): string {
     endMonth?: number | null
   }
   if (anyEv.startYear && anyEv.startYear > 0) {
-    const s = `${anyEv.startEra === 'BC' ? 'BC ' : ''}${anyEv.startYear}${
+    const startText = `${anyEv.startEra === 'BC' ? 'BC ' : ''}${anyEv.startYear}${
       anyEv.startMonth ? `.${String(anyEv.startMonth).padStart(2, '0')}` : ''
     }`
-    const e =
+    const endText =
       anyEv.endYear && anyEv.endYear > 0
         ? `${anyEv.endEra === 'BC' ? 'BC ' : ''}${anyEv.endYear}${
             anyEv.endMonth ? `.${String(anyEv.endMonth).padStart(2, '0')}` : ''
           }`
         : null
-    return e && e !== s ? `${s} ~ ${e}` : s
+    return endText && endText !== startText ? `${startText} ~ ${endText}` : startText
   }
   return '연도 미상'
 }
@@ -241,6 +242,19 @@ export function CountryMilitaryWarsPanel({
   const [collapsedWarIds, setCollapsedWarIds] = useState<Set<string>>(
     () => new Set(),
   )
+  const [showWarDeclarations, setShowWarDeclarations] = useState(false)
+  const [toolbarMenuOpen, setToolbarMenuOpen] = useState(false)
+
+  useEffect(() => {
+    if (!toolbarMenuOpen) return
+    const handlePointerDown = (evt: MouseEvent) => {
+      const target = evt.target as HTMLElement | null
+      if (target?.closest('[data-wars-toolbar-menu]')) return
+      setToolbarMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [toolbarMenuOpen])
 
   const relatedHistKey = linkedHistoricalCountryIds.join(',')
 
@@ -282,17 +296,17 @@ export function CountryMilitaryWarsPanel({
   const deployedUnitsByEventId = useMemo(() => {
     const map = new Map<string, DeployedUnitChipData[]>()
     const typedUnits = units as DeployedUnitSummary[]
-    for (const u of typedUnits) {
-      for (const dep of u.sideDeployedUnits ?? []) {
+    for (const unitItem of typedUnits) {
+      for (const dep of unitItem.sideDeployedUnits ?? []) {
         const evId = dep.side?.event?.id
         if (!evId) continue
         const bucket = map.get(evId) ?? []
-        if (!bucket.some((item) => item.id === u.id)) {
+        if (!bucket.some((item) => item.id === unitItem.id)) {
           bucket.push({
-            id: u.id,
-            name: u.name,
-            abbreviation: u.abbreviation,
-            unitType: u.unitType,
+            id: unitItem.id,
+            name: unitItem.name,
+            abbreviation: unitItem.abbreviation,
+            unitType: unitItem.unitType,
           })
           map.set(evId, bucket)
         }
@@ -316,7 +330,7 @@ export function CountryMilitaryWarsPanel({
   }, [rawEvents])
 
   const filteredEvents = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
+    const queryText = searchQuery.trim().toLowerCase()
     const list = rawEvents.filter((ev) => {
       if (
         conflictFilter !== 'ALL' &&
@@ -324,17 +338,17 @@ export function CountryMilitaryWarsPanel({
       ) {
         return false
       }
-      if (q) {
+      if (queryText) {
         const counterparts = [
           ...(ev.relatedCountries ?? []).map(
-            (c) => `${c.name} ${c.sideName ?? ''}`,
+            (countryItem) => `${countryItem.name} ${countryItem.sideName ?? ''}`,
           ),
           ...(ev.relatedHistoricalCountries ?? []).map(
-            (h) => `${h.name} ${h.sideName ?? ''}`,
+            (histItem) => `${histItem.name} ${histItem.sideName ?? ''}`,
           ),
         ].join(' ')
         const deployedNames = (deployedUnitsByEventId.get(ev.id) ?? [])
-          .map((u) => `${u.name} ${u.abbreviation ?? ''}`)
+          .map((unitItem) => `${unitItem.name} ${unitItem.abbreviation ?? ''}`)
           .join(' ')
         const hay = [
           ev.title,
@@ -346,21 +360,21 @@ export function CountryMilitaryWarsPanel({
           .filter(Boolean)
           .join(' ')
           .toLowerCase()
-        if (!hay.includes(q)) return false
+        if (!hay.includes(queryText)) return false
       }
       return true
     })
 
     const mult = sortDir === 'asc' ? 1 : -1
-    return [...list].sort((a, b) => {
-      const kA = getEventChronologyKey(a)
-      const kB = getEventChronologyKey(b)
+    return [...list].sort((leftEv, rightEv) => {
+      const kA = getEventChronologyKey(leftEv)
+      const kB = getEventChronologyKey(rightEv)
       if (kA !== kB) {
         if (kA === Number.MAX_SAFE_INTEGER) return 1
         if (kB === Number.MAX_SAFE_INTEGER) return -1
         return (kA - kB) * mult
       }
-      return a.title.localeCompare(b.title, 'ko')
+      return leftEv.title.localeCompare(rightEv.title, 'ko')
     })
   }, [
     rawEvents,
@@ -401,11 +415,11 @@ export function CountryMilitaryWarsPanel({
 
     // 하위 전투는 항상 연대순(과거 -> 미래)으로 정렬해 전쟁 전개 흐름을 자연스럽게 읽게 함
     for (const bucket of childrenMap.values()) {
-      bucket.sort((a, b) => {
-        const kA = getEventChronologyKey(a)
-        const kB = getEventChronologyKey(b)
+      bucket.sort((leftEv, rightEv) => {
+        const kA = getEventChronologyKey(leftEv)
+        const kB = getEventChronologyKey(rightEv)
         if (kA !== kB) return kA - kB
-        return a.title.localeCompare(b.title, 'ko')
+        return leftEv.title.localeCompare(rightEv.title, 'ko')
       })
     }
 
@@ -477,30 +491,15 @@ export function CountryMilitaryWarsPanel({
 
   return (
     <PanelStack>
-      <WarDeclarationsSection
-        historicalCountryId={isHistorical ? country.id : undefined}
-        countryId={!isHistorical ? country.id : undefined}
-        linkedHistoricalCountryIds={linkedHistoricalCountryIds}
-      />
+      {showWarDeclarations ? (
+        <WarDeclarationsSection
+          historicalCountryId={isHistorical ? country.id : undefined}
+          countryId={!isHistorical ? country.id : undefined}
+          linkedHistoricalCountryIds={linkedHistoricalCountryIds}
+        />
+      ) : null}
 
       <ConflictsCard aria-label="참전 전쟁 및 군사 사건 원장">
-        <ConflictsHeader>
-          <div>
-            <ConflictsTitle>
-              참전 전쟁 · 전투 · 군사사건 원장 ({rawEvents.length.toLocaleString('ko-KR')}건)
-            </ConflictsTitle>
-            <ConflictsSub>
-              {country.name} 및 전신 정치체가 참전·관여한 전쟁, 전역·전투, 승패 결과 및 투입 부대 기록
-            </ConflictsSub>
-          </div>
-          <LedgerCompactAction
-            type="button"
-            onClick={() => navigate(pathKeys.events.create())}
-          >
-            <FiPlus size={12} /> 군사 사건 등록
-          </LedgerCompactAction>
-        </ConflictsHeader>
-
         <FilterToolbar>
           <ChipRow role="group" aria-label="군사 사건 유형 필터">
             <LedgerFilterChip
@@ -540,7 +539,7 @@ export function CountryMilitaryWarsPanel({
             </LedgerFilterChip>
           </ChipRow>
 
-          <FilterRight>
+          <FilterRight data-wars-toolbar-menu>
             <LedgerSearchBox style={{ maxWidth: 270 }}>
               <FiSearch />
               <LedgerSearchInput
@@ -560,22 +559,86 @@ export function CountryMilitaryWarsPanel({
               ) : null}
             </LedgerSearchBox>
 
-            <LedgerViewSwitch role="group" aria-label="정렬 순서">
-              <LedgerViewSwitchItem
+            <MoreMenuWrap>
+              <LedgerIconButton
                 type="button"
-                $active={sortDir === 'desc'}
-                onClick={() => setSortDir('desc')}
+                aria-label="전쟁·참전사 정렬 및 보기 설정"
+                aria-expanded={toolbarMenuOpen}
+                title="정렬 순서 · 선전포고 이력 보기 설정"
+                onClick={() => setToolbarMenuOpen((prev) => !prev)}
               >
-                <FiArrowDown size={12} /> 최신순
-              </LedgerViewSwitchItem>
-              <LedgerViewSwitchItem
-                type="button"
-                $active={sortDir === 'asc'}
-                onClick={() => setSortDir('asc')}
-              >
-                <FiArrowUp size={12} /> 연대순
-              </LedgerViewSwitchItem>
-            </LedgerViewSwitch>
+                <FiMoreHorizontal size={16} />
+              </LedgerIconButton>
+
+              {toolbarMenuOpen ? (
+                <MoreDropdownMenu role="menu">
+                  <MoreDropdownSectionLabel>정렬 순서</MoreDropdownSectionLabel>
+                  <MoreDropdownItem
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setSortDir('desc')
+                      setToolbarMenuOpen(false)
+                    }}
+                  >
+                    <FiArrowDown size={12.5} />
+                    <span>최신순 (최근 사건부터)</span>
+                    {sortDir === 'desc' ? (
+                      <FiCheck size={12.5} style={{ marginLeft: 'auto' }} />
+                    ) : null}
+                  </MoreDropdownItem>
+                  <MoreDropdownItem
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setSortDir('asc')
+                      setToolbarMenuOpen(false)
+                    }}
+                  >
+                    <FiArrowUp size={12.5} />
+                    <span>연대순 (과거 사건부터)</span>
+                    {sortDir === 'asc' ? (
+                      <FiCheck size={12.5} style={{ marginLeft: 'auto' }} />
+                    ) : null}
+                  </MoreDropdownItem>
+
+                  <MoreDropdownDivider />
+                  <MoreDropdownSectionLabel>보조 패널</MoreDropdownSectionLabel>
+                  <MoreDropdownItem
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setShowWarDeclarations((prev) => !prev)
+                      setToolbarMenuOpen(false)
+                    }}
+                  >
+                    <FiShield size={12.5} />
+                    <span>선전포고 · 참전 이력 섹션 표시</span>
+                    {showWarDeclarations ? (
+                      <FiCheck size={12.5} style={{ marginLeft: 'auto' }} />
+                    ) : null}
+                  </MoreDropdownItem>
+
+                  {(conflictFilter !== 'ALL' || Boolean(searchQuery.trim())) && (
+                    <>
+                      <MoreDropdownDivider />
+                      <MoreDropdownItem
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setConflictFilter('ALL')
+                          setSearchQuery('')
+                          setToolbarMenuOpen(false)
+                        }}
+                      >
+                        <FiRotateCcw size={12.5} />
+                        <span>필터 초기화</span>
+                      </MoreDropdownItem>
+                    </>
+                  )}
+                </MoreDropdownMenu>
+              ) : null}
+            </MoreMenuWrap>
           </FilterRight>
         </FilterToolbar>
 
@@ -627,15 +690,15 @@ export function CountryMilitaryWarsPanel({
 
                   const selfModerns = !isHistorical
                     ? (ev.relatedCountries ?? []).filter(
-                        (c) => c.id === country.id,
+                        (countryItem) => countryItem.id === country.id,
                       )
                     : []
                   const selfHistoricals = (
                     ev.relatedHistoricalCountries ?? []
                   ).filter(
-                    (h) =>
-                      (isHistorical && h.id === country.id) ||
-                      linkedHistSet.has(h.id),
+                    (histItem) =>
+                      (isHistorical && histItem.id === country.id) ||
+                      linkedHistSet.has(histItem.id),
                   )
                   const allSelfMatches = [...selfModerns, ...selfHistoricals]
                   const primarySelf = allSelfMatches[0]
@@ -646,7 +709,7 @@ export function CountryMilitaryWarsPanel({
                     : null
 
                   const sideMatch = allSelfMatches.find(
-                    (m) => m.sideOutcome || m.sideName,
+                    (matchItem) => matchItem.sideOutcome || matchItem.sideName,
                   )
                   const sideName =
                     sideMatch?.sideName &&
@@ -666,8 +729,11 @@ export function CountryMilitaryWarsPanel({
                   const distinctHistNames = Array.from(
                     new Set(
                       selfHistoricals
-                        .map((h) => h.name)
-                        .filter((n) => Boolean(n) && n !== country.name),
+                        .map((histItem) => histItem.name)
+                        .filter(
+                          (nameVal) =>
+                            Boolean(nameVal) && nameVal !== country.name,
+                        ),
                     ),
                   )
 
@@ -675,14 +741,17 @@ export function CountryMilitaryWarsPanel({
                     new Set([
                       ...(ev.relatedHistoricalCountries ?? [])
                         .filter(
-                          (h) =>
-                            !(isHistorical && h.id === country.id) &&
-                            !linkedHistSet.has(h.id),
+                          (histItem) =>
+                            !(isHistorical && histItem.id === country.id) &&
+                            !linkedHistSet.has(histItem.id),
                         )
-                        .map((h) => h.name),
+                        .map((histItem) => histItem.name),
                       ...(ev.relatedCountries ?? [])
-                        .filter((c) => isHistorical || c.id !== country.id)
-                        .map((c) => c.name),
+                        .filter(
+                          (countryItem) =>
+                            isHistorical || countryItem.id !== country.id,
+                        )
+                        .map((countryItem) => countryItem.name),
                     ]),
                   ).slice(0, 4)
 
@@ -752,29 +821,33 @@ export function CountryMilitaryWarsPanel({
 
                           {deployedUnits.length > 0 ? (
                             <DeployedUnitsRow>
-                              {deployedUnits.slice(0, 4).map((u) => (
+                              {deployedUnits.slice(0, 4).map((unitChip) => (
                                 <DeployedUnitChip
-                                  key={u.id}
+                                  key={unitChip.id}
                                   type="button"
                                   title={
-                                    u.unitType
-                                      ? `${militaryUnitTypeLabelKo(u.unitType)} · 클릭 시 편제 상세 보기 (⌘/Ctrl+클릭: 단독 상세)`
+                                    unitChip.unitType
+                                      ? `${militaryUnitTypeLabelKo(unitChip.unitType)} · 클릭 시 편제 상세 보기 (⌘/Ctrl+클릭: 단독 상세)`
                                       : '클릭 시 편제 상세 보기'
                                   }
                                   onClick={(evt) => {
                                     if (!shouldInterceptEntityClick(evt)) {
-                                      navigate(pathKeys.militaryUnitDetail(u.id))
+                                      navigate(
+                                        pathKeys.militaryUnitDetail(unitChip.id),
+                                      )
                                       return
                                     }
                                     if (onSelectUnit) {
-                                      onSelectUnit(u.id)
+                                      onSelectUnit(unitChip.id)
                                     } else {
-                                      navigate(pathKeys.militaryUnitDetail(u.id))
+                                      navigate(
+                                        pathKeys.militaryUnitDetail(unitChip.id),
+                                      )
                                     }
                                   }}
                                 >
                                   <FiShield size={10} />
-                                  {u.abbreviation || u.name}
+                                  {unitChip.abbreviation || unitChip.name}
                                 </DeployedUnitChip>
                               ))}
                               {deployedUnits.length > 4 ? (
@@ -1205,3 +1278,59 @@ const SurveyJumpLink = styled(Link)`
     opacity: 0.88;
   }
 `
+
+const MoreMenuWrap = styled.div`
+  position: relative;
+  display: inline-flex;
+`
+
+const MoreDropdownMenu = styled.div`
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 45;
+  min-width: 220px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerElevated(theme.mode)};
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
+const MoreDropdownSectionLabel = styled.div`
+  padding: 4px 8px 2px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const MoreDropdownItem = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+`
+
+const MoreDropdownDivider = styled.div`
+  height: 1px;
+  margin: 4px;
+  background: ${({ theme }) => ledgerHairline(theme.mode)};
+`
+

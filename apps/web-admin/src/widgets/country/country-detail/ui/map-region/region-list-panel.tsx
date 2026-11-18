@@ -1,6 +1,12 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 
-import { FiEdit2, FiMoreHorizontal, FiPlus, FiTrash2 } from 'react-icons/fi'
+import {
+  FiEdit2,
+  FiMapPin,
+  FiMoreHorizontal,
+  FiPlus,
+  FiTrash2,
+} from 'react-icons/fi'
 
 import { type RegionPalette } from './use-region-palette'
 
@@ -18,8 +24,8 @@ interface RegionListPanelProps {
 }
 
 /**
- * 좌측 목록 패널 컨테이너 — 헤더/툴바 + 스크롤 영역.
- * 행정구역(검색)·자연(pill)·인프라(pill) 모두 동일한 카드 골격 사용.
+ * 좌측 목록 패널 컨테이너 — 헤더/툴바 + 스크롤 원장 영역.
+ * 행정구역(검색)·자연(pill)·인프라(pill) 모두 동일한 Event-Ledger 카드 골격 사용.
  */
 export function RegionListPanel({
   palette,
@@ -34,9 +40,9 @@ export function RegionListPanel({
       style={{
         background: palette.bg,
         border: `1px solid ${palette.border}`,
-        borderRadius: 10,
+        borderRadius: 8,
         overflow: 'hidden',
-        boxShadow: palette.shadowNone,
+        boxShadow: 'none',
         display: 'flex',
         flexDirection: 'column',
         maxHeight,
@@ -67,7 +73,7 @@ interface FilterPillProps {
   children: ReactNode
 }
 
-/** pill 형태 필터 버튼 — 자연지리/인프라 뷰의 카테고리 토글 */
+/** pill 형태 필터 버튼 — 행정구역 상태/자연지리/인프라 카테고리 토글 */
 export function FilterPill({
   palette,
   active,
@@ -79,15 +85,17 @@ export function FilterPill({
       type="button"
       onClick={onClick}
       style={{
-        height: 28,
-        padding: '0 10px',
-        borderRadius: 8,
+        height: 26,
+        padding: '0 9px',
+        borderRadius: 6,
         border: `1px solid ${active ? palette.primary : palette.border}`,
         background: active ? palette.bgSelected : 'transparent',
         color: active ? palette.primary : palette.textSecondary,
-        fontSize: 12,
-        fontWeight: active ? 700 : 500,
+        fontSize: 11.5,
+        fontWeight: active ? 700 : 600,
+        fontVariantNumeric: 'tabular-nums',
         cursor: 'pointer',
+        whiteSpace: 'nowrap',
       }}
     >
       {children}
@@ -107,7 +115,7 @@ export function PillToolbar({ palette, children, rightSlot }: PillToolbarProps) 
   return (
     <div
       style={{
-        padding: '14px 16px',
+        padding: '8px 12px',
         borderBottom: `1px solid ${palette.border}`,
         background: palette.bgSecondary,
         display: 'flex',
@@ -120,7 +128,7 @@ export function PillToolbar({ palette, children, rightSlot }: PillToolbarProps) 
         style={{
           display: 'flex',
           flexWrap: 'wrap',
-          gap: 6,
+          gap: 5,
           flex: 1,
           minWidth: 0,
         }}
@@ -138,7 +146,7 @@ interface RegisterButtonProps {
   label?: string
 }
 
-/** "+ 등록" 액션 버튼 — PillToolbar의 rightSlot에 주로 사용 */
+/** "+ 등록" 액션 버튼 */
 export function RegisterButton({
   palette,
   onClick,
@@ -151,15 +159,15 @@ export function RegisterButton({
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        gap: 6,
-        height: 34,
-        padding: '0 13px',
-        fontSize: 12.5,
-        fontWeight: 600,
+        gap: 5,
+        height: 30,
+        padding: '0 11px',
+        fontSize: 12,
+        fontWeight: 700,
         color: palette.isDark ? '#0e0f12' : '#ffffff',
         background: palette.primary,
         border: 'none',
-        borderRadius: 8,
+        borderRadius: 6,
         cursor: 'pointer',
         whiteSpace: 'nowrap',
         flexShrink: 0,
@@ -173,7 +181,7 @@ export function RegisterButton({
         e.currentTarget.style.background = palette.primary
       }}
     >
-      <FiPlus size={14} />
+      <FiPlus size={13} />
       <span>{label}</span>
     </button>
   )
@@ -185,19 +193,22 @@ interface RegionListItemProps {
   onSelect: () => void
   title: string
   subtitle?: ReactNode
-  /** 우측 보조(개수 등) — pill 뷰에서는 안 씀, 행정구역 뷰에서 사용 */
+  /** 우측 보조(개수 등) */
   trailing?: ReactNode
   /** 호버 시 노출되는 수정 버튼 콜백 */
   onEdit?: () => void
   /** 호버 시 노출되는 삭제 버튼 콜백 */
   onDelete?: () => void
-  /** 제목 앞에 표시되는 타입 배지 — 전체 보기에서 산/강 등 시각 구분 */
+  /** 제목 앞에 표시되는 타입 배지 */
   typeBadge?: { label: string; color: string; bg: string } | null
+  /** 좌표 보유 표시 */
+  hasCoords?: boolean
+  /** 폐지 여부 (시각적 감쇠) */
+  abolished?: boolean
 }
 
 /**
- * 리스트 항목 카드 — 선택 시 좌측 강조선·선택 배경.
- * 행정구역/자연/인프라 모두 동일한 시각.
+ * 리스트 항목 원장 행 — Event-Ledger 플랫 1px 헤어라인 행 + 선택 시 좌측 3px 인디고 강조선.
  */
 export function RegionListItem({
   palette,
@@ -209,6 +220,8 @@ export function RegionListItem({
   onEdit,
   onDelete,
   typeBadge,
+  hasCoords,
+  abolished,
 }: RegionListItemProps) {
   const hasActions = !!(onEdit || onDelete)
   return (
@@ -224,44 +237,56 @@ export function RegionListItem({
       }}
       className="region-list-item"
       style={{
-        padding: '11px 14px',
-        margin: '6px 12px',
-        borderRadius: 8,
+        padding: '10px 12px 10px 11px',
+        margin: 0,
+        borderRadius: 0,
         borderLeft: `3px solid ${selected ? palette.primary : 'transparent'}`,
+        borderBottom: `1px solid ${palette.border}`,
         background: selected ? palette.bgSelected : palette.bg,
-        border: `1px solid ${selected ? palette.primary : palette.border}`,
         boxShadow: 'none',
         cursor: 'pointer',
-        transition: 'background-color 0.14s ease, border-color 0.14s ease',
+        transition: 'background-color 0.12s ease',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: 12,
+        gap: 8,
         position: 'relative',
       }}
+      onMouseEnter={(e) => {
+        if (!selected) e.currentTarget.style.background = palette.bgHover
+      }}
+      onMouseLeave={(e) => {
+        if (!selected) e.currentTarget.style.background = palette.bg
+      }}
     >
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          opacity: abolished ? 0.62 : 1,
+        }}
+      >
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 8,
-            marginBottom: subtitle ? 4 : 0,
+            gap: 6,
+            marginBottom: subtitle ? 3 : 0,
             minWidth: 0,
           }}
         >
           {typeBadge && (
             <span
               style={{
-                fontSize: 10,
+                fontSize: 10.5,
                 fontWeight: 700,
                 color: typeBadge.color,
                 background: typeBadge.bg,
-                padding: '2px 7px',
-                borderRadius: 5,
-                letterSpacing: '0.02em',
+                padding: '1px 6px',
+                borderRadius: 4,
+                letterSpacing: '0.01em',
                 flexShrink: 0,
-                lineHeight: 1.4,
+                lineHeight: 1.45,
               }}
             >
               {typeBadge.label}
@@ -269,24 +294,39 @@ export function RegionListItem({
           )}
           <div
             style={{
-              fontSize: 14,
-              fontWeight: 600,
+              fontSize: 13.5,
+              fontWeight: selected ? 700 : 600,
               color: palette.text,
+              textDecoration: abolished ? 'line-through' : 'none',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
-              flex: 1,
               minWidth: 0,
             }}
           >
             {title}
           </div>
+          {hasCoords && (
+            <FiMapPin
+              size={11}
+              title="중심 좌표 등록됨"
+              style={{
+                color: palette.primary,
+                opacity: 0.78,
+                flexShrink: 0,
+              }}
+            />
+          )}
         </div>
         {subtitle && (
           <div
             style={{
-              fontSize: 12,
+              fontSize: 11.5,
               color: palette.textSecondary,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              fontVariantNumeric: 'tabular-nums',
             }}
           >
             {subtitle}
@@ -294,14 +334,21 @@ export function RegionListItem({
         )}
       </div>
       {trailing && hasActions ? (
-        <>
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            flexShrink: 0,
+          }}
+        >
           {trailing}
           <ListItemActions
             palette={palette}
             onEdit={onEdit}
             onDelete={onDelete}
           />
-        </>
+        </div>
       ) : hasActions ? (
         <ListItemActions
           palette={palette}
@@ -342,7 +389,7 @@ function ListItemActions({ palette, onEdit, onDelete }: ListItemActionsProps) {
   return (
     <div
       ref={wrapperRef}
-      style={{ position: 'relative' }}
+      style={{ position: 'relative', flexShrink: 0 }}
       onClick={(e) => e.stopPropagation()}
     >
       <button
@@ -361,7 +408,7 @@ function ListItemActions({ palette, onEdit, onDelete }: ListItemActionsProps) {
         style={{
           width: 24,
           height: 24,
-          borderRadius: 6,
+          borderRadius: 5,
           border: 'none',
           background: open ? palette.bgHover : 'transparent',
           color: palette.textSecondary,
@@ -388,17 +435,15 @@ function ListItemActions({ palette, onEdit, onDelete }: ListItemActionsProps) {
             right: 0,
             top: '100%',
             marginTop: 4,
-            minWidth: 120,
+            minWidth: 116,
             padding: '4px',
             margin: 0,
             listStyle: 'none',
             background: palette.bg,
             border: `1px solid ${palette.border}`,
-            borderRadius: 8,
-            boxShadow: palette.isDark
-              ? '0 8px 24px rgba(0, 0, 0, 0.45)'
-              : '0 8px 24px rgba(15, 23, 42, 0.1)',
-            zIndex: 20,
+            borderRadius: 6,
+            boxShadow: 'none',
+            zIndex: 30,
           }}
         >
           {onEdit && (
@@ -416,14 +461,14 @@ function ListItemActions({ palette, onEdit, onDelete }: ListItemActionsProps) {
                   alignItems: 'center',
                   gap: 8,
                   width: '100%',
-                  padding: '7px 10px',
+                  padding: '6px 9px',
                   textAlign: 'left',
                   border: 'none',
-                  borderRadius: 6,
+                  borderRadius: 4,
                   background: 'transparent',
                   color: palette.text,
                   fontSize: 12,
-                  fontWeight: 500,
+                  fontWeight: 600,
                   cursor: 'pointer',
                 }}
                 onMouseEnter={(e) => {
@@ -433,8 +478,8 @@ function ListItemActions({ palette, onEdit, onDelete }: ListItemActionsProps) {
                   e.currentTarget.style.background = 'transparent'
                 }}
               >
-                <FiEdit2 size={13} />
-                <span>수정</span>
+                <FiEdit2 size={12} />
+                <span>모달 편집</span>
               </button>
             </li>
           )}
@@ -453,14 +498,14 @@ function ListItemActions({ palette, onEdit, onDelete }: ListItemActionsProps) {
                   alignItems: 'center',
                   gap: 8,
                   width: '100%',
-                  padding: '7px 10px',
+                  padding: '6px 9px',
                   textAlign: 'left',
                   border: 'none',
-                  borderRadius: 6,
+                  borderRadius: 4,
                   background: 'transparent',
                   color: palette.textSecondary,
                   fontSize: 12,
-                  fontWeight: 500,
+                  fontWeight: 600,
                   cursor: 'pointer',
                 }}
                 onMouseEnter={(e) => {
@@ -476,7 +521,7 @@ function ListItemActions({ palette, onEdit, onDelete }: ListItemActionsProps) {
                   e.currentTarget.style.color = palette.textSecondary
                 }}
               >
-                <FiTrash2 size={13} />
+                <FiTrash2 size={12} />
                 <span>삭제</span>
               </button>
             </li>
@@ -503,14 +548,14 @@ export function ListEmptyState({
   return (
     <div
       style={{
-        padding: '32px 24px',
+        padding: '28px 20px',
         textAlign: 'center',
         color: palette.textSecondary,
-        fontSize: 13,
+        fontSize: 12.5,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: 12,
+        gap: 10,
       }}
     >
       <div>{message}</div>

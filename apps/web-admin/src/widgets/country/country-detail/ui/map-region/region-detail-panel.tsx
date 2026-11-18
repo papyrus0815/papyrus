@@ -4,7 +4,7 @@ import { type RegionPalette } from './use-region-palette'
 
 interface RegionDetailPanelProps {
   palette: RegionPalette
-  /** 선택된 항목이 없을 때 보일 빈 상태 — null이면 emptyTitle/Description 사용 */
+  /** 선택된 항목이 없을 때 보일 커스텀 총람/빈 상태 */
   empty?: ReactNode
   emptyIcon?: ReactNode
   emptyTitle?: string
@@ -32,10 +32,10 @@ export function RegionDetailPanel({
       style={{
         background: palette.bg,
         border: `1px solid ${palette.border}`,
-        borderRadius: 10,
-        overflow: 'auto',
-        boxShadow: palette.shadowNone,
-        padding: 24,
+        borderRadius: 8,
+        overflow: 'hidden',
+        boxShadow: 'none',
+        padding: isSelected || !empty ? '20px 22px' : '16px 18px',
         minHeight: 0,
       }}
     >
@@ -47,27 +47,27 @@ export function RegionDetailPanel({
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              height: '100%',
-              minHeight: 320,
+              minHeight: 220,
               color: palette.textSecondary,
-              fontSize: 14,
+              fontSize: 13,
               textAlign: 'center',
+              padding: '24px 16px',
             }}
           >
             {emptyIcon && (
               <div
                 style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 10,
+                  width: 38,
+                  height: 38,
+                  borderRadius: 8,
                   background: palette.bgSecondary,
                   border: `1px solid ${palette.border}`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginBottom: 12,
+                  marginBottom: 10,
                   color: palette.textSecondary,
-                  fontSize: 20,
+                  fontSize: 18,
                 }}
               >
                 {emptyIcon}
@@ -75,14 +75,14 @@ export function RegionDetailPanel({
             )}
             <div
               style={{
-                fontWeight: 600,
+                fontWeight: 700,
                 color: palette.text,
                 marginBottom: 4,
               }}
             >
               {emptyTitle}
             </div>
-            <div>{emptyDescription}</div>
+            <div style={{ fontSize: 12.5 }}>{emptyDescription}</div>
           </div>
         )
       ) : (
@@ -93,26 +93,13 @@ export function RegionDetailPanel({
               style={{
                 display: 'grid',
                 gridTemplateColumns:
-                  'repeat(auto-fill, minmax(160px, 1fr))',
-                gap: 12,
+                  'repeat(auto-fill, minmax(156px, 1fr))',
+                gap: 10,
               }}
             >
               {children}
             </div>
           )}
-          {/* 스크롤 힌트 — 내용이 더 있으면 하단이 살짝 사라지듯 페이드.
-              내용이 짧으면 빈 배경 위 그라데이션이라 보이지 않는다. */}
-          <div
-            aria-hidden
-            style={{
-              position: 'sticky',
-              bottom: -24,
-              height: 32,
-              margin: '0 -24px -24px',
-              background: `linear-gradient(to bottom, transparent, ${palette.bg})`,
-              pointerEvents: 'none',
-            }}
-          />
         </div>
       )}
     </div>
@@ -123,37 +110,53 @@ interface RegionDetailHeaderProps {
   palette: RegionPalette
   title: string
   subtitle?: string
+  rightSlot?: ReactNode
 }
 
-/** 상세 패널 헤더 — 제목 + 부제목 (메타 그리드 위에 배치) */
+/** 상세 패널 헤더 — 제목 + 부제목 + 우측 액션 */
 export function RegionDetailHeader({
   palette,
   title,
   subtitle,
+  rightSlot,
 }: RegionDetailHeaderProps) {
   return (
-    <>
-      <h2
-        style={{
-          fontSize: 20,
-          fontWeight: 800,
-          color: palette.text,
-          margin: '0 0 8px',
-        }}
-      >
-        {title}
-      </h2>
-      {subtitle && (
-        <div
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 12,
+        paddingBottom: 14,
+        marginBottom: 14,
+        borderBottom: `1px solid ${palette.border}`,
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
+        <h2
           style={{
-            fontSize: 13,
-            color: palette.textSecondary,
-            marginBottom: 20,
+            fontSize: 19,
+            fontWeight: 800,
+            color: palette.text,
+            margin: 0,
+            letterSpacing: '-0.02em',
           }}
         >
-          {subtitle}
-        </div>
-      )}
-    </>
+          {title}
+        </h2>
+        {subtitle && (
+          <div
+            style={{
+              fontSize: 12.5,
+              color: palette.textSecondary,
+              marginTop: 4,
+            }}
+          >
+            {subtitle}
+          </div>
+        )}
+      </div>
+      {rightSlot && <div style={{ flexShrink: 0 }}>{rightSlot}</div>}
+    </div>
   )
 }

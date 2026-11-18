@@ -1,5 +1,13 @@
 import { useState } from 'react'
 
+import {
+  FiChevronDown,
+  FiChevronUp,
+  FiExternalLink,
+  FiMaximize2,
+  FiMinimize2,
+} from 'react-icons/fi'
+
 import { GoogleMap, type MapMarker } from '@/shared/ui/google-map/google-map'
 
 import { type RegionPalette } from './use-region-palette'
@@ -18,9 +26,11 @@ interface MapCardProps {
   /** 선택된 행정구역 표시명 */
   selectedDivisionName?: string | null
   onMarkerClick?: (id: string) => void
+  /** 기본 뷰포트 높이 (px) — 아틀라스 우측 상단 컴팩트 기본값 230 */
+  defaultHeight?: number
 }
 
-const DEFAULT_ZOOM = { withLocation: 12, withoutLocation: 6 }
+const DEFAULT_ZOOM = { withLocation: 11, withoutLocation: 6 }
 
 export function MapCard({
   palette,
@@ -32,8 +42,11 @@ export function MapCard({
   selectedDivisionQuery = null,
   selectedDivisionName = null,
   onMarkerClick,
+  defaultHeight = 230,
 }: MapCardProps) {
   const [viewMode, setViewMode] = useState<'auto' | 'google' | 'pins'>('auto')
+  const [expanded, setExpanded] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
 
   const useMarkers = Boolean(markers && markers.length > 0)
   const hasCountryCoords =
@@ -104,15 +117,17 @@ export function MapCard({
     }
   })()
 
+  const mapHeight = expanded ? 380 : defaultHeight
+
   return (
     <section aria-label="지도">
       <div
         style={{
           background: palette.bg,
           border: `1px solid ${palette.border}`,
-          borderRadius: 14,
+          borderRadius: 8,
           overflow: 'hidden',
-          boxShadow: palette.shadowNone,
+          boxShadow: 'none',
         }}
       >
         {/* 상단 컨트롤 헤더 */}
@@ -122,38 +137,49 @@ export function MapCard({
             alignItems: 'center',
             justifyContent: 'space-between',
             flexWrap: 'wrap',
-            gap: '8px 12px',
-            padding: '8px 14px',
+            gap: '6px 10px',
+            padding: '7px 12px',
             background: palette.bgSecondary,
-            borderBottom: `1px solid ${palette.border}`,
+            borderBottom: collapsed ? 'none' : `1px solid ${palette.border}`,
             color: palette.textSecondary,
-            fontSize: 12,
+            fontSize: 11.5,
+            fontVariantNumeric: 'tabular-nums',
           }}
         >
-          <span>
+          <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {selectedDivisionName ? (
               <>
-                선택 구역: <strong style={{ color: palette.textPrimary }}>{selectedDivisionName}</strong>
+                선택 포커스:{' '}
+                <strong style={{ color: palette.text }}>
+                  {selectedDivisionName}
+                </strong>
                 {mapLocation ? (
-                  <>
+                  <span style={{ opacity: 0.85 }}>
                     {' '}
-                    · 좌표 ({Number(mapLocation.latitude).toFixed(4)}°,{' '}
-                    {Number(mapLocation.longitude).toFixed(4)}°)
-                  </>
+                    · {Number(mapLocation.latitude).toFixed(4)}°,{' '}
+                    {Number(mapLocation.longitude).toFixed(4)}°
+                  </span>
                 ) : (
-                  <> · 중심 좌표 미등록 (구글 지도 명칭 검색 포커스)</>
+                  <span style={{ opacity: 0.85 }}> · 명칭 검색 포커스</span>
                 )}
               </>
             ) : hasAnyPinCoords ? (
               <>
-                <strong style={{ color: palette.textPrimary }}>{country.name}</strong>{' '}
-                행정구역 지도 · 좌표 보유 핀 {markers?.length ?? 0}곳
+                <strong style={{ color: palette.text }}>
+                  {country.name}
+                </strong>{' '}
+                지리 뷰포트 · 좌표 핀{' '}
+                <strong style={{ color: palette.primary }}>
+                  {markers?.length ?? (hasCountryCoords ? 1 : 0)}
+                </strong>
+                곳
               </>
             ) : (
               <>
-                구역 중심 좌표가 아직 등록되지 않아{' '}
-                <strong style={{ color: palette.textPrimary }}>{country.name}</strong>{' '}
-                검색 기준 구글 지도를 표시합니다.
+                <strong style={{ color: palette.text }}>
+                  {country.name}
+                </strong>{' '}
+                구글 지도 검색 뷰포트
               </>
             )}
           </span>
@@ -162,19 +188,19 @@ export function MapCard({
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 8,
+              gap: 6,
               marginLeft: 'auto',
             }}
           >
-            {hasAnyPinCoords && (
+            {!collapsed && hasAnyPinCoords && (
               <div
                 role="tablist"
-                aria-label="행정구역 지도 표시 모드"
+                aria-label="지도 표시 모드"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
                   padding: 2,
-                  borderRadius: 7,
+                  borderRadius: 6,
                   border: `1px solid ${palette.border}`,
                   background: palette.bg,
                 }}
@@ -182,42 +208,19 @@ export function MapCard({
                 <button
                   type="button"
                   role="tab"
-                  aria-selected={activeMode === 'google'}
-                  onClick={() => setViewMode('google')}
-                  style={{
-                    padding: '3px 9px',
-                    border: 'none',
-                    borderRadius: 5,
-                    fontSize: 11.5,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    background:
-                      activeMode === 'google'
-                        ? palette.primarySubtle
-                        : 'transparent',
-                    color:
-                      activeMode === 'google'
-                        ? palette.primary
-                        : palette.textSecondary,
-                  }}
-                >
-                  구글 지도
-                </button>
-                <button
-                  type="button"
-                  role="tab"
                   aria-selected={activeMode === 'pins'}
                   onClick={() => setViewMode('pins')}
                   style={{
-                    padding: '3px 9px',
+                    padding: '2px 8px',
                     border: 'none',
-                    borderRadius: 5,
-                    fontSize: 11.5,
+                    borderRadius: 4,
+                    fontSize: 11,
                     fontWeight: 700,
                     cursor: 'pointer',
+                    fontVariantNumeric: 'tabular-nums',
                     background:
                       activeMode === 'pins'
-                        ? palette.primarySubtle
+                        ? palette.bgSelected
                         : 'transparent',
                     color:
                       activeMode === 'pins'
@@ -227,62 +230,147 @@ export function MapCard({
                 >
                   핀 지도 ({markers?.length ?? (hasCountryCoords ? 1 : 0)})
                 </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeMode === 'google'}
+                  onClick={() => setViewMode('google')}
+                  style={{
+                    padding: '2px 8px',
+                    border: 'none',
+                    borderRadius: 4,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    background:
+                      activeMode === 'google'
+                        ? palette.bgSelected
+                        : 'transparent',
+                    color:
+                      activeMode === 'google'
+                        ? palette.primary
+                        : palette.textSecondary,
+                  }}
+                >
+                  구글 지도
+                </button>
               </div>
+            )}
+
+            {!collapsed && (
+              <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                title={expanded ? '지도 기본 높이로 축소' : '지도 크게 펼치기'}
+                aria-label={expanded ? '지도 축소' : '지도 확장'}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  height: 24,
+                  padding: '0 7px',
+                  borderRadius: 5,
+                  border: `1px solid ${palette.border}`,
+                  background: palette.bg,
+                  color: palette.textSecondary,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                {expanded ? <FiMinimize2 size={11} /> : <FiMaximize2 size={11} />}
+                <span>{expanded ? '축소' : '확장'}</span>
+              </button>
             )}
 
             <a
               href={googleEmbedSpec.externalUrl}
               target="_blank"
               rel="noopener noreferrer"
+              title="새 탭에서 Google 지도 열기"
               style={{
-                padding: '4px 9px',
-                borderRadius: 6,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                height: 24,
+                padding: '0 7px',
+                borderRadius: 5,
                 border: `1px solid ${palette.border}`,
+                background: palette.bg,
                 color: palette.textSecondary,
-                fontSize: 11.5,
+                fontSize: 11,
                 fontWeight: 600,
                 textDecoration: 'none',
                 whiteSpace: 'nowrap',
               }}
             >
-              Google 지도 크게 보기 ↗
+              <span>외부 지도</span>
+              <FiExternalLink size={11} />
             </a>
+
+            <button
+              type="button"
+              onClick={() => setCollapsed((v) => !v)}
+              title={collapsed ? '지도 펼치기' : '지도 접기'}
+              aria-label={collapsed ? '지도 펼치기' : '지도 접기'}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 24,
+                height: 24,
+                padding: 0,
+                borderRadius: 5,
+                border: `1px solid ${palette.border}`,
+                background: palette.bg,
+                color: palette.textSecondary,
+                cursor: 'pointer',
+              }}
+            >
+              {collapsed ? (
+                <FiChevronDown size={13} />
+              ) : (
+                <FiChevronUp size={13} />
+              )}
+            </button>
           </div>
         </div>
 
         {/* 지도 뷰포트 */}
-        <div style={{ height: 300 }}>
-          {activeMode === 'google' ? (
-            <iframe
-              key={googleEmbedSpec.embedUrl}
-              title={`${country.name} 구글 지도`}
-              src={googleEmbedSpec.embedUrl}
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-              allowFullScreen
-              style={{
-                width: '100%',
-                height: '100%',
-                border: 0,
-                display: 'block',
-              }}
-            />
-          ) : useMarkers && markers ? (
-            <GoogleMap
-              markers={markers}
-              selectedId={selectedMarkerId}
-              onMarkerClick={onMarkerClick}
-              zoom={zoom.withLocation}
-            />
-          ) : (
-            <GoogleMap
-              latitude={location.latitude}
-              longitude={location.longitude}
-              name={location.name}
-              zoom={mapLocation ? zoom.withLocation : zoom.withoutLocation}
-            />
-          )}
-        </div>
+        {!collapsed && (
+          <div style={{ height: mapHeight }}>
+            {activeMode === 'google' ? (
+              <iframe
+                key={googleEmbedSpec.embedUrl}
+                title={`${country.name} 구글 지도`}
+                src={googleEmbedSpec.embedUrl}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                allowFullScreen
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  border: 0,
+                  display: 'block',
+                }}
+              />
+            ) : useMarkers && markers ? (
+              <GoogleMap
+                markers={markers}
+                selectedId={selectedMarkerId}
+                onMarkerClick={onMarkerClick}
+                zoom={zoom.withLocation}
+              />
+            ) : (
+              <GoogleMap
+                latitude={location.latitude}
+                longitude={location.longitude}
+                name={location.name}
+                zoom={mapLocation ? zoom.withLocation : zoom.withoutLocation}
+              />
+            )}
+          </div>
+        )}
       </div>
     </section>
   )

@@ -1,10 +1,22 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { FiExternalLink, FiPlus } from 'react-icons/fi'
+import {
+  FiBarChart2,
+  FiCheck,
+  FiExternalLink,
+  FiMoreHorizontal,
+  FiPlus,
+} from 'react-icons/fi'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import {
+  ledgerElevated,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+} from '@/entities/event/ui/ledger-tokens'
 import { useHistoricalCountriesByModernCountry } from '@/features/country/api/use-historical-countries-by-modern-country.hook'
 import { useConstituentHistoricalPolities } from '@/features/government-info/model/use-constituent-historical-polities'
 import { GovernmentMilitaryTab } from '@/features/government-info/ui/government-military-tab.widget'
@@ -15,7 +27,7 @@ import {
   administrationDepartmentsByHistoricalCountryQueryKey,
 } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { pathKeys } from '@/shared/router'
-import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
+import { AddButton } from '@/shared/ui/section-page-layout'
 import {
   UnderlineTabBadge,
   UnderlineTabButton,
@@ -25,7 +37,7 @@ import {
 import * as DashboardStyles from './country-detail-dashboard.styles'
 import {
   countryTabCanvasPadding,
-  LedgerToolbarButton,
+  LedgerIconButton,
 } from './country-ledger-primitives'
 import { CountryMilitaryWarsPanel } from './country-military-wars-panel'
 import { MilitaryUnitFormModal } from './military-unit-form.modal'
@@ -81,6 +93,19 @@ export function CountryMilitarySection({
   const [militaryBranchDefault, setMilitaryBranchDefault] = useState<
     string | null
   >(null)
+  const [showHeadlineStats, setShowHeadlineStats] = useState(false)
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
+
+  useEffect(() => {
+    if (!headerMenuOpen) return
+    const handlePointerDown = (evt: MouseEvent) => {
+      const target = evt.target as HTMLElement | null
+      if (target?.closest('[data-country-military-menu]')) return
+      setHeaderMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [headerMenuOpen])
 
   useEffect(() => {
     if (unitIdQuery) {
@@ -142,7 +167,7 @@ export function CountryMilitarySection({
         )
         const dedup = new Map<string, MilitaryUnit>()
         for (const batch of results) {
-          for (const u of batch) dedup.set(u.id, u)
+          for (const unitItem of batch) dedup.set(unitItem.id, unitItem)
         }
         return [...dedup.values()]
       }
@@ -154,7 +179,7 @@ export function CountryMilitarySection({
       ])
       const dedup = new Map<string, MilitaryUnit>()
       for (const batch of results) {
-        for (const u of batch) dedup.set(u.id, u)
+        for (const unitItem of batch) dedup.set(unitItem.id, unitItem)
       }
       return [...dedup.values()]
     },
@@ -203,16 +228,16 @@ export function CountryMilitarySection({
     let commanderTenures = 0
     let orbatDeployments = 0
 
-    for (const u of units) {
-      if (u.unitType && HIGH_AND_OPERATIONAL_TYPES.has(u.unitType)) {
+    for (const unitItem of units) {
+      if (unitItem.unitType && HIGH_AND_OPERATIONAL_TYPES.has(unitItem.unitType)) {
         highCommandAndOps += 1
       }
-      const tCount = u.tenures?.length ?? 0
-      const legacyCount = (u.commanders ?? []).filter(
-        (c) => !c.tenureId,
+      const tCount = unitItem.tenures?.length ?? 0
+      const legacyCount = (unitItem.commanders ?? []).filter(
+        (cmdItem) => !cmdItem.tenureId,
       ).length
       commanderTenures += tCount + legacyCount
-      orbatDeployments += u.sideDeployedUnits?.length ?? 0
+      orbatDeployments += unitItem.sideDeployedUnits?.length ?? 0
     }
 
     const milEvents = militaryEventsSummaryQuery.data ?? []
@@ -256,170 +281,212 @@ export function CountryMilitarySection({
   return (
     <>
       <SectionCanvas aria-label="군사 사령부 및 전쟁사">
-        <SectionTabHeader
-          variant="plain"
-          title="군사 · 전력"
-          description={`${country.name}의 최고통수기구·야전 편제 지휘 계통, 역대 지휘관 재임, 참전 전쟁·전투 기록을 통합 조회합니다.`}
-          rightSlot={
-            <HeaderActions>
-              <LedgerToolbarButton
+        <HeaderBar>
+          <UnderlineTabNav aria-label="군사 하위 지면" style={{ flex: 1, borderBottom: 'none' }}>
+            <UnderlineTabButton
+              type="button"
+              $active={subQuery === 'units'}
+              onClick={() => handleSubTabChange('units')}
+            >
+              <span>편제 · 사령부</span>
+              <UnderlineTabBadge $active={subQuery === 'units'}>
+                {headlineStats.totalUnits.toLocaleString('ko-KR')}
+              </UnderlineTabBadge>
+            </UnderlineTabButton>
+            <UnderlineTabButton
+              type="button"
+              $active={subQuery === 'wars'}
+              onClick={() => handleSubTabChange('wars')}
+            >
+              <span>전쟁 · 참전사</span>
+              <UnderlineTabBadge $active={subQuery === 'wars'}>
+                {headlineStats.totalMilitaryEvents.toLocaleString('ko-KR')}
+              </UnderlineTabBadge>
+            </UnderlineTabButton>
+          </UnderlineTabNav>
+
+          <HeaderActions data-country-military-menu>
+            {subQuery === 'wars' ? (
+              <AddButton
                 type="button"
-                onClick={() =>
-                  navigate(
-                    `${pathKeys.military()}?country=${encodeURIComponent(country.name)}`,
-                  )
-                }
+                onClick={() => navigate(pathKeys.events.create())}
               >
-                <FiExternalLink size={14} />
-                군사 카탈로그
-              </LedgerToolbarButton>
-              {subQuery === 'wars' ? (
-                <AddButton
-                  type="button"
-                  onClick={() => navigate(pathKeys.events.create())}
-                >
-                  <FiPlus size={14} /> 군사 사건 등록
-                </AddButton>
-              ) : (
-                <AddButton
-                  type="button"
-                  onClick={() => {
-                    setMilitaryUnitEditingId(null)
-                    setMilitaryDeptDefaultId(null)
-                    setMilitaryParentDefaultId(null)
-                    setMilitaryHistCountryDefaultId(
-                      isHistorical ? country.id : null,
-                    )
-                    setMilitaryBranchDefault(null)
-                    setMilitaryUnitModalOpen(true)
-                  }}
-                >
-                  <FiPlus size={14} /> 사령부·부대 등록
-                </AddButton>
-              )}
-            </HeaderActions>
-          }
-        />
+                <FiPlus size={14} /> 군사 사건 등록
+              </AddButton>
+            ) : (
+              <AddButton
+                type="button"
+                onClick={() => {
+                  setMilitaryUnitEditingId(null)
+                  setMilitaryDeptDefaultId(null)
+                  setMilitaryParentDefaultId(null)
+                  setMilitaryHistCountryDefaultId(
+                    isHistorical ? country.id : null,
+                  )
+                  setMilitaryBranchDefault(null)
+                  setMilitaryUnitModalOpen(true)
+                }}
+              >
+                <FiPlus size={14} /> 사령부·부대 등록
+              </AddButton>
+            )}
 
-        <DashboardStyles.SectionHeadlineStrip aria-label="군사 전력 요약 지표">
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              전체 사령부 · 편제
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue
-              $muted={headlineStats.totalUnits === 0}
-            >
-              {headlineStats.totalUnits > 0 ? (
-                <>
-                  {headlineStats.totalUnits.toLocaleString('ko-KR')}
-                  <DashboardStyles.SectionHeadlineUnit>
-                    개
-                  </DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '미등록'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {isHistorical
-                ? '본국 및 구성 정치체 편제 합산'
-                : '현대 직속 및 전신 역사국가 편제 합산'}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
+            <HeaderMenuWrap>
+              <LedgerIconButton
+                type="button"
+                aria-label="군사 화면 설정 및 이동 메뉴"
+                aria-expanded={headerMenuOpen}
+                title="요약 지표 표시 · 군사 카탈로그 이동"
+                onClick={() => setHeaderMenuOpen((prev) => !prev)}
+              >
+                <FiMoreHorizontal size={16} />
+              </LedgerIconButton>
 
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              상급지휘부 · 작전제대
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue
-              $muted={headlineStats.highCommandAndOps === 0}
-            >
-              {headlineStats.highCommandAndOps > 0 ? (
-                <>
-                  {headlineStats.highCommandAndOps.toLocaleString('ko-KR')}
-                  <DashboardStyles.SectionHeadlineUnit>
-                    개
-                  </DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '없음'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              최고사령부 · 참모본부 · 집단군 · 야전군 · 함대 · 군단
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
+              {headerMenuOpen ? (
+                <HeaderDropdownMenu role="menu">
+                  <HeaderDropdownItem
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setShowHeadlineStats((prev) => !prev)
+                      setHeaderMenuOpen(false)
+                    }}
+                  >
+                    <FiBarChart2 size={13} />
+                    <span>요약 지표 카드 표시</span>
+                    {showHeadlineStats ? (
+                      <FiCheck size={13} style={{ marginLeft: 'auto' }} />
+                    ) : null}
+                  </HeaderDropdownItem>
+                  <HeaderDropdownItem
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setHeaderMenuOpen(false)
+                      if (subQuery === 'wars') {
+                        setMilitaryUnitEditingId(null)
+                        setMilitaryDeptDefaultId(null)
+                        setMilitaryParentDefaultId(null)
+                        setMilitaryHistCountryDefaultId(
+                          isHistorical ? country.id : null,
+                        )
+                        setMilitaryBranchDefault(null)
+                        setMilitaryUnitModalOpen(true)
+                      } else {
+                        navigate(pathKeys.events.create())
+                      }
+                    }}
+                  >
+                    <FiPlus size={13} />
+                    <span>
+                      {subQuery === 'wars'
+                        ? '사령부·부대 등록'
+                        : '군사 사건 등록'}
+                    </span>
+                  </HeaderDropdownItem>
+                  <HeaderDropdownDivider />
+                  <HeaderDropdownItem
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setHeaderMenuOpen(false)
+                      navigate(
+                        `${pathKeys.military()}?country=${encodeURIComponent(country.name)}`,
+                      )
+                    }}
+                  >
+                    <FiExternalLink size={13} />
+                    <span>전체 군사 카탈로그에서 보기</span>
+                  </HeaderDropdownItem>
+                </HeaderDropdownMenu>
+              ) : null}
+            </HeaderMenuWrap>
+          </HeaderActions>
+        </HeaderBar>
 
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              역대 지휘관 · 참모
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue
-              $muted={headlineStats.commanderTenures === 0}
-            >
-              {headlineStats.commanderTenures > 0 ? (
-                <>
-                  {headlineStats.commanderTenures.toLocaleString('ko-KR')}
-                  <DashboardStyles.SectionHeadlineUnit>
-                    건
-                  </DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '미등록'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              사령관 · 참모총장 · 부대장 보직 재임 기록
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
+        {showHeadlineStats ? (
+          <DashboardStyles.SectionHeadlineStrip aria-label="군사 전력 요약 지표">
+            <DashboardStyles.SectionHeadlineCell>
+              <DashboardStyles.SectionHeadlineLabel>
+                전체 사령부 · 편제
+              </DashboardStyles.SectionHeadlineLabel>
+              <DashboardStyles.SectionHeadlineValue
+                $muted={headlineStats.totalUnits === 0}
+              >
+                {headlineStats.totalUnits > 0 ? (
+                  <>
+                    {headlineStats.totalUnits.toLocaleString('ko-KR')}
+                    <DashboardStyles.SectionHeadlineUnit>
+                      개
+                    </DashboardStyles.SectionHeadlineUnit>
+                  </>
+                ) : (
+                  '미등록'
+                )}
+              </DashboardStyles.SectionHeadlineValue>
+            </DashboardStyles.SectionHeadlineCell>
 
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              참전 · 관여 군사사건
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue
-              $muted={headlineStats.totalMilitaryEvents === 0}
-            >
-              {headlineStats.totalMilitaryEvents > 0 ? (
-                <>
-                  {headlineStats.totalMilitaryEvents.toLocaleString('ko-KR')}
-                  <DashboardStyles.SectionHeadlineUnit>
-                    건
-                  </DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '없음'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              전쟁 {headlineStats.warCount}건 · 부대 전투투입{' '}
-              {headlineStats.orbatDeployments}회
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
-        </DashboardStyles.SectionHeadlineStrip>
+            <DashboardStyles.SectionHeadlineCell>
+              <DashboardStyles.SectionHeadlineLabel>
+                상급지휘부 · 작전제대
+              </DashboardStyles.SectionHeadlineLabel>
+              <DashboardStyles.SectionHeadlineValue
+                $muted={headlineStats.highCommandAndOps === 0}
+              >
+                {headlineStats.highCommandAndOps > 0 ? (
+                  <>
+                    {headlineStats.highCommandAndOps.toLocaleString('ko-KR')}
+                    <DashboardStyles.SectionHeadlineUnit>
+                      개
+                    </DashboardStyles.SectionHeadlineUnit>
+                  </>
+                ) : (
+                  '없음'
+                )}
+              </DashboardStyles.SectionHeadlineValue>
+            </DashboardStyles.SectionHeadlineCell>
 
-        <UnderlineTabNav aria-label="군사 하위 지면">
-          <UnderlineTabButton
-            type="button"
-            $active={subQuery === 'units'}
-            onClick={() => handleSubTabChange('units')}
-          >
-            <span>편제 · 사령부</span>
-            <UnderlineTabBadge $active={subQuery === 'units'}>
-              {headlineStats.totalUnits.toLocaleString('ko-KR')}
-            </UnderlineTabBadge>
-          </UnderlineTabButton>
-          <UnderlineTabButton
-            type="button"
-            $active={subQuery === 'wars'}
-            onClick={() => handleSubTabChange('wars')}
-          >
-            <span>전쟁 · 참전사</span>
-            <UnderlineTabBadge $active={subQuery === 'wars'}>
-              {headlineStats.totalMilitaryEvents.toLocaleString('ko-KR')}
-            </UnderlineTabBadge>
-          </UnderlineTabButton>
-        </UnderlineTabNav>
+            <DashboardStyles.SectionHeadlineCell>
+              <DashboardStyles.SectionHeadlineLabel>
+                역대 지휘관 · 참모
+              </DashboardStyles.SectionHeadlineLabel>
+              <DashboardStyles.SectionHeadlineValue
+                $muted={headlineStats.commanderTenures === 0}
+              >
+                {headlineStats.commanderTenures > 0 ? (
+                  <>
+                    {headlineStats.commanderTenures.toLocaleString('ko-KR')}
+                    <DashboardStyles.SectionHeadlineUnit>
+                      건
+                    </DashboardStyles.SectionHeadlineUnit>
+                  </>
+                ) : (
+                  '미등록'
+                )}
+              </DashboardStyles.SectionHeadlineValue>
+            </DashboardStyles.SectionHeadlineCell>
+
+            <DashboardStyles.SectionHeadlineCell>
+              <DashboardStyles.SectionHeadlineLabel>
+                참전 · 관여 군사사건
+              </DashboardStyles.SectionHeadlineLabel>
+              <DashboardStyles.SectionHeadlineValue
+                $muted={headlineStats.totalMilitaryEvents === 0}
+              >
+                {headlineStats.totalMilitaryEvents > 0 ? (
+                  <>
+                    {headlineStats.totalMilitaryEvents.toLocaleString('ko-KR')}
+                    <DashboardStyles.SectionHeadlineUnit>
+                      건
+                    </DashboardStyles.SectionHeadlineUnit>
+                  </>
+                ) : (
+                  '없음'
+                )}
+              </DashboardStyles.SectionHeadlineValue>
+            </DashboardStyles.SectionHeadlineCell>
+          </DashboardStyles.SectionHeadlineStrip>
+        ) : null}
 
         {subQuery === 'wars' ? (
           <CountryMilitaryWarsPanel
@@ -513,12 +580,22 @@ export function CountryMilitarySection({
 const SectionCanvas = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
   ${countryTabCanvasPadding}
   min-height: calc(100vh - 200px);
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
+`
+
+const HeaderBar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  padding-bottom: 2px;
 `
 
 const HeaderActions = styled.div`
@@ -527,3 +604,52 @@ const HeaderActions = styled.div`
   gap: 8px;
   flex-wrap: wrap;
 `
+
+const HeaderMenuWrap = styled.div`
+  position: relative;
+  display: inline-flex;
+`
+
+const HeaderDropdownMenu = styled.div`
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 45;
+  min-width: 210px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerElevated(theme.mode)};
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
+const HeaderDropdownItem = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+`
+
+const HeaderDropdownDivider = styled.div`
+  height: 1px;
+  margin: 4px;
+  background: ${({ theme }) => ledgerHairline(theme.mode)};
+`
+

@@ -64,6 +64,7 @@ import {
 import { CountryDetailHeader } from './country-detail-header.widget'
 import * as TabStyles from './overview-sub-tabs.styles'
 import * as DashboardStyles from './country-detail-dashboard.styles'
+import { SectionTabHeader } from '@/shared/ui/section-page-layout'
 import { UnderlineTabButton } from '@/shared/ui/underline-tabs'
 import {
   historicalCountryKeys,
@@ -1424,15 +1425,12 @@ function HistoricalRegionsSection({ country }: { country: UnifiedCountry }) {
   } | null>(null)
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 24,
-        padding: '28px 32px 48px',
-        minHeight: 'calc(100vh - 300px)',
-      }}
-    >
+    <HistoricalRegionsPane>
+      <SectionTabHeader
+        variant="plain"
+        title="행정구역 · 강역 편제"
+        description="시기별 행정구역 체계(도·주·부·목·군·현)와 치소 좌표, 개편 계보를 인포그래픽과 계층 트리로 탐색합니다."
+      />
       <MapRegionAdministrativeView
         country={{
           id: country.id,
@@ -1454,9 +1452,17 @@ function HistoricalRegionsSection({ country }: { country: UnifiedCountry }) {
           })
         }}
       />
-    </div>
+    </HistoricalRegionsPane>
   )
 }
+
+const HistoricalRegionsPane = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 24px 32px;
+  min-height: calc(100vh - 300px);
+`
 
 /* 역사 국가의 행정조직 탭 = 정체 + 안내 한 줄 */
 const HistoricalGovernmentPane = styled.div`

@@ -1,11 +1,21 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
+import styled from 'styled-components'
+
+import {
+  type AdministrativeDivision,
+  useAdministrativeDivisions,
+} from '@/entities/country/api.administrative-divisions'
+import { useInfrastructures } from '@/entities/country/api.infrastructure'
+import { useNaturalFeatures } from '@/entities/country/api.natural-feature'
+import { DIGIT_DISPLAY } from '@/entities/event/ui/ledger-tokens'
 import { SectionTabHeader } from '@/shared/ui/section-page-layout'
 import {
   UnderlineTabButton,
   UnderlineTabNav,
 } from '@/shared/ui/underline-tabs'
 
+import { countryTabCanvasPadding } from './country-ledger-primitives'
 import { MapRegionAdministrativeView } from './map-region-administrative-view'
 import { MapRegionInfrastructureView } from './map-region-infrastructure-view'
 import { MapRegionNatureView } from './map-region-nature-view'
@@ -33,9 +43,34 @@ interface MapRegionSectionProps {
   }) => void
 }
 
+function countDivisionTree(nodes: AdministrativeDivision[]): number {
+  let total = 0
+  for (const node of nodes) {
+    total += 1
+    if (node.children?.length) total += countDivisionTree(node.children)
+  }
+  return total
+}
+
+const SectionCanvas = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  ${countryTabCanvasPadding}
+  min-height: calc(100vh - 200px);
+  position: relative;
+`
+
+const TabCount = styled.span<{ $active?: boolean }>`
+  margin-left: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  opacity: ${({ $active }) => ($active ? 0.95 : 0.65)};
+  ${DIGIT_DISPLAY}
+`
+
 /**
- * 지도 & 행정구역 섹션 — 보기 전환 탭 + 모드별 뷰 위임.
- * 개수 통계는 각 뷰의 KPI 스트립이 담당한다 (상단 중복 stat 바 제거).
+ * 지도 & 행정구역 섹션 — 보기 전환 탭(건수 배지) + 모드별 Event-Ledger 아틀라스 뷰 위임.
  */
 export function MapRegionSection({
   country,
@@ -44,21 +79,22 @@ export function MapRegionSection({
 }: MapRegionSectionProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('administrative')
 
+  // 하위 뷰와 동일한 React Query 캐시 키를 공유하여 추가 요청 없이 탭 건수 표시
+  const { data: divisions = [] } = useAdministrativeDivisions(country.id, null)
+  const { data: natureItems = [] } = useNaturalFeatures(country.id)
+  const { data: infraItems = [] } = useInfrastructures(country.id)
+
+  const divisionTotal = useMemo(
+    () => countDivisionTree(divisions),
+    [divisions],
+  )
+
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 20,
-        padding: '20px clamp(20px, 2.5vw, 32px) 48px',
-        minHeight: 'calc(100vh - 200px)',
-        position: 'relative',
-      }}
-    >
+    <SectionCanvas>
       <SectionTabHeader
         variant="plain"
-        title="행정구역"
-        description="행정구역, 자연 지리, 인프라를 지도와 목록으로 확인할 수 있습니다."
+        title="행정구역 · 지리"
+        description="행정구역 계층 편제와 시기별 개편 체계, 자연 지형, 국가 기간시설을 인포그래픽과 지도로 탐색합니다."
       />
 
       <UnderlineTabNav
@@ -74,6 +110,11 @@ export function MapRegionSection({
           onClick={() => setViewMode('administrative')}
         >
           행정구역
+          {divisionTotal > 0 && (
+            <TabCount $active={viewMode === 'administrative'}>
+              {divisionTotal.toLocaleString('ko-KR')}
+            </TabCount>
+          )}
         </UnderlineTabButton>
         <UnderlineTabButton
           type="button"
@@ -83,6 +124,11 @@ export function MapRegionSection({
           onClick={() => setViewMode('nature')}
         >
           자연 지리
+          {natureItems.length > 0 && (
+            <TabCount $active={viewMode === 'nature'}>
+              {natureItems.length.toLocaleString('ko-KR')}
+            </TabCount>
+          )}
         </UnderlineTabButton>
         <UnderlineTabButton
           type="button"
@@ -92,6 +138,11 @@ export function MapRegionSection({
           onClick={() => setViewMode('infrastructure')}
         >
           인프라
+          {infraItems.length > 0 && (
+            <TabCount $active={viewMode === 'infrastructure'}>
+              {infraItems.length.toLocaleString('ko-KR')}
+            </TabCount>
+          )}
         </UnderlineTabButton>
       </UnderlineTabNav>
 
@@ -106,6 +157,6 @@ export function MapRegionSection({
       {viewMode === 'infrastructure' && (
         <MapRegionInfrastructureView country={country} />
       )}
-    </div>
+    </SectionCanvas>
   )
 }

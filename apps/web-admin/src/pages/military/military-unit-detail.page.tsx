@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -18,6 +18,7 @@ import {
   FiGrid,
   FiList,
   FiMapPin,
+  FiMoreHorizontal,
   FiPlus,
   FiSearch,
   FiShield,
@@ -82,6 +83,11 @@ import {
   InstitutionAppointmentModal,
 } from '@/shared/ui/institution-appointment-modal'
 import { notify } from '@/shared/ui/toast'
+import {
+  UnderlineTabBadge,
+  UnderlineTabButton,
+  UnderlineTabNav,
+} from '@/shared/ui/underline-tabs'
 import {
   LedgerCompactAction,
   LedgerIconButton,
@@ -386,10 +392,10 @@ function formatStructuredEventSpan(ev: {
       mo != null && dy != null ? `.${String(dy).padStart(2, '0')}` : ''
     return `${prefix}${yr}${mPart}${dPart}`
   }
-  const s = fmtPoint(ev.startEra, ev.startYear, ev.startMonth, ev.startDay)
-  const e = fmtPoint(ev.endEra, ev.endYear, ev.endMonth, ev.endDay)
-  if (s && e && s !== e) return `${s} ~ ${e}`
-  return s ?? e ?? '연도 미상'
+  const startPoint = fmtPoint(ev.startEra, ev.startYear, ev.startMonth, ev.startDay)
+  const endPoint = fmtPoint(ev.endEra, ev.endYear, ev.endMonth, ev.endDay)
+  if (startPoint && endPoint && startPoint !== endPoint) return `${startPoint} ~ ${endPoint}`
+  return startPoint ?? endPoint ?? '연도 미상'
 }
 
 export function MilitaryUnitDetailPage() {
@@ -458,6 +464,24 @@ export function MilitaryUnitDetailPage() {
   )
   const [commanderSearch, setCommanderSearch] = useState('')
   const [commanderSort, setCommanderSort] = useState<'asc' | 'desc'>('asc')
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'commanders' | 'operations'
+  >('overview')
+  const [showMapPreview, setShowMapPreview] = useState(false)
+  const [topMenuOpen, setTopMenuOpen] = useState(false)
+  const [openRowMenuKey, setOpenRowMenuKey] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!topMenuOpen && !openRowMenuKey) return
+    const handlePointerDown = (mouseEvent: MouseEvent) => {
+      const targetEl = mouseEvent.target as HTMLElement | null
+      if (targetEl?.closest('[data-detail-more-menu]')) return
+      setTopMenuOpen(false)
+      setOpenRowMenuKey(null)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [topMenuOpen, openRowMenuKey])
 
   const detailQuery = useQuery({
     queryKey: ['military-unit', 'detail', unitId],
@@ -542,11 +566,11 @@ export function MilitaryUnitDetailPage() {
 
   const sortedSubUnits = useMemo(() => {
     const subs = unit?.subUnits ?? []
-    return [...subs].sort((a, b) => {
-      const rA = a.unitType ? (ECHELON_ORDER[a.unitType] ?? 50) : 50
-      const rB = b.unitType ? (ECHELON_ORDER[b.unitType] ?? 50) : 50
+    return [...subs].sort((leftUnit, rightUnit) => {
+      const rA = leftUnit.unitType ? (ECHELON_ORDER[leftUnit.unitType] ?? 50) : 50
+      const rB = rightUnit.unitType ? (ECHELON_ORDER[rightUnit.unitType] ?? 50) : 50
       if (rA !== rB) return rA - rB
-      return a.name.localeCompare(b.name, 'ko')
+      return leftUnit.name.localeCompare(rightUnit.name, 'ko')
     })
   }, [unit?.subUnits])
 
@@ -575,11 +599,11 @@ export function MilitaryUnitDetailPage() {
       map.set(item.parentUnitId, bucket)
     }
     for (const bucket of map.values()) {
-      bucket.sort((a, b) => {
-        const rA = a.unitType ? (ECHELON_ORDER[a.unitType] ?? 50) : 50
-        const rB = b.unitType ? (ECHELON_ORDER[b.unitType] ?? 50) : 50
+      bucket.sort((leftUnit, rightUnit) => {
+        const rA = leftUnit.unitType ? (ECHELON_ORDER[leftUnit.unitType] ?? 50) : 50
+        const rB = rightUnit.unitType ? (ECHELON_ORDER[rightUnit.unitType] ?? 50) : 50
         if (rA !== rB) return rA - rB
-        return a.name.localeCompare(b.name, 'ko')
+        return leftUnit.name.localeCompare(rightUnit.name, 'ko')
       })
     }
     return map
@@ -1204,64 +1228,16 @@ export function MilitaryUnitDetailPage() {
               <FiArrowLeft size={14} /> 군사 총람
             </LedgerToolbarButton>
           ) : (
-            <>
-              <LedgerToolbarButton
-                type="button"
-                onClick={() => goBackOr(navigate, pathKeys.military())}
-              >
-                <FiArrowLeft size={14} /> 이전 화면
-              </LedgerToolbarButton>
-              <LedgerToolbarButton
-                type="button"
-                onClick={() => navigate(pathKeys.military())}
-              >
-                <FiShield size={13} /> 군사 총람
-              </LedgerToolbarButton>
-            </>
-          )}
-          {countryName && countryIdForLink ? (
             <LedgerToolbarButton
               type="button"
-              onClick={() =>
-                navigate(pathKeys.countryMilitary(countryIdForLink, unit.id))
-              }
+              onClick={() => goBackOr(navigate, pathKeys.military())}
             >
-              <FiGlobe size={13} />
-              <span>{countryName} 군사 탭</span>
-              <FiArrowUpRight size={13} />
+              <FiArrowLeft size={14} /> 이전 화면
             </LedgerToolbarButton>
-          ) : null}
+          )}
         </TopBarLeft>
 
-        <TopBarRight>
-          <LedgerToolbarButton
-            type="button"
-            onClick={() => {
-              setUnitFormEditingId(null)
-              setUnitFormDefaults({
-                parentUnitId: unit.id,
-                countryId: unit.countryId ?? null,
-                historicalCountryId: unit.historicalCountryId ?? null,
-                administrationDepartmentId:
-                  unit.administrationDepartmentId ??
-                  unit.administrationDepartment?.id ??
-                  null,
-                branch: unit.branch ?? null,
-              })
-              setUnitFormOpen(true)
-            }}
-          >
-            <FiPlus size={14} /> 예하 부대 추가
-          </LedgerToolbarButton>
-          <LedgerToolbarButton
-            type="button"
-            onClick={() => {
-              setEditingTenure(null)
-              setAppointmentOpen(true)
-            }}
-          >
-            <FiUser size={14} /> 지휘관·참모 임명
-          </LedgerToolbarButton>
+        <TopBarRight data-detail-more-menu>
           <LedgerToolbarButton
             type="button"
             onClick={() => {
@@ -1272,14 +1248,121 @@ export function MilitaryUnitDetailPage() {
           >
             <FiEdit2 size={13} /> 수정
           </LedgerToolbarButton>
-          <LedgerCompactAction
-            type="button"
-            $danger
-            onClick={() => void handleDeleteUnit()}
-            style={{ height: 34, padding: '0 11px', borderRadius: 8 }}
-          >
-            <FiTrash2 size={13} /> 삭제
-          </LedgerCompactAction>
+
+          <MoreMenuWrap>
+            <LedgerIconButton
+              type="button"
+              aria-expanded={topMenuOpen}
+              aria-label="부대 관리 및 설정 메뉴"
+              title="예하 부대 추가 · 지휘관 임명 · 계보 · 삭제"
+              onClick={() => setTopMenuOpen((prev) => !prev)}
+            >
+              <FiMoreHorizontal size={16} />
+            </LedgerIconButton>
+
+            {topMenuOpen ? (
+              <MoreDropdownMenu role="menu">
+                <MoreDropdownItem
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setTopMenuOpen(false)
+                    setUnitFormEditingId(null)
+                    setUnitFormDefaults({
+                      parentUnitId: unit.id,
+                      countryId: unit.countryId ?? null,
+                      historicalCountryId: unit.historicalCountryId ?? null,
+                      administrationDepartmentId:
+                        unit.administrationDepartmentId ??
+                        unit.administrationDepartment?.id ??
+                        null,
+                      branch: unit.branch ?? null,
+                    })
+                    setUnitFormOpen(true)
+                  }}
+                >
+                  <FiPlus size={13} />
+                  <span>예하 부대 추가</span>
+                </MoreDropdownItem>
+                <MoreDropdownItem
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setTopMenuOpen(false)
+                    setEditingTenure(null)
+                    setAppointmentOpen(true)
+                  }}
+                >
+                  <FiUser size={13} />
+                  <span>지휘관 · 참모 임명</span>
+                </MoreDropdownItem>
+                <MoreDropdownItem
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setTopMenuOpen(false)
+                    setActiveTab('overview')
+                    setAddTransitionOpen(true)
+                  }}
+                >
+                  <FiGitCommit size={13} />
+                  <span>조직 개편 계보 추가</span>
+                </MoreDropdownItem>
+                <MoreDropdownItem
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setTopMenuOpen(false)
+                    setActiveTab('operations')
+                    setEventPickerOpen(true)
+                  }}
+                >
+                  <FiCompass size={13} />
+                  <span>사건 · 지령 연결</span>
+                </MoreDropdownItem>
+                <MoreDropdownDivider />
+                {countryName && countryIdForLink ? (
+                  <MoreDropdownItem
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setTopMenuOpen(false)
+                      navigate(
+                        pathKeys.countryMilitary(countryIdForLink, unit.id),
+                      )
+                    }}
+                  >
+                    <FiGlobe size={13} />
+                    <span>{countryName} 군사 탭 열기</span>
+                  </MoreDropdownItem>
+                ) : null}
+                <MoreDropdownItem
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setTopMenuOpen(false)
+                    navigate(pathKeys.military())
+                  }}
+                >
+                  <FiShield size={13} />
+                  <span>군사 총람 전체 보기</span>
+                </MoreDropdownItem>
+                <MoreDropdownDivider />
+                <MoreDropdownItem
+                  type="button"
+                  role="menuitem"
+                  $danger
+                  onClick={() => {
+                    setTopMenuOpen(false)
+                    void handleDeleteUnit()
+                  }}
+                >
+                  <FiTrash2 size={13} />
+                  <span>부대 삭제</span>
+                </MoreDropdownItem>
+              </MoreDropdownMenu>
+            ) : null}
+          </MoreMenuWrap>
         </TopBarRight>
       </TopBar>
 
@@ -1399,17 +1482,36 @@ export function MilitaryUnitDetailPage() {
               <FiMapPin size={11.5} /> 주둔지 · 병력 규모
             </SpecLabel>
             <SpecValue>
-              {[
-                unit.garrison ? unit.garrison : null,
-                unit.strength ? `규모 ${unit.strength}` : null,
-              ]
-                .filter(Boolean)
-                .join(' · ') || <MutedSpan>미등록</MutedSpan>}
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 6,
+                }}
+              >
+                <span>
+                  {[
+                    unit.garrison ? unit.garrison : null,
+                    unit.strength ? `규모 ${unit.strength}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || <MutedSpan>미등록</MutedSpan>}
+                </span>
+                {unit.garrison?.trim() ? (
+                  <LedgerCompactAction
+                    type="button"
+                    onClick={() => setShowMapPreview((prev) => !prev)}
+                  >
+                    {showMapPreview ? '지도 닫기' : '지도 보기'}
+                  </LedgerCompactAction>
+                ) : null}
+              </span>
             </SpecValue>
           </SpecCell>
         </SpecStrip>
 
-        {unit.garrison?.trim() ? (
+        {showMapPreview && unit.garrison?.trim() ? (
           <MapPreviewSection>
             <HeadquartersMapPreview
               headquarters={unit.garrison}
@@ -1419,24 +1521,44 @@ export function MilitaryUnitDetailPage() {
             />
           </MapPreviewSection>
         ) : null}
-
-        {contextMetaCards.length > 0 ? (
-          <ContextMetaGrid>
-            {contextMetaCards.map((card) => (
-              <ContextMetaCard key={card.label}>
-                <ContextMetaLabel>{card.label}</ContextMetaLabel>
-                <ContextMetaBody>{card.body}</ContextMetaBody>
-              </ContextMetaCard>
-            ))}
-          </ContextMetaGrid>
-        ) : null}
-
-        {unit.description ? (
-          <DescriptionProse>{unit.description}</DescriptionProse>
-        ) : null}
       </LedgerSection>
 
+      <UnderlineTabNav aria-label="부대 상세 지면">
+        <UnderlineTabButton
+          type="button"
+          $active={activeTab === 'overview'}
+          onClick={() => setActiveTab('overview')}
+        >
+          <span>편제 · 계보</span>
+          <UnderlineTabBadge $active={activeTab === 'overview'}>
+            {sortedSubUnits.length + predecessors.length + successors.length}
+          </UnderlineTabBadge>
+        </UnderlineTabButton>
+        <UnderlineTabButton
+          type="button"
+          $active={activeTab === 'commanders'}
+          onClick={() => setActiveTab('commanders')}
+        >
+          <span>역대 지휘관</span>
+          <UnderlineTabBadge $active={activeTab === 'commanders'}>
+            {totalCommanderCount}
+          </UnderlineTabBadge>
+        </UnderlineTabButton>
+        <UnderlineTabButton
+          type="button"
+          $active={activeTab === 'operations'}
+          onClick={() => setActiveTab('operations')}
+        >
+          <span>참전 · 작전 · 지령</span>
+          <UnderlineTabBadge $active={activeTab === 'operations'}>
+            {deployments.length + eventRelations.length}
+          </UnderlineTabBadge>
+        </UnderlineTabButton>
+      </UnderlineTabNav>
+
       {/* 1. 지휘 계통 · 예하 편제 + 개편 계보 */}
+      {activeTab === 'overview' && (
+        <>
       <LedgerSection>
         <SectionHead>
           <SectionHeadTitle>
@@ -1534,7 +1656,7 @@ export function MilitaryUnitDetailPage() {
             successors.length === 0 &&
             !addTransitionOpen ? (
               <MutedLine>
-                등록된 전신·후신 개편 계보가 없습니다. (예: 제국전쟁부 → 국방군 최고사령부, 제2기갑집단 → 제2기갑군)
+                등록된 전신·후신 개편 계보가 없습니다. (예: 전쟁부 → 국방군 최고사령부, 제2기갑집단 → 제2기갑군)
               </MutedLine>
             ) : null}
 
@@ -1564,6 +1686,8 @@ export function MilitaryUnitDetailPage() {
                     TRANSITION_KIND_LABELS[item.kind] ?? item.kind
                   const isEditingThis =
                     editingTransitionId === item.transitionId
+                  const rowMenuKey = `lineage:${item.transitionId}`
+                  const isRowMenuOpen = openRowMenuKey === rowMenuKey
 
                   return (
                     <LineageRowCard key={item.transitionId}>
@@ -1605,35 +1729,56 @@ export function MilitaryUnitDetailPage() {
                       </LineageRowMain>
 
                       <RowActions>
-                        <LedgerIconButton
-                          type="button"
-                          $size="sm"
-                          title="계보 수정"
-                          aria-label={`${targetName} 계보 수정`}
-                          onClick={() =>
-                            isEditingThis
-                              ? setEditingTransitionId(null)
-                              : openEditTransition(item)
-                          }
-                        >
-                          <FiEdit2 />
-                        </LedgerIconButton>
-                        <LedgerIconButton
-                          type="button"
-                          $size="sm"
-                          $danger
-                          title="계보 연결 삭제"
-                          aria-label={`${targetName} 계보 연결 삭제`}
-                          disabled={transitionBusy}
-                          onClick={() =>
-                            void handleDeleteTransition(
-                              item.transitionId,
-                              targetName,
-                            )
-                          }
-                        >
-                          <FiTrash2 />
-                        </LedgerIconButton>
+                        <MoreMenuWrap onClick={(evt) => evt.stopPropagation()}>
+                          <LedgerIconButton
+                            type="button"
+                            $size="sm"
+                            title="계보 관리 메뉴"
+                            aria-label={`${targetName} 계보 관리 메뉴`}
+                            onClick={(evt) => {
+                              evt.stopPropagation()
+                              setOpenRowMenuKey((prev) =>
+                                prev === rowMenuKey ? null : rowMenuKey,
+                              )
+                            }}
+                          >
+                            <FiMoreHorizontal />
+                          </LedgerIconButton>
+                          {isRowMenuOpen && (
+                            <MoreDropdownMenu role="menu">
+                              <MoreDropdownItem
+                                type="button"
+                                onClick={() => {
+                                  setOpenRowMenuKey(null)
+                                  if (isEditingThis) {
+                                    setEditingTransitionId(null)
+                                  } else {
+                                    openEditTransition(item)
+                                  }
+                                }}
+                              >
+                                <FiEdit2 size={12} />
+                                <span>{isEditingThis ? '수정 닫기' : '계보 수정'}</span>
+                              </MoreDropdownItem>
+                              <MoreDropdownDivider />
+                              <MoreDropdownItem
+                                type="button"
+                                $danger
+                                disabled={transitionBusy}
+                                onClick={() => {
+                                  setOpenRowMenuKey(null)
+                                  void handleDeleteTransition(
+                                    item.transitionId,
+                                    targetName,
+                                  )
+                                }}
+                              >
+                                <FiTrash2 size={12} />
+                                <span>계보 연결 삭제</span>
+                              </MoreDropdownItem>
+                            </MoreDropdownMenu>
+                          )}
+                        </MoreMenuWrap>
                       </RowActions>
 
                       {isEditingThis ? (
@@ -1921,7 +2066,7 @@ export function MilitaryUnitDetailPage() {
                     visitedSet: Set<string>,
                   ): React.ReactNode => {
                     const kids = (childrenByParentMap.get(nodeItem.id) ?? []).filter(
-                      (k) => !visitedSet.has(k.id),
+                      (kidItem) => !visitedSet.has(kidItem.id),
                     )
                     const isCollapsed = collapsedSubIds.has(nodeItem.id)
                     const nextVisited = new Set(visitedSet)
@@ -2026,7 +2171,57 @@ export function MilitaryUnitDetailPage() {
         </SectionBody>
       </LedgerSection>
 
+      {/* 3. 배속 함정 */}
+      {vessels.length > 0 ? (
+        <LedgerSection>
+          <SectionHead>
+            <SectionHeadTitle>
+              <FiAnchor size={13} style={{ marginRight: 5, verticalAlign: -1 }} />
+              배속 함정 ({vessels.length}척)
+            </SectionHeadTitle>
+          </SectionHead>
+          <SectionBody>
+            <SubUnitGrid>
+              {vessels.map((vessel) => (
+                <VesselCard key={vessel.id}>
+                  <AccentBadge>{vessel.vesselType ?? '함정'}</AccentBadge>
+                  <strong>{vessel.name}</strong>
+                  {vessel.vesselClass ? (
+                    <NeutralBadge>{vessel.vesselClass}</NeutralBadge>
+                  ) : null}
+                </VesselCard>
+              ))}
+            </SubUnitGrid>
+          </SectionBody>
+        </LedgerSection>
+      ) : null}
+
+      {/* 임무 · 관할 · 부대 소개 */}
+      {contextMetaCards.length > 0 || unit.description ? (
+        <LedgerSection>
+          <SectionHead>
+            <SectionHeadTitle>부대 소개 · 주요 임무 · 제원</SectionHeadTitle>
+          </SectionHead>
+          {contextMetaCards.length > 0 ? (
+            <ContextMetaGrid style={{ borderTop: 'none' }}>
+              {contextMetaCards.map((card) => (
+                <ContextMetaCard key={card.label}>
+                  <ContextMetaLabel>{card.label}</ContextMetaLabel>
+                  <ContextMetaBody>{card.body}</ContextMetaBody>
+                </ContextMetaCard>
+              ))}
+            </ContextMetaGrid>
+          ) : null}
+          {unit.description ? (
+            <DescriptionProse>{unit.description}</DescriptionProse>
+          ) : null}
+        </LedgerSection>
+      ) : null}
+        </>
+      )}
+
       {/* 2. 역대 지휘관 · 참모 */}
+      {activeTab === 'commanders' && (
       <LedgerSection>
         <SectionHead>
           <SectionHeadLeft>
@@ -2120,7 +2315,7 @@ export function MilitaryUnitDetailPage() {
                   <th>지휘관 · 참모</th>
                   <th>계급 · 보직명</th>
                   <th>재임 기간</th>
-                  <th style={{ width: 84, textAlign: 'right' }}>관리</th>
+                  <th style={{ width: 64, textAlign: 'right' }}>관리</th>
                 </tr>
               </thead>
               <tbody>
@@ -2142,6 +2337,8 @@ export function MilitaryUnitDetailPage() {
                     ]
                       .filter(Boolean)
                       .join(' · ') || '지휘관'
+                  const rowMenuKey = `tenure:${tenureItem.id}`
+                  const isRowMenuOpen = openRowMenuKey === rowMenuKey
                   return (
                     <tr key={tenureItem.id}>
                       <td>
@@ -2181,53 +2378,72 @@ export function MilitaryUnitDetailPage() {
                       <td className="num">{formatTenureSpan(tenureItem)}</td>
                       <td style={{ textAlign: 'right' }}>
                         <RowActions style={{ justifyContent: 'flex-end' }}>
-                          <LedgerIconButton
-                            type="button"
-                            $size="sm"
-                            title="보직 수정"
-                            aria-label={`${personName} 보직 수정`}
-                            onClick={() => {
-                              setEditingTenure({
-                                id: tenureItem.id,
-                                personId: targetPersonId,
-                                personName,
-                                positionType: tenureItem.positionType ?? null,
-                                positionDefinitionId:
-                                  tenureItem.positionDefinitionId ?? null,
-                                title: tenureItem.title ?? null,
-                                rankTitle: tenureItem.rankTitle ?? null,
-                                ordinal: tenureItem.ordinal ?? null,
-                                partyId: tenureItem.partyId ?? null,
-                                militaryUnitId: unit.id,
-                                startDate: tenureItem.startDate ?? null,
-                                endDate: tenureItem.endDate ?? null,
-                                startEra: tenureItem.startEra ?? null,
-                                startYear: tenureItem.startYear ?? null,
-                                startMonth: tenureItem.startMonth ?? null,
-                                startDay: tenureItem.startDay ?? null,
-                                endEra: tenureItem.endEra ?? null,
-                                endYear: tenureItem.endYear ?? null,
-                                endMonth: tenureItem.endMonth ?? null,
-                                endDay: tenureItem.endDay ?? null,
-                                notes: tenureItem.notes ?? null,
-                              })
-                              setAppointmentOpen(true)
-                            }}
-                          >
-                            <FiEdit2 />
-                          </LedgerIconButton>
-                          <LedgerIconButton
-                            type="button"
-                            $size="sm"
-                            $danger
-                            title="보직 삭제"
-                            aria-label={`${personName} 보직 삭제`}
-                            onClick={() =>
-                              void handleDeleteCommanderTenure(tenureItem)
-                            }
-                          >
-                            <FiTrash2 />
-                          </LedgerIconButton>
+                          <MoreMenuWrap onClick={(evt) => evt.stopPropagation()}>
+                            <LedgerIconButton
+                              type="button"
+                              $size="sm"
+                              title="보직 관리 메뉴"
+                              aria-label={`${personName} 보직 관리 메뉴`}
+                              onClick={(evt) => {
+                                evt.stopPropagation()
+                                setOpenRowMenuKey((prev) =>
+                                  prev === rowMenuKey ? null : rowMenuKey,
+                                )
+                              }}
+                            >
+                              <FiMoreHorizontal />
+                            </LedgerIconButton>
+                            {isRowMenuOpen && (
+                              <MoreDropdownMenu role="menu">
+                                <MoreDropdownItem
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenRowMenuKey(null)
+                                    setEditingTenure({
+                                      id: tenureItem.id,
+                                      personId: targetPersonId,
+                                      personName,
+                                      positionType: tenureItem.positionType ?? null,
+                                      positionDefinitionId:
+                                        tenureItem.positionDefinitionId ?? null,
+                                      title: tenureItem.title ?? null,
+                                      rankTitle: tenureItem.rankTitle ?? null,
+                                      ordinal: tenureItem.ordinal ?? null,
+                                      partyId: tenureItem.partyId ?? null,
+                                      militaryUnitId: unit.id,
+                                      startDate: tenureItem.startDate ?? null,
+                                      endDate: tenureItem.endDate ?? null,
+                                      startEra: tenureItem.startEra ?? null,
+                                      startYear: tenureItem.startYear ?? null,
+                                      startMonth: tenureItem.startMonth ?? null,
+                                      startDay: tenureItem.startDay ?? null,
+                                      endEra: tenureItem.endEra ?? null,
+                                      endYear: tenureItem.endYear ?? null,
+                                      endMonth: tenureItem.endMonth ?? null,
+                                      endDay: tenureItem.endDay ?? null,
+                                      notes: tenureItem.notes ?? null,
+                                    })
+                                    setAppointmentOpen(true)
+                                  }}
+                                >
+                                  <FiEdit2 size={12} />
+                                  <span>보직 수정</span>
+                                </MoreDropdownItem>
+                                <MoreDropdownDivider />
+                                <MoreDropdownItem
+                                  type="button"
+                                  $danger
+                                  onClick={() => {
+                                    setOpenRowMenuKey(null)
+                                    void handleDeleteCommanderTenure(tenureItem)
+                                  }}
+                                >
+                                  <FiTrash2 size={12} />
+                                  <span>보직 삭제</span>
+                                </MoreDropdownItem>
+                              </MoreDropdownMenu>
+                            )}
+                          </MoreMenuWrap>
                         </RowActions>
                       </td>
                     </tr>
@@ -2284,33 +2500,11 @@ export function MilitaryUnitDetailPage() {
           </TableWrap>
         )}
       </LedgerSection>
+      )}
 
-      {/* 3. 배속 함정 */}
-      {vessels.length > 0 ? (
-        <LedgerSection>
-          <SectionHead>
-            <SectionHeadTitle>
-              <FiAnchor size={13} style={{ marginRight: 5, verticalAlign: -1 }} />
-              배속 함정 ({vessels.length}척)
-            </SectionHeadTitle>
-          </SectionHead>
-          <SectionBody>
-            <SubUnitGrid>
-              {vessels.map((vessel) => (
-                <VesselCard key={vessel.id}>
-                  <AccentBadge>{vessel.vesselType ?? '함정'}</AccentBadge>
-                  <strong>{vessel.name}</strong>
-                  {vessel.vesselClass ? (
-                    <NeutralBadge>{vessel.vesselClass}</NeutralBadge>
-                  ) : null}
-                </VesselCard>
-              ))}
-            </SubUnitGrid>
-          </SectionBody>
-        </LedgerSection>
-      ) : null}
-
-      {/* 4. 지령 · 작전 관여 사건 */}
+      {/* 4. 지령 · 작전 관여 사건 & 5. 참전 작전 · 전투 투입 기록 */}
+      {activeTab === 'operations' && (
+        <>
       <LedgerSection>
         <SectionHead>
           <SectionHeadTitle>
@@ -2350,7 +2544,7 @@ export function MilitaryUnitDetailPage() {
                 </FormSelect>
                 <FormInput
                   type="text"
-                  placeholder="세부 역할·지령 번호 (예: 총통 지령 제21호 입안)"
+                  placeholder="세부 역할·지령 번호 (예: 작전 지령 제21호 입안)"
                   value={eventRoleDesc}
                   onChange={(evt) => setEventRoleDesc(evt.target.value)}
                 />
@@ -2389,7 +2583,7 @@ export function MilitaryUnitDetailPage() {
                   <th>사건 · 지령명</th>
                   <th style={{ width: 150 }}>관여 역할</th>
                   <th>비고</th>
-                  <th style={{ width: 84, textAlign: 'right' }}>관리</th>
+                  <th style={{ width: 64, textAlign: 'right' }}>관리</th>
                 </tr>
               </thead>
               <tbody>
@@ -2398,6 +2592,8 @@ export function MilitaryUnitDetailPage() {
                     EVENT_DEPARTMENT_ROLE_LABEL[
                       relItem.role as EventDepartmentRoleValue
                     ] ?? relItem.role
+                  const rowMenuKey = `event:${relItem.relationId}`
+                  const isRowMenuOpen = openRowMenuKey === rowMenuKey
                   return (
                     <tr key={relItem.relationId}>
                       <td className="num">
@@ -2417,37 +2613,59 @@ export function MilitaryUnitDetailPage() {
                       <td>{relItem.roleDescription || '—'}</td>
                       <td style={{ textAlign: 'right' }}>
                         <RowActions style={{ justifyContent: 'flex-end' }}>
-                          <LedgerIconButton
-                            type="button"
-                            $size="sm"
-                            title="역할 수정"
-                            onClick={() => {
-                              setPendingEvent(null)
-                              setEditingEventLink(relItem)
-                              setEventRole(
-                                (relItem.role as AdministrationDepartmentEventRole) ||
-                                  'ISSUER',
-                              )
-                              setEventRoleDesc(relItem.roleDescription ?? '')
-                            }}
-                          >
-                            <FiEdit2 />
-                          </LedgerIconButton>
-                          <LedgerIconButton
-                            type="button"
-                            $size="sm"
-                            $danger
-                            title="연결 해제"
-                            onClick={() =>
-                              void handleUnlinkDirectiveEvent(
-                                relItem.event.id,
-                                relItem.relationId,
-                                relItem.event.title,
-                              )
-                            }
-                          >
-                            <FiTrash2 />
-                          </LedgerIconButton>
+                          <MoreMenuWrap onClick={(evt) => evt.stopPropagation()}>
+                            <LedgerIconButton
+                              type="button"
+                              $size="sm"
+                              title="사건 연결 관리 메뉴"
+                              onClick={(evt) => {
+                                evt.stopPropagation()
+                                setOpenRowMenuKey((prev) =>
+                                  prev === rowMenuKey ? null : rowMenuKey,
+                                )
+                              }}
+                            >
+                              <FiMoreHorizontal />
+                            </LedgerIconButton>
+                            {isRowMenuOpen && (
+                              <MoreDropdownMenu role="menu">
+                                <MoreDropdownItem
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenRowMenuKey(null)
+                                    setPendingEvent(null)
+                                    setEditingEventLink(relItem)
+                                    setEventRole(
+                                      (relItem.role as AdministrationDepartmentEventRole) ||
+                                        'ISSUER',
+                                    )
+                                    setEventRoleDesc(
+                                      relItem.roleDescription ?? '',
+                                    )
+                                  }}
+                                >
+                                  <FiEdit2 size={12} />
+                                  <span>역할 수정</span>
+                                </MoreDropdownItem>
+                                <MoreDropdownDivider />
+                                <MoreDropdownItem
+                                  type="button"
+                                  $danger
+                                  onClick={() => {
+                                    setOpenRowMenuKey(null)
+                                    void handleUnlinkDirectiveEvent(
+                                      relItem.event.id,
+                                      relItem.relationId,
+                                      relItem.event.title,
+                                    )
+                                  }}
+                                >
+                                  <FiTrash2 size={12} />
+                                  <span>연결 해제</span>
+                                </MoreDropdownItem>
+                              </MoreDropdownMenu>
+                            )}
+                          </MoreMenuWrap>
                         </RowActions>
                       </td>
                     </tr>
@@ -2683,6 +2901,8 @@ export function MilitaryUnitDetailPage() {
           </TableWrap>
         )}
       </LedgerSection>
+        </>
+      )}
 
       <InstitutionAppointmentModal
         isOpen={appointmentOpen}
@@ -3558,3 +3778,61 @@ const ParentWarHintLink = styled(Link)`
     text-decoration: underline;
   }
 `
+
+const MoreMenuWrap = styled.div`
+  position: relative;
+  display: inline-flex;
+`
+
+const MoreDropdownMenu = styled.div`
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  z-index: 40;
+  min-width: 170px;
+  padding: 5px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerElevated(theme.mode)};
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
+const MoreDropdownItem = styled.button<{ $danger?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: ${({ theme, $danger }) =>
+    $danger ? '#dc2626' : theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: ${({ theme, $danger }) =>
+      $danger
+        ? 'rgba(220, 38, 38, 0.1)'
+        : ledgerHoverFill(theme.mode)};
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+`
+
+const MoreDropdownDivider = styled.div`
+  height: 1px;
+  margin: 3px 4px;
+  background: ${({ theme }) => ledgerHairline(theme.mode)};
+`
+

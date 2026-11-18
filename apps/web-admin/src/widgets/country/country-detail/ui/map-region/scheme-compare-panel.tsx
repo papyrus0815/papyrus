@@ -1,22 +1,28 @@
 /**
- * 체계 비교 패널 — 국가 불문 행정구역 체계 2개를 나란히 비교.
- * 각 칼럼: 체계 선택(전체 국가의 체계 목록) → 시행 기간·단위 구성·구역 수·1차 구역 목록.
+ * 체계 비교 패널 — 국가 불문 행정구역 체계 2개를 나란히 인포그래픽으로 비교.
+ * 각 칼럼: 체계 선택 → 시행 기간 · 계층 분포(StackedSegmentBar) · 좌표/존속 비율 · 1차 구역 편제.
  */
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { FiX } from 'react-icons/fi'
 
 import {
+  type AdminDivisionConfig,
   type AdminDivisionScheme,
+  type AdministrativeDivision,
   type DivisionOwner,
   adminDivisionConfigKeys,
   administrativeDivisionKeys,
   useAllAdminDivisionSchemes,
 } from '@/entities/country/api.administrative-divisions'
+import {
+  type SegmentSlice,
+  StackedSegmentBar,
+} from '@/entities/event/ui/bento-primitives'
 import { cityApi } from '@/shared/api/city'
 
-import { formatYearRange } from './tree-utils'
+import { countDescendants, formatYearRange, isAbolished } from './tree-utils'
 import type { RegionPalette } from './use-region-palette'
 
 function schemeOwner(s: AdminDivisionScheme): DivisionOwner {
@@ -50,8 +56,9 @@ export function SchemeComparePanel({
       style={{
         background: palette.bg,
         border: `1px solid ${palette.border}`,
-        borderRadius: 16,
-        padding: 24,
+        borderRadius: 8,
+        padding: 20,
+        boxShadow: 'none',
       }}
     >
       <div
@@ -59,17 +66,23 @@ export function SchemeComparePanel({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: 18,
+          paddingBottom: 14,
+          marginBottom: 16,
+          borderBottom: `1px solid ${palette.border}`,
         }}
       >
         <div>
-          <div style={{ fontSize: 17, fontWeight: 800, color: palette.text }}>
-            체계 비교
+          <div style={{ fontSize: 16, fontWeight: 800, color: palette.text }}>
+            행정구역 편제 체계 비교
           </div>
           <div
-            style={{ fontSize: 12.5, color: palette.textSecondary, marginTop: 2 }}
+            style={{
+              fontSize: 12,
+              color: palette.textSecondary,
+              marginTop: 2,
+            }}
           >
-            서로 다른 국가·시기의 행정구역 편제를 나란히 비교합니다
+            서로 다른 국가·시대의 행정구역 계층 구조와 광역 편제를 나란히 대조합니다
           </div>
         </div>
         <button
@@ -79,14 +92,15 @@ export function SchemeComparePanel({
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 4,
-            padding: '7px 12px',
+            gap: 5,
+            height: 30,
+            padding: '0 11px',
             fontSize: 12,
             fontWeight: 600,
             border: `1px solid ${palette.border}`,
             background: palette.bg,
             color: palette.text,
-            borderRadius: 10,
+            borderRadius: 6,
             cursor: 'pointer',
           }}
         >
@@ -95,11 +109,11 @@ export function SchemeComparePanel({
       </div>
 
       {isLoading ? (
-        <div style={{ color: palette.textSecondary, fontSize: 13, padding: 24 }}>
+        <div style={{ color: palette.textSecondary, fontSize: 13, padding: 20 }}>
           체계 목록을 불러오는 중…
         </div>
       ) : allSchemes.length === 0 ? (
-        <div style={{ color: palette.textSecondary, fontSize: 13, padding: 24 }}>
+        <div style={{ color: palette.textSecondary, fontSize: 13, padding: 20 }}>
           등록된 체계가 없습니다 — 먼저 각 국가의 행정구역 탭에서 체계를
           등록하세요.
         </div>
@@ -107,9 +121,8 @@ export function SchemeComparePanel({
         <div
           style={{
             display: 'grid',
-            // 좁은 화면에선 자동으로 세로 스택 (칼럼 최소 280px)
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: 20,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+            gap: 16,
             alignItems: 'start',
           }}
         >
@@ -146,9 +159,6 @@ function CompareColumn({
 }: CompareColumnProps) {
   const owner = scheme ? schemeOwner(scheme) : null
 
-  // 키를 기존 prefix(administrative-divisions / admin-division-configs) 아래에 두어
-  // useInvalidateForOwner의 broad invalidation에 함께 걸리게 한다 —
-  // 별도 ad-hoc 키면 편집 후에도 staleTime(3분) 동안 비교 화면이 옛 데이터를 보여준다.
   const divisionsQuery = useQuery({
     queryKey: [...administrativeDivisionKeys.all, 'compare', scheme?.id ?? ''],
     queryFn: () => cityApi.getAdministrativeDivisions(owner!, scheme!.id),
@@ -161,17 +171,63 @@ function CompareColumn({
   })
 
   const roots = divisionsQuery.data ?? []
-  const totalCount = countTree(roots)
-  const configs = (configsQuery.data ?? [])
-    .slice()
-    .sort((a, b) => a.divisionLevel - b.divisionLevel)
+  const configs = useMemo(
+    () =>
+      (configsQuery.data ?? [])
+        .slice()
+        .sort((a, b) => a.divisionLevel - b.divisionLevel),
+    [configsQuery.data],
+  )
+
+  const summary = useMemo(() => {
+    const configMap = new Map<string, AdminDivisionConfig>()
+    for (const c of configs) configMap.set(c.id, c)
+
+    const tierCounts = new Map<string, { level: number; label: string; count: number }>()
+    let total = 0
+    let pinned = 0
+    let abolished = 0
+
+    const walk = (nodes: AdministrativeDivision[], depth: number) => {
+      for (const n of nodes) {
+        total += 1
+        if (n.centerLat != null && n.centerLng != null) pinned += 1
+        if (isAbolished(n)) abolished += 1
+        const cfg = configMap.get(n.adminDivisionId)
+        const level = cfg?.divisionLevel ?? depth
+        const label = cfg?.divisionLabel || `${level}차`
+        const key = `${level}:${label}`
+        const cur = tierCounts.get(key)
+        if (cur) cur.count += 1
+        else tierCounts.set(key, { level, label, count: 1 })
+        if (n.children?.length) walk(n.children, depth + 1)
+      }
+    }
+    walk(roots, 1)
+
+    const colors = palette.isDark
+      ? ['#a5b4fc', '#38bdf8', '#34d399', '#fbbf24', '#c084fc']
+      : ['#4f46e5', '#0284c7', '#059669', '#d97706', '#7c3aed']
+
+    const slices: SegmentSlice[] = [...tierCounts.values()]
+      .sort((a, b) => a.level - b.level || b.count - a.count)
+      .map((item, idx) => ({
+        key: `${item.level}:${item.label}`,
+        label: `${item.level}차 ${item.label}`,
+        value: item.count,
+        color: colors[idx % colors.length]!,
+        meta: `${item.count}개`,
+      }))
+
+    return { total, pinned, abolished, slices }
+  }, [roots, configs, palette.isDark])
 
   return (
     <div
       style={{
         border: `1px solid ${palette.border}`,
-        borderRadius: 14,
-        padding: 18,
+        borderRadius: 8,
+        padding: 16,
         background: palette.bgSecondary,
         minHeight: 220,
       }}
@@ -182,18 +238,19 @@ function CompareColumn({
         onChange={(e) => onSelect(e.target.value)}
         style={{
           width: '100%',
-          padding: '9px 12px',
-          fontSize: 13,
+          height: 34,
+          padding: '0 10px',
+          fontSize: 12.5,
           fontWeight: 600,
           border: `1px solid ${palette.border}`,
-          borderRadius: 10,
+          borderRadius: 6,
           background: palette.bg,
           color: palette.text,
           outline: 'none',
           cursor: 'pointer',
         }}
       >
-        <option value="">체계 선택…</option>
+        <option value="">비교할 체계 선택…</option>
         {allSchemes.map((s) => (
           <option key={s.id} value={s.id}>
             {s.ownerName ? `${s.ownerName} · ` : ''}
@@ -205,90 +262,164 @@ function CompareColumn({
       {!scheme ? (
         <div
           style={{
-            paddingTop: 40,
+            paddingTop: 36,
             textAlign: 'center',
             color: palette.textSecondary,
-            fontSize: 13,
+            fontSize: 12.5,
           }}
         >
-          위에서 체계를 선택하세요
+          위 드롭다운에서 비교할 체계를 선택하세요
         </div>
       ) : (
-        <div style={{ marginTop: 16 }}>
-          <div style={{ fontSize: 18, fontWeight: 800, color: palette.text }}>
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 17, fontWeight: 800, color: palette.text }}>
             {scheme.name}
           </div>
           <div
             style={{
-              fontSize: 12.5,
+              fontSize: 12,
               color: palette.textSecondary,
               marginTop: 2,
               marginBottom: 12,
+              fontVariantNumeric: 'tabular-nums',
             }}
           >
-            {scheme.ownerName ?? ''} ·{' '}
+            {scheme.ownerName ? `${scheme.ownerName} · ` : ''}
             {formatYearRange(scheme.startDate, scheme.endDate)}
             {scheme.description ? ` — ${scheme.description}` : ''}
           </div>
 
-          <div style={{ display: 'flex', gap: 18, marginBottom: 12 }}>
-            <Stat palette={palette} label="1차 구역" value={`${roots.length}개`} />
-            <Stat palette={palette} label="전체 구역" value={`${totalCount}개`} />
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              gap: 8,
+              marginBottom: 12,
+            }}
+          >
             <Stat
               palette={palette}
-              label="단위 구성"
-              value={
-                configs.length > 0
-                  ? configs
-                      .map((c) => `${c.divisionLevel}차 ${c.divisionLabel}`)
-                      .join(' · ')
-                  : '—'
-              }
+              label="1차 광역"
+              value={`${roots.length.toLocaleString('ko-KR')}곳`}
+            />
+            <Stat
+              palette={palette}
+              label="전체 구역"
+              value={`${summary.total.toLocaleString('ko-KR')}곳`}
+            />
+            <Stat
+              palette={palette}
+              label="좌표 등록"
+              value={`${summary.pinned.toLocaleString('ko-KR')}곳`}
             />
           </div>
 
+          {summary.slices.length > 0 && (
+            <div
+              style={{
+                padding: '10px 12px',
+                borderRadius: 6,
+                background: palette.bg,
+                border: `1px solid ${palette.border}`,
+                marginBottom: 12,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: palette.textSecondary,
+                  marginBottom: 6,
+                }}
+              >
+                계층·단위 분포
+              </div>
+              <StackedSegmentBar slices={summary.slices} height={8} showPercent />
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '4px 10px',
+                  marginTop: 8,
+                  fontSize: 11.5,
+                  color: palette.textSecondary,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {summary.slices.map((sl) => (
+                  <span key={sl.key}>
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        width: 7,
+                        height: 7,
+                        borderRadius: '50%',
+                        background: sl.color,
+                        marginRight: 4,
+                      }}
+                    />
+                    {sl.label} <strong style={{ color: palette.text }}>{sl.value}</strong>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {divisionsQuery.isLoading ? (
-            <div style={{ fontSize: 12.5, color: palette.textSecondary }}>
+            <div style={{ fontSize: 12, color: palette.textSecondary }}>
               구역 불러오는 중…
             </div>
           ) : roots.length === 0 ? (
-            <div style={{ fontSize: 12.5, color: palette.textSecondary }}>
+            <div style={{ fontSize: 12, color: palette.textSecondary }}>
               이 체계에 등록된 구역이 없습니다
             </div>
           ) : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {roots.map((r) => (
-                <span
-                  key={r.id}
-                  style={{
-                    fontSize: 12.5,
-                    fontWeight: 600,
-                    color: palette.text,
-                    background: palette.bg,
-                    border: `1px solid ${palette.border}`,
-                    padding: '4px 10px',
-                    borderRadius: 8,
-                  }}
-                  title={
-                    (r.children?.length ?? 0) > 0
-                      ? `하위 ${r.children!.length}개`
-                      : undefined
-                  }
-                >
-                  {r.name}
-                  {(r.children?.length ?? 0) > 0 && (
+            <div>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: palette.textSecondary,
+                  marginBottom: 6,
+                }}
+              >
+                1차 광역 구역 ({roots.length}곳)
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                {roots.map((r) => {
+                  const desc = countDescendants(r)
+                  return (
                     <span
+                      key={r.id}
                       style={{
-                        marginLeft: 4,
-                        color: palette.textSecondary,
-                        fontWeight: 500,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: palette.text,
+                        background: palette.bg,
+                        border: `1px solid ${palette.border}`,
+                        padding: '3px 9px',
+                        borderRadius: 5,
+                        fontVariantNumeric: 'tabular-nums',
                       }}
+                      title={desc > 0 ? `하위 총 ${desc}곳` : undefined}
                     >
-                      {r.children!.length}
+                      {r.name}
+                      {desc > 0 && (
+                        <span
+                          style={{
+                            marginLeft: 4,
+                            color: palette.primary,
+                            fontWeight: 700,
+                            fontSize: 11,
+                          }}
+                        >
+                          +{desc}
+                        </span>
+                      )}
                     </span>
-                  )}
-                </span>
-              ))}
+                  )
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -307,33 +438,35 @@ function Stat({
   value: string
 }) {
   return (
-    <div style={{ minWidth: 0 }}>
+    <div
+      style={{
+        padding: '8px 10px',
+        borderRadius: 6,
+        background: palette.bg,
+        border: `1px solid ${palette.border}`,
+        minWidth: 0,
+      }}
+    >
       <div
         style={{
-          fontSize: 11,
-          fontWeight: 600,
+          fontSize: 10.5,
+          fontWeight: 700,
           color: palette.textSecondary,
           marginBottom: 2,
         }}
       >
         {label}
       </div>
-      <div style={{ fontSize: 13.5, fontWeight: 700, color: palette.text }}>
+      <div
+        style={{
+          fontSize: 13.5,
+          fontWeight: 800,
+          color: palette.text,
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
         {value}
       </div>
     </div>
   )
-}
-
-function countTree(
-  nodes: Array<{ children?: unknown[] }>,
-): number {
-  let n = 0
-  for (const node of nodes) {
-    n += 1
-    if (Array.isArray(node.children) && node.children.length) {
-      n += countTree(node.children as Array<{ children?: unknown[] }>)
-    }
-  }
-  return n
 }
