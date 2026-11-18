@@ -160,9 +160,34 @@ export interface ElectionSummary {
   pollDate: string
 }
 
+export interface CenturyDomainBucket {
+  century: number
+  total: number
+  domains: Record<string, number>
+}
+
+export interface WarOutcomeSummary {
+  totalMilitaryEvents: number
+  wars: number
+  battles: number
+  victories: number
+  defeats: number
+  draws: number
+}
+
+export interface MilitaryBranchSummary {
+  branch: string
+  count: number
+}
+
 export interface CountryDashboardStats {
   personCount: number
   militaryCount: number
+  highCommandCount: number
+  militaryBranchBreakdown: MilitaryBranchSummary[]
+  eventDomainBreakdown: Array<{ domain: string; count: number }>
+  eventCenturyDomainCounts: CenturyDomainBucket[]
+  warSummary: WarOutcomeSummary
   eventCount: number
   historicalCountryCount: number
   administrationCount: number
@@ -562,9 +587,40 @@ export function useCountryDashboardStats(
     ],
   })
 
+  const linkedHistIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (country?.historicalCountries ?? [])
+            .map((h) => h?.id)
+            .filter((hid): hid is string => Boolean(hid)),
+        ),
+      ).sort(),
+    [country?.historicalCountries],
+  )
+  const linkedHistKey = linkedHistIds.join(',')
+
   const militaryUnitsQuery = useQuery({
-    queryKey: ['military-units', 'all'] as const,
-    queryFn: () => militaryUnitApi.getAll(),
+    queryKey: [
+      'military-units',
+      'country-scope',
+      'mod',
+      countryId,
+      linkedHistKey,
+    ] as const,
+    queryFn: async () => {
+      const batches = await Promise.all([
+        militaryUnitApi.getAll({ countryId }),
+        ...linkedHistIds.map((hid) =>
+          militaryUnitApi.getAll({ historicalCountryId: hid }),
+        ),
+      ])
+      const dedup = new Map<string, (typeof batches)[0][number]>()
+      for (const list of batches) {
+        for (const u of list) dedup.set(u.id, u)
+      }
+      return [...dedup.values()]
+    },
     enabled: Boolean(countryId),
     staleTime: 1000 * 60 * 2,
   })
@@ -624,24 +680,44 @@ export function useCountryDashboardStats(
   }, [personsQuery.data])
 
   const personCount = persons.length
-  const militaryCount = useMemo(() => {
-    if (!countryId || !Array.isArray(militaryUnitsQuery.data)) return 0
-    const linkedHistoricalIds = new Set(
-      (country?.historicalCountries ?? [])
-        .map((histItem) => histItem?.id)
-        .filter((histId): histId is string => Boolean(histId)),
-    )
-    return militaryUnitsQuery.data.filter((unitItem) => {
-      if (unitItem.countryId === countryId) return true
-      if (
-        unitItem.historicalCountryId &&
-        linkedHistoricalIds.has(unitItem.historicalCountryId)
-      ) {
-        return true
+  const { militaryCount, highCommandCount, militaryBranchBreakdown } = useMemo(() => {
+    if (!countryId || !Array.isArray(militaryUnitsQuery.data)) {
+      return {
+        militaryCount: 0,
+        highCommandCount: 0,
+        militaryBranchBreakdown: [] as MilitaryBranchSummary[],
       }
-      return false
-    }).length
-  }, [countryId, country?.historicalCountries, militaryUnitsQuery.data])
+    }
+    const HIGH_CMD_TYPES = new Set([
+      'SUPREME_COMMAND',
+      'GENERAL_STAFF',
+      'SERVICE_HQ',
+      'THEATER',
+      'ARMY_GROUP',
+      'FRONT',
+      'MILITARY_DISTRICT',
+      'FIELD_ARMY',
+      'FLEET',
+      'AIR_FLEET',
+      'CORPS',
+      'AIR_CORPS',
+    ])
+    let highCmd = 0
+    const byBranch = new Map<string, number>()
+    for (const u of militaryUnitsQuery.data) {
+      if (u.unitType && HIGH_CMD_TYPES.has(u.unitType)) highCmd += 1
+      const br = u.branch ?? 'OTHER'
+      byBranch.set(br, (byBranch.get(br) ?? 0) + 1)
+    }
+    const breakdown = [...byBranch.entries()]
+      .map(([branch, count]) => ({ branch, count }))
+      .sort((a, b) => b.count - a.count)
+    return {
+      militaryCount: militaryUnitsQuery.data.length,
+      highCommandCount: highCmd,
+      militaryBranchBreakdown: breakdown,
+    }
+  }, [countryId, militaryUnitsQuery.data])
   const eventCount = Array.isArray(eventsQuery.data) ? eventsQuery.data.length : 0
   const historicalCountryCount = country?.historicalCountries?.length ?? 0
   const departmentCount = Array.isArray(administrationQuery.data)
@@ -1124,14 +1200,63 @@ export function useCountryDashboardStats(
    * 합성해 내려준다('0976-01-01', BC는 앞에 '-'). 그래서 **문자열로 읽는다** —
    * `new Date()`에 넣으면 100년 미만이 1900년대로 튀고 BC는 Invalid Date가 된다.
    */
-  const eventCenturyCounts = useMemo<
-    Array<{ century: number; count: number }>
-  >(() => {
+  const {
+    eventCenturyCounts,
+    eventCenturyDomainCounts,
+    eventDomainBreakdown,
+    warSummary,
+  } = useMemo(() => {
     const list = (eventsQuery.data ?? []) as Array<{
       startDate?: string | null
+      domain?: string | null
+      type?: string | null
+      relatedCountries?: Array<{ id?: string; sideOutcome?: string | null }>
+      relatedHistoricalCountries?: Array<{
+        id?: string
+        sideOutcome?: string | null
+      }>
     }>
-    const byCentury = new Map<number, number>()
+    const linkedSet = new Set(linkedHistIds)
+    const byCentury = new Map<
+      number,
+      { total: number; domains: Record<string, number> }
+    >()
+    const byDomain = new Map<string, number>()
+    const warAcc: WarOutcomeSummary = {
+      totalMilitaryEvents: 0,
+      wars: 0,
+      battles: 0,
+      victories: 0,
+      defeats: 0,
+      draws: 0,
+    }
+
     for (const event of list) {
+      const dom = event.domain?.trim() || 'OTHER'
+      byDomain.set(dom, (byDomain.get(dom) ?? 0) + 1)
+
+      if (dom === 'MILITARY') {
+        warAcc.totalMilitaryEvents += 1
+        if (event.type === 'WAR') warAcc.wars += 1
+        else if (
+          event.type === 'BATTLE' ||
+          event.type === 'CAMPAIGN' ||
+          event.type === 'SIEGE'
+        ) {
+          warAcc.battles += 1
+        }
+        const selfMod = (event.relatedCountries ?? []).find(
+          (c) => c.id === countryId && c.sideOutcome,
+        )
+        const selfHist = (event.relatedHistoricalCountries ?? []).find(
+          (h) => h.id && linkedSet.has(h.id) && h.sideOutcome,
+        )
+        const outcome = selfMod?.sideOutcome ?? selfHist?.sideOutcome ?? null
+        if (outcome === 'VICTORY') warAcc.victories += 1
+        else if (outcome === 'DEFEAT') warAcc.defeats += 1
+        else if (outcome) warAcc.draws += 1
+      }
+
       const raw = event.startDate
       if (typeof raw !== 'string') continue
       const matched = /^(-?)(\d{1,6})-/.exec(raw)
@@ -1139,15 +1264,32 @@ export function useCountryDashboardStats(
       const year = Number(matched[2])
       if (!Number.isFinite(year) || year === 0) continue
       const century =
-        matched[1] === '-'
-          ? -Math.ceil(year / 100)
-          : Math.ceil(year / 100)
-      byCentury.set(century, (byCentury.get(century) ?? 0) + 1)
+        matched[1] === '-' ? -Math.ceil(year / 100) : Math.ceil(year / 100)
+      const prev = byCentury.get(century) ?? { total: 0, domains: {} }
+      prev.total += 1
+      prev.domains[dom] = (prev.domains[dom] ?? 0) + 1
+      byCentury.set(century, prev)
     }
-    return [...byCentury.entries()]
-      .map(([century, count]) => ({ century, count }))
-      .sort((left, right) => left.century - right.century)
-  }, [eventsQuery.data])
+
+    const sortedCenturies = [...byCentury.entries()].sort(
+      (left, right) => left[0] - right[0],
+    )
+    return {
+      eventCenturyCounts: sortedCenturies.map(([century, val]) => ({
+        century,
+        count: val.total,
+      })),
+      eventCenturyDomainCounts: sortedCenturies.map(([century, val]) => ({
+        century,
+        total: val.total,
+        domains: val.domains,
+      })),
+      eventDomainBreakdown: [...byDomain.entries()]
+        .map(([domain, count]) => ({ domain, count }))
+        .sort((a, b) => b.count - a.count),
+      warSummary: warAcc,
+    }
+  }, [eventsQuery.data, countryId, linkedHistIds])
 
   /** 달력용 경량 목록 — 같은 쿼리를 재사용하므로 왕복은 늘지 않는다 */
   const calendarEvents = useMemo<CalendarEventItem[]>(() => {
@@ -1560,6 +1702,11 @@ export function useCountryDashboardStats(
   return {
     personCount,
     militaryCount,
+    highCommandCount,
+    militaryBranchBreakdown,
+    eventDomainBreakdown,
+    eventCenturyDomainCounts,
+    warSummary,
     eventCount,
     historicalCountryCount,
     administrationCount,

@@ -121,6 +121,13 @@ interface LoosePerson {
  */
 interface LooseRecord extends LoosePerson {
   title?: string | null
+  domain?: string | null
+  type?: string | null
+  sideOutcome?: string | null
+  relatedHistoricalCountries?: Array<{
+    id?: string | null
+    sideOutcome?: string | null
+  }> | null
   startDate?: string | null
   endDate?: string | null
   startEra?: string | null
@@ -292,16 +299,46 @@ export function useHistoricalCountryDashboard(
     ],
   })
 
-  const militaryUnitsQuery = useQuery({
-    queryKey: ['military-units', 'all'] as const,
-    queryFn: () => militaryUnitApi.getAll(),
-    enabled: Boolean(id),
-    staleTime: 1000 * 60 * 2,
-  })
-
   const { data: constituentPolities = [] } = useConstituentHistoricalPolities(
     id || undefined,
   )
+  const constituentIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          constituentPolities
+            .map((p) => p.id)
+            .filter((pid): pid is string => Boolean(pid)),
+        ),
+      ).sort(),
+    [constituentPolities],
+  )
+  const constituentKey = constituentIds.join(',')
+
+  const militaryUnitsQuery = useQuery({
+    queryKey: [
+      'military-units',
+      'country-scope',
+      'hist',
+      id,
+      constituentKey,
+    ] as const,
+    queryFn: async () => {
+      const targetIds = Array.from(new Set([id, ...constituentIds]))
+      const batches = await Promise.all(
+        targetIds.map((hid) =>
+          militaryUnitApi.getAll({ historicalCountryId: hid }),
+        ),
+      )
+      const dedup = new Map<string, (typeof batches)[0][number]>()
+      for (const list of batches) {
+        for (const u of list) dedup.set(u.id, u)
+      }
+      return [...dedup.values()]
+    },
+    enabled: Boolean(id),
+    staleTime: 1000 * 60 * 2,
+  })
 
   const transitions: HistoricalCountryTransitionDto[] = useMemo(
     () => (Array.isArray(transitionsQuery.data) ? transitionsQuery.data : []),
@@ -414,22 +451,83 @@ export function useHistoricalCountryDashboard(
   const events = asArray(eventsQuery.data)
   const persons = asArray(personsQuery.data)
 
-  /* 세기 분포 — 사건 발생일 문자열에서(BC는 '-' 접두, new Date 금지) */
-  const eventCenturyCounts = useMemo(() => {
-    const byCentury = new Map<number, number>()
+  /* 세기 분포 & 도메인·전쟁 결과 집계 — 사건 발생일 문자열에서(BC는 '-' 접두, new Date 금지) */
+  const {
+    eventCenturyCounts,
+    eventCenturyDomainCounts,
+    eventDomainBreakdown,
+    warSummary,
+  } = useMemo(() => {
+    const byCentury = new Map<
+      number,
+      { total: number; domains: Record<string, number> }
+    >()
+    const byDomain = new Map<string, number>()
+    const constituentSet = new Set([id, ...constituentIds])
+    const warAcc = {
+      totalMilitaryEvents: 0,
+      wars: 0,
+      battles: 0,
+      victories: 0,
+      defeats: 0,
+      draws: 0,
+    }
     for (const event of asArray(eventsQuery.data)) {
+      const dom =
+        typeof event.domain === 'string' && event.domain.trim()
+          ? event.domain.trim()
+          : 'OTHER'
+      byDomain.set(dom, (byDomain.get(dom) ?? 0) + 1)
+
+      if (dom === 'MILITARY') {
+        warAcc.totalMilitaryEvents += 1
+        if (event.type === 'WAR') warAcc.wars += 1
+        else if (
+          event.type === 'BATTLE' ||
+          event.type === 'CAMPAIGN' ||
+          event.type === 'SIEGE'
+        ) {
+          warAcc.battles += 1
+        }
+        const selfHist = asArray(event.relatedHistoricalCountries).find(
+          (h) => h.id && constituentSet.has(String(h.id)) && h.sideOutcome,
+        )
+        const outcome = selfHist?.sideOutcome ?? null
+        if (outcome === 'VICTORY') warAcc.victories += 1
+        else if (outcome === 'DEFEAT') warAcc.defeats += 1
+        else if (outcome) warAcc.draws += 1
+      }
+
       const matched = /^(-?)(\d{1,6})-/.exec(String(event.startDate ?? ''))
       if (!matched) continue
       const year = Number(matched[2])
       if (!Number.isFinite(year) || year === 0) continue
       const century =
         matched[1] === '-' ? -Math.ceil(year / 100) : Math.ceil(year / 100)
-      byCentury.set(century, (byCentury.get(century) ?? 0) + 1)
+      const prev = byCentury.get(century) ?? { total: 0, domains: {} }
+      prev.total += 1
+      prev.domains[dom] = (prev.domains[dom] ?? 0) + 1
+      byCentury.set(century, prev)
     }
-    return [...byCentury.entries()]
-      .map(([century, count]) => ({ century, count }))
-      .sort((left, right) => left.century - right.century)
-  }, [eventsQuery.data])
+    const sorted = [...byCentury.entries()].sort(
+      (left, right) => left[0] - right[0],
+    )
+    return {
+      eventCenturyCounts: sorted.map(([century, val]) => ({
+        century,
+        count: val.total,
+      })),
+      eventCenturyDomainCounts: sorted.map(([century, val]) => ({
+        century,
+        total: val.total,
+        domains: val.domains,
+      })),
+      eventDomainBreakdown: [...byDomain.entries()]
+        .map(([domain, count]) => ({ domain, count }))
+        .sort((a, b) => b.count - a.count),
+      warSummary: warAcc,
+    }
+  }, [eventsQuery.data, id, constituentIds])
 
   const calendarEvents = useMemo<CalendarEventItem[]>(() => {
     const rows: CalendarEventItem[] = []
@@ -649,18 +747,43 @@ export function useHistoricalCountryDashboard(
   }, [divisionsQuery.data])
   const electionCount = elections.length
   const departmentCount = departments.length
-  const militaryCount = useMemo(() => {
-    if (!id || !Array.isArray(militaryUnitsQuery.data)) return 0
-    const constituentIdSet = new Set(
-      constituentPolities.map((polity) => polity.id).filter(Boolean),
-    )
-    return militaryUnitsQuery.data.filter(
-      (unitItem) =>
-        unitItem.historicalCountryId === id ||
-        (unitItem.historicalCountryId != null &&
-          constituentIdSet.has(unitItem.historicalCountryId)),
-    ).length
-  }, [id, militaryUnitsQuery.data, constituentPolities])
+  const { militaryCount, highCommandCount, militaryBranchBreakdown } = useMemo(() => {
+    if (!id || !Array.isArray(militaryUnitsQuery.data)) {
+      return {
+        militaryCount: 0,
+        highCommandCount: 0,
+        militaryBranchBreakdown: [] as Array<{ branch: string; count: number }>,
+      }
+    }
+    const HIGH_CMD_TYPES = new Set([
+      'SUPREME_COMMAND',
+      'GENERAL_STAFF',
+      'SERVICE_HQ',
+      'THEATER',
+      'ARMY_GROUP',
+      'FRONT',
+      'MILITARY_DISTRICT',
+      'FIELD_ARMY',
+      'FLEET',
+      'AIR_FLEET',
+      'CORPS',
+      'AIR_CORPS',
+    ])
+    let highCmd = 0
+    const byBranch = new Map<string, number>()
+    for (const u of militaryUnitsQuery.data) {
+      if (u.unitType && HIGH_CMD_TYPES.has(u.unitType)) highCmd += 1
+      const br = u.branch ?? 'OTHER'
+      byBranch.set(br, (byBranch.get(br) ?? 0) + 1)
+    }
+    return {
+      militaryCount: militaryUnitsQuery.data.length,
+      highCommandCount: highCmd,
+      militaryBranchBreakdown: [...byBranch.entries()]
+        .map(([branch, count]) => ({ branch, count }))
+        .sort((a, b) => b.count - a.count),
+    }
+  }, [id, militaryUnitsQuery.data])
   const administrationCount = departments.length + politicalSystems.length
   const lawCount = laws.length
   const ethnicityCount = ethnicities.length
@@ -813,6 +936,8 @@ export function useHistoricalCountryDashboard(
     administrationCount,
     departmentCount,
     militaryCount,
+    highCommandCount,
+    militaryBranchBreakdown,
     divisionCount,
     capitalDivisionName,
     electionCount,
@@ -820,6 +945,13 @@ export function useHistoricalCountryDashboard(
     ethnicityCount,
     treatyCount,
     eventCenturyCounts,
+    eventCenturyDomainCounts,
+    eventDomainBreakdown,
+    warSummary,
+    founding: founding ?? null,
+    politicalSystems: politicalSystemsQuery.data ?? [],
+    memberships,
+    relations,
     calendarEvents,
     recentActivity,
     completeness: {

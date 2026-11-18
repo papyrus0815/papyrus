@@ -1,34 +1,112 @@
-// src/pages/dashboard/dashboard.page.tsx
 import { useEffect, useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
+import {
+  FiArrowUpRight,
+  FiBookOpen,
+  FiCalendar,
+  FiClock,
+  FiCompass,
+  FiFlag,
+  FiGlobe,
+  FiLayers,
+  FiPlus,
+  FiSearch,
+  FiShield,
+  FiUsers,
+} from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
+import { useTheme } from 'styled-components'
 
-import { formatDomainPath } from '@/entities/event/model'
+import {
+  domainAccent,
+  domainLabel,
+  EVENT_DOMAIN_ORDER,
+  formatDomainPath,
+  isEventDomainKey,
+  type EventDomainKey,
+} from '@/entities/event/model'
 import { sessionQueryOptions } from '@/entities/session'
+import { getAllCountries } from '@/shared/api/countries'
 import { eventKeys } from '@/shared/api/event-query-keys'
-import { getAllEvents, getEventsOnThisDay } from '@/shared/api/events'
-import type { EventResponseDto } from '@/shared/api/events'
+import {
+  EVENTS_LIMIT_ALL,
+  getAllEvents,
+  getEventsCount,
+  getEventsOnThisDay,
+  type EventResponseDto,
+} from '@/shared/api/events'
+import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
+import { militaryUnitApi } from '@/shared/api/military-unit'
+import { getInfographicPersons } from '@/shared/api/persons'
+import { treatyApi } from '@/shared/api/treaty'
 import { pathKeys } from '@/shared/router'
-import { EventRegisterModal } from '@/widgets/event-form/ui/event-register-modal'
+import { useCommandPaletteStore } from '@/widgets/command-palette'
+import type { CenturyDomainBucket } from '@/widgets/country/country-detail/model/use-country-dashboard-stats'
+import { StackedCenturyDomainChart } from '@/widgets/country/country-detail/ui/dashboard-infographic/bento-primitives'
 import { useEventRegisterModalUrl } from '@/widgets/event-form/model/use-event-register-modal-url'
+import { EventRegisterModal } from '@/widgets/event-form/ui/event-register-modal'
 
 import * as S from './dashboard.styles'
 
-/** startDate(ISO 문자열)에서 "N세기" / "기원전 N세기" 라벨을 만든다. 불명확하면 null. */
-function eraLabel(startDate?: string | null): string | null {
-  if (!startDate) return null
-  const year = new Date(startDate).getUTCFullYear()
-  if (Number.isNaN(year)) return null
-  if (year <= 0) return `기원전 ${Math.floor(Math.abs(year) / 100) + 1}세기`
-  return `${Math.floor((year - 1) / 100) + 1}세기`
+/** 사건 응답에서 부호 있는 연도 추출 (BC는 음수, AD는 양수) */
+function extractSignedEventYear(event: EventResponseDto): number | null {
+  const anyEv = event as {
+    startYear?: number | null
+    startEra?: string | null
+    startDate?: string | null
+  }
+  if (typeof anyEv.startYear === 'number' && Number.isFinite(anyEv.startYear)) {
+    const absY = Math.abs(Math.trunc(anyEv.startYear))
+    if (absY === 0) return null
+    return String(anyEv.startEra ?? 'AD').toUpperCase() === 'BC' ? -absY : absY
+  }
+  const raw = anyEv.startDate?.trim()
+  if (!raw) return null
+  const bcMatch = raw.match(/^-(\d{1,6})/)
+  if (bcMatch) {
+    const y = Number(bcMatch[1])
+    return Number.isFinite(y) && y > 0 ? -y : null
+  }
+  const adMatch = raw.match(/^(\d{1,4})/)
+  if (adMatch) {
+    const y = Number(adMatch[1])
+    return Number.isFinite(y) && y > 0 ? y : null
+  }
+  const parsed = new Date(raw).getUTCFullYear()
+  if (Number.isNaN(parsed) || parsed === 0) return null
+  return parsed
+}
+
+function signedYearToCentury(signedYear: number): number | null {
+  if (!Number.isFinite(signedYear) || signedYear === 0) return null
+  const c =
+    signedYear < 0
+      ? -(Math.floor((Math.abs(signedYear) - 1) / 100) + 1)
+      : Math.floor((signedYear - 1) / 100) + 1
+  return Math.abs(c) <= 21 ? c : null
+}
+
+function formatEventYearBadge(event: EventResponseDto): string {
+  const y = extractSignedEventYear(event)
+  if (y == null) return '연대 미상'
+  return y < 0 ? `BC ${Math.abs(y)}` : `${y}년`
+}
+
+function stripHtmlSummary(raw?: string | null): string | null {
+  if (!raw) return null
+  const cleaned = raw
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return cleaned.length > 0 ? cleaned : null
 }
 
 /**
- * 시계 — 매초 갱신되는 유일한 부분이라 별도 컴포넌트로 분리한다.
- * (대시보드 전체가 1초마다 리렌더되던 것을 시계 영역으로 한정)
+ * 매초 갱신되는 시계 영역만 별도 컴포넌트로 분리해 차트·카드의 불필요한 리렌더를 차단한다.
  */
-function Clock() {
+function LiveClockPill() {
   const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
@@ -36,146 +114,165 @@ function Clock() {
     return () => clearInterval(timer)
   }, [])
 
-  const timeString = now.toLocaleTimeString('ko-KR', {
+  const dateText = now.toLocaleDateString('ko-KR', {
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+  })
+  const timeText = now.toLocaleTimeString('ko-KR', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
   })
-  const dateString = now.toLocaleDateString('ko-KR', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  })
 
   return (
-    <S.ClockContainer>
-      <S.Time>{timeString}</S.Time>
-      <S.DateText>{dateString}</S.DateText>
-    </S.ClockContainer>
+    <S.ClockPill aria-label="현재 날짜 및 시각">
+      <FiClock size={11} aria-hidden />
+      <span>{dateText}</span>
+      <span>·</span>
+      <S.ClockTime>{timeText}</S.ClockTime>
+    </S.ClockPill>
   )
 }
 
-const PlayIcon = () => (
-  <svg viewBox="0 0 24 24" aria-hidden>
-    <path d="M10 16.5l6-4.5-6-4.5v9z" />
-  </svg>
-)
+/** 9대 사건 분야 SVG 멀티 세그먼트 도넛 링 + 수평 비례 바 카드 */
+function EventDomainInfographicCard({
+  domainBreakdown,
+  totalSampled,
+  onSelectDomain,
+  onOpenEvents,
+}: {
+  domainBreakdown: Array<{ domain: EventDomainKey; count: number }>
+  totalSampled: number
+  onSelectDomain: (domain: EventDomainKey) => void
+  onOpenEvents: () => void
+}) {
+  const theme = useTheme()
+  const radius = 40
+  const circumference = 2 * Math.PI * radius
+  const maxDomainCount = Math.max(1, ...domainBreakdown.map((d) => d.count))
 
-/** 사건 카드 1개 — 클릭 시 상세로 이동. 두 섹션이 공용. */
-function EventCardItem({ event }: { event: EventResponseDto }) {
-  const navigate = useNavigate()
-  const era = eraLabel(event.startDate)
-  const category = formatDomainPath(event.domain, event.type)
+  const donutArcs = useMemo(() => {
+    if (totalSampled <= 0) return []
+    let cumulative = 0
+    return domainBreakdown
+      .filter((d) => d.count > 0)
+      .map((d) => {
+        const fraction = d.count / totalSampled
+        const dashLength = Math.max(0, fraction * circumference - 1.5)
+        const dashOffset = -cumulative * circumference
+        cumulative += fraction
+        return {
+          key: d.domain,
+          color: domainAccent(d.domain, theme.mode),
+          dashArray: `${dashLength} ${Math.max(0, circumference - dashLength)}`,
+          dashOffset,
+        }
+      })
+  }, [domainBreakdown, totalSampled, circumference, theme.mode])
 
   return (
-    <S.EventCard
-      type="button"
-      onClick={() => navigate(pathKeys.events.detail(event.id))}
-    >
-      <S.EventTitle>{event.title}</S.EventTitle>
-      {(era || category) && (
-        <S.CardMetaRow>
-          {era && <span>{era}</span>}
-          {era && category && <S.MetaDot />}
-          {category && <span>{category}</span>}
-        </S.CardMetaRow>
+    <S.BentoCard aria-label="사건 9대 분야 분포">
+      <S.CardHeader>
+        <S.CardTitleGroup>
+          <S.CardTitle>9대 사건 분야 비중</S.CardTitle>
+          <S.CardBadge>
+            {domainBreakdown.filter((d) => d.count > 0).length}개 분야
+          </S.CardBadge>
+        </S.CardTitleGroup>
+        <S.CardLinkBtn type="button" onClick={onOpenEvents}>
+          사건 총람
+          <FiArrowUpRight size={12} aria-hidden />
+        </S.CardLinkBtn>
+      </S.CardHeader>
+
+      {totalSampled === 0 ? (
+        <S.EmptyBox>아직 집계할 사건 데이터가 없습니다.</S.EmptyBox>
+      ) : (
+        <S.DomainInfographicBody>
+          <S.DonutWrap>
+            <svg width={108} height={108} viewBox="0 0 108 108" aria-hidden>
+              <circle
+                cx={54}
+                cy={54}
+                r={radius}
+                fill="none"
+                stroke={
+                  theme.mode === 'dark'
+                    ? 'rgba(255,255,255,0.08)'
+                    : 'rgba(15,23,42,0.06)'
+                }
+                strokeWidth={11}
+              />
+              <g transform="rotate(-90 54 54)">
+                {donutArcs.map((arc) => (
+                  <circle
+                    key={arc.key}
+                    cx={54}
+                    cy={54}
+                    r={radius}
+                    fill="none"
+                    stroke={arc.color}
+                    strokeWidth={11}
+                    strokeDasharray={arc.dashArray}
+                    strokeDashoffset={arc.dashOffset}
+                  />
+                ))}
+              </g>
+            </svg>
+            <S.DonutCenter>
+              <S.DonutTotalNum>
+                {totalSampled.toLocaleString('ko-KR')}
+              </S.DonutTotalNum>
+              <S.DonutTotalLabel>집계 사건</S.DonutTotalLabel>
+            </S.DonutCenter>
+          </S.DonutWrap>
+
+          <S.DomainBarList>
+            {domainBreakdown
+              .filter((item) => item.count > 0)
+              .map((item) => {
+                const color = domainAccent(item.domain, theme.mode)
+                const barPct = Math.max(
+                  5,
+                  Math.round((item.count / maxDomainCount) * 100),
+                )
+                const sharePct = Math.round((item.count / totalSampled) * 100)
+                return (
+                  <S.DomainBarRow
+                    key={item.domain}
+                    type="button"
+                    onClick={() => onSelectDomain(item.domain)}
+                    title={`${domainLabel(item.domain)} 분야 사건 목록 열기`}
+                  >
+                    <S.DomainLabelCell>
+                      <S.DomainSwatch $color={color} />
+                      <span>{domainLabel(item.domain)}</span>
+                    </S.DomainLabelCell>
+                    <S.DomainTrack>
+                      <S.DomainFill $pct={barPct} $color={color} />
+                    </S.DomainTrack>
+                    <S.DomainStatCell>
+                      {item.count.toLocaleString('ko-KR')}
+                      <S.DomainPctSub>({sharePct}%)</S.DomainPctSub>
+                    </S.DomainStatCell>
+                  </S.DomainBarRow>
+                )
+              })}
+          </S.DomainBarList>
+        </S.DomainInfographicBody>
       )}
-      {event.description && <S.DescLine>{event.description}</S.DescLine>}
-      <S.CardFooter>
-        <S.OpenChip>
-          <PlayIcon />
-          자세히 보기
-        </S.OpenChip>
-      </S.CardFooter>
-    </S.EventCard>
-  )
-}
-
-/** 최근 등록 사건 — 항상 노출되는 주력 섹션. */
-function RecentEventsSection() {
-  const navigate = useNavigate()
-
-  const { data, isLoading, isError } = useQuery({
-    queryKey: eventKeys.dashboardRecent(),
-    // createdSinceDays를 크게 주면 서버가 createdAt desc(최근 등록순)로 정렬한다.
-    // 하단 영역이 가운데 화면과 겹치지 않도록 2개(한 줄)만 노출한다.
-    queryFn: () => getAllEvents({ limit: 2, createdSinceDays: 36500 }),
-    staleTime: 1000 * 60,
-  })
-
-  const events = data ?? []
-
-  return (
-    <S.Section>
-      <S.SectionHeader>
-        <S.SectionTitle>최근 사건</S.SectionTitle>
-        <S.ViewAllButton
-          type="button"
-          onClick={() => navigate(pathKeys.events.root())}
-        >
-          전체 보기
-        </S.ViewAllButton>
-      </S.SectionHeader>
-
-      <S.EventGrid>
-        {isLoading ? (
-          <S.EmptyState>불러오는 중…</S.EmptyState>
-        ) : isError ? (
-          <S.EmptyState>최근 사건을 불러오지 못했습니다.</S.EmptyState>
-        ) : events.length === 0 ? (
-          <S.EmptyState>아직 등록된 사건이 없습니다.</S.EmptyState>
-        ) : (
-          events.map((event) => <EventCardItem key={event.id} event={event} />)
-        )}
-      </S.EventGrid>
-    </S.Section>
-  )
-}
-
-/**
- * 역사 속 오늘 — 오늘 월·일에 해당하는 사건. 보조 섹션이라 결과가 있을 때만 노출하고,
- * 로딩·에러·빈 결과에서는 아무것도 그리지 않는다(빈 화면 리스크 제거).
- * month·day는 사용자 로컬 기준으로 넘긴다(서버 TZ 어긋남 방지).
- */
-function OnThisDaySection() {
-  const today = useMemo(() => {
-    const now = new Date()
-    return { month: now.getMonth() + 1, day: now.getDate() }
-  }, [])
-
-  const { data } = useQuery({
-    queryKey: ['dashboard-on-this-day', today.month, today.day],
-    queryFn: () =>
-      getEventsOnThisDay({ month: today.month, day: today.day, limit: 2 }),
-    staleTime: 1000 * 60 * 30,
-  })
-
-  const events = data ?? []
-  if (events.length === 0) return null
-
-  return (
-    <S.Section>
-      <S.SectionHeader>
-        <S.SectionTitle>
-          역사 속 오늘 · {today.month}월 {today.day}일
-        </S.SectionTitle>
-      </S.SectionHeader>
-      <S.EventGrid>
-        {events.map((event) => (
-          <EventCardItem key={event.id} event={event} />
-        ))}
-      </S.EventGrid>
-    </S.Section>
+    </S.BentoCard>
   )
 }
 
 export default function DashboardPage() {
-  // 로그인 시점 username은 영속화되지 않아 새로고침 시 사라진다.
-  // account.me 쿼리에서 표시명을 받아 새로고침 후에도 안정적으로 인사한다.
+  const theme = useTheme()
+  const navigate = useNavigate()
+  const openCommandPalette = useCommandPaletteStore((s) => s.openPalette)
   const { data: user } = useQuery(sessionQueryOptions)
   const displayName = user?.account ?? null
-  const navigate = useNavigate()
-  /** 사건 등록 모달 — 대시보드를 떠나지 않고 추가. 열림은 `?eventForm=new`로 URL 동기화. */
+
   const {
     isOpen: createEventOpen,
     open: openCreateEvent,
@@ -183,132 +280,501 @@ export default function DashboardPage() {
     onDirtyChange: onCreateEventDirtyChange,
   } = useEventRegisterModalUrl()
 
-  // 대시보드 마운트 시 전역 배경 숨기기
-  // (스토어의 enabled=false는 검은 오버레이 모드라, 흰 배경 대시보드에는 직접 제어가 필요)
+  // 대시보드 진입 시 배경 3D/캔버스 요소만 숨겨 GPU 점유를 줄이고, 다크/라이트 테마는 그대로 유지한다.
   useEffect(() => {
-    document.body.setAttribute('data-dashboard', 'true')
     const globalBg = document.getElementById('global-bg')
     if (globalBg) globalBg.style.display = 'none'
-
     return () => {
-      document.body.removeAttribute('data-dashboard')
       const gb = document.getElementById('global-bg')
       if (gb) gb.style.display = ''
     }
   }, [])
 
+  const today = useMemo(() => {
+    const now = new Date()
+    return { month: now.getMonth() + 1, day: now.getDate() }
+  }, [])
+
+  // --- 경량·캐시 공유 아카이브 볼륨 쿼리 ---
+  const { data: countries = [] } = useQuery({
+    queryKey: ['countries'],
+    queryFn: getAllCountries,
+    staleTime: 5 * 60_000,
+  })
+
+  const { data: historicalCountries = [] } = useQuery({
+    queryKey: ['historical-countries'],
+    queryFn: getAllHistoricalCountries,
+    staleTime: 5 * 60_000,
+  })
+
+  const { data: persons = [] } = useQuery({
+    queryKey: ['persons', 'infographic'],
+    queryFn: getInfographicPersons,
+    staleTime: 5 * 60_000,
+  })
+
+  const { data: totalEventsCount } = useQuery({
+    queryKey: ['dashboard-events-count'],
+    queryFn: () => getEventsCount({ includeSubEvents: true }),
+    staleTime: 3 * 60_000,
+  })
+
+  const { data: allSampledEvents = [], isLoading: isInfographicLoading } =
+    useQuery({
+      queryKey: ['dashboard-events-overview'],
+      queryFn: () =>
+        getAllEvents({ limit: EVENTS_LIMIT_ALL, includeSubEvents: true }),
+      staleTime: 5 * 60_000,
+    })
+
+  const { data: militaryUnits = [] } = useQuery({
+    queryKey: ['military-units', 'global-catalog'],
+    queryFn: () => militaryUnitApi.getAll(),
+    staleTime: 5 * 60_000,
+  })
+
+  const { data: treatyMeta } = useQuery({
+    queryKey: ['treaties', 'dashboard-total'],
+    queryFn: () => treatyApi.getAll({ take: 1 }),
+    staleTime: 5 * 60_000,
+  })
+
+  const { data: onThisDayEvents = [], isLoading: isOnThisDayLoading } =
+    useQuery({
+      queryKey: ['dashboard-on-this-day', today.month, today.day],
+      queryFn: () =>
+        getEventsOnThisDay({ month: today.month, day: today.day, limit: 6 }),
+      staleTime: 30 * 60_000,
+    })
+
+  const { data: recentEvents = [], isLoading: isRecentLoading } = useQuery({
+    queryKey: [...eventKeys.dashboardRecent(), 6],
+    queryFn: () => getAllEvents({ limit: 6, createdSinceDays: 36500 }),
+    staleTime: 60_000,
+  })
+
+  // --- 세기별 사건 밀도 & 9대 분야 인포그래픽 집계 ---
+  const { centuryBuckets, domainBreakdown, sampledTotal } = useMemo(() => {
+    const centuryMap = new Map<number, Record<string, number>>()
+    const domainCounts: Record<EventDomainKey, number> = {
+      POLITICS: 0,
+      DIPLOMACY: 0,
+      MILITARY: 0,
+      ECONOMY: 0,
+      SOCIETY: 0,
+      CULTURE: 0,
+      RELIGION: 0,
+      SCIENCE: 0,
+      OTHER: 0,
+    }
+
+    for (const ev of allSampledEvents) {
+      const domKey: EventDomainKey = isEventDomainKey(ev.domain)
+        ? ev.domain
+        : 'OTHER'
+      domainCounts[domKey] += 1
+
+      const signedYear = extractSignedEventYear(ev)
+      const century =
+        signedYear != null ? signedYearToCentury(signedYear) : null
+      if (century != null) {
+        const bucket = centuryMap.get(century) ?? {}
+        bucket[domKey] = (bucket[domKey] ?? 0) + 1
+        centuryMap.set(century, bucket)
+      }
+    }
+
+    const sortedBuckets: CenturyDomainBucket[] = Array.from(
+      centuryMap.entries(),
+    )
+      .sort(([a], [b]) => a - b)
+      .map(([century, domains]) => ({
+        century,
+        total: Object.values(domains).reduce((acc, v) => acc + v, 0),
+        domains,
+      }))
+
+    const sortedDomains = EVENT_DOMAIN_ORDER.map((domain) => ({
+      domain,
+      count: domainCounts[domain],
+    })).sort((a, b) => b.count - a.count)
+
+    return {
+      centuryBuckets: sortedBuckets,
+      domainBreakdown: sortedDomains,
+      sampledTotal: allSampledEvents.length,
+    }
+  }, [allSampledEvents])
+
+  const effectiveEventTotal = totalEventsCount ?? sampledTotal
+  const treatyTotal = treatyMeta?.total ?? 0
+
   return (
-    <S.DashboardContainer
+    <S.DashboardViewport
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
+      transition={{ duration: 0.2 }}
     >
-      <S.CentralContent>
-        {displayName && (
-          <S.Greeting>{displayName}님, 환영합니다</S.Greeting>
-        )}
+      <S.DashboardInner>
+        {/* 1. 상단 커맨드 헤더 */}
+        <S.HeaderBar>
+          <S.HeaderLead>
+            <S.EyebrowRow>
+              <S.EyebrowBadge>PAPYRUS ARCHIVE INFOGRAPHIC</S.EyebrowBadge>
+              <LiveClockPill />
+            </S.EyebrowRow>
+            <S.GreetingTitle>
+              {displayName
+                ? `${displayName}님의 역사 아카이브 현황판`
+                : '파피루스 역사 아카이브 현황판'}
+            </S.GreetingTitle>
+          </S.HeaderLead>
 
-        <Clock />
-
-        <S.ButtonContainer>
-          <S.ButtonWrapper>
-            <S.CircleButton
+          <S.HeaderControls>
+            <S.CommandSearchTrigger
               type="button"
-              title="국가"
-              aria-label="국가"
+              onClick={openCommandPalette}
+              aria-label="통합 검색 팔레트 열기"
+            >
+              <S.SearchLead>
+                <FiSearch size={14} aria-hidden />
+                <span>국가 · 인물 · 사건 · 부대 · 조약 검색…</span>
+              </S.SearchLead>
+              <S.SearchShortcutKbd>⌘K</S.SearchShortcutKbd>
+            </S.CommandSearchTrigger>
+
+            <S.PrimaryActionBtn type="button" onClick={openCreateEvent}>
+              <FiPlus size={14} aria-hidden />
+              새 사건 기록
+            </S.PrimaryActionBtn>
+          </S.HeaderControls>
+        </S.HeaderBar>
+
+        {/* 2. 6-Cell 아카이브 총량 스트립 + 교차 도메인 허브 바로가기 */}
+        <S.VolumeStripWrap aria-label="아카이브 도메인별 수록 규모">
+          <S.VolumeGrid>
+            <S.VolumeCell
+              type="button"
               onClick={() => navigate(pathKeys.country())}
             >
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2c1.7 0 3.25.62 4.45 1.64-.53.18-1.12.36-1.45.36-1 0-2-.5-3.5-.5-.86 0-1.6.17-2.22.44C9.73 4.67 10.83 4 12 4zm-7.32 6c.24-1.02.7-1.96 1.33-2.77.43.29.92.77 1.49 1.37.73.78 1.63 1.4 2.5 1.4.71 0 1.48-.31 2.17-.62.52-.24 1.02-.46 1.49-.55.5-.1.98-.04 1.43.18.53.25 1.02.68 1.46 1.29.41.58.73 1.25.94 1.98H4.68zM12 20c-2.56 0-4.83-1.2-6.27-3.06.37-.54.83-1.05 1.3-1.36.58-.38 1.15-.5 1.69-.36.5.13.98.46 1.45.96.5.54 1.02.86 1.56.96.7.13 1.46-.07 2.25-.47.7-.36 1.3-.49 1.83-.39.64.12 1.28.58 1.92 1.32C16.49 19.23 14.35 20 12 20z" />
-              </svg>
-            </S.CircleButton>
-            <S.ButtonLabel>국가</S.ButtonLabel>
-          </S.ButtonWrapper>
+              <S.VolumeTopRow>
+                <span>현대 주권국</span>
+                <FiGlobe size={13} aria-hidden />
+              </S.VolumeTopRow>
+              <S.VolumeNumber>
+                {countries.length.toLocaleString('ko-KR')}
+                <S.VolumeUnit>개국</S.VolumeUnit>
+              </S.VolumeNumber>
+              <S.VolumeSub>글로벌 아틀라스 · 국력 지표</S.VolumeSub>
+            </S.VolumeCell>
 
-          <S.ButtonWrapper>
-            <S.CircleButton
+            <S.VolumeCell
               type="button"
-              $primary
-              title="새 사건"
-              aria-label="새 사건 등록"
-              onClick={openCreateEvent}
+              onClick={() => navigate(pathKeys.country())}
             >
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <path d="M20.24 4.56c-2.34-2.34-6.14-2.34-8.48 0L3 13.32V21h7.68l8.56-8.56c2.34-2.34 2.34-6.14 0-8.48zM9.1 19H5v-4.1l6.34-6.34 4.1 4.1L9.1 19zm8.49-8.49-1.41 1.41-4.1-4.1 1.41-1.41c1.56-1.56 4.09-1.56 5.66 0 1.56 1.57 1.56 4.1 0 5.66z" />
-              </svg>
-            </S.CircleButton>
-            <S.ButtonLabel>새 사건</S.ButtonLabel>
-          </S.ButtonWrapper>
+              <S.VolumeTopRow>
+                <span>역사 정치체</span>
+                <FiCompass size={13} aria-hidden />
+              </S.VolumeTopRow>
+              <S.VolumeNumber>
+                {historicalCountries.length.toLocaleString('ko-KR')}
+                <S.VolumeUnit>개국</S.VolumeUnit>
+              </S.VolumeNumber>
+              <S.VolumeSub>왕조 · 제국 · 고대~근현대 정권</S.VolumeSub>
+            </S.VolumeCell>
 
-          <S.ButtonWrapper>
-            <S.CircleButton
+            <S.VolumeCell
               type="button"
-              title="왕조"
-              aria-label="왕조"
-              onClick={() => navigate(pathKeys.dynasty())}
+              onClick={() => navigate(pathKeys.personsTimeline())}
             >
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <path d="M5 16h14l1-8-4 3-3-5-3 5-4-3 1 8zm-1 2h16v2H4v-2z" />
-              </svg>
-            </S.CircleButton>
-            <S.ButtonLabel>왕조</S.ButtonLabel>
-          </S.ButtonWrapper>
+              <S.VolumeTopRow>
+                <span>등록 인물</span>
+                <FiUsers size={13} aria-hidden />
+              </S.VolumeTopRow>
+              <S.VolumeNumber>
+                {persons.length.toLocaleString('ko-KR')}
+                <S.VolumeUnit>명</S.VolumeUnit>
+              </S.VolumeNumber>
+              <S.VolumeSub>생애 연표 · 가계도 · 관직 이력</S.VolumeSub>
+            </S.VolumeCell>
 
-          <S.ButtonWrapper>
-            <S.CircleButton
+            <S.VolumeCell
               type="button"
-              title="역대 수장 비교"
-              aria-label="역대 수장 비교"
+              onClick={() => navigate(pathKeys.events.root())}
+            >
+              <S.VolumeTopRow>
+                <span>역사 사건</span>
+                <FiCalendar size={13} aria-hidden />
+              </S.VolumeTopRow>
+              <S.VolumeNumber>
+                {effectiveEventTotal.toLocaleString('ko-KR')}
+                <S.VolumeUnit>건</S.VolumeUnit>
+              </S.VolumeNumber>
+              <S.VolumeSub>하위 국면·전투 포함 전체 기록</S.VolumeSub>
+            </S.VolumeCell>
+
+            <S.VolumeCell
+              type="button"
+              onClick={() => navigate(pathKeys.military())}
+            >
+              <S.VolumeTopRow>
+                <span>군사 편제</span>
+                <FiShield size={13} aria-hidden />
+              </S.VolumeTopRow>
+              <S.VolumeNumber>
+                {militaryUnits.length.toLocaleString('ko-KR')}
+                <S.VolumeUnit>개 부대</S.VolumeUnit>
+              </S.VolumeNumber>
+              <S.VolumeSub>지휘 계통 · 참전 ORBAT 카탈로그</S.VolumeSub>
+            </S.VolumeCell>
+
+            <S.VolumeCell
+              type="button"
+              onClick={() => navigate(pathKeys.treaties.list())}
+            >
+              <S.VolumeTopRow>
+                <span>체결 조약</span>
+                <FiFlag size={13} aria-hidden />
+              </S.VolumeTopRow>
+              <S.VolumeNumber>
+                {treatyTotal.toLocaleString('ko-KR')}
+                <S.VolumeUnit>건</S.VolumeUnit>
+              </S.VolumeNumber>
+              <S.VolumeSub>강화 · 동맹 · 국경 · 통상 협정</S.VolumeSub>
+            </S.VolumeCell>
+          </S.VolumeGrid>
+
+          <S.QuickHubStrip aria-label="도메인 전문 뷰 바로가기">
+            <S.QuickHubLabel>전문 뷰 바로가기</S.QuickHubLabel>
+            <S.QuickHubPill
+              type="button"
+              onClick={() => navigate(pathKeys.government.list())}
+            >
+              <FiLayers size={12} aria-hidden />
+              정부·내각 총람
+            </S.QuickHubPill>
+            <S.QuickHubPill
+              type="button"
               onClick={() => navigate(pathKeys.headsOfState())}
             >
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <path d="M12 2l2.39 6.95H22l-6 4.36 2.3 7.04L12 16l-6.3 4.35L8 13.31 2 8.95h7.61L12 2z" />
-              </svg>
-            </S.CircleButton>
-            <S.ButtonLabel>수장 비교</S.ButtonLabel>
-          </S.ButtonWrapper>
-
-          <S.ButtonWrapper>
-            <S.CircleButton
+              역대 수장 비교 연표
+            </S.QuickHubPill>
+            <S.QuickHubPill
               type="button"
-              title="집단 (세대·계파·사단)"
-              aria-label="집단 (세대·계파·사단)"
+              onClick={() => navigate(pathKeys.headsOfStateAtlas())}
+            >
+              수장 지도 아틀라스
+            </S.QuickHubPill>
+            <S.QuickHubPill
+              type="button"
+              onClick={() => navigate(pathKeys.dynasty())}
+            >
+              왕조·가문
+            </S.QuickHubPill>
+            <S.QuickHubPill
+              type="button"
               onClick={() => navigate(pathKeys.personGroups())}
             >
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <path d="M12 5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM5 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm14 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM12 11c-1.6 0-3 .7-3.9 1.8l1.5 1.2c.5-.6 1.4-1 2.4-1s1.9.4 2.4 1l1.5-1.2C15 11.7 13.6 11 12 11z" />
-              </svg>
-            </S.CircleButton>
-            <S.ButtonLabel>집단</S.ButtonLabel>
-          </S.ButtonWrapper>
-        </S.ButtonContainer>
+              인물 집단·계파
+            </S.QuickHubPill>
+            <S.QuickHubPill
+              type="button"
+              onClick={() => navigate(pathKeys.companies.root())}
+            >
+              기업·상단
+            </S.QuickHubPill>
+            <S.QuickHubPill
+              type="button"
+              onClick={() => navigate(pathKeys.sources())}
+            >
+              <FiBookOpen size={12} aria-hidden />
+              출처 서고
+            </S.QuickHubPill>
+          </S.QuickHubStrip>
+        </S.VolumeStripWrap>
 
-        <S.TextButton type="button" onClick={() => navigate(pathKeys.events.root())}>
-          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-            <path d="M18 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12v-2H6V4h12v16l2-1V3.5A1.5 1.5 0 0 0 18.5 2H18z" />
-          </svg>
-          아카이브 열기
-        </S.TextButton>
-      </S.CentralContent>
+        {/* 3. 2열 아카이브 인포그래픽 (세기별 사건 밀도 & 9대 분야 분포) */}
+        <S.InfographicsGrid>
+          <S.BentoCard aria-label="세기별 역사 사건 밀도 히스토그램">
+            <S.CardHeader>
+              <S.CardTitleGroup>
+                <S.CardTitle>기원전 ~ 현대 세기별 사건 밀도</S.CardTitle>
+                {centuryBuckets.length > 0 && (
+                  <S.CardBadge>{centuryBuckets.length}개 세기</S.CardBadge>
+                )}
+              </S.CardTitleGroup>
+              <S.CardLinkBtn
+                type="button"
+                onClick={() => navigate(pathKeys.events.root())}
+              >
+                연대별 탐색
+                <FiArrowUpRight size={12} aria-hidden />
+              </S.CardLinkBtn>
+            </S.CardHeader>
+            <S.CardCaption>
+              막대를 클릭하면 해당 세기 사건 카탈로그로 즉시 필터링됩니다.
+            </S.CardCaption>
 
-      <S.BottomContainer
-        initial={{ y: 100, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.5, delay: 0.2 }}
-      >
-        <S.BottomInner>
-          {/* 보조: 결과 있을 때만 노출 */}
-          <OnThisDaySection />
-          {/* 주력: 항상 노출 */}
-          <RecentEventsSection />
-        </S.BottomInner>
-      </S.BottomContainer>
+            {isInfographicLoading ? (
+              <S.EmptyBox>세기별 분포를 집계하는 중…</S.EmptyBox>
+            ) : centuryBuckets.length === 0 ? (
+              <S.EmptyBox>연대가 입력된 사건 기록이 아직 없습니다.</S.EmptyBox>
+            ) : (
+              <StackedCenturyDomainChart
+                buckets={centuryBuckets}
+                domainBreakdown={domainBreakdown}
+                onSelectCentury={(century) =>
+                  navigate(`${pathKeys.events.root()}?century=${century}`)
+                }
+              />
+            )}
+          </S.BentoCard>
+
+          <EventDomainInfographicCard
+            domainBreakdown={domainBreakdown}
+            totalSampled={sampledTotal}
+            onSelectDomain={(domainKey) =>
+              navigate(`${pathKeys.events.root()}?cat=${domainKey}`)
+            }
+            onOpenEvents={() => navigate(pathKeys.events.root())}
+          />
+        </S.InfographicsGrid>
+
+        {/* 4. 2열 라이브 큐레이션 (역사 속 오늘 & 최근 기록된 사건) */}
+        <S.FeedsGrid>
+          <S.BentoCard aria-label={`역사 속 오늘 ${today.month}월 ${today.day}일`}>
+            <S.CardHeader>
+              <S.CardTitleGroup>
+                <S.CardTitle>
+                  역사 속 오늘 · {today.month}월 {today.day}일
+                </S.CardTitle>
+                {onThisDayEvents.length > 0 && (
+                  <S.CardBadge>{onThisDayEvents.length}건</S.CardBadge>
+                )}
+              </S.CardTitleGroup>
+              <S.CardLinkBtn type="button" onClick={openCreateEvent}>
+                <FiPlus size={12} aria-hidden />
+                사건 추가
+              </S.CardLinkBtn>
+            </S.CardHeader>
+
+            {isOnThisDayLoading ? (
+              <S.EmptyBox>오늘 날짜의 역사 기록을 찾는 중…</S.EmptyBox>
+            ) : onThisDayEvents.length === 0 ? (
+              <S.EmptyBox>
+                <span>
+                  {today.month}월 {today.day}일자로 기록된 역사 사건이 아직 없습니다.
+                </span>
+                <S.CardLinkBtn
+                  type="button"
+                  onClick={() => navigate(pathKeys.events.root())}
+                >
+                  사건 아카이브 둘러보기
+                  <FiArrowUpRight size={12} aria-hidden />
+                </S.CardLinkBtn>
+              </S.EmptyBox>
+            ) : (
+              <S.SpineList>
+                {onThisDayEvents.map((ev) => {
+                  const color = domainAccent(ev.domain, theme.mode)
+                  const summary = stripHtmlSummary(ev.description)
+                  const categoryPath = formatDomainPath(ev.domain, ev.type)
+                  return (
+                    <S.FeedRowButton
+                      key={ev.id}
+                      type="button"
+                      onClick={() => navigate(pathKeys.events.detail(ev.id))}
+                    >
+                      <S.FeedYearBadge>{formatEventYearBadge(ev)}</S.FeedYearBadge>
+                      <S.FeedMainCol>
+                        <S.FeedTitleLine>
+                          <S.DomainSwatch $color={color} />
+                          <S.FeedEventTitle>{ev.title}</S.FeedEventTitle>
+                        </S.FeedTitleLine>
+                        {summary ? <S.FeedSummary>{summary}</S.FeedSummary> : null}
+                      </S.FeedMainCol>
+                      {categoryPath ? (
+                        <S.FeedCategoryTag $color={color}>
+                          {categoryPath}
+                        </S.FeedCategoryTag>
+                      ) : (
+                        <FiArrowUpRight size={13} aria-hidden />
+                      )}
+                    </S.FeedRowButton>
+                  )
+                })}
+              </S.SpineList>
+            )}
+          </S.BentoCard>
+
+          <S.BentoCard aria-label="최근 기록된 사건">
+            <S.CardHeader>
+              <S.CardTitleGroup>
+                <S.CardTitle>최근 기록된 사건</S.CardTitle>
+                {recentEvents.length > 0 && (
+                  <S.CardBadge>최신 {recentEvents.length}건</S.CardBadge>
+                )}
+              </S.CardTitleGroup>
+              <S.CardLinkBtn
+                type="button"
+                onClick={() => navigate(pathKeys.events.root())}
+              >
+                전체 보기
+                <FiArrowUpRight size={12} aria-hidden />
+              </S.CardLinkBtn>
+            </S.CardHeader>
+
+            {isRecentLoading ? (
+              <S.EmptyBox>최근 사건을 불러오는 중…</S.EmptyBox>
+            ) : recentEvents.length === 0 ? (
+              <S.EmptyBox>
+                <span>아직 등록된 사건이 없습니다.</span>
+                <S.CardLinkBtn type="button" onClick={openCreateEvent}>
+                  첫 사건 등록하기
+                </S.CardLinkBtn>
+              </S.EmptyBox>
+            ) : (
+              <S.SpineList>
+                {recentEvents.map((ev) => {
+                  const color = domainAccent(ev.domain, theme.mode)
+                  const summary = stripHtmlSummary(ev.description)
+                  const categoryPath = formatDomainPath(ev.domain, ev.type)
+                  return (
+                    <S.FeedRowButton
+                      key={ev.id}
+                      type="button"
+                      onClick={() => navigate(pathKeys.events.detail(ev.id))}
+                    >
+                      <S.FeedYearBadge>{formatEventYearBadge(ev)}</S.FeedYearBadge>
+                      <S.FeedMainCol>
+                        <S.FeedTitleLine>
+                          <S.DomainSwatch $color={color} />
+                          <S.FeedEventTitle>{ev.title}</S.FeedEventTitle>
+                        </S.FeedTitleLine>
+                        {summary ? <S.FeedSummary>{summary}</S.FeedSummary> : null}
+                      </S.FeedMainCol>
+                      {categoryPath ? (
+                        <S.FeedCategoryTag $color={color}>
+                          {categoryPath}
+                        </S.FeedCategoryTag>
+                      ) : (
+                        <FiArrowUpRight size={13} aria-hidden />
+                      )}
+                    </S.FeedRowButton>
+                  )
+                })}
+              </S.SpineList>
+            )}
+          </S.BentoCard>
+        </S.FeedsGrid>
+      </S.DashboardInner>
 
       <EventRegisterModal
         isOpen={createEventOpen}
         onClose={closeCreateEvent}
         onDirtyChange={onCreateEventDirtyChange}
       />
-    </S.DashboardContainer>
+    </S.DashboardViewport>
   )
 }
