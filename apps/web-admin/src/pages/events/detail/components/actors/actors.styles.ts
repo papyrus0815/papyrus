@@ -598,10 +598,23 @@ export const GroupHead = styled.div`
 
 /** 무리 머리 오른쪽 — 이름으로 추가(입력) · 목록에서 고르기. 좁으면 라벨 아래로 내려가 한 줄을 쓴다 */
 export const GroupTools = styled.div`
-  display: inline-flex;
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  justify-content: flex-end;
+  gap: 8px 12px;
   min-width: 0;
+
+  /* 좁으면 입력 칸이 한 줄을 다 쓰고 단추들은 그 아래 */
+  @container eventdetail (max-width: 639px) {
+    justify-content: flex-start;
+
+    > input {
+      flex: 1 1 100%;
+      width: auto;
+    }
+  }
 `
 
 /** 이름이 맞는 후보 — 입력하는 동안만 머리 아래 한 줄 */
@@ -784,14 +797,13 @@ export const CountryNoteLine = styled.div<{ $hasContent: boolean }>`
 `
 
 /**
- * 역할은 이 지면의 새 축이라 스캔이 돼야 하는데, 이름 옆 회색 글씨로 두니
- * "대한민국 피해국"이 한 덩어리로 읽히고 편집 가능한지도 보이지 않았다.
- * 테두리를 둘러 이름에서 떼어내고, 작지만 또렷한 잉크를 준다.
+ * 역할(주도국·피해국…) — 이름 옆 알약. 기본값 '참여국'이면 세우지 않는다. 고르기는 편집 칸(✎)에서.
+ * 이름과 한 덩어리로 읽히지 않게 면을 깔고, 작지만 또렷한 잉크.
  */
-export const CountryRolePicker = styled.span`
+export const CountryRoleTag = styled.span`
   display: inline-flex;
   align-items: center;
-  padding: 1px 4px 1px 8px;
+  padding: 1px 8px;
   border-radius: ${RADIUS.PILL};
   background: ${({ theme }) => surface.chip(theme.mode)};
   font-size: 12px;
@@ -800,21 +812,6 @@ export const CountryRolePicker = styled.span`
   line-height: 1.5;
   color: ${({ theme }) => theme.colors.text.secondary};
   white-space: nowrap;
-
-  [data-empty='true'] {
-    font-style: italic;
-    font-weight: 500;
-    opacity: 0.6;
-  }
-
-  /*
-   * InlineSelect의 ▾는 hover에서만 뜨는데, 배지는 그 자리를 18px 비워 두므로 평소엔
-   * 한쪽이 빈 알약처럼 보였다. 약하게 상시 노출해 균형을 맞추고 "고를 수 있다"는
-   * 신호도 남긴다 — 행에 들어오면 또렷해진다.
-   */
-  button {
-    opacity: 0.4;
-  }
 `
 
 /** 진영 한 묶음 — 묶음 사이는 국가 목록의 행 간격보다 넓게 */
@@ -961,8 +958,9 @@ export const CountryNameLine = styled.div`
   align-items: baseline;
   flex-wrap: wrap;
   gap: 10px;
-  font-size: 15px;
-  font-weight: 600;
+  /* 나라 이름은 아래 대표단(사람 카드 14px)의 머리 — 한 단 크고 굵게 */
+  font-size: 16px;
+  font-weight: 700;
   letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.primary};
 `
@@ -979,7 +977,7 @@ export const CountryFlag = styled.span`
 export const CountryLink = styled(Link)`
   color: inherit;
   text-decoration: none;
-  font-weight: 600;
+  font-weight: inherit;
 
   &:hover,
   &:focus-visible {
@@ -1149,7 +1147,7 @@ export const EditToggle = styled.button<{ $active?: boolean }>`
  * 예전엔 나라 줄 전체(대표단 포함)에 걸려 인물에 마우스를 올려도 나라 단추가 켜졌다.
  * 행에 들어와도 높이·줄바꿈은 그대로(hover는 단추 투명도만).
  */
-export const CountryCard = styled.div<{ $dragOver?: boolean }>`
+export const CountryCard = styled.div<{ $dragOver?: boolean; $editing?: boolean }>`
   position: relative;
   padding: 10px 14px;
   border-radius: ${RADIUS.MD};
@@ -1160,10 +1158,6 @@ export const CountryCard = styled.div<{ $dragOver?: boolean }>`
 
   &:hover {
     background: ${({ theme }) => surface.cardHover(theme.mode)};
-  }
-  &:hover ${CountryRolePicker} button,
-  &:focus-within ${CountryRolePicker} button {
-    opacity: 1;
   }
   &:hover > ${RowActions},
   &:focus-within > ${RowActions} {
@@ -1178,6 +1172,19 @@ export const CountryCard = styled.div<{ $dragOver?: boolean }>`
   &:focus-within > ${RowActions} ${EditToggle} {
     opacity: 0.8;
   }
+
+  /* 편집 중인 나라 — 인물 카드와 같은 표시 */
+  ${({ $editing, theme }) =>
+    $editing &&
+    css`
+      &,
+      &:hover {
+        background: ${theme.colors.background.primary};
+        box-shadow:
+          0 0 0 1.5px ${ledgerAccent(theme.mode)},
+          0 4px 16px rgba(15, 23, 42, 0.08);
+      }
+    `}
 `
 
 /** 참여국 사실 줄 — 참여 형태·가담/이탈·진영(평평한 목록일 때) */

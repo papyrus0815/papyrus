@@ -1,4 +1,4 @@
-import { type DragEvent, type KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { type DragEvent } from 'react'
 
 import { FiAlertTriangle, FiArrowDown, FiArrowUp, FiEdit2, FiX } from 'react-icons/fi'
 
@@ -10,19 +10,10 @@ import {
   participationValueOf,
   personNameOf,
 } from './actors.lib'
+import { ActorEditPanel } from './actor-edit-panel'
 import {
   AddInfoButton,
-  ChoiceChip,
-  ChoiceChips,
   DeathAtEventBadge,
-  EditDone,
-  EditField,
-  EditFoot,
-  EditHint,
-  EditInput,
-  EditLabel,
-  EditPanel,
-  EditTextarea,
   EditToggle,
   FactTag,
   MismatchNote,
@@ -176,13 +167,50 @@ export function ActorPersonRow({
         )}
 
         {editing ? (
-          <PersonEditPanel
-            entry={entry}
-            fullName={fullName}
-            sideOptions={sideOptions}
-            participationOptions={participationOptions}
-            onUpdate={onUpdate}
-            onParticipation={onParticipation}
+          <ActorEditPanel
+            name={fullName}
+            choices={[
+              ...(participationOptions.length > 1
+                ? [
+                    {
+                      id: 'country',
+                      label: '참여 국가',
+                      value: participationValueOf(entry) || 'none',
+                      options: participationOptions.map((option) => ({ ...option, muted: option.value === 'none' })),
+                      onPick: (next: string) => onParticipation(entry.personId, next),
+                    },
+                  ]
+                : []),
+              ...(sideOptions.length > 1
+                ? [
+                    {
+                      id: 'side',
+                      label: '진영',
+                      value: entry.sideId ?? 'none',
+                      options: sideOptions.map((option) => ({ ...option, muted: option.value === 'none' })),
+                      onPick: (next: string) => onUpdate(entry.personId, { sideId: next === 'none' ? null : next }),
+                    },
+                  ]
+                : []),
+            ]}
+            texts={[
+              {
+                id: 'role',
+                label: '무엇을 했나',
+                value: entry.role ?? '',
+                placeholder: '예: 협상 대표, 지휘관, 서명',
+                maxLength: 100,
+                onSave: (next) => onUpdate(entry.personId, { role: next }),
+              },
+              {
+                id: 'note',
+                label: '비고',
+                value: entry.note ?? '',
+                placeholder: '이 사건에서의 행적 · 근거 · 덧붙일 말 (*강조*는 굵게)',
+                multiline: true,
+                onSave: (next) => onUpdate(entry.personId, { note: next }),
+              },
+            ]}
             onClose={() => onEditingChange(false)}
           />
         ) : (
@@ -241,231 +269,5 @@ export function ActorPersonRow({
         </RemoveInline>
       </RowActions>
     </PersonRow>
-  )
-}
-
-/** 역할은 100자까지(서버 검증과 같다) */
-const ROLE_MAX = 100
-
-/**
- * 한 사람의 편집 칸 — 참여 국가 · 진영(한 번 누르면 저장) · 무엇을 했나 · 비고(칸을 벗어나면 저장).
- *
- * - 열리면 '무엇을 했나'에 커서가 가고 카드가 화면에 들어온다. 참여 국가를 고르면 카드가 그 나라 밑으로
- *   옮겨 가며 새로 그려지는데, 그때도 같은 자리(무엇을 했나)로 돌아와 이어 적는다.
- * - 저장은 칸마다(행 단위 머지 patch, 되돌리기 토스트 그대로). '완료'·Esc는 아직 안 나간 글까지 저장하고 닫는다.
- * - ⚠️ 칸에서 아직 안 나간 글은 **칩을 누르기 전·칸이 사라질 때** 먼저 보낸다. 참여 국가를 고르면 카드가 옮겨 가며
- *   새로 그려지는데, blur보다 그게 먼저면 비고에 친 글이 통째로 사라졌다(실측: 비고를 치고 '미국'을 누르자 유실).
- */
-function PersonEditPanel({
-  entry,
-  fullName,
-  sideOptions,
-  participationOptions,
-  onUpdate,
-  onParticipation,
-  onClose,
-}: {
-  entry: EventPersonEntry
-  fullName: string
-  sideOptions: Array<{ value: string; label: string }>
-  participationOptions: Array<{ value: string; label: string }>
-  onUpdate: (personId: string, patch: PersonUpdate) => void
-  onParticipation: (personId: string, value: string) => void
-  onClose: () => void
-}) {
-  const fieldId = useId()
-  const panelRef = useRef<HTMLDivElement>(null)
-  const roleRef = useRef<HTMLInputElement>(null)
-  const noteRef = useRef<HTMLTextAreaElement>(null)
-  const [roleDraft, setRoleDraft] = useState(entry.role ?? '')
-  const [noteDraft, setNoteDraft] = useState(entry.note ?? '')
-  /** 마지막으로 보낸 값 — blur 저장과 '완료' 저장이 같은 글을 두 번 보내지 않게 */
-  const sentRef = useRef({ role: (entry.role ?? '').trim(), note: (entry.note ?? '').trim() })
-  /** 지금 친 글 — 칸이 사라질 때(cleanup) 렌더 밖에서 읽는다 */
-  const draftRef = useRef({ role: roleDraft, note: noteDraft })
-  draftRef.current = { role: roleDraft, note: noteDraft }
-  const onUpdateRef = useRef(onUpdate)
-  onUpdateRef.current = onUpdate
-
-  /* 서버 값이 바뀌면(되돌리기·다른 칸 저장 후 다시 받기) 쓰고 있지 않은 칸만 따라간다 — 치는 글은 덮지 않는다 */
-  useEffect(() => {
-    sentRef.current.role = (entry.role ?? '').trim()
-    if (document.activeElement !== roleRef.current) setRoleDraft(entry.role ?? '')
-  }, [entry.role])
-  useEffect(() => {
-    sentRef.current.note = (entry.note ?? '').trim()
-    if (document.activeElement !== noteRef.current) setNoteDraft(entry.note ?? '')
-  }, [entry.note])
-
-  /*
-   * 열릴 때(새로 그려질 때 포함) — 카드를 화면에 들이고 **처음 빈 칸**에 커서(둘 다 차 있으면 무엇을 했나).
-   * 참여 국가를 골라 카드가 옮겨 간 뒤에도 이어 적을 자리로 돌아온다.
-   */
-  useEffect(() => {
-    panelRef.current?.closest('li')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-    const target = (entry.role ?? '').trim() && !(entry.note ?? '').trim() ? noteRef.current : roleRef.current
-    target?.focus({ preventScroll: true })
-    // 처음 그려질 때만 — 이후 값이 바뀔 때마다 커서를 옮기면 치는 중에 튄다
-  }, [])
-
-  /* 칸이 사라질 때(닫기·카드 이동) 아직 안 나간 글을 보낸다 — blur가 오지 않는 경로의 안전망 */
-  useEffect(
-    () => () => {
-      const role = draftRef.current.role.trim()
-      const note = draftRef.current.note.trim()
-      const patch: PersonUpdate = {}
-      if (role !== sentRef.current.role) patch.role = role
-      if (note !== sentRef.current.note) patch.note = note
-      if (patch.role !== undefined || patch.note !== undefined) onUpdateRef.current(entry.personId, patch)
-    },
-    [entry.personId],
-  )
-
-  /* 비고 칸은 글 높이만큼 자란다 */
-  useLayoutEffect(() => {
-    const node = noteRef.current
-    if (!node) return
-    node.style.height = 'auto'
-    node.style.height = `${node.scrollHeight}px`
-  }, [noteDraft])
-
-  const saveRole = () => {
-    const next = roleDraft.trim()
-    if (next === sentRef.current.role) return
-    sentRef.current.role = next
-    onUpdate(entry.personId, { role: next })
-  }
-  const saveNote = () => {
-    const next = noteDraft.trim()
-    if (next === sentRef.current.note) return
-    sentRef.current.note = next
-    onUpdate(entry.personId, { note: next })
-  }
-  /** 칸에 남은 글을 먼저 보낸다 — 칩(참여 국가·진영)을 누르기 전에 */
-  const flushText = () => {
-    saveRole()
-    saveNote()
-  }
-  const finish = () => {
-    flushText()
-    onClose()
-  }
-
-  const participationValue = participationValueOf(entry) || 'none'
-  const sideValue = entry.sideId ?? 'none'
-  const showParticipation = participationOptions.length > 1
-  const showSide = sideOptions.length > 1
-
-  const onPanelKeyDown = (keyEvent: KeyboardEvent<HTMLDivElement>) => {
-    if (keyEvent.key === 'Escape') {
-      keyEvent.preventDefault()
-      keyEvent.stopPropagation()
-      finish()
-    }
-  }
-
-  return (
-    <EditPanel ref={panelRef} role="group" aria-label={`${fullName} 정보`} onKeyDown={onPanelKeyDown}>
-      {showParticipation && (
-        <EditField>
-          <EditLabel as="span" id={`${fieldId}-country`}>
-            참여 국가
-          </EditLabel>
-          <ChoiceChips role="radiogroup" aria-labelledby={`${fieldId}-country`}>
-            {participationOptions.map((option) => {
-              const selected = option.value === participationValue
-              return (
-                <ChoiceChip
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  $selected={selected}
-                  $muted={option.value === 'none'}
-                  onClick={() => {
-                    if (selected) return
-                    flushText()
-                    onParticipation(entry.personId, option.value)
-                  }}
-                >
-                  {option.label}
-                </ChoiceChip>
-              )
-            })}
-          </ChoiceChips>
-        </EditField>
-      )}
-
-      {showSide && (
-        <EditField>
-          <EditLabel as="span" id={`${fieldId}-side`}>
-            진영
-          </EditLabel>
-          <ChoiceChips role="radiogroup" aria-labelledby={`${fieldId}-side`}>
-            {sideOptions.map((option) => {
-              const selected = option.value === sideValue
-              return (
-                <ChoiceChip
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  $selected={selected}
-                  $muted={option.value === 'none'}
-                  onClick={() => {
-                    if (selected) return
-                    flushText()
-                    onUpdate(entry.personId, { sideId: option.value === 'none' ? null : option.value })
-                  }}
-                >
-                  {option.label}
-                </ChoiceChip>
-              )
-            })}
-          </ChoiceChips>
-        </EditField>
-      )}
-
-      <EditField>
-        <EditLabel htmlFor={`${fieldId}-role`}>무엇을 했나</EditLabel>
-        <EditInput
-          ref={roleRef}
-          id={`${fieldId}-role`}
-          value={roleDraft}
-          maxLength={ROLE_MAX}
-          placeholder="예: 협상 대표, 지휘관, 서명"
-          onChange={(changeEvent) => setRoleDraft(changeEvent.target.value)}
-          onBlur={saveRole}
-          onKeyDown={(keyEvent) => {
-            /* Enter = 저장하고 비고로(IME 조합 중 Enter는 글자 확정이라 넘긴다) */
-            if (keyEvent.key === 'Enter' && !keyEvent.nativeEvent.isComposing) {
-              keyEvent.preventDefault()
-              saveRole()
-              noteRef.current?.focus()
-            }
-          }}
-        />
-      </EditField>
-
-      <EditField>
-        <EditLabel htmlFor={`${fieldId}-note`}>비고</EditLabel>
-        <EditTextarea
-          ref={noteRef}
-          id={`${fieldId}-note`}
-          rows={2}
-          value={noteDraft}
-          placeholder="이 사건에서의 행적 · 근거 · 덧붙일 말 (*강조*는 굵게)"
-          onChange={(changeEvent) => setNoteDraft(changeEvent.target.value)}
-          onBlur={saveNote}
-        />
-      </EditField>
-
-      <EditFoot>
-        <EditHint>칸을 벗어나면 저장됩니다 · Esc로 닫기</EditHint>
-        <EditDone type="button" onClick={finish}>
-          완료
-        </EditDone>
-      </EditFoot>
-    </EditPanel>
   )
 }

@@ -118,7 +118,11 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
    * 편집 칸이 열린 인물(한 번에 한 사람) — 여기서 쥐어야 참여 국가를 골라 카드가 그 나라 밑으로 옮겨 가
    * 새로 그려져도 열린 채로 따라간다(행이 쥐고 있을 땐 옮겨 가는 순간 닫혔다).
    */
-  const [editingPersonId, setEditingPersonId] = useState<string | null>(null)
+  const [editingKey, setEditingKey] = useState<string | null>(null)
+  /** 편집 칸은 한 번에 하나 — 인물('person:id')과 나라('country:행 키')가 한 자리를 나눠 쓴다 */
+  const editingPersonId = editingKey?.startsWith('person:') ? editingKey.slice('person:'.length) : null
+  const editingCountryKey = editingKey?.startsWith('country:') ? editingKey.slice('country:'.length) : null
+  const setEditingPersonId = (personId: string | null) => setEditingKey(personId ? `person:${personId}` : null)
   const [importingLeaders, setImportingLeaders] = useState(false)
 
   const actors = useActorMutations({ event, onPatch })
@@ -129,11 +133,11 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
     setImportingLeaders(true)
     try {
       const modernIds = countryRows
-        .filter((r) => !r.isHistorical)
-        .map((r) => r.id)
+        .filter((countryRow) => !countryRow.isHistorical)
+        .map((countryRow) => countryRow.id)
       const histIds = countryRows
-        .filter((r) => r.isHistorical)
-        .map((r) => r.id)
+        .filter((countryRow) => countryRow.isHistorical)
+        .map((countryRow) => countryRow.id)
       const candidates = await getContemporaryLeadersForEvent({
         date: event.startDate,
         datePrecision: event.startDatePrecision ?? null,
@@ -145,11 +149,11 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
         return
       }
       const addedCount = actors.addPersonsBatch(
-        candidates.map((c) => ({
-          personId: c.personId,
-          role: c.suggestedRole,
-          countryId: c.countryId,
-          historicalCountryId: c.historicalCountryId,
+        candidates.map((candidate) => ({
+          personId: candidate.personId,
+          role: candidate.suggestedRole,
+          countryId: candidate.countryId,
+          historicalCountryId: candidate.historicalCountryId,
         })),
         `당시 수반 ${candidates.length}명 불러오기`,
       )
@@ -446,13 +450,18 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
         side={row.sideId && sideById.get(row.sideId) ? sideById.get(row.sideId) : null}
         sideOptions={sideOptions}
         groupSideId={groupSideId}
+        editing={editingCountryKey === rowKey}
+        onEditingChange={(open) => setEditingKey(open ? `country:${rowKey}` : null)}
         manageMode={manageMode}
         isFirst={index === 0}
         isLast={index === countryRows.length - 1}
         onCountryClick={onCountryClick}
         onUpdate={actors.updateCountry}
         onMove={actors.moveCountry}
-        onRemove={actors.removeCountry}
+        onRemove={(removedKey) => {
+          if (editingCountryKey === removedKey) setEditingKey(null)
+          actors.removeCountry(removedKey)
+        }}
         isDragOver={dragOverTarget === targetKey}
         onDragStart={(dragEvent) => {
           dragEvent.stopPropagation()
