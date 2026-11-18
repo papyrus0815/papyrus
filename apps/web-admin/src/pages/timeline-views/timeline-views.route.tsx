@@ -14,5 +14,5 @@ const lazyTimelineView =
   }
 
 export const timelineViewsRoutes: RouteObject[] = (
-  ['ethnicity', 'legislature', 'military'] as const
+  ['ethnicity', 'legislature'] as const
 ).map((view) => ({ path: view, lazy: lazyTimelineView(view) }))

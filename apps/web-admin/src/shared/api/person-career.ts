@@ -30,7 +30,8 @@ export interface CreateMilitaryCareerDto {
   showPositionInfo?: boolean
   rankId: string // 계급 ID (대장, 중장 등)
   jobCategoryId?: string
-  organizationId: string // 소속 조직 ID
+  organizationId?: string | null // 소속 조직 ID (선택)
+  militaryUnitId?: string | null // 소속 군사 사령부·부대 ID (선택)
   branch?: string // 군종 (육군, 해군, 공군)
   position?: string // 역할/보직 (사령관, 참모장 등)
   termNumber?: number // 대수

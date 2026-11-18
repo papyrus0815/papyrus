@@ -312,6 +312,10 @@ export class EventResponseDto {
     participantId?: string | null
     /** 진영(D1) */
     sideId?: string | null
+    sideName?: string | null
+    sideColor?: string | null
+    sideOutcome?: string | null
+    sideOutcomeNote?: string | null
     participation?: string | null
     join?: StructuredPointView | null
     joinReason?: string | null
@@ -348,6 +352,10 @@ export class EventResponseDto {
     participantId?: string | null
     /** 진영(D1) */
     sideId?: string | null
+    sideName?: string | null
+    sideColor?: string | null
+    sideOutcome?: string | null
+    sideOutcomeNote?: string | null
     participation?: string | null
     join?: StructuredPointView | null
     joinReason?: string | null

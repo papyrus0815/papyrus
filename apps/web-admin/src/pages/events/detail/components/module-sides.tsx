@@ -49,6 +49,7 @@ import { SIDE_OUTCOME_LABEL, SIDE_OUTCOME_OPTIONS } from './side-outcome'
 interface ModuleSidesProps {
   event: EventDetail
   onPatch: (patch: UpdateEventDto) => void
+  focusUnitId?: string | null
 }
 
 /**
@@ -125,7 +126,7 @@ function computeJoinSpanRatio(
  * 줄의 sideId**로 저장한다(사건 수정 patch → 되돌리기 가능). 같은 나라를 진영과 참여국에 두 번
  * 적지 않는다 — 여기서 고르는 나라는 이미 이 사건의 참여국이다.
  */
-export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
+export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
   const queryClient = useQueryClient()
   const sides = useMemo(() => event.sides ?? [], [event.sides])
   /* 표시용 색 — 저장된 색이 없으면 순서대로 팔레트(저장값 불변) */
@@ -686,7 +687,11 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
           const shownExtra: Record<SideExtra, boolean> = {
             faction: Boolean(side.personGroupId) || isOpened('faction'),
             /* 조회 실패는 접지 않는다 — 접으면 실패가 또 '없음'으로 보인다 */
-            orbat: sideUnitRows.length > 0 || isOpened('orbat') || sideUnitsQuery.isError,
+            orbat:
+              sideUnitRows.length > 0 ||
+              isOpened('orbat') ||
+              sideUnitsQuery.isError ||
+              Boolean(focusUnitId),
             weapons:
               (weaponCountBySideId.get(side.id) ?? 0) > 0 || isOpened('weapons') || sideWeaponsQuery.isError,
             description: Boolean(side.description?.trim()) || isOpened('description'),
@@ -1063,6 +1068,7 @@ export function ModuleSides({ event, onPatch }: ModuleSidesProps) {
                   )
                 }
                 candidatePersonIds={persons.map((person) => person.personId)}
+                focusUnitId={focusUnitId}
                 onRefresh={refresh}
               />
               )}

@@ -461,9 +461,14 @@ function EventDetailContent({
 
   /* 탭 — URL(?tab=)이 정본(replace: 탭을 오가도 '뒤로'가 탭을 되감지 않는다). 개요는 파라미터 없음 */
   const tabParam = searchParams.get('tab')
+  const focusUnitId = searchParams.get('unit')?.trim() || null
   const visibleTabs = isCollection ? EVENT_TABS : EVENT_TABS.filter((tab) => tab.id !== 'survey')
   const activeTab: EventTabId =
-    isEventTab(tabParam) && visibleTabs.some((tab) => tab.id === tabParam) ? tabParam : 'overview'
+    isEventTab(tabParam) && visibleTabs.some((tab) => tab.id === tabParam)
+      ? tabParam
+      : !isCollection && (tabParam === 'survey' || focusUnitId)
+        ? 'modules'
+        : 'overview'
   /** '하위 사건으로 나누기'(단일 → 묶음) 모달 */
   const [splitOpen, setSplitOpen] = useState(false)
   /** 사건 종류 안내(머리의 '단일 사건 ?'·'최상위 사건 ?') */
@@ -1194,7 +1199,13 @@ function EventDetailContent({
                     onStartSides={startSides}
                     onShowMetrics={() => setMetricsOpened(true)}
                   />
-                  {enabledModules.includes('sides') && <ModuleSides event={event} onPatch={onPatch} />}
+                  {enabledModules.includes('sides') && (
+                    <ModuleSides
+                      event={event}
+                      onPatch={onPatch}
+                      focusUnitId={focusUnitId}
+                    />
+                  )}
                   {enabledModules.includes('metrics') && <ModuleMetrics event={event} />}
                   {enabledModules.includes('military-details') && (
                     <ModuleMilitaryDetails event={event} onPatch={onPatch} />

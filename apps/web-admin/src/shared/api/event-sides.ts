@@ -116,7 +116,12 @@ export function toSideInputs(sides: ReadonlyArray<EventSide>): EventSideInput[] 
   }))
 }
 
-export type SideUnitRole = 'MAIN_EFFORT' | 'SUPPORTING' | 'RESERVE' | 'DEFENSE'
+export type SideUnitRole =
+  | 'MAIN_EFFORT'
+  | 'SUPPORTING'
+  | 'RESERVE'
+  | 'DEFENSE'
+  | 'OTHER'
 
 export interface SideUnitLineage {
   id: string

@@ -582,6 +582,7 @@ export class PersonController {
     partyMemberships: any[]
     electionCandidacies: any[]
     militaryCommands: any[]
+    battleCommands?: any[]
     events: any[]
     governmentPositions: any[]
     spouseRelations: any[]
@@ -1120,7 +1121,36 @@ export class PersonController {
       partyLeaderships: serializeBigInt(person.PoliticalPartyLeadership || []),
       partyMemberships: serializeBigInt(person.politicalPartyMemberships || []),
       electionCandidacies: serializeBigInt(person.electionCandidacies || []),
-      militaryCommands: serializeBigInt(person.MilitaryUnitCommander || []),
+      militaryCommands: (() => {
+        const canonicalUnitIds = new Set<string>(
+          ((person.GovernmentTenures ?? []) as any[])
+            .map((t) => t?.militaryUnitId ?? t?.militaryUnit?.id)
+            .filter(Boolean),
+        )
+        const rawCommands = (person.MilitaryUnitCommander || []) as any[]
+        const deduped = rawCommands.filter((cmd) => {
+          const uid = cmd?.unit?.id ?? cmd?.unitId
+          return !uid || !canonicalUnitIds.has(uid)
+        })
+        return serializeBigInt(deduped)
+      })(),
+      battleCommands: serializeBigInt(
+        ((person.commandedDeployedUnits ?? []) as any[]).map((dep) => ({
+          id: dep.id,
+          role: dep.role ?? null,
+          note: dep.note ?? null,
+          unit: dep.militaryUnit ?? null,
+          side: dep.side
+            ? {
+                id: dep.side.id,
+                name: dep.side.name,
+                color: dep.side.color ?? null,
+                outcome: dep.side.outcome ?? null,
+              }
+            : null,
+          event: dep.side?.event ?? null,
+        })),
+      ),
       events: serializeBigInt(person.PersonEvent || []),
       governmentPositions: serializeBigInt(person.GovernmentTenures ?? []),
       ...(() => {
@@ -1291,6 +1321,8 @@ export class PersonController {
                   : (c.positionId ?? rawRank?.id ?? null),
               organizationId: c.organizationId ?? c.organization?.id ?? null,
               organization: c.organization ?? null,
+              militaryUnitId: c.militaryUnitId ?? c.militaryUnit?.id ?? null,
+              militaryUnit: c.militaryUnit ?? null,
               timelineTitle: c.timelineTitle ?? null,
               showPositionInfo: c.showPositionInfo ?? true,
               title,

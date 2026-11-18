@@ -11,16 +11,16 @@
 import styled, { css } from 'styled-components'
 
 export const GOV_BRAND = {
-  primary: '#1d4ed8',
-  primaryDark: '#60a5fa',
-  primaryHover: '#1e40af',
-  primaryHoverDark: '#93c5fd',
-  primarySoft: 'rgba(37, 99, 235, 0.08)',
-  primarySoftDark: 'rgba(96, 165, 250, 0.14)',
-  primaryBorder: 'rgba(37, 99, 235, 0.34)',
-  primaryBorderDark: 'rgba(96, 165, 250, 0.4)',
-  primaryInk: '#1d4ed8',
-  primaryInkDark: '#93c5fd',
+  primary: '#4f46e5',
+  primaryDark: '#a5b4fc',
+  primaryHover: '#4338ca',
+  primaryHoverDark: '#c7d2fe',
+  primarySoft: 'rgba(79, 70, 229, 0.08)',
+  primarySoftDark: 'rgba(165, 180, 252, 0.14)',
+  primaryBorder: 'rgba(79, 70, 229, 0.28)',
+  primaryBorderDark: 'rgba(165, 180, 252, 0.36)',
+  primaryInk: '#4f46e5',
+  primaryInkDark: '#a5b4fc',
 } as const
 
 export const GOV_ROW_HAIRLINE = {

@@ -35,7 +35,7 @@ import {
   FiUsers,
   FiX,
 } from 'react-icons/fi'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
 import {
   personKeys,
@@ -99,6 +99,12 @@ import {
   getInfluenceTierLabel,
 } from '@/shared/lib/influence-tier'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
+import { militaryUnitTypeLabelKo } from '@/shared/lib/military-unit-type-label'
+import { SIDE_UNIT_ROLE_LABEL } from '@/pages/events/detail/components/side-orbat.lib'
+import {
+  isPlaceholderSideName,
+  SIDE_OUTCOME_LABEL,
+} from '@/pages/events/detail/components/side-outcome'
 
 import type { EntityConnectionTarget } from '@/shared/api/entity-graph'
 import { ConnectionsPanel } from '@/shared/ui/entity-graph'
@@ -771,7 +777,7 @@ export function PersonDetailPanel({
         title: c.timelineTitle || c.title || null,
         notes: c.notes ?? null,
         kindLabel: KIND_LABELS[c.kind] ?? c.kind ?? null,
-        organization: c.organization ?? null,
+        organization: c.militaryUnit ?? c.organization ?? null,
         rank: c.rank ?? null,
       })
     }
@@ -824,6 +830,27 @@ export function PersonDetailPanel({
         kindLabel: '군 지휘',
         organization: cmd.unit
           ? { id: cmd.unit.id ?? `unit-${cmd.id}`, name: cmd.unit.name }
+          : null,
+        rank: null,
+      })
+    }
+
+    for (const bc of ((person as any)?.battleCommands ?? []) as any[]) {
+      const roleKo =
+        bc.role && bc.role in SIDE_UNIT_ROLE_LABEL
+          ? SIDE_UNIT_ROLE_LABEL[bc.role as keyof typeof SIDE_UNIT_ROLE_LABEL]
+          : null
+      const titleLabel = [bc.event?.title, roleKo].filter(Boolean).join(' · ')
+      items.push({
+        id: `battlecmd-${bc.id}`,
+        recordKey: bc.id ? `battlecmd-${bc.id}` : 'section-activities',
+        startDate: bc.event?.startDate ?? null,
+        endDate: bc.event?.endDate ?? null,
+        title: titleLabel || '참전 전투 지휘',
+        notes: bc.note ?? null,
+        kindLabel: '참전 지휘',
+        organization: bc.unit
+          ? { id: bc.unit.id ?? `bunit-${bc.id}`, name: bc.unit.name }
           : null,
         rank: null,
       })
@@ -3520,7 +3547,8 @@ export function PersonDetailPanel({
                       (p.books?.length ?? 0) +
                       (p.foundedCompanies?.length ?? 0) +
                       (p.organizationRoles?.length ?? 0) +
-                      (p.militaryCommands?.length ?? 0)
+                      (p.militaryCommands?.length ?? 0) +
+                      (((p as any).battleCommands as unknown[] | undefined)?.length ?? 0)
                     const activeCareerSections = [
                       {
                         id: 'career-section-tenures',
@@ -3668,7 +3696,7 @@ export function PersonDetailPanel({
                               `/country/${encodeURIComponent(unitCountryId)}/military?unitId=${encodeURIComponent(militaryUnitId)}`,
                             )
                           } else {
-                            navigate(`/military-units/${encodeURIComponent(militaryUnitId)}`)
+                            navigate(pathKeys.militaryUnitDetail(militaryUnitId))
                           }
                         }}
                         onAddTenure={() => {
@@ -3725,7 +3753,16 @@ export function PersonDetailPanel({
 
                   {/* 2. 분야별 경력 (데이터 있을 때만 본문에 노출) */}
                   {(p.careers?.length ?? 0) > 0 && (() => {
-                    const careers = p.careers ?? []
+                    type ExtendedCareerEntry = NonNullable<
+                      typeof p.careers
+                    >[number] & {
+                      militaryUnitId?: string | null
+                      militaryUnit?: {
+                        id?: string
+                        name?: string | null
+                      } | null
+                    }
+                    const careers = (p.careers ?? []) as ExtendedCareerEntry[]
                     const KIND_LABELS: Record<string, string> = {
                       military: '군사',
                       business: '기업',
@@ -3804,12 +3841,20 @@ export function PersonDetailPanel({
                                       formatPeriod(start, end, isDeceased ? '미상' : '현재')
                                     const isOngoing =
                                       !!c.startDate && !c.endDate && !isDeceased
+                                    const primaryAffiliation =
+                                      c.militaryUnit?.name ??
+                                      c.organization?.name
                                     const titleBits = [
-                                      c.organization?.name,
+                                      primaryAffiliation,
                                       c.rank?.name,
                                       c.title,
                                     ].filter(Boolean) as string[]
                                     const subBits = [
+                                      c.militaryUnit?.name &&
+                                      c.organization?.name &&
+                                      c.organization.name !== c.militaryUnit.name
+                                        ? c.organization.name
+                                        : null,
                                       c.branch,
                                       c.department,
                                       c.termNumber != null
@@ -3862,7 +3907,23 @@ export function PersonDetailPanel({
                                         <SimpleEntryMainCol>
                                           <SimpleEntryHeader>
                                             <SimpleEntryTitle>
-                                              {titleBits[0] ?? '미상'}
+                                              {c.militaryUnit?.id &&
+                                              titleBits[0] ===
+                                                c.militaryUnit.name ? (
+                                                <Link
+                                                  to={pathKeys.militaryUnitDetail(
+                                                    c.militaryUnit.id,
+                                                  )}
+                                                  style={{
+                                                    color: 'inherit',
+                                                    textDecoration: 'none',
+                                                  }}
+                                                >
+                                                  {titleBits[0]}
+                                                </Link>
+                                              ) : (
+                                                (titleBits[0] ?? '미상')
+                                              )}
                                             </SimpleEntryTitle>
                                             {titleBits.slice(1).map((t, i) => (
                                               <SimpleEntryRole
@@ -4139,17 +4200,19 @@ export function PersonDetailPanel({
                     </CollapsibleSection>
                   )}
 
-                  {/* 5. 활동·이력 — 저작/창업/조직/군부대 */}
+                  {/* 5. 활동·이력 — 저작/창업/조직/참전지휘/군부대 */}
                   {(() => {
                     const books = p.books ?? []
                     const founded = p.foundedCompanies ?? []
                     const orgRoles = p.organizationRoles ?? []
                     const milCmds = p.militaryCommands ?? []
+                    const battleCmds = (((p as any).battleCommands ?? []) as any[])
                     const total =
                       books.length +
                       founded.length +
                       orgRoles.length +
-                      milCmds.length
+                      milCmds.length +
+                      battleCmds.length
                     if (total === 0) return null
                     return (
                       <CollapsibleSection
@@ -4320,6 +4383,157 @@ export function PersonDetailPanel({
                               </SimpleEntryList>
                             </ActivityGroup>
                           )}
+                          {battleCmds.length > 0 && (
+                            <ActivityGroup>
+                              <ActivityGroupTitle>
+                                <span>참전 전투 지휘</span>
+                                <ActivityGroupCount>{battleCmds.length}</ActivityGroupCount>
+                              </ActivityGroupTitle>
+                              <SimpleEntryList>
+                                {battleCmds
+                                  .slice()
+                                  .sort((a, b) => {
+                                    const ta = a.event?.startDate
+                                      ? isoDateSortKey(a.event.startDate)
+                                      : a.event?.startYear
+                                        ? (a.event.startEra === 'BC'
+                                            ? -Math.abs(a.event.startYear)
+                                            : a.event.startYear) * 10000
+                                        : Number.POSITIVE_INFINITY
+                                    const tb = b.event?.startDate
+                                      ? isoDateSortKey(b.event.startDate)
+                                      : b.event?.startYear
+                                        ? (b.event.startEra === 'BC'
+                                            ? -Math.abs(b.event.startYear)
+                                            : b.event.startYear) * 10000
+                                        : Number.POSITIVE_INFINITY
+                                    return ta - tb
+                                  })
+                                  .map((bc, bIdx) => {
+                                    const ev = bc.event
+                                    const startStr =
+                                      formatIsoDateKo(ev?.startDate) ||
+                                      (ev?.startYear
+                                        ? `${ev.startEra === 'BC' ? '기원전 ' : ''}${ev.startYear}년`
+                                        : '')
+                                    const endStr =
+                                      formatIsoDateKo(ev?.endDate) ||
+                                      (ev?.endYear && ev.endYear !== ev.startYear
+                                        ? `${ev.endEra === 'BC' ? '기원전 ' : ''}${ev.endYear}년`
+                                        : '')
+                                    const period =
+                                      startStr && endStr && startStr !== endStr
+                                        ? `${startStr} ~ ${endStr}`
+                                        : startStr
+                                    const roleKo =
+                                      bc.role && bc.role in SIDE_UNIT_ROLE_LABEL
+                                        ? SIDE_UNIT_ROLE_LABEL[
+                                            bc.role as keyof typeof SIDE_UNIT_ROLE_LABEL
+                                          ]
+                                        : null
+                                    const sideLabel =
+                                      bc.side?.name &&
+                                      !isPlaceholderSideName(bc.side.name)
+                                        ? bc.side.name
+                                        : null
+                                    const outcomeKo =
+                                      bc.side?.outcome &&
+                                      bc.side.outcome in SIDE_OUTCOME_LABEL
+                                        ? SIDE_OUTCOME_LABEL[
+                                            bc.side
+                                              .outcome as keyof typeof SIDE_OUTCOME_LABEL
+                                          ]
+                                        : null
+                                    const unitMeta = bc.unit
+                                      ? `${bc.unit.name}${bc.unit.unitType ? ` (${militaryUnitTypeLabelKo(bc.unit.unitType)})` : ''}`
+                                      : null
+                                    const subParts = [
+                                      sideLabel,
+                                      ev?.parentEvent?.title
+                                        ? `상위: ${ev.parentEvent.title}`
+                                        : null,
+                                    ].filter(Boolean) as string[]
+
+                                    return (
+                                      <SimpleEntryItem
+                                        key={bc.id ?? `battlecmd-${bIdx}`}
+                                        id={
+                                          bc.id
+                                            ? `person-record-battlecmd-${bc.id}`
+                                            : undefined
+                                        }
+                                      >
+                                        <SimpleEntryDateCol $muted={!period}>
+                                          {period || '연도 미상'}
+                                        </SimpleEntryDateCol>
+                                        <SimpleEntryMainCol>
+                                          <SimpleEntryHeader>
+                                            <SimpleEntryTitle>
+                                              {ev?.id ? (
+                                                <Link
+                                                  to={
+                                                    ev.kind === 'COLLECTION'
+                                                      ? `${pathKeys.events.detail(ev.id)}?tab=survey${bc.unit?.id ? `&unit=${encodeURIComponent(bc.unit.id)}` : ''}`
+                                                      : `${pathKeys.events.detail(ev.id)}?tab=modules${bc.unit?.id ? `&unit=${encodeURIComponent(bc.unit.id)}` : ''}#module-sides`
+                                                  }
+                                                  style={{
+                                                    color: 'inherit',
+                                                    textDecoration: 'none',
+                                                  }}
+                                                >
+                                                  {ev.title}
+                                                </Link>
+                                              ) : (
+                                                (ev?.title ?? '전투 미상')
+                                              )}
+                                            </SimpleEntryTitle>
+                                            {unitMeta && bc.unit?.id ? (
+                                              <SimpleEntryRole $tone="accent">
+                                                <Link
+                                                  to={pathKeys.militaryUnitDetail(
+                                                    bc.unit.id,
+                                                  )}
+                                                  style={{
+                                                    color: 'inherit',
+                                                    textDecoration: 'none',
+                                                  }}
+                                                >
+                                                  {unitMeta}
+                                                </Link>
+                                              </SimpleEntryRole>
+                                            ) : unitMeta ? (
+                                              <SimpleEntryRole $tone="accent">
+                                                {unitMeta}
+                                              </SimpleEntryRole>
+                                            ) : null}
+                                            {roleKo && (
+                                              <SimpleEntryRole $tone="neutral">
+                                                {roleKo}
+                                              </SimpleEntryRole>
+                                            )}
+                                            {outcomeKo && (
+                                              <SimpleEntryRole $tone="amber">
+                                                {outcomeKo}
+                                              </SimpleEntryRole>
+                                            )}
+                                          </SimpleEntryHeader>
+                                          {subParts.length > 0 && (
+                                            <SimpleEntryPeriod>
+                                              {subParts.join(' · ')}
+                                            </SimpleEntryPeriod>
+                                          )}
+                                          {bc.note && (
+                                            <SimpleEntryDescription>
+                                              {bc.note}
+                                            </SimpleEntryDescription>
+                                          )}
+                                        </SimpleEntryMainCol>
+                                      </SimpleEntryItem>
+                                    )
+                                  })}
+                              </SimpleEntryList>
+                            </ActivityGroup>
+                          )}
                           {milCmds.length > 0 && (
                             <ActivityGroup>
                               <ActivityGroupTitle>
@@ -4360,10 +4574,24 @@ export function PersonDetailPanel({
                                         <SimpleEntryMainCol>
                                           <SimpleEntryHeader>
                                             <SimpleEntryTitle>
-                                              {m.unit?.name ?? '부대 미상'}
+                                              {m.unit?.id ? (
+                                                <Link
+                                                  to={pathKeys.militaryUnitDetail(
+                                                    m.unit.id,
+                                                  )}
+                                                  style={{
+                                                    color: 'inherit',
+                                                    textDecoration: 'none',
+                                                  }}
+                                                >
+                                                  {m.unit.name ?? '부대 미상'}
+                                                </Link>
+                                              ) : (
+                                                (m.unit?.name ?? '부대 미상')
+                                              )}
                                               {m.unit?.unitType && (
                                                 <SimpleEntrySub>
-                                                  {' '}({m.unit.unitType})
+                                                  {' '}({militaryUnitTypeLabelKo(m.unit.unitType)})
                                                 </SimpleEntrySub>
                                               )}
                                             </SimpleEntryTitle>

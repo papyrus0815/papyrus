@@ -230,10 +230,15 @@ export function EventOverviewPanel({
   const [hotId, setHotId] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const [attaching, setAttaching] = useState(false)
-  /** 조망 안 탭 — URL `?sv=`(기본 전개). 상세의 `?tab=survey`와 겹치지 않는 이름 */
+  /** 조망 안 탭 — URL `?sv=`(기본 전개, 단 `?unit=` 단독 진입 시 참여·부대 탭 우선). 상세의 `?tab=survey`와 겹치지 않는 이름 */
   const viewParam = searchParams.get('sv')
-  const activeView: SurveyView = isSurveyView(viewParam) ? viewParam : 'timeline'
-  const setActiveView = (view: SurveyView) => setParam('sv', view === 'timeline' ? null : view)
+  const activeView: SurveyView = isSurveyView(viewParam)
+    ? viewParam
+    : selectedUnitId
+      ? 'participants'
+      : 'timeline'
+  const setActiveView = (view: SurveyView) =>
+    setParam('sv', view === 'timeline' && !selectedUnitId ? null : view)
   /**
    * 탭 줄 높이 — 간트 축이 그 아래에 붙는다(--survey-tabs-height). 탭을 바꿀 때 돌아갈 자리(contentTopRef)도
    * 이 높이만큼 비켜 선다.
@@ -333,6 +338,35 @@ export function EventOverviewPanel({
         ? selectedGroup
         : null
     if (!data || !derived || (!selectedCountryKey && !selectedType && !period && !groupKey && !selectedUnitId)) return null
+    const rootHasSelectedUnit =
+      Boolean(selectedUnitId) &&
+      data.root.sides.some((side) =>
+        (side.deployedUnits ?? []).some(
+          (deployedUnit) => deployedUnit.militaryUnitId === selectedUnitId,
+        ),
+      )
+    const descendantMatchesUnit =
+      Boolean(selectedUnitId) &&
+      data.descendants.some((node) =>
+        node.sides.some((side) =>
+          (side.deployedUnits ?? []).some(
+            (deployedUnit) => deployedUnit.militaryUnitId === selectedUnitId,
+          ),
+        ),
+      )
+    // 루트(전쟁 전체)에만 배치되고 하위 사건에는 직접 배치되지 않은 최상위 사령부를 선택한 경우,
+    // 단독 필터면 하위 사건 전체를 0건으로 지우지 않는다.
+    const filterDescendantsByUnit =
+      Boolean(selectedUnitId) && (!rootHasSelectedUnit || descendantMatchesUnit)
+    if (
+      !selectedCountryKey &&
+      !selectedType &&
+      !period &&
+      !groupKey &&
+      !filterDescendantsByUnit
+    ) {
+      return null
+    }
     const rowById = new Map(derived.gantt.rows.map((row) => [row.node.id, row]))
     return new Set(
       data.descendants
@@ -343,7 +377,7 @@ export function EventOverviewPanel({
               node.countries.some((country) => country.key === selectedCountryKey)) &&
             (!selectedType || subtypeKeyOf(node) === selectedType) &&
             (!groupKey || inGroupFilter(derived.grouping, node.id, groupKey)) &&
-            (!selectedUnitId ||
+            (!filterDescendantsByUnit ||
               node.sides.some((side) =>
                 (side.deployedUnits ?? []).some(
                   (deployedUnit) => deployedUnit.militaryUnitId === selectedUnitId,

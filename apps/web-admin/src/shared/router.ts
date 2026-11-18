@@ -199,11 +199,12 @@ export const pathKeys = {
   ethnicityTimeline: () => `/${ROUTES.ETHNICITY}/`,
   /** 저원(입법) 타임라인 */
   legislatureTimeline: () => `/${ROUTES.LEGISLATURE}/`,
-  /** 군사 타임라인 */
+  /** 군사 카탈로그 총람 */
+  military: () => `/${ROUTES.MILITARY}/`,
   militaryTimeline: () => `/${ROUTES.MILITARY}/`,
-  /** 군사 부대 상세 (군사 타임라인 내 부대 선택 뷰) */
+  /** 군사 부대 상세 고유 URL */
   militaryUnitDetail: (unitId: string) =>
-    `/${ROUTES.MILITARY}/?unitId=${encodeURIComponent(unitId)}`,
+    `/${ROUTES.MILITARY}/units/${encodeURIComponent(unitId)}`,
 
   // --- 대륙·수장 ---
   continents: () => `/${ROUTES.CONTINENTS}/`,

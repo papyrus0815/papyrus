@@ -17,6 +17,7 @@ export const SIDE_UNIT_ROLE_LABEL: Record<SideUnitRole, string> = {
   SUPPORTING: '조공',
   RESERVE: '예비',
   DEFENSE: '수비',
+  OTHER: '기타',
 }
 
 export const SIDE_UNIT_ROLE_OPTIONS: Array<{ value: SideUnitRole; label: string }> = [
@@ -24,10 +25,14 @@ export const SIDE_UNIT_ROLE_OPTIONS: Array<{ value: SideUnitRole; label: string 
   { value: 'SUPPORTING', label: '조공 (측면·지원)' },
   { value: 'RESERVE', label: '예비 (전략·전술 예비)' },
   { value: 'DEFENSE', label: '수비 (방어·경계)' },
+  { value: 'OTHER', label: '기타 (특수·독립 임무)' },
 ]
 
 /** 부대 급수 정렬 우선순위 — 상위 편제가 먼저 오도록 */
 const UNIT_TYPE_RANK: Record<string, number> = {
+  SUPREME_COMMAND: -3,
+  GENERAL_STAFF: -2,
+  SERVICE_HQ: -1,
   THEATER: 1,
   ARMY_GROUP: 2,
   FRONT: 2,

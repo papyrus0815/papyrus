@@ -770,30 +770,191 @@ const militaryUnit: Projection = {
   subject: 'person',
   objects: ['militaryUnit'],
   async forward(prisma, _ctx, personId) {
-    const rows = await prisma.militaryUnitCommander.findMany({
-      where: { personId },
-      select: { rank: true, role: true, startDate: true, endDate: true, unit: { select: { id: true, name: true } } },
-    })
+    const [legacyRows, tenureRows, careerRows, battleRows] = await Promise.all([
+      prisma.militaryUnitCommander.findMany({
+        where: { personId },
+        select: {
+          rank: true,
+          role: true,
+          startDate: true,
+          endDate: true,
+          unit: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.governmentPositionTenure.findMany({
+        where: { personId, militaryUnitId: { not: null } },
+        select: {
+          title: true,
+          rankTitle: true,
+          startDate: true,
+          endDate: true,
+          militaryUnit: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.militaryCareer.findMany({
+        where: { personId, militaryUnitId: { not: null } },
+        select: {
+          position: true,
+          startDate: true,
+          endDate: true,
+          militaryUnit: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.sideDeployedUnit.findMany({
+        where: {
+          commanderId: personId,
+          side: { event: { deletedAt: null } },
+        },
+        select: {
+          role: true,
+          militaryUnit: { select: { id: true, name: true } },
+          side: {
+            select: {
+              event: { select: { title: true, startDate: true, endDate: true } },
+            },
+          },
+        },
+      }),
+    ])
     const base = { relation: this.relation, group: this.group, direction: 'out' as const }
-    return result(
-      rows.map((row) =>
-        edge(base, '지휘', simpleTarget('militaryUnit', row.unit), row.role ?? row.rank ?? null, periodFromDates(row.startDate, row.endDate)),
-      ),
-    )
+    const seenUnitKeys = new Set<string>()
+    const edges = []
+
+    for (const t of tenureRows) {
+      if (!t.militaryUnit) continue
+      seenUnitKeys.add(`tenure:${t.militaryUnit.id}`)
+      edges.push(
+        edge(
+          base,
+          '지휘·보직',
+          simpleTarget('militaryUnit', t.militaryUnit),
+          [t.rankTitle, t.title].filter(Boolean).join(' · ') || null,
+          periodFromDates(t.startDate, t.endDate),
+        ),
+      )
+    }
+    for (const row of legacyRows) {
+      if (seenUnitKeys.has(`tenure:${row.unit.id}`)) continue
+      edges.push(
+        edge(
+          base,
+          '지휘',
+          simpleTarget('militaryUnit', row.unit),
+          row.role ?? row.rank ?? null,
+          periodFromDates(row.startDate, row.endDate),
+        ),
+      )
+    }
+    for (const c of careerRows) {
+      if (!c.militaryUnit) continue
+      edges.push(
+        edge(
+          base,
+          '군 복무',
+          simpleTarget('militaryUnit', c.militaryUnit),
+          c.position ?? null,
+          periodFromDates(c.startDate, c.endDate),
+        ),
+      )
+    }
+    for (const b of battleRows) {
+      if (!b.militaryUnit) continue
+      edges.push(
+        edge(
+          base,
+          '참전 지휘',
+          simpleTarget('militaryUnit', b.militaryUnit),
+          b.side?.event?.title ?? b.role ?? null,
+          periodFromDates(b.side?.event?.startDate ?? null, b.side?.event?.endDate ?? null),
+        ),
+      )
+    }
+    return result(edges)
   },
   async reverse(prisma, ctx, _kind, id) {
-    const rows = await prisma.militaryUnitCommander.findMany({
-      where: { unitId: id },
-      select: { rank: true, role: true, startDate: true, endDate: true, person: { select: PERSON_TARGET_SELECT } },
-    })
+    const [legacyRows, tenureRows, battleRows] = await Promise.all([
+      prisma.militaryUnitCommander.findMany({
+        where: { unitId: id },
+        select: {
+          rank: true,
+          role: true,
+          startDate: true,
+          endDate: true,
+          person: { select: PERSON_TARGET_SELECT },
+        },
+      }),
+      prisma.governmentPositionTenure.findMany({
+        where: { militaryUnitId: id },
+        select: {
+          title: true,
+          rankTitle: true,
+          startDate: true,
+          endDate: true,
+          person: { select: PERSON_TARGET_SELECT },
+        },
+      }),
+      prisma.sideDeployedUnit.findMany({
+        where: {
+          militaryUnitId: id,
+          commanderId: { not: null },
+          side: { event: { deletedAt: null } },
+        },
+        select: {
+          role: true,
+          commander: { select: PERSON_TARGET_SELECT },
+          side: {
+            select: {
+              event: { select: { title: true, startDate: true, endDate: true } },
+            },
+          },
+        },
+      }),
+    ])
     const base = { relation: this.relation, group: this.group, direction: 'in' as const }
-    return result(
-      rows.map((row) =>
-        edge(base, '지휘관', personTarget(row.person, ctx.accountId), row.role ?? row.rank ?? null, periodFromDates(row.startDate, row.endDate)),
-      ),
-    )
+    const seenPersonIds = new Set<string>()
+    const edges = []
+
+    for (const t of tenureRows) {
+      if (!t.person) continue
+      seenPersonIds.add(t.person.id)
+      edges.push(
+        edge(
+          base,
+          '지휘관·참모',
+          personTarget(t.person, ctx.accountId),
+          [t.rankTitle, t.title].filter(Boolean).join(' · ') || null,
+          periodFromDates(t.startDate, t.endDate),
+        ),
+      )
+    }
+    for (const row of legacyRows) {
+      if (seenPersonIds.has(row.person.id)) continue
+      edges.push(
+        edge(
+          base,
+          '지휘관',
+          personTarget(row.person, ctx.accountId),
+          row.role ?? row.rank ?? null,
+          periodFromDates(row.startDate, row.endDate),
+        ),
+      )
+    }
+    for (const b of battleRows) {
+      if (!b.commander) continue
+      edges.push(
+        edge(
+          base,
+          '전투 지휘',
+          personTarget(b.commander, ctx.accountId),
+          b.side?.event?.title ?? b.role ?? null,
+          periodFromDates(b.side?.event?.startDate ?? null, b.side?.event?.endDate ?? null),
+        ),
+      )
+    }
+    return result(edges)
   },
 }
+
 
 /** 등록 순서 = 같은 묶음 안의 기본 나열 순서 */
 export const PROJECTIONS: readonly Projection[] = [

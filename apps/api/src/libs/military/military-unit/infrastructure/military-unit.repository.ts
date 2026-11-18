@@ -6,7 +6,12 @@ import {
 } from '@nestjs/common'
 // eslint-disable-next-line @nx/enforce-module-boundaries
 import { PrismaService } from '@prisma/prisma.service'
-import type { Era, Prisma } from '@prisma/client'
+import {
+  MilitaryBranch as PrismaMilitaryBranch,
+  MilitaryUnitType as PrismaMilitaryUnitType,
+  type Era,
+  type Prisma,
+} from '@prisma/client'
 import {
   mapStructuredDateInput,
   structuredDateEndKey,
@@ -665,14 +670,35 @@ export class MilitaryUnitRepository {
         }
       : null
 
+    const validUnitType =
+      filters?.unitType &&
+      Object.values(PrismaMilitaryUnitType).includes(
+        filters.unitType as PrismaMilitaryUnitType,
+      )
+        ? (filters.unitType as PrismaMilitaryUnitType)
+        : undefined
+    const validBranch =
+      filters?.branch &&
+      Object.values(PrismaMilitaryBranch).includes(
+        filters.branch as PrismaMilitaryBranch,
+      )
+        ? (filters.branch as PrismaMilitaryBranch)
+        : undefined
+    if (
+      (filters?.unitType && !validUnitType) ||
+      (filters?.branch && !validBranch)
+    ) {
+      return []
+    }
+
     const where: Prisma.MilitaryUnitWhereInput = {
       ...(filters?.historicalCountryId
         ? { historicalCountryId: filters.historicalCountryId }
         : filters?.countryId && !countryOrClause
           ? { countryId: filters.countryId }
           : {}),
-      ...(filters?.unitType ? { unitType: filters.unitType as any } : {}),
-      ...(filters?.branch ? { branch: filters.branch as any } : {}),
+      ...(validUnitType ? { unitType: validUnitType } : {}),
+      ...(validBranch ? { branch: validBranch } : {}),
       ...(countryOrClause && searchOrClause
         ? { AND: [countryOrClause, searchOrClause] }
         : countryOrClause
@@ -717,6 +743,7 @@ export class MilitaryUnitRepository {
             name: true,
             abbreviation: true,
             unitType: true,
+            branch: true,
             isActive: true,
           },
         },
@@ -831,7 +858,23 @@ export class MilitaryUnitRepository {
                     title: true,
                     startDate: true,
                     endDate: true,
+                    startEra: true,
+                    startYear: true,
+                    startMonth: true,
+                    startDay: true,
+                    endEra: true,
+                    endYear: true,
+                    endMonth: true,
+                    endDay: true,
                     kind: true,
+                    parentEventId: true,
+                    parentEvent: {
+                      select: {
+                        id: true,
+                        title: true,
+                        kind: true,
+                      },
+                    },
                   },
                 },
               },
@@ -882,6 +925,7 @@ export class MilitaryUnitRepository {
             name: true,
             abbreviation: true,
             unitType: true,
+            branch: true,
             isActive: true,
           },
         },
@@ -1039,8 +1083,24 @@ export class MilitaryUnitRepository {
                     title: true,
                     startDate: true,
                     endDate: true,
+                    startEra: true,
+                    startYear: true,
+                    startMonth: true,
+                    startDay: true,
+                    endEra: true,
+                    endYear: true,
+                    endMonth: true,
+                    endDay: true,
                     kind: true,
                     type: true,
+                    parentEventId: true,
+                    parentEvent: {
+                      select: {
+                        id: true,
+                        title: true,
+                        kind: true,
+                      },
+                    },
                   },
                 },
               },
@@ -1478,6 +1538,7 @@ export class MilitaryUnitRepository {
       if (successorUnitId === id) {
         throw new BadRequestException('같은 부대를 자기 후신으로 둘 수 없습니다.')
       }
+      await this.assertNoTransitionCycle(id, successorUnitId)
       const target = await this.prisma.militaryUnit.findUnique({
         where: { id: successorUnitId },
         select: { id: true },
@@ -1502,6 +1563,7 @@ export class MilitaryUnitRepository {
       if (predecessorUnitId === id) {
         throw new BadRequestException('같은 부대를 자기 전신으로 둘 수 없습니다.')
       }
+      await this.assertNoTransitionCycle(predecessorUnitId, id)
       const target = await this.prisma.militaryUnit.findUnique({
         where: { id: predecessorUnitId },
         select: { id: true },
@@ -1597,6 +1659,33 @@ export class MilitaryUnitRepository {
         ...(body.note !== undefined && { note: body.note?.trim() || null }),
       },
     })
+  }
+
+  private async assertNoTransitionCycle(
+    fromUnitId: string,
+    toUnitId: string,
+  ): Promise<void> {
+    const visited = new Set<string>([toUnitId])
+    const queue: string[] = [toUnitId]
+    while (queue.length > 0) {
+      const batch = queue.splice(0, 50)
+      const nextEdges = await this.prisma.militaryUnitTransition.findMany({
+        where: { predecessorUnitId: { in: batch } },
+        select: { successorUnitId: true },
+      })
+      for (const edge of nextEdges) {
+        if (!edge.successorUnitId) continue
+        if (edge.successorUnitId === fromUnitId) {
+          throw new BadRequestException(
+            '순환하는 개편 계보(전신 ↔ 후신 고리)는 연결할 수 없습니다.',
+          )
+        }
+        if (!visited.has(edge.successorUnitId)) {
+          visited.add(edge.successorUnitId)
+          queue.push(edge.successorUnitId)
+        }
+      }
+    }
   }
 
   async deleteTransition(transitionId: string): Promise<void> {

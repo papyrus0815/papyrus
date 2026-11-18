@@ -186,6 +186,7 @@ export interface MilitaryUnitDto {
     name: string
     abbreviation?: string | null
     unitType?: MilitaryUnitType | null
+    branch?: MilitaryBranch | null
     isActive?: boolean | null
   }>
   commanders?: Array<{

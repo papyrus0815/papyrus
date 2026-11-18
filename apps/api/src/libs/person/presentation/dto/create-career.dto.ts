@@ -47,8 +47,13 @@ export class CreateMilitaryCareerDto {
   @IsString()
   jobCategoryId?: string
 
+  @IsOptional()
   @IsString()
-  organizationId!: string // 소속 조직 ID
+  organizationId?: string | null // 소속 조직 ID (군부대 직접 연결 시 생략 가능)
+
+  @IsOptional()
+  @IsString()
+  militaryUnitId?: string | null // 소속 군부대 ID (MilitaryUnit FK)
 
   @IsOptional()
   @IsString()

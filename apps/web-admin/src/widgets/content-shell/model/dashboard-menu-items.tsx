@@ -128,7 +128,7 @@ export const DASHBOARD_MENU_ITEMS: DashboardMenuItem[] = [
     label: '군사',
     icon: IconMilitary,
     path: pathKeys.militaryTimeline(),
-    matchPath: (p) => /^\/military\/?$/.test(p),
+    matchPath: (p) => /^\/military(\/.*)?$/.test(p),
   },
   {
     id: 'dynasty',

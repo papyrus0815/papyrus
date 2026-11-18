@@ -133,7 +133,7 @@ export function MapPanel({
       const eventLabel = numLabel ? `${numLabel}. ${node.title}` : node.title
       for (const feat of node.mapFeatures ?? []) {
         const extFeat = feat as typeof feat & { militaryUnitId?: string | null }
-        if (selectedUnitId && extFeat.militaryUnitId && extFeat.militaryUnitId !== selectedUnitId) {
+        if (selectedUnitId && extFeat.militaryUnitId !== selectedUnitId) {
           continue
         }
         list.push({

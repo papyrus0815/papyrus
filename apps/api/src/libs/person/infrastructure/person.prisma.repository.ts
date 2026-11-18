@@ -1950,6 +1950,61 @@ export class PersonPrismaRepository implements IPersonRepository {
             },
           },
         },
+        commandedDeployedUnits: {
+          where: {
+            side: {
+              event: {
+                deletedAt: null,
+              },
+            },
+          },
+          select: {
+            id: true,
+            role: true,
+            note: true,
+            militaryUnit: {
+              select: {
+                id: true,
+                name: true,
+                abbreviation: true,
+                unitType: true,
+                branch: true,
+              },
+            },
+            side: {
+              select: {
+                id: true,
+                name: true,
+                color: true,
+                outcome: true,
+                event: {
+                  select: {
+                    id: true,
+                    title: true,
+                    kind: true,
+                    type: true,
+                    startDate: true,
+                    startDatePrecision: true,
+                    endDate: true,
+                    endDatePrecision: true,
+                    startEra: true,
+                    startYear: true,
+                    startMonth: true,
+                    startDay: true,
+                    parentEventId: true,
+                    parentEvent: {
+                      select: {
+                        id: true,
+                        title: true,
+                        kind: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         PersonEvent: {
           where: { event: { deletedAt: null } },
           select: {
@@ -2150,8 +2205,12 @@ export class PersonPrismaRepository implements IPersonRepository {
             id: true, timelineTitle: true, showPositionInfo: true,
             branch: true, position: true, termNumber: true,
             startDate: true, endDate: true, notes: true,
+            militaryUnitId: true,
             rank: { select: { id: true, title: true } },
             organization: { select: { id: true, name: true } },
+            militaryUnit: {
+              select: { id: true, name: true, abbreviation: true, unitType: true, branch: true },
+            },
           },
           orderBy: { startDate: Prisma.SortOrder.desc },
         },

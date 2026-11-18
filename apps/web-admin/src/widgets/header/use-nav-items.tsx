@@ -15,6 +15,7 @@ import {
   FiGlobe,
   FiLayers,
   FiMap,
+  FiShare2,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 
@@ -114,6 +115,13 @@ export function useNavItems(pathname: string): NavItemSpec[] {
         icon: <FiColumns size={18} />,
         onClick: go(pathKeys.government.list()),
         active: pathname.startsWith('/government'),
+      },
+      {
+        key: 'organizations',
+        label: '국제·기구',
+        icon: <FiShare2 size={18} />,
+        onClick: go('/organizations?view=international'),
+        active: pathname.startsWith('/organizations'),
       },
       {
         key: 'treaties',

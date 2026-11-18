@@ -1,11 +1,16 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiChevronDown, FiChevronRight, FiPlus, FiShield, FiUser, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
-import { RADIUS, ledgerAccent } from '@/entities/event/ui/ledger-tokens'
+import {
+  RADIUS,
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentSubtle,
+} from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import {
@@ -60,6 +65,7 @@ interface SideOrbatSectionProps {
   sideCountryIds: ReadonlySet<string>
   sideHistoricalCountryIds: ReadonlySet<string>
   candidatePersonIds: string[]
+  focusUnitId?: string | null
   onRefresh: () => Promise<void>
   /** 투입 부대 조회 실패 — '부대 없음'이 아니라 '못 불러옴'으로 말한다 */
   unitsError?: boolean
@@ -82,6 +88,7 @@ export function SideOrbatSection({
   sideCountryIds,
   sideHistoricalCountryIds,
   candidatePersonIds,
+  focusUnitId,
   onRefresh,
   unitsError = false,
   onRetryUnits,
@@ -96,6 +103,44 @@ export function SideOrbatSection({
 
   const tree = useMemo(() => buildSideOrbatTree(sideUnits), [sideUnits])
   const summaryByType = useMemo(() => summarizeOrbatByType(sideUnits), [sideUnits])
+
+  useEffect(() => {
+    if (!focusUnitId || tree.length === 0) return
+    const ancestors: string[] = []
+    const findPath = (nodes: OrbatTreeNode[], trail: string[]): boolean => {
+      for (const n of nodes) {
+        if (n.unitId === focusUnitId) {
+          ancestors.push(...trail)
+          return true
+        }
+        if (n.children.length > 0 && findPath(n.children, [...trail, n.unitId])) {
+          return true
+        }
+      }
+      return false
+    }
+    if (!findPath(tree, [])) return
+    if (ancestors.length > 0) {
+      setCollapsedIds((prev) => {
+        let changed = false
+        const next = new Set(prev)
+        for (const ancId of ancestors) {
+          if (next.has(ancId)) {
+            next.delete(ancId)
+            changed = true
+          }
+        }
+        return changed ? next : prev
+      })
+    }
+    const raf = requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-testid="orbat-node-${focusUnitId}"]`)
+      if (el && 'scrollIntoView' in el) {
+        ;(el as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [focusUnitId, tree])
 
   const sideWeaponsQuery = useQuery({
     queryKey: eventKeys.sideWeapons(eventId),
@@ -290,6 +335,9 @@ export function SideOrbatSection({
     const isCollapsed = collapsedIds.has(node.unitId)
     const deployed = node.deployed
     const isHighCommand =
+      node.unitType === 'SUPREME_COMMAND' ||
+      node.unitType === 'GENERAL_STAFF' ||
+      node.unitType === 'SERVICE_HQ' ||
       node.unitType === 'THEATER' ||
       node.unitType === 'ARMY_GROUP' ||
       node.unitType === 'FRONT' ||
@@ -301,6 +349,7 @@ export function SideOrbatSection({
           $color={sideColor}
           $inferred={!deployed}
           $highCommand={isHighCommand}
+          $focused={focusUnitId === node.unitId}
           data-testid={`orbat-node-${node.unitId}`}
         >
           <NodeMainRow>
@@ -321,7 +370,7 @@ export function SideOrbatSection({
             )}
 
             <UnitNameLink
-              to={`${pathKeys.militaryTimeline()}?unitId=${encodeURIComponent(node.unitId)}`}
+              to={pathKeys.militaryUnitDetail(node.unitId)}
               title="군사 부대 상세 보기"
             >
               {node.name}
@@ -682,29 +731,36 @@ const NodeCard = styled.div<{
   $color: string
   $inferred?: boolean
   $highCommand?: boolean
+  $focused?: boolean
 }>`
   display: flex;
   flex-direction: column;
   gap: 3px;
   padding: 5px 8px;
   border-radius: ${RADIUS.XS};
-  background: ${({ theme, $highCommand, $inferred }) =>
-    $inferred
-      ? 'transparent'
-      : $highCommand
-        ? theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.055)'
-          : 'rgba(15,23,42,0.045)'
-        : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.03)'
-          : 'rgba(255,255,255,0.7)'};
-  border: 1px ${({ $inferred }) => ($inferred ? 'dashed' : 'solid')}
-    ${({ theme, $highCommand, $color }) =>
-      $highCommand
-        ? `color-mix(in srgb, ${$color} 35%, transparent)`
-        : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.07)'
-          : 'rgba(15,23,42,0.08)'};
+  background: ${({ theme, $highCommand, $inferred, $focused }) =>
+    $focused
+      ? ledgerAccentSubtle(theme.mode)
+      : $inferred
+        ? 'transparent'
+        : $highCommand
+          ? theme.mode === 'dark'
+            ? 'rgba(255,255,255,0.055)'
+            : 'rgba(15,23,42,0.045)'
+          : theme.mode === 'dark'
+            ? 'rgba(255,255,255,0.03)'
+            : 'rgba(255,255,255,0.7)'};
+  border: 1px ${({ $inferred, $focused }) => ($inferred && !$focused ? 'dashed' : 'solid')}
+    ${({ theme, $highCommand, $color, $focused }) =>
+      $focused
+        ? ledgerAccent(theme.mode)
+        : $highCommand
+          ? `color-mix(in srgb, ${$color} 35%, transparent)`
+          : theme.mode === 'dark'
+            ? 'rgba(255,255,255,0.07)'
+            : 'rgba(15,23,42,0.08)'};
+  box-shadow: ${({ theme, $focused }) =>
+    $focused ? `0 0 0 1px ${ledgerAccentBorder(theme.mode)}` : 'none'};
 `
 
 const NodeMainRow = styled.div`

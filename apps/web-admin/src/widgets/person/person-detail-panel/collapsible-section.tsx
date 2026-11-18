@@ -52,6 +52,7 @@ export function expandCollapsibleSectionForRecordKey(recordKey: string): boolean
     recordKey.startsWith('company-') ||
     recordKey.startsWith('orgrole-') ||
     recordKey.startsWith('milcmd-') ||
+    recordKey.startsWith('battlecmd-') ||
     recordKey === 'section-activities'
   ) {
     targetKey = 'activities'

@@ -318,7 +318,10 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
     if (!ok) return
     try {
       await deleteObservation(observation.id)
-      await queryClient.invalidateQueries({ queryKey: eventKeys.observations(event.id) })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: eventKeys.observations(event.id) }),
+        queryClient.invalidateQueries({ queryKey: eventKeys.sideUnits(event.id) }),
+      ])
       notify.success('수치를 지웠습니다')
     } catch (error) {
       notify.error(error instanceof Error ? error.message : '지우지 못했습니다')

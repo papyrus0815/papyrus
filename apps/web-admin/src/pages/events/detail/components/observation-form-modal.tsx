@@ -89,6 +89,7 @@ const SUBJECT_GROUP_LABEL: Partial<Record<ObservationSubjectType, string>> = {
   EVENT: '사건',
   EVENT_SIDE: '진영',
   EVENT_PARTICIPANT: '참여국',
+  EVENT_SIDE_UNIT: '투입 부대',
 }
 
 const VALUE_MODES: Array<{ value: ValueMode; label: string }> = [
@@ -379,7 +380,10 @@ export function ObservationFormModal({
           citations: citation ? [citation] : [],
         })
       }
-      await queryClient.invalidateQueries({ queryKey: eventKeys.observations(eventId) })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: eventKeys.observations(eventId) }),
+        queryClient.invalidateQueries({ queryKey: eventKeys.sideUnits(eventId) }),
+      ])
       notify.success(initial ? '수치를 고쳤습니다' : '수치를 기록했습니다')
       onClose()
     } catch (error) {

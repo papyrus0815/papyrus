@@ -169,16 +169,21 @@ export function WarDeclarationsSection({
   const targetId = historicalCountryId ?? countryId ?? ''
   const [filterDirection, setFilterDirection] = useState<'ALL' | DeclarationDirection>('ALL')
 
+  const linkedHistKey = linkedHistoricalCountryIds.join(',')
+
   const { data: rawEvents = [], isLoading } = useQuery({
     queryKey: [
       'country-war-declarations',
       historicalCountryId ? `h:${historicalCountryId}` : `c:${countryId ?? ''}`,
+      linkedHistKey,
     ],
     queryFn: () =>
       getAllEvents(
         historicalCountryId
           ? {
-              historicalCountryIds: [historicalCountryId],
+              historicalCountryIds: Array.from(
+                new Set([historicalCountryId, ...linkedHistoricalCountryIds]),
+              ),
               types: 'WAR_DECLARATION',
               includeSubEvents: true,
               limit: 'all',

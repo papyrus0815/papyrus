@@ -22,11 +22,13 @@ import styled from 'styled-components'
 import { personKeys } from '@/entities/person/query-keys'
 import { getApiConnection } from '@/shared/api/client'
 import { type Job, jobApi } from '@/shared/api/job'
+import { militaryUnitApi } from '@/shared/api/military-unit'
 import {
   type OrganizationType,
   getOrganizations,
 } from '@/shared/api/organizations'
 import { personCareerApi } from '@/shared/api/person-career'
+import { militaryUnitTypeLabelKo } from '@/shared/lib/military-unit-type-label'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
@@ -78,8 +80,8 @@ const KIND_CONFIG: Record<CareerKind, KindConfig> = {
     label: '군사',
     positionLabel: '계급',
     positionPlaceholder: '예: 대장, 중장',
-    orgLabel: '소속 부대·조직',
-    orgRequired: true,
+    orgLabel: '관련 조직·기관 (선택)',
+    orgRequired: false,
     extras: [
       { key: 'branch', label: '군종', placeholder: '예: 육군, 해군, 공군' },
       { key: 'position', label: '보직', placeholder: '예: 사령관, 참모장' },
@@ -206,6 +208,7 @@ const KIND_ORDER: CareerKind[] = [
 const ORGANIZATION_TYPE_LABEL: Record<OrganizationType, string> = {
   POLITICAL_PARTY: '정당',
   INTERGOVERNMENTAL_ORG: '국제기구',
+  MULTILATERAL_FORUM: '다자 협의체·블록',
   NGO: 'NGO',
   TRADE_UNION: '노동조합',
   GOVERNMENT_AGENCY: '정부기관/행정기구',
@@ -246,6 +249,8 @@ export interface PersonCareerEditTarget {
   kind: CareerKind | string
   organizationId?: string | null
   organization?: { id: string; name?: string | null } | null
+  militaryUnitId?: string | null
+  militaryUnit?: { id: string; name?: string | null } | null
   positionId?: string | null
   rankId?: string | null
   rank?: { id: string; name?: string | null } | null
@@ -291,6 +296,7 @@ export function CareerRegisterModal({
   const queryClient = useQueryClient()
   const [kind, setKind] = useState<CareerKind>('business')
   const [organizationId, setOrganizationId] = useState('')
+  const [militaryUnitId, setMilitaryUnitId] = useState('')
   const [positionId, setPositionId] = useState('')
   const [extras, setExtras] = useState<Record<string, string>>({})
   const [startDate, setStartDate] = useState('')
@@ -312,6 +318,28 @@ export function CareerRegisterModal({
     queryFn: jobApi.getAll,
     enabled: open,
   })
+
+  const { data: militaryUnits = [], isLoading: unitsLoading } = useQuery({
+    queryKey: ['military-units', 'global-catalog'],
+    queryFn: () => militaryUnitApi.getAll(),
+    enabled: open && kind === 'military',
+    staleTime: 60_000,
+  })
+
+  const militaryUnitOptions = useMemo(
+    () =>
+      militaryUnits.map((u) => ({
+        id: u.id,
+        name: u.name,
+        sub: [
+          u.unitType ? militaryUnitTypeLabelKo(u.unitType) : null,
+          u.historicalCountry?.name ?? u.country?.name ?? null,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+      })),
+    [militaryUnits],
+  )
 
   const orgOptions = useMemo(() => {
     const priority = ORG_TYPE_PRIORITY[kind] ?? []
@@ -359,6 +387,9 @@ export function CareerRegisterModal({
       setKind(nextKind)
       setOrganizationId(
         initialCareer.organizationId ?? initialCareer.organization?.id ?? '',
+      )
+      setMilitaryUnitId(
+        initialCareer.militaryUnitId ?? initialCareer.militaryUnit?.id ?? '',
       )
       setPositionId(
         nextKind === 'military'
@@ -413,6 +444,7 @@ export function CareerRegisterModal({
     }
     setKind('business')
     setOrganizationId('')
+    setMilitaryUnitId('')
     setPositionId('')
     setExtras({})
     setStartDate('')
@@ -453,8 +485,13 @@ export function CareerRegisterModal({
         notes: notes.trim() || (isEditMode ? null : undefined),
       }
       // 군사만 Job FK 필드명이 rankId — 나머지는 positionId
-      if (kind === 'military') payload.rankId = positionId
-      else payload.positionId = positionId
+      if (kind === 'military') {
+        payload.rankId = positionId
+        payload.militaryUnitId =
+          militaryUnitId || (isEditMode ? null : undefined)
+      } else {
+        payload.positionId = positionId
+      }
       for (const field of cfg.extras) {
         const raw = (extras[field.key] ?? '').trim()
         if (!raw) {
@@ -491,6 +528,7 @@ export function CareerRegisterModal({
       if (keepOpen) {
         // 연속 등록 — 분야는 유지하고 입력값만 비움
         setOrganizationId('')
+        setMilitaryUnitId('')
         setPositionId('')
         setExtras({})
         setStartDate('')
@@ -572,6 +610,19 @@ export function CareerRegisterModal({
               </MilitaryTenureGuideBanner>
             )}
           </Field>
+
+          {kind === 'military' && (
+            <Field>
+              <Label>소속 사령부·부대 (선택)</Label>
+              <SearchPicker
+                value={militaryUnitId}
+                onChange={setMilitaryUnitId}
+                options={militaryUnitOptions}
+                loading={unitsLoading}
+                placeholder="군사 사령부·부대명으로 검색"
+              />
+            </Field>
+          )}
 
           <Field>
             <Label>

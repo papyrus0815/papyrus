@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { type MouseEvent, useMemo, useState } from 'react'
 import {
   FiAnchor,
   FiArrowDown,
@@ -15,9 +15,18 @@ import {
 } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import {
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentSubtle,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+} from '@/entities/event/ui/ledger-tokens'
 import type {
-  MilitaryUnit,
   MilitaryUnitDatePartsDto,
+  MilitaryUnitEventLinkDto,
+  MilitaryUnitLineageDto,
   MilitaryUnitTenureItem,
   MilitaryUnitType,
 } from '@/shared/api/military-unit'
@@ -25,9 +34,49 @@ import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { parseSignedDateParts } from '@/shared/lib/tenure-person-utils'
 
-import { GOV_BRAND } from './government-ledger.styles'
-
-export type LedgerMilitaryUnitItem = MilitaryUnit & {
+export interface LedgerMilitaryUnitItem {
+  id: string
+  name: string
+  nameLocal?: string | null
+  nameEn?: string | null
+  abbreviation?: string | null
+  unitType?: MilitaryUnitType | null
+  isActive?: boolean | null
+  established?: MilitaryUnitDatePartsDto | null
+  disbanded?: MilitaryUnitDatePartsDto | null
+  establishedDate?: string | null
+  disbandedDate?: string | null
+  parentUnitId?: string | null
+  parentUnit?: {
+    id: string
+    name: string
+    abbreviation?: string | null
+    unitType?: MilitaryUnitType | null
+  } | null
+  subUnits?: Array<{
+    id: string
+    name: string
+    abbreviation?: string | null
+    unitType?: MilitaryUnitType | null
+    isActive?: boolean | null
+  }>
+  countryId?: string | null
+  historicalCountryId?: string | null
+  country?: { id: string; name: string; flagEmoji?: string | null } | null
+  historicalCountry?: {
+    id: string
+    name: string
+    enName?: string | null
+    startEra?: string | null
+    startYear?: number | null
+    endEra?: string | null
+    endYear?: number | null
+  } | null
+  description?: string | null
+  insigniaUrl?: string | null
+  predecessors?: MilitaryUnitLineageDto[]
+  successors?: MilitaryUnitLineageDto[]
+  eventRelations?: MilitaryUnitEventLinkDto[]
   branch?: string | null
   nickname?: string | null
   motto?: string | null
@@ -60,6 +109,16 @@ export type LedgerMilitaryUnitItem = MilitaryUnit & {
   sideDeployedUnits?: Array<{
     id: string
   }>
+  assignedNavalVessels?: Array<{
+    id: string
+    name: string
+    vesselType?: string | null
+  }>
+  navalVessels?: Array<{
+    id: string
+    name: string
+    vesselType?: string | null
+  }>
 }
 
 export interface MilitaryUnitsLedgerViewProps {
@@ -68,13 +127,19 @@ export interface MilitaryUnitsLedgerViewProps {
   selectedUnitId?: string | null
   compact?: boolean
   isHistorical?: boolean
+  targetPolityId?: string | null
+  showCountryColumn?: boolean
+  onCountryClick?: (countryId: string) => void
   unitTypeLabels: Record<MilitaryUnitType, string>
   branchLabels: Record<string, string>
   echelonOrder: Record<string, number>
   resolveEffectiveDepartment: (
     unitItem: LedgerMilitaryUnitItem,
   ) => { id: string; name: string; abbreviation?: string | null } | null
-  onSelectUnit: (unitItem: LedgerMilitaryUnitItem) => void
+  onSelectUnit: (
+    unitItem: LedgerMilitaryUnitItem,
+    evt?: MouseEvent<HTMLTableRowElement>,
+  ) => void
   onAddRoot?: () => void
 }
 
@@ -193,6 +258,9 @@ export function MilitaryUnitsLedgerView({
   selectedUnitId,
   compact = false,
   isHistorical = false,
+  targetPolityId = null,
+  showCountryColumn = false,
+  onCountryClick,
   unitTypeLabels,
   branchLabels,
   echelonOrder,
@@ -344,6 +412,9 @@ export function MilitaryUnitsLedgerView({
                   ) : null}
                 </SortableThBtn>
               </Th>
+              {showCountryColumn ? (
+                <Th style={{ width: compact ? 118 : 148 }}>국가 · 정치체</Th>
+              ) : null}
               <Th style={{ width: compact ? 124 : 168 }}>
                 <SortableThBtn
                   type="button"
@@ -402,6 +473,11 @@ export function MilitaryUnitsLedgerView({
               const succCount = (unitRow.successors ?? []).length
               const lineageTotal = predCount + succCount
               const battleCount = (unitRow.sideDeployedUnits ?? []).length
+              const vesselCount = (
+                unitRow.assignedNavalVessels ??
+                unitRow.navalVessels ??
+                []
+              ).length
               const commanderText = resolveLeadCommanderLabel(unitRow)
               const isSelected = selectedUnitId === unitRow.id
               const isHighCommand =
@@ -409,12 +485,24 @@ export function MilitaryUnitsLedgerView({
                 ['SUPREME_COMMAND', 'GENERAL_STAFF', 'SERVICE_HQ'].includes(
                   unitRow.unitType,
                 )
+              const countryLabel =
+                unitRow.historicalCountry?.name ??
+                unitRow.country?.name ??
+                '국가 미지정'
+              const countryJumpId =
+                unitRow.historicalCountry?.id ?? unitRow.country?.id ?? null
+              const showConstituentPolityBadge =
+                !showCountryColumn &&
+                Boolean(unitRow.historicalCountry?.name) &&
+                (!isHistorical ||
+                  (targetPolityId != null &&
+                    unitRow.historicalCountryId !== targetPolityId))
 
               return (
                 <Tr
                   key={unitRow.id}
                   $selected={isSelected}
-                  onClick={() => onSelectUnit(unitRow)}
+                  onClick={(evt) => onSelectUnit(unitRow, evt)}
                 >
                   <Td>
                     <PeriodStack>
@@ -455,8 +543,8 @@ export function MilitaryUnitsLedgerView({
                           ) : null}
                         </NamePrimary>
                         <SubInfoRow>
-                          {!isHistorical && unitRow.historicalCountry?.name ? (
-                            <EraTag>{unitRow.historicalCountry.name}</EraTag>
+                          {showConstituentPolityBadge ? (
+                            <EraTag>{unitRow.historicalCountry!.name}</EraTag>
                           ) : null}
                           {compact && parentRef ? (
                             <ParentHint>↳ {parentRef.name}</ParentHint>
@@ -479,6 +567,31 @@ export function MilitaryUnitsLedgerView({
                       </NameCellBody>
                     </NameCellRow>
                   </Td>
+                  {showCountryColumn ? (
+                    <Td>
+                      {countryJumpId && onCountryClick ? (
+                        <CountryCellBtn
+                          type="button"
+                          onClick={(evt) => {
+                            evt.stopPropagation()
+                            onCountryClick(countryJumpId)
+                          }}
+                          title={`${countryLabel} 상세로 이동`}
+                        >
+                          {countryLabel}
+                        </CountryCellBtn>
+                      ) : (
+                        <CountryCellText
+                          $muted={
+                            !unitRow.historicalCountry?.name &&
+                            !unitRow.country?.name
+                          }
+                        >
+                          {countryLabel}
+                        </CountryCellText>
+                      )}
+                    </Td>
+                  ) : null}
                   <Td>
                     <BadgeRow>
                       <EchelonBadge $echelon={unitRow.unitType ?? ''}>
@@ -515,6 +628,12 @@ export function MilitaryUnitsLedgerView({
                           {commanderText}
                         </CommanderChip>
                       ) : null}
+                      {vesselCount > 0 ? (
+                        <MetricChip title={`배속 함정 ${vesselCount}척`}>
+                          <FiAnchor size={10.5} />
+                          {vesselCount}
+                        </MetricChip>
+                      ) : null}
                       {lineageTotal > 0 ? (
                         <MetricChip
                           title={`전신 ${predCount} · 후신 ${succCount}`}
@@ -533,6 +652,7 @@ export function MilitaryUnitsLedgerView({
                         </MetricChip>
                       ) : null}
                       {(!commanderText || compact) &&
+                      vesselCount === 0 &&
                       lineageTotal === 0 &&
                       battleCount === 0 ? (
                         commanderText ? (
@@ -597,8 +717,8 @@ const SortPillBtn = styled.button<{ $active: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  height: 25px;
-  padding: 0 8px;
+  height: 26px;
+  padding: 0 9px;
   border-radius: 6px;
   font-size: 11px;
   font-weight: 600;
@@ -606,43 +726,41 @@ const SortPillBtn = styled.button<{ $active: boolean }>`
   border: 1px solid
     ${({ theme, $active }) =>
       $active
-        ? theme.mode === 'dark'
-          ? GOV_BRAND.primaryBorderDark
-          : GOV_BRAND.primaryBorder
-        : theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.1)'
-          : 'rgba(20, 19, 34, 0.1)'};
+        ? ledgerAccentBorder(theme.mode)
+        : ledgerHairlineStrong(theme.mode)};
   background: ${({ theme, $active }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? GOV_BRAND.primarySoftDark
-        : GOV_BRAND.primarySoft
-      : 'transparent'};
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
   color: ${({ theme, $active }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? '#93c5fd'
-        : GOV_BRAND.primary
-      : theme.colors.text.secondary};
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+  }
 `
 
 const AddInlineBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  height: 25px;
-  padding: 0 8px;
+  height: 26px;
+  padding: 0 9px;
   border-radius: 6px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.12)'
-        : 'rgba(20, 19, 34, 0.12)'};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.primary};
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
+  transition: background 0.12s ease;
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
 `
 
 const TableScrollArea = styled.div`
@@ -665,12 +783,8 @@ const Th = styled.th`
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? '#141925' : '#f8fafc'};
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.08)'
-        : 'rgba(20, 19, 34, 0.08)'};
+    theme.mode === 'dark' ? '#121319' : '#fafafb'};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   white-space: nowrap;
 `
 
@@ -685,7 +799,7 @@ const SortableThBtn = styled.button<{ $active?: boolean }>`
   font-size: 11px;
   font-weight: 700;
   color: ${({ theme, $active }) =>
-    $active ? theme.colors.text.primary : theme.colors.text.tertiary};
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
   cursor: pointer;
 
   &:hover {
@@ -696,29 +810,18 @@ const SortableThBtn = styled.button<{ $active?: boolean }>`
 const Tr = styled.tr<{ $selected: boolean }>`
   cursor: pointer;
   border-left: 2.5px solid
-    ${({ $selected }) => ($selected ? GOV_BRAND.primary : 'transparent')};
+    ${({ theme, $selected }) =>
+      $selected ? ledgerAccent(theme.mode) : 'transparent'};
   background: ${({ theme, $selected }) =>
-    $selected
-      ? theme.mode === 'dark'
-        ? 'rgba(59, 130, 246, 0.14)'
-        : 'rgba(37, 99, 235, 0.07)'
-      : 'transparent'};
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.05)'
-        : 'rgba(20, 19, 34, 0.05)'};
+    $selected ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   transition: background 0.12s ease;
 
   &:hover {
     background: ${({ theme, $selected }) =>
       $selected
-        ? theme.mode === 'dark'
-          ? 'rgba(59, 130, 246, 0.18)'
-          : 'rgba(37, 99, 235, 0.1)'
-        : theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.035)'
-          : 'rgba(20, 19, 34, 0.025)'};
+        ? ledgerAccentSubtle(theme.mode)
+        : ledgerHoverFill(theme.mode)};
   }
 `
 
@@ -860,6 +963,40 @@ const BadgeRow = styled.div`
   gap: 4px;
 `
 
+const CountryCellBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  }
+`
+
+const CountryCellText = styled.span<{ $muted?: boolean }>`
+  font-size: 11.5px;
+  font-weight: 500;
+  color: ${({ theme, $muted }) =>
+    $muted ? theme.colors.text.tertiary : theme.colors.text.secondary};
+`
+
 const EchelonBadge = styled.span<{ $echelon: string }>`
   display: inline-flex;
   align-items: center;
@@ -872,39 +1009,39 @@ const EchelonBadge = styled.span<{ $echelon: string }>`
       ? theme.mode === 'dark'
         ? 'rgba(245, 158, 11, 0.16)'
         : 'rgba(245, 158, 11, 0.12)'
-      : ['THEATER', 'ARMY_GROUP', 'FRONT', 'MILITARY_DISTRICT'].includes(
-            $echelon,
-          )
-        ? theme.mode === 'dark'
-          ? GOV_BRAND.primarySoftDark
-          : GOV_BRAND.primarySoft
-        : ['FIELD_ARMY', 'FLEET', 'AIR_FLEET', 'CORPS', 'AIR_CORPS'].includes(
-              $echelon,
-            )
-          ? theme.mode === 'dark'
-            ? 'rgba(13, 148, 136, 0.16)'
-            : 'rgba(13, 148, 136, 0.1)'
-          : theme.mode === 'dark'
-            ? 'rgba(255, 255, 255, 0.06)'
-            : 'rgba(20, 19, 34, 0.05)'};
+      : [
+            'THEATER',
+            'ARMY_GROUP',
+            'FRONT',
+            'MILITARY_DISTRICT',
+            'FIELD_ARMY',
+            'FLEET',
+            'AIR_FLEET',
+            'CORPS',
+            'AIR_CORPS',
+          ].includes($echelon)
+        ? ledgerAccentSubtle(theme.mode)
+        : theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.06)'
+          : 'rgba(20, 19, 34, 0.05)'};
   color: ${({ theme, $echelon }) =>
     ['SUPREME_COMMAND', 'GENERAL_STAFF', 'SERVICE_HQ'].includes($echelon)
       ? theme.mode === 'dark'
         ? '#fcd34d'
         : '#b45309'
-      : ['THEATER', 'ARMY_GROUP', 'FRONT', 'MILITARY_DISTRICT'].includes(
-            $echelon,
-          )
-        ? theme.mode === 'dark'
-          ? '#93c5fd'
-          : GOV_BRAND.primary
-        : ['FIELD_ARMY', 'FLEET', 'AIR_FLEET', 'CORPS', 'AIR_CORPS'].includes(
-              $echelon,
-            )
-          ? theme.mode === 'dark'
-            ? '#5eead4'
-            : '#0f766e'
-          : theme.colors.text.secondary};
+      : [
+            'THEATER',
+            'ARMY_GROUP',
+            'FRONT',
+            'MILITARY_DISTRICT',
+            'FIELD_ARMY',
+            'FLEET',
+            'AIR_FLEET',
+            'CORPS',
+            'AIR_CORPS',
+          ].includes($echelon)
+        ? ledgerAccent(theme.mode)
+        : theme.colors.text.secondary};
 `
 
 const BranchBadge = styled.span`
@@ -932,7 +1069,7 @@ const DeptCellText = styled.span`
   gap: 4px;
   font-size: 11.5px;
   font-weight: 600;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#5eead4' : '#0f766e')};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
 `
 
 const DashText = styled.span`
@@ -978,16 +1115,10 @@ const MetricChip = styled.span<{ $combat?: boolean }>`
   font-variant-numeric: tabular-nums;
   background: ${({ theme, $combat }) =>
     $combat
-      ? theme.mode === 'dark'
-        ? 'rgba(13, 148, 136, 0.16)'
-        : 'rgba(13, 148, 136, 0.1)'
+      ? ledgerAccentSubtle(theme.mode)
       : theme.mode === 'dark'
         ? 'rgba(255, 255, 255, 0.06)'
         : 'rgba(20, 19, 34, 0.05)'};
   color: ${({ theme, $combat }) =>
-    $combat
-      ? theme.mode === 'dark'
-        ? '#5eead4'
-        : '#0f766e'
-      : theme.colors.text.secondary};
+    $combat ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
 `

@@ -1128,6 +1128,15 @@ export class EventController {
           include: {
             country: true,
             historicalCountry: true,
+            side: {
+              select: {
+                id: true,
+                name: true,
+                color: true,
+                outcome: true,
+                outcomeNote: true,
+              },
+            },
           },
           // 표시 순서는 sortOrder가 정본. createdAt은 동률 tiebreak(구 데이터 안전망).
           orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
@@ -2699,6 +2708,12 @@ export class EventController {
 function participantMembership(relation: {
   id?: string
   sideId?: string | null
+  side?: {
+    name?: string | null
+    color?: string | null
+    outcome?: string | null
+    outcomeNote?: string | null
+  } | null
   participation?: string | null
   joinEra?: 'BC' | 'AD' | null
   joinYear?: number | null
@@ -2714,6 +2729,10 @@ function participantMembership(relation: {
   return {
     participantId: relation.id ?? null,
     sideId: relation.sideId ?? null,
+    sideName: relation.side?.name ?? null,
+    sideColor: relation.side?.color ?? null,
+    sideOutcome: relation.side?.outcome ?? null,
+    sideOutcomeNote: relation.side?.outcomeNote ?? null,
     participation: relation.participation ?? null,
     join: columnsToPoint({
       era: relation.joinEra ?? null,

@@ -5,10 +5,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   FiAnchor,
   FiArrowDown,
+  FiArrowRight,
   FiArrowUp,
   FiArrowUpRight,
   FiAward,
   FiCalendar,
+  FiCheck,
   FiChevronDown,
   FiChevronLeft,
   FiChevronRight,
@@ -18,12 +20,15 @@ import {
   FiEdit2,
   FiExternalLink,
   FiGitBranch,
+  FiGitCommit,
   FiLayers,
   FiList,
   FiMapPin,
   FiMaximize2,
+  FiMoreHorizontal,
   FiNavigation,
   FiPlus,
+  FiRotateCcw,
   FiSearch,
   FiShield,
   FiTrash2,
@@ -47,7 +52,9 @@ import {
   type MilitaryUnit,
   type MilitaryUnitDatePartsDto,
   type MilitaryUnitEventLinkDto,
+  type MilitaryUnitLineageDto,
   type MilitaryUnitTenureItem,
+  type MilitaryUnitTransitionKind,
   type MilitaryUnitType,
 } from '@/shared/api/military-unit'
 import { personCareerApi } from '@/shared/api/person-career'
@@ -71,6 +78,7 @@ import {
   EventPickerModal,
   type EventPickerSelection,
 } from '@/shared/ui/event-picker-modal/event-picker-modal'
+import { HeadquartersMapPreview } from '@/shared/ui/headquarters-location-field'
 import { InstitutionAppointmentModal } from '@/shared/ui/institution-appointment-modal'
 import { notify } from '@/shared/ui/toast'
 import * as DetailS from '@/widgets/country/country-detail/ui/ministry-department-detail.styles'
@@ -112,6 +120,7 @@ export interface GovernmentMilitaryTabProps {
   country?: UnifiedCountry
   effectiveCountryId: string | undefined
   focusUnitId?: string | null
+  hidePrimaryCta?: boolean
   onConsumedFocusUnit?: () => void
   onSelectedUnitChange?: (unitId: string | null) => void
   onCreateUnit: (defaults?: CreateMilitaryUnitDefaults) => void
@@ -219,6 +228,22 @@ const TRANSITION_KIND_LABEL_KO: Record<string, string> = {
   ABSORB: '흡수',
 }
 
+const TRANSITION_KIND_OPTIONS: Array<{
+  value: MilitaryUnitTransitionKind
+  label: string
+}> = [
+  { value: 'REORGANIZE', label: '개편 (편제·역할 재편)' },
+  { value: 'RENAME', label: '개칭 (명칭 변경)' },
+  { value: 'SPLIT', label: '분할 (신설 분리)' },
+  { value: 'MERGE', label: '통합 (합병)' },
+  { value: 'ABSORBED', label: '흡수 (타 편제로 편입)' },
+]
+
+type LineageDirectionKey =
+  | 'PREDECESSOR_UNIT'
+  | 'PREDECESSOR_DEPT'
+  | 'SUCCESSOR_UNIT'
+
 const EVENT_ROLE_LABEL: Record<AdministrationDepartmentEventRole, string> = {
   ISSUER: '지령 발령·하달',
   RECIPIENT: '수명·작전 이행',
@@ -259,13 +284,29 @@ const BRANCH_DISPLAY_ORDER: readonly string[] = [
 ]
 
 const INITIAL_VISIBLE_COMMANDERS = 15
+const INITIAL_VISIBLE_SUB_UNITS = 14
 
-type ExtendedMilitaryUnit = LedgerMilitaryUnitItem & {
+type ExtendedMilitaryUnit = Omit<
+  LedgerMilitaryUnitItem,
+  'sideDeployedUnits' | 'assignedNavalVessels' | 'navalVessels'
+> & {
   primaryMission?: string | null
   jurisdiction?: string | null
   notableBattles?: string | null
   honors?: string | null
   eventRelations?: MilitaryUnitEventLinkDto[]
+  assignedNavalVessels?: Array<{
+    id: string
+    name: string
+    vesselType?: string | null
+    vesselClass?: string | null
+  }>
+  navalVessels?: Array<{
+    id: string
+    name: string
+    vesselType?: string | null
+    vesselClass?: string | null
+  }>
   sideDeployedUnits?: Array<{
     id: string
     role?: string | null
@@ -275,6 +316,7 @@ type ExtendedMilitaryUnit = LedgerMilitaryUnitItem & {
     weaponsUsed?: Array<{
       id: string
       quantity?: string | number | null
+      note?: string | null
       weapon?: { id: string; name: string } | null
       groundVehicle?: { id: string; name: string } | null
       aircraft?: { id: string; name: string } | null
@@ -283,16 +325,28 @@ type ExtendedMilitaryUnit = LedgerMilitaryUnitItem & {
     deployedWeapons?: Array<{
       id: string
       quantity?: string | number | null
+      note?: string | null
       weapon?: { id: string; name: string } | null
       groundVehicle?: { id: string; name: string } | null
       aircraft?: { id: string; name: string } | null
       navalVessel?: { id: string; name: string } | null
+    }>
+    metrics?: Array<{
+      id: string
+      metricKey: string
+      metricName: string
+      unit?: string | null
+      value?: string | null
+      low?: string | null
+      high?: string | null
+      approx?: boolean
     }>
     mapFeatures?: Array<{
       id: string
       eventId: string
       geometryType: string
       title?: string | null
+      description?: string | null
     }>
     side: {
       id: string
@@ -304,7 +358,15 @@ type ExtendedMilitaryUnit = LedgerMilitaryUnitItem & {
         title: string
         startDate?: string | null
         endDate?: string | null
+        startEra?: string | null
+        startYear?: number | null
         kind?: string | null
+        parentEventId?: string | null
+        parentEvent?: {
+          id: string
+          title: string
+          kind?: string | null
+        } | null
       }
     }
   }>
@@ -323,7 +385,7 @@ function getLedgerTokens(isDark: boolean) {
     chipBg: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(20, 19, 34, 0.045)',
     chipBorder: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(20, 19, 34, 0.1)',
     subtleBg: isDark ? 'rgba(255, 255, 255, 0.025)' : '#f8fafc',
-    accent: isDark ? '#93c5fd' : GOV_BRAND.primary,
+    accent: isDark ? GOV_BRAND.primaryDark : GOV_BRAND.primary,
     accentSoft: isDark ? GOV_BRAND.primarySoftDark : GOV_BRAND.primarySoft,
   }
 }
@@ -594,23 +656,19 @@ function UnitEmblemThumb({
         border: isDark ? 'rgba(251, 191, 36, 0.28)' : '#fde68a',
         color: isDark ? '#fcd34d' : '#b45309',
       }
-    : isNaval
+    : isNaval || isAir
       ? {
-          bg: isDark ? 'rgba(37, 99, 235, 0.16)' : '#eff6ff',
-          border: isDark ? 'rgba(96, 165, 250, 0.28)' : '#bfdbfe',
-          color: isDark ? '#93c5fd' : '#1d4ed8',
+          bg: isDark ? GOV_BRAND.primarySoftDark : GOV_BRAND.primarySoft,
+          border: isDark
+            ? GOV_BRAND.primaryBorderDark
+            : GOV_BRAND.primaryBorder,
+          color: isDark ? GOV_BRAND.primaryDark : GOV_BRAND.primary,
         }
-      : isAir
-        ? {
-            bg: isDark ? 'rgba(14, 165, 233, 0.16)' : '#f0f9ff',
-            border: isDark ? 'rgba(56, 189, 248, 0.28)' : '#bae6fd',
-            color: isDark ? '#7dd3fc' : '#0369a1',
-          }
-        : {
-            bg: isDark ? 'rgba(13, 148, 136, 0.14)' : '#f0fdfa',
-            border: isDark ? 'rgba(45, 212, 191, 0.24)' : '#ccfbf1',
-            color: isDark ? '#5eead4' : '#0f766e',
-          }
+      : {
+          bg: isDark ? 'rgba(255, 255, 255, 0.05)' : '#f8fafc',
+          border: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(15, 23, 42, 0.1)',
+          color: isDark ? '#cbd5e1' : '#475569',
+        }
 
   return (
     <div
@@ -637,6 +695,7 @@ export function GovernmentMilitaryTab({
   country,
   effectiveCountryId,
   focusUnitId,
+  hidePrimaryCta = false,
   onConsumedFocusUnit,
   onSelectedUnitChange,
   onCreateUnit,
@@ -651,6 +710,7 @@ export function GovernmentMilitaryTab({
 
   const [browseViewMode, setBrowseViewMode] = useState<BrowseViewMode>('TREE')
   const [layoutMode, setLayoutMode] = useState<WorkspaceLayoutMode>('SPLIT')
+  const [groupByEra, setGroupByEra] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [echelonGroupFilter, setEchelonGroupFilter] =
     useState<EchelonGroupKey>('ALL')
@@ -666,6 +726,50 @@ export function GovernmentMilitaryTab({
   const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(
     () => new Set(),
   )
+  const [collapsedEraIds, setCollapsedEraIds] = useState<Set<string>>(
+    () => new Set(),
+  )
+  const [expandedAllSubUnits, setExpandedAllSubUnits] = useState(false)
+  const [detailSubTab, setDetailSubTab] = useState<
+    'overview' | 'commanders' | 'operations'
+  >('overview')
+  const [showGarrisonMap, setShowGarrisonMap] = useState(false)
+  const [toolbarMenuOpen, setToolbarMenuOpen] = useState(false)
+  const [detailMenuOpen, setDetailMenuOpen] = useState(false)
+  const [openRowMenuKey, setOpenRowMenuKey] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!toolbarMenuOpen && !detailMenuOpen && !openRowMenuKey) return
+    const handlePointerDown = (mouseEvent: MouseEvent) => {
+      const targetEl = mouseEvent.target as HTMLElement | null
+      if (targetEl?.closest('[data-more-menu-root]')) return
+      setToolbarMenuOpen(false)
+      setDetailMenuOpen(false)
+      setOpenRowMenuKey(null)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    return () => document.removeEventListener('mousedown', handlePointerDown)
+  }, [toolbarMenuOpen, detailMenuOpen, openRowMenuKey])
+
+  // Inline lineage (전신·후신 개편 계보) states
+  const [lineageFormOpen, setLineageFormOpen] = useState(false)
+  const [lineageDirection, setLineageDirection] =
+    useState<LineageDirectionKey>('PREDECESSOR_UNIT')
+  const [lineageTargetId, setLineageTargetId] = useState('')
+  const [lineageKind, setLineageKind] =
+    useState<MilitaryUnitTransitionKind>('REORGANIZE')
+  const [lineageEra, setLineageEra] = useState<'AD' | 'BC'>('AD')
+  const [lineageYear, setLineageYear] = useState('')
+  const [lineageMonth, setLineageMonth] = useState('')
+  const [lineageNote, setLineageNote] = useState('')
+  const [editingLineageId, setEditingLineageId] = useState<string | null>(null)
+  const [editLineageKind, setEditLineageKind] =
+    useState<MilitaryUnitTransitionKind>('REORGANIZE')
+  const [editLineageEra, setEditLineageEra] = useState<'AD' | 'BC'>('AD')
+  const [editLineageYear, setEditLineageYear] = useState('')
+  const [editLineageMonth, setEditLineageMonth] = useState('')
+  const [editLineageNote, setEditLineageNote] = useState('')
+  const [lineageBusy, setLineageBusy] = useState(false)
 
   // Commander tenure & inline person inspection states
   const [appointmentOpen, setAppointmentOpen] = useState(false)
@@ -722,36 +826,58 @@ export function GovernmentMilitaryTab({
     return idSet
   }, [constituentPolities])
 
+  const relatedHistKey = useMemo(() => {
+    const ids = isHistorical
+      ? [...constituentPolityIdSet]
+      : [...linkedHistoricalIds]
+    return ids.sort().join(',')
+  }, [isHistorical, constituentPolityIdSet, linkedHistoricalIds])
+
   const unitsQuery = useQuery({
-    queryKey: ['military-units', 'all'],
-    queryFn: () => militaryUnitApi.getAll(),
+    queryKey: [
+      'military-units',
+      'country-scope',
+      isHistorical ? 'hist' : 'mod',
+      targetId,
+      relatedHistKey,
+    ],
+    queryFn: async () => {
+      if (!targetId) return []
+      if (isHistorical) {
+        const histIds = Array.from(
+          new Set([targetId, ...constituentPolityIdSet]),
+        )
+        const results = await Promise.all(
+          histIds.map((hid) =>
+            militaryUnitApi.getAll({ historicalCountryId: hid }),
+          ),
+        )
+        const dedup = new Map<string, MilitaryUnit>()
+        for (const batch of results) {
+          for (const u of batch) dedup.set(u.id, u)
+        }
+        return [...dedup.values()]
+      }
+      const histIds = [...linkedHistoricalIds]
+      const results = await Promise.all([
+        militaryUnitApi.getAll({ countryId: targetId }),
+        ...histIds.map((hid) =>
+          militaryUnitApi.getAll({ historicalCountryId: hid }),
+        ),
+      ])
+      const dedup = new Map<string, MilitaryUnit>()
+      for (const batch of results) {
+        for (const u of batch) dedup.set(u.id, u)
+      }
+      return [...dedup.values()]
+    },
+    enabled: Boolean(targetId),
     staleTime: 1000 * 60 * 2,
   })
 
   const countryUnits = useMemo<ExtendedMilitaryUnit[]>(() => {
-    const allUnits = (unitsQuery.data ?? []) as ExtendedMilitaryUnit[]
-    if (!targetId) return []
-    return allUnits.filter((unitItem) => {
-      if (isHistorical) {
-        return (
-          unitItem.historicalCountryId === targetId ||
-          (unitItem.historicalCountryId != null &&
-            constituentPolityIdSet.has(unitItem.historicalCountryId))
-        )
-      }
-      return (
-        unitItem.countryId === targetId ||
-        (unitItem.historicalCountryId != null &&
-          linkedHistoricalIds.has(unitItem.historicalCountryId))
-      )
-    })
-  }, [
-    unitsQuery.data,
-    targetId,
-    isHistorical,
-    constituentPolityIdSet,
-    linkedHistoricalIds,
-  ])
+    return (unitsQuery.data ?? []) as ExtendedMilitaryUnit[]
+  }, [unitsQuery.data])
 
   const unitByIdMap = useMemo(() => {
     const map = new Map<string, ExtendedMilitaryUnit>()
@@ -1050,7 +1176,7 @@ export function GovernmentMilitaryTab({
     return [...list].sort(compareUnitsByEchelonAndYear)
   }, [unitsMatchingToolbar, branchFilter])
 
-  /** 트리 구성: 필터된 부대 집합 내에서 부모-자식 맵 및 중앙부처(군령기구)별 루트 그룹 생성 */
+  /** 트리 구성: 필터된 부대 집합 내에서 부모-자식 맵 및 중앙부처(군령기구)·시대별 루트 그룹 생성 */
   const hierarchyGroups = useMemo(() => {
     const filteredIdSet = new Set(filteredUnits.map((unitItem) => unitItem.id))
     const childrenByParentId = new Map<string, ExtendedMilitaryUnit[]>()
@@ -1081,39 +1207,136 @@ export function GovernmentMilitaryTab({
       roots: ExtendedMilitaryUnit[]
     }
 
-    const groupMap = new Map<string, DeptGroup>()
-    for (const rootUnit of rootUnits) {
-      const effDept = resolveEffectiveDepartment(rootUnit)
-      const groupKey = effDept ? `dept:${effDept.id}` : 'dept:unlinked'
-      const existing = groupMap.get(groupKey)
-      if (existing) {
-        existing.roots.push(rootUnit)
+    const buildDeptGroups = (targetRoots: ExtendedMilitaryUnit[]): DeptGroup[] => {
+      const groupMap = new Map<string, DeptGroup>()
+      for (const rootUnit of targetRoots) {
+        const effDept = resolveEffectiveDepartment(rootUnit)
+        const groupKey = effDept ? `dept:${effDept.id}` : 'dept:unlinked'
+        const existing = groupMap.get(groupKey)
+        if (existing) {
+          existing.roots.push(rootUnit)
+        } else {
+          groupMap.set(groupKey, {
+            key: groupKey,
+            departmentId: effDept?.id ?? null,
+            departmentName: effDept
+              ? effDept.name
+              : '독립 · 상급 군령기구 미지정 편제',
+            departmentAbbreviation: effDept?.abbreviation,
+            historicalCountryId: rootUnit.historicalCountryId ?? null,
+            roots: [rootUnit],
+          })
+        }
+      }
+      return Array.from(groupMap.values()).sort((left, right) => {
+        if (left.departmentId && !right.departmentId) return -1
+        if (!left.departmentId && right.departmentId) return 1
+        return left.departmentName.localeCompare(right.departmentName, 'ko')
+      })
+    }
+
+    const groups = buildDeptGroups(rootUnits)
+
+    type EraTreeSection = {
+      id: string
+      label: string
+      historicalCountryId: string | null
+      totalCount: number
+      deptGroups: DeptGroup[]
+    }
+
+    let eraSections: EraTreeSection[] | null = null
+    if (
+      groupByEra &&
+      eraFilter === 'ALL' &&
+      historicalErasAvailable.length > 0
+    ) {
+      const sections: EraTreeSection[] = []
+      const countSubtree = (rootsList: ExtendedMilitaryUnit[]): number => {
+        let count = 0
+        const visited = new Set<string>()
+        const walk = (node: ExtendedMilitaryUnit) => {
+          if (visited.has(node.id)) return
+          visited.add(node.id)
+          count += 1
+          for (const childNode of childrenByParentId.get(node.id) ?? []) {
+            walk(childNode)
+          }
+        }
+        for (const rootNode of rootsList) walk(rootNode)
+        return count
+      }
+
+      if (isHistorical && targetId) {
+        const ownRoots = rootUnits.filter(
+          (unitRow) =>
+            !unitRow.historicalCountryId ||
+            unitRow.historicalCountryId === targetId,
+        )
+        if (ownRoots.length > 0) {
+          sections.push({
+            id: targetId,
+            label: `${country?.name ?? '본국'} 직속`,
+            historicalCountryId: targetId,
+            totalCount: countSubtree(ownRoots),
+            deptGroups: buildDeptGroups(ownRoots),
+          })
+        }
       } else {
-        groupMap.set(groupKey, {
-          key: groupKey,
-          departmentId: effDept?.id ?? null,
-          departmentName: effDept
-            ? effDept.name
-            : '독립 · 상급 군령기구 미지정 편제',
-          departmentAbbreviation: effDept?.abbreviation,
-          historicalCountryId: rootUnit.historicalCountryId ?? null,
-          roots: [rootUnit],
-        })
+        const modernRoots = rootUnits.filter(
+          (unitRow) => !unitRow.historicalCountryId,
+        )
+        if (modernRoots.length > 0) {
+          sections.push({
+            id: '__MODERN__',
+            label: `현대 ${country?.name ?? ''} 직속`.trim(),
+            historicalCountryId: null,
+            totalCount: countSubtree(modernRoots),
+            deptGroups: buildDeptGroups(modernRoots),
+          })
+        }
+      }
+
+      const handledEraIds = new Set<string>(sections.map((sec) => sec.id))
+      for (const eraItem of historicalErasAvailable) {
+        if (handledEraIds.has(eraItem.id)) continue
+        const eraRoots = rootUnits.filter(
+          (unitRow) => unitRow.historicalCountryId === eraItem.id,
+        )
+        if (eraRoots.length > 0) {
+          handledEraIds.add(eraItem.id)
+          sections.push({
+            id: eraItem.id,
+            label: eraItem.name,
+            historicalCountryId: eraItem.id,
+            totalCount: countSubtree(eraRoots),
+            deptGroups: buildDeptGroups(eraRoots),
+          })
+        }
+      }
+
+      if (sections.length > 1) {
+        eraSections = sections
       }
     }
 
-    const groups = Array.from(groupMap.values()).sort((left, right) => {
-      if (left.departmentId && !right.departmentId) return -1
-      if (!left.departmentId && right.departmentId) return 1
-      return left.departmentName.localeCompare(right.departmentName, 'ko')
-    })
-
     return {
       groups,
+      eraSections,
+      filteredIdSet,
       childrenByParentId,
       collapsibleParentIds: Array.from(childrenByParentId.keys()),
     }
-  }, [filteredUnits, resolveEffectiveDepartment])
+  }, [
+    filteredUnits,
+    resolveEffectiveDepartment,
+    groupByEra,
+    eraFilter,
+    historicalErasAvailable,
+    isHistorical,
+    targetId,
+    country?.name,
+  ])
 
   const selectedUnitDetailQuery = useQuery({
     queryKey: ['military-unit', 'detail', selectedUnitId],
@@ -1131,12 +1354,95 @@ export function GovernmentMilitaryTab({
     (selectedUnitDetailQuery.data as ExtendedMilitaryUnit | undefined) ??
     selectedUnitSummary
 
+  const departmentsForLineageQuery = useQuery({
+    queryKey: [
+      'administration-departments',
+      'military-tab-lineage',
+      selectedUnitFull?.countryId ?? (isHistorical ? null : targetId),
+      selectedUnitFull?.historicalCountryId ?? (isHistorical ? targetId : null),
+    ],
+    queryFn: async () => {
+      const histId =
+        selectedUnitFull?.historicalCountryId ??
+        (isHistorical ? targetId : null)
+      const modId =
+        selectedUnitFull?.countryId ?? (isHistorical ? null : targetId)
+      if (histId) {
+        const histDepts = await administrationDepartmentApi.getAll({
+          historicalCountryId: histId,
+        })
+        if (modId) {
+          const modDepts = await administrationDepartmentApi.getAll({
+            countryId: modId,
+          })
+          const seenIds = new Set(histDepts.map((deptItem) => deptItem.id))
+          return [
+            ...histDepts,
+            ...modDepts.filter((deptItem) => !seenIds.has(deptItem.id)),
+          ]
+        }
+        return histDepts
+      }
+      if (modId) {
+        return administrationDepartmentApi.getAll({ countryId: modId })
+      }
+      return []
+    },
+    enabled:
+      Boolean(selectedUnitFull?.id) &&
+      lineageFormOpen &&
+      lineageDirection === 'PREDECESSOR_DEPT',
+    staleTime: 60_000,
+  })
+
+  /** 선택된 부대가 변경되면 상위 트리 노드와 소속 시대 섹션을 자동으로 펼치고 하위 폼 초기화 */
   useEffect(() => {
     setCommanderSearch('')
     setExpandedAllCommanders(false)
+    setExpandedAllSubUnits(false)
+    setDetailSubTab('overview')
+    setShowGarrisonMap(false)
+    setDetailMenuOpen(false)
+    setOpenRowMenuKey(null)
     setPendingEvent(null)
     setEditingEventLink(null)
-  }, [selectedUnitId])
+    setLineageFormOpen(false)
+    setEditingLineageId(null)
+
+    if (!selectedUnitId) return
+    const ancestorsToExpand: string[] = []
+    const visited = new Set<string>()
+    let cursor = unitByIdMap.get(selectedUnitId)
+    while (cursor?.parentUnitId && !visited.has(cursor.parentUnitId)) {
+      visited.add(cursor.parentUnitId)
+      ancestorsToExpand.push(cursor.parentUnitId)
+      cursor = unitByIdMap.get(cursor.parentUnitId)
+    }
+    if (ancestorsToExpand.length > 0) {
+      setCollapsedNodeIds((prev) => {
+        let changed = false
+        const next = new Set(prev)
+        for (const ancId of ancestorsToExpand) {
+          if (next.has(ancId)) {
+            next.delete(ancId)
+            changed = true
+          }
+        }
+        return changed ? next : prev
+      })
+    }
+
+    const selectedNode = unitByIdMap.get(selectedUnitId)
+    if (selectedNode) {
+      const eraSectionId = selectedNode.historicalCountryId || '__MODERN__'
+      setCollapsedEraIds((prev) => {
+        if (!prev.has(eraSectionId)) return prev
+        const next = new Set(prev)
+        next.delete(eraSectionId)
+        return next
+      })
+    }
+  }, [selectedUnitId, unitByIdMap])
 
   const deleteMutation = useMutation({
     mutationFn: (unitId: string) => militaryUnitApi.delete(unitId),
@@ -1170,7 +1476,7 @@ export function GovernmentMilitaryTab({
     const confirmed = await confirm({
       title: '군부대 삭제',
       message: `'${unitItem.name}' 부대를 삭제하시겠습니까?`,
-      confirmText: '삭제',
+      confirmLabel: '삭제',
       danger: true,
     })
     if (!confirmed) return
@@ -1184,6 +1490,155 @@ export function GovernmentMilitaryTab({
         queryKey: ['military-unit', 'detail', selectedUnitId],
       })
     }
+    await queryClient.invalidateQueries({
+      queryKey: ['administration-departments'],
+    })
+  }
+
+  const handleAddLineage = async () => {
+    if (!selectedUnitFull || lineageBusy) return
+    if (!lineageTargetId) {
+      notify.error('연결할 전신·후신 부대 또는 부처를 선택해 주세요.')
+      return
+    }
+    const parsedYear = lineageYear.trim() ? Number(lineageYear.trim()) : null
+    const parsedMonth = lineageMonth.trim() ? Number(lineageMonth.trim()) : null
+    if (
+      parsedYear !== null &&
+      (!Number.isInteger(parsedYear) || parsedYear < 1)
+    ) {
+      notify.error('개편 연도는 1 이상의 정수여야 합니다.')
+      return
+    }
+    if (
+      parsedMonth !== null &&
+      (!Number.isInteger(parsedMonth) || parsedMonth < 1 || parsedMonth > 12)
+    ) {
+      notify.error('개편 월은 1~12 사이여야 합니다.')
+      return
+    }
+    if (parsedYear === null && parsedMonth !== null) {
+      notify.error('연도 없이 월만 입력할 수 없습니다.')
+      return
+    }
+
+    setLineageBusy(true)
+    try {
+      await militaryUnitApi.addTransition(selectedUnitFull.id, {
+        ...(lineageDirection === 'PREDECESSOR_UNIT'
+          ? { predecessorUnitId: lineageTargetId }
+          : lineageDirection === 'PREDECESSOR_DEPT'
+            ? { predecessorDepartmentId: lineageTargetId }
+            : { successorUnitId: lineageTargetId }),
+        kind: lineageKind,
+        era: parsedYear !== null ? lineageEra : null,
+        year: parsedYear,
+        month: parsedMonth,
+        note: lineageNote.trim() || null,
+      })
+      await refreshSelectedUnitQueries()
+      setLineageFormOpen(false)
+      setLineageTargetId('')
+      setLineageYear('')
+      setLineageMonth('')
+      setLineageNote('')
+      notify.success('개편 계보가 연결되었습니다.')
+    } catch (err) {
+      notify.error(
+        err instanceof Error ? err.message : '계보 연결 추가에 실패했습니다.',
+      )
+    } finally {
+      setLineageBusy(false)
+    }
+  }
+
+  const openEditLineage = (lineageItem: MilitaryUnitLineageDto) => {
+    setEditingLineageId(lineageItem.transitionId)
+    setEditLineageKind(lineageItem.kind)
+    setEditLineageEra(lineageItem.era === 'BC' ? 'BC' : 'AD')
+    setEditLineageYear(
+      lineageItem.year != null ? String(lineageItem.year) : '',
+    )
+    setEditLineageMonth(
+      lineageItem.month != null ? String(lineageItem.month) : '',
+    )
+    setEditLineageNote(lineageItem.note ?? '')
+  }
+
+  const handleUpdateLineage = async (transitionId: string) => {
+    if (lineageBusy) return
+    const parsedYear = editLineageYear.trim()
+      ? Number(editLineageYear.trim())
+      : null
+    const parsedMonth = editLineageMonth.trim()
+      ? Number(editLineageMonth.trim())
+      : null
+    if (
+      parsedYear !== null &&
+      (!Number.isInteger(parsedYear) || parsedYear < 1)
+    ) {
+      notify.error('개편 연도는 1 이상의 정수여야 합니다.')
+      return
+    }
+    if (
+      parsedMonth !== null &&
+      (!Number.isInteger(parsedMonth) || parsedMonth < 1 || parsedMonth > 12)
+    ) {
+      notify.error('개편 월은 1~12 사이여야 합니다.')
+      return
+    }
+    if (parsedYear === null && parsedMonth !== null) {
+      notify.error('연도 없이 월만 입력할 수 없습니다.')
+      return
+    }
+
+    setLineageBusy(true)
+    try {
+      await militaryUnitApi.updateTransition(transitionId, {
+        kind: editLineageKind,
+        era: parsedYear !== null ? editLineageEra : null,
+        year: parsedYear,
+        month: parsedMonth,
+        note: editLineageNote.trim() || null,
+      })
+      await refreshSelectedUnitQueries()
+      setEditingLineageId(null)
+      notify.success('개편 계보가 수정되었습니다.')
+    } catch (err) {
+      notify.error(
+        err instanceof Error ? err.message : '계보 수정에 실패했습니다.',
+      )
+    } finally {
+      setLineageBusy(false)
+    }
+  }
+
+  const handleDeleteLineage = async (
+    transitionId: string,
+    targetLabel: string,
+  ) => {
+    const confirmed = await confirm({
+      title: '개편 계보 연결 해제',
+      message: `'${targetLabel}' 계보 연결을 해제하시겠습니까?`,
+      confirmLabel: '해제',
+      danger: true,
+    })
+    if (!confirmed) return
+    setLineageBusy(true)
+    try {
+      await militaryUnitApi.deleteTransition(transitionId)
+      await refreshSelectedUnitQueries()
+      if (editingLineageId === transitionId) {
+        setEditingLineageId(null)
+      }
+      notify.success('개편 계보 연결이 해제되었습니다.')
+    } catch (err) {
+      notify.error(
+        err instanceof Error ? err.message : '계보 연결 해제에 실패했습니다.',
+      )
+    } finally {
+      setLineageBusy(false)
+    }
   }
 
   const handleDeleteCommanderTenure = async (tenure: MilitaryUnitTenureItem) => {
@@ -1192,7 +1647,7 @@ export function GovernmentMilitaryTab({
     const confirmed = await confirm({
       title: '지휘관·참모 재임 삭제',
       message: `'${roleLabel}' 임기 기록을 삭제하시겠습니까?`,
-      confirmText: '삭제',
+      confirmLabel: '삭제',
       danger: true,
     })
     if (!confirmed) return
@@ -1260,7 +1715,7 @@ export function GovernmentMilitaryTab({
     const confirmed = await confirm({
       title: '사건·지령 연결 해제',
       message: `'${eventTitle}' 연결을 해제하시겠습니까?`,
-      confirmText: '해제',
+      confirmLabel: '해제',
       danger: true,
     })
     if (!confirmed) return
@@ -1290,6 +1745,18 @@ export function GovernmentMilitaryTab({
     })
   }
 
+  const toggleEraCollapse = (eraId: string) => {
+    setCollapsedEraIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(eraId)) {
+        next.delete(eraId)
+      } else {
+        next.add(eraId)
+      }
+      return next
+    })
+  }
+
   const allCollapsibleCollapsed =
     hierarchyGroups.collapsibleParentIds.length > 0 &&
     hierarchyGroups.collapsibleParentIds.every((id) =>
@@ -1299,6 +1766,7 @@ export function GovernmentMilitaryTab({
   const toggleCollapseAll = () => {
     if (allCollapsibleCollapsed) {
       setCollapsedNodeIds(new Set())
+      setCollapsedEraIds(new Set())
     } else {
       setCollapsedNodeIds(new Set(hierarchyGroups.collapsibleParentIds))
     }
@@ -1354,6 +1822,7 @@ export function GovernmentMilitaryTab({
     unitItem: ExtendedMilitaryUnit,
     depth: number,
     visitedIds: Set<string>,
+    hideEraInMeta = false,
   ) => {
     if (visitedIds.has(unitItem.id)) return null
     const nextVisited = new Set(visitedIds)
@@ -1366,34 +1835,14 @@ export function GovernmentMilitaryTab({
     const isSelected = selectedUnitId === unitItem.id
     const periodLabel = formatUnitCompactPeriod(unitItem)
 
-    const firstTenure = unitItem.tenures?.[0]
-    const leadCommander = unitItem.commanders?.[0]
-    const leadCommanderName = firstTenure?.person
-      ? getPersonDisplayName({
-          name: firstTenure.person.name ?? '',
-          surname: firstTenure.person.surname ?? undefined,
-          middleName: firstTenure.person.middleName ?? undefined,
-          country: firstTenure.person.country ?? undefined,
-        }) || firstTenure.person.name
-      : leadCommander?.person
-        ? getPersonDisplayName({
-            name: leadCommander.person.name ?? '',
-            surname: leadCommander.person.surname ?? undefined,
-          }) || leadCommander.person.name
-        : null
-    const leadCommanderRank =
-      firstTenure?.rankTitle ?? leadCommander?.rank ?? null
-    const totalCommandersCount =
-      (unitItem.tenures?.length ?? 0) +
-      (unitItem.commanders?.filter((cmd) => !cmd.tenureId).length ?? 0)
-    const battleCount = unitItem.sideDeployedUnits?.length ?? 0
-
     const metaTextParts: string[] = []
     if (periodLabel) metaTextParts.push(periodLabel)
-    if (unitItem.branch) {
+    if (unitItem.branch && branchFilter === 'ALL') {
       metaTextParts.push(BRANCH_LABELS[unitItem.branch] ?? unitItem.branch)
     }
     if (
+      !hideEraInMeta &&
+      eraFilter === 'ALL' &&
       (!isHistorical || unitItem.historicalCountryId !== targetId) &&
       unitItem.historicalCountry?.name
     ) {
@@ -1430,7 +1879,7 @@ export function GovernmentMilitaryTab({
           </TreeCaretSlot>
 
           <TreeMainBtn type="button" onClick={() => selectUnit(unitItem.id)}>
-            <UnitEmblemThumb unitItem={unitItem} size={28} isDark={isDark} />
+            <UnitEmblemThumb unitItem={unitItem} size={26} isDark={isDark} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <TreeTitleLine $selected={isSelected}>
                 <span>{unitItem.name}</span>
@@ -1439,47 +1888,28 @@ export function GovernmentMilitaryTab({
                     ({unitItem.abbreviation.trim()})
                   </TreeAbbrSpan>
                 ) : null}
-                {unitItem.nickname?.trim() ? (
-                  <TreeNicknameSpan>
-                    &ldquo;{unitItem.nickname.trim()}&rdquo;
-                  </TreeNicknameSpan>
-                ) : null}
                 {unitItem.unitType ? (
                   <EchelonMiniBadge $echelon={unitItem.unitType}>
                     {UNIT_TYPE_LABELS[unitItem.unitType] ?? unitItem.unitType}
                   </EchelonMiniBadge>
                 ) : null}
-                {unitItem.isActive === false ? (
-                  <TreeDisbandedBadge>해체</TreeDisbandedBadge>
-                ) : null}
-              </TreeTitleLine>
-
-              <TreeMetaStrip>
-                {metaTextParts.length > 0 ? (
-                  <TreeLifespanSpan>
-                    {metaTextParts.join(' · ')}
-                  </TreeLifespanSpan>
-                ) : null}
-                {leadCommanderName ? (
-                  <TreeCommanderBadge>
-                    <FiUser size={10} />
-                    {leadCommanderRank ? `${leadCommanderRank} ` : ''}
-                    {leadCommanderName}
-                    {totalCommandersCount > 1
-                      ? ` 외 ${totalCommandersCount - 1}`
-                      : ''}
-                  </TreeCommanderBadge>
-                ) : null}
                 {hasChildren ? (
                   <TreeCountHint>예하 {children.length}</TreeCountHint>
                 ) : null}
-                {battleCount > 0 ? (
-                  <TreeBattleBadge>
-                    <FiCompass size={10} />
-                    참전 {battleCount}
-                  </TreeBattleBadge>
-                ) : null}
-              </TreeMetaStrip>
+              </TreeTitleLine>
+
+              {(metaTextParts.length > 0 || unitItem.isActive === false) && (
+                <TreeMetaStrip>
+                  {metaTextParts.length > 0 ? (
+                    <TreeLifespanSpan>
+                      {metaTextParts.join(' · ')}
+                    </TreeLifespanSpan>
+                  ) : null}
+                  {unitItem.isActive === false ? (
+                    <TreeDisbandedBadge>해체</TreeDisbandedBadge>
+                  ) : null}
+                </TreeMetaStrip>
+              )}
             </div>
           </TreeMainBtn>
         </TreeRow>
@@ -1487,7 +1917,7 @@ export function GovernmentMilitaryTab({
         {hasChildren && !isCollapsed ? (
           <TreeChildrenGroup>
             {children.map((childUnit) =>
-              renderTreeNode(childUnit, depth + 1, nextVisited),
+              renderTreeNode(childUnit, depth + 1, nextVisited, hideEraInMeta),
             )}
           </TreeChildrenGroup>
         ) : null}
@@ -1520,27 +1950,76 @@ export function GovernmentMilitaryTab({
     const isInheritedDept =
       !unitFull.administrationDepartment?.id && Boolean(effDept?.id)
 
-    const parentUnitRef = unitFull.parentUnit
-      ? unitFull.parentUnit
-      : unitFull.parentUnitId
-        ? (unitByIdMap.get(unitFull.parentUnitId) ?? null)
-        : null
+    // 최상위 사령부부터 직속 상급부대까지의 전체 상향 지휘 계통(ancestorChain) 도출
+    const ancestorChain: Array<{
+      id: string
+      name: string
+      abbreviation?: string | null
+      unitType?: string | null
+    }> = []
+    const visitedAncestors = new Set<string>([unitFull.id])
+    let parentCursor:
+      | {
+          id: string
+          name: string
+          abbreviation?: string | null
+          unitType?: string | null
+          parentUnitId?: string | null
+        }
+      | undefined
+      | null = unitFull.parentUnitId
+      ? (unitByIdMap.get(unitFull.parentUnitId) ??
+        unitFull.parentUnit ??
+        null)
+      : (unitFull.parentUnit ?? null)
 
-    const subUnitsList =
+    while (parentCursor && !visitedAncestors.has(parentCursor.id)) {
+      visitedAncestors.add(parentCursor.id)
+      ancestorChain.unshift({
+        id: parentCursor.id,
+        name: parentCursor.name,
+        abbreviation: parentCursor.abbreviation,
+        unitType: parentCursor.unitType,
+      })
+      const fullParent = unitByIdMap.get(parentCursor.id)
+      parentCursor = fullParent?.parentUnitId
+        ? (unitByIdMap.get(fullParent.parentUnitId) ??
+          fullParent.parentUnit ??
+          null)
+        : null
+    }
+
+    const rawSubUnitsList =
       unitFull.subUnits && unitFull.subUnits.length > 0
         ? unitFull.subUnits
-        : countryUnits.filter((candidate) => candidate.parentUnitId === unitFull.id)
+        : countryUnits.filter(
+            (candidate) => candidate.parentUnitId === unitFull.id,
+          )
+    const subUnitsList = [...rawSubUnitsList].sort((leftSub, rightSub) => {
+      const leftRank = leftSub.unitType
+        ? (UNIT_ECHELON_ORDER[leftSub.unitType] ?? 50)
+        : 50
+      const rightRank = rightSub.unitType
+        ? (UNIT_ECHELON_ORDER[rightSub.unitType] ?? 50)
+        : 50
+      if (leftRank !== rightRank) return leftRank - rightRank
+      return leftSub.name.localeCompare(rightSub.name, 'ko')
+    })
+    const visibleSubUnits = expandedAllSubUnits
+      ? subUnitsList
+      : subUnitsList.slice(0, INITIAL_VISIBLE_SUB_UNITS)
+    const hiddenSubUnitsCount = subUnitsList.length - visibleSubUnits.length
 
     const predecessors = unitFull.predecessors ?? []
     const successors = unitFull.successors ?? []
-
-    const hasRelationsMatrix = Boolean(
-      effDept ||
-        parentUnitRef ||
-        subUnitsList.length > 0 ||
-        predecessors.length > 0 ||
-        successors.length > 0,
+    const navalVessels =
+      unitFull.assignedNavalVessels ?? unitFull.navalVessels ?? []
+    const candidateLineageUnits = countryUnits.filter(
+      (candidate) => candidate.id !== unitFull.id,
     )
+    const candidateLineageDepts = departmentsForLineageQuery.data ?? []
+
+    const hasCommandChainRow = Boolean(effDept || ancestorChain.length > 0)
 
     const hasStructuredSpecs = Boolean(
       unitFull.garrison?.trim() ||
@@ -1631,50 +2110,114 @@ export function GovernmentMilitaryTab({
             <DetailS.DeptDetailActionsGroup
               role="group"
               aria-label="부대 편집 및 관리"
+              data-more-menu-root
             >
-              <DetailS.DeptTopGhostBtn
-                onClick={() =>
-                  onCreateUnit({
-                    parentUnitId: unitFull.id,
-                    administrationDepartmentId:
-                      unitFull.administrationDepartmentId ??
-                      unitFull.administrationDepartment?.id ??
-                      effDept?.id ??
-                      null,
-                    historicalCountryId: unitFull.historicalCountryId ?? null,
-                    branch: unitFull.branch ?? null,
-                  })
-                }
-              >
-                <FiPlus size={13} />
-                예하 추가
-              </DetailS.DeptTopGhostBtn>
-              <DetailS.DeptTopTealBtn
-                onClick={() => {
-                  setEditingTenure(null)
-                  setAppointmentOpen(true)
-                }}
-              >
-                <FiUser size={13} />
-                지휘관 임명
-              </DetailS.DeptTopTealBtn>
-              <DetailS.DeptTopGhostLink
-                to={pathKeys.militaryUnitDetail(unitFull.id)}
-                title="전력 타임라인 페이지에서 전체 상세 보기"
-              >
-                <FiExternalLink size={13} />
-                전력 타임라인
-              </DetailS.DeptTopGhostLink>
               <DetailS.DeptTopEditBtn onClick={() => onEditUnit(unitFull.id)}>
                 <FiEdit2 size={13} />
                 수정
               </DetailS.DeptTopEditBtn>
-              <DetailS.DeptTopDeleteBtn
-                onClick={() => void handleDelete(unitFull)}
-              >
-                <FiTrash2 size={13} />
-                삭제
-              </DetailS.DeptTopDeleteBtn>
+
+              <MoreMenuAnchor>
+                <MoreDotsBtn
+                  type="button"
+                  $active={detailMenuOpen}
+                  aria-expanded={detailMenuOpen}
+                  aria-label="부대 설정 및 추가 작업 메뉴"
+                  title="부대 설정 · 예하 추가 · 지휘관 임명 · 삭제"
+                  onClick={() => setDetailMenuOpen((prev) => !prev)}
+                >
+                  <FiMoreHorizontal size={16} />
+                </MoreDotsBtn>
+
+                {detailMenuOpen ? (
+                  <MoreDropdownMenu role="menu">
+                    <MoreDropdownSectionTitle>편제 · 인원 추가</MoreDropdownSectionTitle>
+                    <MoreDropdownItem
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setDetailMenuOpen(false)
+                        onCreateUnit({
+                          parentUnitId: unitFull.id,
+                          administrationDepartmentId:
+                            unitFull.administrationDepartmentId ??
+                            unitFull.administrationDepartment?.id ??
+                            effDept?.id ??
+                            null,
+                          historicalCountryId:
+                            unitFull.historicalCountryId ?? null,
+                          branch: unitFull.branch ?? null,
+                        })
+                      }}
+                    >
+                      <FiPlus size={13} />
+                      <span>예하 부대 추가</span>
+                    </MoreDropdownItem>
+                    <MoreDropdownItem
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setDetailMenuOpen(false)
+                        setEditingTenure(null)
+                        setAppointmentOpen(true)
+                      }}
+                    >
+                      <FiUser size={13} />
+                      <span>지휘관 · 참모 임명</span>
+                    </MoreDropdownItem>
+                    <MoreDropdownItem
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setDetailMenuOpen(false)
+                        setDetailSubTab('overview')
+                        setLineageFormOpen(true)
+                        setEditingLineageId(null)
+                      }}
+                    >
+                      <FiGitCommit size={13} />
+                      <span>개편 계보 연결</span>
+                    </MoreDropdownItem>
+                    <MoreDropdownItem
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setDetailMenuOpen(false)
+                        setDetailSubTab('operations')
+                        setEventPickerOpen(true)
+                      }}
+                    >
+                      <FiCompass size={13} />
+                      <span>지령 · 작전 사건 연결</span>
+                    </MoreDropdownItem>
+
+                    <MoreDropdownDivider />
+                    <MoreDropdownItem
+                      as={Link}
+                      to={pathKeys.militaryUnitDetail(unitFull.id)}
+                      role="menuitem"
+                      onClick={() => setDetailMenuOpen(false)}
+                    >
+                      <FiExternalLink size={13} />
+                      <span>단독 상세 페이지 열기</span>
+                    </MoreDropdownItem>
+
+                    <MoreDropdownDivider />
+                    <MoreDropdownItem
+                      type="button"
+                      role="menuitem"
+                      $danger
+                      onClick={() => {
+                        setDetailMenuOpen(false)
+                        void handleDelete(unitFull)
+                      }}
+                    >
+                      <FiTrash2 size={13} />
+                      <span>부대 삭제</span>
+                    </MoreDropdownItem>
+                  </MoreDropdownMenu>
+                ) : null}
+              </MoreMenuAnchor>
             </DetailS.DeptDetailActionsGroup>
           </DetailS.DeptDetailTopBarRight>
         </DetailS.DeptDetailTopBar>
@@ -1760,236 +2303,578 @@ export function GovernmentMilitaryTab({
             </DetailS.DeptIdentityBody>
           </DetailS.DeptIdentityMain>
 
-          {/* 3. 지휘 계통 · 상하 편제 · 개편 계보 매트릭스 */}
-          {hasRelationsMatrix ? (
-            <DetailS.DeptRelationsMatrix>
-              {effDept ? (
-                <DetailS.DeptRelationRow>
-                  <DetailS.UnitsLabel>소관 부처</DetailS.UnitsLabel>
-                  <DetailS.UnitsChipList>
+          {/* 3. 지휘 계통 · 예하 편제 · 배속 함정 · 개편 계보 매트릭스 */}
+          <DetailS.DeptRelationsMatrix>
+            {hasCommandChainRow ? (
+              <DetailS.DeptRelationRow>
+                <DetailS.UnitsLabel>지휘 계통</DetailS.UnitsLabel>
+                <DetailS.UnitsChipList style={{ alignItems: 'center' }}>
+                  {effDept ? (
+                    <>
+                      <DetailS.UnitChip
+                        $tone="military"
+                        role={onNavigateToDepartment ? 'button' : undefined}
+                        tabIndex={onNavigateToDepartment ? 0 : undefined}
+                        onClick={() => onNavigateToDepartment?.(effDept.id)}
+                        onKeyDown={(keyEvent) => {
+                          if (
+                            !onNavigateToDepartment ||
+                            (keyEvent.key !== 'Enter' && keyEvent.key !== ' ')
+                          ) {
+                            return
+                          }
+                          keyEvent.preventDefault()
+                          onNavigateToDepartment(effDept.id)
+                        }}
+                        style={{
+                          cursor: onNavigateToDepartment ? 'pointer' : undefined,
+                        }}
+                        title={
+                          isInheritedDept
+                            ? '상위 사령부를 통해 연결된 소관 국방·군정 부처'
+                            : '직속 소관 국방·군정 부처'
+                        }
+                      >
+                        <FiShield size={11} />
+                        {effDept.name}
+                        {effDept.abbreviation ? ` (${effDept.abbreviation})` : ''}
+                      </DetailS.UnitChip>
+                      <CommandChainArrow>
+                        <FiChevronRight size={12} />
+                      </CommandChainArrow>
+                    </>
+                  ) : null}
+
+                  {ancestorChain.map((ancNode) => (
+                    <span
+                      key={`anc-${ancNode.id}`}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                      }}
+                    >
+                      <DetailS.UnitChip
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => selectUnit(ancNode.id)}
+                        onKeyDown={(keyEvent) => {
+                          if (
+                            keyEvent.key !== 'Enter' &&
+                            keyEvent.key !== ' '
+                          ) {
+                            return
+                          }
+                          keyEvent.preventDefault()
+                          selectUnit(ancNode.id)
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        {ancNode.unitType ? (
+                          <span style={{ opacity: 0.68, fontWeight: 500 }}>
+                            {UNIT_TYPE_LABELS[
+                              ancNode.unitType as MilitaryUnitType
+                            ] ?? ancNode.unitType}
+                          </span>
+                        ) : null}
+                        {ancNode.name}
+                        {ancNode.abbreviation
+                          ? ` (${ancNode.abbreviation})`
+                          : ''}
+                      </DetailS.UnitChip>
+                      <CommandChainArrow>
+                        <FiChevronRight size={12} />
+                      </CommandChainArrow>
+                    </span>
+                  ))}
+
+                  <CommandChainCurrentChip>
+                    {unitFull.unitType ? (
+                      <span style={{ opacity: 0.75, fontWeight: 500 }}>
+                        {UNIT_TYPE_LABELS[unitFull.unitType] ??
+                          unitFull.unitType}
+                      </span>
+                    ) : null}
+                    <strong>{unitFull.name}</strong>
+                  </CommandChainCurrentChip>
+                </DetailS.UnitsChipList>
+              </DetailS.DeptRelationRow>
+            ) : null}
+
+            {subUnitsList.length > 0 ? (
+              <DetailS.DeptRelationRow>
+                <DetailS.UnitsLabel>
+                  예하 편제 ({subUnitsList.length})
+                </DetailS.UnitsLabel>
+                <DetailS.UnitsChipList>
+                  {visibleSubUnits.map((subItem) => (
                     <DetailS.UnitChip
-                      $tone="military"
-                      role={onNavigateToDepartment ? 'button' : undefined}
-                      tabIndex={onNavigateToDepartment ? 0 : undefined}
-                      onClick={() => onNavigateToDepartment?.(effDept.id)}
+                      key={`sub-${subItem.id}`}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => selectUnit(subItem.id)}
                       onKeyDown={(keyEvent) => {
-                        if (
-                          !onNavigateToDepartment ||
-                          (keyEvent.key !== 'Enter' && keyEvent.key !== ' ')
-                        ) {
+                        if (keyEvent.key !== 'Enter' && keyEvent.key !== ' ') {
                           return
                         }
                         keyEvent.preventDefault()
-                        onNavigateToDepartment(effDept.id)
+                        selectUnit(subItem.id)
                       }}
-                      style={{
-                        cursor: onNavigateToDepartment ? 'pointer' : undefined,
-                      }}
+                      style={{ cursor: 'pointer' }}
                     >
-                      <FiShield size={11} />
-                      {effDept.name}
-                      {effDept.abbreviation ? ` (${effDept.abbreviation})` : ''}
-                      {isInheritedDept ? (
+                      {subItem.unitType ? (
+                        <span style={{ opacity: 0.68, fontWeight: 500 }}>
+                          {UNIT_TYPE_LABELS[
+                            subItem.unitType as MilitaryUnitType
+                          ] ?? subItem.unitType}
+                        </span>
+                      ) : null}
+                      {subItem.name}
+                      {subItem.abbreviation ? ` (${subItem.abbreviation})` : ''}
+                    </DetailS.UnitChip>
+                  ))}
+                  {(hiddenSubUnitsCount > 0 ||
+                    (expandedAllSubUnits &&
+                      subUnitsList.length > INITIAL_VISIBLE_SUB_UNITS)) && (
+                    <LineageActionTriggerBtn
+                      type="button"
+                      onClick={() =>
+                        setExpandedAllSubUnits((prevVal) => !prevVal)
+                      }
+                    >
+                      {expandedAllSubUnits
+                        ? '접기'
+                        : `+${hiddenSubUnitsCount}개 더보기`}
+                    </LineageActionTriggerBtn>
+                  )}
+                </DetailS.UnitsChipList>
+              </DetailS.DeptRelationRow>
+            ) : null}
+
+            {navalVessels.length > 0 ? (
+              <DetailS.DeptRelationRow>
+                <DetailS.UnitsLabel>
+                  배속 함정 ({navalVessels.length})
+                </DetailS.UnitsLabel>
+                <DetailS.UnitsChipList>
+                  {navalVessels.map((vesselItem) => (
+                    <DetailS.UnitChip key={vesselItem.id} $tone="military">
+                      <FiAnchor size={11} />
+                      {vesselItem.name}
+                      {vesselItem.vesselClass || vesselItem.vesselType ? (
                         <span style={{ opacity: 0.72, fontWeight: 500 }}>
-                          · 상위 사령부 경유
+                          ·{' '}
+                          {[vesselItem.vesselClass, vesselItem.vesselType]
+                            .filter(Boolean)
+                            .join(' ')}
                         </span>
                       ) : null}
                     </DetailS.UnitChip>
-                  </DetailS.UnitsChipList>
-                </DetailS.DeptRelationRow>
-              ) : null}
+                  ))}
+                </DetailS.UnitsChipList>
+              </DetailS.DeptRelationRow>
+            ) : null}
 
-              {(parentUnitRef || subUnitsList.length > 0) && (
-                <DetailS.DeptRelationRow>
-                  <DetailS.UnitsLabel>상하 편제</DetailS.UnitsLabel>
-                  <DetailS.UnitsChipList>
-                    {parentUnitRef ? (
-                      <DetailS.UnitChip
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => selectUnit(parentUnitRef.id)}
-                        onKeyDown={(keyEvent) => {
-                          if (
-                            keyEvent.key !== 'Enter' &&
-                            keyEvent.key !== ' '
-                          ) {
-                            return
-                          }
-                          keyEvent.preventDefault()
-                          selectUnit(parentUnitRef.id)
-                        }}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <span style={{ opacity: 0.65, fontWeight: 500 }}>
-                          상위
-                        </span>
-                        {parentUnitRef.name}
-                        {parentUnitRef.abbreviation
-                          ? ` (${parentUnitRef.abbreviation})`
-                          : ''}
-                        {parentUnitRef.unitType ? (
-                          <span style={{ opacity: 0.72, fontWeight: 500 }}>
-                            ·{' '}
-                            {UNIT_TYPE_LABELS[
-                              parentUnitRef.unitType as MilitaryUnitType
-                            ] ?? parentUnitRef.unitType}
-                          </span>
-                        ) : null}
-                      </DetailS.UnitChip>
-                    ) : null}
-                    {subUnitsList.map((subItem) => (
-                      <DetailS.UnitChip
-                        key={`sub-${subItem.id}`}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => selectUnit(subItem.id)}
-                        onKeyDown={(keyEvent) => {
-                          if (
-                            keyEvent.key !== 'Enter' &&
-                            keyEvent.key !== ' '
-                          ) {
-                            return
-                          }
-                          keyEvent.preventDefault()
-                          selectUnit(subItem.id)
-                        }}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <span style={{ opacity: 0.65, fontWeight: 500 }}>
-                          예하
-                        </span>
-                        {subItem.name}
-                        {subItem.abbreviation
-                          ? ` (${subItem.abbreviation})`
-                          : ''}
-                        {subItem.unitType ? (
-                          <span style={{ opacity: 0.72, fontWeight: 500 }}>
-                            ·{' '}
-                            {UNIT_TYPE_LABELS[
-                              subItem.unitType as MilitaryUnitType
-                            ] ?? subItem.unitType}
-                          </span>
-                        ) : null}
-                      </DetailS.UnitChip>
-                    ))}
-                  </DetailS.UnitsChipList>
-                </DetailS.DeptRelationRow>
-              )}
-
-              {(predecessors.length > 0 || successors.length > 0) && (
-                <DetailS.DeptRelationRow>
-                  <DetailS.UnitsLabel>개편 계보</DetailS.UnitsLabel>
-                  <DetailS.UnitsChipList>
-                    {predecessors.map((predItem) => {
-                      const kindKo = predItem.kind
-                        ? TRANSITION_KIND_LABEL_KO[predItem.kind]
+            {(predecessors.length > 0 ||
+              successors.length > 0 ||
+              lineageFormOpen ||
+              Boolean(editingLineageId)) && (
+              <DetailS.DeptRelationRow>
+                <DetailS.UnitsLabel>개편 계보</DetailS.UnitsLabel>
+                <div
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
+                  }}
+                >
+                  <DetailS.UnitsChipList style={{ alignItems: 'center' }}>
+                    {[
+                      ...predecessors.map((predItem) => ({
+                        dirPrefix:
+                          predItem.targetType === 'DEPARTMENT'
+                            ? '← 전신 부처'
+                            : '← 전신',
+                        item: predItem,
+                      })),
+                      ...successors.map((succItem) => ({
+                        dirPrefix: '후신 →',
+                        item: succItem,
+                      })),
+                    ].map(({ dirPrefix, item }) => {
+                      const kindKo = item.kind
+                        ? TRANSITION_KIND_LABEL_KO[item.kind]
                         : null
-                      const yearStr = formatTransitionYearLabel(predItem)
-                      const metaSuffix = [
-                        kindKo,
-                        yearStr ? `(${yearStr})` : null,
-                      ]
+                      const yearStr = formatTransitionYearLabel(item)
+                      const metaSuffix = [kindKo, yearStr ? `(${yearStr})` : null]
                         .filter(Boolean)
                         .join(' ')
+                      const targetLabel =
+                        item.targetType === 'DEPARTMENT'
+                          ? (item.department?.name ?? '행정부처')
+                          : (item.unit?.name ?? '군사부대')
+                      const menuKey = `lineage:${item.transitionId}`
 
-                      if (
-                        predItem.targetType === 'DEPARTMENT' &&
-                        predItem.department
-                      ) {
-                        return (
-                          <DetailS.UnitChip
-                            key={`pred-dept-${predItem.transitionId}`}
-                            $tone="military"
-                            title={
-                              predItem.note ?? '전신 행정부처 상세로 이동'
-                            }
-                            role={onNavigateToDepartment ? 'button' : undefined}
-                            tabIndex={onNavigateToDepartment ? 0 : undefined}
-                            onClick={() =>
-                              onNavigateToDepartment?.(predItem.department!.id)
-                            }
-                            style={{
-                              cursor: onNavigateToDepartment
-                                ? 'pointer'
-                                : undefined,
-                            }}
-                          >
-                            <span style={{ opacity: 0.7, fontWeight: 500 }}>
-                              전신 부처
-                            </span>
-                            {predItem.department.name}
-                            {metaSuffix ? (
-                              <span style={{ opacity: 0.75, fontWeight: 500 }}>
-                                · {metaSuffix}
-                              </span>
-                            ) : null}
-                          </DetailS.UnitChip>
-                        )
-                      }
-                      if (predItem.unit) {
-                        return (
-                          <DetailS.UnitChip
-                            key={`pred-unit-${predItem.transitionId}`}
-                            title={predItem.note ?? undefined}
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => selectUnit(predItem.unit!.id)}
-                            style={{ cursor: 'pointer' }}
-                          >
-                            <span style={{ opacity: 0.65, fontWeight: 500 }}>
-                              전신
-                            </span>
-                            {predItem.unit.name}
-                            {metaSuffix ? (
-                              <span style={{ opacity: 0.72, fontWeight: 500 }}>
-                                · {metaSuffix}
-                              </span>
-                            ) : null}
-                          </DetailS.UnitChip>
-                        )
-                      }
-                      return null
-                    })}
-
-                    {successors.map((succItem) => {
-                      if (!succItem.unit) return null
-                      const kindKo = succItem.kind
-                        ? TRANSITION_KIND_LABEL_KO[succItem.kind]
-                        : null
-                      const yearStr = formatTransitionYearLabel(succItem)
-                      const metaSuffix = [
-                        kindKo,
-                        yearStr ? `(${yearStr})` : null,
-                      ]
-                        .filter(Boolean)
-                        .join(' ')
                       return (
-                        <DetailS.UnitChip
-                          key={`succ-unit-${succItem.transitionId}`}
-                          title={succItem.note ?? undefined}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => selectUnit(succItem.unit!.id)}
-                          style={{ cursor: 'pointer' }}
+                        <LineageChipGroup
+                          key={item.transitionId}
+                          data-more-menu-root
                         >
-                          <span style={{ opacity: 0.65, fontWeight: 500 }}>
-                            후신
-                          </span>
-                          {succItem.unit.name}
-                          {metaSuffix ? (
-                            <span style={{ opacity: 0.72, fontWeight: 500 }}>
-                              · {metaSuffix}
-                            </span>
+                          {item.targetType === 'DEPARTMENT' && item.department ? (
+                            <DetailS.UnitChip
+                              $tone="military"
+                              title={item.note ?? '전신 행정부처 상세로 이동'}
+                              role={onNavigateToDepartment ? 'button' : undefined}
+                              tabIndex={onNavigateToDepartment ? 0 : undefined}
+                              onClick={() =>
+                                onNavigateToDepartment?.(item.department!.id)
+                              }
+                              style={{
+                                cursor: onNavigateToDepartment
+                                  ? 'pointer'
+                                  : undefined,
+                              }}
+                            >
+                              <span style={{ opacity: 0.7, fontWeight: 500 }}>
+                                {dirPrefix}
+                              </span>
+                              {item.department.name}
+                              {metaSuffix ? (
+                                <span style={{ opacity: 0.75, fontWeight: 500 }}>
+                                  · {metaSuffix}
+                                </span>
+                              ) : null}
+                            </DetailS.UnitChip>
+                          ) : item.unit ? (
+                            <DetailS.UnitChip
+                              title={item.note ?? undefined}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => selectUnit(item.unit!.id)}
+                              style={{ cursor: 'pointer' }}
+                            >
+                              <span style={{ opacity: 0.65, fontWeight: 500 }}>
+                                {dirPrefix}
+                              </span>
+                              {item.unit.name}
+                              {metaSuffix ? (
+                                <span style={{ opacity: 0.72, fontWeight: 500 }}>
+                                  · {metaSuffix}
+                                </span>
+                              ) : null}
+                            </DetailS.UnitChip>
                           ) : null}
-                        </DetailS.UnitChip>
+
+                          <MoreMenuAnchor>
+                            <LineageChipIconBtn
+                              type="button"
+                              aria-label={`${targetLabel} 계보 설정`}
+                              title="계보 수정 또는 연결 해제"
+                              onClick={() =>
+                                setOpenRowMenuKey((prev) =>
+                                  prev === menuKey ? null : menuKey,
+                                )
+                              }
+                            >
+                              <FiMoreHorizontal size={12} />
+                            </LineageChipIconBtn>
+                            {openRowMenuKey === menuKey ? (
+                              <MoreDropdownMenu role="menu">
+                                <MoreDropdownItem
+                                  type="button"
+                                  role="menuitem"
+                                  onClick={() => {
+                                    setOpenRowMenuKey(null)
+                                    if (editingLineageId === item.transitionId) {
+                                      setEditingLineageId(null)
+                                    } else {
+                                      openEditLineage(item)
+                                    }
+                                  }}
+                                >
+                                  <FiEdit2 size={12.5} />
+                                  <span>계보 정보 수정</span>
+                                </MoreDropdownItem>
+                                <MoreDropdownItem
+                                  type="button"
+                                  role="menuitem"
+                                  $danger
+                                  onClick={() => {
+                                    setOpenRowMenuKey(null)
+                                    void handleDeleteLineage(
+                                      item.transitionId,
+                                      targetLabel,
+                                    )
+                                  }}
+                                >
+                                  <FiTrash2 size={12.5} />
+                                  <span>계보 연결 해제</span>
+                                </MoreDropdownItem>
+                              </MoreDropdownMenu>
+                            ) : null}
+                          </MoreMenuAnchor>
+                        </LineageChipGroup>
                       )
                     })}
+
+                    <LineageActionTriggerBtn
+                      type="button"
+                      onClick={() => {
+                        setLineageFormOpen((prev) => !prev)
+                        setEditingLineageId(null)
+                      }}
+                    >
+                      <FiGitCommit size={11} />
+                      {lineageFormOpen ? '닫기' : '+ 계보 연결'}
+                    </LineageActionTriggerBtn>
                   </DetailS.UnitsChipList>
-                </DetailS.DeptRelationRow>
-              )}
-            </DetailS.DeptRelationsMatrix>
-          ) : null}
+
+                {editingLineageId ? (
+                  <LineageInlineFormBox>
+                    <LineageFormRow>
+                      <LineageFormSelect
+                        aria-label="개편 유형"
+                        value={editLineageKind}
+                        onChange={(changeEvent) =>
+                          setEditLineageKind(
+                            changeEvent.target
+                              .value as MilitaryUnitTransitionKind,
+                          )
+                        }
+                      >
+                        {TRANSITION_KIND_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </LineageFormSelect>
+                      <LineageFormSelect
+                        aria-label="기원"
+                        value={editLineageEra}
+                        onChange={(changeEvent) =>
+                          setEditLineageEra(
+                            changeEvent.target.value as 'AD' | 'BC',
+                          )
+                        }
+                        style={{ maxWidth: 78 }}
+                      >
+                        <option value="AD">서기</option>
+                        <option value="BC">BC</option>
+                      </LineageFormSelect>
+                      <LineageFormInput
+                        type="number"
+                        placeholder="연도 (예: 1938)"
+                        value={editLineageYear}
+                        onChange={(changeEvent) =>
+                          setEditLineageYear(changeEvent.target.value)
+                        }
+                        style={{ maxWidth: 112 }}
+                      />
+                      <LineageFormInput
+                        type="number"
+                        placeholder="월 (1~12)"
+                        value={editLineageMonth}
+                        onChange={(changeEvent) =>
+                          setEditLineageMonth(changeEvent.target.value)
+                        }
+                        style={{ maxWidth: 88 }}
+                      />
+                      <LineageFormInput
+                        type="text"
+                        placeholder="개편 사유·비고"
+                        value={editLineageNote}
+                        onChange={(changeEvent) =>
+                          setEditLineageNote(changeEvent.target.value)
+                        }
+                      />
+                      <EventDraftSaveBtn
+                        type="button"
+                        disabled={lineageBusy}
+                        onClick={() =>
+                          void handleUpdateLineage(editingLineageId)
+                        }
+                      >
+                        저장
+                      </EventDraftSaveBtn>
+                      <EventDraftCancelBtn
+                        type="button"
+                        disabled={lineageBusy}
+                        onClick={() => setEditingLineageId(null)}
+                      >
+                        취소
+                      </EventDraftCancelBtn>
+                    </LineageFormRow>
+                  </LineageInlineFormBox>
+                ) : null}
+
+                {lineageFormOpen ? (
+                  <LineageInlineFormBox>
+                    <LineageFormRow>
+                      <LineageFormSelect
+                        aria-label="계보 방향"
+                        value={lineageDirection}
+                        onChange={(changeEvent) => {
+                          setLineageDirection(
+                            changeEvent.target.value as LineageDirectionKey,
+                          )
+                          setLineageTargetId('')
+                        }}
+                      >
+                        <option value="PREDECESSOR_UNIT">
+                          ← 전신 군사부대 (이전 부대 → {unitFull.name})
+                        </option>
+                        <option value="PREDECESSOR_DEPT">
+                          ← 전신 행정부처 (국방·전쟁부 → {unitFull.name})
+                        </option>
+                        <option value="SUCCESSOR_UNIT">
+                          → 후신 군사부대 ({unitFull.name} → 후속 부대)
+                        </option>
+                      </LineageFormSelect>
+
+                      {lineageDirection === 'PREDECESSOR_DEPT' ? (
+                        <LineageFormSelect
+                          aria-label="전신 행정부처 선택"
+                          value={lineageTargetId}
+                          onChange={(changeEvent) =>
+                            setLineageTargetId(changeEvent.target.value)
+                          }
+                        >
+                          <option value="">
+                            {departmentsForLineageQuery.isLoading
+                              ? '부처 불러오는 중…'
+                              : '전신 부처 선택…'}
+                          </option>
+                          {candidateLineageDepts.map((deptItem) => (
+                            <option key={deptItem.id} value={deptItem.id}>
+                              {deptItem.name}
+                              {deptItem.abbreviation
+                                ? ` (${deptItem.abbreviation})`
+                                : ''}
+                            </option>
+                          ))}
+                        </LineageFormSelect>
+                      ) : (
+                        <LineageFormSelect
+                          aria-label="연결할 군사부대 선택"
+                          value={lineageTargetId}
+                          onChange={(changeEvent) =>
+                            setLineageTargetId(changeEvent.target.value)
+                          }
+                        >
+                          <option value="">
+                            {lineageDirection === 'PREDECESSOR_UNIT'
+                              ? '전신 부대 선택…'
+                              : '후신 부대 선택…'}
+                          </option>
+                          {candidateLineageUnits.map((candUnit) => {
+                            const typeKo = candUnit.unitType
+                              ? (UNIT_TYPE_LABELS[candUnit.unitType] ??
+                                candUnit.unitType)
+                              : null
+                            const eraKo = candUnit.historicalCountry?.name
+                            const suffix = [typeKo, eraKo]
+                              .filter(Boolean)
+                              .join(' · ')
+                            return (
+                              <option key={candUnit.id} value={candUnit.id}>
+                                {candUnit.name}
+                                {suffix ? ` (${suffix})` : ''}
+                              </option>
+                            )
+                          })}
+                        </LineageFormSelect>
+                      )}
+
+                      <LineageFormSelect
+                        aria-label="개편 유형"
+                        value={lineageKind}
+                        onChange={(changeEvent) =>
+                          setLineageKind(
+                            changeEvent.target
+                              .value as MilitaryUnitTransitionKind,
+                          )
+                        }
+                      >
+                        {TRANSITION_KIND_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </LineageFormSelect>
+                    </LineageFormRow>
+
+                    <LineageFormRow>
+                      <LineageFormSelect
+                        aria-label="기원"
+                        value={lineageEra}
+                        onChange={(changeEvent) =>
+                          setLineageEra(
+                            changeEvent.target.value as 'AD' | 'BC',
+                          )
+                        }
+                        style={{ maxWidth: 78 }}
+                      >
+                        <option value="AD">서기</option>
+                        <option value="BC">BC</option>
+                      </LineageFormSelect>
+                      <LineageFormInput
+                        type="number"
+                        placeholder="전환 연도 (예: 1938)"
+                        value={lineageYear}
+                        onChange={(changeEvent) =>
+                          setLineageYear(changeEvent.target.value)
+                        }
+                        style={{ maxWidth: 132 }}
+                      />
+                      <LineageFormInput
+                        type="number"
+                        placeholder="월 (1~12)"
+                        value={lineageMonth}
+                        onChange={(changeEvent) =>
+                          setLineageMonth(changeEvent.target.value)
+                        }
+                        style={{ maxWidth: 92 }}
+                      />
+                      <LineageFormInput
+                        type="text"
+                        placeholder="개편 사유·비고 (선택)"
+                        value={lineageNote}
+                        onChange={(changeEvent) =>
+                          setLineageNote(changeEvent.target.value)
+                        }
+                      />
+                      <EventDraftSaveBtn
+                        type="button"
+                        disabled={lineageBusy || !lineageTargetId}
+                        onClick={() => void handleAddLineage()}
+                      >
+                        {lineageBusy ? '연결 중…' : '계보 연결'}
+                      </EventDraftSaveBtn>
+                      <EventDraftCancelBtn
+                        type="button"
+                        disabled={lineageBusy}
+                        onClick={() => setLineageFormOpen(false)}
+                      >
+                        취소
+                      </EventDraftCancelBtn>
+                    </LineageFormRow>
+                  </LineageInlineFormBox>
+                ) : null}
+              </div>
+            </DetailS.DeptRelationRow>
+          </DetailS.DeptRelationsMatrix>
         </DetailS.DeptIdentityCard>
+
+        {unitFull.garrison?.trim() ? (
+          <HeadquartersMapPreview
+            headquarters={unitFull.garrison}
+            countryName={country?.name}
+            departmentName={unitFull.name}
+            showHeadline
+          />
+        ) : null}
 
         {/* 4. 주요 제원 · 임무 · 관할 매트릭스 */}
         {hasStructuredSpecs ? (
@@ -2057,7 +2942,7 @@ export function GovernmentMilitaryTab({
         {unitFull.description?.trim() ? (
           <DetailS.DeptInfoSection>
             <DetailS.DeptInfoSectionTitle>
-              <DetailS.DeptInfoDot $color="#0d9488" />
+              <DetailS.DeptInfoDot $color={GOV_BRAND.primary} />
               사령부·부대 개요
             </DetailS.DeptInfoSectionTitle>
             <DetailS.DeptInfoText>
@@ -2109,7 +2994,7 @@ export function GovernmentMilitaryTab({
                     style={{
                       position: 'absolute',
                       left: 8,
-                      color: tokens.textFaint,
+                      opacity: 0.55,
                       pointerEvents: 'none',
                     }}
                   />
@@ -2520,11 +3405,17 @@ export function GovernmentMilitaryTab({
             <LedgerRowList>
               {combatDeployments.map((deployment, idx) => {
                 const eventRecord = deployment.side.event
-                const startYear = signedYearFromIsoLike(eventRecord.startDate)
+                const startYear =
+                  signedYearFromIsoLike(eventRecord.startDate) ??
+                  (eventRecord.startYear && eventRecord.startYear > 0
+                    ? eventRecord.startEra === 'BC'
+                      ? -Math.abs(eventRecord.startYear)
+                      : eventRecord.startYear
+                    : null)
                 const weaponsList =
                   deployment.deployedWeapons ?? deployment.weaponsUsed ?? []
-                const weaponCount = weaponsList.length
-                const vectorCount = deployment.mapFeatures?.length ?? 0
+                const metricsList = deployment.metrics ?? []
+                const mapFeaturesList = deployment.mapFeatures ?? []
                 const battleCommanderName = deployment.commander
                   ? getPersonDisplayName({
                       name: deployment.commander.name ?? '',
@@ -2568,12 +3459,45 @@ export function GovernmentMilitaryTab({
                         </SideTagPill>
                       </CombatTitleGroup>
 
-                      <SurveyLinkBtn
-                        to={`/events/${eventRecord.id}/overview?tab=survey&unit=${unitFull.id}`}
+                      <div
+                        style={{
+                          display: 'inline-flex',
+                          flexWrap: 'wrap',
+                          alignItems: 'center',
+                          gap: 6,
+                        }}
                       >
-                        <span>조망·기동선</span>
-                        <FiArrowUpRight size={11} />
-                      </SurveyLinkBtn>
+                        {eventRecord.kind === 'COLLECTION' ? (
+                          <SurveyLinkBtn
+                            to={`${pathKeys.events.detail(eventRecord.id)}?tab=survey&unit=${encodeURIComponent(unitFull.id)}`}
+                          >
+                            <span>조망·기동선</span>
+                            <FiArrowUpRight size={11} />
+                          </SurveyLinkBtn>
+                        ) : (
+                          <>
+                            <SurveyLinkBtn
+                              to={`${pathKeys.events.detail(eventRecord.id)}?tab=modules&unit=${encodeURIComponent(unitFull.id)}#module-sides`}
+                            >
+                              <span>전투서열</span>
+                              <FiArrowUpRight size={11} />
+                            </SurveyLinkBtn>
+                            {eventRecord.parentEventId ? (
+                              <SurveyLinkBtn
+                                to={`${pathKeys.events.detail(eventRecord.parentEventId)}?tab=survey&sv=map&unit=${encodeURIComponent(unitFull.id)}&event=${encodeURIComponent(eventRecord.id)}`}
+                                title={
+                                  eventRecord.parentEvent?.title
+                                    ? `${eventRecord.parentEvent.title} 조망 지도에서 보기`
+                                    : '상위 전쟁 조망 지도에서 보기'
+                                }
+                              >
+                                <span>전역 지도</span>
+                                <FiArrowUpRight size={11} />
+                              </SurveyLinkBtn>
+                            ) : null}
+                          </>
+                        )}
+                      </div>
                     </CombatTopLine>
 
                     <CombatMetaLine>
@@ -2608,14 +3532,85 @@ export function GovernmentMilitaryTab({
                           </InlineTextBtn>
                         </span>
                       ) : null}
-                      {weaponCount > 0 ? (
-                        <span>배속 무기 {weaponCount}종</span>
-                      ) : null}
-                      {vectorCount > 0 ? (
-                        <span>기동 벡터 {vectorCount}개</span>
-                      ) : null}
                       {deployment.note ? <span>{deployment.note}</span> : null}
                     </CombatMetaLine>
+
+                    {(weaponsList.length > 0 ||
+                      metricsList.length > 0 ||
+                      mapFeaturesList.length > 0) && (
+                      <CombatChipsRow>
+                        {metricsList.map((metricEntry) => {
+                          const rawVal =
+                            metricEntry.value ??
+                            metricEntry.low ??
+                            metricEntry.high
+                          const formattedVal =
+                            rawVal != null && Number.isFinite(Number(rawVal))
+                              ? Number(rawVal).toLocaleString()
+                              : (rawVal ?? '')
+                          return (
+                            <NeutralChip key={metricEntry.id}>
+                              {metricEntry.metricName}:{' '}
+                              {metricEntry.approx ? '약 ' : ''}
+                              {formattedVal}
+                              {metricEntry.unit ? ` ${metricEntry.unit}` : ''}
+                            </NeutralChip>
+                          )
+                        })}
+                        {weaponsList.map((weaponEntry) => {
+                          const assetName =
+                            weaponEntry.groundVehicle?.name ??
+                            weaponEntry.aircraft?.name ??
+                            weaponEntry.navalVessel?.name ??
+                            weaponEntry.weapon?.name ??
+                            '투입 병기'
+                          const qtyLabel =
+                            weaponEntry.quantity != null &&
+                            String(weaponEntry.quantity).trim() !== ''
+                              ? Number.isFinite(Number(weaponEntry.quantity))
+                                ? `${Number(weaponEntry.quantity).toLocaleString()}기`
+                                : String(weaponEntry.quantity)
+                              : null
+                          return (
+                            <NeutralChip key={weaponEntry.id}>
+                              <FiShield
+                                size={10}
+                                style={{
+                                  marginRight: 3,
+                                  verticalAlign: -1,
+                                  opacity: 0.75,
+                                }}
+                              />
+                              {assetName}
+                              {qtyLabel ? ` · ${qtyLabel}` : ''}
+                            </NeutralChip>
+                          )
+                        })}
+                        {mapFeaturesList.map((featEntry) => {
+                          const mapUrl =
+                            eventRecord.kind === 'COLLECTION'
+                              ? `${pathKeys.events.detail(featEntry.eventId)}?tab=survey&sv=map&unit=${encodeURIComponent(unitFull.id)}`
+                              : eventRecord.parentEventId
+                                ? `${pathKeys.events.detail(eventRecord.parentEventId)}?tab=survey&sv=map&unit=${encodeURIComponent(unitFull.id)}&event=${encodeURIComponent(eventRecord.id)}`
+                                : `${pathKeys.events.detail(eventRecord.id)}?tab=modules&unit=${encodeURIComponent(unitFull.id)}#module-sides`
+                          return (
+                            <SurveyLinkBtn
+                              key={featEntry.id}
+                              to={mapUrl}
+                              title={
+                                featEntry.description ??
+                                '조망 지도 또는 전투서열에서 기동 축선·포위망 보기'
+                              }
+                            >
+                              <FiCompass size={10.5} />
+                              <span>
+                                {featEntry.title?.trim() || '기동 벡터'}
+                              </span>
+                            </SurveyLinkBtn>
+                          )
+                        })}
+                      </CombatChipsRow>
+                    )}
                   </CombatLedgerItem>
                 )
               })}
@@ -2625,6 +3620,140 @@ export function GovernmentMilitaryTab({
       </DetailS.DetailRoot>
     )
   }
+
+  const renderDeptGroupsList = (
+    deptGroups: typeof hierarchyGroups.groups,
+    hideEraInMeta = false,
+  ) =>
+    deptGroups.map((groupItem, groupIdx) => {
+      const showGroupHeader =
+        deptGroups.length > 1 || Boolean(groupItem.departmentId)
+      return (
+        <div key={groupItem.key}>
+          {showGroupHeader ? (
+            <DeptGroupHeaderBar $first={groupIdx === 0 && !hideEraInMeta}>
+              <DeptGroupTitleWrap>
+                <FiShield size={13} />
+                <DeptGroupName>{groupItem.departmentName}</DeptGroupName>
+                {groupItem.departmentAbbreviation ? (
+                  <DeptGroupAbbr>
+                    ({groupItem.departmentAbbreviation})
+                  </DeptGroupAbbr>
+                ) : null}
+                <DeptGroupCountPill>
+                  {groupItem.roots.length}
+                </DeptGroupCountPill>
+              </DeptGroupTitleWrap>
+              <DeptGroupRightActions>
+                {groupItem.departmentId && onNavigateToDepartment ? (
+                  <DeptHeaderLinkBtn
+                    type="button"
+                    onClick={() =>
+                      onNavigateToDepartment(groupItem.departmentId!)
+                    }
+                  >
+                    부처 상세
+                    <FiArrowUpRight size={11} />
+                  </DeptHeaderLinkBtn>
+                ) : null}
+                <DeptHeaderAddBtn
+                  type="button"
+                  onClick={() =>
+                    onCreateUnit({
+                      administrationDepartmentId: groupItem.departmentId,
+                      historicalCountryId: groupItem.historicalCountryId,
+                      branch:
+                        branchFilter !== 'ALL' && branchFilter !== 'UNSPECIFIED'
+                          ? branchFilter
+                          : null,
+                    })
+                  }
+                >
+                  <FiPlus size={11} />
+                  직할 추가
+                </DeptHeaderAddBtn>
+              </DeptGroupRightActions>
+            </DeptGroupHeaderBar>
+          ) : null}
+          {groupItem.roots.map((rootUnit) =>
+            renderTreeNode(rootUnit, 0, new Set(), hideEraInMeta),
+          )}
+        </div>
+      )
+    })
+
+  const renderTreePanel = () => (
+    <TreeContainer>
+      <TreeScrollArea>
+        {hierarchyGroups.eraSections ? (
+          hierarchyGroups.eraSections.map((eraSection) => {
+            const isEraCollapsed = collapsedEraIds.has(eraSection.id)
+            return (
+              <div key={eraSection.id}>
+                <EraStickyHeaderBar>
+                  <EraStickyToggleBtn
+                    type="button"
+                    aria-expanded={!isEraCollapsed}
+                    onClick={() => toggleEraCollapse(eraSection.id)}
+                  >
+                    {isEraCollapsed ? (
+                      <FiChevronRight size={13} />
+                    ) : (
+                      <FiChevronDown size={13} />
+                    )}
+                    <EraStickyTitle>{eraSection.label}</EraStickyTitle>
+                    <DeptGroupCountPill>
+                      {eraSection.totalCount}
+                    </DeptGroupCountPill>
+                  </EraStickyToggleBtn>
+                  <DeptHeaderAddBtn
+                    type="button"
+                    onClick={() =>
+                      onCreateUnit({
+                        historicalCountryId: eraSection.historicalCountryId,
+                        administrationDepartmentId:
+                          deptFilter !== 'ALL' && deptFilter !== 'UNLINKED'
+                            ? deptFilter
+                            : null,
+                        branch:
+                          branchFilter !== 'ALL' &&
+                          branchFilter !== 'UNSPECIFIED'
+                            ? branchFilter
+                            : null,
+                      })
+                    }
+                  >
+                    <FiPlus size={11} />
+                    시대 편제 추가
+                  </DeptHeaderAddBtn>
+                </EraStickyHeaderBar>
+                {!isEraCollapsed
+                  ? renderDeptGroupsList(eraSection.deptGroups, true)
+                  : null}
+              </div>
+            )
+          })
+        ) : (
+          renderDeptGroupsList(hierarchyGroups.groups, false)
+        )}
+      </TreeScrollArea>
+
+      <TreeFooterBar>
+        <TreeFooterAddBtn
+          type="button"
+          onClick={() => onCreateUnit(resolveDefaultCreateOptions())}
+        >
+          <FiPlus size={13} />
+          최상위 사령부·부대 추가
+        </TreeFooterAddBtn>
+        {hierarchyGroups.collapsibleParentIds.length > 0 ? (
+          <TreeFooterCollapseBtn type="button" onClick={toggleCollapseAll}>
+            {allCollapsibleCollapsed ? '모두 펼치기' : '모두 접기'}
+          </TreeFooterCollapseBtn>
+        ) : null}
+      </TreeFooterBar>
+    </TreeContainer>
+  )
 
   return (
     <>
@@ -2651,6 +3780,61 @@ export function GovernmentMilitaryTab({
                   </GovPromSearchClear>
                 ) : null}
               </GovPromSearch>
+
+              <GovToolbarGroup role="group" aria-label="제대 위계 필터">
+                {(
+                  [
+                    'ALL',
+                    'HIGH_COMMAND',
+                    'OPERATIONAL',
+                    'TACTICAL',
+                  ] as const
+                ).map((groupKey) => (
+                  <GovToolbarBtn
+                    key={groupKey}
+                    type="button"
+                    $active={echelonGroupFilter === groupKey}
+                    onClick={() => setEchelonGroupFilter(groupKey)}
+                  >
+                    {ECHELON_GROUP_LABELS[groupKey]}
+                  </GovToolbarBtn>
+                ))}
+              </GovToolbarGroup>
+
+              <GovToolbarGroup role="group" aria-label="운용 상태 필터">
+                {(['ALL', 'ACTIVE', 'DISBANDED'] as const).map((statusKey) => (
+                  <GovToolbarBtn
+                    key={statusKey}
+                    type="button"
+                    $active={statusFilter === statusKey}
+                    onClick={() => setStatusFilter(statusKey)}
+                  >
+                    {STATUS_FILTER_LABELS[statusKey]}
+                  </GovToolbarBtn>
+                ))}
+              </GovToolbarGroup>
+
+              <SnapshotYearWrap title="특정 연도(예: 1941, BC 221)에 존재했던 군부대만 스냅샷 필터링합니다">
+                <FiCalendar size={12.5} aria-hidden />
+                <SnapshotYearInput
+                  type="text"
+                  value={snapshotYearInput}
+                  onChange={(changeEvt) =>
+                    setSnapshotYearInput(changeEvt.target.value)
+                  }
+                  placeholder="기준 연도 (예: 1941)"
+                  aria-label="기준 연도 스냅샷 필터"
+                />
+                {snapshotYearInput ? (
+                  <GovPromSearchClear
+                    type="button"
+                    aria-label="기준 연도 지우기"
+                    onClick={() => setSnapshotYearInput('')}
+                  >
+                    <FiX size={11} />
+                  </GovPromSearchClear>
+                ) : null}
+              </SnapshotYearWrap>
 
               {historicalErasAvailable.length > 0 ? (
                 <ToolbarSelect
@@ -2706,28 +3890,6 @@ export function GovernmentMilitaryTab({
                 </ToolbarSelect>
               ) : null}
 
-              <SnapshotYearWrap title="특정 연도(예: 1941, BC 221)에 존재했던 군부대만 스냅샷 필터링합니다">
-                <FiCalendar size={12.5} aria-hidden />
-                <SnapshotYearInput
-                  type="text"
-                  value={snapshotYearInput}
-                  onChange={(changeEvt) =>
-                    setSnapshotYearInput(changeEvt.target.value)
-                  }
-                  placeholder="기준 연도 (예: 1941)"
-                  aria-label="기준 연도 스냅샷 필터"
-                />
-                {snapshotYearInput ? (
-                  <GovPromSearchClear
-                    type="button"
-                    aria-label="기준 연도 지우기"
-                    onClick={() => setSnapshotYearInput('')}
-                  >
-                    <FiX size={11} />
-                  </GovPromSearchClear>
-                ) : null}
-              </SnapshotYearWrap>
-
               <GovToolbarRight>
                 <GovViewMeta>
                   표시 <strong>{filteredUnits.length}</strong> · 전체{' '}
@@ -2736,8 +3898,26 @@ export function GovernmentMilitaryTab({
 
                 <GovToolbarDivider />
 
-                <ToolbarSegmentTrack role="group" aria-label="목록 표시 방식">
-                  <ToolbarSegmentBtn
+                {browseViewMode === 'TREE' &&
+                eraFilter === 'ALL' &&
+                historicalErasAvailable.length > 0 ? (
+                  <GovToolbarBtn
+                    type="button"
+                    $active={groupByEra}
+                    onClick={() => setGroupByEra((prev) => !prev)}
+                    title={
+                      groupByEra
+                        ? '현재 시대·정체별 섹션으로 묶어 표시 중 (클릭하여 통합 트리로 전환)'
+                        : '클릭하면 현대 직속과 역사국가별로 섹션을 나누어 표시합니다'
+                    }
+                  >
+                    <FiLayers size={12.5} />
+                    <span>시대별 묶음</span>
+                  </GovToolbarBtn>
+                ) : null}
+
+                <GovToolbarGroup role="group" aria-label="목록 표시 방식">
+                  <GovToolbarBtn
                     type="button"
                     $active={browseViewMode === 'TREE'}
                     onClick={() => setBrowseViewMode('TREE')}
@@ -2745,8 +3925,8 @@ export function GovernmentMilitaryTab({
                   >
                     <FiGitBranch size={12.5} />
                     <span>편제 트리</span>
-                  </ToolbarSegmentBtn>
-                  <ToolbarSegmentBtn
+                  </GovToolbarBtn>
+                  <GovToolbarBtn
                     type="button"
                     $active={browseViewMode === 'LEDGER'}
                     onClick={() => setBrowseViewMode('LEDGER')}
@@ -2754,11 +3934,11 @@ export function GovernmentMilitaryTab({
                   >
                     <FiList size={12.5} />
                     <span>원장 표</span>
-                  </ToolbarSegmentBtn>
-                </ToolbarSegmentTrack>
+                  </GovToolbarBtn>
+                </GovToolbarGroup>
 
-                <ToolbarSegmentTrack role="group" aria-label="화면 분할 방식">
-                  <ToolbarSegmentBtn
+                <GovToolbarGroup role="group" aria-label="화면 분할 방식">
+                  <GovToolbarBtn
                     type="button"
                     $active={layoutMode === 'SPLIT'}
                     onClick={() => setLayoutMode('SPLIT')}
@@ -2766,8 +3946,8 @@ export function GovernmentMilitaryTab({
                   >
                     <FiColumns size={12.5} />
                     <span>분할</span>
-                  </ToolbarSegmentBtn>
-                  <ToolbarSegmentBtn
+                  </GovToolbarBtn>
+                  <GovToolbarBtn
                     type="button"
                     $active={layoutMode === 'FOCUS'}
                     onClick={() => {
@@ -2778,16 +3958,18 @@ export function GovernmentMilitaryTab({
                   >
                     <FiMaximize2 size={12.5} />
                     <span>전체폭</span>
-                  </ToolbarSegmentBtn>
-                </ToolbarSegmentTrack>
+                  </GovToolbarBtn>
+                </GovToolbarGroup>
 
-                <GovPrimaryBtn
-                  type="button"
-                  onClick={() => onCreateUnit(resolveDefaultCreateOptions())}
-                >
-                  <FiPlus size={14} />
-                  <span>사령부·부대 등록</span>
-                </GovPrimaryBtn>
+                {!hidePrimaryCta ? (
+                  <GovPrimaryBtn
+                    type="button"
+                    onClick={() => onCreateUnit(resolveDefaultCreateOptions())}
+                  >
+                    <FiPlus size={14} />
+                    <span>사령부·부대 등록</span>
+                  </GovPrimaryBtn>
+                ) : null}
               </GovToolbarRight>
             </GovToolbarRow>
 
@@ -2919,72 +4101,27 @@ export function GovernmentMilitaryTab({
             <GovLedgerPanel>{renderDetailView(selectedUnitFull)}</GovLedgerPanel>
           ) : (
             <WorkspaceStack>
-              <SubFilterHeaderRow>
-                <BranchNavBar role="tablist" aria-label="군종별 편제 필터">
-                  {branchTabs.map((tabItem) => {
-                    const active = branchFilter === tabItem.id
-                    return (
-                      <BranchTabBtn
-                        key={tabItem.id}
-                        type="button"
-                        role="tab"
-                        aria-selected={active}
-                        tabIndex={active ? 0 : -1}
-                        $active={active}
-                        onClick={() => setBranchFilter(tabItem.id)}
-                      >
-                        <span>{tabItem.label}</span>
-                        <BranchCountPill $active={active}>
-                          {tabItem.count}
-                        </BranchCountPill>
-                      </BranchTabBtn>
-                    )
-                  })}
-                </BranchNavBar>
-
-                <SubFilterPillsCluster>
-                  <SubFilterSegmentTrack
-                    role="group"
-                    aria-label="제대 위계 필터"
-                  >
-                    {(
-                      [
-                        'ALL',
-                        'HIGH_COMMAND',
-                        'OPERATIONAL',
-                        'TACTICAL',
-                      ] as const
-                    ).map((groupKey) => (
-                      <SubFilterSegmentBtn
-                        key={groupKey}
-                        type="button"
-                        $active={echelonGroupFilter === groupKey}
-                        onClick={() => setEchelonGroupFilter(groupKey)}
-                      >
-                        {ECHELON_GROUP_LABELS[groupKey]}
-                      </SubFilterSegmentBtn>
-                    ))}
-                  </SubFilterSegmentTrack>
-
-                  <SubFilterSegmentTrack
-                    role="group"
-                    aria-label="운용 상태 필터"
-                  >
-                    {(['ALL', 'ACTIVE', 'DISBANDED'] as const).map(
-                      (statusKey) => (
-                        <SubFilterSegmentBtn
-                          key={statusKey}
-                          type="button"
-                          $active={statusFilter === statusKey}
-                          onClick={() => setStatusFilter(statusKey)}
-                        >
-                          {STATUS_FILTER_LABELS[statusKey]}
-                        </SubFilterSegmentBtn>
-                      ),
-                    )}
-                  </SubFilterSegmentTrack>
-                </SubFilterPillsCluster>
-              </SubFilterHeaderRow>
+              <BranchNavBar role="tablist" aria-label="군종별 편제 필터">
+                {branchTabs.map((tabItem) => {
+                  const active = branchFilter === tabItem.id
+                  return (
+                    <BranchTabBtn
+                      key={tabItem.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      tabIndex={active ? 0 : -1}
+                      $active={active}
+                      onClick={() => setBranchFilter(tabItem.id)}
+                    >
+                      <span>{tabItem.label}</span>
+                      <BranchCountPill $active={active}>
+                        {tabItem.count}
+                      </BranchCountPill>
+                    </BranchTabBtn>
+                  )
+                })}
+              </BranchNavBar>
 
               {filteredUnits.length === 0 ? (
                 <EmptyStateSpotlight
@@ -3008,6 +4145,7 @@ export function GovernmentMilitaryTab({
                         selectedUnitId={selectedUnitFull?.id}
                         compact
                         isHistorical={isHistorical}
+                        targetPolityId={targetId}
                         unitTypeLabels={UNIT_TYPE_LABELS}
                         branchLabels={BRANCH_LABELS}
                         echelonOrder={UNIT_ECHELON_ORDER}
@@ -3018,97 +4156,7 @@ export function GovernmentMilitaryTab({
                         }
                       />
                     ) : (
-                      <TreeContainer>
-                        <TreeScrollArea>
-                          {hierarchyGroups.groups.map((groupItem, groupIdx) => {
-                            const showGroupHeader =
-                              hierarchyGroups.groups.length > 1 ||
-                              Boolean(groupItem.departmentId)
-                            return (
-                              <div key={groupItem.key}>
-                                {showGroupHeader ? (
-                                  <DeptGroupHeaderBar $first={groupIdx === 0}>
-                                    <DeptGroupTitleWrap>
-                                      <FiShield size={13} />
-                                      <DeptGroupName>
-                                        {groupItem.departmentName}
-                                      </DeptGroupName>
-                                      {groupItem.departmentAbbreviation ? (
-                                        <DeptGroupAbbr>
-                                          ({groupItem.departmentAbbreviation})
-                                        </DeptGroupAbbr>
-                                      ) : null}
-                                      <DeptGroupCountPill>
-                                        {groupItem.roots.length}
-                                      </DeptGroupCountPill>
-                                    </DeptGroupTitleWrap>
-                                    <DeptGroupRightActions>
-                                      {groupItem.departmentId &&
-                                      onNavigateToDepartment ? (
-                                        <DeptHeaderLinkBtn
-                                          type="button"
-                                          onClick={() =>
-                                            onNavigateToDepartment(
-                                              groupItem.departmentId!,
-                                            )
-                                          }
-                                        >
-                                          부처 상세
-                                          <FiArrowUpRight size={11} />
-                                        </DeptHeaderLinkBtn>
-                                      ) : null}
-                                      <DeptHeaderAddBtn
-                                        type="button"
-                                        onClick={() =>
-                                          onCreateUnit({
-                                            administrationDepartmentId:
-                                              groupItem.departmentId,
-                                            historicalCountryId:
-                                              groupItem.historicalCountryId,
-                                            branch:
-                                              branchFilter !== 'ALL' &&
-                                              branchFilter !== 'UNSPECIFIED'
-                                                ? branchFilter
-                                                : null,
-                                          })
-                                        }
-                                      >
-                                        <FiPlus size={11} />
-                                        직할 추가
-                                      </DeptHeaderAddBtn>
-                                    </DeptGroupRightActions>
-                                  </DeptGroupHeaderBar>
-                                ) : null}
-                                {groupItem.roots.map((rootUnit) =>
-                                  renderTreeNode(rootUnit, 0, new Set()),
-                                )}
-                              </div>
-                            )
-                          })}
-                        </TreeScrollArea>
-
-                        <TreeFooterBar>
-                          <TreeFooterAddBtn
-                            type="button"
-                            onClick={() =>
-                              onCreateUnit(resolveDefaultCreateOptions())
-                            }
-                          >
-                            <FiPlus size={13} />
-                            최상위 사령부·부대 추가
-                          </TreeFooterAddBtn>
-                          {hierarchyGroups.collapsibleParentIds.length > 0 ? (
-                            <TreeFooterCollapseBtn
-                              type="button"
-                              onClick={toggleCollapseAll}
-                            >
-                              {allCollapsibleCollapsed
-                                ? '모두 펼치기'
-                                : '모두 접기'}
-                            </TreeFooterCollapseBtn>
-                          ) : null}
-                        </TreeFooterBar>
-                      </TreeContainer>
+                      renderTreePanel()
                     )}
                   </TreeLedgerColumn>
 
@@ -3132,6 +4180,7 @@ export function GovernmentMilitaryTab({
                       allUnits={countryUnits}
                       selectedUnitId={selectedUnitId}
                       isHistorical={isHistorical}
+                      targetPolityId={targetId}
                       unitTypeLabels={UNIT_TYPE_LABELS}
                       branchLabels={BRANCH_LABELS}
                       echelonOrder={UNIT_ECHELON_ORDER}
@@ -3142,97 +4191,7 @@ export function GovernmentMilitaryTab({
                       }
                     />
                   ) : (
-                    <TreeContainer>
-                      <TreeScrollArea>
-                        {hierarchyGroups.groups.map((groupItem, groupIdx) => {
-                          const showGroupHeader =
-                            hierarchyGroups.groups.length > 1 ||
-                            Boolean(groupItem.departmentId)
-                          return (
-                            <div key={groupItem.key}>
-                              {showGroupHeader ? (
-                                <DeptGroupHeaderBar $first={groupIdx === 0}>
-                                  <DeptGroupTitleWrap>
-                                    <FiShield size={13} />
-                                    <DeptGroupName>
-                                      {groupItem.departmentName}
-                                    </DeptGroupName>
-                                    {groupItem.departmentAbbreviation ? (
-                                      <DeptGroupAbbr>
-                                        ({groupItem.departmentAbbreviation})
-                                      </DeptGroupAbbr>
-                                    ) : null}
-                                    <DeptGroupCountPill>
-                                      {groupItem.roots.length}
-                                    </DeptGroupCountPill>
-                                  </DeptGroupTitleWrap>
-                                  <DeptGroupRightActions>
-                                    {groupItem.departmentId &&
-                                    onNavigateToDepartment ? (
-                                      <DeptHeaderLinkBtn
-                                        type="button"
-                                        onClick={() =>
-                                          onNavigateToDepartment(
-                                            groupItem.departmentId!,
-                                          )
-                                        }
-                                      >
-                                        부처 상세
-                                        <FiArrowUpRight size={11} />
-                                      </DeptHeaderLinkBtn>
-                                    ) : null}
-                                    <DeptHeaderAddBtn
-                                      type="button"
-                                      onClick={() =>
-                                        onCreateUnit({
-                                          administrationDepartmentId:
-                                            groupItem.departmentId,
-                                          historicalCountryId:
-                                            groupItem.historicalCountryId,
-                                          branch:
-                                            branchFilter !== 'ALL' &&
-                                            branchFilter !== 'UNSPECIFIED'
-                                              ? branchFilter
-                                              : null,
-                                        })
-                                      }
-                                    >
-                                      <FiPlus size={11} />
-                                      직할 추가
-                                    </DeptHeaderAddBtn>
-                                  </DeptGroupRightActions>
-                                </DeptGroupHeaderBar>
-                              ) : null}
-                              {groupItem.roots.map((rootUnit) =>
-                                renderTreeNode(rootUnit, 0, new Set()),
-                              )}
-                            </div>
-                          )
-                        })}
-                      </TreeScrollArea>
-
-                      <TreeFooterBar>
-                        <TreeFooterAddBtn
-                          type="button"
-                          onClick={() =>
-                            onCreateUnit(resolveDefaultCreateOptions())
-                          }
-                        >
-                          <FiPlus size={13} />
-                          최상위 사령부·부대 추가
-                        </TreeFooterAddBtn>
-                        {hierarchyGroups.collapsibleParentIds.length > 0 ? (
-                          <TreeFooterCollapseBtn
-                            type="button"
-                            onClick={toggleCollapseAll}
-                          >
-                            {allCollapsibleCollapsed
-                              ? '모두 펼치기'
-                              : '모두 접기'}
-                          </TreeFooterCollapseBtn>
-                        ) : null}
-                      </TreeFooterBar>
-                    </TreeContainer>
+                    renderTreePanel()
                   )}
                 </GovLedgerPanel>
               )}
@@ -3248,7 +4207,7 @@ export function GovernmentMilitaryTab({
             setAppointmentOpen(false)
             setEditingTenure(null)
           }}
-          onSuccess={() => {
+          onSaved={() => {
             void refreshSelectedUnitQueries()
           }}
           contextType="MILITARY_UNIT"
@@ -3403,57 +4362,6 @@ const SnapshotYearInput = styled.input`
   }
 `
 
-const ToolbarSegmentTrack = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
-  height: 34px;
-  box-sizing: border-box;
-  border-radius: 8px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f1f5f9'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.08)'
-        : 'rgba(15, 23, 42, 0.08)'};
-`
-
-const ToolbarSegmentBtn = styled.button<{ $active: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 9px;
-  border: none;
-  border-radius: 6px;
-  background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.12)'
-        : '#ffffff'
-      : 'transparent'};
-  box-shadow: ${({ $active, theme }) =>
-    $active && theme.mode !== 'dark'
-      ? '0 1px 2px rgba(15, 23, 42, 0.08)'
-      : 'none'};
-  color: ${({ $active, theme }) =>
-    $active ? theme.colors.text.primary : theme.colors.text.secondary};
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: ${({ $active }) => ($active ? 700 : 500)};
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    color 0.14s ease,
-    background-color 0.14s ease;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
-
 const WorkspaceStage = styled.div`
   flex: 1;
   min-height: 0;
@@ -3469,72 +4377,6 @@ const WorkspaceStack = styled.div`
   gap: 12px;
 `
 
-const SubFilterHeaderRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  border-bottom: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? GOV_ROW_HAIRLINE.dark : GOV_ROW_HAIRLINE.light};
-`
-
-const SubFilterPillsCluster = styled.div`
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 4px 0;
-  margin-left: auto;
-`
-
-const SubFilterSegmentTrack = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 7px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.035)' : '#f1f5f9'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.07)'
-        : 'rgba(15, 23, 42, 0.07)'};
-`
-
-const SubFilterSegmentBtn = styled.button<{ $active: boolean }>`
-  height: 24px;
-  padding: 0 8px;
-  border: none;
-  border-radius: 5px;
-  background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.12)'
-        : '#ffffff'
-      : 'transparent'};
-  box-shadow: ${({ $active, theme }) =>
-    $active && theme.mode !== 'dark'
-      ? '0 1px 2px rgba(15, 23, 42, 0.07)'
-      : 'none'};
-  color: ${({ $active, theme }) =>
-    $active ? theme.colors.text.primary : theme.colors.text.secondary};
-  font-family: inherit;
-  font-size: 11.5px;
-  font-weight: ${({ $active }) => ($active ? 700 : 500)};
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    color 0.14s ease,
-    background-color 0.14s ease;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
-
 const BranchNavBar = styled.div`
   display: flex;
   flex-wrap: nowrap;
@@ -3543,6 +4385,9 @@ const BranchNavBar = styled.div`
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? GOV_ROW_HAIRLINE.dark : GOV_ROW_HAIRLINE.light};
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
@@ -3620,7 +4465,7 @@ const BranchCountPill = styled.span<{ $active: boolean }>`
   color: ${({ $active, theme }) =>
     $active
       ? theme.mode === 'dark'
-        ? '#93c5fd'
+        ? GOV_BRAND.primaryDark
         : GOV_BRAND.primary
       : theme.colors.text.tertiary};
 `
@@ -3686,7 +4531,8 @@ const DeptGroupTitleWrap = styled.div`
   align-items: center;
   gap: 6px;
   min-width: 0;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#5eead4' : '#0f766e')};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
 `
 
 const DeptGroupName = styled.span`
@@ -3731,7 +4577,7 @@ const DeptHeaderLinkBtn = styled.button`
   border: none;
   background: transparent;
   color: ${({ theme }) =>
-    theme.mode === 'dark' ? '#93c5fd' : GOV_BRAND.primary};
+    theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
   font-family: inherit;
   font-size: 11px;
   font-weight: 600;
@@ -3948,39 +4794,43 @@ const EchelonMiniBadge = styled.span<{ $echelon: string }>`
       ? theme.mode === 'dark'
         ? 'rgba(245, 158, 11, 0.16)'
         : 'rgba(245, 158, 11, 0.12)'
-      : ['THEATER', 'ARMY_GROUP', 'FRONT', 'MILITARY_DISTRICT'].includes(
-            $echelon,
-          )
+      : [
+            'THEATER',
+            'ARMY_GROUP',
+            'FRONT',
+            'MILITARY_DISTRICT',
+            'FIELD_ARMY',
+            'FLEET',
+            'AIR_FLEET',
+            'CORPS',
+            'AIR_CORPS',
+          ].includes($echelon)
         ? theme.mode === 'dark'
           ? GOV_BRAND.primarySoftDark
           : GOV_BRAND.primarySoft
-        : ['FIELD_ARMY', 'FLEET', 'AIR_FLEET', 'CORPS', 'AIR_CORPS'].includes(
-              $echelon,
-            )
-          ? theme.mode === 'dark'
-            ? 'rgba(13, 148, 136, 0.16)'
-            : 'rgba(13, 148, 136, 0.1)'
-          : theme.mode === 'dark'
-            ? 'rgba(255, 255, 255, 0.06)'
-            : 'rgba(20, 19, 34, 0.045)'};
+        : theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.06)'
+          : 'rgba(20, 19, 34, 0.045)'};
   color: ${({ theme, $echelon }) =>
     ['SUPREME_COMMAND', 'GENERAL_STAFF', 'SERVICE_HQ'].includes($echelon)
       ? theme.mode === 'dark'
         ? '#fcd34d'
         : '#b45309'
-      : ['THEATER', 'ARMY_GROUP', 'FRONT', 'MILITARY_DISTRICT'].includes(
-            $echelon,
-          )
+      : [
+            'THEATER',
+            'ARMY_GROUP',
+            'FRONT',
+            'MILITARY_DISTRICT',
+            'FIELD_ARMY',
+            'FLEET',
+            'AIR_FLEET',
+            'CORPS',
+            'AIR_CORPS',
+          ].includes($echelon)
         ? theme.mode === 'dark'
-          ? '#93c5fd'
+          ? GOV_BRAND.primaryDark
           : GOV_BRAND.primary
-        : ['FIELD_ARMY', 'FLEET', 'AIR_FLEET', 'CORPS', 'AIR_CORPS'].includes(
-              $echelon,
-            )
-          ? theme.mode === 'dark'
-            ? '#5eead4'
-            : '#0f766e'
-          : theme.colors.text.secondary};
+        : theme.colors.text.secondary};
 `
 
 const TreeCommanderBadge = styled.span`
@@ -4009,8 +4859,226 @@ const TreeBattleBadge = styled.span`
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(13, 148, 136, 0.16)' : '#f0fdfa'};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#5eead4' : '#0f766e')};
+    theme.mode === 'dark' ? GOV_BRAND.primarySoftDark : GOV_BRAND.primarySoft};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
+`
+
+const TreeDetachedParentBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(255, 255, 255, 0.06)'
+      : 'rgba(20, 19, 34, 0.045)'};
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const TreeSuccessorBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? GOV_BRAND.primarySoftDark : GOV_BRAND.primarySoft};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
+`
+
+const EraStickyHeaderBar = styled.div`
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 12px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? '#141925' : '#f1f5f9'};
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? GOV_ROW_HAIRLINE.dark : GOV_ROW_HAIRLINE.light};
+`
+
+const EraStickyToggleBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
+  cursor: pointer;
+  min-width: 0;
+  text-align: left;
+`
+
+const EraStickyTitle = styled.span`
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+`
+
+const CommandChainArrow = styled.span`
+  display: inline-flex;
+  align-items: center;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const CommandChainCurrentChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? GOV_BRAND.primarySoftDark : GOV_BRAND.primarySoft};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? GOV_BRAND.primaryBorderDark
+        : GOV_BRAND.primaryBorder};
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
+
+  strong {
+    font-weight: 700;
+  }
+`
+
+const LineageChipGroup = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+`
+
+const LineageChipIconBtn = styled.button<{ $danger?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: ${({ theme, $danger }) =>
+    $danger ? '#ef4444' : theme.colors.text.tertiary};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme, $danger }) =>
+      $danger ? '#dc2626' : theme.colors.text.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.06)'
+        : 'rgba(15, 23, 42, 0.05)'};
+  }
+`
+
+const LineageActionTriggerBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px dashed
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.16)'
+        : 'rgba(15, 23, 42, 0.16)'};
+  background: transparent;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    border-style: solid;
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? GOV_BRAND.primarySoftDark : GOV_BRAND.primarySoft};
+  }
+`
+
+const LineageInlineFormBox = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.025)' : '#f8fafc'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.1)'
+        : 'rgba(20, 19, 34, 0.1)'};
+`
+
+const LineageFormRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+`
+
+const LineageFormSelect = styled.select`
+  height: 30px;
+  padding: 0 24px 0 8px;
+  border-radius: 6px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.12)'
+        : 'rgba(20, 19, 34, 0.12)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? '#141925' : '#ffffff'};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  outline: none;
+`
+
+const LineageFormInput = styled.input`
+  flex: 1 1 140px;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 6px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.12)'
+        : 'rgba(20, 19, 34, 0.12)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? '#141925' : '#ffffff'};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+`
+
+const CombatChipsRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
 `
 
 const TreeFooterBar = styled.div`
@@ -4213,14 +5281,15 @@ const OutlineActionBtn = styled.button`
         : 'rgba(20, 19, 34, 0.1)'};
   background: transparent;
   color: ${({ theme }) =>
-    theme.mode === 'dark' ? '#93c5fd' : GOV_BRAND.primary};
+    theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
   font-family: inherit;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
 
   &:hover {
-    border-color: ${GOV_BRAND.primary};
+    border-color: ${({ theme }) =>
+      theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
     background: ${({ theme }) =>
       theme.mode === 'dark' ? GOV_BRAND.primarySoftDark : GOV_BRAND.primarySoft};
   }
@@ -4263,7 +5332,7 @@ const OrdinalPill = styled.span`
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: ${({ theme }) =>
-    theme.mode === 'dark' ? '#93c5fd' : GOV_BRAND.primary};
+    theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? GOV_BRAND.primarySoftDark : GOV_BRAND.primarySoft};
   padding: 1px 6px;
@@ -4283,7 +5352,7 @@ const PersonJumpBtn = styled.button`
 
   &:hover {
     color: ${({ theme }) =>
-      theme.mode === 'dark' ? '#93c5fd' : GOV_BRAND.primary};
+      theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
     text-decoration: underline;
     text-underline-offset: 2px;
   }
@@ -4355,12 +5424,17 @@ const RowMiniBtn = styled.button<{ $danger?: boolean }>`
   cursor: pointer;
 
   &:hover {
-    border-color: ${({ $danger }) => ($danger ? '#ef4444' : GOV_BRAND.primary)};
+    border-color: ${({ $danger, theme }) =>
+      $danger
+        ? '#ef4444'
+        : theme.mode === 'dark'
+          ? GOV_BRAND.primaryDark
+          : GOV_BRAND.primary};
     color: ${({ theme, $danger }) =>
       $danger
         ? '#dc2626'
         : theme.mode === 'dark'
-          ? '#93c5fd'
+          ? GOV_BRAND.primaryDark
           : GOV_BRAND.primary};
   }
 `
@@ -4376,7 +5450,7 @@ const ExpandListBtn = styled.button`
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.025)' : '#f8fafc'};
   color: ${({ theme }) =>
-    theme.mode === 'dark' ? '#93c5fd' : GOV_BRAND.primary};
+    theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
   font-family: inherit;
   font-size: 11.5px;
   font-weight: 600;
@@ -4433,7 +5507,7 @@ const EventRolePillBtn = styled.button<{ $active: boolean }>`
   color: ${({ theme, $active }) =>
     $active
       ? theme.mode === 'dark'
-        ? '#93c5fd'
+        ? GOV_BRAND.primaryDark
         : GOV_BRAND.primary
       : theme.colors.text.secondary};
   cursor: pointer;
@@ -4467,8 +5541,9 @@ const EventDraftSaveBtn = styled.button`
   font-family: inherit;
   font-size: 12px;
   font-weight: 600;
-  background: ${GOV_BRAND.primary};
-  color: #ffffff;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#0e0f12' : '#ffffff')};
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -4497,7 +5572,7 @@ const EventRowLink = styled(Link)`
 
   &:hover {
     color: ${({ theme }) =>
-      theme.mode === 'dark' ? '#93c5fd' : GOV_BRAND.primary};
+      theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
   }
 `
 
@@ -4578,7 +5653,7 @@ const SurveyLinkBtn = styled(Link)`
   font-weight: 600;
   text-decoration: none;
   color: ${({ theme }) =>
-    theme.mode === 'dark' ? '#93c5fd' : GOV_BRAND.primary};
+    theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
   background: ${({ theme }) =>
     theme.mode === 'dark' ? GOV_BRAND.primarySoftDark : GOV_BRAND.primarySoft};
 
@@ -4610,7 +5685,7 @@ const InlineTextBtn = styled.button`
 
   &:hover {
     color: ${({ theme }) =>
-      theme.mode === 'dark' ? '#93c5fd' : GOV_BRAND.primary};
+      theme.mode === 'dark' ? GOV_BRAND.primaryDark : GOV_BRAND.primary};
   }
 `
 

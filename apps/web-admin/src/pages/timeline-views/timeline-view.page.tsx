@@ -17,8 +17,6 @@ import styled, { css } from 'styled-components'
 import { EthnicityDashboardSection } from '@/widgets/country/country-detail/ui/ethnicity-dashboard-section.widget'
 import { type DashboardContentView } from '@/widgets/content-shell'
 
-import { MilitaryUnitDetailSection } from './military-unit-detail-section'
-
 const PLACEHOLDERS: Partial<
   Record<
     DashboardContentView,
@@ -31,15 +29,11 @@ const PLACEHOLDERS: Partial<
     fullPath: '/organizations/',
     fullLabel: '전체 보기',
   },
-  military: {
-    title: '군사',
-    desc: '국가를 선택한 뒤 행정조직 → 중앙부처에서 국방 관련 부처를 열고 「군부대 등록」으로 부대를 등록합니다.',
-  },
 }
 
 export type TimelineSimpleView = Extract<
   DashboardContentView,
-  'ethnicity' | 'legislature' | 'military'
+  'ethnicity' | 'legislature'
 >
 
 interface Props {
@@ -51,7 +45,6 @@ export default function TimelineViewPage({ view }: Props) {
 
   const renderRight = () => {
     if (view === 'ethnicity') return <EthnicityDashboardSection />
-    if (view === 'military') return <MilitaryUnitDetailSection />
     const ph = PLACEHOLDERS[view]
     if (!ph) return null
     return (
@@ -67,12 +60,20 @@ export default function TimelineViewPage({ view }: Props) {
               {ph.fullLabel}
             </DashboardMenuContentButton>
             {view === 'legislature' && (
-              <DashboardMenuContentButton
-                type="button"
-                onClick={() => navigate('/government')}
-              >
-                전 국가 정부·내각 허브 보기
-              </DashboardMenuContentButton>
+              <>
+                <DashboardMenuContentButton
+                  type="button"
+                  onClick={() => navigate('/organizations?view=international')}
+                >
+                  국제기구·다자협의체·정기회의 허브
+                </DashboardMenuContentButton>
+                <DashboardMenuContentButton
+                  type="button"
+                  onClick={() => navigate('/government')}
+                >
+                  전 국가 정부·내각 허브 보기
+                </DashboardMenuContentButton>
+              </>
             )}
           </ButtonGroup>
         )}
