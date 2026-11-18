@@ -939,9 +939,6 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   const [layoutMode, setLayoutMode] = useState<'split' | 'single'>(
     readInitialLayoutMode,
   )
-  const [splitRatio, setSplitRatio] = useState<
-    'left-wide' | 'equal' | 'right-wide'
-  >('equal')
   const [isDirty, setIsDirty] = useState(false)
   const isDirtyRef = useRef(false)
   isDirtyRef.current = isDirty
@@ -975,6 +972,10 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
 
   // Compact UI toggles & inline quick search states (BasicInfoSection · EventTypeField 규격)
   const [showHighCommandPresets, setShowHighCommandPresets] = useState(false)
+  const [showForeignAndMottoFields, setShowForeignAndMottoFields] =
+    useState(false)
+  const [showNewLineageForm, setShowNewLineageForm] = useState(false)
+  const [showDetailedSpecs, setShowDetailedSpecs] = useState(false)
   const [showAllLinkedEras, setShowAllLinkedEras] = useState(false)
   const [eraFilterQuery, setEraFilterQuery] = useState('')
   const [isInlineCountryChangeOpen, setIsInlineCountryChangeOpen] =
@@ -983,10 +984,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   const [countryQuickFocused, setCountryQuickFocused] = useState(false)
   const countryQuickInputRef = useRef<HTMLInputElement>(null)
 
-  const [unitTypeSearchQuery, setUnitTypeSearchQuery] = useState('')
-  const [unitTypeSearchOpen, setUnitTypeSearchOpen] = useState(false)
   const [showAllUnitTypes, setShowAllUnitTypes] = useState(false)
-  const unitTypeSearchWrapRef = useRef<HTMLDivElement>(null)
 
   const [parentUnitQuickQuery, setParentUnitQuickQuery] = useState('')
   const [parentUnitQuickFocused, setParentUnitQuickFocused] = useState(false)
@@ -1089,20 +1087,6 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     isDirtyRef.current = nextDirty
     setIsDirty(nextDirty)
   }, [])
-
-  useEffect(() => {
-    if (!unitTypeSearchOpen) return
-    const handlePointerDown = (mouseEvent: MouseEvent) => {
-      if (
-        unitTypeSearchWrapRef.current &&
-        !unitTypeSearchWrapRef.current.contains(mouseEvent.target as Node)
-      ) {
-        setUnitTypeSearchOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handlePointerDown)
-    return () => document.removeEventListener('mousedown', handlePointerDown)
-  }, [unitTypeSearchOpen])
 
   const toggleLayoutMode = useCallback(() => {
     playClickSound()
@@ -1456,13 +1440,15 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       setCountryQuickQuery('')
       setIsInlineCountryChangeOpen(false)
       setEraFilterQuery('')
-      setUnitTypeSearchQuery('')
       setParentUnitQuickQuery('')
       setAdminDeptQuickQuery('')
       setCommanderQuickQuery('')
       setLineageQuickQuery('')
       setShowAllLinkedEras(false)
       setShowAllUnitTypes(false)
+      setShowForeignAndMottoFields(false)
+      setShowNewLineageForm(false)
+      setShowDetailedSpecs(false)
       setActiveSection('basic')
       markDirty(false)
 
@@ -1738,6 +1724,25 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       setNotableBattles(unit.notableBattles || '')
       setHonors(unit.honors || '')
 
+      setShowForeignAndMottoFields(
+        Boolean(
+          unit.nameLocal?.trim() ||
+            unit.nameEn?.trim() ||
+            unit.nickname?.trim() ||
+            unit.motto?.trim(),
+        ),
+      )
+      setShowDetailedSpecs(
+        Boolean(
+          unit.strength?.trim() ||
+            unit.jurisdiction?.trim() ||
+            unit.primaryMission?.trim() ||
+            unit.notableBattles?.trim() ||
+            unit.honors?.trim(),
+        ),
+      )
+      setShowNewLineageForm(false)
+
       setUnitTenures(
         Array.isArray(unit.tenures)
           ? (unit.tenures as MilitaryUnitTenureItem[])
@@ -1984,6 +1989,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       setNewTransitionYear('')
       setNewTransitionMonth('')
       setNewTransitionNote('')
+      setShowNewLineageForm(false)
       markDirty(true)
       return
     }
@@ -2009,6 +2015,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
       setNewTransitionYear('')
       setNewTransitionMonth('')
       setNewTransitionNote('')
+      setShowNewLineageForm(false)
       notify.success('전신·후신 계보가 연결되었습니다.')
       onSaved?.()
     } catch (transError) {
@@ -2670,18 +2677,6 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     }
   }, [branch, unitType])
 
-  const unitTypeQuickMatches = useMemo(() => {
-    const queryText = unitTypeSearchQuery.trim().toLowerCase()
-    if (!queryText) return []
-    return UNIT_TYPES.filter(
-      (item) =>
-        item.label.toLowerCase().includes(queryText) ||
-        item.shortLabel.toLowerCase().includes(queryText) ||
-        item.group.toLowerCase().includes(queryText) ||
-        item.keywords.toLowerCase().includes(queryText),
-    ).slice(0, 8)
-  }, [unitTypeSearchQuery])
-
   // 상위 부대 빠른 검색 및 상급 사령부 추천 칩
   const prioritizedParentUnits = useMemo(() => {
     const highCommandSet = new Set<MilitaryUnitType>([
@@ -3288,6 +3283,17 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
   // ==========================================================================
   // 1. 기본 정보 섹션 (사건 등록 모달 BasicInfoSection 정본 규격)
   // ==========================================================================
+  const hasAnyForeignOrMotto = Boolean(
+    nameLocal.trim() || nameEn.trim() || nickname.trim() || motto.trim(),
+  )
+  const hasAnyDetailedSpecs = Boolean(
+    strength.trim() ||
+      jurisdiction.trim() ||
+      primaryMission.trim() ||
+      notableBattles.trim() ||
+      honors.trim(),
+  )
+
   const basicSectionNode = (
     <FormGroupSection
       id="military-unit-section-basic"
@@ -3296,12 +3302,9 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     >
       <FormGroupHeader>
         <FormGroupTitle>기본 정보</FormGroupTitle>
-        <FormGroupSummaryBadge>
-          명칭 · 시기 · 소속 국가 · 군종 · 제대
-        </FormGroupSummaryBadge>
       </FormGroupHeader>
 
-      {/* 군부대·사령부명 + 약칭 */}
+      {/* 군부대·사령부명 + 약칭 + 선택적 원어/영문/별칭/표어 토글 */}
       <S.FormRow>
         <S.FormLabel htmlFor="military-unit-name">
           군부대·사령부명 <S.Required>*</S.Required>
@@ -3334,8 +3337,8 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
             />
           </NameAbbrGrid>
 
-          {/* 신규 등록 시 주요 최고사령부 빠른 예시 바 (접기/펼치기 가능) */}
-          {!isEdit && (
+          {/* 신규 등록 시 이름을 아직 입력하지 않았고 상위부대 미지정일 때만 예시 노출 */}
+          {!isEdit && !name.trim() && !parentUnitId && (
             <RecentParticipantBar>
               <RecentParticipantLabel>사령부 예시</RecentParticipantLabel>
               {(showHighCommandPresets
@@ -3351,6 +3354,9 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                     setAbbreviation(presetItem.abbreviation)
                     setNameLocal(presetItem.nameLocal ?? '')
                     setNameEn(presetItem.nameEn ?? '')
+                    if (presetItem.nameLocal || presetItem.nameEn) {
+                      setShowForeignAndMottoFields(true)
+                    }
                     setUnitType(presetItem.unitType)
                     setBranch(presetItem.branch)
                     markDirty(true)
@@ -3441,7 +3447,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
             </TitleSuggestionRow>
           )}
 
-          {/* 동일·유사 부대 탐지 및 원클릭 상위/전신 연결 (BasicInfoSection SimilarEventsBar 규격) */}
+          {/* 동일·유사 부대 탐지 및 원클릭 상위/전신 연결 */}
           {similarExistingUnits.length > 0 && (
             <SimilarEventsBar role="status" aria-live="polite">
               <SimilarEventsLabel>
@@ -3451,7 +3457,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                 {similarExistingUnits.map((dupUnit) => (
                   <SimilarEventItem key={dupUnit.id}>
                     <SimilarEventTitle>
-                      🛡️ {dupUnit.name}
+                      {dupUnit.name}
                       {dupUnit.abbreviation ? ` (${dupUnit.abbreviation})` : ''}
                     </SimilarEventTitle>
                     {dupUnit.historicalCountry?.name && (
@@ -3485,7 +3491,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                                 localKey: `${Date.now()}-${Math.random()}`,
                                 direction: 'PREDECESSOR_UNIT',
                                 targetId: dupUnit.id,
-                                targetLabel: `🛡️ ${dupUnit.name}${dupUnit.abbreviation ? ` (${dupUnit.abbreviation})` : ''}`,
+                                targetLabel: `${dupUnit.name}${dupUnit.abbreviation ? ` (${dupUnit.abbreviation})` : ''}`,
                                 kind: 'REORGANIZE',
                                 era: establishedEra,
                                 year: establishedYear.trim(),
@@ -3504,77 +3510,84 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
               </SimilarEventsList>
             </SimilarEventsBar>
           )}
-        </S.FormField>
-      </S.FormRow>
 
-      {/* 원어 · 영문 · 별칭 · 표어 (SubTitleGrid 2열 규격) */}
-      <S.FormRow>
-        <S.FormLabel>
-          이명 · 외국어 표기<OptionalTag>(선택)</OptionalTag>
-        </S.FormLabel>
-        <S.FormField>
-          <SubTitleGrid>
-            <SubTitleField>
-              <SubTitleLabel>
-                원어 표기<OptionalTag>(선택)</OptionalTag>
-              </SubTitleLabel>
-              <S.Input
-                type="text"
-                aria-label="원어 표기"
-                placeholder="예: Grand Quartier Général, Ставка"
-                value={nameLocal}
-                onChange={(changeEvent) => {
-                  setNameLocal(changeEvent.target.value)
-                  markDirty(true)
-                }}
-              />
-            </SubTitleField>
-            <SubTitleField>
-              <SubTitleLabel>
-                영문 표기<OptionalTag>(선택)</OptionalTag>
-              </SubTitleLabel>
-              <S.Input
-                type="text"
-                aria-label="영문 표기"
-                placeholder="예: Armed Forces High Command"
-                value={nameEn}
-                onChange={(changeEvent) => {
-                  setNameEn(changeEvent.target.value)
-                  markDirty(true)
-                }}
-              />
-            </SubTitleField>
-            <SubTitleField>
-              <SubTitleLabel>
-                별칭 · 통칭<OptionalTag>(선택)</OptionalTag>
-              </SubTitleLabel>
-              <S.Input
-                type="text"
-                aria-label="별명·통칭"
-                placeholder="예: 맹호부대, 백골부대, 아프리카 군단"
-                value={nickname}
-                onChange={(changeEvent) => {
-                  setNickname(changeEvent.target.value)
-                  markDirty(true)
-                }}
-              />
-            </SubTitleField>
-            <SubTitleField>
-              <SubTitleLabel>
-                부대 표어 · 모토<OptionalTag>(선택)</OptionalTag>
-              </SubTitleLabel>
-              <S.Input
-                type="text"
-                aria-label="부대 표어"
-                placeholder="예: 필승, 충성, Semper Fidelis"
-                value={motto}
-                onChange={(changeEvent) => {
-                  setMotto(changeEvent.target.value)
-                  markDirty(true)
-                }}
-              />
-            </SubTitleField>
-          </SubTitleGrid>
+          {/* 원어 · 영문 · 별칭 · 표어 (선택적 펼침) */}
+          {showForeignAndMottoFields || hasAnyForeignOrMotto ? (
+            <CollapsibleSubBox>
+              <CollapsibleSubHeader>
+                <span>원어 · 영문 표기 · 별칭 · 표어 (선택)</span>
+                {!hasAnyForeignOrMotto && (
+                  <DateQuickActionBtn
+                    type="button"
+                    onClick={() => setShowForeignAndMottoFields(false)}
+                  >
+                    접기
+                  </DateQuickActionBtn>
+                )}
+              </CollapsibleSubHeader>
+              <SubTitleGrid>
+                <SubTitleField>
+                  <SubTitleLabel>원어 표기</SubTitleLabel>
+                  <S.Input
+                    type="text"
+                    aria-label="원어 표기"
+                    placeholder="예: Grand Quartier Général, Ставка"
+                    value={nameLocal}
+                    onChange={(changeEvent) => {
+                      setNameLocal(changeEvent.target.value)
+                      markDirty(true)
+                    }}
+                  />
+                </SubTitleField>
+                <SubTitleField>
+                  <SubTitleLabel>영문 표기</SubTitleLabel>
+                  <S.Input
+                    type="text"
+                    aria-label="영문 표기"
+                    placeholder="예: Armed Forces High Command"
+                    value={nameEn}
+                    onChange={(changeEvent) => {
+                      setNameEn(changeEvent.target.value)
+                      markDirty(true)
+                    }}
+                  />
+                </SubTitleField>
+                <SubTitleField>
+                  <SubTitleLabel>별칭 · 통칭</SubTitleLabel>
+                  <S.Input
+                    type="text"
+                    aria-label="별명·통칭"
+                    placeholder="예: 맹호부대, 백골부대, 아프리카 군단"
+                    value={nickname}
+                    onChange={(changeEvent) => {
+                      setNickname(changeEvent.target.value)
+                      markDirty(true)
+                    }}
+                  />
+                </SubTitleField>
+                <SubTitleField>
+                  <SubTitleLabel>부대 표어 · 모토</SubTitleLabel>
+                  <S.Input
+                    type="text"
+                    aria-label="부대 표어"
+                    placeholder="예: 필승, 충성, Semper Fidelis"
+                    value={motto}
+                    onChange={(changeEvent) => {
+                      setMotto(changeEvent.target.value)
+                      markDirty(true)
+                    }}
+                  />
+                </SubTitleField>
+              </SubTitleGrid>
+            </CollapsibleSubBox>
+          ) : (
+            <OptionalExpandToggleBtn
+              type="button"
+              onClick={() => setShowForeignAndMottoFields(true)}
+            >
+              + 원어 · 영문 표기 · 별칭 · 표어 입력 (선택)
+            </OptionalExpandToggleBtn>
+          )}
         </S.FormField>
       </S.FormRow>
 
@@ -3800,16 +3813,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                         })
                       }}
                     >
-                      {isInlineCountryChangeOpen ? '검색 닫기' : '빠른 검색'}
-                    </S.AddButton>
-                    <S.AddButton
-                      type="button"
-                      onClick={() => {
-                        playClickSound()
-                        setCountryModalOpen(true)
-                      }}
-                    >
-                      목록 변경
+                      {isInlineCountryChangeOpen ? '닫기' : '변경'}
                     </S.AddButton>
                     <ParticipantRemove
                       type="button"
@@ -3908,13 +3912,22 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                             ))
                           ) : (
                             <CountryQuickEmpty>
-                              일치하는 국가가 없습니다. 「목록 변경」에서 전체
-                              목록을 확인하세요.
+                              일치하는 국가가 없습니다. 우측 「전체 목록」에서
+                              선택하세요.
                             </CountryQuickEmpty>
                           )}
                         </CountryQuickResultBox>
                       )}
                   </CountryQuickSearchWrap>
+                  <S.AddButton
+                    type="button"
+                    onClick={() => {
+                      playClickSound()
+                      setCountryModalOpen(true)
+                    }}
+                  >
+                    전체 목록
+                  </S.AddButton>
                 </CountryQuickSearchRow>
               )}
 
@@ -4218,80 +4231,13 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
         </S.FormField>
       </S.FormRow>
 
-      {/* 부대 유형 · 제대 (EventRegisterModal EventTypeField 규격: 빠른 검색 + 추천 칩 + 다른 제대 더보기) */}
-      <S.FormRow>
+      {/* 부대 유형 · 제대 (군종 맞춤형 추천 칩 + 다른 제대 더보기) */}
+      <S.FormRow $noBorder>
         <S.FormLabel as="div">
           부대 유형 · 제대<OptionalTag>(선택)</OptionalTag>
         </S.FormLabel>
         <S.FormField>
           <UnitTypeContainer>
-            <UnitTypeQuickSearchWrap ref={unitTypeSearchWrapRef}>
-              <CountryQuickSearchInput
-                type="text"
-                value={unitTypeSearchQuery}
-                placeholder="제대 빠른 검색 후 Enter (예: 최고사령부, 집단군, 야전군, 사단, 함대, 비행단…)"
-                aria-label="부대 유형 · 제대 빠른 검색"
-                onFocus={() => setUnitTypeSearchOpen(true)}
-                onKeyDown={(keyEvent) => {
-                  if (keyEvent.key === 'Escape') {
-                    keyEvent.stopPropagation()
-                    setUnitTypeSearchOpen(false)
-                    return
-                  }
-                  if (
-                    keyEvent.key === 'Enter' &&
-                    unitTypeQuickMatches.length > 0
-                  ) {
-                    keyEvent.preventDefault()
-                    const firstMatch = unitTypeQuickMatches[0]!
-                    playClickSound()
-                    setUnitType(firstMatch.value)
-                    setUnitTypeSearchQuery('')
-                    setUnitTypeSearchOpen(false)
-                    markDirty(true)
-                  }
-                }}
-                onChange={(changeEvent) => {
-                  setUnitTypeSearchQuery(changeEvent.target.value)
-                  setUnitTypeSearchOpen(true)
-                }}
-              />
-              {unitTypeSearchOpen && unitTypeSearchQuery.trim().length > 0 && (
-                <CountryQuickResultBox
-                  role="listbox"
-                  aria-label="부대 유형 검색 결과"
-                >
-                  {unitTypeQuickMatches.length > 0 ? (
-                    unitTypeQuickMatches.map((item) => (
-                      <CountryQuickResultItem
-                        key={item.value}
-                        type="button"
-                        onMouseDown={(mouseEvent) => mouseEvent.preventDefault()}
-                        onClick={() => {
-                          playClickSound()
-                          setUnitType(item.value)
-                          setUnitTypeSearchQuery('')
-                          setUnitTypeSearchOpen(false)
-                          markDirty(true)
-                        }}
-                      >
-                        <CountryQuickResultName>
-                          {item.label}
-                        </CountryQuickResultName>
-                        <CountryQuickResultMeta>
-                          {item.group}
-                        </CountryQuickResultMeta>
-                      </CountryQuickResultItem>
-                    ))
-                  ) : (
-                    <CountryQuickEmpty>
-                      일치하는 부대 유형이 없습니다
-                    </CountryQuickEmpty>
-                  )}
-                </CountryQuickResultBox>
-              )}
-            </UnitTypeQuickSearchWrap>
-
             <KitChipGroup role="radiogroup" aria-label="주요 부대 유형">
               <KitChoiceChip
                 type="button"
@@ -4375,94 +4321,6 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
           </UnitTypeContainer>
         </S.FormField>
       </S.FormRow>
-
-      {/* 부대 마크 · 휘장 (register-form-kit KitUploadStrip / KitUploadFilled 정본 규격) */}
-      <S.FormRow $noBorder>
-        <S.FormLabel as="div">
-          부대 마크 · 휘장<OptionalTag>(선택)</OptionalTag>
-        </S.FormLabel>
-        <S.FormField>
-          {insigniaUrl ? (
-            <KitUploadFilled
-              $dragging={insigniaDragOver}
-              onDragOver={(dragEvent) => {
-                dragEvent.preventDefault()
-                if (!insigniaUploading) setInsigniaDragOver(true)
-              }}
-              onDragLeave={() => setInsigniaDragOver(false)}
-              onDrop={(dropEvent) => {
-                dropEvent.preventDefault()
-                setInsigniaDragOver(false)
-                const droppedFile = dropEvent.dataTransfer.files?.[0]
-                if (droppedFile) void handleInsigniaFileUpload(droppedFile)
-              }}
-            >
-              <KitUploadThumb
-                src={getUploadImageUrl(insigniaUrl)}
-                alt="부대 휘장 미리보기"
-                onClick={() => {
-                  if (!insigniaUploading) insigniaInputRef.current?.click()
-                }}
-              />
-              <KitUploadText>
-                <strong>부대 마크 · 휘장이 등록되었습니다</strong>
-                <span>
-                  드래그 · 클립보드 붙여넣기(⌘V) 또는 변경 버튼으로 교체할 수
-                  있습니다
-                </span>
-              </KitUploadText>
-              <KitUploadActions>
-                <S.UploadButton
-                  type="button"
-                  disabled={insigniaUploading}
-                  onClick={() => insigniaInputRef.current?.click()}
-                >
-                  {insigniaUploading ? '업로드 중…' : '변경'}
-                </S.UploadButton>
-                <KitUploadRemove
-                  type="button"
-                  disabled={insigniaUploading}
-                  aria-label="부대 휘장 제거"
-                  title="부대 휘장 제거"
-                  onClick={() => {
-                    playClickSound()
-                    setInsigniaUrl('')
-                    markDirty(true)
-                  }}
-                >
-                  <FiX size={16} />
-                </KitUploadRemove>
-              </KitUploadActions>
-            </KitUploadFilled>
-          ) : (
-            <KitUploadStrip
-              type="button"
-              $dragging={insigniaDragOver}
-              disabled={insigniaUploading}
-              onClick={() => insigniaInputRef.current?.click()}
-              onDragOver={(dragEvent) => {
-                dragEvent.preventDefault()
-                if (!insigniaUploading) setInsigniaDragOver(true)
-              }}
-              onDragLeave={() => setInsigniaDragOver(false)}
-              onDrop={(dropEvent) => {
-                dropEvent.preventDefault()
-                setInsigniaDragOver(false)
-                const droppedFile = dropEvent.dataTransfer.files?.[0]
-                if (droppedFile) void handleInsigniaFileUpload(droppedFile)
-              }}
-            >
-              <FiImage size={16} />
-              <span>
-                {insigniaUploading
-                  ? '휘장 업로드 중…'
-                  : '클릭하거나 이미지를 드래그 · 붙여넣기(⌘V)하여 휘장 추가'}
-              </span>
-              <small>PNG, JPG, WEBP, SVG · 최대 10MB</small>
-            </KitUploadStrip>
-          )}
-        </S.FormField>
-      </S.FormRow>
     </FormGroupSection>
   )
 
@@ -4477,40 +4335,13 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     >
       <FormGroupHeader>
         <FormGroupTitle>소속 · 지휘 · 계보</FormGroupTitle>
-        <FormGroupRightCluster>
-          <FormGroupSummaryBadge>
-            지휘관 {totalCommanderCount}명 · 계보 {totalLineageCount}건
-          </FormGroupSummaryBadge>
-          {layoutMode === 'split' && (
-            <SplitRatioGroup
-              role="group"
-              aria-label="좌우 분할 폭 비율"
-              title="좌우 컬럼 폭 비율 조절"
-            >
-              <SplitRatioBtn
-                type="button"
-                $active={splitRatio === 'left-wide'}
-                onClick={() => setSplitRatio('left-wide')}
-              >
-                좌측 넓게
-              </SplitRatioBtn>
-              <SplitRatioBtn
-                type="button"
-                $active={splitRatio === 'equal'}
-                onClick={() => setSplitRatio('equal')}
-              >
-                5:5
-              </SplitRatioBtn>
-              <SplitRatioBtn
-                type="button"
-                $active={splitRatio === 'right-wide'}
-                onClick={() => setSplitRatio('right-wide')}
-              >
-                우측 넓게
-              </SplitRatioBtn>
-            </SplitRatioGroup>
-          )}
-        </FormGroupRightCluster>
+        {(totalCommanderCount > 0 || totalLineageCount > 0) && (
+          <FormGroupRightCluster>
+            <FormGroupSummaryBadge>
+              지휘관 {totalCommanderCount}명 · 계보 {totalLineageCount}건
+            </FormGroupSummaryBadge>
+          </FormGroupRightCluster>
+        )}
       </FormGroupHeader>
 
       {/* 상위 부대 · 사령부 (BasicInfoSection ParentEventCard + 빠른 검색 + 상급부대 칩 규격) */}
@@ -5616,199 +5447,222 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                 )
               })}
 
-            {/* 새 계보 연결 카드 */}
-            <ParticipantRow>
-              <ParticipantRoleBar style={{ borderTop: 'none', paddingTop: 0 }}>
-                <ParticipantRoleChipGroup
-                  role="radiogroup"
-                  aria-label="계보 연결 방향"
-                >
-                  <ParticipantRoleChipBtn
-                    type="button"
-                    $selected={
-                      newTransitionDirection === 'PREDECESSOR_DEPARTMENT'
-                    }
-                    onClick={() => {
-                      setNewTransitionDirection('PREDECESSOR_DEPARTMENT')
-                      setNewTransitionTargetId('')
-                      setLineageQuickQuery('')
-                    }}
-                  >
-                    🏛️ 전신 부처 → 이 부대
-                  </ParticipantRoleChipBtn>
-                  <ParticipantRoleChipBtn
-                    type="button"
-                    $selected={newTransitionDirection === 'PREDECESSOR_UNIT'}
-                    onClick={() => {
-                      setNewTransitionDirection('PREDECESSOR_UNIT')
-                      setNewTransitionTargetId('')
-                      setLineageQuickQuery('')
-                    }}
-                  >
-                    🛡️ 전신 부대 → 이 부대
-                  </ParticipantRoleChipBtn>
-                  <ParticipantRoleChipBtn
-                    type="button"
-                    $selected={newTransitionDirection === 'SUCCESSOR_UNIT'}
-                    onClick={() => {
-                      setNewTransitionDirection('SUCCESSOR_UNIT')
-                      setNewTransitionTargetId('')
-                      setLineageQuickQuery('')
-                    }}
-                  >
-                    이 부대 → 후신 부대 🛡️
-                  </ParticipantRoleChipBtn>
-                </ParticipantRoleChipGroup>
-
-                <ParticipantRoleChipGroup
-                  role="radiogroup"
-                  aria-label="변동 유형"
-                >
-                  {TRANSITION_KIND_OPTIONS.map((optItem) => (
-                    <ParticipantRoleChipBtn
-                      key={optItem.value}
+            {/* 새 계보 연결 카드 (클릭 시 펼침) */}
+            {showNewLineageForm ? (
+              <ParticipantRow>
+                <ParticipantRoleBar style={{ borderTop: 'none', paddingTop: 0 }}>
+                  <CollapsibleSubHeader>
+                    <SubTitleLabel>전신 · 후신 계보 연결</SubTitleLabel>
+                    <DateQuickActionBtn
                       type="button"
-                      $selected={newTransitionKind === optItem.value}
-                      onClick={() => setNewTransitionKind(optItem.value)}
-                    >
-                      {optItem.label}
-                    </ParticipantRoleChipBtn>
-                  ))}
-                </ParticipantRoleChipGroup>
-
-                <CountryQuickSearchRow>
-                  <CountryQuickSearchWrap>
-                    <CountryQuickSearchInput
-                      type="text"
-                      value={lineageQuickQuery}
-                      placeholder={
-                        newTransitionDirection === 'PREDECESSOR_DEPARTMENT'
-                          ? '전신 행정부처 검색·선택 후 Enter (예: 전쟁성, 국방성, 병조…)'
-                          : '전신·후신 군부대 검색·선택 후 Enter…'
-                      }
-                      aria-label="계보 연결 대상 검색"
-                      onFocus={() => setLineageQuickFocused(true)}
-                      onBlur={() => {
-                        window.setTimeout(
-                          () => setLineageQuickFocused(false),
-                          160,
-                        )
-                      }}
-                      onKeyDown={(keyEvent) => {
-                        if (keyEvent.key === 'Escape') {
-                          keyEvent.stopPropagation()
-                          setLineageQuickFocused(false)
-                          return
-                        }
-                        if (
-                          keyEvent.key === 'Enter' &&
-                          lineageQuickMatches.length > 0
-                        ) {
-                          keyEvent.preventDefault()
-                          const topCand = lineageQuickMatches[0]!
-                          playClickSound()
-                          setNewTransitionTargetId(topCand.id)
-                          setLineageQuickQuery(topCand.label)
-                          setLineageQuickFocused(false)
-                        }
-                      }}
-                      onChange={(changeEvent) => {
-                        setLineageQuickQuery(changeEvent.target.value)
+                      onClick={() => {
+                        setShowNewLineageForm(false)
                         setNewTransitionTargetId('')
+                        setLineageQuickQuery('')
                       }}
-                    />
-                    {lineageQuickFocused && (
-                      <CountryQuickResultBox
-                        role="listbox"
-                        aria-label="계보 연결 후보"
-                      >
-                        {lineageQuickMatches.length > 0 ? (
-                          lineageQuickMatches.map((cand) => (
-                            <CountryQuickResultItem
-                              key={cand.id}
-                              type="button"
-                              onMouseDown={(mouseEvent) =>
-                                mouseEvent.preventDefault()
-                              }
-                              onClick={() => {
-                                playClickSound()
-                                setNewTransitionTargetId(cand.id)
-                                setLineageQuickQuery(cand.label)
-                                setLineageQuickFocused(false)
-                              }}
-                            >
-                              <ParentEventBadge>{cand.badge}</ParentEventBadge>
-                              <CountryQuickResultName>
-                                {cand.label}
-                              </CountryQuickResultName>
-                              <CountryQuickResultMeta>
-                                {cand.meta}
-                              </CountryQuickResultMeta>
-                            </CountryQuickResultItem>
-                          ))
-                        ) : (
-                          <CountryQuickEmpty>
-                            연결 가능한 기관·부대가 없습니다
-                          </CountryQuickEmpty>
-                        )}
-                      </CountryQuickResultBox>
-                    )}
-                  </CountryQuickSearchWrap>
-                </CountryQuickSearchRow>
+                    >
+                      닫기
+                    </DateQuickActionBtn>
+                  </CollapsibleSubHeader>
 
-                <CompactInlineFieldsRow>
-                  <CompactEraSelect
-                    aria-label="개편 기원"
-                    value={newTransitionEra}
-                    onChange={(changeEvent) =>
-                      setNewTransitionEra(
-                        changeEvent.target.value as 'AD' | 'BC',
-                      )
-                    }
+                  <ParticipantRoleChipGroup
+                    role="radiogroup"
+                    aria-label="계보 연결 방향"
                   >
-                    <option value="AD">서기</option>
-                    <option value="BC">BC</option>
-                  </CompactEraSelect>
-                  <ParticipantNoteInput
-                    type="number"
-                    min={1}
-                    placeholder="개편 연도 (예: 1948)"
-                    value={newTransitionYear}
-                    onChange={(changeEvent) =>
-                      setNewTransitionYear(changeEvent.target.value)
-                    }
-                    style={{ maxWidth: 132 }}
-                  />
-                  <ParticipantNoteInput
-                    type="number"
-                    min={1}
-                    max={12}
-                    placeholder="월"
-                    value={newTransitionMonth}
-                    onChange={(changeEvent) =>
-                      setNewTransitionMonth(changeEvent.target.value)
-                    }
-                    style={{ maxWidth: 68 }}
-                  />
-                  <ParticipantNoteInput
-                    type="text"
-                    placeholder="개편 비고 (선택 — 예: 국방경비대 개편 후 창설)"
-                    value={newTransitionNote}
-                    onChange={(changeEvent) =>
-                      setNewTransitionNote(changeEvent.target.value)
-                    }
-                  />
-                  <S.AddButton
-                    type="button"
-                    disabled={!newTransitionTargetId || transitionBusy}
-                    onClick={() => void handleAddTransition()}
+                    <ParticipantRoleChipBtn
+                      type="button"
+                      $selected={
+                        newTransitionDirection === 'PREDECESSOR_DEPARTMENT'
+                      }
+                      onClick={() => {
+                        setNewTransitionDirection('PREDECESSOR_DEPARTMENT')
+                        setNewTransitionTargetId('')
+                        setLineageQuickQuery('')
+                      }}
+                    >
+                      🏛️ 전신 부처 → 이 부대
+                    </ParticipantRoleChipBtn>
+                    <ParticipantRoleChipBtn
+                      type="button"
+                      $selected={newTransitionDirection === 'PREDECESSOR_UNIT'}
+                      onClick={() => {
+                        setNewTransitionDirection('PREDECESSOR_UNIT')
+                        setNewTransitionTargetId('')
+                        setLineageQuickQuery('')
+                      }}
+                    >
+                      🛡️ 전신 부대 → 이 부대
+                    </ParticipantRoleChipBtn>
+                    <ParticipantRoleChipBtn
+                      type="button"
+                      $selected={newTransitionDirection === 'SUCCESSOR_UNIT'}
+                      onClick={() => {
+                        setNewTransitionDirection('SUCCESSOR_UNIT')
+                        setNewTransitionTargetId('')
+                        setLineageQuickQuery('')
+                      }}
+                    >
+                      이 부대 → 후신 부대 🛡️
+                    </ParticipantRoleChipBtn>
+                  </ParticipantRoleChipGroup>
+
+                  <ParticipantRoleChipGroup
+                    role="radiogroup"
+                    aria-label="변동 유형"
                   >
-                    <FiPlus size={14} />
-                    {transitionBusy ? '추가 중…' : '계보 추가'}
-                  </S.AddButton>
-                </CompactInlineFieldsRow>
-              </ParticipantRoleBar>
-            </ParticipantRow>
+                    {TRANSITION_KIND_OPTIONS.map((optItem) => (
+                      <ParticipantRoleChipBtn
+                        key={optItem.value}
+                        type="button"
+                        $selected={newTransitionKind === optItem.value}
+                        onClick={() => setNewTransitionKind(optItem.value)}
+                      >
+                        {optItem.label}
+                      </ParticipantRoleChipBtn>
+                    ))}
+                  </ParticipantRoleChipGroup>
+
+                  <CountryQuickSearchRow>
+                    <CountryQuickSearchWrap>
+                      <CountryQuickSearchInput
+                        type="text"
+                        value={lineageQuickQuery}
+                        placeholder={
+                          newTransitionDirection === 'PREDECESSOR_DEPARTMENT'
+                            ? '전신 행정부처 검색·선택 후 Enter (예: 전쟁성, 국방성, 병조…)'
+                            : '전신·후신 군부대 검색·선택 후 Enter…'
+                        }
+                        aria-label="계보 연결 대상 검색"
+                        onFocus={() => setLineageQuickFocused(true)}
+                        onBlur={() => {
+                          window.setTimeout(
+                            () => setLineageQuickFocused(false),
+                            160,
+                          )
+                        }}
+                        onKeyDown={(keyEvent) => {
+                          if (keyEvent.key === 'Escape') {
+                            keyEvent.stopPropagation()
+                            setLineageQuickFocused(false)
+                            return
+                          }
+                          if (
+                            keyEvent.key === 'Enter' &&
+                            lineageQuickMatches.length > 0
+                          ) {
+                            keyEvent.preventDefault()
+                            const topCand = lineageQuickMatches[0]!
+                            playClickSound()
+                            setNewTransitionTargetId(topCand.id)
+                            setLineageQuickQuery(topCand.label)
+                            setLineageQuickFocused(false)
+                          }
+                        }}
+                        onChange={(changeEvent) => {
+                          setLineageQuickQuery(changeEvent.target.value)
+                          setNewTransitionTargetId('')
+                        }}
+                      />
+                      {lineageQuickFocused && (
+                        <CountryQuickResultBox
+                          role="listbox"
+                          aria-label="계보 연결 후보"
+                        >
+                          {lineageQuickMatches.length > 0 ? (
+                            lineageQuickMatches.map((cand) => (
+                              <CountryQuickResultItem
+                                key={cand.id}
+                                type="button"
+                                onMouseDown={(mouseEvent) =>
+                                  mouseEvent.preventDefault()
+                                }
+                                onClick={() => {
+                                  playClickSound()
+                                  setNewTransitionTargetId(cand.id)
+                                  setLineageQuickQuery(cand.label)
+                                  setLineageQuickFocused(false)
+                                }}
+                              >
+                                <ParentEventBadge>{cand.badge}</ParentEventBadge>
+                                <CountryQuickResultName>
+                                  {cand.label}
+                                </CountryQuickResultName>
+                                <CountryQuickResultMeta>
+                                  {cand.meta}
+                                </CountryQuickResultMeta>
+                              </CountryQuickResultItem>
+                            ))
+                          ) : (
+                            <CountryQuickEmpty>
+                              연결 가능한 기관·부대가 없습니다
+                            </CountryQuickEmpty>
+                          )}
+                        </CountryQuickResultBox>
+                      )}
+                    </CountryQuickSearchWrap>
+                  </CountryQuickSearchRow>
+
+                  <CompactInlineFieldsRow>
+                    <CompactEraSelect
+                      aria-label="개편 기원"
+                      value={newTransitionEra}
+                      onChange={(changeEvent) =>
+                        setNewTransitionEra(
+                          changeEvent.target.value as 'AD' | 'BC',
+                        )
+                      }
+                    >
+                      <option value="AD">서기</option>
+                      <option value="BC">BC</option>
+                    </CompactEraSelect>
+                    <ParticipantNoteInput
+                      type="number"
+                      min={1}
+                      placeholder="개편 연도 (예: 1948)"
+                      value={newTransitionYear}
+                      onChange={(changeEvent) =>
+                        setNewTransitionYear(changeEvent.target.value)
+                      }
+                      style={{ maxWidth: 132 }}
+                    />
+                    <ParticipantNoteInput
+                      type="number"
+                      min={1}
+                      max={12}
+                      placeholder="월"
+                      value={newTransitionMonth}
+                      onChange={(changeEvent) =>
+                        setNewTransitionMonth(changeEvent.target.value)
+                      }
+                      style={{ maxWidth: 68 }}
+                    />
+                    <ParticipantNoteInput
+                      type="text"
+                      placeholder="개편 비고 (선택 — 예: 국방경비대 개편 후 창설)"
+                      value={newTransitionNote}
+                      onChange={(changeEvent) =>
+                        setNewTransitionNote(changeEvent.target.value)
+                      }
+                    />
+                    <S.AddButton
+                      type="button"
+                      disabled={!newTransitionTargetId || transitionBusy}
+                      onClick={() => void handleAddTransition()}
+                    >
+                      <FiPlus size={14} />
+                      {transitionBusy ? '추가 중…' : '계보 추가'}
+                    </S.AddButton>
+                  </CompactInlineFieldsRow>
+                </ParticipantRoleBar>
+              </ParticipantRow>
+            ) : (
+              <OptionalExpandToggleBtn
+                type="button"
+                onClick={() => setShowNewLineageForm(true)}
+              >
+                + 전신 · 후신 계보 연결 추가 (선택)
+              </OptionalExpandToggleBtn>
+            )}
           </ParticipantList>
         </S.FormField>
       </S.FormRow>
@@ -5826,9 +5680,6 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
     >
       <FormGroupHeader>
         <FormGroupTitle>맥락 · 상세 기록</FormGroupTitle>
-        <FormGroupSummaryBadge>
-          주둔지 · 병력 · 임무 · 전투 · 수훈 · 설명
-        </FormGroupSummaryBadge>
       </FormGroupHeader>
 
       <S.FormRow>
@@ -5845,111 +5696,16 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
               markDirty(true)
             }}
           />
-          <S.Hint>
-            소속 국가 선택 후 본부 소재지·주둔지를 입력합니다 (예: 용산, 계룡대,
-            펜타곤, 포츠담 등).
-          </S.Hint>
         </S.FormField>
       </S.FormRow>
 
       <S.FormRow>
         <S.FormLabel as="div">
-          병력 · 작전구역<OptionalTag>(선택)</OptionalTag>
-        </S.FormLabel>
-        <S.FormField>
-          <SubTitleGrid>
-            <SubTitleField>
-              <SubTitleLabel>
-                병력 · 편제 규모<OptionalTag>(선택)</OptionalTag>
-              </SubTitleLabel>
-              <S.Input
-                type="text"
-                placeholder="예: 약 15,000명 / 3개 군단 9개 사단"
-                value={strength}
-                onChange={(changeEvent) => {
-                  setStrength(changeEvent.target.value)
-                  markDirty(true)
-                }}
-              />
-            </SubTitleField>
-            <SubTitleField>
-              <SubTitleLabel>
-                관할 · 작전구역<OptionalTag>(선택)</OptionalTag>
-              </SubTitleLabel>
-              <S.Input
-                type="text"
-                placeholder="예: 서부·북아프리카 전구, 중부전선"
-                value={jurisdiction}
-                onChange={(changeEvent) => {
-                  setJurisdiction(changeEvent.target.value)
-                  markDirty(true)
-                }}
-              />
-            </SubTitleField>
-          </SubTitleGrid>
-        </S.FormField>
-      </S.FormRow>
-
-      <S.FormRow>
-        <S.FormLabel as="div">
-          임무 · 전투 · 수훈<OptionalTag>(선택)</OptionalTag>
-        </S.FormLabel>
-        <S.FormField>
-          <SubTitleGrid>
-            <SubTitleField>
-              <SubTitleLabel>
-                주요 임무 · 역할<OptionalTag>(선택)</OptionalTag>
-              </SubTitleLabel>
-              <S.Textarea
-                rows={2}
-                placeholder="예: 합동 작전 총괄 지휘, 기동 타격, 해상 호위"
-                value={primaryMission}
-                onChange={(changeEvent) => {
-                  setPrimaryMission(changeEvent.target.value)
-                  markDirty(true)
-                }}
-              />
-            </SubTitleField>
-            <SubTitleField>
-              <SubTitleLabel>
-                주요 전투 · 작전<OptionalTag>(선택)</OptionalTag>
-              </SubTitleLabel>
-              <S.Textarea
-                rows={2}
-                placeholder="예: 노르망디 상륙작전, 인천상륙작전, 다부동 전투"
-                value={notableBattles}
-                onChange={(changeEvent) => {
-                  setNotableBattles(changeEvent.target.value)
-                  markDirty(true)
-                }}
-              />
-            </SubTitleField>
-          </SubTitleGrid>
-          <SubTitleField>
-            <SubTitleLabel>
-              훈장 · 표창 내역<OptionalTag>(선택)</OptionalTag>
-            </SubTitleLabel>
-            <S.Input
-              type="text"
-              aria-label="훈장·표창 내역"
-              placeholder="예: 대통령 부대표창 5회, 미 대통령 부대표창(PUC)"
-              value={honors}
-              onChange={(changeEvent) => {
-                setHonors(changeEvent.target.value)
-                markDirty(true)
-              }}
-            />
-          </SubTitleField>
-        </S.FormField>
-      </S.FormRow>
-
-      <S.FormRow $noBorder>
-        <S.FormLabel as="div">
-          부대 상세 설명<OptionalTag>(선택)</OptionalTag>
+          부대 설명 · 상세<OptionalTag>(선택)</OptionalTag>
         </S.FormLabel>
         <S.FormField>
           <S.Textarea
-            rows={4}
+            rows={3}
             placeholder="부대·사령부의 창설 배경, 지휘 구조, 편제 변천사 및 작전사적 의의를 기록하세요."
             value={description}
             onChange={(changeEvent) => {
@@ -5957,14 +5713,185 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
               markDirty(true)
             }}
           />
-          <DescriptionFooterRow>
-            <S.Hint>
-              편제 변천·지휘 체계 및 주요 작전 배경을 자유롭게 기술할 수 있습니다.
-            </S.Hint>
-            {description.length > 0 && (
-              <CharCountText>{description.length}자</CharCountText>
-            )}
-          </DescriptionFooterRow>
+
+          {/* 병력 규모 · 관할구역 · 임무 · 참전 전투 · 수훈 내역 (선택 사항 접기/펼치기) */}
+          {showDetailedSpecs || hasAnyDetailedSpecs ? (
+            <CollapsibleSubBox>
+              <CollapsibleSubHeader>
+                <SubTitleLabel>
+                  병력 규모 · 관할구역 · 임무 · 전투 · 수훈 (선택)
+                </SubTitleLabel>
+                {!hasAnyDetailedSpecs && (
+                  <DateQuickActionBtn
+                    type="button"
+                    onClick={() => setShowDetailedSpecs(false)}
+                  >
+                    접기
+                  </DateQuickActionBtn>
+                )}
+              </CollapsibleSubHeader>
+              <SubTitleGrid>
+                <SubTitleField>
+                  <SubTitleLabel>병력 · 편제 규모</SubTitleLabel>
+                  <S.Input
+                    type="text"
+                    placeholder="예: 약 15,000명 / 3개 군단 9개 사단"
+                    value={strength}
+                    onChange={(changeEvent) => {
+                      setStrength(changeEvent.target.value)
+                      markDirty(true)
+                    }}
+                  />
+                </SubTitleField>
+                <SubTitleField>
+                  <SubTitleLabel>관할 · 작전구역</SubTitleLabel>
+                  <S.Input
+                    type="text"
+                    placeholder="예: 서부·북아프리카 전구, 중부전선"
+                    value={jurisdiction}
+                    onChange={(changeEvent) => {
+                      setJurisdiction(changeEvent.target.value)
+                      markDirty(true)
+                    }}
+                  />
+                </SubTitleField>
+              </SubTitleGrid>
+              <SubTitleGrid>
+                <SubTitleField>
+                  <SubTitleLabel>주요 임무 · 역할</SubTitleLabel>
+                  <S.Textarea
+                    rows={2}
+                    placeholder="예: 합동 작전 총괄 지휘, 기동 타격, 해상 호위"
+                    value={primaryMission}
+                    onChange={(changeEvent) => {
+                      setPrimaryMission(changeEvent.target.value)
+                      markDirty(true)
+                    }}
+                  />
+                </SubTitleField>
+                <SubTitleField>
+                  <SubTitleLabel>주요 전투 · 작전</SubTitleLabel>
+                  <S.Textarea
+                    rows={2}
+                    placeholder="예: 노르망디 상륙작전, 인천상륙작전, 다부동 전투"
+                    value={notableBattles}
+                    onChange={(changeEvent) => {
+                      setNotableBattles(changeEvent.target.value)
+                      markDirty(true)
+                    }}
+                  />
+                </SubTitleField>
+              </SubTitleGrid>
+              <SubTitleField>
+                <SubTitleLabel>훈장 · 표창 내역</SubTitleLabel>
+                <S.Input
+                  type="text"
+                  aria-label="훈장·표창 내역"
+                  placeholder="예: 대통령 부대표창 5회, 미 대통령 부대표창(PUC)"
+                  value={honors}
+                  onChange={(changeEvent) => {
+                    setHonors(changeEvent.target.value)
+                    markDirty(true)
+                  }}
+                />
+              </SubTitleField>
+            </CollapsibleSubBox>
+          ) : (
+            <OptionalExpandToggleBtn
+              type="button"
+              onClick={() => setShowDetailedSpecs(true)}
+            >
+              + 병력 규모 · 관할구역 · 주요 임무 · 참전 전투 · 수훈 입력 (선택)
+            </OptionalExpandToggleBtn>
+          )}
+        </S.FormField>
+      </S.FormRow>
+
+      {/* 부대 마크 · 휘장 (register-form-kit KitUploadStrip / KitUploadFilled 정본 규격) */}
+      <S.FormRow $noBorder>
+        <S.FormLabel as="div">
+          부대 마크 · 휘장<OptionalTag>(선택)</OptionalTag>
+        </S.FormLabel>
+        <S.FormField>
+          {insigniaUrl ? (
+            <KitUploadFilled
+              $dragging={insigniaDragOver}
+              onDragOver={(dragEvent) => {
+                dragEvent.preventDefault()
+                if (!insigniaUploading) setInsigniaDragOver(true)
+              }}
+              onDragLeave={() => setInsigniaDragOver(false)}
+              onDrop={(dropEvent) => {
+                dropEvent.preventDefault()
+                setInsigniaDragOver(false)
+                const droppedFile = dropEvent.dataTransfer.files?.[0]
+                if (droppedFile) void handleInsigniaFileUpload(droppedFile)
+              }}
+            >
+              <KitUploadThumb
+                src={getUploadImageUrl(insigniaUrl)}
+                alt="부대 휘장 미리보기"
+                onClick={() => {
+                  if (!insigniaUploading) insigniaInputRef.current?.click()
+                }}
+              />
+              <KitUploadText>
+                <strong>부대 마크 · 휘장이 등록되었습니다</strong>
+                <span>
+                  드래그 · 클립보드 붙여넣기(⌘V) 또는 변경 버튼으로 교체할 수
+                  있습니다
+                </span>
+              </KitUploadText>
+              <KitUploadActions>
+                <S.UploadButton
+                  type="button"
+                  disabled={insigniaUploading}
+                  onClick={() => insigniaInputRef.current?.click()}
+                >
+                  {insigniaUploading ? '업로드 중…' : '변경'}
+                </S.UploadButton>
+                <KitUploadRemove
+                  type="button"
+                  disabled={insigniaUploading}
+                  aria-label="부대 휘장 제거"
+                  title="부대 휘장 제거"
+                  onClick={() => {
+                    playClickSound()
+                    setInsigniaUrl('')
+                    markDirty(true)
+                  }}
+                >
+                  <FiX size={16} />
+                </KitUploadRemove>
+              </KitUploadActions>
+            </KitUploadFilled>
+          ) : (
+            <KitUploadStrip
+              type="button"
+              $dragging={insigniaDragOver}
+              disabled={insigniaUploading}
+              onClick={() => insigniaInputRef.current?.click()}
+              onDragOver={(dragEvent) => {
+                dragEvent.preventDefault()
+                if (!insigniaUploading) setInsigniaDragOver(true)
+              }}
+              onDragLeave={() => setInsigniaDragOver(false)}
+              onDrop={(dropEvent) => {
+                dropEvent.preventDefault()
+                setInsigniaDragOver(false)
+                const droppedFile = dropEvent.dataTransfer.files?.[0]
+                if (droppedFile) void handleInsigniaFileUpload(droppedFile)
+              }}
+            >
+              <FiImage size={16} />
+              <span>
+                {insigniaUploading
+                  ? '휘장 업로드 중…'
+                  : '클릭하거나 이미지를 드래그 · 붙여넣기(⌘V)하여 휘장 추가'}
+              </span>
+              <small>PNG, JPG, WEBP, SVG · 최대 10MB</small>
+            </KitUploadStrip>
+          )}
         </S.FormField>
       </S.FormRow>
     </FormGroupSection>
@@ -5999,28 +5926,6 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
                 <span>↳</span>
                 <HeaderContextBadgeText>
                   상위: {selectedParentUnit.name}
-                </HeaderContextBadgeText>
-              </HeaderContextBadge>
-            )}
-            {countryName && (
-              <HeaderContextBadge
-                type="button"
-                title={`소속 국가: ${countryName} (기본 정보 섹션으로 이동)`}
-                onClick={() => scrollToSection('basic')}
-              >
-                <span>{countryFlagEmoji || '🏳️'}</span>
-                <HeaderContextBadgeText>{countryName}</HeaderContextBadgeText>
-              </HeaderContextBadge>
-            )}
-            {selectedAdminDept && (
-              <HeaderContextBadge
-                type="button"
-                title={`소관 부처: ${selectedAdminDept.name} (소속·지휘·계보 섹션으로 이동)`}
-                onClick={() => scrollToSection('command')}
-              >
-                <span>🏛️</span>
-                <HeaderContextBadgeText>
-                  {selectedAdminDept.name}
                 </HeaderContextBadgeText>
               </HeaderContextBadge>
             )}
@@ -6104,10 +6009,7 @@ export const MilitaryUnitFormModal: React.FC<MilitaryUnitFormModalProps> = ({
             <form id="military-unit-form" onSubmit={handleSubmit}>
               <S.FormSection ref={formRootRef} style={activeBranchStyle}>
                 {layoutMode === 'split' ? (
-                  <SplitColumnsGrid
-                    data-split-ratio={splitRatio}
-                    $ratio={splitRatio}
-                  >
+                  <SplitColumnsGrid>
                     <SplitColumnLeft id="military-unit-form-split-left">
                       {basicSectionNode}
                     </SplitColumnLeft>
@@ -6619,59 +6521,9 @@ const FormGroupSummaryBadge = styled.span`
     border-color 0.16s ease;
 `
 
-const SplitRatioGroup = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 7px;
-  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f1f5f9'};
-
-  @media (max-width: 1179px) {
-    display: none;
-  }
-`
-
-const SplitRatioBtn = styled.button<{ $active: boolean }>`
-  height: 22px;
-  padding: 0 7px;
-  border: none;
-  border-radius: 5px;
-  background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.12)'
-        : '#ffffff'
-      : 'transparent'};
-  box-shadow: ${({ $active, theme }) =>
-    $active && theme.mode !== 'dark'
-      ? '0 1px 2px rgba(15, 23, 42, 0.08)'
-      : 'none'};
-  color: ${({ $active, theme }) =>
-    $active ? theme.colors.text.primary : theme.colors.text.tertiary};
-  font: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
-
-const SplitColumnsGrid = styled.div<{
-  $ratio?: 'left-wide' | 'equal' | 'right-wide'
-}>`
+const SplitColumnsGrid = styled.div`
   display: grid;
-  grid-template-columns: ${({ $ratio }) =>
-    $ratio === 'left-wide'
-      ? 'minmax(0, 1.2fr) minmax(0, 0.85fr)'
-      : $ratio === 'right-wide'
-        ? 'minmax(0, 0.85fr) minmax(0, 1.2fr)'
-        : 'minmax(0, 1fr) minmax(0, 1fr)'};
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0;
   align-items: start;
   width: 100%;
@@ -7381,11 +7233,6 @@ const UnitTypeContainer = styled.div`
   gap: 10px;
 `
 
-const UnitTypeQuickSearchWrap = styled.div`
-  position: relative;
-  max-width: 440px;
-`
-
 const MoreToggleChip = styled.button`
   height: 32px;
   padding: 0 11px;
@@ -7506,15 +7353,50 @@ const ModalCausalCenterTitle = styled.span`
   white-space: nowrap;
 `
 
-const DescriptionFooterRow = styled.div`
+const CollapsibleSubBox = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => S.getC(theme).border.light};
+  background: ${({ theme }) => S.getC(theme).background.subtle};
+`
+
+const CollapsibleSubHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 `
 
-const CharCountText = styled.span`
-  font-size: 11.5px;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+const OptionalExpandToggleBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 5px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 8px;
+  border: 1px dashed ${({ theme }) => S.getC(theme).border.default};
+  background: transparent;
+  color: ${({ theme }) => S.getC(theme).text.secondary};
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color 0.14s ease,
+    border-color 0.14s ease,
+    background-color 0.14s ease;
+
+  &:hover,
+  &:focus-visible {
+    color: ${({ theme }) =>
+      `var(--active-domain-text, ${theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8'})`};
+    border-color: rgba(var(--active-domain-rgb, 37, 99, 235), 0.5);
+    background: ${({ theme }) =>
+      `rgba(var(--active-domain-rgb, 37, 99, 235), ${theme.mode === 'dark' ? 0.12 : 0.05})`};
+    outline: none;
+  }
 `
