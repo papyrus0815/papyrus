@@ -36,6 +36,7 @@ import {
   ledgerAccentBorder,
   ledgerAccentSubtle,
   ledgerBackground,
+  ledgerElevated,
   ledgerHairline,
   ledgerHairlineStrong,
   ledgerHoverFill,

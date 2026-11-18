@@ -189,6 +189,9 @@ export const ledgerSurface = (mode: Mode) =>
 export const ledgerSurfaceSolid = (mode: Mode) =>
   mode === 'dark' ? '#17181c' : '#ffffff'
 
+export const ledgerElevated = (mode: Mode) =>
+  mode === 'dark' ? '#1c1e24' : '#ffffff'
+
 export const ledgerOverlay = (mode: Mode) =>
   mode === 'dark' ? 'rgba(20,20,24,0.96)' : '#ffffff'
 
