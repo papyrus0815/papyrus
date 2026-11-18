@@ -24,16 +24,7 @@ import {
   useUpdateAdminDivisionConfig,
 } from '@/entities/country/api.administrative-divisions'
 import { confirm } from '@/shared/ui/confirm-dialog'
-import {
-  ModalBody,
-  ModalBox,
-  ModalCloseButton,
-  ModalFooter,
-  ModalHeader,
-  ModalSubtitle,
-  ModalTitle,
-  ModalOverlay,
-} from '@/shared/ui/modal'
+import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
 
 import { FooterBtn } from './form-fields'
@@ -56,7 +47,10 @@ function countUsageByConfig(
   const counts = new Map<string, number>()
   const walk = (nodes: AdministrativeDivision[]) => {
     for (const node of nodes) {
-      counts.set(node.adminDivisionId, (counts.get(node.adminDivisionId) ?? 0) + 1)
+      counts.set(
+        node.adminDivisionId,
+        (counts.get(node.adminDivisionId) ?? 0) + 1,
+      )
       if (node.children?.length) walk(node.children)
     }
   }
@@ -118,8 +112,6 @@ export function AdminDivisionConfigModal({
     setNewLabel('')
     setEditingId(null)
   }, [isOpen])
-
-  if (!isOpen) return null
 
   const submitting =
     createMut.isPending || updateMut.isPending || deleteMut.isPending
@@ -199,246 +191,241 @@ export function AdminDivisionConfigModal({
   }
 
   return (
-    <ModalOverlay onClick={onClose}>
-      <ModalBox $maxWidth="520px" onClick={(event) => event.stopPropagation()}>
-        <ModalHeader>
-          <div>
-            <ModalTitle>행정 단위 관리</ModalTitle>
-            <ModalSubtitle>
-              {schemeName ? `${schemeName} 체계 전용` : '공용 단위'} · 레벨(차수)
-              구조를 먼저 정의합니다
-            </ModalSubtitle>
-          </div>
-          <ModalCloseButton type="button" onClick={onClose} aria-label="닫기">
-            <FiX />
-          </ModalCloseButton>
-        </ModalHeader>
-        <ModalBody>
-          <p
-            style={{
-              margin: 0,
-              fontSize: 12.5,
-              lineHeight: 1.6,
-              color: palette.textSecondary,
-            }}
-          >
-            구역 계층의 단위를 미리 정해 두면 등록 시 선택만 하면 됩니다. 예:
-            1차 = 주, 2차 = 카운티, 3차 = 시.
-          </p>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="행정 단위 관리"
+      subtitle={`${schemeName ? `${schemeName} 체계 전용` : '공용 단위'} · 레벨(차수) 구조를 먼저 정의합니다`}
+      maxWidth="520px"
+    >
+      <ModalBody>
+        <p
+          style={{
+            margin: 0,
+            fontSize: 12.5,
+            lineHeight: 1.6,
+            color: palette.textSecondary,
+          }}
+        >
+          구역 계층의 단위를 미리 정해 두면 등록 시 선택만 하면 됩니다. 예: 1차
+          = 주, 2차 = 카운티, 3차 = 시.
+        </p>
 
-          {sortedConfigs.length === 0 ? (
-            <div
-              style={{
-                padding: '20px 12px',
-                textAlign: 'center',
-                fontSize: 13,
-                color: palette.textMuted,
-                background: palette.bgSecondary,
-                border: `1px dashed ${palette.border}`,
-                borderRadius: 12,
-              }}
-            >
-              아직 정의된 단위가 없습니다. 아래에서 1차 단위부터 추가하세요.
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {sortedConfigs.map((config) => {
-                const usage = usageByConfig.get(config.id) ?? 0
-                const isShared = config.schemeId == null
-                const editing = editingId === config.id
-                return (
-                  <div
-                    key={config.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '8px 10px',
-                      border: `1px solid ${palette.border}`,
-                      borderRadius: 10,
-                      background: palette.bgSecondary,
-                    }}
-                  >
-                    {editing ? (
-                      <>
-                        <input
-                          type="number"
-                          min={1}
-                          aria-label="차수"
-                          value={editLevel}
-                          onChange={(event) => setEditLevel(event.target.value)}
-                          style={fieldStyle(palette, 56)}
-                        />
-                        <input
-                          aria-label="단위 이름"
-                          value={editLabel}
-                          onChange={(event) => setEditLabel(event.target.value)}
-                          autoFocus
-                          style={{ ...fieldStyle(palette), flex: 1 }}
-                        />
-                        <IconBtn
-                          palette={palette}
-                          label="저장"
-                          tone="primary"
-                          disabled={submitting}
-                          onClick={() => handleSaveEdit(config)}
-                        >
-                          <FiCheck />
-                        </IconBtn>
-                        <IconBtn
-                          palette={palette}
-                          label="취소"
-                          onClick={cancelEdit}
-                        >
-                          <FiX />
-                        </IconBtn>
-                      </>
-                    ) : (
-                      <>
-                        <span
-                          style={{
-                            flexShrink: 0,
-                            minWidth: 34,
-                            padding: '2px 7px',
-                            fontSize: 11,
-                            fontWeight: 700,
-                            textAlign: 'center',
-                            color: palette.badgeText,
-                            background: palette.badgeBg,
-                            border: `1px solid ${palette.badgeBorder}`,
-                            borderRadius: 6,
-                          }}
-                        >
-                          {config.divisionLevel}차
-                        </span>
-                        <span
-                          style={{
-                            flex: 1,
-                            minWidth: 0,
-                            fontSize: 13.5,
-                            fontWeight: 600,
-                            color: palette.text,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {config.divisionLabel}
-                          {isShared && (
-                            <span
-                              style={{
-                                marginLeft: 6,
-                                fontSize: 10,
-                                fontWeight: 600,
-                                color: palette.textMuted,
-                              }}
-                            >
-                              공용
-                            </span>
-                          )}
-                        </span>
-                        <span
-                          style={{
-                            flexShrink: 0,
-                            fontSize: 11,
-                            color: palette.textMuted,
-                          }}
-                        >
-                          {usage > 0 ? `${usage}개 구역` : '미사용'}
-                        </span>
-                        <IconBtn
-                          palette={palette}
-                          label="수정"
-                          onClick={() => startEdit(config)}
-                        >
-                          <FiEdit2 />
-                        </IconBtn>
-                        <IconBtn
-                          palette={palette}
-                          label="삭제"
-                          tone="danger"
-                          disabled={submitting}
-                          onClick={() => handleDelete(config)}
-                        >
-                          <FiTrash2 />
-                        </IconBtn>
-                      </>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          {/* 새 단위 추가 */}
+        {sortedConfigs.length === 0 ? (
           <div
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              paddingTop: 12,
-              borderTop: `1px solid ${palette.divider}`,
+              padding: '20px 12px',
+              textAlign: 'center',
+              fontSize: 13,
+              color: palette.textMuted,
+              background: palette.bgSecondary,
+              border: `1px dashed ${palette.border}`,
+              borderRadius: 12,
             }}
           >
-            <input
-              type="number"
-              min={1}
-              aria-label="새 단위 차수"
-              value={newLevel}
-              onChange={(event) => setNewLevel(event.target.value)}
-              placeholder={String(nextLevel)}
-              style={fieldStyle(palette, 56)}
-            />
-            <input
-              aria-label="새 단위 이름"
-              value={newLabel}
-              onChange={(event) => setNewLabel(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  void handleCreate()
-                }
-              }}
-              placeholder={`${nextLevel}차 단위 이름 (예: ${levelExample(nextLevel)})`}
-              style={{ ...fieldStyle(palette), flex: 1 }}
-            />
-            <button
-              type="button"
-              onClick={() => void handleCreate()}
-              disabled={submitting || !newLabel.trim()}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                flexShrink: 0,
-                padding: '8px 12px',
-                fontSize: 12.5,
-                fontWeight: 600,
-                color: '#ffffff',
-                background: palette.primary,
-                border: `1px solid ${palette.primary}`,
-                borderRadius: 9,
-                cursor:
-                  submitting || !newLabel.trim() ? 'not-allowed' : 'pointer',
-                opacity: submitting || !newLabel.trim() ? 0.5 : 1,
-              }}
-            >
-              <FiPlus size={13} />
-              추가
-            </button>
+            아직 정의된 단위가 없습니다. 아래에서 1차 단위부터 추가하세요.
           </div>
-        </ModalBody>
-        <ModalFooter>
-          <FooterBtn type="button" onClick={onClose}>
-            닫기
-          </FooterBtn>
-        </ModalFooter>
-      </ModalBox>
-    </ModalOverlay>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {sortedConfigs.map((config) => {
+              const usage = usageByConfig.get(config.id) ?? 0
+              const isShared = config.schemeId == null
+              const editing = editingId === config.id
+              return (
+                <div
+                  key={config.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '8px 10px',
+                    border: `1px solid ${palette.border}`,
+                    borderRadius: 10,
+                    background: palette.bgSecondary,
+                  }}
+                >
+                  {editing ? (
+                    <>
+                      <input
+                        type="number"
+                        min={1}
+                        aria-label="차수"
+                        value={editLevel}
+                        onChange={(event) => setEditLevel(event.target.value)}
+                        style={fieldStyle(palette, 56)}
+                      />
+                      <input
+                        aria-label="단위 이름"
+                        value={editLabel}
+                        onChange={(event) => setEditLabel(event.target.value)}
+                        autoFocus
+                        style={{ ...fieldStyle(palette), flex: 1 }}
+                      />
+                      <IconBtn
+                        palette={palette}
+                        label="저장"
+                        tone="primary"
+                        disabled={submitting}
+                        onClick={() => handleSaveEdit(config)}
+                      >
+                        <FiCheck />
+                      </IconBtn>
+                      <IconBtn
+                        palette={palette}
+                        label="취소"
+                        onClick={cancelEdit}
+                      >
+                        <FiX />
+                      </IconBtn>
+                    </>
+                  ) : (
+                    <>
+                      <span
+                        style={{
+                          flexShrink: 0,
+                          minWidth: 34,
+                          padding: '2px 7px',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          textAlign: 'center',
+                          color: palette.badgeText,
+                          background: palette.badgeBg,
+                          border: `1px solid ${palette.badgeBorder}`,
+                          borderRadius: 6,
+                        }}
+                      >
+                        {config.divisionLevel}차
+                      </span>
+                      <span
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          fontSize: 13.5,
+                          fontWeight: 600,
+                          color: palette.text,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {config.divisionLabel}
+                        {isShared && (
+                          <span
+                            style={{
+                              marginLeft: 6,
+                              fontSize: 10,
+                              fontWeight: 600,
+                              color: palette.textMuted,
+                            }}
+                          >
+                            공용
+                          </span>
+                        )}
+                      </span>
+                      <span
+                        style={{
+                          flexShrink: 0,
+                          fontSize: 11,
+                          color: palette.textMuted,
+                        }}
+                      >
+                        {usage > 0 ? `${usage}개 구역` : '미사용'}
+                      </span>
+                      <IconBtn
+                        palette={palette}
+                        label="수정"
+                        onClick={() => startEdit(config)}
+                      >
+                        <FiEdit2 />
+                      </IconBtn>
+                      <IconBtn
+                        palette={palette}
+                        label="삭제"
+                        tone="danger"
+                        disabled={submitting}
+                        onClick={() => handleDelete(config)}
+                      >
+                        <FiTrash2 />
+                      </IconBtn>
+                    </>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* 새 단위 추가 */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            paddingTop: 12,
+            borderTop: `1px solid ${palette.divider}`,
+          }}
+        >
+          <input
+            type="number"
+            min={1}
+            aria-label="새 단위 차수"
+            value={newLevel}
+            onChange={(event) => setNewLevel(event.target.value)}
+            placeholder={String(nextLevel)}
+            style={fieldStyle(palette, 56)}
+          />
+          <input
+            aria-label="새 단위 이름"
+            value={newLabel}
+            onChange={(event) => setNewLabel(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                void handleCreate()
+              }
+            }}
+            placeholder={`${nextLevel}차 단위 이름 (예: ${levelExample(nextLevel)})`}
+            style={{ ...fieldStyle(palette), flex: 1 }}
+          />
+          <button
+            type="button"
+            onClick={() => void handleCreate()}
+            disabled={submitting || !newLabel.trim()}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              flexShrink: 0,
+              padding: '8px 12px',
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: '#ffffff',
+              background: palette.primary,
+              border: `1px solid ${palette.primary}`,
+              borderRadius: 9,
+              cursor:
+                submitting || !newLabel.trim() ? 'not-allowed' : 'pointer',
+              opacity: submitting || !newLabel.trim() ? 0.5 : 1,
+            }}
+          >
+            <FiPlus size={13} />
+            추가
+          </button>
+        </div>
+      </ModalBody>
+      <ModalFooter>
+        <FooterBtn type="button" onClick={onClose}>
+          닫기
+        </FooterBtn>
+      </ModalFooter>
+    </Modal>
   )
 }
 
-function fieldStyle(palette: RegionPalette, width?: number): React.CSSProperties {
+function fieldStyle(
+  palette: RegionPalette,
+  width?: number,
+): React.CSSProperties {
   return {
     width,
     padding: '8px 10px',
