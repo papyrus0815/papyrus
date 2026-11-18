@@ -405,6 +405,7 @@ function CountryDetailInner({
                 {activeSubTab === 'dashboard' && (
                   <CountryDetailDashboard
                     country={country}
+                    preloadedStats={dashboardStats}
                     onEdit={onEdit ? () => onEdit(country) : undefined}
                     /*
                       히어로는 대시보드 셸 좌측 칼럼 안에서 렌더한다. 바깥 형제로 두면
@@ -429,6 +430,7 @@ function CountryDetailInner({
                 {activeSubTab === 'events' && (
                   <EventsTimelineSection
                     countryId={country.id}
+                    countryName={country.name}
                     /* 서버 필터는 최상위 사건에만 걸린다 — 평탄화된 하위 사건까지
                        같은 기준으로 거르도록 이 국가의 id 집합을 넘긴다 */
                     scopeCountryIds={[
@@ -619,6 +621,103 @@ const WORLD_SOVEREIGN_BENCHMARK = 195
 const WORLD_LAND_AREA_KM2 = 148_940_000
 
 type ExplorerRankMetric = 'population' | 'area' | 'historical'
+type ContinentMetric = 'count' | 'population' | 'area'
+
+const ATLAS_VIEW_W = 720
+const ATLAS_VIEW_H = 300
+
+function projectLonLat(lng: number, lat: number): [number, number] {
+  const clampedLng = Math.max(-180, Math.min(180, lng))
+  const clampedLat = Math.max(-82, Math.min(84, lat))
+  const x = ((clampedLng + 180) / 360) * ATLAS_VIEW_W
+  const y = ((90 - clampedLat) / 180) * ATLAS_VIEW_H
+  return [Math.round(x * 10) / 10, Math.round(y * 10) / 10]
+}
+
+const WORLD_LANDMASS_POLYGONS: Array<{
+  key: string
+  coords: Array<[number, number]>
+}> = [
+  {
+    key: 'northAmerica',
+    coords: [
+      [-168, 66], [-140, 70], [-95, 73], [-62, 60], [-55, 47], [-70, 42],
+      [-80, 25], [-90, 21], [-83, 9], [-95, 16], [-106, 22], [-115, 30],
+      [-124, 48], [-140, 59], [-166, 60],
+    ],
+  },
+  {
+    key: 'greenland',
+    coords: [[-55, 81], [-20, 81], [-18, 70], [-43, 60], [-56, 70]],
+  },
+  {
+    key: 'southAmerica',
+    coords: [
+      [-80, 10], [-62, 11], [-50, 1], [-35, -6], [-39, -18], [-48, -28],
+      [-58, -38], [-68, -54], [-74, -50], [-72, -35], [-71, -18], [-81, -5],
+    ],
+  },
+  {
+    key: 'europe',
+    coords: [
+      [-10, 36], [-9, 43], [-5, 48], [2, 51], [8, 55], [10, 63], [20, 70],
+      [32, 70], [45, 65], [55, 60], [50, 46], [38, 45], [29, 41], [24, 37],
+      [15, 38], [12, 42], [5, 43], [-5, 36],
+    ],
+  },
+  {
+    key: 'uk',
+    coords: [[-6, 50], [-5, 58], [1, 58], [2, 51]],
+  },
+  {
+    key: 'africa',
+    coords: [
+      [-17, 15], [-13, 28], [-6, 35], [10, 37], [25, 32], [33, 31], [43, 12],
+      [51, 12], [41, -2], [40, -15], [33, -26], [27, -34], [18, -34],
+      [14, -22], [12, -6], [8, 4], [-8, 5], [-16, 11],
+    ],
+  },
+  {
+    key: 'madagascar',
+    coords: [[44, -13], [50, -14], [47, -25], [43, -24]],
+  },
+  {
+    key: 'asia',
+    coords: [
+      [28, 41], [40, 42], [52, 38], [56, 26], [44, 13], [54, 17], [60, 25],
+      [68, 24], [73, 16], [77, 8], [82, 16], [89, 22], [97, 16], [103, 2],
+      [109, 12], [108, 21], [117, 23], [122, 31], [121, 39], [127, 35],
+      [129, 41], [136, 46], [142, 53], [160, 60], [175, 66], [170, 70],
+      [135, 72], [100, 74], [70, 72], [55, 60], [50, 46],
+    ],
+  },
+  {
+    key: 'japan',
+    coords: [[130, 32], [136, 35], [141, 41], [145, 44], [141, 38], [134, 33]],
+  },
+  {
+    key: 'indonesia',
+    coords: [[96, 5], [105, -6], [115, -8], [125, -8], [120, -2], [110, 1], [102, 3]],
+  },
+  {
+    key: 'oceania',
+    coords: [
+      [114, -22], [122, -17], [132, -12], [142, -11], [150, -22], [153, -28],
+      [149, -38], [139, -36], [130, -32], [115, -34],
+    ],
+  },
+  {
+    key: 'newZealand',
+    coords: [[172, -35], [178, -38], [170, -46], [167, -45]],
+  },
+]
+
+const PROJECTED_LANDMASS_PATHS = WORLD_LANDMASS_POLYGONS.map((poly) => ({
+  key: poly.key,
+  points: poly.coords
+    .map(([lng, lat]) => projectLonLat(lng, lat).join(','))
+    .join(' '),
+}))
 
 function parseExplorerNumber(raw: unknown): number {
   if (raw == null || raw === '') return 0
@@ -662,56 +761,91 @@ function EmptyState({
 }) {
   const navigate = useNavigate()
   const [rankMetric, setRankMetric] = useState<ExplorerRankMetric>('population')
+  const [continentMetric, setContinentMetric] =
+    useState<ContinentMetric>('count')
+  const [hoveredAtlasId, setHoveredAtlasId] = useState<string | null>(null)
+  const [histEraFilter, setHistEraFilter] = useState<string | null>(null)
+  const [histStateFilter, setHistStateFilter] = useState<string | null>(null)
+  const [histSort, setHistSort] = useState<'duration' | 'ancient' | 'modern'>(
+    'duration',
+  )
+  const [onlyUnlinkedHist, setOnlyUnlinkedHist] = useState(false)
+  const [histSearch, setHistSearch] = useState('')
   const {
     countries,
     unifiedCountries,
     continents,
     historicalCount,
+    unlinkedHistoricalIds,
     apiHistoricalCountries,
     continentFilter,
     setContinentFilter,
+    countryTypeFilter,
     setCountryTypeFilter,
   } = useCountryListState()
+
+  const isHistoricalAtlasMode = countryTypeFilter === 'historical'
 
   const continentStats = useMemo(() => {
     const countMap = new Map<string, number>()
     const popMap = new Map<string, number>()
     const areaMap = new Map<string, number>()
 
+    let popTotal = 0
+    let areaTotal = 0
+
     for (const c of countries) {
       if (!c.continentId) continue
+      const p = parseExplorerNumber(c.population)
+      const a = parseExplorerNumber(c.areaSqKm)
       countMap.set(c.continentId, (countMap.get(c.continentId) ?? 0) + 1)
-      popMap.set(
-        c.continentId,
-        (popMap.get(c.continentId) ?? 0) + parseExplorerNumber(c.population),
-      )
-      areaMap.set(
-        c.continentId,
-        (areaMap.get(c.continentId) ?? 0) + parseExplorerNumber(c.areaSqKm),
-      )
+      popMap.set(c.continentId, (popMap.get(c.continentId) ?? 0) + p)
+      areaMap.set(c.continentId, (areaMap.get(c.continentId) ?? 0) + a)
+      popTotal += p
+      areaTotal += a
     }
 
     const totalModern = Math.max(countries.length, 1)
+    const safePopTotal = Math.max(popTotal, 1)
+    const safeAreaTotal = Math.max(areaTotal, 1)
+
     const items = continents
       .map((cont) => {
         const count = countMap.get(cont.id) ?? 0
         const population = popMap.get(cont.id) ?? 0
         const area = areaMap.get(cont.id) ?? 0
+        const metricVal =
+          continentMetric === 'population'
+            ? population
+            : continentMetric === 'area'
+              ? area
+              : count
+        const activeSharePct =
+          continentMetric === 'population'
+            ? Math.round((population / safePopTotal) * 100)
+            : continentMetric === 'area'
+              ? Math.round((area / safeAreaTotal) * 100)
+              : Math.round((count / totalModern) * 100)
         return {
           id: cont.id,
           name: cont.name,
           count,
           sharePct: Math.round((count / totalModern) * 100),
+          activeSharePct,
+          metricVal,
           population,
           area,
         }
       })
       .filter((item) => item.count > 0)
-      .sort((a, b) => b.count - a.count)
+      .sort((a, b) => {
+        if (b.metricVal !== a.metricVal) return b.metricVal - a.metricVal
+        return b.count - a.count
+      })
 
-    const maxCount = Math.max(...items.map((item) => item.count), 1)
-    return { items, maxCount }
-  }, [countries, continents])
+    const maxMetricVal = Math.max(...items.map((item) => item.metricVal), 1)
+    return { items, maxMetricVal }
+  }, [countries, continents, continentMetric])
 
   const { totalPopulation, totalAreaSqKm } = useMemo(() => {
     let popSum = 0
@@ -880,6 +1014,185 @@ function EmptyState({
     }))
   }, [unifiedCountries, continentFilter, rankMetric])
 
+  const top3CountryIds = useMemo(
+    () => new Set(rankedModernCountries.slice(0, 3).map((r) => r.country.id)),
+    [rankedModernCountries],
+  )
+
+  const atlasWorldPoints = useMemo(() => {
+    const withCoords = unifiedCountries.filter(
+      (c) =>
+        c.latitude != null &&
+        c.longitude != null &&
+        Number.isFinite(c.latitude) &&
+        Number.isFinite(c.longitude),
+    )
+
+    const scored = withCoords.map((c) => {
+      const metricValue =
+        rankMetric === 'population'
+          ? parseExplorerNumber(c.population)
+          : rankMetric === 'area'
+            ? parseExplorerNumber(c.areaSqKm)
+            : (c.historicalCountries?.length ?? 0)
+      const [x, y] = projectLonLat(c.longitude as number, c.latitude as number)
+      return { country: c, metricValue, x, y }
+    })
+
+    const maxVal = Math.max(...scored.map((s) => s.metricValue), 1)
+    return scored
+      .map((s) => {
+        const radius =
+          s.metricValue > 0
+            ? 3.2 + Math.sqrt(s.metricValue / maxVal) * 9.8
+            : 2.6
+        return { ...s, radius: Math.round(radius * 10) / 10 }
+      })
+      .sort((a, b) => b.radius - a.radius)
+  }, [unifiedCountries, rankMetric])
+
+  const hoveredAtlasEntry = useMemo(() => {
+    if (!hoveredAtlasId) return null
+    const found = atlasWorldPoints.find((p) => p.country.id === hoveredAtlasId)
+    if (found) return found
+    const fallbackCountry = unifiedCountries.find(
+      (c) => c.id === hoveredAtlasId,
+    )
+    if (!fallbackCountry) return null
+    const metricValue =
+      rankMetric === 'population'
+        ? parseExplorerNumber(fallbackCountry.population)
+        : rankMetric === 'area'
+          ? parseExplorerNumber(fallbackCountry.areaSqKm)
+          : (fallbackCountry.historicalCountries?.length ?? 0)
+    return {
+      country: fallbackCountry,
+      metricValue,
+      x: null as number | null,
+      y: null as number | null,
+      radius: 0,
+    }
+  }, [hoveredAtlasId, atlasWorldPoints, unifiedCountries, rankMetric])
+
+  const filteredHistoricalAtlasList = useMemo(() => {
+    const raw = apiHistoricalCountries ?? []
+    const q = histSearch.trim().toLowerCase()
+
+    const classifyEraKey = (h: (typeof raw)[number]): string => {
+      const span = getCountryYearRange({
+        startYear: h.startYear,
+        startEra: h.startEra,
+        endYear: h.endYear,
+        endEra: h.endEra,
+      })
+      const start = span.start
+      if (start == null) return 'unknown'
+      if (start <= 0) return 'ancient'
+      if (start <= 500) return 'classical'
+      if (start <= 1400) return 'medieval'
+      if (start <= 1800) return 'earlyModern'
+      return 'modernEra'
+    }
+
+    const classifyStateKey = (h: (typeof raw)[number]): string => {
+      const st = String(h.stateType ?? '').toUpperCase()
+      if (st.includes('EMPIRE')) return 'empire'
+      if (
+        st.includes('KINGDOM') ||
+        st.includes('DYNASTY') ||
+        st.includes('MONARCHY') ||
+        st.includes('DUCHY') ||
+        st.includes('PRINCIPALITY') ||
+        st.includes('KHANATE') ||
+        st.includes('SHOGUNATE') ||
+        st.includes('SULTANATE') ||
+        st.includes('CALIPHATE')
+      ) {
+        return 'monarchy'
+      }
+      if (
+        st.includes('REPUBLIC') ||
+        st.includes('FEDERATION') ||
+        st.includes('CONFEDERATION') ||
+        st.includes('COMMONWEALTH')
+      ) {
+        return 'republic'
+      }
+      return 'other'
+    }
+
+    const matched = raw.filter((h) => {
+      if (onlyUnlinkedHist && !unlinkedHistoricalIds.has(h.id)) return false
+      if (histEraFilter && classifyEraKey(h) !== histEraFilter) return false
+      if (histStateFilter && classifyStateKey(h) !== histStateFilter) return false
+      if (q) {
+        const hay = [h.name, h.enName ?? '', formatCountryPeriod(h)]
+          .join(' ')
+          .toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+
+    const scored = matched.map((h) => {
+      const duration =
+        getCountryDurationYears({
+          startYear: h.startYear,
+          startEra: h.startEra,
+          endYear: h.endYear,
+          endEra: h.endEra,
+        }) ?? 0
+      const span = getCountryYearRange({
+        startYear: h.startYear,
+        startEra: h.startEra,
+        endYear: h.endYear,
+        endEra: h.endEra,
+      })
+      return {
+        item: h,
+        duration,
+        startSigned: span.start,
+        isUnlinked: unlinkedHistoricalIds.has(h.id),
+      }
+    })
+
+    scored.sort((a, b) => {
+      if (histSort === 'duration') {
+        if (b.duration !== a.duration) return b.duration - a.duration
+      } else if (histSort === 'ancient') {
+        const lS = a.startSigned ?? 99999
+        const rS = b.startSigned ?? 99999
+        if (lS !== rS) return lS - rS
+      } else {
+        const lS = a.startSigned ?? -99999
+        const rS = b.startSigned ?? -99999
+        if (rS !== lS) return rS - lS
+      }
+      return a.item.name.localeCompare(b.item.name, 'ko')
+    })
+
+    const maxDuration = Math.max(1, ...scored.map((s) => s.duration))
+    return {
+      totalMatched: scored.length,
+      items: scored.slice(0, 24).map((entry, idx) => ({
+        ...entry,
+        rank: idx + 1,
+        ratioPct:
+          entry.duration > 0
+            ? Math.max(5, Math.round((entry.duration / maxDuration) * 100))
+            : 4,
+      })),
+    }
+  }, [
+    apiHistoricalCountries,
+    histSearch,
+    onlyUnlinkedHist,
+    unlinkedHistoricalIds,
+    histEraFilter,
+    histStateFilter,
+    histSort,
+  ])
+
   const featuredHistoricalCountries = useMemo(() => {
     if (!apiHistoricalCountries?.length) return []
     return [...apiHistoricalCountries]
@@ -923,19 +1236,51 @@ function EmptyState({
       <ExplorerInner>
         <ExplorerHeader>
           <ExplorerHeaderText>
-            <ExplorerEyebrow>GLOBAL ATLAS INFOGRAPHIC</ExplorerEyebrow>
+            <ExplorerEyebrow>
+              {isHistoricalAtlasMode
+                ? 'HISTORICAL POLITIES ATLAS'
+                : 'GLOBAL ATLAS INFOGRAPHIC'}
+            </ExplorerEyebrow>
             <ExplorerTitle>
-              현대 주권국과 역사 정치체 아카이브 현황판
+              {isHistoricalAtlasMode
+                ? '역사 정치체 · 왕조 · 제국 아카이브 현황판'
+                : '현대 주권국과 역사 정치체 아카이브 현황판'}
             </ExplorerTitle>
             <ExplorerDescription>
-              대륙 막대를 클릭해 좌측 목록을 즉시 필터링하거나, 상위 랭킹·역사 왕조 카드로 바로 진입하세요.
+              {isHistoricalAtlasMode
+                ? '고대(BC)부터 근현대까지의 성립 시대·국체 분포를 필터링하고, 존속 기간 비례 랭킹으로 과거 국가 대시보드에 바로 진입하세요.'
+                : '대륙 막대와 세계 버블 지도를 클릭해 필터링하거나, 상위 랭킹·역사 왕조 카드로 바로 진입하세요.'}
             </ExplorerDescription>
           </ExplorerHeaderText>
-          {onOpenMobileList && (
-            <S.EmptyStateMobileButton type="button" onClick={onOpenMobileList}>
-              목록에서 국가 선택하기
-            </S.EmptyStateMobileButton>
-          )}
+
+          <ExplorerHeaderRight>
+            <RankModeGroup role="tablist" aria-label="아틀라스 시대 축 전환">
+              <RankModeBtn
+                type="button"
+                role="tab"
+                aria-selected={!isHistoricalAtlasMode}
+                $active={!isHistoricalAtlasMode}
+                onClick={() => setCountryTypeFilter('all')}
+              >
+                현대 주권국 ({unifiedCountries.length})
+              </RankModeBtn>
+              <RankModeBtn
+                type="button"
+                role="tab"
+                aria-selected={isHistoricalAtlasMode}
+                $active={isHistoricalAtlasMode}
+                onClick={() => setCountryTypeFilter('historical')}
+              >
+                과거 정치체 ({historicalCount})
+              </RankModeBtn>
+            </RankModeGroup>
+
+            {onOpenMobileList && (
+              <S.EmptyStateMobileButton type="button" onClick={onOpenMobileList}>
+                목록에서 국가 선택하기
+              </S.EmptyStateMobileButton>
+            )}
+          </ExplorerHeaderRight>
         </ExplorerHeader>
 
         {/* 1단: 전체 국가 아카이브 4칸 헤어라인 요약 */}
@@ -990,37 +1335,345 @@ function EmptyState({
           </ExplorerKpiCell>
         </ExplorerKpiStrip>
 
+        {isHistoricalAtlasMode ? (
+          <>
+            {/* 과거 정치체 전용 2열 Bento: 시대별 성립 히스토그램 + 국체/현대계승 현황 */}
+            <AtlasBentoGrid>
+              <AtlasBentoCard aria-label="시대별 역사 정치체 성립 분포">
+                <AtlasCardHead>
+                  <AtlasCardTitleWrap>
+                    <AtlasCardTitle>시대별 성립 정치체 밀도</AtlasCardTitle>
+                    <AtlasCardBadge>총 {historicalCount}개국</AtlasCardBadge>
+                  </AtlasCardTitleWrap>
+                  {histEraFilter ? (
+                    <ExplorerResetBtn
+                      type="button"
+                      onClick={() => setHistEraFilter(null)}
+                    >
+                      시대 필터 해제
+                    </ExplorerResetBtn>
+                  ) : (
+                    <AtlasCardHint>막대 클릭 시 시대 필터</AtlasCardHint>
+                  )}
+                </AtlasCardHead>
+
+                <EraColumnsGrid>
+                  {historicalInfographic.eraDefs.map((era) => {
+                    const heightPct =
+                      era.count > 0
+                        ? Math.max(
+                            10,
+                            Math.round(
+                              (era.count / historicalInfographic.maxEraCount) *
+                                100,
+                            ),
+                          )
+                        : 3
+                    const isSelected = histEraFilter === era.key
+                    return (
+                      <EraColumnButton
+                        key={era.key}
+                        type="button"
+                        $active={isSelected}
+                        onClick={() =>
+                          setHistEraFilter((prev) =>
+                            prev === era.key ? null : era.key,
+                          )
+                        }
+                        title={`${era.label} (${era.sub}) 성립 정치체 ${era.count}개`}
+                      >
+                        <EraColumnCount $zero={era.count === 0}>
+                          {era.count}
+                        </EraColumnCount>
+                        <EraColumnWell>
+                          <EraColumnBar
+                            $pct={heightPct}
+                            $zero={era.count === 0}
+                          />
+                        </EraColumnWell>
+                        <EraColumnLabel>{era.label}</EraColumnLabel>
+                        <EraColumnSub>{era.sub}</EraColumnSub>
+                      </EraColumnButton>
+                    )
+                  })}
+                </EraColumnsGrid>
+              </AtlasBentoCard>
+
+              <AtlasBentoCard aria-label="국체 구성 및 현대 국가 브리지 현황">
+                <AtlasCardHead>
+                  <AtlasCardTitleWrap>
+                    <AtlasCardTitle>국체 구성 · 현대 계보 연결</AtlasCardTitle>
+                    <AtlasCardBadge>
+                      연결 {Math.max(0, historicalCount - unlinkedHistoricalIds.size)}개국
+                    </AtlasCardBadge>
+                  </AtlasCardTitleWrap>
+                  {(histStateFilter || onlyUnlinkedHist) && (
+                    <ExplorerResetBtn
+                      type="button"
+                      onClick={() => {
+                        setHistStateFilter(null)
+                        setOnlyUnlinkedHist(false)
+                      }}
+                    >
+                      필터 해제
+                    </ExplorerResetBtn>
+                  )}
+                </AtlasCardHead>
+
+                <EraHistogramWrap>
+                  <PolityTypeFooter style={{ borderTop: 'none', paddingTop: 0 }}>
+                    <PolityStackedTrack>
+                      {historicalInfographic.stateSegments.map((seg) => (
+                        <PolityStackedSeg
+                          key={seg.key}
+                          $pct={Math.max(seg.pct, 3)}
+                          $tone={seg.tone}
+                          title={`${seg.label}: ${seg.count}개 (${seg.pct}%)`}
+                        />
+                      ))}
+                    </PolityStackedTrack>
+                    <PolityLegendRow>
+                      {historicalInfographic.stateSegments.map((seg) => {
+                        const active = histStateFilter === seg.key
+                        return (
+                          <HistFilterPillBtn
+                            key={seg.key}
+                            type="button"
+                            $active={active}
+                            onClick={() =>
+                              setHistStateFilter((prev) =>
+                                prev === seg.key ? null : seg.key,
+                              )
+                            }
+                          >
+                            <PolityLegendDot $tone={seg.tone} />
+                            <span>{seg.label}</span>
+                            <strong>
+                              {seg.count} ({seg.pct}%)
+                            </strong>
+                          </HistFilterPillBtn>
+                        )
+                      })}
+                    </PolityLegendRow>
+                  </PolityTypeFooter>
+
+                  <HistBridgeSummaryRow>
+                    <span>
+                      현대 국가 계보 연결:{' '}
+                      <strong>
+                        {Math.max(
+                          0,
+                          historicalCount - unlinkedHistoricalIds.size,
+                        )}
+                        개국
+                      </strong>
+                      {unlinkedHistoricalIds.size > 0
+                        ? ` · 미연결 ${unlinkedHistoricalIds.size}개국`
+                        : ''}
+                    </span>
+                    {unlinkedHistoricalIds.size > 0 && (
+                      <HistFilterPillBtn
+                        type="button"
+                        $active={onlyUnlinkedHist}
+                        onClick={() => setOnlyUnlinkedHist((prev) => !prev)}
+                      >
+                        미연결 정치체만 ({unlinkedHistoricalIds.size})
+                      </HistFilterPillBtn>
+                    )}
+                  </HistBridgeSummaryRow>
+                </EraHistogramWrap>
+              </AtlasBentoCard>
+            </AtlasBentoGrid>
+
+            {/* 과거 정치체 전폭 탐색 원장 & 존속 기간 비례 바 */}
+            <AtlasBentoCard aria-label="역사 정치체 존속 기간 비례 탐색기">
+              <AtlasCardHead $wrap>
+                <AtlasCardTitleWrap>
+                  <AtlasCardTitle>역사 정치체 존속 비례 랭킹 · 탐색</AtlasCardTitle>
+                  <AtlasCardBadge>
+                    검색 결과 {filteredHistoricalAtlasList.totalMatched}개국
+                  </AtlasCardBadge>
+                </AtlasCardTitleWrap>
+
+                <ContinentHeaderControls>
+                  <HistAtlasSearchInput
+                    type="search"
+                    value={histSearch}
+                    onChange={(e) => setHistSearch(e.target.value)}
+                    placeholder="역사 국호 · 영문명 · 연도 검색…"
+                    aria-label="역사 정치체 검색"
+                  />
+
+                  <RankModeGroup role="tablist" aria-label="역사 정치체 정렬 기준">
+                    <RankModeBtn
+                      type="button"
+                      role="tab"
+                      aria-selected={histSort === 'duration'}
+                      $active={histSort === 'duration'}
+                      onClick={() => setHistSort('duration')}
+                    >
+                      최장 존속순
+                    </RankModeBtn>
+                    <RankModeBtn
+                      type="button"
+                      role="tab"
+                      aria-selected={histSort === 'ancient'}
+                      $active={histSort === 'ancient'}
+                      onClick={() => setHistSort('ancient')}
+                    >
+                      고대 성립순
+                    </RankModeBtn>
+                    <RankModeBtn
+                      type="button"
+                      role="tab"
+                      aria-selected={histSort === 'modern'}
+                      $active={histSort === 'modern'}
+                      onClick={() => setHistSort('modern')}
+                    >
+                      근현대순
+                    </RankModeBtn>
+                  </RankModeGroup>
+                </ContinentHeaderControls>
+              </AtlasCardHead>
+
+              {filteredHistoricalAtlasList.items.length === 0 ? (
+                <CoverageSubText>
+                  선택한 시대·국체 필터나 검색어에 해당하는 역사 정치체가 없습니다.
+                </CoverageSubText>
+              ) : (
+                <RankingTwoColGrid>
+                  {filteredHistoricalAtlasList.items.map(
+                    ({ item, rank, duration, ratioPct, isUnlinked }) => {
+                      const flagSrc = item.thumbnailUrl
+                        ? getUploadImageUrl(item.thumbnailUrl)
+                        : null
+                      const periodText = formatCountryPeriod(item)
+                      return (
+                        <RankingBarCard
+                          key={item.id}
+                          type="button"
+                          onClick={() =>
+                            navigate(pathKeys.countryDetail(item.id))
+                          }
+                        >
+                          <RankingIndex $top={rank <= 3}>{rank}</RankingIndex>
+                          <ExplorerFlagBox>
+                            {flagSrc ? (
+                              <img src={flagSrc} alt="" />
+                            ) : (
+                              <FiCompass size={13} aria-hidden />
+                            )}
+                          </ExplorerFlagBox>
+                          <RankingMainCol>
+                            <RankingTopLine>
+                              <ExplorerCardName>
+                                {item.name}
+                                {isUnlinked ? ' (미연결)' : ''}
+                              </ExplorerCardName>
+                              <RankingMetricText>
+                                {duration > 0
+                                  ? `약 ${duration.toLocaleString('ko-KR')}년`
+                                  : periodText || '연대 미상'}
+                              </RankingMetricText>
+                            </RankingTopLine>
+                            {periodText && duration > 0 && (
+                              <ExplorerCardMeta>{periodText}</ExplorerCardMeta>
+                            )}
+                            <RankingTrack>
+                              <RankingFill
+                                $pct={ratioPct}
+                                $top={rank <= 3}
+                              />
+                            </RankingTrack>
+                          </RankingMainCol>
+                        </RankingBarCard>
+                      )
+                    },
+                  )}
+                </RankingTwoColGrid>
+              )}
+            </AtlasBentoCard>
+          </>
+        ) : (
+          <>
         {/* 2단: 대륙별 주권국 비례 바 & 시대별 역사 정치체 밀도 히스토그램 */}
         <AtlasBentoGrid>
           <AtlasBentoCard aria-label="대륙별 현대 국가 분포">
-            <AtlasCardHead>
+            <AtlasCardHead $wrap>
               <AtlasCardTitleWrap>
                 <AtlasCardTitle>대륙별 주권국 분포</AtlasCardTitle>
                 <AtlasCardBadge>
                   {continentStats.items.length}개 권역
                 </AtlasCardBadge>
               </AtlasCardTitleWrap>
-              {continentFilter ? (
-                <ExplorerResetBtn
-                  type="button"
-                  onClick={() => setContinentFilter('')}
-                >
-                  필터 해제 ({selectedContinentName})
-                </ExplorerResetBtn>
-              ) : (
-                <AtlasCardHint>막대 클릭 시 좌측 목록 필터</AtlasCardHint>
-              )}
+              <ContinentHeaderControls>
+                <RankModeGroup role="tablist" aria-label="대륙 비교 기준">
+                  <RankModeBtn
+                    type="button"
+                    role="tab"
+                    aria-selected={continentMetric === 'count'}
+                    $active={continentMetric === 'count'}
+                    onClick={() => setContinentMetric('count')}
+                  >
+                    국가 수
+                  </RankModeBtn>
+                  <RankModeBtn
+                    type="button"
+                    role="tab"
+                    aria-selected={continentMetric === 'population'}
+                    $active={continentMetric === 'population'}
+                    onClick={() => setContinentMetric('population')}
+                  >
+                    인구
+                  </RankModeBtn>
+                  <RankModeBtn
+                    type="button"
+                    role="tab"
+                    aria-selected={continentMetric === 'area'}
+                    $active={continentMetric === 'area'}
+                    onClick={() => setContinentMetric('area')}
+                  >
+                    면적
+                  </RankModeBtn>
+                </RankModeGroup>
+                {continentFilter ? (
+                  <ExplorerResetBtn
+                    type="button"
+                    onClick={() => setContinentFilter('')}
+                  >
+                    필터 해제 ({selectedContinentName})
+                  </ExplorerResetBtn>
+                ) : null}
+              </ContinentHeaderControls>
             </AtlasCardHead>
 
             <ContinentBarList>
               {continentStats.items.map((cont) => {
                 const isSelected = continentFilter === cont.id
                 const isDimmed = Boolean(continentFilter) && !isSelected
-                const barPct = Math.max(
-                  6,
-                  Math.round((cont.count / continentStats.maxCount) * 100),
-                )
+                const barPct =
+                  cont.metricVal > 0
+                    ? Math.max(
+                        6,
+                        Math.round(
+                          (cont.metricVal / continentStats.maxMetricVal) * 100,
+                        ),
+                      )
+                    : 4
                 const popText = formatExplorerPopulation(cont.population)
+                const areaText = formatExplorerArea(cont.area)
+                const primaryMetricLabel =
+                  continentMetric === 'population'
+                    ? popText ?? '미집계'
+                    : continentMetric === 'area'
+                      ? areaText ?? '미집계'
+                      : `${cont.count}개국`
+                const secondaryMetaLabel =
+                  continentMetric === 'count'
+                    ? popText
+                      ? `인구 ${popText}`
+                      : null
+                    : `${cont.count}개국`
                 return (
                   <ContinentBarRow
                     key={cont.id}
@@ -1037,12 +1690,16 @@ function EmptyState({
                         {cont.name}
                       </ContinentName>
                       <ContinentRightMeta>
-                        {popText ? (
-                          <ContinentPopMeta>인구 {popText}</ContinentPopMeta>
+                        {secondaryMetaLabel ? (
+                          <ContinentPopMeta>
+                            {secondaryMetaLabel}
+                          </ContinentPopMeta>
                         ) : null}
                         <ContinentCountValue>
-                          {cont.count}개국
-                          <ContinentSharePct>({cont.sharePct}%)</ContinentSharePct>
+                          {primaryMetricLabel}
+                          <ContinentSharePct>
+                            ({cont.activeSharePct}%)
+                          </ContinentSharePct>
                         </ContinentCountValue>
                       </ContinentRightMeta>
                     </ContinentRowTop>
@@ -1177,7 +1834,7 @@ function EmptyState({
                 <div>
                   <AtlasCardTitleWrap>
                     <AtlasCardTitle>
-                      글로벌 스케일 Top 8
+                      월드 버블 아틀라스 · 스케일 Top 8
                       {selectedContinentName ? ` · ${selectedContinentName}` : ''}
                     </AtlasCardTitle>
                     <AtlasCardBadge>
@@ -1185,7 +1842,7 @@ function EmptyState({
                     </AtlasCardBadge>
                   </AtlasCardTitleWrap>
                   <CoverageSubText>
-                    등록 지표 기준 상위 국가 비례 비교 · 클릭 시 국가 대시보드로 이동
+                    세계 지도 버블 및 상위 8개국 비례 랭킹 · 호버하여 지표 확인, 클릭 시 대시보드 이동
                   </CoverageSubText>
                 </div>
               </CoverageLeadGroup>
@@ -1221,6 +1878,156 @@ function EmptyState({
               </RankModeGroup>
             </AtlasCardHead>
 
+            {atlasWorldPoints.length > 0 && (
+              <WorldAtlasFrame
+                onMouseLeave={() => setHoveredAtlasId(null)}
+              >
+                <WorldAtlasStatusBar>
+                  {hoveredAtlasEntry ? (
+                    <WorldAtlasCallout>
+                      <WorldAtlasCalloutName>
+                        {hoveredAtlasEntry.country.flagEmoji ? (
+                          <span>{hoveredAtlasEntry.country.flagEmoji}</span>
+                        ) : null}
+                        <strong>{hoveredAtlasEntry.country.name}</strong>
+                        {hoveredAtlasEntry.country.capital ? (
+                          <WorldAtlasCalloutSub>
+                            수도 {hoveredAtlasEntry.country.capital}
+                          </WorldAtlasCalloutSub>
+                        ) : null}
+                      </WorldAtlasCalloutName>
+                      <WorldAtlasCalloutMetric>
+                        {rankMetric === 'population'
+                          ? `인구 ${formatExplorerPopulation(hoveredAtlasEntry.metricValue) ?? '미입력'}`
+                          : rankMetric === 'area'
+                            ? `면적 ${formatExplorerArea(hoveredAtlasEntry.metricValue) ?? '미입력'}`
+                            : `연결 역사국가 ${hoveredAtlasEntry.metricValue}개국`}
+                        <span>· 클릭 시 대시보드 열기</span>
+                      </WorldAtlasCalloutMetric>
+                    </WorldAtlasCallout>
+                  ) : (
+                    <WorldAtlasIdleMeta>
+                      <span>
+                        좌표 등록 {atlasWorldPoints.length}개국 플로팅 (원 크기 ={' '}
+                        {rankMetric === 'population'
+                          ? '인구 비례'
+                          : rankMetric === 'area'
+                            ? '영토 면적 비례'
+                            : '연결 역사국가 비례'}
+                        )
+                      </span>
+                      <span>
+                        {selectedContinentName
+                          ? `${selectedContinentName} 권역 하이라이트 중`
+                          : '버블 또는 하단 랭킹 호버 시 위치 연동'}
+                      </span>
+                    </WorldAtlasIdleMeta>
+                  )}
+                </WorldAtlasStatusBar>
+
+                <WorldAtlasSvg
+                  viewBox={`0 0 ${ATLAS_VIEW_W} ${ATLAS_VIEW_H}`}
+                  role="img"
+                  aria-label="세계 주권국 버블 아틀라스 지도"
+                >
+                  {/* 경위선 그리드 (적도, 남북회귀선, 본초자오선 등) */}
+                  {[60, 30, 0, -30, -60].map((lat) => {
+                    const [, gy] = projectLonLat(0, lat)
+                    return (
+                      <WorldGraticuleLine
+                        key={`lat-${lat}`}
+                        x1={0}
+                        y1={gy}
+                        x2={ATLAS_VIEW_W}
+                        y2={gy}
+                        $major={lat === 0}
+                      />
+                    )
+                  })}
+                  {[-120, -60, 0, 60, 120].map((lng) => {
+                    const [gx] = projectLonLat(lng, 0)
+                    return (
+                      <WorldGraticuleLine
+                        key={`lng-${lng}`}
+                        x1={gx}
+                        y1={0}
+                        x2={gx}
+                        y2={ATLAS_VIEW_H}
+                        $major={lng === 0}
+                      />
+                    )
+                  })}
+
+                  {/* 대륙 실루엣 배경 폴리곤 */}
+                  {PROJECTED_LANDMASS_PATHS.map((land) => (
+                    <WorldLandmassPolygon
+                      key={land.key}
+                      points={land.points}
+                    />
+                  ))}
+
+                  {/* 호버 십자선 레티클 */}
+                  {hoveredAtlasEntry &&
+                    hoveredAtlasEntry.x != null &&
+                    hoveredAtlasEntry.y != null && (
+                      <g pointerEvents="none">
+                        <WorldReticleLine
+                          x1={hoveredAtlasEntry.x}
+                          y1={0}
+                          x2={hoveredAtlasEntry.x}
+                          y2={ATLAS_VIEW_H}
+                        />
+                        <WorldReticleLine
+                          x1={0}
+                          y1={hoveredAtlasEntry.y}
+                          x2={ATLAS_VIEW_W}
+                          y2={hoveredAtlasEntry.y}
+                        />
+                      </g>
+                    )}
+
+                  {/* 국가별 비례 버블 핀 */}
+                  {atlasWorldPoints.map(({ country: c, x, y, radius }) => {
+                    const isContinentMatch =
+                      !continentFilter || c.continentId === continentFilter
+                    const isHovered = hoveredAtlasId === c.id
+                    const isTop3 = top3CountryIds.has(c.id)
+                    return (
+                      <WorldCountryBubbleGroup
+                        key={c.id}
+                        transform={`translate(${x}, ${y})`}
+                        $dimmed={!isContinentMatch && !isHovered}
+                        onMouseEnter={() => setHoveredAtlasId(c.id)}
+                        onFocus={() => setHoveredAtlasId(c.id)}
+                        onClick={() => navigate(pathKeys.countryDetail(c.id))}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`${c.name} 대시보드로 이동`}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            navigate(pathKeys.countryDetail(c.id))
+                          }
+                        }}
+                      >
+                        {(isTop3 || isHovered) && (
+                          <WorldBubbleHalo
+                            r={radius + (isHovered ? 4 : 2.5)}
+                            $hovered={isHovered}
+                          />
+                        )}
+                        <WorldBubbleDot
+                          r={isHovered ? radius + 1.2 : radius}
+                          $hovered={isHovered}
+                          $highlighted={isTop3 || Boolean(continentFilter && isContinentMatch)}
+                        />
+                      </WorldCountryBubbleGroup>
+                    )
+                  })}
+                </WorldAtlasSvg>
+              </WorldAtlasFrame>
+            )}
+
             <RankingTwoColGrid>
               {rankedModernCountries.map(({ country: item, rank, metricValue, ratioPct }) => {
                 const flagSrc = item.thumbnailUrl
@@ -1237,6 +2044,9 @@ function EmptyState({
                   <RankingBarCard
                     key={item.id}
                     type="button"
+                    $hovered={hoveredAtlasId === item.id}
+                    onMouseEnter={() => setHoveredAtlasId(item.id)}
+                    onMouseLeave={() => setHoveredAtlasId(null)}
                     onClick={() => navigate(pathKeys.countryDetail(item.id))}
                   >
                     <RankingIndex $top={rank <= 3}>{rank}</RankingIndex>
@@ -1326,6 +2136,8 @@ function EmptyState({
             </ExplorerGrid>
           </ExplorerSection>
         )}
+          </>
+        )}
       </ExplorerInner>
     </ExplorerContainer>
   )
@@ -1361,6 +2173,13 @@ const ExplorerHeaderText = styled.div`
   display: flex;
   flex-direction: column;
   gap: 5px;
+`
+
+const ExplorerHeaderRight = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 `
 
 const ExplorerEyebrow = styled.span`
@@ -1630,15 +2449,18 @@ const EraColumnsGrid = styled.div`
   padding-top: 4px;
 `
 
-const EraColumnButton = styled.button`
+const EraColumnButton = styled.button<{ $active?: boolean }>`
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
   padding: 6px 4px;
-  border: 1px solid transparent;
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? ledgerAccentBorder(theme.mode) : 'transparent'};
   border-radius: 7px;
-  background: transparent;
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
   font-family: inherit;
   cursor: pointer;
   transition:
@@ -1646,8 +2468,74 @@ const EraColumnButton = styled.button`
     border-color ${MOTION.fast} ease;
 
   &:hover {
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-    border-color: ${({ theme }) => ledgerHairline(theme.mode)};
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+    border-color: ${({ theme, $active }) =>
+      $active ? ledgerAccentBorder(theme.mode) : ledgerHairline(theme.mode)};
+  }
+`
+
+const HistFilterPillBtn = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 7px;
+  border-radius: 5px;
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? ledgerAccentBorder(theme.mode) : ledgerHairline(theme.mode)};
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  font-family: inherit;
+  font-size: 11px;
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  cursor: pointer;
+  ${DIGIT_DISPLAY}
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+  }
+`
+
+const HistBridgeSummaryRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+
+  strong {
+    color: ${({ theme }) => theme.colors.text.primary};
+    font-weight: 700;
+  }
+`
+
+const HistAtlasSearchInput = styled.input`
+  width: min(210px, 100%);
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  font-family: inherit;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.primary};
+  outline: none;
+
+  &:focus {
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 `
 
@@ -1832,6 +2720,165 @@ const RankModeBtn = styled.button<{ $active: boolean }>`
   }
 `
 
+const ContinentHeaderControls = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+`
+
+const WorldAtlasFrame = styled.div`
+  display: flex;
+  flex-direction: column;
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  border-radius: 8px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(15, 23, 42, 0.42)'
+      : 'rgba(248, 250, 252, 0.72)'};
+  overflow: hidden;
+`
+
+const WorldAtlasStatusBar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+`
+
+const WorldAtlasCallout = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  flex-wrap: wrap;
+`
+
+const WorldAtlasCalloutName = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+`
+
+const WorldAtlasCalloutSub = styled.span`
+  font-size: 11px;
+  ${metaText}
+`
+
+const WorldAtlasCalloutMetric = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  ${DIGIT_DISPLAY}
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  span {
+    font-size: 11px;
+    font-weight: 500;
+    ${metaText}
+  }
+`
+
+const WorldAtlasIdleMeta = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  flex-wrap: wrap;
+  font-size: 11px;
+  ${DIGIT_DISPLAY}
+  ${metaText}
+`
+
+const WorldAtlasSvg = styled.svg`
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 290px;
+  user-select: none;
+`
+
+const WorldGraticuleLine = styled.line<{ $major?: boolean }>`
+  stroke: ${({ theme, $major }) =>
+    $major
+      ? ledgerHairlineStrong(theme.mode)
+      : ledgerHairline(theme.mode)};
+  stroke-width: ${({ $major }) => ($major ? 0.9 : 0.6)};
+  stroke-dasharray: ${({ $major }) => ($major ? 'none' : '2.5 3.5')};
+`
+
+const WorldLandmassPolygon = styled.polygon`
+  fill: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(148, 163, 184, 0.13)'
+      : 'rgba(100, 116, 139, 0.11)'};
+  stroke: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(148, 163, 184, 0.26)'
+      : 'rgba(100, 116, 139, 0.24)'};
+  stroke-width: 0.7;
+  stroke-linejoin: round;
+`
+
+const WorldReticleLine = styled.line`
+  stroke: ${({ theme }) => ledgerAccent(theme.mode)};
+  stroke-width: 0.75;
+  stroke-dasharray: 3 3;
+  opacity: 0.55;
+`
+
+const WorldCountryBubbleGroup = styled.g<{ $dimmed: boolean }>`
+  cursor: pointer;
+  opacity: ${({ $dimmed }) => ($dimmed ? 0.2 : 1)};
+  transition: opacity ${MOTION.fast} ease;
+  outline: none;
+`
+
+const WorldBubbleHalo = styled.circle<{ $hovered: boolean }>`
+  fill: ${({ theme, $hovered }) =>
+    $hovered
+      ? theme.mode === 'dark'
+        ? 'rgba(165, 180, 252, 0.24)'
+        : 'rgba(79, 70, 229, 0.18)'
+      : 'transparent'};
+  stroke: ${({ theme }) => ledgerAccent(theme.mode)};
+  stroke-width: ${({ $hovered }) => ($hovered ? 1.2 : 0.85)};
+  opacity: ${({ $hovered }) => ($hovered ? 0.95 : 0.55)};
+`
+
+const WorldBubbleDot = styled.circle<{
+  $hovered: boolean
+  $highlighted: boolean
+}>`
+  fill: ${({ theme, $hovered, $highlighted }) =>
+    $hovered
+      ? ledgerAccent(theme.mode)
+      : $highlighted
+        ? theme.mode === 'dark'
+          ? 'rgba(165, 180, 252, 0.86)'
+          : 'rgba(79, 70, 229, 0.82)'
+        : theme.mode === 'dark'
+          ? 'rgba(165, 180, 252, 0.52)'
+          : 'rgba(79, 70, 229, 0.5)'};
+  stroke: ${({ theme }) => ledgerBackground(theme.mode)};
+  stroke-width: 0.9;
+  transition: r ${MOTION.fast} ease, fill ${MOTION.fast} ease;
+`
+
 const RankingTwoColGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1842,14 +2889,17 @@ const RankingTwoColGrid = styled.div`
   }
 `
 
-const RankingBarCard = styled.button`
+const RankingBarCard = styled.button<{ $hovered?: boolean }>`
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  border: 1px solid
+    ${({ theme, $hovered }) =>
+      $hovered ? ledgerAccentBorder(theme.mode) : ledgerHairline(theme.mode)};
   border-radius: 8px;
-  background: transparent;
+  background: ${({ theme, $hovered }) =>
+    $hovered ? ledgerAccentSubtle(theme.mode) : 'transparent'};
   text-align: left;
   font-family: inherit;
   cursor: pointer;
@@ -1859,7 +2909,7 @@ const RankingBarCard = styled.button`
     background ${MOTION.fast} ease;
 
   &:hover {
-    border-color: ${({ theme }) => ledgerHairlineHover(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
     background: ${({ theme }) => ledgerHoverFill(theme.mode)};
   }
 `

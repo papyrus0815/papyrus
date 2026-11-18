@@ -7,8 +7,31 @@
  */
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
-import styled from 'styled-components'
+import { FiX } from 'react-icons/fi'
+import styled, { useTheme } from 'styled-components'
 
+import {
+  BentoCard,
+  BentoCardBadge,
+  BentoCardBody,
+  BentoCardHeader,
+  BentoCardTitle,
+  BentoCardTitleGroup,
+  BentoGrid2Col,
+  type SegmentSlice,
+  StackedSegmentBar,
+} from '@/entities/event/ui/bento-primitives'
+import {
+  DIGIT_DISPLAY,
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentSubtle,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  ledgerSubtleFill,
+  MOTION,
+} from '@/entities/event/ui/ledger-tokens'
 import {
   useCreateDynasty,
   useDeleteDynasty,
@@ -41,10 +64,6 @@ import {
   EraGroupCount,
   EraGroupMarker,
   HeaderTopRow,
-  KpiInlineGroup,
-  KpiInlineItem,
-  KpiInlineLabel,
-  KpiInlineValue,
   PageTitle,
   RowList,
   ScrollBody,
@@ -138,6 +157,23 @@ function centuryLabel(century: number): string {
   return `BC ${Math.abs(century)}년대`
 }
 
+/** 창건 세기 번호 (예: 1392 → 14, -57 → -1) */
+function foundingCenturyNum(year: number | null): number | null {
+  if (year == null) return null
+  if (year === 0) return 1
+  return year > 0
+    ? Math.floor((year - 1) / 100) + 1
+    : -(Math.floor((Math.abs(year) - 1) / 100) + 1)
+}
+
+function foundingCenturyFullLabel(c: number): string {
+  return c < 0 ? `BC ${Math.abs(c)}세기` : `${c}세기`
+}
+
+function foundingCenturyShortLabel(c: number): string {
+  return c < 0 ? `BC${Math.abs(c)}C` : `${c}C`
+}
+
 /** 빈 문자열은 편집 시 null(=clear), 신규 시 undefined(=skip)로. */
 function emptyToNullOrUndefined(
   value: string,
@@ -149,6 +185,8 @@ function emptyToNullOrUndefined(
 }
 
 export function DynastySection() {
+  const theme = useTheme()
+  const isDarkMode = theme.mode === 'dark'
   const { data: dynasties = [], isLoading, isError, refetch } = useDynasties()
   const createDynasty = useCreateDynasty()
   const updateDynasty = useUpdateDynasty()
@@ -169,6 +207,9 @@ export function DynastySection() {
   const [sort, setSort] = useState<SortKey>('era')
   const [sortDir, setSortDir] = useState<SortDir>(defaultDirFor('era'))
   const [status, setStatus] = useState<StatusFilter>('all')
+  const [selectedFoundingCentury, setSelectedFoundingCentury] = useState<
+    number | null
+  >(null)
   // 다중 expand 허용 — Set 으로 보관
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
   // 스크롤 컨테이너 + 헤더 compact 토글
@@ -208,13 +249,93 @@ export function DynastySection() {
     return { avgDuration, eraSpan, ongoingCount, endedCount }
   }, [allDerived])
 
+  const bentoStats = useMemo(() => {
+    const centuryMap = new Map<number, number>()
+    let undatedCount = 0
+
+    for (const d of allDerived) {
+      const c = foundingCenturyNum(d.startYear)
+      if (c == null) undatedCount += 1
+      else centuryMap.set(c, (centuryMap.get(c) ?? 0) + 1)
+    }
+
+    const centuryBars = [...centuryMap.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([century, count]) => ({
+        century,
+        count,
+        shortLabel: foundingCenturyShortLabel(century),
+        fullLabel: foundingCenturyFullLabel(century),
+      }))
+
+    const maxCenturyCount = centuryBars.reduce(
+      (max, item) => Math.max(max, item.count),
+      1,
+    )
+
+    const top5Longest = [...allDerived]
+      .filter((d) => d.duration != null && d.duration > 0)
+      .sort((a, b) => (b.duration ?? 0) - (a.duration ?? 0))
+      .slice(0, 5)
+    const maxTopDuration = top5Longest[0]?.duration ?? 1
+
+    const knownTotal = globalStats.ongoingCount + globalStats.endedCount
+    const ongoingPct =
+      knownTotal > 0
+        ? Math.round((globalStats.ongoingCount / knownTotal) * 100)
+        : 0
+    const endedPct = knownTotal > 0 ? 100 - ongoingPct : 0
+
+    const statusSlices: SegmentSlice[] = [
+      {
+        key: 'ongoing',
+        label: '현존 · 진행',
+        value: globalStats.ongoingCount,
+        color: isDarkMode ? '#a5b4fc' : '#4f46e5',
+        meta: `${globalStats.ongoingCount.toLocaleString('ko-KR')} (${ongoingPct}%)`,
+      },
+      {
+        key: 'ended',
+        label: '단절 · 종료',
+        value: globalStats.endedCount,
+        color: isDarkMode ? '#94a3b8' : '#64748b',
+        meta: `${globalStats.endedCount.toLocaleString('ko-KR')} (${endedPct}%)`,
+      },
+      ...(undatedCount > 0
+        ? [
+            {
+              key: 'undated',
+              label: '연도 미상',
+              value: undatedCount,
+              color: isDarkMode ? '#475569' : '#cbd5e1',
+            },
+          ]
+        : []),
+    ]
+
+    return {
+      centuryBars,
+      maxCenturyCount,
+      undatedCount,
+      top5Longest,
+      maxTopDuration,
+      statusSlices,
+    }
+  }, [allDerived, globalStats, isDarkMode])
+
   // 필터 + 정렬
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return allDerived
-      .filter((d) => matchesQuery(d.dynasty, q) && matchesStatus(d, status))
+      .filter(
+        (d) =>
+          matchesQuery(d.dynasty, q) &&
+          matchesStatus(d, status) &&
+          (selectedFoundingCentury === null ||
+            foundingCenturyNum(d.startYear) === selectedFoundingCentury),
+      )
       .sort(compareBy(sort, sortDir))
-  }, [allDerived, query, status, sort, sortDir])
+  }, [allDerived, query, status, selectedFoundingCentury, sort, sortDir])
 
   // 타임라인 축 — 필터 결과 기준으로 재계산해 막대가 의미있는 너비를 가짐
   const axis = useMemo(() => {
@@ -348,7 +469,24 @@ export function DynastySection() {
     })
   }
 
-  const isFiltering = query.trim().length > 0 || status !== 'all'
+  const isFiltering =
+    query.trim().length > 0 ||
+    status !== 'all' ||
+    selectedFoundingCentury !== null
+
+  const handleFocusDynasty = (dynastyId: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      next.add(dynastyId)
+      return next
+    })
+    requestAnimationFrame(() => {
+      const anchor = scrollRootRef.current?.querySelector(
+        `[data-entity-id="${CSS.escape(dynastyId)}"]`,
+      )
+      anchor?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  }
 
   return (
     <SectionRoot ref={scrollRootRef}>
@@ -357,41 +495,10 @@ export function DynastySection() {
           <HeaderTopRow>
             <TitleCluster>
               <PageTitle>가문</PageTitle>
-              {totalCount > 0 && !headerCompact && (
-                <KpiInlineGroup>
-                  <KpiInlineItem>
-                    <KpiInlineLabel>등록</KpiInlineLabel>
-                    <KpiInlineValue>{totalCount.toLocaleString()}</KpiInlineValue>
-                  </KpiInlineItem>
-                  {(globalStats.ongoingCount > 0 || globalStats.endedCount > 0) && (
-                    <KpiInlineItem>
-                      <KpiInlineLabel>상태</KpiInlineLabel>
-                      <KpiInlineValue>
-                        진행 {globalStats.ongoingCount.toLocaleString()} · 종료{' '}
-                        {globalStats.endedCount.toLocaleString()}
-                      </KpiInlineValue>
-                    </KpiInlineItem>
-                  )}
-                  {globalStats.avgDuration != null && (
-                    <KpiInlineItem>
-                      <KpiInlineLabel>평균 존속</KpiInlineLabel>
-                      <KpiInlineValue>
-                        {globalStats.avgDuration.toLocaleString()}년
-                      </KpiInlineValue>
-                    </KpiInlineItem>
-                  )}
-                  {globalStats.eraSpan && (
-                    <KpiInlineItem>
-                      <KpiInlineLabel>시대</KpiInlineLabel>
-                      <KpiInlineValue>
-                        {formatCountryYearShort(globalStats.eraSpan.min)} –{' '}
-                        {globalStats.eraSpan.max != null
-                          ? formatCountryYearShort(globalStats.eraSpan.max)
-                          : '현재'}
-                      </KpiInlineValue>
-                    </KpiInlineItem>
-                  )}
-                </KpiInlineGroup>
+              {totalCount > 0 && (
+                <BentoCardBadge>
+                  {totalCount.toLocaleString('ko-KR')}개 가문
+                </BentoCardBadge>
               )}
             </TitleCluster>
             <SecondaryButton type="button" onClick={openCreate} aria-label="새 가문 추가">
@@ -421,6 +528,152 @@ export function DynastySection() {
       </StickyHeader>
 
       <ScrollBody>
+        {!isLoading && !isError && totalCount > 0 && (
+          <BentoSummarySection>
+            <BentoGrid2Col aria-label="가문 창건 시대 및 존속 기간 요약">
+              <BentoCard>
+                <BentoCardHeader>
+                  <BentoCardTitleGroup>
+                    <BentoCardTitle>시대·세기별 가문·왕조 창건 분포</BentoCardTitle>
+                    {globalStats.eraSpan && (
+                      <BentoCardBadge>
+                        {formatCountryYearShort(globalStats.eraSpan.min)} –{' '}
+                        {globalStats.eraSpan.max != null
+                          ? formatCountryYearShort(globalStats.eraSpan.max)
+                          : '현재'}
+                      </BentoCardBadge>
+                    )}
+                  </BentoCardTitleGroup>
+                  {selectedFoundingCentury !== null && (
+                    <CenturyResetBtn
+                      type="button"
+                      onClick={() => setSelectedFoundingCentury(null)}
+                    >
+                      {foundingCenturyFullLabel(selectedFoundingCentury)} 해제{' '}
+                      <FiX size={11} />
+                    </CenturyResetBtn>
+                  )}
+                </BentoCardHeader>
+                <BentoCardBody>
+                  {bentoStats.centuryBars.length > 0 ? (
+                    <>
+                      <DynastyHistogram role="group" aria-label="세기별 창건 가문 히스토그램">
+                        {bentoStats.centuryBars.map((bar) => {
+                          const active = selectedFoundingCentury === bar.century
+                          const dimmed =
+                            selectedFoundingCentury !== null &&
+                            selectedFoundingCentury !== bar.century
+                          const pct = Math.max(
+                            12,
+                            Math.round(
+                              (bar.count / bentoStats.maxCenturyCount) * 100,
+                            ),
+                          )
+                          return (
+                            <DynastyHistBtn
+                              key={bar.century}
+                              type="button"
+                              $active={active}
+                              $dimmed={dimmed}
+                              aria-pressed={active}
+                              title={`${bar.fullLabel}: ${bar.count}개 가문 — 클릭하여 필터`}
+                              onClick={() =>
+                                setSelectedFoundingCentury((prev) =>
+                                  prev === bar.century ? null : bar.century,
+                                )
+                              }
+                            >
+                              <DynastyHistCount $active={active}>
+                                {bar.count}
+                              </DynastyHistCount>
+                              <DynastyHistTrack>
+                                <DynastyHistFill
+                                  $active={active}
+                                  style={{ height: `${pct}%` }}
+                                />
+                              </DynastyHistTrack>
+                              <DynastyHistLabel $active={active}>
+                                {bar.shortLabel}
+                              </DynastyHistLabel>
+                            </DynastyHistBtn>
+                          )
+                        })}
+                      </DynastyHistogram>
+                      <BentoNoteText>
+                        막대를 클릭하면 해당 세기 창건 가문만 필터링합니다
+                        {bentoStats.undatedCount > 0
+                          ? ` · 창건연도 미상 ${bentoStats.undatedCount}개`
+                          : ''}
+                      </BentoNoteText>
+                    </>
+                  ) : (
+                    <BentoNoteText>
+                      창건 연도가 기록된 가문이 없습니다.
+                    </BentoNoteText>
+                  )}
+                </BentoCardBody>
+              </BentoCard>
+
+              <BentoCard>
+                <BentoCardHeader>
+                  <BentoCardTitleGroup>
+                    <BentoCardTitle>최장 존속 가문 Top 5 · 현존 비율</BentoCardTitle>
+                    {globalStats.avgDuration != null && (
+                      <BentoCardBadge>
+                        평균 {globalStats.avgDuration.toLocaleString('ko-KR')}년
+                      </BentoCardBadge>
+                    )}
+                  </BentoCardTitleGroup>
+                </BentoCardHeader>
+                <BentoCardBody>
+                  {bentoStats.top5Longest.length > 0 && (
+                    <TopDynastyList>
+                      {bentoStats.top5Longest.map((item, idx) => {
+                        const widthPct = Math.max(
+                          6,
+                          Math.round(
+                            ((item.duration ?? 0) / bentoStats.maxTopDuration) *
+                              100,
+                          ),
+                        )
+                        return (
+                          <TopDynastyRow
+                            key={item.dynasty.id}
+                            type="button"
+                            onClick={() => handleFocusDynasty(item.dynasty.id)}
+                            title={`${item.dynasty.name} 행으로 이동 및 펼치기`}
+                          >
+                            <TopRank>{idx + 1}</TopRank>
+                            <TopName>{item.dynasty.name}</TopName>
+                            <TopBarTrack aria-hidden>
+                              <TopBarFill
+                                $ongoing={item.ongoing}
+                                style={{ width: `${widthPct}%` }}
+                              />
+                            </TopBarTrack>
+                            <TopDuration>
+                              {(item.duration ?? 0).toLocaleString('ko-KR')}년
+                              {item.ongoing ? <em>현존</em> : null}
+                            </TopDuration>
+                          </TopDynastyRow>
+                        )
+                      })}
+                    </TopDynastyList>
+                  )}
+                  <BentoSectionRule />
+                  <StatusDistWrap>
+                    <StatusDistLabel>현존 · 단절 가문 비율</StatusDistLabel>
+                    <StackedSegmentBar
+                      slices={bentoStats.statusSlices}
+                      height={8}
+                    />
+                  </StatusDistWrap>
+                </BentoCardBody>
+              </BentoCard>
+            </BentoGrid2Col>
+          </BentoSummarySection>
+        )}
+
         {isLoading ? (
           <DynastySkeleton />
         ) : isError ? (
@@ -443,6 +696,7 @@ export function DynastySection() {
                   onClick={() => {
                     setQuery('')
                     setStatus('all')
+                    setSelectedFoundingCentury(null)
                   }}
                 >
                   필터 초기화
@@ -553,6 +807,205 @@ const InlineLinkBtn = styled.button`
   font: inherit;
   padding: 0;
   &:hover {
-    color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
+`
+
+const BentoSummarySection = styled.div`
+  margin-bottom: 16px;
+`
+
+const CenturyResetBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  ${DIGIT_DISPLAY}
+`
+
+const DynastyHistogram = styled.div`
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(28px, 1fr);
+  gap: 6px;
+  align-items: end;
+  overflow-x: auto;
+  padding-top: 4px;
+`
+
+const DynastyHistBtn = styled.button<{ $active: boolean; $dimmed: boolean }>`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 2px;
+  border-radius: 6px;
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? ledgerAccentBorder(theme.mode) : 'transparent'};
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  opacity: ${({ $dimmed }) => ($dimmed ? 0.45 : 1)};
+  cursor: pointer;
+  transition:
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    opacity ${MOTION.fast} ease;
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    opacity: 1;
+  }
+`
+
+const DynastyHistCount = styled.span<{ $active: boolean }>`
+  ${DIGIT_DISPLAY}
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+`
+
+const DynastyHistTrack = styled.span`
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  max-width: 24px;
+  height: 64px;
+  border-radius: 3px 3px 0 0;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  overflow: hidden;
+`
+
+const DynastyHistFill = styled.span<{ $active: boolean }>`
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
+  opacity: ${({ $active }) => ($active ? 1 : 0.72)};
+  transition: height ${MOTION.normal} ease, opacity ${MOTION.fast} ease;
+`
+
+const DynastyHistLabel = styled.span<{ $active: boolean }>`
+  ${DIGIT_DISPLAY}
+  font-size: 10px;
+  font-weight: ${({ $active }) => ($active ? 700 : 600)};
+  white-space: nowrap;
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
+`
+
+const BentoNoteText = styled.div`
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+`
+
+const TopDynastyList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const TopDynastyRow = styled.button`
+  display: grid;
+  grid-template-columns: 18px minmax(88px, 128px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background ${MOTION.fast} ease;
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+`
+
+const TopRank = styled.span`
+  ${DIGIT_DISPLAY}
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const TopName = styled.span`
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const TopBarTrack = styled.span`
+  display: block;
+  height: 7px;
+  border-radius: 999px;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  overflow: hidden;
+`
+
+const TopBarFill = styled.span<{ $ongoing: boolean }>`
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: ${({ theme, $ongoing }) =>
+    $ongoing
+      ? ledgerAccent(theme.mode)
+      : theme.mode === 'dark'
+        ? 'rgba(165,180,252,0.58)'
+        : 'rgba(79,70,229,0.62)'};
+`
+
+const TopDuration = styled.span`
+  ${DIGIT_DISPLAY}
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+
+  em {
+    font-style: normal;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+`
+
+const BentoSectionRule = styled.div`
+  height: 1px;
+  background: ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const StatusDistWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const StatusDistLabel = styled.div`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `

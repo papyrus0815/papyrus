@@ -3,6 +3,22 @@ import { useMemo, useState } from 'react'
 import styled, { useTheme } from 'styled-components'
 
 import {
+  BentoActionBtn,
+  BentoCard,
+  BentoCardBadge,
+  BentoCardBody,
+  BentoCardHeader,
+  BentoCardTitle,
+  BentoCardTitleGroup,
+} from '@/entities/event/ui/bento-primitives'
+import {
+  DIGIT_DISPLAY,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerSubtleFill,
+  RADIUS,
+} from '@/entities/event/ui/ledger-tokens'
+import {
   useExportImports,
   type ExportImportItem,
 } from '@/entities/country/api.trade'
@@ -37,8 +53,10 @@ interface TradeSectionProps {
   countryName: string
   /** 대시보드에서 '상세·원장 보기' 클릭 시 교역 탭으로 이동 */
   onOpenDetailTab?: () => void
-  /** 교역 전용 탭 내부에 임베드될 때 — 아래에 편집 원장이 함께 있으므로 모달 버튼을 숨긴다 */
+  /** 교역 전용 탭 내부에 임베드될 때 — 상단 헤더 편집 버튼을 사용한다 */
   embeddedInTab?: boolean
+  /** 상위 탭에서 교역 편집 모달을 여는 콜백 */
+  onOpenEditor?: () => void
 }
 
 type Direction = 'EXPORT' | 'IMPORT'
@@ -77,16 +95,120 @@ interface DirectionView {
  * 자료가 없어도 **섹션은 선다**. 감췄더니 거의 모든 국가에서 교역이 아예 없는 기능처럼
  * 보였다 — 대신 빈 자리가 무엇을 넣으면 무엇이 보이는지 말하고 등록 버튼을 함께 낸다.
  */
+interface PartnerBarEntry {
+  key: string
+  name: string
+  metricText: string
+  weight: number
+  subNote: string | null
+}
+
+function buildRankedPartners(view: DirectionView): PartnerBarEntry[] {
+  if (view.partners.length > 0) {
+    return view.partners
+      .map((item) => {
+        const share = shareOf(item, view.total)
+        const val = item.value ?? null
+        const metricText =
+          share != null
+            ? `${share.toFixed(1)}%`
+            : val != null
+              ? formatTradeValue(val)
+              : item.quantity != null
+                ? `${item.quantity.toLocaleString('ko-KR')}${item.quantityUnit ?? ''}`
+                : '비중 미기재'
+        const weight =
+          share != null && share > 0
+            ? share
+            : val != null && val > 0
+              ? val
+              : 0
+        const subNote =
+          item.channel && item.channel !== 'OFFICIAL'
+            ? CHANNEL_LABEL[item.channel]
+            : (item.relatedTreatyName ??
+                item.relatedEventTitle ??
+                item.relatedCompanyName ??
+                null)
+        return {
+          key: item.id,
+          name: item.partnerName ?? item.name,
+          metricText,
+          weight,
+          subNote,
+        }
+      })
+      .sort((left, right) => {
+        if (left.weight !== right.weight) return right.weight - left.weight
+        return left.name.localeCompare(right.name, 'ko')
+      })
+  }
+
+  if (view.partnerCommodities.length > 0) {
+    const byPartner = new Map<
+      string,
+      { name: string; shareSum: number; hasShare: boolean; valSum: number; hasVal: boolean; count: number }
+    >()
+    for (const item of view.partnerCommodities) {
+      const pName = item.partnerName?.trim()
+      if (!pName) continue
+      const prev = byPartner.get(pName) ?? {
+        name: pName,
+        shareSum: 0,
+        hasShare: false,
+        valSum: 0,
+        hasVal: false,
+        count: 0,
+      }
+      prev.count += 1
+      const share = shareOf(item, view.total)
+      if (share != null && share > 0) {
+        prev.shareSum += share
+        prev.hasShare = true
+      } else if (item.value != null && item.value > 0) {
+        prev.valSum += item.value
+        prev.hasVal = true
+      }
+      byPartner.set(pName, prev)
+    }
+    return [...byPartner.values()]
+      .map((agg) => {
+        const weight = agg.hasShare
+          ? agg.shareSum
+          : agg.hasVal
+            ? agg.valSum
+            : agg.count
+        const metricText = agg.hasShare
+          ? `${agg.shareSum.toFixed(1)}%`
+          : agg.hasVal
+            ? formatTradeValue(agg.valSum)
+            : `품목 ${agg.count}건`
+        return {
+          key: `pc-${agg.name}`,
+          name: agg.name,
+          metricText,
+          weight,
+          subNote: `품목 ${agg.count}건 합산`,
+        }
+      })
+      .sort((left, right) => right.weight - left.weight)
+  }
+
+  return []
+}
+
 export function TradeSection({
   countryId,
   historicalCountryId,
   countryName,
   onOpenDetailTab,
   embeddedInTab = false,
+  onOpenEditor,
 }: TradeSectionProps) {
   const theme = useTheme()
   const isDark = theme.mode === 'dark'
   const [managerOpen, setManagerOpen] = useState(false)
+  const [showAllPartners, setShowAllPartners] = useState(false)
   /* 칩을 눌러 "이 품목을 누가 주고받았나"로 건너뛴다 — 카탈로그 품목만 열린다 */
   const [pickedCommodity, setPickedCommodity] = useState<{
     id: string
@@ -192,9 +314,6 @@ export function TradeSection({
   }
 
   if (years.length === 0 || !current) {
-    if (embeddedInTab) {
-      return null
-    }
     return (
       <S.Section>
         <S.SectionTitleRow>
@@ -203,7 +322,7 @@ export function TradeSection({
           </S.SectionTitleIcon>
           <S.SectionTitleText>교역</S.SectionTitleText>
           <SectionHelpPopover sectionKey="trade" />
-          {onOpenDetailTab && (
+          {!embeddedInTab && onOpenDetailTab && (
             <S.SectionLink type="button" onClick={onOpenDetailTab}>
               교역 탭 열기
             </S.SectionLink>
@@ -211,14 +330,15 @@ export function TradeSection({
         </S.SectionTitleRow>
         <ChartEmpty
           text="연도별 수출·수입액을 넣으면 여기에 규모와 무역수지가 그려집니다."
-          hint="수출·수입 총액 또는 품목·상대국 명세를 입력하면 무역수지와 품목 트리맵이 생성됩니다"
+          hint="수출·수입 총액 또는 품목·상대국 명세를 입력하면 무역수지, 상대국 양방향 비교, 품목 트리맵이 생성됩니다"
           actionLabel="교역 자료 등록"
           onAction={() => {
-            if (countryId) setManagerOpen(true)
+            if (onOpenEditor) onOpenEditor()
+            else if (countryId) setManagerOpen(true)
             else onOpenDetailTab?.()
           }}
         />
-        {countryId && (
+        {countryId && !embeddedInTab && (
           <CountryDataManagerModal
             countryId={countryId}
             countryName={countryName}
@@ -237,11 +357,16 @@ export function TradeSection({
     current.periodEndYear,
   )
 
-  const hasFlows = (['EXPORT', 'IMPORT'] as const).some(
+  const exportPartners = buildRankedPartners(views.EXPORT)
+  const importPartners = buildRankedPartners(views.IMPORT)
+  const hasPartnerComparison =
+    exportPartners.length > 0 || importPartners.length > 0
+
+  const hasCommodityFlows = (['EXPORT', 'IMPORT'] as const).some(
     (direction) =>
       views[direction].commodities.length +
-        views[direction].partners.length +
-        views[direction].partnerCommodities.length >
+        views[direction].partnerCommodities.length +
+        views[direction].slices.length >
       0,
   )
 
@@ -484,7 +609,18 @@ export function TradeSection({
             onSelect={setPickedYearId}
           />
 
-          {hasFlows && (
+          {hasPartnerComparison && (
+            <TradePartnersButterflyCard
+              yearLabel={yearLabel}
+              exportPartners={exportPartners}
+              importPartners={importPartners}
+              isDark={isDark}
+              showAll={showAllPartners}
+              onToggleShowAll={() => setShowAllPartners((prev) => !prev)}
+            />
+          )}
+
+          {hasCommodityFlows && (
             <S.TradeGroupsContainer>
               <S.TradeItemGroups>
                 {(['EXPORT', 'IMPORT'] as const).map((direction) => (
@@ -643,8 +779,8 @@ function TradeDirectionView({
   const color = directionColor(direction, isDark)
   const itemCount =
     view.commodities.length +
-    view.partners.length +
-    view.partnerCommodities.length
+    view.partnerCommodities.length +
+    view.slices.length
   if (itemCount === 0) {
     return null
   }
@@ -660,7 +796,7 @@ function TradeDirectionView({
     <S.TradeDirectionBlock>
       <S.TradeDirectionHeader>
         <S.TradeDirectionTitleGroup>
-          <S.TradeDirectionName $color={color}>{label}</S.TradeDirectionName>
+          <S.TradeDirectionName $color={color}>{label} 품목 구성</S.TradeDirectionName>
           {view.slices.length > 0 && (
             <S.TradeCoverageNote>
               {relative
@@ -679,7 +815,7 @@ function TradeDirectionView({
             </strong>
           )}
           <span>
-            품목 {view.commodities.length} · 상대 {view.partners.length}
+            품목 {view.commodities.length}
             {view.partnerCommodities.length > 0
               ? ` · 상대별 품목 ${view.partnerCommodities.length}`
               : ''}
@@ -711,13 +847,6 @@ function TradeDirectionView({
         total={view.total}
         gaugeColor={color}
         onPickCommodity={onPickCommodity}
-      />
-      <TradeItemLine
-        label="상대"
-        items={view.partners}
-        total={view.total}
-        gaugeColor={color}
-        showPartnerAsName
       />
       <TradeItemLine
         label="상대별 품목"
@@ -1126,3 +1255,308 @@ const TradeLedgerActionHint = styled.span`
   font-weight: 600;
   color: ${({ theme }) => theme.colors.primary};
 `
+
+interface TradePartnersButterflyCardProps {
+  yearLabel: string
+  exportPartners: PartnerBarEntry[]
+  importPartners: PartnerBarEntry[]
+  isDark: boolean
+  showAll: boolean
+  onToggleShowAll: () => void
+}
+
+function TradePartnersButterflyCard({
+  yearLabel,
+  exportPartners,
+  importPartners,
+  isDark,
+  showAll,
+  onToggleShowAll,
+}: TradePartnersButterflyCardProps) {
+  const exportColor = directionColor('EXPORT', isDark)
+  const importColor = directionColor('IMPORT', isDark)
+  const visibleExports = showAll ? exportPartners : exportPartners.slice(0, 5)
+  const visibleImports = showAll ? importPartners : importPartners.slice(0, 5)
+  const rowCount = Math.max(visibleExports.length, visibleImports.length)
+  const maxTotal = Math.max(exportPartners.length, importPartners.length)
+  const hasMore = maxTotal > 5
+
+  const maxExportWeight = Math.max(
+    0,
+    ...visibleExports.map((entry) => entry.weight),
+  )
+  const maxImportWeight = Math.max(
+    0,
+    ...visibleImports.map((entry) => entry.weight),
+  )
+
+  return (
+    <BentoCard aria-label={`${yearLabel} 주요 교역 상대국 비교`}>
+      <BentoCardHeader>
+        <BentoCardTitleGroup>
+          <BentoCardTitle>
+            주요 교역 상대국 {showAll ? '전체' : 'Top 5'} · 양방향 비교
+          </BentoCardTitle>
+          <BentoCardBadge>
+            {yearLabel} · 수출 {exportPartners.length}개국 / 수입{' '}
+            {importPartners.length}개국
+          </BentoCardBadge>
+        </BentoCardTitleGroup>
+        {hasMore && (
+          <BentoActionBtn type="button" onClick={onToggleShowAll}>
+            {showAll ? 'Top 5만 보기' : `전체 상대국 (${maxTotal}위)`}
+          </BentoActionBtn>
+        )}
+      </BentoCardHeader>
+
+      <BentoCardBody>
+        <ButterflyContainer>
+          <ButterflyHeaderRow>
+            <ButterflyColHead $align="right" $color={exportColor}>
+              ← 주요 수출 상대국 (Export)
+            </ButterflyColHead>
+            <ButterflyCenterHead>순위</ButterflyCenterHead>
+            <ButterflyColHead $align="left" $color={importColor}>
+              주요 수입 상대국 (Import) →
+            </ButterflyColHead>
+          </ButterflyHeaderRow>
+
+          <ButterflyRows>
+            {Array.from({ length: rowCount }, (_, idx) => {
+              const exp = visibleExports[idx] ?? null
+              const imp = visibleImports[idx] ?? null
+              const expPct =
+                exp && maxExportWeight > 0 && exp.weight > 0
+                  ? Math.max(6, (exp.weight / maxExportWeight) * 100)
+                  : 0
+              const impPct =
+                imp && maxImportWeight > 0 && imp.weight > 0
+                  ? Math.max(6, (imp.weight / maxImportWeight) * 100)
+                  : 0
+
+              return (
+                <ButterflyRow key={idx}>
+                  <ButterflySide $mirror>
+                    {exp ? (
+                      <>
+                        <ButterflyMetaRow $mirror>
+                          <ButterflyMetric>{exp.metricText}</ButterflyMetric>
+                          <ButterflyPartnerName title={exp.name}>
+                            {exp.name}
+                            {exp.subNote && (
+                              <ButterflySubTag> · {exp.subNote}</ButterflySubTag>
+                            )}
+                          </ButterflyPartnerName>
+                        </ButterflyMetaRow>
+                        <ButterflyTrack $mirror>
+                          {expPct > 0 && (
+                            <ButterflyFill
+                              $color={exportColor}
+                              style={{ width: `${expPct}%` }}
+                            />
+                          )}
+                        </ButterflyTrack>
+                      </>
+                    ) : (
+                      <ButterflyEmptySlot $mirror>—</ButterflyEmptySlot>
+                    )}
+                  </ButterflySide>
+
+                  <ButterflyRankCell>
+                    <ButterflyRankBadge>{idx + 1}</ButterflyRankBadge>
+                  </ButterflyRankCell>
+
+                  <ButterflySide>
+                    {imp ? (
+                      <>
+                        <ButterflyMetaRow>
+                          <ButterflyPartnerName title={imp.name}>
+                            {imp.name}
+                            {imp.subNote && (
+                              <ButterflySubTag> · {imp.subNote}</ButterflySubTag>
+                            )}
+                          </ButterflyPartnerName>
+                          <ButterflyMetric>{imp.metricText}</ButterflyMetric>
+                        </ButterflyMetaRow>
+                        <ButterflyTrack>
+                          {impPct > 0 && (
+                            <ButterflyFill
+                              $color={importColor}
+                              style={{ width: `${impPct}%` }}
+                            />
+                          )}
+                        </ButterflyTrack>
+                      </>
+                    ) : (
+                      <ButterflyEmptySlot>—</ButterflyEmptySlot>
+                    )}
+                  </ButterflySide>
+                </ButterflyRow>
+              )
+            })}
+          </ButterflyRows>
+        </ButterflyContainer>
+      </BentoCardBody>
+    </BentoCard>
+  )
+}
+
+const ButterflyContainer = styled.div`
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const ButterflyHeaderRow = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+
+  @container (max-width: 600px) {
+    display: none;
+  }
+`
+
+const ButterflyColHead = styled.span<{
+  $align: 'left' | 'right'
+  $color: string
+}>`
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ $color }) => $color};
+  text-align: ${({ $align }) => $align};
+`
+
+const ButterflyCenterHead = styled.span`
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  text-align: center;
+`
+
+const ButterflyRows = styled.div`
+  display: flex;
+  flex-direction: column;
+`
+
+const ButterflyRow = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+
+  &:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  @container (max-width: 600px) {
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 6px 8px;
+  }
+`
+
+const ButterflySide = styled.div<{ $mirror?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+
+  @container (max-width: 600px) {
+    grid-column: 2;
+  }
+`
+
+const ButterflyMetaRow = styled.div<{ $mirror?: boolean }>`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+
+  @container (max-width: 600px) {
+    flex-direction: ${({ $mirror }) => ($mirror ? 'row-reverse' : 'row')};
+  }
+`
+
+const ButterflyPartnerName = styled.span`
+  font-size: 12.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const ButterflySubTag = styled.span`
+  font-size: 11px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ButterflyMetric = styled.span`
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+`
+
+const ButterflyTrack = styled.div<{ $mirror?: boolean }>`
+  display: flex;
+  justify-content: ${({ $mirror }) => ($mirror ? 'flex-end' : 'flex-start')};
+  width: 100%;
+  height: 7px;
+  border-radius: ${RADIUS.XS};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  overflow: hidden;
+
+  @container (max-width: 600px) {
+    justify-content: flex-start;
+  }
+`
+
+const ButterflyFill = styled.div<{ $color: string }>`
+  height: 100%;
+  border-radius: ${RADIUS.XS};
+  background: ${({ $color }) => $color};
+`
+
+const ButterflyRankCell = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  @container (max-width: 600px) {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+`
+
+const ButterflyRankBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+`
+
+const ButterflyEmptySlot = styled.div<{ $mirror?: boolean }>`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  text-align: ${({ $mirror }) => ($mirror ? 'right' : 'left')};
+`
+

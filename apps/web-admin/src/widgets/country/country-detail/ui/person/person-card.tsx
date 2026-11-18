@@ -1,152 +1,252 @@
 import React from 'react'
-import styled, { css } from 'styled-components'
+import { FiArrowUpRight } from 'react-icons/fi'
+import styled from 'styled-components'
 
+import {
+  DIGIT_DISPLAY,
+  ledgerAccent,
+  ledgerBackground,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  ledgerSubtleFill,
+  RADIUS,
+} from '@/entities/event/ui/ledger-tokens'
 import { type PersonResponseDto as Person } from '@/shared/api/persons'
+import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { getPositionColor } from '@/shared/lib/position-color'
 import { InfluenceBadge } from '@/shared/ui/influence-badge'
 import { FOCUS_COLOR } from '@/shared/ui/register-form-layout'
 
-interface PersonCardProps {
+export interface PersonCardProps {
   person: Person
-  index: number
+  index?: number
   onClick: () => void
+  onOpenDetail?: () => void
   dynastyName?: string | null
+  roleLabel?: string | null
+  roleColor?: string | null
 }
 
-export function PersonCard({ person, onClick, dynastyName }: PersonCardProps) {
-  const fullName = getPersonDisplayName(person)
+function toSignedYear(
+  year: number | null | undefined,
+  era?: string | null,
+): number | null {
+  if (year == null || !Number.isFinite(year)) return null
+  return era === 'BC' ? -Math.abs(year) : Math.abs(year)
+}
+
+export function PersonCard({
+  person,
+  onClick,
+  onOpenDetail,
+  dynastyName,
+  roleLabel,
+  roleColor,
+}: PersonCardProps) {
+  const fullName = getPersonDisplayName(person, true) || person.name
   const birthYear = person.birthYear
   const deathYear = person.deathYear
   const isBirthBc = person.birthEra === 'BC'
   const isDeathBc = person.deathEra === 'BC'
 
+  const signedBirth = toSignedYear(birthYear, person.birthEra)
+  const signedDeath = toSignedYear(deathYear, person.deathEra)
   const ageAtDeath =
-    birthYear != null && deathYear != null && !isBirthBc && !isDeathBc
-      ? deathYear - birthYear
+    signedBirth != null && signedDeath != null && signedDeath >= signedBirth
+      ? signedDeath - signedBirth - (signedBirth < 0 && signedDeath > 0 ? 1 : 0)
       : null
 
   const lifePct =
     ageAtDeath != null
-      ? Math.min(Math.max(ageAtDeath, 4), 100)
-      : birthYear != null ? 8 : 0
+      ? Math.min(Math.max(ageAtDeath, 6), 100)
+      : birthYear != null
+        ? 14
+        : 0
 
-  const primaryTenure = (person as any).governmentTenures?.[0]
+  const primaryTenure = (
+    person as Person & {
+      jobTitle?: string | null
+      governmentTenures?: Array<{
+        title?: string | null
+        positionType?: string | null
+        positionDefinition?: {
+          title?: string | null
+          name?: string | null
+          positionType?: string | null
+        } | null
+      }>
+    }
+  ).governmentTenures?.[0]
   const primaryPositionType =
     primaryTenure?.positionDefinition?.positionType ?? primaryTenure?.positionType
-  const accentColor = getPositionColor(primaryPositionType)
+  const accentColor = roleColor || getPositionColor(primaryPositionType)
+  const resolvedRole =
+    roleLabel ??
+    primaryTenure?.title?.trim() ??
+    primaryTenure?.positionDefinition?.title?.trim() ??
+    primaryTenure?.positionDefinition?.name?.trim() ??
+    (person as Person & { jobTitle?: string | null }).jobTitle?.trim() ??
+    null
+
   const displayImage = person.profileImageUrl
+    ? getUploadImageUrl(person.profileImageUrl)
+    : null
 
   return (
-    <Card
-      type="button"
-      aria-label={`${fullName || '이름 없음'} 상세 보기`}
-      onClick={onClick}
-    >
-      <ImageSide>
-        <InfluenceBadge
-          influence={(person as { influence?: number | null }).influence}
-          variant="overlay"
-        />
-        {displayImage ? (
-          <Img src={displayImage} alt={fullName} loading="lazy" decoding="async" />
-        ) : (
-          <ImgPlaceholder $color={accentColor}>
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-            </svg>
-          </ImgPlaceholder>
-        )}
-      </ImageSide>
-
-      <Content>
-        <Name>{fullName}</Name>
-
-        <LifespanRow>
-          {birthYear != null ? (
-            <>
-              <LifespanYear>
-                {isBirthBc ? 'BC ' : ''}{Math.abs(birthYear)}
-              </LifespanYear>
-              <LifespanTrack>
-                <LifespanFill $color={accentColor} $pct={lifePct} />
-              </LifespanTrack>
-              <LifespanYear>
-                {deathYear != null
-                  ? `${isDeathBc ? 'BC ' : ''}${Math.abs(deathYear)}`
-                  : '現'}
-              </LifespanYear>
-              {ageAtDeath != null && (
-                <LifespanAge>· {ageAtDeath}세</LifespanAge>
-              )}
-            </>
+    <CardShell>
+      <CardMainBtn
+        type="button"
+        aria-label={`${fullName || '이름 없음'} 미리보기`}
+        onClick={onClick}
+      >
+        <ImageSide>
+          <InfluenceBadge
+            influence={(person as { influence?: number | null }).influence}
+            variant="overlay"
+          />
+          {displayImage ? (
+            <Img
+              src={displayImage}
+              alt={fullName}
+              loading="lazy"
+              decoding="async"
+            />
           ) : (
-            <LifespanYearMuted>생몰년 미상</LifespanYearMuted>
+            <ImgPlaceholder $color={accentColor}>
+              <span>{(fullName || '?').slice(0, 1)}</span>
+            </ImgPlaceholder>
           )}
-        </LifespanRow>
+        </ImageSide>
 
-        {dynastyName && (
-          <MetaRow>
-            <MetaLabel>가문</MetaLabel>
-            <MetaValue>{dynastyName}</MetaValue>
-          </MetaRow>
-        )}
-      </Content>
-    </Card>
+        <Content>
+          <NameRow>
+            <RoleDot $color={accentColor} aria-hidden />
+            <Name title={fullName}>{fullName}</Name>
+          </NameRow>
+
+          {resolvedRole && (
+            <RoleBadge title={resolvedRole}>{resolvedRole}</RoleBadge>
+          )}
+
+          <LifespanRow>
+            {birthYear != null || deathYear != null ? (
+              <>
+                <LifespanYear>
+                  {birthYear != null
+                    ? `${isBirthBc ? 'BC ' : ''}${Math.abs(birthYear)}`
+                    : '?'}
+                </LifespanYear>
+                <LifespanTrack>
+                  <LifespanFill $color={accentColor} $pct={lifePct} />
+                </LifespanTrack>
+                <LifespanYear>
+                  {deathYear != null
+                    ? `${isDeathBc ? 'BC ' : ''}${Math.abs(deathYear)}`
+                    : '現'}
+                </LifespanYear>
+                {ageAtDeath != null && ageAtDeath >= 0 && (
+                  <LifespanAge>{ageAtDeath}세</LifespanAge>
+                )}
+              </>
+            ) : (
+              <LifespanYearMuted>생몰년 미상</LifespanYearMuted>
+            )}
+          </LifespanRow>
+
+          {dynastyName && (
+            <MetaRow>
+              <MetaBadge>{dynastyName}</MetaBadge>
+            </MetaRow>
+          )}
+        </Content>
+      </CardMainBtn>
+
+      {onOpenDetail && (
+        <CornerDetailBtn
+          type="button"
+          onClick={onOpenDetail}
+          title={`${fullName} 연보 페이지 열기`}
+          aria-label={`${fullName} 연보 페이지 열기`}
+        >
+          <FiArrowUpRight size={13} />
+        </CornerDetailBtn>
+      )}
+    </CardShell>
   )
 }
 
-const Card = styled.button`
-  border-radius: 16px;
+const CardShell = styled.div`
+  position: relative;
+  border-radius: ${RADIUS.MD};
   overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  min-height: 100px;
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  box-shadow: none;
+  transition:
+    border-color 0.14s ease,
+    background 0.14s ease;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+`
+
+const CardMainBtn = styled.button`
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  cursor: pointer;
-  min-height: 112px;
-  transition: box-shadow 0.25s ease, transform 0.25s ease;
+  flex: 1;
+  min-width: 0;
   padding: 0;
   margin: 0;
   border: none;
+  background: transparent;
   font: inherit;
   color: inherit;
   text-align: left;
-  width: 100%;
+  cursor: pointer;
 
   &:focus-visible {
     outline: 2px solid ${FOCUS_COLOR};
-    outline-offset: 2px;
+    outline-offset: -2px;
   }
+`
 
-  ${({ theme }) =>
-    theme.mode === 'dark'
-      ? css`
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          box-shadow: none;
-          &:hover {
-            border-color: rgba(255, 255, 255, 0.18);
-            background: rgba(255, 255, 255, 0.05);
-          }
-        `
-      : css`
-          background: #ffffff;
-          border: 1px solid #e5e7eb;
-          box-shadow: none;
-          &:hover {
-            border-color: #d1d5db;
-            background: #fafafa;
-          }
-        `}
+const CornerDetailBtn = styled.button`
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 24px;
+  height: 24px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    border-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  }
 `
 
 const ImageSide = styled.div`
-  width: 106px;
+  width: 84px;
   flex-shrink: 0;
   position: relative;
   overflow: hidden;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#f3f4f6'};
+  border-right: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
 `
 
 const Img = styled.img`
@@ -154,10 +254,7 @@ const Img = styled.img`
   height: 100%;
   object-fit: cover;
   object-position: top center;
-  transition: transform 0.25s ease;
-  ${Card}:hover & {
-    transform: scale(1.04);
-  }
+  display: block;
 `
 
 const ImgPlaceholder = styled.div<{ $color: string }>`
@@ -167,32 +264,62 @@ const ImgPlaceholder = styled.div<{ $color: string }>`
   align-items: center;
   justify-content: center;
   background: ${({ $color, theme }) =>
-    theme.mode === 'dark' ? `${$color}18` : `${$color}12`};
+    theme.mode === 'dark' ? `${$color}1c` : `${$color}12`};
   color: ${({ $color }) => $color};
-  opacity: 0.55;
-  svg {
-    width: 34px;
-    height: 34px;
-  }
+  font-size: 18px;
+  font-weight: 800;
 `
 
 const Content = styled.div`
   flex: 1;
   min-width: 0;
-  padding: 14px 16px;
+  padding: 11px 13px;
+  padding-right: 30px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 0;
+  gap: 5px;
 `
 
-const Name = styled.h3`
-  margin: 0 0 6px 0;
-  font-size: 15px;
+const NameRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+`
+
+const RoleDot = styled.span<{ $color: string }>`
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: ${({ $color }) => $color};
+  flex-shrink: 0;
+`
+
+const Name = styled.h4`
+  margin: 0;
+  font-size: 13.5px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
   line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const RoleBadge = styled.span`
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 1px 6px;
+  border-radius: ${RADIUS.XS};
+  font-size: 10.5px;
+  font-weight: 600;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(165, 180, 252, 0.12)'
+      : 'rgba(79, 70, 229, 0.08)'};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -201,35 +328,33 @@ const Name = styled.h3`
 const LifespanRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 7px;
+  gap: 5px;
 `
 
 const LifespanYear = styled.span`
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
   white-space: nowrap;
   flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
+  ${DIGIT_DISPLAY}
 `
 
 const LifespanYearMuted = styled.span`
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
-  opacity: 0.55;
-  letter-spacing: 0.01em;
+  opacity: 0.7;
 `
 
 const LifespanTrack = styled.div`
   flex: 1;
-  height: 3px;
+  height: 4px;
   border-radius: 2px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.08)' : '#e9ecef'};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
   position: relative;
   overflow: hidden;
+  min-width: 24px;
 `
 
 const LifespanFill = styled.div<{ $color: string; $pct: number }>`
@@ -238,40 +363,35 @@ const LifespanFill = styled.div<{ $color: string; $pct: number }>`
   top: 0;
   bottom: 0;
   width: ${({ $pct }) => $pct}%;
-  min-width: 6px;
+  min-width: 5px;
   background: ${({ $color }) => $color};
   border-radius: 2px;
-  opacity: 0.75;
+  opacity: 0.8;
 `
 
 const LifespanAge = styled.span`
   font-size: 10px;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  color: ${({ theme }) => theme.colors.text.secondary};
   flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
+  ${DIGIT_DISPLAY}
 `
 
 const MetaRow = styled.div`
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 4px;
 `
 
-const MetaLabel = styled.span`
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  flex-shrink: 0;
-`
-
-const MetaValue = styled.span`
-  font-size: 11px;
+const MetaBadge = styled.span`
+  padding: 1px 6px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  font-size: 10px;
+  font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  min-width: 0;
+  max-width: 100%;
 `

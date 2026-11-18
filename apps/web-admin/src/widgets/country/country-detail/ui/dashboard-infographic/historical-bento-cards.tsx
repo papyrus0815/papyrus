@@ -339,15 +339,20 @@ export function HistoricalRulerSpectrumCard({
   rulers,
   spanStart,
   spanEnd,
+  activeTenureId,
+  onFocusRulerTenure,
   onSelectPerson,
   onOpenRulersTab,
 }: {
   rulers: HistoricalRulerItem[]
   spanStart: number | null
   spanEnd: number | null
+  activeTenureId?: string | null
+  onFocusRulerTenure?: (tenureId: string) => void
   onSelectPerson: (personId: string) => void
   onOpenRulersTab: () => void
 }) {
+  const [hoveredRecordId, setHoveredRecordId] = useState<string | null>(null)
   const inSpanRulers = useMemo(
     () => rulers.filter((r) => !r.isOutOfSpan && r.startYear != null),
     [rulers],
@@ -382,7 +387,7 @@ export function HistoricalRulerSpectrumCard({
     const hog = buildSegs('HEAD_OF_GOVERNMENT')
     const allSegs = [...hos, ...hog]
     const longest =
-      allSegs.sort((a, b) => b.years - a.years)[0]?.ruler ?? null
+      [...allSegs].sort((a, b) => b.years - a.years)[0]?.ruler ?? null
 
     return {
       lo: minY,
@@ -395,17 +400,53 @@ export function HistoricalRulerSpectrumCard({
 
   if (rulers.length === 0) return null
 
+  const highlightedId = hoveredRecordId ?? activeTenureId ?? null
+  const highlightedRuler = highlightedId
+    ? (rulers.find((r) => r.recordId === highlightedId) ?? null)
+    : null
+
+  const handleRulerAction = (ruler: HistoricalRulerItem) => {
+    if (onFocusRulerTenure) {
+      onFocusRulerTenure(ruler.recordId)
+      return
+    }
+    if (ruler.personId) onSelectPerson(ruler.personId)
+  }
+
   return (
     <BentoCard aria-label="역대 통치자 치세 스펙트럼">
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <BentoCardTitle>역대 통치자 · 치세 스펙트럼</BentoCardTitle>
+          <BentoCardTitle>역대 통치자 치세 스펙트럼</BentoCardTitle>
           <BentoCardBadge>{rulers.length}명</BentoCardBadge>
-          {longestRuler ? (
+          {highlightedRuler ? (
+            <BentoPill $accent>
+              {highlightedRuler.ordinal != null
+                ? `제${highlightedRuler.ordinal}대 `
+                : ''}
+              {highlightedRuler.personName} (
+              {highlightedRuler.startYear != null
+                ? formatSignedYear(highlightedRuler.startYear)
+                : '?'}{' '}
+              ~{' '}
+              {highlightedRuler.endYear != null
+                ? formatSignedYear(highlightedRuler.endYear)
+                : '?'}
+              )
+            </BentoPill>
+          ) : longestRuler ? (
             <BentoPill>최장 재위: {longestRuler.personName}</BentoPill>
           ) : null}
         </BentoCardTitleGroup>
         <BentoHeaderActions>
+          {highlightedRuler?.personId && onFocusRulerTenure ? (
+            <BentoActionBtn
+              type="button"
+              onClick={() => onSelectPerson(highlightedRuler.personId!)}
+            >
+              {highlightedRuler.personName} 인물 정보
+            </BentoActionBtn>
+          ) : null}
           <BentoActionBtn type="button" $accent onClick={onOpenRulersTab}>
             통치자·내각 연표 <FiArrowUpRight size={11} />
           </BentoActionBtn>
@@ -423,14 +464,15 @@ export function HistoricalRulerSpectrumCard({
                   type="button"
                   $tone="hos"
                   $even={seg.even}
+                  $active={seg.ruler.recordId === highlightedId}
                   style={{
                     left: `${seg.leftPct}%`,
                     width: `${seg.widthPct}%`,
                   }}
-                  title={`${seg.ruler.personName} (${seg.ruler.startYear != null ? formatSignedYear(seg.ruler.startYear) : '?'} ~ ${seg.ruler.endYear != null ? formatSignedYear(seg.ruler.endYear) : '?'})`}
-                  onClick={() => {
-                    if (seg.ruler.personId) onSelectPerson(seg.ruler.personId)
-                  }}
+                  title={`${seg.ruler.personName} (${seg.ruler.startYear != null ? formatSignedYear(seg.ruler.startYear) : '?'} ~ ${seg.ruler.endYear != null ? formatSignedYear(seg.ruler.endYear) : '?'}) — 클릭하여 당대 마인드맵 전환`}
+                  onMouseEnter={() => setHoveredRecordId(seg.ruler.recordId)}
+                  onMouseLeave={() => setHoveredRecordId(null)}
+                  onClick={() => handleRulerAction(seg.ruler)}
                 />
               ))}
             </SpectrumTrack>
@@ -447,14 +489,15 @@ export function HistoricalRulerSpectrumCard({
                   type="button"
                   $tone="hog"
                   $even={seg.even}
+                  $active={seg.ruler.recordId === highlightedId}
                   style={{
                     left: `${seg.leftPct}%`,
                     width: `${seg.widthPct}%`,
                   }}
-                  title={`${seg.ruler.personName} (${seg.ruler.startYear != null ? formatSignedYear(seg.ruler.startYear) : '?'} ~ ${seg.ruler.endYear != null ? formatSignedYear(seg.ruler.endYear) : '?'})`}
-                  onClick={() => {
-                    if (seg.ruler.personId) onSelectPerson(seg.ruler.personId)
-                  }}
+                  title={`${seg.ruler.personName} (${seg.ruler.startYear != null ? formatSignedYear(seg.ruler.startYear) : '?'} ~ ${seg.ruler.endYear != null ? formatSignedYear(seg.ruler.endYear) : '?'}) — 클릭하여 당대 마인드맵 전환`}
+                  onMouseEnter={() => setHoveredRecordId(seg.ruler.recordId)}
+                  onMouseLeave={() => setHoveredRecordId(null)}
+                  onClick={() => handleRulerAction(seg.ruler)}
                 />
               ))}
             </SpectrumTrack>
@@ -467,19 +510,21 @@ export function HistoricalRulerSpectrumCard({
           <span>{formatSignedYear(hi)}</span>
         </SpectrumAxisTicks>
 
-        {/* 주요 통치자 빠른 칩 */}
+        {/* 주요 통치자 빠른 전환 칩 (클릭 시 상단 마인드맵 즉시 연동) */}
         <RulerChipsWrap>
-          {rulers.slice(0, 10).map((r) => {
+          {rulers.slice(0, 12).map((r) => {
             const img = r.profileImageUrl
               ? getUploadImageUrl(r.profileImageUrl)
               : null
+            const isSelected = r.recordId === activeTenureId
             return (
               <RulerChipBtn
                 key={r.recordId}
                 type="button"
-                onClick={() => {
-                  if (r.personId) onSelectPerson(r.personId)
-                }}
+                $active={isSelected}
+                onMouseEnter={() => setHoveredRecordId(r.recordId)}
+                onMouseLeave={() => setHoveredRecordId(null)}
+                onClick={() => handleRulerAction(r)}
               >
                 {img ? <img src={img} alt="" /> : null}
                 {r.ordinal != null ? <small>{r.ordinal}대</small> : null}
@@ -487,9 +532,9 @@ export function HistoricalRulerSpectrumCard({
               </RulerChipBtn>
             )
           })}
-          {rulers.length > 10 ? (
+          {rulers.length > 12 ? (
             <MoreChipBtn type="button" onClick={onOpenRulersTab}>
-              +{rulers.length - 10}명 전체 보기
+              +{rulers.length - 12}명 전체 보기
             </MoreChipBtn>
           ) : null}
         </RulerChipsWrap>
@@ -698,14 +743,19 @@ export function HistoricalTerritoryWaterfallCard({
       </BentoCardHeader>
 
       <BentoCardBody>
+        <WaterfallAxisLegend>
+          <span className="loss">◀ 상실 · 할양</span>
+          <span>0 기준</span>
+          <span className="gain">정복 · 획득 ▶</span>
+        </WaterfallAxisLegend>
         <WaterfallList>
           {rows.slice(0, 8).map(({ change, year }) => {
             const isGain = change.direction === 'gained'
             const area = change.areaKm2 ?? 0
-            const pct =
+            const halfPct =
               area > 0
-                ? Math.max(12, Math.round((area / maxArea) * 100))
-                : 28
+                ? Math.max(8, Math.round((area / maxArea) * 48))
+                : 18
             return (
               <WaterfallRow
                 key={change.id}
@@ -717,8 +767,18 @@ export function HistoricalTerritoryWaterfallCard({
                   <strong>{change.regionName || change.event.title}</strong>
                   <small>{territoryMethodLabel(change.method)}</small>
                 </WfRegion>
-                <WfBarCell>
-                  <WfBar $gain={isGain} style={{ width: `${pct}%` }} />
+                <WfDivergingCell>
+                  <WfDivergingTrack>
+                    <WfCenterZeroLine aria-hidden />
+                    <WfDivergingFill
+                      $gain={isGain}
+                      style={
+                        isGain
+                          ? { left: '50%', width: `${halfPct}%` }
+                          : { right: '50%', width: `${halfPct}%` }
+                      }
+                    />
+                  </WfDivergingTrack>
                   <WfVal $gain={isGain}>
                     {isGain ? '+' : '−'}
                     {area > 0
@@ -727,7 +787,7 @@ export function HistoricalTerritoryWaterfallCard({
                         : `${area.toLocaleString('ko-KR')}km²`
                       : territoryMethodLabel(change.method)}
                   </WfVal>
-                </WfBarCell>
+                </WfDivergingCell>
               </WaterfallRow>
             )
           })}
@@ -917,19 +977,25 @@ const SpectrumTrack = styled.div`
 const SpectrumBlock = styled.button<{
   $tone: 'hos' | 'hog'
   $even: boolean
+  $active?: boolean
 }>`
   position: absolute;
   top: 0;
   bottom: 0;
   padding: 0;
   border: none;
-  background: ${({ theme, $tone, $even }) =>
-    $tone === 'hos'
-      ? ledgerAccent(theme.mode)
-      : theme.mode === 'dark'
-        ? '#2dd4bf'
-        : '#0d9488'};
-  opacity: ${({ $even }) => ($even ? 0.86 : 0.56)};
+  background: ${({ theme, $tone, $active }) =>
+    $active
+      ? theme.mode === 'dark'
+        ? '#fcd34d'
+        : '#d97706'
+      : $tone === 'hos'
+        ? ledgerAccent(theme.mode)
+        : theme.mode === 'dark'
+          ? '#2dd4bf'
+          : '#0d9488'};
+  opacity: ${({ $active, $even }) => ($active ? 1 : $even ? 0.86 : 0.56)};
+  z-index: ${({ $active }) => ($active ? 2 : 1)};
   cursor: pointer;
 
   &:hover {
@@ -952,15 +1018,21 @@ const RulerChipsWrap = styled.div`
   gap: 5px;
 `
 
-const RulerChipBtn = styled.button`
+const RulerChipBtn = styled.button<{ $active?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 3px 8px;
   border-radius: 999px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
-  color: ${({ theme }) => theme.colors.text.primary};
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active
+        ? ledgerAccentBorder(theme.mode)
+        : ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : ledgerBackground(theme.mode)};
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
   font-family: inherit;
   font-size: 11px;
   cursor: pointer;
@@ -977,7 +1049,7 @@ const RulerChipBtn = styled.button`
     ${DIGIT_DISPLAY}
   }
   strong {
-    font-weight: 600;
+    font-weight: ${({ $active }) => ($active ? 700 : 600)};
   }
 
   &:hover {
@@ -1120,14 +1192,54 @@ const WfRegion = styled.div`
   }
 `
 
-const WfBarCell = styled.div`
+const WaterfallAxisLegend = styled.div`
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: space-between;
+  padding-left: 162px;
+  margin-bottom: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  .loss {
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#fda4af' : '#be123c')};
+  }
+  .gain {
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#6ee7b7' : '#047857')};
+  }
 `
 
-const WfBar = styled.div<{ $gain: boolean }>`
-  height: 8px;
+const WfDivergingCell = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 68px;
+  align-items: center;
+  gap: 8px;
+`
+
+const WfDivergingTrack = styled.div`
+  position: relative;
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  overflow: hidden;
+`
+
+const WfCenterZeroLine = styled.span`
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  z-index: 2;
+`
+
+const WfDivergingFill = styled.div<{ $gain: boolean }>`
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
   border-radius: 999px;
   background: ${({ theme, $gain }) =>
     $gain
@@ -1141,6 +1253,7 @@ const WfBar = styled.div<{ $gain: boolean }>`
 
 const WfVal = styled.span<{ $gain: boolean }>`
   flex-shrink: 0;
+  text-align: right;
   font-size: 10.5px;
   font-weight: 700;
   color: ${({ theme, $gain }) =>
@@ -1152,4 +1265,143 @@ const WfVal = styled.span<{ $gain: boolean }>`
         ? '#fda4af'
         : '#be123c'};
   ${DIGIT_DISPLAY}
+`
+
+/* ─── 5. Historical Domain Archive Footprint Card ────────────────────────── */
+
+export interface HistoricalDomainMetricItem {
+  key: string
+  label: string
+  count: number
+  unit?: string
+  onOpen: () => void
+}
+
+export function HistoricalDomainArchiveCard({
+  items,
+}: {
+  items: HistoricalDomainMetricItem[]
+}) {
+  const populatedCount = items.filter((item) => item.count > 0).length
+  const totalRecords = items.reduce((acc, item) => acc + item.count, 0)
+  const maxCount = Math.max(1, ...items.map((item) => item.count))
+  const sorted = [...items].sort((a, b) => b.count - a.count)
+
+  return (
+    <BentoCard aria-label="역사 도메인 아카이브 현황">
+      <BentoCardHeader>
+        <BentoCardTitleGroup>
+          <BentoCardTitle>도메인별 사료 · 아카이브 밀도</BentoCardTitle>
+          <BentoCardBadge>
+            {populatedCount}/{items.length}개 분야 · 총{' '}
+            {totalRecords.toLocaleString('ko-KR')}건
+          </BentoCardBadge>
+        </BentoCardTitleGroup>
+      </BentoCardHeader>
+
+      <BentoCardBody>
+        <ArchiveDomainGrid>
+          {sorted.map((item, idx) => {
+            const pct =
+              item.count > 0
+                ? Math.max(6, Math.round((item.count / maxCount) * 100))
+                : 0
+            return (
+              <ArchiveDomainRowBtn
+                key={item.key}
+                type="button"
+                $empty={item.count === 0}
+                onClick={item.onOpen}
+              >
+                <ArchiveDomainTop>
+                  <ArchiveDomainLabel>{item.label}</ArchiveDomainLabel>
+                  <ArchiveDomainCount $empty={item.count === 0}>
+                    {item.count > 0
+                      ? `${item.count.toLocaleString('ko-KR')}${item.unit ?? '건'}`
+                      : '미등록 +'}
+                  </ArchiveDomainCount>
+                </ArchiveDomainTop>
+                <ArchiveDomainTrack>
+                  {pct > 0 && (
+                    <ArchiveDomainFill $pct={pct} $top={idx < 2} />
+                  )}
+                </ArchiveDomainTrack>
+              </ArchiveDomainRowBtn>
+            )
+          })}
+        </ArchiveDomainGrid>
+      </BentoCardBody>
+    </BentoCard>
+  )
+}
+
+const ArchiveDomainGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+
+  @media (max-width: 560px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+const ArchiveDomainRowBtn = styled.button<{ $empty: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 5px 7px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: transparent;
+  opacity: ${({ $empty }) => ($empty ? 0.65 : 1)};
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 1;
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+`
+
+const ArchiveDomainTop = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+`
+
+const ArchiveDomainLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const ArchiveDomainCount = styled.span<{ $empty: boolean }>`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme, $empty }) =>
+    $empty ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+`
+
+const ArchiveDomainTrack = styled.div`
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  overflow: hidden;
+`
+
+const ArchiveDomainFill = styled.div<{ $pct: number; $top: boolean }>`
+  width: ${({ $pct }) => `${$pct}%`};
+  height: 100%;
+  border-radius: 999px;
+  background: ${({ theme, $top }) =>
+    $top
+      ? ledgerAccent(theme.mode)
+      : theme.mode === 'dark'
+        ? 'rgba(165, 180, 252, 0.5)'
+        : 'rgba(79, 70, 229, 0.5)'};
 `

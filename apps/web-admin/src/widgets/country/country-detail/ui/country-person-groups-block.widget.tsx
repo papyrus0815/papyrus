@@ -1,17 +1,27 @@
 /**
- * 국가 상세 인물 탭 — "이 나라의 집단" 블록.
- * countryId로 연결된 세대·계파·사단 등을 칩으로 보여주고, 묶음 상세/허브로 이동.
+ * 국가 상세 인물 탭 — "이 나라의 역사 집단 · 계파 · 세대" 블록.
+ * countryId / historicalCountryId로 연결된 세대·계파·학파·사단 등을 플랫 인포그래픽 스트립으로 표시.
  */
 import { useQuery } from '@tanstack/react-query'
+import { FiArrowUpRight, FiUsers } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
-import { FiChevronRight, FiUsers } from 'react-icons/fi'
 import styled from 'styled-components'
 
 import {
+  DIGIT_DISPLAY,
+  ledgerAccent,
+  ledgerBackground,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  ledgerSubtleFill,
+  RADIUS,
+} from '@/entities/event/ui/ledger-tokens'
+import {
   GROUP_TONE,
-  PERSON_GROUP_TYPE_META,
-  listPersonGroups,
   type GroupTone,
+  listPersonGroups,
+  PERSON_GROUP_TYPE_META,
 } from '@/shared/api/person-groups'
 import { pathKeys } from '@/shared/router'
 
@@ -35,31 +45,46 @@ export function CountryPersonGroupsBlock({
 
   if (isLoading || groups.length === 0) return null
 
+  const maxMembers = Math.max(...groups.map((g) => g.memberCount || 0), 1)
+
   return (
-    <Wrap>
+    <Wrap aria-label="소속 인물 집단 및 계파">
       <Head>
         <Title>
-          <FiUsers size={14} />
-          이 나라의 집단
+          <FiUsers size={13} />
+          <span>소속 집단 · 계파 · 세대</span>
           <Count>{groups.length}</Count>
         </Title>
         <AllLink
           to={pathKeys.personGroups({ countryId, historicalCountryId })}
         >
-          전체 보기 <FiChevronRight size={13} />
+          <span>집단 전체 보기</span>
+          <FiArrowUpRight size={12} />
         </AllLink>
       </Head>
       <Chips>
         {groups.slice(0, 12).map((g) => {
           const meta = PERSON_GROUP_TYPE_META[g.type]
+          const barPct =
+            g.memberCount > 0
+              ? Math.max(12, Math.round((g.memberCount / maxMembers) * 100))
+              : 0
           return (
             <GroupChip key={g.id} to={pathKeys.personGroupDetail(g.id)}>
-              <Dot $tone={meta.tone} />
-              <ChipName>{g.name}</ChipName>
-              {g.type === 'GENERATION' && g.generationOrder != null && (
-                <ChipOrd>{g.generationOrder}세대</ChipOrd>
+              <ChipTop>
+                <Dot $tone={meta.tone} />
+                <ChipTypeBadge $tone={meta.tone}>{meta.label}</ChipTypeBadge>
+                <ChipName>{g.name}</ChipName>
+                {g.type === 'GENERATION' && g.generationOrder != null && (
+                  <ChipOrd>{g.generationOrder}세대</ChipOrd>
+                )}
+                <ChipCount>{g.memberCount}명</ChipCount>
+              </ChipTop>
+              {barPct > 0 && (
+                <MiniMemberBar>
+                  <MiniMemberFill $tone={meta.tone} $pct={barPct} />
+                </MiniMemberBar>
               )}
-              <ChipCount>{g.memberCount}</ChipCount>
             </GroupChip>
           )
         })}
@@ -69,98 +94,149 @@ export function CountryPersonGroupsBlock({
 }
 
 const Wrap = styled.div`
-  margin-bottom: 18px;
-  padding: 14px 16px;
-  border-radius: 10px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: transparent;
+  margin-bottom: 14px;
+  padding: 12px 15px;
+  border-radius: ${RADIUS.MD};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  box-shadow: none;
 `
 
 const Head = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin-bottom: 10px;
 `
 
 const Title = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  font-size: 13px;
+  gap: 6px;
+  font-size: 12.5px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
   svg {
-    color: ${({ theme }) => theme.colors.text.secondary};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 `
 
 const Count = styled.span`
-  padding: 1px 8px;
+  padding: 1px 7px;
   font-size: 11px;
   font-weight: 700;
-  border-radius: 999px;
-  background: ${({ theme }) => theme.colors.background.tertiary};
+  border-radius: ${RADIUS.XS};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
   color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
 `
 
 const AllLink = styled(Link)`
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  font-size: 12px;
+  gap: 3px;
+  font-size: 11.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
   text-decoration: none;
   &:hover {
-    color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 `
 
 const Chips = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 7px;
 `
 
 const GroupChip = styled(Link)`
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 11px;
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 7px 10px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   background: transparent;
   text-decoration: none;
-  transition: border-color 0.13s ease, background 0.13s ease;
+  transition:
+    border-color 0.13s ease,
+    background 0.13s ease;
   &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-    background: ${({ theme }) => theme.colors.hover};
+    border-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
   }
 `
 
+const ChipTop = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+`
+
 const Dot = styled.span<{ $tone: GroupTone }>`
-  width: 9px;
-  height: 9px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
+  flex-shrink: 0;
   background: ${({ $tone, theme }) =>
     isDark(theme.mode) ? GROUP_TONE[$tone].fgDark : GROUP_TONE[$tone].fgLight};
 `
 
+const ChipTypeBadge = styled.span<{ $tone: GroupTone }>`
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+  color: ${({ $tone, theme }) =>
+    isDark(theme.mode) ? GROUP_TONE[$tone].fgDark : GROUP_TONE[$tone].fgLight};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+`
+
 const ChipName = styled.span`
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
 `
 
 const ChipOrd = styled.span`
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 700;
-  color: ${({ theme }) => (isDark(theme.mode) ? '#ffd60a' : '#b45309')};
+  flex-shrink: 0;
+  color: ${({ theme }) => (isDark(theme.mode) ? '#fcd34d' : '#b45309')};
+  ${DIGIT_DISPLAY}
 `
 
 const ChipCount = styled.span`
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
+  flex-shrink: 0;
   color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+`
+
+const MiniMemberBar = styled.div`
+  width: 100%;
+  height: 3px;
+  border-radius: 999px;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  overflow: hidden;
+`
+
+const MiniMemberFill = styled.div<{ $tone: GroupTone; $pct: number }>`
+  width: ${({ $pct }) => `${$pct}%`};
+  height: 100%;
+  border-radius: 999px;
+  opacity: 0.78;
+  background: ${({ $tone, theme }) =>
+    isDark(theme.mode) ? GROUP_TONE[$tone].fgDark : GROUP_TONE[$tone].fgLight};
 `

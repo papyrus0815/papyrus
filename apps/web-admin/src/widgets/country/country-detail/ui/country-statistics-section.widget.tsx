@@ -1,23 +1,27 @@
 import { useEffect, useState } from 'react'
 
+import { FiEdit2 } from 'react-icons/fi'
 import { useSearchParams } from 'react-router-dom'
 import styled from 'styled-components'
 
+import {
+  BentoActionBtn,
+  BentoCard,
+  BentoCardBody,
+  BentoCardHeader,
+  BentoCardTitle,
+  BentoCardTitleGroup,
+  BentoSubLabel,
+} from '@/entities/event/ui/bento-primitives'
 import { SectionTabHeader } from '@/shared/ui/section-page-layout'
 import {
   UnderlineTabButton,
   UnderlineTabNav,
 } from '@/shared/ui/underline-tabs'
 
-import { BondYieldPanel } from './country-data-manager/bond-yield-panel'
-import { INDICATOR_META, type IndicatorType } from './country-data-manager/field-configs'
-import { IndicatorEditorPanel } from './country-data-manager/indicator-editor-panel'
-import { PopulationPyramidPanel } from './country-data-manager/population-pyramid-panel'
+import { CountryDataManagerModal } from './country-data-manager/country-data-manager-modal'
 import { RecordsPanel } from './country-data-manager/records-panel'
-import {
-  countryTabCanvasPadding,
-  LedgerFilterChip,
-} from './country-ledger-primitives'
+import { countryTabCanvasPadding } from './country-ledger-primitives'
 import { BondYieldSection } from './dashboard-panels/bond-yield-section'
 import { IndicatorTrendsSection } from './dashboard-panels/indicator-trends-section'
 import { PopulationPyramidSection } from './dashboard-panels/population-pyramid-section'
@@ -34,29 +38,23 @@ const STAT_SUB_TABS: { key: StatisticsSubTab; label: string; desc: string }[] = 
   {
     key: 'indicators',
     label: '거시·발전 지표',
-    desc: '경제(8종)·인구(8종)·발전(7종) 연도별 추이 시각화 및 원장 편집',
+    desc: '경제(8종)·인구(8종)·발전(7종) 핵심 스파크라인 및 연도별 추이 시각화',
   },
   {
     key: 'pyramid',
     label: '인구 피라미드',
-    desc: '연도별 연령대(9구간) × 성별 인구 구조 비교 및 원장 편집',
+    desc: '연도별 연령대(9구간) × 성별 인구 구조 비교 시각화',
   },
   {
     key: 'bonds',
     label: '국채 금리',
-    desc: '연도·만기별 국채 수익률 곡선, 장단기 스프레드 및 금리 원장 편집',
+    desc: '연도·만기별 국채 수익률 곡선 및 장단기 스프레드 분석',
   },
   {
     key: 'records',
     label: '국가 연혁 메모',
     desc: '연도별 주요 정책·경제·사회 기록 노트 관리',
   },
-]
-
-const INDICATOR_TYPES: IndicatorType[] = [
-  'economic',
-  'demographic',
-  'development',
 ]
 
 function isValidSubTab(raw: string | null): raw is StatisticsSubTab {
@@ -71,8 +69,8 @@ function isValidSubTab(raw: string | null): raw is StatisticsSubTab {
 /**
  * 국가 상세 「경제·통계」 전용 탭 (`/country/:countryId/statistics`).
  *
- * 대시보드에서 요약으로만 보이던 거시·인구·발전 지표(23종), 연령·성별 인구 피라미드,
- * 국채 수익률 곡선, 국가 연혁 메모를 풀페이지 차트 + 원장 편집 테이블로 통합 제공한다.
+ * 인포그래픽 읽기 화면과 원장 데이터 편집 모달(`CountryDataManagerModal`)을 분리하여,
+ * 거시·인구·발전 지표(23종), 연령·성별 인구 피라미드, 국채 수익률 곡선을 쾌적하게 탐색한다.
  */
 export function CountryStatisticsSection({
   countryId,
@@ -86,7 +84,7 @@ export function CountryStatisticsSection({
     : (initialSubTab ?? 'indicators')
 
   const [subTab, setSubTab] = useState<StatisticsSubTab>(resolvedInitial)
-  const [indicatorType, setIndicatorType] = useState<IndicatorType>('economic')
+  const [managerOpen, setManagerOpen] = useState(false)
 
   useEffect(() => {
     if (isValidSubTab(urlSub)) {
@@ -116,6 +114,16 @@ export function CountryStatisticsSection({
         variant="plain"
         title="경제·통계"
         description={`${countryName} · ${activeMeta.desc}`}
+        rightSlot={
+          <BentoActionBtn
+            type="button"
+            $accent
+            onClick={() => setManagerOpen(true)}
+          >
+            <FiEdit2 size={13} />
+            데이터 편집
+          </BentoActionBtn>
+        }
       />
 
       <UnderlineTabNav aria-label="경제·통계 하위 탭">
@@ -138,40 +146,6 @@ export function CountryStatisticsSection({
             countryName={countryName}
             embeddedInTab
           />
-
-          <LedgerCard>
-            <LedgerHeader>
-              <div>
-                <LedgerTitle>지표 원장 및 연도별 데이터 편집</LedgerTitle>
-                <LedgerSub>
-                  분야를 선택해 연도별 지표를 추가·수정·삭제하면 상단 추이 차트와 대시보드에 즉시 반영됩니다.
-                </LedgerSub>
-              </div>
-              <CategoryChips role="tablist" aria-label="지표 분야 선택">
-                {INDICATOR_TYPES.map((typeKey) => (
-                  <CategoryChip
-                    key={typeKey}
-                    type="button"
-                    role="tab"
-                    aria-selected={indicatorType === typeKey}
-                    $active={indicatorType === typeKey}
-                    onClick={() => setIndicatorType(typeKey)}
-                  >
-                    {INDICATOR_META[typeKey].label}
-                    <ChipCount>
-                      {INDICATOR_META[typeKey].fields.length}종
-                    </ChipCount>
-                  </CategoryChip>
-                ))}
-              </CategoryChips>
-            </LedgerHeader>
-
-            <IndicatorEditorPanel
-              key={indicatorType}
-              countryId={countryId}
-              type={indicatorType}
-            />
-          </LedgerCard>
         </TabBody>
       )}
 
@@ -182,18 +156,6 @@ export function CountryStatisticsSection({
             countryName={countryName}
             embeddedInTab
           />
-
-          <LedgerCard>
-            <LedgerHeader>
-              <div>
-                <LedgerTitle>연령·성별 인구 원장 및 편집</LedgerTitle>
-                <LedgerSub>
-                  연도별 9개 연령 구간(0–9세 ~ 80세 이상)의 남·여 인구를 입력·수정할 수 있습니다.
-                </LedgerSub>
-              </div>
-            </LedgerHeader>
-            <PopulationPyramidPanel countryId={countryId} />
-          </LedgerCard>
         </TabBody>
       )}
 
@@ -204,36 +166,34 @@ export function CountryStatisticsSection({
             countryName={countryName}
             embeddedInTab
           />
-
-          <LedgerCard>
-            <LedgerHeader>
-              <div>
-                <LedgerTitle>국채 금리 원장 및 만기별 수익률 편집</LedgerTitle>
-                <LedgerSub>
-                  연도별·만기별(3개월~30년) 국채 수익률(%)을 등록·수정하면 수익률 곡선과 장단기 스프레드가 계산됩니다.
-                </LedgerSub>
-              </div>
-            </LedgerHeader>
-            <BondYieldPanel countryId={countryId} />
-          </LedgerCard>
         </TabBody>
       )}
 
       {subTab === 'records' && (
         <TabBody>
-          <LedgerCard>
-            <LedgerHeader>
-              <div>
-                <LedgerTitle>국가 연혁 메모 원장</LedgerTitle>
-                <LedgerSub>
+          <BentoCard>
+            <BentoCardHeader>
+              <BentoCardTitleGroup>
+                <BentoCardTitle>국가 연혁 메모 원장</BentoCardTitle>
+                <BentoSubLabel>
                   정치·경제·사회·외교 등 정형 수치로 담기 어려운 연도별 핵심 기록을 관리합니다.
-                </LedgerSub>
-              </div>
-            </LedgerHeader>
-            <RecordsPanel countryId={countryId} />
-          </LedgerCard>
+                </BentoSubLabel>
+              </BentoCardTitleGroup>
+            </BentoCardHeader>
+            <BentoCardBody>
+              <RecordsPanel countryId={countryId} />
+            </BentoCardBody>
+          </BentoCard>
         </TabBody>
       )}
+
+      <CountryDataManagerModal
+        countryId={countryId}
+        countryName={countryName}
+        open={managerOpen}
+        onClose={() => setManagerOpen(false)}
+        initialTab={subTab}
+      />
     </Wrap>
   )
 }
@@ -250,50 +210,4 @@ const TabBody = styled.div`
   display: flex;
   flex-direction: column;
   gap: 24px;
-`
-
-const LedgerCard = styled.section`
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 18px 0;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-`
-
-const LedgerHeader = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px 20px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-`
-
-const LedgerTitle = styled.h4`
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const LedgerSub = styled.p`
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const CategoryChips = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-`
-
-const CategoryChip = styled(LedgerFilterChip)``
-
-const ChipCount = styled.span`
-  font-size: 11px;
-  font-weight: 700;
-  opacity: 0.75;
 `

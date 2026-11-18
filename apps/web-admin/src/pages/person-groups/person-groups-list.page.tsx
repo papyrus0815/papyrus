@@ -3,13 +3,36 @@
  * 유형 칩 필터 + 이름·인물·설명 검색 + 카드 그리드(멤버 아바타 스택·미리보기) → 상세 페이지.
  * URL ?type=&countryId=&historicalCountryId= 로 딥링크 (국가 상세 "집단 전체 보기" 진입 등).
  */
-import { useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { FiPlus, FiSearch, FiUsers, FiX } from 'react-icons/fi'
-import styled from 'styled-components'
+import styled, { css, useTheme } from 'styled-components'
 
+import {
+  BentoCard,
+  BentoCardBadge,
+  BentoCardBody,
+  BentoCardHeader,
+  BentoCardTitle,
+  BentoCardTitleGroup,
+  type SegmentSlice,
+  StackedSegmentBar,
+} from '@/entities/event/ui/bento-primitives'
+import {
+  DIGIT_DISPLAY,
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentSubtle,
+  ledgerBackground,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  ledgerSubtleFill,
+  MOTION,
+  RADIUS,
+} from '@/entities/event/ui/ledger-tokens'
 import {
   GROUP_TONE,
   PERSON_GROUP_TYPE_META,
@@ -93,6 +116,8 @@ function deriveGroupCountryBadge(g: PersonGroup): string | null {
 }
 
 export default function PersonGroupsListPage() {
+  const theme = useTheme()
+  const dark = isDark(theme.mode)
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const typeParam = (searchParams.get('type') as PersonGroupType | null) ?? null
@@ -175,6 +200,45 @@ export default function PersonGroupsListPage() {
     return map
   }, [baseFiltered])
 
+  const typeSlices = useMemo<SegmentSlice[]>(
+    () =>
+      PERSON_GROUP_TYPE_ORDER.map((t) => {
+        const meta = PERSON_GROUP_TYPE_META[t]
+        const cnt = typeCounts.get(t) ?? 0
+        const tone = GROUP_TONE[meta.tone]
+        return {
+          key: t,
+          label: meta.label,
+          value: cnt,
+          color: dark ? tone.fgDark : tone.fgLight,
+        }
+      }),
+    [typeCounts, dark],
+  )
+
+  const validTypeSlices = useMemo(
+    () => typeSlices.filter((s) => s.value > 0),
+    [typeSlices],
+  )
+
+  const summaryStats = useMemo(() => {
+    let memberSum = 0
+    let eventSideSum = 0
+    for (const g of baseFiltered) {
+      memberSum += g.memberCount || (g.members?.length ?? 0)
+      eventSideSum += g.eventSideCount ?? 0
+    }
+    return { memberSum, eventSideSum }
+  }, [baseFiltered])
+
+  const activeSliceIndex = useMemo(
+    () =>
+      typeParam
+        ? validTypeSlices.findIndex((s) => s.key === typeParam)
+        : -1,
+    [typeParam, validTypeSlices],
+  )
+
   const filtered = useMemo(
     () =>
       baseFiltered.filter((g) => !typeParam || g.type === typeParam),
@@ -211,6 +275,30 @@ export default function PersonGroupsListPage() {
     setSearchParams(new URLSearchParams())
   }
 
+  const handleTypeSegmentClick = (evt: React.MouseEvent<HTMLDivElement>) => {
+    const segmentWrap = evt.currentTarget.firstElementChild
+    if (!segmentWrap) return
+    const track = segmentWrap.children[0]
+    const legend = segmentWrap.children[1]
+    const target = evt.target as HTMLElement
+    let idx = -1
+    if (track && track.contains(target)) {
+      const piece = Array.from(track.children).find(
+        (c) => c === target || c.contains(target),
+      )
+      if (piece) idx = Array.from(track.children).indexOf(piece)
+    } else if (legend && legend.contains(target)) {
+      const item = Array.from(legend.children).find(
+        (c) => c === target || c.contains(target),
+      )
+      if (item) idx = Array.from(legend.children).indexOf(item)
+    }
+    if (idx >= 0 && idx < validTypeSlices.length) {
+      const clickedType = validTypeSlices[idx].key as PersonGroupType
+      setType(typeParam === clickedType ? null : clickedType)
+    }
+  }
+
   return (
     <Page>
       <HeaderRow>
@@ -228,6 +316,52 @@ export default function PersonGroupsListPage() {
           <FiPlus size={17} />새 묶음
         </CreateBtn>
       </HeaderRow>
+
+      {!isLoading && baseFiltered.length > 0 && (
+        <BentoCard aria-label="집단 유형 분포 요약">
+          <BentoCardHeader>
+            <BentoCardTitleGroup>
+              <BentoCardTitle>집단 유형 분포</BentoCardTitle>
+              <BentoCardBadge>
+                {baseFiltered.length.toLocaleString('ko-KR')}개 묶음 ·{' '}
+                {validTypeSlices.length}개 유형
+              </BentoCardBadge>
+            </BentoCardTitleGroup>
+            <BentoRightMeta>
+              <span>
+                연인원 <strong>{summaryStats.memberSum.toLocaleString('ko-KR')}</strong>명
+              </span>
+              {summaryStats.eventSideSum > 0 && (
+                <>
+                  <span>·</span>
+                  <span>
+                    사건 진영{' '}
+                    <strong>
+                      {summaryStats.eventSideSum.toLocaleString('ko-KR')}
+                    </strong>
+                    건
+                  </span>
+                </>
+              )}
+              {typeParam && (
+                <TypeResetPill type="button" onClick={() => setType(null)}>
+                  {PERSON_GROUP_TYPE_META[typeParam].label} 해제{' '}
+                  <FiX size={11} />
+                </TypeResetPill>
+              )}
+            </BentoRightMeta>
+          </BentoCardHeader>
+          <BentoCardBody>
+            <InteractiveTypeSegmentWrap
+              $activeIndex={activeSliceIndex}
+              onClick={handleTypeSegmentClick}
+              title="막대 구간 또는 범례를 클릭하면 해당 유형으로 필터링합니다"
+            >
+              <StackedSegmentBar slices={typeSlices} height={10} />
+            </InteractiveTypeSegmentWrap>
+          </BentoCardBody>
+        </BentoCard>
+      )}
 
       <Toolbar>
         <TopRow>
@@ -435,18 +569,19 @@ const PageTitle = styled.h1`
   letter-spacing: -0.02em;
   color: ${({ theme }) => theme.colors.text.primary};
   svg {
-    color: ${({ theme }) => theme.colors.primary};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 `
 
 const TotalBadge = styled.span`
+  ${DIGIT_DISPLAY}
   padding: 2px 9px;
   font-size: 13px;
   font-weight: 700;
   border-radius: 999px;
-  background: ${({ theme }) => theme.colors.background.secondary};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
 `
 
 const PageDesc = styled.p`
@@ -459,14 +594,21 @@ const CreateBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 11px 18px;
-  font-size: 14px;
+  padding: 10px 16px;
+  font-size: 13.5px;
   font-weight: 700;
-  border-radius: 10px;
-  border: none;
-  background: ${({ theme }) => theme.colors.primary};
+  border-radius: 9px;
+  border: 1px solid ${({ theme }) => (isDark(theme.mode) ? '#6366f1' : '#4f46e5')};
+  background: ${({ theme }) => (isDark(theme.mode) ? '#6366f1' : '#4f46e5')};
   color: #fff;
+  box-shadow: none;
   cursor: pointer;
+  transition: background ${MOTION.fast} ease, border-color ${MOTION.fast} ease;
+
+  &:hover {
+    background: ${({ theme }) => (isDark(theme.mode) ? '#4f46e5' : '#4338ca')};
+    border-color: ${({ theme }) => (isDark(theme.mode) ? '#4f46e5' : '#4338ca')};
+  }
 `
 
 const Toolbar = styled.div`
@@ -563,43 +705,46 @@ const FilterChip = styled.button<{
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 14px;
-  font-size: 13px;
+  padding: 6px 13px;
+  font-size: 12.5px;
   font-weight: 700;
   border-radius: 999px;
   cursor: pointer;
-  transition: all 0.13s ease;
+  box-shadow: none;
+  transition:
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    color ${MOTION.fast} ease;
   opacity: ${({ $dim }) => ($dim ? 0.45 : 1)};
-  border: 1.5px solid
+  border: 1px solid
     ${({ $active, $tone, theme }) =>
       $active
         ? $tone
           ? isDark(theme.mode)
             ? GROUP_TONE[$tone].fgDark
             : GROUP_TONE[$tone].fgLight
-          : theme.colors.primary
-        : theme.colors.border.default};
+          : ledgerAccentBorder(theme.mode)
+        : ledgerHairlineStrong(theme.mode)};
   background: ${({ $active, $tone, theme }) =>
     $active
       ? $tone
         ? isDark(theme.mode)
           ? GROUP_TONE[$tone].bgDark
           : GROUP_TONE[$tone].bgLight
-        : isDark(theme.mode)
-          ? 'rgba(99,106,242,0.16)'
-          : 'rgba(99,102,241,0.10)'
-      : theme.colors.background.primary};
+        : ledgerAccentSubtle(theme.mode)
+      : ledgerBackground(theme.mode)};
   color: ${({ $active, $tone, theme }) =>
     $active
       ? $tone
         ? isDark(theme.mode)
           ? GROUP_TONE[$tone].fgDark
           : GROUP_TONE[$tone].fgLight
-        : theme.colors.primary
+        : ledgerAccent(theme.mode)
       : theme.colors.text.secondary};
 `
 
 const ChipCount = styled.span`
+  ${DIGIT_DISPLAY}
   font-size: 11.5px;
   font-weight: 700;
   opacity: 0.78;
@@ -616,17 +761,25 @@ const Card = styled.button`
   flex-direction: column;
   align-items: flex-start;
   gap: 9px;
-  padding: 18px;
-  border-radius: 14px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.primary};
+  padding: 17px 18px;
+  border-radius: ${RADIUS.MD};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  box-shadow: none;
   cursor: pointer;
   text-align: left;
-  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
+  transition:
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease;
+
   &:hover {
-    transform: translateY(-2px);
-    border-color: ${({ theme }) => theme.colors.primary};
-    box-shadow: 0 8px 20px ${({ theme }) => theme.colors.shadow.sm};
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: -2px;
   }
 `
 
@@ -709,7 +862,7 @@ const MemberPreviewRow = styled.div`
   display: flex;
   align-items: center;
   gap: 10px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const AvatarStack = styled.div`
@@ -764,7 +917,77 @@ const Empty = styled.div`
 
 const SkCard = styled.div`
   height: 170px;
-  border-radius: 14px;
-  background: ${({ theme }) => theme.colors.background.secondary};
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-radius: ${RADIUS.MD};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+`
+
+const BentoRightMeta = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const TypeResetPill = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+`
+
+const InteractiveTypeSegmentWrap = styled.div<{ $activeIndex: number }>`
+  & > div > div:first-child > * {
+    cursor: pointer;
+    transition: opacity ${MOTION.fast} ease;
+  }
+
+  & > div > div:first-child > *:hover {
+    opacity: 0.8;
+  }
+
+  & > div > div:nth-child(2) > span {
+    cursor: pointer;
+    padding: 2px 6px;
+    margin: -2px -3px;
+    border-radius: 5px;
+    border: 1px solid transparent;
+    transition:
+      background ${MOTION.fast} ease,
+      border-color ${MOTION.fast} ease;
+  }
+
+  & > div > div:nth-child(2) > span:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    border-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  }
+
+  ${({ $activeIndex, theme }) =>
+    $activeIndex >= 0 &&
+    css`
+      & > div > div:first-child > *:not(:nth-child(${$activeIndex + 1})) {
+        opacity: 0.32;
+      }
+      & > div > div:nth-child(2) > span:nth-child(${$activeIndex + 1}) {
+        background: ${ledgerAccentSubtle(theme.mode)};
+        border-color: ${ledgerAccentBorder(theme.mode)};
+      }
+    `}
 `

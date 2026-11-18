@@ -1,12 +1,28 @@
 import { useMemo, useState } from 'react'
 
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 
 import {
   useDemographicIndicators,
   useDevelopmentIndicators,
   useEconomicIndicators,
 } from '@/entities/country/api.indicators'
+import {
+  BentoGrid3Col,
+  MiniSvgSparkline,
+  type SparkPoint,
+} from '@/entities/event/ui/bento-primitives'
+import {
+  DIGIT_DISPLAY,
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentSubtle,
+  ledgerBackground,
+  ledgerHairline,
+  ledgerHoverFill,
+  MOTION,
+  RADIUS,
+} from '@/entities/event/ui/ledger-tokens'
 
 import { CountryDataManagerModal } from '../country-data-manager/country-data-manager-modal'
 import {
@@ -134,17 +150,23 @@ const INVERSE_FIELDS = new Set([
   'co2EmissionsPerCapita',
 ])
 
+type TrendsViewMode = 'sparklines' | 'charts' | 'ledger'
+
 export function IndicatorTrendsSection({
   countryId,
   countryName,
   onOpenDetailTab,
   embeddedInTab = false,
 }: IndicatorTrendsSectionProps) {
+  const theme = useTheme()
+  const accentColor = ledgerAccent(theme.mode)
   const [managerOpen, setManagerOpen] = useState(false)
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | IndicatorType>('ALL')
   const [showAllCharts, setShowAllCharts] = useState(false)
   const [selectedSeriesKey, setSelectedSeriesKey] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<'chart' | 'ledger'>('chart')
+  const [viewMode, setViewMode] = useState<TrendsViewMode>(() =>
+    embeddedInTab ? 'sparklines' : 'charts',
+  )
   const economicQuery = useEconomicIndicators(countryId)
   const demographicQuery = useDemographicIndicators(countryId)
   const developmentQuery = useDevelopmentIndicators(countryId)
@@ -266,6 +288,7 @@ export function IndicatorTrendsSection({
         minVal,
         maxVal,
         avgVal,
+        sparkPoints: sorted as SparkPoint[],
         recentPoints: sorted.slice(-6).reverse(),
       }
     })
@@ -303,6 +326,9 @@ export function IndicatorTrendsSection({
     if (activeCategory !== 'ALL' && activeCategory !== category) {
       setCategoryFilter('ALL')
     }
+    if (viewMode === 'sparklines') {
+      setViewMode('charts')
+    }
     const idxInAll = allSeries.findIndex((series) => series.key === specKey)
     if (!embeddedInTab && idxInAll >= 4) {
       setShowAllCharts(true)
@@ -311,6 +337,21 @@ export function IndicatorTrendsSection({
       const el = document.getElementById(`trend-chart-${specKey}`)
       el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
     }, 40)
+  }
+
+  const handleSelectSparkTile = (specKey: string) => {
+    setSelectedSeriesKey(specKey)
+    setViewMode('charts')
+    const idxInFiltered = filteredSeries.findIndex(
+      (series) => series.key === specKey,
+    )
+    if (!embeddedInTab && idxInFiltered >= defaultLimit) {
+      setShowAllCharts(true)
+    }
+    setTimeout(() => {
+      const el = document.getElementById(`trend-chart-${specKey}`)
+      el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }, 50)
   }
 
   const activeCategoryCount = (
@@ -325,10 +366,6 @@ export function IndicatorTrendsSection({
       onClose={() => setManagerOpen(false)}
     />
   )
-
-  if (!isLoading && !hasAny && embeddedInTab) {
-    return null
-  }
 
   return (
     <S.Section $wide={hasAny}>
@@ -370,7 +407,7 @@ export function IndicatorTrendsSection({
       ) : (
         hasAny && (
           <>
-            {headlineSpecs.length > 0 && (
+            {headlineSpecs.length > 0 && viewMode !== 'sparklines' && (
               <HeadlineStrip aria-label="핵심 지표 최신 요약">
                 {headlineSpecs.map((spec) => {
                   if (spec.latestValue == null || spec.latestYear == null) {
@@ -519,12 +556,23 @@ export function IndicatorTrendsSection({
               )}
 
               <ViewSwitch role="tablist" aria-label="지표 추이 보기 방식">
+                {embeddedInTab && (
+                  <ViewSwitchBtn
+                    type="button"
+                    role="tab"
+                    aria-selected={viewMode === 'sparklines'}
+                    $active={viewMode === 'sparklines'}
+                    onClick={() => setViewMode('sparklines')}
+                  >
+                    스파크라인
+                  </ViewSwitchBtn>
+                )}
                 <ViewSwitchBtn
                   type="button"
                   role="tab"
-                  aria-selected={viewMode === 'chart'}
-                  $active={viewMode === 'chart'}
-                  onClick={() => setViewMode('chart')}
+                  aria-selected={viewMode === 'charts'}
+                  $active={viewMode === 'charts'}
+                  onClick={() => setViewMode('charts')}
                 >
                   추이 차트
                 </ViewSwitchBtn>
@@ -540,7 +588,109 @@ export function IndicatorTrendsSection({
               </ViewSwitch>
             </ToolbarRow>
 
-            {viewMode === 'chart' ? (
+            {viewMode === 'sparklines' ? (
+              <BentoGrid3Col
+                role="list"
+                aria-label="전체 지표 스파크라인 요약 그리드"
+              >
+                {filteredSpecs.map((spec) => {
+                  const deltaUnit = spec.unit === '%' ? '%p' : spec.unit
+                  const deltaSign =
+                    spec.delta != null && spec.delta > 0 ? '+' : ''
+                  const hasMultiYearSpark =
+                    spec.sparkPoints.length >= 2 &&
+                    spec.sparkPoints[spec.sparkPoints.length - 1].year >
+                      spec.sparkPoints[0].year
+                  const isHighlighted = selectedSeriesKey === spec.key
+
+                  return (
+                    <SparkTileCard
+                      key={spec.key}
+                      role="listitem"
+                      tabIndex={0}
+                      $active={isHighlighted}
+                      onClick={() => handleSelectSparkTile(spec.key)}
+                      onKeyDown={(keyEvent) => {
+                        if (
+                          keyEvent.key === 'Enter' ||
+                          keyEvent.key === ' '
+                        ) {
+                          keyEvent.preventDefault()
+                          handleSelectSparkTile(spec.key)
+                        }
+                      }}
+                    >
+                      <SparkTileHeader>
+                        <HeadlineTitleGroup>
+                          <HeadlineCatTag>{spec.categoryLabel}</HeadlineCatTag>
+                          <SparkTileTitle title={spec.title}>
+                            {spec.title}
+                          </SparkTileTitle>
+                        </HeadlineTitleGroup>
+                        {spec.latestYear != null && (
+                          <HeadlineYear>{spec.latestYear}년</HeadlineYear>
+                        )}
+                      </SparkTileHeader>
+
+                      <SparkTileMetricRow>
+                        <SparkTileValue>
+                          {spec.latestValue != null
+                            ? formatMetricValue(spec.latestValue, spec.unit)
+                            : '—'}
+                        </SparkTileValue>
+                        {spec.delta != null &&
+                          spec.prevYear != null &&
+                          Math.abs(spec.delta) > 1e-6 && (
+                            <SparkDeltaBadge $tone={spec.deltaTone}>
+                              {deltaSign}
+                              {formatMetricValue(spec.delta, deltaUnit)}
+                            </SparkDeltaBadge>
+                          )}
+                      </SparkTileMetricRow>
+
+                      <SparkGraphSlot>
+                        {hasMultiYearSpark ? (
+                          <MiniSvgSparkline
+                            points={spec.sparkPoints}
+                            color={accentColor}
+                            height={38}
+                            showZeroLine={
+                              spec.minVal != null &&
+                              spec.maxVal != null &&
+                              spec.minVal < 0 &&
+                              spec.maxVal > 0
+                            }
+                            formatValue={(val) =>
+                              formatMetricValue(val, spec.unit, true)
+                            }
+                          />
+                        ) : (
+                          <SingleObsLine>
+                            <SingleObsDot $color={accentColor} />
+                            <span>
+                              {spec.latestYear != null
+                                ? `${spec.latestYear}년 단일 관측`
+                                : '단일 관측'}
+                            </span>
+                          </SingleObsLine>
+                        )}
+                      </SparkGraphSlot>
+
+                      <SparkTileFooter>
+                        <SparkTileRange>
+                          {spec.pointCount >= 2 &&
+                          spec.firstYear != null &&
+                          spec.latestYear != null
+                            ? `${spec.firstYear}–${spec.latestYear} (${spec.pointCount}개년)`
+                            : `${spec.latestYear ?? '—'}년 기록`}
+                        </SparkTileRange>
+                        <SparkTileJumpHint>차트 상세 ↗</SparkTileJumpHint>
+                      </SparkTileFooter>
+                    </SparkTileCard>
+                  )
+                })}
+              </BentoGrid3Col>
+            ) : viewMode === 'charts' ? (
               <>
                 <GridContainer>
                   <Grid>
@@ -1066,5 +1216,156 @@ const Grid = styled.div`
     grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
   }
 `
+
+const SparkTileCard = styled.article<{ $active?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 13px 14px 11px;
+  border-radius: ${RADIUS.MD};
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? ledgerAccentBorder(theme.mode) : ledgerHairline(theme.mode)};
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : ledgerBackground(theme.mode)};
+  box-shadow: none;
+  cursor: pointer;
+  transition:
+    border-color ${MOTION.fast},
+    background ${MOTION.fast};
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+  }
+`
+
+const SparkTileHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+`
+
+const SparkTileTitle = styled.span`
+  font-size: 12.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const SparkTileMetricRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+`
+
+const SparkTileValue = styled.strong`
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  ${DIGIT_DISPLAY}
+`
+
+const SparkDeltaBadge = styled.span<{ $tone: 'good' | 'caution' | 'neutral' }>`
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: ${RADIUS.XS};
+  font-size: 11px;
+  font-weight: 700;
+  ${DIGIT_DISPLAY}
+  color: ${({ theme, $tone }) => {
+    if ($tone === 'neutral') return theme.colors.text.tertiary
+    if ($tone === 'good') {
+      return theme.mode === 'dark' ? '#34d399' : '#047857'
+    }
+    return theme.mode === 'dark' ? '#fca5a5' : '#b91c1c'
+  }};
+  background: ${({ theme, $tone }) => {
+    if ($tone === 'neutral') {
+      return theme.mode === 'dark'
+        ? 'rgba(255,255,255,0.05)'
+        : 'rgba(15,23,42,0.04)'
+    }
+    if ($tone === 'good') {
+      return theme.mode === 'dark'
+        ? 'rgba(16,185,129,0.14)'
+        : 'rgba(16,185,129,0.09)'
+    }
+    return theme.mode === 'dark'
+      ? 'rgba(248,113,113,0.14)'
+      : 'rgba(220,38,38,0.08)'
+  }};
+`
+
+const SparkGraphSlot = styled.div`
+  width: 100%;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+`
+
+const SingleObsLine = styled.div`
+  width: 100%;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-top: 1px dashed ${({ theme }) => ledgerHairline(theme.mode)};
+  border-bottom: 1px dashed ${({ theme }) => ledgerHairline(theme.mode)};
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+`
+
+const SingleObsDot = styled.span<{ $color: string }>`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: ${({ $color }) => $color};
+  flex-shrink: 0;
+`
+
+const SparkTileFooter = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const SparkTileRange = styled.span`
+  font-size: 10.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  ${DIGIT_DISPLAY}
+`
+
+const SparkTileJumpHint = styled.span`
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+`
+
 
 

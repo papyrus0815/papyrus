@@ -10,14 +10,38 @@
  *  - 추가·수정 = 공용 Modal(Esc·스크롤 잠금·포커스 트랩)
  *  - 색은 전부 테마 토큰
  */
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiArrowRight, FiPlus } from 'react-icons/fi'
-import { Link } from 'react-router-dom'
-import styled from 'styled-components'
+import { FiArrowRight, FiArrowUpRight, FiPlus, FiX } from 'react-icons/fi'
+import { Link, useNavigate } from 'react-router-dom'
+import styled, { useTheme } from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import {
+  BentoCard,
+  BentoCardBadge,
+  BentoCardBody,
+  BentoCardHeader,
+  BentoCardTitle,
+  BentoCardTitleGroup,
+  BentoGrid2Col,
+  BentoGridAsym,
+  MiniDonutRing,
+  type SegmentSlice,
+  StackedSegmentBar,
+} from '@/entities/event/ui/bento-primitives'
+import {
+  DIGIT_DISPLAY,
+  ledgerAccent,
+  ledgerAccentSubtle,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  ledgerSubtleFill,
+  RADIUS,
+} from '@/entities/event/ui/ledger-tokens'
+import { formatCountryPeriod } from '@/shared/lib/country-period'
 import {
   type CreateHistoricalCountryMembershipDto,
   type CreateHistoricalCountryRelationDto,
@@ -287,11 +311,17 @@ async function confirmRemove(what: string) {
 // ─── 계승 ────────────────────────────────────────────────────────────────────
 
 export function SuccessionSection({ country }: { country: UnifiedCountry }) {
+  const theme = useTheme()
+  const isDark = theme.mode === 'dark'
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const historicalCountryId = country.id
   const queryKey = ['historical-country-transitions', historicalCountryId]
   const [addOpen, setAddOpen] = useState(false)
-  const [directionFilter, setDirectionFilter] = useState<'all' | 'predecessor' | 'successor'>('all')
+  const [directionFilter, setDirectionFilter] = useState<
+    'all' | 'predecessor' | 'successor'
+  >('all')
+  const [eventTypeFilter, setEventTypeFilter] = useState<string | null>(null)
   const [editing, setEditing] = useState<HistoricalCountryTransitionDto | null>(null)
   const [form, setForm] = useState<{
     asPredecessor: boolean
@@ -329,16 +359,34 @@ export function SuccessionSection({ country }: { country: UnifiedCountry }) {
   const regimeChangeCount = transitions.filter(
     (transition) => transition.transitionScope === 'REGIME_CHANGE',
   ).length
-  const withDateCount = transitions.filter((transition) =>
-    Boolean(transition.successorStartDate),
-  ).length
+
+  const transitionTypeSlices = useMemo<SegmentSlice[]>(() => {
+    const palette = isDark
+      ? ['#a5b4fc', '#fbbf24', '#f87171', '#34d399', '#38bdf8', '#c084fc']
+      : ['#4f46e5', '#d97706', '#dc2626', '#059669', '#0284c7', '#7c3aed']
+    const counts = new Map<string, number>()
+    for (const tr of transitions) {
+      counts.set(tr.eventType, (counts.get(tr.eventType) ?? 0) + 1)
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([typeKey, cnt], idx) => ({
+        key: typeKey,
+        label: TRANSITION_EVENT_LABELS[typeKey] ?? typeKey,
+        value: cnt,
+        color: palette[idx % palette.length],
+        meta: `${cnt}건`,
+      }))
+  }, [transitions, isDark])
 
   const filteredTransitions = transitions.filter((transition) => {
     if (directionFilter === 'predecessor') {
-      return transition.successorId === historicalCountryId
+      if (transition.successorId !== historicalCountryId) return false
+    } else if (directionFilter === 'successor') {
+      if (transition.predecessorId !== historicalCountryId) return false
     }
-    if (directionFilter === 'successor') {
-      return transition.predecessorId === historicalCountryId
+    if (eventTypeFilter && transition.eventType !== eventTypeFilter) {
+      return false
     }
     return true
   })
@@ -406,104 +454,165 @@ export function SuccessionSection({ country }: { country: UnifiedCountry }) {
       <Section>
         <SectionHead
           title="계승·변천"
-          description="이 나라로 이어진 전신, 이 나라에서 이어진 후신과 그 방식(계승·정복·독립…)"
+          description="전신 → 현재 국가 → 후신으로 이어지는 국가 주권·정통성 변천 다이어그램과 원장입니다."
           addLabel="계승 관계 추가"
           onAdd={() => setAddOpen(true)}
         />
 
-        <DashboardStyles.SectionHeadlineStrip aria-label="계승·변천 요약 지표">
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              전체 계승·변천
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue $muted={transitions.length === 0}>
-              {transitions.length > 0 ? (
-                <>
-                  {transitions.length}
-                  <DashboardStyles.SectionHeadlineUnit>건</DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '미등록'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {transitions.length > 0
-                ? `전신 ${predecessors.length}건 · 후신 ${successors.length}건`
-                : '전신·후신 연결 기록 없음'}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
+        {transitions.length > 0 && (
+          <DiagramBentoWrap>
+            <BentoGridAsym $leftFr={1.35} $rightFr={1}>
+              {/* 좌측: 3단계 시각 계승 다이어그램 */}
+              <BentoCard aria-label="전신·후신 시각 계보 다이어그램">
+                <BentoCardHeader>
+                  <BentoCardTitleGroup>
+                    <BentoCardTitle>전신 ──▶ 현재 ──▶ 후신 흐름도</BentoCardTitle>
+                    <BentoCardBadge>총 {transitions.length}건</BentoCardBadge>
+                  </BentoCardTitleGroup>
+                </BentoCardHeader>
+                <BentoCardBody>
+                  <TriStageFlowGrid>
+                    <TriStageCol>
+                      <TriStageHeader>
+                        전신 ({predecessors.length})
+                      </TriStageHeader>
+                      {predecessors.length > 0 ? (
+                        predecessors.slice(0, 4).map((tr) => (
+                          <DiagramNodeBtn
+                            key={tr.id}
+                            type="button"
+                            onClick={() =>
+                              tr.predecessorId &&
+                              navigate(pathKeys.countryDetail(tr.predecessorId))
+                            }
+                          >
+                            <strong>{tr.predecessorName ?? '전임 국가'}</strong>
+                            <small>
+                              {TRANSITION_EVENT_LABELS[tr.eventType] ??
+                                tr.eventType}
+                            </small>
+                          </DiagramNodeBtn>
+                        ))
+                      ) : (
+                        <DiagramEmptySlotBtn
+                          type="button"
+                          onClick={() => openAddWithDirection(false)}
+                        >
+                          + 전신 연결
+                        </DiagramEmptySlotBtn>
+                      )}
+                      {predecessors.length > 4 && (
+                        <DiagramMoreNote>
+                          외 {predecessors.length - 4}개국
+                        </DiagramMoreNote>
+                      )}
+                    </TriStageCol>
 
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              전신 (이전 국가)
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue $muted={predecessors.length === 0}>
-              {predecessors.length > 0 ? (
-                <>
-                  {predecessors.length}
-                  <DashboardStyles.SectionHeadlineUnit>개국</DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '없음'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {predecessors.length > 0
-                ? predecessors
-                    .map((item) => item.predecessorName)
-                    .filter(Boolean)
-                    .slice(0, 3)
-                    .join(' · ')
-                : `이 국가(${country.name})로 이어진 전신 미등록`}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
+                    <TriArrowCol aria-hidden>
+                      <FiArrowRight size={15} />
+                    </TriArrowCol>
 
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              후신 (이후 국가)
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue $muted={successors.length === 0}>
-              {successors.length > 0 ? (
-                <>
-                  {successors.length}
-                  <DashboardStyles.SectionHeadlineUnit>개국</DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '없음'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {successors.length > 0
-                ? successors
-                    .map((item) => item.successorName)
-                    .filter(Boolean)
-                    .slice(0, 3)
-                    .join(' · ')
-                : `이 국가(${country.name})에서 이어진 후신 미등록`}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
+                    <TriStageCenterCard>
+                      <CenterTag>현재 정치체</CenterTag>
+                      <CenterName>{country.name}</CenterName>
+                      <CenterPeriod>
+                        {formatCountryPeriod(country) || '존속 연대'}
+                      </CenterPeriod>
+                    </TriStageCenterCard>
 
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              변천 시점 · 성격
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue $muted={transitions.length === 0}>
-              {transitions.length > 0 ? (
-                <>
-                  {Math.round((withDateCount / transitions.length) * 100)}
-                  <DashboardStyles.SectionHeadlineUnit>%</DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '—'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {transitions.length > 0
-                ? `시점 확인 ${withDateCount}/${transitions.length}건 · 국가계승 ${stateSuccessionCount} / 정권교체 ${regimeChangeCount}`
-                : '전환 방식(계승·정복·독립 등) 기록 대기'}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
-        </DashboardStyles.SectionHeadlineStrip>
+                    <TriArrowCol aria-hidden>
+                      <FiArrowRight size={15} />
+                    </TriArrowCol>
+
+                    <TriStageCol>
+                      <TriStageHeader>
+                        후신 ({successors.length})
+                      </TriStageHeader>
+                      {successors.length > 0 ? (
+                        successors.slice(0, 4).map((tr) => (
+                          <DiagramNodeBtn
+                            key={tr.id}
+                            type="button"
+                            onClick={() =>
+                              tr.successorId &&
+                              navigate(pathKeys.countryDetail(tr.successorId))
+                            }
+                          >
+                            <strong>{tr.successorName ?? '후임 국가'}</strong>
+                            <small>
+                              {TRANSITION_EVENT_LABELS[tr.eventType] ??
+                                tr.eventType}
+                            </small>
+                          </DiagramNodeBtn>
+                        ))
+                      ) : (
+                        <DiagramEmptySlotBtn
+                          type="button"
+                          onClick={() => openAddWithDirection(true)}
+                        >
+                          + 후신 연결
+                        </DiagramEmptySlotBtn>
+                      )}
+                      {successors.length > 4 && (
+                        <DiagramMoreNote>
+                          외 {successors.length - 4}개국
+                        </DiagramMoreNote>
+                      )}
+                    </TriStageCol>
+                  </TriStageFlowGrid>
+                </BentoCardBody>
+              </BentoCard>
+
+              {/* 우측: 변천 방식 비중 */}
+              <BentoCard aria-label="변천 방식 및 전환 성격 비중">
+                <BentoCardHeader>
+                  <BentoCardTitleGroup>
+                    <BentoCardTitle>변천 방식 · 전환 성격</BentoCardTitle>
+                    <BentoCardBadge>
+                      국가계승 {stateSuccessionCount} · 정권교체 {regimeChangeCount}
+                    </BentoCardBadge>
+                  </BentoCardTitleGroup>
+                  {eventTypeFilter && (
+                    <InlineChipResetBtn
+                      type="button"
+                      onClick={() => setEventTypeFilter(null)}
+                    >
+                      전체 방식
+                    </InlineChipResetBtn>
+                  )}
+                </BentoCardHeader>
+                <BentoCardBody>
+                  <StackedSegmentBar
+                    slices={transitionTypeSlices}
+                    height={10}
+                    showPercent
+                  />
+                  <SliceFilterRow>
+                    {transitionTypeSlices.map((slice) => {
+                      const active = eventTypeFilter === slice.key
+                      return (
+                        <SliceFilterPill
+                          key={slice.key}
+                          type="button"
+                          $active={active}
+                          onClick={() =>
+                            setEventTypeFilter((prev) =>
+                              prev === slice.key ? null : slice.key,
+                            )
+                          }
+                        >
+                          <MiniColorDot $color={slice.color} />
+                          <span>{slice.label}</span>
+                          <strong>{slice.meta}</strong>
+                        </SliceFilterPill>
+                      )
+                    })}
+                  </SliceFilterRow>
+                </BentoCardBody>
+              </BentoCard>
+            </BentoGridAsym>
+          </DiagramBentoWrap>
+        )}
 
         {isLoading ? (
           <Muted>불러오는 중…</Muted>
@@ -818,11 +927,18 @@ export function SuccessionSection({ country }: { country: UnifiedCountry }) {
 // ─── 소속·구성 ───────────────────────────────────────────────────────────────
 
 export function MembershipSection({ country }: { country: UnifiedCountry }) {
+  const theme = useTheme()
+  const isDark = theme.mode === 'dark'
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const historicalCountryId = country.id
   const queryKey = ['historical-country-memberships', historicalCountryId]
   const [addOpen, setAddOpen] = useState(false)
-  const [positionFilter, setPositionFilter] = useState<'all' | 'asMember' | 'asParent'>('all')
+  const [positionFilter, setPositionFilter] = useState<
+    'all' | 'asMember' | 'asParent'
+  >('all')
+  const [roleFilter, setRoleFilter] =
+    useState<HistoricalMembershipRole | null>(null)
   const [editing, setEditing] = useState<HistoricalCountryMembershipDto | null>(null)
   const [form, setForm] = useState<{
     asParent: boolean
@@ -865,17 +981,36 @@ export function MembershipSection({ country }: { country: UnifiedCountry }) {
   const leadingCount = memberships.filter(
     (membership) => Boolean(membership.isLeadingMember),
   ).length
-  const withPeriodCount = memberships.filter((membership) =>
-    Boolean(membership.start?.year || membership.end?.year),
-  ).length
+
+  const roleSlices = useMemo<
+    Array<SegmentSlice & { roleKey: HistoricalMembershipRole }>
+  >(() => {
+    const palette = isDark
+      ? ['#a5b4fc', '#38bdf8', '#fbbf24', '#34d399', '#f87171', '#c084fc']
+      : ['#4f46e5', '#0284c7', '#d97706', '#059669', '#dc2626', '#7c3aed']
+    const counts = new Map<HistoricalMembershipRole, number>()
+    for (const m of memberships) {
+      counts.set(m.role, (counts.get(m.role) ?? 0) + 1)
+    }
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([roleKey, cnt], idx) => ({
+        key: roleKey,
+        roleKey,
+        label: MEMBERSHIP_ROLE_LABELS[roleKey] ?? roleKey,
+        value: cnt,
+        color: palette[idx % palette.length],
+        meta: `${cnt}건`,
+      }))
+  }, [memberships, isDark])
 
   const filteredMemberships = memberships.filter((membership) => {
     if (positionFilter === 'asMember') {
-      return membership.memberCountryId === historicalCountryId
+      if (membership.memberCountryId !== historicalCountryId) return false
+    } else if (positionFilter === 'asParent') {
+      if (membership.historicalCountryId !== historicalCountryId) return false
     }
-    if (positionFilter === 'asParent') {
-      return membership.historicalCountryId === historicalCountryId
-    }
+    if (roleFilter && membership.role !== roleFilter) return false
     return true
   })
 
@@ -929,104 +1064,163 @@ export function MembershipSection({ country }: { country: UnifiedCountry }) {
       <Section>
         <SectionHead
           title="소속·구성"
-          description="신성로마제국–제후국, 종주국–속국처럼 위아래로 묶인 관계"
+          description="상위 종주국·제국·연방과 하위 제후국·속국·식민지 사이의 수직 포함 위계를 조망합니다."
           addLabel="소속·구성 추가"
           onAdd={() => setAddOpen(true)}
         />
 
-        <DashboardStyles.SectionHeadlineStrip aria-label="소속·구성 요약 지표">
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              전체 소속·구성
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue $muted={memberships.length === 0}>
-              {memberships.length > 0 ? (
-                <>
-                  {memberships.length}
-                  <DashboardStyles.SectionHeadlineUnit>건</DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '미등록'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {memberships.length > 0
-                ? `상위 소속 ${asMemberList.length}건 · 하위 구성 ${asParentList.length}건`
-                : '상위·하위 정치체 연결 없음'}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
+        {memberships.length > 0 && (
+          <DiagramBentoWrap>
+            <BentoGridAsym $leftFr={1.3} $rightFr={1}>
+              {/* 좌측: 상·하위 포함 위계 다이어그램 */}
+              <BentoCard aria-label="상·하위 정치체 포함 위계 다이어그램">
+                <BentoCardHeader>
+                  <BentoCardTitleGroup>
+                    <BentoCardTitle>상위 소속 ⊃ 현재 ⊃ 하위 구성 위계</BentoCardTitle>
+                    <BentoCardBadge>
+                      상위 {asMemberList.length} · 하위 {asParentList.length}
+                    </BentoCardBadge>
+                  </BentoCardTitleGroup>
+                </BentoCardHeader>
+                <BentoCardBody>
+                  <TriStageFlowGrid>
+                    <TriStageCol>
+                      <TriStageHeader>
+                        상위 소속 ({asMemberList.length})
+                      </TriStageHeader>
+                      {asMemberList.length > 0 ? (
+                        asMemberList.slice(0, 4).map((m) => (
+                          <DiagramNodeBtn
+                            key={m.id}
+                            type="button"
+                            onClick={() =>
+                              m.historicalCountryId &&
+                              navigate(
+                                pathKeys.countryDetail(m.historicalCountryId),
+                              )
+                            }
+                          >
+                            <strong>{m.parentName ?? '상위 정치체'}</strong>
+                            <small>
+                              {MEMBERSHIP_ROLE_LABELS[m.role] ?? m.role}
+                            </small>
+                          </DiagramNodeBtn>
+                        ))
+                      ) : (
+                        <DiagramEmptySlotBtn
+                          type="button"
+                          onClick={() => openAddWithPosition(false)}
+                        >
+                          + 상위 정치체 연결
+                        </DiagramEmptySlotBtn>
+                      )}
+                    </TriStageCol>
 
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              소속된 상위 정치체
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue $muted={asMemberList.length === 0}>
-              {asMemberList.length > 0 ? (
-                <>
-                  {asMemberList.length}
-                  <DashboardStyles.SectionHeadlineUnit>개국</DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '없음'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {asMemberList.length > 0
-                ? asMemberList
-                    .map((item) => item.parentName)
-                    .filter(Boolean)
-                    .slice(0, 3)
-                    .join(' · ')
-                : '제국·연방 등 상위 소속 기록 없음'}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
+                    <TriArrowCol aria-hidden>⊃</TriArrowCol>
 
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              거느린 하위 구성국
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue $muted={asParentList.length === 0}>
-              {asParentList.length > 0 ? (
-                <>
-                  {asParentList.length}
-                  <DashboardStyles.SectionHeadlineUnit>개국</DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '없음'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {asParentList.length > 0
-                ? asParentList
-                    .map((item) => item.memberName)
-                    .filter(Boolean)
-                    .slice(0, 3)
-                    .join(' · ')
-                : '제후국·속국·식민지 등 하위 기록 없음'}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
+                    <TriStageCenterCard>
+                      <CenterTag>현재 정치체</CenterTag>
+                      <CenterName>{country.name}</CenterName>
+                      {leadingCount > 0 && (
+                        <CenterPeriod>주축 기록 {leadingCount}건</CenterPeriod>
+                      )}
+                    </TriStageCenterCard>
 
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              기간 확인율 · 주축
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue $muted={memberships.length === 0}>
-              {memberships.length > 0 ? (
-                <>
-                  {Math.round((withPeriodCount / memberships.length) * 100)}
-                  <DashboardStyles.SectionHeadlineUnit>%</DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '—'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {memberships.length > 0
-                ? `기간 확인 ${withPeriodCount}/${memberships.length}건${leadingCount > 0 ? ` · 주축 ${leadingCount}건` : ''}`
-                : '소속 시작·종료 시점 기록 대기'}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
-        </DashboardStyles.SectionHeadlineStrip>
+                    <TriArrowCol aria-hidden>⊃</TriArrowCol>
+
+                    <TriStageCol>
+                      <TriStageHeader>
+                        거느린 하위 ({asParentList.length})
+                      </TriStageHeader>
+                      {asParentList.length > 0 ? (
+                        asParentList.slice(0, 4).map((m) => (
+                          <DiagramNodeBtn
+                            key={m.id}
+                            type="button"
+                            onClick={() =>
+                              m.memberCountryId &&
+                              navigate(
+                                pathKeys.countryDetail(m.memberCountryId),
+                              )
+                            }
+                          >
+                            <strong>{m.memberName ?? '하위 정치체'}</strong>
+                            <small>
+                              {MEMBERSHIP_ROLE_LABELS[m.role] ?? m.role}
+                              {m.isLeadingMember ? ' · 주축' : ''}
+                            </small>
+                          </DiagramNodeBtn>
+                        ))
+                      ) : (
+                        <DiagramEmptySlotBtn
+                          type="button"
+                          onClick={() => openAddWithPosition(true)}
+                        >
+                          + 하위 구성국 연결
+                        </DiagramEmptySlotBtn>
+                      )}
+                      {asParentList.length > 4 && (
+                        <DiagramMoreNote>
+                          외 {asParentList.length - 4}개국
+                        </DiagramMoreNote>
+                      )}
+                    </TriStageCol>
+                  </TriStageFlowGrid>
+                </BentoCardBody>
+              </BentoCard>
+
+              {/* 우측: 소속 역할 구성 도넛 */}
+              <BentoCard aria-label="소속·구성 역할 분포">
+                <BentoCardHeader>
+                  <BentoCardTitleGroup>
+                    <BentoCardTitle>소속 역할 구성</BentoCardTitle>
+                    <BentoCardBadge>{roleSlices.length}개 유형</BentoCardBadge>
+                  </BentoCardTitleGroup>
+                  {roleFilter && (
+                    <InlineChipResetBtn
+                      type="button"
+                      onClick={() => setRoleFilter(null)}
+                    >
+                      전체 역할
+                    </InlineChipResetBtn>
+                  )}
+                </BentoCardHeader>
+                <BentoCardBody>
+                  <DonutRoleRow>
+                    <MiniDonutRing
+                      slices={roleSlices}
+                      size={74}
+                      strokeWidth={10}
+                      centerValue={String(memberships.length)}
+                      centerLabel="총 건수"
+                    />
+                    <DonutRoleLegend>
+                      {roleSlices.map((slice) => {
+                        const active = roleFilter === slice.roleKey
+                        return (
+                          <SliceFilterPill
+                            key={slice.key}
+                            type="button"
+                            $active={active}
+                            onClick={() =>
+                              setRoleFilter((prev) =>
+                                prev === slice.roleKey ? null : slice.roleKey,
+                              )
+                            }
+                          >
+                            <MiniColorDot $color={slice.color} />
+                            <span>{slice.label}</span>
+                            <strong>{slice.meta}</strong>
+                          </SliceFilterPill>
+                        )
+                      })}
+                    </DonutRoleLegend>
+                  </DonutRoleRow>
+                </BentoCardBody>
+              </BentoCard>
+            </BentoGridAsym>
+          </DiagramBentoWrap>
+        )}
 
         {isLoading ? (
           <Muted>불러오는 중…</Muted>
@@ -1361,11 +1555,17 @@ export function MembershipSection({ country }: { country: UnifiedCountry }) {
 // ─── 국가 관계 ───────────────────────────────────────────────────────────────
 
 export function RelationSection({ country }: { country: UnifiedCountry }) {
+  const theme = useTheme()
+  const isDark = theme.mode === 'dark'
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const historicalCountryId = country.id
   const queryKey = ['historical-country-relations', historicalCountryId]
   const [addOpen, setAddOpen] = useState(false)
-  const [typeFilter, setTypeFilter] = useState<'all' | 'cooperative' | 'hierarchical' | 'conflict'>('all')
+  const [typeFilter, setTypeFilter] = useState<
+    'all' | 'cooperative' | 'hierarchical' | 'conflict'
+  >('all')
+  const [partnerFilterId, setPartnerFilterId] = useState<string | null>(null)
   const [editing, setEditing] = useState<HistoricalCountryRelationDto | null>(null)
   const [form, setForm] = useState<{
     asSubject: boolean
@@ -1408,25 +1608,88 @@ export function RelationSection({ country }: { country: UnifiedCountry }) {
   const conflictList = relations.filter(
     (relation) => relation.relationType === 'WAR',
   )
-  const withPeriodCount = relations.filter((relation) =>
-    Boolean(relation.startDate || relation.endDate),
-  ).length
+
+  const relationToneSlices = useMemo<
+    Array<
+      SegmentSlice & {
+        filterKey: 'cooperative' | 'hierarchical' | 'conflict'
+      }
+    >
+  >(
+    () =>
+      [
+        {
+          key: 'cooperative',
+          filterKey: 'cooperative' as const,
+          label: '동맹 · 동군연합',
+          value: cooperativeList.length,
+          color: isDark ? '#34d399' : '#059669',
+          meta: `${cooperativeList.length}건`,
+        },
+        {
+          key: 'hierarchical',
+          filterKey: 'hierarchical' as const,
+          label: '조공·책봉 · 종속',
+          value: hierarchicalList.length,
+          color: isDark ? '#fbbf24' : '#d97706',
+          meta: `${hierarchicalList.length}건`,
+        },
+        {
+          key: 'conflict',
+          filterKey: 'conflict' as const,
+          label: '전쟁 · 교전',
+          value: conflictList.length,
+          color: isDark ? '#f87171' : '#dc2626',
+          meta: `${conflictList.length}건`,
+        },
+      ].filter((s) => s.value > 0),
+    [cooperativeList.length, hierarchicalList.length, conflictList.length, isDark],
+  )
+
+  const topPartners = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; count: number }>()
+    for (const rel of relations) {
+      const isSub = rel.subjectCountryId === historicalCountryId
+      const otherId = isSub ? rel.objectCountryId : rel.subjectCountryId
+      const otherName =
+        (isSub ? rel.objectCountryName : rel.subjectCountryName) ?? '상대 국가'
+      if (!otherId) continue
+      const existing = map.get(otherId)
+      if (existing) existing.count += 1
+      else map.set(otherId, { id: otherId, name: otherName, count: 1 })
+    }
+    const sorted = [...map.values()]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5)
+    const maxCount = Math.max(1, ...sorted.map((s) => s.count))
+    return { items: sorted, maxCount }
+  }, [relations, historicalCountryId])
 
   const filteredRelations = relations.filter((relation) => {
     if (typeFilter === 'cooperative') {
-      return (
-        relation.relationType === 'ALLIANCE' ||
-        relation.relationType === 'PERSONAL_UNION'
-      )
+      if (
+        relation.relationType !== 'ALLIANCE' &&
+        relation.relationType !== 'PERSONAL_UNION'
+      ) {
+        return false
+      }
+    } else if (typeFilter === 'hierarchical') {
+      if (
+        relation.relationType !== 'TRIBUTARY' &&
+        relation.relationType !== 'SUZERAIN_VASSAL'
+      ) {
+        return false
+      }
+    } else if (typeFilter === 'conflict') {
+      if (relation.relationType !== 'WAR') return false
     }
-    if (typeFilter === 'hierarchical') {
-      return (
-        relation.relationType === 'TRIBUTARY' ||
-        relation.relationType === 'SUZERAIN_VASSAL'
-      )
-    }
-    if (typeFilter === 'conflict') {
-      return relation.relationType === 'WAR'
+    if (partnerFilterId) {
+      if (
+        relation.subjectCountryId !== partnerFilterId &&
+        relation.objectCountryId !== partnerFilterId
+      ) {
+        return false
+      }
     }
     return true
   })
@@ -1485,103 +1748,136 @@ export function RelationSection({ country }: { country: UnifiedCountry }) {
       <Section>
         <SectionHead
           title="국가 관계"
-          description="조공·책봉, 동맹, 전쟁, 동군연합처럼 나란히 선 나라 사이의 관계"
+          description="동맹·동군연합, 조공·책봉·종주-속국, 전쟁 등 주변 역사 국가들과 맺은 대외 관계 인포그래픽입니다."
           addLabel="관계 추가"
           onAdd={() => setAddOpen(true)}
         />
 
-        <DashboardStyles.SectionHeadlineStrip aria-label="국가 관계 요약 지표">
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              전체 외교·관계
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue $muted={relations.length === 0}>
-              {relations.length > 0 ? (
-                <>
-                  {relations.length}
-                  <DashboardStyles.SectionHeadlineUnit>건</DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '미등록'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {relations.length > 0
-                ? `주체 ${relations.filter((item) => item.subjectCountryId === historicalCountryId).length}건 · 대상 ${relations.filter((item) => item.objectCountryId === historicalCountryId).length}건`
-                : '주변국 외교·전쟁 기록 없음'}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
+        {relations.length > 0 && (
+          <DiagramBentoWrap>
+            <BentoGrid2Col>
+              {/* 좌측: 외교·교전 성격 도넛 */}
+              <BentoCard aria-label="국가 관계 성격 비중">
+                <BentoCardHeader>
+                  <BentoCardTitleGroup>
+                    <BentoCardTitle>대외 관계 성격 비중</BentoCardTitle>
+                    <BentoCardBadge>총 {relations.length}건</BentoCardBadge>
+                  </BentoCardTitleGroup>
+                  {typeFilter !== 'all' && (
+                    <InlineChipResetBtn
+                      type="button"
+                      onClick={() => setTypeFilter('all')}
+                    >
+                      전체 유형
+                    </InlineChipResetBtn>
+                  )}
+                </BentoCardHeader>
+                <BentoCardBody>
+                  <DonutRoleRow>
+                    <MiniDonutRing
+                      slices={relationToneSlices}
+                      size={74}
+                      strokeWidth={10}
+                      centerValue={String(relations.length)}
+                      centerLabel="대외 관계"
+                    />
+                    <DonutRoleLegend>
+                      {relationToneSlices.map((slice) => {
+                        const active = typeFilter === slice.filterKey
+                        return (
+                          <SliceFilterPill
+                            key={slice.key}
+                            type="button"
+                            $active={active}
+                            onClick={() =>
+                              setTypeFilter((prev) =>
+                                prev === slice.filterKey
+                                  ? 'all'
+                                  : slice.filterKey,
+                              )
+                            }
+                          >
+                            <MiniColorDot $color={slice.color} />
+                            <span>{slice.label}</span>
+                            <strong>{slice.meta}</strong>
+                          </SliceFilterPill>
+                        )
+                      })}
+                    </DonutRoleLegend>
+                  </DonutRoleRow>
+                </BentoCardBody>
+              </BentoCard>
 
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              동맹 · 동군연합
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue $muted={cooperativeList.length === 0}>
-              {cooperativeList.length > 0 ? (
-                <>
-                  {cooperativeList.length}
-                  <DashboardStyles.SectionHeadlineUnit>건</DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '없음'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {cooperativeList.length > 0
-                ? '동맹 · 동군연합 등 수평적 결합'
-                : '등록된 동맹·동군연합 기록 없음'}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
-
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              조공·책봉 · 종속
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue $muted={hierarchicalList.length === 0}>
-              {hierarchicalList.length > 0 ? (
-                <>
-                  {hierarchicalList.length}
-                  <DashboardStyles.SectionHeadlineUnit>건</DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '없음'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {hierarchicalList.length > 0
-                ? '조공·책봉 및 종주국-속국 질서'
-                : '등록된 조공·종속 기록 없음'}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
-
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              전쟁·교전 · 기간 확인
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue $muted={relations.length === 0}>
-              {relations.length > 0 ? (
-                conflictList.length > 0 ? (
-                  <>
-                    전쟁 {conflictList.length}
-                    <DashboardStyles.SectionHeadlineUnit>건</DashboardStyles.SectionHeadlineUnit>
-                  </>
-                ) : (
-                  <>
-                    {Math.round((withPeriodCount / relations.length) * 100)}
-                    <DashboardStyles.SectionHeadlineUnit>%</DashboardStyles.SectionHeadlineUnit>
-                  </>
-                )
-              ) : (
-                '—'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {relations.length > 0
-                ? `기간 확인 ${withPeriodCount}/${relations.length}건 · 전쟁 ${conflictList.length}건`
-                : '관계 성립·종료 시점 기록 대기'}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
-        </DashboardStyles.SectionHeadlineStrip>
+              {/* 우측: 주요 관계 상대국 Top 5 비례 막대 */}
+              <BentoCard aria-label="주요 외교·교전 상대국">
+                <BentoCardHeader>
+                  <BentoCardTitleGroup>
+                    <BentoCardTitle>주요 외교 · 교전 상대국 Top 5</BentoCardTitle>
+                    <BentoCardBadge>
+                      {topPartners.items.length}개국
+                    </BentoCardBadge>
+                  </BentoCardTitleGroup>
+                  {partnerFilterId && (
+                    <InlineChipResetBtn
+                      type="button"
+                      onClick={() => setPartnerFilterId(null)}
+                    >
+                      상대국 필터 해제 <FiX size={10} />
+                    </InlineChipResetBtn>
+                  )}
+                </BentoCardHeader>
+                <BentoCardBody>
+                  <PartnerBarsWrap>
+                    {topPartners.items.map((partner, idx) => {
+                      const pct = Math.max(
+                        10,
+                        Math.round(
+                          (partner.count / topPartners.maxCount) * 100,
+                        ),
+                      )
+                      const isSelected = partnerFilterId === partner.id
+                      return (
+                        <PartnerBarRow key={partner.id}>
+                          <PartnerFilterBtn
+                            type="button"
+                            $active={isSelected}
+                            onClick={() =>
+                              setPartnerFilterId((prev) =>
+                                prev === partner.id ? null : partner.id,
+                              )
+                            }
+                          >
+                            <PartnerTopLine>
+                              <PartnerName $active={isSelected}>
+                                <small>{idx + 1}.</small> {partner.name}
+                              </PartnerName>
+                              <PartnerCount>{partner.count}건</PartnerCount>
+                            </PartnerTopLine>
+                            <PartnerTrack>
+                              <PartnerFill
+                                $pct={pct}
+                                $active={isSelected || idx === 0}
+                              />
+                            </PartnerTrack>
+                          </PartnerFilterBtn>
+                          <PartnerGoBtn
+                            type="button"
+                            onClick={() =>
+                              navigate(pathKeys.countryDetail(partner.id))
+                            }
+                            title={`${partner.name} 대시보드로 이동`}
+                          >
+                            <FiArrowUpRight size={12} />
+                          </PartnerGoBtn>
+                        </PartnerBarRow>
+                      )
+                    })}
+                  </PartnerBarsWrap>
+                </BentoCardBody>
+              </BentoCard>
+            </BentoGrid2Col>
+          </DiagramBentoWrap>
+        )}
 
         {isLoading ? (
           <Muted>불러오는 중…</Muted>
@@ -2365,5 +2661,326 @@ const PrimaryButton = styled.button`
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+`
+
+const DiagramBentoWrap = styled.div`
+  padding-bottom: 14px;
+`
+
+const InlineChipResetBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  }
+`
+
+const TriStageFlowGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(120px, 0.9fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+
+  @media (max-width: 720px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+const TriStageCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+`
+
+const TriStageHeader = styled.span`
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+`
+
+const DiagramNodeBtn = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+
+  strong {
+    font-size: 12px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  small {
+    flex-shrink: 0;
+    font-size: 10px;
+    font-weight: 600;
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+`
+
+const DiagramEmptySlotBtn = styled.button`
+  padding: 6px 8px;
+  border-radius: ${RADIUS.SM};
+  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+`
+
+const DiagramMoreNote = styled.span`
+  font-size: 10.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+`
+
+const TriArrowCol = styled.span`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  @media (max-width: 720px) {
+    display: none;
+  }
+`
+
+const TriStageCenterCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 10px 8px;
+  border-radius: ${RADIUS.MD};
+  border: 1px solid ${({ theme }) => ledgerAccent(theme.mode)};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  text-align: center;
+  min-width: 0;
+`
+
+const CenterTag = styled.span`
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+`
+
+const CenterName = styled.strong`
+  font-size: 13.5px;
+  font-weight: 800;
+  color: ${({ theme }) => theme.colors.text.primary};
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const CenterPeriod = styled.span`
+  font-size: 10.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+`
+
+const SliceFilterRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+`
+
+const SliceFilterPill = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : 'transparent'};
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  font-family: inherit;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+  text-align: left;
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    ${DIGIT_DISPLAY}
+  }
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+  }
+`
+
+const MiniColorDot = styled.span<{ $color: string }>`
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: ${({ $color }) => $color};
+  flex-shrink: 0;
+`
+
+const DonutRoleRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+`
+
+const DonutRoleLegend = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+`
+
+const PartnerBarsWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+`
+
+const PartnerBarRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+`
+
+const PartnerFilterBtn = styled.button<{ $active?: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : 'transparent'};
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+  }
+`
+
+const PartnerTopLine = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+`
+
+const PartnerName = styled.span<{ $active?: boolean }>`
+  font-size: 12px;
+  font-weight: ${({ $active }) => ($active ? 700 : 600)};
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  small {
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    ${DIGIT_DISPLAY}
+  }
+`
+
+const PartnerCount = styled.span`
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+`
+
+const PartnerTrack = styled.div`
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  overflow: hidden;
+`
+
+const PartnerFill = styled.div<{ $pct: number; $active?: boolean }>`
+  width: ${({ $pct }) => `${$pct}%`};
+  height: 100%;
+  border-radius: 999px;
+  background: ${({ theme, $active }) =>
+    $active
+      ? ledgerAccent(theme.mode)
+      : theme.mode === 'dark'
+        ? 'rgba(165, 180, 252, 0.5)'
+        : 'rgba(79, 70, 229, 0.5)'};
+`
+
+const PartnerGoBtn = styled.button`
+  width: 24px;
+  height: 24px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    border-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   }
 `

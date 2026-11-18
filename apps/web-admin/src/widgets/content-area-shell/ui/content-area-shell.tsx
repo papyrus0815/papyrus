@@ -99,11 +99,14 @@ function specFor(pathname: string): DomainSpec | null {
     }
   }
   if (pathname.startsWith('/companies')) {
+    const selectedCompanyId = idFromPath(pathname, 'companies')
+    if (!selectedCompanyId) return null
     return {
       storageKey: 'companies-list-collapsed',
+      defaultCollapsed: false,
       render: (context) => (
         <CompanyListSidebar
-          selectedId={idFromPath(pathname, 'companies')}
+          selectedId={selectedCompanyId}
           {...context}
         />
       ),
@@ -182,8 +185,11 @@ function specFor(pathname: string): DomainSpec | null {
     }
   }
   if (pathname.startsWith('/dynasty')) {
+    const selectedDynastyId = idFromPath(pathname, 'dynasty')
+    if (!selectedDynastyId) return null
     return {
       storageKey: 'dynasty-list-collapsed',
+      defaultCollapsed: false,
       render: (context) => <DynastyListSidebar {...context} />,
     }
   }
@@ -206,9 +212,20 @@ function specFor(pathname: string): DomainSpec | null {
     }
   }
   if (pathname.startsWith('/military')) {
+    /*
+     * 목록(/military)은 전체 폭(fullScreen) 카탈로그 지면으로 두고,
+     * 부대 상세(/military/units/:unitId)에만 좌측 부대 사이드바를 붙여
+     * 다른 국가·시대 사령부·부대로 곧장 건너갈 수 있게 한다.
+     */
+    const unitMatch = /^\/military\/units\/([^/]+)/.exec(pathname)
+    if (!unitMatch) return null
+    const selectedUnitId = decodeURIComponent(unitMatch[1])
     return {
       storageKey: 'military-list-collapsed',
-      render: (context) => <MilitaryUnitListSidebar {...context} />,
+      defaultCollapsed: false,
+      render: (context) => (
+        <MilitaryUnitListSidebar selectedId={selectedUnitId} {...context} />
+      ),
     }
   }
   // 수장 비교(/heads-of-state)는 자체 좌측 UI(핀 편집기)를 가지므로 좌측을 비운다

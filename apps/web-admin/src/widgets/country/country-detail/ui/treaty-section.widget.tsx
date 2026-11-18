@@ -28,6 +28,24 @@ import { useNavigate } from 'react-router-dom'
 import styled, { ThemeProvider, keyframes, useTheme } from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import {
+  BentoCard,
+  BentoCardBadge,
+  BentoCardBody,
+  BentoCardHeader,
+  BentoCardTitle,
+  BentoCardTitleGroup,
+  BentoGrid2Col,
+  type SegmentSlice,
+  StackedSegmentBar,
+} from '@/entities/event/ui/bento-primitives'
+import {
+  DIGIT_DISPLAY,
+  ledgerAccent,
+  ledgerHairline,
+  ledgerSubtleFill,
+  RADIUS,
+} from '@/entities/event/ui/ledger-tokens'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import { getAllCountries } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
@@ -72,7 +90,6 @@ import {
   shouldInterceptEntityClick,
 } from '@/widgets/country/country-inline-modal'
 
-import * as DashboardStyles from './country-detail-dashboard.styles'
 import {
   countryTabCanvasPadding,
   LedgerFilterChip,
@@ -105,6 +122,152 @@ const TreatyHeaderActions = styled.div`
 `
 
 const TreatySecondaryBtn = styled(LedgerToolbarButton)``
+
+const TreatyBentoLegendList = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+`
+
+const TreatyBentoLegendBtn = styled.button<{ $active?: boolean }>`
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  border: none;
+  border-radius: ${RADIUS.XS};
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  font-family: inherit;
+  font-size: 11.5px;
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.primary : theme.colors.text.secondary};
+  cursor: pointer;
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+    ${DIGIT_DISPLAY}
+  }
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+const TreatyBentoDot = styled.span<{ $color: string }>`
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: ${({ $color }) => $color};
+  flex-shrink: 0;
+`
+
+const TreatyStatusDivider = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const TreatyStatusSummaryRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+
+  .good {
+    font-weight: 700;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#34d399' : '#047857')};
+  }
+  .warn {
+    font-weight: 700;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
+  }
+  .danger {
+    font-weight: 700;
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#f87171' : '#dc2626')};
+  }
+`
+
+const TreatyPartnerRows = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+`
+
+const TreatyPartnerRowBtn = styled.button<{ $active?: boolean }>`
+  appearance: none;
+  display: grid;
+  grid-template-columns: 22px minmax(92px, 140px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 3px 6px;
+  margin: 0 -6px;
+  border: none;
+  border-radius: ${RADIUS.XS};
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+const TreatyPartnerRank = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+`
+
+const TreatyPartnerName = styled.span`
+  font-size: 12.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const TreatyPartnerBarTrack = styled.div`
+  width: 100%;
+  height: 7px;
+  border-radius: ${RADIUS.XS};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  overflow: hidden;
+`
+
+const TreatyPartnerBarFill = styled.div`
+  height: 100%;
+  border-radius: ${RADIUS.XS};
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
+`
+
+const TreatyPartnerCount = styled.span`
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: nowrap;
+  ${DIGIT_DISPLAY}
+`
+
+const TreatyPartnerEmpty = styled.div`
+  padding: 12px 0;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
 
 const Empty = styled.div`
   padding: 28px 0;
@@ -816,12 +979,6 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
     return typeSet.size
   }, [treaties])
 
-  const violatedList = useMemo(
-    () => treaties.filter((treatyItem) => Boolean(treatyItem.violationDate)),
-    [treaties],
-  )
-  const validCount = treaties.length - violatedList.length
-
   const typeChipItems = useMemo(() => {
     const counts = new Map<TreatyType, number>()
     for (const treatyItem of treaties) {
@@ -860,11 +1017,164 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
 
   const parentTheme = useTheme()
   const { mode } = useThemeStore()
-  const treatyPalette = getTreatySectionPalette(mode === 'dark')
+  const isDarkMode = mode === 'dark'
+  const treatyPalette = getTreatySectionPalette(isDarkMode)
   const treatyTheme = useMemo(
     () => ({ ...parentTheme, ts: treatyPalette }),
     [parentTheme, treatyPalette],
   )
+
+  const treatyInfographic = useMemo(() => {
+    const palette = isDarkMode
+      ? ['#a5b4fc', '#38bdf8', '#34d399', '#fbbf24', '#c084fc', '#94a3b8']
+      : ['#4f46e5', '#0284c7', '#059669', '#d97706', '#7c3aed', '#64748b']
+
+    const sortedTypes = [...typeChipItems].sort(
+      (left, right) => right.count - left.count,
+    )
+    const typeSlices: SegmentSlice[] = sortedTypes.map((item, idx) => ({
+      key: item.typeKey,
+      label: item.label,
+      value: item.count,
+      color: palette[idx % palette.length],
+      meta: `${item.count}건`,
+    }))
+
+    const now = new Date()
+    const curY = now.getUTCFullYear()
+    const curM = now.getUTCMonth() + 1
+    const curD = now.getUTCDate()
+
+    let violatedCount = 0
+    let expiredCount = 0
+    for (const item of treaties) {
+      if (item.violationDate) {
+        violatedCount += 1
+        continue
+      }
+      if (item.expiryDate) {
+        const expParts = parseIsoDateParts(item.expiryDate)
+        if (
+          expParts &&
+          (expParts.year < curY ||
+            (expParts.year === curY && expParts.month < curM) ||
+            (expParts.year === curY &&
+              expParts.month === curM &&
+              expParts.day < curD))
+        ) {
+          expiredCount += 1
+        }
+      }
+    }
+    const activeCount = Math.max(
+      0,
+      treaties.length - violatedCount - expiredCount,
+    )
+    const activePct =
+      treaties.length > 0
+        ? Math.round((activeCount / treaties.length) * 100)
+        : 0
+
+    const statusSlices: SegmentSlice[] = [
+      ...(activeCount > 0
+        ? [
+            {
+              key: 'active',
+              label: '유효·이행',
+              value: activeCount,
+              color: isDarkMode ? '#34d399' : '#059669',
+              meta: `${activeCount}건`,
+            },
+          ]
+        : []),
+      ...(expiredCount > 0
+        ? [
+            {
+              key: 'expired',
+              label: '만료',
+              value: expiredCount,
+              color: isDarkMode ? '#fbbf24' : '#d97706',
+              meta: `${expiredCount}건`,
+            },
+          ]
+        : []),
+      ...(violatedCount > 0
+        ? [
+            {
+              key: 'violated',
+              label: '파기·위반',
+              value: violatedCount,
+              color: isDarkMode ? '#f87171' : '#dc2626',
+              meta: `${violatedCount}건`,
+            },
+          ]
+        : []),
+    ]
+
+    const partnerCounts = new Map<
+      string,
+      { key: string; name: string; flagEmoji: string; count: number }
+    >()
+    for (const treatyItem of treaties) {
+      const seenInTreaty = new Set<string>()
+      for (const sig of treatyItem.signatories) {
+        const sigCountryId = sig.country?.id
+        const sigHistId = sig.historicalCountry?.id
+        const sigName =
+          sig.country?.name ?? sig.historicalCountry?.name ?? ''
+        if (!sigName) continue
+        if (countryId && sigCountryId === countryId) continue
+        if (historicalCountryId && sigHistId === historicalCountryId) continue
+        if (sigName === country.name) continue
+
+        const pKey = sigCountryId
+          ? `c:${sigCountryId}`
+          : sigHistId
+            ? `h:${sigHistId}`
+            : `n:${sigName}`
+        if (seenInTreaty.has(pKey)) continue
+        seenInTreaty.add(pKey)
+
+        const prev = partnerCounts.get(pKey)
+        if (prev) {
+          prev.count += 1
+        } else {
+          partnerCounts.set(pKey, {
+            key: pKey,
+            name: sigName,
+            flagEmoji: sig.country?.flagEmoji ?? '',
+            count: 1,
+          })
+        }
+      }
+    }
+
+    const sortedPartners = [...partnerCounts.values()].sort((left, right) => {
+      if (left.count !== right.count) return right.count - left.count
+      return left.name.localeCompare(right.name, 'ko')
+    })
+    const topPartners = sortedPartners.slice(0, 5)
+    const maxPartnerCount = topPartners[0]?.count ?? 0
+
+    return {
+      typeSlices,
+      statusSlices,
+      activeCount,
+      expiredCount,
+      violatedCount,
+      activePct,
+      topPartners,
+      maxPartnerCount,
+      totalPartnerCount: sortedPartners.length,
+    }
+  }, [
+    treaties,
+    typeChipItems,
+    isDarkMode,
+    countryId,
+    historicalCountryId,
+    country.name,
+  ])
 
   const inner = detailId ? (
     <TreatyDetail
@@ -894,103 +1204,146 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
         }
       />
 
-      <DashboardStyles.SectionHeadlineStrip aria-label="조약 요약 지표">
-        <DashboardStyles.SectionHeadlineCell>
-          <DashboardStyles.SectionHeadlineLabel>
-            전체 참여 조약
-          </DashboardStyles.SectionHeadlineLabel>
-          <DashboardStyles.SectionHeadlineValue $muted={treaties.length === 0}>
-            {treaties.length > 0 ? (
-              <>
-                {treaties.length.toLocaleString('ko-KR')}
-                <DashboardStyles.SectionHeadlineUnit>
-                  건
-                </DashboardStyles.SectionHeadlineUnit>
-              </>
-            ) : (
-              '미등록'
-            )}
-          </DashboardStyles.SectionHeadlineValue>
-          <DashboardStyles.SectionHeadlineSub>
-            {treaties.length > 0
-              ? '서명 · 비준 · 가입 조약 및 협정'
-              : '등록된 참여 조약 없음'}
-          </DashboardStyles.SectionHeadlineSub>
-        </DashboardStyles.SectionHeadlineCell>
+      {!isLoading && treaties.length > 0 && (
+        <BentoGrid2Col aria-label="조약 요약 인포그래픽">
+          {/* Card 1: 조약 유형 분포 + 유효/만료·파기 비율 */}
+          <BentoCard>
+            <BentoCardHeader>
+              <BentoCardTitleGroup>
+                <BentoCardTitle>조약 유형 분포 · 효력 비율</BentoCardTitle>
+                <BentoCardBadge>
+                  총 {treaties.length.toLocaleString('ko-KR')}건 ·{' '}
+                  {distinctTypeCount}종
+                </BentoCardBadge>
+              </BentoCardTitleGroup>
+            </BentoCardHeader>
+            <BentoCardBody>
+              <StackedSegmentBar
+                slices={treatyInfographic.typeSlices}
+                height={10}
+                showPercent
+              />
+              <TreatyBentoLegendList>
+                {treatyInfographic.typeSlices.map((slice) => {
+                  const isActive = typeFilter === slice.key
+                  return (
+                    <TreatyBentoLegendBtn
+                      key={slice.key}
+                      type="button"
+                      $active={isActive}
+                      onClick={() =>
+                        setTypeFilter((prev) =>
+                          prev === slice.key
+                            ? 'ALL'
+                            : (slice.key as TreatyType),
+                        )
+                      }
+                    >
+                      <TreatyBentoDot $color={slice.color} />
+                      <span>{slice.label}</span>
+                      <strong>{slice.meta}</strong>
+                    </TreatyBentoLegendBtn>
+                  )
+                })}
+              </TreatyBentoLegendList>
 
-        <DashboardStyles.SectionHeadlineCell>
-          <DashboardStyles.SectionHeadlineLabel>
-            체결 조약 유형
-          </DashboardStyles.SectionHeadlineLabel>
-          <DashboardStyles.SectionHeadlineValue
-            $muted={distinctTypeCount === 0}
-          >
-            {distinctTypeCount > 0 ? (
-              <>
-                {distinctTypeCount.toLocaleString('ko-KR')}
-                <DashboardStyles.SectionHeadlineUnit>
-                  종
-                </DashboardStyles.SectionHeadlineUnit>
-              </>
-            ) : (
-              '없음'
-            )}
-          </DashboardStyles.SectionHeadlineValue>
-          <DashboardStyles.SectionHeadlineSub>
-            {treaties.length > 0
-              ? '불가침 · 평화 · 동맹 · 통상 등 분류'
-              : '조약 유형 데이터 대기'}
-          </DashboardStyles.SectionHeadlineSub>
-        </DashboardStyles.SectionHeadlineCell>
+              <TreatyStatusDivider>
+                <StackedSegmentBar
+                  slices={treatyInfographic.statusSlices}
+                  height={6}
+                />
+                <TreatyStatusSummaryRow>
+                  <span>
+                    유효·이행{' '}
+                    <span className="good">
+                      {treatyInfographic.activeCount}건 (
+                      {treatyInfographic.activePct}%)
+                    </span>
+                  </span>
+                  <span>
+                    {treatyInfographic.expiredCount > 0 && (
+                      <>
+                        만료{' '}
+                        <span className="warn">
+                          {treatyInfographic.expiredCount}건
+                        </span>
+                        {' · '}
+                      </>
+                    )}
+                    파기·위반{' '}
+                    <span className="danger">
+                      {treatyInfographic.violatedCount}건
+                    </span>
+                  </span>
+                </TreatyStatusSummaryRow>
+              </TreatyStatusDivider>
+            </BentoCardBody>
+          </BentoCard>
 
-        <DashboardStyles.SectionHeadlineCell>
-          <DashboardStyles.SectionHeadlineLabel>
-            유효 · 이행 기록
-          </DashboardStyles.SectionHeadlineLabel>
-          <DashboardStyles.SectionHeadlineValue $muted={validCount === 0}>
-            {validCount > 0 ? (
-              <>
-                {validCount.toLocaleString('ko-KR')}
-                <DashboardStyles.SectionHeadlineUnit>
-                  건
-                </DashboardStyles.SectionHeadlineUnit>
-              </>
-            ) : (
-              '없음'
-            )}
-          </DashboardStyles.SectionHeadlineValue>
-          <DashboardStyles.SectionHeadlineSub>
-            {treaties.length > 0
-              ? '파기 기록 없는 체결·발효 조약'
-              : '유효·이행 조약 없음'}
-          </DashboardStyles.SectionHeadlineSub>
-        </DashboardStyles.SectionHeadlineCell>
-
-        <DashboardStyles.SectionHeadlineCell>
-          <DashboardStyles.SectionHeadlineLabel>
-            파기 · 위반 기록
-          </DashboardStyles.SectionHeadlineLabel>
-          <DashboardStyles.SectionHeadlineValue
-            $muted={violatedList.length === 0}
-          >
-            {violatedList.length > 0 ? (
-              <>
-                {violatedList.length.toLocaleString('ko-KR')}
-                <DashboardStyles.SectionHeadlineUnit>
-                  건
-                </DashboardStyles.SectionHeadlineUnit>
-              </>
-            ) : (
-              '없음'
-            )}
-          </DashboardStyles.SectionHeadlineValue>
-          <DashboardStyles.SectionHeadlineSub>
-            {violatedList.length > 0
-              ? '파기일 또는 위반 사유 명시 조약'
-              : '파기·위반 기록 없음'}
-          </DashboardStyles.SectionHeadlineSub>
-        </DashboardStyles.SectionHeadlineCell>
-      </DashboardStyles.SectionHeadlineStrip>
+          {/* Card 2: 주요 체결 상대국 Top 5 가로 비례 막대 */}
+          <BentoCard>
+            <BentoCardHeader>
+              <BentoCardTitleGroup>
+                <BentoCardTitle>주요 체결 상대국 Top 5</BentoCardTitle>
+                <BentoCardBadge>
+                  {treatyInfographic.totalPartnerCount > 0
+                    ? `상대 당사국 ${treatyInfographic.totalPartnerCount}개국`
+                    : '당사국 연결 대기'}
+                </BentoCardBadge>
+              </BentoCardTitleGroup>
+            </BentoCardHeader>
+            <BentoCardBody>
+              {treatyInfographic.topPartners.length > 0 ? (
+                <TreatyPartnerRows>
+                  {treatyInfographic.topPartners.map((partner, idx) => {
+                    const barPct =
+                      treatyInfographic.maxPartnerCount > 0
+                        ? Math.max(
+                            8,
+                            (partner.count /
+                              treatyInfographic.maxPartnerCount) *
+                              100,
+                          )
+                        : 8
+                    const isFiltered = searchQuery.trim() === partner.name
+                    return (
+                      <TreatyPartnerRowBtn
+                        key={partner.key}
+                        type="button"
+                        $active={isFiltered}
+                        title={`${partner.name} 체결 조약 필터링`}
+                        onClick={() =>
+                          setSearchQuery((prev) =>
+                            prev.trim() === partner.name ? '' : partner.name,
+                          )
+                        }
+                      >
+                        <TreatyPartnerRank>#{idx + 1}</TreatyPartnerRank>
+                        <TreatyPartnerName title={partner.name}>
+                          {partner.flagEmoji ? `${partner.flagEmoji} ` : ''}
+                          {partner.name}
+                        </TreatyPartnerName>
+                        <TreatyPartnerBarTrack>
+                          <TreatyPartnerBarFill
+                            style={{ width: `${barPct}%` }}
+                          />
+                        </TreatyPartnerBarTrack>
+                        <TreatyPartnerCount>
+                          {partner.count}건
+                        </TreatyPartnerCount>
+                      </TreatyPartnerRowBtn>
+                    )
+                  })}
+                </TreatyPartnerRows>
+              ) : (
+                <TreatyPartnerEmpty>
+                  조약에 2개국 이상 서명 당사국을 연결하면 주요 체결 상대국 비중이 표시됩니다.
+                </TreatyPartnerEmpty>
+              )}
+            </BentoCardBody>
+          </BentoCard>
+        </BentoGrid2Col>
+      )}
 
       {isLoading ? (
         <Empty>불러오는 중…</Empty>
@@ -1218,6 +1571,7 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
           )}
         </>
       )}
+
 
       {createOpen && (
         <TreatyCreateModal

@@ -12,11 +12,8 @@ import {
 } from '@/entities/country/api.indicators'
 import { useExportImports } from '@/entities/country/api.trade'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
-import { usePoliticalSystems } from '@/entities/political-system/api'
-import { resolveCurrentSystem } from '@/entities/political-system/model/political-system'
 import { companyApi } from '@/shared/api/company'
 import { pathKeys } from '@/shared/router'
-import { CompanyRegisterModal } from '@/widgets/company-form'
 import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inline-modal'
 import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
 
@@ -34,16 +31,15 @@ import {
   ArchiveFootprintBar,
   BentoCanvas,
   BentoGrid2Col,
-  BentoGridAsym,
+  BentoGrid3Col,
   type MissingAxisChip,
 } from './dashboard-infographic/bento-primitives'
+import { ExecutiveMindMapBentoHero } from './dashboard-infographic/executive-mindmap-hero'
 import {
   CompactGeoBentoCard,
   DemographicsBentoCard,
-  GovernancePowerBentoCard,
-  MacroSparklinesBentoStrip,
   ModernHistoryForceBentoCard,
-  NationalScaleBentoCard,
+  NationalPowerGaugeStrip,
   TradeAndIndustryBentoCard,
 } from './dashboard-infographic/modern-bento-cards'
 import { parsePopulation } from './dashboard-panels/format'
@@ -51,20 +47,22 @@ import { parsePopulation } from './dashboard-panels/format'
 export interface CountryDetailDashboardProps {
   country: UnifiedCountry
   onEdit?: () => void
-  /**
-   * 국가 히어로(국기 썸네일·국가명). 대시보드 탭에서만 뜨므로 셸 좌측 칼럼 안에서
-   * 렌더한다.
-   */
+  /** 상위 셸(CountryDetailInner)에서 이미 계산된 통계 객체를 전달하면 중복 연산을 생략한다 */
+  preloadedStats?: ReturnType<typeof useCountryDashboardStats>
   header?: ReactNode
 }
 
 export function CountryDetailDashboard({
   country,
   onEdit,
+  preloadedStats,
   header,
 }: CountryDetailDashboardProps) {
   const navigate = useNavigate()
-  const stats = useCountryDashboardStats(country)
+  const fallbackStats = useCountryDashboardStats(
+    preloadedStats ? null : country,
+  )
+  const stats = preloadedStats ?? fallbackStats
   const rootRef = useRef<HTMLDivElement | null>(null)
   const isModern = country.type === 'modern'
 
@@ -88,13 +86,8 @@ export function CountryDetailDashboard({
     queryFn: () => companyApi.getAll(),
     staleTime: 60_000,
   })
-  const politicalSystemsQuery = usePoliticalSystems({
-    countryId: isModern ? country.id : undefined,
-    historicalCountryId: isModern ? undefined : country.id,
-  })
 
   const [dataManagerTab, setDataManagerTab] = useState<MainTab | null>(null)
-  const [companyRegisterOpen, setCompanyRegisterOpen] = useState(false)
   const [previewEventId, setPreviewEventId] = useState<string | null>(null)
   const [previewPersonId, setPreviewPersonId] = useState<string | null>(null)
 
@@ -104,29 +97,6 @@ export function CountryDetailDashboard({
       .sort((first, second) => second.year - first.year)
     return sorted[0] ?? null
   }, [demographicIndicators])
-
-  const latestEconomicGdp = useMemo(() => {
-    const sorted = [...economicIndicators]
-      .filter((row) => row.gdp != null && Number.isFinite(row.gdp))
-      .sort((first, second) => second.year - first.year)
-    return sorted[0] ?? null
-  }, [economicIndicators])
-
-  const latestEconomicGdpPerCapita = useMemo(() => {
-    const sorted = [...economicIndicators]
-      .filter(
-        (row) => row.gdpPerCapita != null && Number.isFinite(row.gdpPerCapita),
-      )
-      .sort((first, second) => second.year - first.year)
-    return sorted[0] ?? null
-  }, [economicIndicators])
-
-  const latestDevelopmentHdi = useMemo(() => {
-    const sorted = [...developmentIndicators]
-      .filter((row) => row.hdi != null && Number.isFinite(Number(row.hdi)))
-      .sort((first, second) => second.year - first.year)
-    return sorted[0] ?? null
-  }, [developmentIndicators])
 
   const directPopNum = parsePopulation(country.population)
   const popNum =
@@ -147,16 +117,6 @@ export function CountryDetailDashboard({
       : null
   const capitalText = country.capital ? String(country.capital).trim() : ''
 
-  const currentPolity = useMemo(
-    () =>
-      resolveCurrentSystem(politicalSystemsQuery.data ?? [], {
-        preferModernDirect: isModern,
-      }),
-    [politicalSystemsQuery.data, isModern],
-  )
-  const isBridgedPolity =
-    isModern && Boolean(currentPolity?.historicalCountryId)
-
   const { countryCompanyCount, companiesBySector } = useMemo(() => {
     const linkedHistIds = new Set(
       (country.historicalCountries ?? [])
@@ -168,17 +128,24 @@ export function CountryDetailDashboard({
         c.countryId === country.id ||
         (c.historicalCountryId && linkedHistIds.has(c.historicalCountryId)),
     )
-    const sectorMap = new Map<string, number>()
+    const statusMap = new Map<string, number>()
     for (const comp of matched) {
+      const st = String(comp.status ?? '').toUpperCase()
       const label =
-        (comp as { industry?: string | null; sector?: string | null }).industry?.trim() ||
-        (comp as { sector?: string | null }).sector?.trim() ||
-        (comp.status === 'DISSOLVED' ? '해산·소멸' : '등록 기업')
-      sectorMap.set(label, (sectorMap.get(label) ?? 0) + 1)
+        st === 'DISSOLVED' || comp.dissolvedAt
+          ? '해산·소멸'
+          : st === 'ACQUIRED' || st === 'MERGED'
+            ? '인수·합병'
+            : st === 'NATIONALIZED'
+              ? '국유화'
+              : comp.historicalCountryId && !comp.countryId
+                ? '전신 국가 기업'
+                : '운영 기업'
+      statusMap.set(label, (statusMap.get(label) ?? 0) + 1)
     }
     return {
       countryCompanyCount: matched.length,
-      companiesBySector: [...sectorMap.entries()]
+      companiesBySector: [...statusMap.entries()]
         .map(([label, count]) => ({ label, count }))
         .sort((a, b) => b.count - a.count),
     }
@@ -191,6 +158,7 @@ export function CountryDetailDashboard({
   const goGovernment = (
     subTab?: 'cabinets' | 'ministries' | 'system' | 'military',
     cabinetId?: string | null,
+    departmentId?: string | null,
   ) => {
     if (subTab === 'military') {
       navigate(pathKeys.countryMilitary(country.id))
@@ -200,6 +168,9 @@ export function CountryDetailDashboard({
     if (typeof subTab === 'string' && subTab) params.set('sub', subTab)
     if (typeof cabinetId === 'string' && cabinetId) {
       params.set('cabinetId', cabinetId)
+    }
+    if (typeof departmentId === 'string' && departmentId) {
+      params.set('departmentId', departmentId)
     }
     const qs = params.toString()
     navigate(`${pathKeys.countryGovernment(country.id)}${qs ? `?${qs}` : ''}`)
@@ -322,59 +293,79 @@ export function CountryDetailDashboard({
     stats.eventCenturyDomainCounts.length > 0 ||
     stats.militaryCount > 0
 
+  const atlasCardCount =
+    (hasDemographicsCard ? 1 : 0) + (hasTradeCard ? 1 : 0) + 1
+
   return (
     <>
       {header}
       <S.DashboardRoot ref={rootRef}>
         <BentoCanvas>
-          {/* 1단 벤토: 헌정·통치 구조 (좌) + 국력 스케일·대륙 백분위 게이지 (우) */}
-          <BentoGridAsym $leftFr={1.18} $rightFr={1}>
-            <GovernancePowerBentoCard
-              description={country.description}
-              currentPolity={currentPolity}
-              isBridgedPolity={isBridgedPolity}
-              currentHeads={stats.currentHeads}
-              currentCabinet={stats.currentCabinet}
-              nextElection={stats.nextElection}
-              recentElection={stats.recentElection}
-              onEditCountry={onEdit}
-              onOpenPoliticalSystem={goPoliticalSystem}
-              onOpenCabinets={(cabinetId) => goGovernment('cabinets', cabinetId)}
-              onOpenElections={goElections}
-              onSelectPerson={(pid) => setPreviewPersonId(pid)}
-            />
+          {/* 1단 (전폭 히어로): 대통령 · 국가수장 & 각 부처 수장 마인드맵 인포그래픽 */}
+          <ExecutiveMindMapBentoHero
+            countryId={isModern ? country.id : undefined}
+            historicalCountryId={!isModern ? country.id : undefined}
+            countryName={country.name}
+            countryIsoCode={country.isoCode}
+            description={country.description}
+            currentCabinetSummary={stats.currentCabinet}
+            nextElection={stats.nextElection}
+            recentElection={stats.recentElection}
+            onEditOverview={onEdit}
+            onOpenPoliticalSystem={goPoliticalSystem}
+            onOpenCabinets={(cabinetId) => goGovernment('cabinets', cabinetId)}
+            onOpenMinistries={(departmentId) =>
+              goGovernment('ministries', null, departmentId)
+            }
+            onOpenElections={goElections}
+            onSelectPerson={(pid) => setPreviewPersonId(pid)}
+          />
 
-            <NationalScaleBentoCard
-              popNum={popNum}
-              popYearNote={popYearNote}
-              areaNum={areaNum}
-              densityText={densityText}
-              capitalText={capitalText}
-              cityCount={stats.cityCount}
-              continentComparison={stats.continentComparison}
-              latestGdp={latestEconomicGdp}
-              latestGdpPerCapita={latestEconomicGdpPerCapita}
-              latestHdi={latestDevelopmentHdi}
-              onOpenDemographics={goStatsPyramid}
-              onOpenRegions={() => goRegions()}
-              onOpenEconomics={goStatsIndicators}
-              onOpenDataManager={() => setDataManagerTab('indicators')}
-            />
-          </BentoGridAsym>
-
-          {/* 2단 벤토: 거시경제 4대 핵심 추이 스파크라인 스트립 (데이터 있을 때 즉시 노출) */}
-          <MacroSparklinesBentoStrip
+          {/* 2단 (4칸 한줄 계기판): 인구·영토 아크 게이지 | GDP 스파크라인+YoY | 성장·금리 | HDI 스펙트럼 */}
+          <NationalPowerGaugeStrip
+            popNum={popNum}
+            popYearNote={popYearNote}
+            areaNum={areaNum}
+            densityText={densityText}
+            capitalText={capitalText}
+            cityCount={stats.cityCount}
+            continentComparison={stats.continentComparison}
             economicIndicators={economicIndicators}
+            developmentIndicators={developmentIndicators}
             bondYields={bondYields}
+            onOpenDemographics={goStatsPyramid}
+            onOpenRegions={() => goRegions()}
             onOpenEconomics={goStatsIndicators}
             onOpenBonds={goStatsBonds}
             onOpenDataManager={() => setDataManagerTab('indicators')}
           />
 
-          {/* 3단 벤토: 인구 피라미드·연령 구조 (좌) + 대외 교역 수지·기업 생태계 (우) */}
-          {(hasDemographicsCard || hasTradeCard) &&
-            (hasDemographicsCard && hasTradeCard ? (
-              <BentoGrid2Col>
+          {/* 3단 (3열 비주얼 아틀라스): 인구 피라미드·도넛 | 무역 수지·품목 도넛 | 강역·행정구역 미니맵 */}
+          {atlasCardCount === 3 ? (
+            <BentoGrid3Col>
+              <DemographicsBentoCard
+                demographicIndicators={demographicIndicators}
+                ethnicityCount={stats.ethnicityCount}
+                onOpenPyramid={goStatsPyramid}
+                onOpenEthnicity={goEthnicity}
+                onOpenDataManager={() => setDataManagerTab('pyramid')}
+              />
+              <TradeAndIndustryBentoCard
+                exportImports={exportImports}
+                companyCount={countryCompanyCount}
+                companiesBySector={companiesBySector}
+                onOpenTrade={goTrade}
+                onOpenCompanies={goCompanies}
+              />
+              <CompactGeoBentoCard
+                country={country}
+                cityCount={stats.cityCount}
+                onOpenRegions={goRegions}
+              />
+            </BentoGrid3Col>
+          ) : atlasCardCount === 2 ? (
+            <BentoGrid2Col>
+              {hasDemographicsCard ? (
                 <DemographicsBentoCard
                   demographicIndicators={demographicIndicators}
                   ethnicityCount={stats.ethnicityCount}
@@ -382,6 +373,8 @@ export function CountryDetailDashboard({
                   onOpenEthnicity={goEthnicity}
                   onOpenDataManager={() => setDataManagerTab('pyramid')}
                 />
+              ) : null}
+              {hasTradeCard ? (
                 <TradeAndIndustryBentoCard
                   exportImports={exportImports}
                   companyCount={countryCompanyCount}
@@ -389,57 +382,13 @@ export function CountryDetailDashboard({
                   onOpenTrade={goTrade}
                   onOpenCompanies={goCompanies}
                 />
-              </BentoGrid2Col>
-            ) : (
-              <>
-                {hasDemographicsCard ? (
-                  <DemographicsBentoCard
-                    demographicIndicators={demographicIndicators}
-                    ethnicityCount={stats.ethnicityCount}
-                    onOpenPyramid={goStatsPyramid}
-                    onOpenEthnicity={goEthnicity}
-                    onOpenDataManager={() => setDataManagerTab('pyramid')}
-                  />
-                ) : null}
-                {hasTradeCard ? (
-                  <TradeAndIndustryBentoCard
-                    exportImports={exportImports}
-                    companyCount={countryCompanyCount}
-                    companiesBySector={companiesBySector}
-                    onOpenTrade={goTrade}
-                    onOpenCompanies={goCompanies}
-                  />
-                ) : null}
-              </>
-            ))}
-
-          {/* 4단 벤토: 통사 계보·세기별 사건·군사력 (좌) + 컴팩트 강역·행정구역 맵 (우) */}
-          {hasHistoryForceCard ? (
-            <BentoGridAsym $leftFr={1.35} $rightFr={1}>
-              <ModernHistoryForceBentoCard
-                countryName={country.name}
-                historicalCountries={country.historicalCountries ?? []}
-                eventCount={stats.eventCount}
-                centuryBuckets={stats.eventCenturyDomainCounts}
-                domainBreakdown={stats.eventDomainBreakdown}
-                militaryCount={stats.militaryCount}
-                highCommandCount={stats.highCommandCount}
-                militaryBranchBreakdown={stats.militaryBranchBreakdown}
-                warSummary={stats.warSummary}
-                onOpenHistoricalTab={goHistorical}
-                onSelectHistoricalCountry={(hid) =>
-                  navigate(pathKeys.countryDetail(hid))
-                }
-                onSelectCentury={goEventsCentury}
-                onOpenEvents={goEvents}
-                onOpenMilitary={goMilitary}
-              />
+              ) : null}
               <CompactGeoBentoCard
                 country={country}
                 cityCount={stats.cityCount}
                 onOpenRegions={goRegions}
               />
-            </BentoGridAsym>
+            </BentoGrid2Col>
           ) : (
             <CompactGeoBentoCard
               country={country}
@@ -447,6 +396,28 @@ export function CountryDetailDashboard({
               onOpenRegions={goRegions}
             />
           )}
+
+          {/* 4단: 통사 계보 스파인 · 세기별 사건 스택 히스토그램 · 군사 전력 & 승률 도넛 */}
+          {hasHistoryForceCard ? (
+            <ModernHistoryForceBentoCard
+              countryName={country.name}
+              historicalCountries={country.historicalCountries ?? []}
+              eventCount={stats.eventCount}
+              centuryBuckets={stats.eventCenturyDomainCounts}
+              domainBreakdown={stats.eventDomainBreakdown}
+              militaryCount={stats.militaryCount}
+              highCommandCount={stats.highCommandCount}
+              militaryBranchBreakdown={stats.militaryBranchBreakdown}
+              warSummary={stats.warSummary}
+              onOpenHistoricalTab={goHistorical}
+              onSelectHistoricalCountry={(hid) =>
+                navigate(pathKeys.countryDetail(hid))
+              }
+              onSelectCentury={goEventsCentury}
+              onOpenEvents={goEvents}
+              onOpenMilitary={goMilitary}
+            />
+          ) : null}
 
           {/* 하단 1줄: 아카이브 완성도 도넛 링 + 미입력 보완 칩 + 최근 기록 티커 */}
           <ArchiveFootprintBar
@@ -479,19 +450,11 @@ export function CountryDetailDashboard({
         />
         {isModern && (
           <CountryDataManagerModal
-            open={dataManagerTab !== null}
-            onClose={() => setDataManagerTab(null)}
             countryId={country.id}
             countryName={country.name}
-            initialTab={dataManagerTab ?? 'records'}
-          />
-        )}
-        {companyRegisterOpen && (
-          <CompanyRegisterModal
-            isOpen={companyRegisterOpen}
-            onClose={() => setCompanyRegisterOpen(false)}
-            defaultCountryId={isModern ? country.id : undefined}
-            defaultHistoricalCountryId={isModern ? undefined : country.id}
+            initialTab={dataManagerTab ?? 'indicators'}
+            open={dataManagerTab !== null}
+            onClose={() => setDataManagerTab(null)}
           />
         )}
       </S.DashboardRoot>

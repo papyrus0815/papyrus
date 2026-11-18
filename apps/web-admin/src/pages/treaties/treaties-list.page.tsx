@@ -21,14 +21,29 @@ import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiChevronDown, FiPlus, FiSearch, FiX } from 'react-icons/fi'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import styled, { css } from 'styled-components'
+import styled, { css, useTheme } from 'styled-components'
 
+import {
+  BentoCard,
+  BentoCardBadge,
+  BentoCardBody,
+  BentoCardHeader,
+  BentoCardTitle,
+  BentoCardTitleGroup,
+  BentoGrid2Col,
+  type SegmentSlice,
+  StackedSegmentBar,
+} from '@/entities/event/ui/bento-primitives'
 import {
   DIGIT_DISPLAY,
   ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentSubtle,
   ledgerHairline,
   ledgerHairlineStrong,
   ledgerHoverFill,
+  ledgerSubtleFill,
+  MOTION,
 } from '@/entities/event/ui/ledger-tokens'
 import {
   TREATY_TYPE_LABELS,
@@ -136,7 +151,9 @@ export function TreatiesListPage() {
     treatyListSearch: location.search,
   }
 
+  const theme = useTheme()
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set())
+  const [selectedCentury, setSelectedCentury] = useState<number | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
 
   const all = useMemo(() => data?.items ?? [], [data])
@@ -150,10 +167,96 @@ export function TreatiesListPage() {
     return counts
   }, [all])
 
+  /** 세기별 체결 밀도 & 유형·효력 상태 인포그래픽 집계 */
+  const infographicData = useMemo(() => {
+    const centuryMap = new Map<number, number>()
+    let undatedCount = 0
+    let activeCount = 0
+    let expiredCount = 0
+    let brokenCount = 0
+
+    for (const treaty of all) {
+      const century = getCenturyFromIso(treaty.signDate)
+      if (century === null) undatedCount += 1
+      else centuryMap.set(century, (centuryMap.get(century) ?? 0) + 1)
+
+      if (parseIsoDateParts(treaty.violationDate)) brokenCount += 1
+      else if (parseIsoDateParts(treaty.expiryDate)) expiredCount += 1
+      else activeCount += 1
+    }
+
+    const centuryBars = [...centuryMap.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([century, count]) => ({
+        century,
+        count,
+        shortLabel: century < 0 ? `BC${Math.abs(century)}C` : `${century}C`,
+        fullLabel: formatCenturyLabel(century),
+      }))
+
+    const maxCenturyCount = centuryBars.reduce(
+      (max, b) => Math.max(max, b.count),
+      1,
+    )
+    const peakCentury =
+      centuryBars.length > 0
+        ? centuryBars.reduce((best, b) => (b.count > best.count ? b : best))
+        : null
+
+    const typeSlices: SegmentSlice[] = (
+      Object.keys(TREATY_TYPE_LABELS) as TreatyType[]
+    )
+      .filter((t) => (typeCounts.get(t) ?? 0) > 0)
+      .sort((a, b) => (typeCounts.get(b) ?? 0) - (typeCounts.get(a) ?? 0))
+      .map((t) => ({
+        key: t,
+        label: TREATY_TYPE_LABELS[t].replace(/ (조약|협정)$/, ''),
+        value: typeCounts.get(t) ?? 0,
+        color: treatyTypeTone(t, theme.mode),
+      }))
+
+    const isDarkMode = theme.mode === 'dark'
+    const validitySlices: SegmentSlice[] = [
+      {
+        key: 'active',
+        label: '유효 · 존속',
+        value: activeCount,
+        color: isDarkMode ? '#34d399' : '#059669',
+      },
+      {
+        key: 'expired',
+        label: '만료',
+        value: expiredCount,
+        color: isDarkMode ? '#94a3b8' : '#64748b',
+      },
+      {
+        key: 'broken',
+        label: '파기',
+        value: brokenCount,
+        color: isDarkMode ? '#f87171' : '#dc2626',
+      },
+    ]
+
+    return {
+      centuryBars,
+      maxCenturyCount,
+      peakCentury,
+      undatedCount,
+      typeSlices,
+      validitySlices,
+    }
+  }, [all, typeCounts, theme.mode])
+
   const groups = useMemo(() => {
     const lowered = query.trim().toLowerCase()
     const filtered = all.filter((treaty) => {
       if (typeFilter && treaty.type !== typeFilter) return false
+      if (
+        selectedCentury !== null &&
+        getCenturyFromIso(treaty.signDate) !== selectedCentury
+      ) {
+        return false
+      }
       if (!lowered) return true
       const haystack = [
         treaty.name,
@@ -194,15 +297,28 @@ export function TreatiesListPage() {
       buckets.get(key)!.treaties.push(treaty)
     }
     return [...buckets.entries()].map(([key, bucket]) => ({ key, ...bucket }))
-  }, [all, query, typeFilter, sort])
+  }, [all, query, typeFilter, selectedCentury, sort])
 
   const shownCount = groups.reduce(
     (sum, group) => sum + group.treaties.length,
     0,
   )
-  const hasFilter = !!query.trim() || !!typeFilter
+  const hasFilter = !!query.trim() || !!typeFilter || selectedCentury !== null
 
-  const clearFilters = () => patchListState({ query: '', type: '' })
+  const clearFilters = () => {
+    setSelectedCentury(null)
+    patchListState({ query: '', type: '' })
+  }
+
+  const handleSelectCenturyBar = (century: number) => {
+    setSelectedCentury((prev) => (prev === century ? null : century))
+    setCollapsed((current) => {
+      if (!current.has(String(century))) return current
+      const next = new Set(current)
+      next.delete(String(century))
+      return next
+    })
+  }
 
   const toggleGroup = (key: string) =>
     setCollapsed((current) => {
@@ -214,6 +330,111 @@ export function TreatiesListPage() {
 
   return (
     <Page>
+      {!isLoading && !isError && all.length > 0 && (
+        <BentoGrid2Col aria-label="조약 체결 밀도 및 성격 요약">
+          <BentoCard>
+            <BentoCardHeader>
+              <BentoCardTitleGroup>
+                <BentoCardTitle>세기별 조약 체결 밀도</BentoCardTitle>
+                <BentoCardBadge>{all.length.toLocaleString('ko-KR')}건</BentoCardBadge>
+              </BentoCardTitleGroup>
+              {selectedCentury !== null ? (
+                <HistogramResetBtn
+                  type="button"
+                  onClick={() => setSelectedCentury(null)}
+                >
+                  {formatCenturyLabel(selectedCentury)} 해제 <FiX size={11} />
+                </HistogramResetBtn>
+              ) : infographicData.peakCentury ? (
+                <HistogramPeakText>
+                  최다 <strong>{infographicData.peakCentury.fullLabel}</strong> (
+                  {infographicData.peakCentury.count}건)
+                </HistogramPeakText>
+              ) : null}
+            </BentoCardHeader>
+            <BentoCardBody>
+              {infographicData.centuryBars.length > 0 ? (
+                <>
+                  <CenturyHistogram role="group" aria-label="세기별 체결 건수 히스토그램">
+                    {infographicData.centuryBars.map((bar) => {
+                      const active = selectedCentury === bar.century
+                      const dimmed =
+                        selectedCentury !== null && selectedCentury !== bar.century
+                      const heightPct = Math.max(
+                        12,
+                        Math.round(
+                          (bar.count / infographicData.maxCenturyCount) * 100,
+                        ),
+                      )
+                      return (
+                        <CenturyBarBtn
+                          key={bar.century}
+                          type="button"
+                          $active={active}
+                          $dimmed={dimmed}
+                          aria-pressed={active}
+                          title={`${bar.fullLabel}: ${bar.count}건 — 클릭하여 세기 필터`}
+                          onClick={() => handleSelectCenturyBar(bar.century)}
+                        >
+                          <CenturyBarCount $active={active}>
+                            {bar.count}
+                          </CenturyBarCount>
+                          <CenturyBarTrack>
+                            <CenturyBarFill
+                              $active={active}
+                              style={{ height: `${heightPct}%` }}
+                            />
+                          </CenturyBarTrack>
+                          <CenturyBarAxis $active={active}>
+                            {bar.shortLabel}
+                          </CenturyBarAxis>
+                        </CenturyBarBtn>
+                      )
+                    })}
+                  </CenturyHistogram>
+                  <HistogramCaption>
+                    막대를 클릭하면 해당 세기의 조약만 필터링합니다
+                    {infographicData.undatedCount > 0
+                      ? ` · 서명일 미상 ${infographicData.undatedCount}건`
+                      : ''}
+                  </HistogramCaption>
+                </>
+              ) : (
+                <HistogramCaption>
+                  서명일이 기록된 조약이 없습니다.
+                </HistogramCaption>
+              )}
+            </BentoCardBody>
+          </BentoCard>
+
+          <BentoCard>
+            <BentoCardHeader>
+              <BentoCardTitleGroup>
+                <BentoCardTitle>조약 성격 비중 · 효력 상태</BentoCardTitle>
+                <BentoCardBadge>{typeCounts.size}개 유형</BentoCardBadge>
+              </BentoCardTitleGroup>
+            </BentoCardHeader>
+            <BentoCardBody>
+              <SummaryBlock>
+                <SummaryMiniTitle>조약 성격 분포</SummaryMiniTitle>
+                <StackedSegmentBar
+                  slices={infographicData.typeSlices}
+                  height={9}
+                />
+              </SummaryBlock>
+              <SummaryDivider />
+              <SummaryBlock>
+                <SummaryMiniTitle>효력 상태 요약 (유효 · 만료 · 파기)</SummaryMiniTitle>
+                <StackedSegmentBar
+                  slices={infographicData.validitySlices}
+                  height={7}
+                />
+              </SummaryBlock>
+            </BentoCardBody>
+          </BentoCard>
+        </BentoGrid2Col>
+      )}
+
       <Toolbar>
         <SearchBox>
           <FiSearch size={16} aria-hidden />
@@ -515,7 +736,7 @@ const Toolbar = styled.div`
   }
 `
 
-/** 사건 목록 '+ 새 사건 등록'과 같은 자리·같은 옷 — 툴바 맨 끝, 브랜드 채움 */
+/** 사건 목록 '+ 새 사건 등록'과 같은 자리·같은 옷 — 툴바 맨 끝, 인디고 브랜드 채움 */
 const CreateButton = styled.button`
   margin-left: auto;
   display: inline-flex;
@@ -523,22 +744,24 @@ const CreateButton = styled.button`
   gap: 6px;
   height: 36px;
   padding: 0 14px;
-  border: none;
+  border: 1px solid ${({ theme }) => (theme.mode === 'dark' ? '#6366f1' : '#4f46e5')};
   border-radius: 10px;
-  background: #2563eb;
+  background: ${({ theme }) => (theme.mode === 'dark' ? '#6366f1' : '#4f46e5')};
   color: #fff;
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  transition: background 0.12s;
+  box-shadow: none;
+  transition: background ${MOTION.fast} ease, border-color ${MOTION.fast} ease;
 
   &:hover {
-    background: #1d4ed8;
+    background: ${({ theme }) => (theme.mode === 'dark' ? '#4f46e5' : '#4338ca')};
+    border-color: ${({ theme }) => (theme.mode === 'dark' ? '#4f46e5' : '#4338ca')};
   }
 
   &:focus-visible {
-    outline: 2px solid #1d4ed8;
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
   }
 `
@@ -841,7 +1064,7 @@ const CenturyDivider = styled.button`
     height: 10px;
     border-radius: 50%;
     transform: translate(-50%, -50%);
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#93c5fd' : '#2563eb')};
+    background: ${({ theme }) => ledgerAccent(theme.mode)};
     box-shadow: 0 0 0 3px
       ${({ theme }) => (theme.mode === 'dark' ? '#141414' : '#fff')};
   }
@@ -1101,4 +1324,134 @@ const TextButton = styled.button`
   &:hover {
     text-decoration: underline;
   }
+`
+
+const HistogramPeakText = styled.span`
+  font-size: 11.5px;
+  color: ${metaColor};
+  ${DIGIT_DISPLAY}
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const HistogramResetBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  ${DIGIT_DISPLAY}
+`
+
+const CenturyHistogram = styled.div`
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(28px, 1fr);
+  gap: 6px;
+  align-items: end;
+  overflow-x: auto;
+  padding-top: 2px;
+`
+
+const CenturyBarBtn = styled.button<{ $active: boolean; $dimmed: boolean }>`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 2px;
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? ledgerAccentBorder(theme.mode) : 'transparent'};
+  border-radius: 6px;
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  opacity: ${({ $dimmed }) => ($dimmed ? 0.48 : 1)};
+  cursor: pointer;
+  transition:
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    opacity ${MOTION.fast} ease;
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    opacity: 1;
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: -2px;
+  }
+`
+
+const CenturyBarCount = styled.span<{ $active: boolean }>`
+  ${DIGIT_DISPLAY}
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+`
+
+const CenturyBarTrack = styled.span`
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  max-width: 24px;
+  height: 46px;
+  border-radius: 3px 3px 0 0;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  overflow: hidden;
+`
+
+const CenturyBarFill = styled.span<{ $active: boolean }>`
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
+  opacity: ${({ $active }) => ($active ? 1 : 0.72)};
+  transition: height ${MOTION.normal} ease, opacity ${MOTION.fast} ease;
+`
+
+const CenturyBarAxis = styled.span<{ $active: boolean }>`
+  ${DIGIT_DISPLAY}
+  font-size: 10px;
+  font-weight: ${({ $active }) => ($active ? 700 : 600)};
+  white-space: nowrap;
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : metaColor({ theme })};
+`
+
+const HistogramCaption = styled.div`
+  font-size: 11px;
+  color: ${metaColor};
+  ${DIGIT_DISPLAY}
+`
+
+const SummaryBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const SummaryMiniTitle = styled.div`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${metaColor};
+`
+
+const SummaryDivider = styled.div`
+  height: 1px;
+  background: ${({ theme }) => ledgerHairline(theme.mode)};
 `

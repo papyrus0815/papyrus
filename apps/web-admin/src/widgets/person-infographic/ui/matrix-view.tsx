@@ -6,6 +6,15 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import styled, { useTheme } from 'styled-components'
 
+import {
+  DIGIT_DISPLAY,
+  RADIUS,
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentSubtle,
+  ledgerBackground,
+} from '@/entities/event/ui/ledger-tokens'
+
 import type { AdaptedPerson } from '../model/types'
 import { bornForPlot, diedForPlot } from '../model/adapt'
 import { describePersonLifespan, formatYear } from '../model/century'
@@ -212,16 +221,6 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
     }
   }, [plottablePeople, showAll, canvasW, focusedEra, countryOrder])
 
-  if (!grouped.all.length && eraWindow === 'all') {
-    return (
-      <EmptyState
-        hasActiveFilter={hasAnyFilter}
-        onClearFilters={resetFilters}
-        description="국가·시대·분야·영향력 필터를 확인해보세요."
-      />
-    )
-  }
-
   const { packed, totalRowH, minY, maxY, rng, yearX, ticks, hiddenCount } =
     grouped
   const cursorYear =
@@ -239,6 +238,16 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
     }
     return count
   }, [cursorYear, plottablePeople, isActive])
+
+  if (!grouped.all.length && eraWindow === 'all') {
+    return (
+      <EmptyState
+        hasActiveFilter={hasAnyFilter}
+        onClearFilters={resetFilters}
+        description="국가·시대·분야·영향력 필터를 확인해보세요."
+      />
+    )
+  }
 
   const gridLine = theme.colors.border.light
   const tickLine = theme.colors.border.default
@@ -272,6 +281,17 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
         </ControlGroup>
 
         <ControlRightGroup>
+          {cursorYear != null && (
+            <CoevalHeaderBadge role="status" aria-live="off">
+              <CoevalYearTag>
+                {cursorYear === 0 ? '0년' : formatYear(cursorYear)}
+              </CoevalYearTag>
+              <span>
+                선택 연도 동시대 생존{' '}
+                <strong>{coevalCount.toLocaleString()}</strong>명
+              </span>
+            </CoevalHeaderBadge>
+          )}
           {hasActiveFilter && (
             <FilterBadge>
               <span style={{ fontVariantNumeric: 'tabular-nums' }}>
@@ -502,10 +522,15 @@ export function MatrixView({ people, onOpen, selectedPersonId }: Props) {
                     {cursorX != null && cursorYear != null && (
                       <CrosshairYearBadge
                         style={{
-                          left: Math.max(28, Math.min(canvasW - 28, cursorX)),
+                          left: Math.max(82, Math.min(canvasW - 82, cursorX)),
                         }}
                       >
-                        {cursorYear === 0 ? '0' : formatYear(cursorYear)}
+                        <span>
+                          {cursorYear === 0 ? '0' : formatYear(cursorYear)}
+                        </span>
+                        <CrosshairCoevalSpan>
+                          · 선택 연도 동시대 생존 {coevalCount.toLocaleString()}명
+                        </CrosshairCoevalSpan>
                       </CrosshairYearBadge>
                     )}
                   </div>
@@ -814,29 +839,65 @@ const ControlRightGroup = styled.div`
   gap: 8px 16px;
 `
 
+const CoevalHeaderBadge = styled.span`
+  ${DIGIT_DISPLAY}
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: ${RADIUS.PILL};
+  border: 1px solid
+    ${({ theme }) =>
+      ledgerAccentBorder(theme.mode === 'dark' ? 'dark' : 'light')};
+  background: ${({ theme }) =>
+    ledgerAccentSubtle(theme.mode === 'dark' ? 'dark' : 'light')};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: none;
+
+  strong {
+    font-weight: 800;
+    color: ${({ theme }) =>
+      ledgerAccent(theme.mode === 'dark' ? 'dark' : 'light')};
+  }
+`
+
+const CoevalYearTag = styled.span`
+  font-weight: 800;
+  color: ${({ theme }) =>
+    ledgerAccent(theme.mode === 'dark' ? 'dark' : 'light')};
+`
+
 const CrosshairYearBadge = styled.div`
+  ${DIGIT_DISPLAY}
   position: absolute;
-  top: 4px;
+  top: 3px;
   transform: translateX(-50%);
   z-index: 4;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 7px;
-  border-radius: 999px;
+  padding: 2px 8px;
+  border-radius: ${RADIUS.PILL};
+  border: 1px solid
+    ${({ theme }) =>
+      ledgerAccentBorder(theme.mode === 'dark' ? 'dark' : 'light')};
   font-size: 10px;
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   pointer-events: none;
-  color: ${({ theme }) => theme.colors.background.primary};
-  background: ${({ theme }) => theme.colors.active};
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);
+  color: ${({ theme }) =>
+    ledgerAccent(theme.mode === 'dark' ? 'dark' : 'light')};
+  background: ${({ theme }) =>
+    ledgerBackground(theme.mode === 'dark' ? 'dark' : 'light')};
+  box-shadow: none;
 `
 
 const CrosshairCoevalSpan = styled.span`
   font-weight: 600;
-  opacity: 0.88;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const ControlLabel = styled.span`

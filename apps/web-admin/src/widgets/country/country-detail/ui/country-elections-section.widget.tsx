@@ -33,6 +33,20 @@ import styled, { useTheme } from 'styled-components'
 
 import { useCountry } from '@/entities/country/api'
 import {
+  BentoActionBtn,
+  BentoCard,
+  BentoCardBadge,
+  BentoCardBody,
+  BentoCardHeader,
+  BentoCardTitle,
+  BentoCardTitleGroup,
+  BentoGrid2Col,
+  MiniSvgSparkline,
+  type SegmentSlice,
+  type SparkPoint,
+  StackedSegmentBar,
+} from '@/entities/event/ui/bento-primitives'
+import {
   DIGIT_DISPLAY,
   RADIUS,
   ledgerAccent,
@@ -2085,7 +2099,10 @@ export function CountryElectionsSection({
     }
   }, [politicsViewTab, listLoading, sortedList, list, selectedId, setSelectedId])
 
-  /** 선거 요약 KPI (4칸 헤어라인 스트립용) */
+  const sectionTheme = useTheme()
+  const isSectionDark = sectionTheme.mode === 'dark'
+
+  /** 선거 요약 인포그래픽 데이터 (2열 벤토 요약 카드용) */
   const electionKpiSummary = useMemo(() => {
     const totalCount = list.length
     let completedCount = 0
@@ -2093,8 +2110,14 @@ export function CountryElectionsSection({
     const typeCounts = new Map<string, number>()
     let turnoutSum = 0
     let turnoutCount = 0
+    const turnoutByYear = new Map<number, { sum: number; count: number }>()
+    let latestTurnoutInfo: { year: number; val: number } | null = null
 
-    for (const row of list) {
+    const orderedAsc = [...list].sort(
+      (a, b) => new Date(a.pollDate).getTime() - new Date(b.pollDate).getTime(),
+    )
+
+    for (const row of orderedAsc) {
       if (row.status === 'FINALIZED' || row.status === 'COMPLETED')
         completedCount += 1
       else if (row.status === 'SCHEDULED' || row.status === 'IN_PROGRESS')
@@ -2115,21 +2138,89 @@ export function CountryElectionsSection({
         if (Number.isFinite(tNum) && tNum >= 0) {
           turnoutSum += tNum
           turnoutCount += 1
+          const yNum = Number(formatPollYear(row.pollDate))
+          if (Number.isFinite(yNum)) {
+            const cur = turnoutByYear.get(yNum) ?? { sum: 0, count: 0 }
+            cur.sum += tNum
+            cur.count += 1
+            turnoutByYear.set(yNum, cur)
+            latestTurnoutInfo = {
+              year: yNum,
+              val: Math.round(tNum * 10) / 10,
+            }
+          }
         }
       }
     }
 
-    let topType: { type: string; count: number } | null = null
-    for (const [type, count] of typeCounts.entries()) {
-      if (!topType || count > topType.count) {
-        topType = { type, count }
-      }
-    }
+    const turnoutSparkPoints: SparkPoint[] = [...turnoutByYear.entries()]
+      .sort((left, right) => left[0] - right[0])
+      .map(([year, agg]) => ({
+        year,
+        value: Math.round((agg.sum / agg.count) * 10) / 10,
+      }))
 
-    const byDateDesc = [...list].sort(
-      (a, b) => new Date(b.pollDate).getTime() - new Date(a.pollDate).getTime(),
+    const palette = isSectionDark
+      ? ['#a5b4fc', '#38bdf8', '#34d399', '#fbbf24', '#c084fc', '#94a3b8']
+      : ['#4f46e5', '#0284c7', '#059669', '#d97706', '#7c3aed', '#64748b']
+
+    const sortedTypes = [...typeCounts.entries()].sort(
+      (left, right) => right[1] - left[1],
     )
-    const latestElection = byDateDesc[0] ?? null
+    const typeSlices: SegmentSlice[] = sortedTypes.map(
+      ([typeKey, count], idx) => ({
+        key: typeKey,
+        label: labelElectionType(typeKey),
+        value: count,
+        color: palette[idx % palette.length],
+        meta: `${count}건`,
+      }),
+    )
+
+    const otherStatusCount = Math.max(
+      0,
+      totalCount - completedCount - scheduledCount,
+    )
+    const statusSlices: SegmentSlice[] = [
+      ...(completedCount > 0
+        ? [
+            {
+              key: 'completed',
+              label: '확정·완료',
+              value: completedCount,
+              color: isSectionDark ? '#a5b4fc' : '#4f46e5',
+              meta: `${completedCount}건`,
+            },
+          ]
+        : []),
+      ...(scheduledCount > 0
+        ? [
+            {
+              key: 'scheduled',
+              label: '예정·진행',
+              value: scheduledCount,
+              color: isSectionDark ? '#38bdf8' : '#0284c7',
+              meta: `${scheduledCount}건`,
+            },
+          ]
+        : []),
+      ...(otherStatusCount > 0
+        ? [
+            {
+              key: 'other',
+              label: '기타·미상',
+              value: otherStatusCount,
+              color: isSectionDark ? '#64748b' : '#94a3b8',
+              meta: `${otherStatusCount}건`,
+            },
+          ]
+        : []),
+    ]
+
+    const topType = sortedTypes[0]
+      ? { type: sortedTypes[0][0], count: sortedTypes[0][1] }
+      : null
+    const latestElection = orderedAsc[orderedAsc.length - 1] ?? null
     const avgTurnout =
       turnoutCount > 0 ? Math.round((turnoutSum / turnoutCount) * 10) / 10 : null
 
@@ -2142,8 +2233,12 @@ export function CountryElectionsSection({
       latestElection,
       avgTurnout,
       turnoutCount,
+      turnoutSparkPoints,
+      latestTurnoutInfo,
+      typeSlices,
+      statusSlices,
     }
-  }, [list])
+  }, [list, isSectionDark])
 
   /** 선거 전환 직후 이전 쿼리 데이터가 잠깐 남는 경우를 막아 상세가 뒤섞이지 않게 함 */
   const detailMatchesSelection = Boolean(
@@ -2226,72 +2321,141 @@ export function CountryElectionsSection({
         {politicsViewTab === 'elections' ? (
           <ElectionsPoliticsTabSubsection aria-label="선거 목록·상세">
             {!listLoading && list.length > 0 ? (
-              <DashboardStyles.SectionHeadlineStrip aria-label="선거 현황 요약">
-                <DashboardStyles.SectionHeadlineCell>
-                  <DashboardStyles.SectionHeadlineLabel>
-                    전체 등록 선거
-                  </DashboardStyles.SectionHeadlineLabel>
-                  <DashboardStyles.SectionHeadlineValue>
-                    {electionKpiSummary.totalCount}
-                    <DashboardStyles.SectionHeadlineUnit>
-                      건
-                    </DashboardStyles.SectionHeadlineUnit>
-                  </DashboardStyles.SectionHeadlineValue>
-                  <DashboardStyles.SectionHeadlineSub>
-                    완료 {electionKpiSummary.completedCount}건 · 예정/진행{' '}
-                    {electionKpiSummary.scheduledCount}건
-                  </DashboardStyles.SectionHeadlineSub>
-                </DashboardStyles.SectionHeadlineCell>
-                <DashboardStyles.SectionHeadlineCell>
-                  <DashboardStyles.SectionHeadlineLabel>
-                    선거 유형 분포
-                  </DashboardStyles.SectionHeadlineLabel>
-                  <DashboardStyles.SectionHeadlineValue>
-                    {electionKpiSummary.distinctTypeCount}
-                    <DashboardStyles.SectionHeadlineUnit>
-                      개 유형
-                    </DashboardStyles.SectionHeadlineUnit>
-                  </DashboardStyles.SectionHeadlineValue>
-                  <DashboardStyles.SectionHeadlineSub>
-                    {electionKpiSummary.topType
-                      ? `최다: ${labelElectionType(electionKpiSummary.topType.type)} (${electionKpiSummary.topType.count}건)`
-                      : '유형 미지정'}
-                  </DashboardStyles.SectionHeadlineSub>
-                </DashboardStyles.SectionHeadlineCell>
-                <DashboardStyles.SectionHeadlineCell>
-                  <DashboardStyles.SectionHeadlineLabel>
-                    최근 선거 투표일
-                  </DashboardStyles.SectionHeadlineLabel>
-                  <DashboardStyles.SectionHeadlineValue>
-                    {electionKpiSummary.latestElection
-                      ? formatPollDate(electionKpiSummary.latestElection.pollDate)
-                      : '—'}
-                  </DashboardStyles.SectionHeadlineValue>
-                  <DashboardStyles.SectionHeadlineSub>
-                    {electionKpiSummary.latestElection
-                      ? electionPrimaryTitle(electionKpiSummary.latestElection)
-                      : '등록 선거 없음'}
-                  </DashboardStyles.SectionHeadlineSub>
-                </DashboardStyles.SectionHeadlineCell>
-                <DashboardStyles.SectionHeadlineCell>
-                  <DashboardStyles.SectionHeadlineLabel>
-                    평균 투표율 · 연동 정당
-                  </DashboardStyles.SectionHeadlineLabel>
-                  <DashboardStyles.SectionHeadlineValue>
-                    {electionKpiSummary.avgTurnout != null
-                      ? `${electionKpiSummary.avgTurnout}`
-                      : `${parties.length}`}
-                    <DashboardStyles.SectionHeadlineUnit>
-                      {electionKpiSummary.avgTurnout != null ? '%' : '개 정당'}
-                    </DashboardStyles.SectionHeadlineUnit>
-                  </DashboardStyles.SectionHeadlineValue>
-                  <DashboardStyles.SectionHeadlineSub>
-                    {electionKpiSummary.avgTurnout != null
-                      ? `투표율 집계 ${electionKpiSummary.turnoutCount}건 · 등록 정당 ${parties.length}곳`
-                      : `등록 정당 ${parties.length}곳 · 선거구 ${districts.length}곳`}
-                  </DashboardStyles.SectionHeadlineSub>
-                </DashboardStyles.SectionHeadlineCell>
-              </DashboardStyles.SectionHeadlineStrip>
+              <BentoGrid2Col aria-label="선거 현황 요약 인포그래픽">
+                {/* Left: 역대 투표율 추이 스파크라인 + 선거 유형 분포 */}
+                <BentoCard>
+                  <BentoCardHeader>
+                    <BentoCardTitleGroup>
+                      <BentoCardTitle>
+                        역대 투표율 추이 · 선거 유형 분포
+                      </BentoCardTitle>
+                      <BentoCardBadge>
+                        {electionKpiSummary.avgTurnout != null
+                          ? `평균 투표율 ${electionKpiSummary.avgTurnout}%`
+                          : `${electionKpiSummary.distinctTypeCount}개 유형`}
+                      </BentoCardBadge>
+                    </BentoCardTitleGroup>
+                  </BentoCardHeader>
+                  <BentoCardBody>
+                    {electionKpiSummary.turnoutSparkPoints.length >= 2 ? (
+                      <ElectionTurnoutSparkWrap>
+                        <ElectionTurnoutMetaRow>
+                          <span>
+                            최근 투표율{' '}
+                            <strong>
+                              {electionKpiSummary.latestTurnoutInfo?.val}%
+                            </strong>{' '}
+                            ({electionKpiSummary.latestTurnoutInfo?.year}년)
+                          </span>
+                          <span className="muted">
+                            집계 {electionKpiSummary.turnoutCount}회
+                          </span>
+                        </ElectionTurnoutMetaRow>
+                        <MiniSvgSparkline
+                          points={electionKpiSummary.turnoutSparkPoints}
+                          color={ledgerAccent(sectionTheme.mode)}
+                          height={38}
+                          formatValue={(val) => `${val.toFixed(1)}%`}
+                        />
+                      </ElectionTurnoutSparkWrap>
+                    ) : electionKpiSummary.turnoutCount === 1 &&
+                      electionKpiSummary.latestTurnoutInfo ? (
+                      <ElectionSingleTurnoutLine>
+                        투표율 기록 1회 ·{' '}
+                        <strong>
+                          {electionKpiSummary.latestTurnoutInfo.year}년{' '}
+                          {electionKpiSummary.latestTurnoutInfo.val}%
+                        </strong>
+                      </ElectionSingleTurnoutLine>
+                    ) : null}
+
+                    <ElectionTypeBarSection>
+                      <StackedSegmentBar
+                        slices={electionKpiSummary.typeSlices}
+                        height={9}
+                        showPercent
+                      />
+                      <ElectionBentoLegendRow>
+                        {electionKpiSummary.typeSlices.map((slice) => (
+                          <ElectionBentoLegendItem key={slice.key}>
+                            <ElectionBentoDot $color={slice.color} />
+                            <span>{slice.label}</span>
+                            <strong>{slice.meta}</strong>
+                          </ElectionBentoLegendItem>
+                        ))}
+                      </ElectionBentoLegendRow>
+                    </ElectionTypeBarSection>
+                  </BentoCardBody>
+                </BentoCard>
+
+                {/* Right: 등록 정당 · 확정 선거 요약 */}
+                <BentoCard>
+                  <BentoCardHeader>
+                    <BentoCardTitleGroup>
+                      <BentoCardTitle>
+                        등록 정당 · 확정 선거 요약
+                      </BentoCardTitle>
+                      <BentoCardBadge>
+                        총 {electionKpiSummary.totalCount}회 선거
+                      </BentoCardBadge>
+                    </BentoCardTitleGroup>
+                    <BentoActionBtn
+                      type="button"
+                      onClick={() => handlePoliticsViewTab('parties')}
+                    >
+                      정당 원장 ({parties.length}) →
+                    </BentoActionBtn>
+                  </BentoCardHeader>
+                  <BentoCardBody>
+                    <ElectionRightKpiRow>
+                      <ElectionRightKpiCell>
+                        <span className="label">확정·완료 선거</span>
+                        <strong className="val">
+                          {electionKpiSummary.completedCount}
+                          <small> / {electionKpiSummary.totalCount}건</small>
+                        </strong>
+                      </ElectionRightKpiCell>
+                      <ElectionRightKpiCell>
+                        <span className="label">등록 정당 · 선거구</span>
+                        <strong className="val">
+                          {parties.length}
+                          <small>개당 · {districts.length}곳</small>
+                        </strong>
+                      </ElectionRightKpiCell>
+                      <ElectionRightKpiCell>
+                        <span className="label">최근 실시 선거</span>
+                        <strong className="val date">
+                          {electionKpiSummary.latestElection
+                            ? formatPollDate(
+                                electionKpiSummary.latestElection.pollDate,
+                              )
+                            : '—'}
+                        </strong>
+                      </ElectionRightKpiCell>
+                    </ElectionRightKpiRow>
+
+                    {electionKpiSummary.statusSlices.length > 0 && (
+                      <StackedSegmentBar
+                        slices={electionKpiSummary.statusSlices}
+                        height={8}
+                      />
+                    )}
+
+                    <ElectionBentoFooterLine>
+                      <span>
+                        {electionKpiSummary.latestElection
+                          ? `최신: ${electionPrimaryTitle(electionKpiSummary.latestElection)}`
+                          : '등록 선거 없음'}
+                      </span>
+                      {electionKpiSummary.scheduledCount > 0 && (
+                        <span className="accent">
+                          예정·진행 {electionKpiSummary.scheduledCount}건
+                        </span>
+                      )}
+                    </ElectionBentoFooterLine>
+                  </BentoCardBody>
+                </BentoCard>
+              </BentoGrid2Col>
             ) : null}
 
             {!listLoading && list.length === 0 ? (
@@ -4125,14 +4289,6 @@ function ElectionDetailPanel({
     )
   }, [validationNotes])
 
-  const pollYearLabel = useMemo(() => {
-    const startY = formatPollYear(detail.pollDate)
-    if (!detail.pollEndDate) return `${startY}년`
-    const endY = formatPollYear(detail.pollEndDate)
-    if (endY !== '—' && endY !== startY) return `${startY}–${endY}년`
-    return `${startY}년`
-  }, [detail.pollDate, detail.pollEndDate])
-
   return (
     <>
       <ElectionLedgerContainer>
@@ -4265,6 +4421,83 @@ function ElectionDetailPanel({
                   ) : null}
                 </ElectionHeroTitle>
               </ElectionHeroTitleRow>
+
+              <ElectionHeroCompactFacts aria-label="선거 핵심 명세">
+                <ElectionHeroFactItem>
+                  <FiCalendar size={12} aria-hidden />
+                  <span className="mono">
+                    {formatPollDate(detail.pollDate)}
+                    {detail.pollEndDate != null &&
+                    String(detail.pollEndDate).trim() !== ''
+                      ? ` – ${formatPollDate(detail.pollEndDate)}`
+                      : ''}
+                  </span>
+                </ElectionHeroFactItem>
+                {detail.voterTurnoutPercent != null &&
+                String(detail.voterTurnoutPercent).trim() !== '' ? (
+                  <ElectionHeroFactItem>
+                    <span className="k">투표율</span>
+                    <strong className="mono">
+                      {detail.voterTurnoutPercent}%
+                    </strong>
+                  </ElectionHeroFactItem>
+                ) : null}
+                {detail.totalSeats != null ? (
+                  <ElectionHeroFactItem>
+                    <span className="k">총 의석</span>
+                    <strong className="mono">
+                      {detail.totalSeats.toLocaleString('ko-KR')}석
+                    </strong>
+                  </ElectionHeroFactItem>
+                ) : null}
+                {detail.legislatureTermStart || detail.legislatureTermEnd ? (
+                  <ElectionHeroFactItem>
+                    <span className="k">의회 임기</span>
+                    <span className="mono">
+                      {detail.legislatureTermStart
+                        ? formatPollDate(detail.legislatureTermStart)
+                        : '—'}
+                      {' – '}
+                      {detail.legislatureTermEnd
+                        ? formatPollDate(detail.legislatureTermEnd)
+                        : '—'}
+                    </span>
+                  </ElectionHeroFactItem>
+                ) : null}
+                {detail.resultingLegislatureClosureKind ||
+                (detail.resultingLegislatureClosureDate != null &&
+                  String(detail.resultingLegislatureClosureDate).trim() !==
+                    '') ? (
+                  <ElectionHeroFactItem>
+                    <span className="k">의회 종료</span>
+                    <span>
+                      {[
+                        detail.resultingLegislatureClosureKind
+                          ? labelLegislatureClosureKind(
+                              detail.resultingLegislatureClosureKind,
+                            )
+                          : null,
+                        detail.resultingLegislatureClosureDate != null &&
+                        String(
+                          detail.resultingLegislatureClosureDate,
+                        ).trim() !== ''
+                          ? formatPollDate(
+                              detail.resultingLegislatureClosureDate,
+                            )
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                  </ElectionHeroFactItem>
+                ) : null}
+                {electionScopeCountryLabel(detail) ? (
+                  <ElectionHeroFactItem>
+                    <span className="k">소속</span>
+                    <span>{electionScopeCountryLabel(detail)}</span>
+                  </ElectionHeroFactItem>
+                ) : null}
+              </ElectionHeroCompactFacts>
 
               {/* ── 사건 상세 DetailPower.ElectionRow 스타일 핵심 결과 & 파워 바 ── */}
               {electedCandidacies.length > 0 ||
@@ -6364,290 +6597,6 @@ function ElectionDetailPanel({
               </ElectionLedgerSection>
             ) : null}
           </ElectionLedgerMain>
-
-          {/* ── 사건 상세(DetailFacts) 문법 우측 스티키 선거 장부 ── */}
-          <ElectionLedgerAside aria-label="선거 사실 장부">
-            <ElectionFactsHead>
-              <ElectionFactsHeadTop>
-                <ElectionYearDisplay>{pollYearLabel}</ElectionYearDisplay>
-                <ElectionHeroIconBtn
-                  type="button"
-                  onClick={onEditElection}
-                  aria-label="선거 기본 정보 수정"
-                  title="선거 기본 정보 수정"
-                >
-                  <FiEdit2 size={13} aria-hidden />
-                </ElectionHeroIconBtn>
-              </ElectionFactsHeadTop>
-              <ElectionDateLine>
-                {formatPollDate(detail.pollDate)}
-                {detail.pollEndDate != null &&
-                String(detail.pollEndDate).trim() !== ''
-                  ? ` – ${formatPollDate(detail.pollEndDate)}`
-                  : ''}
-              </ElectionDateLine>
-            </ElectionFactsHead>
-
-            <ElectionFactList>
-              <ElectionFactRow>
-                <ElectionFactTerm>유형</ElectionFactTerm>
-                <ElectionFactDesc>
-                  {labelElectionType(detail.electionType)}
-                </ElectionFactDesc>
-              </ElectionFactRow>
-
-              <ElectionFactRow>
-                <ElectionFactTerm>상태</ElectionFactTerm>
-                <ElectionFactDesc>
-                  {labelElectionStatus(detail.status)}
-                </ElectionFactDesc>
-              </ElectionFactRow>
-
-              {detail.convocationOrdinal != null ? (
-                <ElectionFactRow>
-                  <ElectionFactTerm>회차</ElectionFactTerm>
-                  <ElectionFactDesc>
-                    <span className="mono">
-                      제{detail.convocationOrdinal}대
-                    </span>
-                  </ElectionFactDesc>
-                </ElectionFactRow>
-              ) : null}
-
-              {electionScopeCountryLabel(detail) ? (
-                <ElectionFactRow>
-                  <ElectionFactTerm>국가</ElectionFactTerm>
-                  <ElectionFactDesc>
-                    {electionScopeCountryLabel(detail)}
-                  </ElectionFactDesc>
-                </ElectionFactRow>
-              ) : null}
-
-              {detail.voterTurnoutPercent != null &&
-              String(detail.voterTurnoutPercent).trim() !== '' ? (
-                <ElectionFactRow>
-                  <ElectionFactTerm>투표율</ElectionFactTerm>
-                  <ElectionFactDesc>
-                    <strong className="mono">
-                      {detail.voterTurnoutPercent}%
-                    </strong>
-                  </ElectionFactDesc>
-                </ElectionFactRow>
-              ) : null}
-
-              {detail.totalSeats != null ? (
-                <ElectionFactRow>
-                  <ElectionFactTerm>총 의석</ElectionFactTerm>
-                  <ElectionFactDesc>
-                    <strong className="mono">
-                      {detail.totalSeats.toLocaleString('ko-KR')}석
-                    </strong>
-                  </ElectionFactDesc>
-                </ElectionFactRow>
-              ) : null}
-
-              {electedCandidacies.length > 0 ? (
-                <ElectionFactRow>
-                  <ElectionFactTerm>당선</ElectionFactTerm>
-                  <ElectionFactDesc>
-                    {electedCandidacies.slice(0, 3).map((cand) => {
-                      const pid = cand.personId ?? cand.person?.id ?? null
-                      return (
-                        <ElectionFactChip
-                          key={cand.id}
-                          type="button"
-                          onClick={() => {
-                            if (pid) setMentionPersonId(pid)
-                            else setActiveDetailTab('candidacies')
-                          }}
-                        >
-                          {candidacyLabel(cand)}
-                        </ElectionFactChip>
-                      )
-                    })}
-                    {electedCandidacies.length > 3 ? (
-                      <ElectionFactChip
-                        type="button"
-                        onClick={() => setActiveDetailTab('candidacies')}
-                      >
-                        외 {electedCandidacies.length - 3}명
-                      </ElectionFactChip>
-                    ) : null}
-                  </ElectionFactDesc>
-                </ElectionFactRow>
-              ) : null}
-
-              {leadingPartyInfo ? (
-                <ElectionFactRow>
-                  <ElectionFactTerm>제1당</ElectionFactTerm>
-                  <ElectionFactDesc>
-                    <ElectionFactChip
-                      type="button"
-                      onClick={() =>
-                        setElectionMentionPartyId(leadingPartyInfo.row.partyId)
-                      }
-                    >
-                      <PartyColorDot
-                        $fill={leadingPartyInfo.fill}
-                        style={{ marginRight: 5 }}
-                        aria-hidden
-                      />
-                      {leadingPartyInfo.name}
-                      {leadingPartyInfo.seats
-                        ? ` · ${leadingPartyInfo.seats}`
-                        : leadingPartyInfo.pct
-                          ? ` · ${leadingPartyInfo.pct}`
-                          : ''}
-                    </ElectionFactChip>
-                  </ElectionFactDesc>
-                </ElectionFactRow>
-              ) : null}
-
-              {detail.legislatureTermStart || detail.legislatureTermEnd ? (
-                <ElectionFactRow>
-                  <ElectionFactTerm>의회 임기</ElectionFactTerm>
-                  <ElectionFactDesc>
-                    <span className="mono" style={{ fontSize: 12 }}>
-                      {detail.legislatureTermStart
-                        ? formatPollDate(detail.legislatureTermStart)
-                        : '—'}
-                      {' – '}
-                      {detail.legislatureTermEnd
-                        ? formatPollDate(detail.legislatureTermEnd)
-                        : '—'}
-                    </span>
-                  </ElectionFactDesc>
-                </ElectionFactRow>
-              ) : null}
-
-              {detail.resultingLegislatureClosureKind ||
-              (detail.resultingLegislatureClosureDate != null &&
-                String(detail.resultingLegislatureClosureDate).trim() !==
-                  '') ? (
-                <ElectionFactRow>
-                  <ElectionFactTerm>의회 종료</ElectionFactTerm>
-                  <ElectionFactDesc>
-                    {[
-                      detail.resultingLegislatureClosureKind
-                        ? labelLegislatureClosureKind(
-                            detail.resultingLegislatureClosureKind,
-                          )
-                        : null,
-                      detail.resultingLegislatureClosureDate != null &&
-                      String(detail.resultingLegislatureClosureDate).trim() !==
-                        ''
-                        ? formatPollDate(detail.resultingLegislatureClosureDate)
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </ElectionFactDesc>
-                </ElectionFactRow>
-              ) : null}
-
-              {(prevSameTypeElection ||
-                detail.partyResultComparisonVsPrevious?.previousElection) &&
-              onSelectElection ? (
-                <ElectionFactRow>
-                  <ElectionFactTerm>직전 선거</ElectionFactTerm>
-                  <ElectionFactDesc>
-                    <ElectionFactChip
-                      type="button"
-                      onClick={() => {
-                        const targetId =
-                          prevSameTypeElection?.id ??
-                          detail.partyResultComparisonVsPrevious
-                            ?.previousElection?.id
-                        if (targetId) onSelectElection(targetId)
-                      }}
-                    >
-                      ←{' '}
-                      {prevSameTypeElection
-                        ? electionPrimaryTitle(prevSameTypeElection)
-                        : detail.partyResultComparisonVsPrevious
-                            ?.previousElection?.name}
-                    </ElectionFactChip>
-                  </ElectionFactDesc>
-                </ElectionFactRow>
-              ) : null}
-
-              {nextSameTypeElection && onSelectElection ? (
-                <ElectionFactRow>
-                  <ElectionFactTerm>다음 선거</ElectionFactTerm>
-                  <ElectionFactDesc>
-                    <ElectionFactChip
-                      type="button"
-                      onClick={() => onSelectElection(nextSameTypeElection.id)}
-                    >
-                      {electionPrimaryTitle(nextSameTypeElection)} →
-                    </ElectionFactChip>
-                  </ElectionFactDesc>
-                </ElectionFactRow>
-              ) : null}
-
-              <ElectionFactRow>
-                <ElectionFactTerm>연결 사건</ElectionFactTerm>
-                <ElectionFactDesc>
-                  {detail.eventId ? (
-                    <ElectionFactChip
-                      type="button"
-                      onClick={() =>
-                        navigate(pathKeys.events.detail(detail.eventId!))
-                      }
-                    >
-                      {detail.event?.title?.trim() || '연결된 사건 보기'} →
-                    </ElectionFactChip>
-                  ) : onCreateNarrativeEvent ? (
-                    <ElectionAddLineBtn
-                      type="button"
-                      disabled={creatingNarrativeEvent}
-                      onClick={onCreateNarrativeEvent}
-                      style={{ padding: 0, fontSize: 12 }}
-                    >
-                      +{' '}
-                      {creatingNarrativeEvent
-                        ? '사건 만드는 중…'
-                        : '사건으로 만들어 연표에 올리기'}
-                    </ElectionAddLineBtn>
-                  ) : (
-                    <span className="muted">연결 없음</span>
-                  )}
-                </ElectionFactDesc>
-              </ElectionFactRow>
-
-              <ElectionFactRow>
-                <ElectionFactTerm>집계 탐색</ElectionFactTerm>
-                <ElectionFactDesc>
-                  {!isReferendum ? (
-                    <>
-                      <ElectionFactChip
-                        type="button"
-                        onClick={() => setActiveDetailTab('parties')}
-                      >
-                        정당 {partyResults.length}개
-                      </ElectionFactChip>
-                      <ElectionFactChip
-                        type="button"
-                        onClick={() => setActiveDetailTab('candidacies')}
-                      >
-                        후보 {detail.candidacies.length}명
-                        {candidacyTotals.electedCount > 0
-                          ? ` · 당선 ${candidacyTotals.electedCount}`
-                          : ''}
-                      </ElectionFactChip>
-                    </>
-                  ) : (
-                    <ElectionFactChip
-                      type="button"
-                      onClick={() => setActiveDetailTab('ballots')}
-                    >
-                      투표 안 {sortedBallotOptions.length}개
-                    </ElectionFactChip>
-                  )}
-                </ElectionFactDesc>
-              </ElectionFactRow>
-            </ElectionFactList>
-          </ElectionLedgerAside>
         </ElectionLedgerBody>
       </ElectionLedgerContainer>
       {chartHoverTip
@@ -10478,11 +10427,6 @@ const ElectionLedgerBody = styled.div`
   grid-template-columns: minmax(0, 1fr);
   gap: 24px;
   align-items: start;
-
-  @container (min-width: 820px) {
-    grid-template-columns: minmax(0, 1fr) 292px;
-    gap: 28px;
-  }
 `
 
 const ElectionLedgerMain = styled.div`
@@ -10490,21 +10434,6 @@ const ElectionLedgerMain = styled.div`
   display: flex;
   flex-direction: column;
   gap: 24px;
-`
-
-const ElectionLedgerAside = styled.aside`
-  position: static;
-  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  padding-top: 18px;
-
-  @container (min-width: 820px) {
-    position: sticky;
-    top: 12px;
-    border-top: none;
-    border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-    padding-top: 0;
-    padding-left: 22px;
-  }
 `
 
 const ElectionHero = styled.header`
@@ -11006,109 +10935,169 @@ const ElectionOverviewRow = styled.div`
   }
 `
 
-const ElectionFactsHead = styled.div`
+const ElectionHeroCompactFacts = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-`
-
-const ElectionFactsHeadTop = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-`
-
-const ElectionYearDisplay = styled.div`
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.1;
-  color: ${({ theme }) => theme.colors.text.primary};
-  ${DIGIT_DISPLAY}
-`
-
-const ElectionDateLine = styled.div`
-  font-size: 12px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  ${DIGIT_DISPLAY}
-`
-
-const ElectionFactList = styled.dl`
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-`
-
-const ElectionFactRow = styled.div`
-  display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
-  gap: 10px;
-  align-items: baseline;
-  padding: 8px 0;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-
-  &:last-child {
-    border-bottom: none;
-  }
-`
-
-const ElectionFactTerm = styled.dt`
-  font-size: 11.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  letter-spacing: -0.01em;
-`
-
-const ElectionFactDesc = styled.dd`
-  margin: 0;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
   flex-wrap: wrap;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.primary};
+  align-items: center;
+  gap: 6px 14px;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const ElectionHeroFactItem = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+
+  .k {
+    font-size: 11px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
 
   .mono {
     ${DIGIT_DISPLAY}
   }
 
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const ElectionTurnoutSparkWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const ElectionTurnoutMetaRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
   .muted {
     color: ${({ theme }) => theme.colors.text.tertiary};
-    font-size: 12px;
   }
 `
 
-const ElectionFactChip = styled.button`
+const ElectionSingleTurnoutLine = styled.div`
+  padding-bottom: 6px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const ElectionTypeBarSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+`
+
+const ElectionBentoLegendRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+`
+
+const ElectionBentoLegendItem = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 2px 7px;
-  border-radius: 4px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.primary};
+  gap: 5px;
   font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  transition:
-    color 0.12s ease,
-    border-color 0.12s ease,
-    background 0.12s ease;
+  color: ${({ theme }) => theme.colors.text.secondary};
 
-  &:hover {
-    color: ${({ theme }) => ledgerAccent(theme.mode)};
-    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
-    background: ${({ theme }) => ledgerRowWash(theme.mode)};
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+    ${DIGIT_DISPLAY}
   }
 `
+
+const ElectionBentoDot = styled.span<{ $color: string }>`
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: ${({ $color }) => $color};
+  flex-shrink: 0;
+`
+
+const ElectionRightKpiRow = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const ElectionRightKpiCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+
+  .label {
+    font-size: 11px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+
+  .val {
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: ${({ theme }) => theme.colors.text.primary};
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    ${DIGIT_DISPLAY}
+
+    &.date {
+      font-size: 13.5px;
+      font-weight: 700;
+    }
+
+    small {
+      font-size: 11px;
+      font-weight: 600;
+      color: ${({ theme }) => theme.colors.text.tertiary};
+    }
+  }
+`
+
+const ElectionBentoFooterLine = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  .accent {
+    font-weight: 700;
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    ${DIGIT_DISPLAY}
+  }
+`
+
 

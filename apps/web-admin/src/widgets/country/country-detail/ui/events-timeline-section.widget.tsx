@@ -1,19 +1,69 @@
 /**
- * 연대표(전체 사건) 섹션 — 가문·민족 메뉴와 동일한 헤더·레이아웃
- * 목록 뷰 + 사건 등록(공용 EventRegisterModal)
+ * 국가 상세 "사건" 탭 — 현대 국가(현재 국가 + 브리지된 과거 국가 통사)와
+ * 역사 국가(단일 왕조·정권) 양쪽의 연관 사건을 한눈에 조망하는 인포그래픽 원장.
  *
- * 등록은 예전엔 이 위젯 전용 폼(event-create-form-dashboard, 1,954줄)이 목록 자리를 갈아
- * 끼웠다. 공용 등록 모달과 같은 일을 다른 코드로 했고, 저장 뒤 캐시를 무효화하지 않아
- * 사건 목록·상세에 늦게 반영됐다. 이제 공용 모달을 띄운다 — 목록은 언마운트되지 않는다.
+ * - 상단 3열 인터랙티브 Bento 인포그래픽(통사 규모·정치체 비중 · 세기별 분야 누적 막대 · 9대 분야 도넛)
+ *   → 차트 막대·범례 클릭 시 하단 연표/간트/캘린더가 즉시 연동 필터링됨
+ * - 1줄 통합 필터 바(시대 범위 · 9대 사건 분야 칩 · 세기/정치체 활성 태그 · 검색)
+ * - 3모드 보기 전환: [연표 원장 | 기간 간트(스팬 타임라인) | 월별 캘린더]
+ * - 행 클릭 시 EventInlineModal 빠른 미리보기 오픈(스크롤·필터 보존), 우측 '상세 →'로 전용 페이지 진입
+ * - '+ 새 사건 등록' 시 현재 국가(현대/역사) 및 선택 분야 자동 프리필
  */
 import React, { useEffect, useMemo, useState } from 'react'
 
 import { motion } from 'framer-motion'
-import { FiPlus, FiSearch } from 'react-icons/fi'
+import {
+  FiAlignLeft,
+  FiArrowUpRight,
+  FiCalendar,
+  FiChevronDown,
+  FiList,
+  FiMapPin,
+  FiPlus,
+  FiSearch,
+  FiX,
+} from 'react-icons/fi'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import styled, { useTheme } from 'styled-components'
 
 import { useEvents } from '@/entities/event/model'
+import type { EventCountryParticipant } from '@/entities/event/model/country-participant'
+import {
+  domainAccent,
+  domainLabel,
+  EVENT_DOMAIN_ORDER,
+  type EventDomainKey,
+  isEventDomainKey,
+} from '@/entities/event/model/event-domain'
+import {
+  eventTypeLabel,
+  eventTypeShort,
+} from '@/entities/event/model/event-type-registry'
+import {
+  BentoCard,
+  BentoCardBadge,
+  BentoCardBody,
+  BentoCardHeader,
+  BentoCardTitle,
+  BentoCardTitleGroup,
+  BentoGrid3Col,
+  type CenturyDomainBucket,
+  MiniDonutRing,
+  type SegmentSlice,
+  StackedCenturyDomainChart,
+  StackedSegmentBar,
+} from '@/entities/event/ui/bento-primitives'
+import {
+  DIGIT_DISPLAY,
+  ledgerAccent,
+  ledgerAccentSubtle,
+  ledgerBackground,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  ledgerSubtleFill,
+  RADIUS,
+} from '@/entities/event/ui/ledger-tokens'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
 import { signedYearFromIsoLike } from '@/shared/lib/country-period'
 import {
@@ -22,9 +72,9 @@ import {
 } from '@/shared/lib/lifespan-text'
 import { pathKeys } from '@/shared/router'
 import { EventRegisterModal } from '@/widgets/event-form/ui/event-register-modal'
+import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inline-modal'
 
 import type { CalendarEventItem } from '../model/use-country-dashboard-stats'
-import * as DashboardStyles from './country-detail-dashboard.styles'
 import {
   countryTabCanvasPadding,
   LedgerFilterChip,
@@ -32,395 +82,19 @@ import {
   LedgerToolbarButton,
   LedgerViewSwitch,
   LedgerViewSwitchItem,
-  ledgerHairlineStrong,
 } from './country-ledger-primitives'
+import { ChartSkeleton } from './dashboard-panels/chart-skeleton'
 import { EventCalendarPanel } from './dashboard-panels/event-calendar-panel'
-import { EventCenturyStrip } from './dashboard-panels/event-century-strip'
-
-const Root = styled(motion.div)`
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  ${countryTabCanvasPadding}
-  position: relative;
-  min-height: calc(100vh - 200px);
-  box-sizing: border-box;
-`
-
-/* ── 시간축 목록 ─────────────────────────────────────────────────────────────── */
-
-const Chronology = styled.div`
-  display: flex;
-  flex-direction: column;
-`
-
-const CenturySection = styled.section`
-  display: flex;
-  flex-direction: column;
-  scroll-margin-top: 12px;
-
-  /* 연표 막대에서 넘어왔을 때 잠깐 켜지는 강조 — 어디에 내려섰는지 알려 준다 */
-  &[data-century-focus='true'] {
-    animation: centuryArrive 1.6s ease-out;
-  }
-
-  @keyframes centuryArrive {
-    0%,
-    60% {
-      background: rgba(245, 158, 11, 0.14);
-      box-shadow: inset 3px 0 0 rgba(245, 158, 11, 0.7);
-    }
-    100% {
-      background: transparent;
-      box-shadow: inset 3px 0 0 transparent;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    &[data-century-focus='true'] {
-      animation: none;
-      box-shadow: inset 3px 0 0 rgba(245, 158, 11, 0.7);
-    }
-  }
-`
-
-/** 세기 머리 — 스크롤 중에도 지금 보는 세기가 남도록 sticky */
-const CenturyHead = styled.div`
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 14px 0 8px;
-  background: ${({ theme }) => theme.colors.background.primary};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-`
-
-const CenturyLabel = styled.h3`
-  margin: 0;
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const CenturyCount = styled.span`
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  font-variant-numeric: tabular-nums;
-`
-
-/**
- * 한 사건 = 한 행. 연도 열을 고정폭·tabular로 세워 세로로 스캔되게 한다
- * (카드 격자에서는 연도가 카드마다 다른 x에 있어 훑을 수가 없었다).
- */
-const EventRow = styled.button`
-  display: grid;
-  grid-template-columns: 68px minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: 12px;
-  width: 100%;
-  padding: 11px 8px;
-  border: none;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 0;
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.12s ease;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.hover};
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.active};
-    outline-offset: -2px;
-  }
-
-  @media (max-width: 720px) {
-    grid-template-columns: 56px minmax(0, 1fr);
-  }
-`
-
-const RowYear = styled.span`
-  font-size: 13px;
-  font-weight: 700;
-  text-align: right;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-`
-
-const RowBody = styled.span`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-`
-
-const RowTitle = styled.span`
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.4;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const RowRange = styled.span`
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  font-variant-numeric: tabular-nums;
-`
-
-/** 정렬 방향 토글 — 역사는 오래된순이 기본, 최근 동향을 볼 땐 최신순 */
-/**
- * 지면 머리 한 줄 — 제목·건수·설명은 왼쪽, 조작(정렬·등록)은 오른쪽.
- * 건수를 따로 큰 박스에 담지 않는다. 숫자 하나에 카드 한 장은 과잉이고, 제목 옆이
- * "무엇이 몇 건인지"를 한 번에 읽히게 한다.
- */
-const Header = styled.header`
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
-  flex-wrap: wrap;
-`
-
-const HeaderText = styled.div`
-  min-width: 0;
-`
-
-const HeaderTitleRow = styled.div`
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-`
-
-const HeaderTitle = styled.h2`
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const HeaderCount = styled.span`
-  font-size: 14px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const HeaderDesc = styled.p`
-  margin: 4px 0 0;
-  max-width: 540px;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1.55;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const HeaderActions = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  flex-wrap: wrap;
-`
-
-/** 사건 카드 하단 관련 국가 칩 줄 */
-const CountryChipRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 4px;
-  max-width: 320px;
-
-  @media (max-width: 720px) {
-    display: none;
-  }
-`
-
-/** 과거 국가는 앰버 톤으로 — 현대 국가 칩과 한눈에 갈리게 */
-const CountryChip = styled.span<{ $past?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.4;
-  white-space: nowrap;
-  color: ${({ theme, $past }) =>
-    $past
-      ? theme.mode === 'dark'
-        ? '#fbbf24'
-        : '#92400e'
-      : theme.colors.text.secondary};
-  background: ${({ theme, $past }) =>
-    $past
-      ? theme.mode === 'dark'
-        ? 'rgba(245,158,11,0.16)'
-        : '#fef3c7'
-      : theme.colors.background.secondary};
-`
-
-const CenturyBarCard = styled.div`
-  padding: 14px 4px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 0;
-  background: transparent;
-`
-
-const CalendarCard = styled.div`
-  padding: 18px 4px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 0;
-  background: transparent;
-`
-
-const FilterToolbar = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 12px 0;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-`
-
-const ScopeChipGroup = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-`
-
-const ScopeFilterChip = styled(LedgerFilterChip)``
-
-const SearchControlsGroup = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-`
-
-const SearchInputWrap = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 34px;
-  padding: 0 11px;
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  min-width: 240px;
-
-  &:focus-within {
-    border-color: ${({ theme }) => theme.colors.active};
-  }
-
-  input {
-    border: none;
-    background: transparent;
-    color: ${({ theme }) => theme.colors.text.primary};
-    font-family: inherit;
-    font-size: 12.5px;
-    outline: none;
-    width: 100%;
-  }
-
-  @media (max-width: 768px) {
-    height: 40px;
-  }
-`
-
-const FilterResultMeta = styled.span`
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  font-variant-numeric: tabular-nums;
-`
-
-const FilterResetButton = styled.button`
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    background: ${({ theme }) => theme.colors.hover};
-  }
-`
-
-const EventEmptySpecGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-
-  @media (max-width: 720px) {
-    grid-template-columns: 1fr;
-  }
-`
-
-const EventEmptySpecCell = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 18px 16px;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-
-  &:nth-child(odd) {
-    border-right: 1px solid ${({ theme }) => theme.colors.border.light};
-  }
-
-  &:last-child:nth-child(odd) {
-    grid-column: 1 / -1;
-    border-right: none;
-  }
-
-  @media (max-width: 720px) {
-    &:nth-child(odd) {
-      border-right: none;
-    }
-  }
-`
-
-const EventEmptySpecTitle = styled.div`
-  font-size: 13px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const EventEmptySpecDesc = styled.p`
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.55;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
 
 export interface EventsTimelineSectionProps {
   /** 국가(현대/역사적) ID로 연관 사건만 표시. 미전달 시 전체 */
   countryId?: string | null
+  /** 국가명 (새 사건 안내·허브 링크용) */
+  countryName?: string | null
+  /** 역사 국가 상세에서 호출된 경우 true (사건 등록 모달 historicalCountryId 프리필) */
+  isHistoricalCountry?: boolean
   /**
    * 이 국가로 인정할 id 전부 — 현대 국가 id + 브리지된 과거 국가 id들.
-   *
-   * 서버 필터(countryId)는 **최상위 사건**에만 걸리는데, 응답에 실려온 하위 사건이
-   * 변환 단계에서 평탄화돼 목록에 함께 들어온다. 그래서 이 국가와 무관한 자식 사건이
-   * 섞인다(독일: 최상위 36건 → 목록 97건, 그중 40여 건이 무관).
-   * 이 집합이 있으면 목록을 같은 기준으로 한 번 더 거른다. 없으면 거르지 않는다.
    */
   scopeCountryIds?: string[]
   /** URL searchParams form=create 시 true. 사건 등록 모달을 바로 연다 */
@@ -428,16 +102,42 @@ export interface EventsTimelineSectionProps {
   /**
    * URL의 `century` — 부호 세기 문자열(20 = 20세기, -1 = 기원전 1세기).
    * 대시보드 연표 막대에서 넘어오면 그 세기 묶음으로 스크롤하고 잠깐 강조한다.
-   * 걸러내지 않고 **데려다 놓기만** 한다 — 필터로 만들면 그 세기 밖 사건이 사라져,
-   * 전체를 보러 온 사람이 잃는 것이 생긴다.
    */
   focusCentury?: string | null
   /** 등록 모달 열고 닫을 때 URL 동기화 (열기: true, 닫기: false) */
   onNavigateToForm?: (toForm: boolean) => void
 }
 
+type EventViewMode = 'list' | 'gantt' | 'calendar'
+
+const GANTT_MAX_ROWS = 75
+
+function toCenturyIndex(signedYear: number | null): number | null {
+  if (signedYear == null || signedYear === 0) return null
+  return signedYear < 0
+    ? -Math.ceil(Math.abs(signedYear) / 100)
+    : Math.ceil(signedYear / 100)
+}
+
+function formatCenturyIdx(cIdx: number): string {
+  return cIdx < 0 ? `기원전 ${Math.abs(cIdx)}세기` : `${cIdx}세기`
+}
+
+function stripPlainSnippet(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  const cleaned = raw
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/[#*_`>~[\]]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!cleaned) return null
+  return cleaned.length > 96 ? `${cleaned.slice(0, 96)}…` : cleaned
+}
+
 export function EventsTimelineSection({
   countryId,
+  countryName,
+  isHistoricalCountry = false,
   scopeCountryIds,
   initialFormFromSearchParams,
   focusCentury,
@@ -446,44 +146,50 @@ export function EventsTimelineSection({
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const theme = useTheme()
+  const isDark = theme.mode === 'dark'
+
   const [pageSize] = useState(50)
   const [isCreateOpen, setIsCreateOpen] = useState(
     Boolean(initialFormFromSearchParams),
   )
+  const [previewEventId, setPreviewEventId] = useState<string | null>(null)
   const [eraScopeFilter, setEraScopeFilter] = useState<
     'all' | 'modern' | 'historical'
   >('all')
+  const [polityFilterId, setPolityFilterId] = useState<string | null>(null)
+  const [domainFilter, setDomainFilter] = useState<EventDomainKey | 'all'>('all')
+  const [selectedCentury, setSelectedCentury] = useState<number | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const viewMode: 'list' | 'calendar' =
-    searchParams.get('view') === 'calendar' ? 'calendar' : 'list'
+  const [order, setOrder] = useState<'asc' | 'desc'>('asc')
+  const [collapsedCenturies, setCollapsedCenturies] = useState<Set<string>>(
+    new Set(),
+  )
+  const [ganttMultiYearOnly, setGanttMultiYearOnly] = useState(false)
 
-  const setViewMode = (mode: 'list' | 'calendar') => {
+  const rawViewParam = searchParams.get('view')
+  const viewMode: EventViewMode =
+    rawViewParam === 'calendar'
+      ? 'calendar'
+      : rawViewParam === 'gantt'
+        ? 'gantt'
+        : 'list'
+
+  const setViewMode = (mode: EventViewMode) => {
     const nextParams = new URLSearchParams(searchParams)
-    if (mode === 'calendar') {
-      nextParams.set('view', 'calendar')
-    } else {
+    if (mode === 'list') {
       nextParams.delete('view')
+    } else {
+      nextParams.set('view', mode)
     }
     setSearchParams(nextParams, { replace: true })
   }
-  // autoLoadAll: 타임라인은 사건을 서버 순서(start_date DESC)로 카드 나열하는데, 1000년 이전
-  // 사건은 start_date NULL이라 서버 정렬상 맨 뒤(마지막 페이지)로 밀린다. 전체 페이지를 자동
-  // 소진해 옛 세기 사건도 '더 보기' 클릭 없이 바로 나오게 한다(수동 페이지네이션 대체).
-  // [[event-catalog-clientside-sort-over-paginated]]
-  // loadMoreFailed: 자동 소진 중 한 페이지가 실패하면 무한 재시도 방지를 위해 자동 재개가
-  // 멈춘다(useEvents 가드). 이 경우 일부 사건(특히 뒤 페이지의 옛 세기)이 누락된 채로 남으므로
-  // 재시도 버튼으로 사용자가 이어받게 한다 — 없으면 부분 데이터가 조용히 묻힌다.
-  const { events, isLoading, loadMoreFailed, fetchMoreEvents } =
-    useEvents({
-      pageSize,
-      countryId: countryId ?? undefined,
-      autoLoadAll: true,
-    })
 
-  /**
-   * 서버가 거른 것과 같은 기준으로 목록을 한 번 더 좁힌다 —
-   * 관련 현대 국가 또는 관련 과거 국가가 이 국가 스코프에 걸리는 사건만.
-   */
+  const { events, isLoading, loadMoreFailed, fetchMoreEvents } = useEvents({
+    pageSize,
+    countryId: countryId ?? undefined,
+    autoLoadAll: true,
+  })
+
   const scopeSet = useMemo(
     () => (scopeCountryIds?.length ? new Set(scopeCountryIds) : null),
     [scopeCountryIds],
@@ -500,11 +206,8 @@ export function EventsTimelineSection({
     const all = events ?? []
     if (!scopeSet) return all
     return all.filter((evt) => {
-      const modern = (evt as { relatedCountries?: Array<{ id: string }> })
-        .relatedCountries
-      const historical = (
-        evt as { relatedHistoricalCountries?: Array<{ id: string }> }
-      ).relatedHistoricalCountries
+      const modern = evt.relatedCountries
+      const historical = evt.relatedHistoricalCountries
       return (
         (modern ?? []).some((item) => scopeSet.has(item.id)) ||
         (historical ?? []).some((item) => scopeSet.has(item.id))
@@ -512,7 +215,8 @@ export function EventsTimelineSection({
     })
   }, [events, scopeSet])
 
-  const kpiSummary = useMemo(() => {
+  // ── 3-Card Bento Infographic 집계 (전체 스코프 모수 기준) ──────────────────
+  const bentoSummary = useMemo(() => {
     const centuries = new Set<number>()
     let minYear: number | null = null
     let maxYear: number | null = null
@@ -520,19 +224,52 @@ export function EventsTimelineSection({
     let dayKnownCount = 0
     let modernCount = 0
     let historicalCount = 0
+    let multiYearCount = 0
+    let collectionCount = 0
+
+    const histPolityCounts = new Map<string, { id: string; name: string; count: number }>()
+    const domainCounts = new Map<EventDomainKey, number>()
+    const centuryBucketMap = new Map<number, CenturyDomainBucket>()
 
     for (const eventItem of list) {
-      const signedYear = signedYearFromIsoLike(eventItem.startDate)
-      if (signedYear == null || signedYear === 0) {
+      const signedStart = signedYearFromIsoLike(eventItem.startDate)
+      const signedEnd = signedYearFromIsoLike(eventItem.endDate)
+      const cIdx = toCenturyIndex(signedStart)
+
+      const domKey: EventDomainKey = isEventDomainKey(eventItem.domain)
+        ? eventItem.domain
+        : 'OTHER'
+      domainCounts.set(domKey, (domainCounts.get(domKey) ?? 0) + 1)
+
+      if (cIdx == null) {
         unknownYearCount += 1
       } else {
-        const century =
-          signedYear < 0
-            ? -Math.ceil(Math.abs(signedYear) / 100)
-            : Math.ceil(signedYear / 100)
-        centuries.add(century)
-        if (minYear == null || signedYear < minYear) minYear = signedYear
-        if (maxYear == null || signedYear > maxYear) maxYear = signedYear
+        centuries.add(cIdx)
+        if (minYear == null || signedStart! < minYear) minYear = signedStart!
+        const effectiveEnd =
+          signedEnd != null && signedEnd >= signedStart!
+            ? signedEnd
+            : signedStart!
+        if (maxYear == null || effectiveEnd > maxYear) maxYear = effectiveEnd
+
+        let bucket = centuryBucketMap.get(cIdx)
+        if (!bucket) {
+          bucket = { century: cIdx, total: 0, domains: {} }
+          centuryBucketMap.set(cIdx, bucket)
+        }
+        bucket.total += 1
+        bucket.domains[domKey] = (bucket.domains[domKey] ?? 0) + 1
+      }
+
+      if (
+        signedStart != null &&
+        signedEnd != null &&
+        signedEnd > signedStart
+      ) {
+        multiYearCount += 1
+      }
+      if (eventItem.kind === 'COLLECTION') {
+        collectionCount += 1
       }
 
       const rawStart = eventItem.startDate
@@ -548,19 +285,24 @@ export function EventsTimelineSection({
       }
 
       if (hasHistoricalBridge && countryId) {
-        const modernList =
-          (eventItem as { relatedCountries?: Array<{ id: string }> })
-            .relatedCountries ?? []
-        const historicalList =
-          (eventItem as { relatedHistoricalCountries?: Array<{ id: string }> })
-            .relatedHistoricalCountries ?? []
+        const modernList = eventItem.relatedCountries ?? []
+        const historicalList = eventItem.relatedHistoricalCountries ?? []
         if (modernList.some((rel) => rel.id === countryId)) {
           modernCount += 1
         }
-        if (
-          historicalList.some((rel) => historicalBridgeIds.has(rel.id)) ||
-          modernList.some((rel) => historicalBridgeIds.has(rel.id))
-        ) {
+        let matchedHist = false
+        for (const rel of historicalList) {
+          if (historicalBridgeIds.has(rel.id)) {
+            matchedHist = true
+            const prev = histPolityCounts.get(rel.id)
+            if (prev) prev.count += 1
+            else histPolityCounts.set(rel.id, { id: rel.id, name: rel.name, count: 1 })
+          }
+        }
+        if (!matchedHist && modernList.some((rel) => historicalBridgeIds.has(rel.id))) {
+          matchedHist = true
+        }
+        if (matchedHist) {
           historicalCount += 1
         }
       }
@@ -573,6 +315,102 @@ export function EventsTimelineSection({
           : `${formatSignedYear(minYear)} ~ ${formatSignedYear(maxYear)}`
         : '연도 미상'
 
+    const palette = isDark
+      ? ['#a5b4fc', '#fbbf24', '#38bdf8', '#34d399', '#c084fc', '#94a3b8']
+      : ['#4f46e5', '#d97706', '#0284c7', '#059669', '#7c3aed', '#64748b']
+
+    // Card 1 세그먼트: 브리지 존재 시 정치체 비중, 단일 국가 시 사건 형태 비중
+    const scopeSlices: Array<SegmentSlice & { polityId: string | null }> = []
+    if (hasHistoricalBridge) {
+      if (modernCount > 0) {
+        scopeSlices.push({
+          key: '__modern__',
+          polityId: '__modern__',
+          label: `${countryName || '현대 국가'} (현대)`,
+          value: modernCount,
+          color: palette[0],
+          meta: `${modernCount}건`,
+        })
+      }
+      const sortedHist = [...histPolityCounts.values()].sort(
+        (a, b) => b.count - a.count,
+      )
+      sortedHist.slice(0, 4).forEach((hp, idx) => {
+        scopeSlices.push({
+          key: hp.id,
+          polityId: hp.id,
+          label: hp.name,
+          value: hp.count,
+          color: palette[(idx + 1) % (palette.length - 1)],
+          meta: `${hp.count}건`,
+        })
+      })
+      const restCount = sortedHist
+        .slice(4)
+        .reduce((acc, item) => acc + item.count, 0)
+      if (restCount > 0) {
+        scopeSlices.push({
+          key: 'other-hist',
+          polityId: null,
+          label: `기타 과거국가 (${sortedHist.length - 4}개국)`,
+          value: restCount,
+          color: palette[palette.length - 1],
+          meta: `${restCount}건`,
+        })
+      }
+    }
+
+    const singleYearCount = Math.max(
+      0,
+      list.length - multiYearCount,
+    )
+    const structureSlices: SegmentSlice[] = [
+      {
+        key: 'collection',
+        label: '묶음(전쟁·전역)',
+        value: collectionCount,
+        color: isDark ? '#f87171' : '#b91c1c',
+        meta: `${collectionCount}건`,
+      },
+      {
+        key: 'multiYear',
+        label: '다년도 지속',
+        value: Math.max(0, multiYearCount - collectionCount),
+        color: isDark ? '#fbbf24' : '#d97706',
+        meta: `${Math.max(0, multiYearCount - collectionCount)}건`,
+      },
+      {
+        key: 'single',
+        label: '단년·단일 사건',
+        value: singleYearCount,
+        color: isDark ? '#a5b4fc' : '#4f46e5',
+        meta: `${singleYearCount}건`,
+      },
+    ].filter((s) => s.value > 0)
+
+    const centuryDomainBuckets = [...centuryBucketMap.values()].sort(
+      (a, b) => a.century - b.century,
+    )
+
+    const domainBreakdown = EVENT_DOMAIN_ORDER.filter(
+      (dk) => (domainCounts.get(dk) ?? 0) > 0,
+    )
+      .map((dk) => ({
+        domain: dk,
+        label: domainLabel(dk),
+        count: domainCounts.get(dk) ?? 0,
+        color: domainAccent(dk, theme.mode),
+      }))
+      .sort((a, b) => b.count - a.count)
+
+    const domainDonutSlices: SegmentSlice[] = domainBreakdown.map((d) => ({
+      key: d.domain,
+      label: d.label,
+      value: d.count,
+      color: d.color,
+      meta: `${d.count}건`,
+    }))
+
     return {
       totalCount: list.length,
       centuryCount: centuries.size,
@@ -581,20 +419,52 @@ export function EventsTimelineSection({
       dayKnownCount,
       modernCount,
       historicalCount,
+      multiYearCount,
+      collectionCount,
+      scopeSlices,
+      structureSlices,
+      centuryDomainBuckets,
+      domainBreakdown,
+      domainDonutSlices,
+      histPolityMap: histPolityCounts,
     }
-  }, [list, hasHistoricalBridge, countryId, historicalBridgeIds])
+  }, [
+    list,
+    hasHistoricalBridge,
+    countryId,
+    countryName,
+    historicalBridgeIds,
+    isDark,
+    theme.mode,
+  ])
 
   const filteredList = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
     return list.filter((eventItem) => {
-      const withRelations = eventItem as typeof eventItem & {
-        relatedCountries?: Array<{ id: string; name: string }>
-        relatedHistoricalCountries?: Array<{ id: string; name: string }>
-      }
-      const modernList = withRelations.relatedCountries ?? []
-      const historicalList = withRelations.relatedHistoricalCountries ?? []
+      const modernList = eventItem.relatedCountries ?? []
+      const historicalList = eventItem.relatedHistoricalCountries ?? []
+      const domKey: EventDomainKey = isEventDomainKey(eventItem.domain)
+        ? eventItem.domain
+        : 'OTHER'
 
-      if (hasHistoricalBridge && countryId && eraScopeFilter !== 'all') {
+      if (domainFilter !== 'all' && domKey !== domainFilter) {
+        return false
+      }
+
+      if (selectedCentury != null) {
+        const cIdx = toCenturyIndex(signedYearFromIsoLike(eventItem.startDate))
+        if (cIdx !== selectedCentury) return false
+      }
+
+      if (polityFilterId && countryId) {
+        if (polityFilterId === '__modern__') {
+          if (!modernList.some((rel) => rel.id === countryId)) return false
+        } else {
+          if (!historicalList.some((rel) => rel.id === polityFilterId)) {
+            return false
+          }
+        }
+      } else if (hasHistoricalBridge && countryId && eraScopeFilter !== 'all') {
         if (eraScopeFilter === 'modern') {
           if (!modernList.some((rel) => rel.id === countryId)) return false
         } else if (eraScopeFilter === 'historical') {
@@ -609,8 +479,13 @@ export function EventsTimelineSection({
         const signedYear = signedYearFromIsoLike(eventItem.startDate)
         const yearText =
           signedYear == null ? '미상' : formatSignedYear(signedYear)
+        const tLabel = eventTypeLabel(eventItem.type) ?? ''
+        const dLabel = domainLabel(domKey)
         const haystack = [
           eventItem.title ?? '',
+          dLabel,
+          tLabel,
+          eventItem.location ?? '',
           yearText,
           eventItem.startDate ?? '',
           ...modernList.map((rel) => rel.name),
@@ -623,34 +498,17 @@ export function EventsTimelineSection({
 
       return true
     })
-  }, [list, hasHistoricalBridge, countryId, eraScopeFilter, historicalBridgeIds, searchQuery])
-
-  /**
-   * 시간축 그룹 — 세기 → 사건. 카드 격자는 읽는 순서가 지그재그이고 연도 축이 없어서
-   * "언제 무슨 일이 있었나"를 못 읽는다. 세기로 묶고 행마다 연도를 고정폭으로 세운다.
-   *
-   * 연도는 부호 연도(BC 음수)로 정렬한다 — 원시 문자열 비교는 BC를 뒤집는다.
-   * 연도 미상은 방향과 무관하게 항상 맨 끝의 '연도 미상' 묶음으로 보낸다.
-   */
-  const [order, setOrder] = useState<'asc' | 'desc'>('asc')
-
-  const eventCenturyCounts = useMemo<
-    Array<{ century: number; count: number }>
-  >(() => {
-    const byCentury = new Map<number, number>()
-    for (const eventItem of filteredList) {
-      const signedYear = signedYearFromIsoLike(eventItem.startDate)
-      if (signedYear == null || signedYear === 0) continue
-      const century =
-        signedYear < 0
-          ? -Math.ceil(Math.abs(signedYear) / 100)
-          : Math.ceil(signedYear / 100)
-      byCentury.set(century, (byCentury.get(century) ?? 0) + 1)
-    }
-    return [...byCentury.entries()]
-      .map(([century, count]) => ({ century, count }))
-      .sort((left, right) => left.century - right.century)
-  }, [filteredList])
+  }, [
+    list,
+    domainFilter,
+    selectedCentury,
+    polityFilterId,
+    hasHistoricalBridge,
+    countryId,
+    eraScopeFilter,
+    historicalBridgeIds,
+    searchQuery,
+  ])
 
   const calendarEvents = useMemo<CalendarEventItem[]>(() => {
     const rows: CalendarEventItem[] = []
@@ -670,57 +528,60 @@ export function EventsTimelineSection({
     return rows
   }, [filteredList])
 
-  const jumpToCentury = (century: number) => {
-    const targetKey = `c${century > 0 ? 1 : -1}-${Math.abs(century)}`
-    const target = document.querySelector<HTMLElement>(
-      `[data-century-key="${targetKey}"]`,
-    )
-    if (!target) return
-    target.scrollIntoView({ block: 'start', behavior: 'smooth' })
-    target.setAttribute('data-century-focus', 'true')
-    window.setTimeout(
-      () => target.removeAttribute('data-century-focus'),
-      1600,
-    )
-  }
-
   const centuryGroups = useMemo(() => {
     type Entry = {
       event: (typeof filteredList)[number]
+      domainKey: EventDomainKey
+      domainText: string
+      typeShortText: string | null
       signedYear: number | null
+      durationYears: number | null
       yearLabel: string
       rangeLabel: string | null
+      snippet: string | null
       modern: Array<{ id: string; name: string; flagEmoji?: string }>
       historical: Array<{ id: string; name: string }>
     }
 
     const entries: Entry[] = filteredList.map((event) => {
-      const withRelations = event as typeof event & {
-        relatedCountries?: Array<{
-          id: string
-          name: string
-          flagEmoji?: string
-        }>
-        relatedHistoricalCountries?: Array<{ id: string; name: string }>
-      }
-      const signedYear = signedYearFromIsoLike(event.startDate)
+      const signedStart = signedYearFromIsoLike(event.startDate)
+      const signedEnd = signedYearFromIsoLike(event.endDate)
+      const durationYears =
+        signedStart != null && signedEnd != null && signedEnd > signedStart
+          ? signedEnd - signedStart - (signedStart < 0 && signedEnd > 0 ? 1 : 0) + 1
+          : null
       const range = formatDateRange(event.startDate, event.endDate)
+      const domKey: EventDomainKey = isEventDomainKey(event.domain)
+        ? event.domain
+        : 'OTHER'
+
       return {
         event,
-        signedYear,
-        yearLabel: signedYear == null ? '미상' : formatSignedYear(signedYear),
-        // 연도는 왼쪽 열에 이미 있으므로, 기간이 한 해로 끝나면 중복이라 감춘다
+        domainKey: domKey,
+        domainText: domainLabel(domKey),
+        typeShortText: eventTypeShort(event.type) ?? eventTypeLabel(event.type),
+        signedYear: signedStart,
+        durationYears,
+        yearLabel: signedStart == null ? '미상' : formatSignedYear(signedStart),
         rangeLabel: event.endDate ? range : null,
-        modern: withRelations.relatedCountries ?? [],
-        historical: withRelations.relatedHistoricalCountries ?? [],
+        snippet: stripPlainSnippet(event.description),
+        modern: event.relatedCountries ?? [],
+        historical: event.relatedHistoricalCountries ?? [],
       }
     })
 
     const direction = order === 'asc' ? 1 : -1
     const buckets = new Map<
       string,
-      { key: string; label: string; sortKey: number; events: Entry[] }
+      {
+        key: string
+        label: string
+        sortKey: number
+        events: Entry[]
+        topDomains: Array<{ domain: EventDomainKey; label: string; count: number }>
+      }
     >()
+
     for (const entry of entries) {
       const key =
         entry.signedYear == null
@@ -741,35 +602,137 @@ export function EventsTimelineSection({
               ? Number.POSITIVE_INFINITY
               : entry.signedYear,
           events: [entry],
+          topDomains: [],
         })
       }
     }
 
     return Array.from(buckets.values())
       .sort((left, right) => {
-        // 미상은 방향과 무관하게 끝
         if (!Number.isFinite(left.sortKey)) return 1
         if (!Number.isFinite(right.sortKey)) return -1
         return (left.sortKey - right.sortKey) * direction
       })
-      .map((group) => ({
-        ...group,
-        events: [...group.events].sort((left, right) => {
-          if (left.signedYear == null && right.signedYear == null) return 0
-          if (left.signedYear == null) return 1
-          if (right.signedYear == null) return -1
-          return (left.signedYear - right.signedYear) * direction
-        }),
-      }))
+      .map((group) => {
+        const dMap = new Map<EventDomainKey, number>()
+        for (const ev of group.events) {
+          dMap.set(ev.domainKey, (dMap.get(ev.domainKey) ?? 0) + 1)
+        }
+        const topDomains = [...dMap.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([domain, count]) => ({
+            domain,
+            label: domainLabel(domain),
+            count,
+          }))
+
+        return {
+          ...group,
+          topDomains,
+          events: [...group.events].sort((left, right) => {
+            if (left.signedYear == null && right.signedYear == null) return 0
+            if (left.signedYear == null) return 1
+            if (right.signedYear == null) return -1
+            return (left.signedYear - right.signedYear) * direction
+          }),
+        }
+      })
   }, [filteredList, order])
 
-  /*
-   * 연표 막대에서 넘어온 세기로 데려다 놓는다.
-   *
-   * 목록을 자르지 않는 이유: 자르면 그 세기 밖 사건이 사라져 '전체를 보러 온' 사람이
-   * 잃는 게 생긴다. 스크롤 + 잠깐의 강조면 "여기다"를 말하기에 충분하다.
-   * 사건이 페이지 단위로 들어오므로 list가 늘어날 때마다 다시 시도한다(한 번 성공하면 끝).
-   */
+  // ── 기간 간트 (Event Span Timeline) 데이터 집계 ──────────────────────────
+  const ganttData = useMemo(() => {
+    if (viewMode !== 'gantt') return null
+    const candidates: Array<{
+      event: (typeof filteredList)[number]
+      domainKey: EventDomainKey
+      color: string
+      typeLabelText: string
+      startYear: number
+      endYear: number
+      isMultiYear: boolean
+      durationYears: number
+    }> = []
+    let undatedCount = 0
+
+    for (const ev of filteredList) {
+      const sStart = signedYearFromIsoLike(ev.startDate)
+      if (sStart == null || sStart === 0) {
+        undatedCount += 1
+        continue
+      }
+      const sEndRaw = signedYearFromIsoLike(ev.endDate)
+      const sEnd =
+        sEndRaw != null && sEndRaw >= sStart ? sEndRaw : sStart
+      const isMultiYear = sEnd > sStart || ev.kind === 'COLLECTION'
+      const durationYears =
+        sEnd > sStart
+          ? sEnd - sStart - (sStart < 0 && sEnd > 0 ? 1 : 0) + 1
+          : 1
+      const domKey: EventDomainKey = isEventDomainKey(ev.domain)
+        ? ev.domain
+        : 'OTHER'
+
+      candidates.push({
+        event: ev,
+        domainKey: domKey,
+        color: domainAccent(domKey, theme.mode),
+        typeLabelText:
+          eventTypeShort(ev.type) ?? domainLabel(domKey),
+        startYear: sStart,
+        endYear: Math.max(sStart + 1, sEnd),
+        isMultiYear,
+        durationYears,
+      })
+    }
+
+    const multiYearItems = candidates.filter((c) => c.isMultiYear)
+    const pool =
+      ganttMultiYearOnly && multiYearItems.length > 0
+        ? multiYearItems
+        : candidates
+
+    const dir = order === 'desc' ? -1 : 1
+    pool.sort((a, b) => {
+      if (a.startYear !== b.startYear) return (a.startYear - b.startYear) * dir
+      return b.durationYears - a.durationYears
+    })
+
+    if (pool.length === 0) {
+      return {
+        rows: [],
+        minYear: 0,
+        maxYear: 1,
+        ticks: [] as number[],
+        undatedCount,
+        multiYearTotal: multiYearItems.length,
+        truncatedCount: 0,
+      }
+    }
+
+    const rows = pool.slice(0, GANTT_MAX_ROWS)
+    const truncatedCount = Math.max(0, pool.length - rows.length)
+    const minYear = Math.min(...rows.map((r) => r.startYear))
+    const maxYear = Math.max(...rows.map((r) => r.endYear), minYear + 5)
+    const span = Math.max(5, maxYear - minYear)
+
+    const ticks = Array.from({ length: 5 }, (_, idx) => {
+      const raw = Math.round(minYear + (span * idx) / 4)
+      return raw === 0 ? 1 : raw
+    })
+
+    return {
+      rows,
+      minYear,
+      maxYear: minYear + span,
+      ticks,
+      undatedCount,
+      multiYearTotal: multiYearItems.length,
+      truncatedCount,
+    }
+  }, [viewMode, filteredList, ganttMultiYearOnly, order, theme.mode])
+
+  // 대시보드 연표 막대에서 넘어온 세기로 자동 스크롤 + 하이라이트
   const [centuryFocused, setCenturyFocused] = useState(false)
   const focusKey = useMemo(() => {
     if (!focusCentury) return null
@@ -789,12 +752,6 @@ export function EventsTimelineSection({
     )
     if (!target) return
 
-    /*
-     * 사건은 페이지 단위로 들어온다. 첫 페이지에서 한 번 스크롤하고 끝내면 뒤 페이지가
-     * 붙으면서 목표가 아래로 밀려 **엉뚱한 세기 앞에 서 있게 된다**(실측: 19세기로
-     * 갔는데 18세기가 화면 위였다). 목록이 자랄 때마다 다시 맞춘다 —
-     * 강조는 처음 한 번만 켠다.
-     */
     target.scrollIntoView({
       block: 'start',
       behavior: centuryFocused ? 'auto' : 'smooth',
@@ -824,76 +781,82 @@ export function EventsTimelineSection({
     onNavigateToForm?.(true)
   }
 
+  const initialParticipantCountries = useMemo<
+    EventCountryParticipant[] | undefined
+  >(() => {
+    if (!countryId) return undefined
+    if (isHistoricalCountry) {
+      return [{ historicalCountryId: countryId, role: 'PARTICIPANT' }]
+    }
+    return [{ countryId, role: 'PARTICIPANT' }]
+  }, [countryId, isHistoricalCountry])
+
+  const toggleCenturyCollapse = (key: string) => {
+    setCollapsedCenturies((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
   const isFiltered =
-    eraScopeFilter !== 'all' || searchQuery.trim().length > 0
+    eraScopeFilter !== 'all' ||
+    polityFilterId != null ||
+    domainFilter !== 'all' ||
+    selectedCentury != null ||
+    searchQuery.trim().length > 0
+
+  const resetAllFilters = () => {
+    setEraScopeFilter('all')
+    setPolityFilterId(null)
+    setDomainFilter('all')
+    setSelectedCentury(null)
+    setSearchQuery('')
+  }
+
+  const activePolityName = useMemo(() => {
+    if (!polityFilterId) return null
+    if (polityFilterId === '__modern__') {
+      return `${countryName || '현대 국가'} (현대)`
+    }
+    return bentoSummary.histPolityMap.get(polityFilterId)?.name ?? null
+  }, [polityFilterId, countryName, bentoSummary.histPolityMap])
 
   return (
     <Root
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+      transition={{ duration: 0.22 }}
     >
-      {/*
-       * 지면 머리 — 이 위젯이 독립 페이지였던 시절엔 h2 '연대표' + 칸이 하나뿐인 탭바
-       * ('전체 사건') + 숫자 하나만 든 KPI 박스 + h3 '연대표'가 겹겹이 쌓여 있었다.
-       * 국가 상세의 탭으로 들어온 지금은 바깥 탭바가 이미 '사건'을 말하므로 전부 중복 —
-       * 본문에 닿기까지 네 겹의 크롬을 지나야 했다. 한 줄로 접는다.
-       */}
       <Header>
         <HeaderText>
           <HeaderTitleRow>
-            <HeaderTitle>연대표</HeaderTitle>
-            {list.length > 0 && <HeaderCount>{list.length}건</HeaderCount>}
+            <HeaderTitle>
+              {countryName ? `${countryName} 사건 연대표` : '사건 연대표'}
+            </HeaderTitle>
+            {list.length > 0 && (
+              <HeaderCount>
+                {list.length.toLocaleString('ko-KR')}건
+              </HeaderCount>
+            )}
           </HeaderTitleRow>
           <HeaderDesc>
             {countryId
-              ? '이 국가와 과거 국가에 연관된 사건입니다. 행을 클릭하면 상세로 이동합니다.'
-              : '등록된 사건입니다. 행을 클릭하면 상세로 이동합니다.'}
+              ? '상단 인포그래픽 막대·도넛을 클릭해 세기·분야별로 즉시 좁히고, 사건 행을 클릭해 흐름을 끊지 않고 미리보세요.'
+              : '등록된 역사·현대 사건 원장입니다.'}
           </HeaderDesc>
         </HeaderText>
+
         <HeaderActions>
-          {list.length > 0 && (
-            <>
-              <LedgerViewSwitch role="group" aria-label="보기 방식">
-                <LedgerViewSwitchItem
-                  type="button"
-                  $active={viewMode === 'list'}
-                  aria-pressed={viewMode === 'list'}
-                  onClick={() => setViewMode('list')}
-                >
-                  연표 목록
-                </LedgerViewSwitchItem>
-                <LedgerViewSwitchItem
-                  type="button"
-                  $active={viewMode === 'calendar'}
-                  aria-pressed={viewMode === 'calendar'}
-                  onClick={() => setViewMode('calendar')}
-                >
-                  캘린더
-                </LedgerViewSwitchItem>
-              </LedgerViewSwitch>
-              {viewMode === 'list' && (
-                <LedgerViewSwitch role="group" aria-label="정렬 방향">
-                  <LedgerViewSwitchItem
-                    type="button"
-                    $active={order === 'asc'}
-                    aria-pressed={order === 'asc'}
-                    onClick={() => setOrder('asc')}
-                  >
-                    오래된순
-                  </LedgerViewSwitchItem>
-                  <LedgerViewSwitchItem
-                    type="button"
-                    $active={order === 'desc'}
-                    aria-pressed={order === 'desc'}
-                    onClick={() => setOrder('desc')}
-                  >
-                    최신순
-                  </LedgerViewSwitchItem>
-                </LedgerViewSwitch>
-              )}
-            </>
-          )}
+          <LedgerToolbarButton
+            type="button"
+            onClick={() => navigate(pathKeys.events.root())}
+          >
+            <span>사건 허브</span>
+            <FiArrowUpRight size={13} />
+          </LedgerToolbarButton>
+
           <LedgerPrimaryButton
             type="button"
             onClick={openCreate}
@@ -905,276 +868,1626 @@ export function EventsTimelineSection({
         </HeaderActions>
       </Header>
 
-      {/* 저장 뒤 목록 갱신은 모달이 한다 — 이 목록(useEvents)도 ['events'] 아래라 함께 다시 받는다 */}
-      <EventRegisterModal isOpen={isCreateOpen} onClose={closeCreate} />
+      <EventRegisterModal
+        isOpen={isCreateOpen}
+        onClose={closeCreate}
+        initialCountries={initialParticipantCountries}
+        initialDomain={domainFilter !== 'all' ? domainFilter : null}
+      />
 
+      <EventInlineModal
+        eventId={previewEventId}
+        onClose={() => setPreviewEventId(null)}
+        onNavigate={(targetEventId) => {
+          setPreviewEventId(null)
+          navigate(pathKeys.events.detail(targetEventId))
+        }}
+      />
+
+      {/* 상단 3열 인터랙티브 Bento 인포그래픽 요약 */}
       {list.length > 0 && (
-        <DashboardStyles.SectionHeadlineStrip>
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              전체 연관 사건
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue>
-              {kpiSummary.totalCount.toLocaleString()}건
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {hasHistoricalBridge
-                ? `현대 국가 ${kpiSummary.modernCount}건 · 과거 국가 ${kpiSummary.historicalCount}건`
-                : '현재 국가 스코프 등록 사건'}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              걸쳐 있는 세기
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue>
-              {kpiSummary.centuryCount.toLocaleString()}개 세기
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {kpiSummary.unknownYearCount > 0
-                ? `연도 미상 ${kpiSummary.unknownYearCount}건 별도 분류`
-                : '연도 확인 사건 기준'}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              최초 ~ 최근 연도 범위
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue>
-              {kpiSummary.yearSpanValue}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              연표 시작일 기준 통사 범위
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              일자 확인 사건 (캘린더)
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue>
-              {kpiSummary.dayKnownCount.toLocaleString()}건
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              월·일 단위 캘린더 표시 가능
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
-        </DashboardStyles.SectionHeadlineStrip>
+        <BentoGrid3Col aria-label="국가 사건 인포그래픽 요약">
+          {/* Card 1: 사건 통사 범위 & 시대/형태 비중 */}
+          <BentoCard>
+            <BentoCardHeader>
+              <BentoCardTitleGroup>
+                <BentoCardTitle>
+                  {hasHistoricalBridge
+                    ? '통사 범위 · 정치체 비중'
+                    : '통사 범위 · 사건 형태'}
+                </BentoCardTitle>
+                <BentoCardBadge>
+                  {bentoSummary.centuryCount}개 세기
+                </BentoCardBadge>
+              </BentoCardTitleGroup>
+              {polityFilterId && (
+                <CardResetMiniBtn
+                  type="button"
+                  onClick={() => setPolityFilterId(null)}
+                >
+                  전체 정치체
+                </CardResetMiniBtn>
+              )}
+            </BentoCardHeader>
+            <BentoCardBody>
+              <HeroMetricLine>
+                <HeroBigNumber>
+                  {bentoSummary.totalCount.toLocaleString('ko-KR')}
+                  <span>건</span>
+                </HeroBigNumber>
+                <HeroSpanText>{bentoSummary.yearSpanValue}</HeroSpanText>
+              </HeroMetricLine>
+
+              {hasHistoricalBridge ? (
+                <>
+                  <StackedSegmentBar
+                    slices={bentoSummary.scopeSlices}
+                    height={10}
+                    showPercent
+                  />
+                  <LegendChipsWrap>
+                    {bentoSummary.scopeSlices.slice(0, 5).map((slice) => {
+                      const active =
+                        slice.polityId != null &&
+                        polityFilterId === slice.polityId
+                      return slice.polityId ? (
+                        <LegendFilterBtn
+                          key={slice.key}
+                          type="button"
+                          $active={active}
+                          onClick={() => {
+                            setEraScopeFilter('all')
+                            setPolityFilterId((prev) =>
+                              prev === slice.polityId ? null : slice.polityId,
+                            )
+                          }}
+                          title={`${slice.label} 사건만 보기`}
+                        >
+                          <ColorDot $color={slice.color} />
+                          <LegendName>{slice.label}</LegendName>
+                          <LegendCount>{slice.meta}</LegendCount>
+                        </LegendFilterBtn>
+                      ) : (
+                        <LegendStaticSpan key={slice.key}>
+                          <ColorDot $color={slice.color} />
+                          <LegendName>{slice.label}</LegendName>
+                          <LegendCount>{slice.meta}</LegendCount>
+                        </LegendStaticSpan>
+                      )
+                    })}
+                  </LegendChipsWrap>
+                </>
+              ) : (
+                <>
+                  <StackedSegmentBar
+                    slices={bentoSummary.structureSlices}
+                    height={10}
+                    showPercent
+                  />
+                  <LegendChipsWrap>
+                    {bentoSummary.structureSlices.map((slice) => (
+                      <LegendStaticSpan key={slice.key}>
+                        <ColorDot $color={slice.color} />
+                        <LegendName>{slice.label}</LegendName>
+                        <LegendCount>{slice.meta}</LegendCount>
+                      </LegendStaticSpan>
+                    ))}
+                  </LegendChipsWrap>
+                  <SubHintLine>
+                    일자 확인 {bentoSummary.dayKnownCount}건 (캘린더 표시)
+                    {bentoSummary.unknownYearCount > 0
+                      ? ` · 연도 미상 ${bentoSummary.unknownYearCount}건`
+                      : ''}
+                  </SubHintLine>
+                </>
+              )}
+            </BentoCardBody>
+          </BentoCard>
+
+          {/* Card 2: 세기별 사건 분야 누적 리듬 */}
+          <BentoCard>
+            <BentoCardHeader>
+              <BentoCardTitleGroup>
+                <BentoCardTitle>세기별 사건 리듬</BentoCardTitle>
+                <BentoCardBadge>
+                  {selectedCentury != null
+                    ? formatCenturyIdx(selectedCentury)
+                    : `기록 ${bentoSummary.centuryDomainBuckets.length}개 세기`}
+                </BentoCardBadge>
+              </BentoCardTitleGroup>
+              {selectedCentury != null && (
+                <CardResetMiniBtn
+                  type="button"
+                  onClick={() => setSelectedCentury(null)}
+                >
+                  세기 필터 해제
+                </CardResetMiniBtn>
+              )}
+            </BentoCardHeader>
+            <BentoCardBody>
+              {bentoSummary.centuryDomainBuckets.length > 0 ? (
+                <>
+                  <StackedCenturyDomainChart
+                    buckets={bentoSummary.centuryDomainBuckets}
+                    domainBreakdown={bentoSummary.domainBreakdown}
+                    onSelectCentury={(cIdx) =>
+                      setSelectedCentury((prev) =>
+                        prev === cIdx ? null : cIdx,
+                      )
+                    }
+                  />
+                  <SubHintLine>
+                    막대를 클릭하면 해당 세기 사건만 좁혀 봅니다 (다시 클릭 시 해제)
+                  </SubHintLine>
+                </>
+              ) : (
+                <SubHintLine>
+                  시작 연도가 기재된 사건이 등록되면 세기별 분야 누적 차트가 표시됩니다.
+                </SubHintLine>
+              )}
+            </BentoCardBody>
+          </BentoCard>
+
+          {/* Card 3: 9대 사건 분야 도넛 & 클릭 필터 */}
+          <BentoCard>
+            <BentoCardHeader>
+              <BentoCardTitleGroup>
+                <BentoCardTitle>사건 분야 구성</BentoCardTitle>
+                <BentoCardBadge>
+                  {bentoSummary.domainBreakdown.length}개 분야
+                </BentoCardBadge>
+              </BentoCardTitleGroup>
+              {domainFilter !== 'all' && (
+                <CardResetMiniBtn
+                  type="button"
+                  onClick={() => setDomainFilter('all')}
+                >
+                  전체 분야
+                </CardResetMiniBtn>
+              )}
+            </BentoCardHeader>
+            <BentoCardBody>
+              <DomainDonutLayout>
+                <MiniDonutRing
+                  slices={bentoSummary.domainDonutSlices}
+                  size={76}
+                  strokeWidth={10}
+                  centerValue={
+                    domainFilter !== 'all'
+                      ? String(
+                          bentoSummary.domainBreakdown.find(
+                            (d) => d.domain === domainFilter,
+                          )?.count ?? 0,
+                        )
+                      : String(bentoSummary.totalCount)
+                  }
+                  centerLabel={
+                    domainFilter !== 'all'
+                      ? domainLabel(domainFilter)
+                      : '전체 사건'
+                  }
+                />
+                <DomainLegendList>
+                  {bentoSummary.domainBreakdown.slice(0, 5).map((item) => {
+                    const pct =
+                      bentoSummary.totalCount > 0
+                        ? Math.round(
+                            (item.count / bentoSummary.totalCount) * 100,
+                          )
+                        : 0
+                    const isSelected = domainFilter === item.domain
+                    return (
+                      <DomainLegendBtn
+                        key={item.domain}
+                        type="button"
+                        $active={isSelected}
+                        onClick={() =>
+                          setDomainFilter((prev) =>
+                            prev === item.domain ? 'all' : item.domain,
+                          )
+                        }
+                        title={`${item.label} 사건만 필터링`}
+                      >
+                        <ColorDot $color={item.color} />
+                        <DomainLegendName $active={isSelected}>
+                          {item.label}
+                        </DomainLegendName>
+                        <DomainLegendCount>
+                          {item.count}건 ({pct}%)
+                        </DomainLegendCount>
+                      </DomainLegendBtn>
+                    )
+                  })}
+                </DomainLegendList>
+              </DomainDonutLayout>
+            </BentoCardBody>
+          </BentoCard>
+        </BentoGrid3Col>
       )}
 
+      {/* 통합 필터 바 & 3모드 보기 전환 */}
       {list.length > 0 && (
         <FilterToolbar>
-          {hasHistoricalBridge ? (
-            <ScopeChipGroup role="tablist" aria-label="시대 범위 필터">
-              <ScopeFilterChip
-                type="button"
-                role="tab"
-                aria-selected={eraScopeFilter === 'all'}
-                $active={eraScopeFilter === 'all'}
-                onClick={() => setEraScopeFilter('all')}
-              >
-                전체 ({kpiSummary.totalCount})
-              </ScopeFilterChip>
-              <ScopeFilterChip
-                type="button"
-                role="tab"
-                aria-selected={eraScopeFilter === 'modern'}
-                $active={eraScopeFilter === 'modern'}
-                onClick={() => setEraScopeFilter('modern')}
-              >
-                현대 국가 직접 연관 ({kpiSummary.modernCount})
-              </ScopeFilterChip>
-              <ScopeFilterChip
-                type="button"
-                role="tab"
-                aria-selected={eraScopeFilter === 'historical'}
-                $active={eraScopeFilter === 'historical'}
-                onClick={() => setEraScopeFilter('historical')}
-              >
-                연결 과거 국가 ({kpiSummary.historicalCount})
-              </ScopeFilterChip>
-            </ScopeChipGroup>
-          ) : (
-            <FilterResultMeta>
-              전체 {kpiSummary.totalCount.toLocaleString()}건
-            </FilterResultMeta>
-          )}
-          <SearchControlsGroup>
-            {isFiltered && (
+          <ScopeChipGroup role="tablist" aria-label="시대 및 사건 분야 필터">
+            <ScopeFilterChip
+              type="button"
+              role="tab"
+              aria-selected={
+                eraScopeFilter === 'all' &&
+                domainFilter === 'all' &&
+                polityFilterId == null
+              }
+              $active={
+                eraScopeFilter === 'all' &&
+                domainFilter === 'all' &&
+                polityFilterId == null
+              }
+              onClick={() => {
+                setEraScopeFilter('all')
+                setPolityFilterId(null)
+                setDomainFilter('all')
+              }}
+            >
+              전체 <ChipCount>{bentoSummary.totalCount}</ChipCount>
+            </ScopeFilterChip>
+
+            {hasHistoricalBridge && (
               <>
-                <FilterResultMeta>
-                  검색 결과 {filteredList.length.toLocaleString()}건 / 전체{' '}
-                  {kpiSummary.totalCount.toLocaleString()}건
-                </FilterResultMeta>
-                <FilterResetButton
+                <ScopeFilterChip
                   type="button"
+                  role="tab"
+                  aria-selected={eraScopeFilter === 'modern'}
+                  $active={eraScopeFilter === 'modern'}
                   onClick={() => {
-                    setEraScopeFilter('all')
-                    setSearchQuery('')
+                    setPolityFilterId(null)
+                    setEraScopeFilter((prev) =>
+                      prev === 'modern' ? 'all' : 'modern',
+                    )
                   }}
                 >
-                  필터 초기화
-                </FilterResetButton>
+                  현대 국가 <ChipCount>{bentoSummary.modernCount}</ChipCount>
+                </ScopeFilterChip>
+                <ScopeFilterChip
+                  type="button"
+                  role="tab"
+                  aria-selected={eraScopeFilter === 'historical'}
+                  $active={eraScopeFilter === 'historical'}
+                  onClick={() => {
+                    setPolityFilterId(null)
+                    setEraScopeFilter((prev) =>
+                      prev === 'historical' ? 'all' : 'historical',
+                    )
+                  }}
+                >
+                  과거 국가{' '}
+                  <ChipCount>{bentoSummary.historicalCount}</ChipCount>
+                </ScopeFilterChip>
+                <ToolbarDivider aria-hidden />
               </>
             )}
+
+            {bentoSummary.domainBreakdown.map((item) => {
+              const active = domainFilter === item.domain
+              return (
+                <ScopeFilterChip
+                  key={item.domain}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  $active={active}
+                  onClick={() =>
+                    setDomainFilter((prev) =>
+                      prev === item.domain ? 'all' : item.domain,
+                    )
+                  }
+                >
+                  <ColorDot $color={item.color} />
+                  <span>{item.label}</span>
+                  <ChipCount>{item.count}</ChipCount>
+                </ScopeFilterChip>
+              )
+            })}
+          </ScopeChipGroup>
+
+          <SearchControlsGroup>
+            {activePolityName && (
+              <ActiveFilterPill
+                type="button"
+                onClick={() => setPolityFilterId(null)}
+              >
+                <span>{activePolityName}</span>
+                <FiX size={11} />
+              </ActiveFilterPill>
+            )}
+            {selectedCentury != null && (
+              <ActiveFilterPill
+                type="button"
+                onClick={() => setSelectedCentury(null)}
+              >
+                <span>{formatCenturyIdx(selectedCentury)}</span>
+                <FiX size={11} />
+              </ActiveFilterPill>
+            )}
+            {isFiltered && (
+              <FilterStatusInline>
+                <FilterResultMeta>
+                  {filteredList.length.toLocaleString('ko-KR')}건
+                </FilterResultMeta>
+                <InlineResetTextBtn type="button" onClick={resetAllFilters}>
+                  초기화
+                </InlineResetTextBtn>
+              </FilterStatusInline>
+            )}
+
             <SearchInputWrap>
               <FiSearch size={13} />
               <input
                 type="search"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="사건명·연도·관련 국가 검색..."
+                placeholder="사건명·분야·장소·연도·국가 검색…"
                 aria-label="연대표 사건 검색"
               />
             </SearchInputWrap>
+
+            {viewMode !== 'calendar' && (
+              <LedgerViewSwitch role="group" aria-label="정렬 방향">
+                <LedgerViewSwitchItem
+                  type="button"
+                  $active={order === 'asc'}
+                  aria-pressed={order === 'asc'}
+                  onClick={() => setOrder('asc')}
+                >
+                  오래된순
+                </LedgerViewSwitchItem>
+                <LedgerViewSwitchItem
+                  type="button"
+                  $active={order === 'desc'}
+                  aria-pressed={order === 'desc'}
+                  onClick={() => setOrder('desc')}
+                >
+                  최신순
+                </LedgerViewSwitchItem>
+              </LedgerViewSwitch>
+            )}
+
+            <LedgerViewSwitch role="group" aria-label="사건 보기 방식">
+              <LedgerViewSwitchItem
+                type="button"
+                $active={viewMode === 'list'}
+                aria-pressed={viewMode === 'list'}
+                onClick={() => setViewMode('list')}
+              >
+                <FiList size={13} />
+                <span>연표 원장</span>
+              </LedgerViewSwitchItem>
+              <LedgerViewSwitchItem
+                type="button"
+                $active={viewMode === 'gantt'}
+                aria-pressed={viewMode === 'gantt'}
+                onClick={() => setViewMode('gantt')}
+              >
+                <FiAlignLeft size={13} />
+                <span>기간 간트</span>
+              </LedgerViewSwitchItem>
+              <LedgerViewSwitchItem
+                type="button"
+                $active={viewMode === 'calendar'}
+                aria-pressed={viewMode === 'calendar'}
+                onClick={() => setViewMode('calendar')}
+              >
+                <FiCalendar size={13} />
+                <span>캘린더</span>
+              </LedgerViewSwitchItem>
+            </LedgerViewSwitch>
           </SearchControlsGroup>
         </FilterToolbar>
       )}
 
-      <section aria-label="연대표">
+      <section aria-label="사건 연대표 본문">
         {isLoading && list.length === 0 ? (
-          <div
-            style={{
-              padding: '36px 12px',
-              textAlign: 'center',
-              color: theme.colors.text.secondary,
-              fontSize: 14,
-              borderTop: `1px solid ${theme.colors.border.light}`,
-              borderBottom: `1px solid ${theme.colors.border.light}`,
-            }}
-          >
-            불러오는 중…
-          </div>
+          <ChartSkeleton variant="bars" rows={6} />
         ) : list.length === 0 ? (
           <EventEmptySpecGrid>
             <EventEmptySpecCell>
               <EventEmptySpecTitle>
-                연도·세기별 사건 연표 원장
+                1. 기원전(BC) ~ 현대 세기별 통사 원장
               </EventEmptySpecTitle>
               <EventEmptySpecDesc>
-                기원전(BC)부터 현대까지 시작 연도 기준으로 세기별 묶음과 연도열을 정렬해 국가 통사를 한눈에 훑을 수 있습니다.
+                시작 연도 기준으로 세기별 묶음과 연도열, 9대 사건 분야 배지를 정렬해 국가 통사를 한눈에 훑을 수 있습니다.
               </EventEmptySpecDesc>
             </EventEmptySpecCell>
             <EventEmptySpecCell>
               <EventEmptySpecTitle>
-                현대·과거 국가 통사 브리지
+                2. 기간 간트(스팬 타임라인) & 월별 캘린더
               </EventEmptySpecTitle>
               <EventEmptySpecDesc>
-                현재 국가뿐 아니라 연결된 과거 국가(왕조·이전 정체)에 결속된 역사 사건까지 하나의 연대표에서 함께 조회합니다.
+                전쟁·조약·개혁 등 다년도 사건의 동시대 중첩을 간트 막대로 비교하거나, 일자가 확인된 사건을 월별 달력으로 탐색합니다.
               </EventEmptySpecDesc>
             </EventEmptySpecCell>
             <EventEmptySpecCell>
               <EventEmptySpecTitle>
-                세기 막대 점프 및 월·일 캘린더
+                3. 이 국가의 첫 사건 등록하기
               </EventEmptySpecTitle>
               <EventEmptySpecDesc>
-                상단 세기 분포 막대를 클릭해 목표 세기로 즉시 이동하거나, 일자가 확인된 사건을 월별 캘린더 뷰로 전환해 볼 수 있습니다.
+                새 사건 등록 창을 열면 현재 국가가 참여국으로 자동 채워집니다.
               </EventEmptySpecDesc>
-            </EventEmptySpecCell>
-            <EventEmptySpecCell>
-              <EventEmptySpecTitle>첫 사건 등록 안내</EventEmptySpecTitle>
-              <EventEmptySpecDesc>
-                우측 상단 <strong>새 사건 등록</strong> 버튼을 눌러 이 국가와 연관된 첫 역사·현대 사건을 등록해 보세요.
-              </EventEmptySpecDesc>
+              <EmptyCreateBtn type="button" onClick={openCreate}>
+                <FiPlus size={12} />
+                <span>새 사건 등록하기</span>
+              </EmptyCreateBtn>
             </EventEmptySpecCell>
           </EventEmptySpecGrid>
         ) : filteredList.length === 0 ? (
-          <div
-            style={{
-              padding: '36px 12px',
-              textAlign: 'center',
-              color: theme.colors.text.secondary,
-              fontSize: 13.5,
-              borderBottom: `1px solid ${theme.colors.border.light}`,
-            }}
-          >
-            조건에 맞는 사건이 없습니다. 검색어나 시대 범위 필터를 조정해 보세요.
-          </div>
+          <EmptyFilterBox>
+            <span>조건에 맞는 사건이 없습니다.</span>
+            <InlineResetTextBtn type="button" onClick={resetAllFilters}>
+              필터 초기화
+            </InlineResetTextBtn>
+          </EmptyFilterBox>
         ) : viewMode === 'calendar' ? (
           <CalendarCard>
             <EventCalendarPanel
               events={calendarEvents}
-              onSelectEvent={(eventId) =>
-                navigate(pathKeys.events.detail(eventId))
-              }
+              onSelectEvent={(targetEventId) => setPreviewEventId(targetEventId)}
             />
           </CalendarCard>
-        ) : (
-          <>
-            {eventCenturyCounts.length > 1 && (
-              <CenturyBarCard style={{ marginBottom: 20 }}>
-                <EventCenturyStrip
-                  counts={eventCenturyCounts}
-                  onOpen={jumpToCentury}
-                />
-              </CenturyBarCard>
+        ) : viewMode === 'gantt' && ganttData ? (
+          <GanttPanel aria-label="사건 기간 스팬 간트 차트">
+            <GanttSubToolbar>
+              <GanttHintText>
+                시작~종료 연도 기준 시간축 비례 스팬 막대 · 행 클릭 시 빠른 미리보기
+              </GanttHintText>
+              {ganttData.multiYearTotal > 0 && (
+                <ScopeFilterChip
+                  type="button"
+                  $active={ganttMultiYearOnly}
+                  onClick={() => setGanttMultiYearOnly((prev) => !prev)}
+                >
+                  다년도·묶음 사건만 ({ganttData.multiYearTotal})
+                </ScopeFilterChip>
+              )}
+            </GanttSubToolbar>
+
+            {ganttData.rows.length === 0 ? (
+              <EmptyFilterBox>
+                <span>연도가 확인된 사건이 없어 기간 간트를 표시할 수 없습니다.</span>
+                <InlineResetTextBtn
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                >
+                  연표 원장으로 전환
+                </InlineResetTextBtn>
+              </EmptyFilterBox>
+            ) : (
+              <>
+                <GanttAxisHead>
+                  <span>사건 · 분야</span>
+                  <GanttTicksRow>
+                    {ganttData.ticks.map((tick, idx) => (
+                      <span key={`${tick}-${idx}`}>
+                        {formatSignedYear(tick)}
+                      </span>
+                    ))}
+                  </GanttTicksRow>
+                  <GanttDurationHead>연대 · 지속</GanttDurationHead>
+                </GanttAxisHead>
+
+                <GanttRowsList>
+                  {ganttData.rows.map((row) => {
+                    const totalSpan = Math.max(
+                      1,
+                      ganttData.maxYear - ganttData.minYear,
+                    )
+                    const leftPct = Math.max(
+                      0,
+                      Math.min(
+                        98,
+                        ((row.startYear - ganttData.minYear) / totalSpan) * 100,
+                      ),
+                    )
+                    const widthPct = Math.max(
+                      1.4,
+                      Math.min(
+                        100 - leftPct,
+                        ((row.endYear - row.startYear) / totalSpan) * 100,
+                      ),
+                    )
+                    return (
+                      <GanttEventRow
+                        key={row.event.id}
+                        type="button"
+                        onClick={() => setPreviewEventId(row.event.id)}
+                      >
+                        <GanttLeadCol>
+                          <ColorDot $color={row.color} />
+                          <GanttTypeTag $color={row.color}>
+                            {row.typeLabelText}
+                          </GanttTypeTag>
+                          <GanttEventTitle title={row.event.title}>
+                            {row.event.title || '제목 없음'}
+                          </GanttEventTitle>
+                        </GanttLeadCol>
+
+                        <GanttTrackLane>
+                          <GanttSpanFill
+                            $color={row.color}
+                            $multi={row.isMultiYear}
+                            style={{
+                              left: `${leftPct}%`,
+                              width: `${widthPct}%`,
+                            }}
+                          />
+                        </GanttTrackLane>
+
+                        <GanttRightMeta>
+                          {formatSignedYear(row.startYear)}
+                          {row.durationYears > 1
+                            ? ` (${row.durationYears}년)`
+                            : ''}
+                        </GanttRightMeta>
+                      </GanttEventRow>
+                    )
+                  })}
+                </GanttRowsList>
+
+                {(ganttData.truncatedCount > 0 ||
+                  ganttData.undatedCount > 0) && (
+                  <GanttFooterBar>
+                    {ganttData.truncatedCount > 0 && (
+                      <span>
+                        상위 {GANTT_MAX_ROWS}건 표시 중 (외{' '}
+                        {ganttData.truncatedCount}건은 세기·분야 필터로 좁혀 확인)
+                      </span>
+                    )}
+                    {ganttData.undatedCount > 0 && (
+                      <span>
+                        연도 미상 {ganttData.undatedCount}건은 연표 원장 하단에 표시됩니다.
+                      </span>
+                    )}
+                  </GanttFooterBar>
+                )}
+              </>
             )}
-            <Chronology>
-              {centuryGroups.map((group) => (
+          </GanttPanel>
+        ) : (
+          <Chronology>
+            {centuryGroups.map((group) => {
+              const isCollapsed = collapsedCenturies.has(group.key)
+              return (
                 <CenturySection key={group.key} data-century-key={group.key}>
                   <CenturyHead>
-                    <CenturyLabel>{group.label}</CenturyLabel>
-                    <CenturyCount>{group.events.length}건</CenturyCount>
-                  </CenturyHead>
-                  {group.events.map((entry) => (
-                    <EventRow
-                      key={entry.event.id}
+                    <CenturyHeadBtn
                       type="button"
-                      onClick={() =>
-                        navigate(pathKeys.events.detail(entry.event.id))
-                      }
+                      onClick={() => toggleCenturyCollapse(group.key)}
+                      aria-expanded={!isCollapsed}
                     >
-                      <RowYear>{entry.yearLabel}</RowYear>
-                      <RowBody>
-                        <RowTitle>{entry.event.title || '제목 없음'}</RowTitle>
-                        {entry.rangeLabel && (
-                          <RowRange>{entry.rangeLabel}</RowRange>
-                        )}
-                      </RowBody>
-                      {(entry.historical.length > 0 ||
-                        entry.modern.length > 0) && (
-                        <CountryChipRow>
-                          {entry.historical.map((item) => (
-                            <CountryChip key={`h-${item.id}`} $past>
-                              {item.name}
-                            </CountryChip>
-                          ))}
-                          {entry.modern.map((item) => (
-                            <CountryChip key={`m-${item.id}`}>
-                              {item.flagEmoji ? `${item.flagEmoji} ` : ''}
-                              {item.name}
-                            </CountryChip>
-                          ))}
-                        </CountryChipRow>
-                      )}
-                    </EventRow>
-                  ))}
+                      <CenturyCaret $collapsed={isCollapsed} aria-hidden>
+                        <FiChevronDown size={14} />
+                      </CenturyCaret>
+                      <CenturyLabel>{group.label}</CenturyLabel>
+                      <CenturyCount>{group.events.length}건</CenturyCount>
+                    </CenturyHeadBtn>
+
+                    <CenturyDomainSummary>
+                      {group.topDomains.map((d) => (
+                        <CenturyDomainMiniPill key={d.domain}>
+                          <ColorDot
+                            $color={domainAccent(d.domain, theme.mode)}
+                          />
+                          <span>{d.label}</span>
+                          <strong>{d.count}</strong>
+                        </CenturyDomainMiniPill>
+                      ))}
+                    </CenturyDomainSummary>
+                  </CenturyHead>
+
+                  {!isCollapsed &&
+                    group.events.map((entry) => {
+                      const dColor = domainAccent(entry.domainKey, theme.mode)
+                      return (
+                        <EventLedgerItem key={entry.event.id}>
+                          <EventRowMainBtn
+                            type="button"
+                            onClick={() => setPreviewEventId(entry.event.id)}
+                          >
+                            <RowYearCol>
+                              <RowYear>{entry.yearLabel}</RowYear>
+                              {entry.durationYears != null &&
+                                entry.durationYears > 1 && (
+                                  <DurationMiniPill>
+                                    {entry.durationYears}년 지속
+                                  </DurationMiniPill>
+                                )}
+                            </RowYearCol>
+
+                            <RowBody>
+                              <RowHeadlineLine>
+                                <DomainInlineBadge $color={dColor}>
+                                  <ColorDot $color={dColor} />
+                                  <span>
+                                    {entry.typeShortText
+                                      ? `${entry.domainText} · ${entry.typeShortText}`
+                                      : entry.domainText}
+                                  </span>
+                                </DomainInlineBadge>
+
+                                {entry.event.kind === 'COLLECTION' && (
+                                  <CollectionTag>묶음 사건</CollectionTag>
+                                )}
+
+                                <RowTitle>
+                                  {entry.event.title || '제목 없음'}
+                                </RowTitle>
+                              </RowHeadlineLine>
+
+                              {(entry.rangeLabel ||
+                                entry.event.location ||
+                                entry.snippet) && (
+                                <RowSubLine>
+                                  {entry.rangeLabel && (
+                                    <RowRange>{entry.rangeLabel}</RowRange>
+                                  )}
+                                  {entry.event.location && (
+                                    <RowLocation>
+                                      <FiMapPin size={10} />
+                                      <span>{entry.event.location}</span>
+                                    </RowLocation>
+                                  )}
+                                  {entry.snippet && (
+                                    <RowSnippet>{entry.snippet}</RowSnippet>
+                                  )}
+                                </RowSubLine>
+                              )}
+                            </RowBody>
+
+                            {(entry.historical.length > 0 ||
+                              entry.modern.length > 0) && (
+                              <CountryChipRow>
+                                {entry.historical.slice(0, 3).map((item) => (
+                                  <CountryChip key={`h-${item.id}`} $past>
+                                    {item.name}
+                                  </CountryChip>
+                                ))}
+                                {entry.modern.slice(0, 3).map((item) => (
+                                  <CountryChip key={`m-${item.id}`}>
+                                    {item.flagEmoji
+                                      ? `${item.flagEmoji} `
+                                      : ''}
+                                    {item.name}
+                                  </CountryChip>
+                                ))}
+                                {entry.historical.length + entry.modern.length >
+                                  6 && (
+                                  <CountryChip>
+                                    +
+                                    {entry.historical.length +
+                                      entry.modern.length -
+                                      6}
+                                  </CountryChip>
+                                )}
+                              </CountryChipRow>
+                            )}
+                          </EventRowMainBtn>
+
+                          <EventDetailNavBtn
+                            type="button"
+                            onClick={() =>
+                              navigate(pathKeys.events.detail(entry.event.id))
+                            }
+                            title="사건 전용 상세 페이지로 이동"
+                          >
+                            상세 →
+                          </EventDetailNavBtn>
+                        </EventLedgerItem>
+                      )
+                    })}
                 </CenturySection>
-              ))}
-            </Chronology>
-          </>
+              )
+            })}
+          </Chronology>
         )}
 
-        {/* 자동 소진 중 일부 페이지 로드 실패 — 재시도로 이어받기(옛 세기 누락 방지) */}
         {loadMoreFailed && (
-          <div style={{ marginTop: 24, textAlign: 'center' }}>
-            <div
-              style={{
-                fontSize: 13,
-                color: theme.colors.text.secondary,
-                marginBottom: 10,
-              }}
-            >
-              일부 사건을 불러오지 못했습니다.
-            </div>
+          <LoadMoreErrorBox>
+            <span>일부 과거 사건 페이지를 불러오지 못했습니다.</span>
             <LedgerToolbarButton
               type="button"
               onClick={() => fetchMoreEvents()}
             >
-              다시 시도
+              이어받기 다시 시도
             </LedgerToolbarButton>
-          </div>
+          </LoadMoreErrorBox>
         )}
       </section>
     </Root>
   )
 }
+
+/* ── Styled Components (Event-Ledger Flat System) ─────────────────────────── */
+
+const Root = styled(motion.div)`
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  ${countryTabCanvasPadding}
+  position: relative;
+  min-height: calc(100vh - 200px);
+  box-sizing: border-box;
+`
+
+const Header = styled.header`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+`
+
+const HeaderText = styled.div`
+  min-width: 0;
+`
+
+const HeaderTitleRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+`
+
+const HeaderTitle = styled.h2`
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const HeaderCount = styled.span`
+  font-size: 13.5px;
+  font-weight: 700;
+  ${DIGIT_DISPLAY}
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+`
+
+const HeaderDesc = styled.p`
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const HeaderActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+`
+
+const CardResetMiniBtn = styled.button`
+  padding: 2px 7px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  }
+`
+
+const HeroMetricLine = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+`
+
+const HeroBigNumber = styled.strong`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  ${DIGIT_DISPLAY}
+
+  span {
+    font-size: 12px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+const HeroSpanText = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+`
+
+const LegendChipsWrap = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+`
+
+const LegendFilterBtn = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : 'transparent'};
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+  }
+`
+
+const LegendStaticSpan = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 2px;
+  font-size: 11.5px;
+`
+
+const ColorDot = styled.span<{ $color: string }>`
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: ${({ $color }) => $color};
+  flex-shrink: 0;
+`
+
+const LegendName = styled.span`
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-weight: 600;
+  max-width: 116px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const LegendCount = styled.span`
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-weight: 700;
+  ${DIGIT_DISPLAY}
+`
+
+const SubHintLine = styled.div`
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+`
+
+const DomainDonutLayout = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+`
+
+const DomainLegendList = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+`
+
+const DomainLegendBtn = styled.button<{ $active?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 6px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : 'transparent'};
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+  }
+`
+
+const DomainLegendName = styled.span<{ $active?: boolean }>`
+  flex: 1;
+  min-width: 0;
+  font-weight: ${({ $active }) => ($active ? 700 : 600)};
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const DomainLegendCount = styled.span`
+  flex-shrink: 0;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+`
+
+const FilterToolbar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const ScopeChipGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+`
+
+const ScopeFilterChip = styled(LedgerFilterChip)`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+`
+
+const ChipCount = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.85;
+  ${DIGIT_DISPLAY}
+`
+
+const ToolbarDivider = styled.span`
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  background: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+`
+
+const SearchControlsGroup = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+`
+
+const ActiveFilterPill = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerAccent(theme.mode)};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  cursor: pointer;
+`
+
+const FilterStatusInline = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+`
+
+const FilterResultMeta = styled.span`
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+`
+
+const InlineResetTextBtn = styled.button`
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+`
+
+const SearchInputWrap = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  width: min(220px, 100%);
+
+  &:focus-within {
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+
+  input {
+    border: none;
+    background: transparent;
+    color: ${({ theme }) => theme.colors.text.primary};
+    font-family: inherit;
+    font-size: 12px;
+    outline: none;
+    width: 100%;
+  }
+`
+
+/* ── 연표 원장 (Chronology List) ─────────────────────────────────────────── */
+
+const Chronology = styled.div`
+  display: flex;
+  flex-direction: column;
+`
+
+const CenturySection = styled.section`
+  display: flex;
+  flex-direction: column;
+  scroll-margin-top: 12px;
+
+  &[data-century-focus='true'] {
+    animation: centuryArrive 1.6s ease-out;
+  }
+
+  @keyframes centuryArrive {
+    0%,
+    60% {
+      background: rgba(79, 70, 229, 0.1);
+      box-shadow: inset 3px 0 0 #4f46e5;
+    }
+    100% {
+      background: transparent;
+      box-shadow: inset 3px 0 0 transparent;
+    }
+  }
+`
+
+const CenturyHead = styled.div`
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 0 8px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+`
+
+const CenturyHeadBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+`
+
+const CenturyCaret = styled.span<{ $collapsed: boolean }>`
+  display: inline-flex;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  transition: transform 0.15s ease;
+  transform: rotate(${({ $collapsed }) => ($collapsed ? '-90deg' : '0deg')});
+`
+
+const CenturyLabel = styled.h3`
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const CenturyCount = styled.span`
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+`
+
+const CenturyDomainSummary = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+
+  @media (max-width: 680px) {
+    display: none;
+  }
+`
+
+const CenturyDomainMiniPill = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+const EventLedgerItem = styled.div`
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const EventRowMainBtn = styled.button`
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  padding: 10px 8px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease;
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+
+  @media (max-width: 740px) {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+`
+
+const RowYearCol = styled.span`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+`
+
+const RowYear = styled.span`
+  font-size: 12.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: nowrap;
+  ${DIGIT_DISPLAY}
+`
+
+const DurationMiniPill = styled.span`
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  ${DIGIT_DISPLAY}
+`
+
+const RowBody = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+`
+
+const RowHeadlineLine = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  min-width: 0;
+`
+
+const DomainInlineBadge = styled.span<{ $color: string }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 6px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ $color }) => $color};
+  white-space: nowrap;
+`
+
+const CollectionTag = styled.span`
+  padding: 1px 5px;
+  border-radius: ${RADIUS.XS};
+  font-size: 10px;
+  font-weight: 700;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#b45309')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(245,158,11,0.16)' : '#fef3c7'};
+  white-space: nowrap;
+`
+
+const RowTitle = styled.span`
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const RowSubLine = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const RowRange = styled.span`
+  flex-shrink: 0;
+  font-weight: 600;
+  ${DIGIT_DISPLAY}
+`
+
+const RowLocation = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const RowSnippet = styled.span`
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.85;
+`
+
+const CountryChipRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  max-width: 280px;
+
+  @media (max-width: 740px) {
+    display: none;
+  }
+`
+
+const CountryChip = styled.span<{ $past?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: ${({ theme, $past }) =>
+    $past
+      ? theme.mode === 'dark'
+        ? '#fbbf24'
+        : '#92400e'
+      : theme.colors.text.secondary};
+  background: ${({ theme, $past }) =>
+    $past
+      ? theme.mode === 'dark'
+        ? 'rgba(245,158,11,0.14)'
+        : '#fef3c7'
+      : ledgerSubtleFill(theme.mode)};
+`
+
+const EventDetailNavBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border: none;
+  border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: transparent;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+`
+
+/* ── 기간 간트 (Event Span Gantt View) ───────────────────────────────────── */
+
+const GanttPanel = styled.div`
+  display: flex;
+  flex-direction: column;
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  border-radius: ${RADIUS.MD};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  overflow: hidden;
+`
+
+const GanttSubToolbar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const GanttHintText = styled.span`
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const GanttAxisHead = styled.div`
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) 128px;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 12px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  @media (max-width: 780px) {
+    grid-template-columns: 165px minmax(0, 1fr);
+  }
+`
+
+const GanttTicksRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  ${DIGIT_DISPLAY}
+`
+
+const GanttDurationHead = styled.span`
+  text-align: right;
+  @media (max-width: 780px) {
+    display: none;
+  }
+`
+
+const GanttRowsList = styled.div`
+  display: flex;
+  flex-direction: column;
+`
+
+const GanttEventRow = styled.button`
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) 128px;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 12px;
+  border: none;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+
+  @media (max-width: 780px) {
+    grid-template-columns: 165px minmax(0, 1fr);
+  }
+`
+
+const GanttLeadCol = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+`
+
+const GanttTypeTag = styled.span<{ $color: string }>`
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  color: ${({ $color }) => $color};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  flex-shrink: 0;
+`
+
+const GanttEventTitle = styled.span`
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const GanttTrackLane = styled.div`
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  overflow: hidden;
+`
+
+const GanttSpanFill = styled.div<{ $color: string; $multi: boolean }>`
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  min-width: 6px;
+  border-radius: 999px;
+  background: ${({ $color }) => $color};
+  opacity: ${({ $multi }) => ($multi ? 0.92 : 0.68)};
+`
+
+const GanttRightMeta = styled.span`
+  font-size: 11px;
+  font-weight: 600;
+  text-align: right;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  ${DIGIT_DISPLAY}
+
+  @media (max-width: 780px) {
+    display: none;
+  }
+`
+
+const GanttFooterBar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+`
+
+const CalendarCard = styled.div`
+  padding: 14px 16px;
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  border-radius: ${RADIUS.MD};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+`
+
+const EmptyFilterBox = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 24px 8px;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const EventEmptySpecGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+
+  @media (max-width: 820px) {
+    grid-template-columns: 1fr;
+  }
+`
+
+const EventEmptySpecCell = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 14px;
+
+  & + & {
+    border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  }
+
+  @media (max-width: 820px) {
+    & + & {
+      border-left: none;
+      border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+    }
+  }
+`
+
+const EventEmptySpecTitle = styled.div`
+  font-size: 12.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const EventEmptySpecDesc = styled.p`
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const EmptyCreateBtn = styled.button`
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+`
+
+const LoadMoreErrorBox = styled.div`
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-size: 12.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`

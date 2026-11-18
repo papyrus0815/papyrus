@@ -3,6 +3,13 @@
  * 페이지 본질 가치(같은 시점에 누가 있었나) 를 한눈에 전달하기 위한 컴포넌트.
  */
 import { domainLabel } from '@/entities/event/model/event-domain'
+import {
+  DIGIT_DISPLAY,
+  MOTION,
+  RADIUS,
+  ledgerHairline,
+  ledgerSubtleFill,
+} from '@/entities/event/ui/ledger-tokens'
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { FiX } from 'react-icons/fi'
@@ -14,7 +21,11 @@ import {
   PERSON_RECORD_KIND_LABEL,
   type PersonRecordItem,
 } from '@/shared/api/person-records'
-import { centuryYearRange, getCentury } from '@/shared/lib/iso-date'
+import {
+  centuryYearRange,
+  getCentury,
+  parseIsoDateParts,
+} from '@/shared/lib/iso-date'
 
 import { sortSegmentsChronologically } from '../lib/sort-segments'
 import type { TenureBar } from '../lib/normalize-tenures'
@@ -45,6 +56,71 @@ interface Props {
 
 function formatYear(y: number): string {
   return y < 0 ? `BC ${Math.abs(y)}` : String(y)
+}
+
+function calendarYearSpan(fromYear: number, toYear: number): number {
+  if (fromYear < 0 && toYear > 0) return toYear - fromYear - 1
+  return toYear - fromYear
+}
+
+function computeReignProgress(bar: TenureBar, highlightYear: number): {
+  prefix: string
+  elapsedYears: number
+  totalLabel: string
+  periodText: string
+  pct: number
+} | null {
+  const startYear =
+    parseIsoDateParts(bar.startDate)?.year ?? Math.floor(bar.startJulian)
+  if (!Number.isFinite(startYear)) return null
+
+  const endYear = bar.endDate
+    ? (parseIsoDateParts(bar.endDate)?.year ??
+      (bar.endJulian != null ? Math.floor(bar.endJulian) : null))
+    : null
+  const prefix =
+    bar.isMonarchical || bar.positionCategory === 'MONARCH' ? '재위' : '재임'
+
+  if (endYear != null && Number.isFinite(endYear)) {
+    const totalYears = Math.max(1, calendarYearSpan(startYear, endYear))
+    const elapsedYears = Math.max(
+      1,
+      Math.min(totalYears, calendarYearSpan(startYear, highlightYear) + 1),
+    )
+    const pct = Math.max(
+      6,
+      Math.min(100, Math.round((elapsedYears / totalYears) * 100)),
+    )
+    const periodText =
+      startYear === endYear
+        ? `${formatYear(startYear)}년`
+        : `${formatYear(startYear)} ~ ${formatYear(endYear)}`
+    return {
+      prefix,
+      elapsedYears,
+      totalLabel: `총 ${totalYears}년`,
+      periodText,
+      pct,
+    }
+  }
+
+  const currentYear = Math.max(highlightYear, new Date().getFullYear())
+  const totalSoFar = Math.max(1, calendarYearSpan(startYear, currentYear) + 1)
+  const elapsedYears = Math.max(
+    1,
+    calendarYearSpan(startYear, highlightYear) + 1,
+  )
+  const pct = Math.max(
+    8,
+    Math.min(100, Math.round((elapsedYears / totalSoFar) * 100)),
+  )
+  return {
+    prefix,
+    elapsedYears,
+    totalLabel: '현직',
+    periodText: `${formatYear(startYear)} ~ 현직`,
+    pct,
+  }
 }
 
 function categoryLabel(c: TenureBar['positionCategory']): string {
@@ -173,6 +249,7 @@ export function ContemporaryPanel({
               <BarList>
                 {e.bars.map((bar) => {
                   const clickable = onSelectPerson != null && bar.personId != null
+                  const progress = computeReignProgress(bar, highlightYear)
                   return (
                     <BarItem
                       key={bar.id}
@@ -208,6 +285,26 @@ export function ContemporaryPanel({
                             <span>{bar.positionTitle}</span>
                           )}
                         </BarMeta>
+                        {progress && (
+                          <ReignProgressBox>
+                            <ReignProgressMeta>
+                              <ReignProgressLabel>
+                                {progress.prefix}{' '}
+                                <strong>{progress.elapsedYears}년차</strong> /{' '}
+                                {progress.totalLabel}
+                              </ReignProgressLabel>
+                              <ReignPeriodSpan>
+                                {progress.periodText}
+                              </ReignPeriodSpan>
+                            </ReignProgressMeta>
+                            <ReignProgressTrack aria-hidden="true">
+                              <ReignProgressFill
+                                $category={bar.positionCategory}
+                                style={{ width: `${progress.pct}%` }}
+                              />
+                            </ReignProgressTrack>
+                          </ReignProgressBox>
+                        )}
                         {bar.personId && requestedIdSet.has(bar.personId) && (
                           <YearRecords
                             records={recordsByPerson.get(bar.personId)}
@@ -592,6 +689,64 @@ const BarMeta = styled.div`
   font-size: 11px;
   color: ${({ theme }) => theme.colors.text.secondary};
   align-items: center;
+`
+
+const ReignProgressBox = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 3px;
+`
+
+const ReignProgressMeta = styled.span`
+  ${DIGIT_DISPLAY}
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 10px;
+  line-height: 1.3;
+`
+
+const ReignProgressLabel = styled.span`
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-weight: 500;
+
+  strong {
+    color: ${({ theme }) => theme.colors.text.primary};
+    font-weight: 700;
+  }
+`
+
+const ReignPeriodSpan = styled.span`
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-weight: 500;
+  white-space: nowrap;
+`
+
+const ReignProgressTrack = styled.span`
+  display: block;
+  width: 100%;
+  height: 5px;
+  border-radius: ${RADIUS.PILL};
+  background: ${({ theme }) =>
+    ledgerSubtleFill(theme.mode === 'dark' ? 'dark' : 'light')};
+  border: 1px solid
+    ${({ theme }) => ledgerHairline(theme.mode === 'dark' ? 'dark' : 'light')};
+  overflow: hidden;
+  box-shadow: none;
+`
+
+const ReignProgressFill = styled.span<{
+  $category: TenureBar['positionCategory']
+}>`
+  display: block;
+  height: 100%;
+  border-radius: ${RADIUS.PILL};
+  background: ${({ $category, theme }) =>
+    CATEGORY_TOKENS[$category].bar[theme.mode === 'dark' ? 'dark' : 'light']
+      .border};
+  transition: width ${MOTION.normal} ease;
 `
 
 /* ── 그 해 한 일 (통합 기록) ─────────────────────────────────── */

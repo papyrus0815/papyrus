@@ -13,8 +13,20 @@ import {
   FiX,
 } from 'react-icons/fi'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 
+import {
+  BentoCard,
+  BentoCardBadge,
+  BentoCardBody,
+  BentoCardHeader,
+  BentoCardTitle,
+  BentoCardTitleGroup,
+  BentoGrid2Col,
+  MiniDonutRing,
+  type SegmentSlice,
+  StackedSegmentBar,
+} from '@/entities/event/ui/bento-primitives'
 import {
   DIGIT_DISPLAY,
   ledgerAccent,
@@ -56,7 +68,6 @@ import {
   UnderlineTabButton,
   UnderlineTabNav,
 } from '@/shared/ui/underline-tabs'
-import * as DashboardStyles from '@/widgets/country/country-detail/ui/country-detail-dashboard.styles'
 import {
   LedgerFilterChip,
   LedgerSearchBox,
@@ -647,12 +658,128 @@ export function MilitaryCatalogPage() {
     return counts
   }, [preBranchFilteredUnits])
 
+  const theme = useTheme()
+  const isDarkMode = theme.mode === 'dark'
+
   const filteredUnits = useMemo(() => {
     if (branchTab === 'ALL') return preBranchFilteredUnits
     return preBranchFilteredUnits.filter((unitItem) =>
       matchesBranchTab(unitItem.branch, branchTab),
     )
   }, [preBranchFilteredUnits, branchTab])
+
+  const branchSlices = useMemo<SegmentSlice[]>(
+    () => [
+      {
+        key: 'ARMY',
+        label: '육군',
+        value: branchCounts.ARMY,
+        color: isDarkMode ? '#34d399' : '#059669',
+      },
+      {
+        key: 'NAVY',
+        label: '해군·해안경비대',
+        value: branchCounts.NAVY,
+        color: isDarkMode ? '#60a5fa' : '#2563eb',
+      },
+      {
+        key: 'AIR_FORCE',
+        label: '공군·우주군',
+        value: branchCounts.AIR_FORCE,
+        color: isDarkMode ? '#38bdf8' : '#0284c7',
+      },
+      {
+        key: 'MARINE_CORPS',
+        label: '해병대',
+        value: branchCounts.MARINE_CORPS,
+        color: isDarkMode ? '#f87171' : '#dc2626',
+      },
+      {
+        key: 'JOINT_OTHER',
+        label: '합동·특수·기타',
+        value: branchCounts.JOINT_OTHER,
+        color: isDarkMode ? '#a5b4fc' : '#4f46e5',
+      },
+    ],
+    [branchCounts, isDarkMode],
+  )
+
+  const echelonAndStatusStats = useMemo(() => {
+    let highCommand = 0
+    let strategic = 0
+    let operational = 0
+    let tactical = 0
+    let activeCount = 0
+    let disbandedCount = 0
+
+    for (const unitItem of filteredUnits) {
+      if (matchesEchelonTier(unitItem.unitType, 'HIGH_COMMAND')) highCommand += 1
+      else if (matchesEchelonTier(unitItem.unitType, 'STRATEGIC')) strategic += 1
+      else if (matchesEchelonTier(unitItem.unitType, 'OPERATIONAL')) {
+        operational += 1
+      } else {
+        tactical += 1
+      }
+
+      if (unitItem.isActive === false) disbandedCount += 1
+      else activeCount += 1
+    }
+
+    const echelonSlices: SegmentSlice[] = [
+      {
+        key: 'HIGH_COMMAND',
+        label: '상급사령부',
+        value: highCommand,
+        color: isDarkMode ? '#a5b4fc' : '#4f46e5',
+      },
+      {
+        key: 'STRATEGIC',
+        label: '전구·집단군',
+        value: strategic,
+        color: isDarkMode ? '#c4b5fd' : '#7c3aed',
+      },
+      {
+        key: 'OPERATIONAL',
+        label: '군단·사단·함대',
+        value: operational,
+        color: isDarkMode ? '#38bdf8' : '#0284c7',
+      },
+      {
+        key: 'TACTICAL',
+        label: '전술부대·기타',
+        value: tactical,
+        color: isDarkMode ? '#2dd4bf' : '#0d9488',
+      },
+    ]
+
+    const total = activeCount + disbandedCount
+    const activePct = total > 0 ? Math.round((activeCount / total) * 100) : 0
+    const disbandedPct = total > 0 ? 100 - activePct : 0
+    const statusSlices: SegmentSlice[] = [
+      {
+        key: 'ACTIVE',
+        label: '현역·존속',
+        value: activeCount,
+        color: isDarkMode ? '#34d399' : '#059669',
+        meta: `${activeCount.toLocaleString('ko-KR')} (${activePct}%)`,
+      },
+      {
+        key: 'DISBANDED',
+        label: '해체·폐지',
+        value: disbandedCount,
+        color: isDarkMode ? '#94a3b8' : '#64748b',
+        meta: `${disbandedCount.toLocaleString('ko-KR')} (${disbandedPct}%)`,
+      },
+    ]
+
+    return {
+      echelonSlices,
+      statusSlices,
+      activeCount,
+      disbandedCount,
+      activePct,
+    }
+  }, [filteredUnits, isDarkMode])
 
   // 국가별 편제 트리 그룹화
   const countryTreeGroups = useMemo(() => {
@@ -766,99 +893,93 @@ export function MilitaryCatalogPage() {
         }
       />
 
-      <DashboardStyles.SectionHeadlineStrip aria-label="군사 총람 요약 지표">
-        <DashboardStyles.SectionHeadlineCell>
-          <DashboardStyles.SectionHeadlineLabel>
-            등록 사령부 · 편제
-          </DashboardStyles.SectionHeadlineLabel>
-          <DashboardStyles.SectionHeadlineValue
-            $muted={kpiMetrics.totalUnits === 0}
-          >
-            {kpiMetrics.totalUnits > 0 ? (
-              <>
-                {kpiMetrics.totalUnits.toLocaleString('ko-KR')}
-                <DashboardStyles.SectionHeadlineUnit>
-                  개
-                </DashboardStyles.SectionHeadlineUnit>
-              </>
+      <BentoGrid2Col aria-label="군사 총람 인포그래픽 요약">
+        <BentoCard>
+          <BentoCardHeader>
+            <BentoCardTitleGroup>
+              <BentoCardTitle>군종 전력 구성</BentoCardTitle>
+              <BentoCardBadge>
+                {branchCounts.ALL.toLocaleString('ko-KR')}개 편제
+              </BentoCardBadge>
+            </BentoCardTitleGroup>
+            <SummaryMetaGroup>
+              <span>
+                정치체 <strong>{kpiMetrics.polityCount.toLocaleString('ko-KR')}</strong>개국
+              </span>
+              <span>·</span>
+              <span>
+                전투투입·지령{' '}
+                <strong>{kpiMetrics.deploymentLinkCount.toLocaleString('ko-KR')}</strong>건
+              </span>
+            </SummaryMetaGroup>
+          </BentoCardHeader>
+          <BentoCardBody>
+            {branchCounts.ALL > 0 ? (
+              <BranchSummaryLayout>
+                <MiniDonutRing
+                  slices={branchSlices}
+                  size={74}
+                  strokeWidth={9}
+                  centerValue={branchCounts.ALL.toLocaleString('ko-KR')}
+                  centerLabel="편제"
+                />
+                <BranchSummaryRight>
+                  <StackedSegmentBar slices={branchSlices} height={10} />
+                  <SummaryFootNote>
+                    등록 총원 {kpiMetrics.totalUnits.toLocaleString('ko-KR')}개 · 현재 조건 일치{' '}
+                    {filteredUnits.length.toLocaleString('ko-KR')}개 부대
+                  </SummaryFootNote>
+                </BranchSummaryRight>
+              </BranchSummaryLayout>
             ) : (
-              '미등록'
+              <SummaryEmptyText>
+                현재 필터 조건에 해당하는 군종 편제가 없습니다.
+              </SummaryEmptyText>
             )}
-          </DashboardStyles.SectionHeadlineValue>
-          <DashboardStyles.SectionHeadlineSub>
-            현재 조건 일치 {filteredUnits.length.toLocaleString('ko-KR')}개 부대
-          </DashboardStyles.SectionHeadlineSub>
-        </DashboardStyles.SectionHeadlineCell>
+          </BentoCardBody>
+        </BentoCard>
 
-        <DashboardStyles.SectionHeadlineCell>
-          <DashboardStyles.SectionHeadlineLabel>
-            보유 국가 · 정치체
-          </DashboardStyles.SectionHeadlineLabel>
-          <DashboardStyles.SectionHeadlineValue
-            $muted={kpiMetrics.polityCount === 0}
-          >
-            {kpiMetrics.polityCount > 0 ? (
+        <BentoCard>
+          <BentoCardHeader>
+            <BentoCardTitleGroup>
+              <BentoCardTitle>지휘 제대 · 현역 편제 비중</BentoCardTitle>
+              <BentoCardBadge>
+                상급·전략 {kpiMetrics.highAndStrategicCount.toLocaleString('ko-KR')}개
+              </BentoCardBadge>
+            </BentoCardTitleGroup>
+            <SummaryMetaGroup>
+              <span>
+                현역 비율 <strong>{echelonAndStatusStats.activePct}%</strong>
+              </span>
+            </SummaryMetaGroup>
+          </BentoCardHeader>
+          <BentoCardBody>
+            {filteredUnits.length > 0 ? (
               <>
-                {kpiMetrics.polityCount.toLocaleString('ko-KR')}
-                <DashboardStyles.SectionHeadlineUnit>
-                  개국
-                </DashboardStyles.SectionHeadlineUnit>
+                <SummarySectionBlock>
+                  <SummarySubLabel>지휘 제대 구성</SummarySubLabel>
+                  <StackedSegmentBar
+                    slices={echelonAndStatusStats.echelonSlices}
+                    height={9}
+                  />
+                </SummarySectionBlock>
+                <SummaryHairline />
+                <SummarySectionBlock>
+                  <SummarySubLabel>현역 · 해체 편제 비율</SummarySubLabel>
+                  <StackedSegmentBar
+                    slices={echelonAndStatusStats.statusSlices}
+                    height={7}
+                  />
+                </SummarySectionBlock>
               </>
             ) : (
-              '없음'
+              <SummaryEmptyText>
+                현재 필터 조건에 해당하는 지휘 제대 데이터가 없습니다.
+              </SummaryEmptyText>
             )}
-          </DashboardStyles.SectionHeadlineValue>
-          <DashboardStyles.SectionHeadlineSub>
-            역사 왕조·제국 및 현대 국가 통합
-          </DashboardStyles.SectionHeadlineSub>
-        </DashboardStyles.SectionHeadlineCell>
-
-        <DashboardStyles.SectionHeadlineCell>
-          <DashboardStyles.SectionHeadlineLabel>
-            상급지휘부 · 전략제대
-          </DashboardStyles.SectionHeadlineLabel>
-          <DashboardStyles.SectionHeadlineValue
-            $muted={kpiMetrics.highAndStrategicCount === 0}
-          >
-            {kpiMetrics.highAndStrategicCount > 0 ? (
-              <>
-                {kpiMetrics.highAndStrategicCount.toLocaleString('ko-KR')}
-                <DashboardStyles.SectionHeadlineUnit>
-                  개
-                </DashboardStyles.SectionHeadlineUnit>
-              </>
-            ) : (
-              '없음'
-            )}
-          </DashboardStyles.SectionHeadlineValue>
-          <DashboardStyles.SectionHeadlineSub>
-            최고사령부 · 참모본부 · 집단군 · 야전군 · 함대
-          </DashboardStyles.SectionHeadlineSub>
-        </DashboardStyles.SectionHeadlineCell>
-
-        <DashboardStyles.SectionHeadlineCell>
-          <DashboardStyles.SectionHeadlineLabel>
-            전투 투입 · 지령 기록
-          </DashboardStyles.SectionHeadlineLabel>
-          <DashboardStyles.SectionHeadlineValue
-            $muted={kpiMetrics.deploymentLinkCount === 0}
-          >
-            {kpiMetrics.deploymentLinkCount > 0 ? (
-              <>
-                {kpiMetrics.deploymentLinkCount.toLocaleString('ko-KR')}
-                <DashboardStyles.SectionHeadlineUnit>
-                  건
-                </DashboardStyles.SectionHeadlineUnit>
-              </>
-            ) : (
-              '없음'
-            )}
-          </DashboardStyles.SectionHeadlineValue>
-          <DashboardStyles.SectionHeadlineSub>
-            사건 전투서열(ORBAT) 투입 및 작전 지령 합산
-          </DashboardStyles.SectionHeadlineSub>
-        </DashboardStyles.SectionHeadlineCell>
-      </DashboardStyles.SectionHeadlineStrip>
+          </BentoCardBody>
+        </BentoCard>
+      </BentoGrid2Col>
 
       {eraStripData.buckets.length > 0 ? (
         <GovernmentEraStrip
@@ -975,13 +1096,15 @@ export function MilitaryCatalogPage() {
             ) : null}
           </SnapshotInputWrap>
 
-          <LedgerFilterChip
-            type="button"
-            $active={currentOnly}
-            onClick={() => setCurrentOnly((prev) => !prev)}
-          >
-            현존 편제만
-          </LedgerFilterChip>
+          {eraStripData.buckets.length === 0 ? (
+            <LedgerFilterChip
+              type="button"
+              $active={currentOnly}
+              onClick={() => setCurrentOnly((prev) => !prev)}
+            >
+              현존 편제만
+            </LedgerFilterChip>
+          ) : null}
         </ToolbarLeftGroup>
 
         <ToolbarRightGroup>
@@ -1602,4 +1725,67 @@ const TreeSubCount = styled.span`
   font-size: 11px;
   color: ${({ theme }) => theme.colors.text.tertiary};
   ${DIGIT_DISPLAY}
+`
+
+const SummaryMetaGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const BranchSummaryLayout = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+
+  @media (max-width: 560px) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+`
+
+const BranchSummaryRight = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+const SummaryFootNote = styled.div`
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+`
+
+const SummarySectionBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const SummarySubLabel = styled.div`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const SummaryHairline = styled.div`
+  height: 1px;
+  background: ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const SummaryEmptyText = styled.div`
+  padding: 12px 0;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `

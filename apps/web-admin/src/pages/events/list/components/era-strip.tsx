@@ -11,8 +11,19 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 
+import {
+  EVENT_DOMAIN_ORDER,
+  domainAccent,
+  domainLabel,
+  isEventDomainKey,
+} from '@/entities/event/model/event-domain'
+import {
+  ledgerAccent,
+  ledgerHairline,
+  ledgerHairlineStrong,
+} from '@/entities/event/ui/ledger-tokens'
 import { parseIsoDateParts } from '@/shared/lib/iso-date'
 
 import type { HistoricalEvent } from '../../create/events.types'
@@ -44,14 +55,26 @@ function jumpToYear(target: number) {
   best?.element.scrollIntoView({ block: 'start', behavior: 'smooth' })
 }
 
+const DOMAIN_ORDER_RANK = new Map<string, number>(
+  EVENT_DOMAIN_ORDER.map((domain, index) => [domain, index]),
+)
+
+interface DecadeBucket {
+  total: number
+  segments: Array<{ domain: string | null; count: number }>
+}
+
 export function EraStrip({ events }: { events: ReadonlyArray<HistoricalEvent> }) {
+  const theme = useTheme()
+  const mode = theme.mode === 'dark' ? 'dark' : 'light'
+
   const model = useMemo(() => {
-    const starts: Array<{ year: number }> = []
+    const starts: Array<{ year: number; domain: string | null }> = []
     const spans: Array<{ id: string; title: string; from: number; to: number }> = []
     for (const event of events) {
       const from = yearOf(event.startDate)
       if (from == null) continue
-      starts.push({ year: from })
+      starts.push({ year: from, domain: event.domain ?? null })
       if (event.kind === 'COLLECTION' && !event.parentEventId) {
         const to = yearOf(event.endDate) ?? from
         spans.push({ id: event.id, title: event.title, from, to: Math.max(to, from) })
@@ -59,12 +82,38 @@ export function EraStrip({ events }: { events: ReadonlyArray<HistoricalEvent> })
     }
     const axis = buildEraAxis(starts.map((start) => start.year))
     if (!axis) return null
-    const decades = new Map<string, number>()
-    for (const { year } of starts) {
+
+    const rawDecades = new Map<string, { total: number; byDomain: Map<string, number> }>()
+    for (const { year, domain } of starts) {
       const key = `${centuryOf(year)}:${decadeIndex(year)}`
-      decades.set(key, (decades.get(key) ?? 0) + 1)
+      let entry = rawDecades.get(key)
+      if (!entry) {
+        entry = { total: 0, byDomain: new Map() }
+        rawDecades.set(key, entry)
+      }
+      entry.total += 1
+      const domainKey = domain ?? ''
+      entry.byDomain.set(domainKey, (entry.byDomain.get(domainKey) ?? 0) + 1)
     }
-    const peak = Math.max(1, ...decades.values())
+
+    const decades = new Map<string, DecadeBucket>()
+    let peak = 1
+    for (const [key, entry] of rawDecades.entries()) {
+      if (entry.total > peak) peak = entry.total
+      const segments = Array.from(entry.byDomain.entries())
+        .sort((a, b) => {
+          const rankA = DOMAIN_ORDER_RANK.get(a[0]) ?? 999
+          const rankB = DOMAIN_ORDER_RANK.get(b[0]) ?? 999
+          if (rankA !== rankB) return rankA - rankB
+          return b[1] - a[1]
+        })
+        .map(([domainKey, count]) => ({
+          domain: domainKey || null,
+          count,
+        }))
+      decades.set(key, { total: entry.total, segments })
+    }
+
     const lanes = packLanes(
       spans.map((span) => ({
         ...span,
@@ -147,20 +196,58 @@ export function EraStrip({ events }: { events: ReadonlyArray<HistoricalEvent> })
           ) : (
             <Century key={slot.century} style={{ left: `${slot.left}%`, width: `${slot.width}%` }}>
               {Array.from({ length: 10 }, (unusedSlot, index) => {
-                const count = decades.get(`${slot.century}:${index}`) ?? 0
+                const bucket = decades.get(`${slot.century}:${index}`)
+                const count = bucket?.total ?? 0
                 const year = decadeMidYear(slot.century, index)
                 const label = `${centuryLabel(slot.century)}세기 ${index === 0 ? '첫 10년' : `${index * 10}년대`}`
+                const domainBreakdownText =
+                  bucket && bucket.segments.length > 0
+                    ? bucket.segments
+                        .slice()
+                        .sort((a, b) => b.count - a.count)
+                        .slice(0, 3)
+                        .map(
+                          (seg) =>
+                            `${seg.domain ? domainLabel(seg.domain) : '기타'} ${seg.count}`,
+                        )
+                        .join(' · ')
+                    : ''
+                const tooltipText = count
+                  ? `${label} — ${count}건${domainBreakdownText ? ` (${domainBreakdownText})` : ''} · 눌러서 그 해로`
+                  : undefined
                 return (
                   <Decade
                     key={index}
                     type="button"
                     disabled={count === 0}
                     onClick={() => jumpToYear(year)}
-                    title={count ? `${label} — ${count}건 · 눌러서 그 해로` : undefined}
+                    title={tooltipText}
                     aria-label={count ? `${label} ${count}건, 목록에서 그 해로 가기` : undefined}
                     tabIndex={count ? 0 : -1}
                   >
-                    {count > 0 && <span style={{ height: `${Math.max(12, Math.sqrt(count / peak) * 100)}%` }} />}
+                    {count > 0 && bucket && (
+                      <DecadeBarStack
+                        style={{
+                          height: `${Math.max(12, Math.sqrt(count / peak) * 100)}%`,
+                        }}
+                      >
+                        {bucket.segments.map((seg, segIdx) => {
+                          const segColor =
+                            seg.domain && isEventDomainKey(seg.domain)
+                              ? domainAccent(seg.domain, mode)
+                              : ledgerAccent(mode)
+                          return (
+                            <DecadeSegment
+                              key={seg.domain ?? `other-${segIdx}`}
+                              style={{
+                                height: `${(seg.count / count) * 100}%`,
+                                background: segColor,
+                              }}
+                            />
+                          )
+                        })}
+                      </DecadeBarStack>
+                    )}
                   </Decade>
                 )
               })}
@@ -190,7 +277,11 @@ const Strip = styled.div`
   margin: 0 0 6px;
   padding: 8px 12px 4px;
   border-radius: 10px;
-  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(20,19,34,0.025)')};
+  border: 1px solid
+    ${({ theme }) => ledgerHairline(theme.mode === 'dark' ? 'dark' : 'light')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.025)' : 'rgba(15,23,42,0.02)'};
+  box-shadow: none;
 
   @media (max-width: 640px) {
     display: none;
@@ -207,14 +298,17 @@ const SpanLine = styled.span`
   height: 3px;
   min-width: 3px;
   border-radius: 2px;
-  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(165,180,252,0.55)' : 'rgba(79,70,229,0.45)')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(165,180,252,0.6)' : 'rgba(79,70,229,0.5)'};
 `
 
 const Bars = styled.div`
   position: relative;
   height: 34px;
   margin-top: 4px;
-  border-bottom: 1px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(20,19,34,0.12)')};
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      ledgerHairlineStrong(theme.mode === 'dark' ? 'dark' : 'light')};
 `
 
 /** 지금 화면 — 옅은 면 + 위아래 테두리 없이 좌우만 */
@@ -222,9 +316,12 @@ const Window = styled.span`
   position: absolute;
   top: -22px;
   bottom: -1px;
-  border-left: 1.5px solid ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#4f46e5')};
-  border-right: 1.5px solid ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#4f46e5')};
-  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(129,140,248,0.12)' : 'rgba(79,70,229,0.07)')};
+  border-left: 1.5px solid
+    ${({ theme }) => ledgerAccent(theme.mode === 'dark' ? 'dark' : 'light')};
+  border-right: 1.5px solid
+    ${({ theme }) => ledgerAccent(theme.mode === 'dark' ? 'dark' : 'light')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(165,180,252,0.12)' : 'rgba(79,70,229,0.07)'};
   pointer-events: none;
   transition: left 0.15s ease, width 0.15s ease;
 `
@@ -249,7 +346,25 @@ const Century = styled.div`
   grid-template-columns: repeat(10, 1fr);
   gap: 1px;
   padding: 0 1px;
-  border-left: 1px solid ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(20,19,34,0.06)')};
+  border-left: 1px solid
+    ${({ theme }) => ledgerHairline(theme.mode === 'dark' ? 'dark' : 'light')};
+`
+
+const DecadeBarStack = styled.span`
+  display: flex;
+  flex-direction: column-reverse;
+  width: 100%;
+  border-radius: 2px 2px 0 0;
+  overflow: hidden;
+  background: ${({ theme }) =>
+    ledgerAccent(theme.mode === 'dark' ? 'dark' : 'light')};
+  transition: filter 0.12s ease, opacity 0.12s ease;
+`
+
+const DecadeSegment = styled.span`
+  display: block;
+  width: 100%;
+  min-height: 1px;
 `
 
 const Decade = styled.button`
@@ -266,20 +381,14 @@ const Decade = styled.button`
     cursor: default;
   }
 
-  span {
-    display: block;
-    width: 100%;
-    border-radius: 2px 2px 0 0;
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#a1a1aa' : '#71717a')};
-  }
-
-  &:hover:not(:disabled) span,
-  &:focus-visible span {
-    background: ${({ theme }) => (theme.mode === 'dark' ? '#e4e4e7' : '#18181b')};
+  &:hover:not(:disabled) ${DecadeBarStack},
+  &:focus-visible ${DecadeBarStack} {
+    filter: brightness(1.16) saturate(1.12);
   }
 
   &:focus-visible {
-    outline: 2px solid ${({ theme }) => (theme.mode === 'dark' ? '#818cf8' : '#4f46e5')};
+    outline: 2px solid
+      ${({ theme }) => ledgerAccent(theme.mode === 'dark' ? 'dark' : 'light')};
     outline-offset: 1px;
   }
 `

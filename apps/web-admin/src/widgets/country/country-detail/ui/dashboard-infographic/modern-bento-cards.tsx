@@ -81,8 +81,10 @@ import {
   BentoSubLabel,
   HdiScaleBar,
   MilitaryForceInfographicBlock,
+  MiniDonutRing,
   MiniSvgSparkline,
   PercentileBulletBar,
+  SemiCircleGauge,
   type SegmentSlice,
   StackedCenturyDomainChart,
   StackedSegmentBar,
@@ -510,6 +512,312 @@ export function NationalScaleBentoCard({
   )
 }
 
+/* ─── 2B. Single-Row 4-Cell National Power & Macro Gauge Strip ───────────── */
+
+export function NationalPowerGaugeStrip({
+  popNum,
+  popYearNote,
+  areaNum,
+  densityText,
+  capitalText,
+  cityCount,
+  continentComparison,
+  economicIndicators,
+  developmentIndicators = [],
+  bondYields,
+  onOpenDemographics,
+  onOpenRegions,
+  onOpenEconomics,
+  onOpenBonds,
+  onOpenDataManager,
+}: {
+  popNum: number | null
+  popYearNote: string | null
+  areaNum: number | null
+  densityText: string | null
+  capitalText: string
+  cityCount: number
+  continentComparison: ContinentComparison
+  economicIndicators: EconomicIndicator[]
+  developmentIndicators?: DevelopmentIndicator[]
+  bondYields: BondYield[]
+  onOpenDemographics: () => void
+  onOpenRegions: () => void
+  onOpenEconomics: () => void
+  onOpenBonds: () => void
+  onOpenDataManager: () => void
+}) {
+  const theme = useTheme()
+
+  const {
+    gdpPts,
+    latestGdpVal,
+    latestGdpYear,
+    gdpYoY,
+    latestGdpPerCapVal,
+    macroPts,
+    macroLabel,
+    macroLatestText,
+    macroDelta,
+    macroZeroLine,
+    latestY10,
+    hdiVal,
+    hdiYear,
+    hdiDelta,
+  } = useMemo(() => {
+    const sortedEco = [...economicIndicators].sort((a, b) => a.year - b.year)
+    const gPts = sortedEco
+      .filter((r) => r.gdp != null && Number.isFinite(Number(r.gdp)))
+      .map((r) => ({ year: r.year, value: Number(r.gdp) }))
+    const capPts = sortedEco
+      .filter(
+        (r) =>
+          r.gdpPerCapita != null && Number.isFinite(Number(r.gdpPerCapita)),
+      )
+      .map((r) => ({ year: r.year, value: Number(r.gdpPerCapita) }))
+    const growthPts = sortedEco
+      .filter(
+        (r) =>
+          r.gdpGrowthRate != null && Number.isFinite(Number(r.gdpGrowthRate)),
+      )
+      .map((r) => ({ year: r.year, value: Number(r.gdpGrowthRate) }))
+    const infPts = sortedEco
+      .filter(
+        (r) =>
+          r.inflationRate != null && Number.isFinite(Number(r.inflationRate)),
+      )
+      .map((r) => ({ year: r.year, value: Number(r.inflationRate) }))
+
+    const y10Pts = [...bondYields]
+      .filter(
+        (b) =>
+          b.maturity === 'Y10' &&
+          b.yieldRate != null &&
+          Number.isFinite(Number(b.yieldRate)),
+      )
+      .sort((a, b) => a.year - b.year)
+      .map((b) => ({ year: b.year, value: Number(b.yieldRate) }))
+
+    const calcPctDelta = (pts: Array<{ year: number; value: number }>) => {
+      if (pts.length < 2) return null
+      const prev = pts[pts.length - 2].value
+      const curr = pts[pts.length - 1].value
+      if (prev === 0) return null
+      const pct = ((curr - prev) / Math.abs(prev)) * 100
+      return `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`
+    }
+
+    const calcDiffDelta = (pts: Array<{ year: number; value: number }>) => {
+      if (pts.length < 2) return null
+      const diff = pts[pts.length - 1].value - pts[pts.length - 2].value
+      return `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%p`
+    }
+
+    const activeMacro =
+      growthPts.length > 0
+        ? {
+            pts: growthPts,
+            label: '실질 경제성장률',
+            latest: `${growthPts[growthPts.length - 1].value.toFixed(1)}%`,
+            delta: calcDiffDelta(growthPts),
+            zero: true,
+          }
+        : infPts.length > 0
+          ? {
+              pts: infPts,
+              label: '소비자물가 상승률',
+              latest: `${infPts[infPts.length - 1].value.toFixed(1)}%`,
+              delta: calcDiffDelta(infPts),
+              zero: true,
+            }
+          : y10Pts.length > 0
+            ? {
+                pts: y10Pts,
+                label: '10년물 국채금리',
+                latest: `${y10Pts[y10Pts.length - 1].value.toFixed(2)}%`,
+                delta: calcDiffDelta(y10Pts),
+                zero: false,
+              }
+            : null
+
+    const sortedDev = [...developmentIndicators]
+      .filter((d) => d.hdi != null && Number.isFinite(Number(d.hdi)))
+      .sort((a, b) => a.year - b.year)
+    const lastDev = sortedDev[sortedDev.length - 1] ?? null
+    const prevDev =
+      sortedDev.length >= 2 ? sortedDev[sortedDev.length - 2] : null
+    const devDelta =
+      lastDev?.hdi != null && prevDev?.hdi != null
+        ? Number(lastDev.hdi) - Number(prevDev.hdi)
+        : null
+
+    return {
+      gdpPts: gPts,
+      latestGdpVal: gPts.length > 0 ? gPts[gPts.length - 1].value : null,
+      latestGdpYear: gPts.length > 0 ? gPts[gPts.length - 1].year : null,
+      gdpYoY: calcPctDelta(gPts),
+      latestGdpPerCapVal:
+        capPts.length > 0 ? capPts[capPts.length - 1].value : null,
+      macroPts: activeMacro?.pts ?? [],
+      macroLabel: activeMacro?.label ?? '거시 성장 · 금리',
+      macroLatestText: activeMacro?.latest ?? null,
+      macroDelta: activeMacro?.delta ?? null,
+      macroZeroLine: activeMacro?.zero ?? false,
+      latestY10: y10Pts.length > 0 ? y10Pts[y10Pts.length - 1] : null,
+      hdiVal: lastDev?.hdi != null ? Number(lastDev.hdi) : null,
+      hdiYear: lastDev?.year ?? null,
+      hdiDelta:
+        devDelta != null
+          ? `${devDelta >= 0 ? '+' : ''}${devDelta.toFixed(3)}`
+          : null,
+    }
+  }, [economicIndicators, developmentIndicators, bondYields])
+
+  const popRankTotal = continentComparison.populationRankTotal ?? 0
+  const popTopPct =
+    continentComparison.populationRank != null && popRankTotal > 1
+      ? Math.max(
+          5,
+          Math.round(
+            ((popRankTotal - continentComparison.populationRank + 1) /
+              popRankTotal) *
+              100,
+          ),
+        )
+      : popNum != null
+        ? 65
+        : 0
+
+  return (
+    <BentoCard aria-label="국력 스케일 및 거시경제 한눈 계기판">
+      <GaugeStripGrid>
+        {/* 1. 인구 · 영토 반원 아크 게이지 */}
+        <GaugeCellBtn type="button" onClick={onOpenDemographics}>
+          <GaugeCellTop>
+            <SparkTitle>인구 · 영토 스케일</SparkTitle>
+            {continentComparison.populationRank != null && popRankTotal > 0 ? (
+              <DeltaChip>
+                대륙 {continentComparison.populationRank}/{popRankTotal}위
+              </DeltaChip>
+            ) : null}
+          </GaugeCellTop>
+          <GaugeRowInline>
+            <SemiCircleGauge
+              percent={popTopPct}
+              centerValue={popNum != null ? formatPopulation(popNum) : '—'}
+              subLabel={popYearNote ?? '인구'}
+              size={84}
+            />
+            <GaugeSideStats>
+              <div>
+                <span>영토 면적</span>
+                <strong>
+                  {areaNum != null ? formatAreaValue(areaNum) : '미등록'}
+                </strong>
+              </div>
+              <div>
+                <span>인구 밀도</span>
+                <strong>{densityText ?? '—'}</strong>
+              </div>
+            </GaugeSideStats>
+          </GaugeRowInline>
+        </GaugeCellBtn>
+
+        {/* 2. 명목 GDP 스파크라인 + YoY + 1인당 GDP */}
+        <GaugeCellBtn type="button" onClick={onOpenEconomics}>
+          <GaugeCellTop>
+            <SparkTitle>
+              경제 규모 {latestGdpYear ? `(${latestGdpYear})` : ''}
+            </SparkTitle>
+            {gdpYoY ? <DeltaChip>{gdpYoY}</DeltaChip> : null}
+          </GaugeCellTop>
+          <SparkBigNum>
+            {latestGdpVal != null
+              ? formatMetricValue(latestGdpVal, 'USD')
+              : '미등록'}
+            {latestGdpPerCapVal != null ? (
+              <SparkYear>
+                1인당 {formatMetricValue(latestGdpPerCapVal, 'USD_CAPITA')}
+              </SparkYear>
+            ) : null}
+          </SparkBigNum>
+          {gdpPts.length > 0 ? (
+            <MiniSvgSparkline
+              points={gdpPts}
+              color={ledgerAccent(theme.mode)}
+              height={46}
+              formatValue={(v) => formatMetricValue(v, 'USD')}
+            />
+          ) : (
+            <GaugeEmptyHint>클릭하여 경제 지표 확인 · 입력</GaugeEmptyHint>
+          )}
+        </GaugeCellBtn>
+
+        {/* 3. 성장률 / 물가 / 국채금리 추이 */}
+        <GaugeCellBtn
+          type="button"
+          onClick={latestY10 && macroPts.length === 0 ? onOpenBonds : onOpenEconomics}
+        >
+          <GaugeCellTop>
+            <SparkTitle>{macroLabel}</SparkTitle>
+            {macroDelta ? (
+              <DeltaChip>{macroDelta}</DeltaChip>
+            ) : latestY10 ? (
+              <DeltaChip>10Y {latestY10.value.toFixed(2)}%</DeltaChip>
+            ) : null}
+          </GaugeCellTop>
+          <SparkBigNum>
+            {macroLatestText ??
+              (latestY10 ? `${latestY10.value.toFixed(2)}%` : '미등록')}
+            {latestY10 && macroLatestText ? (
+              <SparkYear>국채10Y {latestY10.value.toFixed(2)}%</SparkYear>
+            ) : null}
+          </SparkBigNum>
+          {macroPts.length > 0 ? (
+            <MiniSvgSparkline
+              points={macroPts}
+              color={theme.mode === 'dark' ? '#34d399' : '#059669'}
+              height={46}
+              showZeroLine={macroZeroLine}
+              formatValue={(v) => `${v.toFixed(2)}%`}
+            />
+          ) : (
+            <GaugeEmptyHint>성장률 · 물가 · 금리 시계열</GaugeEmptyHint>
+          )}
+        </GaugeCellBtn>
+
+        {/* 4. 인간개발지수(HDI) 4단계 스펙트럼 + 수도·행정구역 */}
+        <GaugeCellBtn
+          type="button"
+          onClick={hdiVal != null ? onOpenEconomics : onOpenDataManager}
+        >
+          <GaugeCellTop>
+            <SparkTitle>
+              인간개발지수 {hdiYear ? `(${hdiYear})` : '(HDI)'}
+            </SparkTitle>
+            {hdiDelta ? <DeltaChip>{hdiDelta}</DeltaChip> : null}
+          </GaugeCellTop>
+          <SparkBigNum>
+            {hdiVal != null ? hdiVal.toFixed(3) : capitalText || '미등록'}
+            {hdiVal != null && capitalText ? (
+              <SparkYear>수도 {capitalText}</SparkYear>
+            ) : null}
+          </SparkBigNum>
+          {hdiVal != null ? (
+            <HdiScaleBar hdi={hdiVal} />
+          ) : (
+            <GaugeEmptyHint>
+              {cityCount > 0
+                ? `광역 행정구역 ${cityCount}곳 등록 · HDI 입력`
+                : 'HDI · 사회 발전 지표 입력'}
+            </GaugeEmptyHint>
+          )}
+        </GaugeCellBtn>
+      </GaugeStripGrid>
+    </BentoCard>
+  )
+}
+
 /* ─── 3. Always-Visible 4-Column Macro Sparklines Strip ──────────────────── */
 
 export function MacroSparklinesBentoStrip({
@@ -819,7 +1127,7 @@ export function DemographicsBentoCard({
 
       <BentoCardBody>
         {latestPyramid ? (
-          <MiniPyramidWrap onClick={onOpenPyramid} role="button" tabIndex={0}>
+          <MiniPyramidBtn type="button" onClick={onOpenPyramid}>
             <PyramidLegendRow>
               <span className="male">◀ 남성</span>
               <span>연령대</span>
@@ -842,7 +1150,7 @@ export function DemographicsBentoCard({
                 )
               })}
             </PyramidRows>
-          </MiniPyramidWrap>
+          </MiniPyramidBtn>
         ) : (
           <EmptyInlinePrompt type="button" onClick={onOpenDataManager}>
             <FiPlus size={12} /> 연령대별 인구 피라미드 데이터 입력하기
@@ -850,7 +1158,24 @@ export function DemographicsBentoCard({
         )}
 
         {ageShareSlices.length > 0 ? (
-          <StackedSegmentBar slices={ageShareSlices} height={8} showPercent />
+          <AgeCohortDonutRow>
+            <MiniDonutRing
+              slices={ageShareSlices}
+              size={60}
+              strokeWidth={8}
+              centerValue={
+                medianAge != null ? `${medianAge.toFixed(0)}세` : undefined
+              }
+              centerLabel={medianAge != null ? '중위' : undefined}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <StackedSegmentBar
+                slices={ageShareSlices}
+                height={7}
+                showPercent
+              />
+            </div>
+          </AgeCohortDonutRow>
         ) : null}
 
         {(tfr != null ||
@@ -906,24 +1231,34 @@ export function TradeAndIndustryBentoCard({
   onOpenCompanies: () => void
 }) {
   const theme = useTheme()
+  const [tradeDir, setTradeDir] = useState<'EXPORT' | 'IMPORT'>('EXPORT')
 
   const latestTrade = useMemo(() => {
     const sorted = [...exportImports].sort((a, b) => b.year - a.year)
     return sorted[0] ?? null
   }, [exportImports])
 
-  const exportComp = useMemo(() => {
+  const activeComp = useMemo(() => {
     if (!latestTrade) return null
-    const expItems = (latestTrade.items ?? []).filter(
-      (i) => i.direction === 'EXPORT',
+    const dirItems = (latestTrade.items ?? []).filter(
+      (i) => i.direction === tradeDir,
     )
-    if (expItems.length === 0) return null
-    return buildComposition(
-      expItems,
-      latestTrade.exportValue != null ? Number(latestTrade.exportValue) : null,
-      theme.mode === 'dark',
-    )
-  }, [latestTrade, theme.mode])
+    if (dirItems.length === 0) return null
+    const totalVal =
+      tradeDir === 'EXPORT'
+        ? latestTrade.exportValue != null
+          ? Number(latestTrade.exportValue)
+          : null
+        : latestTrade.importValue != null
+          ? Number(latestTrade.importValue)
+          : null
+    return buildComposition(dirItems, totalVal, theme.mode === 'dark')
+  }, [latestTrade, tradeDir, theme.mode])
+
+  const hasImportItems = useMemo(
+    () => Boolean(latestTrade?.items?.some((i) => i.direction === 'IMPORT')),
+    [latestTrade],
+  )
 
   if (!latestTrade && companyCount === 0) return null
 
@@ -933,6 +1268,16 @@ export function TradeAndIndustryBentoCard({
     latestTrade?.importValue != null ? Number(latestTrade.importValue) : 0
   const maxTrade = Math.max(1, expVal, impVal)
   const balance = expVal - impVal
+
+  const compSlices: SegmentSlice[] = activeComp
+    ? activeComp.slices.slice(0, 5).map((sl) => ({
+        key: sl.key,
+        label: sl.name,
+        value: sl.pct,
+        color: sl.color,
+        meta: `${sl.pct.toFixed(1)}%`,
+      }))
+    : []
 
   const sectorSlices: SegmentSlice[] = companiesBySector
     .slice(0, 5)
@@ -944,18 +1289,18 @@ export function TradeAndIndustryBentoCard({
     }))
 
   return (
-    <BentoCard aria-label="대외 교역 수지 및 기업 산업군 분포">
+    <BentoCard aria-label="대외 교역 수지 및 주력 품목 도넛 인포그래픽">
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <BentoCardTitle>교역 수지 · 주력 품목 · 기업</BentoCardTitle>
+          <BentoCardTitle>무역 수지 · 품목 도넛</BentoCardTitle>
           {latestTrade ? (
-            <BentoCardBadge>{latestTrade.year}년 교역</BentoCardBadge>
+            <BentoCardBadge>{latestTrade.year}년</BentoCardBadge>
           ) : null}
         </BentoCardTitleGroup>
         <BentoHeaderActions>
           {companyCount > 0 ? (
             <BentoActionBtn type="button" onClick={onOpenCompanies}>
-              기업 {companyCount} <FiArrowUpRight size={11} />
+              기업 {companyCount}
             </BentoActionBtn>
           ) : null}
           <BentoActionBtn type="button" $accent onClick={onOpenTrade}>
@@ -966,7 +1311,7 @@ export function TradeAndIndustryBentoCard({
 
       <BentoCardBody>
         {latestTrade ? (
-          <TradeBalanceBox onClick={onOpenTrade} role="button" tabIndex={0}>
+          <TradeBalanceBtn type="button" onClick={onOpenTrade}>
             <TradeDirRow>
               <TradeDirLabel>수출</TradeDirLabel>
               <TradeBarTrack>
@@ -996,27 +1341,51 @@ export function TradeAndIndustryBentoCard({
                 {formatMetricValue(Math.abs(balance), 'USD')}
               </strong>
             </BalanceCallout>
-          </TradeBalanceBox>
+          </TradeBalanceBtn>
         ) : null}
 
-        {exportComp && exportComp.slices.length > 0 ? (
+        {compSlices.length > 0 ? (
           <div>
-            <BentoSubLabel style={{ marginBottom: 6 }}>
-              <span>주력 수출 품목 구성</span>
-              {exportComp.coverage != null ? (
-                <span>분류 커버리지 {Math.round(exportComp.coverage)}%</span>
+            <BentoSubLabel style={{ marginBottom: 7 }}>
+              <span>
+                {tradeDir === 'EXPORT' ? '주력 수출 품목' : '주력 수입 품목'}
+              </span>
+              {hasImportItems ? (
+                <MiniDirSwitch>
+                  <MiniDirBtn
+                    type="button"
+                    $active={tradeDir === 'EXPORT'}
+                    onClick={() => setTradeDir('EXPORT')}
+                  >
+                    수출
+                  </MiniDirBtn>
+                  <MiniDirBtn
+                    type="button"
+                    $active={tradeDir === 'IMPORT'}
+                    onClick={() => setTradeDir('IMPORT')}
+                  >
+                    수입
+                  </MiniDirBtn>
+                </MiniDirSwitch>
+              ) : activeComp?.coverage != null ? (
+                <span>커버리지 {Math.round(activeComp.coverage)}%</span>
               ) : null}
             </BentoSubLabel>
-            <StackedSegmentBar
-              slices={exportComp.slices.slice(0, 5).map((sl) => ({
-                key: sl.key,
-                label: sl.name,
-                value: sl.pct,
-                color: sl.color,
-                meta: `${sl.pct.toFixed(1)}%`,
-              }))}
-              height={10}
-            />
+            <AgeCohortDonutRow>
+              <MiniDonutRing
+                slices={compSlices}
+                size={64}
+                strokeWidth={9}
+                centerValue={
+                  activeComp?.coverage != null
+                    ? `${Math.round(activeComp.coverage)}%`
+                    : `${compSlices.length}종`
+                }
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <StackedSegmentBar slices={compSlices} height={8} />
+              </div>
+            </AgeCohortDonutRow>
           </div>
         ) : null}
 
@@ -1025,9 +1394,9 @@ export function TradeAndIndustryBentoCard({
             {latestTrade ? <BentoDivider /> : null}
             <div>
               <BentoSubLabel style={{ marginBottom: 6 }}>
-                <span>등록 기업 업종·상태 분포 ({companyCount}개사)</span>
+                <span>등록 기업 현황 ({companyCount}개사)</span>
               </BentoSubLabel>
-              <StackedSegmentBar slices={sectorSlices} height={8} />
+              <StackedSegmentBar slices={sectorSlices} height={7} />
             </div>
           </>
         ) : null}
@@ -1922,4 +2291,169 @@ const DivisionChipBtn = styled.button`
     color: ${({ theme }) => ledgerAccent(theme.mode)};
     background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
   }
+`
+
+/* ─── NationalPowerGaugeStrip & Donut Atlas Styled Helpers ───────────────── */
+
+const GaugeStripGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+
+  @media (max-width: 1100px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: 600px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+const GaugeCellBtn = styled.button`
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 13px 16px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  transition: background 0.14s ease;
+
+  & + & {
+    border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  }
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+
+  @media (max-width: 1100px) and (min-width: 601px) {
+    &:nth-child(2n + 1) {
+      border-left: none;
+    }
+    &:nth-child(n + 3) {
+      border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+    }
+  }
+
+  @media (max-width: 600px) {
+    & + & {
+      border-left: none;
+      border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+    }
+  }
+`
+
+const GaugeCellTop = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+`
+
+const GaugeRowInline = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+`
+
+const GaugeSideStats = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+
+  div {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  span {
+    font-size: 10px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  strong {
+    font-size: 12px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    ${DIGIT_DISPLAY}
+  }
+`
+
+const GaugeEmptyHint = styled.span`
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const MiniPyramidBtn = styled.button`
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  font-family: inherit;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  }
+`
+
+const AgeCohortDonutRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+`
+
+const TradeBalanceBtn = styled.button`
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  }
+`
+
+const MiniDirSwitch = styled.span`
+  display: inline-flex;
+  padding: 1.5px;
+  border-radius: 5px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+`
+
+const MiniDirBtn = styled.button<{ $active: boolean }>`
+  height: 19px;
+  padding: 0 7px;
+  border: none;
+  border-radius: 3.5px;
+  background: ${({ theme, $active }) =>
+    $active ? ledgerBackground(theme.mode) : 'transparent'};
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  cursor: pointer;
 `

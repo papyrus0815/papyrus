@@ -297,6 +297,11 @@ export interface LineageFlowProps {
   modernEndpoint?: LineageModernEndpoint
   /** 상단 툴바 왼쪽에 배치할 보조 컨트롤(필터 칩, 이전 N개 펼치기 등) */
   toolbarLeft?: ReactNode
+  /** 상위 지면에 이미 Bento 인포그래픽 요약이 있을 때 내부 4칸 텍스트 스트립 숨김 */
+  hideHeadline?: boolean
+  /** 상위 지면에서 보기 방식(세기별 카드 / 존속 기간 바)을 직접 제어할 때 전달 */
+  externalViewMode?: LineageViewMode
+  onExternalViewModeChange?: (mode: LineageViewMode) => void
 }
 
 /**
@@ -314,6 +319,9 @@ export function LineageFlow({
   maxPerColumn,
   modernEndpoint,
   toolbarLeft,
+  hideHeadline = false,
+  externalViewMode,
+  onExternalViewModeChange,
 }: LineageFlowProps) {
   const nodes = useMemo(
     () => [...historicalCountries].sort(compareByCountryStart).map(toNode),
@@ -484,7 +492,13 @@ export function LineageFlow({
     ]
   }, [nodes, columns, modernEndpoint, currentId, overallSpanSummary])
 
-  const [viewMode, setViewMode] = useState<LineageViewMode>('century')
+  const [internalViewMode, setInternalViewMode] =
+    useState<LineageViewMode>('century')
+  const viewMode = externalViewMode ?? internalViewMode
+  const setViewMode = (nextMode: LineageViewMode) => {
+    setInternalViewMode(nextMode)
+    onExternalViewModeChange?.(nextMode)
+  }
   const [zoomIndex, setZoomIndex] = useState<number>(DEFAULT_ZOOM_INDEX)
   const [isFullscreenOpen, setIsFullscreenOpen] = useState(false)
   const zoomScale = ZOOM_STEPS[zoomIndex] ?? 1
@@ -599,35 +613,39 @@ export function LineageFlow({
           </ZoomControlGroup>
         )}
 
-        <ViewSwitchGroup role="tablist" aria-label="계보 보기 방식 전환">
-          <ViewSwitchButton
-            type="button"
-            role="tab"
-            aria-selected={viewMode === 'century'}
-            $active={viewMode === 'century'}
-            onClick={() => setViewMode('century')}
-          >
-            세기별 카드
-          </ViewSwitchButton>
-          <ViewSwitchButton
-            type="button"
-            role="tab"
-            aria-selected={viewMode === 'span'}
-            $active={viewMode === 'span'}
-            onClick={() => setViewMode('span')}
-          >
-            존속 기간 바
-          </ViewSwitchButton>
-          <ViewSwitchButton
-            type="button"
-            role="tab"
-            aria-selected={viewMode === 'ledger'}
-            $active={viewMode === 'ledger'}
-            onClick={() => setViewMode('ledger')}
-          >
-            2열 원장
-          </ViewSwitchButton>
-        </ViewSwitchGroup>
+        {(!externalViewMode || inModal) && (
+          <ViewSwitchGroup role="tablist" aria-label="계보 보기 방식 전환">
+            <ViewSwitchButton
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'century'}
+              $active={viewMode === 'century'}
+              onClick={() => setViewMode('century')}
+            >
+              세기별 카드
+            </ViewSwitchButton>
+            <ViewSwitchButton
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'span'}
+              $active={viewMode === 'span'}
+              onClick={() => setViewMode('span')}
+            >
+              존속 기간 바
+            </ViewSwitchButton>
+            {!externalViewMode && (
+              <ViewSwitchButton
+                type="button"
+                role="tab"
+                aria-selected={viewMode === 'ledger'}
+                $active={viewMode === 'ledger'}
+                onClick={() => setViewMode('ledger')}
+              >
+                2열 원장
+              </ViewSwitchButton>
+            )}
+          </ViewSwitchGroup>
+        )}
 
         {!inModal ? (
           <ExpandModalButton
@@ -654,7 +672,7 @@ export function LineageFlow({
 
   return (
     <Container>
-      {nodes.length > 0 && (
+      {!hideHeadline && nodes.length > 0 && (
         <LineageHeadlineStrip role="group" aria-label="계보 핵심 요약">
           {headlineCells.map((cell) => (
             <LineageHeadlineCell key={cell.label}>

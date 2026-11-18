@@ -1,21 +1,52 @@
 /**
  * 현대 국가 상세 > '과거 국가' 탭
- * - 무컨테이너 헤어라인 4칸 KPI 요약 바 + 분류/검색 필터 바 + 2열 과거 국가 원장 + LineageFlow 계보도 통합
+ *
+ * - 상단 3열 인터랙티브 Bento 인포그래픽(계보 역할 비중 · 국체 구성 도넛 · 장기 존속 Top 4 비례 바)
+ * - 단일 레벨 3모드 보기 전환: [2열 원장 | 존속 스팬 바 | 세기 계보도] (중복 헤드라인·이중 스위처 제거)
+ * - 2열 원장 내 전체 통사 대비 '상대 존속 위치 미니 스팬 바' + 존속 연수 배지 + 변천/소속/외교 관계 칩
  */
 import { useMemo, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
 import {
+  FiAlignLeft,
   FiArrowRight,
   FiChevronRight,
+  FiGitCommit,
   FiLayers,
+  FiList,
   FiPlus,
   FiRepeat,
+  FiSearch,
+  FiX,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import {
+  BentoCard,
+  BentoCardBadge,
+  BentoCardBody,
+  BentoCardHeader,
+  BentoCardTitle,
+  BentoCardTitleGroup,
+  BentoGrid3Col,
+  MiniDonutRing,
+  type SegmentSlice,
+  StackedSegmentBar,
+} from '@/entities/event/ui/bento-primitives'
+import {
+  DIGIT_DISPLAY,
+  ledgerAccent,
+  ledgerAccentSubtle,
+  ledgerBackground,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  ledgerSubtleFill,
+  RADIUS,
+} from '@/entities/event/ui/ledger-tokens'
 import { getStateTypeLabel } from '@/entities/historical-country/lib/utils'
 import { useHistoricalCountries } from '@/features/historical-country'
 import {
@@ -34,11 +65,15 @@ import {
   compareByCountryStart,
   formatCountryPeriod,
   formatModernLinkPeriod,
+  getCountryDurationYears,
   toLinkScopedPeriod,
 } from '@/shared/lib/country-period'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
-import { CountryPicker, type CountryPickerPick } from '@/shared/ui/country-picker'
+import {
+  CountryPicker,
+  type CountryPickerPick,
+} from '@/shared/ui/country-picker'
 import { notify } from '@/shared/ui/toast'
 
 import { classifyLinkedHistorical } from '../model/linked-historical-classify'
@@ -74,6 +109,10 @@ type CategoryFilterKey =
   | 'HERITAGE'
   | 'withRelations'
 
+type StateGroupKey = 'monarchy' | 'empire' | 'republic' | 'principality' | 'other'
+type LinkedViewMode = 'list' | 'span' | 'century'
+type LinkedSortKey = 'eraAsc' | 'eraDesc' | 'durationDesc'
+
 const EMPTY_RELS: {
   transitions: HistoricalCountryTransitionDto[]
   relations: HistoricalCountryRelationDto[]
@@ -84,6 +123,45 @@ const LINK_KIND_LABEL: Record<string, string> = {
   PREDECESSOR: '직계 전신',
   CONSTITUENT: '구성 정치체',
   HERITAGE: '역사 유산',
+}
+
+const STATE_GROUP_LABEL: Record<StateGroupKey, string> = {
+  monarchy: '왕국·왕조',
+  empire: '제국',
+  republic: '공화·연방',
+  principality: '공국·제후국',
+  other: '칸국·정권·기타',
+}
+
+function classifyStateGroup(stateType?: string | null): StateGroupKey {
+  const st = String(stateType ?? '').toUpperCase()
+  if (st.includes('EMPIRE')) return 'empire'
+  if (
+    st.includes('KINGDOM') ||
+    st.includes('DYNASTY') ||
+    st.includes('MONARCHY') ||
+    st.includes('PERSONAL_UNION') ||
+    st.includes('HEREDITARY')
+  ) {
+    return 'monarchy'
+  }
+  if (
+    st.includes('REPUBLIC') ||
+    st.includes('CONFEDERATION') ||
+    st.includes('FEDERATION') ||
+    st.includes('CITY_STATE')
+  ) {
+    return 'republic'
+  }
+  if (
+    st.includes('DUCHY') ||
+    st.includes('PRINCIPALITY') ||
+    st.includes('ELECTORATE') ||
+    st.includes('MARGRAVIATE')
+  ) {
+    return 'principality'
+  }
+  return 'other'
 }
 
 function toSignedYear(
@@ -102,21 +180,30 @@ function formatSignedYearShort(signedYear: number | null): string | null {
 export function LinkedHistoricalCountriesSection({
   country,
 }: LinkedHistoricalCountriesSectionProps) {
+  const theme = useTheme()
+  const isDark = theme.mode === 'dark'
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+
   const rawList = country.historicalCountries ?? []
   const list = useMemo(
-    // 이 땅에 있었던 기간으로 정렬 — 대만 목록의 중화민국은 1912가 아니라 1945 자리에 선다
     () =>
       [...rawList].sort((left, right) =>
-        compareByCountryStart(toLinkScopedPeriod(left), toLinkScopedPeriod(right)),
+        compareByCountryStart(
+          toLinkScopedPeriod(left),
+          toLinkScopedPeriod(right),
+        ),
       ),
     [rawList],
   )
   const count = list.length
 
-  const [viewMode, setViewMode] = useState<'list' | 'flow'>('list')
-  const [categoryFilter, setCategoryFilter] = useState<CategoryFilterKey>('all')
+  const [viewMode, setViewMode] = useState<LinkedViewMode>('list')
+  const [sortBy, setSortBy] = useState<LinkedSortKey>('eraAsc')
+  const [categoryFilter, setCategoryFilter] =
+    useState<CategoryFilterKey>('all')
+  const [stateGroupFilter, setStateGroupFilter] =
+    useState<StateGroupKey | 'all'>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [isPickerOpen, setIsPickerOpen] = useState(false)
   const [isMutatingLink, setIsMutatingLink] = useState(false)
@@ -260,7 +347,6 @@ export function LinkedHistoricalCountriesSection({
     return map
   }, [list])
 
-  /** 국가별 변천·수평·소속 관계 집계 */
   const countryRelations = useMemo(() => {
     const map = new Map<
       string,
@@ -294,7 +380,6 @@ export function LinkedHistoricalCountriesSection({
     return map
   }, [list, transitions, relations, memberships])
 
-  /** 직계 전신 / 구성 정치체 / 역사 유산 분류 */
   const classification = useMemo(() => {
     const kindById = new Map<string, string>()
     const hasServerKind =
@@ -305,7 +390,6 @@ export function LinkedHistoricalCountriesSection({
       }
     } else {
       const { kindById: clientKind } = classifyLinkedHistorical({
-        // 이 땅에서의 기간 — 중국 목록에서 존속 중인 중화민국이 '진행 중 앵커'로 잡히지 않게(끝=1949)
         nodes: list.map((item) => {
           const scoped = toLinkScopedPeriod(item)
           return {
@@ -341,7 +425,6 @@ export function LinkedHistoricalCountriesSection({
     return { kindById, predecessors, constituents, heritage }
   }, [list, transitions, memberships])
 
-  /** 통사 연도 범위 */
   const spanSummary = useMemo(() => {
     let minSigned: number | null = null
     let maxSigned: number | null = null
@@ -363,11 +446,13 @@ export function LinkedHistoricalCountriesSection({
       }
     }
     return {
+      minSigned,
+      maxSigned,
       minLabel: formatSignedYearShort(minSigned),
       maxLabel: formatSignedYearShort(maxSigned),
       totalYears:
         minSigned != null && maxSigned != null && maxSigned >= minSigned
-          ? maxSigned - minSigned
+          ? maxSigned - minSigned - (minSigned < 0 && maxSigned > 0 ? 1 : 0)
           : null,
     }
   }, [list])
@@ -386,9 +471,103 @@ export function LinkedHistoricalCountriesSection({
     [list, countryRelations],
   )
 
+  // ── Bento 인포그래픽 집계 ───────────────────────────────────────────────────
+  const bentoInfographic = useMemo(() => {
+    const rawRoleSlices: Array<SegmentSlice & { filterKey: CategoryFilterKey }> =
+      [
+        {
+          key: 'PREDECESSOR',
+          filterKey: 'PREDECESSOR',
+          label: '직계 전신',
+          value: classification.predecessors.length,
+          color: isDark ? '#a5b4fc' : '#4f46e5',
+          meta: `${classification.predecessors.length}개국`,
+        },
+        {
+          key: 'CONSTITUENT',
+          filterKey: 'CONSTITUENT',
+          label: '구성 정치체',
+          value: classification.constituents.length,
+          color: isDark ? '#38bdf8' : '#0284c7',
+          meta: `${classification.constituents.length}개국`,
+        },
+        {
+          key: 'HERITAGE',
+          filterKey: 'HERITAGE',
+          label: '역사 유산',
+          value: classification.heritage.length,
+          color: isDark ? '#fbbf24' : '#d97706',
+          meta: `${classification.heritage.length}개국`,
+        },
+      ]
+    const roleSlices = rawRoleSlices.filter((s) => s.value > 0)
+
+    const stateColorMap: Record<StateGroupKey, string> = isDark
+      ? {
+          monarchy: '#a5b4fc',
+          empire: '#fbbf24',
+          republic: '#34d399',
+          principality: '#38bdf8',
+          other: '#94a3b8',
+        }
+      : {
+          monarchy: '#4f46e5',
+          empire: '#d97706',
+          republic: '#059669',
+          principality: '#0284c7',
+          other: '#64748b',
+        }
+    const stateCounts = new Map<StateGroupKey, number>()
+    for (const item of list) {
+      const grp = classifyStateGroup(item.stateType)
+      stateCounts.set(grp, (stateCounts.get(grp) ?? 0) + 1)
+    }
+    const stateOrder: StateGroupKey[] = [
+      'monarchy',
+      'empire',
+      'republic',
+      'principality',
+      'other',
+    ]
+    const stateSlices: Array<SegmentSlice & { groupKey: StateGroupKey }> =
+      stateOrder
+        .filter((gk) => (stateCounts.get(gk) ?? 0) > 0)
+        .map((gk) => ({
+          key: gk,
+          groupKey: gk,
+          label: STATE_GROUP_LABEL[gk],
+          value: stateCounts.get(gk) ?? 0,
+          color: stateColorMap[gk],
+          meta: `${stateCounts.get(gk) ?? 0}개국`,
+        }))
+
+    const topLongest = [...list]
+      .map((item) => ({
+        item,
+        duration:
+          getCountryDurationYears({
+            startYear: item.startYear,
+            startEra: item.startEra,
+            endYear: item.endYear,
+            endEra: item.endEra,
+          }) ?? 0,
+      }))
+      .filter((entry) => entry.duration > 0)
+      .sort((a, b) => b.duration - a.duration)
+      .slice(0, 4)
+    const maxDuration = Math.max(1, ...topLongest.map((e) => e.duration))
+
+    return {
+      roleSlices,
+      stateSlices,
+      topLongest,
+      maxDuration,
+    }
+  }, [classification, list, isDark])
+
   const filteredList = useMemo(() => {
     const lowered = searchQuery.trim().toLowerCase()
-    return list.filter((item) => {
+    const matched = list.filter((item) => {
       const resolvedKind =
         classification.kindById.get(item.id) ?? item.linkKind ?? null
       const rels = countryRelations.get(item.id) ?? EMPTY_RELS
@@ -405,6 +584,13 @@ export function LinkedHistoricalCountriesSection({
       ) {
         if (resolvedKind !== categoryFilter) return false
       } else if (categoryFilter === 'withRelations' && !hasAnyRel) {
+        return false
+      }
+
+      if (
+        stateGroupFilter !== 'all' &&
+        classifyStateGroup(item.stateType) !== stateGroupFilter
+      ) {
         return false
       }
 
@@ -425,11 +611,42 @@ export function LinkedHistoricalCountriesSection({
         .toLowerCase()
       return searchable.includes(lowered)
     })
-  }, [list, classification.kindById, countryRelations, categoryFilter, searchQuery])
+
+    if (sortBy === 'eraDesc') {
+      return [...matched].reverse()
+    }
+    if (sortBy === 'durationDesc') {
+      return [...matched].sort((a, b) => {
+        const dA =
+          getCountryDurationYears({
+            startYear: a.startYear,
+            startEra: a.startEra,
+            endYear: a.endYear,
+            endEra: a.endEra,
+          }) ?? -1
+        const dB =
+          getCountryDurationYears({
+            startYear: b.startYear,
+            startEra: b.startEra,
+            endYear: b.endYear,
+            endEra: b.endEra,
+          }) ?? -1
+        return dB - dA
+      })
+    }
+    return matched
+  }, [
+    list,
+    classification.kindById,
+    countryRelations,
+    categoryFilter,
+    stateGroupFilter,
+    searchQuery,
+    sortBy,
+  ])
 
   const enrichedForLineage = useMemo(
     () =>
-      // 계보도는 이 땅에서의 기간으로 그린다(중국 계보의 중화민국은 1949에서 끝난다)
       filteredList.map((item) => ({
         ...toLinkScopedPeriod(item),
         linkKind:
@@ -506,14 +723,28 @@ export function LinkedHistoricalCountriesSection({
     return chips
   }
 
+  const isFiltered =
+    categoryFilter !== 'all' ||
+    stateGroupFilter !== 'all' ||
+    searchQuery.trim().length > 0
+
+  const resetFilters = () => {
+    setCategoryFilter('all')
+    setStateGroupFilter('all')
+    setSearchQuery('')
+  }
+
   const filterBarNode = (
     <FilterChipGroup role="tablist" aria-label="과거 국가 계보 분류 필터">
       <FilterChip
         type="button"
         role="tab"
-        aria-selected={categoryFilter === 'all'}
-        $active={categoryFilter === 'all'}
-        onClick={() => setCategoryFilter('all')}
+        aria-selected={categoryFilter === 'all' && stateGroupFilter === 'all'}
+        $active={categoryFilter === 'all' && stateGroupFilter === 'all'}
+        onClick={() => {
+          setCategoryFilter('all')
+          setStateGroupFilter('all')
+        }}
       >
         전체 <FilterChipCount>{count}</FilterChipCount>
       </FilterChip>
@@ -522,7 +753,11 @@ export function LinkedHistoricalCountriesSection({
         role="tab"
         aria-selected={categoryFilter === 'PREDECESSOR'}
         $active={categoryFilter === 'PREDECESSOR'}
-        onClick={() => setCategoryFilter('PREDECESSOR')}
+        onClick={() =>
+          setCategoryFilter((prev) =>
+            prev === 'PREDECESSOR' ? 'all' : 'PREDECESSOR',
+          )
+        }
       >
         직계 전신{' '}
         <FilterChipCount>{classification.predecessors.length}</FilterChipCount>
@@ -533,10 +768,16 @@ export function LinkedHistoricalCountriesSection({
           role="tab"
           aria-selected={categoryFilter === 'CONSTITUENT'}
           $active={categoryFilter === 'CONSTITUENT'}
-          onClick={() => setCategoryFilter('CONSTITUENT')}
+          onClick={() =>
+            setCategoryFilter((prev) =>
+              prev === 'CONSTITUENT' ? 'all' : 'CONSTITUENT',
+            )
+          }
         >
           구성 정치체{' '}
-          <FilterChipCount>{classification.constituents.length}</FilterChipCount>
+          <FilterChipCount>
+            {classification.constituents.length}
+          </FilterChipCount>
         </FilterChip>
       )}
       {classification.heritage.length > 0 && (
@@ -545,7 +786,11 @@ export function LinkedHistoricalCountriesSection({
           role="tab"
           aria-selected={categoryFilter === 'HERITAGE'}
           $active={categoryFilter === 'HERITAGE'}
-          onClick={() => setCategoryFilter('HERITAGE')}
+          onClick={() =>
+            setCategoryFilter((prev) =>
+              prev === 'HERITAGE' ? 'all' : 'HERITAGE',
+            )
+          }
         >
           역사 유산{' '}
           <FilterChipCount>{classification.heritage.length}</FilterChipCount>
@@ -557,7 +802,11 @@ export function LinkedHistoricalCountriesSection({
           role="tab"
           aria-selected={categoryFilter === 'withRelations'}
           $active={categoryFilter === 'withRelations'}
-          onClick={() => setCategoryFilter('withRelations')}
+          onClick={() =>
+            setCategoryFilter((prev) =>
+              prev === 'withRelations' ? 'all' : 'withRelations',
+            )
+          }
         >
           관계 보유 <FilterChipCount>{withRelationsCount}</FilterChipCount>
         </FilterChip>
@@ -572,7 +821,7 @@ export function LinkedHistoricalCountriesSection({
           <HeadText>
             <Title>과거 국가 · 역사 계보</Title>
             <Description>
-              {country.name}에 연결된 역사적 국가의 직계 전신·구성 정치체·유산 분류와 변천·소속·수평 외교 관계를 원장 및 흐름도로 확인합니다.
+              {country.name}의 직계 전신·구성 정치체·역사 유산 계보와 국체 분포, 변천·외교 관계를 인포그래픽으로 조망합니다.
             </Description>
           </HeadText>
 
@@ -586,16 +835,28 @@ export function LinkedHistoricalCountriesSection({
                   $active={viewMode === 'list'}
                   onClick={() => setViewMode('list')}
                 >
-                  2열 원장
+                  <FiList size={13} />
+                  <span>2열 원장</span>
                 </LedgerViewSwitchItem>
                 <LedgerViewSwitchItem
                   type="button"
                   role="tab"
-                  aria-selected={viewMode === 'flow'}
-                  $active={viewMode === 'flow'}
-                  onClick={() => setViewMode('flow')}
+                  aria-selected={viewMode === 'span'}
+                  $active={viewMode === 'span'}
+                  onClick={() => setViewMode('span')}
                 >
-                  계보 흐름도
+                  <FiAlignLeft size={13} />
+                  <span>존속 스팬 바</span>
+                </LedgerViewSwitchItem>
+                <LedgerViewSwitchItem
+                  type="button"
+                  role="tab"
+                  aria-selected={viewMode === 'century'}
+                  $active={viewMode === 'century'}
+                  onClick={() => setViewMode('century')}
+                >
+                  <FiGitCommit size={13} />
+                  <span>세기 계보도</span>
                 </LedgerViewSwitchItem>
               </LedgerViewSwitch>
             )}
@@ -610,95 +871,190 @@ export function LinkedHistoricalCountriesSection({
           </HeadActions>
         </HeadRow>
 
-        <DashboardStyles.SectionHeadlineStrip aria-label="연결된 과거 국가 요약 지표">
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              연결된 과거 국가
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue $muted={count === 0}>
-              {count > 0 ? (
-                <>
-                  {count.toLocaleString('ko-KR')}
-                  <DashboardStyles.SectionHeadlineUnit>개국</DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '미등록'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {spanSummary.minLabel && spanSummary.maxLabel
-                ? `${spanSummary.minLabel} ~ ${spanSummary.maxLabel}${spanSummary.totalYears ? ` (${spanSummary.totalYears.toLocaleString('ko-KR')}년)` : ''}`
-                : '연결된 역사 국가 존속 범위'}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
-
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              계보 역할 분포
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue $muted={count === 0}>
-              {count > 0 ? (
-                <>
-                  직계 {classification.predecessors.length}
-                  <DashboardStyles.SectionHeadlineUnit>개국</DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '—'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {count > 0
-                ? `구성 정치체 ${classification.constituents.length} · 역사 유산 ${classification.heritage.length}`
-                : '전신·구성국·유산 자동 분류'}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
-
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              계승 · 소속 관계
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue
-              $muted={transitions.length + memberships.length === 0}
-            >
-              {transitions.length + memberships.length > 0 ? (
-                <>
-                  {(transitions.length + memberships.length).toLocaleString(
-                    'ko-KR',
+        {count > 0 && (
+          <BentoHeaderWrap aria-label="연결된 과거 국가 인포그래픽 요약">
+            <BentoGrid3Col>
+              {/* Card 1: 계보 역할 비중 & 통사 범위 */}
+              <BentoCard>
+                <BentoCardHeader>
+                  <BentoCardTitleGroup>
+                    <BentoCardTitle>계보 역할 · 통사 범위</BentoCardTitle>
+                    <BentoCardBadge>{count}개국</BentoCardBadge>
+                  </BentoCardTitleGroup>
+                  {categoryFilter !== 'all' && (
+                    <MiniResetBtn
+                      type="button"
+                      onClick={() => setCategoryFilter('all')}
+                    >
+                      전체 역할
+                    </MiniResetBtn>
                   )}
-                  <DashboardStyles.SectionHeadlineUnit>건</DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '없음'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              변천 {transitions.length}건 · 소속·구성 {memberships.length}건
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
+                </BentoCardHeader>
+                <BentoCardBody>
+                  <PolityHeroLine>
+                    <BigCountNum>
+                      {count.toLocaleString('ko-KR')}
+                      <span>개국</span>
+                    </BigCountNum>
+                    <SpanSubLabel>
+                      {spanSummary.minLabel && spanSummary.maxLabel
+                        ? `${spanSummary.minLabel} ~ ${spanSummary.maxLabel}${spanSummary.totalYears ? ` (약 ${spanSummary.totalYears.toLocaleString('ko-KR')}년사)` : ''}`
+                        : '존속 연대 집계'}
+                    </SpanSubLabel>
+                  </PolityHeroLine>
 
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              수평 외교 · 교전 관계
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue
-              $muted={relations.length === 0}
-            >
-              {relations.length > 0 ? (
-                <>
-                  {relations.length.toLocaleString('ko-KR')}
-                  <DashboardStyles.SectionHeadlineUnit>건</DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '없음'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {relations.length > 0
-                ? `관계 보유 국가 ${withRelationsCount}/${count}개국`
-                : '동맹·조공·전쟁·동군연합 기록 없음'}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
-        </DashboardStyles.SectionHeadlineStrip>
+                  <StackedSegmentBar
+                    slices={bentoInfographic.roleSlices}
+                    height={10}
+                    showPercent
+                  />
+
+                  <InteractiveLegendRow>
+                    {bentoInfographic.roleSlices.map((slice) => {
+                      const active = categoryFilter === slice.filterKey
+                      return (
+                        <LegendPillBtn
+                          key={slice.key}
+                          type="button"
+                          $active={active}
+                          onClick={() =>
+                            setCategoryFilter((prev) =>
+                              prev === slice.filterKey ? 'all' : slice.filterKey,
+                            )
+                          }
+                        >
+                          <SwatchDot $color={slice.color} />
+                          <span>{slice.label}</span>
+                          <strong>{slice.meta}</strong>
+                        </LegendPillBtn>
+                      )
+                    })}
+                  </InteractiveLegendRow>
+                </BentoCardBody>
+              </BentoCard>
+
+              {/* Card 2: 국체 · 국가 형태 도넛 */}
+              <BentoCard>
+                <BentoCardHeader>
+                  <BentoCardTitleGroup>
+                    <BentoCardTitle>국체 · 국가 형태 분포</BentoCardTitle>
+                    <BentoCardBadge>
+                      관계 {transitions.length + memberships.length + relations.length}건
+                    </BentoCardBadge>
+                  </BentoCardTitleGroup>
+                  {stateGroupFilter !== 'all' && (
+                    <MiniResetBtn
+                      type="button"
+                      onClick={() => setStateGroupFilter('all')}
+                    >
+                      전체 국체
+                    </MiniResetBtn>
+                  )}
+                </BentoCardHeader>
+                <BentoCardBody>
+                  <DonutFlexRow>
+                    <MiniDonutRing
+                      slices={bentoInfographic.stateSlices}
+                      size={74}
+                      strokeWidth={10}
+                      centerValue={
+                        stateGroupFilter !== 'all'
+                          ? String(
+                              bentoInfographic.stateSlices.find(
+                                (s) => s.groupKey === stateGroupFilter,
+                              )?.value ?? 0,
+                            )
+                          : String(count)
+                      }
+                      centerLabel={
+                        stateGroupFilter !== 'all'
+                          ? STATE_GROUP_LABEL[stateGroupFilter]
+                          : '전체 정치체'
+                      }
+                    />
+                    <DonutLegendStack>
+                      {bentoInfographic.stateSlices.map((slice) => {
+                        const pct = Math.round((slice.value / count) * 100)
+                        const active = stateGroupFilter === slice.groupKey
+                        return (
+                          <DonutLegendRowBtn
+                            key={slice.key}
+                            type="button"
+                            $active={active}
+                            onClick={() =>
+                              setStateGroupFilter((prev) =>
+                                prev === slice.groupKey ? 'all' : slice.groupKey,
+                              )
+                            }
+                          >
+                            <SwatchDot $color={slice.color} />
+                            <DonutLegendLabel $active={active}>
+                              {slice.label}
+                            </DonutLegendLabel>
+                            <DonutLegendVal>
+                              {slice.value}개 ({pct}%)
+                            </DonutLegendVal>
+                          </DonutLegendRowBtn>
+                        )
+                      })}
+                    </DonutLegendStack>
+                  </DonutFlexRow>
+                </BentoCardBody>
+              </BentoCard>
+
+              {/* Card 3: 장기 존속 과거 국가 Top 4 비례 막대 */}
+              <BentoCard>
+                <BentoCardHeader>
+                  <BentoCardTitleGroup>
+                    <BentoCardTitle>장기 존속 과거 국가 Top 4</BentoCardTitle>
+                    <BentoCardBadge>존속 연수 비례</BentoCardBadge>
+                  </BentoCardTitleGroup>
+                </BentoCardHeader>
+                <BentoCardBody>
+                  {bentoInfographic.topLongest.length > 0 ? (
+                    <LongestBarList>
+                      {bentoInfographic.topLongest.map(
+                        ({ item, duration }, idx) => {
+                          const pct = Math.max(
+                            8,
+                            Math.round(
+                              (duration / bentoInfographic.maxDuration) * 100,
+                            ),
+                          )
+                          return (
+                            <LongestBarBtn
+                              key={item.id}
+                              type="button"
+                              onClick={() =>
+                                navigate(pathKeys.countryDetail(item.id))
+                              }
+                            >
+                              <LongestRowHead>
+                                <LongestName>
+                                  <small>{idx + 1}.</small> {item.name}
+                                </LongestName>
+                                <LongestDuration>
+                                  약 {duration.toLocaleString('ko-KR')}년
+                                </LongestDuration>
+                              </LongestRowHead>
+                              <LongestTrack>
+                                <LongestFill $pct={pct} $top={idx === 0} />
+                              </LongestTrack>
+                            </LongestBarBtn>
+                          )
+                        },
+                      )}
+                    </LongestBarList>
+                  ) : (
+                    <EmptyDurationHint>
+                      성립·종료 연도가 입력되면 장기 존속 정치체 비례 막대가 표시됩니다.
+                    </EmptyDurationHint>
+                  )}
+                </BentoCardBody>
+              </BentoCard>
+            </BentoGrid3Col>
+          </BentoHeaderWrap>
+        )}
 
         {isLinkedDataLoading ? (
           <ChartSkeleton variant="bars" rows={5} />
@@ -709,7 +1065,7 @@ export function LinkedHistoricalCountriesSection({
                 1. 이 탭에서 과거 국가 직접 연결
               </EmptySpecTitle>
               <EmptySpecDesc>
-                「+ 과거 국가 연결」로 기존 역사적 국가를 선택하면 {country.name}의 전신·구성 정치체·역사 유산 계보에 즉시 연결됩니다.
+                「+ 과거 국가 연결」로 기존 역사적 국가를 선택하거나 새로 등록하면 {country.name}의 전신·구성 정치체·역사 유산 계보에 즉시 연결됩니다.
               </EmptySpecDesc>
               <EmptyActionBtn
                 type="button"
@@ -729,7 +1085,7 @@ export function LinkedHistoricalCountriesSection({
               </EmptySpecDesc>
             </EmptySpecCell>
           </EmptySpecGrid>
-        ) : viewMode === 'flow' ? (
+        ) : viewMode !== 'list' ? (
           <FlowSectionWrap>
             <LineageFlow
               historicalCountries={enrichedForLineage}
@@ -744,6 +1100,12 @@ export function LinkedHistoricalCountriesSection({
                 navigate(pathKeys.countryDetail(targetId))
               }
               toolbarLeft={filterBarNode}
+              hideHeadline
+              externalViewMode={viewMode === 'span' ? 'span' : 'century'}
+              onExternalViewModeChange={(next) => {
+                if (next === 'ledger') setViewMode('list')
+                else setViewMode(next)
+              }}
             />
 
             {transitions.length + memberships.length + relations.length > 0 && (
@@ -896,20 +1258,54 @@ export function LinkedHistoricalCountriesSection({
           <>
             <FilterToolbar>
               {filterBarNode}
-              <SearchInput
-                type="search"
-                value={searchQuery}
-                onChange={(changeEvent) =>
-                  setSearchQuery(changeEvent.target.value)
-                }
-                placeholder="국호 · 영문명 · 체제 · 연도 검색…"
-                aria-label="과거 국가 검색"
-              />
+
+              <ToolbarRightGroup>
+                {stateGroupFilter !== 'all' && (
+                  <ActiveFilterTag
+                    type="button"
+                    onClick={() => setStateGroupFilter('all')}
+                  >
+                    <span>국체: {STATE_GROUP_LABEL[stateGroupFilter]}</span>
+                    <FiX size={11} />
+                  </ActiveFilterTag>
+                )}
+                {isFiltered && (
+                  <ResetLinkBtn type="button" onClick={resetFilters}>
+                    초기화 ({filteredList.length}/{count})
+                  </ResetLinkBtn>
+                )}
+
+                <SearchInputBox>
+                  <FiSearch size={13} />
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(changeEvent) =>
+                      setSearchQuery(changeEvent.target.value)
+                    }
+                    placeholder="국호 · 영문명 · 체제 · 연도 검색…"
+                    aria-label="과거 국가 검색"
+                  />
+                </SearchInputBox>
+
+                <SortSelect
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as LinkedSortKey)}
+                  aria-label="과거 국가 정렬 기준"
+                >
+                  <option value="eraAsc">성립 오래된순</option>
+                  <option value="eraDesc">성립 최신순</option>
+                  <option value="durationDesc">존속 기간 긴 순</option>
+                </SortSelect>
+              </ToolbarRightGroup>
             </FilterToolbar>
 
             {filteredList.length === 0 ? (
               <NoMatchRow>
-                선택한 분류나 검색어와 일치하는 과거 국가가 없습니다.
+                <span>선택한 분류나 검색어와 일치하는 과거 국가가 없습니다.</span>
+                <ResetLinkBtn type="button" onClick={resetFilters}>
+                  전체 보기
+                </ResetLinkBtn>
               </NoMatchRow>
             ) : (
               <CountryLedgerGrid>
@@ -926,7 +1322,43 @@ export function LinkedHistoricalCountriesSection({
                     : null
                   const periodLabel = formatCountryPeriod(item)
                   const linkPeriodLabel = formatModernLinkPeriod(item)
+                  const durationYears = getCountryDurationYears({
+                    startYear: item.startYear,
+                    startEra: item.startEra,
+                    endYear: item.endYear,
+                    endEra: item.endEra,
+                  })
                   const relationChips = renderRelationSummaries(item)
+
+                  // 전체 통사 범위 대비 상대 존속 위치 계산
+                  const scoped = toLinkScopedPeriod(item)
+                  const sYear = toSignedYear(scoped.startEra, scoped.startYear)
+                  const eYear =
+                    toSignedYear(scoped.endEra, scoped.endYear) ?? sYear
+                  const globalMin = spanSummary.minSigned
+                  const globalMax = spanSummary.maxSigned
+                  let spanLeftPct: number | null = null
+                  let spanWidthPct: number | null = null
+                  if (
+                    sYear != null &&
+                    eYear != null &&
+                    globalMin != null &&
+                    globalMax != null &&
+                    globalMax > globalMin
+                  ) {
+                    const total = globalMax - globalMin
+                    spanLeftPct = Math.max(
+                      0,
+                      Math.min(97, ((sYear - globalMin) / total) * 100),
+                    )
+                    spanWidthPct = Math.max(
+                      2.5,
+                      Math.min(
+                        100 - spanLeftPct,
+                        ((Math.max(sYear + 1, eYear) - sYear) / total) * 100,
+                      ),
+                    )
+                  }
 
                   return (
                     <CountryLedgerCell key={item.id}>
@@ -954,6 +1386,11 @@ export function LinkedHistoricalCountriesSection({
                             {item.enName && (
                               <CountryEnNameText>{item.enName}</CountryEnNameText>
                             )}
+                            {durationYears != null && durationYears > 0 && (
+                              <DurationBadge>
+                                약 {durationYears.toLocaleString('ko-KR')}년
+                              </DurationBadge>
+                            )}
                           </CountryTitleRow>
 
                           <CountryMetaRow>
@@ -967,11 +1404,23 @@ export function LinkedHistoricalCountriesSection({
                             )}
                             <PeriodText>{periodLabel}</PeriodText>
                             {linkPeriodLabel && (
-                              <LinkPeriodText title="이 나라가 이 땅에 있었던 기간 — 존속 기간과 다르다">
+                              <LinkPeriodText title="이 나라가 이 땅에 있었던 기간">
                                 이 땅에서 {linkPeriodLabel}
                               </LinkPeriodText>
                             )}
                           </CountryMetaRow>
+
+                          {spanLeftPct != null && spanWidthPct != null && (
+                            <MiniEraSpanTrack title={`전체 통사 내 존속 구간 (${periodLabel})`}>
+                              <MiniEraSpanFill
+                                $kind={resolvedKind ?? ''}
+                                style={{
+                                  left: `${spanLeftPct}%`,
+                                  width: `${spanWidthPct}%`,
+                                }}
+                              />
+                            </MiniEraSpanTrack>
+                          )}
 
                           {relationChips.length > 0 && (
                             <RelationChipRow>
@@ -993,7 +1442,7 @@ export function LinkedHistoricalCountriesSection({
                         </CountryMainCol>
 
                         <DetailActionLabel>
-                          <span>상세</span>
+                          <span>대시보드</span>
                           <FiChevronRight size={13} />
                         </DetailActionLabel>
                       </CountryRowButton>
@@ -1032,6 +1481,8 @@ export function LinkedHistoricalCountriesSection({
   )
 }
 
+/* ── Styled Components ────────────────────────────────────────────────────── */
+
 const SectionWrap = styled.section`
   display: flex;
   flex-direction: column;
@@ -1063,7 +1514,7 @@ const HeadActions = styled.div`
 
 const Title = styled.h3`
   margin: 0;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   letter-spacing: -0.02em;
   color: ${({ theme }) => theme.colors.text.primary};
@@ -1071,8 +1522,241 @@ const Title = styled.h3`
 
 const Description = styled.p`
   margin: 0;
-  font-size: 13px;
+  font-size: 12.5px;
+  line-height: 1.5;
   color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const BentoHeaderWrap = styled.div`
+  padding-bottom: 14px;
+`
+
+const MiniResetBtn = styled.button`
+  padding: 2px 7px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  }
+`
+
+const PolityHeroLine = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+`
+
+const BigCountNum = styled.strong`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: ${({ theme }) => theme.colors.text.primary};
+  ${DIGIT_DISPLAY}
+
+  span {
+    font-size: 12px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+const SpanSubLabel = styled.span`
+  font-size: 11.5px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+`
+
+const InteractiveLegendRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+`
+
+const LegendPillBtn = styled.button<{ $active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : 'transparent'};
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  font-family: inherit;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  cursor: pointer;
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    ${DIGIT_DISPLAY}
+  }
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+  }
+`
+
+const SwatchDot = styled.span<{ $color: string }>`
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: ${({ $color }) => $color};
+  flex-shrink: 0;
+`
+
+const DonutFlexRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+`
+
+const DonutLegendStack = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+`
+
+const DonutLegendRowBtn = styled.button<{ $active?: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 6px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : 'transparent'};
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+  }
+`
+
+const DonutLegendLabel = styled.span<{ $active?: boolean }>`
+  flex: 1;
+  min-width: 0;
+  font-weight: ${({ $active }) => ($active ? 700 : 600)};
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const DonutLegendVal = styled.span`
+  flex-shrink: 0;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+`
+
+const LongestBarList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const LongestBarBtn = styled.button`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 3px 5px;
+  border: none;
+  border-radius: ${RADIUS.XS};
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+`
+
+const LongestRowHead = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+`
+
+const LongestName = styled.span`
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  small {
+    font-size: 11px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    ${DIGIT_DISPLAY}
+  }
+`
+
+const LongestDuration = styled.span`
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+`
+
+const LongestTrack = styled.div`
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  overflow: hidden;
+`
+
+const LongestFill = styled.div<{ $pct: number; $top?: boolean }>`
+  width: ${({ $pct }) => `${$pct}%`};
+  height: 100%;
+  border-radius: 999px;
+  background: ${({ theme, $top }) =>
+    $top
+      ? ledgerAccent(theme.mode)
+      : theme.mode === 'dark'
+        ? 'rgba(165, 180, 252, 0.5)'
+        : 'rgba(79, 70, 229, 0.5)'};
+`
+
+const EmptyDurationHint = styled.p`
+  margin: 0;
+  padding: 12px 0;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const FilterToolbar = styled.div`
@@ -1081,14 +1765,15 @@ const FilterToolbar = styled.div`
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
-  padding: 8px 0;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  padding: 10px 0;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const FilterChipGroup = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   flex-wrap: wrap;
 `
 
@@ -1097,35 +1782,98 @@ const FilterChip = styled(LedgerFilterChip)``
 const FilterChipCount = styled.span`
   font-size: 11px;
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
+  ${DIGIT_DISPLAY}
   opacity: 0.85;
 `
 
-const SearchInput = styled.input`
-  width: min(260px, 100%);
-  height: 34px;
-  padding: 0 11px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 8px;
+const ToolbarRightGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+`
+
+const ActiveFilterTag = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerAccent(theme.mode)};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  cursor: pointer;
+`
+
+const ResetLinkBtn = styled.button`
+  padding: 0;
+  border: none;
   background: transparent;
   font-family: inherit;
-  font-size: 12.5px;
-  color: ${({ theme }) => theme.colors.text.primary};
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  cursor: pointer;
+  ${DIGIT_DISPLAY}
 
-  &:focus {
-    outline: none;
-    border-color: ${({ theme }) => theme.colors.active};
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+`
+
+const SearchInputBox = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.SM};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  width: min(210px, 100%);
+
+  &:focus-within {
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 
-  @media (max-width: 768px) {
-    height: 40px;
+  input {
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: 12px;
+    color: ${({ theme }) => theme.colors.text.primary};
+    width: 100%;
+    outline: none;
+  }
+`
+
+const SortSelect = styled.select`
+  height: 32px;
+  padding: 0 8px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  outline: none;
+
+  &:focus {
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 `
 
 const CountryLedgerGrid = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
 
   @media (min-width: 780px) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1137,11 +1885,11 @@ const CountryLedgerCell = styled.div`
   align-items: stretch;
   justify-content: space-between;
   min-width: 0;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
   @media (min-width: 780px) {
     &:nth-child(even) {
-      border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+      border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
     }
 
     &:last-child:nth-child(odd) {
@@ -1165,8 +1913,7 @@ const CountryRowButton = styled.button`
   transition: background-color 0.12s ease;
 
   &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc'};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
   }
 `
 
@@ -1180,7 +1927,7 @@ const CountryRowActions = styled.div`
 const UnlinkRowBtn = styled.button`
   padding: 3px 7px;
   border: none;
-  border-radius: 4px;
+  border-radius: ${RADIUS.XS};
   background: transparent;
   font-family: inherit;
   font-size: 11px;
@@ -1204,7 +1951,7 @@ const UnlinkRowBtn = styled.button`
 const CountryThumb = styled.div`
   width: 38px;
   height: 28px;
-  border-radius: 4px;
+  border-radius: ${RADIUS.XS};
   overflow: hidden;
   flex-shrink: 0;
   margin-top: 2px;
@@ -1214,9 +1961,8 @@ const CountryThumb = styled.div`
   font-size: 12px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#f1f5f9'};
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
   img {
     width: 100%;
@@ -1228,14 +1974,14 @@ const CountryThumb = styled.div`
 const CountryMainCol = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
   flex: 1;
   min-width: 0;
 `
 
 const CountryTitleRow = styled.div`
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
   flex-wrap: wrap;
   min-width: 0;
@@ -1248,11 +1994,22 @@ const CountryNameText = styled.span`
 `
 
 const CountryEnNameText = styled.span`
-  font-size: 12px;
+  font-size: 11.5px;
   color: ${({ theme }) => theme.colors.text.tertiary};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 180px;
+`
+
+const DurationBadge = styled.span`
+  padding: 1px 6px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
 `
 
 const CountryMetaRow = styled.div`
@@ -1260,97 +2017,125 @@ const CountryMetaRow = styled.div`
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  min-width: 0;
 `
 
 const KindBadge = styled.span<{ $kind: string }>`
   padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 11px;
+  border-radius: ${RADIUS.XS};
+  font-size: 10.5px;
   font-weight: 700;
-  color: ${({ theme, $kind }) =>
-    $kind === 'PREDECESSOR'
-      ? theme.colors.active
-      : theme.colors.text.secondary};
-  background: ${({ theme, $kind }) =>
-    $kind === 'PREDECESSOR'
-      ? theme.colors.activeLight
-      : theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.06)'
-        : '#f1f5f9'};
+  color: ${({ theme, $kind }) => {
+    if ($kind === 'PREDECESSOR') return ledgerAccent(theme.mode)
+    if ($kind === 'CONSTITUENT')
+      return theme.mode === 'dark' ? '#38bdf8' : '#0369a1'
+    return theme.mode === 'dark' ? '#fbbf24' : '#92400e'
+  }};
+  background: ${({ theme, $kind }) => {
+    if ($kind === 'PREDECESSOR') return ledgerAccentSubtle(theme.mode)
+    if ($kind === 'CONSTITUENT')
+      return theme.mode === 'dark' ? 'rgba(56, 189, 248, 0.14)' : '#e0f2fe'
+    return theme.mode === 'dark' ? 'rgba(245, 158, 11, 0.16)' : '#fef3c7'
+  }};
 `
 
 const StateBadge = styled.span`
   padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 11px;
+  border-radius: ${RADIUS.XS};
+  font-size: 10.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f8fafc'};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
 `
 
 const PeriodText = styled.span`
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
 `
 
-/** 연결 기간 — 존속 기간과 다를 때만 보인다(중화민국: 중국 1912.1–1949.12 / 대만 1945.10–) */
 const LinkPeriodText = styled.span`
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.primary};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  ${DIGIT_DISPLAY}
+`
+
+const MiniEraSpanTrack = styled.div`
+  position: relative;
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  overflow: hidden;
+`
+
+const MiniEraSpanFill = styled.div<{ $kind: string }>`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 6px;
+  border-radius: 999px;
+  background: ${({ theme, $kind }) => {
+    if ($kind === 'PREDECESSOR') return ledgerAccent(theme.mode)
+    if ($kind === 'CONSTITUENT')
+      return theme.mode === 'dark' ? '#38bdf8' : '#0284c7'
+    return theme.mode === 'dark' ? '#fbbf24' : '#d97706'
+  }};
+  opacity: 0.85;
 `
 
 const RelationChipRow = styled.div`
   display: flex;
-  align-items: center;
-  gap: 5px;
   flex-wrap: wrap;
+  gap: 4px;
   margin-top: 2px;
 `
 
 const RelationChip = styled.span<{ $highlight?: boolean }>`
   padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  font-size: 10.5px;
+  font-weight: 600;
   color: ${({ theme, $highlight }) =>
-    $highlight ? theme.colors.text.primary : theme.colors.text.secondary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#f1f5f9'};
+    $highlight ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  background: ${({ theme, $highlight }) =>
+    $highlight ? ledgerAccentSubtle(theme.mode) : 'transparent'};
 `
 
 const DetailActionLabel = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  font-size: 12px;
+  align-self: center;
+  font-size: 11.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
   white-space: nowrap;
-  flex-shrink: 0;
-  align-self: center;
+`
 
-  ${CountryRowButton}:hover & {
-    color: ${({ theme }) => theme.colors.active};
-  }
+const NoMatchRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 4px;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const FlowSectionWrap = styled.div`
   display: flex;
   flex-direction: column;
   gap: 20px;
-  padding-top: 8px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const SubLedgerSection = styled.section`
   display: flex;
   flex-direction: column;
-  padding-top: 12px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
+  gap: 8px;
 `
 
 const SubLedgerHead = styled.div`
@@ -1358,27 +2143,27 @@ const SubLedgerHead = styled.div`
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  padding-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
 const SubLedgerTitle = styled.h4`
   margin: 0;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const SubLedgerCount = styled.span`
-  font-size: 11.5px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
 `
 
 const RelationLedgerGrid = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 
   @media (min-width: 780px) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1389,17 +2174,13 @@ const RelationLedgerCell = styled.div`
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 9px 10px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   min-width: 0;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
 
   @media (min-width: 780px) {
     &:nth-child(even) {
-      border-left: 1px solid ${({ theme }) => theme.colors.border.light};
-    }
-
-    &:last-child:nth-child(odd) {
-      grid-column: 1 / -1;
+      border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
     }
   }
 `
@@ -1407,31 +2188,32 @@ const RelationLedgerCell = styled.div`
 const RelationKindBadge = styled.span<{
   $tone: 'transition' | 'membership' | 'relation'
 }>`
-  padding: 2px 7px;
-  border-radius: 4px;
-  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: ${RADIUS.XS};
+  font-size: 10.5px;
   font-weight: 700;
   white-space: nowrap;
   flex-shrink: 0;
-  color: ${({ theme, $tone }) =>
-    $tone === 'transition'
-      ? theme.colors.active
-      : theme.colors.text.secondary};
-  background: ${({ theme, $tone }) =>
-    $tone === 'transition'
-      ? theme.colors.activeLight
-      : theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.06)'
-        : '#f1f5f9'};
+  color: ${({ theme, $tone }) => {
+    if ($tone === 'transition') return ledgerAccent(theme.mode)
+    if ($tone === 'membership')
+      return theme.mode === 'dark' ? '#38bdf8' : '#0369a1'
+    return theme.mode === 'dark' ? '#34d399' : '#047857'
+  }};
+  background: ${({ theme, $tone }) => {
+    if ($tone === 'transition') return ledgerAccentSubtle(theme.mode)
+    if ($tone === 'membership')
+      return theme.mode === 'dark' ? 'rgba(56, 189, 248, 0.14)' : '#e0f2fe'
+    return theme.mode === 'dark' ? 'rgba(52, 211, 153, 0.14)' : '#d1fae5'
+  }};
 `
 
 const RelationMainText = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
   min-width: 0;
-  font-size: 13px;
+  flex-wrap: wrap;
 `
 
 const RelationNodeBtn = styled.button`
@@ -1439,13 +2221,13 @@ const RelationNodeBtn = styled.button`
   border: none;
   background: transparent;
   font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12.5px;
+  font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
   cursor: pointer;
 
   &:hover {
-    color: ${({ theme }) => theme.colors.active};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
     text-decoration: underline;
     text-underline-offset: 3px;
   }
@@ -1454,23 +2236,14 @@ const RelationNodeBtn = styled.button`
 const RelationArrow = styled.span`
   display: inline-flex;
   align-items: center;
-  font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const NoMatchRow = styled.p`
-  margin: 0;
-  padding: 20px 0;
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
 `
 
 const EmptySpecGrid = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
   @media (min-width: 720px) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1485,13 +2258,13 @@ const EmptySpecCell = styled.div`
   min-width: 0;
 
   & + & {
-    border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+    border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   }
 
   @media (min-width: 720px) {
     & + & {
       border-top: none;
-      border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+      border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
     }
   }
 `
@@ -1510,27 +2283,22 @@ const EmptySpecDesc = styled.p`
 `
 
 const EmptyActionBtn = styled.button`
+  align-self: flex-start;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  align-self: flex-start;
   margin-top: 4px;
   padding: 0;
   border: none;
   background: transparent;
   font-family: inherit;
   font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.active};
+  font-weight: 700;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
   cursor: pointer;
 
   &:hover:not(:disabled) {
     text-decoration: underline;
     text-underline-offset: 3px;
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
 `

@@ -495,26 +495,118 @@ export const DomainBarList = styled.div`
   min-width: 0;
 `
 
-export const DomainBarRow = styled.button`
+export const DomainBarRow = styled.button<{ $active?: boolean; $dimmed?: boolean }>`
   display: grid;
   grid-template-columns: 68px minmax(0, 1fr) 68px;
   align-items: center;
   gap: 8px;
   padding: 4px 6px;
-  border: 1px solid transparent;
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? ledgerHairlineStrong(theme.mode) : 'transparent'};
   border-radius: 6px;
-  background: transparent;
+  background: ${({ theme, $active }) =>
+    $active ? ledgerHoverFill(theme.mode) : 'transparent'};
+  opacity: ${({ $dimmed }) => ($dimmed ? 0.45 : 1)};
   font-family: inherit;
   text-align: left;
   cursor: pointer;
   transition:
+    opacity ${MOTION.fast} ease,
     background ${MOTION.fast} ease,
     border-color ${MOTION.fast} ease;
 
   &:hover {
+    opacity: 1;
     background: ${({ theme }) => ledgerHoverFill(theme.mode)};
     border-color: ${({ theme }) => ledgerHairline(theme.mode)};
   }
+`
+
+export const EraModeSwitch = styled.div`
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+`
+
+export const EraModeBtn = styled.button<{ $active: boolean }>`
+  height: 22px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 4px;
+  background: ${({ theme, $active }) =>
+    $active ? ledgerBackground(theme.mode) : 'transparent'};
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  cursor: pointer;
+`
+
+export const SimpleCenturyBarsRow = styled.div`
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 116px;
+  padding-top: 14px;
+  overflow-x: auto;
+`
+
+export const SimpleCenturyCol = styled.button`
+  flex: 1 1 26px;
+  min-width: 24px;
+  max-width: 52px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+
+  &:hover > div > div {
+    opacity: 1;
+  }
+`
+
+export const SimpleCenturyCount = styled.span`
+  font-size: 10px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+`
+
+export const SimpleCenturyTrack = styled.div`
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  border-radius: 4px;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+`
+
+export const SimpleCenturyFill = styled.div<{ $color: string }>`
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: ${({ $color }) => $color};
+  opacity: 0.85;
+  transition: opacity ${MOTION.fast} ease;
+`
+
+export const SimpleCenturyLabel = styled.span`
+  font-size: 10px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  ${DIGIT_DISPLAY}
 `
 
 export const DomainLabelCell = styled.span`

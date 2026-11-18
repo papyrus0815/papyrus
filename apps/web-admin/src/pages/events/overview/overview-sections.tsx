@@ -7,9 +7,23 @@
 import { Fragment, type ReactNode, useEffect, useRef, useState } from 'react'
 
 import { Link } from 'react-router-dom'
-import { useTheme } from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 
 import { domainAccent, domainLabel } from '@/entities/event/model/event-domain'
+import {
+  DIGIT_DISPLAY,
+  MOTION,
+  RADIUS,
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentSubtle,
+  ledgerBackground,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  ledgerSubtleFill,
+  withAlpha,
+} from '@/entities/event/ui/ledger-tokens'
 import type { EventOverviewNode, EventOverviewRelation } from '@/shared/api/event-overview'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
@@ -184,6 +198,26 @@ export function GanttPanel({
   /** 묶음 만들기 — 고르는 중인가, 무엇을 골랐나 */
   const [regrouping, setRegrouping] = useState(false)
   const [picked, setPicked] = useState<Set<string>>(() => new Set())
+  const [guideOpen, setGuideOpen] = useState(false)
+  const guideRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!guideOpen) return undefined
+    const onPointerDown = (event: MouseEvent) => {
+      if (guideRef.current && !guideRef.current.contains(event.target as Node)) {
+        setGuideOpen(false)
+      }
+    }
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setGuideOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    window.addEventListener('keydown', onEscape)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      window.removeEventListener('keydown', onEscape)
+    }
+  }, [guideOpen])
   const togglePick = (id: string) =>
     setPicked((previous) => {
       const next = new Set(previous)
@@ -315,6 +349,32 @@ export function GanttPanel({
     }))
     .filter((hatch) => hatch.right > hatch.left)
   const outsideCount = gantt.rows.filter((row) => row.outside).length
+  const guideClauses = [
+    gantt.parentBand
+      ? '회색 띠 = 상위 사건의 기간'
+      : edges.length > 0
+        ? '세로 선 = 상위 사건의 시작·끝'
+        : '축 전체가 상위 사건의 기간 안',
+    '점선 막대 = 연·월만 아는 불확정 날짜(그 기간 어딘가)',
+    gantt.undated.length > 0
+      ? `날짜 없음 ${gantt.undated.length}건은 '기록 점검' 탭에 표시`
+      : null,
+    outsideCount > 0
+      ? edges.length > 0
+        ? `상위 기간 밖 ${outsideCount}건 (시작·끝 선 바깥)`
+        : `상위 기간 밖 ${outsideCount}건 (제목 뒤 '기간 전·후' 표지)`
+      : null,
+    accessionMarks.length > 0
+      ? '♛ · ★ 점선 = 참여국 국가원수 즉위·취임 (마우스 오버 시 이름 표시)'
+      : null,
+    gantt.breaks.length > 0
+      ? '≈ 기호 = 사건이 없는 긴 빈 구간을 접어 표시'
+      : null,
+    showLinks && relations.length > 0
+      ? '화살표 연결 = 실선(직접 계기) · 긴 점선(배경) · 점선(같은 국면·그 밖)'
+      : null,
+  ].filter((item): item is string => item !== null)
+
   return (
     <S.Panel $wide id="overview-gantt" aria-labelledby="overview-gantt-title">
       <S.PanelHead>
@@ -340,6 +400,37 @@ export function GanttPanel({
             연결 {relations.length}
           </S.RegroupToggle>
         )}
+        <GanttGuideAnchor ref={guideRef}>
+          <GanttGuideToggle
+            type="button"
+            $active={guideOpen}
+            aria-expanded={guideOpen}
+            aria-haspopup="dialog"
+            onClick={() => setGuideOpen((open) => !open)}
+          >
+            ? 기호 안내
+          </GanttGuideToggle>
+          {guideOpen && (
+            <GanttGuidePopover role="dialog" aria-label="전개 간트 기호 안내">
+              <GanttGuideTitle>간트 기호 안내</GanttGuideTitle>
+              <GanttGuideList>
+                {guideClauses.map((clause) => (
+                  <li key={clause}>{clause}</li>
+                ))}
+              </GanttGuideList>
+            </GanttGuidePopover>
+          )}
+        </GanttGuideAnchor>
+        {zoomLabel && (
+          <GanttFilterStatusBadge>
+            {zoomLabel} 확대 · 외 {offWindowCount}건 숨김
+          </GanttFilterStatusBadge>
+        )}
+        {hiddenCount > 0 && (
+          <GanttFilterStatusBadge>
+            묶음 밖 {hiddenCount}건 숨김
+          </GanttFilterStatusBadge>
+        )}
         <S.ViewSwitch role="group" aria-label="시간축 범위">
           <S.ViewSwitchItem
             type="button"
@@ -358,23 +449,6 @@ export function GanttPanel({
             상위 기간 전체
           </S.ViewSwitchItem>
         </S.ViewSwitch>
-        <S.PanelNote style={{ flexBasis: '100%' }}>
-          {gantt.parentBand
-            ? '회색 띠 = 상위 사건의 기간'
-            : edges.length > 0
-              ? '세로 선 = 상위 사건의 시작·끝'
-              : '축 전체가 상위 사건의 기간 안'}
-          {zoomLabel && ` · 축을 ${zoomLabel}로 확대 — 그 밖의 ${offWindowCount}건은 숨김(위 '시기' 칩 ×로 되돌림)`}
-          {' · 점선 막대 = 연·월만 아는 날짜(그 기간 어딘가)'}
-          {gantt.undated.length > 0 && ` · 날짜 없음 ${gantt.undated.length}건은 '기록 점검' 탭에`}
-          {outsideCount > 0 &&
-            (edges.length > 0
-              ? ` · 상위 기간 밖 ${outsideCount}건(시작·끝 선 바깥)`
-              : ` · 상위 기간 밖 ${outsideCount}건(제목 뒤 '기간 전·후' 표지)`)}
-          {accessionMarks.length > 0 && ' · ♛·★ 점선 = 참여국 국가원수 즉위·취임(축의 표지에 마우스를 올리면 이름)'}
-          {hiddenCount > 0 && ` · 묶음 밖 ${hiddenCount}건 숨김`}
-          {showLinks && relations.length > 0 && ' · 화살표 = 연결(실선 직접 계기 · 긴 점선 배경 · 점선 같은 국면·그 밖)'}
-        </S.PanelNote>
         {domainsShown.length > 1 && (
           <S.DomainLegend aria-label="막대 색 — 분야">
             {domainsShown.map(([domain, count]) => (
@@ -1738,6 +1812,76 @@ export function MilitaryUnitsPanel({
   )
 }
 
+interface OverviewDeployedUnitItem {
+  id: string
+  militaryUnitId: string
+  name: string
+  unitType: string | null
+  role: string | null
+}
+
+interface OverviewDeployedWeaponItem {
+  id: string
+  assetName: string
+  quantity: number | null
+}
+
+interface OverviewSideEntry {
+  id: string
+  name: string
+  color?: string | null
+  sortOrder?: number | null
+  outcome?: string | null
+  outcomeNote?: string | null
+  deployedUnits?: OverviewDeployedUnitItem[]
+  deployedWeapons?: OverviewDeployedWeaponItem[]
+  countries?: Array<{ name?: string | null }>
+}
+
+function parseSingleMetricChunk(text: string): number | null {
+  const cleaned = text.replace(/약|추정|최소|최대|이상|이하/g, '').trim()
+  const regex = /(\d[\d,]*(?:\.\d+)?)\s*(억|백만|만|천)?/g
+  const matches = [...cleaned.matchAll(regex)]
+  if (matches.length === 0) return null
+
+  const hasUnit = matches.some((m) => Boolean(m[2]))
+  if (hasUnit) {
+    let total = 0
+    for (const m of matches) {
+      const raw = Number.parseFloat(m[1]!.replace(/,/g, ''))
+      if (!Number.isFinite(raw)) continue
+      const unit = m[2]
+      const mult =
+        unit === '억'
+          ? 1e8
+          : unit === '백만'
+            ? 1e6
+            : unit === '만'
+              ? 1e4
+              : unit === '천'
+                ? 1e3
+                : 1
+      total += raw * mult
+    }
+    return total > 0 ? total : null
+  }
+
+  const first = Number.parseFloat(matches[0]![1]!.replace(/,/g, ''))
+  return Number.isFinite(first) && first > 0 ? first : null
+}
+
+/** 수치 표시 문자열에서 비례 막대용 대표 실수 추출 ("40,000~60,000명" → 50000, "12.5만" → 125000) */
+function parseMetricNumericValue(display: string): number | null {
+  if (!display) return null
+  const rangeParts = display.split(/\s*(?:[~–—]|(?<=\d|[만억천백])\s*-\s*(?=\d))\s*/)
+  if (rangeParts.length === 2) {
+    const low = parseSingleMetricChunk(rangeParts[0]!)
+    const high = parseSingleMetricChunk(rangeParts[1]!)
+    if (low != null && high != null) return (low + high) / 2
+  }
+  return parseSingleMetricChunk(display)
+}
+
 /**
  * 진영 · 수치 — 다른 패널과 **같은 번호**를 달고, 제목을 누르면 사건 모달이 열리며, 마우스를 올리면
  * 세 패널이 함께 칠해진다. 예전엔 제목 글자뿐이라 이 패널만 번호 체계 밖에 있었다.
@@ -1761,6 +1905,9 @@ export function SidesMetricsPanel({
   visibleIds?: Set<string> | null
   wide?: boolean
 }) {
+  const theme = useTheme()
+  const mode = theme.mode === 'dark' ? 'dark' : 'light'
+
   /** 상위 = 0, 하위 = 전개 번호, 번호 없는 것(이론상 없음)은 맨 뒤 */
   const orderOf = (id: string) => (id === root.id ? '0' : (numberById.get(id) ?? '99999'))
   const filteredDescendants = visibleIds
@@ -1777,6 +1924,43 @@ export function SidesMetricsPanel({
         compareOutline(orderOf(left.row.eventId), orderOf(right.row.eventId)) || left.index - right.index,
     )
     .map(({ row }) => row)
+
+  // 사건별 진영명·참전국 → 진영 대표 색상 매핑
+  const sideColorByEvent = new Map<string, Map<string, string>>()
+  for (const node of [root, ...descendants]) {
+    const rawSides = (node.sides ?? []) as OverviewSideEntry[]
+    if (rawSides.length === 0) continue
+    const map = new Map<string, string>()
+    for (const side of withSideColors(rawSides)) {
+      if (side.name) map.set(side.name, side.color)
+      for (const c of side.countries ?? []) {
+        if (c.name && !map.has(c.name)) map.set(c.name, side.color)
+      }
+    }
+    sideColorByEvent.set(node.id, map)
+  }
+
+  // 비례 비교 기준값: 같은 사건·같은 항목 내 대립 진영(또는 참전국)이 2개 이상이면 맞대결 기준, 아니면 동일 항목 전체 최대값
+  const numericValues = sortedMetrics.map((row) => parseMetricNumericValue(row.display))
+  const headToHeadStats = new Map<string, { max: number; sum: number; count: number }>()
+  const metricWideMax = new Map<string, number>()
+
+  sortedMetrics.forEach((row, idx) => {
+    const val = numericValues[idx]
+    if (val == null || val <= 0) return
+    const scopeKind = row.subjectKind === 'EVENT' ? 'EVENT' : 'OPPOSING'
+    const key = `${row.eventId}::${row.metricName}::${scopeKind}`
+    const cur = headToHeadStats.get(key) ?? { max: 0, sum: 0, count: 0 }
+    cur.max = Math.max(cur.max, val)
+    cur.sum += val
+    cur.count += 1
+    headToHeadStats.set(key, cur)
+
+    metricWideMax.set(
+      row.metricName,
+      Math.max(metricWideMax.get(row.metricName) ?? 0, val),
+    )
+  })
 
   /** 번호 칸 + 제목 칸 — 상위는 모달 대상이 아니라 글자로만 */
   const renderEventCells = (id: string, title: string) =>
@@ -1841,23 +2025,12 @@ export function SidesMetricsPanel({
                   <td>
                     {/* 진영마다 그 진영 색 칩 + 승패 결과 + 투입 부대 요약 */}
                     <S.SideChips>
-                      {withSideColors(node.sides).map((side, index) => {
-                        const extSide = side as typeof side & {
-                          outcome?: string | null
-                          outcomeNote?: string | null
-                          deployedUnits?: Array<{
-                            id: string
-                            militaryUnitId: string
-                            name: string
-                            unitType: string | null
-                            role: string | null
-                          }>
-                        }
+                      {withSideColors((node.sides ?? []) as OverviewSideEntry[]).map((side, index) => {
                         const outcomeText =
-                          extSide.outcome && extSide.outcome in SIDE_OUTCOME_LABEL
-                            ? SIDE_OUTCOME_LABEL[extSide.outcome as keyof typeof SIDE_OUTCOME_LABEL]
+                          side.outcome && side.outcome in SIDE_OUTCOME_LABEL
+                            ? SIDE_OUTCOME_LABEL[side.outcome as keyof typeof SIDE_OUTCOME_LABEL]
                             : null
-                        const units = extSide.deployedUnits ?? []
+                        const units = side.deployedUnits ?? []
                         return (
                           <Fragment key={side.id}>
                             {index > 0 && <S.SideVersus aria-label="대">↔</S.SideVersus>}
@@ -1866,7 +2039,7 @@ export function SidesMetricsPanel({
                               title={
                                 [
                                   outcomeText
-                                    ? `${outcomeText}${extSide.outcomeNote ? ` (${extSide.outcomeNote})` : ''}`
+                                    ? `${outcomeText}${side.outcomeNote ? ` (${side.outcomeNote})` : ''}`
                                     : null,
                                   units.length > 0
                                     ? `투입 부대 ${units.length}개: ${units
@@ -1897,22 +2070,14 @@ export function SidesMetricsPanel({
                       })}
                     </S.SideChips>
                     {(() => {
-                      const allUnits = node.sides.flatMap((side) => {
-                        const extSide = side as typeof side & {
-                          deployedUnits?: Array<{ id: string; militaryUnitId: string; name: string }>
-                        }
-                        return extSide.deployedUnits ?? []
-                      })
-                      const allWeapons = node.sides.flatMap((side) => {
-                        const extSide = side as typeof side & {
-                          deployedWeapons?: Array<{ id: string; assetName: string; quantity: number | null }>
-                        }
-                        return extSide.deployedWeapons ?? []
-                      })
+                      const typedSides = (node.sides ?? []) as OverviewSideEntry[]
+                      const allUnits = typedSides.flatMap((side) => side.deployedUnits ?? [])
+                      const allWeapons = typedSides.flatMap((side) => side.deployedWeapons ?? [])
                       const extNode = node as typeof node & {
                         contextLinks?: Array<{ id: string; entityName: string }>
                       }
-                      const ctxLinks = extNode.contextLinks ?? []
+                      const ctxLinks: Array<{ id: string; entityName: string }> =
+                        extNode.contextLinks ?? []
                       if (allUnits.length === 0 && allWeapons.length === 0 && ctxLinks.length === 0) {
                         return null
                       }
@@ -1960,21 +2125,91 @@ export function SidesMetricsPanel({
                 <th scope="col">사건</th>
                 <th scope="col">누구</th>
                 <th scope="col">항목</th>
-                <th scope="col">값</th>
+                <th scope="col">값 · 비례 비교</th>
               </tr>
             </thead>
             <tbody>
-              {sortedMetrics.map((row, index) => (
-                <S.ChecklistRow
-                  key={`${row.eventId}-${row.metricName}-${index}`}
-                  {...rowProps(row.eventId)}
-                >
-                  {renderEventCells(row.eventId, row.eventTitle)}
-                  <td>{row.subject ?? '사건 전체'}</td>
-                  <td>{row.metricName}</td>
-                  <td>{row.display}</td>
-                </S.ChecklistRow>
-              ))}
+              {sortedMetrics.map((row, index) => {
+                const numVal = numericValues[index]
+                const eventSideMap = sideColorByEvent.get(row.eventId)
+                const matchedSideColor =
+                  row.subject && eventSideMap
+                    ? (eventSideMap.get(row.subject) ?? null)
+                    : null
+                const barColor = matchedSideColor ?? ledgerAccent(mode)
+
+                const scopeKind = row.subjectKind === 'EVENT' ? 'EVENT' : 'OPPOSING'
+                const groupStat = headToHeadStats.get(
+                  `${row.eventId}::${row.metricName}::${scopeKind}`,
+                )
+                const isOpposingComparison =
+                  scopeKind === 'OPPOSING' && (groupStat?.count ?? 0) >= 2
+                const scaleMax = isOpposingComparison
+                  ? (groupStat?.max ?? 0)
+                  : (metricWideMax.get(row.metricName) ?? groupStat?.max ?? 0)
+                const barPct =
+                  numVal != null && numVal > 0 && scaleMax > 0
+                    ? Math.max(5, Math.min(100, Math.round((numVal / scaleMax) * 100)))
+                    : null
+                const sharePct =
+                  isOpposingComparison &&
+                  numVal != null &&
+                  groupStat &&
+                  groupStat.sum > 0
+                    ? Math.round((numVal / groupStat.sum) * 100)
+                    : null
+
+                return (
+                  <S.ChecklistRow
+                    key={`${row.eventId}-${row.metricName}-${index}`}
+                    {...rowProps(row.eventId)}
+                  >
+                    {renderEventCells(row.eventId, row.eventTitle)}
+                    <td>
+                      {row.subject ? (
+                        matchedSideColor ? (
+                          <S.SideChip $color={matchedSideColor}>
+                            {row.subject}
+                          </S.SideChip>
+                        ) : (
+                          row.subject
+                        )
+                      ) : (
+                        <S.Muted>사건 전체</S.Muted>
+                      )}
+                    </td>
+                    <td>{row.metricName}</td>
+                    <td>
+                      {barPct != null ? (
+                        <MetricCompareCell>
+                          <MetricBarTrack aria-hidden="true">
+                            <MetricBarFill
+                              style={{
+                                width: `${barPct}%`,
+                                background: withAlpha(
+                                  barColor,
+                                  mode === 'dark' ? 0.72 : 0.78,
+                                ),
+                                borderRight: `2px solid ${barColor}`,
+                              }}
+                            />
+                          </MetricBarTrack>
+                          <MetricValueText>
+                            <strong>{row.display}</strong>
+                            {sharePct != null && (
+                              <MetricShareBadge $color={barColor}>
+                                {sharePct}%
+                              </MetricShareBadge>
+                            )}
+                          </MetricValueText>
+                        </MetricCompareCell>
+                      ) : (
+                        <MetricValueOnly>{row.display}</MetricValueOnly>
+                      )}
+                    </td>
+                  </S.ChecklistRow>
+                )
+              })}
             </tbody>
           </S.Table>
         </S.Scroll>
@@ -2437,3 +2672,168 @@ export function ChecklistPanel({
     </S.Panel>
   )
 }
+
+const GanttGuideAnchor = styled.div`
+  position: relative;
+  display: inline-flex;
+`
+
+const GanttGuideToggle = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid
+    ${({ $active, theme }) => {
+      const m = theme.mode === 'dark' ? 'dark' : 'light'
+      return $active ? ledgerAccentBorder(m) : ledgerHairlineStrong(m)
+    }};
+  background: ${({ $active, theme }) => {
+    const m = theme.mode === 'dark' ? 'dark' : 'light'
+    return $active ? ledgerAccentSubtle(m) : 'transparent'
+  }};
+  color: ${({ $active, theme }) => {
+    const m = theme.mode === 'dark' ? 'dark' : 'light'
+    return $active ? ledgerAccent(m) : theme.colors.text.secondary
+  }};
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: none;
+  transition:
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    color ${MOTION.fast} ease;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) =>
+      ledgerHoverFill(theme.mode === 'dark' ? 'dark' : 'light')};
+  }
+  &:focus-visible {
+    outline: 2px solid
+      ${({ theme }) => ledgerAccent(theme.mode === 'dark' ? 'dark' : 'light')};
+    outline-offset: 1px;
+  }
+`
+
+const GanttGuidePopover = styled.div`
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 25;
+  width: min(360px, 84vw);
+  padding: 10px 12px;
+  border-radius: ${RADIUS.MD};
+  border: 1px solid
+    ${({ theme }) =>
+      ledgerHairlineStrong(theme.mode === 'dark' ? 'dark' : 'light')};
+  background: ${({ theme }) =>
+    ledgerBackground(theme.mode === 'dark' ? 'dark' : 'light')};
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const GanttGuideTitle = styled.div`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  padding-bottom: 4px;
+  border-bottom: 1px solid
+    ${({ theme }) => ledgerHairline(theme.mode === 'dark' ? 'dark' : 'light')};
+`
+
+const GanttGuideList = styled.ul`
+  margin: 0;
+  padding: 0 0 0 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const GanttFilterStatusBadge = styled.span`
+  ${DIGIT_DISPLAY}
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: ${RADIUS.PILL};
+  border: 1px solid
+    ${({ theme }) =>
+      ledgerAccentBorder(theme.mode === 'dark' ? 'dark' : 'light')};
+  background: ${({ theme }) =>
+    ledgerAccentSubtle(theme.mode === 'dark' ? 'dark' : 'light')};
+  color: ${({ theme }) =>
+    ledgerAccent(theme.mode === 'dark' ? 'dark' : 'light')};
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: none;
+`
+
+const MetricCompareCell = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 190px;
+`
+
+const MetricBarTrack = styled.span`
+  flex: 1;
+  min-width: 72px;
+  max-width: 180px;
+  height: 8px;
+  border-radius: 3px;
+  background: ${({ theme }) =>
+    ledgerSubtleFill(theme.mode === 'dark' ? 'dark' : 'light')};
+  border: 1px solid
+    ${({ theme }) => ledgerHairline(theme.mode === 'dark' ? 'dark' : 'light')};
+  overflow: hidden;
+  box-shadow: none;
+`
+
+const MetricBarFill = styled.span`
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  transition: width ${MOTION.normal} ease;
+`
+
+const MetricValueText = styled.span`
+  ${DIGIT_DISPLAY}
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+
+  strong {
+    font-size: 12px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const MetricShareBadge = styled.span<{ $color: string }>`
+  ${DIGIT_DISPLAY}
+  padding: 1px 5px;
+  border-radius: ${RADIUS.XS};
+  font-size: 10px;
+  font-weight: 700;
+  color: ${({ $color }) => $color};
+  background: ${({ $color, theme }) =>
+    withAlpha($color, theme.mode === 'dark' ? 0.18 : 0.12)};
+  border: 1px solid
+    ${({ $color, theme }) =>
+      withAlpha($color, theme.mode === 'dark' ? 0.42 : 0.32)};
+`
+
+const MetricValueOnly = styled.span`
+  ${DIGIT_DISPLAY}
+`

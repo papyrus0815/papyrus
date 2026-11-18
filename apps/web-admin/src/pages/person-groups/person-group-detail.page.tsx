@@ -18,15 +18,40 @@ import {
   FiArrowRight,
   FiArrowUp,
   FiCheck,
+  FiChevronDown,
   FiChevronLeft,
+  FiChevronUp,
   FiEdit2,
   FiGitBranch,
   FiTrash2,
   FiUserPlus,
   FiX,
 } from 'react-icons/fi'
-import styled from 'styled-components'
+import styled, { css, useTheme } from 'styled-components'
 
+import {
+  BentoCard,
+  BentoCardBadge,
+  BentoCardBody,
+  BentoCardHeader,
+  BentoCardTitle,
+  BentoCardTitleGroup,
+  type SegmentSlice,
+  StackedSegmentBar,
+} from '@/entities/event/ui/bento-primitives'
+import {
+  DIGIT_DISPLAY,
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentSubtle,
+  ledgerBackground,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  ledgerSubtleFill,
+  MOTION,
+  RADIUS,
+} from '@/entities/event/ui/ledger-tokens'
 import { getAllCountries } from '@/shared/api/countries'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import {
@@ -42,6 +67,7 @@ import {
 } from '@/shared/api/person-groups'
 import { getAllPersons } from '@/shared/api/persons'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
@@ -60,6 +86,24 @@ function yearLabel(era: 'BC' | 'AD' | null | undefined, y?: number | null) {
   if (y == null || !Number.isFinite(y)) return ''
   return era === 'BC' ? `BC ${y}` : `${y}`
 }
+
+function fmtSignedYear(y: number): string {
+  return y < 0 ? `BC ${Math.abs(y)}` : `${y}`
+}
+
+function toSignedPersonYear(
+  era: string | null | undefined,
+  yr: number | null | undefined,
+  isoFallback?: string | null,
+): number | null {
+  if (yr != null && Number.isFinite(yr) && yr !== 0) {
+    if (yr < 0) return yr
+    return era === 'BC' ? -Math.abs(yr) : yr
+  }
+  return parseIsoDateParts(isoFallback ?? null)?.year ?? null
+}
+
+const COHORT_TICK_STEPS = [5, 10, 20, 25, 50, 100, 200, 500]
 
 /**
  * 설명 텍스트 안의 `「집단 이름」` 표기를 찾아 실제 존재하는 집단이면 상세 링크로 변환한다.
@@ -123,6 +167,8 @@ const OUTCOME_LABELS: Record<string, string> = {
 }
 
 export default function PersonGroupDetailPage() {
+  const theme = useTheme()
+  const dark = isDark(theme.mode)
   const { groupId = '' } = useParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -131,6 +177,7 @@ export default function PersonGroupDetailPage() {
   const [memberEditMode, setMemberEditMode] = useState(false)
   const [editForm, setEditForm] = useState<EditForm | null>(null)
   const [picker, setPicker] = useState<'member' | 'center' | null>(null)
+  const [cohortExpanded, setCohortExpanded] = useState(false)
 
   const { data: group, isLoading } = useQuery({
     queryKey: ['person-group', groupId],
@@ -170,6 +217,220 @@ export default function PersonGroupDetailPage() {
     if (!group) return []
     return sortGroupMembers(group.members, group.center?.id)
   }, [group])
+
+  /** 소속 인물 동시대 생애·활동 코호트 축 계산 */
+  const cohortTimeline = useMemo(() => {
+    const currentYear = new Date().getFullYear()
+    type CohortRowItem = {
+      membershipId: string
+      personId: string
+      name: string
+      roleLabel: string | null
+      isCenter: boolean
+      start: number
+      end: number
+      kind: 'lifespan' | 'alive' | 'floruit' | 'point'
+      rangeText: string
+    }
+    const items: CohortRowItem[] = []
+    let undatedCount = 0
+
+    for (const m of members) {
+      const p = m.person
+      const name = getPersonDisplayName(p, true)
+      const isCenter = group?.center?.id === p.id
+      const birth = toSignedPersonYear(p.birthEra, p.birthYear, p.birthDate)
+      const death = toSignedPersonYear(p.deathEra, p.deathYear, p.deathDate)
+      const flStart = toSignedPersonYear(p.floruitEra, p.floruitStartYear)
+      const flEnd = toSignedPersonYear(p.floruitEra, p.floruitEndYear)
+
+      if (birth != null) {
+        if (death != null && death >= birth) {
+          items.push({
+            membershipId: m.membershipId,
+            personId: p.id,
+            name,
+            roleLabel: m.roleLabel?.trim() || null,
+            isCenter,
+            start: birth,
+            end: death,
+            kind: 'lifespan',
+            rangeText: `${fmtSignedYear(birth)} – ${fmtSignedYear(death)}`,
+          })
+        } else if (
+          p.isAlive === true ||
+          (death == null && birth >= currentYear - 105)
+        ) {
+          items.push({
+            membershipId: m.membershipId,
+            personId: p.id,
+            name,
+            roleLabel: m.roleLabel?.trim() || null,
+            isCenter,
+            start: birth,
+            end: currentYear,
+            kind: 'alive',
+            rangeText: `${fmtSignedYear(birth)} – 현재`,
+          })
+        } else {
+          items.push({
+            membershipId: m.membershipId,
+            personId: p.id,
+            name,
+            roleLabel: m.roleLabel?.trim() || null,
+            isCenter,
+            start: birth,
+            end: birth,
+            kind: 'point',
+            rangeText: `${fmtSignedYear(birth)} 출생`,
+          })
+        }
+      } else if (flStart != null || flEnd != null) {
+        const s = flStart ?? flEnd!
+        const e = Math.max(s, flEnd ?? s)
+        items.push({
+          membershipId: m.membershipId,
+          personId: p.id,
+          name,
+          roleLabel: m.roleLabel?.trim() || null,
+          isCenter,
+          start: s,
+          end: e,
+          kind: s === e ? 'point' : 'floruit',
+          rangeText:
+            s === e
+              ? `활동 ${fmtSignedYear(s)}`
+              : `활동 ${fmtSignedYear(s)} – ${fmtSignedYear(e)}`,
+        })
+      } else {
+        undatedCount += 1
+      }
+    }
+
+    if (items.length === 0) return null
+
+    items.sort((a, b) => {
+      if (a.isCenter !== b.isCenter) return a.isCenter ? -1 : 1
+      return a.start - b.start || a.name.localeCompare(b.name, 'ko')
+    })
+
+    const minStart = Math.min(...items.map((i) => i.start))
+    const maxEnd = Math.max(...items.map((i) => i.end))
+    const ongoingAny = items.some((i) => i.kind === 'alive')
+    const rawSpan = Math.max(10, maxEnd - minStart)
+    const step =
+      COHORT_TICK_STEPS.find((s) => rawSpan / s <= 5) ??
+      Math.max(500, Math.ceil(rawSpan / 4 / 100) * 100)
+    const axisMin = Math.floor((minStart - rawSpan * 0.04) / step) * step
+    const axisMax = ongoingAny
+      ? currentYear
+      : Math.max(axisMin + step, Math.ceil((maxEnd + rawSpan * 0.04) / step) * step)
+
+    const ticks: number[] = []
+    for (let t = axisMin; t <= axisMax; t += step) {
+      if (ongoingAny && axisMax - t < step * 0.35) break
+      ticks.push(t)
+    }
+
+    // 동시대 최다 활동 교집합 연대 산출
+    let overlapWindow: { from: number; to: number; count: number } | null = null
+    if (items.length >= 2) {
+      const boundaries = Array.from(
+        new Set(items.flatMap((i) => [i.start, i.end])),
+      ).sort((a, b) => a - b)
+      let bestCount = 0
+      let bestFrom = boundaries[0]
+      let bestTo = boundaries[0]
+      for (let idx = 0; idx < boundaries.length - 1; idx += 1) {
+        const segStart = boundaries[idx]
+        const segEnd = boundaries[idx + 1]
+        const mid = (segStart + segEnd) / 2
+        const cnt = items.filter((i) => i.start <= mid && i.end >= mid).length
+        if (cnt > bestCount || (cnt === bestCount && segEnd === bestFrom && cnt >= 2)) {
+          if (cnt > bestCount) {
+            bestCount = cnt
+            bestFrom = segStart
+            bestTo = segEnd
+          } else {
+            bestTo = segEnd
+          }
+        } else if (cnt === bestCount && bestTo === segStart) {
+          bestTo = segEnd
+        }
+      }
+      if (bestCount >= 2 && bestTo > bestFrom) {
+        overlapWindow = { from: bestFrom, to: bestTo, count: bestCount }
+      }
+    }
+
+    return {
+      items,
+      undatedCount,
+      axisMin,
+      axisMax,
+      ticks,
+      ongoingAny,
+      overlapWindow,
+    }
+  }, [members, group?.center?.id])
+
+  /** 사건 진영 참여 전적(승·무·패) 집계 */
+  const eventSideOutcomeSummary = useMemo(() => {
+    const sides = group?.eventSides ?? []
+    if (sides.length === 0) return null
+
+    let victory = 0
+    let defeat = 0
+    let draw = 0
+    let withdrawal = 0
+    let other = 0
+
+    for (const s of sides) {
+      if (s.outcome === 'VICTORY') victory += 1
+      else if (s.outcome === 'DEFEAT') defeat += 1
+      else if (s.outcome === 'DRAW') draw += 1
+      else if (s.outcome === 'WITHDRAWAL') withdrawal += 1
+      else other += 1
+    }
+
+    const decided = victory + defeat + draw + withdrawal
+    const winRate = decided > 0 ? Math.round((victory / decided) * 100) : null
+
+    const slices: SegmentSlice[] = [
+      {
+        key: 'VICTORY',
+        label: '승리',
+        value: victory,
+        color: dark ? '#34d399' : '#059669',
+      },
+      {
+        key: 'DRAW',
+        label: '무승부',
+        value: draw,
+        color: dark ? '#fbbf24' : '#d97706',
+      },
+      {
+        key: 'WITHDRAWAL',
+        label: '철수',
+        value: withdrawal,
+        color: dark ? '#c4b5fd' : '#7c3aed',
+      },
+      {
+        key: 'DEFEAT',
+        label: '패배',
+        value: defeat,
+        color: dark ? '#f87171' : '#dc2626',
+      },
+      {
+        key: 'OTHER',
+        label: '결론 없음 · 미기재',
+        value: other,
+        color: dark ? '#94a3b8' : '#64748b',
+      },
+    ]
+
+    return { total: sides.length, slices, winRate, victory, decided }
+  }, [group?.eventSides, dark])
 
   /** 각 멤버가 속한 다른 집단 목록 */
   const otherGroupsByPersonId = useMemo(() => {
@@ -740,7 +1001,163 @@ export default function PersonGroupDetailPage() {
       {members.length === 0 ? (
         <Muted>아직 멤버가 없습니다.</Muted>
       ) : (
-        <MemberGrid>
+        <>
+          {cohortTimeline && (
+            <BentoCard aria-label="소속 인물 동시대 생애·활동 코호트">
+              <BentoCardHeader>
+                <BentoCardTitleGroup>
+                  <BentoCardTitle>
+                    소속 인물 동시대 활동 연대 코호트
+                  </BentoCardTitle>
+                  <BentoCardBadge>
+                    {cohortTimeline.items.length}/{members.length}명 연대 기록
+                  </BentoCardBadge>
+                </BentoCardTitleGroup>
+                <CohortHeaderMeta>
+                  {cohortTimeline.overlapWindow && (
+                    <CohortOverlapPill>
+                      최다 동시대 활동{' '}
+                      <strong>{cohortTimeline.overlapWindow.count}명</strong> (
+                      {fmtSignedYear(cohortTimeline.overlapWindow.from)}–
+                      {fmtSignedYear(cohortTimeline.overlapWindow.to)})
+                    </CohortOverlapPill>
+                  )}
+                  {cohortTimeline.undatedCount > 0 && (
+                    <span>연도 미상 {cohortTimeline.undatedCount}명</span>
+                  )}
+                </CohortHeaderMeta>
+              </BentoCardHeader>
+              <BentoCardBody>
+                <CohortChart>
+                  <CohortAxisRow aria-hidden>
+                    <CohortAxisSpacer>인물</CohortAxisSpacer>
+                    <CohortAxisTrack>
+                      {cohortTimeline.ticks.map((tick, idx) => {
+                        const pct =
+                          ((tick - cohortTimeline.axisMin) /
+                            Math.max(
+                              1,
+                              cohortTimeline.axisMax - cohortTimeline.axisMin,
+                            )) *
+                          100
+                        return (
+                          <CohortTickLabel
+                            key={tick}
+                            $edge={idx === 0}
+                            style={{ left: `${pct}%` }}
+                          >
+                            {fmtSignedYear(tick)}
+                          </CohortTickLabel>
+                        )
+                      })}
+                      {cohortTimeline.ongoingAny && (
+                        <CohortNowLabel>현재</CohortNowLabel>
+                      )}
+                    </CohortAxisTrack>
+                    <CohortRangeHead>기간</CohortRangeHead>
+                  </CohortAxisRow>
+
+                  {(cohortExpanded
+                    ? cohortTimeline.items
+                    : cohortTimeline.items.slice(0, 12)
+                  ).map((row) => {
+                    const span = Math.max(
+                      1,
+                      cohortTimeline.axisMax - cohortTimeline.axisMin,
+                    )
+                    const leftPct = Math.max(
+                      0,
+                      Math.min(
+                        100,
+                        ((row.start - cohortTimeline.axisMin) / span) * 100,
+                      ),
+                    )
+                    const rightPct = Math.max(
+                      leftPct,
+                      Math.min(
+                        100,
+                        ((row.end - cohortTimeline.axisMin) / span) * 100,
+                      ),
+                    )
+                    const widthPct = Math.max(0.8, rightPct - leftPct)
+
+                    return (
+                      <CohortRow key={row.membershipId}>
+                        <CohortNameLink
+                          to={pathKeys.personsTimelineDetail(row.personId)}
+                          title={
+                            row.roleLabel
+                              ? `${row.name} — ${row.roleLabel}`
+                              : row.name
+                          }
+                        >
+                          {row.isCenter && <CohortStar>★</CohortStar>}
+                          <span>{row.name}</span>
+                        </CohortNameLink>
+                        <CohortTrack aria-hidden>
+                          {cohortTimeline.overlapWindow && (
+                            <CohortOverlapBand
+                              style={{
+                                left: `${Math.max(0, ((cohortTimeline.overlapWindow.from - cohortTimeline.axisMin) / span) * 100)}%`,
+                                width: `${Math.max(0.5, ((cohortTimeline.overlapWindow.to - cohortTimeline.overlapWindow.from) / span) * 100)}%`,
+                              }}
+                            />
+                          )}
+                          {cohortTimeline.ticks.map((tick) => {
+                            const pct =
+                              ((tick - cohortTimeline.axisMin) / span) * 100
+                            if (pct <= 0.5 || pct >= 99.5) return null
+                            return (
+                              <CohortGridLine
+                                key={tick}
+                                style={{ left: `${pct}%` }}
+                              />
+                            )
+                          })}
+                          {row.kind === 'point' ? (
+                            <CohortPointDot
+                              $center={row.isCenter}
+                              style={{ left: `${leftPct}%` }}
+                            />
+                          ) : (
+                            <CohortSpanBar
+                              $center={row.isCenter}
+                              $kind={row.kind}
+                              style={{
+                                left: `${leftPct}%`,
+                                width: `${widthPct}%`,
+                              }}
+                            />
+                          )}
+                        </CohortTrack>
+                        <CohortRangeCell>{row.rangeText}</CohortRangeCell>
+                      </CohortRow>
+                    )
+                  })}
+                </CohortChart>
+
+                {cohortTimeline.items.length > 12 && (
+                  <CohortToggleBtn
+                    type="button"
+                    onClick={() => setCohortExpanded((v) => !v)}
+                  >
+                    {cohortExpanded ? (
+                      <>
+                        <FiChevronUp size={13} /> 코호트 접기
+                      </>
+                    ) : (
+                      <>
+                        <FiChevronDown size={13} /> 나머지{' '}
+                        {cohortTimeline.items.length - 12}명 더 보기
+                      </>
+                    )}
+                  </CohortToggleBtn>
+                )}
+              </BentoCardBody>
+            </BentoCard>
+          )}
+
+          <MemberGrid>
           {members.map((m, index) => {
             const p = m.person
             const displayName = getPersonDisplayName(p, true)
@@ -883,7 +1300,8 @@ export default function PersonGroupDetailPage() {
               </MemberCard>
             )
           })}
-        </MemberGrid>
+          </MemberGrid>
+        </>
       )}
 
       {/* ── 참여·관여 사건 ── */}
@@ -895,7 +1313,35 @@ export default function PersonGroupDetailPage() {
           사건의 ‘진영’에 이 집단({group.name})을 연결하거나 소속 인물이 사건에 참여하면 여기에 표시됩니다.
         </Muted>
       ) : (
-        <EventSideList>
+        <>
+          {eventSideOutcomeSummary && (
+            <BentoCard aria-label="진영 참여 결과 분포">
+              <BentoCardHeader>
+                <BentoCardTitleGroup>
+                  <BentoCardTitle>진영 참여 결과 분포</BentoCardTitle>
+                  <BentoCardBadge>
+                    진영 참여 {eventSideOutcomeSummary.total}건
+                  </BentoCardBadge>
+                </BentoCardTitleGroup>
+                {eventSideOutcomeSummary.winRate !== null && (
+                  <CohortHeaderMeta>
+                    <span>
+                      승률 <strong>{eventSideOutcomeSummary.winRate}%</strong> (
+                      {eventSideOutcomeSummary.victory}/
+                      {eventSideOutcomeSummary.decided})
+                    </span>
+                  </CohortHeaderMeta>
+                )}
+              </BentoCardHeader>
+              <BentoCardBody>
+                <StackedSegmentBar
+                  slices={eventSideOutcomeSummary.slices}
+                  height={9}
+                />
+              </BentoCardBody>
+            </BentoCard>
+          )}
+          <EventSideList>
           {group.eventSides?.map((es) => {
             const yearText = yearLabel(
               (es.startEra as 'BC' | 'AD' | null) ?? null,
@@ -981,7 +1427,8 @@ export default function PersonGroupDetailPage() {
               </EventSideRow>
             )
           })}
-        </EventSideList>
+          </EventSideList>
+        </>
       )}
 
       {picker && (
@@ -1036,10 +1483,11 @@ const HeaderCard = styled.div`
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 22px;
-  border-radius: 16px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.primary};
+  padding: 20px 22px;
+  border-radius: ${RADIUS.MD};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  box-shadow: none;
 `
 
 const HeaderTop = styled.div`
@@ -1196,14 +1644,17 @@ const RelatedCard = styled(Link)`
   flex-direction: column;
   gap: 5px;
   padding: 11px 13px;
-  border-radius: 12px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) => theme.colors.background.secondary};
+  border-radius: ${RADIUS.MD};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  box-shadow: none;
   text-decoration: none;
-  transition: border-color 0.14s ease, transform 0.14s ease;
+  transition:
+    border-color ${MOTION.fast} ease,
+    background ${MOTION.fast} ease;
   &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-    transform: translateY(-1px);
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
   }
 `
 
@@ -1312,15 +1763,16 @@ const MemberCard = styled.div<{ $center?: boolean }>`
   flex-direction: column;
   gap: 10px;
   padding: 16px;
-  border-radius: 14px;
+  border-radius: ${RADIUS.MD};
   border: 1px solid
     ${({ $center, theme }) =>
       $center
         ? isDark(theme.mode)
           ? 'rgba(255,214,10,0.45)'
           : 'rgba(245,158,11,0.5)'
-        : theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.primary};
+        : ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  box-shadow: none;
 `
 
 const MemberCardHeader = styled.div`
@@ -1693,9 +2145,10 @@ const EventSideRow = styled.div`
   gap: 12px;
   flex-wrap: wrap;
   padding: 13px 16px;
-  border-radius: 12px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) => theme.colors.background.primary};
+  border-radius: ${RADIUS.MD};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  box-shadow: none;
 `
 
 const EventMainLink = styled(Link)`
@@ -1807,5 +2260,236 @@ const VsText = styled.span`
   font-size: 11.5px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const CohortHeaderMeta = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const CohortOverlapPill = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  font-size: 11px;
+  font-weight: 600;
+`
+
+const CohortChart = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
+const cohortRowGrid = css`
+  display: grid;
+  grid-template-columns: minmax(110px, 168px) minmax(0, 1fr) 118px;
+  align-items: center;
+  column-gap: 14px;
+
+  @media (max-width: 640px) {
+    grid-template-columns: minmax(90px, 128px) minmax(0, 1fr) 92px;
+    column-gap: 8px;
+  }
+`
+
+const CohortAxisRow = styled.div`
+  ${cohortRowGrid}
+  padding: 0 4px 6px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  margin-bottom: 4px;
+`
+
+const CohortAxisSpacer = styled.span`
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const CohortAxisTrack = styled.div`
+  position: relative;
+  height: 16px;
+  min-width: 0;
+`
+
+const CohortTickLabel = styled.span<{ $edge?: boolean }>`
+  ${DIGIT_DISPLAY}
+  position: absolute;
+  bottom: 0;
+  transform: ${({ $edge }) => ($edge ? 'none' : 'translateX(-50%)')};
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const CohortNowLabel = styled.span`
+  ${DIGIT_DISPLAY}
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  font-size: 10px;
+  font-weight: 700;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+`
+
+const CohortRangeHead = styled.span`
+  font-size: 10.5px;
+  font-weight: 700;
+  text-align: right;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const CohortRow = styled.div`
+  ${cohortRowGrid}
+  min-height: 28px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  transition: background ${MOTION.fast} ease;
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+`
+
+const CohortNameLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  text-decoration: none;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    text-decoration: underline;
+  }
+`
+
+const CohortStar = styled.em`
+  font-style: normal;
+  font-size: 11px;
+  flex-shrink: 0;
+  color: ${({ theme }) => (isDark(theme.mode) ? '#ffd60a' : '#b45309')};
+`
+
+const CohortTrack = styled.div`
+  position: relative;
+  height: 20px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+`
+
+const CohortOverlapBand = styled.span`
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  pointer-events: none;
+`
+
+const CohortGridLine = styled.span`
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: ${({ theme }) => ledgerHairline(theme.mode)};
+  pointer-events: none;
+`
+
+const CohortSpanBar = styled.span<{
+  $center: boolean
+  $kind: 'lifespan' | 'alive' | 'floruit'
+}>`
+  position: absolute;
+  height: 7px;
+  min-width: 4px;
+  border-radius: 999px;
+  background: ${({ theme, $center, $kind }) => {
+    const accent = $center
+      ? isDark(theme.mode)
+        ? '#ffd60a'
+        : '#d97706'
+      : ledgerAccent(theme.mode)
+    if ($kind === 'floruit') {
+      return `repeating-linear-gradient(90deg, ${accent} 0 4px, transparent 4px 7px)`
+    }
+    return accent
+  }};
+  opacity: ${({ $kind }) => ($kind === 'alive' ? 1 : 0.82)};
+`
+
+const CohortPointDot = styled.span<{ $center: boolean }>`
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  background: ${({ theme, $center }) =>
+    $center
+      ? isDark(theme.mode)
+        ? '#ffd60a'
+        : '#d97706'
+      : ledgerAccent(theme.mode)};
+`
+
+const CohortRangeCell = styled.span`
+  ${DIGIT_DISPLAY}
+  font-size: 11px;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const CohortToggleBtn = styled.button`
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    color ${MOTION.fast} ease;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
 `
 

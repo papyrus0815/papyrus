@@ -23,8 +23,8 @@ import { motion } from 'framer-motion'
 import {
   FiArrowDown,
   FiBarChart2,
+  FiChevronDown,
   FiClock,
-  FiFilter,
   FiFlag,
   FiGlobe,
   FiGrid,
@@ -32,10 +32,36 @@ import {
   FiList,
   FiPlus,
   FiSearch,
+  FiSliders,
   FiX,
 } from 'react-icons/fi'
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 
+import {
+  BentoCard,
+  BentoCardBadge,
+  BentoCardBody,
+  BentoCardHeader,
+  BentoCardTitle,
+  BentoCardTitleGroup,
+  BentoGrid3Col,
+  MiniDonutRing,
+  StackedSegmentBar,
+  type SegmentSlice,
+} from '@/entities/event/ui/bento-primitives'
+import {
+  DIGIT_DISPLAY,
+  MOTION,
+  RADIUS,
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentSubtle,
+  ledgerBackground,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  ledgerSubtleFill,
+} from '@/entities/event/ui/ledger-tokens'
 import { usePersonsInfographic } from '@/entities/person/api'
 import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
 
@@ -47,12 +73,14 @@ import {
   REGIONS,
 } from '../model/constants'
 import {
+  type AliveFilter,
   countActiveScopes,
   usePersonInfographicFilterStore,
   type PersonGroupBy,
   type PersonInfographicView,
   type PersonSortKey,
 } from '../model/filter.store'
+import type { AdaptedPerson } from '../model/types'
 import {
   computePersonFacetCounts,
   filterPersons,
@@ -122,12 +150,35 @@ const EMPTY_SCOPES = {
   country: [] as string[],
 }
 
+const INFLUENCE_PRESETS = [0, 40, 60, 80, 90] as const
+const ALIVE_FILTER_OPTIONS: ReadonlyArray<readonly [AliveFilter, string]> = [
+  ['all', '전체'],
+  ['dead', '사망'],
+  ['alive', '생존'],
+]
+
+function resolvePersonFieldBucket(person: AdaptedPerson): string {
+  const raw = person.field?.trim()
+  if (raw && raw !== '기타' && raw !== '미상') return raw
+  if (person.isMonarch || person.isHeadOfState) return '정치'
+  const hint = `${person.primaryTitle ?? ''} ${person.faction ?? ''}`
+  if (/장군|제독|원수|무장|군인|장수|사령관/.test(hint)) return '군사'
+  if (/교황|주교|승려|선사|신학|선지자|목사|성인/.test(hint)) return '종교'
+  if (/과학|수학|물리|화학|천문|의학|발명|박물/.test(hint)) return '과학'
+  if (/철학|학자|역사가|사상가|유학|교수|경제/.test(hint)) return '학술'
+  if (/화가|시인|작가|음악|예술|건축|소설|조각/.test(hint)) return '문화'
+  if (/왕|황제|대통령|총리|수상|재상|정치|관료|대신|집정관/.test(hint)) return '정치'
+  return raw || '기타'
+}
+
 export function InfographicContent({
   onPersonClick,
   viewSwitcher,
   selectedPersonId,
-  onOpenFilters,
+  onOpenFilters: _onOpenFilters,
 }: InfographicContentProps) {
+  const theme = useTheme()
+  const mode = theme.mode === 'dark' ? 'dark' : 'light'
   // URL ↔ store 동기화는 상위 PersonInfographicPane이 담당 (records 뷰 분기 공유)
   const { isLoading, isError, refetch } = usePersonsInfographic()
   const allPeople = useAdaptedPersons()
@@ -173,6 +224,29 @@ export function InfographicContent({
   )
 
   const [formOpen, setFormOpen] = useState(false)
+  const [extraFilterOpen, setExtraFilterOpen] = useState(false)
+  const extraFilterRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!extraFilterOpen) return
+    const onPointerDown = (event: MouseEvent) => {
+      if (
+        extraFilterRef.current &&
+        !extraFilterRef.current.contains(event.target as Node)
+      ) {
+        setExtraFilterOpen(false)
+      }
+    }
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setExtraFilterOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    window.addEventListener('keydown', onEscape)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      window.removeEventListener('keydown', onEscape)
+    }
+  }, [extraFilterOpen])
 
   // 통계 차트 접힘 — 기본 접힘. localStorage persist.
   const [statsOpen, setStatsOpen] = useState<boolean>(() => {
@@ -222,9 +296,22 @@ export function InfographicContent({
 
   // 활성 scope 라벨 — 단일이면 그 값, 다중이면 "필터링됨". 모두 비면 "전체 인물".
   const totalScopeCount = countActiveScopes(scopes)
-  /** 상세 필터 시트가 다루는 것만 센다(검색어는 툴바 검색창이 따로 보여 준다) */
-  const sheetFilterCount =
-    totalScopeCount + (minInfluence > 0 ? 1 : 0) + (aliveFilter !== 'all' ? 1 : 0)
+  /** 추가 조건 팝오버가 다루는 2개 필터(영향력·생존 여부)만 센다 — 시대·지역·분야·국가는 바로 옆 드롭다운이 표시 */
+  const extraFilterCount =
+    (minInfluence > 0 ? 1 : 0) + (aliveFilter !== 'all' ? 1 : 0)
+  const extraFilterSummary =
+    extraFilterCount === 0
+      ? '영향력·생존'
+      : [
+          minInfluence > 0 ? `영향력 ${minInfluence}+` : null,
+          aliveFilter === 'alive'
+            ? '생존'
+            : aliveFilter === 'dead'
+              ? '사망'
+              : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')
   const scopeLabel =
     totalScopeCount === 0
       ? '전체 인물'
@@ -324,6 +411,92 @@ export function InfographicContent({
       country: countryOptions,
     }
   }, [allPeople, scopes, minInfluence, aliveFilter, dq])
+
+  // 상시 노출 3열 컴팩트 벤토 인포그래픽 요약 (시대 밀도 5-bar / 활동 분야 비중 / 소속 국가 Top 5)
+  const summaryInfographic = useMemo(() => {
+    const filteredEraCounts = new Map<string, number>()
+    const fieldCounts = new Map<string, number>()
+    const countryCounts = new Map<string, number>()
+
+    for (const person of filtered) {
+      filteredEraCounts.set(
+        person.era.key,
+        (filteredEraCounts.get(person.era.key) ?? 0) + 1,
+      )
+      const fieldKey = resolvePersonFieldBucket(person)
+      fieldCounts.set(fieldKey, (fieldCounts.get(fieldKey) ?? 0) + 1)
+
+      const countryName = person.country?.trim() || '미상'
+      countryCounts.set(countryName, (countryCounts.get(countryName) ?? 0) + 1)
+    }
+
+    // 시대 막대는 시대 필터가 걸렸을 때 후보군(facet)도 유지하여 다른 시대 막대를 눌러 토글할 수 있게 한다
+    const eraFacetByKey = new Map(
+      scopeOptions.era.map((opt) => [opt.value, opt.count]),
+    )
+    const eraBars = ERAS.map((era) => {
+      const count =
+        scopes.era.length > 0
+          ? (eraFacetByKey.get(era.key) ?? 0)
+          : (filteredEraCounts.get(era.key) ?? 0)
+      return {
+        key: era.key,
+        label: era.lbl,
+        color: era.color,
+        count,
+        selected: scopes.era.includes(era.key),
+      }
+    })
+    const maxEraCount = Math.max(1, ...eraBars.map((bar) => bar.count))
+
+    const total = Math.max(1, filtered.length)
+    const fieldSlices: SegmentSlice[] = Array.from(fieldCounts.entries())
+      .filter(([, value]) => value > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([label, value]) => ({
+        key: label,
+        label,
+        value,
+        color: colorForField(label),
+        meta: `${Math.round((value / total) * 100)}%`,
+      }))
+    const topField = fieldSlices[0] ?? null
+    const topFieldPct = topField
+      ? Math.round((topField.value / total) * 100)
+      : 0
+
+    const namedCountries = Array.from(countryCounts.entries()).filter(
+      ([name]) => name !== '미상',
+    )
+    const sourceCountries =
+      namedCountries.length > 0
+        ? namedCountries
+        : Array.from(countryCounts.entries())
+    const topCountries = sourceCountries
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko'))
+      .slice(0, 5)
+      .map(([country, count]) => ({
+        country,
+        count,
+        pct: Math.round((count / total) * 100),
+        selected: scopes.country.includes(country),
+      }))
+    const maxCountryCount = Math.max(
+      1,
+      ...topCountries.map((entry) => entry.count),
+    )
+
+    return {
+      eraBars,
+      maxEraCount,
+      fieldSlices,
+      topField,
+      topFieldPct,
+      topCountries,
+      maxCountryCount,
+      distinctCountryCount: namedCountries.length || countryCounts.size,
+    }
+  }, [filtered, scopeOptions.era, scopes.era, scopes.country])
 
   // 활성 필터 칩 — 좌측 레일·상단 드롭다운 어디서 걸었든 한 줄에서 보고 하나씩 해제.
   const activeChips: Array<{ key: string; label: string; onRemove: () => void }> = [
@@ -474,27 +647,100 @@ export function InfographicContent({
               options={scopeOptions.country}
               searchable
             />
-          </FilterGroup>
-          {onOpenFilters && (
-            <FilterSheetBtn
-              type="button"
-              onClick={onOpenFilters}
-              $active={sheetFilterCount > 0}
-              aria-haspopup="dialog"
-              aria-label={
-                sheetFilterCount > 0
-                  ? `상세 필터 열기, ${sheetFilterCount}개 적용 중`
-                  : '상세 필터 열기'
-              }
-              title="영향력·생존 등 상세 필터"
-            >
-              <FiFilter size={13} aria-hidden />
-              <span>상세</span>
-              {sheetFilterCount > 0 && (
-                <FilterCount aria-hidden>{sheetFilterCount}</FilterCount>
+            <ExtraFilterAnchor ref={extraFilterRef}>
+              <ExtraFilterBtn
+                type="button"
+                onClick={() => setExtraFilterOpen((open) => !open)}
+                $active={extraFilterCount > 0 || extraFilterOpen}
+                aria-expanded={extraFilterOpen}
+                aria-haspopup="dialog"
+                title="영향력 하한 · 생존 여부 조건"
+              >
+                <FiSliders size={13} aria-hidden />
+                <span>{extraFilterSummary}</span>
+                {extraFilterCount > 0 && (
+                  <FilterCount aria-hidden>{extraFilterCount}</FilterCount>
+                )}
+                <FiChevronDown
+                  size={12}
+                  aria-hidden
+                  style={{
+                    transform: extraFilterOpen ? 'rotate(180deg)' : 'none',
+                    transition: `transform ${MOTION.fast} ease`,
+                  }}
+                />
+              </ExtraFilterBtn>
+              {extraFilterOpen && (
+                <ExtraFilterPopover
+                  role="dialog"
+                  aria-label="영향력 및 생존 여부 필터"
+                >
+                  <PopoverSection>
+                    <PopoverHeadRow>
+                      <PopoverLabel>영향력 하한</PopoverLabel>
+                      <PopoverValue>
+                        {minInfluence > 0 ? `${minInfluence}점 이상` : '전체'}
+                      </PopoverValue>
+                    </PopoverHeadRow>
+                    <PresetPillsRow>
+                      {INFLUENCE_PRESETS.map((preset) => (
+                        <PresetPill
+                          key={preset}
+                          type="button"
+                          $active={minInfluence === preset}
+                          onClick={() => setMinInfluence(preset)}
+                        >
+                          {preset === 0 ? '전체' : `${preset}+`}
+                        </PresetPill>
+                      ))}
+                    </PresetPillsRow>
+                    <InfluenceSlider
+                      type="range"
+                      min={0}
+                      max={95}
+                      step={5}
+                      value={minInfluence}
+                      onChange={(event) =>
+                        setMinInfluence(Number(event.target.value))
+                      }
+                      aria-label="영향력 최소 점수"
+                    />
+                  </PopoverSection>
+                  <PopoverSection>
+                    <PopoverHeadRow>
+                      <PopoverLabel>생존 여부</PopoverLabel>
+                    </PopoverHeadRow>
+                    <PresetPillsRow role="group" aria-label="생존 여부 선택">
+                      {ALIVE_FILTER_OPTIONS.map(([val, lbl]) => (
+                        <PresetPill
+                          key={val}
+                          type="button"
+                          $active={aliveFilter === val}
+                          aria-pressed={aliveFilter === val}
+                          onClick={() => setAliveFilter(val)}
+                        >
+                          {lbl}
+                        </PresetPill>
+                      ))}
+                    </PresetPillsRow>
+                  </PopoverSection>
+                  {extraFilterCount > 0 && (
+                    <PopoverFooter>
+                      <PopoverResetBtn
+                        type="button"
+                        onClick={() => {
+                          setMinInfluence(0)
+                          setAliveFilter('all')
+                        }}
+                      >
+                        추가 조건 초기화
+                      </PopoverResetBtn>
+                    </PopoverFooter>
+                  )}
+                </ExtraFilterPopover>
               )}
-            </FilterSheetBtn>
-          )}
+            </ExtraFilterAnchor>
+          </FilterGroup>
 
           {activeView === 'story' && (
             <DisplayOptions>
@@ -595,6 +841,191 @@ export function InfographicContent({
         )}
 
 
+        {!isLoading && !isError && filtered.length > 0 && (
+          <SummaryStripWrap aria-label="인물 분포 요약 인포그래픽">
+            <SummaryGrid3Col>
+              {/* Col 1: 시대별 인물 밀도 미니 히스토그램 (5-bar) */}
+              <CompactBentoCard>
+                <CompactBentoHeader>
+                  <BentoCardTitleGroup>
+                    <CompactBentoTitle>시대별 인물 밀도</CompactBentoTitle>
+                  </BentoCardTitleGroup>
+                  <BentoCardBadge>
+                    {scopes.era.length > 0
+                      ? `${scopes.era.length}개 시대 선택`
+                      : `${filtered.length.toLocaleString()}명`}
+                  </BentoCardBadge>
+                </CompactBentoHeader>
+                <CompactBentoBody>
+                  <EraMiniHistogram role="group" aria-label="시대별 인물 밀도 막대 — 클릭하여 시대 필터 토글">
+                    {summaryInfographic.eraBars.map((bar) => {
+                      const heightPct =
+                        bar.count > 0
+                          ? Math.max(
+                              12,
+                              Math.round(
+                                (bar.count / summaryInfographic.maxEraCount) * 100,
+                              ),
+                            )
+                          : 0
+                      const dimmed =
+                        scopes.era.length > 0 && !bar.selected
+                      return (
+                        <EraBarButton
+                          key={bar.key}
+                          type="button"
+                          onClick={() => toggleScope('era', bar.key)}
+                          aria-pressed={bar.selected}
+                          $selected={bar.selected}
+                          $dimmed={dimmed}
+                          title={`${bar.label}: ${bar.count.toLocaleString()}명 (클릭하여 시대 필터 ${bar.selected ? '해제' : '적용'})`}
+                        >
+                          <EraBarCount $selected={bar.selected}>
+                            {bar.count}
+                          </EraBarCount>
+                          <EraBarTrack $selected={bar.selected}>
+                            {bar.count > 0 && (
+                              <EraBarFill
+                                style={{
+                                  height: `${heightPct}%`,
+                                  background: bar.color,
+                                }}
+                              />
+                            )}
+                          </EraBarTrack>
+                          <EraBarLabel $selected={bar.selected}>
+                            {bar.label}
+                          </EraBarLabel>
+                        </EraBarButton>
+                      )
+                    })}
+                  </EraMiniHistogram>
+                </CompactBentoBody>
+              </CompactBentoCard>
+
+              {/* Col 2: 활동 분야 비중 StackedSegmentBar + MiniDonutRing */}
+              <CompactBentoCard>
+                <CompactBentoHeader>
+                  <BentoCardTitleGroup>
+                    <CompactBentoTitle>활동 분야 비중</CompactBentoTitle>
+                  </BentoCardTitleGroup>
+                  {summaryInfographic.topField && (
+                    <BentoCardBadge>
+                      {summaryInfographic.topField.label}{' '}
+                      {summaryInfographic.topFieldPct}%
+                    </BentoCardBadge>
+                  )}
+                </CompactBentoHeader>
+                <CompactBentoBody>
+                  <FieldSummaryLayout>
+                    <MiniDonutRing
+                      slices={summaryInfographic.fieldSlices}
+                      size={52}
+                      strokeWidth={7}
+                      centerValue={`${summaryInfographic.topFieldPct}%`}
+                    />
+                    <FieldSummaryMain>
+                      <StackedSegmentBar
+                        slices={summaryInfographic.fieldSlices}
+                        height={8}
+                      />
+                      <FieldChipRow>
+                        {summaryInfographic.fieldSlices.slice(0, 6).map((slice) => {
+                          const canToggle = (FIELDS as readonly string[]).includes(
+                            slice.key,
+                          )
+                          const isSelected = scopes.field.includes(slice.key)
+                          return (
+                            <FieldStatChip
+                              key={slice.key}
+                              type="button"
+                              disabled={!canToggle}
+                              $selected={isSelected}
+                              aria-pressed={canToggle ? isSelected : undefined}
+                              onClick={() => {
+                                if (canToggle) toggleScope('field', slice.key)
+                              }}
+                              title={
+                                canToggle
+                                  ? `${slice.label} ${slice.value.toLocaleString()}명 (${slice.meta}) — 클릭하여 분야 필터 토글`
+                                  : `${slice.label} ${slice.value.toLocaleString()}명 (${slice.meta})`
+                              }
+                            >
+                              <FieldDot style={{ background: slice.color }} />
+                              <span>{slice.label}</span>
+                              <strong>{slice.meta}</strong>
+                            </FieldStatChip>
+                          )
+                        })}
+                      </FieldChipRow>
+                    </FieldSummaryMain>
+                  </FieldSummaryLayout>
+                </CompactBentoBody>
+              </CompactBentoCard>
+
+              {/* Col 3: 소속 국가 Top 5 수평 비례 막대 */}
+              <CompactBentoCard>
+                <CompactBentoHeader>
+                  <BentoCardTitleGroup>
+                    <CompactBentoTitle>소속 국가 Top 5</CompactBentoTitle>
+                  </BentoCardTitleGroup>
+                  <BentoCardBadge>
+                    총 {summaryInfographic.distinctCountryCount.toLocaleString()}개국
+                  </BentoCardBadge>
+                </CompactBentoHeader>
+                <CompactBentoBody>
+                  <TopCountryList>
+                    {summaryInfographic.topCountries.map((item, idx) => {
+                      const canToggle = item.country !== '미상'
+                      const barPct = Math.max(
+                        6,
+                        Math.round(
+                          (item.count / summaryInfographic.maxCountryCount) * 100,
+                        ),
+                      )
+                      return (
+                        <TopCountryRow
+                          key={item.country}
+                          type="button"
+                          disabled={!canToggle}
+                          $selected={item.selected}
+                          aria-pressed={canToggle ? item.selected : undefined}
+                          onClick={() => {
+                            if (canToggle) toggleScope('country', item.country)
+                          }}
+                          title={
+                            canToggle
+                              ? `${item.country}: ${item.count.toLocaleString()}명 (${item.pct}%) — 클릭하여 국가 필터 ${item.selected ? '해제' : '적용'}`
+                              : `${item.country}: ${item.count.toLocaleString()}명`
+                          }
+                        >
+                          <TopCountryRank>{idx + 1}</TopCountryRank>
+                          <TopCountryName $selected={item.selected}>
+                            {item.country}
+                          </TopCountryName>
+                          <TopCountryBarTrack>
+                            <TopCountryBarFill
+                              $selected={item.selected}
+                              style={{
+                                width: `${barPct}%`,
+                                background: ledgerAccent(mode),
+                              }}
+                            />
+                          </TopCountryBarTrack>
+                          <TopCountryStat>
+                            <strong>{item.count.toLocaleString()}</strong>
+                            <span>{item.pct}%</span>
+                          </TopCountryStat>
+                        </TopCountryRow>
+                      )
+                    })}
+                  </TopCountryList>
+                </CompactBentoBody>
+              </CompactBentoCard>
+            </SummaryGrid3Col>
+          </SummaryStripWrap>
+        )}
+
         {!isLoading && (filtered.length > 0 || baseFiltered.length > 0) && statsPanelShown && (
           <StatsArea>
             <HeaderStats
@@ -689,50 +1120,455 @@ const FilterCount = styled.span`
     theme.mode === 'dark' ? BRAND.primaryFillDark : BRAND.primaryFill};
 `
 
-const FilterSheetBtn = styled.button<{ $active?: boolean }>`
+const ExtraFilterAnchor = styled.div`
+  position: relative;
+  display: inline-flex;
+`
+
+const ExtraFilterBtn = styled.button<{ $active?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 5px;
   height: 34px;
   padding: 0 11px;
-  border-radius: 8px;
+  border-radius: ${RADIUS.SM};
   border: 1px solid
-    ${({ $active, theme }) =>
-      $active
-        ? BRAND.primaryBorder
-        : theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.08)'
-          : 'rgba(15, 23, 42, 0.08)'};
-  background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? BRAND.primarySoftDark
-        : BRAND.primarySoft
-      : theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.02)'
-        : '#ffffff'};
-  color: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? BRAND.primaryTextOnDark
-        : BRAND.primaryHover
-      : theme.colors.text.secondary};
+    ${({ $active, theme }) => {
+      const m = theme.mode === 'dark' ? 'dark' : 'light'
+      return $active ? ledgerAccentBorder(m) : ledgerHairlineStrong(m)
+    }};
+  background: ${({ $active, theme }) => {
+    const m = theme.mode === 'dark' ? 'dark' : 'light'
+    return $active ? ledgerAccentSubtle(m) : ledgerBackground(m)
+  }};
+  color: ${({ $active, theme }) => {
+    const m = theme.mode === 'dark' ? 'dark' : 'light'
+    return $active ? ledgerAccent(m) : theme.colors.text.secondary
+  }};
   font-size: 12.5px;
   font-weight: ${({ $active }) => ($active ? 600 : 500)};
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  box-shadow: none;
+  transition:
+    background ${MOTION.fast} ease,
+    color ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease;
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.16)' : 'rgba(15, 23, 42, 0.16)'};
     background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.03)'};
+      ledgerHoverFill(theme.mode === 'dark' ? 'dark' : 'light')};
   }
   &:focus-visible {
-    outline: none;
-    box-shadow: ${BRAND.focusRing};
+    outline: 2px solid
+      ${({ theme }) => ledgerAccent(theme.mode === 'dark' ? 'dark' : 'light')};
+    outline-offset: 1px;
+  }
+`
+
+const ExtraFilterPopover = styled.div`
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  width: 268px;
+  padding: 12px;
+  border-radius: ${RADIUS.MD};
+  border: 1px solid
+    ${({ theme }) =>
+      ledgerHairlineStrong(theme.mode === 'dark' ? 'dark' : 'light')};
+  background: ${({ theme }) =>
+    ledgerBackground(theme.mode === 'dark' ? 'dark' : 'light')};
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+`
+
+const PopoverSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const PopoverHeadRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+`
+
+const PopoverLabel = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const PopoverValue = styled.span`
+  ${DIGIT_DISPLAY}
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) =>
+    ledgerAccent(theme.mode === 'dark' ? 'dark' : 'light')};
+`
+
+const PresetPillsRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+`
+
+const PresetPill = styled.button<{ $active: boolean }>`
+  flex: 1;
+  min-width: 42px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid
+    ${({ $active, theme }) => {
+      const m = theme.mode === 'dark' ? 'dark' : 'light'
+      return $active ? ledgerAccentBorder(m) : ledgerHairlineStrong(m)
+    }};
+  background: ${({ $active, theme }) => {
+    const m = theme.mode === 'dark' ? 'dark' : 'light'
+    return $active ? ledgerAccentSubtle(m) : 'transparent'
+  }};
+  color: ${({ $active, theme }) => {
+    const m = theme.mode === 'dark' ? 'dark' : 'light'
+    return $active ? ledgerAccent(m) : theme.colors.text.secondary
+  }};
+  font-size: 11px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    color ${MOTION.fast} ease;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) =>
+      ledgerHoverFill(theme.mode === 'dark' ? 'dark' : 'light')};
+  }
+`
+
+const InfluenceSlider = styled.input`
+  width: 100%;
+  margin: 2px 0 0;
+  accent-color: ${({ theme }) =>
+    ledgerAccent(theme.mode === 'dark' ? 'dark' : 'light')};
+  cursor: pointer;
+`
+
+const PopoverFooter = styled.div`
+  padding-top: 8px;
+  border-top: 1px solid
+    ${({ theme }) => ledgerHairline(theme.mode === 'dark' ? 'dark' : 'light')};
+  display: flex;
+  justify-content: flex-end;
+`
+
+const PopoverResetBtn = styled.button`
+  border: none;
+  background: transparent;
+  padding: 2px 6px;
+  border-radius: ${RADIUS.XS};
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) =>
+    ledgerAccent(theme.mode === 'dark' ? 'dark' : 'light')};
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) =>
+      ledgerAccentSubtle(theme.mode === 'dark' ? 'dark' : 'light')};
+  }
+`
+
+const SummaryStripWrap = styled.section`
+  margin-top: 10px;
+`
+
+const SummaryGrid3Col = styled(BentoGrid3Col)`
+  gap: 8px;
+`
+
+const CompactBentoCard = styled(BentoCard)`
+  padding: 10px 12px;
+  gap: 8px;
+  box-shadow: none;
+  border: 1px solid
+    ${({ theme }) =>
+      ledgerHairlineStrong(theme.mode === 'dark' ? 'dark' : 'light')};
+`
+
+const CompactBentoHeader = styled(BentoCardHeader)`
+  padding: 0;
+  min-height: 0;
+`
+
+const CompactBentoTitle = styled(BentoCardTitle)`
+  font-size: 11.5px;
+  font-weight: 700;
+`
+
+const CompactBentoBody = styled(BentoCardBody)`
+  padding: 0;
+  gap: 6px;
+`
+
+const EraMiniHistogram = styled.div`
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+  align-items: end;
+`
+
+const EraBarButton = styled.button<{ $selected: boolean; $dimmed: boolean }>`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 3px 3px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid
+    ${({ $selected, theme }) => {
+      const m = theme.mode === 'dark' ? 'dark' : 'light'
+      return $selected ? ledgerAccentBorder(m) : 'transparent'
+    }};
+  background: ${({ $selected, theme }) => {
+    const m = theme.mode === 'dark' ? 'dark' : 'light'
+    return $selected ? ledgerAccentSubtle(m) : 'transparent'
+  }};
+  opacity: ${({ $dimmed }) => ($dimmed ? 0.42 : 1)};
+  cursor: pointer;
+  box-shadow: none;
+  min-width: 0;
+  transition:
+    opacity ${MOTION.fast} ease,
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease;
+
+  &:hover {
+    opacity: 1;
+    background: ${({ theme }) =>
+      ledgerHoverFill(theme.mode === 'dark' ? 'dark' : 'light')};
+  }
+  &:focus-visible {
+    outline: 2px solid
+      ${({ theme }) => ledgerAccent(theme.mode === 'dark' ? 'dark' : 'light')};
+    outline-offset: 1px;
+  }
+`
+
+const EraBarCount = styled.span<{ $selected: boolean }>`
+  ${DIGIT_DISPLAY}
+  font-size: 10px;
+  font-weight: ${({ $selected }) => ($selected ? 800 : 600)};
+  line-height: 1.1;
+  color: ${({ $selected, theme }) =>
+    $selected
+      ? ledgerAccent(theme.mode === 'dark' ? 'dark' : 'light')
+      : theme.colors.text.secondary};
+`
+
+const EraBarTrack = styled.span<{ $selected: boolean }>`
+  width: 100%;
+  height: 36px;
+  display: flex;
+  align-items: flex-end;
+  padding: 2px;
+  border-radius: ${RADIUS.XS};
+  background: ${({ theme }) =>
+    ledgerSubtleFill(theme.mode === 'dark' ? 'dark' : 'light')};
+  border: 1px solid
+    ${({ $selected, theme }) => {
+      const m = theme.mode === 'dark' ? 'dark' : 'light'
+      return $selected ? ledgerAccentBorder(m) : ledgerHairline(m)
+    }};
+`
+
+const EraBarFill = styled.span`
+  display: block;
+  width: 100%;
+  border-radius: 2px 2px 0 0;
+  transition: height ${MOTION.normal} ease;
+`
+
+const EraBarLabel = styled.span<{ $selected: boolean }>`
+  max-width: 100%;
+  font-size: 10px;
+  font-weight: ${({ $selected }) => ($selected ? 700 : 500)};
+  line-height: 1.15;
+  color: ${({ $selected, theme }) =>
+    $selected
+      ? ledgerAccent(theme.mode === 'dark' ? 'dark' : 'light')
+      : theme.colors.text.tertiary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const FieldSummaryLayout = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+`
+
+const FieldSummaryMain = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+`
+
+const FieldChipRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+`
+
+const FieldStatChip = styled.button<{ $selected: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid
+    ${({ $selected, theme }) => {
+      const m = theme.mode === 'dark' ? 'dark' : 'light'
+      return $selected ? ledgerAccentBorder(m) : ledgerHairlineStrong(m)
+    }};
+  background: ${({ $selected, theme }) => {
+    const m = theme.mode === 'dark' ? 'dark' : 'light'
+    return $selected ? ledgerAccentSubtle(m) : 'transparent'
+  }};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 10.5px;
+  font-weight: ${({ $selected }) => ($selected ? 700 : 500)};
+  cursor: pointer;
+  box-shadow: none;
+
+  strong {
+    ${DIGIT_DISPLAY}
+    font-weight: 700;
+    color: ${({ $selected, theme }) =>
+      $selected
+        ? ledgerAccent(theme.mode === 'dark' ? 'dark' : 'light')
+        : theme.colors.text.primary};
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+
+  &:hover:not(:disabled) {
+    background: ${({ theme }) =>
+      ledgerHoverFill(theme.mode === 'dark' ? 'dark' : 'light')};
+  }
+`
+
+const FieldDot = styled.span`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+`
+
+const TopCountryList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`
+
+const TopCountryRow = styled.button<{ $selected: boolean }>`
+  display: grid;
+  grid-template-columns: 14px minmax(52px, 84px) minmax(40px, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  margin: 0 -4px;
+  border-radius: ${RADIUS.XS};
+  border: 1px solid
+    ${({ $selected, theme }) => {
+      const m = theme.mode === 'dark' ? 'dark' : 'light'
+      return $selected ? ledgerAccentBorder(m) : 'transparent'
+    }};
+  background: ${({ $selected, theme }) => {
+    const m = theme.mode === 'dark' ? 'dark' : 'light'
+    return $selected ? ledgerAccentSubtle(m) : 'transparent'
+  }};
+  cursor: pointer;
+  text-align: left;
+  box-shadow: none;
+
+  &:disabled {
+    cursor: default;
+  }
+
+  &:hover:not(:disabled) {
+    background: ${({ theme }) =>
+      ledgerHoverFill(theme.mode === 'dark' ? 'dark' : 'light')};
+  }
+`
+
+const TopCountryRank = styled.span`
+  ${DIGIT_DISPLAY}
+  font-size: 10px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  text-align: center;
+`
+
+const TopCountryName = styled.span<{ $selected: boolean }>`
+  font-size: 11px;
+  font-weight: ${({ $selected }) => ($selected ? 700 : 600)};
+  color: ${({ $selected, theme }) =>
+    $selected
+      ? ledgerAccent(theme.mode === 'dark' ? 'dark' : 'light')
+      : theme.colors.text.primary};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const TopCountryBarTrack = styled.span`
+  height: 6px;
+  border-radius: ${RADIUS.PILL};
+  background: ${({ theme }) =>
+    ledgerSubtleFill(theme.mode === 'dark' ? 'dark' : 'light')};
+  border: 1px solid
+    ${({ theme }) => ledgerHairline(theme.mode === 'dark' ? 'dark' : 'light')};
+  overflow: hidden;
+`
+
+const TopCountryBarFill = styled.span<{ $selected: boolean }>`
+  display: block;
+  height: 100%;
+  border-radius: ${RADIUS.PILL};
+  opacity: ${({ $selected }) => ($selected ? 1 : 0.85)};
+  transition: width ${MOTION.normal} ease;
+`
+
+const TopCountryStat = styled.span`
+  ${DIGIT_DISPLAY}
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 10.5px;
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  span {
+    font-size: 9.5px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 `
 

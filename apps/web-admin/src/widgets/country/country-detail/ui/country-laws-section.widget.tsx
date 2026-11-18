@@ -9,8 +9,26 @@ import {
   FiSearch,
   FiTrash2,
 } from 'react-icons/fi'
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 
+import {
+  BentoCard,
+  BentoCardBadge,
+  BentoCardBody,
+  BentoCardHeader,
+  BentoCardTitle,
+  BentoCardTitleGroup,
+  BentoGrid2Col,
+  type SegmentSlice,
+  StackedSegmentBar,
+} from '@/entities/event/ui/bento-primitives'
+import {
+  DIGIT_DISPLAY,
+  ledgerAccent,
+  ledgerHairline,
+  ledgerSubtleFill,
+  RADIUS,
+} from '@/entities/event/ui/ledger-tokens'
 import {
   type LawRow,
   createLaw,
@@ -36,7 +54,6 @@ import {
 } from '@/shared/ui/select-modal/select-modal'
 import { notify } from '@/shared/ui/toast'
 
-import * as DashboardStyles from './country-detail-dashboard.styles'
 import {
   EmptyHint,
   PoliticsTabPanel,
@@ -46,6 +63,30 @@ import {
   SectionLead,
   SubsectionAddBtn,
 } from './country-politics-tab.styles'
+
+function getLawTypeHierarchyRank(label: string): number {
+  if (/헌법|기본법|대헌장|장전/.test(label)) return 0
+  if (/법률|법전|율령|대전|통전/.test(label)) return 1
+  if (/조약|협약|국제법/.test(label)) return 2
+  if (/대통령령|칙령|시행령|정령|명령|교지/.test(label)) return 3
+  if (/총리령|부령|시행규칙|규칙|조례|예규/.test(label)) return 4
+  if (label === '미분류') return 9
+  return 5
+}
+
+function parseLawSignedYear(raw: string | null | undefined): number | null {
+  if (!raw) return null
+  const match = String(raw).trim().match(/^(-?\d{1,4})/)
+  if (match) {
+    const parsed = parseInt(match[1], 10)
+    if (Number.isFinite(parsed) && parsed !== 0) return parsed
+  }
+  const dateObj = new Date(raw)
+  if (!Number.isNaN(dateObj.getTime())) {
+    return dateObj.getUTCFullYear()
+  }
+  return null
+}
 
 function lawsScopeKey(input: {
   countryId?: string
@@ -211,11 +252,9 @@ export function CountryLawsSection({
     return () => window.clearTimeout(timer)
   }, [highlightedLawId, sorted])
 
-  const withTypeList = useMemo(
-    () =>
-      sorted.filter((row) => Boolean(row.lawType?.name || row.lawTypeId)),
-    [sorted],
-  )
+  const theme = useTheme()
+  const isDark = theme.mode === 'dark'
+
   const distinctTypeCount = useMemo(() => {
     const typeSet = new Set<string>()
     for (const row of sorted) {
@@ -224,17 +263,6 @@ export function CountryLawsSection({
     }
     return typeSet.size
   }, [sorted])
-  const withClauseList = useMemo(
-    () =>
-      sorted.filter(
-        (row) => row.articleNumber != null || row.paragraphNumber != null,
-      ),
-    [sorted],
-  )
-  const withSummaryList = useMemo(
-    () => sorted.filter((row) => Boolean(row.summary?.trim())),
-    [sorted],
-  )
 
   const typeChipItems = useMemo(() => {
     const counts = new Map<string, { id: string; label: string; count: number }>()
@@ -268,6 +296,105 @@ export function CountryLawsSection({
     }
     return items
   }, [sorted, lawTypes])
+
+  const lawInfographic = useMemo(() => {
+    const palette = isDark
+      ? ['#a5b4fc', '#38bdf8', '#34d399', '#fbbf24', '#c084fc', '#94a3b8']
+      : ['#4f46e5', '#0284c7', '#059669', '#d97706', '#7c3aed', '#64748b']
+
+    const hierarchySorted = [...typeChipItems].sort((left, right) => {
+      const rLeft = getLawTypeHierarchyRank(left.label)
+      const rRight = getLawTypeHierarchyRank(right.label)
+      if (rLeft !== rRight) return rLeft - rRight
+      return right.count - left.count
+    })
+
+    const lawTypeSlices: SegmentSlice[] = hierarchySorted.map((item, idx) => ({
+      key: item.id,
+      label: item.label,
+      value: item.count,
+      color:
+        item.id === 'UNTYPED'
+          ? palette[palette.length - 1]
+          : palette[idx % (palette.length - 1)],
+      meta: `${item.count}건`,
+    }))
+
+    const repealedCount = sorted.filter((row) => Boolean(row.endDate)).length
+    const inForceCount = Math.max(0, sorted.length - repealedCount)
+
+    const datedYears: number[] = []
+    for (const row of sorted) {
+      const y = parseLawSignedYear(row.startDate)
+      if (y != null) datedYears.push(y)
+    }
+
+    let mode: 'decade' | 'century' = 'century'
+    const bucketMap = new Map<
+      number,
+      { key: string; label: string; shortLabel: string; count: number }
+    >()
+
+    if (datedYears.length > 0) {
+      const minY = Math.min(...datedYears)
+      const maxY = Math.max(...datedYears)
+      if (maxY - minY <= 160 && minY >= 1700) {
+        mode = 'decade'
+        for (const y of datedYears) {
+          const d = Math.floor(y / 10) * 10
+          const cur = bucketMap.get(d)
+          if (cur) {
+            cur.count += 1
+          } else {
+            bucketMap.set(d, {
+              key: String(d),
+              label: `${d}년대`,
+              shortLabel: `'${String(d).slice(-2)}s`,
+              count: 1,
+            })
+          }
+        }
+      } else {
+        mode = 'century'
+        for (const y of datedYears) {
+          const c = y > 0 ? Math.ceil(y / 100) : -Math.ceil(Math.abs(y) / 100)
+          const cur = bucketMap.get(c)
+          if (cur) {
+            cur.count += 1
+          } else {
+            bucketMap.set(c, {
+              key: String(c),
+              label: c > 0 ? `${c}세기` : `BC ${Math.abs(c)}세기`,
+              shortLabel: c > 0 ? `${c}c` : `B${Math.abs(c)}c`,
+              count: 1,
+            })
+          }
+        }
+      }
+    }
+
+    const buckets = [...bucketMap.entries()]
+      .sort((left, right) => left[0] - right[0])
+      .slice(-12)
+      .map(([, val]) => val)
+    const maxBucketCount = Math.max(0, ...buckets.map((b) => b.count))
+    const peakBucket = buckets.reduce<{ label: string; count: number } | null>(
+      (best, cur) => (!best || cur.count > best.count ? cur : best),
+      null,
+    )
+
+    return {
+      lawTypeSlices,
+      inForceCount,
+      repealedCount,
+      mode,
+      buckets,
+      maxBucketCount,
+      peakBucket,
+      datedCount: datedYears.length,
+      earliestYear: datedYears.length > 0 ? Math.min(...datedYears) : null,
+    }
+  }, [typeChipItems, sorted, isDark])
 
   const filteredRows = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase()
@@ -507,105 +634,134 @@ export function CountryLawsSection({
           </LawTypeAddStrip>
         ) : null}
 
-        <DashboardStyles.SectionHeadlineStrip aria-label="법령 요약 지표">
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              전체 등록 법령
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue $muted={sorted.length === 0}>
-              {sorted.length > 0 ? (
-                <>
-                  {sorted.length.toLocaleString('ko-KR')}
-                  <DashboardStyles.SectionHeadlineUnit>
-                    건
-                  </DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '미등록'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {sorted.length > 0
-                ? '헌법 · 법률 · 율령 · 조례 원장'
-                : '등록된 법령 없음'}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
+        {!isLoading && sorted.length > 0 && (
+          <BentoGrid2Col aria-label="법령 요약 인포그래픽">
+            {/* Card 1: 법령 분류·위계 분포 */}
+            <BentoCard>
+              <BentoCardHeader>
+                <BentoCardTitleGroup>
+                  <BentoCardTitle>법령 분류 · 위계 분포</BentoCardTitle>
+                  <BentoCardBadge>
+                    총 {sorted.length.toLocaleString('ko-KR')}건 ·{' '}
+                    {distinctTypeCount}종
+                  </BentoCardBadge>
+                </BentoCardTitleGroup>
+              </BentoCardHeader>
+              <BentoCardBody>
+                <StackedSegmentBar
+                  slices={lawInfographic.lawTypeSlices}
+                  height={10}
+                  showPercent
+                />
+                <LawBentoLegendList>
+                  {lawInfographic.lawTypeSlices.map((slice) => {
+                    const isActive = typeFilter === slice.key
+                    return (
+                      <LawBentoLegendBtn
+                        key={slice.key}
+                        type="button"
+                        $active={isActive}
+                        onClick={() =>
+                          setTypeFilter((prev) =>
+                            prev === slice.key ? 'ALL' : slice.key,
+                          )
+                        }
+                      >
+                        <LawBentoDot $color={slice.color} />
+                        <span>{slice.label}</span>
+                        <strong>{slice.meta}</strong>
+                      </LawBentoLegendBtn>
+                    )
+                  })}
+                </LawBentoLegendList>
+                <LawBentoFooterLine>
+                  <span>
+                    현행·시행 유지{' '}
+                    <strong>{lawInfographic.inForceCount}건</strong>
+                  </span>
+                  <span>
+                    폐지·종료 명시{' '}
+                    <strong>{lawInfographic.repealedCount}건</strong>
+                  </span>
+                </LawBentoFooterLine>
+              </BentoCardBody>
+            </BentoCard>
 
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              적용 법 분류
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue
-              $muted={distinctTypeCount === 0}
-            >
-              {distinctTypeCount > 0 ? (
-                <>
-                  {distinctTypeCount.toLocaleString('ko-KR')}
-                  <DashboardStyles.SectionHeadlineUnit>
-                    종
-                  </DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '없음'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {sorted.length > 0
-                ? `분류 지정 ${withTypeList.length}/${sorted.length}건 · 전체 카탈로그 ${lawTypes.length}종`
-                : `법 분류 카탈로그 ${lawTypes.length}종 등록됨`}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
-
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              조·항 명시 법령
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue
-              $muted={withClauseList.length === 0}
-            >
-              {withClauseList.length > 0 ? (
-                <>
-                  {withClauseList.length.toLocaleString('ko-KR')}
-                  <DashboardStyles.SectionHeadlineUnit>
-                    건
-                  </DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '없음'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {sorted.length > 0
-                ? `제N조·제M항 특정 기록 ${withClauseList.length}/${sorted.length}건`
-                : '구체 조문 번호 미지정'}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
-
-          <DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineLabel>
-              요약 서술 보유율
-            </DashboardStyles.SectionHeadlineLabel>
-            <DashboardStyles.SectionHeadlineValue
-              $muted={withSummaryList.length === 0}
-            >
-              {sorted.length > 0 ? (
-                <>
-                  {Math.round((withSummaryList.length / sorted.length) * 100)}
-                  <DashboardStyles.SectionHeadlineUnit>
-                    %
-                  </DashboardStyles.SectionHeadlineUnit>
-                </>
-              ) : (
-                '—'
-              )}
-            </DashboardStyles.SectionHeadlineValue>
-            <DashboardStyles.SectionHeadlineSub>
-              {sorted.length > 0
-                ? `요약 서술 ${withSummaryList.length}/${sorted.length}건`
-                : '법령 취지·요약 미작성'}
-            </DashboardStyles.SectionHeadlineSub>
-          </DashboardStyles.SectionHeadlineCell>
-        </DashboardStyles.SectionHeadlineStrip>
+            {/* Card 2: 세기·연대별 제정 분포 미니 막대 차트 */}
+            <BentoCard>
+              <BentoCardHeader>
+                <BentoCardTitleGroup>
+                  <BentoCardTitle>
+                    {lawInfographic.mode === 'decade'
+                      ? '연대별 제정 분포'
+                      : '세기별 제정 분포'}
+                  </BentoCardTitle>
+                  <BentoCardBadge>
+                    {lawInfographic.datedCount > 0
+                      ? `시행일 확인 ${lawInfographic.datedCount}건`
+                      : '시행일 미기재'}
+                  </BentoCardBadge>
+                </BentoCardTitleGroup>
+              </BentoCardHeader>
+              <BentoCardBody>
+                {lawInfographic.buckets.length > 0 ? (
+                  <>
+                    <LawHistBars role="img" aria-label="시기별 법령 제정 분포">
+                      {lawInfographic.buckets.map((bucket) => {
+                        const heightPct =
+                          lawInfographic.maxBucketCount > 0
+                            ? Math.max(
+                                10,
+                                (bucket.count /
+                                  lawInfographic.maxBucketCount) *
+                                  100,
+                              )
+                            : 10
+                        const isPeak =
+                          lawInfographic.peakBucket?.label === bucket.label
+                        return (
+                          <LawHistCol
+                            key={bucket.key}
+                            title={`${bucket.label}: ${bucket.count}건`}
+                          >
+                            <LawHistCount>{bucket.count}</LawHistCount>
+                            <LawHistTrack>
+                              <LawHistFill
+                                $peak={isPeak}
+                                style={{ height: `${heightPct}%` }}
+                              />
+                            </LawHistTrack>
+                            <LawHistAxis>{bucket.shortLabel}</LawHistAxis>
+                          </LawHistCol>
+                        )
+                      })}
+                    </LawHistBars>
+                    <LawBentoFooterLine>
+                      <span>
+                        {lawInfographic.earliestYear != null
+                          ? `최초 제정: ${lawInfographic.earliestYear < 0 ? `BC ${Math.abs(lawInfographic.earliestYear)}` : lawInfographic.earliestYear}년`
+                          : ''}
+                      </span>
+                      {lawInfographic.peakBucket && (
+                        <span>
+                          최다 제정기:{' '}
+                          <strong>
+                            {lawInfographic.peakBucket.label} (
+                            {lawInfographic.peakBucket.count}건)
+                          </strong>
+                        </span>
+                      )}
+                    </LawBentoFooterLine>
+                  </>
+                ) : (
+                  <LawHistEmpty>
+                    법령의 제정·시행일을 입력하면 세기·연대별 제정 분포 막대 차트가 생성됩니다.
+                  </LawHistEmpty>
+                )}
+              </BentoCardBody>
+            </BentoCard>
+          </BentoGrid2Col>
+        )}
 
         <LawPanelBody>
           {isLoading ? (
@@ -1457,3 +1613,129 @@ const LawsRowActions = styled.div`
   gap: 4px;
   flex-shrink: 0;
 `
+
+const LawBentoLegendList = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
+`
+
+const LawBentoLegendBtn = styled.button<{ $active?: boolean }>`
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  border: none;
+  border-radius: ${RADIUS.XS};
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  font-family: inherit;
+  font-size: 11.5px;
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.primary : theme.colors.text.secondary};
+  cursor: pointer;
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+    ${DIGIT_DISPLAY}
+  }
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+  }
+`
+
+const LawBentoDot = styled.span<{ $color: string }>`
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: ${({ $color }) => $color};
+  flex-shrink: 0;
+`
+
+const LawBentoFooterLine = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding-top: 6px;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const LawHistBars = styled.div`
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  align-items: end;
+  gap: 5px;
+  height: 74px;
+  padding-top: 4px;
+`
+
+const LawHistCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  height: 100%;
+  min-width: 0;
+`
+
+const LawHistCount = styled.span`
+  font-size: 9.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  line-height: 1;
+  ${DIGIT_DISPLAY}
+`
+
+const LawHistTrack = styled.div`
+  width: 100%;
+  max-width: 24px;
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  border-radius: ${RADIUS.XS} ${RADIUS.XS} 0 0;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const LawHistFill = styled.div<{ $peak?: boolean }>`
+  width: 100%;
+  border-radius: ${RADIUS.XS} ${RADIUS.XS} 0 0;
+  background: ${({ theme, $peak }) =>
+    $peak
+      ? ledgerAccent(theme.mode)
+      : theme.mode === 'dark'
+        ? 'rgba(165, 180, 252, 0.42)'
+        : 'rgba(79, 70, 229, 0.35)'};
+`
+
+const LawHistAxis = styled.span`
+  font-size: 9.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  line-height: 1;
+  white-space: nowrap;
+  ${DIGIT_DISPLAY}
+`
+
+const LawHistEmpty = styled.div`
+  padding: 16px 0;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+

@@ -148,6 +148,9 @@ function EventDomainInfographicCard({
   onOpenEvents: () => void
 }) {
   const theme = useTheme()
+  const [hoveredDomain, setHoveredDomain] = useState<EventDomainKey | null>(
+    null,
+  )
   const radius = 40
   const circumference = 2 * Math.PI * radius
   const maxDomainCount = Math.max(1, ...domainBreakdown.map((d) => d.count))
@@ -164,12 +167,18 @@ function EventDomainInfographicCard({
         cumulative += fraction
         return {
           key: d.domain,
+          count: d.count,
+          sharePct: Math.round(fraction * 100),
           color: domainAccent(d.domain, theme.mode),
           dashArray: `${dashLength} ${Math.max(0, circumference - dashLength)}`,
           dashOffset,
         }
       })
   }, [domainBreakdown, totalSampled, circumference, theme.mode])
+
+  const activeHoverItem = hoveredDomain
+    ? (donutArcs.find((a) => a.key === hoveredDomain) ?? null)
+    : null
 
   return (
     <S.BentoCard aria-label="사건 9대 분야 분포">
@@ -205,26 +214,50 @@ function EventDomainInfographicCard({
                 strokeWidth={11}
               />
               <g transform="rotate(-90 54 54)">
-                {donutArcs.map((arc) => (
-                  <circle
-                    key={arc.key}
-                    cx={54}
-                    cy={54}
-                    r={radius}
-                    fill="none"
-                    stroke={arc.color}
-                    strokeWidth={11}
-                    strokeDasharray={arc.dashArray}
-                    strokeDashoffset={arc.dashOffset}
-                  />
-                ))}
+                {donutArcs.map((arc) => {
+                  const isHovered = hoveredDomain === arc.key
+                  const isDimmed =
+                    Boolean(hoveredDomain) && hoveredDomain !== arc.key
+                  return (
+                    <circle
+                      key={arc.key}
+                      cx={54}
+                      cy={54}
+                      r={radius}
+                      fill="none"
+                      stroke={arc.color}
+                      strokeWidth={isHovered ? 13.5 : 11}
+                      strokeOpacity={isDimmed ? 0.35 : 1}
+                      strokeDasharray={arc.dashArray}
+                      strokeDashoffset={arc.dashOffset}
+                      style={{ cursor: 'pointer', transition: 'all 0.14s ease' }}
+                      onMouseEnter={() => setHoveredDomain(arc.key)}
+                      onMouseLeave={() => setHoveredDomain(null)}
+                      onClick={() => onSelectDomain(arc.key)}
+                    />
+                  )
+                })}
               </g>
             </svg>
             <S.DonutCenter>
-              <S.DonutTotalNum>
-                {totalSampled.toLocaleString('ko-KR')}
-              </S.DonutTotalNum>
-              <S.DonutTotalLabel>집계 사건</S.DonutTotalLabel>
+              {activeHoverItem ? (
+                <>
+                  <S.DonutTotalNum style={{ color: activeHoverItem.color }}>
+                    {activeHoverItem.sharePct}%
+                  </S.DonutTotalNum>
+                  <S.DonutTotalLabel>
+                    {domainLabel(activeHoverItem.key)} ·{' '}
+                    {activeHoverItem.count.toLocaleString('ko-KR')}
+                  </S.DonutTotalLabel>
+                </>
+              ) : (
+                <>
+                  <S.DonutTotalNum>
+                    {totalSampled.toLocaleString('ko-KR')}
+                  </S.DonutTotalNum>
+                  <S.DonutTotalLabel>집계 사건</S.DonutTotalLabel>
+                </>
+              )}
             </S.DonutCenter>
           </S.DonutWrap>
 
@@ -242,6 +275,12 @@ function EventDomainInfographicCard({
                   <S.DomainBarRow
                     key={item.domain}
                     type="button"
+                    $active={hoveredDomain === item.domain}
+                    $dimmed={
+                      Boolean(hoveredDomain) && hoveredDomain !== item.domain
+                    }
+                    onMouseEnter={() => setHoveredDomain(item.domain)}
+                    onMouseLeave={() => setHoveredDomain(null)}
                     onClick={() => onSelectDomain(item.domain)}
                     title={`${domainLabel(item.domain)} 분야 사건 목록 열기`}
                   >
@@ -406,6 +445,77 @@ export default function DashboardPage() {
       sampledTotal: allSampledEvents.length,
     }
   }, [allSampledEvents])
+
+  const [eraAxisMode, setEraAxisMode] = useState<
+    'events' | 'persons' | 'polities'
+  >('events')
+
+  const personCenturyBuckets = useMemo(() => {
+    const map = new Map<number, number>()
+    for (const p of persons) {
+      const anyP = p as {
+        birthYear?: number | null
+        birthEra?: string | null
+        floruitStartYear?: number | null
+        floruitEra?: string | null
+        birthDate?: string | null
+      }
+      let signed: number | null = null
+      if (typeof anyP.birthYear === 'number' && Number.isFinite(anyP.birthYear)) {
+        signed =
+          String(anyP.birthEra ?? 'AD').toUpperCase() === 'BC'
+            ? -Math.abs(anyP.birthYear)
+            : Math.abs(anyP.birthYear)
+      } else if (
+        typeof anyP.floruitStartYear === 'number' &&
+        Number.isFinite(anyP.floruitStartYear)
+      ) {
+        signed =
+          String(anyP.floruitEra ?? 'AD').toUpperCase() === 'BC'
+            ? -Math.abs(anyP.floruitStartYear)
+            : Math.abs(anyP.floruitStartYear)
+      } else if (anyP.birthDate) {
+        const m = /^(-?\d{1,6})/.exec(anyP.birthDate.trim())
+        if (m) signed = Number(m[1])
+      }
+      const c = signed != null ? signedYearToCentury(signed) : null
+      if (c != null) map.set(c, (map.get(c) ?? 0) + 1)
+    }
+    return [...map.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([century, count]) => ({ century, count }))
+  }, [persons])
+
+  const polityCenturyBuckets = useMemo(() => {
+    const map = new Map<number, number>()
+    for (const hc of historicalCountries) {
+      const sY =
+        hc.startYear != null
+          ? hc.startEra === 'BC'
+            ? -Math.abs(hc.startYear)
+            : Math.abs(hc.startYear)
+          : null
+      const eY =
+        hc.endYear != null
+          ? hc.endEra === 'BC'
+            ? -Math.abs(hc.endYear)
+            : Math.abs(hc.endYear)
+          : sY
+      if (sY == null) continue
+      const cStart = signedYearToCentury(sY)
+      const cEnd = eY != null ? signedYearToCentury(eY) : cStart
+      if (cStart == null || cEnd == null) continue
+      const lo = Math.max(-21, Math.min(cStart, cEnd))
+      const hi = Math.min(21, Math.max(cStart, cEnd))
+      for (let c = lo; c <= hi; c += 1) {
+        if (c === 0) continue
+        map.set(c, (map.get(c) ?? 0) + 1)
+      }
+    }
+    return [...map.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([century, count]) => ({ century, count }))
+  }, [historicalCountries])
 
   const effectiveEventTotal = totalEventsCount ?? sampledTotal
   const treatyTotal = treatyMeta?.total ?? 0
@@ -594,40 +704,136 @@ export default function DashboardPage() {
           </S.QuickHubStrip>
         </S.VolumeStripWrap>
 
-        {/* 3. 2열 아카이브 인포그래픽 (세기별 사건 밀도 & 9대 분야 분포) */}
+        {/* 3. 2열 아카이브 인포그래픽 (세기별 3축 밀도 & 9대 분야 분포) */}
         <S.InfographicsGrid>
-          <S.BentoCard aria-label="세기별 역사 사건 밀도 히스토그램">
+          <S.BentoCard aria-label="세기별 역사 아카이브 밀도 히스토그램">
             <S.CardHeader>
               <S.CardTitleGroup>
-                <S.CardTitle>기원전 ~ 현대 세기별 사건 밀도</S.CardTitle>
-                {centuryBuckets.length > 0 && (
-                  <S.CardBadge>{centuryBuckets.length}개 세기</S.CardBadge>
-                )}
+                <S.CardTitle>
+                  {eraAxisMode === 'events'
+                    ? '기원전 ~ 현대 세기별 사건 밀도'
+                    : eraAxisMode === 'persons'
+                      ? '기원전 ~ 현대 세기별 인물 밀도'
+                      : '기원전 ~ 현대 세기별 존속 정치체'}
+                </S.CardTitle>
               </S.CardTitleGroup>
-              <S.CardLinkBtn
-                type="button"
-                onClick={() => navigate(pathKeys.events.root())}
-              >
-                연대별 탐색
-                <FiArrowUpRight size={12} aria-hidden />
-              </S.CardLinkBtn>
+
+              <S.EraModeSwitch role="tablist" aria-label="세기별 밀도 기준 전환">
+                <S.EraModeBtn
+                  type="button"
+                  $active={eraAxisMode === 'events'}
+                  onClick={() => setEraAxisMode('events')}
+                >
+                  사건 ({centuryBuckets.length})
+                </S.EraModeBtn>
+                <S.EraModeBtn
+                  type="button"
+                  $active={eraAxisMode === 'persons'}
+                  onClick={() => setEraAxisMode('persons')}
+                >
+                  인물 ({personCenturyBuckets.length})
+                </S.EraModeBtn>
+                <S.EraModeBtn
+                  type="button"
+                  $active={eraAxisMode === 'polities'}
+                  onClick={() => setEraAxisMode('polities')}
+                >
+                  정치체 ({polityCenturyBuckets.length})
+                </S.EraModeBtn>
+              </S.EraModeSwitch>
             </S.CardHeader>
             <S.CardCaption>
-              막대를 클릭하면 해당 세기 사건 카탈로그로 즉시 필터링됩니다.
+              {eraAxisMode === 'events'
+                ? '막대를 클릭하면 해당 세기 사건 카탈로그로 즉시 필터링됩니다.'
+                : eraAxisMode === 'persons'
+                  ? '생몰·활동 연대 기준 세기별 수록 인물 분포입니다.'
+                  : '존속 시작~종료 기간에 걸쳐 해당 세기에 실존했던 역사 정치체 수입니다.'}
             </S.CardCaption>
 
-            {isInfographicLoading ? (
-              <S.EmptyBox>세기별 분포를 집계하는 중…</S.EmptyBox>
-            ) : centuryBuckets.length === 0 ? (
-              <S.EmptyBox>연대가 입력된 사건 기록이 아직 없습니다.</S.EmptyBox>
+            {eraAxisMode === 'events' ? (
+              isInfographicLoading ? (
+                <S.EmptyBox>세기별 분포를 집계하는 중…</S.EmptyBox>
+              ) : centuryBuckets.length === 0 ? (
+                <S.EmptyBox>연대가 입력된 사건 기록이 아직 없습니다.</S.EmptyBox>
+              ) : (
+                <StackedCenturyDomainChart
+                  buckets={centuryBuckets}
+                  domainBreakdown={domainBreakdown}
+                  onSelectCentury={(century) =>
+                    navigate(`${pathKeys.events.root()}?century=${century}`)
+                  }
+                />
+              )
+            ) : eraAxisMode === 'persons' ? (
+              personCenturyBuckets.length === 0 ? (
+                <S.EmptyBox>연대가 입력된 인물 기록이 아직 없습니다.</S.EmptyBox>
+              ) : (
+                <S.SimpleCenturyBarsRow>
+                  {(() => {
+                    const maxP = Math.max(
+                      1,
+                      ...personCenturyBuckets.map((b) => b.count),
+                    )
+                    return personCenturyBuckets.map((b) => (
+                      <S.SimpleCenturyCol
+                        key={b.century}
+                        type="button"
+                        onClick={() => navigate(pathKeys.personsTimeline())}
+                        title={`${b.century < 0 ? `기원전 ${Math.abs(b.century)}세기` : `${b.century}세기`}: 인물 ${b.count}명`}
+                      >
+                        <S.SimpleCenturyCount>{b.count}</S.SimpleCenturyCount>
+                        <S.SimpleCenturyTrack>
+                          <S.SimpleCenturyFill
+                            $color={
+                              theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5'
+                            }
+                            style={{
+                              height: `${Math.max(8, Math.round((b.count / maxP) * 100))}%`,
+                            }}
+                          />
+                        </S.SimpleCenturyTrack>
+                        <S.SimpleCenturyLabel>
+                          {b.century < 0 ? `BC${Math.abs(b.century)}` : `${b.century}c`}
+                        </S.SimpleCenturyLabel>
+                      </S.SimpleCenturyCol>
+                    ))
+                  })()}
+                </S.SimpleCenturyBarsRow>
+              )
+            ) : polityCenturyBuckets.length === 0 ? (
+              <S.EmptyBox>존속 연대가 입력된 역사 정치체가 없습니다.</S.EmptyBox>
             ) : (
-              <StackedCenturyDomainChart
-                buckets={centuryBuckets}
-                domainBreakdown={domainBreakdown}
-                onSelectCentury={(century) =>
-                  navigate(`${pathKeys.events.root()}?century=${century}`)
-                }
-              />
+              <S.SimpleCenturyBarsRow>
+                {(() => {
+                  const maxH = Math.max(
+                    1,
+                    ...polityCenturyBuckets.map((b) => b.count),
+                  )
+                  return polityCenturyBuckets.map((b) => (
+                    <S.SimpleCenturyCol
+                      key={b.century}
+                      type="button"
+                      onClick={() => navigate(pathKeys.country())}
+                      title={`${b.century < 0 ? `기원전 ${Math.abs(b.century)}세기` : `${b.century}세기`}: 존속 정치체 ${b.count}개`}
+                    >
+                      <S.SimpleCenturyCount>{b.count}</S.SimpleCenturyCount>
+                      <S.SimpleCenturyTrack>
+                        <S.SimpleCenturyFill
+                          $color={
+                            theme.mode === 'dark' ? '#fcd34d' : '#d97706'
+                          }
+                          style={{
+                            height: `${Math.max(8, Math.round((b.count / maxH) * 100))}%`,
+                          }}
+                        />
+                      </S.SimpleCenturyTrack>
+                      <S.SimpleCenturyLabel>
+                        {b.century < 0 ? `BC${Math.abs(b.century)}` : `${b.century}c`}
+                      </S.SimpleCenturyLabel>
+                    </S.SimpleCenturyCol>
+                  ))
+                })()}
+              </S.SimpleCenturyBarsRow>
             )}
           </S.BentoCard>
 

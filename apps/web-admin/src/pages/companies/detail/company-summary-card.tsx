@@ -13,16 +13,33 @@
  */
 import styled, { useTheme } from 'styled-components'
 
+import {
+  MiniSvgSparkline,
+  type SegmentSlice,
+  type SparkPoint,
+  StackedSegmentBar,
+} from '@/entities/event/ui/bento-primitives'
+import {
+  DIGIT_DISPLAY,
+  ledgerAccent,
+  ledgerAccentSubtle,
+  ledgerBackground,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerSubtleFill,
+  RADIUS,
+} from '@/entities/event/ui/ledger-tokens'
 import type {
   AnalystRating,
   CompanyDetail,
   CompanyOutlookItem,
   OutlookStance,
 } from '@/shared/api/company'
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import { formatCompactKo, formatGrouped } from '@/shared/lib/number-format'
 import { isVisuallyEmptyRichText } from '@/shared/lib/rich-text-read-view'
 
-import { ratingTone, stanceTone, toneColor } from './financial-tone'
+import { stanceTone, toneColor } from './financial-tone'
 import { TonePill } from './tone-pill'
 
 interface Props {
@@ -47,6 +64,110 @@ const STANCE_LABEL: Record<OutlookStance, string> = {
   BULLISH: '강세',
   NEUTRAL: '중립',
   BEARISH: '약세',
+}
+
+const RATING_SLICE_COLORS: Record<
+  AnalystRating,
+  { light: string; dark: string }
+> = {
+  STRONG_BUY: { light: '#059669', dark: '#34d399' },
+  BUY: { light: '#0d9488', dark: '#2dd4bf' },
+  HOLD: { light: '#64748b', dark: '#94a3b8' },
+  SELL: { light: '#ef4444', dark: '#fca5a5' },
+  STRONG_SELL: { light: '#b91c1c', dark: '#f87171' },
+}
+
+function buildCompanySparkSeries(company: CompanyDetail): {
+  label: string
+  points: SparkPoint[]
+  formatValue: (val: number) => string
+} | null {
+  const rawList = company.stockPoints ?? []
+  if (rawList.length === 0) return null
+
+  const extractByMetric = (
+    pick: (pt: (typeof rawList)[number]) => number | null,
+  ) => {
+    const dated: Array<{
+      year: number
+      month: number
+      day: number
+      sortKey: number
+      value: number
+      currency: string | null
+    }> = []
+    for (const pt of rawList) {
+      const val = pick(pt)
+      if (val == null || !Number.isFinite(val)) continue
+      const parts = parseIsoDateParts(pt.date)
+      if (!parts) continue
+      dated.push({
+        year: parts.year,
+        month: parts.month,
+        day: parts.day,
+        sortKey: parts.year * 10_000 + parts.month * 100 + parts.day,
+        value: val,
+        currency: pt.currency ?? null,
+      })
+    }
+    dated.sort((a, b) => a.sortKey - b.sortKey)
+    return dated
+  }
+
+  const pricePts = extractByMetric((pt) => pt.price)
+  const capPts = pricePts.length === 0 ? extractByMetric((pt) => pt.marketCap) : []
+  const revPts =
+    pricePts.length === 0 && capPts.length === 0
+      ? extractByMetric((pt) => pt.revenue)
+      : []
+
+  const chosen =
+    pricePts.length > 0 ? pricePts : capPts.length > 0 ? capPts : revPts
+  if (chosen.length === 0) return null
+
+  const distinctYears = new Set(chosen.map((c) => c.year))
+  let points: SparkPoint[]
+  if (distinctYears.size >= 2 || chosen.length === 1) {
+    const byYear = new Map<number, number>()
+    for (const item of chosen) {
+      byYear.set(item.year, item.value)
+    }
+    points = [...byYear.entries()].map(([year, value]) => ({ year, value }))
+  } else {
+    points = chosen.map((item, idx) => ({
+      year: Number(
+        (
+          item.year +
+          (item.month - 1) / 12 +
+          (item.day - 1) / 365 +
+          idx * 0.001
+        ).toFixed(2),
+      ),
+      value: item.value,
+    }))
+  }
+
+  const lastCurrency = chosen[chosen.length - 1]?.currency ?? null
+  if (pricePts.length > 0) {
+    return {
+      label: `주가 추이${lastCurrency ? ` (${lastCurrency})` : ''}`,
+      points,
+      formatValue: (val) =>
+        `${formatGrouped(val)}${lastCurrency ? ` ${lastCurrency}` : ''}`,
+    }
+  }
+  if (capPts.length > 0) {
+    return {
+      label: '시가총액 추이',
+      points,
+      formatValue: (val) => formatCompactKo(val),
+    }
+  }
+  return {
+    label: '매출 추이',
+    points,
+    formatValue: (val) => formatCompactKo(val),
+  }
 }
 
 export function CompanySummaryCard({ company }: Props) {
@@ -91,7 +212,15 @@ export function CompanySummaryCard({ company }: Props) {
   }
   for (const rating of company.analystRatings ?? [])
     if (rating.rating) ratingDist[rating.rating] += 1
-  const hasRatings = RATING_ORDER.some((key) => ratingDist[key] > 0)
+  const totalRatings = RATING_ORDER.reduce((sum, key) => sum + ratingDist[key], 0)
+  const hasRatings = totalRatings > 0
+  const ratingSlices: SegmentSlice[] = RATING_ORDER.map((key) => ({
+    key,
+    label: RATING_LABEL[key],
+    value: ratingDist[key],
+    color: dark ? RATING_SLICE_COLORS[key].dark : RATING_SLICE_COLORS[key].light,
+  }))
+  const sparkSeries = buildCompanySparkSeries(company)
 
   // 최신 전망(방향) — asOf 가장 나중의, stance 있는 전망.
   const latestOutlook = (company.outlooks ?? [])
@@ -146,45 +275,57 @@ export function CompanySummaryCard({ company }: Props) {
 
   return (
     <Card>
-      {finance.length > 0 && (
+      {(finance.length > 0 || sparkSeries != null) && (
         <Section>
           <CardTitle>재무 스냅샷</CardTitle>
-          <Dl>
-            {finance.map((row) => (
-              <Row key={row.label}>
-                <Dt>{row.label}</Dt>
-                <Dd $numeric>{row.value}</Dd>
-              </Row>
-            ))}
-            {upside != null && (
-              <Row>
-                <Dt>현재가 대비</Dt>
-                <Dd
-                  $numeric
-                  style={{
-                    color: toneColor(upside >= 0 ? 'positive' : 'negative', dark),
-                    fontWeight: 700,
-                  }}
-                >
-                  {upside >= 0 ? '+' : ''}
-                  {upside.toFixed(1)}%
-                </Dd>
-              </Row>
-            )}
-          </Dl>
+          {sparkSeries && (
+            <SparkBox>
+              <SparkLabelRow>
+                <span>{sparkSeries.label}</span>
+                <span>{sparkSeries.points.length}개 시점</span>
+              </SparkLabelRow>
+              <MiniSvgSparkline
+                points={sparkSeries.points}
+                height={56}
+                formatValue={sparkSeries.formatValue}
+              />
+            </SparkBox>
+          )}
+          {finance.length > 0 && (
+            <Dl>
+              {finance.map((row) => (
+                <Row key={row.label}>
+                  <Dt>{row.label}</Dt>
+                  <Dd $numeric>{row.value}</Dd>
+                </Row>
+              ))}
+              {upside != null && (
+                <Row>
+                  <Dt>현재가 대비</Dt>
+                  <Dd
+                    $numeric
+                    style={{
+                      color: toneColor(upside >= 0 ? 'positive' : 'negative', dark),
+                      fontWeight: 700,
+                    }}
+                  >
+                    {upside >= 0 ? '+' : ''}
+                    {upside.toFixed(1)}%
+                  </Dd>
+                </Row>
+              )}
+            </Dl>
+          )}
         </Section>
       )}
 
       {hasRatings && (
         <Section>
-          <CardTitle>투자의견 분포</CardTitle>
-          <Pills>
-            {RATING_ORDER.filter((key) => ratingDist[key] > 0).map((key) => (
-              <TonePill key={key} $tone={ratingTone(key)}>
-                {RATING_LABEL[key]} {ratingDist[key]}
-              </TonePill>
-            ))}
-          </Pills>
+          <SectionTitleRow>
+            <CardTitle>투자의견 분포</CardTitle>
+            <CountBadge>{totalRatings}건</CountBadge>
+          </SectionTitleRow>
+          <StackedSegmentBar slices={ratingSlices} height={9} />
         </Section>
       )}
 
@@ -239,10 +380,11 @@ const Card = styled.aside`
   display: flex;
   flex-direction: column;
   gap: 0;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 16px;
-  background: ${({ theme }) => theme.colors.background.secondary};
-  padding: 20px 22px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.MD};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  box-shadow: none;
+  padding: 18px 20px;
 `
 
 const Section = styled.div`
@@ -257,10 +399,48 @@ const Section = styled.div`
    * (검토 F15, 실측). 카드의 자식은 이 섹션뿐이라 :not(:first-child)로 같은 뜻이 된다.
    */
   &:not(:first-child) {
-    margin-top: 18px;
-    padding-top: 18px;
-    border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   }
+`
+
+const SectionTitleRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+`
+
+const CountBadge = styled.span`
+  ${DIGIT_DISPLAY}
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+`
+
+const SparkBox = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 11px 8px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+`
+
+const SparkLabelRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
 `
 
 const CardTitle = styled.h3`
@@ -336,7 +516,7 @@ const Progress = styled.div`
 const ProgressFill = styled.div`
   height: 100%;
   border-radius: 999px;
-  background: ${({ theme }) => theme.colors.text.tertiary};
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
   transition: width 0.2s ease;
 `
 

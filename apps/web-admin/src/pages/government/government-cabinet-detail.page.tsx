@@ -95,6 +95,11 @@ import { CabinetPartyLinkModal } from '@/widgets/country/country-detail/ui/cabin
 import { CabinetPoliticalPartiesBlock } from '@/widgets/country/country-detail/ui/cabinet-political-parties-block.widget'
 import { CabinetPortfolioMatrix } from '@/widgets/country/country-detail/ui/cabinet-portfolio-matrix.widget'
 import {
+  MindMapDiagramStage,
+  type MindMapBranchItem,
+} from '@/widgets/country/country-detail/ui/dashboard-infographic/executive-mindmap-hero'
+import type { MindMapMember } from '@/widgets/country/country-detail/model/use-dashboard-mindmap'
+import {
   APPOINTMENT_METHOD_LABEL,
   END_REASON_LABEL,
 } from '@/widgets/country/country-detail/ui/cabinets-section.helpers'
@@ -123,7 +128,7 @@ import {
   toEditableCabinetRecord,
 } from './government-helpers'
 
-type MinisterPortfolioViewMode = 'matrix' | 'cards'
+type MinisterPortfolioViewMode = 'mindmap' | 'matrix' | 'cards'
 
 type ExtendedCabinetTenureItem = GovernmentCabinetTenureItem & {
   isActing?: boolean
@@ -174,7 +179,7 @@ export function GovernmentCabinetDetailPage() {
   const [treatyModalOpen, setTreatyModalOpen] = useState<boolean>(false)
 
   const [portfolioViewMode, setPortfolioViewMode] =
-    useState<MinisterPortfolioViewMode>('matrix')
+    useState<MinisterPortfolioViewMode>('mindmap')
   const [suggestExpanded, setSuggestExpanded] = useState<boolean>(false)
   const [selectedSuggestedIds, setSelectedSuggestedIds] = useState<Set<string>>(
     () => new Set(),
@@ -747,9 +752,95 @@ export function GovernmentCabinetDetailPage() {
     : null
 
   const effectivePortfolioView: MinisterPortfolioViewMode =
-    portfolioViewMode === 'matrix' && contemporaryDepartments.length > 0
-      ? 'matrix'
-      : 'cards'
+    portfolioViewMode === 'mindmap'
+      ? 'mindmap'
+      : portfolioViewMode === 'matrix' && contemporaryDepartments.length > 0
+        ? 'matrix'
+        : 'cards'
+
+  const cabinetMindMapData = useMemo(() => {
+    const ht = cabinet.headTenure
+    const headNode: MindMapMember | null = ht
+      ? {
+          id: ht.id,
+          personId: ht.person?.id ?? null,
+          name: headName || '이름 미상',
+          imageUrl: ht.person?.profileImageUrl ?? null,
+          title: posTitle || '수반',
+          startDate: effectiveDates.startDate,
+          endDate: effectiveDates.endDate,
+          isHead: true,
+          ordinal: ht.ordinal ?? null,
+          replaced: false,
+          predecessor: null,
+          polityLabel: polity.polityName,
+        }
+      : null
+
+    const usedDeptIds = new Set<string>()
+    const filledBranches: MindMapBranchItem[] = nonHeadMinisters.map((m) => {
+      const matchedDept =
+        m.administrationDepartment ??
+        findDepartmentForMember(m, contemporaryDepartments) ??
+        null
+      if (matchedDept?.id) usedDeptIds.add(matchedDept.id)
+      const mName = m.person
+        ? getPersonDisplayName({
+            ...m.person,
+            name: m.person.name ?? '',
+          })
+        : '인물 미상'
+      return {
+        kind: 'member',
+        key: `m:${m.id}`,
+        member: {
+          id: m.id,
+          personId: m.person?.id ?? null,
+          name: mName,
+          imageUrl: m.person?.profileImageUrl ?? null,
+          title:
+            (m.title ?? m.positionDefinition?.title ?? '각료').trim() || '각료',
+          departmentName: matchedDept?.name ?? null,
+          departmentId: matchedDept?.id ?? null,
+          startDate: m.startDate ?? null,
+          endDate: m.endDate ?? null,
+          isHead: false,
+          ordinal: m.ordinal ?? null,
+          replaced: false,
+          predecessor: null,
+          partyName: m.party?.shortName?.trim() || m.party?.name || null,
+          partyColor: m.party?.brandColor ?? null,
+        },
+      }
+    })
+
+    const vacantBranches: MindMapBranchItem[] = contemporaryDepartments
+      .filter((d) => !usedDeptIds.has(d.id))
+      .map((d) => ({
+        kind: 'vacant',
+        key: `v:${d.id}`,
+        slot: {
+          key: d.id,
+          departmentId: d.id,
+          departmentName: d.name,
+          positionTitle: '수장',
+        },
+      }))
+
+    return {
+      headNode,
+      branches: [...filledBranches, ...vacantBranches],
+    }
+  }, [
+    cabinet.headTenure,
+    headName,
+    posTitle,
+    effectiveDates.startDate,
+    effectiveDates.endDate,
+    polity.polityName,
+    nonHeadMinisters,
+    contemporaryDepartments,
+  ])
 
   const handleOpenEditMinister = (ministerTenure: ExtendedCabinetTenureItem) => {
     const ministerName = ministerTenure.person
@@ -1259,8 +1350,17 @@ export function GovernmentCabinetDetailPage() {
                     ? ` · 존속 부처 ${contemporaryDepartments.length}개`
                     : ''}
                 </SectionCount>
-                {contemporaryDepartments.length > 0 && (
-                  <ViewModeToggle role="group" aria-label="각료 보기 방식">
+                <ViewModeToggle role="group" aria-label="각료 보기 방식">
+                  <ViewModeBtn
+                    type="button"
+                    $active={effectivePortfolioView === 'mindmap'}
+                    onClick={() => setPortfolioViewMode('mindmap')}
+                    title="수반 중심 각 부처 마인드맵 보기"
+                  >
+                    <FiLayers size={12} />
+                    <span>마인드맵</span>
+                  </ViewModeBtn>
+                  {contemporaryDepartments.length > 0 && (
                     <ViewModeBtn
                       type="button"
                       $active={effectivePortfolioView === 'matrix'}
@@ -1270,17 +1370,17 @@ export function GovernmentCabinetDetailPage() {
                       <FiList size={12} />
                       <span>편제표</span>
                     </ViewModeBtn>
-                    <ViewModeBtn
-                      type="button"
-                      $active={effectivePortfolioView === 'cards'}
-                      onClick={() => setPortfolioViewMode('cards')}
-                      title="임명된 부처별 카드 보기"
-                    >
-                      <FiGrid size={12} />
-                      <span>카드</span>
-                    </ViewModeBtn>
-                  </ViewModeToggle>
-                )}
+                  )}
+                  <ViewModeBtn
+                    type="button"
+                    $active={effectivePortfolioView === 'cards'}
+                    onClick={() => setPortfolioViewMode('cards')}
+                    title="임명된 부처별 카드 보기"
+                  >
+                    <FiGrid size={12} />
+                    <span>카드</span>
+                  </ViewModeBtn>
+                </ViewModeToggle>
                 <SmallAddBtn
                   type="button"
                   onClick={() => {
@@ -1299,6 +1399,31 @@ export function GovernmentCabinetDetailPage() {
               <CompactEmptyHint>
                 소속 각료를 불러오는 중입니다…
               </CompactEmptyHint>
+            ) : effectivePortfolioView === 'mindmap' ? (
+              <MindMapDiagramStage
+                head={cabinetMindMapData.headNode}
+                emptyHeadLabel={posTitle || '내각 수반'}
+                polityLabel={polity.polityName}
+                headPeriodSummary={periodLabel}
+                ministersCount={totalMinisterCount}
+                departmentsCount={
+                  contemporaryDepartments.length ||
+                  cabinetMindMapData.branches.length
+                }
+                isHistorical={polity.isHistorical}
+                branches={cabinetMindMapData.branches}
+                onSelectPerson={(pid) => setSelectedPersonId(pid)}
+                onClickEmptyHead={() => setEditModalOpen(true)}
+                onSelectVacant={(slot) => {
+                  const dept =
+                    contemporaryDepartments.find(
+                      (d) => d.id === slot.departmentId,
+                    ) ?? null
+                  setEditingMinister(null)
+                  setAppointPresetDept(dept)
+                  setAppointModalOpen(true)
+                }}
+              />
             ) : effectivePortfolioView === 'matrix' ? (
               <CabinetPortfolioMatrix
                 departments={contemporaryDepartments}

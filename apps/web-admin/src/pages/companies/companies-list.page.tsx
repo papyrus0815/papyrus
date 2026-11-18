@@ -12,12 +12,14 @@
  *   모달을 닫은 뒤에도 그대로 남는다.
  * - 목록 데이터는 사이드바·국가 대시보드와 같은 쿼리 키(['companies','all'])라 한 번만 받는다.
  */
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   FiArrowDown,
   FiArrowUp,
+  FiChevronDown,
+  FiChevronUp,
   FiEdit2,
   FiExternalLink,
   FiPlus,
@@ -29,6 +31,27 @@ import {
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import styled, { css, keyframes } from 'styled-components'
 
+import {
+  BentoCard,
+  BentoCardBadge,
+  BentoCardBody,
+  BentoCardHeader,
+  BentoCardTitle,
+  BentoCardTitleGroup,
+  BentoGrid2Col,
+  type SegmentSlice,
+  StackedSegmentBar,
+} from '@/entities/event/ui/bento-primitives'
+import {
+  DIGIT_DISPLAY,
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentSubtle,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  ledgerSubtleFill,
+  MOTION,
+} from '@/entities/event/ui/ledger-tokens'
 import type { Company, CompanyStatus } from '@/shared/api/company'
 import { companyApi } from '@/shared/api/company'
 import { getUploadImageUrl } from '@/shared/api/upload'
@@ -335,6 +358,9 @@ export const CompaniesListPage: React.FC = () => {
   const [centuryFilter, setCenturyFilter] = useState<ReadonlySet<number>>(new Set())
   const [statusFilter, setStatusFilter] = useState<ReadonlySet<CompanyStatus>>(new Set())
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT)
+  const [facetsExpanded, setFacetsExpanded] = useState(false)
+  const [facetsOverflow, setFacetsOverflow] = useState(false)
+  const facetsMeasureRef = useRef<HTMLDivElement>(null)
   /** 등록·수정 모달 — null=닫힘, 'new'=신규, 그 외=수정 대상 id */
   const [modalTarget, setModalTarget] = useState<string | null>(null)
   /* 카테고리 관리 모달 — 옛 /company-categories 주소는 ?categories=open으로 넘어와 바로 연다 */
@@ -376,6 +402,47 @@ export const CompaniesListPage: React.FC = () => {
     () => new Set(list.map(countryName).filter(Boolean)).size,
     [list],
   )
+
+  const bentoSummary = useMemo(() => {
+    let unrecordedActive = 0
+    const centuryMap = new Map<number, number>()
+    let undatedCount = 0
+
+    for (const company of list) {
+      if (!company.status && !company.dissolvedAt) {
+        unrecordedActive += 1
+      }
+      const c = centuryOf(company)
+      if (c === 0) undatedCount += 1
+      else centuryMap.set(c, (centuryMap.get(c) ?? 0) + 1)
+    }
+
+    const statusSlices: SegmentSlice[] = COMPANY_STATUS_ORDER.map((status) => ({
+      key: status,
+      label: COMPANY_STATUS_META[status].label,
+      value:
+        status === 'ACTIVE'
+          ? statusCounts.ACTIVE + unrecordedActive
+          : statusCounts[status],
+      color: COMPANY_STATUS_META[status].tone,
+    }))
+
+    const centuryBars = [...centuryMap.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([century, count]) => ({
+        century,
+        count,
+        shortLabel: century < 0 ? `BC${Math.abs(century)}C` : `${century}C`,
+        fullLabel: centuryLabel(century),
+      }))
+
+    const maxCenturyCount = centuryBars.reduce(
+      (max, item) => Math.max(max, item.count),
+      1,
+    )
+
+    return { statusSlices, centuryBars, maxCenturyCount, undatedCount }
+  }, [list, statusCounts])
 
   const filters = useMemo<Filters>(
     () => ({
@@ -474,6 +541,24 @@ export const CompaniesListPage: React.FC = () => {
 
   const facetCount = countryFilter.size + centuryFilter.size + statusFilter.size
   const isFiltered = !!search.trim() || facetCount > 0
+
+  useEffect(() => {
+    const el = facetsMeasureRef.current
+    if (!el) return
+    const checkOverflow = () => {
+      setFacetsOverflow(el.scrollHeight > 54)
+    }
+    checkOverflow()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(checkOverflow)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [
+    list.length,
+    facets.countries.length,
+    facets.centuries.length,
+    facets.statuses.length,
+  ])
 
   const resetFilters = () => {
     setQuery('')
@@ -833,6 +918,114 @@ export const CompaniesListPage: React.FC = () => {
         </HeaderActions>
       </Header>
 
+      {!isLoading && !isError && list.length > 0 && (
+        <BentoGrid2Col aria-label="기업 존속 상태 및 시대 분포 요약">
+          <BentoCard>
+            <BentoCardHeader>
+              <BentoCardTitleGroup>
+                <BentoCardTitle>기업 존속 상태 구성</BentoCardTitle>
+                <BentoCardBadge>
+                  {list.length.toLocaleString('ko-KR')}개사 · {countryCount.toLocaleString('ko-KR')}개국
+                </BentoCardBadge>
+              </BentoCardTitleGroup>
+              {insight.averageYears != null && (
+                <BentoMetaText>
+                  평균 존속 <strong>{insight.averageYears.toLocaleString('ko-KR')}년</strong>
+                </BentoMetaText>
+              )}
+            </BentoCardHeader>
+            <BentoCardBody>
+              <StackedSegmentBar
+                slices={bentoSummary.statusSlices}
+                height={10}
+              />
+              {insight.oldest && (
+                <BentoCaptionText>
+                  최고령 기록: <strong>{insight.oldest.company.name}</strong> (
+                  {axisYearLabel(insight.oldest.year)}년 설립)
+                </BentoCaptionText>
+              )}
+            </BentoCardBody>
+          </BentoCard>
+
+          <BentoCard>
+            <BentoCardHeader>
+              <BentoCardTitleGroup>
+                <BentoCardTitle>세기별 설립 분포</BentoCardTitle>
+                <BentoCardBadge>
+                  {bentoSummary.centuryBars.length}개 세기
+                </BentoCardBadge>
+              </BentoCardTitleGroup>
+              {centuryFilter.size > 0 ? (
+                <CenturyClearBtn
+                  type="button"
+                  onClick={() => setCenturyFilter(new Set())}
+                >
+                  시기 필터 해제 <FiX size={11} />
+                </CenturyClearBtn>
+              ) : null}
+            </BentoCardHeader>
+            <BentoCardBody>
+              {bentoSummary.centuryBars.length > 0 ? (
+                <>
+                  <CenturyMiniBars role="group" aria-label="세기별 설립 기업 수">
+                    {bentoSummary.centuryBars.map((bar) => {
+                      const active = centuryFilter.has(bar.century)
+                      const dimmed =
+                        centuryFilter.size > 0 && !centuryFilter.has(bar.century)
+                      const pct = Math.max(
+                        12,
+                        Math.round(
+                          (bar.count / bentoSummary.maxCenturyCount) * 100,
+                        ),
+                      )
+                      return (
+                        <CenturyMiniBarBtn
+                          key={bar.century}
+                          type="button"
+                          $active={active}
+                          $dimmed={dimmed}
+                          aria-pressed={active}
+                          title={`${bar.fullLabel}: ${bar.count}개사 — 클릭하여 시기 필터`}
+                          onClick={() =>
+                            setCenturyFilter((prev) =>
+                              toggleInSet(prev, bar.century),
+                            )
+                          }
+                        >
+                          <CenturyMiniCount $active={active}>
+                            {bar.count}
+                          </CenturyMiniCount>
+                          <CenturyMiniTrack>
+                            <CenturyMiniFill
+                              $active={active}
+                              style={{ height: `${pct}%` }}
+                            />
+                          </CenturyMiniTrack>
+                          <CenturyMiniLabel $active={active}>
+                            {bar.shortLabel}
+                          </CenturyMiniLabel>
+                        </CenturyMiniBarBtn>
+                      )
+                    })}
+                  </CenturyMiniBars>
+                  <BentoCaptionText>
+                    세기 막대를 클릭하면 해당 시기 설립 기업만 필터링합니다
+                    {bentoSummary.undatedCount > 0
+                      ? ` · 설립연도 미상 ${bentoSummary.undatedCount}개사`
+                      : ''}
+                  </BentoCaptionText>
+                </>
+              ) : (
+                <BentoCaptionText>
+                  설립 연도가 기록된 기업이 없습니다.
+                </BentoCaptionText>
+              )}
+            </BentoCardBody>
+          </BentoCard>
+        </BentoGrid2Col>
+      )}
+
       <FilterPanel aria-label="기업 필터">
         <PanelTop>
           <SearchWrap>
@@ -898,17 +1091,43 @@ export const CompaniesListPage: React.FC = () => {
         </PanelTop>
 
         {!isLoading && !isError && list.length > 0 && (
-          <Facets>
-            {renderFacet('국가', facets.countries, countryFilter, (key) =>
-              setCountryFilter((prev) => toggleInSet(prev, key)),
+          <FacetsShell>
+            <FacetsViewport $collapsed={!facetsExpanded && facetsOverflow}>
+              <Facets ref={facetsMeasureRef}>
+                {renderFacet('국가', facets.countries, countryFilter, (key) =>
+                  setCountryFilter((prev) => toggleInSet(prev, key)),
+                )}
+                {renderFacet('시기', facets.centuries, centuryFilter, (key) =>
+                  setCenturyFilter((prev) => toggleInSet(prev, key)),
+                )}
+                {renderFacet('상태', facets.statuses, statusFilter, (key) =>
+                  setStatusFilter((prev) => toggleInSet(prev, key)),
+                )}
+              </Facets>
+            </FacetsViewport>
+            {facetsOverflow && (
+              <FacetToggleBtn
+                type="button"
+                aria-expanded={facetsExpanded}
+                onClick={() => setFacetsExpanded((prev) => !prev)}
+              >
+                {facetsExpanded ? (
+                  <>
+                    <FiChevronUp size={13} aria-hidden />
+                    필터 접기
+                  </>
+                ) : (
+                  <>
+                    <FiChevronDown size={13} aria-hidden />
+                    필터 펼치기
+                    {facetCount > 0 && (
+                      <FacetToggleBadge>{facetCount}</FacetToggleBadge>
+                    )}
+                  </>
+                )}
+              </FacetToggleBtn>
             )}
-            {renderFacet('시기', facets.centuries, centuryFilter, (key) =>
-              setCenturyFilter((prev) => toggleInSet(prev, key)),
-            )}
-            {renderFacet('상태', facets.statuses, statusFilter, (key) =>
-              setStatusFilter((prev) => toggleInSet(prev, key)),
-            )}
-          </Facets>
+          </FacetsShell>
         )}
 
         {isFiltered && (
@@ -1026,7 +1245,7 @@ export const CompaniesListPage: React.FC = () => {
 // 필요한 몇 개만 옮겨 둔다: 브랜드 #2563eb · 메타 텍스트 #6b7280/#a1a1aa ·
 // 행 헤어라인 rgba(15,23,42,.08)/rgba(255,255,255,.12) · 툴바 컨트롤 34px.
 
-const BRAND = '#2563eb'
+const BRAND = '#4f46e5'
 const metaText = ({ theme }: { theme: { mode: string } }) =>
   theme.mode === 'dark' ? '#a1a1aa' : '#6b7280'
 const rowHairline = ({ theme }: { theme: { mode: string } }) =>
@@ -1188,10 +1407,11 @@ const PrimaryBtn = styled.button`
   border: 1px solid ${BRAND};
   background: ${BRAND};
   color: #fff;
+  box-shadow: none;
 
   &:hover {
-    background: #1d4ed8;
-    border-color: #1d4ed8;
+    background: #4338ca;
+    border-color: #4338ca;
   }
 `
 
@@ -1235,13 +1455,72 @@ const PanelTop = styled.div`
  * 패싯은 한 줄에 나란히 — 축마다 칩이 1~3개라 세로 3줄이면 패널 대부분이 빈 칸이었다.
  * 축 사이는 세로 구분선, 좁으면 줄바꿈(줄 머리의 구분선은 왼쪽 여백만 남긴다).
  */
+const FacetsShell = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding-right: 12px;
+  border-top: 1px solid ${rowHairline};
+`
+
+const FacetsViewport = styled.div<{ $collapsed: boolean }>`
+  flex: 1 1 auto;
+  min-width: 0;
+  ${({ $collapsed }) =>
+    $collapsed &&
+    css`
+      max-height: 48px;
+      overflow: hidden;
+    `}
+`
+
 const Facets = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   gap: 10px 0;
-  padding: 10px 14px;
-  border-top: 1px solid ${rowHairline};
+  padding: 10px 0 10px 14px;
+`
+
+const FacetToggleBtn = styled.button`
+  flex-shrink: 0;
+  margin: 10px 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${surface};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    color ${MOTION.fast} ease;
+  ${focusRing}
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+`
+
+const FacetToggleBadge = styled.span`
+  ${DIGIT_DISPLAY}
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
 `
 
 const FacetRow = styled.div`
@@ -1501,25 +1780,26 @@ const SegmentBtn = styled.button<{ $active: boolean }>`
   gap: 6px;
   height: 30px;
   padding: 0 10px;
-  border: none;
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  box-shadow: none;
   transition:
     background 0.15s,
-    color 0.15s;
+    color 0.15s,
+    border-color 0.15s;
   ${focusRing}
 
   ${({ $active, theme }) =>
     $active
       ? css`
+          border: 1px solid ${ledgerHairlineStrong(theme.mode)};
           background: ${theme.colors.background.primary};
           color: ${theme.colors.text.primary};
-          box-shadow: 0 1px 2px
-            ${theme.mode === 'dark' ? 'rgba(0,0,0,0.4)' : 'rgba(15,23,42,0.08)'};
         `
       : css`
+          border: 1px solid transparent;
           background: transparent;
           color: ${metaText};
           &:hover {
@@ -2149,4 +2429,118 @@ const Skeleton = styled.span<{ $w?: string; $h?: string; $r?: string }>`
     );
     animation: ${shimmer} 1.4s infinite;
   }
+`
+
+const BentoMetaText = styled.span`
+  ${DIGIT_DISPLAY}
+  font-size: 11.5px;
+  color: ${metaText};
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const BentoCaptionText = styled.div`
+  font-size: 11px;
+  color: ${metaText};
+  ${DIGIT_DISPLAY}
+
+  strong {
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+`
+
+const CenturyClearBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  ${DIGIT_DISPLAY}
+`
+
+const CenturyMiniBars = styled.div`
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(28px, 1fr);
+  gap: 6px;
+  align-items: end;
+  overflow-x: auto;
+  padding-top: 2px;
+`
+
+const CenturyMiniBarBtn = styled.button<{ $active: boolean; $dimmed: boolean }>`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 2px;
+  border-radius: 6px;
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? ledgerAccentBorder(theme.mode) : 'transparent'};
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  opacity: ${({ $dimmed }) => ($dimmed ? 0.48 : 1)};
+  cursor: pointer;
+  transition:
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    opacity ${MOTION.fast} ease;
+  ${focusRing}
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    opacity: 1;
+  }
+`
+
+const CenturyMiniCount = styled.span<{ $active: boolean }>`
+  ${DIGIT_DISPLAY}
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+`
+
+const CenturyMiniTrack = styled.span`
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  max-width: 24px;
+  height: 40px;
+  border-radius: 3px 3px 0 0;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  overflow: hidden;
+`
+
+const CenturyMiniFill = styled.span<{ $active: boolean }>`
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
+  opacity: ${({ $active }) => ($active ? 1 : 0.72)};
+  transition: height ${MOTION.normal} ease, opacity ${MOTION.fast} ease;
+`
+
+const CenturyMiniLabel = styled.span<{ $active: boolean }>`
+  ${DIGIT_DISPLAY}
+  font-size: 10px;
+  font-weight: ${({ $active }) => ($active ? 700 : 600)};
+  white-space: nowrap;
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : metaText({ theme })};
 `

@@ -56,7 +56,7 @@ import { downloadComparisonJson, printComparison } from '../lib/export'
 import { pickContemporary } from '../lib/pick-contemporary'
 import { readJSON, writeJSON } from '../lib/storage'
 
-const TABLE_OPEN_KEY = 'concurrent-table-open:v1'
+const TABLE_OPEN_KEY = 'concurrent-table-open:v2'
 
 export function HeadsOfStateTimeline() {
   return <HeadsOfStateTimelineInner />
@@ -86,9 +86,9 @@ function HeadsOfStateTimelineInner() {
     if (fromUrl != null) categoryFilter.setFromList(fromUrl)
   }, [categoryFilter])
 
-  // ── 연도 스크러버 · 동시 재위 비교표 ──
+  // ── 연도 스크러버 · 동시 재위 비교표 (기본 닫힘 — 우측 동시대 패널이 재위 진행도를 함께 표시) ──
   const [tableOpen, setTableOpen] = useState<boolean>(() =>
-    readJSON<boolean>(TABLE_OPEN_KEY, true),
+    readJSON<boolean>(TABLE_OPEN_KEY, false),
   )
   useEffect(() => {
     writeJSON(TABLE_OPEN_KEY, tableOpen)
