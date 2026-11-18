@@ -1,10 +1,13 @@
 import { type ReactNode, useLayoutEffect, useRef, useState } from 'react'
 
-import { MoreToggle, ProseClamp } from './actors.styles'
+import { ClampHost, FloatingMoreSlot, MoreToggle, ProseClamp } from './actors.styles'
 
 /**
  * 긴 산문을 2줄에서 접는다. 넘칠 때만 '더 보기'를 단다(짧은 글엔 흔적 없음).
  * 편집 중(focus-within)엔 CSS가 접힘을 풀어 textarea가 잘리지 않게 한다.
+ *
+ * 접힌 '더 보기'는 **마지막 줄 끝**에 얹는다(그 자리 글은 가로로 흐려진다). 예전엔 한 줄을 따로 먹어
+ * 한국전쟁 참여 탭에 '더 보기' 줄만 14개였다. 펼친 뒤의 '접기'는 글 아래 제 줄.
  */
 export function ClampedProse({
   children,
@@ -37,7 +40,7 @@ export function ClampedProse({
 
   const collapsed = !expanded
   return (
-    <>
+    <ClampHost>
       <ProseClamp
         ref={boxRef}
         $collapsed={collapsed}
@@ -45,15 +48,18 @@ export function ClampedProse({
       >
         {children}
       </ProseClamp>
-      {(overflowing || expanded) && (
-        <MoreToggle
-          type="button"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((value) => !value)}
-        >
-          {expanded ? '접기' : '더 보기'}
+      {overflowing && collapsed && (
+        <FloatingMoreSlot>
+          <MoreToggle type="button" aria-expanded={false} onClick={() => setExpanded(true)}>
+            더 보기
+          </MoreToggle>
+        </FloatingMoreSlot>
+      )}
+      {expanded && (
+        <MoreToggle type="button" aria-expanded onClick={() => setExpanded(false)}>
+          접기
         </MoreToggle>
       )}
-    </>
+    </ClampHost>
   )
 }

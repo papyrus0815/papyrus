@@ -162,16 +162,19 @@ export const PersonList = styled.ol`
   ${twoColumnRows}
 `
 
-export const PersonRow = styled.li<{ $compact?: boolean; $dragOver?: boolean }>`
+export const PersonRow = styled.li<{ $compact?: boolean; $dragOver?: boolean; $editing?: boolean }>`
   position: relative;
   display: grid;
   grid-template-columns: ${({ $compact }) => ($compact ? '28px' : '48px')} minmax(0, 1fr);
   align-items: start;
   gap: ${({ $compact }) => ($compact ? '10px' : '14px')};
-  /* 한 사람 = 한 장. 선 대신 면 — 대표단 칸(나라 카드 안)에선 한 단 밝은 면 */
-  padding: ${({ $compact }) => ($compact ? '8px 10px' : '14px 14px')};
+  /*
+   * 한 사람 = 한 장(면). 대표단 줄(나라 카드 안)은 **면을 깔지 않는다** — 회색 카드 안에 흰 카드가 또 서서
+   * 한국전쟁 참여 탭이 상자 21개(나라 7 + 사람 14)였다. 들여쓴 줄로만 나라에 매단다.
+   */
+  padding: ${({ $compact }) => ($compact ? '6px 8px' : '14px 14px')};
   border-radius: ${RADIUS.MD};
-  background: ${({ theme, $compact }) => ($compact ? surface.nested(theme.mode) : surface.card(theme.mode))};
+  background: ${({ theme, $compact }) => ($compact ? 'transparent' : surface.card(theme.mode))};
   outline: ${({ $dragOver, theme }) => ($dragOver ? `2px dashed ${ledgerAccent(theme.mode)}` : 'none')};
   outline-offset: -2px;
   transition: background 0.15s, outline-color 0.15s;
@@ -185,6 +188,19 @@ export const PersonRow = styled.li<{ $compact?: boolean; $dragOver?: boolean }>`
   &:hover {
     background: ${({ theme, $compact }) => ($compact ? surface.nested(theme.mode) : surface.cardHover(theme.mode))};
   }
+
+  /* 편집 중인 사람 — 어느 카드를 고치고 있는지 한눈에(대표단 줄도 면을 깐다) */
+  ${({ $editing, theme }) =>
+    $editing &&
+    css`
+      &,
+      &:hover {
+        background: ${theme.colors.background.primary};
+        box-shadow:
+          0 0 0 1.5px ${ledgerAccent(theme.mode)},
+          0 4px 16px rgba(15, 23, 42, 0.08);
+      }
+    `}
 
   /* 좁은 화면 — 큰 행만 아바타를 40px로(대표단 작은 행은 이미 28px) */
   ${({ $compact }) =>
@@ -416,6 +432,154 @@ export const RemoveInline = styled.button`
   }
 `
 
+/* ─── 인물 편집 칸 — 참여 국가·진영(한 번 누르기) · 무엇을 했나 · 비고 ─── */
+
+/** 아무것도 적지 않은 사람의 '+ 무엇을 했나 · 비고 적기' — 편집 칸을 연다 */
+export const AddInfoButton = styled.button`
+  align-self: flex-start;
+  margin-top: 4px;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: ${({ theme }) => mutedTextColor(theme.mode)};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+    border-radius: ${RADIUS.FOCUS};
+  }
+`
+
+export const EditPanel = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+`
+
+export const EditField = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+`
+
+export const EditLabel = styled.label`
+  font-size: 11.5px;
+  font-weight: 650;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+/** 하나 고르기(참여 국가·진영) — 누르면 바로 저장 */
+export const ChoiceChips = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+`
+
+export const ChoiceChip = styled.button<{ $selected: boolean; $muted?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: ${RADIUS.PILL};
+  border: 1px solid
+    ${({ $selected, theme }) => ($selected ? ledgerAccent(theme.mode) : ledgerHairlineStrong(theme.mode))};
+  background: ${({ $selected, theme }) =>
+    $selected ? `color-mix(in srgb, ${ledgerAccent(theme.mode)} 12%, transparent)` : 'transparent'};
+  color: ${({ $selected, $muted, theme }) =>
+    $selected ? theme.colors.text.primary : $muted ? mutedTextColor(theme.mode) : theme.colors.text.secondary};
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: ${({ $selected }) => ($selected ? 700 : 500)};
+  white-space: nowrap;
+  cursor: ${({ $selected }) => ($selected ? 'default' : 'pointer')};
+  transition: border-color 0.12s, background 0.12s;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+  }
+`
+
+const editControl = css`
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.55;
+
+  &::placeholder {
+    color: ${({ theme }) => mutedTextColor(theme.mode)};
+  }
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    box-shadow: 0 0 0 3px ${({ theme }) => `color-mix(in srgb, ${ledgerAccent(theme.mode)} 18%, transparent)`};
+  }
+`
+
+export const EditInput = styled.input`
+  ${editControl}
+  height: 36px;
+`
+
+export const EditTextarea = styled.textarea`
+  ${editControl}
+  min-height: 60px;
+  resize: vertical;
+  overflow: hidden;
+`
+
+export const EditFoot = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+`
+
+export const EditHint = styled.span`
+  font-size: 11.5px;
+  color: ${({ theme }) => mutedTextColor(theme.mode)};
+`
+
+export const EditDone = styled.button`
+  flex: none;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: ${RADIUS.SM};
+  border: none;
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
+  /* 채운 면의 전경은 지면색 — 다크 강조색은 밝은 인디고라 흰 글자가 묻힌다 */
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#111827' : '#ffffff')};
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+  }
+`
+
 /* ─── Nations paragraph ─── */
 
 
@@ -425,10 +589,27 @@ export const RemoveInline = styled.button`
  */
 export const GroupHead = styled.div`
   display: flex;
-  align-items: baseline;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+`
+
+/** 무리 머리 오른쪽 — 이름으로 추가(입력) · 목록에서 고르기. 좁으면 라벨 아래로 내려가 한 줄을 쓴다 */
+export const GroupTools = styled.div`
+  display: inline-flex;
+  align-items: center;
   gap: 12px;
-  margin-bottom: 2px;
+  min-width: 0;
+`
+
+/** 이름이 맞는 후보 — 입력하는 동안만 머리 아래 한 줄 */
+export const QuickMatches = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -2px 0 10px;
 `
 
 export const GroupLabel = styled.h3`
@@ -460,15 +641,28 @@ export const ProseClamp = styled.div<{ $collapsed: boolean; $faded: boolean }>`
       max-height: calc(${CLAMP_LINES} * 1lh + 4px);
       overflow: hidden;
     `}
+  /*
+   * 넘치면 마지막 줄의 **끝만** 가로로 흐린다 — 그 자리에 '더 보기'가 얹힌다(MoreToggle $floating).
+   * 윗줄들은 그대로, 마지막 줄은 오른쪽 6em 전부터 사라진다. (예전: 마지막 줄 전체를 아래로 흐리고 '더 보기'는 제 줄)
+   */
   ${({ $faded }) =>
     $faded &&
     css`
-      mask-image: linear-gradient(to bottom, #000 calc(100% - 1lh), transparent);
+      mask-image: linear-gradient(#000, #000),
+        linear-gradient(to right, #000 calc(100% - 7em), transparent calc(100% - 4.5em));
+      mask-size: 100% calc(100% - 1lh - 4px), 100% calc(1lh + 4px);
+      mask-position: top, bottom;
+      mask-repeat: no-repeat;
     `}
 
   &:focus-within {
     max-height: none;
     mask-image: none;
+  }
+
+  /* 편집 중엔 접힘이 풀리므로 끝에 띄운 '더 보기'를 걷는다(글 위에 겹친다) */
+  &:focus-within + * {
+    display: none;
   }
 
   /* 산문 속 강조는 굵기로 — 잉크는 본문과 같게 */
@@ -519,6 +713,31 @@ export const ShowAllToggle = styled.button`
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
     border-radius: ${RADIUS.FOCUS};
+  }
+`
+
+/** 접는 산문의 자리 — 접힌 '더 보기'를 마지막 줄 끝에 띄우는 기준 */
+export const ClampHost = styled.div`
+  position: relative;
+  display: flex;
+  flex-direction: column;
+`
+
+/**
+ * 접힌 산문의 마지막 줄 끝 — ProseClamp가 그 자리를 가로로 흐려 둔다. 칸 높이가 **산문의 한 줄(1lh)**이라
+ * 안의 작은 '더 보기'가 그 줄 가운데에 선다(단추 자신의 1lh는 12px 글자 기준이라 줄보다 아래로 처졌다).
+ * bottom 4px = ProseClamp 받침 여백.
+ */
+export const FloatingMoreSlot = styled.div`
+  position: absolute;
+  right: 0;
+  bottom: 4px;
+  height: 1lh;
+  display: flex;
+  align-items: center;
+
+  > button {
+    margin: 0;
   }
 `
 
@@ -844,11 +1063,12 @@ export const AddBtn = styled.button`
 /** 대표단 — 나라 줄 밑 그 나라 자격의 인물들. 나라 이름 아래로 한 단 들인다 */
 export const DelegationList = styled.ol`
   list-style: none;
-  margin: 8px 0 2px;
+  /* 아바타(28px)가 나라 이름 글자 선에 오도록 행 안쪽 여백(8px)만큼 당긴다 */
+  margin: 6px -8px 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
 `
 
 /** 섹션 머리 요약 — '국가 14 · 인물 15 · 진영 2' */
@@ -999,23 +1219,10 @@ export const FigureChip = styled.span`
   }
 `
 
-/** 인라인 빠른 검색 + 추천 칩 바 */
-export const QuickAddBar = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 4px 0 10px;
-`
-
-export const QuickSearchRow = styled.div`
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px 8px;
-`
-
+/** 이름으로 추가 — 무리 머리 오른쪽(GroupTools) */
 export const QuickSearchInput = styled.input`
-  width: 240px;
+  width: 200px;
+  min-width: 0;
   max-width: 100%;
   height: 28px;
   padding: 0 10px;
@@ -1057,11 +1264,13 @@ export const QuickMatchChip = styled.button`
   }
 `
 
+/** 추천 — 목록 **뒤**(이미 있는 사람이 먼저). 목록이 비었으면 머리 바로 아래가 된다 */
 export const RecommendBar = styled.div`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 5px 6px;
+  margin-top: 10px;
 `
 
 export const RecommendLabel = styled.span`

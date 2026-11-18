@@ -39,12 +39,12 @@ import {
   GroupCount,
   GroupHead,
   GroupLabel,
+  GroupTools,
   ManageToggle,
   PersonList,
-  QuickAddBar,
   QuickMatchChip,
+  QuickMatches,
   QuickSearchInput,
-  QuickSearchRow,
   RecommendBar,
   RecommendChip,
   RecommendLabel,
@@ -94,6 +94,8 @@ interface DetailActorsProps {
  *   머리글이 있고 '+ 인물 추가'가 두 목록 사이에 떠 있었다.
  * - 비고·서술은 절반이 150자를 넘어(인물 비고 83/160) 15명짜리 사건에서 섹션이
  *   4,000px을 넘었다. 2줄에서 접고 '더 보기'로 펼친다. 시드가 쓰는 `*강조*`는 굵게 렌더.
+ * - 추가하는 길은 무리 머리 한 줄에 모은다(이름으로 추가 · 목록에서 고르기). 예전엔 머리(+추가) → 빠른 추가 칸 →
+ *   추천 칩이 세 줄로 서서 목록이 그 아래에서야 시작했다. 추천은 목록 **뒤**에 둔다(이미 있는 사람이 먼저).
  */
 export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: DetailActorsProps) {
   const [personModalOpen, setPersonModalOpen] = useState(false)
@@ -108,9 +110,15 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
   const [showAllPersons, setShowAllPersons] = useState(false)
   /** 대표단을 다 펼친 나라(행 키) */
   const [openDelegations, setOpenDelegations] = useState<Set<string>>(() => new Set())
+  /**
+   * 편집 칸이 열린 인물(한 번에 한 사람) — 여기서 쥐어야 참여 국가를 골라 카드가 그 나라 밑으로 옮겨 가
+   * 새로 그려져도 열린 채로 따라간다(행이 쥐고 있을 땐 옮겨 가는 순간 닫혔다).
+   */
+  const [editingPersonId, setEditingPersonId] = useState<string | null>(null)
 
   const actors = useActorMutations({ event, onPatch })
   const { persons, countryRows } = actors
+
   /**
    * 나라 몫의 측정값(병력·사상자…) — 수치 모듈과 같은 캐시. 참여국 줄 id(participantId)에 붙은 값만.
    * 예전엔 진영·수치 모듈에만 있어 참여 탭에서는 나라가 이름뿐이었다.
@@ -148,6 +156,8 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
     if (!actors.addPerson(personId)) return
     /* 새 인물은 끝에 붙는다 — 접혀 있으면 추가한 사람이 안 보이므로 펼친다 */
     if (persons.length >= PERSON_PREVIEW_COUNT) setShowAllPersons(true)
+    /* 방금 더한 사람은 곧 적을 사람 — 편집 칸을 열어 둔다(예전엔 목록 끝에 닫힌 채 붙어 찾아서 ✎를 눌러야 했다) */
+    setEditingPersonId(personId)
   }
 
   const selectedCountryIds = useMemo(() => countryRows.map((row) => row.id), [countryRows])
@@ -317,6 +327,8 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
         side={entry.sideId && sideById.get(entry.sideId) ? sideById.get(entry.sideId) : null}
         sideOptions={sideOptions}
         participationOptions={participationOptions}
+        editing={editingPersonId === entry.personId}
+        onEditingChange={(open) => setEditingPersonId(open ? entry.personId : null)}
         manageMode={manageMode}
         isFirst={position.isFirst}
         isLast={position.isLast}
@@ -324,7 +336,10 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
         onUpdate={actors.updatePerson}
         onParticipation={actors.setParticipationCountry}
         onMove={actors.movePerson}
-        onRemove={actors.removePerson}
+        onRemove={(personId) => {
+          if (editingPersonId === personId) setEditingPersonId(null)
+          actors.removePerson(personId)
+        }}
         isDragOver={dragOverTarget === targetKey}
         onDragStart={(dragEvent) => {
           dragEvent.stopPropagation()
@@ -356,13 +371,18 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
     )
   }
 
-  const renderCountryRow = (row: (typeof countryRows)[number]) => {
+  const renderCountryRow = (row: (typeof countryRows)[number], groupSideId?: string | null) => {
     const index = countryRows.indexOf(row)
     const rowKey = countryRowKey(row)
     const targetKey = `country:${rowKey}`
     const delegates = delegationMode ? (delegations.byCountry.get(rowKey) ?? []) : []
     const delegationOpen = openDelegations.has(rowKey)
-    const shownDelegates = delegationOpen ? delegates : delegates.slice(0, DELEGATION_PREVIEW_COUNT)
+    /* 고치는 중인 사람은 접힌 대표단 뒤쪽이어도 보인다 — 참여 국가를 골라 옮겨 간 카드가 '+N명' 뒤로 숨지 않게 */
+    const shownDelegates = delegationOpen
+      ? delegates
+      : delegates.filter(
+          (entry, position) => position < DELEGATION_PREVIEW_COUNT || entry.personId === editingPersonId,
+        )
     const toggleDelegation = () =>
       setOpenDelegations((previous) => {
         const next = new Set(previous)
@@ -377,6 +397,7 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
         figures={row.participantId ? figuresByParticipant.get(row.participantId) : undefined}
         side={row.sideId && sideById.get(row.sideId) ? sideById.get(row.sideId) : null}
         sideOptions={sideOptions}
+        groupSideId={groupSideId}
         manageMode={manageMode}
         isFirst={index === 0}
         isLast={index === countryRows.length - 1}
@@ -433,10 +454,10 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
               const order = persons.indexOf(entry)
               return renderPersonRow(entry, { isFirst: order === 0, isLast: order === persons.length - 1 }, true)
             })}
-            {delegates.length > DELEGATION_PREVIEW_COUNT && (
+            {delegates.length > DELEGATION_PREVIEW_COUNT && (delegationOpen || delegates.length > shownDelegates.length) && (
               <li>
                 <DelegationMore type="button" aria-expanded={delegationOpen} onClick={toggleDelegation}>
-                  {delegationOpen ? '접기' : `+${delegates.length - DELEGATION_PREVIEW_COUNT}명 더 보기`}
+                  {delegationOpen ? '접기' : `+${delegates.length - shownDelegates.length}명 더 보기`}
                 </DelegationMore>
               </li>
             )}
@@ -454,12 +475,7 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
             국가
             {totalCountries > 0 && <GroupCount>{totalCountries}</GroupCount>}
           </GroupLabel>
-          <AddBtn type="button" onClick={() => setCountryModalOpen(true)}>
-            국가 추가
-          </AddBtn>
-        </GroupHead>
-        <QuickAddBar>
-          <QuickSearchRow>
+          <GroupTools>
             <QuickSearchInput
               type="search"
               value={countryQuery}
@@ -479,9 +495,16 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
                   setCountryQuery('')
                 }
               }}
-              placeholder="+ 참여국 빠른 추가 (이름 입력 후 Enter)…"
-              aria-label="참여국 빠른 검색"
+              placeholder="이름으로 추가 (Enter)"
+              aria-label="참여국 이름으로 추가"
             />
+            <AddBtn type="button" onClick={() => setCountryModalOpen(true)} title="국가 목록에서 여러 나라를 골라 추가">
+              목록에서 고르기
+            </AddBtn>
+          </GroupTools>
+        </GroupHead>
+        {countryQuickMatches.length > 0 && (
+          <QuickMatches aria-label="이름이 맞는 나라">
             {countryQuickMatches.map((candidate) => (
               <QuickMatchChip
                 key={`${candidate.isHistorical ? 'h' : 'c'}:${candidate.id}`}
@@ -502,8 +525,8 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
                 {candidate.isHistorical ? ' (역사)' : ''}
               </QuickMatchChip>
             ))}
-          </QuickSearchRow>
-        </QuickAddBar>
+          </QuickMatches>
+        )}
         {/*
           * 진영은 있는데 어느 나라도 진영에 들지 않았다 — 머리엔 '진영 4'가 서 있는데 목록은 평평해 진영이 어디 갔는지 몰랐다
           * (프랑스 혁명: 진영 4 · 진영에 든 나라 0). 어디서 넣는지 한 줄로.
@@ -561,13 +584,13 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
                         </SideOutcomeTag>
                       )}
                     </SideHead>
-                    <SideCountryList>{group.items.map(renderCountryRow)}</SideCountryList>
+                    <SideCountryList>{group.items.map((row) => renderCountryRow(row, group.sideId))}</SideCountryList>
                   </SideGroup>
                 )
               })}
             </SideColumns>
           ) : (
-            <CountryList>{countryRows.map(renderCountryRow)}</CountryList>
+            <CountryList>{countryRows.map((row) => renderCountryRow(row))}</CountryList>
           ))}
       </ActorsBlock>
   )
@@ -603,13 +626,10 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
           <GroupLabel>
             {delegationMode && listedPersons.length > 0 ? '나라 없이 참여한 인물' : '인물'}
             {listedPersons.length > 0 && <GroupCount>{listedPersons.length}</GroupCount>}
+            {/* 빈 무리도 비었다고 말한다 — 예전엔 머리 아래 따로 한 줄('아직 없습니다 — …')을 세웠다 */}
+            {persons.length === 0 && hasAnything && <GroupCount>아직 없음</GroupCount>}
           </GroupLabel>
-          <AddBtn type="button" onClick={() => setPersonModalOpen(true)}>
-            인물 추가
-          </AddBtn>
-        </GroupHead>
-        <QuickAddBar>
-          <QuickSearchRow>
+          <GroupTools>
             <QuickSearchInput
               type="search"
               value={personQuery}
@@ -621,9 +641,17 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
                   setPersonQuery('')
                 }
               }}
-              placeholder="+ 인물 빠른 추가 (이름·직위 입력 후 Enter)…"
-              aria-label="참여 인물 빠른 검색"
+              placeholder="이름·직위로 추가 (Enter)"
+              aria-label="참여 인물 이름으로 추가"
+              title="이끈 사람·지휘관·대표를 걸어 두면 인물 문서에도 이 사건이 보입니다"
             />
+            <AddBtn type="button" onClick={() => setPersonModalOpen(true)} title="인물 목록에서 여러 사람을 골라 추가">
+              목록에서 고르기
+            </AddBtn>
+          </GroupTools>
+        </GroupHead>
+        {personQuickMatches.length > 0 && (
+          <QuickMatches aria-label="이름이 맞는 인물">
             {personQuickMatches.map((candidate) => {
               const displayName = getPersonDisplayName(candidate)
               const office = headlineOffice(candidate)
@@ -641,8 +669,24 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
                 </QuickMatchChip>
               )
             })}
-          </QuickSearchRow>
-          {recommendedPersons.length > 0 && !personQuery.trim() && (
+          </QuickMatches>
+        )}
+        {listedPersons.length > 0 && (
+          <PersonList>
+            {(personsCollapsed ? listedPersons.slice(0, PERSON_PREVIEW_COUNT) : listedPersons).map((entry) => {
+              const order = persons.indexOf(entry)
+              return renderPersonRow(entry, { isFirst: order === 0, isLast: order === persons.length - 1 })
+            })}
+          </PersonList>
+        )}
+        {listedPersons.length > PERSON_PREVIEW_COUNT && !manageMode && (
+          <ShowAllToggle ref={showAllToggleRef} type="button" aria-expanded={showAllPersons} onClick={togglePersons}>
+            {showAllPersons
+              ? '접기'
+              : `${listedPersons.length}명 모두 보기 (+${listedPersons.length - PERSON_PREVIEW_COUNT})`}
+          </ShowAllToggle>
+        )}
+          {recommendedPersons.length > 0 && !personQuery.trim() && !manageMode && (
             <RecommendBar aria-label="이 사건 무렵 · 참여국 추천 인물">
               <RecommendLabel>동시대·참여국 추천</RecommendLabel>
               {visibleRecommendedPersons.map((candidate) => {
@@ -671,29 +715,6 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
               )}
             </RecommendBar>
           )}
-        </QuickAddBar>
-        {/*
-          * 빈 무리도 한 줄은 말한다(머리글만 서 있으면 비었는지 덜 불러온 건지 몰랐다) — 다만 짧게.
-          * 대표단 보기에서 '모두 위 나라 아래에 있습니다'는 빈 자리를 설명만 했다 — 머리와 추가 버튼으로 충분하다.
-          */}
-        {persons.length === 0 && hasAnything && (
-          <EmptyGroupLine>아직 없습니다 — 이끈 사람·지휘관·대표를 걸어 두면 인물 문서에도 이 사건이 보입니다.</EmptyGroupLine>
-        )}
-        {listedPersons.length > 0 && (
-          <PersonList>
-            {(personsCollapsed ? listedPersons.slice(0, PERSON_PREVIEW_COUNT) : listedPersons).map((entry) => {
-              const order = persons.indexOf(entry)
-              return renderPersonRow(entry, { isFirst: order === 0, isLast: order === persons.length - 1 })
-            })}
-          </PersonList>
-        )}
-        {listedPersons.length > PERSON_PREVIEW_COUNT && !manageMode && (
-          <ShowAllToggle ref={showAllToggleRef} type="button" aria-expanded={showAllPersons} onClick={togglePersons}>
-            {showAllPersons
-              ? '접기'
-              : `${listedPersons.length}명 모두 보기 (+${listedPersons.length - PERSON_PREVIEW_COUNT})`}
-          </ShowAllToggle>
-        )}
       </ActorsBlock>
   )
 
@@ -731,10 +752,6 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
           )}
         </ActorsHeader>
 
-        {event.kind === 'COLLECTION' && (
-          <SubEventSidesRollupPanel eventId={event.id} />
-        )}
-
         {/* 비어 있을 때 통일 안내 — 인물·국가 모두 없을 때만 */}
         {!hasAnything && (
           <S.EmptyState>
@@ -766,6 +783,8 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
           </>
         )}
 
+        {/* 하위 사건 모아보기 — 이 사건 자신의 참여가 먼저다(예전엔 머리 바로 밑에 서서 목록을 한 칸 밀었다) */}
+        {event.kind === 'COLLECTION' && <SubEventSidesRollupPanel eventId={event.id} />}
       </S.Section>
 
       {personModalOpen && (

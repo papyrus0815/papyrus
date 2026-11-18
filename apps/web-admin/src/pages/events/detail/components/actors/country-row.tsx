@@ -49,6 +49,7 @@ export function ActorCountryRow({
   figures = [],
   side = null,
   sideOptions = [],
+  groupSideId,
   manageMode,
   isFirst,
   isLast,
@@ -72,6 +73,12 @@ export function ActorCountryRow({
   side?: { name: string; color: string } | null
   /** 진영 선택지 — 사건에 진영이 있을 때 1클릭 진영 지정/변경 */
   sideOptions?: Array<{ value: string; label: string }>
+  /**
+   * 이 행이 놓인 진영 칸(진영별 묶음일 때). 행의 진영이 칸과 같으면 진영 칩을 세우지 않는다 —
+   * 칸 머리가 이미 말한다(1차대전: '동맹국' 칸 안 네 줄이 모두 '동맹국 ▾' 칩을 달고 있었다).
+   * undefined = 평평한 목록.
+   */
+  groupSideId?: string | null
   manageMode: boolean
   isFirst: boolean
   isLast: boolean
@@ -97,8 +104,16 @@ export function ActorCountryRow({
   const [editing, setEditing] = useState(false)
   const period = membershipPeriodLabel(row)
   const participation = row.participation && row.participation !== 'FULL' ? PARTICIPATION_LABEL[row.participation] : null
-  const showSidePicker = sideOptions.length > 1
-  const hasFacts = Boolean(period || participation || side || showSidePicker)
+  /*
+   * 기본값은 말하지 않는다 — 역할 '참여국'(참여국 1,201줄 중 720줄)과 칸이 이미 말하는 진영은 칩을 세우지 않고
+   * ✎(편집)에서만 고친다. 예전엔 나라마다 '참여국 ▾ · 동맹국 ▾' 칩 두 개가 늘 서 있어 탭이 단추 숲이었다.
+   */
+  const isDefaultRole = !row.role || row.role === 'PARTICIPANT'
+  const showRolePicker = !isDefaultRole || editing
+  const sideImplied = groupSideId !== undefined && Boolean(row.sideId) && row.sideId === groupSideId
+  const showSidePicker = sideOptions.length > 1 && (!sideImplied || editing)
+  const showSideTag = Boolean(side) && !sideImplied
+  const hasFacts = Boolean(period || participation || showSideTag || showSidePicker)
 
   return (
     <CountryRow
@@ -130,6 +145,7 @@ export function ActorCountryRow({
               {row.existenceWarning}
             </MismatchNote>
           )}
+          {showRolePicker && (
           <CountryRolePicker>
             <InlineSelect
               value={row.role || 'PARTICIPANT'}
@@ -146,6 +162,7 @@ export function ActorCountryRow({
               label={`${row.name} 역할`}
             />
           </CountryRolePicker>
+          )}
         </CountryNameLine>
         {hasFacts && (
           <CountryFacts>
@@ -164,7 +181,7 @@ export function ActorCountryRow({
                 />
               </FactTag>
             ) : (
-              side && <FactTag $color={side.color}>{side.name}</FactTag>
+              showSideTag && side && <FactTag $color={side.color}>{side.name}</FactTag>
             )}
             {participation && <FactTag>{participation}</FactTag>}
             {period && (
@@ -227,8 +244,8 @@ export function ActorCountryRow({
           $active={editing}
           aria-pressed={editing}
           onClick={() => setEditing((open) => !open)}
-          aria-label={editing ? `${row.name} 편집 끝` : `${row.name} 빈 칸 채우기(역할·한 일·비고)`}
-          title={editing ? '편집 끝' : '역할·한 일·비고 채우기'}
+          aria-label={editing ? `${row.name} 편집 끝` : `${row.name} 편집(역할·진영·한 일·비고)`}
+          title={editing ? '편집 끝' : '역할·진영·한 일·비고 고치기'}
         >
           {editing ? '완료' : <FiEdit2 aria-hidden />}
         </EditToggle>
