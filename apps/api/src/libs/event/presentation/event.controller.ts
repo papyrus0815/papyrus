@@ -25,12 +25,15 @@ import {
   describeDeathAtEvent,
   describeExistenceMismatch,
   describeLifespanMismatch,
+  keyRange,
   partsOf,
   resolveOfficesAtEvent,
   signedYearOfDate,
 } from '../application/person-participation'
+import { formatSeriesEditionBadge } from '../domain/event-series-forecast'
 import { MilitaryEventService } from '../application/military-event.service'
 import { EventSideService } from '../application/event-side.service'
+import { EventSeriesService } from '../application/event-series.service'
 import { columnsToPoint } from '../../shared/structured-point'
 import { EventRelationService } from '../application/event-relation.service'
 import {
@@ -40,6 +43,7 @@ import {
   EventLinkCandidateDto,
   CountryStatehoodEventsDto,
   StatehoodEventDto,
+  ContemporaryLeaderCandidateDto,
   CreateEventRelationDto,
   UpdateEventRelationDto,
   EventRelationItemDto,
@@ -244,6 +248,71 @@ export interface EventOrganizationDto {
   } | null
 }
 
+/** 사건 ↔ 정당 한 줄 — 정본 PoliticalParty 메타데이터 포함 */
+const EVENT_POLITICAL_PARTY_SELECT = {
+  id: true,
+  role: true,
+  roleDescription: true,
+  note: true,
+  sideId: true,
+  party: {
+    select: {
+      id: true,
+      name: true,
+      shortName: true,
+      localName: true,
+      ideology: true,
+      position: true,
+      brandColor: true,
+      logoUrl: true,
+      foundedDate: true,
+      dissolvedDate: true,
+      country: { select: { id: true, name: true } },
+      historicalCountry: { select: { id: true, name: true } },
+    },
+  },
+} as const
+
+export interface EventPoliticalPartyDto {
+  relationId: string
+  role: string
+  roleDescription: string | null
+  note: string | null
+  sideId: string | null
+  partyId: string
+  name: string
+  shortName: string | null
+  localName: string | null
+  ideology: string | null
+  position: string | null
+  brandColor: string | null
+  logoUrl: string | null
+  foundedDate: string | null
+  dissolvedDate: string | null
+  country: { id: string; name: string } | null
+  historicalCountry: { id: string; name: string } | null
+}
+
+const toEventPoliticalPartyDto = (row: any): EventPoliticalPartyDto => ({
+  relationId: row.id,
+  role: row.role,
+  roleDescription: row.roleDescription ?? null,
+  note: row.note ?? null,
+  sideId: row.sideId ?? null,
+  partyId: row.party.id,
+  name: row.party.name,
+  shortName: row.party.shortName ?? null,
+  localName: row.party.localName ?? null,
+  ideology: row.party.ideology ?? null,
+  position: row.party.position ?? null,
+  brandColor: row.party.brandColor ?? null,
+  logoUrl: row.party.logoUrl ?? null,
+  foundedDate: toIsoOrNull(row.party.foundedDate),
+  dissolvedDate: toIsoOrNull(row.party.dissolvedDate),
+  country: row.party.country ?? null,
+  historicalCountry: row.party.historicalCountry ?? null,
+})
+
 const decimalToString = (value: unknown): string | null => (value == null ? null : String(value))
 
 /** 선택 텍스트 칸 — 생략(undefined)=유지, 빈 문자열·null=비움, 나머지는 앞뒤 공백 정리 */
@@ -335,6 +404,7 @@ function listDeepChildrenInclude(levels: number): Record<string, unknown> {
     omit: LIST_OMITTED_BODY_FIELDS,
     include: {
       historicalCountry: { select: { id: true, name: true } },
+      series: { select: { id: true, title: true, shortTitle: true } },
       countryRelations: {
         include: {
           country: { select: { id: true, name: true, flagEmoji: true } },
@@ -386,6 +456,7 @@ export class EventController {
     private readonly eventService: EventService,
     private readonly militaryEventService: MilitaryEventService,
     private readonly eventSideService: EventSideService,
+    private readonly eventSeriesService: EventSeriesService,
     private readonly eventRelationService: EventRelationService,
     private readonly prisma: PrismaClient,
   ) {}
@@ -537,6 +608,16 @@ export class EventController {
       locationLatitude: event.locationLatitude ?? null,
       locationLongitude: event.locationLongitude ?? null,
       phaseId: event.phaseId ?? null,
+      seriesId: event.seriesId ?? null,
+      seriesEdition: event.seriesEdition ?? null,
+      seriesEditionLabel: event.seriesEditionLabel ?? null,
+      seriesTitle:
+        event.series?.shortTitle ?? event.series?.title ?? undefined,
+      editionBadge:
+        formatSeriesEditionBadge({
+          seriesEdition: event.seriesEdition,
+          seriesEditionLabel: event.seriesEditionLabel,
+        }) ?? undefined,
       locationNote: event.locationNote ?? null,
       // 국면 — 상세에서만 include된다(conditional: 목록·후보 payload를 []로 오염시키지 않게)
       phases: Array.isArray(event.phases) ? event.phases.map(toEventPhaseDto) : undefined,
@@ -737,6 +818,10 @@ export class EventController {
       organizations: Array.isArray((event as any).organizationRelations)
         ? (event as any).organizationRelations.map(toEventOrganizationDto)
         : undefined,
+      /** 관련 정당 — 상세에서만 include */
+      politicalParties: Array.isArray((event as any).politicalPartyRelations)
+        ? (event as any).politicalPartyRelations.map(toEventPoliticalPartyDto)
+        : undefined,
       /** 이 사건을 서사로 가진 선거 — 상세에서만 include(conditional 계약) */
       elections: Array.isArray((event as any).electionsWithNarrative)
         ? (event as any).electionsWithNarrative.map((election: any) => ({
@@ -880,6 +965,7 @@ export class EventController {
     @Query('hasNoCountries') hasNoCountries?: string,
     @Query('hasNoKeywords') hasNoKeywords?: string,
     @Query('includeSubEvents') includeSubEvents?: string,
+    @Query('seriesId') seriesId?: string,
     @Request() req?: any,
   ): Promise<EventResponseDto[]> {
     const userId = req.user?.id || req.user?.sub // AuthGuard가 이미 인증 체크함
@@ -926,7 +1012,11 @@ export class EventController {
      * 스스로 그린다'는 전제에서 나온 것이라 **집계하는 쪽에서는 틀린 모수**가 된다
      * (국가 대시보드에서 미국 43건 중 자식 6건이 통째로 빠져 37건으로 보였다).
      */
-    const includeAll = isFlagOn(includeSubEvents)
+    const filterSeriesId =
+      seriesId && typeof seriesId === 'string' && seriesId.trim()
+        ? seriesId.trim()
+        : undefined
+    const includeAll = isFlagOn(includeSubEvents) || Boolean(filterSeriesId)
 
     // 시간 범위 — decade/century 동시 적용 가능 (양쪽 만족하는 교집합).
     const dateRange: { gte?: Date; lt?: Date } = {}
@@ -1008,6 +1098,7 @@ export class EventController {
         ...(includeAll ? {} : ROOT_EVENT_WHERE),
         createdById: userId,
         deletedAt: null,
+        ...(filterSeriesId && { seriesId: filterSeriesId }),
         ...(createdAtGte && { createdAt: { gte: createdAtGte } }),
         ...(parseEventDomain(domain) && { domain: parseEventDomain(domain) }),
         ...(parseEventTypes(types) && { type: { in: parseEventTypes(types) } }),
@@ -1040,6 +1131,7 @@ export class EventController {
         },
         // F17: 본체 historicalCountryId 표시용(관련 역사국가 목록에 dedup 합류)
         historicalCountry: { select: { id: true, name: true } },
+        series: { select: { id: true, title: true, shortTitle: true } },
         parentEvent: true,
         // 국면 — 목록이 하위 사건 줄에 '2국면' 표지를 단다(묶음만 행이 있다)
         phases: { orderBy: [{ order: 'asc' as const }, { createdAt: 'asc' as const }] },
@@ -1066,6 +1158,7 @@ export class EventController {
                     },
                   },
                   historicalCountry: { select: { id: true, name: true } },
+                  series: { select: { id: true, title: true, shortTitle: true } },
                   // 자식 묶음의 국면 — 손자 줄의 '2국면' 표지 근거(입법의회기 › 하위)
                   phases: { orderBy: [{ order: 'asc' as const }, { createdAt: 'asc' as const }] },
                   // 목록은 섹션 *제목*만 소비한다(드로어의 '본문 구성' 칩) —
@@ -1100,6 +1193,7 @@ export class EventController {
                     omit: LIST_OMITTED_BODY_FIELDS,
                     include: {
                       historicalCountry: { select: { id: true, name: true } },
+                      series: { select: { id: true, title: true, shortTitle: true } },
                       phases: { orderBy: [{ order: 'asc' as const }, { createdAt: 'asc' as const }] },
                       childEvents: listDeepChildrenInclude(LIST_DEEP_LEVELS) as { where: { deletedAt: null } },
                       /**
@@ -1190,6 +1284,7 @@ export class EventController {
     @Query('hasNoCountries') hasNoCountries?: string,
     @Query('hasNoKeywords') hasNoKeywords?: string,
     @Query('includeSubEvents') includeSubEvents?: string,
+    @Query('seriesId') seriesId?: string,
     @Request() req?: any,
   ): Promise<{ total: number }> {
     const userId = req.user?.id || req.user?.sub
@@ -1212,7 +1307,11 @@ export class EventController {
     const hCountryIdList = splitIds(historicalCountryIds)
     const isFlagOn = (raw?: string): boolean => raw === 'true' || raw === '1'
     /* 목록과 같은 스위치 — 총량과 목록의 모수가 어긋나면 "전체 N건"이 거짓말이 된다 */
-    const includeAll = isFlagOn(includeSubEvents)
+    const filterSeriesId =
+      seriesId && typeof seriesId === 'string' && seriesId.trim()
+        ? seriesId.trim()
+        : undefined
+    const includeAll = isFlagOn(includeSubEvents) || Boolean(filterSeriesId)
 
     const dateRange: { gte?: Date; lt?: Date } = {}
     if (decade) {
@@ -1277,6 +1376,7 @@ export class EventController {
         ...(includeAll ? {} : ROOT_EVENT_WHERE),
         createdById: userId,
         deletedAt: null,
+        ...(filterSeriesId && { seriesId: filterSeriesId }),
         ...(createdAtGte && { createdAt: { gte: createdAtGte } }),
         ...(parseEventDomain(domain) && { domain: parseEventDomain(domain) }),
         ...(parseEventTypes(types) && { type: { in: parseEventTypes(types) } }),
@@ -1570,6 +1670,126 @@ export class EventController {
   }
 
   /**
+   * 관련 정당 연결 — 정본 PoliticalParty를 사건(혁명·봉기·총파업·쿠데타·전당대회 등)에 직접 연결한다.
+   * @tag events
+   */
+  @Post(':id/political-parties')
+  async addEventPoliticalParty(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      partyId: string
+      role: string
+      roleDescription?: string | null
+      note?: string | null
+      sideId?: string | null
+    },
+    @Request() req?: any,
+  ): Promise<EventPoliticalPartyDto> {
+    const userId = req.user?.id || req.user?.sub
+    await assertEventOwnership(this.prisma, id, userId, { action: '수정', deleted: 'conflict' })
+    if (!body?.partyId) throw new BadRequestException('partyId가 필요합니다.')
+    if (!(EVENT_ORGANIZATION_ROLES as readonly string[]).includes(body.role)) {
+      throw new BadRequestException(`역할은 ${EVENT_ORGANIZATION_ROLES.join(', ')} 중 하나여야 합니다.`)
+    }
+    const party = await this.prisma.politicalParty.findUnique({
+      where: { id: body.partyId },
+      select: { id: true, name: true },
+    })
+    if (!party) throw new NotFoundException('정당을 찾을 수 없습니다.')
+    const duplicate = await this.prisma.eventPoliticalPartyRelation.findFirst({
+      where: { eventId: id, partyId: body.partyId, role: body.role as EventOrganizationRole },
+      select: { id: true },
+    })
+    if (duplicate) throw new ConflictException(`「${party.name}」은(는) 이미 같은 역할로 연결되어 있습니다.`)
+
+    const count = await this.prisma.eventPoliticalPartyRelation.count({ where: { eventId: id } })
+    const row = await this.prisma.eventPoliticalPartyRelation.create({
+      data: {
+        eventId: id,
+        partyId: body.partyId,
+        role: body.role as EventOrganizationRole,
+        roleDescription: body.roleDescription?.trim() || null,
+        note: body.note?.trim() || null,
+        sideId: body.sideId ?? null,
+        sortOrder: count,
+      },
+      select: EVENT_POLITICAL_PARTY_SELECT,
+    })
+    return toEventPoliticalPartyDto(row)
+  }
+
+  /**
+   * 관련 정당 연결 수정(진영 소속·역할·설명·비고 변경)
+   * @tag events
+   */
+  @Patch(':id/political-parties/:relationId')
+  async updateEventPoliticalParty(
+    @Param('id') id: string,
+    @Param('relationId') relationId: string,
+    @Body()
+    body: {
+      role?: string
+      roleDescription?: string | null
+      note?: string | null
+      sideId?: string | null
+    },
+    @Request() req?: any,
+  ): Promise<EventPoliticalPartyDto> {
+    const userId = req.user?.id || req.user?.sub
+    await assertEventOwnership(this.prisma, id, userId, { action: '수정', deleted: 'conflict' })
+    const existing = await this.prisma.eventPoliticalPartyRelation.findFirst({
+      where: { id: relationId, eventId: id },
+      select: { id: true, partyId: true, role: true },
+    })
+    if (!existing) throw new NotFoundException('연결을 찾을 수 없습니다.')
+    if (
+      body.role !== undefined &&
+      !(EVENT_ORGANIZATION_ROLES as readonly string[]).includes(body.role)
+    ) {
+      throw new BadRequestException(`역할은 ${EVENT_ORGANIZATION_ROLES.join(', ')} 중 하나여야 합니다.`)
+    }
+    if (body.role !== undefined && body.role !== existing.role) {
+      const clash = await this.prisma.eventPoliticalPartyRelation.findFirst({
+        where: { eventId: id, partyId: existing.partyId, role: body.role as EventOrganizationRole },
+        select: { id: true },
+      })
+      if (clash) throw new ConflictException('같은 정당이 이미 해당 역할로 연결되어 있습니다.')
+    }
+    const updated = await this.prisma.eventPoliticalPartyRelation.update({
+      where: { id: relationId },
+      data: {
+        ...(body.role !== undefined ? { role: body.role as EventOrganizationRole } : {}),
+        ...(body.roleDescription !== undefined
+          ? { roleDescription: body.roleDescription?.trim() || null }
+          : {}),
+        ...(body.note !== undefined ? { note: body.note?.trim() || null } : {}),
+        ...(body.sideId !== undefined ? { sideId: body.sideId || null } : {}),
+      },
+      select: EVENT_POLITICAL_PARTY_SELECT,
+    })
+    return toEventPoliticalPartyDto(updated)
+  }
+
+  /**
+   * 관련 정당 연결 해제 — 정당 자체는 유지된다.
+   * @tag events
+   */
+  @Delete(':id/political-parties/:relationId')
+  async removeEventPoliticalParty(
+    @Param('id') id: string,
+    @Param('relationId') relationId: string,
+    @Request() req?: any,
+  ): Promise<void> {
+    const userId = req.user?.id || req.user?.sub
+    await assertEventOwnership(this.prisma, id, userId, { action: '수정' })
+    const deleted = await this.prisma.eventPoliticalPartyRelation.deleteMany({
+      where: { id: relationId, eventId: id },
+    })
+    if (deleted.count === 0) throw new NotFoundException('연결을 찾을 수 없습니다.')
+  }
+
+  /**
    * 취임·즉위 후보 — 이 사건의 **참여 인물**이 가진 재임·재위 중, 사건 연도 ±1년 안에 시작한 기록.
    *
    * '권력 교체' 카드의 연결 동선이다. 재임·재위의 accessionEventId(이 사건으로 취임)는 지금까지
@@ -1848,6 +2068,7 @@ export class EventController {
       include: {
         // F17: 본체 historicalCountryId 표시용(관련 역사국가 목록에 dedup 합류)
         historicalCountry: { select: { id: true, name: true } },
+        series: { select: { id: true, title: true, shortTitle: true } },
         // 위치 복원: 편집 폼 PlaceSelect 뱃지에 표시할 이름 (UUID만으론 부족)
         city: { select: { id: true, name: true } },
         administrativeDivision: { select: { id: true, name: true } },
@@ -1937,6 +2158,15 @@ export class EventController {
           include: {
             country: true,
             historicalCountry: true,
+            side: {
+              select: {
+                id: true,
+                name: true,
+                color: true,
+                outcome: true,
+                outcomeNote: true,
+              },
+            },
           },
           // 표시 순서는 sortOrder가 정본. createdAt은 동률 tiebreak(구 데이터 안전망).
           orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
@@ -1950,6 +2180,11 @@ export class EventController {
         organizationRelations: {
           select: EVENT_ORGANIZATION_SELECT,
           orderBy: { createdAt: 'asc' },
+        },
+        // 관련 정당 — 정본 PoliticalParty 직접 연결
+        politicalPartyRelations: {
+          select: EVENT_POLITICAL_PARTY_SELECT,
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
         },
         // 이 사건으로 시작된 재임·재위(취임·즉위) — 전임자는 프론트가 reign-adjacency로 잇는다.
         // 재위·재임이 한 테이블 — 한 번에 읽고 응답에서 군주직 여부로 가른다(같은 관계 이중 include 불가)
@@ -2071,6 +2306,14 @@ export class EventController {
     const response = this.toResponseDto(event as any)
     // 진영(D1) — 소속 참여자까지. 측정값(D3)은 GET /events/:id/observations로 따로 받는다
     response.sides = await this.eventSideService.list(id)
+    if (event.seriesId) {
+      response.seriesContext =
+        await this.eventSeriesService.buildSeriesContextForEvent(
+          event.seriesId,
+          id,
+          event.createdById,
+        )
+    }
     if (militaryEvent) {
       // @ts-ignore
       response.militaryEvent = militaryEvent
@@ -2193,6 +2436,286 @@ export class EventController {
     }))
   }
 
+  /**
+   * 참여국 당시 국가원수·정부수반·군주 후보 조회 — 정상회의(SUMMIT)·조약·외교 사건 등록/상세에서
+   * 참여국과 시작일 기준으로 당시 재임·재위 중인 수반들을 원클릭으로 불러온다.
+   *
+   * ⚠️ 라우트는 반드시 @Get(':id')보다 먼저 선언 — 아니면 'contemporary-leaders'가 :id로 매칭된다.
+   * @tag events
+   */
+  @Get('contemporary-leaders')
+  async getContemporaryLeaders(
+    @Query('date') date?: string,
+    @Query('datePrecision') datePrecision?: string,
+    @Query('countryIds') countryIds?: string,
+    @Query('historicalCountryIds') historicalCountryIds?: string,
+    @Request() req?: any,
+  ): Promise<ContemporaryLeaderCandidateDto[]> {
+    const userId = req.user?.id || req.user?.sub
+    if (!userId || !date?.trim()) return []
+
+    const parsed = parseEventDate(date.trim(), datePrecision as any)
+    if (!parsed || parsed.year == null) return []
+
+    const signedYear = parsed.era === 'BC' ? -parsed.year : parsed.year
+    const prec = datePrecision ?? 'day'
+    const eventRange = keyRange(
+      signedYear,
+      prec === 'year' ? null : (parsed.month ?? null),
+      prec === 'year' || prec === 'month' ? null : (parsed.day ?? null),
+    )
+    if (!eventRange) return []
+
+    const splitIds = (raw?: string): string[] =>
+      raw
+        ? raw
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : []
+
+    const modernIds = [...new Set(splitIds(countryIds))]
+    const histIds = [...new Set(splitIds(historicalCountryIds))]
+    if (modernIds.length === 0 && histIds.length === 0) return []
+
+    // 현대 국가로 들어온 경우(예: 1985 G7 서독) 해당 연도에 존속한 브리지 역사국가도 함께 탐색한다
+    const bridgedHistoricalSet = new Set<string>(histIds)
+    if (modernIds.length > 0) {
+      const bridges = await this.prisma.historicalCountryModernCountry.findMany({
+        where: { modernCountryId: { in: modernIds } },
+        select: {
+          historicalCountry: {
+            select: {
+              id: true,
+              startEra: true,
+              startYear: true,
+              endEra: true,
+              endYear: true,
+            },
+          },
+        },
+      })
+      for (const b of bridges) {
+        const hc = b.historicalCountry
+        if (!hc) continue
+        const hcStart =
+          hc.startYear != null
+            ? hc.startEra === 'BC'
+              ? -hc.startYear
+              : hc.startYear
+            : null
+        const hcEnd =
+          hc.endYear != null
+            ? hc.endEra === 'BC'
+              ? -hc.endYear
+              : hc.endYear
+            : null
+        const afterStart = hcStart == null || signedYear >= hcStart
+        const beforeEnd = hcEnd == null || signedYear <= hcEnd
+        if (afterStart && beforeEnd) {
+          bridgedHistoricalSet.add(hc.id)
+        }
+      }
+    }
+
+    const countryOr: Array<Record<string, unknown>> = []
+    if (modernIds.length > 0) {
+      countryOr.push({ countryId: { in: modernIds } })
+    }
+    if (bridgedHistoricalSet.size > 0) {
+      countryOr.push({
+        historicalCountryId: { in: [...bridgedHistoricalSet] },
+      })
+    }
+
+    const tenures = await this.prisma.governmentPositionTenure.findMany({
+      where: {
+        person: { accountId: userId },
+        positionType: {
+          in: ['HEAD_OF_STATE', 'HEAD_OF_GOVERNMENT', 'REGENT'],
+        },
+        OR: countryOr,
+      },
+      select: {
+        id: true,
+        personId: true,
+        positionType: true,
+        ordinal: true,
+        title: true,
+        regnalName: true,
+        countryId: true,
+        historicalCountryId: true,
+        startEra: true,
+        startYear: true,
+        startMonth: true,
+        startDay: true,
+        startDate: true,
+        endEra: true,
+        endYear: true,
+        endMonth: true,
+        endDay: true,
+        endDate: true,
+        positionDefinition: {
+          select: { title: true, isMonarchical: true, rank: true },
+        },
+        country: {
+          select: {
+            id: true,
+            name: true,
+            flagEmoji: true,
+            defaultNameDisplayOrder: true,
+          },
+        },
+        historicalCountry: { select: { id: true, name: true } },
+        person: {
+          select: {
+            id: true,
+            name: true,
+            surname: true,
+            middleName: true,
+            profileImageUrl: true,
+            nameDisplayOrder: true,
+            country: { select: { defaultNameDisplayOrder: true } },
+          },
+        },
+      },
+      orderBy: [{ priority: 'asc' }, { startKey: 'asc' }],
+    })
+
+    const overlaps = (
+      start: ReturnType<typeof partsOf>,
+      end: ReturnType<typeof partsOf>,
+    ): boolean => {
+      const sRange = keyRange(start.year, start.month, start.day)
+      if (!sRange) return false
+      const eRange = keyRange(end.year, end.month, end.day)
+      const endKey = eRange ? eRange[1] : Number.MAX_SAFE_INTEGER
+      return sRange[0] <= eventRange[1] && endKey >= eventRange[0]
+    }
+
+    const modernOrder = new Map(modernIds.map((id, idx) => [id, idx]))
+    const histOrder = new Map(histIds.map((id, idx) => [id, idx]))
+
+    const byPerson = new Map<string, ContemporaryLeaderCandidateDto>()
+    for (const row of tenures) {
+      const start = partsOf(
+        row.startEra,
+        row.startYear,
+        row.startMonth,
+        row.startDay,
+        row.startDate,
+      )
+      const end = partsOf(
+        row.endEra,
+        row.endYear,
+        row.endMonth,
+        row.endDay,
+        row.endDate,
+      )
+      if (!overlaps(start, end)) continue
+
+      const isMonarchical = row.positionDefinition?.isMonarchical === true
+      const rawOffice =
+        row.title?.trim() ||
+        row.positionDefinition?.title?.trim() ||
+        (isMonarchical ? '군주' : '수반')
+      const regnalSuffix = row.regnalName?.trim()
+        ? ` (${row.regnalName.trim()})`
+        : ''
+      const ordinalPrefix =
+        !isMonarchical && row.ordinal != null && row.ordinal > 0
+          ? `제${row.ordinal}대 `
+          : ''
+      const countryName =
+        row.historicalCountry?.name ?? row.country?.name ?? ''
+      const fullTitle = `${ordinalPrefix}${rawOffice}${regnalSuffix}`.trim()
+      const suggestedRole = countryName
+        ? `${countryName} ${rawOffice}`
+        : rawOffice
+
+      const existing = byPerson.get(row.personId)
+      if (existing) {
+        if (!existing.title.includes(rawOffice)) {
+          existing.title = `${existing.title} · ${fullTitle}`
+          existing.suggestedRole = `${existing.suggestedRole} · ${rawOffice}`
+        }
+        continue
+      }
+
+      byPerson.set(row.personId, {
+        personId: row.personId,
+        personName: displayPersonName(row.person),
+        surname: row.person.surname ?? null,
+        givenName: row.person.name ?? null,
+        profileImageUrl: row.person.profileImageUrl ?? null,
+        positionType: row.positionType,
+        isMonarchical,
+        ordinal: row.ordinal ?? null,
+        title: fullTitle,
+        suggestedRole,
+        countryId:
+          row.countryId && modernIds.includes(row.countryId)
+            ? row.countryId
+            : (row.countryId ?? null),
+        historicalCountryId:
+          row.historicalCountryId && histIds.includes(row.historicalCountryId)
+            ? row.historicalCountryId
+            : row.countryId && modernIds.includes(row.countryId)
+              ? null
+              : (row.historicalCountryId ?? null),
+        countryName,
+        flagEmoji: row.country?.flagEmoji ?? null,
+        tenureStartYear: start.year,
+        tenureEndYear: end.year,
+      })
+    }
+
+    return [...byPerson.values()].sort((a, b) => {
+      const orderA =
+        (a.countryId != null ? modernOrder.get(a.countryId) : undefined) ??
+        (a.historicalCountryId != null
+          ? histOrder.get(a.historicalCountryId)
+          : undefined) ??
+        999
+      const orderB =
+        (b.countryId != null ? modernOrder.get(b.countryId) : undefined) ??
+        (b.historicalCountryId != null
+          ? histOrder.get(b.historicalCountryId)
+          : undefined) ??
+        999
+      if (orderA !== orderB) return orderA - orderB
+      // 같은 국가 내에서는 정상회의 참석 관례상 정부수반/국가원수 정렬 유지
+      if (a.positionType !== b.positionType) {
+        return a.positionType === 'HEAD_OF_STATE' ? -1 : 1
+      }
+      return a.personName.localeCompare(b.personName, 'ko')
+    })
+  }
+
+  private async syncSeriesPrincipalOrganization(
+    eventId: string,
+    seriesId: string | null | undefined,
+  ): Promise<void> {
+    if (!seriesId) return
+    const series = await this.prisma.eventSeries.findUnique({
+      where: { id: seriesId },
+      select: { organizationId: true },
+    })
+    if (!series?.organizationId) return
+    const existing = await this.prisma.eventOrganizationRelation.findFirst({
+      where: { eventId, organizationId: series.organizationId },
+      select: { id: true },
+    })
+    if (existing) return
+    await this.prisma.eventOrganizationRelation.create({
+      data: {
+        eventId,
+        organizationId: series.organizationId,
+        role: 'PRINCIPAL',
+      },
+    })
+  }
+
   @Get(':id')
   async getEventById(
     @Param('id') id: string,
@@ -2253,6 +2776,9 @@ export class EventController {
         domain: dto.domain,
         background: dto.background,
         aftermath: dto.aftermath,
+        seriesId: dto.seriesId === '' ? null : dto.seriesId,
+        seriesEdition: dto.seriesEdition,
+        seriesEditionLabel: emptyToNull(dto.seriesEditionLabel),
         parentEventId: dto.parentEventId,
         kind: dto.kind,
         type: dto.type,
@@ -2279,6 +2805,12 @@ export class EventController {
     if (dto.militaryEvent) {
       await this.militaryEventService.saveMilitaryData(event.id, dto.militaryEvent)
     }
+
+    // 소속 시리즈에 주관 조직(organizationId)이 있으면 사건 ↔ 조직(PRINCIPAL) 관계를 자동 동기화
+    await this.syncSeriesPrincipalOrganization(
+      event.id,
+      dto.seriesId === '' ? null : dto.seriesId,
+    )
 
     // 모든 관계 + 군사정보가 채워진 *조회와 동일한* 응답으로 반환 — 프론트가 시딩만으로
     // 완전한 상세를 렌더하도록(부분 응답 → refetch 점프 방지). 폴백: 재조회 실패 시 bare.
@@ -2342,6 +2874,15 @@ export class EventController {
         locationNote: emptyToNull(dto.locationNote),
         ...coordinatePair(dto),
         phaseId: phasePatch,
+        seriesId: dto.seriesId === '' ? null : dto.seriesId,
+        seriesEdition:
+          dto.seriesId === null || dto.seriesId === ''
+            ? null
+            : dto.seriesEdition,
+        seriesEditionLabel:
+          dto.seriesId === null || dto.seriesId === ''
+            ? null
+            : emptyToNull(dto.seriesEditionLabel),
         domain: dto.domain,
         background: dto.background,
         aftermath: dto.aftermath,
@@ -2372,6 +2913,10 @@ export class EventController {
     // 정규화된 군사 정보 저장
     if (dto.militaryEvent) {
       await this.militaryEventService.saveMilitaryData(id, dto.militaryEvent)
+    }
+
+    if (dto.seriesId && dto.seriesId !== '') {
+      await this.syncSeriesPrincipalOrganization(id, dto.seriesId)
     }
 
     // create와 동일 — 관계·군사정보 포함 full 응답으로 반환(시딩 시 점프 방지).

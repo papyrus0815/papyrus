@@ -1,4 +1,11 @@
-import { IsString, IsOptional, IsEnum, IsDateString, IsUUID } from 'class-validator'
+import {
+  IsString,
+  IsOptional,
+  IsEnum,
+  IsDateString,
+  IsUUID,
+  ValidateIf,
+} from 'class-validator'
 import { OrganizationType, OrganizationScope } from '@prisma/client'
 
 /**
@@ -50,14 +57,22 @@ export class UpdateOrganizationDto {
   ideology?: string | null
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== '')
   @IsUUID()
   headquartersCityId?: string | null
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== '')
+  @IsUUID()
+  predecessorOrganizationId?: string | null
+
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== '')
   @IsUUID()
   countryId?: string | null
 
   @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== '')
   @IsUUID()
   historicalCountryId?: string | null
 }

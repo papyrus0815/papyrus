@@ -1089,9 +1089,14 @@ const AFFILIATION_TRACK_OPTIONS: ReadonlyArray<{
 ]
 
 const MILITARY_UNIT_TYPE_LABELS: Record<string, string> = {
+  SUPREME_COMMAND: '최고사령부',
   HIGH_COMMAND: '최고사령부',
   GENERAL_STAFF: '참모본부',
+  SERVICE_HQ: '각군 총사령부',
+  THEATER: '전구·총사령부',
   ARMY_GROUP: '집단군·전선군',
+  FRONT: '전선군·방면군',
+  MILITARY_DISTRICT: '군관구',
   FIELD_ARMY: '야전군',
   CORPS: '군단',
   DIVISION: '사단',
@@ -1109,7 +1114,7 @@ const INLINE_MILITARY_UNIT_TYPE_OPTIONS: ReadonlyArray<{
   description: string
 }> = [
   {
-    value: 'HIGH_COMMAND',
+    value: 'SUPREME_COMMAND',
     label: '최고사령부 (OKW·STAVKA·합참)',
     description: '전군 또는 전구 최고 통수·작전 사령부',
   },
@@ -1117,6 +1122,11 @@ const INLINE_MILITARY_UNIT_TYPE_OPTIONS: ReadonlyArray<{
     value: 'GENERAL_STAFF',
     label: '참모본부 (OKH·육군참모본부)',
     description: '군종별 참모본부 및 작전 지도부',
+  },
+  {
+    value: 'SERVICE_HQ',
+    label: '각군 총사령부 (육·해·공군본부)',
+    description: '군종별 최상위 지휘·행정 본부',
   },
   {
     value: 'ARMY_GROUP',
@@ -1141,12 +1151,12 @@ const INLINE_MILITARY_UNIT_TYPE_OPTIONS: ReadonlyArray<{
   {
     value: 'FLEET',
     label: '함대 · 해군사령부',
-    description: '예: 연합함대, 태평양함대, 전쟁해군최고사령부(OKM)',
+    description: '예: 연합함대, 태평양함대, 제7함대',
   },
   {
     value: 'AIR_FLEET',
     label: '항공함대 · 공군사령부',
-    description: '예: 제2항공함대, 공군최고사령부(OKL)',
+    description: '예: 제2항공함대, 전략공군사령부',
   },
   {
     value: 'OTHER',
@@ -1163,9 +1173,10 @@ const INLINE_MILITARY_BRANCH_OPTIONS: ReadonlyArray<{
   { value: 'ARMY', label: '육군' },
   { value: 'NAVY', label: '해군' },
   { value: 'AIR_FORCE', label: '공군' },
-  { value: 'MARINES', label: '해병대' },
-  { value: 'PARAMILITARY', label: '준군사조직 · 친위대' },
-  { value: 'OTHER', label: '기타 군종' },
+  { value: 'MARINE_CORPS', label: '해병대' },
+  { value: 'COAST_GUARD', label: '해안경비대' },
+  { value: 'SPACE_FORCE', label: '우주군' },
+  { value: 'OTHER', label: '기타 · 준군사조직' },
 ]
 
 const DEPARTMENT_ROLE_PRESETS: ReadonlyArray<{
@@ -1719,7 +1730,8 @@ export function TenureRegisterPanel({
   const [newUnitOpen, setNewUnitOpen] = useState(false)
   const [newUnitName, setNewUnitName] = useState('')
   const [newUnitAbbr, setNewUnitAbbr] = useState('')
-  const [newUnitType, setNewUnitType] = useState<MilitaryUnitType>('HIGH_COMMAND')
+  const [newUnitType, setNewUnitType] =
+    useState<MilitaryUnitType>('SUPREME_COMMAND')
   const [newUnitBranch, setNewUnitBranch] = useState<MilitaryBranch>('JOINT')
   const [newUnitSaving, setNewUnitSaving] = useState(false)
   /** 기간 — 구조화 파츠(기원전·연 단위까지). 월·일을 비우면 그만큼만 안다는 뜻 */

@@ -19,6 +19,20 @@ export interface ParsedHeadquartersMapInput {
   isMapUrlOrCoord: boolean
 }
 
+export type HeadquartersGoogleMapLayer = 'roadmap' | 'hybrid'
+
+export interface HeadquartersZoomPreset {
+  key: 'building' | 'district' | 'city'
+  label: string
+  zoom: number
+}
+
+export const HEADQUARTERS_ZOOM_PRESETS: readonly HeadquartersZoomPreset[] = [
+  { key: 'building', label: '건물', zoom: 17 },
+  { key: 'district', label: '주변', zoom: 15 },
+  { key: 'city', label: '권역', zoom: 12 },
+] as const
+
 export interface HeadquartersGoogleMapsSpec {
   embedUrl: string
   externalUrl: string
@@ -275,6 +289,7 @@ export function buildHeadquartersGoogleMapsSpec(params: {
   longitude?: number | null
   countryName?: string | null
   zoom?: number
+  mapLayer?: HeadquartersGoogleMapLayer
 }): HeadquartersGoogleMapsSpec | null {
   const validPoint = clampValidWgs84(params.latitude, params.longitude)
   const cleanHeadquarters = params.headquarters?.trim() ?? ''
@@ -286,6 +301,9 @@ export function buildHeadquartersGoogleMapsSpec(params: {
     searchParams.set('q', coordStr)
     searchParams.set('ll', coordStr)
     searchParams.set('z', String(params.zoom ?? 15))
+    if (params.mapLayer === 'hybrid') {
+      searchParams.set('t', 'h')
+    }
     searchParams.set('hl', 'ko')
     searchParams.set('output', 'embed')
 
@@ -313,6 +331,9 @@ export function buildHeadquartersGoogleMapsSpec(params: {
   const searchParams = new URLSearchParams()
   searchParams.set('q', combinedQuery)
   searchParams.set('z', String(params.zoom ?? 14))
+  if (params.mapLayer === 'hybrid') {
+    searchParams.set('t', 'h')
+  }
   searchParams.set('hl', 'ko')
   searchParams.set('output', 'embed')
 

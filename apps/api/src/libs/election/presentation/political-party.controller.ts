@@ -106,6 +106,17 @@ export class PoliticalPartyController {
         // 어느 FK가 찼는지로 현대/역사 판별 가능(검토서 F13)
         country: { select: { id: true, name: true } },
         historicalCountry: { select: { id: true, name: true } },
+        _count: {
+          select: {
+            memberships: true,
+            leaderships: true,
+            electionPartyResults: true,
+            cabinetAffiliations: true,
+            eventRelations: true,
+            transitionsFrom: true,
+            transitionsTo: true,
+          },
+        },
       },
     })
     return serializeElectionBigInt(rows)
@@ -435,9 +446,82 @@ export class PoliticalPartyController {
     await this.prisma.politicalPartyLaw.delete({ where: { id: linkId } })
   }
 
+  /** 관련 사건 — 이 정당이 주체·참여·창당·해산·피해 등으로 연결된 사건 목록 */
+  @Get(':id/events')
+  async listPartyEvents(@Param('id') id: string): Promise<any> {
+    await this.ensureParty(id)
+    const rows = await this.prisma.eventPoliticalPartyRelation.findMany({
+      where: {
+        partyId: id,
+        event: { deletedAt: null },
+      },
+      include: {
+        side: {
+          select: { id: true, name: true, color: true, outcome: true },
+        },
+        event: {
+          select: {
+            id: true,
+            title: true,
+            domain: true,
+            type: true,
+            startDate: true,
+            startEra: true,
+            startYear: true,
+            startMonth: true,
+            startDay: true,
+            endDate: true,
+            endEra: true,
+            endYear: true,
+            endMonth: true,
+            endDay: true,
+          },
+        },
+      },
+      orderBy: [
+        { event: { startYear: 'desc' } },
+        { event: { startMonth: 'desc' } },
+        { event: { startDay: 'desc' } },
+        { createdAt: 'desc' },
+      ],
+    })
+    return serializeElectionBigInt(
+      rows.map((row) => ({
+        relationId: row.id,
+        role: row.role,
+        roleDescription: row.roleDescription ?? null,
+        note: row.note ?? null,
+        side: row.side ?? null,
+        event: {
+          ...row.event,
+          startDate: row.event.startDate ? row.event.startDate.toISOString() : null,
+          endDate: row.event.endDate ? row.event.endDate.toISOString() : null,
+        },
+      })),
+    )
+  }
+
   @Get(':id')
   async getById(@Param('id') id: string): Promise<any> {
-    const row = await this.prisma.politicalParty.findUnique({ where: { id } })
+    const row = await this.prisma.politicalParty.findUnique({
+      where: { id },
+      include: {
+        country: { select: { id: true, name: true } },
+        historicalCountry: { select: { id: true, name: true } },
+        aliases: true,
+        _count: {
+          select: {
+            memberships: true,
+            leaderships: true,
+            electionPartyResults: true,
+            cabinetAffiliations: true,
+            eventRelations: true,
+            transitionsFrom: true,
+            transitionsTo: true,
+          },
+        },
+      },
+    })
     if (!row) throw new NotFoundException('정당을 찾을 수 없습니다.')
     return serializeElectionBigInt(row)
   }

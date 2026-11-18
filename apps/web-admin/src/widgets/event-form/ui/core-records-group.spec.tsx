@@ -4,6 +4,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { ThemeProvider } from 'styled-components'
 
 import {
+  type RegisterFacetDrafts,
   buildParentRecordsImportPlan,
   commitRegisterFacets,
   emptyRegisterFacetDrafts,
@@ -30,8 +31,10 @@ jest.mock('@/shared/api/election', () => ({
   getElections: jest.fn().mockResolvedValue([]),
 }))
 jest.mock('@/shared/api/organizations', () => ({
+  ...jest.requireActual('@/shared/api/organizations'),
   getOrganizations: jest.fn().mockResolvedValue([]),
   getOrganizationMembers: jest.fn().mockResolvedValue([]),
+  getOrganizationCountryMemberships: jest.fn().mockResolvedValue([]),
 }))
 jest.mock('@/shared/api/persons', () => ({
   getAllPersons: jest.fn().mockResolvedValue([]),
@@ -47,6 +50,9 @@ jest.mock('@/shared/ui/person-picker', () => ({
 }))
 jest.mock('@/shared/ui/select-modal/select-modal', () => ({
   SelectModal: () => null,
+}))
+jest.mock('@/shared/ui/country-picker', () => ({
+  CountryPicker: () => null,
 }))
 
 function renderGroup(ui: React.ReactElement) {
@@ -1412,5 +1418,139 @@ describe('CoreRecordsGroup — 2열 진영 보드(SidesField) 및 성립·소멸
       screen.getByRole('button', { name: '루이나폴레옹 역할 국가원수 지정' }),
     )
     expect(drafts.persons[0].role).toBe('국가원수')
+  })
+
+  it('진영별 승패 결과(outcome) 2자 대칭 자동 지정 및 기업·조직 역할 설명 메모 입력·저장이 동작한다', async () => {
+    const { syncEventSides } = jest.requireMock('@/shared/api/event-sides') as {
+      syncEventSides: jest.Mock
+    }
+    syncEventSides.mockClear()
+    syncEventSides.mockResolvedValue([
+      { id: 'side-a', name: '자유군단·정부군' },
+      { id: 'side-b', name: '스파르타쿠스단' },
+    ])
+    const eventsModule = await import('@/shared/api/events')
+    const addOrgSpy = jest
+      .spyOn(eventsModule, 'addEventOrganization')
+      .mockResolvedValue({} as never)
+
+    let drafts: RegisterFacetDrafts = {
+      ...emptyRegisterFacetDrafts(),
+      sides: {
+        names: ['자유군단·정부군', '스파르타쿠스단'],
+        assignment: {},
+      },
+      organizations: [
+        {
+          id: 'org-spartacus',
+          name: '스파르타쿠스단',
+          role: 'PRINCIPAL' as const,
+        },
+      ],
+    }
+    const onDraftsChange = jest.fn((next) => {
+      drafts = next
+    })
+
+    const { rerender } = renderGroup(
+      <CoreRecordsGroup
+        type="UPRISING"
+        domain="POLITICS"
+        drafts={drafts}
+        onDraftsChange={onDraftsChange}
+        participants={[{ historicalCountryId: 'hc-weimar', role: 'INITIATOR' }]}
+        participantName={() => '바이마르 공화국'}
+        onAddCountryWithRole={jest.fn()}
+        onRemoveParticipant={jest.fn()}
+        eventTitle="베를린 1월 봉기 무력 진압"
+        playClickSound={jest.fn()}
+      />,
+    )
+
+    // 1. 1번 진영에서 '승리·성공' 클릭 시 2번 진영은 자동으로 '패배·실패(DEFEAT)'로 대칭 지정됨
+    fireEvent.click(
+      screen.getByRole('button', { name: '1번 진영 승리·성공' }),
+    )
+    expect(drafts.sides.outcomes).toEqual({
+      A: 'VICTORY',
+      B: 'DEFEAT',
+    })
+
+    rerender(
+      <CoreRecordsGroup
+        type="UPRISING"
+        domain="POLITICS"
+        drafts={drafts}
+        onDraftsChange={onDraftsChange}
+        participants={[{ historicalCountryId: 'hc-weimar', role: 'INITIATOR' }]}
+        participantName={() => '바이마르 공화국'}
+        onAddCountryWithRole={jest.fn()}
+        onRemoveParticipant={jest.fn()}
+        eventTitle="베를린 1월 봉기 무력 진압"
+        playClickSound={jest.fn()}
+      />,
+    )
+
+    // 2. 기업·조직 카드의 역할 설명 textarea에 메모 입력
+    fireEvent.change(screen.getByLabelText('스파르타쿠스단 역할 설명'), {
+      target: { value: '총파업 및 무장 봉기 주도 후 진압됨' },
+    })
+    expect(drafts.organizations[0].roleDescription).toBe(
+      '총파업 및 무장 봉기 주도 후 진압됨',
+    )
+
+    rerender(
+      <CoreRecordsGroup
+        type="UPRISING"
+        domain="POLITICS"
+        drafts={drafts}
+        onDraftsChange={onDraftsChange}
+        participants={[{ historicalCountryId: 'hc-weimar', role: 'INITIATOR' }]}
+        participantName={() => '바이마르 공화국'}
+        onAddCountryWithRole={jest.fn()}
+        onRemoveParticipant={jest.fn()}
+        eventTitle="베를린 1월 봉기 무력 진압"
+        playClickSound={jest.fn()}
+      />,
+    )
+
+    // VS 배너에 승리·패배 배지가 표시됨
+    const vsBanner = screen.getByRole('region', {
+      name: '진영 대결 구도 인포그래픽',
+    })
+    expect(within(vsBanner).getByText('🏆 승리')).toBeInTheDocument()
+    expect(within(vsBanner).getByText('패배')).toBeInTheDocument()
+
+    // 3. commitRegisterFacets 실행 시 진영 outcome과 조직 roleDescription이 각각 API로 전달됨
+    await commitRegisterFacets({
+      eventId: 'evt-berlin',
+      eventTitle: '베를린 1월 봉기 무력 진압',
+      participants: [{ historicalCountryId: 'hc-weimar', role: 'INITIATOR' }],
+      drafts,
+      eventType: 'UPRISING',
+      domain: 'POLITICS',
+    })
+
+    expect(syncEventSides).toHaveBeenCalledWith('evt-berlin', [
+      {
+        name: '자유군단·정부군',
+        level: 'COALITION',
+        color: '#1d4ed8',
+        outcome: 'VICTORY',
+      },
+      {
+        name: '스파르타쿠스단',
+        level: 'COALITION',
+        color: '#b91c1c',
+        outcome: 'DEFEAT',
+      },
+    ])
+    expect(addOrgSpy).toHaveBeenCalledWith('evt-berlin', {
+      organizationId: 'org-spartacus',
+      role: 'PRINCIPAL',
+      roleDescription: '총파업 및 무장 봉기 주도 후 진압됨',
+    })
+
+    addOrgSpy.mockRestore()
   })
 })

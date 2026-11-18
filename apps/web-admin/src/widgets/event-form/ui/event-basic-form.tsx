@@ -66,13 +66,18 @@ import {
   type EventDetail,
   eventDetailQueryOptions,
 } from '@/pages/events/detail/use-event-detail'
-import {
-  LocationPickerModal,
-  parseCoordinateInput,
-} from '@/pages/events/detail/components/location-picker-modal'
+import { LocationPickerModal, parseCoordinateInput } from '@/pages/events/detail/components/location-picker-modal'
+import { EventSeriesLinkModal } from '@/pages/events/detail/components/series-flow-strip'
 import { recordRecentLocation } from '@/pages/events/detail/components/location-text.lib'
 import { cityApi } from '@/shared/api/city'
+import { getApiConnection } from '@/shared/api/client'
 import { eventKeys } from '@/shared/api/event-query-keys'
+import { getEventSeriesById } from '@/shared/api/event-series'
+import {
+  getOrganizationById,
+  getOrganizationCountryMemberships,
+  resolveOrganizationMembershipRoleAtYear,
+} from '@/shared/api/organizations'
 import {
   type EventLinkCandidate,
   type EventResponseDto,
@@ -191,6 +196,17 @@ export interface EventBasicFormProps {
   initialCountries?: EventCountryParticipant[]
   /** 상세 '새 관련 사건 등록' 등 진입 지면의 연관 사건 프리필(신규 등록 전용) */
   initialRelatedEvents?: EventRelatedDraft[]
+  /** 정기 시리즈 차기 회차 원클릭 등록 프리필(신규 등록 전용) */
+  initialSeriesPrefill?: {
+    seriesId?: string | null
+    seriesEdition?: number | null
+    seriesEditionLabel?: string | null
+    title?: string | null
+    startDate?: string | null
+    startDatePrecision?: DatePickerPrecision | null
+    location?: string | null
+    organizationId?: string | null
+  }
   /** 모달 셸에서 전달하는 레이아웃 모드 ('split': 좌우 2단 분할, 'single': 1단 세로) */
   layoutMode?: 'single' | 'split'
 }
@@ -268,6 +284,7 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   initialEventType,
   initialCountries,
   initialRelatedEvents,
+  initialSeriesPrefill,
   layoutMode,
 }) => {
   const queryClient = useQueryClient()
@@ -504,6 +521,166 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
   const [parentEvent, setParentEvent] = useState<EventParentPreset | null>(
     initialParent ?? null,
   )
+
+  // ===== 정기 회의·행사 시리즈 연결(신규 등록 전용 — 편집은 상세 SeriesFlowStrip/DetailFacts 정본) =====
+  const [selectedSeriesId, setSelectedSeriesId] = useState<string>(
+    !isEditMode && initialSeriesPrefill?.seriesId
+      ? initialSeriesPrefill.seriesId
+      : '',
+  )
+  const [seriesEditionInput, setSeriesEditionInput] = useState<string>(
+    !isEditMode && initialSeriesPrefill?.seriesEdition != null
+      ? String(initialSeriesPrefill.seriesEdition)
+      : '',
+  )
+  const [seriesEditionLabelInput, setSeriesEditionLabelInput] =
+    useState<string>(
+      !isEditMode && initialSeriesPrefill?.seriesEditionLabel
+        ? initialSeriesPrefill.seriesEditionLabel
+        : '',
+    )
+  const [seriesPickerOpen, setSeriesPickerOpen] = useState(false)
+
+  const selectedSeriesQuery = useQuery({
+    queryKey: ['event-series', 'detail', selectedSeriesId],
+    queryFn: () => getEventSeriesById(selectedSeriesId),
+    enabled: !isEditMode && Boolean(selectedSeriesId),
+    staleTime: 30_000,
+  })
+
+  const seriesPrefillAppliedRef = useRef(false)
+  useEffect(() => {
+    if (isEditMode || !initialSeriesPrefill || seriesPrefillAppliedRef.current) {
+      return
+    }
+    seriesPrefillAppliedRef.current = true
+    if (initialSeriesPrefill.title) setTitle(initialSeriesPrefill.title)
+    if (initialSeriesPrefill.startDate) {
+      setStartDate(initialSeriesPrefill.startDate)
+      setEndDate(initialSeriesPrefill.startDate)
+    }
+    if (initialSeriesPrefill.startDatePrecision) {
+      setStartDatePrecision(initialSeriesPrefill.startDatePrecision)
+      setEndDatePrecision(initialSeriesPrefill.startDatePrecision)
+    }
+    if (initialSeriesPrefill.location) {
+      setLocation(initialSeriesPrefill.location)
+    }
+    setHydrationToken((prev) => prev + 1)
+  }, [
+    isEditMode,
+    initialSeriesPrefill,
+    setTitle,
+    setStartDate,
+    setEndDate,
+    setStartDatePrecision,
+    setEndDatePrecision,
+    setLocation,
+  ])
+
+  const syncedSeriesOrgIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (isEditMode) return
+    const targetOrgId =
+      selectedSeriesQuery.data?.organizationId ??
+      initialSeriesPrefill?.organizationId ??
+      null
+    if (!targetOrgId || syncedSeriesOrgIdRef.current === targetOrgId) return
+    syncedSeriesOrgIdRef.current = targetOrgId
+
+    // 시리즈 메타로 분야·세부도 비어 있으면 보완
+    if (selectedSeriesQuery.data) {
+      if (!category && isEventDomainKey(selectedSeriesQuery.data.defaultDomain)) {
+        setCategory(selectedSeriesQuery.data.defaultDomain)
+      }
+      if (
+        !eventType &&
+        isEventTypeKey(selectedSeriesQuery.data.defaultEventType)
+      ) {
+        setEventType(selectedSeriesQuery.data.defaultEventType)
+      }
+    }
+
+    void (async () => {
+      try {
+        const conn = getApiConnection()
+        const [org, memberships] = await Promise.all([
+          selectedSeriesQuery.data?.organization
+            ? Promise.resolve(selectedSeriesQuery.data.organization)
+            : getOrganizationById(conn, targetOrgId),
+          getOrganizationCountryMemberships(conn, targetOrgId),
+        ])
+        setFacetDrafts((prev) =>
+          prev.organizations.some((o) => o.id === org.id)
+            ? prev
+            : {
+                ...prev,
+                organizations: [
+                  ...prev.organizations,
+                  { id: org.id, name: org.name, role: 'PRINCIPAL' as const },
+                ],
+              },
+        )
+        const targetYear = signedYearFromIsoLike(
+          initialSeriesPrefill?.startDate || startDate,
+        )
+        const resolvedMembers = memberships
+          .map((m) => ({
+            membership: m,
+            resolvedRole: resolveOrganizationMembershipRoleAtYear(m, targetYear),
+          }))
+          .filter(
+            (
+              entry,
+            ): entry is {
+              membership: (typeof memberships)[number]
+              resolvedRole: NonNullable<
+                ReturnType<typeof resolveOrganizationMembershipRoleAtYear>
+              >
+            } => entry.resolvedRole !== null,
+          )
+        if (resolvedMembers.length > 0) {
+          setRelatedCountries((prev) => {
+            const seen = new Set(prev.map(participantKey))
+            const additions: EventCountryParticipant[] = []
+            for (const { membership: m, resolvedRole } of resolvedMembers) {
+              const mappedEventRole =
+                resolvedRole === 'OBSERVER' || resolvedRole === 'DIALOGUE_PARTNER'
+                  ? 'OBSERVER'
+                  : 'PARTICIPANT'
+              const row: EventCountryParticipant = m.historicalCountryId
+                ? {
+                    historicalCountryId: m.historicalCountryId,
+                    role: mappedEventRole,
+                  }
+                : {
+                    countryId: m.countryId,
+                    role: mappedEventRole,
+                  }
+              const k = participantKey(row)
+              if (!seen.has(k)) {
+                seen.add(k)
+                additions.push(row)
+              }
+            }
+            return additions.length > 0 ? [...prev, ...additions] : prev
+          })
+        }
+      } catch {
+        // 조직·회원국 자동 연결 실패는 무시 (사용자 수동 편집 가능)
+      }
+    })()
+  }, [
+    isEditMode,
+    selectedSeriesQuery.data,
+    initialSeriesPrefill?.organizationId,
+    initialSeriesPrefill?.startDate,
+    category,
+    eventType,
+    startDate,
+    setCategory,
+    setRelatedCountries,
+  ])
   const [parentPickerOpen, setParentPickerOpen] = useState(false)
   const [parentSearchTerm, setParentSearchTerm] = useState('')
   const [parentQuickQuery, setParentQuickQuery] = useState('')
@@ -1404,10 +1581,26 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
         })
         notify.success('사건이 성공적으로 수정되었습니다!')
       } else {
+        const parsedSeriesEdition = seriesEditionInput.trim()
+          ? Number.parseInt(seriesEditionInput.trim(), 10)
+          : null
         saved = await createEvent({
           ...(eventData satisfies Parameters<typeof createEvent>[0]),
           kind,
           ...(eventType && { type: eventType }),
+          ...(selectedSeriesId
+            ? {
+                seriesId: selectedSeriesId,
+                ...(parsedSeriesEdition != null &&
+                Number.isFinite(parsedSeriesEdition) &&
+                parsedSeriesEdition > 0
+                  ? { seriesEdition: parsedSeriesEdition }
+                  : {}),
+                ...(seriesEditionLabelInput.trim()
+                  ? { seriesEditionLabel: seriesEditionLabelInput.trim() }
+                  : {}),
+              }
+            : {}),
           // 참여 인물(세부의 핵심 기록이 인물인 경우) — 생성 요청에 함께 싣는다
           relatedPersons: relatedPersonsPayload(facetDrafts, eventType, domainName),
         })
@@ -1829,6 +2022,22 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
                     startDate={startDate}
                     endDate={endDate}
                     parentRecordsSlot={parentRecordsSlot}
+                    onImportCountriesFromOrganization={(incoming, orgName) => {
+                      const existingKeys = new Set(
+                        relatedCountries.map(participantKey),
+                      )
+                      const fresh = incoming.filter(
+                        (item) => !existingKeys.has(participantKey(item)),
+                      )
+                      if (fresh.length === 0) {
+                        notify.info('이미 모든 회원국이 참여국에 포함되어 있습니다.')
+                        return
+                      }
+                      setRelatedCountries([...relatedCountries, ...fresh])
+                      notify.success(
+                        `‘${orgName}’ 회원국·파트너국 ${fresh.length}개국을 참여국으로 불러왔습니다.`,
+                      )
+                    }}
                     playClickSound={playClickSound}
                   />
                 ),
@@ -1925,6 +2134,33 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
                 onImport: () => setRelatedCountries([...relatedCountries, ...parentCountriesToImport]),
               }
             : undefined
+        }
+        eventSeriesSlot={
+          isEditMode
+            ? undefined
+            : {
+                series: selectedSeriesId
+                  ? {
+                      id: selectedSeriesId,
+                      title:
+                        selectedSeriesQuery.data?.title ?? '선택한 정기 시리즈',
+                      cadenceLabel:
+                        selectedSeriesQuery.data?.forecast.cadenceLabel ?? null,
+                      organizationName:
+                        selectedSeriesQuery.data?.organization?.name ?? null,
+                    }
+                  : null,
+                seriesEdition: seriesEditionInput,
+                onSeriesEditionChange: setSeriesEditionInput,
+                seriesEditionLabel: seriesEditionLabelInput,
+                onSeriesEditionLabelChange: setSeriesEditionLabelInput,
+                onOpenPicker: () => setSeriesPickerOpen(true),
+                onClear: () => {
+                  setSelectedSeriesId('')
+                  setSeriesEditionInput('')
+                  setSeriesEditionLabelInput('')
+                },
+              }
         }
         parentEventSlot={
           isEditMode
@@ -2201,6 +2437,49 @@ export const EventBasicForm: React.FC<EventBasicFormProps> = ({
             setLocationLongitude(next.locationLongitude)
             setLocationNote(next.locationNote ?? '')
             setLocationModalOpen(false)
+          }}
+        />
+      )}
+
+      {/* 정기 회의·행사 시리즈 선택 모달 */}
+      {!isEditMode && seriesPickerOpen && (
+        <EventSeriesLinkModal
+          event={{
+            id: 'new',
+            title,
+            domain: category || 'DIPLOMACY',
+            type: eventType,
+            seriesId: selectedSeriesId || null,
+            seriesEdition: seriesEditionInput.trim()
+              ? Number.parseInt(seriesEditionInput.trim(), 10)
+              : null,
+            seriesEditionLabel: seriesEditionLabelInput.trim() || null,
+            organizations: facetDrafts.organizations.map((org) => ({
+              relationId: org.id,
+              organizationId: org.id,
+              name: org.name,
+              shortName: null,
+              type: 'MULTILATERAL_FORUM',
+              logoUrl: null,
+              role: org.role,
+              roleDescription: org.roleDescription ?? null,
+              companyId: null,
+              latestStock: null,
+            })),
+          }}
+          onClose={() => setSeriesPickerOpen(false)}
+          onSave={(patch) => {
+            const p = patch as {
+              seriesId?: string | null
+              seriesEdition?: number | null
+              seriesEditionLabel?: string | null
+            }
+            setSelectedSeriesId(p.seriesId ?? '')
+            setSeriesEditionInput(
+              p.seriesEdition != null ? String(p.seriesEdition) : '',
+            )
+            setSeriesEditionLabelInput(p.seriesEditionLabel ?? '')
+            setSeriesPickerOpen(false)
           }}
         />
       )}

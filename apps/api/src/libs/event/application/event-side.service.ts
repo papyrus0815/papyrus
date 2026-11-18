@@ -68,6 +68,14 @@ export interface EventSideView {
   participants: EventSideMemberCountry[]
   persons: Array<{ personEventId: string; personId: string; name: string; surname: string | null; role: string | null }>
   organizations: Array<{ relationId: string; organizationId: string; name: string; role: string }>
+  politicalParties: Array<{
+    relationId: string
+    partyId: string
+    name: string
+    shortName: string | null
+    brandColor: string | null
+    role: string
+  }>
 }
 
 /**
@@ -109,6 +117,12 @@ export class EventSideService {
           include: { person: { select: { name: true, surname: true } } },
         },
         organizations: { include: { organization: { select: { name: true } } } },
+        politicalParties: {
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+          include: {
+            party: { select: { name: true, shortName: true, brandColor: true } },
+          },
+        },
       },
     })
     return sides.map((side) => ({
@@ -163,6 +177,14 @@ export class EventSideService {
         relationId: row.id,
         organizationId: row.organizationId,
         name: row.organization.name,
+        role: row.role,
+      })),
+      politicalParties: side.politicalParties.map((row) => ({
+        relationId: row.id,
+        partyId: row.partyId,
+        name: row.party.name,
+        shortName: row.party.shortName ?? null,
+        brandColor: row.party.brandColor ?? null,
         role: row.role,
       })),
     }))

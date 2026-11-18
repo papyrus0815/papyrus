@@ -20,6 +20,7 @@ import {
   FiFlag,
   FiLink2,
   FiLayers,
+  FiRefreshCw,
 } from 'react-icons/fi'
 import styled, { css } from 'styled-components'
 
@@ -65,6 +66,8 @@ interface EventListItemProps {
   hasChildren: boolean
   /** 최상위(앵커) 배지 클릭 — 그 사건 아래로 카탈로그 모수를 좁힌다. 없으면 정적 표기. */
   onEnterAnchorScope?: (eventId: string) => void
+  /** 정기 시리즈 배지 클릭 — 해당 시리즈의 전체 회차로 카탈로그 모수를 좁힌다. */
+  onFilterSeries?: (seriesId: string, seriesTitle?: string | null) => void
   /** 직계 자식 수 — 접었을 때 무엇이 숨는지 알려주는 배지 */
   childCount?: number
   /** 필터 때문에 숨겨진 직계 자식 수 — 조용한 누락 방지 */
@@ -328,6 +331,7 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
   isExpanded,
   hasChildren,
   onEnterAnchorScope,
+  onFilterSeries,
   childCount = 0,
   hiddenChildCount = 0,
   anchorParent = null,
@@ -814,6 +818,38 @@ const EventListItemImpl: React.FC<EventListItemProps> = ({
                 {event.relatedCount}
               </RelatedTag>
             )}
+            {event.seriesId && (event.seriesTitle || event.editionBadge) && (() => {
+              const sTitle = event.seriesTitle?.trim() || null
+              const sBadge = event.editionBadge?.trim() || null
+              const titleIncludesSeries =
+                sTitle != null && displayTitle.includes(sTitle)
+              const chipText =
+                titleIncludesSeries && sBadge
+                  ? sBadge
+                  : [sTitle, sBadge].filter(Boolean).join(' · ')
+              const fullTooltip = [sTitle, sBadge].filter(Boolean).join(' · ')
+              return onFilterSeries ? (
+                <SeriesTag
+                  as="button"
+                  type="button"
+                  tabIndex={isRovingTarget ? 0 : -1}
+                  title={`정기 시리즈 (${fullTooltip}) — 눌러서 이 시리즈 회차만 보기`}
+                  aria-label={`정기 시리즈 ${fullTooltip} 회차만 보기`}
+                  onClick={(clickEvent: React.MouseEvent<HTMLElement>) => {
+                    clickEvent.stopPropagation()
+                    onFilterSeries(event.seriesId!, sTitle)
+                  }}
+                >
+                  <FiRefreshCw size={9} aria-hidden="true" />
+                  <span>{chipText}</span>
+                </SeriesTag>
+              ) : (
+                <SeriesTag title={`정기 시리즈 — ${fullTooltip}`}>
+                  <FiRefreshCw size={9} aria-hidden="true" />
+                  <span>{chipText}</span>
+                </SeriesTag>
+              )
+            })()}
             {/*
               (제거) 단독 토큰 '· 단독'.
               "앵커만 강조하면 표시 없는 147행이 기본값으로 읽혀 배지가 장식처럼 보인다"는
@@ -2461,6 +2497,46 @@ const MatchReasonKind = styled.span`
  * ⚠️ 카테고리 hue를 쓰지 말 것 — 칩 색은 '분류' 전용 채널이다. amber 계열도 금지다
  *    (검색 하이라이트 전용). 중립 표면 토큰만 쓴다.
  */
+const SeriesTag = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  max-width: 180px;
+  height: 17px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(129, 140, 248, 0.28)'
+        : 'rgba(79, 70, 229, 0.2)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.14)'
+      : 'rgba(79, 70, 229, 0.06)'};
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#c7d2fe' : '#4338ca')};
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.22)'
+        : 'rgba(79, 70, 229, 0.12)'};
+  }
+`
+
 const KeywordCell = styled.span.attrs(() => ({ 'data-col': 'kw' }) as Record<string, string>)`
   display: none;
 

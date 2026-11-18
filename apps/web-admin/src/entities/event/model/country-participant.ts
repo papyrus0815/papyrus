@@ -96,6 +96,7 @@ export function eventCountryRoleLabel(
 ): string | null {
   if (!role) return null
   if (eventType === 'WAR_DECLARATION' && role === 'INITIATOR') return '선포국'
+  if (eventType === 'SUMMIT' && role === 'INITIATOR') return '주최·의장국'
   return ROLE_LABEL_BY_VALUE.get(role as EventCountryRole) ?? null
 }
 

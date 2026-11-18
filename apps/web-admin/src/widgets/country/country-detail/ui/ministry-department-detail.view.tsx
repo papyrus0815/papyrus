@@ -12,11 +12,14 @@ import {
   FiExternalLink,
   FiGlobe,
   FiLayers,
+  FiMapPin,
   FiPlus,
   FiShield,
   FiTrash2,
 } from 'react-icons/fi'
+import { useNavigate } from 'react-router-dom'
 
+import { GovMorePopover } from '@/features/government-info/ui/gov-more-popover'
 import {
   type AdministrationDepartment,
   DEPARTMENT_KIND_LABEL,
@@ -139,11 +142,7 @@ export function MinistryDepartmentDetailView({
   const budgetNote =
     department.budgetNote?.trim() || defense?.budgetOrForcesNote?.trim() || ''
   const hasStructuredMeta = Boolean(
-    primaryMission ||
-      headquarters ||
-      hasHeadquartersCoords ||
-      orgStructure ||
-      budgetNote,
+    primaryMission || orgStructure || budgetNote,
   )
   const militaryUnits = department.militaryUnits ?? []
   const milSuccessors = (department.militaryUnitSuccessors ?? []).filter(
@@ -211,6 +210,8 @@ export function MinistryDepartmentDetailView({
       militaryUnits.length > 0,
   )
 
+  const navigate = useNavigate()
+
   const renderEmblemIcon = () => {
     if (isDefenseRelated || militaryUnits.length > 0) {
       return <FiShield size={28} />
@@ -248,40 +249,51 @@ export function MinistryDepartmentDetailView({
               <FiPlus size={13} />
               산하 추가
             </S.DeptTopGhostBtn>
-            {(isDefenseRelated || militaryUnits.length > 0) &&
-            onOpenMilitaryTab ? (
-              <S.DeptTopTealBtn
-                onClick={onOpenMilitaryTab}
-                title="국가 군사 탭으로 이동하여 소관 군 사령부·부대 편제를 조회하고 관리합니다"
-              >
-                <FiShield size={13} />
-                군사 편제 보기
-              </S.DeptTopTealBtn>
-            ) : null}
-            <S.DeptTopGhostBtn
-              onClick={onGoToPositions}
-              title="이 기관에 소속된 고유 관직·직제를 관리합니다"
-            >
-              <FiAward size={13} />
-              고유 관직
-            </S.DeptTopGhostBtn>
-            {crossCountryCompareHref && resolvedCategoryLabel ? (
-              <S.DeptTopGhostLink
-                to={crossCountryCompareHref}
-                title={`다른 국가·시대의 「${resolvedCategoryLabel}」 직능 부처·기관을 함께 비교합니다`}
-              >
-                <FiGlobe size={13} />
-                타국 {resolvedCategoryLabel} 비교
-              </S.DeptTopGhostLink>
-            ) : null}
             <S.DeptTopEditBtn onClick={onEdit}>
               <FiEdit2 size={13} />
               수정
             </S.DeptTopEditBtn>
-            <S.DeptTopDeleteBtn onClick={onDelete}>
-              <FiTrash2 size={13} />
-              삭제
-            </S.DeptTopDeleteBtn>
+            <GovMorePopover
+              triggerSize="sm"
+              ariaLabel="기관 상세 관리 메뉴"
+              title="관직 · 비교 · 삭제"
+              actions={[
+                {
+                  key: 'positions',
+                  label: '소속 고유 관직 관리',
+                  icon: <FiAward size={13.5} />,
+                  onClick: () => onGoToPositions(),
+                },
+                ...((isDefenseRelated || militaryUnits.length > 0) &&
+                onOpenMilitaryTab
+                  ? [
+                      {
+                        key: 'military-tab',
+                        label: '군사 편제 보기',
+                        icon: <FiShield size={13.5} />,
+                        onClick: () => onOpenMilitaryTab(),
+                      },
+                    ]
+                  : []),
+                ...(crossCountryCompareHref && resolvedCategoryLabel
+                  ? [
+                      {
+                        key: 'cross-country-compare',
+                        label: `타국 ${resolvedCategoryLabel} 비교 ↗`,
+                        icon: <FiGlobe size={13.5} />,
+                        onClick: () => navigate(crossCountryCompareHref),
+                      },
+                    ]
+                  : []),
+                {
+                  key: 'delete-department',
+                  label: '기관 삭제',
+                  icon: <FiTrash2 size={13.5} />,
+                  danger: true,
+                  onClick: () => onDelete(),
+                },
+              ]}
+            />
           </S.DeptDetailActionsGroup>
         </S.DeptDetailTopBarRight>
       </S.DeptDetailTopBar>
@@ -361,6 +373,12 @@ export function MinistryDepartmentDetailView({
                 <FiCalendar size={11} />
                 {dateBits.length > 0 ? dateBits.join(' · ') : '설립·폐지일 미등록'}
               </S.DeptTenureDates>
+              {headquarters ? (
+                <S.DeptHqMetaTag title={`청사·본부 소재지: ${headquarters}`}>
+                  <FiMapPin size={11} aria-hidden />
+                  <span>{headquarters}</span>
+                </S.DeptHqMetaTag>
+              ) : null}
             </S.DeptSubMetaRow>
           </S.DeptIdentityBody>
         </S.DeptIdentityMain>
@@ -621,19 +639,6 @@ export function MinistryDepartmentDetailView({
         ) : null}
       </S.DeptIdentityCard>
 
-      {isDefenseRelated && militaryUnits.length === 0 ? (
-        <S.DeptInfoSection>
-          <S.DeptInfoSectionTitle>
-            <S.DeptInfoDot $color="#0d9488" />
-            국방·군정 기관 안내
-          </S.DeptInfoSectionTitle>
-          <S.DeptInfoText style={{ fontSize: 12 }}>
-            행정 조직도상의 청·실·국은 상단「산하 추가」로 등록하고, 사령부·야전군·사단 등
-            군사 편제는 국가「군사」탭에서 등록 후 소관 군정 부처로 연결합니다.
-          </S.DeptInfoText>
-        </S.DeptInfoSection>
-      ) : null}
-
       {cleanDescription.trim() ? (
         <S.DeptInfoSection>
           <S.DeptInfoSectionTitle>
@@ -652,25 +657,6 @@ export function MinistryDepartmentDetailView({
               <S.MetaPanelBody>{primaryMission}</S.MetaPanelBody>
             </S.MetaPanel>
           ) : null}
-          {headquarters || hasHeadquartersCoords ? (
-            <S.MetaPanel>
-              <S.MetaPanelLabel>청사·본부 소재지</S.MetaPanelLabel>
-              {headquarters ? (
-                <S.MetaPanelBody>{headquarters}</S.MetaPanelBody>
-              ) : null}
-              <HeadquartersMapPreview
-                headquarters={headquarters}
-                latitude={department.headquartersLatitude}
-                longitude={department.headquartersLongitude}
-                countryName={
-                  department.historicalCountry?.name ??
-                  department.country?.name ??
-                  null
-                }
-                departmentName={department.name}
-              />
-            </S.MetaPanel>
-          ) : null}
           {orgStructure ? (
             <S.MetaPanel>
               <S.MetaPanelLabel>산하 조직·편제</S.MetaPanelLabel>
@@ -684,6 +670,33 @@ export function MinistryDepartmentDetailView({
             </S.MetaPanel>
           ) : null}
         </S.MetaGrid>
+      ) : null}
+
+      {headquarters || hasHeadquartersCoords ? (
+        <S.DeptLocationSection>
+          <S.DeptLocationHeader>
+            <S.DeptInfoSectionTitle>
+              <S.DeptInfoDot $color="#4f46e5" />
+              청사 · 본부 소재지
+            </S.DeptInfoSectionTitle>
+            {headquarters ? (
+              <S.DeptLocationValue>{headquarters}</S.DeptLocationValue>
+            ) : null}
+          </S.DeptLocationHeader>
+          <HeadquartersMapPreview
+            headquarters={headquarters}
+            latitude={department.headquartersLatitude}
+            longitude={department.headquartersLongitude}
+            countryName={
+              department.historicalCountry?.name ??
+              department.country?.name ??
+              null
+            }
+            departmentName={department.name}
+            defaultExpanded={hasHeadquartersCoords}
+            mapHeight={240}
+          />
+        </S.DeptLocationSection>
       ) : null}
 
       {tenuresSlot}

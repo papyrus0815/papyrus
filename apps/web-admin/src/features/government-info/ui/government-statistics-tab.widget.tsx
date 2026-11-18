@@ -4,10 +4,10 @@ import {
   FiBarChart2,
   FiBookOpen,
   FiBriefcase,
-  FiClock,
   FiLayers,
   FiShield,
   FiUsers,
+  FiX,
 } from 'react-icons/fi'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
@@ -21,6 +21,12 @@ import {
 import type { GovernmentContentTab } from '../model/government-content-tab'
 import { useGovernmentStatistics } from '../model/use-government-statistics'
 
+import {
+  GovMoreFieldGroup,
+  GovMoreFieldLabel,
+  GovMoreNativeSelect,
+  GovMorePopover,
+} from './gov-more-popover'
 import { GOV_BRAND } from './government-ledger.styles'
 import { GovSectionEyebrow } from './government-organizations-tab.styled'
 
@@ -86,159 +92,221 @@ export function GovernmentStatisticsTab({
     ? filteredEvents
     : filteredEvents.slice(0, 30)
 
+  const eventFilterOptions = useMemo(
+    () =>
+      [
+        { key: 'all', label: '전체 연혁', count: eventCounts.all },
+        { key: 'regime', label: '헌정 체제', count: eventCounts.regime },
+        { key: 'cabinet', label: '내각 출범', count: eventCounts.cabinet },
+        {
+          key: 'establishment',
+          label: '기관 설립',
+          count: eventCounts.establishment,
+        },
+        { key: 'reform', label: '기관 개편', count: eventCounts.reform },
+        { key: 'merger', label: '기관 통합', count: eventCounts.merger },
+        { key: 'crisis', label: '기관 폐지', count: eventCounts.crisis },
+      ].filter(
+        (filterItem) => filterItem.key === 'all' || filterItem.count > 0,
+      ),
+    [eventCounts],
+  )
+
+  const activeEventFilterLabel =
+    selectedEventType !== 'all'
+      ? (eventFilterOptions.find(
+          (filterItem) => filterItem.key === selectedEventType,
+        )?.label ?? null)
+      : null
+
+  const orgBreakdownRows = useMemo(
+    () => [
+      {
+        key: 'ministry',
+        title: '중앙부처 (성·부·조)',
+        count: totalMinistries,
+        accentColor: MAIN,
+        examples: ministryExamples,
+      },
+      {
+        key: 'agency',
+        title: '외청 · 위원회 · 정보',
+        count: totalAgencies,
+        accentColor: ACCENT.amber,
+        examples: agencyExamples,
+      },
+      {
+        key: 'special',
+        title: '궁내 · 총독부 · 특수기관',
+        count: totalConstitutional,
+        accentColor: ACCENT.teal,
+        examples: specialExamples,
+      },
+      {
+        key: 'local',
+        title: '유관 · 산하 행정조직',
+        count: totalLocal,
+        accentColor: ACCENT.sky,
+        examples: organizationExamples,
+      },
+    ],
+    [
+      totalMinistries,
+      ministryExamples,
+      totalAgencies,
+      agencyExamples,
+      totalConstitutional,
+      specialExamples,
+      totalLocal,
+      organizationExamples,
+    ],
+  )
+
+  const totalOrgBreakdownSum = useMemo(
+    () =>
+      Math.max(
+        orgBreakdownRows.reduce((sumAcc, rowItem) => sumAcc + rowItem.count, 0),
+        1,
+      ),
+    [orgBreakdownRows],
+  )
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-      {/* 단일 핵심 지표 그리드 (중복 스트립 제거) */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {/* 단일 핵심 지표 그리드 */}
       <section aria-label="정부·행정 핵심 지표">
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(158px, 1fr))',
-            gap: 12,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(156px, 1fr))',
+            gap: 10,
           }}
         >
           <StatCard
             accentColor="#6366f1"
-            icon={<FiBookOpen size={18} />}
+            icon={<FiBookOpen size={17} />}
             title="정체 · 헌정 체제"
             value={totalPoliticalSystems}
             unit="개"
-            subLabel="시대별 통치·헌정 연혁"
             onClick={onSelectTab ? () => onSelectTab('system') : undefined}
           />
           <StatCard
-            accentColor={MAIN}
-            icon={<FiBriefcase size={18} />}
-            title="중앙부처 · 국가기관"
-            value={totalDepartments}
-            unit="곳"
-            subLabel={`현존 ${activeDepartmentCount}곳`}
-            onClick={onSelectTab ? () => onSelectTab('ministries') : undefined}
-          />
-          <StatCard
             accentColor={ACCENT.sky}
-            icon={<FiUsers size={18} />}
+            icon={<FiUsers size={17} />}
             title="역대 행정부 · 내각"
             value={totalCabinets}
             unit="개"
-            subLabel="정권·내각 단위 기록"
             onClick={onSelectTab ? () => onSelectTab('cabinets') : undefined}
           />
           <StatCard
+            accentColor={MAIN}
+            icon={<FiBriefcase size={17} />}
+            title="중앙부처 · 국가기관"
+            value={totalDepartments}
+            unit="곳"
+            subLabel={
+              totalDepartments > 0 ? `현존 ${activeDepartmentCount}곳` : undefined
+            }
+            onClick={onSelectTab ? () => onSelectTab('ministries') : undefined}
+          />
+          <StatCard
             accentColor={ACCENT.emerald}
-            icon={<FiLayers size={18} />}
+            icon={<FiLayers size={17} />}
             title="국가 고유 관직"
             value={totalPositions}
             unit="개"
-            subLabel="이 국가 전용 관직·직제"
             onClick={onSelectTab ? () => onSelectTab('positions') : undefined}
           />
-          <StatCard
-            accentColor={ACCENT.teal}
-            icon={<FiShield size={18} />}
-            title="소관 연결 군부대"
-            value={totalMilitaryUnits}
-            unit="개"
-            subLabel="국방·군정 부처 직할"
-            onClick={onOpenMilitaryTab}
-          />
-          <StatCard
-            accentColor={ACCENT.amber}
-            icon={<FiBarChart2 size={18} />}
-            title="유관 · 산하 조직"
-            value={totalLocal}
-            unit="개"
-            subLabel="행정·사회 산하 기구"
-          />
+          {totalMilitaryUnits > 0 ? (
+            <StatCard
+              accentColor={ACCENT.teal}
+              icon={<FiShield size={17} />}
+              title="소관 연결 군부대"
+              value={totalMilitaryUnits}
+              unit="개"
+              onClick={onOpenMilitaryTab}
+            />
+          ) : null}
+          {totalLocal > 0 ? (
+            <StatCard
+              accentColor={ACCENT.amber}
+              icon={<FiBarChart2 size={17} />}
+              title="유관 · 산하 조직"
+              value={totalLocal}
+              unit="개"
+            />
+          ) : null}
         </div>
       </section>
 
-      {/* 분야별 부처 분포 차트 */}
-      <section aria-label="분야별 기관 분포">
-        <GovSectionEyebrow>분야별 기관 분포</GovSectionEyebrow>
-        <div
-          style={{
-            background: palette.bgSubtle,
-            border: `1px solid ${palette.border}`,
-            borderRadius: 16,
-            padding: '18px 20px',
-          }}
-        >
+      {/* 분야별 부처 분포 차트 — 데이터가 있을 때만 노출 */}
+      {categoryStats.length > 0 ? (
+        <section aria-label="분야별 기관 분포">
+          <GovSectionEyebrow>분야별 기관 분포</GovSectionEyebrow>
           <div
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              marginBottom: categoryStats.length > 0 ? 18 : 10,
-              flexWrap: 'wrap',
-              gap: 10,
+              background: palette.bgSubtle,
+              border: `1px solid ${palette.border}`,
+              borderRadius: 14,
+              padding: '16px 18px',
             }}
           >
-            <p
+            <div
               style={{
-                margin: 0,
-                fontSize: 13,
-                color: palette.textMuted,
-                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 14,
+                flexWrap: 'wrap',
+                gap: 10,
               }}
             >
-              행정 분야 카테고리별 등록 기관 수 (상위 8개 분류)
-            </p>
-            {categoryStats.length > 0 ? (
               <span
                 style={{
-                  fontSize: 12,
+                  fontSize: 12.5,
                   color: palette.textMuted,
                   fontWeight: 600,
-                  padding: '3px 9px',
+                }}
+              >
+                상위 직능 분류별 기관 수
+              </span>
+              <span
+                style={{
+                  fontSize: 11.5,
+                  color: palette.textMuted,
+                  fontWeight: 600,
+                  padding: '2px 8px',
                   borderRadius: 999,
                   background: palette.cardBg,
                   border: `1px solid ${palette.borderHairline}`,
                 }}
               >
-                최다 분류{' '}
+                최다{' '}
                 {Math.max(
                   ...categoryStats.map((row) => row.departmentCount || 0),
                 )}
                 곳
               </span>
-            ) : null}
-          </div>
-
-          {categoryStats.length === 0 ? (
-            <div
-              style={{
-                padding: '28px 16px',
-                textAlign: 'center',
-                borderRadius: 12,
-                border: `1px dashed ${palette.borderMid}`,
-                background: palette.cardBg,
-                color: palette.textMuted,
-                fontSize: 13,
-              }}
-            >
-              아직 등록된 중앙부처·국가기관이 없어 분야별 분포를 집계할 수 없습니다.
             </div>
-          ) : (
+
             <div
               style={{
                 display: 'flex',
                 alignItems: 'flex-end',
                 gap: 14,
-                height: 210,
-                padding: '8px 6px 4px',
+                height: 190,
+                padding: '6px 6px 4px',
                 position: 'relative',
                 overflowX: 'auto',
               }}
             >
-              {/* Y축 눈금 배경 */}
               <div
                 style={{
                   position: 'absolute',
                   left: 0,
                   right: 0,
-                  top: 8,
-                  bottom: 42,
+                  top: 6,
+                  bottom: 40,
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-between',
@@ -251,7 +319,9 @@ export function GovernmentStatisticsTab({
                     style={{
                       width: '100%',
                       height: 1,
-                      background: isDark ? palette.divider : 'rgba(15,23,42,0.06)',
+                      background: isDark
+                        ? palette.divider
+                        : 'rgba(15,23,42,0.06)',
                     }}
                   />
                 ))}
@@ -263,7 +333,7 @@ export function GovernmentStatisticsTab({
                   1,
                 )
                 const barHeight = maxCount
-                  ? ((stat.departmentCount || 0) / maxCount) * 145
+                  ? ((stat.departmentCount || 0) / maxCount) * 130
                   : 0
                 const sharePct =
                   totalCategorizedCount > 0
@@ -304,12 +374,12 @@ export function GovernmentStatisticsTab({
                       }
                     }}
                     style={{
-                      flex: '1 1 72px',
-                      minWidth: 68,
+                      flex: '1 1 68px',
+                      minWidth: 64,
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
-                      gap: 8,
+                      gap: 7,
                       position: 'relative',
                       zIndex: 1,
                       cursor: isClickableBar ? 'pointer' : 'default',
@@ -318,15 +388,15 @@ export function GovernmentStatisticsTab({
                     <div
                       style={{
                         width: '100%',
-                        maxWidth: 56,
-                        minHeight: 28,
-                        height: `${Math.max(barHeight, 28)}px`,
+                        maxWidth: 52,
+                        minHeight: 26,
+                        height: `${Math.max(barHeight, 26)}px`,
                         background: GOV_BRAND.primary,
                         borderRadius: '6px 6px 2px 2px',
                         display: 'flex',
                         alignItems: 'flex-start',
                         justifyContent: 'center',
-                        paddingTop: 6,
+                        paddingTop: 5,
                         color: '#ffffff',
                         fontSize: 12,
                         fontWeight: 700,
@@ -346,7 +416,7 @@ export function GovernmentStatisticsTab({
                     >
                       <span
                         style={{
-                          fontSize: 12.5,
+                          fontSize: 12,
                           fontWeight: 700,
                           color: palette.text,
                           whiteSpace: 'nowrap',
@@ -356,41 +426,40 @@ export function GovernmentStatisticsTab({
                       </span>
                       <span
                         style={{
-                          fontSize: 11,
+                          fontSize: 10.5,
                           fontWeight: 600,
                           color: palette.textFaint,
                         }}
                       >
-                        비중 {sharePct}%
+                        {sharePct}%
                       </span>
                     </div>
                   </div>
                 )
               })}
             </div>
-          )}
-        </div>
-      </section>
+          </div>
+        </section>
+      ) : null}
 
-      {/* 좌: 기관 변천 연혁 타임라인 | 우: 조직 성격별 분포 */}
+      {/* 좌: 통합 변천 연혁 | 우: 성격별 기관 구성 원장 */}
       <section
         aria-label="기관 변천 연혁 및 성격별 현황"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-          gap: 18,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+          gap: 16,
           alignItems: 'start',
         }}
       >
-        {/* 좌측: 기관 설립·폐지·개편 연혁 */}
         <div style={{ minWidth: 0 }}>
-          <GovSectionEyebrow>기관 변천 연혁</GovSectionEyebrow>
+          <GovSectionEyebrow>통합 변천 연혁</GovSectionEyebrow>
           <div
             style={{
               background: palette.bgSubtle,
               border: `1px solid ${palette.border}`,
-              borderRadius: 16,
-              padding: '18px 20px',
+              borderRadius: 14,
+              padding: '15px 16px',
             }}
           >
             <div
@@ -398,143 +467,98 @@ export function GovernmentStatisticsTab({
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                marginBottom: 16,
-                flexWrap: 'wrap',
-                gap: 12,
+                marginBottom: 12,
+                gap: 8,
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    background: palette.accentBg,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: MAIN,
-                    flexShrink: 0,
-                  }}
-                >
-                  <FiClock size={17} />
-                </div>
-                <div>
-                  <h3
-                    style={{
-                      fontSize: 15,
-                      fontWeight: 700,
-                      color: palette.text,
-                      margin: 0,
-                      letterSpacing: '-0.02em',
-                    }}
-                  >
-                    헌정·내각·기관 통합 연혁 타임라인
-                  </h3>
-                  <p
-                    style={{
-                      fontSize: 12,
-                      color: palette.textMuted,
-                      margin: '2px 0 0',
-                    }}
-                  >
-                    정체 수립·내각 출범·기관 개편 이력 통합 집계
-                  </p>
-                </div>
-              </div>
-
-              {/* 사건 타입 필터 */}
               <div
                 style={{
                   display: 'flex',
-                  gap: 2,
+                  alignItems: 'center',
+                  gap: 8,
                   flexWrap: 'wrap',
-                  padding: 3,
-                  background: palette.cardBg,
-                  borderRadius: 10,
-                  border: `1px solid ${palette.borderHairline}`,
+                  minWidth: 0,
                 }}
               >
-                {[
-                  { key: 'all', label: '전체', count: eventCounts.all },
-                  {
-                    key: 'regime',
-                    label: '헌정',
-                    count: eventCounts.regime,
-                  },
-                  {
-                    key: 'cabinet',
-                    label: '내각',
-                    count: eventCounts.cabinet,
-                  },
-                  {
-                    key: 'establishment',
-                    label: '설립',
-                    count: eventCounts.establishment,
-                  },
-                  {
-                    key: 'reform',
-                    label: '개편',
-                    count: eventCounts.reform,
-                  },
-                  {
-                    key: 'merger',
-                    label: '통합',
-                    count: eventCounts.merger,
-                  },
-                  {
-                    key: 'crisis',
-                    label: '폐지',
-                    count: eventCounts.crisis,
-                  },
-                ]
-                  .filter(
-                    (filterItem) =>
-                      filterItem.key === 'all' || filterItem.count > 0,
-                  )
-                  .map((filterItem) => {
-                  const isSelected = selectedEventType === filterItem.key
-                  return (
-                    <button
-                      key={filterItem.key}
-                      type="button"
-                      onClick={() => onSelectedEventTypeChange(filterItem.key)}
-                      style={{
-                        padding: '5px 10px',
-                        borderRadius: 7,
-                        border: 'none',
-                        background: isSelected
-                          ? palette.accentBg
-                          : 'transparent',
-                        color: isSelected ? palette.accent : palette.textMuted,
-                        fontSize: 11.5,
-                        fontWeight: isSelected ? 700 : 600,
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 5,
-                      }}
-                    >
-                      {filterItem.label}
-                      <span
-                        style={{
-                          fontSize: 10.5,
-                          fontWeight: 700,
-                          opacity: isSelected ? 1 : 0.7,
-                        }}
-                      >
-                        {filterItem.count}
-                      </span>
-                    </button>
-                  )
-                })}
+                <h3
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 700,
+                    color: palette.text,
+                    margin: 0,
+                    letterSpacing: '-0.02em',
+                  }}
+                >
+                  헌정 · 내각 · 기관 연혁
+                </h3>
+                <span
+                  style={{
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    color: palette.textMuted,
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {filteredEvents.length}건
+                </span>
+                {activeEventFilterLabel ? (
+                  <button
+                    type="button"
+                    onClick={() => onSelectedEventTypeChange('all')}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '2px 8px',
+                      borderRadius: 999,
+                      border: `1px solid ${palette.borderMid}`,
+                      background: palette.cardBg,
+                      color: palette.text,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <span>{activeEventFilterLabel}</span>
+                    <FiX size={11} color={palette.textMuted} />
+                  </button>
+                ) : null}
               </div>
+
+              {eventFilterOptions.length > 1 ? (
+                <GovMorePopover
+                  triggerSize="sm"
+                  ariaLabel="연혁 유형 필터 설정"
+                  title="연혁 유형 필터"
+                  hasActiveIndicator={selectedEventType !== 'all'}
+                  customContent={
+                    <GovMoreFieldGroup>
+                      <GovMoreFieldLabel htmlFor="gov-stats-event-filter">
+                        연혁 유형 필터
+                      </GovMoreFieldLabel>
+                      <GovMoreNativeSelect
+                        id="gov-stats-event-filter"
+                        value={selectedEventType}
+                        onChange={(changeEvent) =>
+                          onSelectedEventTypeChange(changeEvent.target.value)
+                        }
+                      >
+                        {eventFilterOptions.map((filterItem) => (
+                          <option key={filterItem.key} value={filterItem.key}>
+                            {filterItem.label} ({filterItem.count})
+                          </option>
+                        ))}
+                      </GovMoreNativeSelect>
+                    </GovMoreFieldGroup>
+                  }
+                />
+              ) : null}
             </div>
 
             <div
               style={{
                 position: 'relative',
-                maxHeight: 500,
+                maxHeight: 460,
                 overflowY: 'auto',
                 paddingRight: 4,
               }}
@@ -542,23 +566,23 @@ export function GovernmentStatisticsTab({
               {filteredEvents.length === 0 ? (
                 <div
                   style={{
-                    padding: '32px 16px',
+                    padding: '28px 16px',
                     textAlign: 'center',
-                    fontSize: 13,
+                    fontSize: 12.5,
                     color: palette.textMuted,
                     background: palette.cardBg,
-                    borderRadius: 12,
+                    borderRadius: 10,
                     border: `1px dashed ${palette.borderMid}`,
                   }}
                 >
-                  해당 조건의 설립·개편 연혁이 없습니다.
+                  기록된 변천 연혁이 없습니다.
                 </div>
               ) : (
                 <div
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 10,
+                    gap: 8,
                   }}
                 >
                   {displayedEvents.map((eventItem) => {
@@ -643,18 +667,17 @@ export function GovernmentStatisticsTab({
                         key={eventItem.id}
                         style={{
                           display: 'grid',
-                          gridTemplateColumns: '68px minmax(0, 1fr)',
-                          gap: 10,
-                          alignItems: 'start',
+                          gridTemplateColumns: '64px minmax(0, 1fr)',
+                          gap: 8,
+                          alignItems: 'center',
                         }}
                       >
                         <span
                           style={{
-                            marginTop: 10,
-                            padding: '3px 7px',
-                            borderRadius: 7,
+                            padding: '3px 6px',
+                            borderRadius: 6,
                             textAlign: 'center',
-                            fontSize: 11.5,
+                            fontSize: 11,
                             fontWeight: 700,
                             fontVariantNumeric: 'tabular-nums',
                             background: palette.cardBg,
@@ -686,9 +709,9 @@ export function GovernmentStatisticsTab({
                           style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: 12,
-                            padding: '11px 13px',
-                            borderRadius: 12,
+                            gap: 10,
+                            padding: '9px 12px',
+                            borderRadius: 10,
                             background: palette.cardBg,
                             border: `1px solid ${palette.borderHairline}`,
                             cursor: isInteractiveItem ? 'pointer' : 'default',
@@ -699,9 +722,9 @@ export function GovernmentStatisticsTab({
                               src={imageUrl}
                               alt=""
                               style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: 10,
+                                width: 36,
+                                height: 36,
+                                borderRadius: 8,
                                 objectFit: 'cover',
                                 flexShrink: 0,
                                 border: `1px solid ${palette.border}`,
@@ -714,15 +737,14 @@ export function GovernmentStatisticsTab({
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: 6,
-                                marginBottom: 4,
                                 flexWrap: 'wrap',
                               }}
                             >
                               <span
                                 style={{
-                                  fontSize: 10.5,
+                                  fontSize: 10,
                                   fontWeight: 700,
-                                  padding: '2px 7px',
+                                  padding: '1px 6px',
                                   borderRadius: 5,
                                   background: eventBadgeTone.bg,
                                   color: eventBadgeTone.color,
@@ -732,39 +754,35 @@ export function GovernmentStatisticsTab({
                               </span>
                               <span
                                 style={{
-                                  fontSize: 11,
-                                  fontWeight: 600,
-                                  color: palette.textMuted,
+                                  fontSize: 13,
+                                  fontWeight: 700,
+                                  color: palette.text,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  flex: 1,
+                                  minWidth: 120,
                                 }}
                               >
-                                {eventItem.orgType}
+                                {eventItem.title}
                               </span>
                             </div>
-                            <h4
-                              style={{
-                                fontSize: 13.5,
-                                fontWeight: 700,
-                                color: palette.text,
-                                margin: '0 0 3px',
-                                lineHeight: 1.35,
-                              }}
-                            >
-                              {eventItem.title}
-                            </h4>
-                            <p
-                              style={{
-                                fontSize: 12,
-                                color: palette.textMuted,
-                                lineHeight: 1.45,
-                                margin: 0,
-                                display: '-webkit-box',
-                                WebkitLineClamp: 2,
-                                WebkitBoxOrient: 'vertical',
-                                overflow: 'hidden',
-                              }}
-                            >
-                              {eventItem.description}
-                            </p>
+                            {eventItem.description ? (
+                              <p
+                                style={{
+                                  fontSize: 11.5,
+                                  color: palette.textMuted,
+                                  lineHeight: 1.4,
+                                  margin: '2px 0 0',
+                                  display: '-webkit-box',
+                                  WebkitLineClamp: 1,
+                                  WebkitBoxOrient: 'vertical',
+                                  overflow: 'hidden',
+                                }}
+                              >
+                                {eventItem.description}
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                       </div>
@@ -800,60 +818,108 @@ export function GovernmentStatisticsTab({
           </div>
         </div>
 
-        {/* 우측: 조직 성격별 현황 2x2 */}
+        {/* 우측: 성격별 기관 구성 원장 */}
         <div style={{ minWidth: 0 }}>
           <GovSectionEyebrow>성격별 기관 구성</GovSectionEyebrow>
           <div
             style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+              background: palette.bgSubtle,
+              border: `1px solid ${palette.border}`,
+              borderRadius: 14,
+              padding: '15px 16px',
+              display: 'flex',
+              flexDirection: 'column',
               gap: 12,
             }}
           >
-            <OrgTypeCard
-              accentColor={MAIN}
-              title="중앙부처 (성·부·조)"
-              count={totalMinistries}
-              description="내각·국무 핵심 행정부처"
-              examples={
-                ministryExamples.length > 0
-                  ? ministryExamples
-                  : ['등록된 중앙부처 없음']
-              }
-            />
-            <OrgTypeCard
-              accentColor={ACCENT.amber}
-              title="외청 · 위원회 · 정보"
-              count={totalAgencies}
-              description="독립 위원회 및 직할·외청 기구"
-              examples={
-                agencyExamples.length > 0
-                  ? agencyExamples
-                  : ['등록된 외청·위원회 없음']
-              }
-            />
-            <OrgTypeCard
-              accentColor={ACCENT.teal}
-              title="궁내 · 총독부 · 특수기관"
-              count={totalConstitutional}
-              description="왕실·식민통치·특수 통치기구"
-              examples={
-                specialExamples.length > 0
-                  ? specialExamples
-                  : ['등록된 특수기관 없음']
-              }
-            />
-            <OrgTypeCard
-              accentColor={ACCENT.sky}
-              title="유관 · 산하 행정조직"
-              count={totalLocal}
-              description="국가 연결 일반·사회 조직"
-              examples={
-                organizationExamples.length > 0
-                  ? organizationExamples
-                  : ['등록된 산하조직 없음']
-              }
-            />
+            {orgBreakdownRows.map((rowItem, rowIndex) => {
+              const ratioPct = Math.min(
+                100,
+                Math.round((rowItem.count / totalOrgBreakdownSum) * 100),
+              )
+              return (
+                <div
+                  key={rowItem.key}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                    paddingTop: rowIndex > 0 ? 10 : 0,
+                    borderTop:
+                      rowIndex > 0
+                        ? `1px solid ${palette.borderHairline}`
+                        : 'none',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: palette.text,
+                      }}
+                    >
+                      {rowItem.title}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 800,
+                        color:
+                          rowItem.count > 0 ? palette.text : palette.textFaint,
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      {rowItem.count}
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      width: '100%',
+                      height: 6,
+                      borderRadius: 999,
+                      background: isDark
+                        ? 'rgba(255,255,255,0.06)'
+                        : 'rgba(15,23,42,0.06)',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {rowItem.count > 0 ? (
+                      <div
+                        style={{
+                          width: `${Math.max(ratioPct, 4)}%`,
+                          height: '100%',
+                          borderRadius: 999,
+                          background: rowItem.accentColor,
+                        }}
+                      />
+                    ) : null}
+                  </div>
+
+                  {rowItem.examples.length > 0 ? (
+                    <div
+                      style={{
+                        fontSize: 11.5,
+                        color: palette.textMuted,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {rowItem.examples.slice(0, 3).join(' · ')}
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })}
           </div>
         </div>
       </section>
@@ -978,114 +1044,6 @@ function StatCard({
             {subLabel}
           </div>
         ) : null}
-      </div>
-    </div>
-  )
-}
-
-function OrgTypeCard({
-  accentColor = MAIN,
-  title,
-  count,
-  description,
-  examples,
-}: {
-  accentColor?: string
-  title: string
-  count: number
-  description: string
-  examples: string[]
-}) {
-  const { mode } = useThemeStore()
-  const isDark = mode === 'dark'
-  const cardPalette = useMemo(() => getCabinetsSectionPalette(isDark), [isDark])
-  return (
-    <div
-      style={{
-        background: cardPalette.bgSubtle,
-        border: `1px solid ${cardPalette.borderMid}`,
-        borderRadius: 14,
-        padding: '16px 17px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 8,
-        }}
-      >
-        <h4
-          style={{
-            fontSize: 14,
-            fontWeight: 700,
-            color: cardPalette.text,
-            margin: 0,
-            letterSpacing: '-0.02em',
-          }}
-        >
-          {title}
-        </h4>
-        <span
-          style={{
-            minWidth: 30,
-            height: 26,
-            padding: '0 8px',
-            borderRadius: 8,
-            background: accentColor,
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#ffffff',
-            fontSize: 13,
-            fontWeight: 800,
-          }}
-        >
-          {count}
-        </span>
-      </div>
-      <p
-        style={{
-          fontSize: 12,
-          color: cardPalette.textMuted,
-          margin: 0,
-          lineHeight: 1.4,
-        }}
-      >
-        {description}
-      </p>
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 5,
-          marginTop: 2,
-        }}
-      >
-        {examples.map((example, exampleIndex) => (
-          <div
-            key={exampleIndex}
-            style={{
-              fontSize: 12,
-              color: isDark
-                ? cardPalette.textMuted
-                : cardPalette.sectionLabelTint,
-              padding: '6px 10px',
-              background: cardPalette.cardBg,
-              borderRadius: 7,
-              border: `1px solid ${cardPalette.borderHairline}`,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            • {example}
-          </div>
-        ))}
       </div>
     </div>
   )

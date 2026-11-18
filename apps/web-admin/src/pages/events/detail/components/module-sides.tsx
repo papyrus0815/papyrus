@@ -17,7 +17,11 @@ import {
   syncEventSides,
   toSideInputs,
 } from '@/shared/api/event-sides'
-import { type UpdateEventDto, updateEventOrganization } from '@/shared/api/events'
+import {
+  type UpdateEventDto,
+  updateEventOrganization,
+  updateEventPoliticalParty,
+} from '@/shared/api/events'
 import { militaryUnitApi } from '@/shared/api/military-unit'
 import { getOrganizationMembers } from '@/shared/api/organizations'
 import {
@@ -158,6 +162,10 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
 
   const persons = useMemo(() => event.relatedPersons ?? [], [event.relatedPersons])
   const organizations = useMemo(() => event.organizations ?? [], [event.organizations])
+  const politicalParties = useMemo(
+    () => event.politicalParties ?? [],
+    [event.politicalParties],
+  )
 
   /**
    * 인물 넣기 — 예전엔 **이 사건의 참여 인물** 중에서만 고를 수 있어, 사건에 없는 지휘관은 넣을 길이 없었다
@@ -386,6 +394,20 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
     }
   }
 
+  const assignPoliticalParty = async (relationId: string, sideId: string | null) => {
+    setBusy(true)
+    try {
+      await updateEventPoliticalParty(event.id, relationId, { sideId })
+      await refresh()
+    } catch (error) {
+      notify.error(
+        error instanceof Error ? error.message : '정당 진영 배정에 실패했습니다',
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const importOrganizationMembersToSide = async (
     sideId: string,
     organizationId: string,
@@ -502,7 +524,7 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
   }
 
   type DraggedDetailMember = {
-    kind: 'country' | 'person' | 'organization'
+    kind: 'country' | 'person' | 'organization' | 'politicalParty'
     key: string
     fromSideId: string | null
   }
@@ -518,7 +540,12 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
     const kind = raw.slice(0, colonIdx)
     const key = raw.slice(colonIdx + 1)
     if (!key) return null
-    if (kind === 'country' || kind === 'person' || kind === 'organization') {
+    if (
+      kind === 'country' ||
+      kind === 'person' ||
+      kind === 'organization' ||
+      kind === 'politicalParty'
+    ) {
       return { kind, key, fromSideId: null }
     }
     return null
@@ -540,6 +567,8 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
       assignCountry(payload.key, targetSideId)
     } else if (payload.kind === 'person') {
       assignPerson(payload.key, targetSideId)
+    } else if (payload.kind === 'politicalParty') {
+      void assignPoliticalParty(payload.key, targetSideId)
     } else {
       void assignOrganization(payload.key, targetSideId)
     }
@@ -555,14 +584,27 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
         side.organizations.some((member) => member.relationId === org.relationId),
       ),
   )
+  const unassignedParties = politicalParties.filter(
+    (party) =>
+      !sides.some((side) =>
+        (side.politicalParties ?? []).some(
+          (member) => member.relationId === party.relationId,
+        ),
+      ),
+  )
   const hasUnassignedAny =
-    unassignedCountries.length + unassignedPersons.length + unassignedOrgs.length > 0
+    unassignedCountries.length +
+      unassignedPersons.length +
+      unassignedOrgs.length +
+      unassignedParties.length >
+    0
   const totalAssignedAcrossSides = sides.reduce(
     (sum, side) =>
       sum +
       side.participants.length +
       side.persons.length +
-      side.organizations.length,
+      side.organizations.length +
+      (side.politicalParties?.length ?? 0),
     0,
   )
 
@@ -584,9 +626,11 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
             <VsTeamsWrap>
               {coloredSides.map((side, index) => {
                 const sideUnitCount = (sideUnitsBySideId.get(side.id) ?? []).length
+                const sidePartyCount = side.politicalParties?.length ?? 0
                 const countParts = [
                   side.participants.length > 0 ? `국가 ${side.participants.length}` : '',
                   side.persons.length > 0 ? `인물 ${side.persons.length}` : '',
+                  sidePartyCount > 0 ? `정당 ${sidePartyCount}` : '',
                   side.organizations.length > 0 ? `조직 ${side.organizations.length}` : '',
                   sideUnitCount > 0 ? `부대 ${sideUnitCount}` : '',
                 ].filter(Boolean)
@@ -624,6 +668,7 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
               const memberCount =
                 side.participants.length +
                 side.persons.length +
+                (side.politicalParties?.length ?? 0) +
                 side.organizations.length
               const weight =
                 totalAssignedAcrossSides > 0 ? Math.max(memberCount, 0.25) : 1
@@ -680,6 +725,26 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                 label: elsewhere
                   ? `${org.name} (${elsewhere}에서 옮김)`
                   : org.name,
+              }
+            })
+          const partyOptions = politicalParties
+            .filter(
+              (party) =>
+                !(side.politicalParties ?? []).some(
+                  (member) => member.relationId === party.relationId,
+                ),
+            )
+            .map((party) => {
+              const elsewhere = sides.find((other) =>
+                (other.politicalParties ?? []).some(
+                  (member) => member.relationId === party.relationId,
+                ),
+              )?.name
+              return {
+                value: party.relationId,
+                label: elsewhere
+                  ? `${party.name} (${elsewhere}에서 옮김)`
+                  : party.name,
               }
             })
           const sideUnitRows = sideUnitsBySideId.get(side.id) ?? []
@@ -1010,8 +1075,82 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                     </Member>
                   )
                 })}
-                {side.participants.length + side.persons.length + side.organizations.length === 0 && (
-                  <EmptyLine>아직 소속이 없습니다 — 이 사건의 참여국·인물·계파에서 고르거나 칩을 끌어 놓으세요</EmptyLine>
+                {(side.politicalParties ?? []).map((party) => {
+                  const dragPayload: DraggedDetailMember = {
+                    kind: 'politicalParty',
+                    key: party.relationId,
+                    fromSideId: side.id,
+                  }
+                  return (
+                    <Member
+                      key={`party-${party.relationId}`}
+                      $person
+                      draggable
+                      title="드래그하여 다른 진영이나 미지정으로 이동"
+                      onDragStart={(dragEvent) => {
+                        setDraggedMember(dragPayload)
+                        dragEvent.dataTransfer?.setData(
+                          'text/plain',
+                          encodeDetailDrag(dragPayload),
+                        )
+                      }}
+                      onDragEnd={() => {
+                        setDraggedMember(null)
+                        setDragOverTarget(null)
+                      }}
+                    >
+                      <MemberName>
+                        <Link
+                          to={pathKeys.politicalParties.detail(party.partyId)}
+                          title="정당 상세 및 계보·당원 보기"
+                          style={{
+                            color: 'inherit',
+                            textDecoration: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
+                          }}
+                        >
+                          {party.brandColor && (
+                            <span
+                              style={{
+                                width: 7,
+                                height: 7,
+                                borderRadius: '50%',
+                                background: party.brandColor,
+                                display: 'inline-block',
+                              }}
+                            />
+                          )}
+                          {party.name}
+                        </Link>
+                      </MemberName>
+                      {otherSide && (
+                        <MemberSwitchBtn
+                          type="button"
+                          onClick={() => void assignPoliticalParty(party.relationId, otherSide.id)}
+                          aria-label={`${party.name} ${otherSide.name}(으)로 이동`}
+                          title={`${otherSide.name}(으)로 이동`}
+                        >
+                          →{otherIndex + 1}편
+                        </MemberSwitchBtn>
+                      )}
+                      <MemberRemove
+                        type="button"
+                        onClick={() => void assignPoliticalParty(party.relationId, null)}
+                        aria-label={`${party.name}을(를) 진영에서 빼기`}
+                      >
+                        <FiX />
+                      </MemberRemove>
+                    </Member>
+                  )
+                })}
+                {side.participants.length +
+                  side.persons.length +
+                  (side.politicalParties?.length ?? 0) +
+                  side.organizations.length ===
+                  0 && (
+                  <EmptyLine>아직 소속이 없습니다 — 이 사건의 참여국·인물·정당·조직에서 고르거나 칩을 끌어 놓으세요</EmptyLine>
                 )}
               </MemberList>
 
@@ -1028,6 +1167,15 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                 <PersonPickButton type="button" onClick={() => setPersonPickerSide(side)}>
                   인물 넣기
                 </PersonPickButton>
+                {partyOptions.length > 0 && (
+                  <InlineSelect
+                    value=""
+                    options={partyOptions}
+                    onSave={(relationId) => void assignPoliticalParty(relationId, side.id)}
+                    placeholder="정당 넣기"
+                    label={`${side.name}에 넣을 정당`}
+                  />
+                )}
                 {orgOptions.length > 0 && (
                   <InlineSelect
                     value=""
@@ -1205,6 +1353,40 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                   onSave={(sideId) => assignPerson(person.personId, sideId)}
                   placeholder={personName}
                   label={`${personName}의 진영`}
+                  clearable={false}
+                />
+              </UnassignedChip>
+            )
+          })}
+          {unassignedParties.map((party) => {
+            const dragPayload: DraggedDetailMember = {
+              kind: 'politicalParty',
+              key: party.relationId,
+              fromSideId: null,
+            }
+            return (
+              <UnassignedChip
+                key={`party-${party.relationId}`}
+                draggable
+                title="원하는 진영 카드로 드래그하여 배정"
+                onDragStart={(dragEvent) => {
+                  setDraggedMember(dragPayload)
+                  dragEvent.dataTransfer?.setData(
+                    'text/plain',
+                    encodeDetailDrag(dragPayload),
+                  )
+                }}
+                onDragEnd={() => {
+                  setDraggedMember(null)
+                  setDragOverTarget(null)
+                }}
+              >
+                <InlineSelect
+                  value=""
+                  options={sides.map((side) => ({ value: side.id, label: `${side.name}에 넣기` }))}
+                  onSave={(sideId) => void assignPoliticalParty(party.relationId, sideId)}
+                  placeholder={party.name}
+                  label={`${party.name}의 진영`}
                   clearable={false}
                 />
               </UnassignedChip>

@@ -25,15 +25,17 @@ import {
 const PALETTE = ['#6366f1', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#14b8a6', '#ec4899']
 
 const TYPE_LABEL: Record<string, string> = {
-  GOVERNMENT: '정부',
-  LEGISLATURE: '입법부',
-  JUDICIARY: '사법부',
-  MILITARY: '군',
+  INTERGOVERNMENTAL_ORG: '국제기구',
+  MULTILATERAL_FORUM: '다자 협의체·블록',
+  MILITARY_ALLIANCE: '군사동맹',
+  GOVERNMENT_AGENCY: '정부·행정기구',
   POLITICAL_PARTY: '정당',
-  COMPANY: '기업',
-  INTERNATIONAL: '국제기구',
-  RELIGIOUS: '종교',
-  EDUCATION: '교육',
+  NGO: 'NGO',
+  TRADE_UNION: '노동조합',
+  RELIGIOUS_ORG: '종교단체',
+  BUSINESS_ASSOCIATION: '상공·업계단체',
+  EDUCATION: '교육·학술기관',
+  MILITARY_ACADEMY: '군사교육기관',
   OTHER: '기타',
 }
 
@@ -48,7 +50,7 @@ export function OrganizationListSidebar({
 }: OrganizationListSidebarProps) {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['organizations', 'sidebar'],
-    queryFn: () => getOrganizations(apiConnection),
+    queryFn: () => getOrganizations(apiConnection, { excludeCompanies: true }),
     staleTime: 60_000,
   })
   const { pinnedIds, togglePin } = useSidebarPins('organization-sidebar-pins')

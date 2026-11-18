@@ -9,6 +9,7 @@ export const ORGANIZATION_TYPE_LABEL: Record<string, string> = {
   MILITARY_ACADEMY: '군사학교',
   POLITICAL_PARTY: '정당',
   INTERGOVERNMENTAL_ORG: '국제기구',
+  MULTILATERAL_FORUM: '다자 협의체·블록',
   NGO: 'NGO',
   TRADE_UNION: '노동조합',
   MILITARY_ALLIANCE: '군사동맹',
@@ -22,15 +23,16 @@ export const ORGANIZATION_TYPE_OPTIONS: {
   value: OrganizationType
   label: string
 }[] = [
-  { value: 'GOVERNMENT_AGENCY', label: '정부기관/행정기구' },
-  { value: 'COMPANY', label: '기업' },
-  { value: 'MILITARY_ACADEMY', label: '군사학교' },
-  { value: 'POLITICAL_PARTY', label: '정당' },
   { value: 'INTERGOVERNMENTAL_ORG', label: '국제기구' },
-  { value: 'NGO', label: 'NGO' },
+  { value: 'MULTILATERAL_FORUM', label: '다자 협의체·블록' },
+  { value: 'MILITARY_ALLIANCE', label: '군사동맹' },
+  { value: 'NGO', label: 'NGO·시민단체' },
   { value: 'TRADE_UNION', label: '노동조합' },
-  { value: 'EDUCATION', label: '교육기관' },
-  { value: 'OTHER', label: '기타' },
+  { value: 'BUSINESS_ASSOCIATION', label: '경제·직능단체' },
+  { value: 'RELIGIOUS_ORG', label: '종교단체' },
+  { value: 'EDUCATION', label: '교육·학술기관' },
+  { value: 'MILITARY_ACADEMY', label: '군사학교' },
+  { value: 'OTHER', label: '기타 민간단체' },
 ]
 
 export const ORGANIZATION_SCOPE_OPTIONS: {

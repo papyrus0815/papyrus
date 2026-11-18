@@ -104,6 +104,9 @@ export interface EventFilterOptions {
    */
   period?: { from: number; to: number; label: string } | null
   onClearPeriod?: () => void
+  /** 정기 시리즈 축 — 목록의 시리즈 배지 클릭 시 해당 시리즈 전 회차만 보기 */
+  series?: { id: string; label: string } | null
+  onClearSeries?: () => void
   /**
    * 검색어 입력창이 디바운스로 분리된 호출부(카탈로그 페이지)에서
    * 검색어 칩·필터 초기화 시 입력창 상태도 함께 비우기 위한 콜백.
@@ -152,10 +155,13 @@ export const useEventFilters = (
     referenceState = READY_REFERENCE_STATE,
     period = null,
     onClearPeriod,
+    series = null,
+    onClearSeries,
     onClearKeyword,
   } = options
   const periodFrom = period?.from ?? null
   const periodTo = period?.to ?? null
+  const activeSeriesId = series?.id ?? null
   /**
    * 북마크만 모드가 아닐 때는 `bookmarks` 참조 변화를 술어 deps에서 끊는다 —
    * 아니면 북마크 토글 한 번이 `matchesEvent` → 트리 전체 재평탄화를 유발한다.
@@ -323,7 +329,8 @@ export const useEventFilters = (
     selectedCentury !== FILTER_ALL ||
     normalizedKeyword.length > 0 ||
     bookmarksOnly ||
-    periodFrom !== null
+    periodFrom !== null ||
+    activeSeriesId !== null
 
   /**
    * 축 술어가 읽는 값 묶음 — `matchesEvent`와 옵션 건수(facet)가 **같은 객체**를 본다.
@@ -347,10 +354,12 @@ export const useEventFilters = (
         periodFrom !== null && periodTo !== null
           ? { from: periodFrom, to: periodTo }
           : null,
+      seriesId: activeSeriesId,
     }),
     [
       periodFrom,
       periodTo,
+      activeSeriesId,
       selectedCategory,
       selectedSubtype,
       selectedCountry,
@@ -627,10 +636,20 @@ export const useEventFilters = (
       })
     }
 
+    if (series && onClearSeries) {
+      chips.push({
+        key: 'series',
+        label: `시리즈 · ${series.label}`,
+        onClear: onClearSeries,
+      })
+    }
+
     return chips
   }, [
     period,
     onClearPeriod,
+    series,
+    onClearSeries,
     onClearKeyword,
     selectedCategory,
     selectedSubtype,

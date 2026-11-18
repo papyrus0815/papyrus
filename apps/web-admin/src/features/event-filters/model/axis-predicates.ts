@@ -43,6 +43,9 @@ export interface FilterableEvent {
   type?: string | null
   location?: string | null
   keywords?: string[] | null
+  seriesId?: string | null
+  seriesTitle?: string | null
+  editionBadge?: string | null
   startDate?: string | null
   endDate?: string | null
   relatedCountries?: ReadonlyArray<{ id: string }> | null
@@ -58,6 +61,7 @@ export type FilterAxisKey =
   | 'keyword'
   | 'bookmark'
   | 'period'
+  | 'series'
 
 /** 축 열거의 단일 출처 — 새 축을 추가하면 건수·drop-one-out이 자동으로 따라온다. */
 export const FILTER_AXIS_KEYS = [
@@ -69,6 +73,7 @@ export const FILTER_AXIS_KEYS = [
   'keyword',
   'bookmark',
   'period',
+  'series',
 ] as const satisfies readonly FilterAxisKey[]
 
 /**
@@ -106,6 +111,8 @@ export interface FilterAxisContext {
    * 선택 필드인 이유: 이 축을 모르는 호출부(테스트 픽스처 등)는 그대로 둔다.
    */
   periodRange?: { from: number; to: number } | null
+  /** 정기 시리즈(EventSeries) ID 필터. 없으면 축이 꺼진 것. */
+  seriesId?: string | null
 }
 
 /**
@@ -119,6 +126,8 @@ export function buildKeywordHaystack(event: FilterableEvent): string {
     event.title ?? '',
     event.description ?? '',
     event.location ?? '',
+    event.seriesTitle ?? '',
+    event.editionBadge ?? '',
     ...(event.keywords ?? []),
   ]
     .join('\n')
@@ -265,6 +274,9 @@ export function matchesFilterAxis(
         Math.max(startYear, endYear) >= range.from
       )
     }
+
+    case 'series':
+      return !context.seriesId || event.seriesId === context.seriesId
 
     default:
       return true

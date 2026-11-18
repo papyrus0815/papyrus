@@ -90,6 +90,7 @@ import {
   shouldInterceptEntityClick,
 } from '@/widgets/country/country-inline-modal'
 
+import { CountryInternationalOrgsSection } from './country-international-orgs-section'
 import {
   countryTabCanvasPadding,
   LedgerFilterChip,
@@ -1572,6 +1573,7 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
         </>
       )}
 
+      <CountryInternationalOrgsSection country={country} />
 
       {createOpen && (
         <TreatyCreateModal

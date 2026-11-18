@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
+  FiArrowUpRight,
   FiCalendar,
   FiChevronDown,
   FiChevronLeft,
@@ -2884,6 +2885,16 @@ export function CountryPoliticalPartiesBlock({
                   </PartyDetailBackLink>
                 </PartyDetailTopLeft>
                 <PartyDetailTopActions>
+                  <DetailHeaderIconBtn
+                    type="button"
+                    title="전역 정당 편람에서 계보·관여 사건 보기"
+                    aria-label="전역 정당 편람에서 보기"
+                    onClick={() =>
+                      navigate(pathKeys.politicalParties.detail(detailParty.id))
+                    }
+                  >
+                    <FiArrowUpRight size={17} strokeWidth={2} />
+                  </DetailHeaderIconBtn>
                   <DetailHeaderIconBtn
                     type="button"
                     title="정당 정보 수정"

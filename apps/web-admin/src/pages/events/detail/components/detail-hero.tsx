@@ -31,6 +31,7 @@ import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
 import { HeroCountryCards } from './hero-country-cards'
 import { HeroThumbnail } from './hero-thumbnail'
 import { ParentFlowStrip } from './parent-flow-strip'
+import { SeriesFlowStrip } from './series-flow-strip'
 import {
   InlineSelect,
   InlineText,
@@ -269,6 +270,9 @@ export function DetailHero({
 
       {/* 하위 사건이면 상위 흐름 속 자리 — 몇 번째·시작 며칠째·앞뒤 사건과 형제 띠 */}
       {event.parentEventId && <ParentFlowStrip event={event} />}
+
+      {/* 정기 회의·행사 시리즈 소속이면 회차 흐름 + 이전·다음 회차 + 차기 개최 시점 안내 띠 */}
+      {event.seriesContext && <SeriesFlowStrip event={event} onPatch={onPatch} />}
 
       {/* 날짜·위치·'동시대 수장'은 **사실**이라 우측 장부(DetailFacts)로 옮겼다.
           히어로에는 제목·요약·행위자 — 서사의 도입만 남는다.

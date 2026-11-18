@@ -83,6 +83,8 @@ export interface ExistingExecutiveTenureSummary {
   id: string
   title?: string | null
   positionType?: string | null
+  countryId?: string | null
+  historicalCountryId?: string | null
   positionDefinitionId?: string | null
   positionDefinition?: {
     id?: string

@@ -121,6 +121,39 @@ export function useActorMutations({
     return true
   }
 
+  /**
+   * 여러 인물을 역할·참여 자격 국가와 함께 **한 번의 patch**로 일괄 추가한다
+   * (예: 정상회의 참여국 당시 국가원수·정부수반 원클릭 불러오기)
+   */
+  const addPersonsBatch = (
+    items: Array<{
+      personId: string
+      role?: string | null
+      countryId?: string | null
+      historicalCountryId?: string | null
+    }>,
+    savedLabel?: string,
+  ): number => {
+    const existingIds = new Set(persons.map((p) => p.personId))
+    const fresh: PersonPayload[] = []
+    for (const item of items) {
+      if (existingIds.has(item.personId)) continue
+      existingIds.add(item.personId)
+      fresh.push({
+        personId: item.personId,
+        role: item.role?.trim() || undefined,
+        countryId: item.countryId ?? null,
+        historicalCountryId: item.historicalCountryId ?? null,
+      })
+    }
+    if (fresh.length === 0) return 0
+    patchPersons(
+      [...persons.map(toPersonPayload), ...fresh],
+      savedLabel ? { savedLabel } : undefined,
+    )
+    return fresh.length
+  }
+
   /* ── 국가 ── */
   /** 서버가 자연키로 머지하므로 보내지 않은 필드(역할·서술·비고)는 그대로 살아남는다 */
   const patchCountries = (next: CountryRowData[], options?: PatchOptions) =>
@@ -218,6 +251,7 @@ export function useActorMutations({
     movePerson,
     reorderPerson,
     addPerson,
+    addPersonsBatch,
     updateCountry,
     removeCountry,
     moveCountry,

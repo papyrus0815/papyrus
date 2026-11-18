@@ -249,6 +249,31 @@ export const EventsCatalogPage: React.FC = () => {
   )
   const clearPeriod = useCallback(() => setPeriodParams(null), [setPeriodParams])
 
+  const seriesParam = searchParams.get('series')?.trim() || null
+  const seriesOfParam = searchParams.get('seriesOf')?.trim() || null
+  const setSeriesParams = useCallback(
+    (value: { series: string; seriesOf?: string | null } | null) => {
+      if (!value && !seriesParam && !seriesOfParam) return
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          if (value) {
+            next.set('series', value.series)
+            if (value.seriesOf) next.set('seriesOf', value.seriesOf)
+            else next.delete('seriesOf')
+          } else {
+            next.delete('series')
+            next.delete('seriesOf')
+          }
+          return next
+        },
+        { replace: true },
+      )
+    },
+    [seriesParam, seriesOfParam, setSearchParams],
+  )
+  const clearSeries = useCallback(() => setSeriesParams(null), [setSeriesParams])
+
   // ===== 검색 / 페이지 상태 =====
   const [keywordInput, setKeywordInput] = useState(initialUrlState.keyword)
   const clearKeywordInput = useCallback(() => setKeywordInput(''), [])
@@ -575,6 +600,16 @@ export const EventsCatalogPage: React.FC = () => {
       referenceState,
       period,
       onClearPeriod: clearPeriod,
+      series: seriesParam
+        ? {
+            id: seriesParam,
+            label:
+              seriesOfParam ||
+              events.find((e) => e.seriesId === seriesParam)?.seriesTitle ||
+              '선택 시리즈',
+          }
+        : null,
+      onClearSeries: clearSeries,
       onClearKeyword: clearKeywordInput,
     },
   )
@@ -1023,7 +1058,8 @@ export const EventsCatalogPage: React.FC = () => {
     selectedContinent !== FILTER_ALL ||
     bookmarksOnly ||
     anchorsOnly ||
-    Boolean(anchorId)
+    Boolean(anchorId) ||
+    Boolean(seriesParam)
   const allReignMarkers = useReignMarkers(
     listRenderedHierarchy,
     eventByIdMap,
@@ -1531,6 +1567,7 @@ export const EventsCatalogPage: React.FC = () => {
       keyword: optionCounts.dropOneOut.keyword,
       bookmarks: optionCounts.dropOneOut.bookmark,
       period: optionCounts.dropOneOut.period,
+      series: optionCounts.dropOneOut.series,
     }
     if (anchorId || anchorsOnly) {
       const globalMatchCount = events.filter(matchesEvent).length
@@ -1636,6 +1673,7 @@ export const EventsCatalogPage: React.FC = () => {
 
     handleResetFilters()
     clearPeriod()
+    clearSeries()
     setKeywordInput('')
     setBookmarksOnly(false)
     setAnchorsOnly(false)
@@ -1678,6 +1716,7 @@ export const EventsCatalogPage: React.FC = () => {
   }, [
     handleResetFilters,
     clearPeriod,
+    clearSeries,
     setPeriodParams,
     periodParam,
     periodOfParam,
@@ -1879,6 +1918,9 @@ export const EventsCatalogPage: React.FC = () => {
       }
       onOpenCompany={(companyId) =>
         navigate(pathKeys.companies.detail(companyId))
+      }
+      onFilterSeries={(seriesId, seriesTitle) =>
+        setSeriesParams({ series: seriesId, seriesOf: seriesTitle ?? null })
       }
       onFilterPeriod={(marker) => {
         // 건국·멸망·기업 설립 표지 — 나라·기업의 존속 기간으로 거른다

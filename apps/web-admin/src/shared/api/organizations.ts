@@ -1,12 +1,14 @@
 /**
- * 조직(행정기구) API
- * GET /organizations, GET /organizations/tree, GET /organizations/:id, POST, PUT, DELETE, 계층 API
+ * 조직(행정기구·국제기구·다자협의체·군사동맹 등) API
+ * GET /organizations, GET /organizations/tree, GET /organizations/:id, POST, PUT, DELETE,
+ * 회원국(country-memberships), 관련 사건(events), 계층 API
  */
 import type { IConnection } from '@api/IConnection'
 
 export type OrganizationType =
   | 'POLITICAL_PARTY'
   | 'INTERGOVERNMENTAL_ORG'
+  | 'MULTILATERAL_FORUM'
   | 'NGO'
   | 'TRADE_UNION'
   | 'GOVERNMENT_AGENCY'
@@ -26,6 +28,94 @@ export type OrganizationScope =
   | 'SUBNATIONAL'
   | 'LOCAL'
 
+export type OrganizationCountryRole =
+  | 'FOUNDER'
+  | 'MEMBER'
+  | 'OBSERVER'
+  | 'DIALOGUE_PARTNER'
+  | 'SECRETARIAT_HOST'
+  | 'SUSPENDED'
+  | 'EXPELLED'
+  | 'OTHER'
+
+export const ORGANIZATION_TYPE_LABEL: Record<OrganizationType, string> = {
+  INTERGOVERNMENTAL_ORG: '국제기구',
+  MULTILATERAL_FORUM: '다자 협의체·블록',
+  MILITARY_ALLIANCE: '군사 동맹',
+  GOVERNMENT_AGENCY: '정부기관·행정기구',
+  POLITICAL_PARTY: '정당',
+  NGO: '비정부기구(NGO)',
+  TRADE_UNION: '노동조합',
+  RELIGIOUS_ORG: '종교단체',
+  BUSINESS_ASSOCIATION: '상공·업계단체',
+  EDUCATION: '교육·학술기관',
+  MILITARY_ACADEMY: '군사교육기관',
+  COMPANY: '기업',
+  OTHER: '기타 조직',
+}
+
+export const ORGANIZATION_SCOPE_LABEL: Record<OrganizationScope, string> = {
+  INTERNATIONAL: '국제 (전 세계)',
+  SUPRANATIONAL: '초국가 블록',
+  REGIONAL: '지역·권역 (아태·동남아·유럽 등)',
+  NATIONAL: '국가 (국내)',
+  SUBNATIONAL: '광역·기초',
+  LOCAL: '도시·지역',
+}
+
+export const ORGANIZATION_COUNTRY_ROLE_LABEL: Record<OrganizationCountryRole, string> = {
+  FOUNDER: '창립국',
+  MEMBER: '정회원국',
+  DIALOGUE_PARTNER: '대화상대국·초청 파트너',
+  OBSERVER: '옵서버',
+  SECRETARIAT_HOST: '사무국 소재국',
+  SUSPENDED: '자격정지',
+  EXPELLED: '제명·탈퇴',
+  OTHER: '기타',
+}
+
+export const INTERNATIONAL_ORG_TYPES: OrganizationType[] = [
+  'INTERGOVERNMENTAL_ORG',
+  'MULTILATERAL_FORUM',
+  'MILITARY_ALLIANCE',
+]
+
+/**
+ * 기업(`COMPANY` → `/companies`), 정당(`POLITICAL_PARTY` → `/political-parties`),
+ * 국가 행정부처·기관(`GOVERNMENT_AGENCY` → `/government?tab=departments`)은
+ * 각각 전용 정본 도메인에서 관리하므로 기구·조직 카탈로그/등록 선택지에서 제외한다.
+ */
+export const NON_COMPANY_ORG_TYPES: OrganizationType[] = [
+  'INTERGOVERNMENTAL_ORG',
+  'MULTILATERAL_FORUM',
+  'MILITARY_ALLIANCE',
+  'NGO',
+  'TRADE_UNION',
+  'BUSINESS_ASSOCIATION',
+  'RELIGIOUS_ORG',
+  'EDUCATION',
+  'MILITARY_ACADEMY',
+  'OTHER',
+]
+
+export const DOMESTIC_ORG_TYPES: OrganizationType[] = NON_COMPANY_ORG_TYPES.filter(
+  (t) => !INTERNATIONAL_ORG_TYPES.includes(t),
+)
+
+export function isInternationalOrgType(type?: OrganizationType | string | null): boolean {
+  return (
+    type === 'INTERGOVERNMENTAL_ORG' ||
+    type === 'MULTILATERAL_FORUM' ||
+    type === 'MILITARY_ALLIANCE'
+  )
+}
+
+export interface OrganizationLineageRefDto {
+  id: string
+  name: string
+  shortName: string | null
+}
+
 export interface OrganizationResponseDto {
   id: string
   name: string
@@ -40,10 +130,16 @@ export interface OrganizationResponseDto {
   logoUrl: string | null
   ideology: string | null
   headquartersCityId: string | null
+  headquartersCity?: { id: string; name: string } | null
+  predecessorOrganizationId?: string | null
+  predecessor?: OrganizationLineageRefDto | null
+  successors?: OrganizationLineageRefDto[]
   countryId: string | null
   historicalCountryId: string | null
-  country?: { id: string; name: string } | null
+  country?: { id: string; name: string; flagEmoji?: string | null } | null
   historicalCountry?: { id: string; name: string } | null
+  countryMemberCount?: number
+  eventSeriesCount?: number
   createdAt: string
   updatedAt: string
 }
@@ -62,6 +158,109 @@ export interface OrganizationMemberDto {
   }
 }
 
+export interface OrganizationMembershipStatusPhase {
+  role: OrganizationCountryRole
+  startEra?: 'BC' | 'AD' | null
+  startYear?: number | null
+  endEra?: 'BC' | 'AD' | null
+  endYear?: number | null
+  notes?: string | null
+}
+
+export interface OrganizationCountryMembershipDto {
+  id: string
+  organizationId: string
+  countryId: string | null
+  historicalCountryId: string | null
+  role: OrganizationCountryRole
+  startEra: 'BC' | 'AD' | null
+  startYear: number | null
+  startMonth: number | null
+  startDay: number | null
+  startDate: string | null
+  endEra: 'BC' | 'AD' | null
+  endYear: number | null
+  endMonth: number | null
+  endDay: number | null
+  endDate: string | null
+  sortOrder: number
+  notes: string | null
+  statusHistory?: OrganizationMembershipStatusPhase[] | null
+  country: { id: string; name: string; flagEmoji: string | null } | null
+  historicalCountry: { id: string; name: string } | null
+}
+
+export interface CountryOrganizationMembershipDto
+  extends OrganizationCountryMembershipDto {
+  organization: {
+    id: string
+    name: string
+    shortName: string | null
+    type: OrganizationType
+    scope: OrganizationScope | null
+    logoUrl: string | null
+    foundedDate: string | null
+    dissolvedDate: string | null
+    countryMemberCount: number
+    eventSeriesCount: number
+  }
+}
+
+export interface CreateOrganizationCountryMembershipBody {
+  countryId?: string | null
+  historicalCountryId?: string | null
+  role?: OrganizationCountryRole
+  startEra?: 'BC' | 'AD' | null
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
+  endEra?: 'BC' | 'AD' | null
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
+  sortOrder?: number
+  notes?: string | null
+  statusHistory?: OrganizationMembershipStatusPhase[] | null
+}
+
+export interface UpdateOrganizationCountryMembershipBody {
+  role?: OrganizationCountryRole
+  startEra?: 'BC' | 'AD' | null
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
+  endEra?: 'BC' | 'AD' | null
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
+  sortOrder?: number
+  notes?: string | null
+  statusHistory?: OrganizationMembershipStatusPhase[] | null
+}
+
+export interface OrganizationRelatedEventDto {
+  id: string
+  title: string
+  startDate: string | null
+  startDatePrecision: string | null
+  endDate: string | null
+  location: string | null
+  domain: string
+  type: string | null
+  kind: 'SINGLE' | 'COLLECTION'
+  organizationRole: string | null
+  seriesId: string | null
+  seriesTitle: string | null
+  editionBadge: string | null
+  hostCountry: {
+    id: string
+    name: string
+    flagEmoji: string | null
+    isHistorical: boolean
+  } | null
+  participantCount: number
+}
+
 export interface OrganizationTreeNodeDto extends OrganizationResponseDto {
   children: OrganizationTreeNodeDto[]
   parentIds: string[]
@@ -71,6 +270,11 @@ export interface OrganizationListParams {
   countryId?: string
   historicalCountryId?: string
   type?: OrganizationType
+  types?: OrganizationType[]
+  scope?: OrganizationScope
+  excludeCompanies?: boolean
+  excludePoliticalParties?: boolean
+  excludeGovernmentAgencies?: boolean
 }
 
 export interface CreateOrganizationMemberBody {
@@ -92,9 +296,77 @@ export interface CreateOrganizationBody {
   logoUrl?: string | null
   ideology?: string | null
   headquartersCityId?: string | null
+  predecessorOrganizationId?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
   members?: CreateOrganizationMemberBody[]
+  countryMemberships?: CreateOrganizationCountryMembershipBody[]
+}
+
+/**
+ * 특정 사건 시점(부호 연도)에 해당하는 회원국 지위(role)를 판정한다.
+ * 다단계 지위 이력(statusHistory: 예 '1992~1995 옵서버 → 1995~ 정회원', '2011~2023 자격정지')이 있으면
+ * 해당 연도에 걸치는 구간 지위를 우선 반환하고, 비가입·자격정지·제명이면 null을 반환한다.
+ */
+export function resolveOrganizationMembershipRoleAtYear(
+  membership: Pick<
+    OrganizationCountryMembershipDto,
+    'role' | 'startEra' | 'startYear' | 'endEra' | 'endYear' | 'statusHistory'
+  >,
+  targetSignedYear?: number | null,
+): OrganizationCountryRole | null {
+  const toSigned = (era?: 'BC' | 'AD' | null, yr?: number | null) =>
+    yr != null ? (era === 'BC' ? -yr : yr) : null
+
+  if (
+    targetSignedYear != null &&
+    Number.isFinite(targetSignedYear) &&
+    Array.isArray(membership.statusHistory) &&
+    membership.statusHistory.length > 0
+  ) {
+    const matchedPhase = membership.statusHistory.find((phase) => {
+      const ps = toSigned(phase.startEra, phase.startYear)
+      const pe = toSigned(phase.endEra, phase.endYear)
+      if (ps != null && targetSignedYear < ps) return false
+      if (pe != null && targetSignedYear > pe) return false
+      return true
+    })
+    if (matchedPhase) {
+      if (
+        matchedPhase.role === 'EXPELLED' ||
+        matchedPhase.role === 'SUSPENDED'
+      ) {
+        return null
+      }
+      return matchedPhase.role
+    }
+  }
+
+  if (membership.role === 'EXPELLED' || membership.role === 'SUSPENDED') {
+    return null
+  }
+  if (targetSignedYear == null || !Number.isFinite(targetSignedYear)) {
+    return membership.endYear == null ? membership.role : null
+  }
+  const signedStart = toSigned(membership.startEra, membership.startYear)
+  const signedEnd = toSigned(membership.endEra, membership.endYear)
+  if (signedStart != null && targetSignedYear < signedStart) return null
+  if (signedEnd != null && targetSignedYear > signedEnd) return null
+  return membership.role
+}
+
+/**
+ * 특정 사건 시점(부호 연도)에 이 회원국 멤버십이 유효했는지 판정한다.
+ * 제명(EXPELLED)·자격정지(SUSPENDED)이거나 시점 이후 가입·시점 이전 탈퇴한 국가는 제외한다.
+ */
+export function isOrganizationMembershipActiveAtYear(
+  membership: Pick<
+    OrganizationCountryMembershipDto,
+    'role' | 'startEra' | 'startYear' | 'endEra' | 'endYear' | 'statusHistory'
+  >,
+  targetSignedYear?: number | null,
+): boolean {
+  return resolveOrganizationMembershipRoleAtYear(membership, targetSignedYear) !== null
 }
 
 const base = (conn: IConnection) => conn.host.replace(/\/$/, '')
@@ -107,10 +379,38 @@ export async function getOrganizations(
   if (params?.countryId) url.searchParams.set('countryId', params.countryId)
   if (params?.historicalCountryId)
     url.searchParams.set('historicalCountryId', params.historicalCountryId)
-  if (params?.type) url.searchParams.set('type', params.type)
-  const res = await fetch(url.toString(), { headers: (conn.headers ?? {}) as HeadersInit, credentials: 'include' })
+  if (params?.types && params.types.length > 0) {
+    url.searchParams.set('types', params.types.join(','))
+  } else if (params?.type) {
+    url.searchParams.set('type', params.type)
+  }
+  if (params?.excludeCompanies) {
+    url.searchParams.set('excludeCompanies', 'true')
+    url.searchParams.set('excludePoliticalParties', 'true')
+    url.searchParams.set('excludeGovernmentAgencies', 'true')
+  } else {
+    if (params?.excludePoliticalParties) {
+      url.searchParams.set('excludePoliticalParties', 'true')
+    }
+    if (params?.excludeGovernmentAgencies) {
+      url.searchParams.set('excludeGovernmentAgencies', 'true')
+    }
+  }
+  if (params?.scope) url.searchParams.set('scope', params.scope)
+  const res = await fetch(url.toString(), {
+    headers: (conn.headers ?? {}) as HeadersInit,
+    credentials: 'include',
+  })
   if (!res.ok) throw new Error(await res.text())
-  return res.json()
+  const data: OrganizationResponseDto[] = await res.json()
+  return params?.excludeCompanies
+    ? data.filter(
+        (item) =>
+          item.type !== 'COMPANY' &&
+          item.type !== 'POLITICAL_PARTY' &&
+          item.type !== 'GOVERNMENT_AGENCY',
+      )
+    : data
 }
 
 export async function getOrganizationsTree(
@@ -121,8 +421,28 @@ export async function getOrganizationsTree(
   if (params?.countryId) url.searchParams.set('countryId', params.countryId)
   if (params?.historicalCountryId)
     url.searchParams.set('historicalCountryId', params.historicalCountryId)
-  if (params?.type) url.searchParams.set('type', params.type)
-  const res = await fetch(url.toString(), { headers: (conn.headers ?? {}) as HeadersInit, credentials: 'include' })
+  if (params?.types && params.types.length > 0) {
+    url.searchParams.set('types', params.types.join(','))
+  } else if (params?.type) {
+    url.searchParams.set('type', params.type)
+  }
+  if (params?.excludeCompanies) {
+    url.searchParams.set('excludeCompanies', 'true')
+    url.searchParams.set('excludePoliticalParties', 'true')
+    url.searchParams.set('excludeGovernmentAgencies', 'true')
+  } else {
+    if (params?.excludePoliticalParties) {
+      url.searchParams.set('excludePoliticalParties', 'true')
+    }
+    if (params?.excludeGovernmentAgencies) {
+      url.searchParams.set('excludeGovernmentAgencies', 'true')
+    }
+  }
+  if (params?.scope) url.searchParams.set('scope', params.scope)
+  const res = await fetch(url.toString(), {
+    headers: (conn.headers ?? {}) as HeadersInit,
+    credentials: 'include',
+  })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
@@ -180,6 +500,106 @@ export async function removeOrganizationMember(
     },
   )
   if (!res.ok) throw new Error(await res.text())
+}
+
+export async function getOrganizationCountryMemberships(
+  conn: IConnection,
+  organizationId: string,
+): Promise<OrganizationCountryMembershipDto[]> {
+  const res = await fetch(
+    `${base(conn)}/organizations/${encodeURIComponent(organizationId)}/country-memberships`,
+    {
+      headers: (conn.headers ?? {}) as HeadersInit,
+      credentials: 'include',
+    },
+  )
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export async function getCountryOrganizationMemberships(
+  conn: IConnection,
+  params: { countryId?: string; historicalCountryId?: string },
+): Promise<CountryOrganizationMembershipDto[]> {
+  const url = new URL(`${base(conn)}/organizations/country-memberships`)
+  if (params.countryId) url.searchParams.set('countryId', params.countryId)
+  if (params.historicalCountryId) {
+    url.searchParams.set('historicalCountryId', params.historicalCountryId)
+  }
+  const res = await fetch(url.toString(), {
+    headers: (conn.headers ?? {}) as HeadersInit,
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export async function addOrganizationCountryMembership(
+  conn: IConnection,
+  organizationId: string,
+  body: CreateOrganizationCountryMembershipBody,
+): Promise<OrganizationCountryMembershipDto> {
+  const res = await fetch(
+    `${base(conn)}/organizations/${encodeURIComponent(organizationId)}/country-memberships`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(conn.headers ?? {}) },
+      body: JSON.stringify(body),
+      credentials: 'include',
+    },
+  )
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export async function updateOrganizationCountryMembership(
+  conn: IConnection,
+  organizationId: string,
+  membershipId: string,
+  body: UpdateOrganizationCountryMembershipBody,
+): Promise<OrganizationCountryMembershipDto> {
+  const res = await fetch(
+    `${base(conn)}/organizations/${encodeURIComponent(organizationId)}/country-memberships/${encodeURIComponent(membershipId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...(conn.headers ?? {}) },
+      body: JSON.stringify(body),
+      credentials: 'include',
+    },
+  )
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export async function removeOrganizationCountryMembership(
+  conn: IConnection,
+  organizationId: string,
+  membershipId: string,
+): Promise<void> {
+  const res = await fetch(
+    `${base(conn)}/organizations/${encodeURIComponent(organizationId)}/country-memberships/${encodeURIComponent(membershipId)}`,
+    {
+      method: 'DELETE',
+      headers: (conn.headers ?? {}) as HeadersInit,
+      credentials: 'include',
+    },
+  )
+  if (!res.ok) throw new Error(await res.text())
+}
+
+export async function getOrganizationRelatedEvents(
+  conn: IConnection,
+  organizationId: string,
+): Promise<OrganizationRelatedEventDto[]> {
+  const res = await fetch(
+    `${base(conn)}/organizations/${encodeURIComponent(organizationId)}/events`,
+    {
+      headers: (conn.headers ?? {}) as HeadersInit,
+      credentials: 'include',
+    },
+  )
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
 }
 
 export async function createOrganization(
@@ -261,7 +681,11 @@ export async function removeOrganizationHierarchy(
 ): Promise<void> {
   const res = await fetch(
     `${base(conn)}/organizations/hierarchy/${parentId}/${childId}`,
-    { method: 'DELETE', headers: (conn.headers ?? {}) as HeadersInit, credentials: 'include' },
+    {
+      method: 'DELETE',
+      headers: (conn.headers ?? {}) as HeadersInit,
+      credentials: 'include',
+    },
   )
   if (!res.ok) throw new Error(await res.text())
 }

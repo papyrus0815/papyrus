@@ -427,6 +427,25 @@ export const DeptTenureDates = styled.span`
   font-weight: 600;
 `
 
+export const DeptHqMetaTag = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  max-width: 340px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  svg {
+    flex-shrink: 0;
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#a5b4fc' : GOV_BRAND.primary};
+  }
+`
+
 /* ── 위계 · 계보 · 소관 군부대 매트릭스 (플랫 원장 행) ── */
 export const DeptRelationsMatrix = styled.div`
   display: flex;
@@ -555,16 +574,14 @@ export const DeptInfoText = styled.p`
 export const MetaGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1px;
+  background: ${govHairline};
   border-bottom: 1px solid ${govHairline};
 `
 
 export const MetaPanel = styled.div`
   padding: 14px 20px;
-  border-right: 1px solid ${govHairline};
-
-  &:last-child {
-    border-right: none;
-  }
+  background: ${({ theme }) => theme.colors.background.primary};
 `
 
 export const MetaPanelLabel = styled.div`
@@ -580,4 +597,26 @@ export const MetaPanelBody = styled.div`
   line-height: 1.55;
   color: ${({ theme }) => theme.colors.text.primary};
   white-space: pre-wrap;
+`
+
+export const DeptLocationSection = styled.div`
+  padding: 14px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-bottom: 1px solid ${govHairline};
+`
+
+export const DeptLocationHeader = styled.div`
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+`
+
+export const DeptLocationValue = styled.span`
+  font-size: 13.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  line-height: 1.45;
 `

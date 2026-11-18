@@ -19,6 +19,7 @@ import {
 } from './actors.lib'
 import {
   CountryBody,
+  CountryCard,
   CountryFacts,
   EditToggle,
   FactTag,
@@ -41,8 +42,12 @@ import { ClampedProse } from './clamped-prose'
 import { type CountryPatch } from './use-actor-mutations'
 
 /**
- * 참여국 한 행 — 이름(역사국가는 기울임) · 역할 칩 · 이 나라가 한 일 · 비고.
+ * 참여국 한 행 — 이름 · 역할 칩 · 이 나라가 한 일 · 비고.
  * 진영별 묶음과 평평한 목록이 같이 쓴다.
+ *
+ * **나라 카드에는 나라만.** 그 나라 자격의 인물(대표단, children)은 카드 **밖**, 바로 아래에 들여 쓴 제 카드로 선다.
+ * 예전엔 나라 카드 안에 인물 카드가 들어 있어(카드 안의 카드) 인물에 마우스를 올려도 나라의 ✎·✕가 켜지고,
+ * 인물 편집 칸이 회색 상자 안에서 좁게 열렸다.
  */
 export function ActorCountryRow({
   row,
@@ -118,13 +123,13 @@ export function ActorCountryRow({
   return (
     <CountryRow
       draggable={draggable && !editing}
-      $dragOver={isDragOver}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       onDragEnd={onDragEnd}
     >
+      <CountryCard $dragOver={isDragOver}>
       <CountryBody>
         <CountryNameLine>
           <NameLink
@@ -235,7 +240,6 @@ export function ActorCountryRow({
           </ClampedProse>
         </CountryNoteLine>
         )}
-        {children}
       </CountryBody>
 
       <RowActions>
@@ -263,6 +267,8 @@ export function ActorCountryRow({
           <FiX />
         </RemoveInline>
       </RowActions>
+      </CountryCard>
+      {children}
     </CountryRow>
   )
 }

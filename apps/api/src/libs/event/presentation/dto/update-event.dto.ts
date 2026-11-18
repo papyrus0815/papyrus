@@ -117,6 +117,27 @@ export class UpdateEventDto {
   @IsString()
   phaseId?: string | null
 
+  @ApiProperty({ description: '소속 정기 사건·회의 시리즈 ID (null이면 해제)', required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null && value !== '')
+  @IsString()
+  seriesId?: string | null
+
+  @ApiProperty({ description: '시리즈 회차 번호 (null이면 해제)', required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsNumber()
+  @Min(1)
+  @Max(9999)
+  seriesEdition?: number | null
+
+  @ApiProperty({ description: '특수·합동 회차 표기 (null·빈 문자열이면 비움)', required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(60)
+  seriesEditionLabel?: string | null
+
   @ApiProperty({
     description: '대표 위치 위도(WGS84, -90~90) — 경도와 짝. null이면 좌표 지우기',
     required: false,

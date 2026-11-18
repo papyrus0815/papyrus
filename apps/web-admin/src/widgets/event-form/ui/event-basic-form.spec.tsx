@@ -50,6 +50,13 @@ jest.mock('@/shared/api/events', () => ({
   updateEvent: jest.fn(),
   getEventLinkCandidates: jest.fn(),
 }))
+jest.mock('@/shared/api/event-series', () => ({
+  listEventSeries: jest.fn().mockResolvedValue([]),
+  getEventSeriesById: jest.fn().mockResolvedValue(null),
+  buildCreateNextEditionUrl: jest.fn(() => '/events/create/'),
+  FORECAST_KIND_BADGE: {},
+  CADENCE_PRESETS: [],
+}))
 jest.mock('@/shared/ui/toast', () => ({
   notify: { success: jest.fn(), error: jest.fn(), info: jest.fn() },
 }))

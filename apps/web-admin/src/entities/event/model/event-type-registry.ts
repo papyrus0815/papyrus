@@ -282,8 +282,8 @@ export const EVENT_TYPES: Record<EventTypeKey, EventTypeDef> = {
     metrics: TREATY_METRICS,
   },
   SUMMIT: {
-    key: 'SUMMIT', short: '회담', label: '회담·회의·교섭', examples: '베를린 회의 · 어전회의 · 공의회 · 협정안 교섭 · 정상 통화', defaultDomain: 'DIPLOMACY',
-    core: ['participants', 'persons'], optional: ['treaty'],
+    key: 'SUMMIT', short: '회담', label: '회담·회의·교섭', examples: '아세안·APEC·쿼드 정상회의 · 베를린 회의 · 어전회의 · 공의회 · 협정안 교섭', defaultDomain: 'DIPLOMACY',
+    core: ['participants', 'persons'], optional: ['treaty', 'organizations'],
   },
   WAR_DECLARATION: {
     key: 'WAR_DECLARATION', short: '선전', label: '선전포고', examples: '오스트리아-헝가리의 대세르비아 선전포고 · 프랑스의 대프로이센 선전포고 · 참전 선언', defaultDomain: 'DIPLOMACY',
@@ -444,7 +444,7 @@ export const DOMAIN_SUBTYPES: Partial<Record<EventDomainKey, EventTypeKey[]>> = 
   POLITICS: ['STATEHOOD', 'TERRITORY', 'POWER_CHANGE', 'ELECTION', 'LAW_POLICY', 'INSTITUTION', 'UPRISING', 'INCIDENT', 'ATTACK', 'MOVEMENT', 'WAR_DECLARATION', 'DECLARATION', 'PERSONAL'],
   DIPLOMACY: ['TREATY', 'TERRITORY', 'SUMMIT', 'WAR_DECLARATION', 'DECLARATION', 'VISIT', 'CRISIS', 'EXPANSION', 'INSTITUTION'],
   MILITARY: ['WAR', 'BATTLE', 'WAR_DECLARATION', 'MOBILIZATION', 'LAW_POLICY', 'POWER_CHANGE', 'INSTITUTION', 'UPRISING', 'ATTACK', 'TREATY', 'SUMMIT', 'PERSONAL'],
-  ECONOMY: ['COMPANY', 'MARKET', 'PRODUCT', 'CONSTRUCTION', 'LAW_POLICY', 'INSTITUTION', 'TREATY', 'MOVEMENT'],
+  ECONOMY: ['COMPANY', 'MARKET', 'PRODUCT', 'CONSTRUCTION', 'LAW_POLICY', 'INSTITUTION', 'TREATY', 'SUMMIT', 'MOVEMENT'],
   SOCIETY: ['UPRISING', 'MOVEMENT', 'DISASTER', 'MIGRATION', 'ATTACK', 'INCIDENT', 'LAW_POLICY', 'INSTITUTION', 'CONSTRUCTION'],
   CULTURE: ['CREATION', 'CONSTRUCTION', 'INSTITUTION', 'DISCOVERY', 'MOVEMENT', 'VISIT'],
   RELIGION: ['CONVERSION', 'SUMMIT', 'LAW_POLICY', 'INSTITUTION', 'MOVEMENT', 'INCIDENT', 'CREATION', 'CONSTRUCTION', 'MIGRATION'],
@@ -606,7 +606,7 @@ const TITLE_SUGGESTION_RULES: ReadonlyArray<{
   // 회담·회의·교섭 (종교 공의회 구분)
   { pattern: /공의회/, domain: 'RELIGION', type: 'SUMMIT' },
   {
-    pattern: /(?:정상\s*회담|회담|어전\s*회의|강화\s*회의|평화\s*회의|회의|교섭|회동)$/,
+    pattern: /(?:정상\s*회담|정상\s*회의|각료\s*회의|회담|어전\s*회의|강화\s*회의|평화\s*회의|회의|총회|당\s*대회|포럼|교섭|회동)$/,
     domain: 'DIPLOMACY',
     type: 'SUMMIT',
   },
@@ -731,7 +731,7 @@ const SEARCH_KEYWORDS: Partial<Record<EventTypeKey, string>> = {
   ATTACK: '암살 테러 학살 저격 폭탄 투척 습격',
   MOBILIZATION: '총동원령 동원령 기동훈련 작전지령 계엄령 배치 파병',
   TREATY: '강화조약 화약 의정서 휴전협정 체결 조인 비준 동맹 가입',
-  SUMMIT: '정상회담 강화회의 평화회의 어전회의 공의회 교섭 회동',
+  SUMMIT: '정상회담 정상회의 다자회의 각료회의 총회 당대회 포럼 강화회의 평화회의 어전회의 공의회 교섭 회동 아세안 APEC 쿼드 G7 G20',
   WAR_DECLARATION: '선전포고 개전선언 개전포고 참전선언 전쟁선포 참전 개전 각서',
   DECLARATION: '최후통첩 중립선언 담화 성명 통첩 결의 연설',
   VISIT: '국빈방문 사절단 내항 기항 예방 순방',

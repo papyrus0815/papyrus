@@ -6,3 +6,4 @@ export * from './event-relation.dto'
 
 export * from './split-event.dto'
 export * from './event-phase.dto'
+export * from './event-series.dto'

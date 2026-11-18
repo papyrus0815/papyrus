@@ -67,7 +67,9 @@ model EventSide {
   /// 이 진영의 참여 인물
   persons       PersonEvent[]
   /// 이 진영의 참여 조직
-  organizations EventOrganizationRelation[]
+  organizations    EventOrganizationRelation[]
+  /// 이 진영의 참여 정당
+  politicalParties EventPoliticalPartyRelation[]
 
   /// 투입 부대 목록 (군사 확장)
   deployedUnits SideDeployedUnit[]

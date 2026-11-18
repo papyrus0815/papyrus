@@ -4,12 +4,16 @@ import { useQuery } from '@tanstack/react-query'
 import { FiSettings, FiUsers } from 'react-icons/fi'
 
 import { getAllCountries } from '@/shared/api/countries'
-import { type UpdateEventDto } from '@/shared/api/events'
+import {
+  getContemporaryLeadersForEvent,
+  type UpdateEventDto,
+} from '@/shared/api/events'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import { getAllPersons } from '@/shared/api/persons'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { CountryPicker } from '@/shared/ui/country-picker'
 import { PersonPickerModal } from '@/shared/ui/person-picker'
+import { notify } from '@/shared/ui/toast'
 import {
   comparePersons,
   contextScore,
@@ -115,10 +119,54 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
    * 새로 그려져도 열린 채로 따라간다(행이 쥐고 있을 땐 옮겨 가는 순간 닫혔다).
    */
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null)
+  const [importingLeaders, setImportingLeaders] = useState(false)
 
   const actors = useActorMutations({ event, onPatch })
   const { persons, countryRows } = actors
 
+  const handleImportContemporaryLeaders = async () => {
+    if (!event.startDate || countryRows.length === 0 || importingLeaders) return
+    setImportingLeaders(true)
+    try {
+      const modernIds = countryRows
+        .filter((r) => !r.isHistorical)
+        .map((r) => r.id)
+      const histIds = countryRows
+        .filter((r) => r.isHistorical)
+        .map((r) => r.id)
+      const candidates = await getContemporaryLeadersForEvent({
+        date: event.startDate,
+        datePrecision: event.startDatePrecision ?? null,
+        countryIds: modernIds,
+        historicalCountryIds: histIds,
+      })
+      if (candidates.length === 0) {
+        notify.info('사건 시점에 참여국의 등록된 국가원수·정부수반·군주 기록이 없습니다.')
+        return
+      }
+      const addedCount = actors.addPersonsBatch(
+        candidates.map((c) => ({
+          personId: c.personId,
+          role: c.suggestedRole,
+          countryId: c.countryId,
+          historicalCountryId: c.historicalCountryId,
+        })),
+        `당시 수반 ${candidates.length}명 불러오기`,
+      )
+      if (addedCount === 0) {
+        notify.info('당시 수반이 이미 모두 참여 인물에 포함되어 있습니다.')
+      } else {
+        if (persons.length + addedCount >= PERSON_PREVIEW_COUNT) {
+          setShowAllPersons(true)
+        }
+        notify.success(`참여국 당시 수반·정상 ${addedCount}명을 불러왔습니다.`)
+      }
+    } catch {
+      notify.error('참여국 당시 수반 목록을 불러오지 못했습니다.')
+    } finally {
+      setImportingLeaders(false)
+    }
+  }
   /**
    * 나라 몫의 측정값(병력·사상자…) — 수치 모듈과 같은 캐시. 참여국 줄 id(participantId)에 붙은 값만.
    * 예전엔 진영·수치 모듈에만 있어 참여 탭에서는 나라가 이름뿐이었다.
@@ -648,6 +696,16 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
             <AddBtn type="button" onClick={() => setPersonModalOpen(true)} title="인물 목록에서 여러 사람을 골라 추가">
               목록에서 고르기
             </AddBtn>
+            {countryRows.length > 0 && Boolean(event.startDate) && (
+              <AddBtn
+                type="button"
+                disabled={importingLeaders}
+                onClick={() => void handleImportContemporaryLeaders()}
+                title="참여국들의 사건 시작일 당시 재임·재위 중인 국가원수·정부수반·군주를 한 번에 불러옵니다"
+              >
+                {importingLeaders ? '불러오는 중…' : '👑 당시 수반 불러오기'}
+              </AddBtn>
+            )}
           </GroupTools>
         </GroupHead>
         {personQuickMatches.length > 0 && (

@@ -103,6 +103,8 @@ enum AggregateType {
   COMPANY_FACILITY
   /// 사건
   EVENT
+  /// 정기 사건·회의 시리즈
+  EVENT_SERIES
   /// 무기
   WEAPON
   /// 지상 장비

@@ -1693,4 +1693,60 @@ describe('BasicInfoSection — 펼치기 제거 및 단순·직관적인 참여�
     )
     expect(onRelatedChange).toHaveBeenCalledWith([])
   })
+
+  it('위치 메모는 별도 토글 버튼 없이 항상 노출되며, 분야·세부 분야 접기/펼치기 및 맥락 요약 배지가 동작한다', () => {
+    const setLocationNote = jest.fn()
+    renderWithTheme(
+      <BasicInfoSection
+        {...makeDefaultProps({
+          category: 'MILITARY',
+          participantsCoreOf: '전투·작전',
+          kindSlot: { value: 'SINGLE', onChange: jest.fn() },
+          typeSlot: <div data-testid="type-slot-content">세부 분야 칩</div>,
+          parentEventSlot: {
+            parent: { id: 'p-1', title: '제1차 세계 대전' },
+            onOpenPicker: jest.fn(),
+            onClear: jest.fn(),
+          },
+          locationSlot: {
+            location: '베르됭',
+            setLocation: jest.fn(),
+            locationNote: '',
+            setLocationNote,
+            onOpenMapModal: jest.fn(),
+          },
+          keywords: ['서부전선'],
+          thumbnail: 'https://example.com/thumb.png',
+        })}
+      />,
+    )
+
+    // 1. '+ 메모' 토글 버튼 없이도 위치 메모 입력칸이 항상 노출된다
+    expect(
+      screen.queryByRole('button', { name: '위치 메모 입력칸 열기' }),
+    ).not.toBeInTheDocument()
+    const noteInput = screen.getByLabelText('위치 메모')
+    expect(noteInput).toBeInTheDocument()
+    fireEvent.change(noteInput, { target: { value: '프랑스 뫼즈주' } })
+    expect(setLocationNote).toHaveBeenCalledWith('프랑스 뫼즈주')
+
+    // 2. 맥락 · 부가 정보 헤더에 요약 배지가 표시된다
+    expect(screen.getByLabelText('맥락 및 부가 정보 요약')).toHaveTextContent(
+      '상위 1 · 위치 · 키워드 1 · 썸네일',
+    )
+
+    // 3. 분야 선택 시 '분류 접기' 버튼으로 11개 분야 그리드와 세부 분야를 한 줄 요약 바로 접고 펼칠 수 있다
+    fireEvent.click(
+      screen.getByRole('button', { name: '분야 및 세부 분야 접기' }),
+    )
+    expect(
+      screen.getByRole('region', { name: '선택된 분야 요약' }),
+    ).toHaveTextContent('군사 › 전투·작전 · 단일 사건')
+    expect(screen.queryByTestId('type-slot-content')).not.toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '분야 및 세부 분야 펼치기' }),
+    )
+    expect(screen.getByTestId('type-slot-content')).toBeInTheDocument()
+  })
 })

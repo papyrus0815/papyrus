@@ -30,6 +30,7 @@ import { notify } from '@/shared/ui/toast'
 const ORGANIZATION_TYPE_LABEL: Record<OrganizationType, string> = {
   POLITICAL_PARTY: '정당',
   INTERGOVERNMENTAL_ORG: '국제기구',
+  MULTILATERAL_FORUM: '다자 협의체·블록',
   NGO: 'NGO',
   TRADE_UNION: '노동조합',
   GOVERNMENT_AGENCY: '정부기관/행정기구',

@@ -75,9 +75,11 @@ import {
 } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 
 import {
-  LedgerViewSwitch,
-  LedgerViewSwitchItem,
-} from './country-ledger-primitives'
+  GovMoreFieldGroup,
+  GovMoreFieldLabel,
+  GovMoreNativeSelect,
+  GovMorePopover,
+} from '@/features/government-info/ui/gov-more-popover'
 import {
   doesCabinetMatchPoliticalSystem,
   filterDepartmentsForCabinet,
@@ -521,6 +523,7 @@ export function CabinetsSection({
   const [cabinetListLayout, setCabinetListLayout] = useState<
     'timeline' | 'ledger'
   >(() => readPersistedCabinetViewPrefs().layout)
+  const [showTimelineLegend, setShowTimelineLegend] = useState(false)
 
   const setRegimeFilterInUrl = useCallback(
     (nextRegimeId: string) => {
@@ -2031,282 +2034,433 @@ export function CabinetsSection({
           >
             <CabS.CabListPanel>
               <CabS.CabListToolbarShell>
-                {/* ── 툴바: 국가 필터 + 검색 + 등록 ── */}
+                {/* ── 단일 행 슬림 툴바: 검색 + 시대 선택 + [⋯] + 등록 ── */}
                 <CabS.CabListToolbar>
-                  {country.type === 'modern' &&
-                    Array.isArray(country.historicalCountries) &&
-                    country.historicalCountries.length > 0 && (
-                      <CabS.CabCountryFilterTabs
-                        role="tablist"
-                        aria-label="국가·시기 필터"
-                      >
-                        {[
-                          { id: '', label: '전체' },
-                          { id: countryId ?? '', label: country.name },
-                          ...country.historicalCountries.map((hc) => ({
-                            id: hc.id,
-                            label: hc.name,
-                          })),
-                        ].map((tab) => {
-                          const active = cabinetCountryFilter === tab.id
-                          return (
-                            <CabS.CabCountryFilterTab
-                              key={tab.id}
-                              type="button"
-                              role="tab"
-                              aria-selected={active}
-                              $active={active}
-                              onClick={() => setCabinetCountryFilter(tab.id)}
-                            >
-                              {tab.label}
-                            </CabS.CabCountryFilterTab>
-                          )
-                        })}
-                      </CabS.CabCountryFilterTabs>
-                    )}
+                  {(() => {
+                    const polityFilterOptions: Array<{
+                      id: string
+                      label: string
+                    }> =
+                      country.type === 'modern' &&
+                      Array.isArray(country.historicalCountries) &&
+                      country.historicalCountries.length > 0
+                        ? [
+                            { id: '', label: '전체 시대 · 정치체' },
+                            { id: countryId ?? '', label: country.name },
+                            ...country.historicalCountries.map((histItem) => ({
+                              id: histItem.id,
+                              label: histItem.name,
+                            })),
+                          ]
+                        : country.type === 'historical' &&
+                            historicalConstituentTabs.length > 0
+                          ? [
+                              { id: '', label: '전체 구성국 · 정치체' },
+                              {
+                                id: country.id,
+                                label: `${country.name} 직속`,
+                              },
+                              ...historicalConstituentTabs.map((polityTab) => ({
+                                id: polityTab.id,
+                                label: polityTab.name,
+                              })),
+                            ]
+                          : []
 
-                  {country.type === 'historical' &&
-                    historicalConstituentTabs.length > 0 && (
-                      <CabS.CabCountryFilterTabs
-                        role="tablist"
-                        aria-label="구성국·정치체 필터"
-                      >
-                        {[
-                          { id: '', label: '전체' },
-                          { id: country.id, label: `${country.name} 직속` },
-                          ...historicalConstituentTabs.map((polityTab) => ({
-                            id: polityTab.id,
-                            label: polityTab.name,
-                          })),
-                        ].map((tabItem) => {
-                          const active = cabinetCountryFilter === tabItem.id
-                          return (
-                            <CabS.CabCountryFilterTab
-                              key={tabItem.id || '__all__'}
-                              type="button"
-                              role="tab"
-                              aria-selected={active}
-                              $active={active}
-                              onClick={() =>
-                                setCabinetCountryFilter(tabItem.id)
+                    const activePolityLabel = cabinetCountryFilter
+                      ? (polityFilterOptions.find(
+                          (optItem) => optItem.id === cabinetCountryFilter,
+                        )?.label ?? null)
+                      : null
+
+                    const hasLegendItems =
+                      cabinetTerritoryLegendEntries.length > 0 ||
+                      cabinetTimelineMonarchVisuals.legend.some(
+                        (legendEntry) => legendEntry.label !== '—',
+                      )
+
+                    const hasActiveToolbarFilters = Boolean(
+                      cabinetCountryFilter ||
+                        cabinetCategoryFilter ||
+                        activeRegimeFilter,
+                    )
+
+                    return (
+                      <>
+                        <CabS.CabListControlsRow>
+                          <CabS.CabListSearchBox>
+                            <CabS.CabListSearchIcon aria-hidden>
+                              <FiSearch size={14} />
+                            </CabS.CabListSearchIcon>
+                            <CabS.CabListSearchInput
+                              type="text"
+                              placeholder="수반명, 직위, 연도, 행정부명 검색…"
+                              value={cabinetSearchQuery}
+                              onChange={(changeEvent) =>
+                                setCabinetSearchQuery(changeEvent.target.value)
                               }
+                              $hasTrailing={Boolean(
+                                cabinetSearchQuery.trim() ||
+                                  timelineCabinetsMerged.length > 0,
+                              )}
+                            />
+                            {cabinetSearchQuery.trim() ? (
+                              <CabS.CabListSearchClearBtn
+                                type="button"
+                                aria-label="검색어 지우기"
+                                onClick={() => setCabinetSearchQuery('')}
+                              >
+                                <FiX size={13} />
+                              </CabS.CabListSearchClearBtn>
+                            ) : (
+                              timelineCabinetsMerged.length > 0 && (
+                                <CabS.CabListSearchCount aria-hidden>
+                                  {timelineCabinetsMerged.length}개
+                                </CabS.CabListSearchCount>
+                              )
+                            )}
+                          </CabS.CabListSearchBox>
+
+                          {polityFilterOptions.length > 1 ? (
+                            <select
+                              aria-label="시대·정치체 필터"
+                              value={cabinetCountryFilter}
+                              onChange={(changeEvent) =>
+                                setCabinetCountryFilter(
+                                  changeEvent.target.value,
+                                )
+                              }
+                              style={{
+                                height: 34,
+                                maxWidth: 200,
+                                padding: '0 26px 0 10px',
+                                borderRadius: 8,
+                                border: `1px solid ${
+                                  cabinetCountryFilter
+                                    ? isDark
+                                      ? '#a5b4fc'
+                                      : MAIN
+                                    : palette.borderMid
+                                }`,
+                                background: 'transparent',
+                                color: cabinetCountryFilter
+                                  ? palette.text
+                                  : palette.textMuted,
+                                fontSize: 12.5,
+                                fontWeight: cabinetCountryFilter ? 700 : 600,
+                                cursor: 'pointer',
+                                outline: 'none',
+                              }}
                             >
-                              {tabItem.label}
-                            </CabS.CabCountryFilterTab>
-                          )
-                        })}
-                      </CabS.CabCountryFilterTabs>
-                    )}
+                              {polityFilterOptions.map((optItem) => (
+                                <option
+                                  key={optItem.id || '__all__'}
+                                  value={optItem.id}
+                                >
+                                  {optItem.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : null}
 
-                  {cabinetCategoryOptions.length > 1 && (
-                    <CabS.CabCountryFilterTabs
-                      role="tablist"
-                      aria-label="직위 유형 필터"
-                    >
-                      {[
-                        {
-                          category: '' as CabinetCategoryFilterKey | '',
-                          label: '전체',
-                        },
-                        ...cabinetCategoryOptions,
-                      ].map((tab) => {
-                        const active = cabinetCategoryFilter === tab.category
-                        return (
-                          <CabS.CabCountryFilterTab
-                            key={tab.category || 'all'}
-                            type="button"
-                            role="tab"
-                            aria-selected={active}
-                            $active={active}
-                            onClick={() =>
-                              setCabinetCategoryFilter(tab.category)
-                            }
+                          <div
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              marginLeft: 'auto',
+                              flexShrink: 0,
+                            }}
                           >
-                            {tab.label}
-                          </CabS.CabCountryFilterTab>
-                        )
-                      })}
-                    </CabS.CabCountryFilterTabs>
-                  )}
+                            <GovMorePopover
+                              ariaLabel="행정부 목록 표시 및 필터 설정"
+                              title="표시 방식 · 정렬 · 상세 필터 · 군주 등록"
+                              menuWidth={280}
+                              hasActiveIndicator={
+                                cabinetListLayout !== 'timeline' ||
+                                cabinetSortOrder !== 'asc' ||
+                                Boolean(cabinetCategoryFilter) ||
+                                Boolean(activeRegimeFilter) ||
+                                showTimelineLegend
+                              }
+                              segments={[
+                                {
+                                  key: 'cabinet-layout',
+                                  label: '목록 표시 방식',
+                                  value: cabinetListLayout,
+                                  options: [
+                                    {
+                                      value: 'timeline',
+                                      label: '타임라인',
+                                      icon: <FiGrid size={12} />,
+                                    },
+                                    {
+                                      value: 'ledger',
+                                      label: '원장 목록',
+                                      icon: <FiList size={12} />,
+                                    },
+                                  ],
+                                  onChange: (nextVal) =>
+                                    setCabinetListLayout(
+                                      nextVal as 'timeline' | 'ledger',
+                                    ),
+                                },
+                                {
+                                  key: 'cabinet-sort',
+                                  label: '정렬 순서',
+                                  value: cabinetSortOrder,
+                                  options: [
+                                    {
+                                      value: 'asc',
+                                      label: '과거순',
+                                      icon: <FiClock size={12} />,
+                                    },
+                                    {
+                                      value: 'desc',
+                                      label: '최신순',
+                                      icon: <FiClock size={12} />,
+                                    },
+                                  ],
+                                  onChange: (nextVal) =>
+                                    setCabinetSortOrder(
+                                      nextVal as 'asc' | 'desc',
+                                    ),
+                                },
+                              ]}
+                              customContent={
+                                cabinetCategoryOptions.length > 1 ||
+                                politicalSystems.length > 0 ? (
+                                  <>
+                                    {cabinetCategoryOptions.length > 1 ? (
+                                      <GovMoreFieldGroup>
+                                        <GovMoreFieldLabel htmlFor="cab-more-category-select">
+                                          수반 직위 유형
+                                        </GovMoreFieldLabel>
+                                        <GovMoreNativeSelect
+                                          id="cab-more-category-select"
+                                          aria-label="직위 유형 필터"
+                                          value={cabinetCategoryFilter}
+                                          onChange={(changeEvent) =>
+                                            setCabinetCategoryFilter(
+                                              changeEvent.target.value as
+                                                | CabinetCategoryFilterKey
+                                                | '',
+                                            )
+                                          }
+                                        >
+                                          <option value="">전체 직위</option>
+                                          {cabinetCategoryOptions.map(
+                                            (catOpt) => (
+                                              <option
+                                                key={catOpt.category}
+                                                value={catOpt.category}
+                                              >
+                                                {catOpt.label}
+                                              </option>
+                                            ),
+                                          )}
+                                        </GovMoreNativeSelect>
+                                      </GovMoreFieldGroup>
+                                    ) : null}
 
-                  <CabS.CabListControlsRow>
-                    <CabS.CabListSearchBox>
-                      <CabS.CabListSearchIcon aria-hidden>
-                        <FiSearch size={14} />
-                      </CabS.CabListSearchIcon>
-                      <CabS.CabListSearchInput
-                        type="text"
-                        placeholder="수반명, 직위, 연도, 소속 국가명, 행정부명 검색"
-                        value={cabinetSearchQuery}
-                        onChange={(e) => setCabinetSearchQuery(e.target.value)}
-                        $hasTrailing={Boolean(
-                          cabinetSearchQuery.trim() ||
-                          timelineCabinetsMerged.length > 0,
-                        )}
-                      />
-                      {cabinetSearchQuery.trim() ? (
-                        <CabS.CabListSearchClearBtn
-                          type="button"
-                          aria-label="검색어 지우기"
-                          onClick={() => setCabinetSearchQuery('')}
-                        >
-                          <FiX size={13} />
-                        </CabS.CabListSearchClearBtn>
-                      ) : (
-                        timelineCabinetsMerged.length > 0 && (
-                          <CabS.CabListSearchCount aria-hidden>
-                            {timelineCabinetsMerged.length}개
-                          </CabS.CabListSearchCount>
-                        )
-                      )}
-                    </CabS.CabListSearchBox>
+                                    {politicalSystems.length > 0 ? (
+                                      <GovMoreFieldGroup>
+                                        <GovMoreFieldLabel htmlFor="cab-more-regime-select">
+                                          헌정 체제 필터
+                                        </GovMoreFieldLabel>
+                                        <GovMoreNativeSelect
+                                          id="cab-more-regime-select"
+                                          aria-label="헌정 체제 필터"
+                                          value={regimeIdFromUrl}
+                                          onChange={(changeEvent) =>
+                                            setRegimeFilterInUrl(
+                                              changeEvent.target.value,
+                                            )
+                                          }
+                                        >
+                                          <option value="">전체 체제</option>
+                                          {politicalSystems.map((sysItem) => {
+                                            const formLabel =
+                                              sysItem.governmentForm
+                                                ? (GOVERNMENT_FORM_META[
+                                                    sysItem.governmentForm
+                                                  ]?.label ??
+                                                  sysItem.governmentForm)
+                                                : null
+                                            const optionText =
+                                              sysItem.name?.trim() ||
+                                              formLabel ||
+                                              '헌정 체제'
+                                            return (
+                                              <option
+                                                key={sysItem.id}
+                                                value={sysItem.id}
+                                              >
+                                                {optionText}
+                                              </option>
+                                            )
+                                          })}
+                                        </GovMoreNativeSelect>
+                                      </GovMoreFieldGroup>
+                                    ) : null}
+                                  </>
+                                ) : undefined
+                              }
+                              toggles={
+                                hasLegendItems
+                                  ? [
+                                      {
+                                        key: 'timeline-legend',
+                                        label: '색상 범례 표시',
+                                        description:
+                                          '소속 정치체 · 동시대 군주 색상 안내',
+                                        checked: showTimelineLegend,
+                                        onChange: setShowTimelineLegend,
+                                      },
+                                    ]
+                                  : []
+                              }
+                              actions={[
+                                {
+                                  key: 'register-monarch',
+                                  label: '군주 재위 등록',
+                                  icon: <FiPlus size={13.5} />,
+                                  onClick: () => setMonarchPersonPickerOpen(true),
+                                },
+                              ]}
+                            />
 
-                    {politicalSystems.length > 0 && (
-                      <select
-                        aria-label="헌정 체제 필터"
-                        value={regimeIdFromUrl}
-                        onChange={(changeEvent) =>
-                          setRegimeFilterInUrl(changeEvent.target.value)
-                        }
-                        style={{
-                          height: 34,
-                          maxWidth: 190,
-                          padding: '0 10px',
-                          borderRadius: 8,
-                          border: `1px solid ${activeRegimeFilter ? (isDark ? '#a5b4fc' : MAIN) : palette.borderMid}`,
-                          background: 'transparent',
-                          color: activeRegimeFilter
-                            ? palette.text
-                            : palette.textMuted,
-                          fontSize: 12.5,
-                          fontWeight: activeRegimeFilter ? 700 : 600,
-                          cursor: 'pointer',
-                          outline: 'none',
-                        }}
-                      >
-                        <option value="">헌정 체제: 전체</option>
-                        {politicalSystems.map((sysItem) => {
-                          const formLabel = sysItem.governmentForm
-                            ? (GOVERNMENT_FORM_META[sysItem.governmentForm]
-                                ?.label ?? sysItem.governmentForm)
-                            : null
-                          const optionText =
-                            sysItem.name?.trim() || formLabel || '헌정 체제'
-                          return (
-                            <option key={sysItem.id} value={sysItem.id}>
-                              {optionText}
-                            </option>
-                          )
-                        })}
-                      </select>
-                    )}
+                            <CabS.CabListRegisterBtn
+                              type="button"
+                              onClick={() => setRegisterCabinetModalOpen(true)}
+                            >
+                              <FiPlus size={14} />
+                              <span>행정부 · 내각 등록</span>
+                            </CabS.CabListRegisterBtn>
+                          </div>
+                        </CabS.CabListControlsRow>
 
-                    <CabS.CabListSortBadge
-                      onClick={() =>
-                        setCabinetSortOrder((prev) =>
-                          prev === 'asc' ? 'desc' : 'asc',
-                        )
-                      }
-                      title="정렬 순서 전환 (과거순 ↔ 최신순)"
-                      aria-label={`정렬 순서: ${cabinetSortOrder === 'asc' ? '과거순' : '최신순'} (클릭하여 전환)`}
-                    >
-                      <FiClock size={13} aria-hidden />
-                      {cabinetSortOrder === 'asc' ? '과거순' : '최신순'}
-                    </CabS.CabListSortBadge>
+                        {hasActiveToolbarFilters ? (
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              flexWrap: 'wrap',
+                              gap: 6,
+                              paddingTop: 2,
+                            }}
+                          >
+                            {cabinetCountryFilter && activePolityLabel ? (
+                              <button
+                                type="button"
+                                onClick={() => setCabinetCountryFilter('')}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 5,
+                                  padding: '3px 9px',
+                                  borderRadius: 999,
+                                  border: `1px solid ${palette.borderMid}`,
+                                  background: palette.inputBg,
+                                  color: palette.text,
+                                  fontSize: 11.5,
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    color: palette.textMuted,
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  정치체:
+                                </span>
+                                <span>{activePolityLabel}</span>
+                                <FiX size={12} color={palette.textMuted} />
+                              </button>
+                            ) : null}
 
-                    <LedgerViewSwitch
-                      role="group"
-                      aria-label="행정부 목록 표시 방식"
-                    >
-                      <LedgerViewSwitchItem
-                        type="button"
-                        $active={cabinetListLayout === 'timeline'}
-                        onClick={() => setCabinetListLayout('timeline')}
-                      >
-                        <FiGrid size={13} />
-                        <span>타임라인</span>
-                      </LedgerViewSwitchItem>
-                      <LedgerViewSwitchItem
-                        type="button"
-                        $active={cabinetListLayout === 'ledger'}
-                        onClick={() => setCabinetListLayout('ledger')}
-                      >
-                        <FiList size={13} />
-                        <span>원장 목록</span>
-                      </LedgerViewSwitchItem>
-                    </LedgerViewSwitch>
+                            {cabinetCategoryFilter ? (
+                              <button
+                                type="button"
+                                onClick={() => setCabinetCategoryFilter('')}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 5,
+                                  padding: '3px 9px',
+                                  borderRadius: 999,
+                                  border: `1px solid ${palette.borderMid}`,
+                                  background: palette.inputBg,
+                                  color: palette.text,
+                                  fontSize: 11.5,
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    color: palette.textMuted,
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  직위:
+                                </span>
+                                <span>
+                                  {
+                                    CABINET_CATEGORY_LABEL[
+                                      cabinetCategoryFilter
+                                    ]
+                                  }
+                                </span>
+                                <FiX size={12} color={palette.textMuted} />
+                              </button>
+                            ) : null}
 
-                    <div
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        flexShrink: 0,
-                      }}
-                    >
-                      <CabS.CabListMonarchRegisterBtn
-                        type="button"
-                        onClick={() => setMonarchPersonPickerOpen(true)}
-                        title="타임라인 상단 재위·연호 띠로 표시될 군주를 등록합니다"
-                      >
-                        <FiPlus size={13} />
-                        <span>군주 재위</span>
-                      </CabS.CabListMonarchRegisterBtn>
-
-                      <CabS.CabListRegisterBtn
-                        type="button"
-                        onClick={() => setRegisterCabinetModalOpen(true)}
-                      >
-                        <FiPlus size={14} />
-                        <span>행정부 · 내각 등록</span>
-                      </CabS.CabListRegisterBtn>
-                    </div>
-                  </CabS.CabListControlsRow>
-                  {activeRegimeFilter ? (
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: 8,
-                        paddingTop: 4,
-                      }}
-                    >
-                      <button
-                        type="button"
-                        onClick={clearRegimeFilter}
-                        title="클릭하여 헌정 체제 필터 해제"
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          padding: '4px 10px',
-                          borderRadius: 999,
-                          border: `1px solid ${palette.borderMid}`,
-                          background: palette.inputBg,
-                          color: palette.text,
-                          fontSize: 12,
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <span
-                          style={{ color: palette.textMuted, fontWeight: 500 }}
-                        >
-                          헌정 체제:
-                        </span>
-                        <span>
-                          {activeRegimeFilter.name ||
-                            (activeRegimeFilter.governmentForm
-                              ? (GOVERNMENT_FORM_META[
-                                  activeRegimeFilter.governmentForm
-                                ]?.label ?? activeRegimeFilter.governmentForm)
-                              : '선택된 체제')}
-                        </span>
-                        <FiX size={13} color={palette.textMuted} />
-                      </button>
-                    </div>
-                  ) : null}
+                            {activeRegimeFilter ? (
+                              <button
+                                type="button"
+                                onClick={clearRegimeFilter}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 5,
+                                  padding: '3px 9px',
+                                  borderRadius: 999,
+                                  border: `1px solid ${palette.borderMid}`,
+                                  background: palette.inputBg,
+                                  color: palette.text,
+                                  fontSize: 11.5,
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    color: palette.textMuted,
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  헌정 체제:
+                                </span>
+                                <span>
+                                  {activeRegimeFilter.name ||
+                                    (activeRegimeFilter.governmentForm
+                                      ? (GOVERNMENT_FORM_META[
+                                          activeRegimeFilter.governmentForm
+                                        ]?.label ??
+                                        activeRegimeFilter.governmentForm)
+                                      : '선택된 체제')}
+                                </span>
+                                <FiX size={12} color={palette.textMuted} />
+                              </button>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </>
+                    )
+                  })()}
                 </CabS.CabListToolbar>
               </CabS.CabListToolbarShell>
               {timelineCabinetsMerged.length === 0 ? (
@@ -2399,87 +2553,109 @@ export function CabinetsSection({
                                     : cabinetTimelineYearRange.maxY
                                   : '현재'}
                               </span>
-                              {cabinetListLayout === 'timeline' && (
-                                <span
-                                  style={{
-                                    fontSize: 11,
-                                    color: palette.textFaint,
-                                    marginLeft: 8,
-                                    fontWeight: 500,
-                                  }}
-                                >
-                                  {cabinetSortOrder === 'asc'
-                                    ? '(과거 ← · → 현재)'
-                                    : '(현재 ← · → 과거)'}
-                                </span>
-                              )}
                             </div>
                           </>
                         )}
-                        {cabinetTerritoryLegendEntries.length > 0 && (
-                          <CabS.CabTimelineLegendRow
-                            role="list"
-                            aria-label="이 목록의 소속별 강조 색"
+                        {(cabinetTerritoryLegendEntries.length > 0 ||
+                          (cabinetListLayout === 'timeline' &&
+                            cabinetTimelineMonarchVisuals.legend.some(
+                              (legendItem) => legendItem.label !== '—',
+                            ))) && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setShowTimelineLegend((prevVal) => !prevVal)
+                            }
+                            style={{
+                              marginLeft: 'auto',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 5,
+                              padding: '3px 9px',
+                              borderRadius: 999,
+                              border: `1px solid ${palette.borderMid}`,
+                              background: showTimelineLegend
+                                ? palette.accentBg
+                                : 'transparent',
+                              color: showTimelineLegend
+                                ? palette.accent
+                                : palette.textMuted,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                            }}
                           >
-                            {cabinetTerritoryLegendEntries.map((e) => (
-                              <div
-                                key={e.key}
-                                role="listitem"
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 6,
-                                  flexShrink: 0,
-                                  maxWidth: '100%',
-                                }}
-                                title={e.label}
-                              >
-                                <span
-                                  aria-hidden
-                                  style={{
-                                    width: 8,
-                                    height: 8,
-                                    borderRadius: '50%',
-                                    background: e.line,
-                                    flexShrink: 0,
-                                  }}
-                                />
-                                <span
-                                  style={{
-                                    fontSize: 11,
-                                    fontWeight: 600,
-                                    color: C.textMuted,
-                                    lineHeight: 1.35,
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                    maxWidth: 220,
-                                  }}
-                                >
-                                  {e.label}
-                                </span>
-                              </div>
-                            ))}
-                          </CabS.CabTimelineLegendRow>
+                            <span>
+                              {showTimelineLegend ? '범례 접기' : '범례 보기'}
+                            </span>
+                          </button>
                         )}
-                        {cabinetListLayout === 'timeline' &&
+                        {showTimelineLegend &&
+                          cabinetTerritoryLegendEntries.length > 0 && (
+                            <CabS.CabTimelineLegendRow
+                              role="list"
+                              aria-label="이 목록의 소속별 강조 색"
+                            >
+                              {cabinetTerritoryLegendEntries.map((entryItem) => (
+                                <div
+                                  key={entryItem.key}
+                                  role="listitem"
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    flexShrink: 0,
+                                    maxWidth: '100%',
+                                  }}
+                                  title={entryItem.label}
+                                >
+                                  <span
+                                    aria-hidden
+                                    style={{
+                                      width: 8,
+                                      height: 8,
+                                      borderRadius: '50%',
+                                      background: entryItem.line,
+                                      flexShrink: 0,
+                                    }}
+                                  />
+                                  <span
+                                    style={{
+                                      fontSize: 11,
+                                      fontWeight: 600,
+                                      color: C.textMuted,
+                                      lineHeight: 1.35,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      maxWidth: 220,
+                                    }}
+                                  >
+                                    {entryItem.label}
+                                  </span>
+                                </div>
+                              ))}
+                            </CabS.CabTimelineLegendRow>
+                          )}
+                        {showTimelineLegend &&
+                        cabinetListLayout === 'timeline' &&
                         cabinetTimelineMonarchVisuals.legend.some(
-                          (e) => e.label !== '—',
+                          (entryItem) => entryItem.label !== '—',
                         ) ? (
                           <CabS.CabTimelineMonarchLegendBand
                             role="list"
                             aria-label="타임라인 군주 색 구분"
                           >
                             {cabinetTimelineMonarchVisuals.legend
-                              .filter((e) => e.label !== '—')
-                              .map((e) => {
+                              .filter((entryItem) => entryItem.label !== '—')
+                              .map((entryItem) => {
                                 const chip = cabinetTimelineMonarchUiTint(
-                                  e.lineHex,
+                                  entryItem.lineHex,
                                   isDark,
                                 )
                                 return (
                                   <div
-                                    key={e.key}
+                                    key={entryItem.key}
                                     role="listitem"
                                     style={{
                                       display: 'inline-flex',
@@ -2492,7 +2668,7 @@ export function CabinetsSection({
                                       border: `1px solid ${chip.border}`,
                                       background: chip.background,
                                     }}
-                                    title={e.label}
+                                    title={entryItem.label}
                                   >
                                     <span
                                       aria-hidden
@@ -2500,7 +2676,7 @@ export function CabinetsSection({
                                         width: 6,
                                         height: 6,
                                         borderRadius: '50%',
-                                        background: e.lineHex,
+                                        background: entryItem.lineHex,
                                         flexShrink: 0,
                                         boxShadow: `0 0 0 1px ${chip.border}`,
                                       }}
@@ -2518,7 +2694,7 @@ export function CabinetsSection({
                                         letterSpacing: '0.01em',
                                       }}
                                     >
-                                      {e.label}
+                                      {entryItem.label}
                                     </span>
                                   </div>
                                 )
@@ -3922,48 +4098,6 @@ export function CabinetsSection({
                         cabinetTenureDetailHasContent(
                           selectedCabinet.description,
                         )
-                      const headAchievementCount = Array.isArray(
-                        head?.achievements,
-                      )
-                        ? head.achievements.length
-                        : 0
-                      const jumpTargets: Array<{
-                        id: string
-                        label: string
-                        count?: number
-                      }> = [
-                        ...(hasCabinetDescription
-                          ? [{ id: 'cab-detail-overview', label: '내각 개요' }]
-                          : []),
-                        ...(head
-                          ? [{ id: 'cab-detail-tenure', label: '취임·퇴임' }]
-                          : []),
-                        { id: 'cab-detail-parties', label: '집권·연정 정당' },
-                        {
-                          id: 'cab-detail-ministers',
-                          label: '소속 각료',
-                          count: loadingCabinetMinisters
-                            ? undefined
-                            : nonHeadMinisters.length,
-                        },
-                        ...(head
-                          ? [
-                              {
-                                id: 'cab-detail-achievements',
-                                label: '재임 기록',
-                                count: headAchievementCount,
-                              },
-                            ]
-                          : []),
-                        { id: 'cab-detail-events', label: '관련 사건' },
-                        {
-                          id: 'cab-detail-treaties',
-                          label: '체결 조약',
-                          count: loadingCabinetTreaties
-                            ? undefined
-                            : cabinetTreaties.length,
-                        },
-                      ]
                       const termBadge = formatCabinetTermBadge(
                         termNum,
                         head?.subTermNumber ?? null,
@@ -4098,89 +4232,52 @@ export function CabinetsSection({
                                       : '현재'}
                                   </div>
                                 )}
-                                {head?.person && (
-                                  <>
-                                    <CabS.HeadProfileDivider aria-hidden />
-                                    <CabS.HeadLifespan>
-                                      <CabS.HeadMetaKicker>
-                                        생몰년
-                                      </CabS.HeadMetaKicker>
-                                      {formatPersonLifespan(head.person)}
-                                    </CabS.HeadLifespan>
-                                  </>
-                                )}
-                                {(() => {
-                                  const birthPlace = getPersonBirthPlaceLabel(
-                                    head?.person,
-                                  )
-                                  return birthPlace ? (
-                                    <CabS.HeadLifespan>
-                                      <CabS.HeadMetaKicker>
-                                        출신
-                                      </CabS.HeadMetaKicker>
-                                      {birthPlace}
-                                    </CabS.HeadLifespan>
-                                  ) : null
-                                })()}
+                                {head?.person &&
+                                  (() => {
+                                    const lifespanText = formatPersonLifespan(
+                                      head.person,
+                                    )
+                                    const birthPlace = getPersonBirthPlaceLabel(
+                                      head.person,
+                                    )
+                                    if (!lifespanText && !birthPlace) {
+                                      return null
+                                    }
+                                    return (
+                                      <div
+                                        style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          flexWrap: 'wrap',
+                                          gap: '6px 14px',
+                                          marginTop: 4,
+                                        }}
+                                      >
+                                        {lifespanText ? (
+                                          <CabS.HeadLifespan>
+                                            <CabS.HeadMetaKicker>
+                                              생몰년
+                                            </CabS.HeadMetaKicker>
+                                            {lifespanText}
+                                          </CabS.HeadLifespan>
+                                        ) : null}
+                                        {birthPlace ? (
+                                          <CabS.HeadLifespan>
+                                            <CabS.HeadMetaKicker>
+                                              출신
+                                            </CabS.HeadMetaKicker>
+                                            {birthPlace}
+                                          </CabS.HeadLifespan>
+                                        ) : null}
+                                      </div>
+                                    )
+                                  })()}
                               </CabS.HeadProfileMeta>
                             </CabS.HeadProfileBlock>
                           )}
 
                           {!selectedHeadHistoryId && (
                             <>
-                              <nav
-                                aria-label="내각 상세 섹션 빠른 이동"
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 6,
-                                  flexWrap: 'wrap',
-                                  padding: '8px 0 12px',
-                                  borderBottom: `1px solid ${palette.borderHairline}`,
-                                  marginBottom: 4,
-                                }}
-                              >
-                                {jumpTargets.map((item) => (
-                                  <button
-                                    key={item.id}
-                                    type="button"
-                                    onClick={() => {
-                                      document
-                                        .getElementById(item.id)
-                                        ?.scrollIntoView({
-                                          behavior: 'smooth',
-                                          block: 'start',
-                                        })
-                                    }}
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: 4,
-                                      padding: '4px 10px',
-                                      borderRadius: 9999,
-                                      border: `1px solid ${palette.badgeBorder}`,
-                                      background: palette.chipActionBg,
-                                      color: palette.textMuted,
-                                      fontSize: 11.5,
-                                      fontWeight: 600,
-                                      cursor: 'pointer',
-                                    }}
-                                  >
-                                    <span>{item.label}</span>
-                                    {typeof item.count === 'number' && (
-                                      <span
-                                        style={{
-                                          fontSize: 10.5,
-                                          color: palette.textFaint,
-                                        }}
-                                      >
-                                        {item.count}
-                                      </span>
-                                    )}
-                                  </button>
-                                ))}
-                              </nav>
-
                               {hasCabinetDescription && (
                                 <CabS.HeadTenureInfoSection
                                   id="cab-detail-overview"
@@ -4229,403 +4326,507 @@ export function CabinetsSection({
                                   )}
                                 </CabS.HeadTenureInfoSection>
                               )}
-                              {/* 취임/퇴임 정보 섹션 — 수반이 있는 내각에서만 표시 */}
-                              {head && (
-                              <CabS.CabDetailScrollSection id="cab-detail-tenure">
-                                {/* ── 취임 정보 ── */}
-                                <CabS.HeadTenureInfoSection $accent="mint">
-                                  <CabS.CabDetailMinistersSectionHeader>
-                                    <span
-                                      aria-hidden
-                                      style={{
-                                        width: 8,
-                                        height: 8,
-                                        borderRadius: '50%',
-                                        background: '#6ee7b7',
-                                        flexShrink: 0,
-                                        display: 'inline-block',
-                                      }}
-                                    />
-                                    <CabS.CabDetailMinistersSectionTitle>
-                                      취임 정보
-                                    </CabS.CabDetailMinistersSectionTitle>
-                                    <div style={{ flex: 1 }} />
-                                    {!!editingTenureInfo &&
-                                    editingTenureInfo.cabinetId ===
-                                      selectedCabinet.id &&
-                                    editingTenureInfo.mode === 'appointment' ? (
-                                      <div style={{ display: 'flex', gap: 6 }}>
-                                        <CabS.HistoryArticleCancelBtn
-                                          type="button"
-                                          onClick={() =>
-                                            setEditingTenureInfo(null)
-                                          }
-                                        >
-                                          취소
-                                        </CabS.HistoryArticleCancelBtn>
-                                        <CabS.HistoryArticleSaveBtn
-                                          type="button"
-                                          disabled={tenureInfoSubmitting}
-                                          onClick={() =>
-                                            handleSaveTenureInfoInline(
-                                              selectedCabinet.id,
-                                              head.id,
-                                            )
-                                          }
-                                          $isRegister={false}
-                                        >
-                                          {tenureInfoSubmitting
-                                            ? '저장 중…'
-                                            : '저장'}
-                                        </CabS.HistoryArticleSaveBtn>
-                                      </div>
-                                    ) : (
-                                      <SubsectionAddBtn
-                                        type="button"
-                                        onClick={() => {
-                                          setEditingAppointmentMethod(
-                                            head?.appointmentMethod ?? '',
-                                          )
-                                          setEditingNotes(head?.notes ?? '')
-                                          setEditingTenureInfo({
-                                            cabinetId: selectedCabinet.id,
-                                            mode: 'appointment',
-                                          })
-                                        }}
-                                      >
-                                        {head?.appointmentMethod ||
-                                        cabinetTenureDetailHasContent(
-                                          head?.notes,
-                                        ) ? (
-                                          <>
-                                            <FiEdit2
-                                              size={13}
-                                              strokeWidth={2.25}
-                                            />
-                                            수정
-                                          </>
-                                        ) : (
-                                          <>
-                                            <FiPlus
-                                              size={14}
-                                              strokeWidth={2.25}
-                                            />
-                                            등록
-                                          </>
-                                        )}
-                                      </SubsectionAddBtn>
-                                    )}
-                                  </CabS.CabDetailMinistersSectionHeader>
-                                  {!!editingTenureInfo &&
-                                  editingTenureInfo.cabinetId ===
-                                    selectedCabinet.id &&
-                                  editingTenureInfo.mode === 'appointment' ? (
-                                    <div
-                                      style={{
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        gap: 12,
-                                      }}
-                                    >
-                                      <div>
-                                        <CabS.HeadTenureInfoLabel>
-                                          임명 방식
-                                        </CabS.HeadTenureInfoLabel>
-                                        <CabS.CabinetSelectNative
-                                          value={editingAppointmentMethod}
-                                          onChange={(e) =>
-                                            setEditingAppointmentMethod(
-                                              e.target.value,
-                                            )
-                                          }
-                                          style={{ maxWidth: 280 }}
-                                        >
-                                          <option value="">선택 안 함</option>
-                                          {Object.entries(
-                                            APPOINTMENT_METHOD_LABEL,
-                                          ).map(([k, v]) => (
-                                            <option key={k} value={k}>
-                                              {v}
-                                            </option>
-                                          ))}
-                                        </CabS.CabinetSelectNative>
-                                      </div>
-                                      <div>
-                                        <CabS.HeadTenureInfoLabel>
-                                          취임 배경 / 비고
-                                        </CabS.HeadTenureInfoLabel>
-                                        <CabS.HeadTenureInfoEditorWrap>
-                                          <RichTextEditor
-                                            value={editingNotes}
-                                            onChange={setEditingNotes}
-                                            showTitle={false}
-                                            placeholder="취임 배경, 특이 사항 등"
-                                            onImageUpload={async (file) => {
-                                              const result = await uploadImage(
-                                                file,
-                                                'persons',
-                                              )
-                                              return (
-                                                getUploadImageUrl(
-                                                  result.url,
-                                                ) ||
-                                                (result.url ?? '')
-                                              )
-                                            }}
-                                          />
-                                        </CabS.HeadTenureInfoEditorWrap>
-                                      </div>
-                                    </div>
-                                  ) : head?.appointmentMethod ||
-                                    cabinetTenureDetailHasContent(
-                                      head?.notes,
-                                    ) ? (
-                                    <>
-                                      {head?.appointmentMethod && (
-                                        <CabS.HeadTenureInfoBadge
-                                          $type="appointment"
-                                          style={{ width: 'fit-content' }}
-                                        >
-                                          <CabS.HeadTenureInfoBadgeLabel>
-                                            임명
-                                          </CabS.HeadTenureInfoBadgeLabel>
-                                          {APPOINTMENT_METHOD_LABEL[
-                                            head.appointmentMethod
-                                          ] ?? head.appointmentMethod}
-                                        </CabS.HeadTenureInfoBadge>
-                                      )}
-                                      {cabinetTenureDetailHasContent(
-                                        head.notes,
-                                      ) && (
-                                        <CabS.HeadTenureInfoRow $block>
-                                          <CabS.HeadTenureInfoLabel>
-                                            취임 배경 / 비고
-                                          </CabS.HeadTenureInfoLabel>
-                                          {isLikelyRichTextHtml(head.notes) ? (
-                                            <CabS.HeadTenureInfoRichColumn
-                                              onClick={handleHistoryProseClick}
-                                              role="presentation"
-                                            >
-                                              <CabS.HeadTenureInfoRichProse
-                                                html={String(head.notes ?? '')}
-                                              />
-                                            </CabS.HeadTenureInfoRichColumn>
-                                          ) : (
-                                            <CabS.HeadTenureInfoRichColumn>
-                                              <CabS.HeadTenureInfoText>
-                                                {head.notes}
-                                              </CabS.HeadTenureInfoText>
-                                            </CabS.HeadTenureInfoRichColumn>
-                                          )}
-                                        </CabS.HeadTenureInfoRow>
-                                      )}
-                                    </>
-                                  ) : (
-                                    <CabS.CabDetailEmptyText>
-                                      등록된 취임 정보가 없습니다.
-                                    </CabS.CabDetailEmptyText>
-                                  )}
-                                </CabS.HeadTenureInfoSection>
-
-                                {/* ── 퇴임 정보 ── */}
-                                <CabS.HeadTenureInfoSection $accent="rose">
-                                  <CabS.CabDetailMinistersSectionHeader>
-                                    <span
-                                      aria-hidden
-                                      style={{
-                                        width: 8,
-                                        height: 8,
-                                        borderRadius: '50%',
-                                        background: '#fca5a5',
-                                        flexShrink: 0,
-                                        display: 'inline-block',
-                                      }}
-                                    />
-                                    <CabS.CabDetailMinistersSectionTitle>
-                                      퇴임 정보
-                                    </CabS.CabDetailMinistersSectionTitle>
-                                    <div style={{ flex: 1 }} />
-                                    {!!editingTenureInfo &&
-                                    editingTenureInfo.cabinetId ===
-                                      selectedCabinet.id &&
-                                    editingTenureInfo.mode === 'end' ? (
-                                      <div style={{ display: 'flex', gap: 6 }}>
-                                        <CabS.HistoryArticleCancelBtn
-                                          type="button"
-                                          onClick={() =>
-                                            setEditingTenureInfo(null)
-                                          }
-                                        >
-                                          취소
-                                        </CabS.HistoryArticleCancelBtn>
-                                        <CabS.HistoryArticleSaveBtn
-                                          type="button"
-                                          disabled={tenureInfoSubmitting}
-                                          onClick={() =>
-                                            handleSaveTenureInfoInline(
-                                              selectedCabinet.id,
-                                              head.id,
-                                            )
-                                          }
-                                          $isRegister={false}
-                                        >
-                                          {tenureInfoSubmitting
-                                            ? '저장 중…'
-                                            : '저장'}
-                                        </CabS.HistoryArticleSaveBtn>
-                                      </div>
-                                    ) : (
-                                      <SubsectionAddBtn
-                                        type="button"
-                                        onClick={() => {
-                                          setEditingEndReason(
-                                            head?.endReason ?? '',
-                                          )
-                                          setEditingEndReasonDetail(
-                                            head?.endReasonDetail ?? '',
-                                          )
-                                          setEditingTenureInfo({
-                                            cabinetId: selectedCabinet.id,
-                                            mode: 'end',
-                                          })
-                                        }}
-                                      >
-                                        {head?.endReason ||
-                                        cabinetTenureDetailHasContent(
-                                          head?.endReasonDetail,
-                                        ) ? (
-                                          <>
-                                            <FiEdit2
-                                              size={13}
-                                              strokeWidth={2.25}
-                                            />
-                                            수정
-                                          </>
-                                        ) : (
-                                          <>
-                                            <FiPlus
-                                              size={14}
-                                              strokeWidth={2.25}
-                                            />
-                                            등록
-                                          </>
-                                        )}
-                                      </SubsectionAddBtn>
-                                    )}
-                                  </CabS.CabDetailMinistersSectionHeader>
-                                  {!!editingTenureInfo &&
-                                  editingTenureInfo.cabinetId ===
-                                    selectedCabinet.id &&
-                                  editingTenureInfo.mode === 'end' ? (
-                                    <div
-                                      style={{
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        gap: 12,
-                                      }}
-                                    >
-                                      <div>
-                                        <CabS.HeadTenureInfoLabel>
-                                          퇴임 사유
-                                        </CabS.HeadTenureInfoLabel>
-                                        <CabS.CabinetSelectNative
-                                          value={editingEndReason}
-                                          onChange={(e) =>
-                                            setEditingEndReason(e.target.value)
-                                          }
-                                          style={{ maxWidth: 280 }}
-                                        >
-                                          <option value="">선택 안 함</option>
-                                          {Object.entries(END_REASON_LABEL).map(
-                                            ([k, v]) => (
-                                              <option key={k} value={k}>
-                                                {v}
-                                              </option>
-                                            ),
-                                          )}
-                                        </CabS.CabinetSelectNative>
-                                      </div>
-                                      <div>
-                                        <CabS.HeadTenureInfoLabel>
-                                          퇴임 상세
-                                        </CabS.HeadTenureInfoLabel>
-                                        <CabS.HeadTenureInfoEditorWrap>
-                                          <RichTextEditor
-                                            value={editingEndReasonDetail}
-                                            onChange={setEditingEndReasonDetail}
-                                            showTitle={false}
-                                            placeholder="퇴임 경위, 상세 내용 등"
-                                            onImageUpload={async (file) => {
-                                              const result = await uploadImage(
-                                                file,
-                                                'persons',
-                                              )
-                                              return (
-                                                getUploadImageUrl(
-                                                  result.url,
-                                                ) ||
-                                                (result.url ?? '')
-                                              )
-                                            }}
-                                          />
-                                        </CabS.HeadTenureInfoEditorWrap>
-                                      </div>
-                                    </div>
-                                  ) : head?.endReason ||
-                                    cabinetTenureDetailHasContent(
-                                      head?.endReasonDetail,
-                                    ) ? (
-                                    <>
-                                      {head?.endReason && (
-                                        <CabS.HeadTenureInfoBadge
-                                          $type="end"
-                                          style={{ width: 'fit-content' }}
-                                        >
-                                          <CabS.HeadTenureInfoBadgeLabel>
-                                            퇴임
-                                          </CabS.HeadTenureInfoBadgeLabel>
-                                          {END_REASON_LABEL[head.endReason] ??
-                                            head.endReason}
-                                        </CabS.HeadTenureInfoBadge>
-                                      )}
-                                      {cabinetTenureDetailHasContent(
+                              {/* 취임/퇴임 정보 섹션 — 내용이 있거나 편집 중일 때만 카드 노출, 비어 있으면 한 줄 추가 버튼 */}
+                              {head &&
+                                (() => {
+                                  const hasAppointmentContent = Boolean(
+                                    head.appointmentMethod ||
+                                      cabinetTenureDetailHasContent(head.notes),
+                                  )
+                                  const isEditingAppointment = Boolean(
+                                    editingTenureInfo &&
+                                      editingTenureInfo.cabinetId ===
+                                        selectedCabinet.id &&
+                                      editingTenureInfo.mode === 'appointment',
+                                  )
+                                  const hasEndContent = Boolean(
+                                    head.endReason ||
+                                      cabinetTenureDetailHasContent(
                                         head.endReasonDetail,
-                                      ) && (
-                                        <CabS.HeadTenureInfoRow $block>
-                                          <CabS.HeadTenureInfoLabel>
-                                            퇴임 상세
-                                          </CabS.HeadTenureInfoLabel>
-                                          {isLikelyRichTextHtml(
-                                            head.endReasonDetail,
-                                          ) ? (
-                                            <CabS.HeadTenureInfoRichColumn
-                                              onClick={handleHistoryProseClick}
-                                              role="presentation"
+                                      ),
+                                  )
+                                  const isEditingEnd = Boolean(
+                                    editingTenureInfo &&
+                                      editingTenureInfo.cabinetId ===
+                                        selectedCabinet.id &&
+                                      editingTenureInfo.mode === 'end',
+                                  )
+                                  const showAppointmentCard =
+                                    hasAppointmentContent ||
+                                    isEditingAppointment
+                                  const showEndCard =
+                                    hasEndContent || isEditingEnd
+                                  const showQuickAddRow =
+                                    !showAppointmentCard || !showEndCard
+
+                                  return (
+                                    <CabS.CabDetailScrollSection id="cab-detail-tenure">
+                                      {showAppointmentCard ? (
+                                        <CabS.HeadTenureInfoSection $accent="mint">
+                                          <CabS.CabDetailMinistersSectionHeader>
+                                            <span
+                                              aria-hidden
+                                              style={{
+                                                width: 8,
+                                                height: 8,
+                                                borderRadius: '50%',
+                                                background: '#6ee7b7',
+                                                flexShrink: 0,
+                                                display: 'inline-block',
+                                              }}
+                                            />
+                                            <CabS.CabDetailMinistersSectionTitle>
+                                              취임 정보
+                                            </CabS.CabDetailMinistersSectionTitle>
+                                            <div style={{ flex: 1 }} />
+                                            {isEditingAppointment ? (
+                                              <div
+                                                style={{
+                                                  display: 'flex',
+                                                  gap: 6,
+                                                }}
+                                              >
+                                                <CabS.HistoryArticleCancelBtn
+                                                  type="button"
+                                                  onClick={() =>
+                                                    setEditingTenureInfo(null)
+                                                  }
+                                                >
+                                                  취소
+                                                </CabS.HistoryArticleCancelBtn>
+                                                <CabS.HistoryArticleSaveBtn
+                                                  type="button"
+                                                  disabled={
+                                                    tenureInfoSubmitting
+                                                  }
+                                                  onClick={() =>
+                                                    handleSaveTenureInfoInline(
+                                                      selectedCabinet.id,
+                                                      head.id,
+                                                    )
+                                                  }
+                                                  $isRegister={false}
+                                                >
+                                                  {tenureInfoSubmitting
+                                                    ? '저장 중…'
+                                                    : '저장'}
+                                                </CabS.HistoryArticleSaveBtn>
+                                              </div>
+                                            ) : (
+                                              <SubsectionAddBtn
+                                                type="button"
+                                                onClick={() => {
+                                                  setEditingAppointmentMethod(
+                                                    head.appointmentMethod ??
+                                                      '',
+                                                  )
+                                                  setEditingNotes(
+                                                    head.notes ?? '',
+                                                  )
+                                                  setEditingTenureInfo({
+                                                    cabinetId:
+                                                      selectedCabinet.id,
+                                                    mode: 'appointment',
+                                                  })
+                                                }}
+                                              >
+                                                <FiEdit2
+                                                  size={13}
+                                                  strokeWidth={2.25}
+                                                />
+                                                수정
+                                              </SubsectionAddBtn>
+                                            )}
+                                          </CabS.CabDetailMinistersSectionHeader>
+                                          {isEditingAppointment ? (
+                                            <div
+                                              style={{
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: 12,
+                                              }}
                                             >
-                                              <CabS.HeadTenureInfoRichProse
-                                                html={String(
-                                                  head.endReasonDetail ?? '',
-                                                )}
-                                              />
-                                            </CabS.HeadTenureInfoRichColumn>
+                                              <div>
+                                                <CabS.HeadTenureInfoLabel>
+                                                  임명 방식
+                                                </CabS.HeadTenureInfoLabel>
+                                                <CabS.CabinetSelectNative
+                                                  value={
+                                                    editingAppointmentMethod
+                                                  }
+                                                  onChange={(changeEvent) =>
+                                                    setEditingAppointmentMethod(
+                                                      changeEvent.target.value,
+                                                    )
+                                                  }
+                                                  style={{ maxWidth: 280 }}
+                                                >
+                                                  <option value="">
+                                                    선택 안 함
+                                                  </option>
+                                                  {Object.entries(
+                                                    APPOINTMENT_METHOD_LABEL,
+                                                  ).map(
+                                                    ([
+                                                      methodKey,
+                                                      methodLabel,
+                                                    ]) => (
+                                                      <option
+                                                        key={methodKey}
+                                                        value={methodKey}
+                                                      >
+                                                        {methodLabel}
+                                                      </option>
+                                                    ),
+                                                  )}
+                                                </CabS.CabinetSelectNative>
+                                              </div>
+                                              <div>
+                                                <CabS.HeadTenureInfoLabel>
+                                                  취임 배경 / 비고
+                                                </CabS.HeadTenureInfoLabel>
+                                                <CabS.HeadTenureInfoEditorWrap>
+                                                  <RichTextEditor
+                                                    value={editingNotes}
+                                                    onChange={setEditingNotes}
+                                                    showTitle={false}
+                                                    placeholder="취임 배경, 특이 사항 등"
+                                                    onImageUpload={async (
+                                                      file,
+                                                    ) => {
+                                                      const result =
+                                                        await uploadImage(
+                                                          file,
+                                                          'persons',
+                                                        )
+                                                      return (
+                                                        getUploadImageUrl(
+                                                          result.url,
+                                                        ) ||
+                                                        (result.url ?? '')
+                                                      )
+                                                    }}
+                                                  />
+                                                </CabS.HeadTenureInfoEditorWrap>
+                                              </div>
+                                            </div>
                                           ) : (
-                                            <CabS.HeadTenureInfoRichColumn>
-                                              <CabS.HeadTenureInfoText>
-                                                {head.endReasonDetail}
-                                              </CabS.HeadTenureInfoText>
-                                            </CabS.HeadTenureInfoRichColumn>
+                                            <>
+                                              {head.appointmentMethod && (
+                                                <CabS.HeadTenureInfoBadge
+                                                  $type="appointment"
+                                                  style={{
+                                                    width: 'fit-content',
+                                                  }}
+                                                >
+                                                  <CabS.HeadTenureInfoBadgeLabel>
+                                                    임명
+                                                  </CabS.HeadTenureInfoBadgeLabel>
+                                                  {APPOINTMENT_METHOD_LABEL[
+                                                    head.appointmentMethod
+                                                  ] ?? head.appointmentMethod}
+                                                </CabS.HeadTenureInfoBadge>
+                                              )}
+                                              {cabinetTenureDetailHasContent(
+                                                head.notes,
+                                              ) && (
+                                                <CabS.HeadTenureInfoRow $block>
+                                                  <CabS.HeadTenureInfoLabel>
+                                                    취임 배경 / 비고
+                                                  </CabS.HeadTenureInfoLabel>
+                                                  {isLikelyRichTextHtml(
+                                                    head.notes,
+                                                  ) ? (
+                                                    <CabS.HeadTenureInfoRichColumn
+                                                      onClick={
+                                                        handleHistoryProseClick
+                                                      }
+                                                      role="presentation"
+                                                    >
+                                                      <CabS.HeadTenureInfoRichProse
+                                                        html={String(
+                                                          head.notes ?? '',
+                                                        )}
+                                                      />
+                                                    </CabS.HeadTenureInfoRichColumn>
+                                                  ) : (
+                                                    <CabS.HeadTenureInfoRichColumn>
+                                                      <CabS.HeadTenureInfoText>
+                                                        {head.notes}
+                                                      </CabS.HeadTenureInfoText>
+                                                    </CabS.HeadTenureInfoRichColumn>
+                                                  )}
+                                                </CabS.HeadTenureInfoRow>
+                                              )}
+                                            </>
                                           )}
-                                        </CabS.HeadTenureInfoRow>
-                                      )}
-                                    </>
-                                  ) : (
-                                    <CabS.CabDetailEmptyText>
-                                      등록된 퇴임 정보가 없습니다.
-                                    </CabS.CabDetailEmptyText>
-                                  )}
-                                </CabS.HeadTenureInfoSection>
-                              </CabS.CabDetailScrollSection>
-                              )}
+                                        </CabS.HeadTenureInfoSection>
+                                      ) : null}
+
+                                      {showEndCard ? (
+                                        <CabS.HeadTenureInfoSection $accent="rose">
+                                          <CabS.CabDetailMinistersSectionHeader>
+                                            <span
+                                              aria-hidden
+                                              style={{
+                                                width: 8,
+                                                height: 8,
+                                                borderRadius: '50%',
+                                                background: '#fca5a5',
+                                                flexShrink: 0,
+                                                display: 'inline-block',
+                                              }}
+                                            />
+                                            <CabS.CabDetailMinistersSectionTitle>
+                                              퇴임 정보
+                                            </CabS.CabDetailMinistersSectionTitle>
+                                            <div style={{ flex: 1 }} />
+                                            {isEditingEnd ? (
+                                              <div
+                                                style={{
+                                                  display: 'flex',
+                                                  gap: 6,
+                                                }}
+                                              >
+                                                <CabS.HistoryArticleCancelBtn
+                                                  type="button"
+                                                  onClick={() =>
+                                                    setEditingTenureInfo(null)
+                                                  }
+                                                >
+                                                  취소
+                                                </CabS.HistoryArticleCancelBtn>
+                                                <CabS.HistoryArticleSaveBtn
+                                                  type="button"
+                                                  disabled={
+                                                    tenureInfoSubmitting
+                                                  }
+                                                  onClick={() =>
+                                                    handleSaveTenureInfoInline(
+                                                      selectedCabinet.id,
+                                                      head.id,
+                                                    )
+                                                  }
+                                                  $isRegister={false}
+                                                >
+                                                  {tenureInfoSubmitting
+                                                    ? '저장 중…'
+                                                    : '저장'}
+                                                </CabS.HistoryArticleSaveBtn>
+                                              </div>
+                                            ) : (
+                                              <SubsectionAddBtn
+                                                type="button"
+                                                onClick={() => {
+                                                  setEditingEndReason(
+                                                    head.endReason ?? '',
+                                                  )
+                                                  setEditingEndReasonDetail(
+                                                    head.endReasonDetail ?? '',
+                                                  )
+                                                  setEditingTenureInfo({
+                                                    cabinetId:
+                                                      selectedCabinet.id,
+                                                    mode: 'end',
+                                                  })
+                                                }}
+                                              >
+                                                <FiEdit2
+                                                  size={13}
+                                                  strokeWidth={2.25}
+                                                />
+                                                수정
+                                              </SubsectionAddBtn>
+                                            )}
+                                          </CabS.CabDetailMinistersSectionHeader>
+                                          {isEditingEnd ? (
+                                            <div
+                                              style={{
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: 12,
+                                              }}
+                                            >
+                                              <div>
+                                                <CabS.HeadTenureInfoLabel>
+                                                  퇴임 사유
+                                                </CabS.HeadTenureInfoLabel>
+                                                <CabS.CabinetSelectNative
+                                                  value={editingEndReason}
+                                                  onChange={(changeEvent) =>
+                                                    setEditingEndReason(
+                                                      changeEvent.target.value,
+                                                    )
+                                                  }
+                                                  style={{ maxWidth: 280 }}
+                                                >
+                                                  <option value="">
+                                                    선택 안 함
+                                                  </option>
+                                                  {Object.entries(
+                                                    END_REASON_LABEL,
+                                                  ).map(
+                                                    ([
+                                                      reasonKey,
+                                                      reasonLabel,
+                                                    ]) => (
+                                                      <option
+                                                        key={reasonKey}
+                                                        value={reasonKey}
+                                                      >
+                                                        {reasonLabel}
+                                                      </option>
+                                                    ),
+                                                  )}
+                                                </CabS.CabinetSelectNative>
+                                              </div>
+                                              <div>
+                                                <CabS.HeadTenureInfoLabel>
+                                                  퇴임 상세
+                                                </CabS.HeadTenureInfoLabel>
+                                                <CabS.HeadTenureInfoEditorWrap>
+                                                  <RichTextEditor
+                                                    value={
+                                                      editingEndReasonDetail
+                                                    }
+                                                    onChange={
+                                                      setEditingEndReasonDetail
+                                                    }
+                                                    showTitle={false}
+                                                    placeholder="퇴임 경위, 상세 내용 등"
+                                                    onImageUpload={async (
+                                                      file,
+                                                    ) => {
+                                                      const result =
+                                                        await uploadImage(
+                                                          file,
+                                                          'persons',
+                                                        )
+                                                      return (
+                                                        getUploadImageUrl(
+                                                          result.url,
+                                                        ) ||
+                                                        (result.url ?? '')
+                                                      )
+                                                    }}
+                                                  />
+                                                </CabS.HeadTenureInfoEditorWrap>
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <>
+                                              {head.endReason && (
+                                                <CabS.HeadTenureInfoBadge
+                                                  $type="end"
+                                                  style={{
+                                                    width: 'fit-content',
+                                                  }}
+                                                >
+                                                  <CabS.HeadTenureInfoBadgeLabel>
+                                                    퇴임
+                                                  </CabS.HeadTenureInfoBadgeLabel>
+                                                  {END_REASON_LABEL[
+                                                    head.endReason
+                                                  ] ?? head.endReason}
+                                                </CabS.HeadTenureInfoBadge>
+                                              )}
+                                              {cabinetTenureDetailHasContent(
+                                                head.endReasonDetail,
+                                              ) && (
+                                                <CabS.HeadTenureInfoRow $block>
+                                                  <CabS.HeadTenureInfoLabel>
+                                                    퇴임 상세
+                                                  </CabS.HeadTenureInfoLabel>
+                                                  {isLikelyRichTextHtml(
+                                                    head.endReasonDetail,
+                                                  ) ? (
+                                                    <CabS.HeadTenureInfoRichColumn
+                                                      onClick={
+                                                        handleHistoryProseClick
+                                                      }
+                                                      role="presentation"
+                                                    >
+                                                      <CabS.HeadTenureInfoRichProse
+                                                        html={String(
+                                                          head.endReasonDetail ??
+                                                            '',
+                                                        )}
+                                                      />
+                                                    </CabS.HeadTenureInfoRichColumn>
+                                                  ) : (
+                                                    <CabS.HeadTenureInfoRichColumn>
+                                                      <CabS.HeadTenureInfoText>
+                                                        {head.endReasonDetail}
+                                                      </CabS.HeadTenureInfoText>
+                                                    </CabS.HeadTenureInfoRichColumn>
+                                                  )}
+                                                </CabS.HeadTenureInfoRow>
+                                              )}
+                                            </>
+                                          )}
+                                        </CabS.HeadTenureInfoSection>
+                                      ) : null}
+
+                                      {showQuickAddRow ? (
+                                        <div
+                                          style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            flexWrap: 'wrap',
+                                            gap: 8,
+                                          }}
+                                        >
+                                          {!showAppointmentCard ? (
+                                            <SubsectionAddBtn
+                                              type="button"
+                                              onClick={() => {
+                                                setEditingAppointmentMethod(
+                                                  head.appointmentMethod ?? '',
+                                                )
+                                                setEditingNotes(
+                                                  head.notes ?? '',
+                                                )
+                                                setEditingTenureInfo({
+                                                  cabinetId: selectedCabinet.id,
+                                                  mode: 'appointment',
+                                                })
+                                              }}
+                                            >
+                                              <FiPlus
+                                                size={13}
+                                                strokeWidth={2.25}
+                                              />
+                                              취임 경위 추가
+                                            </SubsectionAddBtn>
+                                          ) : null}
+                                          {!showEndCard ? (
+                                            <SubsectionAddBtn
+                                              type="button"
+                                              onClick={() => {
+                                                setEditingEndReason(
+                                                  head.endReason ?? '',
+                                                )
+                                                setEditingEndReasonDetail(
+                                                  head.endReasonDetail ?? '',
+                                                )
+                                                setEditingTenureInfo({
+                                                  cabinetId: selectedCabinet.id,
+                                                  mode: 'end',
+                                                })
+                                              }}
+                                            >
+                                              <FiPlus
+                                                size={13}
+                                                strokeWidth={2.25}
+                                              />
+                                              퇴임 경위 추가
+                                            </SubsectionAddBtn>
+                                          ) : null}
+                                        </div>
+                                      ) : null}
+                                    </CabS.CabDetailScrollSection>
+                                  )
+                                })()}
 
                               {selectedCabinet?.id && (
                                 <div
@@ -4672,87 +4873,6 @@ export function CabinetsSection({
                                         ? `${sortedVisibleMinisters.length}/${nonHeadMinisters.length}명`
                                         : `${nonHeadMinisters.length}명`}
                                   </CabS.CabResultCount>
-                                  <div
-                                    role="tablist"
-                                    aria-label="각료 보기 방식"
-                                    style={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: 2,
-                                      marginLeft: 10,
-                                      padding: 2,
-                                      borderRadius: 8,
-                                      border: `1px solid ${palette.badgeBorder}`,
-                                      background: palette.chipActionBg,
-                                    }}
-                                  >
-                                    <button
-                                      type="button"
-                                      role="tab"
-                                      aria-selected={ministerViewMode === 'cards'}
-                                      onClick={() => setMinisterViewMode('cards')}
-                                      style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 4,
-                                        padding: '4px 9px',
-                                        borderRadius: 6,
-                                        border: 'none',
-                                        background:
-                                          ministerViewMode === 'cards'
-                                            ? MAIN
-                                            : 'transparent',
-                                        color:
-                                          ministerViewMode === 'cards'
-                                            ? '#ffffff'
-                                            : palette.textMuted,
-                                        fontSize: 11.5,
-                                        fontWeight: 600,
-                                        cursor: 'pointer',
-                                      }}
-                                    >
-                                      <FiGrid size={12} />
-                                      각료 카드
-                                    </button>
-                                    <button
-                                      type="button"
-                                      role="tab"
-                                      aria-selected={ministerViewMode === 'matrix'}
-                                      onClick={() => setMinisterViewMode('matrix')}
-                                      style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 4,
-                                        padding: '4px 9px',
-                                        borderRadius: 6,
-                                        border: 'none',
-                                        background:
-                                          ministerViewMode === 'matrix'
-                                            ? MAIN
-                                            : 'transparent',
-                                        color:
-                                          ministerViewMode === 'matrix'
-                                            ? '#ffffff'
-                                            : palette.textMuted,
-                                        fontSize: 11.5,
-                                        fontWeight: 600,
-                                        cursor: 'pointer',
-                                      }}
-                                    >
-                                      <FiLayers size={12} />
-                                      부처별 편제표
-                                      {ministriesForCabinet.length > 0 && (
-                                        <span
-                                          style={{
-                                            fontSize: 10.5,
-                                            opacity: 0.85,
-                                          }}
-                                        >
-                                          ({ministriesForCabinet.length})
-                                        </span>
-                                      )}
-                                    </button>
-                                  </div>
                                   <div style={{ flex: 1 }} />
                                   {/* 검색창 — 전체 각료 6명 이상이거나 검색어가 있을 때 유지 */}
                                   {(nonHeadMinisters.length > 5 ||
@@ -4760,7 +4880,7 @@ export function CabinetsSection({
                                     <CabS.CabSearchWrap
                                       style={{
                                         maxWidth: 180,
-                                        margin: '0 8px 0 0',
+                                        margin: '0 6px 0 0',
                                       }}
                                     >
                                       <CabS.CabSearchIcon>
@@ -4775,7 +4895,7 @@ export function CabinetsSection({
                                             changeEvent.target.value,
                                           )
                                         }
-                                        style={{ height: 32, fontSize: 12 }}
+                                        style={{ height: 30, fontSize: 12 }}
                                       />
                                       {ministerSearchQuery.trim() && (
                                         <CabS.CabSearchClear
@@ -4789,6 +4909,40 @@ export function CabinetsSection({
                                       )}
                                     </CabS.CabSearchWrap>
                                   )}
+                                  <GovMorePopover
+                                    triggerSize="sm"
+                                    ariaLabel="각료 목록 보기 설정"
+                                    title="각료 표시 방식 전환"
+                                    hasActiveIndicator={
+                                      ministerViewMode !== 'cards'
+                                    }
+                                    segments={[
+                                      {
+                                        key: 'minister-view',
+                                        label: '각료 표시 방식',
+                                        value: ministerViewMode,
+                                        options: [
+                                          {
+                                            value: 'cards',
+                                            label: '각료 카드',
+                                            icon: <FiGrid size={12} />,
+                                          },
+                                          {
+                                            value: 'matrix',
+                                            label:
+                                              ministriesForCabinet.length > 0
+                                                ? `부처 편제 (${ministriesForCabinet.length})`
+                                                : '부처 편제',
+                                            icon: <FiLayers size={12} />,
+                                          },
+                                        ],
+                                        onChange: (nextVal) =>
+                                          setMinisterViewMode(
+                                            nextVal as 'cards' | 'matrix',
+                                          ),
+                                      },
+                                    ]}
+                                  />
                                   {!loadingCabinetMinisters && (
                                     <SubsectionAddBtn
                                       type="button"

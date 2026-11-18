@@ -7,6 +7,7 @@ import {
   FiEdit2,
   FiPlus,
   FiTrash2,
+  FiUserPlus,
   FiUsers,
 } from 'react-icons/fi'
 import styled from 'styled-components'
@@ -29,6 +30,7 @@ import {
   primaryHouseLabel,
   STATE_STRUCTURE_LABEL,
 } from '@/entities/political-system/model/political-system'
+import { GovMorePopover } from '@/features/government-info/ui/gov-more-popover'
 import { GOV_BRAND } from '@/features/government-info/ui/government-ledger.styles'
 import {
   type CabinetListItemDto,
@@ -295,9 +297,22 @@ export function PoliticalSystemTab({
                   : '체제 등록됨')}
             </CurrentSummaryPill>
           ) : null}
-          <ToolbarCaption>
-            헌법 개정·체제 전환마다 기간별 통치형태·의회·원수 직함을 기록합니다.
-          </ToolbarCaption>
+          {polityChips.length > 1 ? (
+            <PolityFilterSelect
+              aria-label="소속 국가·구성국 필터"
+              value={polityFilterId}
+              onChange={(changeEvent) =>
+                setPolityFilterId(changeEvent.target.value)
+              }
+            >
+              <option value="ALL">전체 정치체 ({allSystems.length})</option>
+              {polityChips.map((chipItem) => (
+                <option key={chipItem.id} value={chipItem.id}>
+                  {chipItem.label} ({chipItem.count})
+                </option>
+              ))}
+            </PolityFilterSelect>
+          ) : null}
         </ToolbarMeta>
 
         <PrimaryAddBtn type="button" onClick={openCreate}>
@@ -305,32 +320,6 @@ export function PoliticalSystemTab({
           정체·헌정 추가
         </PrimaryAddBtn>
       </ToolbarSurface>
-
-      {polityChips.length > 1 && (
-        <PolityFilterRow role="tablist" aria-label="소속 국가·구성국 필터">
-          <PolityFilterChip
-            type="button"
-            role="tab"
-            aria-selected={polityFilterId === 'ALL'}
-            $active={polityFilterId === 'ALL'}
-            onClick={() => setPolityFilterId('ALL')}
-          >
-            전체 ({allSystems.length})
-          </PolityFilterChip>
-          {polityChips.map((chipItem) => (
-            <PolityFilterChip
-              key={chipItem.id}
-              type="button"
-              role="tab"
-              aria-selected={polityFilterId === chipItem.id}
-              $active={polityFilterId === chipItem.id}
-              onClick={() => setPolityFilterId(chipItem.id)}
-            >
-              {chipItem.label} ({chipItem.count})
-            </PolityFilterChip>
-          ))}
-        </PolityFilterRow>
-      )}
 
       {query.isLoading ? (
         <LoadingHint>헌정 체제 기록을 불러오는 중…</LoadingHint>
@@ -370,6 +359,7 @@ export function PoliticalSystemTab({
             const fallbackTitle = system.governmentForm
               ? GOVERNMENT_FORM_LABEL[system.governmentForm]
               : '헌정 체제'
+            const matchedInfo = matchedCabinetsBySystemId.get(system.id)
 
             return (
               <TimelineRow key={system.id}>
@@ -431,14 +421,74 @@ export function PoliticalSystemTab({
                         <FiEdit2 size={12} />
                         수정
                       </ActionBtn>
-                      <ActionBtn
-                        type="button"
-                        $danger
-                        onClick={() => void handleDelete(system)}
-                      >
-                        <FiTrash2 size={12} />
-                        삭제
-                      </ActionBtn>
+                      <GovMorePopover
+                        triggerSize="sm"
+                        ariaLabel={`${system.name || fallbackTitle} 관리 메뉴`}
+                        title="체제 관리 및 수장 등록"
+                        actions={[
+                          ...(hos
+                            ? [
+                                {
+                                  key: 'register-hos',
+                                  label: `${hos} 인물 등록`,
+                                  icon: <FiUserPlus size={13.5} />,
+                                  onClick: () =>
+                                    openHeadRegister({
+                                      positionId:
+                                        system.headOfStatePositionId ?? null,
+                                      positionTitle: hos,
+                                      positionType: 'HEAD_OF_STATE' as const,
+                                      historicalCountryId:
+                                        system.historicalCountryId ?? null,
+                                    }),
+                                },
+                              ]
+                            : []),
+                          ...(hog && (!hos || isDistinctDual)
+                            ? [
+                                {
+                                  key: 'register-hog',
+                                  label: `${hog} 인물 등록`,
+                                  icon: <FiUserPlus size={13.5} />,
+                                  onClick: () =>
+                                    openHeadRegister({
+                                      positionId:
+                                        system.headOfGovernmentPositionId ??
+                                        null,
+                                      positionTitle: hog,
+                                      positionType:
+                                        'HEAD_OF_GOVERNMENT' as const,
+                                      historicalCountryId:
+                                        system.historicalCountryId ?? null,
+                                    }),
+                                },
+                              ]
+                            : []),
+                          ...(matchedInfo &&
+                          matchedInfo.count > 0 &&
+                          onOpenCabinetsByRegime
+                            ? [
+                                {
+                                  key: 'open-cabinets',
+                                  label: '역대 행정부·내각 보기',
+                                  icon: <FiUsers size={13.5} />,
+                                  badge: String(matchedInfo.count),
+                                  onClick: () =>
+                                    onOpenCabinetsByRegime(system.id),
+                                },
+                              ]
+                            : []),
+                          {
+                            key: 'delete-system',
+                            label: '정체 기록 삭제',
+                            icon: <FiTrash2 size={13.5} />,
+                            danger: true,
+                            onClick: () => {
+                              void handleDelete(system)
+                            },
+                          },
+                        ]}
+                      />
                     </RowActions>
                   </CardHeader>
 
@@ -458,21 +508,6 @@ export function PoliticalSystemTab({
                                 <Muted> (상징)</Muted>
                               ) : null}
                             </span>
-                            <InlineRegisterBtn
-                              type="button"
-                              onClick={() =>
-                                openHeadRegister({
-                                  positionId:
-                                    system.headOfStatePositionId ?? null,
-                                  positionTitle: hos,
-                                  positionType: 'HEAD_OF_STATE',
-                                  historicalCountryId:
-                                    system.historicalCountryId ?? null,
-                                })
-                              }
-                            >
-                              + 수장 등록
-                            </InlineRegisterBtn>
                           </FactValue>
                         </SpecBox>
                       ) : null}
@@ -487,21 +522,6 @@ export function PoliticalSystemTab({
                                 <Muted> (상징)</Muted>
                               ) : null}
                             </span>
-                            <InlineRegisterBtn
-                              type="button"
-                              onClick={() =>
-                                openHeadRegister({
-                                  positionId:
-                                    system.headOfGovernmentPositionId ?? null,
-                                  positionTitle: hog,
-                                  positionType: 'HEAD_OF_GOVERNMENT',
-                                  historicalCountryId:
-                                    system.historicalCountryId ?? null,
-                                })
-                              }
-                            >
-                              + 수장 등록
-                            </InlineRegisterBtn>
                           </FactValue>
                         </SpecBox>
                       ) : null}
@@ -541,41 +561,37 @@ export function PoliticalSystemTab({
 
                   {system.notes ? <Notes>{system.notes}</Notes> : null}
 
-                  {(() => {
-                    const matchedInfo = matchedCabinetsBySystemId.get(system.id)
-                    if (!matchedInfo || matchedInfo.count === 0) return null
-                    return (
-                      <RegimeCabinetLinkBar>
-                        <RegimeCabinetSummary>
-                          <FiUsers size={12.5} />
-                          <span>
-                            {matchedInfo.leaderNames.length > 0 ? (
-                              <>
-                                수반:{' '}
-                                <strong>
-                                  {matchedInfo.leaderNames.join(' · ')}
-                                </strong>
-                                {matchedInfo.extraLeaderCount > 0
-                                  ? ` 외 ${matchedInfo.extraLeaderCount}명`
-                                  : ''}
-                              </>
-                            ) : (
-                              `연결된 행정부·내각 ${matchedInfo.count}개`
-                            )}
-                          </span>
-                        </RegimeCabinetSummary>
-                        {onOpenCabinetsByRegime ? (
-                          <RegimeCabinetBtn
-                            type="button"
-                            onClick={() => onOpenCabinetsByRegime(system.id)}
-                          >
-                            <span>역대 내각 {matchedInfo.count}개 보기</span>
-                            <FiArrowRight size={12.5} />
-                          </RegimeCabinetBtn>
-                        ) : null}
-                      </RegimeCabinetLinkBar>
-                    )
-                  })()}
+                  {matchedInfo && matchedInfo.count > 0 ? (
+                    <RegimeCabinetLinkBar>
+                      <RegimeCabinetSummary>
+                        <FiUsers size={12.5} />
+                        <span>
+                          {matchedInfo.leaderNames.length > 0 ? (
+                            <>
+                              수반:{' '}
+                              <strong>
+                                {matchedInfo.leaderNames.join(' · ')}
+                              </strong>
+                              {matchedInfo.extraLeaderCount > 0
+                                ? ` 외 ${matchedInfo.extraLeaderCount}명`
+                                : ''}
+                            </>
+                          ) : (
+                            `연결된 행정부·내각 ${matchedInfo.count}개`
+                          )}
+                        </span>
+                      </RegimeCabinetSummary>
+                      {onOpenCabinetsByRegime ? (
+                        <RegimeCabinetBtn
+                          type="button"
+                          onClick={() => onOpenCabinetsByRegime(system.id)}
+                        >
+                          <span>역대 내각 {matchedInfo.count}개 보기</span>
+                          <FiArrowRight size={12.5} />
+                        </RegimeCabinetBtn>
+                      ) : null}
+                    </RegimeCabinetLinkBar>
+                  ) : null}
                 </RegimeCard>
               </TimelineRow>
             )
@@ -788,9 +804,23 @@ const CurrentDot = styled.span`
   background: #10b981;
 `
 
-const ToolbarCaption = styled.span`
-  font-size: 12.5px;
-  color: ${({ theme }) => theme.colors.text.secondary};
+const PolityFilterSelect = styled.select`
+  height: 30px;
+  padding: 0 26px 0 10px;
+  border-radius: 7px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : '#ffffff'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.1)'
+        : 'rgba(20, 19, 34, 0.1)'};
+  cursor: pointer;
+  outline: none;
 `
 
 const PrimaryAddBtn = styled.button`
@@ -821,47 +851,6 @@ const PrimaryAddBtn = styled.button`
   @media (max-width: 768px) {
     height: 40px;
   }
-`
-
-const PolityFilterRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-`
-
-const PolityFilterChip = styled.button<{ $active: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 30px;
-  padding: 0 11px;
-  border-radius: 8px;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid
-    ${({ $active, theme }) =>
-      $active
-        ? theme.mode === 'dark'
-          ? GOV_BRAND.primaryBorderDark
-          : GOV_BRAND.primaryBorder
-        : theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.1)'
-          : 'rgba(20, 19, 34, 0.1)'};
-  background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? GOV_BRAND.primarySoftDark
-        : GOV_BRAND.primarySoft
-      : 'transparent'};
-  color: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? GOV_BRAND.primaryInkDark
-        : GOV_BRAND.primary
-      : theme.colors.text.secondary};
 `
 
 const LoadingHint = styled.p`
@@ -1158,28 +1147,6 @@ const Muted = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const InlineRegisterBtn = styled.button`
-  padding: 2px 7px;
-  border-radius: 6px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? GOV_BRAND.primaryBorderDark
-        : GOV_BRAND.primaryBorder};
-  background: transparent;
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? GOV_BRAND.primaryInkDark : GOV_BRAND.primary};
-  cursor: pointer;
-
-  &:hover {
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? GOV_BRAND.primarySoftDark : GOV_BRAND.primarySoft};
-  }
-`
-
 const Notes = styled.p`
   margin: 0;
   padding-top: 8px;
@@ -1193,50 +1160,37 @@ const Notes = styled.p`
 `
 
 const RowActions = styled.div`
-  display: flex;
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
   flex-shrink: 0;
 `
 
-const ActionBtn = styled.button<{ $danger?: boolean }>`
+const ActionBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 5px 10px;
+  height: 30px;
+  padding: 0 10px;
   border-radius: 8px;
+  font-family: inherit;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   border: 1px solid
-    ${({ $danger, theme }) =>
-      $danger
-        ? theme.mode === 'dark'
-          ? 'rgba(239, 68, 68, 0.35)'
-          : '#fecaca'
-        : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.12)'
-          : '#e2e8f0'};
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
   background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff'};
-  color: ${({ $danger, theme }) =>
-    $danger
-      ? theme.mode === 'dark'
-        ? '#fca5a5'
-        : '#dc2626'
-      : theme.colors.text.secondary};
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
+  color: ${({ theme }) => theme.colors.text.secondary};
   transition:
     background 0.14s,
-    border-color 0.14s;
+    color 0.14s;
 
   &:hover {
-    background: ${({ $danger, theme }) =>
-      $danger
-        ? theme.mode === 'dark'
-          ? 'rgba(239, 68, 68, 0.15)'
-          : '#fff1f2'
-        : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.08)'
-          : '#f8fafc'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#f8fafc'};
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 

@@ -14,14 +14,16 @@
  *
  * 복귀 목적지: 진입점이 `state.from`을 주면 그곳으로, 없으면 `/events`.
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { FiArrowLeft, FiSave } from 'react-icons/fi'
-import { useBlocker, useLocation, useNavigate } from 'react-router-dom'
+import { useBlocker, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 
+import type { EventCountryParticipant } from '@/entities/event/model'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { pathKeys, type ReturnToState } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import type { DatePickerPrecision } from '@/shared/ui/date-picker/date-picker-modal'
 import {
   EventBasicForm,
   type EventBasicFormHandle,
@@ -35,7 +37,50 @@ const LEAVE_MESSAGE = '저장하지 않은 변경 사항이 있습니다. 페이
 export const EventCreatePageRefactored: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const playClickSound = useClickSound()
+
+  const queryPrefill = useMemo(() => {
+    const seriesId = searchParams.get('seriesId')
+    const rawEdition = searchParams.get('seriesEdition')
+    const parsedEdition = rawEdition ? Number.parseInt(rawEdition, 10) : null
+    const rawPrecision = searchParams.get('startDatePrecision')
+    const startDatePrecision: DatePickerPrecision | null =
+      rawPrecision === 'year' || rawPrecision === 'month' || rawPrecision === 'day'
+        ? rawPrecision
+        : null
+    const hostCountryId = searchParams.get('hostCountryId')
+    const initialCountries: EventCountryParticipant[] | undefined = hostCountryId
+      ? [{ countryId: hostCountryId, role: 'INITIATOR' }]
+      : undefined
+
+    const hasSeriesPrefill = Boolean(
+      seriesId ||
+        searchParams.get('title') ||
+        searchParams.get('startDate') ||
+        searchParams.get('organizationId'),
+    )
+
+    return {
+      domain: searchParams.get('domain'),
+      eventType: searchParams.get('type'),
+      initialCountries,
+      initialSeriesPrefill: hasSeriesPrefill
+        ? {
+            seriesId,
+            seriesEdition:
+              parsedEdition != null && Number.isFinite(parsedEdition)
+                ? parsedEdition
+                : null,
+            title: searchParams.get('title'),
+            startDate: searchParams.get('startDate'),
+            startDatePrecision,
+            location: searchParams.get('location'),
+            organizationId: searchParams.get('organizationId'),
+          }
+        : undefined,
+    }
+  }, [searchParams])
 
   const formRef = useRef<EventBasicFormHandle | null>(null)
   const [formState, setFormState] = useState<EventBasicFormState>({
@@ -154,6 +199,10 @@ export const EventCreatePageRefactored: React.FC = () => {
             onDirtyChange={setIsDirty}
             onStateChange={setFormState}
             onSaved={handleSaved}
+            initialDomain={queryPrefill.domain}
+            initialEventType={queryPrefill.eventType}
+            initialCountries={queryPrefill.initialCountries}
+            initialSeriesPrefill={queryPrefill.initialSeriesPrefill}
           />
         </S.FormArea>
       </S.ContentWrapper>

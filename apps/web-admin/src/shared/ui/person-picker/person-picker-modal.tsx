@@ -68,6 +68,10 @@ export interface PersonPickerModalProps {
   context?: PersonPickerContext
   /** 검색 툴바 상단에 렌더링할 부가 컨트롤 (예: 혼인 서열·반대편 부모·출생 서열 원스톱 지정 바) */
   headerAccessory?: ReactNode
+  /** 열릴 때 미리 채울 검색어 (인라인 검색어 이어받기 / 새 인물 등록 이름 프리필용) */
+  initialQuery?: string
+  /** 열릴 때 곧바로 '새 인물 등록' 화면으로 시작할지 여부 */
+  initialCreateMode?: boolean
 }
 
 const SORT_LABEL: Record<PersonSortKey, string> = {
@@ -99,6 +103,8 @@ export function PersonPickerModal({
   pinnedIds,
   context,
   headerAccessory,
+  initialQuery,
+  initialCreateMode = false,
 }: PersonPickerModalProps) {
   const playClickSound = useClickSound()
   const { data: fetchedPersons = [], isLoading: fetching } = useQuery({
@@ -110,14 +116,14 @@ export function PersonPickerModal({
   const persons = givenPersons ?? fetchedPersons
   const loading = givenPersons === undefined ? fetching : givenLoading
 
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery ?? '')
   const [sortKey, setSortKey] = useState<PersonSortKey>(context ? 'relevance' : 'name')
   const [countryFilter, setCountryFilter] = useState('')
   const [dynastyFilter, setDynastyFilter] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
   /** 이번 세션에 추가한 인물(연속 추가) — 이름까지 들고 있어 아래 칩으로 보인다 */
   const [added, setAdded] = useState<Array<{ id: string; name: string }>>([])
-  const [createMode, setCreateMode] = useState(false)
+  const [createMode, setCreateMode] = useState(Boolean(initialCreateMode))
   const searchRef = useRef<HTMLInputElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const canCreate =

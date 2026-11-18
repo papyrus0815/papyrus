@@ -218,6 +218,24 @@ interface BasicInfoSectionProps {
   }
 
   /**
+   * 정기 회의·행사 시리즈(선택) 슬롯 — 아세안·APEC·쿼드 정상회의, WTO 각료회의 등 주기적 사건 연결.
+   */
+  eventSeriesSlot?: {
+    series: {
+      id: string
+      title: string
+      cadenceLabel?: string | null
+      organizationName?: string | null
+    } | null
+    seriesEdition: string
+    onSeriesEditionChange: (value: string) => void
+    seriesEditionLabel: string
+    onSeriesEditionLabelChange: (value: string) => void
+    onOpenPicker: () => void
+    onClear: () => void
+  }
+
+  /**
    * 연관 사건(선택) 슬롯 — 계기·배경·대응·동시 진행 등 상위/하위 묶음이 아닌 사건끼리의 연결.
    * 신규 등록 전용.
    */
@@ -383,6 +401,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
   availableHistoricalCountries = [],
   onOpenCountryModal,
   parentEventSlot,
+  eventSeriesSlot,
   relatedEventsSlot,
   similarEventsSlot,
   kindSlot,
@@ -514,7 +533,8 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
     useState(false)
   const [activeLocationResultIndex, setActiveLocationResultIndex] = useState(0)
   const [isLocationQuickDismissed, setIsLocationQuickDismissed] = useState(true)
-  const [isLocationNoteOpen, setIsLocationNoteOpen] = useState(false)
+  const [isClassificationCollapsed, setIsClassificationCollapsed] =
+    useState(false)
   const [focusedRoleDescKey, setFocusedRoleDescKey] = useState<string | null>(
     null,
   )
@@ -1716,52 +1736,109 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         {/* 분야 — 사건의 분류이자 색·필터의 기준이라 필수. 종류(단일/묶음)는 별도 행 대신 같은 흐름에서 간결하게 전환 */}
         <S.FormRow>
           <S.FormLabel as="span" id="event-form-category-label">
-            분야 <S.Required>*</S.Required>
+            <div>
+              분야 <S.Required>*</S.Required>
+            </div>
+            {category && (
+              <DateQuickActionBtn
+                type="button"
+                aria-label={
+                  isClassificationCollapsed
+                    ? '분야 및 세부 분야 펼치기'
+                    : '분야 및 세부 분야 접기'
+                }
+                style={{ marginTop: 4 }}
+                onClick={() => {
+                  playClickSound()
+                  setIsClassificationCollapsed((prev) => !prev)
+                }}
+              >
+                {isClassificationCollapsed ? '분류 펼치기' : '분류 접기'}
+              </DateQuickActionBtn>
+            )}
           </S.FormLabel>
           <S.FormField>
-            <S.CategoryGrid
-              id="event-form-category-grid"
-              role="radiogroup"
-              aria-labelledby="event-form-category-label"
-              onKeyDown={handleCategoryKeyDown}
-            >
-              {EVENT_DOMAIN_ORDER.map((key, index) => {
-                const domain = EVENT_DOMAINS[key]
-                const Icon = domain.Icon
-                const isSelected = category === key
-                return (
-                  <S.CategoryCard
-                    key={key}
-                    ref={(element) => {
-                      categoryButtonsRef.current[index] = element
-                    }}
-                    type="button"
-                    role="radio"
-                    aria-checked={isSelected}
-                    aria-pressed={isSelected}
-                    tabIndex={index === categoryTabStop ? 0 : -1}
-                    title={domain.tagline}
-                    style={
-                      {
-                        '--cat-rgb': domain.soft.rgb,
-                        '--cat-text': isDark ? domain.soft.textDark : domain.soft.text,
-                        '--cat-accent': isDark ? domain.dark : domain.badge,
-                      } as React.CSSProperties
-                    }
-                    $selected={isSelected}
-                    onClick={() => {
-                      playClickSound()
-                      setCategory(isSelected ? '' : key)
-                    }}
-                  >
-                    <S.CategoryIcon $selected={isSelected}>
-                      <Icon size={13} />
-                    </S.CategoryIcon>
-                    <S.CategoryLabel>{domain.label}</S.CategoryLabel>
-                  </S.CategoryCard>
-                )
-              })}
-            </S.CategoryGrid>
+            {category && isClassificationCollapsed ? (
+              <CollapsedClassificationBar
+                role="region"
+                aria-label="선택된 분야 요약"
+              >
+                <CollapsedClassificationSummary>
+                  <CollapsedClassificationBadge>
+                    {EVENT_DOMAINS[category as EventDomainKey]?.label ?? category}
+                  </CollapsedClassificationBadge>
+                  {participantsCoreOf && (
+                    <CollapsedClassificationSub>
+                      {' › '}
+                      {participantsCoreOf}
+                    </CollapsedClassificationSub>
+                  )}
+                  {kindSlot && (
+                    <CollapsedClassificationKind>
+                      {' · '}
+                      {kindSlot.value === 'COLLECTION'
+                        ? '묶음 사건'
+                        : '단일 사건'}
+                    </CollapsedClassificationKind>
+                  )}
+                </CollapsedClassificationSummary>
+                <DateQuickActionBtn
+                  type="button"
+                  onClick={() => {
+                    playClickSound()
+                    setIsClassificationCollapsed(false)
+                  }}
+                >
+                  변경 · 펼치기
+                </DateQuickActionBtn>
+              </CollapsedClassificationBar>
+            ) : (
+              <S.CategoryGrid
+                id="event-form-category-grid"
+                role="radiogroup"
+                aria-labelledby="event-form-category-label"
+                onKeyDown={handleCategoryKeyDown}
+              >
+                {EVENT_DOMAIN_ORDER.map((key, index) => {
+                  const domain = EVENT_DOMAINS[key]
+                  const Icon = domain.Icon
+                  const isSelected = category === key
+                  return (
+                    <S.CategoryCard
+                      key={key}
+                      ref={(element) => {
+                        categoryButtonsRef.current[index] = element
+                      }}
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      aria-pressed={isSelected}
+                      tabIndex={index === categoryTabStop ? 0 : -1}
+                      title={domain.tagline}
+                      style={
+                        {
+                          '--cat-rgb': domain.soft.rgb,
+                          '--cat-text': isDark
+                            ? domain.soft.textDark
+                            : domain.soft.text,
+                          '--cat-accent': isDark ? domain.dark : domain.badge,
+                        } as React.CSSProperties
+                      }
+                      $selected={isSelected}
+                      onClick={() => {
+                        playClickSound()
+                        setCategory(isSelected ? '' : key)
+                      }}
+                    >
+                      <S.CategoryIcon $selected={isSelected}>
+                        <Icon size={13} />
+                      </S.CategoryIcon>
+                      <S.CategoryLabel>{domain.label}</S.CategoryLabel>
+                    </S.CategoryCard>
+                  )
+                })}
+              </S.CategoryGrid>
+            )}
             {categoryError && (
               <S.ErrorMessage id="event-form-category-error" role="alert">
                 {categoryError}
@@ -1771,7 +1848,7 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         </S.FormRow>
 
         {/* 세부 분야 — 분야의 2단계(선택) + 사건 단위(단일/묶음) */}
-        {(typeSlot || kindSlot) && (
+        {(typeSlot || kindSlot) && !(category && isClassificationCollapsed) && (
           <S.FormRow>
             <S.FormLabel as="span">
               세부 분야<OptionalTag>(선택)</OptionalTag>
@@ -2642,14 +2719,157 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
         </FormGroup>
   ) : null
 
+  const contextSummaryParts: string[] = []
+  if (parentEventSlot?.parent) contextSummaryParts.push('상위 1')
+  if ((relatedEventsSlot?.items.length ?? 0) > 0) {
+    contextSummaryParts.push(`연관 ${relatedEventsSlot?.items.length}`)
+  }
+  if (
+    locationSlot?.location.trim() ||
+    (locationSlot?.latitude != null && locationSlot?.longitude != null)
+  ) {
+    contextSummaryParts.push('위치')
+  }
+  if (keywords.length > 0) {
+    contextSummaryParts.push(`키워드 ${keywords.length}`)
+  }
+  if (thumbnail) contextSummaryParts.push('썸네일')
+  const contextSummaryText = contextSummaryParts.join(' · ')
+
   const contextGroup = (
       <FormGroup
         id="event-form-group-context"
         aria-labelledby="event-form-group-context-title"
       >
         <FormGroupTitle id="event-form-group-context-title">
-          맥락 · 부가 정보
+          <span>맥락 · 부가 정보</span>
+          {contextSummaryText && (
+            <FormGroupSummaryBadge aria-label="맥락 및 부가 정보 요약">
+              {contextSummaryText}
+            </FormGroupSummaryBadge>
+          )}
         </FormGroupTitle>
+
+        {/* 정기 회의·행사 시리즈 */}
+        {eventSeriesSlot && (
+          <S.FormRow>
+            <S.FormLabel>
+              정기 시리즈<OptionalTag>(선택)</OptionalTag>
+            </S.FormLabel>
+            <S.FormField>
+              {eventSeriesSlot.series ? (
+                <ParentEventCard role="group" aria-label="선택된 정기 시리즈">
+                  <ParticipantHeaderRow>
+                    <ParentEventBadge>정기 시리즈</ParentEventBadge>
+                    <ParticipantName>
+                      {eventSeriesSlot.series.title}
+                    </ParticipantName>
+                    {(eventSeriesSlot.series.cadenceLabel ||
+                      eventSeriesSlot.series.organizationName) && (
+                      <RelatedEventDateMeta>
+                        {[
+                          eventSeriesSlot.series.organizationName,
+                          eventSeriesSlot.series.cadenceLabel,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </RelatedEventDateMeta>
+                    )}
+                    <ParticipantHeaderRight>
+                      <ParticipantActions>
+                        <S.AddButton
+                          type="button"
+                          onClick={() => {
+                            playClickSound()
+                            eventSeriesSlot.onOpenPicker()
+                          }}
+                        >
+                          변경
+                        </S.AddButton>
+                        <ParticipantRemove
+                          type="button"
+                          onClick={() => {
+                            playClickSound()
+                            eventSeriesSlot.onClear()
+                          }}
+                          aria-label={`정기 시리즈 '${eventSeriesSlot.series.title}' 해제`}
+                        >
+                          <FiX size={14} />
+                        </ParticipantRemove>
+                      </ParticipantActions>
+                    </ParticipantHeaderRight>
+                  </ParticipantHeaderRow>
+                  <ParticipantRoleBar>
+                    <ParticipantRoleBarLabel>회차</ParticipantRoleBarLabel>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                        gap: 8,
+                        flex: 1,
+                      }}
+                    >
+                      <input
+                        type="number"
+                        min={1}
+                        max={9999}
+                        aria-label="정규 회차 번호"
+                        value={eventSeriesSlot.seriesEdition}
+                        onChange={(e) =>
+                          eventSeriesSlot.onSeriesEditionChange(e.target.value)
+                        }
+                        placeholder="회차 숫자 (예: 43)"
+                        style={{
+                          width: 130,
+                          height: 30,
+                          padding: '0 8px',
+                          borderRadius: 7,
+                          border: '1px solid rgba(148, 163, 184, 0.38)',
+                          fontSize: 12.5,
+                          background: 'transparent',
+                          color: 'inherit',
+                        }}
+                      />
+                      <input
+                        type="text"
+                        aria-label="회차 표기 오버라이드"
+                        value={eventSeriesSlot.seriesEditionLabel}
+                        onChange={(e) =>
+                          eventSeriesSlot.onSeriesEditionLabelChange(
+                            e.target.value,
+                          )
+                        }
+                        placeholder="합동·특별 표기 (예: 제44·45차, 특별 정상회의)"
+                        style={{
+                          flex: '1 1 200px',
+                          height: 30,
+                          padding: '0 8px',
+                          borderRadius: 7,
+                          border: '1px solid rgba(148, 163, 184, 0.38)',
+                          fontSize: 12.5,
+                          background: 'transparent',
+                          color: 'inherit',
+                        }}
+                      />
+                    </div>
+                  </ParticipantRoleBar>
+                </ParentEventCard>
+              ) : (
+                <S.AddButton
+                  type="button"
+                  onClick={() => {
+                    playClickSound()
+                    eventSeriesSlot.onOpenPicker()
+                  }}
+                >
+                  <FiPlus size={15} />
+                  정기 시리즈·회차 연결 (아세안·APEC·쿼드·총회 등)
+                </S.AddButton>
+              )}
+            </S.FormField>
+          </S.FormRow>
+        )}
 
         {/* 상위 사건 */}
         {parentEventSlot && (
@@ -2791,7 +3011,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                                 }
                                 if (parentLoc.note) {
                                   locationSlot.setLocationNote?.(parentLoc.note)
-                                  setIsLocationNoteOpen(true)
                                 }
                               }}
                             >
@@ -3938,26 +4157,11 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       playClickSound()
                       locationSlot.setLocation(locationSplitSuggestion.label)
                       locationSlot.setLocationNote?.(locationSplitSuggestion.note)
-                      setIsLocationNoteOpen(true)
                     }}
                   >
                     이름·메모 나누기
                   </LocationClearBtn>
                 )}
-                {locationSlot.setLocationNote &&
-                  !isLocationNoteOpen &&
-                  !locationSlot.locationNote?.trim() && (
-                    <LocationClearBtn
-                      type="button"
-                      aria-label="위치 메모 입력칸 열기"
-                      onClick={() => {
-                        playClickSound()
-                        setIsLocationNoteOpen(true)
-                      }}
-                    >
-                      + 메모
-                    </LocationClearBtn>
-                  )}
                 {locationSlot.parentLocation &&
                   !locationSlot.location.trim() &&
                   locationSlot.latitude == null &&
@@ -3982,7 +4186,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                         }
                         if (parentLoc.note) {
                           locationSlot.setLocationNote?.(parentLoc.note)
-                          setIsLocationNoteOpen(true)
                         }
                       }}
                     >
@@ -4005,7 +4208,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                       locationSlot.setLocation('')
                       locationSlot.setLocationNote?.('')
                       locationSlot.onClearCoordinates?.()
-                      setIsLocationNoteOpen(false)
                     }}
                   >
                     비우기
@@ -4036,7 +4238,6 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                           }
                           if (entry.note) {
                             locationSlot.setLocationNote?.(entry.note)
-                            setIsLocationNoteOpen(true)
                           }
                         }}
                       >
@@ -4069,28 +4270,25 @@ export const BasicInfoSection: React.FC<BasicInfoSectionProps> = ({
                     )}
                   </LocationCoordBar>
                 )}
-              {(isLocationNoteOpen ||
-                Boolean(locationSlot.locationNote?.trim())) && (
+              {locationSlot.setLocationNote && (
                 <LocationNoteRow>
                   <LocationNoteBadge>위치 메모</LocationNoteBadge>
                   <LocationNoteInput
                     type="text"
                     aria-label="위치 메모"
                     value={locationSlot.locationNote ?? ''}
-                    placeholder="위치 메모 (현 지명·나머지 장소 등)"
-                    onFocus={() => setIsLocationNoteOpen(true)}
+                    placeholder="위치 메모 (현 지명·세부 장소·전투 지점 등 선택 입력)"
                     onChange={(event) =>
                       locationSlot.setLocationNote?.(event.target.value)
                     }
                   />
-                  {locationSlot.setLocationNote && (
+                  {Boolean(locationSlot.locationNote?.trim()) && (
                     <LocationCoordClearBtn
                       type="button"
                       aria-label="위치 메모 비우기"
                       onClick={() => {
                         playClickSound()
                         locationSlot.setLocationNote?.('')
-                        setIsLocationNoteOpen(false)
                       }}
                     >
                       메모 지우기
@@ -6089,4 +6287,41 @@ const SplitQuickTypeChip = styled.button`
     background: rgba(var(--active-domain-rgb, 99, 102, 241), 0.08);
     outline: none;
   }
+`
+
+const CollapsedClassificationBar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(var(--active-domain-rgb, 99, 102, 241), 0.3);
+  background: ${({ theme }) =>
+    `rgba(var(--active-domain-rgb, 99, 102, 241), ${theme.mode === 'dark' ? 0.12 : 0.05})`};
+`
+
+const CollapsedClassificationSummary = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 13px;
+`
+
+const CollapsedClassificationBadge = styled.span`
+  font-weight: 700;
+  color: ${({ theme }) => `var(--active-domain-text, ${theme.colors.primary})`};
+`
+
+const CollapsedClassificationSub = styled.span`
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const CollapsedClassificationKind = styled.span`
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `

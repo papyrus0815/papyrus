@@ -43,15 +43,17 @@
 
 /// 조직의 유형을 정의합니다.
 enum OrganizationType {
-  /// 정당 (예: 미국 공화당 전국 위원회)
+  /// [레거시 호환] 정당 정본은 `politics.prisma`의 `PoliticalParty` (`/political-parties`)를 사용한다.
   POLITICAL_PARTY
-  /// 정부 간 국제기구 (예: UN, NATO)
+  /// 정부 간 국제기구 (예: UN, WTO, EU, ASEAN)
   INTERGOVERNMENTAL_ORG
+  /// 다자 협의체·안보 대화·국가 블록 — 조약·상설 사무국 유무와 무관한 국가 간 협의·포럼 (예: 쿼드(Quad), G7, G20, BRICS, APEC, ASEM, 파이브 아이즈, 유럽협조체제)
+  MULTILATERAL_FORUM
   /// 비정부기구/시민단체
   NGO
   /// 노동조합/산별노조 (예: 민노총)
   TRADE_UNION
-  /// 정부 기관/부처/위원회
+  /// [레거시 호환] 국가 중앙부처·행정기관 정본은 `government.prisma`의 `AdministrationDepartment` (`/government?tab=departments`)를 사용한다.
   GOVERNMENT_AGENCY
   /// 군사 동맹
   MILITARY_ALLIANCE
@@ -63,9 +65,9 @@ enum OrganizationType {
   EDUCATION
   /// 군사 교육기관 (육사, 공사, 해사, 황포군관학교 등)
   MILITARY_ACADEMY
-  /// 기업/회사
+  /// [1:1 브리지 전용] 기업 정본은 `industry.prisma`의 `Company` (`/companies`)를 사용한다.
   COMPANY
-  /// 기타
+  /// 기타 (예: 민간결사, 준군사단체 자유군단 등)
   OTHER
 }
 
@@ -93,6 +95,8 @@ enum OrganizationCountryRole {
   OBSERVER
   /// 창립국
   FOUNDER
+  /// 대화상대국·초청 파트너 (예: 아세안 대화상대국 한·중·일·미, NATO 파트너국, OECD 핵심 파트너)
+  DIALOGUE_PARTNER
   /// 사무국 소재국
   SECRETARIAT_HOST
   /// 자격정지
@@ -215,6 +219,9 @@ model Organization {
   /// 역사적 국가(필요시)
   historicalCountryId String? @map("historical_country_id") @db.Char(36)
 
+  /// 전신(前身) 기구·조직 (예: GATT → WTO, 구주공동체 EC → 유럽연합 EU, 국제연맹 → 유엔, CSCE → OSCE)
+  predecessorOrganizationId String? @map("predecessor_organization_id") @db.Char(36)
+
   /// 자유 확장을 위한 JSON
   extra Json?
 
@@ -222,6 +229,8 @@ model Organization {
   headquartersCity  City?              @relation("OrganizationHeadquartersCity", fields: [headquartersCityId], references: [id], onDelete: SetNull)
   country           Country?           @relation("OrganizationCountry", fields: [countryId], references: [id], onDelete: SetNull)
   historicalCountry HistoricalCountry? @relation("OrganizationHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+  predecessor       Organization?      @relation("OrganizationLineage", fields: [predecessorOrganizationId], references: [id], onDelete: SetNull)
+  successors        Organization[]     @relation("OrganizationLineage")
 
   memberships       OrganizationCountryMembership[]
   roles             OrganizationPersonRole[]
@@ -255,6 +264,9 @@ model Organization {
   /// 이 조직/기업이 참여한 중앙 사건(Event) 관계
   eventRelations EventOrganizationRelation[]
 
+  /// 이 조직/협의체가 주관하는 정기 사건·회의 시리즈 (예: ASEAN → 아세안 정상회의·EAS, WTO → WTO 각료회의, Quad → 쿼드 정상회의)
+  eventSeries EventSeries[] @relation("OrganizationEventSeries")
+
   /// 교역 흐름에서 '상대'로 지목된 행들 (동인도회사·한자동맹 같은 비국가 교역 주체)
   tradeFlowPartnerOf ExportImportItem[] @relation("TradeItemPartnerOrganization")
 
@@ -268,6 +280,7 @@ model Organization {
   @@index([countryId], name: "idx_organization_countryId")
   @@index([historicalCountryId], name: "idx_organization_historicalCountryId")
   @@index([headquartersCityId], name: "idx_organization_hqCityId")
+  @@index([predecessorOrganizationId], name: "idx_organization_predecessorId")
   @@map("organization")
 }
 
@@ -326,12 +339,29 @@ model OrganizationCountryMembership {
   /// 역할(회원/옵서버/창립국 등)
   role OrganizationCountryRole
 
-  /// 시작일/종료일
-  startDate DateTime? @map("start_date")
-  endDate   DateTime? @map("end_date")
+  /// 가입·시작 시점 (구조화 — BC·고대 동맹 및 연/월 정밀도 지원)
+  startEra   Era?      @map("start_era")
+  startYear  Int?      @map("start_year")
+  startMonth Int?      @map("start_month")
+  startDay   Int?      @map("start_day")
+  startDate  DateTime? @map("start_date")
+
+  /// 탈퇴·종료 시점 (구조화)
+  endEra     Era?      @map("end_era")
+  endYear    Int?      @map("end_year")
+  endMonth   Int?      @map("end_month")
+  endDay     Int?      @map("end_day")
+  endDate    DateTime? @map("end_date")
+
+  /// 표시 순서
+  sortOrder Int @default(0) @map("sort_order")
 
   /// 비고
   notes String? @db.Text
+
+  /// 단계별 지위 변천·재가입 이력 JSON 배열 — 예: 옵서버(1992~1995) → 정회원(1995~), 자격정지(2011~2023) → 복귀(2023~)
+  /// 각 원소: { role, startEra?, startYear?, endEra?, endYear?, notes? }
+  statusHistory Json? @map("status_history")
 
   //--- 관계
   organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -345,6 +375,7 @@ model OrganizationCountryMembership {
   @@unique([organizationId, countryId], name: "uniq_org_country")
   @@unique([organizationId, historicalCountryId], name: "uniq_org_histCountry")
   @@index([organizationId], name: "idx_org_member_orgId")
+  @@index([organizationId, sortOrder], name: "idx_org_member_orgId_sortOrder")
   @@index([countryId], name: "idx_org_member_countryId")
   @@index([historicalCountryId], name: "idx_org_member_histCountryId")
   @@index([role], name: "idx_org_member_role")

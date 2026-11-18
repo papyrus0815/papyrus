@@ -1,20 +1,35 @@
-import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import React, {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import { createPortal } from 'react-dom'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   FiAlertCircle,
   FiArrowRight,
+  FiBookmark,
   FiCheck,
+  FiChevronDown,
+  FiChevronUp,
   FiClock,
+  FiFlag,
+  FiHelpCircle,
   FiInfo,
   FiLayers,
+  FiMoreHorizontal,
   FiPlus,
   FiRefreshCw,
   FiSearch,
   FiUser,
   FiUsers,
 } from 'react-icons/fi'
-import styled from 'styled-components'
+import styled, { type DefaultTheme } from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { GOVERNMENT_FORM_LABEL } from '@/entities/political-system/model/political-system'
@@ -60,6 +75,7 @@ import {
   parsePartialDateString,
 } from '@/shared/lib/partial-date-string'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
+import { Z_INDEX } from '@/shared/styles/z-index'
 import { AlertBox } from '@/shared/ui/alert-box/alert-box'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import {
@@ -67,6 +83,13 @@ import {
   type DatePickerPrecision,
 } from '@/shared/ui/date-picker/date-picker-modal'
 import { InlineDateField } from '@/shared/ui/person-register-modal/sections/inline-date-field'
+import {
+  ChoiceChips,
+  type ChoiceChipOption,
+  KitAddButton,
+  KitBusyBar,
+  kitC,
+} from '@/shared/ui/register-form-kit/register-form-kit'
 import {
   FieldControl,
   FieldHint,
@@ -87,17 +110,16 @@ import {
   FooterHint,
   FooterJumpArrow,
   FooterJumpButton,
-  FooterKbd,
   FooterMissingCount,
   FooterReadyBadge,
   FooterReadyGroup,
-  FooterShortcutItem,
-  HeaderActionsBar,
-  HeaderResetBtn,
-  SectionJumpBtn,
-  SectionJumpNav,
   useModalSubmitShortcut,
 } from '@/shared/ui/register-modal-shell/register-modal-chrome'
+import {
+  type ModalMoreActionOption,
+  type ModalMoreToggleOption,
+  RegisterModalMoreMenu,
+} from '@/shared/ui/register-modal-shell/register-modal-more-menu'
 import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
 import {
   PersonRegisterModalCancelBtn,
@@ -135,7 +157,6 @@ import {
   organizePartiesForCabinetScope,
   parseStructuredOrIsoDate,
   type PersonLifespanCandidate,
-  resolveContemporaryRepublicNotice,
   resolveMatchingPartyFromMemberships,
   resolvePolityYearGuidance,
   resolveSmartDefaultExecutiveRole,
@@ -250,6 +271,66 @@ export interface CabinetFormModalProps {
 }
 
 type ModalSectionKey = 'period' | 'leader' | 'role' | 'extra'
+type CabinetEntryChoiceKey = 'head_new' | 'head_reshuffle' | 'collective'
+
+const CABINET_LAYOUT_STORAGE_KEY = 'papyrus:cabinet-register-layout'
+
+function readInitialCabinetLayoutMode(): 'split' | 'single' {
+  if (typeof window === 'undefined') return 'split'
+  try {
+    const saved = window.localStorage.getItem(CABINET_LAYOUT_STORAGE_KEY)
+    return saved === 'single' ? 'single' : 'split'
+  } catch {
+    return 'split'
+  }
+}
+
+interface CabinetModeGuideItem {
+  key: CabinetEntryChoiceKey
+  label: string
+  shortBadge: string
+  icon: React.ReactNode
+  summary: string
+  criteria: string
+  examples: string
+}
+
+const CABINET_MODE_GUIDE_LIST: ReadonlyArray<CabinetModeGuideItem> = [
+  {
+    key: 'head_new',
+    label: '1인 수반 내각',
+    shortBadge: '새 취임 · 재집권',
+    icon: <FiUser size={13.5} />,
+    summary:
+      '총리·대통령·재상 등 수반의 새 임기와 해당 내각·행정부를 한 번에 함께 등록합니다.',
+    criteria:
+      '신규 취임, 퇴임 후 시간을 둔 재집권, 또는 수반이 있는 임시정부 출범 시 선택',
+    examples: '제1차 처칠 내각 · 이승만 행정부 · 티사 이슈트반 내각 · 이토 내각',
+  },
+  {
+    key: 'head_reshuffle',
+    label: '임기 내 개각 추가',
+    shortBadge: '연속 재임 중 개편',
+    icon: <FiLayers size={13.5} />,
+    summary:
+      '이미 등록된 수반 임기 안에서 장관진 개편·연정 재구성 등으로 새 내각만 추가 개설합니다.',
+    criteria:
+      '수반 본인의 퇴임 없이 연속 재임하는 동안 제2차·개조·전시·거국내각을 나눌 때 선택',
+    examples: '제2차 개조내각 · 전시연립내각 · 부분 개각 후 제3기 내각',
+  },
+  {
+    key: 'collective',
+    label: '집단지도 · 위원회',
+    shortBadge: '수반 없는 합의체',
+    icon: <FiUsers size={13.5} />,
+    summary:
+      '단일 1인 수반을 두지 않고 위원회·평의회·국무원이 공동으로 행정권을 행사한 정부입니다.',
+    criteria:
+      '혁명기 통치평의회, 군사혁명위원회, 합의제 연방평의회 등 공동 수반 체제에 선택',
+    examples:
+      '프랑스 공안위원회 · 스위스 연방평의회 · 혁명통치평의회 · 과도국가평의회',
+  },
+]
 
 const DEFAULT_EXECUTIVE_ROLE_PRESETS: Array<{
   title: string
@@ -341,13 +422,83 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
   const startDateAnchorId = `cab-start-date-${instanceId}`
   const endDateAnchorId = `cab-end-date-${instanceId}`
 
-  const [activeSection, setActiveSection] =
-    useState<ModalSectionKey>('period')
+  const [layoutMode, setLayoutMode] = useState<'split' | 'single'>(
+    readInitialCabinetLayoutMode,
+  )
+  const [headerMoreMenuOpen, setHeaderMoreMenuOpen] = useState<boolean>(false)
+  const [modeGuideOpen, setModeGuideOpen] = useState<boolean>(false)
+  const [extraDetailsExpanded, setExtraDetailsExpanded] =
+    useState<boolean>(false)
+  const [tenureNotesExpanded, setTenureNotesExpanded] = useState<boolean>(false)
   const [activeDatePicker, setActiveDatePicker] = useState<
     'start' | 'end' | null
   >(null)
-  const [showMonarchicalRolePresets, setShowMonarchicalRolePresets] =
-    useState<boolean>(false)
+  const [roleOptionsOpen, setRoleOptionsOpen] = useState<boolean>(false)
+  const [roleOptionsCoords, setRoleOptionsCoords] = useState<{
+    top: number
+    left: number
+  } | null>(null)
+  const roleOptionsTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const roleOptionsPopoverRef = useRef<HTMLDivElement | null>(null)
+
+  const applyLayoutMode = useCallback((nextMode: 'split' | 'single') => {
+    setLayoutMode(nextMode)
+    try {
+      window.localStorage.setItem(CABINET_LAYOUT_STORAGE_KEY, nextMode)
+    } catch {
+      // storage disabled
+    }
+  }, [])
+
+  const updateRoleOptionsCoords = useCallback(() => {
+    const triggerEl = roleOptionsTriggerRef.current
+    if (!triggerEl || typeof window === 'undefined') return
+    const rect = triggerEl.getBoundingClientRect()
+    const popoverWidth = 280
+    const idealLeft = rect.right - popoverWidth
+    const clampedLeft = Math.max(
+      12,
+      Math.min(idealLeft, window.innerWidth - popoverWidth - 12),
+    )
+    setRoleOptionsCoords({
+      top: rect.bottom + 6,
+      left: clampedLeft,
+    })
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!roleOptionsOpen) return
+    updateRoleOptionsCoords()
+  }, [roleOptionsOpen, updateRoleOptionsCoords])
+
+  useEffect(() => {
+    if (!roleOptionsOpen) return
+    const handlePointerDown = (mouseEvent: MouseEvent) => {
+      const targetNode = mouseEvent.target as Node | null
+      if (!targetNode) return
+      if (roleOptionsTriggerRef.current?.contains(targetNode)) return
+      if (roleOptionsPopoverRef.current?.contains(targetNode)) return
+      setRoleOptionsOpen(false)
+    }
+    const handleKeyDown = (keyEvent: KeyboardEvent) => {
+      if (keyEvent.key === 'Escape') {
+        keyEvent.stopPropagation()
+        setRoleOptionsOpen(false)
+        roleOptionsTriggerRef.current?.focus()
+      }
+    }
+    const handleReposition = () => updateRoleOptionsCoords()
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown, true)
+    window.addEventListener('resize', handleReposition)
+    window.addEventListener('scroll', handleReposition, true)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown, true)
+      window.removeEventListener('resize', handleReposition)
+      window.removeEventListener('scroll', handleReposition, true)
+    }
+  }, [roleOptionsOpen, updateRoleOptionsCoords])
 
   // Standalone global catalog queries OR fallback historicalCountries when synthetic country object omits them
   const needsModernCountryLookup =
@@ -911,8 +1062,10 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
     setSuggestedMinisters([])
     setCheckedMinisterIds([])
     setActiveDatePicker(null)
-    setActiveSection('period')
-    setShowMonarchicalRolePresets(false)
+    setModeGuideOpen(false)
+    setExtraDetailsExpanded(false)
+    setTenureNotesExpanded(false)
+    setRoleOptionsOpen(false)
     setShowQuickCreateParty(false)
     setQuickPartyName('')
     setQuickPartyShortName('')
@@ -1029,7 +1182,23 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
       setExistingTenureSearch('')
       setOriginEventId('')
       setAutoLinkRulingParty(false)
-      setActiveSection('period')
+      setModeGuideOpen(false)
+      setRoleOptionsOpen(false)
+      setExtraDetailsExpanded(
+        Boolean(
+          editingCabinet.description?.trim() ||
+            editingCabinet.headTenure?.appointmentMethod ||
+            editingCabinet.headTenure?.endReason ||
+            editingCabinet.headTenure?.notes?.trim() ||
+            editingCabinet.headTenure?.endReasonDetail?.trim(),
+        ),
+      )
+      setTenureNotesExpanded(
+        Boolean(
+          editingCabinet.headTenure?.notes?.trim() ||
+            editingCabinet.headTenure?.endReasonDetail?.trim(),
+        ),
+      )
 
       const headTenure = editingCabinet.headTenure
       const hasHeadTenure = Boolean(headTenure?.id)
@@ -1382,6 +1551,7 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
         initialOriginEventIdRef.current = originLink.eventId
         setOriginEventId(originLink.eventId)
         setInitialOriginEventTitle(linkedTitle)
+        setExtraDetailsExpanded(true)
         hydratedEditExtrasIdRef.current = targetEditId
       }
     }
@@ -1441,9 +1611,69 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
     return null
   }, [partyId, parties, selectedPersonMemberships, existingCabinetPartyLinks])
 
+  const politySelectOptions = useMemo<SearchableSelectOption[]>(() => {
+    if (polityOptions.length <= 1) return []
+    const historicalCount = Math.max(0, polityOptions.length - 1)
+    return polityOptions.map((polityItem, index) => {
+      const metaBits: string[] = []
+      if (polityItem.eraLabel) metaBits.push(polityItem.eraLabel)
+      if (polityItem.cabinetCount > 0) {
+        metaBits.push(`내각 ${polityItem.cabinetCount}건`)
+      }
+      return {
+        value: polityItem.id,
+        label: polityItem.name,
+        meta: metaBits.length > 0 ? metaBits.join(' · ') : undefined,
+        group:
+          index === 0
+            ? '기본 소속'
+            : `연결된 시대 · 역사 정치체 (${historicalCount})`,
+        icon: index === 0 ? <FiFlag size={13} /> : <FiBookmark size={13} />,
+        keywords: [polityItem.name, polityItem.eraLabel]
+          .filter(Boolean)
+          .join(' '),
+      }
+    })
+  }, [polityOptions])
+
+  const partySelectOptions = useMemo<SearchableSelectOption[]>(() => {
+    const result: SearchableSelectOption[] = []
+    if (fallbackSelectedPartyOption) {
+      result.push({
+        value: fallbackSelectedPartyOption.id,
+        label: formatPartyOptionLabel(fallbackSelectedPartyOption),
+        group: '현재 선택된 정당',
+      })
+    }
+    const hasBothGroups =
+      organizedPartyBuckets.recommendedParties.length > 0 &&
+      organizedPartyBuckets.otherParties.length > 0
+    for (const partyItem of organizedPartyBuckets.recommendedParties) {
+      result.push({
+        value: partyItem.id,
+        label: formatPartyOptionLabel(partyItem),
+        group: hasBothGroups ? '추천 · 해당 시대 정당' : undefined,
+        keywords: [partyItem.name, partyItem.shortName]
+          .filter(Boolean)
+          .join(' '),
+      })
+    }
+    for (const partyItem of organizedPartyBuckets.otherParties) {
+      result.push({
+        value: partyItem.id,
+        label: formatPartyOptionLabel(partyItem),
+        group: hasBothGroups ? '기타 · 상위 국가 및 타 시기 정당' : undefined,
+        keywords: [partyItem.name, partyItem.shortName]
+          .filter(Boolean)
+          .join(' '),
+      })
+    }
+    return result
+  }, [fallbackSelectedPartyOption, organizedPartyBuckets])
+
   const personCandidates = useMemo(() => {
     if (personQuery.trim().length > 0) {
-      return searchedPersons.map((personItem: PersonSearchItem) => {
+      return searchedPersons.slice(0, 8).map((personItem: PersonSearchItem) => {
         const matchedFull = mergedCountryPersons.find(
           (fullPerson) => fullPerson.id === personItem.id,
         )
@@ -1476,7 +1706,7 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
       return 0
     })
 
-    return ranked.slice(0, 16).map((personItem) => ({
+    return ranked.slice(0, 5).map((personItem) => ({
       id: personItem.id,
       label: getPersonDisplayName(personItem),
       subLabel:
@@ -1550,11 +1780,6 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
     [polityOptions, selectedPolityId, signedStartYear],
   )
 
-  const contemporaryRepublicNotice = useMemo(
-    () => resolveContemporaryRepublicNotice(polityOptions, selectedPolityId),
-    [polityOptions, selectedPolityId],
-  )
-
   // Combined role presets separated into standard executive vs monarchical direct-rule
   const { primaryRoleChips, monarchicalRoleChips } = useMemo(() => {
     const seenTitles = new Set<string>()
@@ -1624,6 +1849,38 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
       monarchicalRoleChips: monarchicalList,
     }
   }, [activePoliticalSystem, effectiveHeadPositionOptions])
+
+  const { visibleRoleChips, overflowRoleChips } = useMemo(() => {
+    const quickFive = primaryRoleChips.slice(0, 5)
+    const remainingPrimary = primaryRoleChips.slice(5)
+    const trimmedCurrent = roleTitle.trim()
+    const allOverflow = [...remainingPrimary, ...monarchicalRoleChips]
+    const activeOverflowItem = allOverflow.find(
+      (chipItem) => chipItem.title === trimmedCurrent,
+    )
+    return {
+      visibleRoleChips: activeOverflowItem
+        ? [...quickFive, activeOverflowItem]
+        : quickFive,
+      overflowRoleChips: remainingPrimary,
+    }
+  }, [primaryRoleChips, monarchicalRoleChips, roleTitle])
+
+  const filledExtraCount = useMemo(() => {
+    let count = 0
+    if (originEventId.trim()) count += 1
+    if (appointmentMethod.trim() || endReason.trim()) count += 1
+    if (notes.trim() || endReasonDetail.trim()) count += 1
+    if (cabinetDescription.trim()) count += 1
+    return count
+  }, [
+    originEventId,
+    appointmentMethod,
+    endReason,
+    notes,
+    endReasonDetail,
+    cabinetDescription,
+  ])
 
   const autoCabinetNamePreview = useMemo(() => {
     const personLabel =
@@ -1793,7 +2050,9 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
   }
 
   const jumpToSection = useCallback((sectionKey: ModalSectionKey) => {
-    setActiveSection(sectionKey)
+    if (sectionKey === 'extra') {
+      setExtraDetailsExpanded(true)
+    }
     const refMap: Record<ModalSectionKey, React.RefObject<HTMLElement | null>> =
       {
         period: periodSectionRef,
@@ -1801,7 +2060,9 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
         role: roleSectionRef,
         extra: extraSectionRef,
       }
-    refMap[sectionKey].current?.scrollIntoView({
+    const targetEl = refMap[sectionKey].current
+    if (!targetEl) return
+    targetEl.scrollIntoView?.({
       behavior: 'smooth',
       block: 'start',
     })
@@ -2454,7 +2715,7 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
           >[1] = {
             personId: selectedPersonId,
             positionType: resolvedPositionType,
-            positionDefinitionId: matchedDef?.id ?? null,
+            positionDefinitionId: matchedDef?.id ?? undefined,
             title: trimmedRoleTitle,
             countryId: resolvedPolityAxis.countryId ?? undefined,
             historicalCountryId:
@@ -2723,9 +2984,7 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
     ? '동시대 부처 장관을 각료진에 편입할까요?'
     : isEditing
       ? `${editingCabinet?.name?.trim() || autoCabinetNamePreview} 수정`
-      : resolvedPolityAxis.displayName
-        ? `${resolvedPolityAxis.displayName} 행정부 · 내각 등록`
-        : '행정부 · 내각 등록'
+      : '행정부 · 내각 등록'
 
   const hasMonarchicalContext =
     monarchicalRoleChips.length > 0 ||
@@ -2744,6 +3003,137 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
           ? 'year'
           : null
 
+  const activeEntryChoiceKey: CabinetEntryChoiceKey =
+    mode === 'collective'
+      ? 'collective'
+      : headActionMode === 'reshuffle_existing'
+        ? 'head_reshuffle'
+        : 'head_new'
+
+  const entryModeChipOptions = useMemo<
+    ChoiceChipOption<CabinetEntryChoiceKey>[]
+  >(
+    () => [
+      {
+        value: 'head_new',
+        label: '1인 수반 내각',
+        title: '총리·대통령 등 새 수반 임기와 내각을 함께 등록합니다',
+      },
+      {
+        value: 'head_reshuffle',
+        label:
+          effectiveExistingHeadTenures.length > 0
+            ? `임기 내 개각 추가 (${effectiveExistingHeadTenures.length})`
+            : '임기 내 개각 추가',
+        title: '기등록 수반 임기 안에서 제2차·개조·전시내각만 추가합니다',
+      },
+      {
+        value: 'collective',
+        label: '집단지도 · 위원회',
+        title: '1인 수반 없이 평의회·위원회가 공동 통치한 정부를 등록합니다',
+      },
+    ],
+    [effectiveExistingHeadTenures.length],
+  )
+
+  const activeModeGuide =
+    CABINET_MODE_GUIDE_LIST.find(
+      (guideItem) => guideItem.key === activeEntryChoiceKey,
+    ) ?? CABINET_MODE_GUIDE_LIST[0]
+
+  const selectEntryChoice = (nextChoice: CabinetEntryChoiceKey) => {
+    setErrorMessage(null)
+    if (nextChoice === 'collective') {
+      setMode('collective')
+      setSelectedExistingTenureId(null)
+      return
+    }
+    if (nextChoice === 'head_reshuffle') {
+      setMode('head')
+      setHeadActionMode('reshuffle_existing')
+      return
+    }
+    setMode('head')
+    setHeadActionMode('new_tenure')
+    setSelectedExistingTenureId(null)
+  }
+
+  const isSplitActive = !onboardingCabinetId && layoutMode === 'split'
+
+  const headerMoreToggles = useMemo<ModalMoreToggleOption[]>(() => {
+    const toggleList: ModalMoreToggleOption[] = []
+    if (!isEditing && canAutoClosePrev && previousCabinetBriefing) {
+      toggleList.push({
+        key: 'auto-close-prev',
+        label: '직전 현직 내각 자동 마감',
+        description: `${previousCabinetBriefing.cabinetTitle} 종료일을 출범일로 마감`,
+        checked: autoClosePreviousCabinet,
+        onChange: setAutoClosePreviousCabinet,
+      })
+    }
+    toggleList.push({
+      key: 'auto-link-party',
+      label: '소속 정당을 집권 여당으로 연결',
+      description: '정당 지정 시 내각 주도 여당에도 함께 반영',
+      checked: autoLinkRulingParty,
+      onChange: setAutoLinkRulingParty,
+    })
+    if (isEditing && editingCabinet?.headTenure?.id) {
+      toggleList.push({
+        key: 'sync-head-tenure',
+        label: '수반 전체 임기 기간도 함께 변경',
+        description: isReshuffleOrDistinctPeriodEdit
+          ? '개각 고유 기간만 수정할 때는 해제하세요'
+          : '해제하면 내각 고유 기간만 수정됩니다',
+        checked: syncPeriodToHeadTenure,
+        onChange: setSyncPeriodToHeadTenure,
+      })
+    }
+    return toggleList
+  }, [
+    isEditing,
+    canAutoClosePrev,
+    previousCabinetBriefing,
+    autoClosePreviousCabinet,
+    autoLinkRulingParty,
+    editingCabinet,
+    isReshuffleOrDistinctPeriodEdit,
+    syncPeriodToHeadTenure,
+  ])
+
+  const headerMoreActions = useMemo<ModalMoreActionOption[]>(() => {
+    const actionList: ModalMoreActionOption[] = []
+    if (!isEditing) {
+      actionList.push({
+        key: 'mode-guide',
+        label: modeGuideOpen
+          ? '등록 방식 기준 안내 닫기'
+          : '등록 방식 기준 안내',
+        icon: <FiHelpCircle size={14} />,
+        active: modeGuideOpen,
+        onClick: () => setModeGuideOpen((prevOpen) => !prevOpen),
+      })
+    }
+    if (!isEditing && isFormDirty && !saveCabinetMutation.isPending) {
+      actionList.push({
+        key: 'reset',
+        label: '작성 내용 초기화',
+        icon: <FiRefreshCw size={13.5} />,
+        danger: true,
+        onClick: () => {
+          void handleResetClick()
+        },
+      })
+    }
+    return actionList
+  }, [
+    isEditing,
+    modeGuideOpen,
+    isFormDirty,
+    saveCabinetMutation.isPending,
+    handleResetClick,
+  ])
+
   return (
     <RegisterModal
       isOpen={isOpen}
@@ -2751,54 +3141,37 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
         void requestClose()
       }}
       title={modalTitle}
-      maxWidth="min(860px, 96vw)"
-      minHeight="560px"
+      maxWidth={isSplitActive ? 'min(1180px, 95vw)' : 'min(720px, 95vw)'}
+      minHeight="auto"
       fullBleedOnMobile
+      closeOnEsc={
+        !saveCabinetMutation.isPending &&
+        activeDatePicker === null &&
+        !headerMoreMenuOpen &&
+        !roleOptionsOpen
+      }
       closeOnOverlayClick={false}
       headerActions={
         !onboardingCabinetId ? (
-          <HeaderActionsBar>
-            <SectionJumpNav aria-label="폼 섹션 이동">
-              <SectionJumpBtn
-                type="button"
-                $active={activeSection === 'period'}
-                onClick={() => jumpToSection('period')}
-              >
-                시기·시대
-              </SectionJumpBtn>
-              <SectionJumpBtn
-                type="button"
-                $active={activeSection === 'leader'}
-                onClick={() => jumpToSection('leader')}
-              >
-                정부형태·수반
-              </SectionJumpBtn>
-              <SectionJumpBtn
-                type="button"
-                $active={activeSection === 'role'}
-                onClick={() => jumpToSection('role')}
-              >
-                직책·내각명
-              </SectionJumpBtn>
-              <SectionJumpBtn
-                type="button"
-                $active={activeSection === 'extra'}
-                onClick={() => jumpToSection('extra')}
-              >
-                정당·사건·상세
-              </SectionJumpBtn>
-            </SectionJumpNav>
-            {!isEditing ? (
-              <HeaderResetBtn
-                type="button"
-                onClick={() => {
-                  void handleResetClick()
-                }}
-              >
-                초기화
-              </HeaderResetBtn>
+          <HeaderRightBar>
+            {resolvedPolityAxis.displayName ? (
+              <HeaderPolityBadge title="현재 등록 대상 국가 · 시대 정치체">
+                <FiFlag size={11.5} aria-hidden />
+                <span>{resolvedPolityAxis.displayName}</span>
+              </HeaderPolityBadge>
             ) : null}
-          </HeaderActionsBar>
+
+            <RegisterModalMoreMenu
+              layoutMode={layoutMode}
+              onChangeLayoutMode={applyLayoutMode}
+              toggles={headerMoreToggles}
+              actions={headerMoreActions}
+              ariaLabel="모달 설정 더보기"
+              title="화면 배치 · 자동 연결 설정 · 초기화"
+              hasActiveIndicator={modeGuideOpen}
+              onOpenChange={setHeaderMoreMenuOpen}
+            />
+          </HeaderRightBar>
         ) : undefined
       }
     >
@@ -2918,389 +3291,357 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
         </>
       ) : (
         <>
-          <PersonRegisterModalFormScroll ref={scrollContainerRef}>
+          <CabinetModalFormScroll
+            ref={scrollContainerRef}
+            $layoutMode={layoutMode}
+          >
+            {saveCabinetMutation.isPending && (
+              <KitBusyBar role="status" aria-live="polite">
+                {isEditing
+                  ? '수정 사항을 저장하는 중...'
+                  : '행정부 · 내각을 등록하는 중...'}
+              </KitBusyBar>
+            )}
+
             {errorMessage ? (
               <AlertBox
                 variant="danger"
                 icon={<FiAlertCircle />}
-                style={{ marginBottom: 18 }}
+                style={{ marginBottom: 16 }}
               >
                 {errorMessage}
               </AlertBox>
             ) : null}
 
-            {/* Top Beginner Guide Strip */}
-            <GuideIntroStrip>
-              <FiInfo size={14} />
-              <div style={{ flex: 1 }}>
-                <strong>무엇을 등록하나요?</strong> 정부·내각의{' '}
-                <strong>존속 기간</strong>과 이를 이끈{' '}
-                <strong>수반(총리·대통령 등)</strong> 또는{' '}
-                <strong>집단지도기구</strong>를 함께 등록합니다.
-                {hasMonarchicalContext
-                  ? ' (국왕·황제·섭정의 재위 자체는 군주·원수 재위에서 관리하며, 여기서는 내각을 이끈 총리·수반을 등록합니다.)'
-                  : ''}
-              </div>
-              {batchSavedCount > 0 ? (
-                <BatchProgressPill>
-                  연속 등록 중 · {batchSavedCount}건 완료
-                </BatchProgressPill>
-              ) : null}
-            </GuideIntroStrip>
-
             <LabeledRowsWrap>
-              {/* ═══════════════ STEP 1: 시기 · 시대 정치체 ═══════════════ */}
-              <FormGroup ref={periodSectionRef}>
-                <FormGroupTitle>1. 출범 시기 · 시대 정치체</FormGroupTitle>
+              <SplitColumnsGrid
+                $layoutMode={layoutMode}
+                data-testid={
+                  layoutMode === 'split' ? 'cabinet-form-split-grid' : undefined
+                }
+              >
+                <SplitColumnLeft
+                  id="cabinet-form-split-left"
+                  $layoutMode={layoutMode}
+                >
+                  {/* ═══════════════ 좌측: 출범 · 수반 ═══════════════ */}
+                  <FormGroup ref={periodSectionRef}>
+                    <FormGroupTitle>출범 · 수반</FormGroupTitle>
 
-                <FieldRow>
-                  <FieldLabel>
-                    존속 기간 <Required>*</Required>
-                  </FieldLabel>
-                  <FieldControl>
-                    {isEditing && editingCabinet?.headTenure?.id ? (
-                      <PeriodSyncCard $protected={!syncPeriodToHeadTenure}>
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={syncPeriodToHeadTenure}
-                            onChange={(changeEvent) =>
-                              setSyncPeriodToHeadTenure(
-                                changeEvent.target.checked,
-                              )
-                            }
+                    {isStandaloneCatalogMode ? (
+                      <FieldRow>
+                        <FieldLabel>
+                          소속 국가 · 정체 <Required>*</Required>
+                        </FieldLabel>
+                        <FieldControl>
+                          <SearchableSelect
+                            options={standaloneSelectOptions}
+                            value={standalonePolityValue}
+                            onChange={(nextVal) => {
+                              setStandalonePolityValue(nextVal)
+                              setSelectedPositionDefId(null)
+                              setSelectedExistingTenureId(null)
+                              setHeadActionMode('new_tenure')
+                            }}
+                            placeholder="국가 또는 역사적 정치체 검색…"
+                            searchPlaceholder="국가명·왕조명·공화국명 검색…"
+                            ariaLabel="소속 국가 및 정치체 선택"
                           />
-                          <span>
-                            수반 전체 임기(
-                            {editingCabinet.headTenure.startYear ?? '?'}~
-                            {editingCabinet.headTenure.endYear ?? '현직'})도 이
-                            기간과 함께 변경
-                          </span>
-                        </label>
-                        {isReshuffleOrDistinctPeriodEdit &&
-                        !syncPeriodToHeadTenure ? (
-                          <ProtectPill>
-                            개각 보호됨 · 내각 고유 기간만 수정
-                          </ProtectPill>
+                        </FieldControl>
+                      </FieldRow>
+                    ) : politySelectOptions.length > 0 ? (
+                      <FieldRow>
+                        <FieldLabel>시대 · 정치체</FieldLabel>
+                        <FieldControl>
+                          <SearchableSelect
+                            options={politySelectOptions}
+                            value={selectedPolityId}
+                            clearable={false}
+                            onChange={(nextPolityId) => {
+                              if (!nextPolityId) return
+                              setSelectedPolityId(nextPolityId)
+                              setSelectedPositionDefId(null)
+                              if (!isEditing) {
+                                setSelectedExistingTenureId(null)
+                                setHeadActionMode('new_tenure')
+                              }
+                            }}
+                            placeholder="시대 · 역사 정치체 선택"
+                            searchPlaceholder="왕조 · 공화국명 또는 존속 연도 검색…"
+                            ariaLabel="시대 및 정치체 선택"
+                            noMatchMessage="일치하는 시대·정치체가 없습니다"
+                          />
+
+                          {polityYearGuidance ? (
+                            <SmartSuggestionCard
+                              $tone={polityYearGuidance.severity}
+                            >
+                              <div className="guide-text">
+                                <FiInfo size={14} />
+                                <span>{polityYearGuidance.message}</span>
+                              </div>
+                              {polityYearGuidance.suggestedPolities.length >
+                              0 ? (
+                                <div className="guide-actions">
+                                  {polityYearGuidance.suggestedPolities.map(
+                                    (suggestedItem) => (
+                                      <QuickSwitchChip
+                                        key={suggestedItem.id}
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedPolityId(suggestedItem.id)
+                                          setSelectedPositionDefId(null)
+                                          if (!isEditing) {
+                                            setSelectedExistingTenureId(null)
+                                            setHeadActionMode('new_tenure')
+                                          }
+                                        }}
+                                      >
+                                        <span>
+                                          {suggestedItem.name}
+                                          {suggestedItem.eraLabel
+                                            ? ` (${suggestedItem.eraLabel})`
+                                            : ''}{' '}
+                                          선택
+                                        </span>
+                                        <FiArrowRight size={12} />
+                                      </QuickSwitchChip>
+                                    ),
+                                  )}
+                                </div>
+                              ) : null}
+                            </SmartSuggestionCard>
+                          ) : null}
+                        </FieldControl>
+                      </FieldRow>
+                    ) : null}
+
+                    <FieldRow>
+                      <FieldLabel>
+                        <div>
+                          존속 기간 <Required>*</Required>
+                        </div>
+                        {durationSummary ? (
+                          <DurationPill>
+                            <FiClock size={11} />
+                            <span>{durationSummary}</span>
+                          </DurationPill>
                         ) : null}
-                      </PeriodSyncCard>
-                    ) : canAutoClosePrev && previousCabinetBriefing ? (
-                      <PeriodSyncCard $protected={false}>
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={autoClosePreviousCabinet}
-                            onChange={(changeEvent) =>
-                              setAutoClosePreviousCabinet(
-                                changeEvent.target.checked,
-                              )
-                            }
-                          />
-                          <span>
-                            직전 현직 기록(
-                            <strong>
-                              {previousCabinetBriefing.cabinetTitle}
-                            </strong>
-                            )의 종료일도 이 출범일로 자동 마감
-                          </span>
-                        </label>
-                      </PeriodSyncCard>
-                    ) : null}
-
-                    <SubFieldPair $cols={2}>
-                      <SubField>
-                        <SubFieldLabel>
-                          출범 · 취임일 <Required>*</Required>
-                        </SubFieldLabel>
-                        <InlineDateField
-                          appearance="field"
-                          anchorId={startDateAnchorId}
-                          pickerOpen={activeDatePicker === 'start'}
-                          era={startEra}
-                          year={startYear}
-                          month={startMonth}
-                          day={startDay}
-                          onEra={setStartEra}
-                          onYear={setStartYear}
-                          onMonth={setStartMonth}
-                          onDay={setStartDay}
-                          onOpenPicker={() => setActiveDatePicker('start')}
-                          ariaLabel="출범 및 취임일"
-                        />
-                      </SubField>
-
-                      <SubField>
-                        <SubFieldHeaderRow>
-                          <SubFieldLabel>
-                            종료 · 퇴임일 <OptionalTag>(선택)</OptionalTag>
-                          </SubFieldLabel>
-                          {endYear || endMonth || endDay ? (
-                            <InlineClearLink
-                              type="button"
-                              onClick={() => {
-                                setEndEra('AD')
-                                setEndYear('')
-                                setEndMonth('')
-                                setEndDay('')
-                              }}
-                            >
-                              현직·존속 중으로 비우기
-                            </InlineClearLink>
-                          ) : null}
-                        </SubFieldHeaderRow>
-                        <InlineDateField
-                          appearance="field"
-                          anchorId={endDateAnchorId}
-                          pickerOpen={activeDatePicker === 'end'}
-                          era={endEra}
-                          year={endYear}
-                          month={endMonth}
-                          day={endDay}
-                          onEra={setEndEra}
-                          onYear={setEndYear}
-                          onMonth={setEndMonth}
-                          onDay={setEndDay}
-                          onOpenPicker={() => setActiveDatePicker('end')}
-                          error={isDateInverted}
-                          ariaLabel="종료 및 퇴임일"
-                        />
-                      </SubField>
-                    </SubFieldPair>
-
-                    <DateMetaFooterRow>
-                      <FieldHint>
-                        정확한 월·일을 모르면 <strong>연도만 입력</strong>해도
-                        저장되며, 종료일을 비워두면 현직(존속 중)으로
-                        기록됩니다.
-                      </FieldHint>
-                      {durationSummary ? (
-                        <DurationPill>
-                          <FiClock size={11} />
-                          <span>{durationSummary}</span>
-                        </DurationPill>
-                      ) : null}
-                    </DateMetaFooterRow>
-
-                    {isDateInverted ? (
-                      <AlertBox variant="danger" icon={<FiAlertCircle />}>
-                        종료 시점이 시작 시점보다 앞섭니다. 기원(서기/기원전)과
-                        연·월·일을 확인해주세요.
-                      </AlertBox>
-                    ) : reshuffleRangeWarning ? (
-                      <AlertBox variant="warning" icon={<FiAlertCircle />}>
-                        {reshuffleRangeWarning}
-                      </AlertBox>
-                    ) : null}
-                  </FieldControl>
-                </FieldRow>
-
-                {isStandaloneCatalogMode ? (
-                  <FieldRow>
-                    <FieldLabel>
-                      소속 국가 · 정체 <Required>*</Required>
-                    </FieldLabel>
-                    <FieldControl>
-                      <SearchableSelect
-                        options={standaloneSelectOptions}
-                        value={standalonePolityValue}
-                        onChange={(nextVal) => {
-                          setStandalonePolityValue(nextVal)
-                          setSelectedPositionDefId(null)
-                          setSelectedExistingTenureId(null)
-                          setHeadActionMode('new_tenure')
-                        }}
-                        placeholder="국가 또는 역사적 정치체 검색 (예: 헝가리, 헝가리 왕국, 대한민국, 영국...)"
-                        searchPlaceholder="국가명·왕조명·공화국명 검색..."
-                      />
-                      <FieldHint>
-                        현대 국가뿐 아니라 왕국·공화국 등 시대별 역사 정치체를
-                        직접 검색해 지정할 수 있습니다.
-                      </FieldHint>
-                    </FieldControl>
-                  </FieldRow>
-                ) : polityOptions.length > 1 ? (
-                  <FieldRow>
-                    <FieldLabel>시대 · 정치체</FieldLabel>
-                    <FieldControl>
-                      <PolityChipGrid>
-                        {polityOptions.map((polityItem) => {
-                          const isSelected = selectedPolityId === polityItem.id
-                          return (
-                            <PolityChipBtn
-                              key={polityItem.id}
-                              type="button"
-                              $active={isSelected}
-                              onClick={() => {
-                                setSelectedPolityId(polityItem.id)
-                                setSelectedPositionDefId(null)
-                                if (!isEditing) {
-                                  setSelectedExistingTenureId(null)
-                                  setHeadActionMode('new_tenure')
-                                }
-                              }}
-                            >
-                              <span>{polityItem.name}</span>
-                              {polityItem.eraLabel ? (
-                                <PolityEraSpan>
-                                  {polityItem.eraLabel}
-                                </PolityEraSpan>
+                      </FieldLabel>
+                      <FieldControl>
+                        <DateRangeGrid>
+                          <SubField>
+                            <SubFieldHeaderRow>
+                              <SubFieldLabel>
+                                출범 · 취임일 <Required>*</Required>
+                              </SubFieldLabel>
+                              {!isEditing &&
+                              !startYear.trim() &&
+                              previousCabinetBriefing?.continuationStartParts ? (
+                                <InlineClearLink
+                                  type="button"
+                                  onClick={() => {
+                                    const cont =
+                                      previousCabinetBriefing.continuationStartParts
+                                    if (!cont) return
+                                    setStartEra(cont.era)
+                                    setStartYear(cont.year)
+                                    setStartMonth(cont.month)
+                                    setStartDay(cont.day)
+                                  }}
+                                >
+                                  직전 종료일(
+                                  {
+                                    previousCabinetBriefing
+                                      .continuationStartParts.year
+                                  }
+                                  {previousCabinetBriefing
+                                    .continuationStartParts.month
+                                    ? `.${previousCabinetBriefing.continuationStartParts.month}`
+                                    : ''}
+                                  ) 적용
+                                </InlineClearLink>
                               ) : null}
-                              {polityItem.cabinetCount > 0 ? (
-                                <PolityCountBadge $active={isSelected}>
-                                  내각 {polityItem.cabinetCount}
-                                </PolityCountBadge>
-                              ) : null}
-                            </PolityChipBtn>
-                          )
-                        })}
-                      </PolityChipGrid>
+                            </SubFieldHeaderRow>
+                            <InlineDateField
+                              appearance="field"
+                              anchorId={startDateAnchorId}
+                              pickerOpen={activeDatePicker === 'start'}
+                              era={startEra}
+                              year={startYear}
+                              month={startMonth}
+                              day={startDay}
+                              onEra={setStartEra}
+                              onYear={setStartYear}
+                              onMonth={setStartMonth}
+                              onDay={setStartDay}
+                              onOpenPicker={() => setActiveDatePicker('start')}
+                              ariaLabel="출범 및 취임일"
+                            />
+                          </SubField>
 
-                      {polityYearGuidance ? (
-                        <SmartSuggestionCard
-                          $tone={polityYearGuidance.severity}
-                        >
-                          <div className="guide-text">
-                            <FiInfo size={14} />
-                            <span>{polityYearGuidance.message}</span>
-                          </div>
-                          {polityYearGuidance.suggestedPolities.length > 0 ? (
-                            <div className="guide-actions">
-                              {polityYearGuidance.suggestedPolities.map(
-                                (suggestedItem) => (
-                                  <QuickSwitchChip
-                                    key={suggestedItem.id}
+                          <SubField>
+                            <SubFieldHeaderRow>
+                              <SubFieldLabel>
+                                종료 · 퇴임일{' '}
+                                <OptionalTag>(비우면 현직)</OptionalTag>
+                              </SubFieldLabel>
+                              {endYear || endMonth || endDay ? (
+                                <InlineClearLink
+                                  type="button"
+                                  onClick={() => {
+                                    setEndEra('AD')
+                                    setEndYear('')
+                                    setEndMonth('')
+                                    setEndDay('')
+                                  }}
+                                >
+                                  비우기
+                                </InlineClearLink>
+                              ) : null}
+                            </SubFieldHeaderRow>
+                            <InlineDateField
+                              appearance="field"
+                              anchorId={endDateAnchorId}
+                              pickerOpen={activeDatePicker === 'end'}
+                              era={endEra}
+                              year={endYear}
+                              month={endMonth}
+                              day={endDay}
+                              onEra={setEndEra}
+                              onYear={setEndYear}
+                              onMonth={setEndMonth}
+                              onDay={setEndDay}
+                              onOpenPicker={() => setActiveDatePicker('end')}
+                              error={isDateInverted}
+                              ariaLabel="종료 및 퇴임일"
+                            />
+                          </SubField>
+                        </DateRangeGrid>
+
+                        {isDateInverted ? (
+                          <AlertBox variant="danger" icon={<FiAlertCircle />}>
+                            종료 시점이 시작 시점보다 앞섭니다. 기원(서기/기원전)과
+                            연·월·일을 확인해주세요.
+                          </AlertBox>
+                        ) : reshuffleRangeWarning ? (
+                          <AlertBox variant="warning" icon={<FiAlertCircle />}>
+                            {reshuffleRangeWarning}
+                          </AlertBox>
+                        ) : null}
+                      </FieldControl>
+                    </FieldRow>
+
+                    <span
+                      ref={leaderSectionRef as React.RefObject<HTMLSpanElement>}
+                      style={{ display: 'contents' }}
+                    />
+
+                    {!isEditing ? (
+                      <FieldRow>
+                        <FieldLabel>등록 방식</FieldLabel>
+                        <FieldControl>
+                          <EntryModeHeaderRow>
+                            <EntryChipsWrap>
+                              <ChoiceChips
+                                value={activeEntryChoiceKey}
+                                options={entryModeChipOptions}
+                                ariaLabel="내각 등록 방식 선택"
+                                onChange={(nextChoice) => {
+                                  if (!nextChoice) return
+                                  selectEntryChoice(nextChoice)
+                                }}
+                              />
+                            </EntryChipsWrap>
+
+                            <InlineMoreIconBtn
+                              type="button"
+                              $open={modeGuideOpen}
+                              aria-label="방식 기준 안내"
+                              aria-expanded={modeGuideOpen}
+                              title={
+                                modeGuideOpen
+                                  ? '등록 방식 비교 안내 닫기'
+                                  : '등록 방식 기준 · 대표 사례 비교 보기'
+                              }
+                              onClick={() =>
+                                setModeGuideOpen((prevOpen) => !prevOpen)
+                              }
+                            >
+                              <FiMoreHorizontal size={15} aria-hidden />
+                            </InlineMoreIconBtn>
+                          </EntryModeHeaderRow>
+
+                          <QuietModeCaption data-testid="active-cabinet-mode-callout">
+                            <strong>{activeModeGuide.label}</strong>
+                            <span className="sep" aria-hidden="true">
+                              ·
+                            </span>
+                            <span>{activeModeGuide.summary}</span>
+                          </QuietModeCaption>
+
+                          {modeGuideOpen ? (
+                            <ModeFullGuidePanel
+                              role="region"
+                              aria-label="내각 등록 방식 비교 안내"
+                            >
+                              <ModeGuideTopCaption>
+                                3가지 등록 방식 비교 — 항목을 클릭하면 바로
+                                선택됩니다
+                              </ModeGuideTopCaption>
+                              {CABINET_MODE_GUIDE_LIST.map((guideItem) => {
+                                const isSelected =
+                                  guideItem.key === activeEntryChoiceKey
+                                return (
+                                  <ModeGuideOptionBtn
+                                    key={guideItem.key}
                                     type="button"
-                                    onClick={() => {
-                                      setSelectedPolityId(suggestedItem.id)
-                                      setSelectedPositionDefId(null)
-                                      if (!isEditing) {
-                                        setSelectedExistingTenureId(null)
-                                        setHeadActionMode('new_tenure')
-                                      }
-                                    }}
+                                    $selected={isSelected}
+                                    onClick={() =>
+                                      selectEntryChoice(guideItem.key)
+                                    }
                                   >
-                                    <span>
-                                      {suggestedItem.name}
-                                      {suggestedItem.eraLabel
-                                        ? ` (${suggestedItem.eraLabel})`
-                                        : ''}{' '}
-                                      선택
+                                    <div className="guide-opt-head">
+                                      <span className="guide-opt-title">
+                                        {guideItem.icon}
+                                        <strong>{guideItem.label}</strong>
+                                        <span className="sub-badge">
+                                          {guideItem.shortBadge}
+                                        </span>
+                                      </span>
+                                      {isSelected ? (
+                                        <span className="selected-pill">
+                                          <FiCheck size={11} />
+                                          선택됨
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <span className="guide-opt-criteria">
+                                      {guideItem.criteria}
                                     </span>
-                                    <FiArrowRight size={12} />
-                                  </QuickSwitchChip>
-                                ),
-                              )}
-                            </div>
+                                    <span className="guide-opt-ex">
+                                      예: {guideItem.examples}
+                                    </span>
+                                  </ModeGuideOptionBtn>
+                                )
+                              })}
+                              <ModeBoundaryTip>
+                                <span className="tip-tag">재집권 vs 개각</span>
+                                <span>
+                                  퇴임 후 다시 취임한 경우는{' '}
+                                  <strong>1인 수반 내각</strong>을, 퇴임 없이
+                                  연속 재임 중 내각만 재편한 경우는{' '}
+                                  <strong>임기 내 개각 추가</strong>를 선택하세요.
+                                  {hasMonarchicalContext
+                                    ? ' (국왕·황제 재위 자체는 「국가원수·군주」 탭에서 등록)'
+                                    : ''}
+                                </span>
+                              </ModeBoundaryTip>
+                            </ModeFullGuidePanel>
                           ) : null}
-                        </SmartSuggestionCard>
-                      ) : contemporaryRepublicNotice ? (
-                        <SubtleNoticeRow>
-                          <span>{contemporaryRepublicNotice.message}</span>
-                          {contemporaryRepublicNotice.recommendedPolity ? (
-                            <InlineClearLink
-                              type="button"
-                              onClick={() => {
-                                const rec =
-                                  contemporaryRepublicNotice.recommendedPolity
-                                if (!rec) return
-                                setSelectedPolityId(rec.id)
-                                setSelectedPositionDefId(null)
-                              }}
-                            >
-                              {
-                                contemporaryRepublicNotice.recommendedPolity
-                                  .name
-                              }{' '}
-                              선택 →
-                            </InlineClearLink>
-                          ) : null}
-                        </SubtleNoticeRow>
-                      ) : (
-                        <FieldHint>
-                          연대순으로 정렬되어 있습니다. 위에서 출범 연도를 먼저
-                          입력하면 알맞은 시대를 자동으로 안내합니다.
-                        </FieldHint>
-                      )}
-                    </FieldControl>
-                  </FieldRow>
-                ) : null}
-              </FormGroup>
-
-              {/* ═══════════════ STEP 2: 정부 형태 · 수반 인물 ═══════════════ */}
-              <FormGroup ref={leaderSectionRef}>
-                <FormGroupTitle>2. 정부 형태 · 수반 지정</FormGroupTitle>
-
-                {!isEditing ? (
-                  <FieldRow>
-                    <FieldLabel>등록 방식</FieldLabel>
-                    <FieldControl>
-                      <ModeCardsGrid>
-                        <ModeCardButton
-                          type="button"
-                          $active={
-                            mode === 'head' && headActionMode === 'new_tenure'
-                          }
-                          onClick={() => {
-                            setMode('head')
-                            setHeadActionMode('new_tenure')
-                            setSelectedExistingTenureId(null)
-                            setErrorMessage(null)
-                          }}
-                        >
-                          <div className="card-top">
-                            <FiUser size={14} />
-                            <strong>총리·대통령 등 1인 수반 내각</strong>
-                          </div>
-                          <span className="card-desc">
-                            가장 일반적 · 새 취임, 재집권, 수반이 있는 임시정부
-                          </span>
-                        </ModeCardButton>
-
-                        <ModeCardButton
-                          type="button"
-                          $active={
-                            mode === 'head' &&
-                            headActionMode === 'reshuffle_existing'
-                          }
-                          onClick={() => {
-                            setMode('head')
-                            setHeadActionMode('reshuffle_existing')
-                            setErrorMessage(null)
-                          }}
-                        >
-                          <div className="card-top">
-                            <FiLayers size={14} />
-                            <strong>같은 임기 내 개각 추가</strong>
-                            <SmallBadge>
-                              {effectiveExistingHeadTenures.length}건
-                            </SmallBadge>
-                          </div>
-                          <span className="card-desc">
-                            기등록 수반 임기 안에서 제2차·개조·전시내각만 개설
-                          </span>
-                        </ModeCardButton>
-
-                        <ModeCardButton
-                          type="button"
-                          $active={mode === 'collective'}
-                          onClick={() => {
-                            setMode('collective')
-                            setSelectedExistingTenureId(null)
-                            setErrorMessage(null)
-                          }}
-                        >
-                          <div className="card-top">
-                            <FiUsers size={14} />
-                            <strong>수반 없는 위원회·평의회</strong>
-                          </div>
-                          <span className="card-desc">
-                            1인 수반 없이 기구가 공동 통치 (예: 혁명통치평의회)
-                          </span>
-                        </ModeCardButton>
-                      </ModeCardsGrid>
-                    </FieldControl>
-                  </FieldRow>
-                ) : null}
+                        </FieldControl>
+                      </FieldRow>
+                    ) : null}
 
                 {/* 2-A. Reshuffle Mode: Pick an Existing Head Tenure */}
                 {!isEditing &&
@@ -3548,12 +3889,12 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                                 placeholder="수반 인물 이름 검색 (성·이름·원어명)..."
                               />
                             </SearchInputWrap>
-                            <SmallGhostBtn
+                            <KitAddButton
                               type="button"
                               onClick={() => setShowQuickCreatePerson(true)}
                             >
-                              <FiPlus size={12} />새 인물 즉석 등록
-                            </SmallGhostBtn>
+                              <FiPlus size={13} />새 인물 즉석 등록
+                            </KitAddButton>
                           </PersonSearchBarRow>
 
                           <PersonChipWrap>
@@ -3696,632 +4037,653 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                     </FieldControl>
                   </FieldRow>
                 ) : null}
-              </FormGroup>
+                    {isEditing && mode === 'collective' ? (
+                      <FieldRow>
+                        <FieldLabel>정부 형태</FieldLabel>
+                        <FieldControl>
+                          <QuietModeCaption data-testid="active-cabinet-mode-callout">
+                            <strong>{activeModeGuide.label}</strong>
+                            <span className="sep" aria-hidden="true">
+                              ·
+                            </span>
+                            <span>{activeModeGuide.summary}</span>
+                          </QuietModeCaption>
+                        </FieldControl>
+                      </FieldRow>
+                    ) : null}
+                  </FormGroup>
+                </SplitColumnLeft>
 
-              {/* ═══════════════ STEP 3: 직책 · 대수 · 내각 명칭 ═══════════════ */}
-              <FormGroup ref={roleSectionRef}>
-                <FormGroupTitle>3. 수반 직책 · 대수 · 내각 명칭</FormGroupTitle>
+                <SplitColumnRight
+                  id="cabinet-form-split-right"
+                  $layoutMode={layoutMode}
+                >
+                  {/* ═══════════════ 우측: 직책 · 명칭 · 정당 ═══════════════ */}
+                  <FormGroup ref={roleSectionRef}>
+                    <FormGroupTitle>직책 · 명칭 · 정당</FormGroupTitle>
 
-                {/* Inline Previous Cabinet Briefing Bar */}
-                {!isEditing && previousCabinetBriefing ? (
-                  <PreviousCabinetBar>
-                    <div className="prev-info">
-                      <span className="prev-tag">이 시대의 최근 기록</span>
-                      <strong>{previousCabinetBriefing.cabinetTitle}</strong>
-                      <span className="prev-period">
-                        ({previousCabinetBriefing.periodText})
-                      </span>
-                    </div>
-                    <div className="prev-actions">
-                      {mode === 'head' &&
-                      headActionMode === 'new_tenure' &&
-                      previousCabinetBriefing.suggestedNextOrdinal != null &&
-                      ordinalInput.trim() !==
-                        String(previousCabinetBriefing.suggestedNextOrdinal) ? (
-                        <QuickFillBtn
-                          type="button"
-                          onClick={() =>
-                            setOrdinalInput(
-                              String(
-                                previousCabinetBriefing.suggestedNextOrdinal,
-                              ),
-                            )
-                          }
-                        >
-                          다음 대수(제
-                          {previousCabinetBriefing.suggestedNextOrdinal}대) 채우기
-                        </QuickFillBtn>
-                      ) : null}
-                      {previousCabinetBriefing.continuationStartParts &&
-                      !startYear.trim() ? (
-                        <QuickFillBtn
-                          type="button"
-                          onClick={() => {
-                            const cont =
-                              previousCabinetBriefing.continuationStartParts
-                            if (!cont) return
-                            setStartEra(cont.era)
-                            setStartYear(cont.year)
-                            setStartMonth(cont.month)
-                            setStartDay(cont.day)
-                          }}
-                        >
-                          직전 종료 시점({previousCabinetBriefing.continuationStartParts.year}
-                          {previousCabinetBriefing.continuationStartParts.month
-                            ? `.${previousCabinetBriefing.continuationStartParts.month}`
-                            : ''}
-                          )을 시작일로 채우기
-                        </QuickFillBtn>
-                      ) : null}
-                    </div>
-                  </PreviousCabinetBar>
-                ) : null}
-
-                {mode === 'head' &&
-                (isEditing || headActionMode === 'new_tenure') ? (
-                  <>
-                    <FieldRow>
-                      <FieldLabel>
-                        수반 직책 <Required>*</Required>
-                      </FieldLabel>
-                      <FieldControl>
-                        <PresetChipWrap>
-                          {primaryRoleChips.map((presetItem) => {
-                            const isChipActive =
-                              roleTitle.trim() === presetItem.title
-                            return (
-                              <RolePresetChip
-                                key={presetItem.title}
-                                type="button"
-                                $active={isChipActive}
-                                onClick={() => {
+                    {mode === 'head' &&
+                    (isEditing || headActionMode === 'new_tenure') ? (
+                      <>
+                        <FieldRow>
+                          <FieldLabel>
+                            수반 직책 <Required>*</Required>
+                          </FieldLabel>
+                          <FieldControl>
+                            <RoleInputBar>
+                              <Input
+                                value={roleTitle}
+                                onChange={(changeEvent) => {
                                   userTouchedRoleRef.current = true
-                                  setRoleTitle(presetItem.title)
+                                  const nextTitle = changeEvent.target.value
+                                  setRoleTitle(nextTitle)
+                                  setSelectedPositionDefId(null)
                                   setPositionTypeOverride(
-                                    presetItem.positionType,
-                                  )
-                                  setSelectedPositionDefId(
-                                    presetItem.positionDefId,
+                                    inferExecutivePositionType(nextTitle),
                                   )
                                 }}
+                                placeholder="예: 총리, 대통령, 국무총리, 내각총리대신"
+                              />
+                              <InlineMoreIconBtn
+                                ref={roleOptionsTriggerRef}
+                                type="button"
+                                $open={roleOptionsOpen}
+                                $tall
+                                aria-label="수반 직책 설정 더보기"
+                                aria-haspopup="dialog"
+                                aria-expanded={roleOptionsOpen}
+                                title="행정부 분류 및 추가 직책 프리셋"
+                                onClick={() =>
+                                  setRoleOptionsOpen((prevOpen) => !prevOpen)
+                                }
                               >
-                                {presetItem.title}
-                              </RolePresetChip>
-                            )
-                          })}
-                          {monarchicalRoleChips.length > 0 ? (
-                            <MonarchicalToggleChip
-                              type="button"
-                              onClick={() =>
-                                setShowMonarchicalRolePresets(
-                                  (prevVal) => !prevVal,
-                                )
-                              }
-                            >
-                              {showMonarchicalRolePresets
-                                ? '군주·섭정 친정 직위 접기'
-                                : '군주·섭정 직접 친정 직위 보기'}
-                            </MonarchicalToggleChip>
-                          ) : null}
-                        </PresetChipWrap>
+                                <FiMoreHorizontal size={16} aria-hidden />
+                              </InlineMoreIconBtn>
+                            </RoleInputBar>
 
-                        {showMonarchicalRolePresets &&
-                        monarchicalRoleChips.length > 0 ? (
-                          <PresetChipWrap>
-                            {monarchicalRoleChips.map((monarchChip) => {
-                              const isChipActive =
-                                roleTitle.trim() === monarchChip.title
-                              return (
-                                <RolePresetChip
-                                  key={monarchChip.title}
-                                  type="button"
-                                  $active={isChipActive}
-                                  onClick={() => {
-                                    userTouchedRoleRef.current = true
-                                    setRoleTitle(monarchChip.title)
-                                    setPositionTypeOverride(
-                                      monarchChip.positionType,
-                                    )
-                                    setSelectedPositionDefId(
-                                      monarchChip.positionDefId,
-                                    )
-                                  }}
-                                >
-                                  {monarchChip.title}
-                                </RolePresetChip>
-                              )
-                            })}
-                          </PresetChipWrap>
-                        ) : null}
+                            {visibleRoleChips.length > 0 ? (
+                              <PresetChipWrap>
+                                {visibleRoleChips.map((presetItem) => {
+                                  const isChipActive =
+                                    roleTitle.trim() === presetItem.title
+                                  return (
+                                    <RolePresetChip
+                                      key={presetItem.title}
+                                      type="button"
+                                      $active={isChipActive}
+                                      onClick={() => {
+                                        userTouchedRoleRef.current = true
+                                        setRoleTitle(presetItem.title)
+                                        setPositionTypeOverride(
+                                          presetItem.positionType,
+                                        )
+                                        setSelectedPositionDefId(
+                                          presetItem.positionDefId,
+                                        )
+                                      }}
+                                    >
+                                      {presetItem.title}
+                                    </RolePresetChip>
+                                  )
+                                })}
+                              </PresetChipWrap>
+                            ) : null}
+                          </FieldControl>
+                        </FieldRow>
 
+                        <FieldRow>
+                          <FieldLabel>
+                            대수 · 회차 <OptionalTag>(선택)</OptionalTag>
+                          </FieldLabel>
+                          <FieldControl>
+                            <SubFieldPair $cols={2}>
+                              <SubField>
+                                <SubFieldHeaderRow>
+                                  <SubFieldLabel>역대 대수</SubFieldLabel>
+                                  {!isEditing &&
+                                  previousCabinetBriefing?.suggestedNextOrdinal !=
+                                    null &&
+                                  ordinalInput.trim() !==
+                                    String(
+                                      previousCabinetBriefing.suggestedNextOrdinal,
+                                    ) ? (
+                                    <InlineClearLink
+                                      type="button"
+                                      onClick={() =>
+                                        setOrdinalInput(
+                                          String(
+                                            previousCabinetBriefing.suggestedNextOrdinal,
+                                          ),
+                                        )
+                                      }
+                                    >
+                                      제
+                                      {
+                                        previousCabinetBriefing.suggestedNextOrdinal
+                                      }
+                                      대 적용
+                                    </InlineClearLink>
+                                  ) : null}
+                                </SubFieldHeaderRow>
+                                <AdornedNumberBox>
+                                  <span className="prefix">제</span>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    value={ordinalInput}
+                                    onChange={(changeEvent) =>
+                                      setOrdinalInput(changeEvent.target.value)
+                                    }
+                                    placeholder="번호"
+                                  />
+                                  <span className="suffix">대</span>
+                                </AdornedNumberBox>
+                              </SubField>
+
+                              <SubField>
+                                <SubFieldLabel>재집권 회차</SubFieldLabel>
+                                <AdornedNumberBox>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    value={subTermInput}
+                                    onChange={(changeEvent) =>
+                                      setSubTermInput(changeEvent.target.value)
+                                    }
+                                    placeholder="1, 2"
+                                  />
+                                  <span className="suffix">기</span>
+                                </AdornedNumberBox>
+                              </SubField>
+                            </SubFieldPair>
+                          </FieldControl>
+                        </FieldRow>
+                      </>
+                    ) : null}
+
+                    <FieldRow>
+                      <FieldLabel>
+                        {mode === 'collective' ? (
+                          <>
+                            기구 · 정부 명칭 <Required>*</Required>
+                          </>
+                        ) : !isEditing &&
+                          headActionMode === 'reshuffle_existing' &&
+                          (selectedExistingTenure?._existingCabinetCount ?? 0) >
+                            0 ? (
+                          <>
+                            개각 명칭 <Required>*</Required>
+                          </>
+                        ) : (
+                          <>
+                            내각 명칭 <OptionalTag>(선택)</OptionalTag>
+                          </>
+                        )}
+                      </FieldLabel>
+                      <FieldControl>
                         <Input
-                          value={roleTitle}
-                          onChange={(changeEvent) => {
-                            userTouchedRoleRef.current = true
-                            const nextTitle = changeEvent.target.value
-                            setRoleTitle(nextTitle)
-                            setSelectedPositionDefId(null)
-                            setPositionTypeOverride(
-                              inferExecutivePositionType(nextTitle),
-                            )
-                          }}
-                          placeholder="직책명 직접 입력 가능 (예: 총리, 각료평의회 의장, 국민지도자, 내각총리대신)"
+                          value={cabinetName}
+                          onChange={(changeEvent) =>
+                            setCabinetName(changeEvent.target.value)
+                          }
+                          placeholder={
+                            mode === 'collective'
+                              ? '예: 혁명통치평의회, 공안위원회, 스위스 연방평의회'
+                              : headActionMode === 'reshuffle_existing'
+                                ? '예: 제2차 개조내각, 전시연립내각, 거국내각'
+                                : `비워두면 "${autoCabinetNamePreview}"(으)로 자동 생성`
+                          }
                         />
-
-                        <RoleClassificationRow>
-                          <span className="regime-note">
-                            {activePoliticalSystem?.governmentForm
-                              ? `시대 정체: ${GOVERNMENT_FORM_LABEL[activePoliticalSystem.governmentForm]}`
-                              : (smartRoleDefault.reasonHint ??
-                                '직책명에 맞춰 내각/행정부 분류가 자동 설정됩니다.')}
-                          </span>
-                          <BranchPillGroup>
-                            <BranchPillBtn
-                              type="button"
-                              $active={
-                                positionTypeOverride === 'HEAD_OF_GOVERNMENT'
-                              }
-                              onClick={() =>
-                                setPositionTypeOverride('HEAD_OF_GOVERNMENT')
-                              }
-                            >
-                              정부수반 (총리·내각)
-                            </BranchPillBtn>
-                            <BranchPillBtn
-                              type="button"
-                              $active={positionTypeOverride === 'HEAD_OF_STATE'}
-                              onClick={() =>
-                                setPositionTypeOverride('HEAD_OF_STATE')
-                              }
-                            >
-                              국가원수 (대통령·행정부)
-                            </BranchPillBtn>
-                          </BranchPillGroup>
-                        </RoleClassificationRow>
                       </FieldControl>
                     </FieldRow>
 
                     <FieldRow>
                       <FieldLabel>
-                        대수 · 회차 <OptionalTag>(선택)</OptionalTag>
+                        집권 정당 <OptionalTag>(선택)</OptionalTag>
                       </FieldLabel>
                       <FieldControl>
-                        <SubFieldPair $cols={2}>
-                          <SubField>
-                            <SubFieldHeaderRow>
-                              <SubFieldLabel>역대 대수 (제 N 대)</SubFieldLabel>
-                              {!isEditing &&
-                              previousCabinetBriefing?.suggestedNextOrdinal !=
-                                null &&
-                              ordinalInput.trim() !==
-                                String(
-                                  previousCabinetBriefing.suggestedNextOrdinal,
-                                ) ? (
-                                <InlineClearLink
-                                  type="button"
-                                  onClick={() =>
-                                    setOrdinalInput(
-                                      String(
-                                        previousCabinetBriefing.suggestedNextOrdinal,
-                                      ),
+                        {showQuickCreateParty ? (
+                          <QuickPersonCard>
+                            <QuickCardTopBar>
+                              <strong>새 정당 즉석 등록</strong>
+                              <InlineClearLink
+                                type="button"
+                                onClick={() => setShowQuickCreateParty(false)}
+                              >
+                                목록으로 돌아가기
+                              </InlineClearLink>
+                            </QuickCardTopBar>
+
+                            {resolvedPolityAxis.historicalCountryId &&
+                            resolvedPolityAxis.countryId ? (
+                              <NameOrderBar>
+                                <span className="order-label">소속 범위</span>
+                                <NameOrderSegment>
+                                  <NameOrderBtn
+                                    type="button"
+                                    $active={quickPartyScope === 'active'}
+                                    onClick={() => setQuickPartyScope('active')}
+                                  >
+                                    {resolvedPolityAxis.displayName ||
+                                      '현재 시대 정체'}
+                                  </NameOrderBtn>
+                                  <NameOrderBtn
+                                    type="button"
+                                    $active={quickPartyScope === 'modern'}
+                                    onClick={() => setQuickPartyScope('modern')}
+                                  >
+                                    상위 현대국가 ({country?.name ?? '현대 국가'})
+                                  </NameOrderBtn>
+                                </NameOrderSegment>
+                              </NameOrderBar>
+                            ) : null}
+
+                            <SubFieldPair $cols={2}>
+                              <SubField>
+                                <SubFieldLabel>
+                                  정당명 <Required>*</Required>
+                                </SubFieldLabel>
+                                <Input
+                                  value={quickPartyName}
+                                  onChange={(changeEvent) =>
+                                    setQuickPartyName(changeEvent.target.value)
+                                  }
+                                  placeholder="예: 자유당, 피데스"
+                                />
+                              </SubField>
+                              <SubField>
+                                <SubFieldLabel>
+                                  약칭 <OptionalTag>(선택)</OptionalTag>
+                                </SubFieldLabel>
+                                <Input
+                                  value={quickPartyShortName}
+                                  onChange={(changeEvent) =>
+                                    setQuickPartyShortName(
+                                      changeEvent.target.value,
                                     )
                                   }
-                                >
-                                  제{previousCabinetBriefing.suggestedNextOrdinal}
-                                  대 적용
-                                </InlineClearLink>
-                              ) : null}
-                            </SubFieldHeaderRow>
-                            <AdornedNumberBox>
-                              <span className="prefix">제</span>
-                              <input
-                                type="number"
-                                min={1}
-                                value={ordinalInput}
-                                onChange={(changeEvent) =>
-                                  setOrdinalInput(changeEvent.target.value)
-                                }
-                                placeholder="예: 15"
-                              />
-                              <span className="suffix">대</span>
-                            </AdornedNumberBox>
-                            <FieldHint>
-                              역대 몇 번째 수반인지 입력 (모르면 비워도 됩니다)
-                            </FieldHint>
-                          </SubField>
+                                  placeholder="예: Fidesz"
+                                />
+                              </SubField>
+                            </SubFieldPair>
 
-                          <SubField>
-                            <SubFieldLabel>
-                              동일 인물 회차 (N 기)
-                            </SubFieldLabel>
-                            <AdornedNumberBox>
-                              <input
-                                type="number"
-                                min={1}
-                                value={subTermInput}
-                                onChange={(changeEvent) =>
-                                  setSubTermInput(changeEvent.target.value)
+                            <div
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'flex-end',
+                              }}
+                            >
+                              <QuickCreateBtn
+                                type="button"
+                                disabled={quickCreatePartyMutation.isPending}
+                                onClick={() =>
+                                  quickCreatePartyMutation.mutate()
                                 }
-                                placeholder="예: 1, 2"
-                              />
-                              <span className="suffix">기</span>
-                            </AdornedNumberBox>
-                            <FieldHint>
-                              재집권 시 같은 대수를 유지하는 나라(헝가리 등)에서
-                              1기·2기 구분용
-                            </FieldHint>
-                          </SubField>
-                        </SubFieldPair>
+                              >
+                                {quickCreatePartyMutation.isPending
+                                  ? '생성 중...'
+                                  : '정당 생성 후 선택'}
+                              </QuickCreateBtn>
+                            </div>
+                          </QuickPersonCard>
+                        ) : (
+                          <PartySelectRow>
+                            <SearchableSelect
+                              options={partySelectOptions}
+                              value={partyId}
+                              onChange={(nextPartyVal) => {
+                                userTouchedPartyRef.current = true
+                                setAutoSuggestedPartyLabel(null)
+                                setPartyId(nextPartyVal)
+                                if (nextPartyVal && !isEditing) {
+                                  setAutoLinkRulingParty(true)
+                                }
+                              }}
+                              placeholder="무소속 / 정당 미지정"
+                              searchPlaceholder="정당명 또는 약칭 검색…"
+                              ariaLabel="집권 · 소속 정당 선택"
+                              emptyMessage="등록된 정당이 없습니다"
+                              noMatchMessage="일치하는 정당이 없습니다"
+                            />
+                            <KitAddButton
+                              type="button"
+                              onClick={() => setShowQuickCreateParty(true)}
+                            >
+                              <FiPlus size={13} />새 정당
+                            </KitAddButton>
+                          </PartySelectRow>
+                        )}
+
+                        {autoSuggestedPartyLabel && partyId ? (
+                          <FieldHint>
+                            수반 당적(<strong>{autoSuggestedPartyLabel}</strong>
+                            )에서 자동 선택됨
+                          </FieldHint>
+                        ) : null}
                       </FieldControl>
                     </FieldRow>
-                  </>
-                ) : null}
+                  </FormGroup>
 
-                <FieldRow>
-                  <FieldLabel>
-                    {mode === 'collective' ? (
-                      <>
-                        기구 · 정부 명칭 <Required>*</Required>
-                      </>
-                    ) : !isEditing &&
-                      headActionMode === 'reshuffle_existing' &&
-                      (selectedExistingTenure?._existingCabinetCount ?? 0) >
-                        0 ? (
-                      <>
-                        개각 명칭 <Required>*</Required>
-                      </>
-                    ) : (
-                      <>
-                        내각 명칭 <OptionalTag>(선택)</OptionalTag>
-                      </>
-                    )}
-                  </FieldLabel>
-                  <FieldControl>
-                    <Input
-                      value={cabinetName}
-                      onChange={(changeEvent) =>
-                        setCabinetName(changeEvent.target.value)
+                  {/* ═══════════════ 우측 하단: 선택 상세 접기/펼치기 ═══════════════ */}
+                  <ExtraDetailsWrap
+                    ref={extraSectionRef as React.RefObject<HTMLDivElement>}
+                  >
+                    <ExtraDetailsToggleBtn
+                      type="button"
+                      $expanded={extraDetailsExpanded}
+                      aria-expanded={extraDetailsExpanded}
+                      onClick={() =>
+                        setExtraDetailsExpanded((prevExpanded) => !prevExpanded)
                       }
-                      placeholder={
-                        mode === 'collective'
-                          ? '예: 혁명통치평의회, 공안위원회, 스위스 연방평의회, 대한민국 임시정부 국무원'
-                          : headActionMode === 'reshuffle_existing'
-                            ? '예: 제2차 개조내각, 전시연립내각, 거국내각'
-                            : `비워두면 "${autoCabinetNamePreview}"(으)로 자동 생성됩니다`
-                      }
-                    />
-                    {mode === 'head' && !cabinetName.trim() ? (
-                      <AutoNamePreviewBar>
-                        자동 생성 미리보기:{' '}
-                        <strong>{autoCabinetNamePreview}</strong>
-                      </AutoNamePreviewBar>
-                    ) : null}
+                    >
+                      <div className="toggle-left">
+                        <strong>
+                          {extraDetailsExpanded
+                            ? '추가 정보 접기'
+                            : '추가 정보 입력'}
+                        </strong>
+                        <span className="toggle-sub">
+                          출범 사건 · 취임/퇴임 경위 · 내각 개요
+                        </span>
+                      </div>
+                      <div className="toggle-right">
+                        {filledExtraCount > 0 ? (
+                          <ExtraFilledBadge>
+                            {filledExtraCount}건 입력됨
+                          </ExtraFilledBadge>
+                        ) : null}
+                        {extraDetailsExpanded ? (
+                          <FiChevronUp size={15} aria-hidden />
+                        ) : (
+                          <FiChevronDown size={15} aria-hidden />
+                        )}
+                      </div>
+                    </ExtraDetailsToggleBtn>
 
-                    <SubField style={{ marginTop: 4 }}>
-                      <SubFieldLabel>
-                        내각 개요 · 출범 기조 <OptionalTag>(선택)</OptionalTag>
-                      </SubFieldLabel>
-                      <PersonRegisterModalTextarea
-                        rows={2}
-                        style={{ minHeight: 68 }}
-                        value={cabinetDescription}
-                        onChange={(changeEvent) =>
-                          setCabinetDescription(changeEvent.target.value)
-                        }
-                        placeholder="예: 오스트리아-헝가리 이중제국 시기 작업당 단독 내각, 1956년 혁명 직후 다당제 연립내각 등"
-                      />
-                    </SubField>
-                  </FieldControl>
-                </FieldRow>
-              </FormGroup>
+                    {extraDetailsExpanded ? (
+                      <ExtraDetailsBody>
+                        <FieldRow>
+                          <FieldLabel>출범 사건</FieldLabel>
+                          <FieldControl>
+                            <LinkedEventPickerField
+                              value={originEventId}
+                              initialTitle={initialOriginEventTitle}
+                              nearYear={signedStartYear}
+                              onChange={(nextEventId) => {
+                                userTouchedOriginEventRef.current = true
+                                setOriginEventId(nextEventId)
+                              }}
+                            />
+                          </FieldControl>
+                        </FieldRow>
 
-              {/* ═══════════════ STEP 4: 정당 · 계기 사건 · 상세 ═══════════════ */}
-              <FormGroup ref={extraSectionRef}>
-                <FormGroupTitle>
-                  4. 집권 정당 · 계기 사건 · 취임/퇴임 상세 (선택)
-                </FormGroupTitle>
+                        {mode === 'head' &&
+                        (isEditing || headActionMode === 'new_tenure') ? (
+                          <FieldRow>
+                            <FieldLabel>취임 · 퇴임</FieldLabel>
+                            <FieldControl>
+                              <SubFieldPair $cols={2}>
+                                <SubField>
+                                  <SubFieldLabel>취임 방식</SubFieldLabel>
+                                  <NativeSelect
+                                    value={appointmentMethod}
+                                    onChange={(changeEvent) =>
+                                      setAppointmentMethod(
+                                        changeEvent.target.value,
+                                      )
+                                    }
+                                  >
+                                    <option value="">선택 안 함</option>
+                                    <option value="PARLIAMENTARY_ELECTION">
+                                      의회 선출 (내각책임제 등)
+                                    </option>
+                                    <option value="APPOINTMENT">
+                                      군주 · 국가원수 임명
+                                    </option>
+                                    <option value="DIRECT_ELECTION">
+                                      직접 선거
+                                    </option>
+                                    <option value="INDIRECT_ELECTION">
+                                      간접 선거
+                                    </option>
+                                    <option value="COUP">쿠데타 · 혁명</option>
+                                    <option value="RESTORATION">
+                                      복위 · 재추대
+                                    </option>
+                                    <option value="HEREDITARY">세습</option>
+                                    <option value="ELECTIVE_MONARCHY">
+                                      선거군주제 선출
+                                    </option>
+                                    <option value="TREATY">
+                                      조약에 의한 취임
+                                    </option>
+                                    <option value="CONQUEST">정복</option>
+                                    <option value="OTHER">기타</option>
+                                  </NativeSelect>
+                                </SubField>
 
-                <FieldRow>
-                  <FieldLabel>
-                    집권 · 소속 정당 <OptionalTag>(선택)</OptionalTag>
-                  </FieldLabel>
-                  <FieldControl>
-                    {showQuickCreateParty ? (
-                      <QuickPersonCard>
-                        <QuickCardTopBar>
-                          <strong>새 정당 즉석 등록 후 선택</strong>
-                          <InlineClearLink
-                            type="button"
-                            onClick={() => setShowQuickCreateParty(false)}
-                          >
-                            기존 정당 목록으로 돌아가기
-                          </InlineClearLink>
-                        </QuickCardTopBar>
+                                <SubField>
+                                  <SubFieldLabel>퇴임 사유</SubFieldLabel>
+                                  <NativeSelect
+                                    value={endReason}
+                                    onChange={(changeEvent) =>
+                                      setEndReason(changeEvent.target.value)
+                                    }
+                                  >
+                                    <option value="">선택 안 함</option>
+                                    <option value="RESIGNATION">
+                                      사임 · 내각 총사퇴 · 불신임
+                                    </option>
+                                    <option value="TERM_COMPLETED">
+                                      임기 만료
+                                    </option>
+                                    <option value="REMOVAL">해임 · 면직</option>
+                                    <option value="IMPEACHMENT">
+                                      탄핵 · 파면
+                                    </option>
+                                    <option value="DEATH_IN_OFFICE">
+                                      재임 중 사망 · 피살
+                                    </option>
+                                    <option value="OVERTHROWN">
+                                      쿠데타 · 혁명 축출
+                                    </option>
+                                    <option value="WAR_DEFEAT">전쟁 패배</option>
+                                    <option value="STATE_DISSOLVED">
+                                      국가 소멸 · 체제 전환
+                                    </option>
+                                    <option value="ABDICATION">자진 퇴위</option>
+                                    <option value="SUCCESSION_TRANSFER">
+                                      양위 · 선위
+                                    </option>
+                                    <option value="OTHER">기타</option>
+                                  </NativeSelect>
+                                </SubField>
+                              </SubFieldPair>
 
-                        {resolvedPolityAxis.historicalCountryId &&
-                        resolvedPolityAxis.countryId ? (
-                          <NameOrderBar>
-                            <span className="order-label">소속 국가 범위</span>
-                            <NameOrderSegment>
-                              <NameOrderBtn
-                                type="button"
-                                $active={quickPartyScope === 'active'}
-                                onClick={() => setQuickPartyScope('active')}
-                              >
-                                {resolvedPolityAxis.displayName || '현재 시대 정체'}
-                              </NameOrderBtn>
-                              <NameOrderBtn
-                                type="button"
-                                $active={quickPartyScope === 'modern'}
-                                onClick={() => setQuickPartyScope('modern')}
-                              >
-                                상위 현대국가 ({country?.name ?? '현대 국가'})
-                              </NameOrderBtn>
-                            </NameOrderSegment>
-                          </NameOrderBar>
+                              {tenureNotesExpanded ||
+                              Boolean(notes.trim() || endReasonDetail.trim()) ? (
+                                <SubFieldPair $cols={2}>
+                                  <SubField>
+                                    <SubFieldLabel>취임 배경 메모</SubFieldLabel>
+                                    <Input
+                                      value={notes}
+                                      onChange={(changeEvent) =>
+                                        setNotes(changeEvent.target.value)
+                                      }
+                                      placeholder="예: 거국연립내각 구성 배경"
+                                    />
+                                  </SubField>
+                                  <SubField>
+                                    <SubFieldLabel>퇴임 상세 사유</SubFieldLabel>
+                                    <Input
+                                      value={endReasonDetail}
+                                      onChange={(changeEvent) =>
+                                        setEndReasonDetail(
+                                          changeEvent.target.value,
+                                        )
+                                      }
+                                      placeholder="예: 의회 불신임 가결"
+                                    />
+                                  </SubField>
+                                </SubFieldPair>
+                              ) : (
+                                <SubtleExpandNotesBtn
+                                  type="button"
+                                  onClick={() => setTenureNotesExpanded(true)}
+                                >
+                                  + 배경 · 상세 사유 메모 입력
+                                </SubtleExpandNotesBtn>
+                              )}
+                            </FieldControl>
+                          </FieldRow>
                         ) : null}
 
-                        <SubFieldPair $cols={2}>
-                          <SubField>
-                            <SubFieldLabel>
-                              정당명 <Required>*</Required>
-                            </SubFieldLabel>
-                            <Input
-                              value={quickPartyName}
+                        <FieldRow>
+                          <FieldLabel>내각 개요</FieldLabel>
+                          <FieldControl>
+                            <PersonRegisterModalTextarea
+                              rows={2}
+                              style={{ minHeight: 64 }}
+                              value={cabinetDescription}
                               onChange={(changeEvent) =>
-                                setQuickPartyName(changeEvent.target.value)
+                                setCabinetDescription(changeEvent.target.value)
                               }
-                              placeholder="예: 자유당, 작업당, 피데스(Fidesz)"
+                              placeholder="출범 기조나 연립 구성 등 간단한 설명 (선택)"
                             />
-                          </SubField>
-                          <SubField>
-                            <SubFieldLabel>
-                              약칭 <OptionalTag>(선택)</OptionalTag>
-                            </SubFieldLabel>
-                            <Input
-                              value={quickPartyShortName}
-                              onChange={(changeEvent) =>
-                                setQuickPartyShortName(changeEvent.target.value)
-                              }
-                              placeholder="예: 자유당, Fidesz"
-                            />
-                          </SubField>
-                        </SubFieldPair>
-
-                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                          <QuickCreateBtn
-                            type="button"
-                            disabled={quickCreatePartyMutation.isPending}
-                            onClick={() => quickCreatePartyMutation.mutate()}
-                          >
-                            {quickCreatePartyMutation.isPending
-                              ? '생성 중...'
-                              : '정당 생성 후 선택'}
-                          </QuickCreateBtn>
-                        </div>
-                      </QuickPersonCard>
-                    ) : (
-                      <PartySelectRow>
-                        <NativeSelect
-                          value={partyId}
-                          onChange={(changeEvent) => {
-                            const nextPartyVal = changeEvent.target.value
-                            userTouchedPartyRef.current = true
-                            setAutoSuggestedPartyLabel(null)
-                            setPartyId(nextPartyVal)
-                            if (nextPartyVal && !isEditing) {
-                              setAutoLinkRulingParty(true)
-                            }
-                          }}
-                        >
-                          <option value="">무소속 / 정당 미지정</option>
-                          {fallbackSelectedPartyOption ? (
-                            <option value={fallbackSelectedPartyOption.id}>
-                              {formatPartyOptionLabel(
-                                fallbackSelectedPartyOption,
-                              )}
-                            </option>
-                          ) : null}
-                          {organizedPartyBuckets.recommendedParties.length > 0 &&
-                          organizedPartyBuckets.otherParties.length > 0 ? (
-                            <>
-                              <optgroup label="추천 · 해당 시대 정당">
-                                {organizedPartyBuckets.recommendedParties.map(
-                                  (partyItem) => (
-                                    <option
-                                      key={partyItem.id}
-                                      value={partyItem.id}
-                                    >
-                                      {formatPartyOptionLabel(partyItem)}
-                                    </option>
-                                  ),
-                                )}
-                              </optgroup>
-                              <optgroup label="기타 · 상위 국가 및 타 시기 정당">
-                                {organizedPartyBuckets.otherParties.map(
-                                  (partyItem) => (
-                                    <option
-                                      key={partyItem.id}
-                                      value={partyItem.id}
-                                    >
-                                      {formatPartyOptionLabel(partyItem)}
-                                    </option>
-                                  ),
-                                )}
-                              </optgroup>
-                            </>
-                          ) : (
-                            [
-                              ...organizedPartyBuckets.recommendedParties,
-                              ...organizedPartyBuckets.otherParties,
-                            ].map((partyItem) => (
-                              <option key={partyItem.id} value={partyItem.id}>
-                                {formatPartyOptionLabel(partyItem)}
-                              </option>
-                            ))
-                          )}
-                        </NativeSelect>
-                        <SmallGhostBtn
-                          type="button"
-                          onClick={() => setShowQuickCreateParty(true)}
-                        >
-                          <FiPlus size={12} />새 정당 즉석 등록
-                        </SmallGhostBtn>
-                      </PartySelectRow>
-                    )}
-
-                    {autoSuggestedPartyLabel && partyId ? (
-                      <FieldHint>
-                        선택한 수반의 당적 이력(
-                        <strong>{autoSuggestedPartyLabel}</strong>)에서 자동
-                        선택되었습니다.
-                      </FieldHint>
+                          </FieldControl>
+                        </FieldRow>
+                      </ExtraDetailsBody>
                     ) : null}
-
-                    {partyId ? (
-                      <InlineCheckRow>
-                        <input
-                          type="checkbox"
-                          checked={autoLinkRulingParty}
-                          onChange={(changeEvent) =>
-                            setAutoLinkRulingParty(changeEvent.target.checked)
-                          }
-                        />
-                        <span>
-                          이 정당을 내각의 <strong>집권·주도 여당</strong>으로도
-                          함께 연결
-                        </span>
-                      </InlineCheckRow>
-                    ) : null}
-                  </FieldControl>
-                </FieldRow>
-
-                <FieldRow>
-                  <FieldLabel>
-                    출범 계기 사건 <OptionalTag>(선택)</OptionalTag>
-                  </FieldLabel>
-                  <FieldControl>
-                    <LinkedEventPickerField
-                      value={originEventId}
-                      initialTitle={initialOriginEventTitle}
-                      nearYear={signedStartYear}
-                      onChange={(nextEventId) => {
-                        userTouchedOriginEventRef.current = true
-                        setOriginEventId(nextEventId)
-                      }}
-                    />
-                    <FieldHint>
-                      총선·혁명·조약·정변 등 이 내각이 출범하게 된 역사적 사건을
-                      연결합니다.
-                      {signedStartYear != null
-                        ? ` (${signedStartYear}년 전후 사건이 먼저 표시됩니다.)`
-                        : ''}
-                    </FieldHint>
-                  </FieldControl>
-                </FieldRow>
-
-                {mode === 'head' &&
-                (isEditing || headActionMode === 'new_tenure') ? (
-                  <FieldRow>
-                    <FieldLabel>
-                      취임 · 퇴임 경위 <OptionalTag>(선택)</OptionalTag>
-                    </FieldLabel>
-                    <FieldControl>
-                      <SubFieldPair $cols={2}>
-                        <SubField>
-                          <SubFieldLabel>취임 · 선출 방식</SubFieldLabel>
-                          <NativeSelect
-                            value={appointmentMethod}
-                            onChange={(changeEvent) =>
-                              setAppointmentMethod(changeEvent.target.value)
-                            }
-                          >
-                            <option value="">선택 안 함</option>
-                            <option value="PARLIAMENTARY_ELECTION">
-                              의회 선출 (내각책임제 등)
-                            </option>
-                            <option value="APPOINTMENT">
-                              군주 · 국가원수 임명 (승계 포함)
-                            </option>
-                            <option value="DIRECT_ELECTION">직접 선거</option>
-                            <option value="INDIRECT_ELECTION">간접 선거</option>
-                            <option value="COUP">쿠데타 · 혁명</option>
-                            <option value="RESTORATION">복위 · 재추대</option>
-                            <option value="HEREDITARY">세습</option>
-                            <option value="ELECTIVE_MONARCHY">
-                              선거군주제 선출
-                            </option>
-                            <option value="TREATY">조약에 의한 취임</option>
-                            <option value="CONQUEST">정복</option>
-                            <option value="OTHER">기타</option>
-                          </NativeSelect>
-                        </SubField>
-
-                        <SubField>
-                          <SubFieldLabel>퇴임 사유</SubFieldLabel>
-                          <NativeSelect
-                            value={endReason}
-                            onChange={(changeEvent) =>
-                              setEndReason(changeEvent.target.value)
-                            }
-                          >
-                            <option value="">선택 안 함</option>
-                            <option value="RESIGNATION">
-                              사임 · 내각 총사퇴 · 불신임
-                            </option>
-                            <option value="TERM_COMPLETED">임기 만료</option>
-                            <option value="REMOVAL">해임 · 면직</option>
-                            <option value="IMPEACHMENT">탄핵 · 파면</option>
-                            <option value="DEATH_IN_OFFICE">
-                              재임 중 사망 · 피살
-                            </option>
-                            <option value="OVERTHROWN">
-                              쿠데타 · 혁명 축출
-                            </option>
-                            <option value="WAR_DEFEAT">전쟁 패배</option>
-                            <option value="STATE_DISSOLVED">
-                              국가 소멸 · 체제 전환
-                            </option>
-                            <option value="ABDICATION">자진 퇴위</option>
-                            <option value="SUCCESSION_TRANSFER">
-                              양위 · 선위
-                            </option>
-                            <option value="OTHER">기타</option>
-                          </NativeSelect>
-                        </SubField>
-                      </SubFieldPair>
-
-                      <SubFieldPair $cols={2}>
-                        <SubField>
-                          <SubFieldLabel>취임 배경 · 비고 메모</SubFieldLabel>
-                          <Input
-                            value={notes}
-                            onChange={(changeEvent) =>
-                              setNotes(changeEvent.target.value)
-                            }
-                            placeholder="예: 거국연립내각 구성 배경, 비상대권 행사 등"
-                          />
-                        </SubField>
-                        <SubField>
-                          <SubFieldLabel>퇴임 상세 사유</SubFieldLabel>
-                          <Input
-                            value={endReasonDetail}
-                            onChange={(changeEvent) =>
-                              setEndReasonDetail(changeEvent.target.value)
-                            }
-                            placeholder="예: 선거법 개혁 갈등으로 사임, 의회 불신임 가결"
-                          />
-                        </SubField>
-                      </SubFieldPair>
-                    </FieldControl>
-                  </FieldRow>
-                ) : null}
-              </FormGroup>
+                  </ExtraDetailsWrap>
+                </SplitColumnRight>
+              </SplitColumnsGrid>
             </LabeledRowsWrap>
-          </PersonRegisterModalFormScroll>
+          </CabinetModalFormScroll>
+
+          {roleOptionsOpen &&
+          roleOptionsCoords &&
+          typeof document !== 'undefined'
+            ? createPortal(
+                <RoleOptionsPopover
+                  ref={roleOptionsPopoverRef}
+                  role="dialog"
+                  aria-label="수반 직책 설정 및 추가 프리셋"
+                  style={{
+                    top: roleOptionsCoords.top,
+                    left: roleOptionsCoords.left,
+                  }}
+                >
+                  <div className="pop-section">
+                    <div className="pop-label-row">
+                      <span>행정부 분류</span>
+                      {activePoliticalSystem?.governmentForm ? (
+                        <span className="pop-sub">
+                          {
+                            GOVERNMENT_FORM_LABEL[
+                              activePoliticalSystem.governmentForm
+                            ]
+                          }
+                        </span>
+                      ) : null}
+                    </div>
+                    <BranchPillGroup>
+                      <BranchPillBtn
+                        type="button"
+                        $active={positionTypeOverride === 'HEAD_OF_GOVERNMENT'}
+                        onClick={() =>
+                          setPositionTypeOverride('HEAD_OF_GOVERNMENT')
+                        }
+                      >
+                        정부수반 (내각)
+                      </BranchPillBtn>
+                      <BranchPillBtn
+                        type="button"
+                        $active={positionTypeOverride === 'HEAD_OF_STATE'}
+                        onClick={() => setPositionTypeOverride('HEAD_OF_STATE')}
+                      >
+                        국가원수 (행정부)
+                      </BranchPillBtn>
+                    </BranchPillGroup>
+                  </div>
+
+                  {overflowRoleChips.length > 0 ? (
+                    <div className="pop-section divider">
+                      <div className="pop-label-row">
+                        <span>추가 직책 프리셋</span>
+                      </div>
+                      <PresetChipWrap>
+                        {overflowRoleChips.map((extraChip) => {
+                          const isChipActive =
+                            roleTitle.trim() === extraChip.title
+                          return (
+                            <RolePresetChip
+                              key={extraChip.title}
+                              type="button"
+                              $active={isChipActive}
+                              onClick={() => {
+                                userTouchedRoleRef.current = true
+                                setRoleTitle(extraChip.title)
+                                setPositionTypeOverride(extraChip.positionType)
+                                setSelectedPositionDefId(
+                                  extraChip.positionDefId,
+                                )
+                                setRoleOptionsOpen(false)
+                              }}
+                            >
+                              {extraChip.title}
+                            </RolePresetChip>
+                          )
+                        })}
+                      </PresetChipWrap>
+                    </div>
+                  ) : null}
+
+                  {monarchicalRoleChips.length > 0 ? (
+                    <div className="pop-section divider">
+                      <div className="pop-label-row">
+                        <span>군주 · 섭정 직접 친정 직위</span>
+                      </div>
+                      <PresetChipWrap>
+                        {monarchicalRoleChips.map((monarchChip) => {
+                          const isChipActive =
+                            roleTitle.trim() === monarchChip.title
+                          return (
+                            <RolePresetChip
+                              key={monarchChip.title}
+                              type="button"
+                              $active={isChipActive}
+                              onClick={() => {
+                                userTouchedRoleRef.current = true
+                                setRoleTitle(monarchChip.title)
+                                setPositionTypeOverride(
+                                  monarchChip.positionType,
+                                )
+                                setSelectedPositionDefId(
+                                  monarchChip.positionDefId,
+                                )
+                                setRoleOptionsOpen(false)
+                              }}
+                            >
+                              {monarchChip.title}
+                            </RolePresetChip>
+                          )
+                        })}
+                      </PresetChipWrap>
+                    </div>
+                  ) : null}
+                </RoleOptionsPopover>,
+                document.body,
+              )
+            : null}
 
           <PersonRegisterModalStickyFooter>
             <FooterHint $warning={missingFieldItems.length > 0}>
+              {!isEditing && batchSavedCount > 0 ? (
+                <BatchSavedBadge role="status">
+                  <BatchSavedDot aria-hidden="true" />
+                  연속 {batchSavedCount}건 등록됨
+                </BatchSavedBadge>
+              ) : null}
               {missingFieldItems.length > 0 ? (
                 <FooterJumpButton
                   type="button"
@@ -4333,22 +4695,13 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                       외 {missingFieldItems.length - 1}개
                     </FooterMissingCount>
                   ) : null}
-                  <FooterJumpArrow>↗ 이동</FooterJumpArrow>
+                  <FooterJumpArrow aria-hidden="true">→</FooterJumpArrow>
                 </FooterJumpButton>
               ) : (
                 <FooterReadyGroup>
-                  <FooterReadyBadge>등록 준비 완료</FooterReadyBadge>
-                  <FooterShortcutItem>
-                    <FooterKbd>⌘</FooterKbd>
-                    <FooterKbd>↵</FooterKbd> 바로 저장
-                  </FooterShortcutItem>
-                  {!isEditing ? (
-                    <FooterShortcutItem>
-                      <FooterKbd>⇧</FooterKbd>
-                      <FooterKbd>⌘</FooterKbd>
-                      <FooterKbd>↵</FooterKbd> 연속 등록
-                    </FooterShortcutItem>
-                  ) : null}
+                  <FooterReadyBadge>
+                    {isEditing ? '수정 준비 완료' : '등록 준비 완료'}
+                  </FooterReadyBadge>
                 </FooterReadyGroup>
               )}
             </FooterHint>
@@ -4356,6 +4709,7 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
             <FooterActions>
               <PersonRegisterModalCancelBtn
                 type="button"
+                disabled={saveCabinetMutation.isPending}
                 onClick={() => {
                   void requestClose()
                 }}
@@ -4363,13 +4717,14 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                 취소
               </PersonRegisterModalCancelBtn>
               {!isEditing ? (
-                <ContinueSubmitBtn
+                <PersonRegisterModalCancelBtn
                   type="button"
                   disabled={saveCabinetMutation.isPending}
+                  title="저장 후 창을 닫지 않고 이어서 다음 내각·행정부를 바로 등록합니다 (단축키: ⌘/Ctrl + Shift + Enter)"
                   onClick={() => handleSubmitWithOption(true)}
                 >
-                  등록 후 이어서 다음
-                </ContinueSubmitBtn>
+                  등록 후 계속
+                </PersonRegisterModalCancelBtn>
               ) : null}
               <PersonRegisterModalPrimaryBtn
                 type="button"
@@ -4415,36 +4770,560 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
 
 /* ─────────────────────────── Styled Primitives ─────────────────────────── */
 
-const GuideIntroStrip = styled.div`
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  padding: 10px 14px;
-  margin-bottom: 20px;
-  border-radius: 10px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.08)'
-      : 'rgba(99, 102, 241, 0.05)'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.22)'
-        : 'rgba(99, 102, 241, 0.16)'};
-  font-size: 12.5px;
-  line-height: 1.55;
-  color: ${({ theme }) => theme.colors.text.secondary};
+const CabinetModalFormScroll = styled(PersonRegisterModalFormScroll)<{
+  $layoutMode: 'split' | 'single'
+}>`
+  overflow-x: hidden;
 
-  > svg {
+  ${({ $layoutMode }) =>
+    $layoutMode === 'split'
+      ? `
+    @media (min-width: 980px) {
+      overflow-y: hidden;
+      padding: 20px 28px;
+    }
+  `
+      : ''}
+`
+
+const DateRangeGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(226px, 1fr));
+  gap: 12px 16px;
+  min-width: 0;
+`
+
+const SplitColumnsGrid = styled.div<{ $layoutMode: 'split' | 'single' }>`
+  display: grid;
+  grid-template-columns: ${({ $layoutMode }) =>
+    $layoutMode === 'split'
+      ? 'minmax(0, 1fr) minmax(0, 1fr)'
+      : 'minmax(0, 1fr)'};
+  gap: ${({ $layoutMode }) => ($layoutMode === 'split' ? '0' : '26px')};
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+
+  ${({ $layoutMode }) =>
+    $layoutMode === 'split'
+      ? `
+    @media (min-width: 980px) {
+      ${FieldRow} {
+        grid-template-columns: 112px minmax(0, 1fr);
+        gap: 14px;
+        padding: 12px 0;
+      }
+
+      ${FormGroup} + ${FormGroup} {
+        margin-top: 22px;
+        padding-top: 4px;
+      }
+    }
+  `
+      : ''}
+
+  @media (max-width: 979px) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+`
+
+const splitPaneScrollStyles = ({
+  $layoutMode,
+  theme,
+}: {
+  $layoutMode: 'split' | 'single'
+  theme: DefaultTheme
+}) =>
+  $layoutMode === 'split'
+    ? `
+  min-width: 0;
+  overflow-x: hidden;
+
+  @media (min-width: 980px) {
+    max-height: calc(88vh - 160px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: 40px;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: ${theme.colors.border.default};
+      border-radius: 2px;
+    }
+  }
+`
+    : `
+  min-width: 0;
+  overflow-x: hidden;
+
+  ${FormGroup} + ${FormGroup} {
+    margin-top: 26px;
+  }
+`
+
+const SplitColumnLeft = styled.div<{ $layoutMode: 'split' | 'single' }>`
+  ${splitPaneScrollStyles}
+
+  ${({ $layoutMode }) =>
+    $layoutMode === 'split'
+      ? `
+    @media (min-width: 980px) {
+      padding-left: 2px;
+      padding-right: 26px;
+    }
+  `
+      : ''}
+`
+
+const SplitColumnRight = styled.div<{ $layoutMode: 'split' | 'single' }>`
+  ${splitPaneScrollStyles}
+
+  ${({ $layoutMode, theme }) =>
+    $layoutMode === 'split'
+      ? `
+    @media (min-width: 980px) {
+      padding-left: 26px;
+      padding-right: 2px;
+      border-left: 1px solid ${theme.colors.border.light};
+    }
+  `
+      : ''}
+`
+
+const HeaderRightBar = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  margin-right: 2px;
+`
+
+const HeaderPolityBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  height: 27px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => kitC(theme).border};
+  background: ${({ theme }) => kitC(theme).section};
+  color: ${({ theme }) => kitC(theme).textSecondary};
+  font-size: 11.5px;
+  font-weight: 600;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  svg {
     flex-shrink: 0;
-    margin-top: 3px;
     color: ${({ theme }) => theme.colors.primary};
   }
 
+  @media (max-width: 560px) {
+    display: none;
+  }
+`
+
+const EntryModeHeaderRow = styled.div`
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+`
+
+const EntryChipsWrap = styled.div`
+  flex: 1 1 auto;
+  min-width: 0;
+`
+
+const InlineMoreIconBtn = styled.button<{ $open: boolean; $tall?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: ${({ $tall }) => ($tall ? '40px' : '34px')};
+  height: ${({ $tall }) => ($tall ? '40px' : '34px')};
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid
+    ${({ $open, theme }) =>
+      $open ? kitC(theme).focus : kitC(theme).border};
+  background: ${({ $open, theme }) =>
+    $open
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.2)'
+        : 'rgba(99, 102, 241, 0.08)'
+      : kitC(theme).content};
+  color: ${({ $open, theme }) =>
+    $open
+      ? theme.mode === 'dark'
+        ? '#a5b4fc'
+        : '#4f46e5'
+      : kitC(theme).textSecondary};
+  cursor: pointer;
+  transition:
+    border-color 0.14s ease,
+    color 0.14s ease,
+    background-color 0.14s ease;
+
+  &:hover {
+    border-color: ${({ theme }) => kitC(theme).focus};
+    color: ${({ theme }) => kitC(theme).textPrimary};
+  }
+`
+
+const QuietModeCaption = styled.div`
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: ${({ theme }) => kitC(theme).textMuted};
+
   strong {
     font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.primary};
+    color: ${({ theme }) => kitC(theme).textSecondary};
   }
+
+  .sep {
+    opacity: 0.55;
+  }
+`
+
+const RoleInputBar = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+`
+
+const RoleOptionsPopover = styled.div`
+  position: fixed;
+  z-index: ${Z_INDEX.RICH_TEXT_EDITOR_OVERLAY + 30};
+  width: 280px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid ${({ theme }) => kitC(theme).border};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? '#18181b' : '#ffffff'};
+  box-shadow: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? '0 16px 38px rgba(0, 0, 0, 0.55)'
+      : '0 14px 34px rgba(15, 23, 42, 0.14)'};
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  .pop-section {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .pop-section.divider {
+    padding-top: 9px;
+    border-top: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+
+  .pop-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: ${({ theme }) => kitC(theme).textMuted};
+  }
+
+  .pop-sub {
+    font-weight: 600;
+    color: ${({ theme }) => kitC(theme).textSecondary};
+  }
+`
+
+const ExtraDetailsWrap = styled.div`
+  margin-top: 16px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.015)' : '#fafafa'};
+  overflow: hidden;
+`
+
+const ExtraDetailsToggleBtn = styled.button<{ $expanded: boolean }>`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 14px;
+  border: none;
+  border-bottom: ${({ $expanded, theme }) =>
+    $expanded ? `1px solid ${theme.colors.border.light}` : 'none'};
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  transition: background-color 0.14s ease;
+
+  &:hover {
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.03)'
+        : 'rgba(15, 23, 42, 0.03)'};
+  }
+
+  .toggle-left {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    min-width: 0;
+
+    strong {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: ${({ theme }) => theme.colors.text.primary};
+    }
+
+    .toggle-sub {
+      font-size: 11.5px;
+      color: ${({ theme }) => theme.colors.text.tertiary};
+    }
+  }
+
+  .toggle-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+`
+
+const ExtraFilledBadge = styled.span`
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme }) =>
+    theme.mode === 'dark' ? '#c7d2fe' : theme.colors.primary};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(99, 102, 241, 0.2)'
+      : 'rgba(99, 102, 241, 0.1)'};
+`
+
+const ExtraDetailsBody = styled.div`
+  padding: 4px 14px 10px;
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'transparent' : '#ffffff'};
+`
+
+const ModeFullGuidePanel = styled.div`
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid ${({ theme }) => kitC(theme).border};
+  border-radius: 10px;
+  background: ${({ theme }) => kitC(theme).content};
+`
+
+const ModeGuideTopCaption = styled.div`
+  padding: 7px 12px;
+  border-bottom: 1px solid ${({ theme }) => kitC(theme).border};
+  background: ${({ theme }) => kitC(theme).section};
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => kitC(theme).textSecondary};
+`
+
+const ModeGuideOptionBtn = styled.button<{ $selected: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-bottom: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.05)'
+        : 'rgba(15, 23, 42, 0.05)'};
+  background: ${({ $selected, theme }) =>
+    $selected
+      ? theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.14)'
+        : 'rgba(99, 102, 241, 0.06)'
+      : 'transparent'};
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.13s ease;
+
+  &:hover {
+    background: ${({ $selected, theme }) =>
+      $selected
+        ? theme.mode === 'dark'
+          ? 'rgba(99, 102, 241, 0.18)'
+          : 'rgba(99, 102, 241, 0.09)'
+        : kitC(theme).section};
+  }
+
+  .guide-opt-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .guide-opt-title {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    color: ${({ $selected, theme }) =>
+      $selected
+        ? theme.mode === 'dark'
+          ? '#a5b4fc'
+          : '#4f46e5'
+        : kitC(theme).textSecondary};
+
+    strong {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: ${({ theme }) => kitC(theme).textPrimary};
+    }
+
+    .sub-badge {
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 10.5px;
+      font-weight: 600;
+      color: ${({ theme }) => kitC(theme).textMuted};
+      background: ${({ theme }) =>
+        theme.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.07)'
+          : 'rgba(15, 23, 42, 0.05)'};
+    }
+  }
+
+  .selected-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 700;
+    flex-shrink: 0;
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#c7d2fe' : '#4338ca'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.24)'
+        : 'rgba(99, 102, 241, 0.12)'};
+  }
+
+  .guide-opt-criteria {
+    font-size: 12px;
+    line-height: 1.44;
+    color: ${({ theme }) => kitC(theme).textSecondary};
+  }
+
+  .guide-opt-ex {
+    font-size: 11px;
+    line-height: 1.4;
+    color: ${({ theme }) => kitC(theme).textMuted};
+  }
+`
+
+const ModeBoundaryTip = styled.div`
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid ${({ theme }) => kitC(theme).border};
+  background: ${({ theme }) => kitC(theme).section};
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: ${({ theme }) => kitC(theme).textSecondary};
+
+  .tip-tag {
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 700;
+    flex-shrink: 0;
+    color: ${({ theme }) =>
+      theme.mode === 'dark' ? '#93c5fd' : '#1d4ed8'};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(59, 130, 246, 0.18)'
+        : 'rgba(59, 130, 246, 0.1)'};
+  }
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => kitC(theme).textPrimary};
+  }
+`
+
+const SubtleExpandNotesBtn = styled.button`
+  align-self: flex-start;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.primary};
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+`
+
+const BatchSavedBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#6ee7b7' : '#047857')};
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(16, 185, 129, 0.14)'
+      : 'rgba(16, 185, 129, 0.1)'};
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(16, 185, 129, 0.28)'
+        : 'rgba(16, 185, 129, 0.22)'};
+`
+
+const BatchSavedDot = styled.span`
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
 `
 
 const SubFieldHeaderRow = styled.div`
@@ -4469,18 +5348,12 @@ const InlineClearLink = styled.button`
   }
 `
 
-const DateMetaFooterRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-`
-
 const DurationPill = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  width: fit-content;
+  margin-top: 6px;
   padding: 3px 10px;
   border-radius: 999px;
   font-size: 11.5px;
@@ -4490,111 +5363,6 @@ const DurationPill = styled.span`
       ? 'rgba(16, 185, 129, 0.14)'
       : 'rgba(16, 185, 129, 0.09)'};
   color: ${({ theme }) => (theme.mode === 'dark' ? '#6ee7b7' : '#047857')};
-`
-
-const PeriodSyncCard = styled.div<{ $protected: boolean }>`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 9px 12px;
-  border-radius: 8px;
-  border: 1px solid
-    ${({ $protected, theme }) =>
-      $protected
-        ? theme.mode === 'dark'
-          ? 'rgba(245, 158, 11, 0.35)'
-          : 'rgba(245, 158, 11, 0.35)'
-        : theme.colors.border.light};
-  background: ${({ $protected, theme }) =>
-    $protected
-      ? theme.mode === 'dark'
-        ? 'rgba(245, 158, 11, 0.08)'
-        : '#fffbeb'
-      : theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.03)'
-        : '#f8fafc'};
-  font-size: 12.5px;
-  color: ${({ theme }) => theme.colors.text.primary};
-
-  label {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-  }
-`
-
-const ProtectPill = styled.span`
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  background: rgba(245, 158, 11, 0.18);
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#fcd34d' : '#b45309')};
-`
-
-const PolityChipGrid = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-`
-
-const PolityChipBtn = styled.button<{ $active: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  padding: 4px 11px;
-  border-radius: 8px;
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: ${({ $active }) => ($active ? 600 : 500)};
-  cursor: pointer;
-  border: 1px solid
-    ${({ $active, theme }) =>
-      $active ? theme.colors.primary : theme.colors.border.default};
-  background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.18)'
-        : 'rgba(99, 102, 241, 0.09)'
-      : theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.025)'
-        : '#ffffff'};
-  color: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? '#c7d2fe'
-        : theme.colors.primary
-      : theme.colors.text.primary};
-  transition: border-color 0.14s ease, background-color 0.14s ease;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-  }
-`
-
-const PolityEraSpan = styled.span`
-  font-size: 11px;
-  opacity: 0.72;
-  font-variant-numeric: tabular-nums;
-`
-
-const PolityCountBadge = styled.span<{ $active: boolean }>`
-  padding: 1px 6px;
-  border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 600;
-  background: ${({ $active, theme }) =>
-    $active
-      ? theme.colors.primary
-      : theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.09)'
-        : '#f1f5f9'};
-  color: ${({ $active, theme }) =>
-    $active ? '#ffffff' : theme.colors.text.secondary};
 `
 
 const SmartSuggestionCard = styled.div<{ $tone: 'warning' | 'info' }>`
@@ -4665,79 +5433,6 @@ const QuickSwitchChip = styled.button`
   }
 `
 
-const SubtleNoticeRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const ModeCardsGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-
-  @media (max-width: 720px) {
-    grid-template-columns: 1fr;
-  }
-`
-
-const ModeCardButton = styled.button<{ $active: boolean }>`
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 5px;
-  padding: 11px 12px;
-  border-radius: 10px;
-  text-align: left;
-  cursor: pointer;
-  font: inherit;
-  border: 1.5px solid
-    ${({ $active, theme }) =>
-      $active ? theme.colors.primary : theme.colors.border.default};
-  background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.16)'
-        : 'rgba(99, 102, 241, 0.06)'
-      : theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.02)'
-        : '#ffffff'};
-  transition: border-color 0.15s ease, background-color 0.15s ease;
-
-  .card-top {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-wrap: wrap;
-    color: ${({ $active, theme }) =>
-      $active
-        ? theme.mode === 'dark'
-          ? '#c7d2fe'
-          : theme.colors.primary
-        : theme.colors.text.primary};
-
-    strong {
-      font-size: 12.5px;
-      font-weight: 700;
-    }
-  }
-
-  .card-desc {
-    font-size: 11.5px;
-    line-height: 1.4;
-    color: ${({ theme }) => theme.colors.text.secondary};
-    word-break: keep-all;
-  }
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-  }
-`
-
 const SmallBadge = styled.span`
   display: inline-flex;
   align-items: center;
@@ -4760,7 +5455,7 @@ const SearchInputWrap = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 38px;
+  height: 40px;
   padding: 0 12px;
   border-radius: 8px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
@@ -4869,6 +5564,10 @@ const PersonSearchBarRow = styled.div`
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+
+  ${KitAddButton} {
+    height: 40px;
+  }
 `
 
 const SmallGhostBtn = styled.button`
@@ -5182,74 +5881,6 @@ const ReappointmentHelperBox = styled.div`
   }
 `
 
-const PreviousCabinetBar = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  padding: 9px 13px;
-  margin-bottom: 6px;
-  border-radius: 9px;
-  border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f8fafc'};
-  font-size: 12.5px;
-
-  .prev-info {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 6px;
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-
-  .prev-tag {
-    padding: 2px 7px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 600;
-    background: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0'};
-    color: ${({ theme }) => theme.colors.text.secondary};
-  }
-
-  .prev-period {
-    color: ${({ theme }) => theme.colors.text.secondary};
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .prev-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-`
-
-const QuickFillBtn = styled.button`
-  padding: 3px 9px;
-  border-radius: 999px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.4)'
-        : 'rgba(99, 102, 241, 0.3)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.14)' : '#ffffff'};
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? '#c7d2fe' : theme.colors.primary};
-  font: inherit;
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.primary};
-    color: #ffffff;
-  }
-`
-
 const PresetChipWrap = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -5257,7 +5888,7 @@ const PresetChipWrap = styled.div`
 `
 
 const RolePresetChip = styled.button<{ $active: boolean }>`
-  padding: 5px 11px;
+  padding: 4px 11px;
   border-radius: 999px;
   font: inherit;
   font-size: 12px;
@@ -5274,48 +5905,29 @@ const RolePresetChip = styled.button<{ $active: boolean }>`
         : '#ffffff'};
   color: ${({ $active, theme }) =>
     $active ? '#ffffff' : theme.colors.text.primary};
-`
-
-const MonarchicalToggleChip = styled.button`
-  padding: 5px 10px;
-  border-radius: 999px;
-  border: 1px dashed ${({ theme }) => theme.colors.border.default};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font: inherit;
-  font-size: 11.5px;
-  cursor: pointer;
+  transition:
+    border-color 0.14s ease,
+    background-color 0.14s ease,
+    color 0.14s ease;
 
   &:hover {
-    border-color: ${({ theme }) => theme.colors.text.secondary};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
-
-const RoleClassificationRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px;
-
-  .regime-note {
-    font-size: 12px;
-    color: ${({ theme }) => theme.colors.text.secondary};
+    border-color: ${({ theme }) => theme.colors.primary};
   }
 `
 
 const BranchPillGroup = styled.div`
-  display: inline-flex;
-  padding: 2px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  padding: 3px;
   border-radius: 8px;
   border: 1px solid ${({ theme }) => theme.colors.border.light};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#f1f5f9'};
+  background: ${({ theme }) => kitC(theme).section};
 `
 
 const BranchPillBtn = styled.button<{ $active: boolean }>`
-  padding: 3px 9px;
+  height: 28px;
+  padding: 0 8px;
   border: none;
   border-radius: 6px;
   font: inherit;
@@ -5325,17 +5937,21 @@ const BranchPillBtn = styled.button<{ $active: boolean }>`
   background: ${({ $active, theme }) =>
     $active
       ? theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.14)'
+        ? 'rgba(255, 255, 255, 0.12)'
         : '#ffffff'
       : 'transparent'};
   color: ${({ $active, theme }) =>
     $active ? theme.colors.text.primary : theme.colors.text.secondary};
+  box-shadow: ${({ $active, theme }) =>
+    $active && theme.mode !== 'dark'
+      ? '0 1px 2px rgba(15, 23, 42, 0.08)'
+      : 'none'};
 `
 
 const AdornedNumberBox = styled.div`
   display: flex;
   align-items: center;
-  height: 38px;
+  height: 40px;
   padding: 0 11px;
   gap: 6px;
   border-radius: 8px;
@@ -5357,8 +5973,17 @@ const AdornedNumberBox = styled.div`
     background: transparent;
     font: inherit;
     font-size: 14px;
+    font-variant-numeric: tabular-nums;
     color: ${({ theme }) => theme.colors.text.primary};
     outline: none;
+    appearance: textfield;
+    -moz-appearance: textfield;
+
+    &::-webkit-outer-spin-button,
+    &::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
   }
 
   &:focus-within {
@@ -5368,19 +5993,9 @@ const AdornedNumberBox = styled.div`
   }
 `
 
-const AutoNamePreviewBar = styled.div`
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-
-  strong {
-    color: ${({ theme }) => theme.colors.text.primary};
-    font-weight: 600;
-  }
-`
-
 const NativeSelect = styled.select`
   width: 100%;
-  height: 38px;
+  height: 40px;
   padding: 0 11px;
   border-radius: 8px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
@@ -5395,19 +6010,6 @@ const NativeSelect = styled.select`
     border-color: ${({ theme }) => theme.colors.primary};
     background: ${({ theme }) =>
       theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#ffffff'};
-  }
-`
-
-const InlineCheckRow = styled.label`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12.5px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-
-  strong {
-    color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
@@ -5475,59 +6077,17 @@ const SuggestedItemBody = styled.div`
   }
 `
 
-const BatchProgressPill = styled.span`
-  flex-shrink: 0;
-  align-self: center;
-  padding: 3px 10px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 700;
-  background: ${({ theme }) => theme.colors.primary};
-  color: #ffffff;
-`
-
 const PartySelectRow = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
 
+  ${KitAddButton} {
+    height: 40px;
+  }
+
   @media (max-width: 560px) {
     grid-template-columns: 1fr;
-  }
-`
-
-const ContinueSubmitBtn = styled.button`
-  height: 38px;
-  padding: 0 14px;
-  border-radius: 9px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.45)'
-        : 'rgba(99, 102, 241, 0.35)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(99, 102, 241, 0.14)'
-      : 'rgba(99, 102, 241, 0.06)'};
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? '#c7d2fe' : theme.colors.primary};
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.14s ease, border-color 0.14s ease;
-
-  &:hover:not(:disabled) {
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.24)'
-        : 'rgba(99, 102, 241, 0.12)'};
-    border-color: ${({ theme }) => theme.colors.primary};
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
 `

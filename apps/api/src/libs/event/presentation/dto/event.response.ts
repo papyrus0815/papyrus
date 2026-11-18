@@ -5,6 +5,7 @@ import type { CalendarSystemValue } from '../../domain/event.entity'
 import type { StructuredPoint as StructuredPointView } from '../../../shared/structured-point'
 import { ApiProperty } from '@nestjs/swagger'
 import { EventPhaseDto } from './event-phase.dto'
+import type { EventSeriesContextDto } from './event-series.dto'
 
 export class EventResponseDto {
   @ApiProperty({ description: '사건 ID' })
@@ -60,6 +61,24 @@ export class EventResponseDto {
 
   @ApiProperty({ description: '손으로 넣은 상위 사건의 국면 id — 비면 날짜로 자동 배정', required: false, nullable: true })
   phaseId?: string | null
+
+  @ApiProperty({ description: '소속 정기 사건·회의 시리즈 ID (선택)', required: false, nullable: true })
+  seriesId?: string | null
+
+  @ApiProperty({ description: '시리즈 회차 번호 (예: 43)', required: false, nullable: true })
+  seriesEdition?: number | null
+
+  @ApiProperty({ description: "특수·합동 회차 표기 (예: '제44·45차', '특별 정상회의')", required: false, nullable: true })
+  seriesEditionLabel?: string | null
+
+  @ApiProperty({ description: '목록·상세 표시용 소속 시리즈 명칭 요약', required: false, nullable: true })
+  seriesTitle?: string | null
+
+  @ApiProperty({ description: "목록·상세 표시용 회차 배지 ('제43차', '제44·45차', '특별 정상회의')", required: false, nullable: true })
+  editionBadge?: string | null
+
+  @ApiProperty({ description: '상세 조회 전용 — 소속 정기 시리즈 맥락(이전/다음 회차 + 차기 개최 안내)', required: false, nullable: true })
+  seriesContext?: EventSeriesContextDto | null
 
   @ApiProperty({
     description: '이 사건(묶음)의 국면 목록 — 상세 조회에서만. 국면은 사건이 아니라 구획(목차)',
@@ -431,6 +450,30 @@ export class EventResponseDto {
   }>
 
   @ApiProperty({
+    description: '관련 정당 목록 — EventPoliticalPartyRelation (상세 조회에서만)',
+    required: false,
+  })
+  politicalParties?: Array<{
+    relationId: string
+    role: string
+    roleDescription: string | null
+    note: string | null
+    sideId: string | null
+    partyId: string
+    name: string
+    shortName: string | null
+    localName: string | null
+    ideology: string | null
+    position: string | null
+    brandColor: string | null
+    logoUrl: string | null
+    foundedDate: string | null
+    dissolvedDate: string | null
+    country: { id: string; name: string } | null
+    historicalCountry: { id: string; name: string } | null
+  }>
+
+  @ApiProperty({
     description: '이 사건을 서사로 가진 선거 (상세 조회에서만). 결과는 GET /elections/:id가 정본',
     required: false,
   })
@@ -705,4 +748,23 @@ export class CountryStatehoodEventsDto {
 
   @ApiProperty({ description: '이 사건으로 멸망(병합·해체)', type: [StatehoodEventDto] })
   dissolved!: StatehoodEventDto[]
+}
+
+export interface ContemporaryLeaderCandidateDto {
+  personId: string
+  personName: string
+  surname: string | null
+  givenName: string | null
+  profileImageUrl: string | null
+  positionType: string
+  isMonarchical: boolean
+  ordinal: number | null
+  title: string
+  suggestedRole: string
+  countryId: string | null
+  historicalCountryId: string | null
+  countryName: string
+  flagEmoji: string | null
+  tenureStartYear: number | null
+  tenureEndYear: number | null
 }

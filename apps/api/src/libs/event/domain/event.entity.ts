@@ -42,6 +42,12 @@ export class Event {
   locationNote?: string | null
   /** 상위 사건의 국면에 손으로 넣은 것(없으면 날짜로 자동) */
   phaseId?: string | null
+  /** 소속 정기 사건·회의 시리즈 ID (선택) */
+  seriesId?: string | null
+  /** 시리즈 내 정규 회차 번호 (예: 43) */
+  seriesEdition?: number | null
+  /** 특수·합동 회차 표기 오버라이드 (예: '제44·45차', '특별 정상회의') */
+  seriesEditionLabel?: string | null
   /** 대표 위치 좌표(WGS84) — 둘 다 있거나 둘 다 없다 */
   locationLatitude?: number | null
   locationLongitude?: number | null

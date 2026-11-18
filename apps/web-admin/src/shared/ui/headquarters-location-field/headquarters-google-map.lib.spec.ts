@@ -59,5 +59,16 @@ describe('headquarters-google-map.lib', () => {
     expect(new URL(textOnlySpec!.embedUrl).searchParams.get('q')).toBe(
       '대한민국 정부서울청사',
     )
+
+    const hybridSpec = buildHeadquartersGoogleMapsSpec({
+      headquarters: '정부서울청사',
+      latitude: 37.574889,
+      longitude: 126.975201,
+      zoom: 17,
+      mapLayer: 'hybrid',
+    })
+    const hybridParams = new URL(hybridSpec!.embedUrl).searchParams
+    expect(hybridParams.get('t')).toBe('h')
+    expect(hybridParams.get('z')).toBe('17')
   })
 })

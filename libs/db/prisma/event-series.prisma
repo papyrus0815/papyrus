@@ -1,0 +1,128 @@
+/// ╔══════════════════════════════════════════════════════════════════════════════╗
+/// ║                           EVENT SERIES DOMAIN                                ║
+/// ╚══════════════════════════════════════════════════════════════════════════════╝
+///
+/// 정기·연례·격년·다년 주기로 반복 개최되는 사건·회의·행사 시리즈를 관리합니다.
+///
+/// 왜 묶음 사건(EventKind.COLLECTION)이나 Organization 단독 필드 대신 별도 모델로 두는가:
+///  1) 묶음 사건은 전쟁·혁명·위기처럼 시작과 끝이 있는 단일 거시 사건용이며 본문에 전개 단락을 쓸 수 없다.
+///     상설 기구의 연례 정상회의(1차~45차)를 상위 묶음 사건 아래 매달면 영구히 끝나지 않는 거대 트리가 된다.
+///  2) 한 국제기구가 주기가 다른 복수의 회의를 주관하는 현실을 담아야 한다:
+///     • ASEAN → 아세안 정상회의(연 2회·6개월) + 동아시아정상회의 EAS(연 1회·12개월) + ARF(연 1회)
+///     • WTO   → WTO 각료회의(격년·24개월)
+///     • UN    → 유엔 총회 고위급 회기(매년 9월) + 기후변화총회 COP(매년 11월)
+///     • 협의체 → 쿼드(Quad) 정상회의(연 1회), APEC 정상회의(매년 11월), ASEM 정상회의(2년 주기)
+///  3) 외교 회담뿐 아니라 당대회(5년 주기)·올림픽/월드컵(4년 주기)·세계박람회(5년 주기)·연례 학술/산업 행사까지
+///     모든 도메인의 주기적 역사 이벤트를 단일 스키마로 수용한다.
+
+/// 시리즈 개최 주기 성격
+enum EventSeriesCadenceKind {
+  /// 정기 주기 — intervalMonths 간격으로 개최 (6=연 2회, 12=매년, 24=2년마다, 36=3년마다, 48=4년마다, 60=5년마다)
+  PERIODIC
+  /// 부정기 — 필요·합의 시 소집 (예: 6자회담, 남북정상회담, 세계공의회)
+  IRREGULAR
+}
+
+/// 시리즈 운영 상태
+enum EventSeriesStatus {
+  /// 현행 유지 중 (차기 개최 추산·안내 대상)
+  ACTIVE
+  /// 잠정 중단·휴지기 (공식 폐지는 아니나 소집이 멈춘 상태 — 예: ASEM, 6자회담)
+  SUSPENDED
+  /// 종료·폐지됨 (기구 해산 또는 회의체 공식 폐지)
+  ENDED
+}
+
+/// 차기 개최 일정 상태 (자동 추산 vs 확정 발표 vs 연기)
+enum EventSeriesNextState {
+  /// 등록된 미래 예정 Event 또는 마지막 회차 + intervalMonths 기반으로 자동 추산
+  AUTO
+  /// 차기 개최 시기·개최국이 공식 발표·확정됨 (next* 오버라이드 필드 우선)
+  CONFIRMED
+  /// 예정된 차기 회차가 연기됨 (nextNote에 연기 사유 기록)
+  POSTPONED
+  /// 차기 일정 미정
+  TBD
+}
+
+/// 정기 사건·회의 시리즈 정본
+model EventSeries {
+  /// PK
+  id String @id @default(uuid()) @db.Char(36)
+
+  /// 시리즈 공식 명칭 (예: '아세안 정상회의', 'APEC 정상회의', '쿼드 정상회의', 'ASEM 정상회의', 'WTO 각료회의')
+  title String @db.VarChar(200)
+
+  /// 짧은 표시명 (예: 'ASEAN 정상회의', 'APEC', 'Quad')
+  shortTitle String? @map("short_title") @db.VarChar(80)
+
+  /// 원어·영문 명칭 (예: 'ASEAN Summit', 'APEC Economic Leaders\' Meeting', 'Quad Leaders\' Summit')
+  originalTitle String? @map("original_title") @db.VarChar(200)
+
+  /// 시리즈 개요·연혁·성격 설명
+  description String? @db.Text
+
+  /// 회차 사건 생성 시 기본 채울 분야·세부 분야
+  defaultDomain    EventDomain @default(DIPLOMACY) @map("default_domain")
+  defaultEventType EventType?  @default(SUMMIT) @map("default_event_type")
+
+  /// 주관·연계 조직 (예: ASEAN, APEC, Quad, WTO, IOC — 기구 없는 회담 시리즈면 null)
+  organizationId String?       @map("organization_id") @db.Char(36)
+  organization   Organization? @relation("OrganizationEventSeries", fields: [organizationId], references: [id], onDelete: SetNull)
+
+  /// 단일 국가 소속 정기 행사·회의인 경우 (예: 전국인민대표대회, 미국 국정연설 등)
+  countryId           String?            @map("country_id") @db.Char(36)
+  country             Country?           @relation("CountryEventSeries", fields: [countryId], references: [id], onDelete: SetNull)
+  historicalCountryId String?            @map("historical_country_id") @db.Char(36)
+  historicalCountry   HistoricalCountry? @relation("HistoricalCountryEventSeries", fields: [historicalCountryId], references: [id], onDelete: SetNull)
+
+  /// 개최 주기 규칙 — 개월 수 단위(6=반기/연2회, 12=매년, 24=2년마다, 36=3년마다, 48=4년마다, 60=5년마다)
+  cadenceKind          EventSeriesCadenceKind @default(PERIODIC) @map("cadence_kind")
+  intervalMonths       Int?                   @default(12) @map("interval_months")
+  /// 통상 개최 월 (1~12, 예: APEC=11, 유엔총회=9; 연 2회면 상반기 기준월)
+  typicalMonth         Int?                   @map("typical_month")
+  /// 연 2회(반기 주기) 등일 때 하반기 통상 개최 월 (1~12, 예: 아세안 정상회의 상반기 5월 · 하반기 10~11월)
+  typicalMonthSecondary Int?                  @map("typical_month_secondary")
+  /// 의장국·개최지 순번 규칙 메모 (예: '회원국 영문 알파벳순 1년 윤번', '아시아·유럽 격년 교대')
+  hostRotationRule     String?                @map("host_rotation_rule") @db.VarChar(300)
+  /// 의장국 순환 큐 자동 추론 활성 여부 (true이면 직전 정규 회차 주최국 다음 순번 회원국을 차기 의장국으로 자동 예고)
+  hostRotationEnabled  Boolean                @default(false) @map("host_rotation_enabled")
+  /// 커스텀 의장국 순환 큐 (국가 UUID 배열 JSON — null이면 주관 기구 정회원국 sortOrder 순서를 기본 사용)
+  hostRotationCountryIds Json?                @map("host_rotation_country_ids")
+
+  /// 시리즈 상태 및 시작·종료 연도 (BC 지원)
+  status      EventSeriesStatus @default(ACTIVE)
+  startedEra  Era?              @default(AD) @map("started_era")
+  startedYear Int?              @map("started_year")
+  endedEra    Era?              @default(AD) @map("ended_era")
+  endedYear   Int?              @map("ended_year")
+
+  /// 차기 개최 안내 오버라이드 (아직 Event 문서를 만들기 전 공식 발표된 차기 의장국·연도·연기 상태 기록용)
+  nextScheduleState EventSeriesNextState @default(AUTO) @map("next_schedule_state")
+  nextEditionNumber Int?                 @map("next_edition_number")
+  nextYear          Int?                 @map("next_year")
+  nextMonth         Int?                 @map("next_month")
+  nextDay           Int?                 @map("next_day")
+  nextHostCountryId String?              @map("next_host_country_id") @db.Char(36)
+  nextHostCountry   Country?             @relation("NextHostCountryEventSeries", fields: [nextHostCountryId], references: [id], onDelete: SetNull)
+  nextLocation      String?              @map("next_location") @db.VarChar(200)
+  nextNote          String?              @map("next_note") @db.VarChar(500)
+
+  /// 등록 계정 (null이면 공유 카탈로그)
+  accountId String?  @map("account_id") @db.Char(36)
+  account   Account? @relation("AccountEventSeries", fields: [accountId], references: [id], onDelete: SetNull)
+
+  /// 이 시리즈에 속한 역대·예정 회차 사건들
+  events Event[] @relation("EventSeriesEvents")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([organizationId], name: "idx_event_series_organizationId")
+  @@index([countryId], name: "idx_event_series_countryId")
+  @@index([historicalCountryId], name: "idx_event_series_histCountryId")
+  @@index([status], name: "idx_event_series_status")
+  @@index([defaultDomain, defaultEventType], name: "idx_event_series_classification")
+  @@index([accountId], name: "idx_event_series_accountId")
+  @@map("event_series")
+}

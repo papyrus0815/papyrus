@@ -24,6 +24,21 @@ const GROUP_TYPE_LABEL: Record<string, string> = {
   OTHER: '집단',
 }
 
+const ORG_TYPE_LABEL: Record<string, string> = {
+  INTERGOVERNMENTAL_ORG: '국제기구',
+  MULTILATERAL_FORUM: '다자 협의체·블록',
+  MILITARY_ALLIANCE: '군사 동맹',
+  GOVERNMENT_AGENCY: '정부 기관',
+  NGO: '비정부기구',
+  POLITICAL_PARTY: '정당 조직',
+  TRADE_UNION: '노동조합',
+  RELIGIOUS_ORG: '종교 단체',
+  BUSINESS_ASSOCIATION: '상공·업계 단체',
+  EDUCATION: '교육·학술기관',
+  MILITARY_ACADEMY: '군사 교육기관',
+  OTHER: '조직',
+}
+
 /**
  * 리치텍스트 엔티티 연결용 통합 검색 (DB `contains`, 타입별 상한)
  * GET /entity-link-search?q=&countryId=
@@ -75,6 +90,7 @@ export class EntityLinkSearchController {
       persons,
       events,
       companies,
+      organizations,
       countries,
       historicalCountries,
       dynasties,
@@ -145,6 +161,39 @@ export class EntityLinkSearchController {
               country: { select: { name: true } },
             },
           },
+        },
+      }),
+      // 국제기구·다자협의체·동맹·정부기관 등 비기업 조직 (기업은 위 Company 검색으로 분리)
+      this.prisma.organization.findMany({
+        where: {
+          type: { not: 'COMPANY' },
+          OR: [
+            { name: { contains: term } },
+            { shortName: { contains: term } },
+            { localName: { contains: term } },
+          ],
+          ...(partyFilter
+            ? {
+                AND: [
+                  {
+                    OR: [
+                      { countryId: partyFilter },
+                      { countryId: null },
+                      { memberships: { some: { countryId: partyFilter } } },
+                    ],
+                  },
+                ],
+              }
+            : {}),
+        },
+        take: 6,
+        orderBy: { name: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          shortName: true,
+          type: true,
+          country: { select: { name: true } },
         },
       }),
       this.prisma.country.findMany({
@@ -239,6 +288,19 @@ export class EntityLinkSearchController {
           company.organization.country?.name ??
           company.organization.localName ??
           undefined,
+      })
+    }
+    for (const org of organizations) {
+      const subParts = [
+        org.shortName?.trim() || null,
+        ORG_TYPE_LABEL[org.type] ?? null,
+        org.country?.name ?? null,
+      ].filter(Boolean)
+      items.push({
+        type: 'organization',
+        id: org.id,
+        name: org.name,
+        subtitle: subParts.length > 0 ? subParts.join(' · ') : undefined,
       })
     }
     for (const c of countries) {

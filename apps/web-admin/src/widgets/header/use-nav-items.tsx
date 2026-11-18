@@ -12,6 +12,7 @@ import {
   FiColumns,
   FiCompass,
   FiFileText,
+  FiFlag,
   FiGlobe,
   FiLayers,
   FiMap,
@@ -115,6 +116,13 @@ export function useNavItems(pathname: string): NavItemSpec[] {
         icon: <FiColumns size={18} />,
         onClick: go(pathKeys.government.list()),
         active: pathname.startsWith('/government'),
+      },
+      {
+        key: 'political-parties',
+        label: '정당',
+        icon: <FiFlag size={18} />,
+        onClick: go(pathKeys.politicalParties.list()),
+        active: pathname.startsWith('/political-parties'),
       },
       {
         key: 'organizations',

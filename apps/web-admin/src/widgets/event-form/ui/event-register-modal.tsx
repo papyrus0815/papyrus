@@ -45,6 +45,7 @@ import type {
 import type { EventRelatedDraft } from '@/features/event-facets/model/register-facets'
 import type {
   EventBasicFormHandle,
+  EventBasicFormProps,
   EventBasicFormState,
   EventParentPreset,
 } from '@/widgets/event-form/ui/event-basic-form'
@@ -112,6 +113,8 @@ export interface EventRegisterModalProps {
   initialCountries?: EventCountryParticipant[]
   /** 상세 '새 관련 사건 등록' 등 진입 지면의 연관 사건 프리필(신규 등록 전용) */
   initialRelatedEvents?: EventRelatedDraft[]
+  /** 정기 시리즈 차기 회차·결번 회차 원클릭 모달 프리필(신규 등록 전용) */
+  initialSeriesPrefill?: EventBasicFormProps['initialSeriesPrefill']
 }
 
 export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
@@ -125,6 +128,7 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
   initialEventType,
   initialCountries,
   initialRelatedEvents,
+  initialSeriesPrefill,
 }) => {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -379,6 +383,8 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
   const refetchMountedLists = useCallback(() => {
     void queryClient.refetchQueries({ queryKey: eventKeys.lists(), type: 'active' })
     void queryClient.refetchQueries({ queryKey: eventKeys.count(), type: 'active' })
+    void queryClient.invalidateQueries?.({ queryKey: ['event-series'] })
+    void queryClient.invalidateQueries?.({ queryKey: ['organizations'] })
   }, [queryClient])
 
   const handleSaved = useCallback(
@@ -558,6 +564,7 @@ export const EventRegisterModal: React.FC<EventRegisterModalProps> = ({
                   initialEventType={initialEventType}
                   initialCountries={initialCountries}
                   initialRelatedEvents={initialRelatedEvents}
+                  initialSeriesPrefill={initialSeriesPrefill}
                   layoutMode={layoutMode}
                   formRef={formRef}
                   onDirtyChange={markDirty}

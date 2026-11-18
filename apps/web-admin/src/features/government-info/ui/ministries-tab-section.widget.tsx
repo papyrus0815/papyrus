@@ -2,11 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   FiBriefcase,
-  FiCalendar,
   FiColumns,
   FiGitBranch,
   FiGrid,
-  FiLayers,
   FiList,
   FiMaximize2,
   FiPlus,
@@ -50,6 +48,12 @@ import {
   DepartmentTenuresBlock,
 } from './department-blocks'
 import {
+  GovMoreFieldGroup,
+  GovMoreFieldLabel,
+  GovMorePopover,
+  GovMoreTextInput,
+} from './gov-more-popover'
+import {
   GovActiveFilterChip,
   GovActiveFiltersRow,
   GovClearFiltersBtn,
@@ -58,9 +62,6 @@ import {
   GovPromSearch,
   GovPromSearchClear,
   GovPromSearchInput,
-  GovToolbarBtn,
-  GovToolbarDivider,
-  GovToolbarGroup,
   GovToolbarRight,
   GovToolbarRow,
   GovToolbarShell,
@@ -119,10 +120,10 @@ function formatPolitySpanLabel(span?: HistoricalPolityYearSpan | null): string |
     if (signed == null) return null
     return signed < 0 ? `BC ${Math.abs(signed)}` : `${signed}`
   }
-  const s = fmt(span.startSignedYear)
-  const e = fmt(span.endSignedYear)
-  if (!s && !e) return null
-  return `${s ?? '?'}–${e ?? ''}`
+  const startLabel = fmt(span.startSignedYear)
+  const endLabel = fmt(span.endSignedYear)
+  if (!startLabel && !endLabel) return null
+  return `${startLabel ?? '?'}–${endLabel ?? ''}`
 }
 
 export type MinistriesTabSectionProps = {
@@ -510,7 +511,7 @@ export function MinistriesTabSection({
       }
     }
 
-    const handledEraIds = new Set<string>(sections.map((s) => s.id))
+    const handledEraIds = new Set<string>(sections.map((secItem) => secItem.id))
     for (const eraItem of historicalErasAvailable) {
       if (handledEraIds.has(eraItem.id)) continue
       const eraDepts = deptsInActiveCatFiltered.filter(
@@ -632,54 +633,6 @@ export function MinistriesTabSection({
                 ) : null}
               </GovPromSearch>
 
-              <GovToolbarGroup role="group" aria-label="기관 성격 필터">
-                {visibleKindGroupKeys.map((groupKey) => (
-                  <GovToolbarBtn
-                    key={groupKey}
-                    type="button"
-                    $active={kindGroupFilter === groupKey}
-                    onClick={() => setKindGroupFilter(groupKey)}
-                  >
-                    {KIND_GROUP_LABEL[groupKey]}
-                  </GovToolbarBtn>
-                ))}
-              </GovToolbarGroup>
-
-              <GovToolbarGroup role="group" aria-label="기관 존속 상태 필터">
-                {(['ALL', 'ACTIVE', 'ABOLISHED'] as const).map((statusKey) => (
-                  <GovToolbarBtn
-                    key={statusKey}
-                    type="button"
-                    $active={statusFilter === statusKey}
-                    onClick={() => setStatusFilter(statusKey)}
-                  >
-                    {STATUS_FILTER_LABEL[statusKey]}
-                  </GovToolbarBtn>
-                ))}
-              </GovToolbarGroup>
-
-              <SnapshotYearWrap title="특정 연도(예: 1941, BC 221)에 존재했던 기관만 스냅샷 필터링합니다">
-                <FiCalendar size={12.5} aria-hidden />
-                <SnapshotYearInput
-                  type="text"
-                  value={snapshotYearInput}
-                  onChange={(changeEvt) =>
-                    setSnapshotYearInput(changeEvt.target.value)
-                  }
-                  placeholder="기준 연도 (예: 1941)"
-                  aria-label="기준 연도 스냅샷 필터"
-                />
-                {snapshotYearInput ? (
-                  <GovPromSearchClear
-                    type="button"
-                    aria-label="기준 연도 지우기"
-                    onClick={() => setSnapshotYearInput('')}
-                  >
-                    <FiX size={11} />
-                  </GovPromSearchClear>
-                ) : null}
-              </SnapshotYearWrap>
-
               {historicalErasAvailable.length > 0 ? (
                 <EraSelect
                   aria-label={isHistorical ? '소속 정치체 필터' : '시대·정체 필터'}
@@ -726,99 +679,159 @@ export function MinistriesTabSection({
                 </EraSelect>
               ) : null}
 
+              {visibleKindGroupKeys.length > 2 ? (
+                <EraSelect
+                  aria-label="기관 성격 필터"
+                  value={kindGroupFilter}
+                  onChange={(changeEvent) =>
+                    setKindGroupFilter(
+                      changeEvent.target.value as DepartmentKindGroup,
+                    )
+                  }
+                >
+                  {visibleKindGroupKeys.map((groupKey) => (
+                    <option key={groupKey} value={groupKey}>
+                      {groupKey === 'ALL'
+                        ? '기관 구분: 전체'
+                        : KIND_GROUP_LABEL[groupKey]}
+                    </option>
+                  ))}
+                </EraSelect>
+              ) : null}
+
               <GovToolbarRight>
                 <GovViewMeta>
-                  표시 <strong>{deptsInActiveCatFiltered.length}</strong> · 전체{' '}
-                  <strong>{kpiStats.totalCount}</strong>
+                  {deptsInActiveCatFiltered.length === kpiStats.totalCount ? (
+                    <>
+                      전체 <strong>{kpiStats.totalCount}</strong>
+                    </>
+                  ) : (
+                    <>
+                      표시 <strong>{deptsInActiveCatFiltered.length}</strong> /{' '}
+                      <strong>{kpiStats.totalCount}</strong>
+                    </>
+                  )}
                 </GovViewMeta>
-
-                {kpiStats.linkedUnitCount > 0 ? (
-                  <GovToolbarBtn
-                    type="button"
-                    onClick={() => onOpenMilitaryTab?.()}
-                    title="군사 탭에서 소관 부대 편제 보기"
-                  >
-                    <FiShield size={12.5} />
-                    <span>군부대 {kpiStats.linkedUnitCount}</span>
-                  </GovToolbarBtn>
-                ) : null}
 
                 {effectiveCountryId ? (
                   <>
-                    <GovToolbarDivider />
-                    {browseViewMode === 'TREE' &&
-                    eraFilter === 'ALL' &&
-                    historicalErasAvailable.length > 0 ? (
-                      <GovToolbarBtn
-                        type="button"
-                        $active={groupByEra}
-                        onClick={() => setGroupByEra((prev) => !prev)}
-                        title={
-                          groupByEra
-                            ? '현재 시대·정체별 섹션으로 묶어 표시 중 (클릭하여 가나다 평면 트리로 전환)'
-                            : '클릭하면 현대 직속과 역사국가별로 섹션을 나누어 표시합니다'
-                        }
-                      >
-                        <FiLayers size={12.5} />
-                        <span>시대별 묶음</span>
-                      </GovToolbarBtn>
-                    ) : null}
-                    <GovToolbarGroup role="group" aria-label="목록 표시 방식">
-                      <GovToolbarBtn
-                        type="button"
-                        $active={browseViewMode === 'TREE'}
-                        onClick={() => setBrowseViewMode('TREE')}
-                        title="상하 위계 편제 트리 보기"
-                      >
-                        <FiGitBranch size={12.5} />
-                        <span>편제 트리</span>
-                      </GovToolbarBtn>
-                      <GovToolbarBtn
-                        type="button"
-                        $active={browseViewMode === 'LEDGER'}
-                        onClick={() => setBrowseViewMode('LEDGER')}
-                        title="설립·폐지일, 상위기관, 역대 인사·계보 원장 표 보기"
-                      >
-                        <FiList size={12.5} />
-                        <span>원장 표</span>
-                      </GovToolbarBtn>
-                    </GovToolbarGroup>
-
-                    <GovToolbarBtn
-                      type="button"
-                      $active={layoutMode === 'SPLIT'}
-                      onClick={() =>
-                        setLayoutMode((prev) =>
-                          prev === 'SPLIT' ? 'FOCUS' : 'SPLIT',
-                        )
+                    <GovMorePopover
+                      ariaLabel="기관 목록 보기 및 필터 설정"
+                      title="보기 방식 · 배치 · 상세 필터"
+                      menuWidth={284}
+                      hasActiveIndicator={
+                        browseViewMode !== 'TREE' ||
+                        layoutMode !== 'SPLIT' ||
+                        statusFilter !== 'ALL' ||
+                        parsedSnapshotYear != null ||
+                        !groupByEra
                       }
-                      title={
-                        layoutMode === 'SPLIT'
-                          ? '현재 분할 보기 (클릭하여 단독 보기 전환)'
-                          : '현재 단독 보기 (클릭하여 분할 보기 전환)'
+                      segments={[
+                        {
+                          key: 'browse-view',
+                          label: '목록 표시 방식',
+                          value: browseViewMode,
+                          options: [
+                            {
+                              value: 'TREE',
+                              label: '편제 트리',
+                              icon: <FiGitBranch size={12} />,
+                            },
+                            {
+                              value: 'LEDGER',
+                              label: '원장 표',
+                              icon: <FiList size={12} />,
+                            },
+                          ],
+                          onChange: (nextVal) =>
+                            setBrowseViewMode(nextVal as BrowseViewMode),
+                        },
+                        {
+                          key: 'layout-mode',
+                          label: '화면 배치',
+                          value: layoutMode,
+                          options: [
+                            {
+                              value: 'SPLIT',
+                              label: '2단 분할',
+                              icon: <FiColumns size={12} />,
+                            },
+                            {
+                              value: 'FOCUS',
+                              label: '단독 보기',
+                              icon: <FiMaximize2 size={12} />,
+                            },
+                          ],
+                          onChange: (nextVal) =>
+                            setLayoutMode(nextVal as WorkspaceLayoutMode),
+                        },
+                        {
+                          key: 'status-filter',
+                          label: '존속 상태 필터',
+                          value: statusFilter,
+                          options: [
+                            { value: 'ALL', label: '전체' },
+                            { value: 'ACTIVE', label: '현존' },
+                            { value: 'ABOLISHED', label: '폐지' },
+                          ],
+                          onChange: (nextVal) =>
+                            setStatusFilter(nextVal as DepartmentStatusFilter),
+                        },
+                      ]}
+                      customContent={
+                        <GovMoreFieldGroup>
+                          <GovMoreFieldLabel htmlFor="gov-ministry-snapshot-year">
+                            기준 연도 스냅샷 필터
+                          </GovMoreFieldLabel>
+                          <GovMoreTextInput
+                            id="gov-ministry-snapshot-year"
+                            type="text"
+                            value={snapshotYearInput}
+                            onChange={(changeEvt) =>
+                              setSnapshotYearInput(changeEvt.target.value)
+                            }
+                            placeholder="예: 1941, BC 221"
+                            aria-label="기준 연도 스냅샷 필터"
+                          />
+                        </GovMoreFieldGroup>
                       }
-                    >
-                      {layoutMode === 'SPLIT' ? (
-                        <>
-                          <FiColumns size={13} />
-                          <span>분할</span>
-                        </>
-                      ) : (
-                        <>
-                          <FiMaximize2 size={13} />
-                          <span>단독</span>
-                        </>
-                      )}
-                    </GovToolbarBtn>
-
-                    <GovToolbarBtn
-                      type="button"
-                      onClick={() => openCategoryModal()}
-                      title="모든 국가·시대가 공유하는 전역 직능 분류 사전을 관리합니다"
-                    >
-                      <FiGrid size={13} />
-                      <span>전역 분류 ({categoriesList.length})</span>
-                    </GovToolbarBtn>
+                      toggles={
+                        browseViewMode === 'TREE' &&
+                        eraFilter === 'ALL' &&
+                        historicalErasAvailable.length > 0
+                          ? [
+                              {
+                                key: 'group-by-era',
+                                label: '시대·정체별 묶음 표시',
+                                description:
+                                  '현대 직속과 역사 정치체를 섹션으로 구분',
+                                checked: groupByEra,
+                                onChange: setGroupByEra,
+                              },
+                            ]
+                          : []
+                      }
+                      actions={[
+                        {
+                          key: 'global-categories',
+                          label: '전역 직능 분류 관리',
+                          icon: <FiGrid size={13.5} />,
+                          badge: String(categoriesList.length),
+                          onClick: () => openCategoryModal(),
+                        },
+                        ...(kpiStats.linkedUnitCount > 0 && onOpenMilitaryTab
+                          ? [
+                              {
+                                key: 'open-military-tab',
+                                label: '군사 탭 소관 부대 보기',
+                                icon: <FiShield size={13.5} />,
+                                badge: String(kpiStats.linkedUnitCount),
+                                onClick: () => onOpenMilitaryTab(),
+                              },
+                            ]
+                          : []),
+                      ]}
+                    />
 
                     <GovPrimaryBtn
                       type="button"
@@ -1377,42 +1390,6 @@ const WorkspaceStack = styled.div`
   display: flex;
   flex-direction: column;
   gap: 12px;
-`
-
-const SnapshotYearWrap = styled.div`
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 8px 0 10px;
-  border-radius: 8px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  background-color: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.03)' : '#ffffff'};
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.1)'
-        : 'rgba(20, 19, 34, 0.1)'};
-`
-
-const SnapshotYearInput = styled.input`
-  width: 118px;
-  height: 100%;
-  border: none;
-  background: transparent;
-  outline: none;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.colors.text.primary};
-
-  &::placeholder {
-    font-weight: 500;
-    color: ${({ theme }) => theme.colors.text.tertiary};
-  }
 `
 
 const SplitWorkspaceGrid = styled.div<{ $ledgerView?: boolean }>`

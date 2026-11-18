@@ -14,17 +14,15 @@ import {
   FiPrinter,
   FiTrash2,
 } from 'react-icons/fi'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
 import {
   ledgerAccent,
   ledgerAccentBorder,
   ledgerAccentSubtle,
-  ledgerHairlineStrong,
-  ledgerHoverFill,
-  RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
+import { GovMorePopover } from '@/features/government-info/ui/gov-more-popover'
 import { parseSignedDateParts } from '@/shared/lib/tenure-person-utils'
 import { pathKeys } from '@/shared/router'
 
@@ -113,6 +111,7 @@ export function CabinetDetailChrome({
   onBackToList,
   onCompareContemporary,
 }: CabinetDetailChromeProps) {
+  const navigate = useNavigate()
   const cabinetSubtitle =
     selectedCabinet &&
     typeof selectedCabinet.name === 'string' &&
@@ -239,58 +238,6 @@ export function CabinetDetailChrome({
           aria-label="행정부·각료 작업"
           style={{ flexShrink: 0, alignSelf: 'flex-start', paddingTop: 2 }}
         >
-          {selectedCabinet &&
-          !selectedMinisterId &&
-          !selectedHeadHistoryId &&
-          onOpenLinkageModal ? (
-            <SecondaryToolbarPillBtn
-              type="button"
-              onClick={() => onOpenLinkageModal()}
-              title="동시대 사건을 축으로 다른 나라 행정부와 연결"
-            >
-              <FiLink2 size={13} />
-              <span>
-                다국 행정부 묶기
-                {linkedPeerCount > 0 ? ` (${linkedPeerCount})` : ''}
-              </span>
-            </SecondaryToolbarPillBtn>
-          ) : null}
-          {selectedCabinet &&
-          !selectedMinisterId &&
-          !selectedHeadHistoryId &&
-          contemporarySignedYear != null &&
-          onCompareContemporary ? (
-            <ContemporaryCompareBtn
-              type="button"
-              onClick={() => onCompareContemporary(contemporarySignedYear)}
-              title={`${contemporaryYearLabel}년 시점 전 세계 행정부·내각 비교 허브로 이동`}
-            >
-              <FiGlobe size={13} />
-              <span>동시대 타국 비교 ({contemporaryYearLabel}년)</span>
-            </ContemporaryCompareBtn>
-          ) : null}
-          {selectedCabinet &&
-          !selectedMinisterId &&
-          !selectedHeadHistoryId &&
-          selectedCabinet.id ? (
-            <StandaloneDetailLink
-              to={pathKeys.government.cabinetDetail(String(selectedCabinet.id))}
-              title="2컬럼 전용 행정부 상세 워크스페이스 지면으로 열기"
-            >
-              <span>상세 지면</span>
-              <FiArrowUpRight size={13} />
-            </StandaloneDetailLink>
-          ) : null}
-          {selectedCabinet && onPrint ? (
-            <DetailHeaderIconBtn
-              type="button"
-              aria-label="인쇄"
-              title="인쇄"
-              onClick={() => onPrint()}
-            >
-              <FiPrinter size={15} strokeWidth={2} />
-            </DetailHeaderIconBtn>
-          ) : null}
           {selectedMinisterId &&
             !selectedHistoryId &&
             onEditMinister &&
@@ -314,28 +261,96 @@ export function CabinetDetailChrome({
           selectedCabinet &&
           onEditCabinet &&
           !selectedHeadHistoryId ? (
-            <DetailHeaderIconBtn
+            <EditCabinetPillBtn
               type="button"
               aria-label="행정부 수정"
-              title="행정부 수정"
+              title="행정부 정보 수정"
               onClick={() => onEditCabinet()}
             >
-              <FiEdit2 size={15} strokeWidth={2} />
-            </DetailHeaderIconBtn>
+              <FiEdit2 size={13} strokeWidth={2} />
+              <span>수정</span>
+            </EditCabinetPillBtn>
           ) : null}
-          {!selectedMinisterId && selectedCabinet && !selectedHeadHistoryId && (
-            <DetailHeaderIconBtn
-              type="button"
-              $variant="danger"
-              aria-label="행정부 삭제"
-              title="행정부 삭제"
-              onClick={(clickEvent) =>
-                handleDeleteCabinet(selectedCabinet.id, clickEvent)
-              }
-            >
-              <FiTrash2 size={15} strokeWidth={2} />
-            </DetailHeaderIconBtn>
-          )}
+          {selectedCabinet ? (
+            <GovMorePopover
+              triggerSize="sm"
+              ariaLabel="행정부 상세 더보기 메뉴"
+              title="비교 · 묶기 · 인쇄 · 삭제"
+              hasActiveIndicator={linkedPeerCount > 0}
+              actions={[
+                ...(!selectedMinisterId &&
+                !selectedHeadHistoryId &&
+                onOpenLinkageModal
+                  ? [
+                      {
+                        key: 'linkage',
+                        label: '다국 행정부 묶기',
+                        icon: <FiLink2 size={13.5} />,
+                        badge:
+                          linkedPeerCount > 0
+                            ? String(linkedPeerCount)
+                            : undefined,
+                        onClick: () => onOpenLinkageModal(),
+                      },
+                    ]
+                  : []),
+                ...(!selectedMinisterId &&
+                !selectedHeadHistoryId &&
+                contemporarySignedYear != null &&
+                onCompareContemporary
+                  ? [
+                      {
+                        key: 'compare-contemporary',
+                        label: `동시대 타국 비교 (${contemporaryYearLabel}년)`,
+                        icon: <FiGlobe size={13.5} />,
+                        onClick: () =>
+                          onCompareContemporary(contemporarySignedYear),
+                      },
+                    ]
+                  : []),
+                ...(!selectedMinisterId &&
+                !selectedHeadHistoryId &&
+                selectedCabinet.id
+                  ? [
+                      {
+                        key: 'standalone-detail',
+                        label: '전용 상세 지면 열기 ↗',
+                        icon: <FiArrowUpRight size={13.5} />,
+                        onClick: () =>
+                          navigate(
+                            pathKeys.government.cabinetDetail(
+                              String(selectedCabinet.id),
+                            ),
+                          ),
+                      },
+                    ]
+                  : []),
+                ...(onPrint
+                  ? [
+                      {
+                        key: 'print',
+                        label: '화면 인쇄',
+                        icon: <FiPrinter size={13.5} />,
+                        onClick: () => onPrint(),
+                      },
+                    ]
+                  : []),
+                ...(!selectedMinisterId && !selectedHeadHistoryId
+                  ? [
+                      {
+                        key: 'delete-cabinet',
+                        label: '행정부 삭제',
+                        icon: <FiTrash2 size={13.5} />,
+                        danger: true,
+                        onClick: (
+                          mouseEvent: React.MouseEvent<HTMLButtonElement>,
+                        ) => handleDeleteCabinet(selectedCabinet.id, mouseEvent),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          ) : null}
         </DetailToolbar>
       </CabS.CabDetailTopBar>
 
@@ -422,23 +437,28 @@ export function CabinetDetailChrome({
   )
 }
 
-const SecondaryToolbarPillBtn = styled.button`
+const EditCabinetPillBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 5px;
   height: 30px;
   padding: 0 10px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
+  border-radius: 8px;
+  border: 1px solid
+    ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
+  background: ${({ theme }) =>
+    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#ffffff'};
   color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
 
   &:hover {
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    background: ${({ theme }) =>
+      theme.mode === 'dark' ? 'rgba(255,255,255,0.07)' : '#f8fafc'};
     color: ${({ theme }) => theme.colors.text.primary};
   }
 `
@@ -571,47 +591,4 @@ const ReshufflePillBtn = styled.button<{ $active: boolean }>`
 const ReshufflePillPeriod = styled.span`
   font-size: 10.5px;
   opacity: 0.78;
-`
-
-const ContemporaryCompareBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 30px;
-  padding: 0 10px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-
-  &:hover {
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
-    color: ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-`
-
-const StandaloneDetailLink = styled(Link)`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 30px;
-  padding: 0 10px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 12px;
-  font-weight: 600;
-  text-decoration: none;
-  white-space: nowrap;
-
-  &:hover {
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
 `

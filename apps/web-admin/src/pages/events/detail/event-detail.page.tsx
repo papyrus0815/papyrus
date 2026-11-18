@@ -58,6 +58,7 @@ import { EventKindGuideModal } from './components/event-kind-guide-modal'
 import { DetailFacts } from './components/detail-facts'
 import { DetailDepartments, eventDepartmentsQueryKey } from './components/detail-departments'
 import { DetailOrganizations } from './components/detail-organizations'
+import { DetailPoliticalParties } from './components/detail-political-parties'
 import { DetailPower, hasPowerData } from './components/detail-power'
 import { DetailRail } from './components/detail-rail'
 import { DetailStatehood, statehoodEntries } from './components/detail-statehood'
@@ -104,7 +105,7 @@ const EVENT_TABS: ReadonlyArray<{ id: EventTabId; label: string; hint: string }>
   { id: 'overview', label: '개요', hint: '배경 · 전개 · 여파 · 댓글' },
   /* 묶음 사건만 — 하위 사건 전부를 한 화면에 모은다 */
   { id: 'survey', label: '조망', hint: '하위 사건 전부 — 전개 간트 · 참여국 · 분포 · 기록 점검' },
-  { id: 'actors', label: '참여', hint: '인물·국가 · 성립·소멸 · 권력 교체 · 기업·조직' },
+  { id: 'actors', label: '참여', hint: '인물·국가 · 성립·소멸 · 권력 교체 · 기구·기업' },
   { id: 'modules', label: '진영·수치', hint: '진영 · 수치 · 작전 정보 · 관련 행정부' },
   { id: 'links', label: '연관', hint: '조약 · 상위·하위·관련 사건' },
   { id: 'media', label: '자료', hint: '이미지' },
@@ -127,7 +128,7 @@ const LazyEventOverviewPanel = lazy(() =>
 function tabOfSection(id: string, promoteTreaties: boolean): EventTabId {
   /* 선전포고 당사국 보드는 개요에만 선다(그 사건의 핵심 사실) — 참여 탭에는 같은 나라의 목록이 이미 있다 */
   if (/^(background|narrative|aftermath|comments|development|war-declaration)/.test(id)) return 'overview'
-  if (/^(actors|statehood|territory|power|departments|organizations)/.test(id)) return 'actors'
+  if (/^(actors|statehood|territory|power|departments|political-parties|organizations|companies)/.test(id)) return 'actors'
   if (id.startsWith('module-')) return 'modules'
   if (id === 'treaties') return promoteTreaties ? 'overview' : 'links'
   if (id === 'network') return 'links'
@@ -508,6 +509,7 @@ function EventDetailContent({
       countOf(event.relatedCountries) +
       countOf(event.relatedHistoricalCountries) +
       departmentCount +
+      countOf(event.politicalParties) +
       countOf(event.organizations),
     modules: enabledModules.length,
     links:
@@ -706,7 +708,27 @@ function EventDetailContent({
     if (showTerritory) items.push({ id: 'territory', label: '영토 이전' })
     if (showPower) items.push({ id: 'power', label: '권력 교체·선거' })
     if (departmentCount > 0) items.push({ id: 'departments', label: '관련 기관' })
-    if (showOrganizations) items.push({ id: 'organizations', label: '관련 기업·조직' })
+    const politicalPartyCount = (event.politicalParties ?? []).length
+    if (politicalPartyCount > 0 || event.domain === 'POLITICS') {
+      items.push({ id: 'political-parties', label: '관련 정당' })
+    }
+    const nonCompanyOrgCount = (event.organizations ?? []).filter((o) => !o.companyId).length
+    const companyOrgCount = (event.organizations ?? []).filter((o) => Boolean(o.companyId)).length
+    if (
+      nonCompanyOrgCount > 0 ||
+      event.type === 'SUMMIT' ||
+      event.type === 'INSTITUTION' ||
+      (features.expectOrganizations && event.type !== 'COMPANY' && event.domain !== 'ECONOMY')
+    ) {
+      items.push({ id: 'organizations', label: '관련 기구·조직' })
+    }
+    if (
+      companyOrgCount > 0 ||
+      event.type === 'COMPANY' ||
+      (features.expectOrganizations && event.domain === 'ECONOMY')
+    ) {
+      items.push({ id: 'companies', label: '관련 기업' })
+    }
     if (promoteTreaties && shown('treaties')) items.push({ id: 'treaties', label: '조약' })
     if (shown('actors')) items.push({ id: 'actors', label: '참여 행위자' })
 
@@ -1275,6 +1297,11 @@ function EventDetailContent({
                     event={event}
                     expectDepartments={expectDepartments}
                     readOnly={trashedView}
+                  />
+                  <DetailPoliticalParties
+                    event={event}
+                    readOnly={trashedView}
+                    onPatch={onPatch}
                   />
                   {(!trashedView || showOrganizations) && (
                     <DetailOrganizations

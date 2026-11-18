@@ -265,7 +265,10 @@ export function useGovernmentStatistics(options?: GovernmentStatisticsOptions) {
       )
       if (!cabYear) continue
       const headPersonName = cabItem.headTenure?.person
-        ? getPersonDisplayName(cabItem.headTenure.person)
+        ? getPersonDisplayName({
+            ...cabItem.headTenure.person,
+            name: cabItem.headTenure.person.name ?? '',
+          })
         : null
       const posTitle =
         cabItem.headTenure?.positionDefinition?.title ??

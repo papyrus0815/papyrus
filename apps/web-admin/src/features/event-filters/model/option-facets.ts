@@ -75,6 +75,7 @@ export const EMPTY_FILTER_OPTION_COUNTS: FilterOptionCounts = {
     keyword: 0,
     bookmark: 0,
     period: 0,
+    series: 0,
   },
   unfiltered: 0,
 }
@@ -102,6 +103,7 @@ export function buildFilterOptionCounts(
     keyword: 0,
     bookmark: 0,
     period: 0,
+    series: 0,
   }
 
   /**

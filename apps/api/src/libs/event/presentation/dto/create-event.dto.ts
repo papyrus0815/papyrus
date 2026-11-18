@@ -159,6 +159,27 @@ export class CreateEventDto {
   @IsOptional()
   aftermath?: string
 
+  @ApiProperty({ description: '소속 정기 사건·회의 시리즈 ID (선택)', required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null && value !== '')
+  @IsString()
+  seriesId?: string | null
+
+  @ApiProperty({ description: '시리즈 회차 번호 (예: 43)', required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsNumber()
+  @Min(1)
+  @Max(9999)
+  seriesEdition?: number | null
+
+  @ApiProperty({ description: "특수·합동 회차 표기 (예: '제44·45차', '특별 정상회의')", required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsString()
+  @MaxLength(60)
+  seriesEditionLabel?: string | null
+
   @ApiProperty({
     description: '상위 사건 ID. 미지정·null이면 최상위 사건으로 생성된다.',
     required: false,

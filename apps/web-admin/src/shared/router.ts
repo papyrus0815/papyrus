@@ -85,6 +85,30 @@ export const pathKeys = {
       `/${ROUTES.GOVERNMENT}/departments/${encodeURIComponent(departmentId)}`,
   },
 
+  /** 전 국가 정당 편람 — 모든 현대·역사 국가 정당 통합 탐색·계보·관련 사건 */
+  politicalParties: {
+    list: (params?: {
+      id?: string
+      countryId?: string
+      historicalCountryId?: string
+      position?: string
+      q?: string
+    }) => {
+      const qs = new URLSearchParams()
+      if (params?.id) qs.set('id', params.id)
+      if (params?.countryId) qs.set('countryId', params.countryId)
+      if (params?.historicalCountryId) {
+        qs.set('historicalCountryId', params.historicalCountryId)
+      }
+      if (params?.position) qs.set('position', params.position)
+      if (params?.q?.trim()) qs.set('q', params.q.trim())
+      const queryString = qs.toString()
+      return `/${ROUTES.POLITICAL_PARTIES}${queryString ? `?${queryString}` : ''}`
+    },
+    detail: (partyId: string) =>
+      `/${ROUTES.POLITICAL_PARTIES}?id=${encodeURIComponent(partyId)}`,
+  },
+
   /** 출처 서고 — sourceId를 주면 그 출처를 펼친 채로 */
   sources: (sourceId?: string) =>
     `/${ROUTES.SOURCES}/${sourceId ? `?id=${encodeURIComponent(sourceId)}` : ''}`,

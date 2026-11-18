@@ -1,11 +1,14 @@
 export {
+  HEADQUARTERS_ZOOM_PRESETS,
   buildHeadquartersGoogleMapsSpec,
   buildHeadquartersSearchHints,
   clampValidWgs84,
   formatHeadquartersCoordinate,
   parseHeadquartersMapInput,
+  type HeadquartersGoogleMapLayer,
   type HeadquartersGoogleMapsSpec,
   type HeadquartersPoint,
+  type HeadquartersZoomPreset,
   type ParsedHeadquartersMapInput,
 } from './headquarters-google-map.lib'
 export {

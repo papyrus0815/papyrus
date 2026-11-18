@@ -10,6 +10,38 @@ export type PoliticalPosition =
   | 'FAR_RIGHT'
   | 'BIG_TENT'
 
+export const POLITICAL_POSITION_LABEL: Record<PoliticalPosition, string> = {
+  FAR_LEFT: '극좌',
+  LEFT: '좌파',
+  CENTER_LEFT: '중도좌파',
+  CENTER: '중도',
+  CENTER_RIGHT: '중도우파',
+  RIGHT: '우파',
+  FAR_RIGHT: '극우',
+  BIG_TENT: '포괄·빅텐트',
+}
+
+export const POLITICAL_POSITION_COLOR: Record<PoliticalPosition, string> = {
+  FAR_LEFT: '#b91c1c',
+  LEFT: '#e11d48',
+  CENTER_LEFT: '#f97316',
+  CENTER: '#eab308',
+  CENTER_RIGHT: '#0284c7',
+  RIGHT: '#2563eb',
+  FAR_RIGHT: '#4338ca',
+  BIG_TENT: '#0d9488',
+}
+
+export type PoliticalPartyCounts = {
+  memberships?: number
+  leaderships?: number
+  electionPartyResults?: number
+  cabinetAffiliations?: number
+  eventRelations?: number
+  transitionsFrom?: number
+  transitionsTo?: number
+}
+
 export type PoliticalParty = PoliticalPartyRow & {
   localName?: string | null
   ideology?: string | null
@@ -19,6 +51,13 @@ export type PoliticalParty = PoliticalPartyRow & {
   dissolvedDate?: string | null
   logoUrl?: string | null
   brandColor?: string | null
+  aliases?: Array<{
+    id: string
+    name: string
+    type: string
+    languageCode?: string | null
+  }>
+  _count?: PoliticalPartyCounts
   createdAt?: string
   updatedAt?: string
 }
@@ -204,6 +243,36 @@ export type PartyCabinetAffiliationRow = {
   } | null
 }
 
+/** GET /political-parties/:id/events */
+export type PartyRelatedEventRow = {
+  relationId: string
+  role: string
+  roleDescription?: string | null
+  note?: string | null
+  side?: {
+    id: string
+    name: string
+    color?: string | null
+    outcome?: string | null
+  } | null
+  event: {
+    id: string
+    title: string
+    domain: string
+    type?: string | null
+    startDate?: string | null
+    startEra?: string | null
+    startYear?: number | null
+    startMonth?: number | null
+    startDay?: number | null
+    endDate?: string | null
+    endEra?: string | null
+    endYear?: number | null
+    endMonth?: number | null
+    endDay?: number | null
+  }
+}
+
 export const politicalPartyApi = {
   getAll: async (params?: { countryId?: string; historicalCountryId?: string }) => {
     return fetchParties(params) as Promise<PoliticalParty[]>
@@ -267,6 +336,13 @@ export const politicalPartyApi = {
   getCabinetAffiliations: async (partyId: string) => {
     return requestJson<PartyCabinetAffiliationRow[]>(
       `/political-parties/${encodeURIComponent(partyId)}/cabinet-affiliations`,
+    )
+  },
+
+  /** 관련 역사 사건 (봉기·혁명·총파업·창당·해산 등) */
+  getEvents: async (partyId: string) => {
+    return requestJson<PartyRelatedEventRow[]>(
+      `/political-parties/${encodeURIComponent(partyId)}/events`,
     )
   },
 

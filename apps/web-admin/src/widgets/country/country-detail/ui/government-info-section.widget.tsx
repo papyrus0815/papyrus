@@ -5,7 +5,7 @@
  */
 import { useQuery } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FiArrowUpRight, FiAward, FiGlobe } from 'react-icons/fi'
+import { FiAward, FiGlobe, FiGrid } from 'react-icons/fi'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -17,13 +17,13 @@ import {
   type GovernmentContentTab,
 } from '@/features/government-info/model/government-content-tab'
 import { useConstituentHistoricalPolities } from '@/features/government-info/model/use-constituent-historical-polities'
+import { GovMorePopover } from '@/features/government-info/ui/gov-more-popover'
 import {
   GovLedgerPage,
   GovSubNavBar,
   GovSubTabBtn,
   GovSubTabCount,
   GovSubTabList,
-  GovToolbarBtn,
 } from '@/features/government-info/ui/government-ledger.styles'
 import { GovernmentStatisticsTab } from '@/features/government-info/ui/government-statistics-tab.widget'
 import { MinistriesTabSection } from '@/features/government-info/ui/ministries-tab-section.widget'
@@ -368,43 +368,49 @@ export function GovernmentInfoSection({
 
           {effectiveCountryId ? (
             <GovSubNavActions>
-              <GovToolbarBtn
-                type="button"
-                $active={positionsDrawerOpen}
-                onClick={() => {
-                  setPositionFilterContext(null)
-                  setPositionsDrawerOpen(true)
-                }}
-                title="이 국가의 고유 관직·직제 및 부처 소속 직위 사전을 엽니다"
-              >
-                <FiAward size={13} />
-                <span>
-                  고유 관직
-                  {dedicatedPositionCount > 0
-                    ? ` (${dedicatedPositionCount})`
-                    : ''}
-                </span>
-              </GovToolbarBtn>
-
-              <GovToolbarBtn
-                type="button"
-                onClick={() =>
-                  navigate(
-                    pathKeys.government.list({
-                      tab:
-                        contentTab === 'ministries'
-                          ? 'departments'
-                          : 'cabinets',
-                    }),
-                    { state: { skipGovernmentMemoryRestore: true } },
-                  )
-                }
-                title="전 국가 행정부·내각 및 중앙부처 비교 카탈로그로 이동"
-              >
-                <FiGlobe size={13} />
-                <span>전 국가 정부·내각 허브</span>
-                <FiArrowUpRight size={12.5} />
-              </GovToolbarBtn>
+              <GovMorePopover
+                ariaLabel="정부·행정 도구 및 사전 메뉴"
+                title="관직 사전 · 직능 분류 · 전 국가 허브"
+                triggerSize="sm"
+                hasActiveIndicator={positionsDrawerOpen || categoryModalOpen}
+                actions={[
+                  {
+                    key: 'country-positions',
+                    label: '고유 관직 · 직제 사전',
+                    icon: <FiAward size={14} />,
+                    badge:
+                      dedicatedPositionCount > 0
+                        ? String(dedicatedPositionCount)
+                        : undefined,
+                    active: positionsDrawerOpen,
+                    onClick: () => {
+                      setPositionFilterContext(null)
+                      setPositionsDrawerOpen(true)
+                    },
+                  },
+                  {
+                    key: 'global-categories',
+                    label: '전역 직능 분류 관리',
+                    icon: <FiGrid size={14} />,
+                    onClick: () => openCategoryModal(),
+                  },
+                  {
+                    key: 'global-hub',
+                    label: '전 국가 정부·내각 허브 ↗',
+                    icon: <FiGlobe size={14} />,
+                    onClick: () =>
+                      navigate(
+                        pathKeys.government.list({
+                          tab:
+                            contentTab === 'ministries'
+                              ? 'departments'
+                              : 'cabinets',
+                        }),
+                        { state: { skipGovernmentMemoryRestore: true } },
+                      ),
+                  },
+                ]}
+              />
             </GovSubNavActions>
           ) : null}
         </GovSubNavBar>

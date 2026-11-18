@@ -163,6 +163,8 @@ describe('eventTypeFeatures — 상세 지면이 읽는 기능', () => {
     expect(eventTypeFeatures('POWER_CHANGE').expectPower).toBe(true)
     expect(eventTypeFeatures('ELECTION').expectPower).toBe(true)
     expect(eventTypeFeatures('INSTITUTION').expectOrganizations).toBe(true)
+    expect(eventTypeFeatures('SUMMIT').expectOrganizations).toBe(true)
+    expect(DOMAIN_SUBTYPES.ECONOMY).toContain('SUMMIT')
     expect(eventTypeFeatures('BATTLE').expectStatehood).toBe(false)
     expect(eventTypeFeatures('DECLARATION').expectWarDeclaration).toBe(false)
   })
@@ -187,6 +189,10 @@ describe('suggestClassificationFromTitle — 사건명 기반 분야·세부 추
       type: 'TREATY',
     })
     expect(suggestClassificationFromTitle('베를린 회의')).toEqual({
+      domain: 'DIPLOMACY',
+      type: 'SUMMIT',
+    })
+    expect(suggestClassificationFromTitle('제43차 아세안 정상회의')).toEqual({
       domain: 'DIPLOMACY',
       type: 'SUMMIT',
     })

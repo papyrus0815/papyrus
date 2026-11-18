@@ -3,6 +3,7 @@ export type EntityLinkSearchItemDto = {
     | 'person'
     | 'event'
     | 'company'
+    | 'organization'
     | 'country'
     | 'historicalCountry'
     | 'dynasty'

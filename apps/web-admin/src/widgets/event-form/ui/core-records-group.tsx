@@ -8,7 +8,7 @@
  *
  * 받은 값은 초안(RegisterFacetDrafts)이고, 저장은 사건이 생긴 뒤 commitRegisterFacets가 각 정본 API로 한다.
  */
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, lazy, Suspense, useEffect, useMemo, useState } from 'react'
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { FiPlus, FiX } from 'react-icons/fi'
@@ -35,14 +35,29 @@ import {
 import { treatyNameFromEventTitle } from '@/features/event-facets/model/treaty-from-event'
 import * as S from '@/pages/events/create/event-create.styles'
 import { getElections } from '@/shared/api/election'
-import type { EventOrganizationRole } from '@/shared/api/events'
-import { getOrganizationMembers, getOrganizations } from '@/shared/api/organizations'
+import type { SideOutcome } from '@/shared/api/event-sides'
+import {
+  getContemporaryLeadersForEvent,
+  type EventOrganizationRole,
+} from '@/shared/api/events'
+import {
+  getOrganizationCountryMemberships,
+  getOrganizationMembers,
+  getOrganizations,
+  isInternationalOrgType,
+  ORGANIZATION_TYPE_LABEL,
+  resolveOrganizationMembershipRoleAtYear,
+} from '@/shared/api/organizations'
 import { getAllPersons, type PersonResponseDto } from '@/shared/api/persons'
 import {
   getPersonGroup,
   listPersonGroups,
   type PersonGroup,
 } from '@/shared/api/person-groups'
+import {
+  POLITICAL_POSITION_LABEL,
+  politicalPartyApi,
+} from '@/shared/api/political-party'
 import { treatyApi } from '@/shared/api/treaty'
 import { nestiaApiService } from '@/shared/api/api.service'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
@@ -71,6 +86,20 @@ import { notify } from '@/shared/ui/toast'
 import { OrganizationQuickCreateModal } from '@/widgets/organization/organization-quick-create-modal'
 import { PersonGroupCreateModal } from '@/widgets/person/person-group-create-modal/person-group-create-modal'
 
+const LazyCompanyRegisterModal = lazy(() =>
+  import('@/widgets/company-form').then((m) => ({
+    default: m.CompanyRegisterModal,
+  })),
+)
+
+const LazyPoliticalPartyQuickCreateModal = lazy(() =>
+  import('@/widgets/political-party/political-party-quick-create-modal').then(
+    (m) => ({
+      default: m.PoliticalPartyQuickCreateModal,
+    }),
+  ),
+)
+
 /** 등록 뒤 상세에서 적는 기록 — 출처·진영별 값이 필요해 등록 칸으로는 받지 않는다 */
 const DETAIL_ONLY: EventFacetKey[] = ['metrics', 'military', 'cabinets']
 
@@ -85,7 +114,19 @@ export const PERSON_ROLE_PRESETS = [
   '반대파',
   '숙청·처형',
   '피살',
+  '전사',
   '중재',
+] as const
+
+export const SIDE_OUTCOME_OPTIONS: ReadonlyArray<{
+  value: SideOutcome
+  label: string
+  shortBadge: string
+}> = [
+  { value: 'VICTORY', label: '승리·성공', shortBadge: '🏆 승리' },
+  { value: 'DEFEAT', label: '패배·실패', shortBadge: '패배' },
+  { value: 'DRAW', label: '무승부·타협', shortBadge: '무승부' },
+  { value: 'WITHDRAWAL', label: '철수', shortBadge: '철수' },
 ] as const
 
 interface CoreRecordsGroupProps {
@@ -126,6 +167,11 @@ interface CoreRecordsGroupProps {
     summaryLabel: string
     onImport: () => void
   }
+  /** 연결된 국제기구·다자협의체·동맹의 회원국을 사건 참여국으로 일괄 추가 */
+  onImportCountriesFromOrganization?: (
+    incoming: EventCountryParticipant[],
+    organizationName: string,
+  ) => void
   playClickSound: () => void
 }
 
@@ -147,10 +193,13 @@ export function CoreRecordsGroup({
   startDate,
   endDate,
   parentRecordsSlot,
+  onImportCountriesFromOrganization,
   playClickSound,
 }: CoreRecordsGroupProps) {
   const facets = typeFacets(type, domain)
   const [picker, setPicker] = useState<PickerKind | null>(null)
+  const [pickerInitialQuery, setPickerInitialQuery] = useState('')
+  const [pickerInitialCreateMode, setPickerInitialCreateMode] = useState(false)
   const [creatingOrgOpen, setCreatingOrgOpen] = useState(false)
   const [creatingOrgInitialName, setCreatingOrgInitialName] = useState('')
   const [expandedOptional, setExpandedOptional] = useState<EventFacetKey[]>([])
@@ -227,18 +276,66 @@ export function CoreRecordsGroup({
     participants.find((row) => row.historicalCountryId)?.historicalCountryId ??
     undefined
 
+  const [orgScopeFilter, setOrgScopeFilter] = useState<
+    'orgs' | 'parties' | 'companies' | 'all'
+  >(() => (type === 'COMPANY' ? 'companies' : 'orgs'))
+  const [creatingCompanyOpen, setCreatingCompanyOpen] = useState(false)
+  const [creatingPartyOpen, setCreatingPartyOpen] = useState(false)
+
+  useEffect(() => {
+    setOrgScopeFilter(type === 'COMPANY' ? 'companies' : 'orgs')
+  }, [type])
+
+  const matchesOrgScope = (orgType?: string | null) => {
+    if (orgScopeFilter === 'parties') return false
+    if (orgScopeFilter === 'companies') return orgType === 'COMPANY'
+    if (orgScopeFilter === 'orgs') {
+      return (
+        orgType !== 'COMPANY' &&
+        orgType !== 'POLITICAL_PARTY' &&
+        orgType !== 'GOVERNMENT_AGENCY'
+      )
+    }
+    return orgType !== 'POLITICAL_PARTY' && orgType !== 'GOVERNMENT_AGENCY'
+  }
+
+  const partyQuickSearchQuery = useQuery({
+    queryKey: ['political-parties', 'all-for-quick-search'],
+    queryFn: () => politicalPartyApi.getAll(),
+    enabled:
+      showOrganizations &&
+      (orgScopeFilter === 'parties' ||
+        (drafts.politicalParties?.length ?? 0) > 0),
+    staleTime: 60_000,
+  })
+
   const orgQuickSearchQuery = useQuery({
     queryKey: ['organizations', 'all-for-quick-search'],
     queryFn: () => getOrganizations(nestiaApiService.getConnection()),
     enabled:
       showOrganizations &&
-      (orgQuickQuery.trim().length >= 1 || personContext?.fromYear != null),
+      (orgQuickQuery.trim().length >= 1 ||
+        drafts.organizations.length > 0 ||
+        personContext?.fromYear != null ||
+        type === 'SUMMIT' ||
+        domain === 'DIPLOMACY'),
     staleTime: 60_000,
   })
+
+  const orgTypeById = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const org of orgQuickSearchQuery.data ?? []) {
+      if (org.type) map.set(org.id, org.type)
+    }
+    return map
+  }, [orgQuickSearchQuery.data])
 
   const suggestedOrganizations = useMemo(() => {
     const allOrgs = orgQuickSearchQuery.data ?? []
     if (allOrgs.length === 0) return []
+    const isDiplomaticForumEvent =
+      orgScopeFilter !== 'companies' &&
+      (type === 'SUMMIT' || type === 'TREATY' || domain === 'DIPLOMACY')
     const countryIds = new Set(
       participants
         .map((row) => row.countryId)
@@ -249,34 +346,101 @@ export function CoreRecordsGroup({
         .map((row) => row.historicalCountryId)
         .filter((id): id is string => Boolean(id)),
     )
-    if (countryIds.size === 0 && histCountryIds.size === 0) return []
+    if (
+      countryIds.size === 0 &&
+      histCountryIds.size === 0 &&
+      !isDiplomaticForumEvent
+    ) {
+      return []
+    }
     const existingIds = new Set(drafts.organizations.map((org) => org.id))
     return allOrgs
       .filter(
         (org) =>
           !existingIds.has(org.id) &&
+          matchesOrgScope(org.type) &&
           ((org.countryId && countryIds.has(org.countryId)) ||
             (org.historicalCountryId &&
-              histCountryIds.has(org.historicalCountryId))),
+              histCountryIds.has(org.historicalCountryId)) ||
+            (isDiplomaticForumEvent && isInternationalOrgType(org.type))),
       )
       .slice(0, 6)
-  }, [orgQuickSearchQuery.data, participants, drafts.organizations])
+  }, [
+    orgQuickSearchQuery.data,
+    participants,
+    drafts.organizations,
+    type,
+    domain,
+    orgScopeFilter,
+  ])
 
   const quickOrgMatches = useMemo(() => {
     const needle = orgQuickQuery.trim().toLowerCase()
     if (!needle) return []
+    if (orgScopeFilter === 'parties') {
+      const existingPartyIds = new Set(
+        (drafts.politicalParties ?? []).map((p) => p.id),
+      )
+      return (partyQuickSearchQuery.data ?? [])
+        .filter(
+          (p) =>
+            !existingPartyIds.has(p.id) &&
+            (p.name.toLowerCase().includes(needle) ||
+              (p.shortName ?? '').toLowerCase().includes(needle) ||
+              (p.localName ?? '').toLowerCase().includes(needle)),
+        )
+        .slice(0, 6)
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          shortName: p.shortName ?? null,
+          isParty: true as const,
+        }))
+    }
     const existingIds = new Set(drafts.organizations.map((org) => org.id))
     return (orgQuickSearchQuery.data ?? [])
       .filter(
         (org) =>
           !existingIds.has(org.id) &&
+          matchesOrgScope(org.type) &&
           (org.name.toLowerCase().includes(needle) ||
             (org.shortName ?? '').toLowerCase().includes(needle)),
       )
       .slice(0, 6)
-  }, [orgQuickQuery, orgQuickSearchQuery.data, drafts.organizations])
+      .map((org) => ({
+        id: org.id,
+        name: org.name,
+        shortName: org.shortName,
+        isParty: false as const,
+      }))
+  }, [
+    orgQuickQuery,
+    orgQuickSearchQuery.data,
+    partyQuickSearchQuery.data,
+    drafts.organizations,
+    drafts.politicalParties,
+    orgScopeFilter,
+  ])
 
-  const addQuickOrganization = (org: { id: string; name: string }) => {
+  const addQuickOrganization = (org: {
+    id: string
+    name: string
+    isParty?: boolean
+  }) => {
+    if (org.isParty || orgScopeFilter === 'parties') {
+      const currentParties = drafts.politicalParties ?? []
+      if (currentParties.some((item) => item.id === org.id)) return
+      playClickSound()
+      update({
+        politicalParties: [
+          ...currentParties,
+          { id: org.id, name: org.name, role: 'PRINCIPAL' as const },
+        ],
+      })
+      setOrgQuickQuery('')
+      setActiveOrgResultIndex(0)
+      return
+    }
     if (drafts.organizations.some((item) => item.id === org.id)) return
     playClickSound()
     update({
@@ -384,6 +548,158 @@ export function CoreRecordsGroup({
         organizationAssignment: next,
       },
     })
+  }
+
+  const togglePartySideSlot = (partyId: string, slot: SideSlot) => {
+    const current = drafts.sides.politicalPartyAssignment ?? {}
+    const next = { ...current }
+    if (next[partyId] === slot) {
+      delete next[partyId]
+    } else {
+      next[partyId] = slot
+    }
+    update({
+      sides: {
+        ...drafts.sides,
+        politicalPartyAssignment: next,
+      },
+    })
+  }
+
+  const importOrganizationCountries = async (
+    organizationId: string,
+    organizationName: string,
+  ) => {
+    if (!onImportCountriesFromOrganization) return
+    try {
+      const memberships = await getOrganizationCountryMemberships(
+        nestiaApiService.getConnection(),
+        organizationId,
+      )
+      const targetYear = signedYearFromIsoLike(startDate)
+      const resolved = memberships
+        .map((m) => ({
+          membership: m,
+          resolvedRole: resolveOrganizationMembershipRoleAtYear(m, targetYear),
+        }))
+        .filter(
+          (
+            entry,
+          ): entry is {
+            membership: (typeof memberships)[number]
+            resolvedRole: NonNullable<
+              ReturnType<typeof resolveOrganizationMembershipRoleAtYear>
+            >
+          } => entry.resolvedRole !== null,
+        )
+      if (resolved.length === 0) {
+        notify.info(
+          `‘${organizationName}’에 이 시점 기준 등록된 회원국·파트너국이 없습니다.`,
+        )
+        return
+      }
+      const incoming: EventCountryParticipant[] = resolved.map(
+        ({ membership: m, resolvedRole }) => {
+          const mappedRole =
+            resolvedRole === 'OBSERVER' || resolvedRole === 'DIALOGUE_PARTNER'
+              ? 'OBSERVER'
+              : 'PARTICIPANT'
+          return m.historicalCountryId
+            ? {
+                historicalCountryId: m.historicalCountryId,
+                role: mappedRole,
+              }
+            : {
+                countryId: m.countryId,
+                role: mappedRole,
+              }
+        },
+      )
+      onImportCountriesFromOrganization(incoming, organizationName)
+    } catch {
+      notify.error('조직 회원국 목록을 불러오지 못했습니다.')
+    }
+  }
+
+  const [importingContemporaryLeaders, setImportingContemporaryLeaders] =
+    useState(false)
+  const canImportContemporaryLeaders =
+    participants.length > 0 && Boolean(startDate?.trim())
+
+  const importContemporaryLeaders = async () => {
+    if (!startDate?.trim() || participants.length === 0 || importingContemporaryLeaders) {
+      return
+    }
+    setImportingContemporaryLeaders(true)
+    try {
+      const modernIds = participants
+        .map((p) => p.countryId)
+        .filter((id): id is string => Boolean(id))
+      const histIds = participants
+        .map((p) => p.historicalCountryId)
+        .filter((id): id is string => Boolean(id))
+      const leaders = await getContemporaryLeadersForEvent({
+        date: startDate,
+        countryIds: modernIds,
+        historicalCountryIds: histIds,
+      })
+      if (leaders.length === 0) {
+        notify.info(
+          '사건 시점에 참여국의 등록된 국가원수·정부수반·군주 기록이 없습니다.',
+        )
+        return
+      }
+      const existingPersonIds = new Set(
+        drafts.persons.map((person) => person.personId),
+      )
+      const nextPersons: PickedPerson[] = [...drafts.persons]
+      const nextPersonAssignment: Record<string, SideSlot> = {
+        ...(drafts.sides.personAssignment ?? {}),
+      }
+      let addedCount = 0
+      for (const leader of leaders) {
+        if (existingPersonIds.has(leader.personId)) continue
+        existingPersonIds.add(leader.personId)
+        nextPersons.push({
+          personId: leader.personId,
+          name: leader.personName,
+          role: leader.suggestedRole,
+          countryId: leader.countryId,
+          historicalCountryId: leader.historicalCountryId,
+        })
+        addedCount += 1
+        const countryKey = leader.historicalCountryId
+          ? `h:${leader.historicalCountryId}`
+          : leader.countryId
+            ? `m:${leader.countryId}`
+            : null
+        const countrySide = countryKey
+          ? drafts.sides.assignment[countryKey]
+          : undefined
+        if (countrySide && !nextPersonAssignment[leader.personId]) {
+          nextPersonAssignment[leader.personId] = countrySide
+        }
+      }
+      if (addedCount === 0) {
+        notify.info('참여국 당시 수반·정상이 이미 모두 추가되어 있습니다.')
+        return
+      }
+      setExpandedOptional((prev) =>
+        prev.includes('persons') ? prev : [...prev, 'persons'],
+      )
+      update({
+        persons: nextPersons,
+        sides: {
+          ...drafts.sides,
+          personAssignment: nextPersonAssignment,
+        },
+      })
+      notify.success(`참여국 당시 정상·수반 ${addedCount}명을 불러왔습니다.`)
+    } catch {
+      notify.error('참여국 당시 정상·수반 목록을 불러오지 못했습니다.')
+    } finally {
+      setImportingContemporaryLeaders(false)
+    }
   }
 
   const importOrganizationMembers = async (
@@ -532,7 +848,16 @@ export function CoreRecordsGroup({
           label="취임·즉위한 인물"
           people={drafts.power}
           onChange={(power) => update({ power })}
-          onAdd={() => setPicker('power')}
+          onAdd={() => {
+            setPickerInitialQuery('')
+            setPickerInitialCreateMode(false)
+            setPicker('power')
+          }}
+          onQuickCreate={(initialName) => {
+            setPickerInitialQuery(initialName)
+            setPickerInitialCreateMode(true)
+            setPicker('power')
+          }}
           addLabel="인물 고르기"
           personContext={personContext}
           playClickSound={playClickSound}
@@ -700,12 +1025,164 @@ export function CoreRecordsGroup({
       {showOrganizations && (
         <S.FormRow data-core-record="organizations">
           <S.FormLabel as="span">
-            기업·조직<RecordOptionalTag>(선택)</RecordOptionalTag>
+            {orgScopeFilter === 'companies' ? '관련 기업' : '기구·조직'}
+            <RecordOptionalTag>(선택)</RecordOptionalTag>
           </S.FormLabel>
           <S.FormField>
+            <PersonSuggestionBar
+              role="group"
+              aria-label="연결 대상 분류 선택"
+              style={{ marginBottom: 6 }}
+            >
+              <OrgRoleChipBtn
+                type="button"
+                $active={orgScopeFilter === 'orgs'}
+                aria-pressed={orgScopeFilter === 'orgs'}
+                onClick={() => setOrgScopeFilter('orgs')}
+              >
+                기구·협의체·조직
+              </OrgRoleChipBtn>
+              <OrgRoleChipBtn
+                type="button"
+                $active={orgScopeFilter === 'parties'}
+                aria-pressed={orgScopeFilter === 'parties'}
+                onClick={() => setOrgScopeFilter('parties')}
+              >
+                정당
+              </OrgRoleChipBtn>
+              <OrgRoleChipBtn
+                type="button"
+                $active={orgScopeFilter === 'companies'}
+                aria-pressed={orgScopeFilter === 'companies'}
+                onClick={() => setOrgScopeFilter('companies')}
+              >
+                기업
+              </OrgRoleChipBtn>
+              <OrgRoleChipBtn
+                type="button"
+                $active={orgScopeFilter === 'all'}
+                aria-pressed={orgScopeFilter === 'all'}
+                onClick={() => setOrgScopeFilter('all')}
+              >
+                전체
+              </OrgRoleChipBtn>
+            </PersonSuggestionBar>
+            {(drafts.politicalParties?.length ?? 0) > 0 && (
+              <RowList>
+                {(drafts.politicalParties ?? []).map((party) => (
+                  <OrgRow key={`party-${party.id}`} $role={party.role}>
+                    <PersonRowHeader>
+                      <RowName>🚩 {party.name}</RowName>
+                      <PersonRowActions>
+                        {hasSides && (
+                          <InlineSideGroup
+                            role="group"
+                            aria-label={`${party.name} 진영 선택`}
+                          >
+                            {activeSideSlots.map((slot, slotIdx) => {
+                              const isAssigned =
+                                drafts.sides.politicalPartyAssignment?.[
+                                  party.id
+                                ] === slot
+                              return (
+                                <InlineSideBtn
+                                  key={slot}
+                                  type="button"
+                                  $active={isAssigned}
+                                  aria-pressed={isAssigned}
+                                  aria-label={`${party.name} ${slotIdx + 1}편 토글`}
+                                  onClick={() => {
+                                    playClickSound()
+                                    togglePartySideSlot(party.id, slot)
+                                  }}
+                                >
+                                  {slotIdx + 1}편
+                                </InlineSideBtn>
+                              )
+                            })}
+                          </InlineSideGroup>
+                        )}
+                        <KitRemoveButton
+                          type="button"
+                          aria-label={`${party.name} 빼기`}
+                          onClick={() => {
+                            const nextPartyAssign = {
+                              ...(drafts.sides.politicalPartyAssignment ?? {}),
+                            }
+                            delete nextPartyAssign[party.id]
+                            update({
+                              politicalParties: (
+                                drafts.politicalParties ?? []
+                              ).filter((item) => item.id !== party.id),
+                              sides: {
+                                ...drafts.sides,
+                                politicalPartyAssignment: nextPartyAssign,
+                              },
+                            })
+                          }}
+                        >
+                          <FiX size={14} />
+                        </KitRemoveButton>
+                      </PersonRowActions>
+                    </PersonRowHeader>
+                    <OrgRoleBar>
+                      <RowSelect
+                        aria-label={`${party.name} 역할`}
+                        value={party.role}
+                        onChange={(change) =>
+                          update({
+                            politicalParties: (
+                              drafts.politicalParties ?? []
+                            ).map((item) =>
+                              item.id === party.id
+                                ? {
+                                    ...item,
+                                    role: change.target
+                                      .value as EventOrganizationRole,
+                                  }
+                                : item,
+                            ),
+                          })
+                        }
+                      >
+                        {ORGANIZATION_ROLE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </RowSelect>
+                    </OrgRoleBar>
+                    <RowRoleWrap>
+                      <RowRoleTextarea
+                        aria-label={`${party.name} 역할 설명`}
+                        placeholder="이 사건에서 정당이 수행한 역할·입장 메모 (선택)"
+                        rows={1}
+                        value={party.roleDescription ?? ''}
+                        onChange={(change) =>
+                          update({
+                            politicalParties: (
+                              drafts.politicalParties ?? []
+                            ).map((item) =>
+                              item.id === party.id
+                                ? {
+                                    ...item,
+                                    roleDescription: change.target.value,
+                                  }
+                                : item,
+                            ),
+                          })
+                        }
+                      />
+                    </RowRoleWrap>
+                  </OrgRow>
+                ))}
+              </RowList>
+            )}
             {drafts.organizations.length > 0 && (
               <RowList>
                 {drafts.organizations.map((organization) => {
+                  const isCompanyRow =
+                    orgTypeById.get(organization.id) === 'COMPANY'
                   const coreOrgRoles: ReadonlyArray<{
                     value: EventOrganizationRole
                     label: string
@@ -775,6 +1252,22 @@ export function CoreRecordsGroup({
                                 )
                               })}
                             </InlineSideGroup>
+                          )}
+                          {onImportCountriesFromOrganization && !isCompanyRow && (
+                            <SideNewGroupBtn
+                              type="button"
+                              title={`${organization.name} 회원국·파트너국을 사건 참여국으로 일괄 불러오기`}
+                              aria-label={`${organization.name} 회원국 불러오기`}
+                              onClick={() => {
+                                playClickSound()
+                                void importOrganizationCountries(
+                                  organization.id,
+                                  organization.name,
+                                )
+                              }}
+                            >
+                              회원국 불러오기
+                            </SideNewGroupBtn>
                           )}
                           <SideNewGroupBtn
                             type="button"
@@ -885,6 +1378,59 @@ export function CoreRecordsGroup({
                           </OrgRoleHintText>
                         )}
                       </OrgRoleBar>
+                      <RowRoleWrap>
+                        <RowRoleTextarea
+                          aria-label={`${organization.name} 역할 설명`}
+                          placeholder="이 사건에서 조직·기관이 한 구체적 역할·활동 메모 (선택 · 줄바꿈 가능)"
+                          rows={Math.min(
+                            4,
+                            Math.max(
+                              1,
+                              (organization.roleDescription ?? '').split('\n')
+                                .length,
+                              (organization.roleDescription ?? '').length > 52
+                                ? 2
+                                : 1,
+                            ),
+                          )}
+                          value={organization.roleDescription ?? ''}
+                          onChange={(change) =>
+                            update({
+                              organizations: drafts.organizations.map((item) =>
+                                item.id === organization.id
+                                  ? {
+                                      ...item,
+                                      roleDescription: change.target.value,
+                                    }
+                                  : item,
+                              ),
+                            })
+                          }
+                        />
+                        {Boolean(
+                          (organization.roleDescription ?? '').trim(),
+                        ) && (
+                          <PersonRolePresetBar>
+                            <PersonRoleClearBtn
+                              type="button"
+                              aria-label={`${organization.name} 역할 설명 비우기`}
+                              onClick={() => {
+                                playClickSound()
+                                update({
+                                  organizations: drafts.organizations.map(
+                                    (item) =>
+                                      item.id === organization.id
+                                        ? { ...item, roleDescription: '' }
+                                        : item,
+                                  ),
+                                })
+                              }}
+                            >
+                              비우기
+                            </PersonRoleClearBtn>
+                          </PersonRolePresetBar>
+                        )}
+                      </RowRoleWrap>
                     </OrgRow>
                   )
                 })}
@@ -905,7 +1451,13 @@ export function CoreRecordsGroup({
                 <QuickSearchInput
                   type="search"
                   aria-label="기업·조직 빠른 검색"
-                  placeholder="기관·조직 이름 검색 후 Enter로 즉시 추가 (예: 공안위원회, 자코뱅)"
+                  placeholder={
+                    orgScopeFilter === 'companies'
+                      ? '기업명 검색 후 Enter로 즉시 추가 (예: 삼성전자, 동인도회사)'
+                      : orgScopeFilter === 'parties'
+                        ? '정당명·약칭 검색 후 Enter로 즉시 추가 (예: SPD, KPD, 자민당)'
+                        : '기구·협의체·조직 검색 후 Enter로 즉시 추가 (예: 아세안, 쿼드, 유엔)'
+                  }
                   value={orgQuickQuery}
                   onFocus={() => setIsOrgQuickDismissed(false)}
                   onChange={(changeEvent) => {
@@ -982,31 +1534,69 @@ export function CoreRecordsGroup({
                       type="button"
                       onClick={() => {
                         playClickSound()
-                        setCreatingOrgInitialName(orgQuickQuery.trim())
-                        setCreatingOrgOpen(true)
+                        if (orgScopeFilter === 'companies') {
+                          setCreatingCompanyOpen(true)
+                        } else if (orgScopeFilter === 'parties') {
+                          setCreatingOrgInitialName(orgQuickQuery.trim())
+                          setCreatingPartyOpen(true)
+                        } else {
+                          setCreatingOrgInitialName(orgQuickQuery.trim())
+                          setCreatingOrgOpen(true)
+                        }
                         setOrgQuickQuery('')
                       }}
                     >
-                      + ‘{orgQuickQuery.trim()}’ 새 기관·조직으로 빠른 등록
+                      {orgScopeFilter === 'companies'
+                        ? `+ ‘${orgQuickQuery.trim()}’ 새 기업으로 등록`
+                        : orgScopeFilter === 'parties'
+                          ? `+ ‘${orgQuickQuery.trim()}’ 새 정당으로 등록`
+                          : `+ ‘${orgQuickQuery.trim()}’ 새 기구·조직으로 빠른 등록`}
                     </QuickResultCreateButton>
                   </QuickResultBox>
                 )}
               </QuickSearchAnchor>
               <KitAddButton type="button" onClick={() => setPicker('organizations')}>
                 <FiPlus size={15} />
-                {drafts.organizations.length > 0 ? '조직 더 추가' : '기업·조직 고르기'}
+                {orgScopeFilter === 'parties'
+                  ? (drafts.politicalParties?.length ?? 0) > 0
+                    ? '정당 더 추가'
+                    : '정당 고르기'
+                  : drafts.organizations.length > 0
+                    ? orgScopeFilter === 'companies'
+                      ? '기업 더 추가'
+                      : '기구·조직 더 추가'
+                    : orgScopeFilter === 'companies'
+                      ? '기업 고르기'
+                      : '기구·조직 고르기'}
               </KitAddButton>
               <KitAddButton
                 type="button"
-                aria-label="새 기관·조직 등록"
+                aria-label={
+                  orgScopeFilter === 'companies'
+                    ? '새 기업 등록'
+                    : orgScopeFilter === 'parties'
+                      ? '새 정당 등록'
+                      : '새 기관·조직 등록'
+                }
                 onClick={() => {
                   playClickSound()
-                  setCreatingOrgInitialName('')
-                  setCreatingOrgOpen(true)
+                  if (orgScopeFilter === 'companies') {
+                    setCreatingCompanyOpen(true)
+                  } else if (orgScopeFilter === 'parties') {
+                    setCreatingOrgInitialName('')
+                    setCreatingPartyOpen(true)
+                  } else {
+                    setCreatingOrgInitialName('')
+                    setCreatingOrgOpen(true)
+                  }
                 }}
               >
                 <FiPlus size={15} />
-                새 기관·조직 등록
+                {orgScopeFilter === 'companies'
+                  ? '새 기업 등록'
+                  : orgScopeFilter === 'parties'
+                    ? '새 정당 등록'
+                    : '새 기구·조직 등록'}
               </KitAddButton>
             </OrgActionRow>
             {suggestedOrganizations.length > 0 && (
@@ -1072,11 +1662,29 @@ export function CoreRecordsGroup({
               update({ persons })
             }
           }}
-          onAdd={() => setPicker('persons')}
+          onAdd={() => {
+            setPickerInitialQuery('')
+            setPickerInitialCreateMode(false)
+            setPicker('persons')
+          }}
+          onQuickCreate={(initialName) => {
+            setPickerInitialQuery(initialName)
+            setPickerInitialCreateMode(true)
+            setPicker('persons')
+          }}
           addLabel={drafts.persons.length > 0 ? '인물 더 추가' : '인물 고르기'}
           withRole
           personContext={personContext}
           playClickSound={playClickSound}
+          onImportContemporaryLeaders={
+            canImportContemporaryLeaders
+              ? () => {
+                  playClickSound()
+                  void importContemporaryLeaders()
+                }
+              : undefined
+          }
+          importingContemporaryLeaders={importingContemporaryLeaders}
           sideAssignment={
             hasSides
               ? {
@@ -1109,16 +1717,33 @@ export function CoreRecordsGroup({
                 </KitAddButton>
               )}
               {canExpandPersons && (
-                <KitAddButton
-                  type="button"
-                  onClick={() => {
-                    playClickSound()
-                    setExpandedOptional((prev) => [...prev, 'persons'])
-                  }}
-                >
-                  <FiPlus size={15} />
-                  참여 인물 추가
-                </KitAddButton>
+                <>
+                  <KitAddButton
+                    type="button"
+                    onClick={() => {
+                      playClickSound()
+                      setExpandedOptional((prev) => [...prev, 'persons'])
+                    }}
+                  >
+                    <FiPlus size={15} />
+                    참여 인물 추가
+                  </KitAddButton>
+                  {canImportContemporaryLeaders && (
+                    <KitAddButton
+                      type="button"
+                      disabled={importingContemporaryLeaders}
+                      onClick={() => {
+                        playClickSound()
+                        void importContemporaryLeaders()
+                      }}
+                    >
+                      👑{' '}
+                      {importingContemporaryLeaders
+                        ? '정상·수반 불러오는 중…'
+                        : '참여국 당시 정상·수반 불러오기'}
+                    </KitAddButton>
+                  )}
+                </>
               )}
             </OrgActionRow>
           </S.FormField>
@@ -1130,6 +1755,16 @@ export function CoreRecordsGroup({
           defaultName={creatingOrgInitialName || undefined}
           defaultCountryId={defaultCountryId}
           defaultHistoricalCountryId={defaultHistoricalCountryId}
+          defaultType={
+            type === 'SUMMIT' || domain === 'DIPLOMACY'
+              ? 'MULTILATERAL_FORUM'
+              : 'NGO'
+          }
+          candidateCountries={participants.map((p) => ({
+            countryId: p.countryId ?? undefined,
+            historicalCountryId: p.historicalCountryId ?? undefined,
+            name: participantName(p),
+          }))}
           candidatePersons={drafts.persons.map((person) => ({
             id: person.personId,
             name: person.name,
@@ -1174,13 +1809,83 @@ export function CoreRecordsGroup({
         />
       )}
 
+      {creatingCompanyOpen && (
+        <Suspense fallback={null}>
+          <LazyCompanyRegisterModal
+            isOpen={creatingCompanyOpen}
+            onClose={() => setCreatingCompanyOpen(false)}
+            defaultCountryId={defaultCountryId}
+            defaultHistoricalCountryId={defaultHistoricalCountryId}
+            onSaved={(created) => {
+              setCreatingCompanyOpen(false)
+              if (!created.organizationId) return
+              if (
+                drafts.organizations.some(
+                  (item) => item.id === created.organizationId,
+                )
+              ) {
+                return
+              }
+              update({
+                organizations: [
+                  ...drafts.organizations,
+                  {
+                    id: created.organizationId,
+                    name: created.name,
+                    role: 'PRINCIPAL' as const,
+                  },
+                ],
+              })
+            }}
+          />
+        </Suspense>
+      )}
+
+      {creatingPartyOpen && (
+        <Suspense fallback={null}>
+          <LazyPoliticalPartyQuickCreateModal
+            defaultName={creatingOrgInitialName || undefined}
+            defaultCountryId={defaultCountryId}
+            defaultHistoricalCountryId={defaultHistoricalCountryId}
+            onClose={() => {
+              setCreatingPartyOpen(false)
+              setCreatingOrgInitialName('')
+            }}
+            onSaved={(saved) => {
+              setCreatingPartyOpen(false)
+              setCreatingOrgInitialName('')
+              const currentParties = drafts.politicalParties ?? []
+              if (currentParties.some((item) => item.id === saved.id)) return
+              update({
+                politicalParties: [
+                  ...currentParties,
+                  {
+                    id: saved.id,
+                    name: saved.name,
+                    role: 'PRINCIPAL' as const,
+                  },
+                ],
+              })
+            }}
+          />
+        </Suspense>
+      )}
+
       <RecordPickers
         kind={picker}
-        onClose={() => setPicker(null)}
+        orgScopeFilter={orgScopeFilter}
+        onClose={() => {
+          setPicker(null)
+          setPickerInitialQuery('')
+          setPickerInitialCreateMode(false)
+        }}
         drafts={drafts}
         update={update}
         personContext={personContext}
         defaultCountryId={defaultCountryId}
+        defaultHistoricalCountryId={defaultHistoricalCountryId}
+        initialQuery={pickerInitialQuery}
+        initialCreateMode={pickerInitialCreateMode}
       />
     </>
   )
@@ -1229,6 +1934,7 @@ function SidesField({
     names,
     assignment,
     personGroupIds,
+    outcomes,
     personAssignment,
     organizationAssignment,
     ...restSides
@@ -1304,11 +2010,34 @@ function SidesField({
       names,
       assignment,
       ...(personGroupIds ? { personGroupIds } : {}),
+      ...(outcomes ? { outcomes } : {}),
       ...(personAssignment ? { personAssignment } : {}),
       ...(organizationAssignment ? { organizationAssignment } : {}),
       ...patch,
     }
     return merged
+  }
+
+  const setSideOutcome = (slot: SideSlot, nextOutcome: SideOutcome | null) => {
+    const nextOutcomes: Partial<Record<SideSlot, SideOutcome | null>> = {
+      ...(outcomes ?? {}),
+    }
+    if (!nextOutcome || nextOutcomes[slot] === nextOutcome) {
+      delete nextOutcomes[slot]
+    } else {
+      nextOutcomes[slot] = nextOutcome
+      // 2자 대결(A vs B)에서 한쪽이 승리/패배/무승부를 고르고 상대방 결과가 아직 비어 있으면 대칭 결과를 자동 채운다
+      if (activeSlots.length === 2 && (slot === 'A' || slot === 'B')) {
+        const oppositeSlot: SideSlot = slot === 'A' ? 'B' : 'A'
+        if (!nextOutcomes[oppositeSlot]) {
+          if (nextOutcome === 'VICTORY') nextOutcomes[oppositeSlot] = 'DEFEAT'
+          else if (nextOutcome === 'DEFEAT')
+            nextOutcomes[oppositeSlot] = 'VICTORY'
+          else if (nextOutcome === 'DRAW') nextOutcomes[oppositeSlot] = 'DRAW'
+        }
+      }
+    }
+    update({ sides: buildNextSides({ outcomes: nextOutcomes }) })
   }
 
   const setSlot = (key: string, slot: SideSlot | null) => {
@@ -1346,6 +2075,14 @@ function SidesField({
     const nextGroupIds = personGroupIds
       ? personGroupIds.filter((_, idx) => idx !== removeIdx)
       : undefined
+    const nextOutcomes: Partial<Record<SideSlot, SideOutcome | null>> = {}
+    for (const [slotKey, val] of Object.entries(outcomes ?? {})) {
+      const slotIdx = SIDE_SLOTS.indexOf(slotKey as SideSlot)
+      if (slotIdx < 0 || slotIdx === removeIdx || !val) continue
+      const mappedSlot =
+        slotIdx > removeIdx ? SIDE_SLOTS[slotIdx - 1] : (slotKey as SideSlot)
+      if (mappedSlot) nextOutcomes[mappedSlot] = val
+    }
     const remapRecord = (
       record: Record<string, SideSlot> | undefined,
     ): Record<string, SideSlot> => {
@@ -1365,6 +2102,7 @@ function SidesField({
       sides: buildNextSides({
         names: nextNames,
         ...(nextGroupIds ? { personGroupIds: nextGroupIds } : {}),
+        ...(outcomes ? { outcomes: nextOutcomes } : {}),
         assignment: remapRecord(assignment),
         ...(personAssignment
           ? { personAssignment: remapRecord(personAssignment) }
@@ -1460,6 +2198,16 @@ function SidesField({
       nextGroupIds[1] = firstGroupId
     }
 
+    const nextOutcomes = outcomes ? { ...outcomes } : undefined
+    if (nextOutcomes) {
+      const outcomeA = nextOutcomes.A
+      const outcomeB = nextOutcomes.B
+      if (outcomeB) nextOutcomes.A = outcomeB
+      else delete nextOutcomes.A
+      if (outcomeA) nextOutcomes.B = outcomeA
+      else delete nextOutcomes.B
+    }
+
     const swapRecord = (
       record: Record<string, SideSlot> | undefined,
     ): Record<string, SideSlot> => {
@@ -1476,6 +2224,7 @@ function SidesField({
       sides: buildNextSides({
         names: nextNames,
         ...(nextGroupIds ? { personGroupIds: nextGroupIds } : {}),
+        ...(nextOutcomes ? { outcomes: nextOutcomes } : {}),
         assignment: swapRecord(assignment),
         ...(personAssignment
           ? { personAssignment: swapRecord(personAssignment) }
@@ -1812,6 +2561,15 @@ function SidesField({
                     <SidesVsTeamItem>
                       <SidesVsTeamDot $slot={stat.slot} />
                       <SidesVsTeamName>{stat.displayName}</SidesVsTeamName>
+                      {outcomes?.[stat.slot] && (
+                        <SideVsOutcomeBadge $outcome={outcomes[stat.slot]!}>
+                          {
+                            SIDE_OUTCOME_OPTIONS.find(
+                              (opt) => opt.value === outcomes[stat.slot],
+                            )?.shortBadge
+                          }
+                        </SideVsOutcomeBadge>
+                      )}
                       <SidesVsTeamMeta>({stat.breakdownLabel})</SidesVsTeamMeta>
                     </SidesVsTeamItem>
                   </Fragment>
@@ -1962,6 +2720,32 @@ function SidesField({
                     </>
                   )}
                 </SideFactionRow>
+                <SideOutcomeRow
+                  role="group"
+                  aria-label={`${index + 1}번 진영 결과`}
+                >
+                  <SideOutcomeLabel>결과</SideOutcomeLabel>
+                  {SIDE_OUTCOME_OPTIONS.map((option) => {
+                    const currentOutcome = outcomes?.[slot] ?? null
+                    const isActive = currentOutcome === option.value
+                    return (
+                      <SideOutcomeChip
+                        key={option.value}
+                        type="button"
+                        aria-pressed={isActive}
+                        aria-label={`${index + 1}번 진영 ${option.label}`}
+                        $active={isActive}
+                        $outcome={option.value}
+                        onClick={() => {
+                          playClickSound()
+                          setSideOutcome(slot, option.value)
+                        }}
+                      >
+                        {option.label}
+                      </SideOutcomeChip>
+                    )
+                  })}
+                </SideOutcomeRow>
                 <SideMemberWrap aria-label={`${index + 1}번 진영 소속 국가`}>
                   {totalAssigned === 0 ? (
                     <SideEmptyHint>
@@ -2047,7 +2831,12 @@ function SidesField({
                               setDragOverTarget(null)
                             }}
                           >
-                            <SideMemberName>👤 {person.name}</SideMemberName>
+                            <SideMemberName>
+                              👤 {person.name}
+                              {person.role?.trim()
+                                ? ` · ${person.role.trim()}`
+                                : ''}
+                            </SideMemberName>
                             <SideMemberSwitch
                               type="button"
                               title={`${otherNumber}번 진영으로 이동`}
@@ -3087,10 +3876,13 @@ function PersonListField({
   people,
   onChange,
   onAdd,
+  onQuickCreate,
   addLabel,
   withRole = false,
   personContext,
   playClickSound,
+  onImportContemporaryLeaders,
+  importingContemporaryLeaders = false,
   sideAssignment,
 }: {
   coreRecordKey?: string
@@ -3098,10 +3890,13 @@ function PersonListField({
   people: PickedPerson[]
   onChange: (next: PickedPerson[]) => void
   onAdd: () => void
+  onQuickCreate?: (initialName: string) => void
   addLabel: string
   withRole?: boolean
   personContext?: PersonPickerContext
   playClickSound?: () => void
+  onImportContemporaryLeaders?: () => void
+  importingContemporaryLeaders?: boolean
   sideAssignment?: {
     activeSlots: SideSlot[]
     assignedByPersonId: Record<string, SideSlot>
@@ -3510,6 +4305,19 @@ function PersonListField({
                       : `‘${quickQuery.trim()}’에 맞는 인물이 없습니다.`}
                   </QuickResultEmpty>
                 )}
+                {onQuickCreate && (
+                  <QuickResultCreateButton
+                    type="button"
+                    onClick={() => {
+                      const trimmed = quickQuery.trim()
+                      playClickSound?.()
+                      setQuickQuery('')
+                      onQuickCreate(trimmed)
+                    }}
+                  >
+                    + &lsquo;{quickQuery.trim()}&rsquo; 새 인물로 빠른 등록
+                  </QuickResultCreateButton>
+                )}
                 <QuickResultCreateButton
                   type="button"
                   onClick={() => {
@@ -3527,6 +4335,31 @@ function PersonListField({
             <FiPlus size={15} />
             {addLabel}
           </KitAddButton>
+          {onQuickCreate && (
+            <KitAddButton
+              type="button"
+              aria-label={`${label} 새 인물 등록`}
+              onClick={() => {
+                playClickSound?.()
+                onQuickCreate('')
+              }}
+            >
+              <FiPlus size={15} />새 인물 등록
+            </KitAddButton>
+          )}
+          {onImportContemporaryLeaders && (
+            <KitAddButton
+              type="button"
+              disabled={importingContemporaryLeaders}
+              title="참여국들의 시작일 당시 재임·재위 중인 국가원수·정부수반·군주를 한 번에 불러옵니다"
+              onClick={onImportContemporaryLeaders}
+            >
+              👑{' '}
+              {importingContemporaryLeaders
+                ? '정상·수반 불러오는 중…'
+                : '참여국 당시 정상·수반 불러오기'}
+            </KitAddButton>
+          )}
         </OrgActionRow>
         {contextualPersonSuggestions.length > 0 && (
           <PersonSuggestionBar
@@ -3591,23 +4424,36 @@ const PICKER_TITLE: Record<PickerKind, string> = {
  */
 function RecordPickers({
   kind,
+  orgScopeFilter = 'all',
   onClose,
   drafts,
   update,
   personContext,
   defaultCountryId,
+  defaultHistoricalCountryId,
+  initialQuery,
+  initialCreateMode,
 }: {
   kind: PickerKind | null
+  orgScopeFilter?: 'orgs' | 'parties' | 'companies' | 'all'
   onClose: () => void
   drafts: RegisterFacetDrafts
   update: (patch: Partial<RegisterFacetDrafts>) => void
   personContext?: PersonPickerContext
   defaultCountryId?: string
+  defaultHistoricalCountryId?: string
+  initialQuery?: string
+  initialCreateMode?: boolean
 }) {
   const [term, setTerm] = useState('')
   const debounced = useDebouncedValue(term, 250, kind ?? '')
   const query = useQuery({
-    queryKey: ['register-record-candidates', kind, kind === 'treaty' ? debounced : ''],
+    queryKey: [
+      'register-record-candidates',
+      kind,
+      kind === 'treaty' ? debounced : '',
+      kind === 'organizations' ? orgScopeFilter : '',
+    ],
     // 인물(참여·권력)은 공용 인물 고르기가 스스로 받는다
     enabled: Boolean(kind) && kind !== 'persons' && kind !== 'power',
     placeholderData: keepPreviousData,
@@ -3618,8 +4464,47 @@ function RecordPickers({
         return list.items.map((treaty) => ({ value: treaty.id, label: treaty.name, description: treaty.signDate?.slice(0, 10) }))
       }
       if (kind === 'organizations') {
-        const organizations = await getOrganizations(nestiaApiService.getConnection())
-        return organizations.map((organization) => ({ value: organization.id, label: organization.name }))
+        if (orgScopeFilter === 'parties') {
+          const parties = await politicalPartyApi.getAll()
+          return parties.map((p) => ({
+            value: p.id,
+            label: p.name,
+            description: [
+              p.shortName,
+              p.historicalCountry?.name ?? p.country?.name ?? null,
+              p.position ? POLITICAL_POSITION_LABEL[p.position] : null,
+            ]
+              .filter(Boolean)
+              .join(' · '),
+          }))
+        }
+        const organizations = await getOrganizations(
+          nestiaApiService.getConnection(),
+          orgScopeFilter === 'companies'
+            ? { type: 'COMPANY' }
+            : orgScopeFilter === 'orgs'
+              ? { excludeCompanies: true }
+              : undefined,
+        )
+        return organizations
+          .filter((org) =>
+            orgScopeFilter === 'companies'
+              ? org.type === 'COMPANY'
+              : orgScopeFilter === 'orgs'
+                ? org.type !== 'COMPANY' &&
+                  org.type !== 'POLITICAL_PARTY' &&
+                  org.type !== 'GOVERNMENT_AGENCY'
+                : org.type !== 'POLITICAL_PARTY' &&
+                  org.type !== 'GOVERNMENT_AGENCY',
+          )
+          .map((organization) => ({
+            value: organization.id,
+            label: organization.name,
+            description:
+              organization.type && ORGANIZATION_TYPE_LABEL[organization.type]
+                ? ORGANIZATION_TYPE_LABEL[organization.type]
+                : undefined,
+          }))
       }
       if (kind === 'election') {
         const elections = await getElections()
@@ -3659,6 +4544,9 @@ function RecordPickers({
         multiSelect
         allowCreate
         defaultCountryId={defaultCountryId}
+        defaultHistoricalCountryId={defaultHistoricalCountryId}
+        initialQuery={initialQuery}
+        initialCreateMode={initialCreateMode}
         context={personContext}
         excludeIds={list.map((person) => person.personId)}
         excludeReason="이미 고른 인물은 목록에서 뺐습니다."
@@ -3672,10 +4560,23 @@ function RecordPickers({
   }
   const labelOf = (value: string) => String(options.find((option) => option.value === value)?.label ?? '')
   const multiple = kind === 'organizations'
-  const selectedValues = kind === 'organizations' ? drafts.organizations.map((organization) => organization.id) : []
+  const selectedValues =
+    kind === 'organizations'
+      ? orgScopeFilter === 'parties'
+        ? (drafts.politicalParties ?? []).map((p) => p.id)
+        : drafts.organizations.map((organization) => organization.id)
+      : []
 
   const onSelect = (value: string) => {
     if (kind === 'organizations') {
+      if (orgScopeFilter === 'parties') {
+        const current = drafts.politicalParties ?? []
+        const next = current.some((p) => p.id === value)
+          ? current.filter((p) => p.id !== value)
+          : [...current, { id: value, name: labelOf(value), role: 'PRINCIPAL' as const }]
+        update({ politicalParties: next })
+        return
+      }
       const next = drafts.organizations.some((organization) => organization.id === value)
         ? drafts.organizations.filter((organization) => organization.id !== value)
         : [...drafts.organizations, { id: value, name: labelOf(value), role: 'PRINCIPAL' as const }]
@@ -4571,6 +5472,109 @@ const LinkedFactionBadge = styled.span`
   border: 1px solid ${({ theme }) => `${theme.colors.primary}35`};
   font-size: 11.5px;
   font-weight: 700;
+`
+
+const SideOutcomeRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+`
+
+const SideOutcomeLabel = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  margin-right: 2px;
+`
+
+const SideOutcomeChip = styled.button<{
+  $active: boolean
+  $outcome: SideOutcome
+}>`
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: ${({ $active }) => ($active ? 700 : 600)};
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
+  border: 1px solid
+    ${({ $active, $outcome, theme }) => {
+      if (!$active) return S.getC(theme).border.light
+      if ($outcome === 'VICTORY') return '#10b981'
+      if ($outcome === 'DEFEAT') return '#ef4444'
+      if ($outcome === 'DRAW') return '#f59e0b'
+      return theme.colors.primary
+    }};
+  background: ${({ $active, $outcome, theme }) => {
+    if (!$active) return 'transparent'
+    if ($outcome === 'VICTORY')
+      return theme.mode === 'dark'
+        ? 'rgba(16, 185, 129, 0.2)'
+        : 'rgba(16, 185, 129, 0.12)'
+    if ($outcome === 'DEFEAT')
+      return theme.mode === 'dark'
+        ? 'rgba(239, 68, 68, 0.2)'
+        : 'rgba(239, 68, 68, 0.1)'
+    if ($outcome === 'DRAW')
+      return theme.mode === 'dark'
+        ? 'rgba(245, 158, 11, 0.2)'
+        : 'rgba(245, 158, 11, 0.12)'
+    return `${theme.colors.primary}18`
+  }};
+  color: ${({ $active, $outcome, theme }) => {
+    if (!$active) return theme.colors.text.tertiary
+    if ($outcome === 'VICTORY')
+      return theme.mode === 'dark' ? '#34d399' : '#047857'
+    if ($outcome === 'DEFEAT')
+      return theme.mode === 'dark' ? '#f87171' : '#b91c1c'
+    if ($outcome === 'DRAW')
+      return theme.mode === 'dark' ? '#fbbf24' : '#b45309'
+    return theme.colors.primary
+  }};
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => S.getC(theme).border.default};
+  }
+`
+
+const SideVsOutcomeBadge = styled.span<{ $outcome: SideOutcome }>`
+  display: inline-flex;
+  align-items: center;
+  height: 19px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: ${({ $outcome, theme }) => {
+    if ($outcome === 'VICTORY')
+      return theme.mode === 'dark'
+        ? 'rgba(16, 185, 129, 0.22)'
+        : 'rgba(16, 185, 129, 0.14)'
+    if ($outcome === 'DEFEAT')
+      return theme.mode === 'dark'
+        ? 'rgba(239, 68, 68, 0.2)'
+        : 'rgba(239, 68, 68, 0.1)'
+    return theme.mode === 'dark'
+      ? 'rgba(148, 163, 184, 0.18)'
+      : 'rgba(148, 163, 184, 0.16)'
+  }};
+  color: ${({ $outcome, theme }) => {
+    if ($outcome === 'VICTORY')
+      return theme.mode === 'dark' ? '#34d399' : '#047857'
+    if ($outcome === 'DEFEAT')
+      return theme.mode === 'dark' ? '#f87171' : '#b91c1c'
+    return theme.colors.text.secondary
+  }};
 `
 
 const SideMemberWrap = styled.div`

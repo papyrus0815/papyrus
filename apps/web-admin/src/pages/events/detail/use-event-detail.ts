@@ -11,7 +11,13 @@ import {
 import type { EventCountryRole } from '@/entities/event/model'
 import { type NormalizedMilitaryEventResponse } from '@/features/event-create/lib'
 import type { EventSide } from '@/shared/api/event-sides'
-import { type EventAccession, type EventOrganization, getEventById } from '@/shared/api/events'
+import type { EventSeriesContext } from '@/shared/api/event-series'
+import {
+  type EventAccession,
+  type EventOrganization,
+  type EventPoliticalParty,
+  getEventById,
+} from '@/shared/api/events'
 import { listEventObservations, type StructuredPoint } from '@/shared/api/evidence'
 
 /**
@@ -199,6 +205,11 @@ export interface EventDetail {
   aftermath?: string | null
   keywords?: string[] | null
   parentEventId?: string | null
+  /** 소속 정기 회의·행사 시리즈 (예: 아세안 정상회의, APEC 정상회의, 쿼드 정상회의) */
+  seriesId?: string | null
+  seriesEdition?: number | null
+  seriesEditionLabel?: string | null
+  seriesContext?: EventSeriesContext | null
   /** 사건 종류 — 단일/묶음. 규칙은 features/event-hierarchy/model/event-kind.ts */
   kind?: 'SINGLE' | 'COLLECTION'
   /** 세부 분야(선택) — 분야의 2단계이자 붙는 기록을 정한다. 정의는 entities/event/model/event-type-registry.ts */
@@ -249,6 +260,8 @@ export interface EventDetail {
   accessions?: EventAccession[]
   /** 관련 조직·기업 — 기업이면 최신 주가 1점 */
   organizations?: EventOrganization[]
+  /** 관련 정당 — 정본 PoliticalParty 직접 연결 */
+  politicalParties?: EventPoliticalParty[]
   relatedPersons?: EventDetailPerson[]
   /**
    * 작전 정보 — 서버 응답에 런타임 전용으로 실려온다(SDK 타입엔 없어 @ts-ignore로 주입됨).

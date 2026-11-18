@@ -2,6 +2,7 @@ import {
   OrganizationType,
   OrganizationScope,
   OrganizationRelationType,
+  OrganizationCountryRole,
 } from '@prisma/client'
 
 /**
@@ -11,6 +12,11 @@ export interface OrganizationListFilter {
   countryId?: string
   historicalCountryId?: string
   type?: OrganizationType
+  types?: OrganizationType[]
+  scope?: OrganizationScope
+  excludeCompanies?: boolean
+  excludePoliticalParties?: boolean
+  excludeGovernmentAgencies?: boolean
 }
 
 /**
@@ -29,6 +35,7 @@ export interface CreateOrganizationData {
   logoUrl?: string | null
   ideology?: string | null
   headquartersCityId?: string | null
+  predecessorOrganizationId?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
 }
@@ -49,6 +56,7 @@ export interface UpdateOrganizationData {
   logoUrl?: string | null
   ideology?: string | null
   headquartersCityId?: string | null
+  predecessorOrganizationId?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
 }
@@ -71,6 +79,13 @@ export interface CreateOrganizationHierarchyData {
 export interface OrganizationCountrySummary {
   id: string
   name: string
+  flagEmoji?: string | null
+}
+
+export interface OrganizationLineageSummary {
+  id: string
+  name: string
+  shortName: string | null
 }
 
 /**
@@ -90,12 +105,20 @@ export interface OrganizationEntity {
   logoUrl: string | null
   ideology: string | null
   headquartersCityId: string | null
+  headquartersCity: { id: string; name: string } | null
+  predecessorOrganizationId: string | null
+  predecessor: OrganizationLineageSummary | null
+  successors: OrganizationLineageSummary[]
   countryId: string | null
   historicalCountryId: string | null
   /** 현대 국가 요약(있으면). 그룹핑 축 */
   country: OrganizationCountrySummary | null
   /** 역사국가 요약(있으면). 소속 축 — 표시는 역사 우선 */
   historicalCountry: OrganizationCountrySummary | null
+  /** 가입 회원국·파트너국 수 */
+  countryMemberCount: number
+  /** 주관 정기 회의·행사 시리즈 수 */
+  eventSeriesCount: number
   createdAt: Date
   updatedAt: Date
 }
@@ -144,6 +167,112 @@ export interface AddOrganizationMemberData {
   notes?: string | null
 }
 
+export interface OrganizationMembershipStatusPhase {
+  role: OrganizationCountryRole
+  startEra?: 'BC' | 'AD' | null
+  startYear?: number | null
+  endEra?: 'BC' | 'AD' | null
+  endYear?: number | null
+  notes?: string | null
+}
+
+/**
+ * 조직 ↔ 국가(현대/역사) 멤버십 엔티티 (회원국·창립국·옵서버·대화상대국 등)
+ */
+export interface OrganizationCountryMembershipEntity {
+  id: string
+  organizationId: string
+  countryId: string | null
+  historicalCountryId: string | null
+  role: OrganizationCountryRole
+  startEra: 'BC' | 'AD' | null
+  startYear: number | null
+  startMonth: number | null
+  startDay: number | null
+  startDate: Date | null
+  endEra: 'BC' | 'AD' | null
+  endYear: number | null
+  endMonth: number | null
+  endDay: number | null
+  endDate: Date | null
+  sortOrder: number
+  notes: string | null
+  statusHistory: OrganizationMembershipStatusPhase[] | null
+  country: { id: string; name: string; flagEmoji: string | null } | null
+  historicalCountry: { id: string; name: string } | null
+}
+
+export interface CountryOrganizationMembershipEntity
+  extends OrganizationCountryMembershipEntity {
+  organization: {
+    id: string
+    name: string
+    shortName: string | null
+    type: OrganizationType
+    scope: OrganizationScope | null
+    logoUrl: string | null
+    foundedDate: Date | null
+    dissolvedDate: Date | null
+    countryMemberCount: number
+    eventSeriesCount: number
+  }
+}
+
+export interface UpsertOrganizationCountryMembershipData {
+  countryId?: string | null
+  historicalCountryId?: string | null
+  role?: OrganizationCountryRole
+  startEra?: 'BC' | 'AD' | null
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
+  endEra?: 'BC' | 'AD' | null
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
+  sortOrder?: number
+  notes?: string | null
+  statusHistory?: OrganizationMembershipStatusPhase[] | null
+}
+
+export interface UpdateOrganizationCountryMembershipData {
+  role?: OrganizationCountryRole
+  startEra?: 'BC' | 'AD' | null
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
+  endEra?: 'BC' | 'AD' | null
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
+  sortOrder?: number
+  notes?: string | null
+  statusHistory?: OrganizationMembershipStatusPhase[] | null
+}
+
+export interface OrganizationRelatedEventEntity {
+  id: string
+  title: string
+  startDate: string | null
+  startDatePrecision: string | null
+  endDate: string | null
+  location: string | null
+  domain: string
+  type: string | null
+  kind: 'SINGLE' | 'COLLECTION'
+  organizationRole: string | null
+  seriesId: string | null
+  seriesTitle: string | null
+  editionBadge: string | null
+  hostCountry: {
+    id: string
+    name: string
+    flagEmoji: string | null
+    isHistorical: boolean
+  } | null
+  participantCount: number
+}
+
 export interface IOrganizationRepository {
   findById(id: string): Promise<OrganizationEntity | null>
   findMany(filter: OrganizationListFilter): Promise<OrganizationEntity[]>
@@ -162,4 +291,29 @@ export interface IOrganizationRepository {
     data: AddOrganizationMemberData,
   ): Promise<OrganizationMemberEntity>
   removeMemberRole(organizationId: string, personId: string): Promise<void>
+
+  findCountryMemberships(
+    organizationId: string,
+  ): Promise<OrganizationCountryMembershipEntity[]>
+  findMembershipsByCountry(params: {
+    countryId?: string
+    historicalCountryId?: string
+  }): Promise<CountryOrganizationMembershipEntity[]>
+  upsertCountryMembership(
+    organizationId: string,
+    data: UpsertOrganizationCountryMembershipData,
+  ): Promise<OrganizationCountryMembershipEntity>
+  updateCountryMembership(
+    organizationId: string,
+    membershipId: string,
+    data: UpdateOrganizationCountryMembershipData,
+  ): Promise<OrganizationCountryMembershipEntity>
+  removeCountryMembership(
+    organizationId: string,
+    membershipId: string,
+  ): Promise<void>
+  findRelatedEvents(
+    organizationId: string,
+    userId?: string,
+  ): Promise<OrganizationRelatedEventEntity[]>
 }

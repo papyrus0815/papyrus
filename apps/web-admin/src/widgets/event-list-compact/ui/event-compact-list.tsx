@@ -161,6 +161,7 @@ interface EventCompactListProps {
    * 미전달이면 배지는 정적 표기로만 남는다(다른 소비처의 계약을 깨지 않기 위한 선택 prop).
    */
   onEnterAnchorScope?: (eventId: string) => void
+  onFilterSeries?: (seriesId: string, seriesTitle?: string | null) => void
   onResetFilters: () => void
   onToggleBookmark?: (eventId: string) => void
   onScroll?: (e: React.UIEvent<HTMLDivElement>) => void
@@ -249,6 +250,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
   onSelectEvent,
   onShowSummary,
   onEnterAnchorScope,
+  onFilterSeries,
   onResetFilters,
   onToggleBookmark,
   onScroll,
@@ -781,6 +783,7 @@ export const EventCompactList: React.FC<EventCompactListProps> = ({
         // 평탄화가 알려주는 값을 그대로 쓴다 — 자식 수로 추측하면 평면 모드에서
         // 눌러도 아무 일이 없는 셰브론이 그려진다.
         hasChildren={canExpand}
+        onFilterSeries={onFilterSeries}
         // 원본 `node.children.length`가 아니라 **필터 통과분**을 센 값이다 — 배지가
         // '11개'라 해 놓고 펼치면 0행이던 죽은 약속을 없앤다(검토 FILT-3).
         childCount={visibleChildCount}

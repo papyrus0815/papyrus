@@ -169,12 +169,12 @@ export const PersonRow = styled.li<{ $compact?: boolean; $dragOver?: boolean; $e
   align-items: start;
   gap: ${({ $compact }) => ($compact ? '10px' : '14px')};
   /*
-   * 한 사람 = 한 장(면). 대표단 줄(나라 카드 안)은 **면을 깔지 않는다** — 회색 카드 안에 흰 카드가 또 서서
-   * 한국전쟁 참여 탭이 상자 21개(나라 7 + 사람 14)였다. 들여쓴 줄로만 나라에 매단다.
+   * 한 사람 = 한 장(면). 대표단 줄도 제 카드다 — 나라 카드 **밖**, 그 아래 들여 쓴 자리에 선다(DelegationList).
+   * 카드 안에 카드를 넣지 않는다(예전: 회색 나라 카드 안 흰 인물 카드).
    */
-  padding: ${({ $compact }) => ($compact ? '6px 8px' : '14px 14px')};
+  padding: ${({ $compact }) => ($compact ? '8px 12px' : '14px 14px')};
   border-radius: ${RADIUS.MD};
-  background: ${({ theme, $compact }) => ($compact ? 'transparent' : surface.card(theme.mode))};
+  background: ${({ theme }) => surface.card(theme.mode)};
   outline: ${({ $dragOver, theme }) => ($dragOver ? `2px dashed ${ledgerAccent(theme.mode)}` : 'none')};
   outline-offset: -2px;
   transition: background 0.15s, outline-color 0.15s;
@@ -186,10 +186,10 @@ export const PersonRow = styled.li<{ $compact?: boolean; $dragOver?: boolean; $e
   }
 
   &:hover {
-    background: ${({ theme, $compact }) => ($compact ? surface.nested(theme.mode) : surface.cardHover(theme.mode))};
+    background: ${({ theme }) => surface.cardHover(theme.mode)};
   }
 
-  /* 편집 중인 사람 — 어느 카드를 고치고 있는지 한눈에(대표단 줄도 면을 깐다) */
+  /* 편집 중인 사람 — 어느 카드를 고치고 있는지 한눈에 */
   ${({ $editing, theme }) =>
     $editing &&
     css`
@@ -929,44 +929,23 @@ export const CountryRoleLine = styled.div<{ $hasContent: boolean }>`
 
 `
 
-/* 인물 행과 같은 골격 — 아바타 열만 없다(국기 이모지는 이름 옆이 자연스러워 생략). */
-export const CountryRow = styled.li<{ $dragOver?: boolean }>`
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-  gap: 16px;
-  /* 15개국이 한 화면에 들어오게 — 이름 한 줄 행은 위아래 7px */
-  /* 한 나라 = 한 장 — 선 대신 면 */
-  padding: 10px 14px;
-  border-radius: ${RADIUS.MD};
-  background: ${({ theme }) => surface.card(theme.mode)};
-  outline: ${({ $dragOver, theme }) => ($dragOver ? `2px dashed ${ledgerAccent(theme.mode)}` : 'none')};
-  outline-offset: -2px;
-  transition: background 0.15s, outline-color 0.15s;
+/**
+ * 나라 한 줄 = 나라 카드(CountryCard) + 그 아래 대표단(DelegationList). 면은 카드가 지고, 줄 자체는 면이 없다.
+ * 대표단이 달린 나라는 다음 나라와 조금 더 띄운다(어디까지가 이 나라 사람인지).
+ */
+export const CountryRow = styled.li`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
   &[draggable='true'] {
     cursor: grab;
   }
   &[draggable='true']:active {
     cursor: grabbing;
   }
-  &:hover {
-    background: ${({ theme }) => surface.cardHover(theme.mode)};
-  }
-
-  /*
-   * 행에 들어와도 **높이·줄바꿈은 그대로** — 예전엔 빈 '한 일'·비고 줄이 hover에 펼쳐지고 기본 역할 칩이
-   * 나타나며 행이 덜컹거렸다(마우스를 내리면 아래 행들이 줄줄이 밀렸다). 이제 hover는 오른쪽 ✎·✕의
-   * 투명도만 바꾸고, 빈 칸 편집은 ✎를 눌러 연다.
-   */
-  &:hover ${CountryRolePicker} button,
-  &:focus-within ${CountryRolePicker} button {
-    opacity: 1;
-  }
-  /* 자기 단추만 — 자손 전체로 걸면 안에 매단 대표단 인물 행의 ✕까지 켜졌다 */
-  &:hover > ${RowActions} ${RemoveInline},
-  &:focus-within > ${RowActions} ${RemoveInline} {
-    opacity: 0.7;
+  &:has(> ol) {
+    margin-bottom: 8px;
   }
 `
 
@@ -1061,14 +1040,21 @@ export const AddBtn = styled.button`
 `
 
 /** 대표단 — 나라 줄 밑 그 나라 자격의 인물들. 나라 이름 아래로 한 단 들인다 */
+/**
+ * 대표단 — 나라 카드 **아래** 그 나라 자격의 인물들. 나라 카드 밖에 들여 써서 소속을 보인다
+ * (선은 쓰지 않는다 — 들여쓰기와 간격이 묶음을 말한다).
+ */
 export const DelegationList = styled.ol`
   list-style: none;
-  /* 아바타(28px)가 나라 이름 글자 선에 오도록 행 안쪽 여백(8px)만큼 당긴다 */
-  margin: 6px -8px 0;
+  margin: 0 0 0 22px;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 6px;
+
+  @media (max-width: 640px) {
+    margin-left: 12px;
+  }
 `
 
 /** 섹션 머리 요약 — '국가 14 · 인물 15 · 진영 2' */
@@ -1155,6 +1141,42 @@ export const EditToggle = styled.button<{ $active?: boolean }>`
   svg {
     width: 13px;
     height: 13px;
+  }
+`
+
+/**
+ * 나라 카드 — 나라만 담는다(그 나라 사람은 카드 밖 아래). ✎·✕는 **이 카드에 들어왔을 때만** 켜진다 —
+ * 예전엔 나라 줄 전체(대표단 포함)에 걸려 인물에 마우스를 올려도 나라 단추가 켜졌다.
+ * 행에 들어와도 높이·줄바꿈은 그대로(hover는 단추 투명도만).
+ */
+export const CountryCard = styled.div<{ $dragOver?: boolean }>`
+  position: relative;
+  padding: 10px 14px;
+  border-radius: ${RADIUS.MD};
+  background: ${({ theme }) => surface.card(theme.mode)};
+  outline: ${({ $dragOver, theme }) => ($dragOver ? `2px dashed ${ledgerAccent(theme.mode)}` : 'none')};
+  outline-offset: -2px;
+  transition: background 0.15s, outline-color 0.15s;
+
+  &:hover {
+    background: ${({ theme }) => surface.cardHover(theme.mode)};
+  }
+  &:hover ${CountryRolePicker} button,
+  &:focus-within ${CountryRolePicker} button {
+    opacity: 1;
+  }
+  &:hover > ${RowActions},
+  &:focus-within > ${RowActions} {
+    background: ${({ theme }) => theme.colors.background.primary};
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1);
+  }
+  &:hover > ${RowActions} ${RemoveInline},
+  &:focus-within > ${RowActions} ${RemoveInline} {
+    opacity: 0.7;
+  }
+  &:hover > ${RowActions} ${EditToggle},
+  &:focus-within > ${RowActions} ${EditToggle} {
+    opacity: 0.8;
   }
 `
 

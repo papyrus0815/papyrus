@@ -60,6 +60,7 @@ import { OriginalDateLine } from './original-date-line'
 import { SIDE_OUTCOME_LABEL, isPlaceholderSideName } from './side-outcome'
 import { representativeOf } from './side-metrics.lib'
 import { scrollToAnchor } from './scroll-to-anchor'
+import { EventSeriesLinkModal } from './series-flow-strip'
 
 interface DetailFactsProps {
   event: EventDetail
@@ -116,6 +117,7 @@ export function DetailFacts({
    * 탭이 1,082px까지 밀렸다. 연도·날짜·위치·수장 링크는 그대로 두고 행만 '사실 N개 보기'로 연다(넓은 폭은 무관).
    */
   const [factsOpen, setFactsOpen] = useState(false)
+  const [seriesModalOpen, setSeriesModalOpen] = useState(false)
   /** 위치 — 글(이름·설명)과 지도 핀(대표 한 점). 핀은 위도·경도가 짝으로 있을 때만 */
   const [locationModalOpen, setLocationModalOpen] = useState(false)
   const locationText = event.location?.trim() ?? ''
@@ -353,6 +355,21 @@ export function DetailFacts({
           + 원어 사건명
         </AddLine>
       )}
+      {!event.seriesId && (
+        <AddLine type="button" onClick={() => setSeriesModalOpen(true)}>
+          + 정기 시리즈·회차 연결
+        </AddLine>
+      )}
+      {seriesModalOpen && (
+        <EventSeriesLinkModal
+          event={event}
+          onClose={() => setSeriesModalOpen(false)}
+          onSave={(patch) => {
+            onPatch(patch)
+            setSeriesModalOpen(false)
+          }}
+        />
+      )}
 
       {contemporaryLink}
 
@@ -430,6 +447,26 @@ export function DetailFacts({
           )
         })}
 
+        {event.seriesContext && (
+          <FactRow label="정기 시리즈" wide>
+            <ParentLink
+              to={
+                event.seriesContext.organizationId
+                  ? `/organizations?selected=${encodeURIComponent(event.seriesContext.organizationId)}&tab=series&series=${encodeURIComponent(event.seriesContext.id)}`
+                  : `/organizations?view=series&series=${encodeURIComponent(event.seriesContext.id)}`
+              }
+              title={`${event.seriesContext.title} (${event.seriesContext.cadenceLabel})`}
+            >
+              {event.seriesContext.title}
+              {event.seriesContext.currentEditionBadge
+                ? ` · ${event.seriesContext.currentEditionBadge}`
+                : ''}
+            </ParentLink>
+            <JumpButton type="button" onClick={() => setSeriesModalOpen(true)}>
+              편집
+            </JumpButton>
+          </FactRow>
+        )}
         {parent && (
           <FactRow label="상위 사건" wide>
             <ParentLink
@@ -464,6 +501,16 @@ export function DetailFacts({
           <FactRow label="인물">
             <JumpButton type="button" onClick={() => jumpTo('actors')}>
               {personCount}명
+            </JumpButton>
+          </FactRow>
+        )}
+        {(event.politicalParties?.length ?? 0) > 0 && (
+          <FactRow label="정당">
+            <JumpButton
+              type="button"
+              onClick={() => jumpTo('political-parties')}
+            >
+              {event.politicalParties?.length ?? 0}개 정당
             </JumpButton>
           </FactRow>
         )}

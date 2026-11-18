@@ -18,10 +18,15 @@ import {
   type EventRelationType,
   createEventRelation,
 } from '@/shared/api/event-relations'
-import { type EventSide, syncEventSides } from '@/shared/api/event-sides'
+import {
+  type EventSide,
+  type SideOutcome,
+  syncEventSides,
+} from '@/shared/api/event-sides'
 import {
   type EventOrganizationRole,
   addEventOrganization,
+  addEventPoliticalParty,
   getEventAccessionCandidates,
   updateEvent,
 } from '@/shared/api/events'
@@ -166,6 +171,8 @@ export interface PickedPerson {
   name: string
   /** 이 사건에서 한 일(선택) */
   role?: string
+  countryId?: string | null
+  historicalCountryId?: string | null
 }
 
 export const SIDE_SLOTS = ['A', 'B', 'C', 'D'] as const
@@ -176,13 +183,15 @@ export interface RegisterFacetDrafts {
   persons: PickedPerson[]
   /** 취임·즉위한 인물 — 참여 인물로도 들어가고, 재임·재위 기록을 이 사건에 잇는다 */
   power: PickedPerson[]
-  /** 진영 — 기본 2편(최대 4편), 영구 집단(PersonGroup) 연결, 참여국·참여 인물·조직별 소속 */
+  /** 진영 — 기본 2편(최대 4편), 영구 집단(PersonGroup) 연결, 결과(outcome), 참여국·참여 인물·조직별 소속 */
   sides: {
     names: string[]
     assignment: Record<string, SideSlot>
     personGroupIds?: Array<string | null>
+    outcomes?: Partial<Record<SideSlot, SideOutcome | null>>
     personAssignment?: Record<string, SideSlot>
     organizationAssignment?: Record<string, SideSlot>
+    politicalPartyAssignment?: Record<string, SideSlot>
   }
   /** 맺어진 조약 */
   treaty:
@@ -190,7 +199,19 @@ export interface RegisterFacetDrafts {
     | { mode: 'link'; treatyId: string; treatyName: string }
     | { mode: 'create'; name: string }
   /** 기업·조직 */
-  organizations: Array<{ id: string; name: string; role: EventOrganizationRole }>
+  organizations: Array<{
+    id: string
+    name: string
+    role: EventOrganizationRole
+    roleDescription?: string
+  }>
+  /** 정본 정당 (`PoliticalParty`) */
+  politicalParties?: Array<{
+    id: string
+    name: string
+    role: EventOrganizationRole
+    roleDescription?: string
+  }>
   /** 선거 */
   election: { id: string; name: string } | null
 }
@@ -201,6 +222,7 @@ export const emptyRegisterFacetDrafts = (): RegisterFacetDrafts => ({
   sides: { names: ['', ''], assignment: {} },
   treaty: { mode: 'none' },
   organizations: [],
+  politicalParties: [],
   election: null,
 })
 
@@ -225,6 +247,9 @@ export function pruneFacetDraftsForType(
   const hasSideOrgAssignment =
     core.has('sides') &&
     Object.keys(drafts.sides.organizationAssignment ?? {}).length > 0
+  const hasSidePartyAssignment =
+    core.has('sides') &&
+    Object.keys(drafts.sides.politicalPartyAssignment ?? {}).length > 0
   return {
     persons:
       core.has('persons') || optional.has('persons') || hasSidePersonAssignment
@@ -238,6 +263,13 @@ export function pruneFacetDraftsForType(
       optional.has('organizations') ||
       hasSideOrgAssignment
         ? drafts.organizations
+        : [],
+    politicalParties:
+      core.has('organizations') ||
+      optional.has('organizations') ||
+      domain === 'POLITICS' ||
+      hasSidePartyAssignment
+        ? (drafts.politicalParties ?? [])
         : [],
     election: core.has('election') ? drafts.election : null,
   }
@@ -268,11 +300,14 @@ export function hasAnyFacetDraft(drafts: RegisterFacetDrafts): boolean {
     drafts.power.length > 0 ||
     drafts.sides.names.some((name) => name.trim().length > 0) ||
     (drafts.sides.personGroupIds ?? []).some((id) => !!id) ||
+    Object.values(drafts.sides.outcomes ?? {}).some(Boolean) ||
     Object.keys(drafts.sides.assignment).length > 0 ||
     Object.keys(drafts.sides.personAssignment ?? {}).length > 0 ||
     Object.keys(drafts.sides.organizationAssignment ?? {}).length > 0 ||
+    Object.keys(drafts.sides.politicalPartyAssignment ?? {}).length > 0 ||
     drafts.treaty.mode !== 'none' ||
     drafts.organizations.length > 0 ||
+    (drafts.politicalParties?.length ?? 0) > 0 ||
     drafts.election !== null
   )
 }
@@ -540,13 +575,33 @@ export function relatedPersonsPayload(
   drafts: RegisterFacetDrafts,
   type?: EventTypeKey | null,
   domain?: string | null,
-): Array<{ personId: string; role?: string }> {
+): Array<{
+  personId: string
+  role?: string
+  countryId?: string
+  historicalCountryId?: string
+}> {
   const active = type === undefined ? drafts : pruneFacetDraftsForType(drafts, type, domain)
-  const rows = new Map<string, { personId: string; role?: string }>()
+  const rows = new Map<
+    string,
+    {
+      personId: string
+      role?: string
+      countryId?: string
+      historicalCountryId?: string
+    }
+  >()
   for (const person of active.power) rows.set(person.personId, { personId: person.personId, role: POWER_ROLE })
   for (const person of active.persons) {
     if (!rows.has(person.personId)) {
-      rows.set(person.personId, { personId: person.personId, role: person.role?.trim() || undefined })
+      rows.set(person.personId, {
+        personId: person.personId,
+        role: person.role?.trim() || undefined,
+        ...(person.countryId ? { countryId: person.countryId } : {}),
+        ...(person.historicalCountryId
+          ? { historicalCountryId: person.historicalCountryId }
+          : {}),
+      })
     }
   }
   return [...rows.values()]
@@ -628,18 +683,24 @@ export async function commitRegisterFacets(input: CommitInput): Promise<CommitRe
     }
   }
 
-  // 진영 — 진영 이름·영구 집단(계파)·참여국·참여 인물·참여 조직 중 하나라도 지정됐을 때 두 편을 만든다.
+  // 진영 — 진영 이름·영구 집단(계파)·진영 결과·참여국·참여 인물·참여 조직 중 하나라도 지정됐을 때 두 편을 만든다.
   const countryAssigned = Object.entries(drafts.sides.assignment)
   const personAssigned = Object.entries(drafts.sides.personAssignment ?? {})
   const orgAssigned = Object.entries(drafts.sides.organizationAssignment ?? {})
+  const partyAssigned = Object.entries(drafts.sides.politicalPartyAssignment ?? {})
   const hasNamedSides = drafts.sides.names.some((name) => name.trim().length > 0)
   const hasLinkedGroups = (drafts.sides.personGroupIds ?? []).some((id) => !!id)
+  const hasSideOutcomes = Object.values(drafts.sides.outcomes ?? {}).some(
+    Boolean,
+  )
   const shouldCreateSides =
     countryAssigned.length > 0 ||
     personAssigned.length > 0 ||
     orgAssigned.length > 0 ||
+    partyAssigned.length > 0 ||
     hasNamedSides ||
-    hasLinkedGroups
+    hasLinkedGroups ||
+    hasSideOutcomes
 
   let createdSideIdOf: ((slot: SideSlot) => string | undefined) | null = null
 
@@ -654,14 +715,20 @@ export async function commitRegisterFacets(input: CommitInput): Promise<CommitRe
         return raw || `진영 ${index + 1}`
       })
       const groupIds = drafts.sides.personGroupIds ?? []
+      const outcomes = drafts.sides.outcomes ?? {}
       const sides: EventSide[] = await syncEventSides(
         eventId,
-        names.map((sideName, index) => ({
-          name: sideName,
-          level: 'COALITION' as const,
-          color: SIDE_COLORS[index] ?? SIDE_COLORS[0],
-          ...(groupIds[index] ? { personGroupId: groupIds[index] } : {}),
-        })),
+        names.map((sideName, index) => {
+          const slot = SIDE_SLOTS[index]
+          const outcome = slot ? outcomes[slot] : undefined
+          return {
+            name: sideName,
+            level: 'COALITION' as const,
+            color: SIDE_COLORS[index] ?? SIDE_COLORS[0],
+            ...(groupIds[index] ? { personGroupId: groupIds[index] } : {}),
+            ...(outcome ? { outcome } : {}),
+          }
+        }),
       )
       const sideIdOf = (slot: SideSlot): string | undefined => {
         const slotIdx = SIDE_SLOTS.indexOf(slot)
@@ -725,12 +792,30 @@ export async function commitRegisterFacets(input: CommitInput): Promise<CommitRe
     await attempt(`조직 ${organization.name}`, async () => {
       const orgSlot = drafts.sides.organizationAssignment?.[organization.id]
       const sideId = orgSlot && createdSideIdOf ? createdSideIdOf(orgSlot) : undefined
+      const roleDescription = organization.roleDescription?.trim() || undefined
       await addEventOrganization(eventId, {
         organizationId: organization.id,
         role: organization.role,
+        ...(roleDescription ? { roleDescription } : {}),
         ...(sideId ? { sideId } : {}),
       })
       return `조직 ${organization.name}`
+    })
+  }
+
+  // 정당 (정본 PoliticalParty)
+  for (const party of drafts.politicalParties ?? []) {
+    await attempt(`정당 ${party.name}`, async () => {
+      const partySlot = drafts.sides.politicalPartyAssignment?.[party.id]
+      const sideId = partySlot && createdSideIdOf ? createdSideIdOf(partySlot) : undefined
+      const roleDescription = party.roleDescription?.trim() || undefined
+      await addEventPoliticalParty(eventId, {
+        partyId: party.id,
+        role: party.role,
+        ...(roleDescription ? { roleDescription } : {}),
+        ...(sideId ? { sideId } : {}),
+      })
+      return `정당 ${party.name}`
     })
   }
 

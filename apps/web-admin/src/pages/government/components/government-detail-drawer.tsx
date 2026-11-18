@@ -15,7 +15,6 @@ import {
   FiGitCommit,
   FiLayers,
   FiLink2,
-  FiMapPin,
   FiPlus,
   FiRefreshCw,
   FiShare2,
@@ -944,22 +943,15 @@ export const GovernmentDetailDrawer: React.FC<GovernmentDetailDrawerProps> = ({
                   {effectiveHq ||
                   (dept.headquartersLatitude != null &&
                     dept.headquartersLongitude != null) ? (
-                    <div>
-                      {effectiveHq ? (
-                        <LocationLine>
-                          <FiMapPin size={11} />
-                          <span>{effectiveHq}</span>
-                        </LocationLine>
-                      ) : null}
-                      <HeadquartersMapPreview
-                        headquarters={effectiveHq}
-                        latitude={dept.headquartersLatitude}
-                        longitude={dept.headquartersLongitude}
-                        countryName={polity.polityName}
-                        departmentName={dept.name}
-                        mapHeight={190}
-                      />
-                    </div>
+                    <HeadquartersMapPreview
+                      showHeadline
+                      headquarters={effectiveHq}
+                      latitude={dept.headquartersLatitude}
+                      longitude={dept.headquartersLongitude}
+                      countryName={polity.polityName}
+                      departmentName={dept.name}
+                      mapHeight={196}
+                    />
                   ) : null}
 
                   {effectiveMission ? (
@@ -1503,14 +1495,6 @@ const SmallBadge = styled.span`
   font-weight: 700;
   background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
   color: ${({ theme }) => ledgerAccent(theme.mode)};
-`
-
-const LocationLine = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const ProseText = styled.p`

@@ -596,7 +596,7 @@ export function MinistryDepartmentTree({
   useEffect(() => {
     if (!selectedDepartmentId || !resolvedEraSections) return
     const ownerSection = resolvedEraSections.find((sec) =>
-      sec.departments.some((d) => d.id === selectedDepartmentId),
+      sec.departments.some((deptRow) => deptRow.id === selectedDepartmentId),
     )
     if (ownerSection && collapsedEraIds.has(ownerSection.id)) {
       setCollapsedEraIds((prev) => {
@@ -937,7 +937,9 @@ function FlatDeptRow({
             color: tokens.textSub,
             cursor: 'pointer',
             flexShrink: 0,
-            opacity: hover || selected ? 1 : 0.65,
+            opacity: hover || selected ? 1 : 0,
+            pointerEvents: hover || selected ? 'auto' : 'none',
+            transition: 'opacity 0.14s ease',
           }}
         >
           <FiPlus size={11} /> 산하
@@ -1160,7 +1162,9 @@ const DeptTreeNode = React.memo(function DeptTreeNode({
               color: tokens.textSub,
               cursor: 'pointer',
               flexShrink: 0,
-              opacity: rowHover || selected ? 1 : 0.65,
+              opacity: rowHover || selected ? 1 : 0,
+              pointerEvents: rowHover || selected ? 'auto' : 'none',
+              transition: 'opacity 0.14s ease',
             }}
           >
             <FiPlus size={11} /> 산하

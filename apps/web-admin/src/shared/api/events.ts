@@ -85,6 +85,63 @@ export interface GetAllEventsParams {
    * 건인가"처럼 **집계**하는 쪽이 이걸 켠다.
    */
   includeSubEvents?: boolean
+  /** 정기 시리즈(EventSeries) ID 필터 */
+  seriesId?: string
+}
+
+export interface ContemporaryLeaderCandidate {
+  personId: string
+  personName: string
+  surname: string | null
+  givenName: string | null
+  profileImageUrl: string | null
+  positionType: string
+  isMonarchical: boolean
+  ordinal: number | null
+  title: string
+  suggestedRole: string
+  countryId: string | null
+  historicalCountryId: string | null
+  countryName: string
+  flagEmoji: string | null
+  tenureStartYear: number | null
+  tenureEndYear: number | null
+}
+
+/**
+ * 참여국 및 시작일 기준으로 당시 재임·재위 중인 국가원수·정부수반·군주 후보를 조회한다.
+ * 정상회의(SUMMIT)·조약·외교 사건에서 "참여국 당시 정상·수반 원클릭 불러오기"에 사용.
+ */
+export async function getContemporaryLeadersForEvent(params: {
+  date: string
+  datePrecision?: string | null
+  countryIds?: string[]
+  historicalCountryIds?: string[]
+}): Promise<ContemporaryLeaderCandidate[]> {
+  if (!params.date?.trim()) return []
+  const cIds = (params.countryIds ?? []).filter(Boolean)
+  const hcIds = (params.historicalCountryIds ?? []).filter(Boolean)
+  if (cIds.length === 0 && hcIds.length === 0) return []
+
+  const connection = getConnection()
+  const url = new URL(`${connection.host}/events/contemporary-leaders`)
+  url.searchParams.set('date', params.date.trim())
+  if (params.datePrecision) {
+    url.searchParams.set('datePrecision', params.datePrecision)
+  }
+  if (cIds.length > 0) url.searchParams.set('countryIds', cIds.join(','))
+  if (hcIds.length > 0) {
+    url.searchParams.set('historicalCountryIds', hcIds.join(','))
+  }
+
+  const response = await fetch(url.toString(), {
+    headers: (connection.headers ?? {}) as HeadersInit,
+    credentials: 'include',
+  })
+  if (!response.ok) {
+    throw new Error(`당시 수반 조회 실패 (HTTP ${response.status})`)
+  }
+  return response.json()
 }
 
 export async function getAllEvents(
@@ -114,6 +171,7 @@ export async function getAllEvents(
     set('types', params?.types)
     set('decade', params?.decade)
     set('century', params?.century)
+    set('seriesId', params?.seriesId)
     if (params?.includeSubEvents) url.searchParams.set('includeSubEvents', 'true')
     if (params?.hasNoDescription) url.searchParams.set('hasNoDescription', 'true')
     if (params?.hasNoCountries) url.searchParams.set('hasNoCountries', 'true')
@@ -156,6 +214,7 @@ export async function getEventsCount(
     | 'hasNoCountries'
     | 'hasNoKeywords'
     | 'includeSubEvents'
+    | 'seriesId'
   >,
 ): Promise<number> {
   try {
@@ -180,6 +239,7 @@ export async function getEventsCount(
     set('decade', params?.decade)
     set('century', params?.century)
     set('createdSinceDays', params?.createdSinceDays)
+    set('seriesId', params?.seriesId)
     if (params?.includeSubEvents) url.searchParams.set('includeSubEvents', 'true')
     if (params?.hasNoDescription) url.searchParams.set('hasNoDescription', 'true')
     if (params?.hasNoCountries) url.searchParams.set('hasNoCountries', 'true')
@@ -351,6 +411,72 @@ export function updateEventOrganization(
 export function removeEventOrganization(eventId: string, relationId: string): Promise<void> {
   return eventOrganizationRequest(
     `/events/${encodeURIComponent(eventId)}/organizations/${encodeURIComponent(relationId)}`,
+    { method: 'DELETE' },
+  )
+}
+
+/** 사건 ↔ 정당 한 줄 — 사건 상세 「관련 정당」 */
+export interface EventPoliticalParty {
+  relationId: string
+  role: EventOrganizationRole
+  roleDescription: string | null
+  note: string | null
+  sideId?: string | null
+  partyId: string
+  name: string
+  shortName: string | null
+  localName: string | null
+  ideology: string | null
+  position: string | null
+  brandColor: string | null
+  logoUrl: string | null
+  foundedDate: string | null
+  dissolvedDate: string | null
+  country: { id: string; name: string } | null
+  historicalCountry: { id: string; name: string } | null
+}
+
+/** POST /events/:id/political-parties — 정본 정당을 사건에 연결 */
+export function addEventPoliticalParty(
+  eventId: string,
+  body: {
+    partyId: string
+    role: EventOrganizationRole
+    roleDescription?: string | null
+    note?: string | null
+    sideId?: string | null
+  },
+): Promise<EventPoliticalParty> {
+  return eventOrganizationRequest(`/events/${encodeURIComponent(eventId)}/political-parties`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+/** PATCH /events/:id/political-parties/:relationId — 진영 소속·역할·설명·비고 변경 */
+export function updateEventPoliticalParty(
+  eventId: string,
+  relationId: string,
+  body: {
+    role?: EventOrganizationRole
+    roleDescription?: string | null
+    note?: string | null
+    sideId?: string | null
+  },
+): Promise<EventPoliticalParty> {
+  return eventOrganizationRequest(
+    `/events/${encodeURIComponent(eventId)}/political-parties/${encodeURIComponent(relationId)}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    },
+  )
+}
+
+/** DELETE /events/:id/political-parties/:relationId — 정당 자체는 유지된다 */
+export function removeEventPoliticalParty(eventId: string, relationId: string): Promise<void> {
+  return eventOrganizationRequest(
+    `/events/${encodeURIComponent(eventId)}/political-parties/${encodeURIComponent(relationId)}`,
     { method: 'DELETE' },
   )
 }

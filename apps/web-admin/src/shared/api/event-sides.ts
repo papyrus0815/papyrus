@@ -52,6 +52,14 @@ export interface EventSide {
   participants: EventSideMemberCountry[]
   persons: Array<{ personEventId: string; personId: string; name: string; surname: string | null; role: string | null }>
   organizations: Array<{ relationId: string; organizationId: string; name: string; role: string }>
+  politicalParties?: Array<{
+    relationId: string
+    partyId: string
+    name: string
+    shortName: string | null
+    brandColor: string | null
+    role: string
+  }>
 }
 
 export interface EventSideInput {

@@ -9,7 +9,6 @@ import {
   FiEdit2,
   FiGitCommit,
   FiLayers,
-  FiMapPin,
   FiPlus,
   FiShield,
   FiTrash2,
@@ -409,21 +408,18 @@ export function GovernmentDepartmentDetailPage() {
             {(effectiveHeadquarters ||
               (department.headquartersLatitude != null &&
                 department.headquartersLongitude != null)) && (
-              <div>
-                {effectiveHeadquarters ? (
-                  <HeroLocation>
-                    <FiMapPin size={12} />
-                    <span>본부·소재지: {effectiveHeadquarters}</span>
-                  </HeroLocation>
-                ) : null}
-                <HeadquartersMapPreview
-                  headquarters={effectiveHeadquarters}
-                  latitude={department.headquartersLatitude}
-                  longitude={department.headquartersLongitude}
-                  countryName={polity.polityName}
-                  departmentName={department.name}
-                />
-              </div>
+              <HeadquartersMapPreview
+                showHeadline
+                defaultExpanded={
+                  department.headquartersLatitude != null &&
+                  department.headquartersLongitude != null
+                }
+                headquarters={effectiveHeadquarters}
+                latitude={department.headquartersLatitude}
+                longitude={department.headquartersLongitude}
+                countryName={polity.polityName}
+                departmentName={department.name}
+              />
             )}
             {effectiveMission && (
               <HeroDescription>{effectiveMission}</HeroDescription>
@@ -1323,14 +1319,6 @@ const HeroTitle = styled.h1`
 const HeroSubline = styled.div`
   font-size: 13px;
   color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const HeroLocation = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const HeroDescription = styled.p`

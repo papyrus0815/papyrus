@@ -15,11 +15,15 @@ import { dashboardRoute } from '@/pages/dashboard/dashboard.route'
 import { dynastyRoute } from '@/pages/dynasty/dynasty.route'
 import { personGroupsRoutes } from '@/pages/person-groups/person-groups.route'
 import { ethnicitiesRoutes } from '@/pages/ethnicities/ethnicities.route'
-import { organizationsRoutes } from '@/pages/organizations/organizations.route'
+import {
+  organizationFormRoutes,
+  organizationsPageRoute,
+} from '@/pages/organizations/organizations.route'
 import { companiesRoutes } from '@/pages/companies/companies.route'
 import { sourcesRoutes } from '@/pages/sources/sources.route'
 import { treatiesRoutes } from '@/pages/treaties/treaties.route'
 import { governmentRoutes } from '@/pages/government/government.route'
+import { politicalPartiesPageRoute } from '@/pages/political-parties/political-parties.route'
 import { militaryRoutes } from '@/pages/military/military.route'
 import { companyCategoriesRoutes } from '@/pages/company-categories/company-categories.route'
 import { eventFormRoutes, eventPageRoute } from '@/pages/events/event-route'
@@ -189,8 +193,8 @@ const appRouterConfig = [
           profileRoute,
           // 공개 프로필 (타 사용자) — /profile/:accountId
           publicProfileRoute,
-          // 행정기구·조직 라우트
-          ...organizationsRoutes,
+          // 기구·조직 풀폭 폼 라우트
+          ...organizationFormRoutes,
           // 민족 라우트 (CRUD)
           ...ethnicitiesRoutes,
           // 기업 카테고리 라우트 (CRUD)
@@ -215,8 +219,10 @@ const appRouterConfig = [
               dynastyRoute,
               ...personGroupsRoutes,
               ...companiesRoutes,
+              organizationsPageRoute,
               ...treatiesRoutes,
               ...governmentRoutes,
+              politicalPartiesPageRoute,
               ...militaryRoutes,
               ...sourcesRoutes,
               eventPageRoute,

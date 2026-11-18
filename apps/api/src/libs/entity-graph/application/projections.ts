@@ -112,6 +112,30 @@ const EVENT_COUNTRY_ROLE_LABEL: Record<string, string> = {
   OTHER: '관련국',
 }
 
+const EVENT_ORGANIZATION_ROLE_LABEL: Record<string, string> = {
+  PRINCIPAL: '주관·주체',
+  FOUNDED: '설립',
+  DISSOLVED: '해산',
+  ACQUIRER: '인수',
+  ACQUIRED: '피인수',
+  PARTICIPANT: '참여',
+  CONTRACTOR: '시공',
+  BENEFICIARY: '수혜',
+  VICTIM: '피해',
+  OTHER: '관여',
+}
+
+const ORG_COUNTRY_ROLE_LABEL: Record<string, string> = {
+  FOUNDER: '창립국',
+  MEMBER: '정회원',
+  OBSERVER: '옵서버',
+  DIALOGUE_PARTNER: '대화상대국',
+  SECRETARIAT_HOST: '사무국 소재국',
+  SUSPENDED: '자격정지',
+  EXPELLED: '제명',
+  OTHER: '관련국',
+}
+
 const TREATY_PARTICIPATION_LABEL: Record<string, string> = {
   SIGNATORY: '서명',
   GUARANTOR: '보증',
@@ -955,6 +979,242 @@ const militaryUnit: Projection = {
   },
 }
 
+const eventOrganization: Projection = {
+  relation: 'event.organization',
+  group: 'organization',
+  subject: 'event',
+  objects: ['organization'],
+  async forward(prisma, _ctx, eventId) {
+    const rows = await prisma.eventOrganizationRelation.findMany({
+      where: { eventId },
+      select: {
+        role: true,
+        organization: {
+          select: { id: true, name: true, shortName: true, logoUrl: true },
+        },
+      },
+    })
+    const base = { relation: this.relation, group: this.group, direction: 'out' as const }
+    return result(
+      rows.map((row) =>
+        edge(
+          base,
+          EVENT_ORGANIZATION_ROLE_LABEL[row.role] ?? '관련 기구·조직',
+          simpleTarget(
+            'organization',
+            row.organization,
+            row.organization.shortName ?? null,
+            row.organization.logoUrl ?? null,
+          ),
+        ),
+      ),
+    )
+  },
+  async reverse(prisma, ctx, _kind, id) {
+    const where = {
+      organizationId: id,
+      event: {
+        deletedAt: null,
+        ...(ctx.accountId ? { createdById: ctx.accountId } : {}),
+      },
+    }
+    const { rows, total } = await limitedReverse(
+      ctx,
+      (take) =>
+        prisma.eventOrganizationRelation.findMany({
+          where,
+          select: { role: true, event: { select: EVENT_TARGET_SELECT } },
+          take,
+        }),
+      () => prisma.eventOrganizationRelation.count({ where }),
+    )
+    const base = { relation: this.relation, group: 'event' as const, direction: 'in' as const }
+    return result(
+      rows.map((row) =>
+        edge(
+          base,
+          '관련 사건',
+          eventTarget(row.event, ctx.accountId),
+          EVENT_ORGANIZATION_ROLE_LABEL[row.role] ?? null,
+          periodFromStructured(row.event),
+        ),
+      ),
+      total,
+    )
+  },
+}
+
+const organizationCountryMembership: Projection = {
+  relation: 'organization.countryMembership',
+  group: 'polity',
+  subject: 'organization',
+  objects: ['country', 'historicalCountry'],
+  async forward(prisma, _ctx, organizationId) {
+    const rows = await prisma.organizationCountryMembership.findMany({
+      where: { organizationId },
+      select: {
+        role: true,
+        startEra: true,
+        startYear: true,
+        startDate: true,
+        endEra: true,
+        endYear: true,
+        endDate: true,
+        ...POLITY_SELECT,
+      },
+      orderBy: [{ sortOrder: 'asc' }, { startYear: 'asc' }],
+    })
+    const base = { relation: this.relation, group: this.group, direction: 'out' as const }
+    return result(
+      rows.map((row) =>
+        edge(
+          base,
+          ORG_COUNTRY_ROLE_LABEL[row.role] ?? '회원국',
+          polityTarget(row),
+          null,
+          periodFromStructured(row),
+        ),
+      ),
+    )
+  },
+  async reverse(prisma, ctx, kind, id) {
+    const where = polityWhere(kind, id)
+    const { rows, total } = await limitedReverse(
+      ctx,
+      (take) =>
+        prisma.organizationCountryMembership.findMany({
+          where,
+          select: {
+            role: true,
+            startEra: true,
+            startYear: true,
+            startDate: true,
+            endEra: true,
+            endYear: true,
+            endDate: true,
+            organization: {
+              select: { id: true, name: true, shortName: true, logoUrl: true },
+            },
+          },
+          take,
+        }),
+      () => prisma.organizationCountryMembership.count({ where }),
+    )
+    const base = {
+      relation: this.relation,
+      group: 'organization' as const,
+      direction: 'in' as const,
+    }
+    return result(
+      rows.map((row) =>
+        edge(
+          base,
+          '가입 기구·협의체',
+          simpleTarget(
+            'organization',
+            row.organization,
+            row.organization.shortName ?? null,
+            row.organization.logoUrl ?? null,
+          ),
+          ORG_COUNTRY_ROLE_LABEL[row.role] ?? null,
+          periodFromStructured(row),
+        ),
+      ),
+      total,
+    )
+  },
+}
+
+const organizationLineage: Projection = {
+  relation: 'organization.lineage',
+  group: 'organization',
+  subject: 'organization',
+  objects: ['organization'],
+  async forward(prisma, _ctx, organizationId) {
+    const org = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: {
+        foundedDate: true,
+        predecessor: {
+          select: {
+            id: true,
+            name: true,
+            shortName: true,
+            logoUrl: true,
+            foundedDate: true,
+            dissolvedDate: true,
+          },
+        },
+      },
+    })
+    if (!org?.predecessor) return result([])
+    const base = {
+      relation: this.relation,
+      group: this.group,
+      direction: 'out' as const,
+    }
+    return result([
+      edge(
+        base,
+        '전신 기구',
+        simpleTarget(
+          'organization',
+          org.predecessor,
+          org.predecessor.shortName ?? null,
+          org.predecessor.logoUrl ?? null,
+        ),
+        null,
+        periodFromDates(
+          org.predecessor.foundedDate,
+          org.predecessor.dissolvedDate,
+        ),
+      ),
+    ])
+  },
+  async reverse(prisma, ctx, _kind, id) {
+    const where = { predecessorOrganizationId: id }
+    const { rows, total } = await limitedReverse(
+      ctx,
+      (take) =>
+        prisma.organization.findMany({
+          where,
+          select: {
+            id: true,
+            name: true,
+            shortName: true,
+            logoUrl: true,
+            foundedDate: true,
+            dissolvedDate: true,
+          },
+          orderBy: [{ foundedDate: 'asc' }, { name: 'asc' }],
+          take,
+        }),
+      () => prisma.organization.count({ where }),
+    )
+    const base = {
+      relation: this.relation,
+      group: this.group,
+      direction: 'in' as const,
+    }
+    return result(
+      rows.map((succ) =>
+        edge(
+          base,
+          '후신·승계 기구',
+          simpleTarget(
+            'organization',
+            succ,
+            succ.shortName ?? null,
+            succ.logoUrl ?? null,
+          ),
+          null,
+          periodFromDates(succ.foundedDate, succ.dissolvedDate),
+        ),
+      ),
+      total,
+    )
+  },
+}
 
 /** 등록 순서 = 같은 묶음 안의 기본 나열 순서 */
 export const PROJECTIONS: readonly Projection[] = [
@@ -967,11 +1227,14 @@ export const PROJECTIONS: readonly Projection[] = [
   dynastyFounder,
   personEvent,
   eventCountry,
+  eventOrganization,
   parent,
   spouse,
   relationship,
   group,
   organization,
+  organizationLineage,
+  organizationCountryMembership,
   party,
   treaty,
   militaryUnit,

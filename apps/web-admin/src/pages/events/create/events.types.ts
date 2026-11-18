@@ -205,6 +205,10 @@ export interface HistoricalEvent {
   extraParentCount?: number
   /** 관련 사건(EventRelation) 개수 — 목록 `_count` 양방향 합. 미로드면 undefined */
   relatedCount?: number
+  /** 소속 정기 시리즈 ID · 시리즈명 · 회차 배지 */
+  seriesId?: string | null
+  seriesTitle?: string | null
+  editionBadge?: string | null
   /** 손으로 넣은 상위 사건의 국면 — 비면 날짜로 자동(목록 '2국면' 표지). transformer가 매핑한다 */
   phaseId?: string | null
   /** 이 묶음의 국면(구획) — 목록이 하위 줄에 '2국면' 표지를 단다. 미로드면 undefined */

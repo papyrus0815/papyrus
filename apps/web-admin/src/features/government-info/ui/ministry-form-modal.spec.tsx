@@ -347,40 +347,79 @@ describe('MinistryFormModal — 디자인 및 입력 UX 개선 검증', () => {
     expect(latestForm.categoryId).toBe('cat-foreign')
   })
 
-  it('사이드바 대신 사건 등록 모달과 동일한 중앙 모달 셸·2단 분할 전환·고정 푸터를 제공한다', () => {
-    renderModalHarness({ countryName: '대한민국' })
+  it('모달 헤더에서 섹션 점프 탭을 제거하고, 좌우 50:50 균형 분할과 기관 구분 설명 기능을 제공한다', () => {
+    let latestForm: MinistryFormFields = emptyMinistryFormFields('', '')
+    renderModalHarness({
+      countryName: '대한민국',
+      onFormSnapshot: (snapshot) => {
+        latestForm = snapshot
+      },
+    })
 
     const modalDialog = screen.getByRole('dialog', {
       name: '중앙부처 · 국가기관 등록',
     })
     expect(modalDialog).toBeInTheDocument()
 
-    // 헤더 섹션 이동 내비게이션 확인
-    const sectionNav = screen.getByRole('navigation', {
-      name: '폼 섹션 이동',
-    })
+    // 헤더 섹션 점프 탭('기본 정보', '상하위 · 계보', '맥락 · 소개')이 제거되었는지 확인
     expect(
-      within(sectionNav).getByRole('button', { name: '기본 정보' }),
+      screen.queryByRole('navigation', { name: '폼 섹션 이동' }),
+    ).not.toBeInTheDocument()
+
+    // 좌우 반반 분할 패널 배치 확인 (좌: 기본 정보 · 분류 / 우: 상하위 편제 + 소재지·직제·소개)
+    const splitGrid = screen.getByTestId('ministry-form-split-grid')
+    expect(splitGrid).toBeInTheDocument()
+    const leftPane = document.getElementById('ministry-form-split-left')!
+    const rightPane = document.getElementById('ministry-form-split-right')!
+    expect(
+      within(leftPane).getByText('기본 정보 · 분류'),
     ).toBeInTheDocument()
     expect(
-      within(sectionNav).getByRole('button', { name: '상하위 · 계보' }),
+      within(rightPane).getByText('상하위 편제 · 전후 계보'),
     ).toBeInTheDocument()
     expect(
-      within(sectionNav).getByRole('button', { name: '맥락 · 소개' }),
+      within(rightPane).getByText('소재지 · 직제 · 소개'),
     ).toBeInTheDocument()
 
-    // 사건 등록 모달과 동일한 2단 분할 <-> 1단 보기 레이아웃 전환 확인
-    expect(screen.getByTestId('ministry-form-split-grid')).toBeInTheDocument()
-    const switchToSingleBtn = screen.getByRole('button', {
-      name: '1단 세로 보기로 전환',
+    // 기관 구분 설명 기능 확인: 1줄 요약 캡션 + 점세개(⋯) '구분 기준 안내' 비교 패널
+    const kindCallout = screen.getByTestId('active-department-kind-callout')
+    expect(kindCallout).toHaveTextContent('중앙부처')
+
+    fireEvent.click(screen.getByRole('button', { name: '구분 기준 안내' }))
+    const guideRegion = screen.getByRole('region', {
+      name: '기관 구분 전체 기준 안내',
     })
-    fireEvent.click(switchToSingleBtn)
+    expect(guideRegion).toBeInTheDocument()
+
+    // 비교 가이드 안의 '외청·위원회' 카드를 클릭하면 즉시 해당 구분이 선택되고 설명이 갱신된다
+    const agencyGuideBtn = within(guideRegion).getByRole('button', {
+      name: /외청·위원회/,
+    })
+    fireEvent.click(agencyGuideBtn)
+    expect(latestForm.kind).toBe('AGENCY')
+    expect(kindCallout).toHaveTextContent('외청·위원회')
+
+    // 다시 중앙부처 선택 후 점세개(⋯) 모달 설정 메뉴에서 2단 분할 <-> 1단 보기 전환 검증
+    const kindRadioGroup = screen.getByRole('radiogroup', {
+      name: '기관 구분 선택',
+    })
+    fireEvent.click(
+      within(kindRadioGroup).getByRole('radio', { name: '중앙부처' }),
+    )
+
+    const moreSettingsBtn = screen.getByRole('button', {
+      name: '모달 설정 더보기',
+    })
+    fireEvent.click(moreSettingsBtn)
+    const moreMenu = screen.getByRole('menu', { name: '모달 설정 더보기' })
+    fireEvent.click(within(moreMenu).getByRole('button', { name: '1단 보기' }))
+
     expect(
       screen.queryByTestId('ministry-form-split-grid'),
     ).not.toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: '2단 좌우 분할 보기로 전환' }),
-    ).toBeInTheDocument()
+
+    fireEvent.click(within(moreMenu).getByRole('button', { name: '2단 분할' }))
+    expect(screen.getByTestId('ministry-form-split-grid')).toBeInTheDocument()
 
     // 하단 고정 푸터: 필수 미입력 점프 -> 기관명 입력 후 등록 준비 완료 전환
     expect(

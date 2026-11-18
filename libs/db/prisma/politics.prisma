@@ -130,7 +130,9 @@ model PoliticalParty {
   /// 이 정당 소속으로 기록된 공직·군직 재임들
   governmentTenures    GovernmentPositionTenure[]   @relation("TenurePoliticalParty")
   /// 관련 법령(`Law`) 연결 — 정당법·정치자금법 등
-  politicalPartyLaws   PoliticalPartyLaw[]        @relation("PartyLawAffiliations")
+  politicalPartyLaws   PoliticalPartyLaw[]           @relation("PartyLawAffiliations")
+  /// 사건(`Event`) 참여·창당·해산 관계
+  eventRelations       EventPoliticalPartyRelation[]
 
   //--- 메타데이터
   createdAt DateTime @default(now()) @map("created_at")

@@ -5,8 +5,9 @@ import {
   FiAlertCircle,
   FiClock,
   FiPlus,
+  FiRefreshCw,
 } from 'react-icons/fi'
-import styled from 'styled-components'
+import styled, { type DefaultTheme } from 'styled-components'
 
 import { useCountries } from '@/features/country/api'
 import { useHistoricalCountries } from '@/features/historical-country/use-historical-countries.hook'
@@ -15,7 +16,6 @@ import {
   type AdministrationDepartment,
   type AdministrationDepartmentKind,
   type CreateAdministrationDepartmentInput,
-  DEPARTMENT_KIND_OPTIONS,
 } from '@/shared/api/administration-department'
 import {
   compareByCountryStart,
@@ -43,12 +43,11 @@ import {
   DatePickerModal,
   type DatePickerPrecision,
 } from '@/shared/ui/date-picker/date-picker-modal'
+import { DepartmentKindField } from '@/shared/ui/department-kind-field'
 import { FormTextarea } from '@/shared/ui/form-input/form-input'
 import { HeadquartersLocationField } from '@/shared/ui/headquarters-location-field'
 import { InlineDateField } from '@/shared/ui/person-register-modal/sections/inline-date-field'
 import {
-  ChoiceChips,
-  type ChoiceChipOption,
   KitAddButton,
   KitBusyBar,
   kitC,
@@ -74,17 +73,12 @@ import {
   FooterHint,
   FooterJumpArrow,
   FooterJumpButton,
-  FooterKbd,
   FooterMissingCount,
   FooterReadyBadge,
   FooterReadyGroup,
-  FooterShortcutItem,
-  HeaderActionsBar,
-  HeaderResetBtn,
-  SectionJumpBtn,
-  SectionJumpNav,
   useModalSubmitShortcut,
 } from '@/shared/ui/register-modal-shell/register-modal-chrome'
+import { RegisterModalMoreMenu } from '@/shared/ui/register-modal-shell/register-modal-more-menu'
 import {
   PersonRegisterModalCancelBtn,
   PersonRegisterModalFormScroll,
@@ -103,12 +97,6 @@ type DepartmentModalSectionKey = 'basic' | 'periodDetail'
 type DepartmentDateInfoPayload = NonNullable<
   CreateAdministrationDepartmentInput['establishedInfo']
 >
-
-const KIND_CHIP_OPTIONS: ChoiceChipOption<AdministrationDepartmentKind>[] =
-  DEPARTMENT_KIND_OPTIONS.map((kindItem) => ({
-    value: kindItem.value,
-    label: kindItem.label,
-  }))
 
 export interface GovernmentDepartmentFormModalProps {
   isOpen: boolean
@@ -183,8 +171,7 @@ export const GovernmentDepartmentFormModal: React.FC<
   const estDateAnchorId = `dept-est-date-${instanceId}`
   const abolDateAnchorId = `dept-abol-date-${instanceId}`
 
-  const [activeSection, setActiveSection] =
-    useState<DepartmentModalSectionKey>('basic')
+  const [layoutMode, setLayoutMode] = useState<'split' | 'single'>('split')
   const [activeDatePicker, setActiveDatePicker] = useState<
     'est' | 'abol' | null
   >(null)
@@ -335,7 +322,6 @@ export const GovernmentDepartmentFormModal: React.FC<
   const resetCreateFormFields = useCallback(() => {
     setErrorMessage(null)
     setActiveDatePicker(null)
-    setActiveSection('basic')
     setShowNewCategory(false)
     setNewCategoryName('')
     setPolityValue(initialPolityValue || '')
@@ -386,7 +372,6 @@ export const GovernmentDepartmentFormModal: React.FC<
       setErrorMessage(null)
       setShowNewCategory(false)
       setNewCategoryName('')
-      setActiveSection('basic')
 
       if (editingDepartment.historicalCountryId) {
         setPolityValue(`h:${editingDepartment.historicalCountryId}`)
@@ -556,7 +541,6 @@ export const GovernmentDepartmentFormModal: React.FC<
 
   const jumpToSection = useCallback(
     (targetSection: DepartmentModalSectionKey) => {
-      setActiveSection(targetSection)
       const refMap: Record<
         DepartmentModalSectionKey,
         React.RefObject<HTMLElement | null>
@@ -1033,42 +1017,39 @@ export const GovernmentDepartmentFormModal: React.FC<
         void requestClose()
       }}
       title={modalTitle}
-      maxWidth="min(920px, 96vw)"
-      minHeight="560px"
+      maxWidth={
+        layoutMode === 'split' ? 'min(1260px, 95vw)' : 'min(820px, 95vw)'
+      }
+      minHeight="auto"
       fullBleedOnMobile
       closeOnOverlayClick={false}
       headerActions={
-        <HeaderActionsBar>
-          <SectionJumpNav aria-label="폼 섹션 이동">
-            <SectionJumpBtn
-              type="button"
-              $active={activeSection === 'basic'}
-              onClick={() => jumpToSection('basic')}
-            >
-              기본 정보
-            </SectionJumpBtn>
-            <SectionJumpBtn
-              type="button"
-              $active={activeSection === 'periodDetail'}
-              onClick={() => jumpToSection('periodDetail')}
-            >
-              설립 시기 · 상세
-            </SectionJumpBtn>
-          </SectionJumpNav>
-          {!isEditing && isFormDirty ? (
-            <HeaderResetBtn
-              type="button"
-              onClick={() => {
-                void handleResetClick()
-              }}
-            >
-              초기화
-            </HeaderResetBtn>
-          ) : null}
-        </HeaderActionsBar>
+        <HeaderRightBar>
+          <RegisterModalMoreMenu
+            layoutMode={layoutMode}
+            onChangeLayoutMode={setLayoutMode}
+            actions={
+              !isEditing && isFormDirty
+                ? [
+                    {
+                      key: 'reset',
+                      label: '작성 내용 초기화',
+                      icon: <FiRefreshCw size={13.5} />,
+                      danger: true,
+                      onClick: () => {
+                        void handleResetClick()
+                      },
+                    },
+                  ]
+                : []
+            }
+            ariaLabel="모달 설정 더보기"
+            title="화면 배치 및 입력 초기화"
+          />
+        </HeaderRightBar>
       }
     >
-      <PersonRegisterModalFormScroll ref={scrollContainerRef}>
+      <DeptModalFormScroll ref={scrollContainerRef} $layoutMode={layoutMode}>
         {saveDepartmentMutation.isPending && (
           <KitBusyBar role="status" aria-live="polite">
             {isEditing ? '변경사항을 저장하는 중...' : '기관을 등록하는 중...'}
@@ -1086,9 +1067,11 @@ export const GovernmentDepartmentFormModal: React.FC<
         ) : null}
 
         <LabeledRowsWrap>
-          {/* ═══════════════ 기본 정보 ═══════════════ */}
+          <SplitColumnsGrid $layoutMode={layoutMode}>
+            <SplitColumnLeft>
+          {/* ═══════════════ 기본 정보 · 분류 ═══════════════ */}
           <FormGroup ref={basicSectionRef}>
-            <FormGroupTitle>기본 정보</FormGroupTitle>
+            <FormGroupTitle>기본 정보 · 분류</FormGroupTitle>
 
             <FieldRow>
               <FieldLabel>
@@ -1169,14 +1152,10 @@ export const GovernmentDepartmentFormModal: React.FC<
             <FieldRow>
               <FieldLabel>기관 구분</FieldLabel>
               <FieldControl>
-                <ChoiceChips
+                <DepartmentKindField
                   value={kind}
-                  options={KIND_CHIP_OPTIONS}
                   ariaLabel="기관 구분 선택"
-                  onChange={(nextKind) => {
-                    if (!nextKind) return
-                    setKind(nextKind)
-                  }}
+                  onChange={(nextKind) => setKind(nextKind)}
                 />
               </FieldControl>
             </FieldRow>
@@ -1273,10 +1252,12 @@ export const GovernmentDepartmentFormModal: React.FC<
               </FieldControl>
             </FieldRow>
           </FormGroup>
+          </SplitColumnLeft>
 
-          {/* ═══════════════ 설립 시기 · 상세 ═══════════════ */}
+          <SplitColumnRight>
+          {/* ═══════════════ 설립 시기 · 소재지 · 상세 ═══════════════ */}
           <FormGroup ref={periodDetailSectionRef}>
-            <FormGroupTitle>설립 시기 · 상세</FormGroupTitle>
+            <FormGroupTitle>설립 시기 · 소재지 · 상세</FormGroupTitle>
 
             <FieldRow>
               <FieldLabel>
@@ -1482,8 +1463,10 @@ export const GovernmentDepartmentFormModal: React.FC<
               </FieldControl>
             </FieldRow>
           </FormGroup>
+          </SplitColumnRight>
+          </SplitColumnsGrid>
         </LabeledRowsWrap>
-      </PersonRegisterModalFormScroll>
+      </DeptModalFormScroll>
 
       <PersonRegisterModalStickyFooter>
         <FooterHint $warning={missingFieldItems.length > 0}>
@@ -1509,19 +1492,9 @@ export const GovernmentDepartmentFormModal: React.FC<
           ) : (
             <FooterReadyGroup>
               <FooterReadyBadge>
-                등록 준비 완료
+                {isEditing ? '수정 준비 완료' : '등록 준비 완료'}
                 {selectedCategory ? ` · ${selectedCategory.name}` : ''}
               </FooterReadyBadge>
-              <FooterShortcutItem>
-                <FooterKbd>⌘↵</FooterKbd>
-                <span>저장</span>
-              </FooterShortcutItem>
-              {!isEditing ? (
-                <FooterShortcutItem>
-                  <FooterKbd>⇧⌘↵</FooterKbd>
-                  <span>등록 후 계속</span>
-                </FooterShortcutItem>
-              ) : null}
             </FooterReadyGroup>
           )}
         </FooterHint>
@@ -1582,6 +1555,100 @@ export const GovernmentDepartmentFormModal: React.FC<
 }
 
 /* ─────────────────────────── Styled Primitives ─────────────────────────── */
+
+const DeptModalFormScroll = styled(PersonRegisterModalFormScroll)<{
+  $layoutMode: 'split' | 'single'
+}>`
+  overflow-x: hidden;
+
+  ${({ $layoutMode }) =>
+    $layoutMode === 'split'
+      ? `
+    @media (min-width: 980px) {
+      overflow-y: hidden;
+      padding: 20px 28px;
+    }
+  `
+      : ''}
+`
+
+const SplitColumnsGrid = styled.div<{ $layoutMode: 'split' | 'single' }>`
+  display: grid;
+  grid-template-columns: ${({ $layoutMode }) =>
+    $layoutMode === 'split'
+      ? 'minmax(0, 1fr) minmax(0, 1fr)'
+      : 'minmax(0, 1fr)'};
+  gap: ${({ $layoutMode }) => ($layoutMode === 'split' ? '0' : '24px')};
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+
+  ${({ $layoutMode }) =>
+    $layoutMode === 'split'
+      ? `
+    @media (min-width: 980px) {
+      ${FieldRow} {
+        grid-template-columns: 112px minmax(0, 1fr);
+        gap: 14px;
+        padding: 12px 0;
+      }
+    }
+  `
+      : ''}
+
+  @media (max-width: 979px) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+`
+
+const deptPaneScrollStyles = ({ theme }: { theme: DefaultTheme }) => `
+  min-width: 0;
+  overflow-x: hidden;
+
+  @media (min-width: 980px) {
+    max-height: calc(86vh - 156px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: 36px;
+
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: ${theme.colors.border.default};
+      border-radius: 2px;
+    }
+  }
+`
+
+const SplitColumnLeft = styled.div`
+  ${deptPaneScrollStyles}
+
+  @media (min-width: 980px) {
+    padding-right: 26px;
+  }
+`
+
+const SplitColumnRight = styled.div`
+  ${deptPaneScrollStyles}
+
+  @media (min-width: 980px) {
+    padding-left: 26px;
+    border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+`
+
+const HeaderRightBar = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  margin-right: 2px;
+`
 
 const NameAndAbbrGrid = styled.div`
   display: grid;

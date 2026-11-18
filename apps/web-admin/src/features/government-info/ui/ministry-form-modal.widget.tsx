@@ -9,7 +9,6 @@ import {
   type ReactNode,
   type RefObject,
   type SetStateAction,
-  type UIEvent,
 } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
@@ -19,13 +18,14 @@ import {
   FiBookmark,
   FiBriefcase,
   FiClock,
-  FiColumns,
   FiExternalLink,
   FiFlag,
   FiGlobe,
+  FiHelpCircle,
   FiImage,
   FiLayers,
   FiPlus,
+  FiRefreshCw,
   FiShield,
   FiTrash2,
   FiX,
@@ -71,7 +71,6 @@ import {
 import {
   collectDescendantDepartmentIds,
   emptyMinistryFormFields,
-  hasDefenseExtensionContent,
   isDefenseRelatedCategory,
   ministryFormFieldsFromDepartment,
 } from '@/shared/lib/ministry-department/ministry-department-utils'
@@ -86,12 +85,11 @@ import {
   DatePickerModal,
   type DatePickerPrecision,
 } from '@/shared/ui/date-picker/date-picker-modal'
+import { DepartmentKindField } from '@/shared/ui/department-kind-field'
 import { FormTextarea } from '@/shared/ui/form-input/form-input'
 import { HeadquartersLocationField } from '@/shared/ui/headquarters-location-field'
 import { InlineDateField } from '@/shared/ui/person-register-modal/sections/inline-date-field'
 import {
-  ChoiceChips,
-  type ChoiceChipOption,
   KitAddButton,
   KitBusyBar,
   KitRemoveButton,
@@ -125,16 +123,15 @@ import {
   FooterHint,
   FooterJumpArrow,
   FooterJumpButton,
-  FooterKbd,
   FooterReadyBadge,
   FooterReadyGroup,
-  FooterShortcutItem,
-  HeaderActionsBar,
-  HeaderResetBtn,
-  SectionJumpBtn,
-  SectionJumpNav,
   useModalSubmitShortcut,
 } from '@/shared/ui/register-modal-shell/register-modal-chrome'
+import {
+  type ModalMoreActionOption,
+  type ModalMoreToggleOption,
+  RegisterModalMoreMenu,
+} from '@/shared/ui/register-modal-shell/register-modal-more-menu'
 import {
   PersonRegisterModalCancelBtn,
   PersonRegisterModalFormScroll,
@@ -151,13 +148,10 @@ const LAYOUT_STORAGE_KEY = 'papyrus:ministry-register-layout'
 const DIRECT_POLITY_SENTINEL = '__DIRECT_COUNTRY__'
 const COLLAPSED_PRESET_LIMIT = 6
 
-const FORM_SECTION_LINKS = [
-  { id: 'ministry-form-group-basic', label: '기본 정보' },
-  { id: 'ministry-form-group-lineage', label: '상하위 · 계보' },
-  { id: 'ministry-form-group-context', label: '맥락 · 소개' },
-] as const
-
-type FormSectionId = (typeof FORM_SECTION_LINKS)[number]['id']
+type FormSectionId =
+  | 'ministry-form-group-basic'
+  | 'ministry-form-group-lineage'
+  | 'ministry-form-group-context'
 
 type DateDraftState = {
   era: 'BC' | 'AD'
@@ -342,13 +336,6 @@ const KIND_META_LIST: ReadonlyArray<KindMetaItem> = [
     ],
   },
 ]
-
-const KIND_CHIP_OPTIONS: ChoiceChipOption<AdministrationDepartmentKind>[] =
-  KIND_META_LIST.map((metaItem) => ({
-    value: metaItem.value,
-    label: metaItem.label,
-    title: metaItem.titleHint,
-  }))
 
 export function buildDateDraftFromForm(
   era: 'BC' | 'AD' | undefined,
@@ -536,9 +523,6 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
   const [layoutMode, setLayoutMode] = useState<'split' | 'single'>(
     readInitialLayoutMode,
   )
-  const [activeSectionId, setActiveSectionId] = useState<FormSectionId>(
-    FORM_SECTION_LINKS[0].id,
-  )
   const [inlineCategoryOpen, setInlineCategoryOpen] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState('')
   const [newCategoryNameEn, setNewCategoryNameEn] = useState('')
@@ -572,6 +556,9 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
   const [categoryManualLocked, setCategoryManualLocked] = useState(false)
   const [categoryAutoMatched, setCategoryAutoMatched] = useState(false)
   const [overrideFrameId, setOverrideFrameId] = useState<string>('')
+  const [headerMoreMenuOpen, setHeaderMoreMenuOpen] = useState(false)
+  const [kindGuideOpen, setKindGuideOpen] = useState(false)
+  const [foreignNameExpanded, setForeignNameExpanded] = useState(false)
   const [orgDetailExpanded, setOrgDetailExpanded] = useState(false)
   const [milTransitionExpanded, setMilTransitionExpanded] = useState(false)
 
@@ -579,16 +566,13 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
   const nameInputRef = useRef<HTMLInputElement>(null)
   const openSessionKeyRef = useRef<string | null>(null)
 
-  const toggleLayoutMode = useCallback(() => {
-    setLayoutMode((prevMode) => {
-      const nextMode = prevMode === 'split' ? 'single' : 'split'
-      try {
-        window.localStorage.setItem(LAYOUT_STORAGE_KEY, nextMode)
-      } catch {
-        // storage disabled
-      }
-      return nextMode
-    })
+  const applyLayoutMode = useCallback((nextMode: 'split' | 'single') => {
+    setLayoutMode(nextMode)
+    try {
+      window.localStorage.setItem(LAYOUT_STORAGE_KEY, nextMode)
+    } catch {
+      // storage disabled
+    }
   }, [])
 
   const { data: linkedHistoricalCountries = [] } =
@@ -648,12 +632,15 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
     if (openSessionKeyRef.current === sessionKey) return
     openSessionKeyRef.current = sessionKey
 
-    setActiveSectionId(FORM_SECTION_LINKS[0].id)
     setInlineCategoryOpen(false)
     setNewCategoryName('')
     setNewCategoryNameEn('')
     setOverrideFrameId('')
     setPresetsExpanded(false)
+    setKindGuideOpen(false)
+    setForeignNameExpanded(
+      Boolean(ministryForm.nameLocal.trim() || ministryForm.nameEn.trim()),
+    )
 
     setEstDateDraft(
       buildDateDraftFromForm(
@@ -749,7 +736,6 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
   })
 
   const scrollToSection = useCallback((sectionId: FormSectionId) => {
-    setActiveSectionId(sectionId)
     const sectionEl = document.getElementById(sectionId)
     if (!sectionEl) return
     const leftPane = document.getElementById('ministry-form-split-left')
@@ -765,40 +751,6 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
       return
     }
     sectionEl.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
-  }, [])
-
-  const handleFormScroll = useCallback((scrollEvent: UIEvent<HTMLDivElement>) => {
-    const scrollTarget = scrollEvent.target as HTMLElement | null
-    if (scrollTarget?.id === 'ministry-form-split-right') {
-      setActiveSectionId((prevId) =>
-        prevId === 'ministry-form-group-lineage'
-          ? prevId
-          : 'ministry-form-group-lineage',
-      )
-      return
-    }
-    if (scrollTarget?.id === 'ministry-form-split-left') {
-      const leftRect = scrollTarget.getBoundingClientRect()
-      const contextEl = document.getElementById('ministry-form-group-context')
-      const nextId: FormSectionId =
-        contextEl && contextEl.getBoundingClientRect().top <= leftRect.top + 96
-          ? 'ministry-form-group-context'
-          : 'ministry-form-group-basic'
-      setActiveSectionId((prevId) => (prevId === nextId ? prevId : nextId))
-      return
-    }
-    const containerEl = scrollEvent.currentTarget
-    const containerRect = containerEl.getBoundingClientRect()
-    const threshold = containerRect.top + 96
-    let currentId: FormSectionId = FORM_SECTION_LINKS[0].id
-    for (const navItem of FORM_SECTION_LINKS) {
-      const targetEl = document.getElementById(navItem.id)
-      if (!targetEl) continue
-      if (targetEl.getBoundingClientRect().top <= threshold) {
-        currentId = navItem.id
-      }
-    }
-    setActiveSectionId((prevId) => (prevId === currentId ? prevId : currentId))
   }, [])
 
   // 소속 시대 · 정치체 검색 드롭다운 옵션 (연대순 정렬 — 수십 개 왕조·정체도 1줄로 유지)
@@ -1231,55 +1183,6 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
         : null,
     [ministriesList, ministryForm.parentId],
   )
-
-  const lineageBadgeCount = useMemo(() => {
-    const parentCount = ministryForm.parentId ? 1 : 0
-    const lineageCount =
-      (ministryForm.predecessorTransitions?.length ?? 0) +
-      (ministryForm.successorTransitions?.length ?? 0) +
-      (ministryForm.militaryUnitSuccessorTransitions?.length ?? 0)
-    return parentCount + lineageCount
-  }, [
-    ministryForm.militaryUnitSuccessorTransitions?.length,
-    ministryForm.parentId,
-    ministryForm.predecessorTransitions?.length,
-    ministryForm.successorTransitions?.length,
-  ])
-
-  const contextBadgeCount = useMemo(() => {
-    let count = 0
-    if (
-      ministryForm.defenseHeadquarters.trim() ||
-      ministryForm.headquartersLatitude != null
-    ) {
-      count += 1
-    }
-    if (ministryForm.defenseMissionScope.trim()) {
-      count += 1
-    }
-    if (ministryForm.description.trim()) count += 1
-    if (
-      hasDefenseExtensionContent({
-        officialNameEn: '',
-        missionScope: '',
-        headquarters: '',
-        orgStructure: ministryForm.defenseOrgStructure,
-        budgetOrForcesNote: ministryForm.defenseBudgetOrForcesNote,
-      })
-    ) {
-      count += 1
-    }
-    if (ministryForm.thumbnailUrl.trim()) count += 1
-    return count
-  }, [
-    ministryForm.defenseBudgetOrForcesNote,
-    ministryForm.defenseHeadquarters,
-    ministryForm.defenseMissionScope,
-    ministryForm.defenseOrgStructure,
-    ministryForm.description,
-    ministryForm.headquartersLatitude,
-    ministryForm.thumbnailUrl,
-  ])
 
   const isFormDirty = useMemo(() => {
     if (editingMinistry) {
@@ -1903,17 +1806,57 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
     )
   })()
 
-  /* ═══════════════ 섹션 1: 기본 정보 (사건 등록 모달 basicGroup 대응) ═══════════════ */
+  /* ═══════════════ 섹션 1: 기본 정보 · 분류 (좌측 50% 패널) ═══════════════ */
   const basicGroup = (
     <FormGroup
       id="ministry-form-group-basic"
       aria-labelledby="ministry-form-group-basic-title"
     >
       <FormGroupTitle id="ministry-form-group-basic-title">
-        기본 정보
+        기본 정보 · 분류
       </FormGroupTitle>
 
-      {/* 1) 기관명 + 약칭 + 추천 칩 */}
+      {/* 1) 소속 시대 · 정체 (다수 왕조도 단일 검색 드롭다운으로 깔끔하게 표시) */}
+      {politySelectOptions.length > 0 && (
+        <FieldRow>
+          <FieldLabel>
+            {isHistorical ? '소속 정치체' : '소속 시대 · 정체'}
+          </FieldLabel>
+          <FieldControl>
+            <SearchableSelect
+              options={politySelectOptions}
+              value={selectedPolityValue}
+              clearable={false}
+              onChange={handlePolitySelectChange}
+              placeholder={`${countryName ?? '현재 국가'} 직속`}
+              searchPlaceholder="왕조 · 시대 정체명 또는 존속 연도 검색…"
+              ariaLabel="소속 시대 및 정치체 선택"
+              noMatchMessage="일치하는 시대·정치체가 없습니다"
+            />
+          </FieldControl>
+        </FieldRow>
+      )}
+
+      {/* 2) 기관 구분 + 구분 기준 설명 기능 */}
+      <FieldRow>
+        <FieldLabel>기관 구분</FieldLabel>
+        <FieldControl>
+          <DepartmentKindField
+            value={ministryForm.kind || 'MINISTRY'}
+            ariaLabel="기관 구분 선택"
+            guideOpen={kindGuideOpen}
+            onGuideOpenChange={setKindGuideOpen}
+            onChange={(nextKind) => {
+              setMinistryForm((prevForm) => ({
+                ...prevForm,
+                kind: nextKind,
+              }))
+            }}
+          />
+        </FieldControl>
+      </FieldRow>
+
+      {/* 3) 기관명 + 약칭 + 체계별 추천 트레이 */}
       <FieldRow>
         <FieldLabel htmlFor="ministry-form-name">
           {activeKindMeta.nameLabel} <Required>*</Required>
@@ -1947,24 +1890,41 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
 
           {!editingMinistry &&
           (ministryForm.kind || 'MINISTRY') === 'MINISTRY' ? (
-            <TitleSuggestionRow aria-label="빠른 부처 추천">
-              <FrameSelectPill
-                aria-label="부처 명칭 체계 선택"
-                value={activeFrame.id}
-                onChange={(changeEvent) => {
-                  setOverrideFrameId(changeEvent.target.value)
-                  setPresetsExpanded(false)
-                }}
-              >
-                {DEPARTMENT_NAME_FRAMES.map((frameOption) => (
-                  <option key={frameOption.id} value={frameOption.id}>
-                    {frameOption.label}
-                  </option>
-                ))}
-              </FrameSelectPill>
+            <PresetSuggestCard aria-label="빠른 부처 추천">
+              <PresetSuggestHeader>
+                <PresetSuggestLabel>빠른 명칭 추천</PresetSuggestLabel>
+                <PresetHeaderRight>
+                  <FrameSelectPill
+                    aria-label="부처 명칭 체계 선택"
+                    value={activeFrame.id}
+                    onChange={(changeEvent) => {
+                      setOverrideFrameId(changeEvent.target.value)
+                      setPresetsExpanded(false)
+                    }}
+                  >
+                    {DEPARTMENT_NAME_FRAMES.map((frameOption) => (
+                      <option key={frameOption.id} value={frameOption.id}>
+                        {frameOption.label}
+                      </option>
+                    ))}
+                  </FrameSelectPill>
+                  {frameSuggestedItems.length > COLLAPSED_PRESET_LIMIT ? (
+                    <TitleSuggestionMoreBtn
+                      type="button"
+                      onClick={() =>
+                        setPresetsExpanded((prevExpanded) => !prevExpanded)
+                      }
+                    >
+                      {presetsExpanded
+                        ? '접기'
+                        : `+${frameSuggestedItems.length - COLLAPSED_PRESET_LIMIT}개 더보기`}
+                    </TitleSuggestionMoreBtn>
+                  ) : null}
+                </PresetHeaderRight>
+              </PresetSuggestHeader>
 
               {visibleFrameSuggestions.length > 0 ? (
-                <>
+                <TitleSuggestionRow>
                   {visibleFrameSuggestions.map((frameItem) => {
                     const isSelectedPreset =
                       ministryForm.name.trim() === frameItem.name
@@ -1994,83 +1954,151 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
                       </TitleSuggestionChip>
                     )
                   })}
-                  {frameSuggestedItems.length > COLLAPSED_PRESET_LIMIT ? (
-                    <TitleSuggestionMoreBtn
-                      type="button"
-                      onClick={() =>
-                        setPresetsExpanded((prevExpanded) => !prevExpanded)
-                      }
-                    >
-                      {presetsExpanded
-                        ? '접기'
-                        : `+${frameSuggestedItems.length - COLLAPSED_PRESET_LIMIT}개`}
-                    </TitleSuggestionMoreBtn>
-                  ) : null}
-                </>
+                </TitleSuggestionRow>
               ) : (
-                <FieldHint>기본 추천 부처가 모두 등록되었습니다.</FieldHint>
+                <FieldHint>이 체계의 기본 추천 부처가 모두 등록되었습니다.</FieldHint>
               )}
-            </TitleSuggestionRow>
+            </PresetSuggestCard>
           ) : !editingMinistry && activeKindMeta.presets.length > 0 ? (
-            <TitleSuggestionRow aria-label="빠른 기관 추천">
-              {activeKindMeta.presets.map((presetItem) => {
-                const matchedCat = resolveCategoryByCanonicalName(
-                  presetItem.categoryName,
-                  categoriesList,
-                )
-                return (
-                  <TitleSuggestionChip
-                    key={presetItem.name}
-                    type="button"
-                    $active={ministryForm.name.trim() === presetItem.name}
-                    onClick={() => {
-                      if (matchedCat) {
-                        setCategoryManualLocked(false)
-                        setCategoryAutoMatched(true)
-                      }
-                      setMinistryForm((prevForm) => ({
-                        ...prevForm,
-                        name: presetItem.name,
-                        abbreviation:
-                          presetItem.abbreviation ?? prevForm.abbreviation,
-                        nameEn: presetItem.nameEn ?? prevForm.nameEn,
-                        defenseOfficialNameEn:
-                          presetItem.nameEn ?? prevForm.defenseOfficialNameEn,
-                        categoryId: matchedCat?.id ?? prevForm.categoryId,
-                      }))
-                    }}
-                  >
-                    {presetItem.name}
-                  </TitleSuggestionChip>
-                )
-              })}
+            <PresetSuggestCard aria-label="빠른 기관 추천">
+              <PresetSuggestHeader>
+                <PresetSuggestLabel>빠른 명칭 추천</PresetSuggestLabel>
+              </PresetSuggestHeader>
+              <TitleSuggestionRow>
+                {activeKindMeta.presets.map((presetItem) => {
+                  const matchedCat = resolveCategoryByCanonicalName(
+                    presetItem.categoryName,
+                    categoriesList,
+                  )
+                  return (
+                    <TitleSuggestionChip
+                      key={presetItem.name}
+                      type="button"
+                      $active={ministryForm.name.trim() === presetItem.name}
+                      onClick={() => {
+                        if (matchedCat) {
+                          setCategoryManualLocked(false)
+                          setCategoryAutoMatched(true)
+                        }
+                        setMinistryForm((prevForm) => ({
+                          ...prevForm,
+                          name: presetItem.name,
+                          abbreviation:
+                            presetItem.abbreviation ?? prevForm.abbreviation,
+                          nameEn: presetItem.nameEn ?? prevForm.nameEn,
+                          defenseOfficialNameEn:
+                            presetItem.nameEn ?? prevForm.defenseOfficialNameEn,
+                          categoryId: matchedCat?.id ?? prevForm.categoryId,
+                        }))
+                      }}
+                    >
+                      {presetItem.name}
+                    </TitleSuggestionChip>
+                  )
+                })}
+              </TitleSuggestionRow>
+            </PresetSuggestCard>
+          ) : null}
+        </FieldControl>
+      </FieldRow>
+
+      {/* 4) 직능 분류 (타국 비교 축) */}
+      <FieldRow>
+        <FieldLabel>
+          직능 분류<OptionalTag>(선택)</OptionalTag>
+        </FieldLabel>
+        <FieldControl>
+          <InlineControlRow>
+            <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+              <SearchableSelect
+                options={categoryOptions}
+                value={ministryForm.categoryId || ''}
+                onChange={(nextCatId) => handleManualSelectCategory(nextCatId)}
+                placeholder="직능 미지정 (외교 · 국방 · 재정·경제 등 검색)"
+                searchPlaceholder="외교, 국방, 재정, 정보기관 등 검색…"
+                ariaLabel="공통 직능 분류 선택"
+                emptyMessage="일치하는 직능 분류가 없습니다"
+              />
+            </div>
+            <KitAddButton
+              type="button"
+              onClick={() => setInlineCategoryOpen((prevOpen) => !prevOpen)}
+            >
+              <FiPlus size={14} />
+              {inlineCategoryOpen ? '닫기' : '새 분류'}
+            </KitAddButton>
+          </InlineControlRow>
+
+          {inlineCategoryOpen && (
+            <InlineControlRow>
+              <Input
+                type="text"
+                value={newCategoryName}
+                onChange={(changeEvent) =>
+                  setNewCategoryName(changeEvent.target.value)
+                }
+                placeholder="새 직능명 (예: 우주·항공)"
+                style={{ flex: '1 1 180px' }}
+              />
+              <Input
+                type="text"
+                value={newCategoryNameEn}
+                onChange={(changeEvent) =>
+                  setNewCategoryNameEn(changeEvent.target.value)
+                }
+                placeholder="영문명 (선택)"
+                style={{ flex: '0 1 160px' }}
+              />
+              <KitAddButton
+                type="button"
+                disabled={!newCategoryName.trim() || creatingCategory}
+                onClick={() => void handleCreateInlineCategory()}
+              >
+                {creatingCategory ? '추가 중…' : '추가'}
+              </KitAddButton>
+            </InlineControlRow>
+          )}
+
+          {selectedCategory ? (
+            <CategoryCompareCard>
+              <span className="meta-summary">
+                {categoryAutoMatched ? (
+                  <span className="auto-pill">자동 매칭</span>
+                ) : null}
+                <span>
+                  {crossCountryPeers.length > 0 ? '동종 기관: ' : '비교 예시: '}
+                  {peerSummaryText}
+                </span>
+              </span>
+              <CompareCatalogLink
+                to={pathKeys.government.list({
+                  tab: 'departments',
+                  categoryId: selectedCategory.id,
+                })}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <span>타국 「{selectedCategory.name}」 비교</span>
+                <FiExternalLink size={11} />
+              </CompareCatalogLink>
+            </CategoryCompareCard>
+          ) : inferredCategoryFromName ? (
+            <TitleSuggestionRow>
+              <TitleSuggestionChip
+                type="button"
+                $accent
+                onClick={() =>
+                  handleManualSelectCategory(inferredCategoryFromName.id)
+                }
+              >
+                추천 직능 적용: {inferredCategoryFromName.name}
+              </TitleSuggestionChip>
             </TitleSuggestionRow>
           ) : null}
         </FieldControl>
       </FieldRow>
 
-      {/* 2) 소속 시대 · 정체 (다수 왕조도 단일 검색 드롭다운으로 깔끔하게 표시) */}
-      {politySelectOptions.length > 0 && (
-        <FieldRow>
-          <FieldLabel>
-            {isHistorical ? '소속 정치체' : '소속 시대 · 정체'}
-          </FieldLabel>
-          <FieldControl>
-            <SearchableSelect
-              options={politySelectOptions}
-              value={selectedPolityValue}
-              clearable={false}
-              onChange={handlePolitySelectChange}
-              placeholder={`${countryName ?? '현재 국가'} 직속`}
-              searchPlaceholder="왕조 · 시대 정체명 또는 존속 연도 검색…"
-              ariaLabel="소속 시대 및 정치체 선택"
-              noMatchMessage="일치하는 시대·정치체가 없습니다"
-            />
-          </FieldControl>
-        </FieldRow>
-      )}
-
-      {/* 3) 설립 · 폐지 (사건 등록 모달 '기간' 행과 동일한 레이아웃·PeriodBadge·빠른 액션) */}
+      {/* 5) 설립 · 폐지 */}
       <FieldRow>
         <FieldLabel>
           <div>
@@ -2173,172 +2201,63 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
                 확인해 주세요.
               </span>
             </InlineErrorText>
-          ) : (
-            <FieldHint>
-              연도만 입력해도 저장되며, 폐지일을 비워두면 현존 기관으로 표시됩니다.
-            </FieldHint>
-          )}
-        </FieldControl>
-      </FieldRow>
-
-      {/* 4) 기관 구분 — 사건 등록 모달 정본 알약 칩(ChoiceChips) */}
-      <FieldRow>
-        <FieldLabel>기관 구분</FieldLabel>
-        <FieldControl>
-          <ChoiceChips
-            value={ministryForm.kind || 'MINISTRY'}
-            options={KIND_CHIP_OPTIONS}
-            ariaLabel="기관 구분 선택"
-            onChange={(nextKind) => {
-              if (!nextKind) return
-              setMinistryForm((prevForm) => ({
-                ...prevForm,
-                kind: nextKind,
-              }))
-            }}
-          />
-        </FieldControl>
-      </FieldRow>
-
-      {/* 5) 직능 분류 (타국 비교 축) */}
-      <FieldRow>
-        <FieldLabel>
-          직능 분류<OptionalTag>(선택)</OptionalTag>
-        </FieldLabel>
-        <FieldControl>
-          <InlineControlRow>
-            <div style={{ flex: '1 1 220px', minWidth: 0 }}>
-              <SearchableSelect
-                options={categoryOptions}
-                value={ministryForm.categoryId || ''}
-                onChange={(nextCatId) => handleManualSelectCategory(nextCatId)}
-                placeholder="직능 미지정 (외교 · 국방 · 재정·경제 등 검색)"
-                searchPlaceholder="외교, 국방, 재정, 정보기관 등 검색…"
-                ariaLabel="공통 직능 분류 선택"
-                emptyMessage="일치하는 직능 분류가 없습니다"
-              />
-            </div>
-            <KitAddButton
-              type="button"
-              onClick={() => setInlineCategoryOpen((prevOpen) => !prevOpen)}
-            >
-              <FiPlus size={14} />새 분류
-            </KitAddButton>
-          </InlineControlRow>
-
-          {inlineCategoryOpen && (
-            <InlineControlRow>
-              <Input
-                type="text"
-                value={newCategoryName}
-                onChange={(changeEvent) =>
-                  setNewCategoryName(changeEvent.target.value)
-                }
-                placeholder="새 직능명 (예: 우주·항공)"
-                style={{ flex: '1 1 180px' }}
-              />
-              <Input
-                type="text"
-                value={newCategoryNameEn}
-                onChange={(changeEvent) =>
-                  setNewCategoryNameEn(changeEvent.target.value)
-                }
-                placeholder="영문명 (선택)"
-                style={{ flex: '0 1 160px' }}
-              />
-              <KitAddButton
-                type="button"
-                disabled={!newCategoryName.trim() || creatingCategory}
-                onClick={() => void handleCreateInlineCategory()}
-              >
-                {creatingCategory ? '추가 중…' : '추가'}
-              </KitAddButton>
-            </InlineControlRow>
-          )}
-
-          {selectedCategory ? (
-            <CategoryMetaLine>
-              <span className="meta-summary">
-                {categoryAutoMatched ? (
-                  <span className="auto-tag">자동 매칭 · </span>
-                ) : null}
-                {crossCountryPeers.length > 0 ? '동종 기관: ' : '비교 예시: '}
-                {peerSummaryText}
-              </span>
-              <CompareCatalogLink
-                to={pathKeys.government.list({
-                  tab: 'departments',
-                  categoryId: selectedCategory.id,
-                })}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <span>타국 「{selectedCategory.name}」 비교</span>
-                <FiExternalLink size={11} />
-              </CompareCatalogLink>
-            </CategoryMetaLine>
-          ) : inferredCategoryFromName ? (
-            <TitleSuggestionRow>
-              <TitleSuggestionChip
-                type="button"
-                $accent
-                onClick={() =>
-                  handleManualSelectCategory(inferredCategoryFromName.id)
-                }
-              >
-                추천 직능 적용: {inferredCategoryFromName.name}
-              </TitleSuggestionChip>
-            </TitleSuggestionRow>
-          ) : (
-            <FieldHint>
-              기관명을 입력하면 자동 매칭되며, 명칭이 다른 타국 동종 부처(예:
-              외무부·국무부·외무성·예조)와 비교됩니다.
-            </FieldHint>
-          )}
+          ) : null}
         </FieldControl>
       </FieldRow>
 
       {/* 6) 원어 · 영문 표기 */}
-      <FieldRow>
-        <FieldLabel>
-          원어 · 영문명<OptionalTag>(선택)</OptionalTag>
-        </FieldLabel>
-        <FieldControl>
-          <SubFieldPair $cols={2}>
-            <SubField>
-              <SubFieldLabel>원어 · 한자</SubFieldLabel>
-              <Input
-                type="text"
-                aria-label="원어 표기"
-                value={ministryForm.nameLocal}
-                onChange={(changeEvent) =>
-                  setMinistryForm((prevForm) => ({
-                    ...prevForm,
-                    nameLocal: changeEvent.target.value,
-                  }))
-                }
-                placeholder={activeKindMeta.localPlaceholder}
-              />
-            </SubField>
-            <SubField>
-              <SubFieldLabel>영문 표기</SubFieldLabel>
-              <Input
-                type="text"
-                aria-label="영문 표기"
-                value={ministryForm.nameEn}
-                onChange={(changeEvent) =>
-                  setMinistryForm((prevForm) => ({
-                    ...prevForm,
-                    nameEn: changeEvent.target.value,
-                    defenseOfficialNameEn: changeEvent.target.value,
-                  }))
-                }
-                placeholder={activeKindMeta.enPlaceholder}
-              />
-            </SubField>
-          </SubFieldPair>
-        </FieldControl>
-      </FieldRow>
+      {foreignNameExpanded ||
+      Boolean(ministryForm.nameLocal.trim() || ministryForm.nameEn.trim()) ? (
+        <FieldRow>
+          <FieldLabel>
+            원어 · 영문명<OptionalTag>(선택)</OptionalTag>
+          </FieldLabel>
+          <FieldControl>
+            <SubFieldPair $cols={2}>
+              <SubField>
+                <SubFieldLabel>원어 · 한자</SubFieldLabel>
+                <Input
+                  type="text"
+                  aria-label="원어 표기"
+                  value={ministryForm.nameLocal}
+                  onChange={(changeEvent) =>
+                    setMinistryForm((prevForm) => ({
+                      ...prevForm,
+                      nameLocal: changeEvent.target.value,
+                    }))
+                  }
+                  placeholder={activeKindMeta.localPlaceholder}
+                />
+              </SubField>
+              <SubField>
+                <SubFieldLabel>영문 표기</SubFieldLabel>
+                <Input
+                  type="text"
+                  aria-label="영문 표기"
+                  value={ministryForm.nameEn}
+                  onChange={(changeEvent) =>
+                    setMinistryForm((prevForm) => ({
+                      ...prevForm,
+                      nameEn: changeEvent.target.value,
+                      defenseOfficialNameEn: changeEvent.target.value,
+                    }))
+                  }
+                  placeholder={activeKindMeta.enPlaceholder}
+                />
+              </SubField>
+            </SubFieldPair>
+          </FieldControl>
+        </FieldRow>
+      ) : (
+        <div style={{ paddingTop: 6 }}>
+          <SubtleExpandLink
+            type="button"
+            onClick={() => setForeignNameExpanded(true)}
+          >
+            + 원어 · 영문 표기 추가
+          </SubtleExpandLink>
+        </div>
+      )}
     </FormGroup>
   )
 
@@ -2789,73 +2708,81 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
           })}
 
           <SubFieldPair $cols={2}>
-            <SearchableSelect
-              options={availablePredecessorOptions}
-              value=""
-              clearable={false}
-              onChange={(selectedId) => {
-                if (!selectedId) return
-                setMinistryForm((prevForm) => {
-                  const existing = prevForm.predecessorTransitions ?? []
-                  if (
-                    existing.some((item) => item.predecessorId === selectedId)
-                  ) {
-                    return prevForm
-                  }
-                  return {
-                    ...prevForm,
-                    predecessorTransitions: [
+            <SubField>
+              <SubFieldLabel>이전(전신) 기관 추가</SubFieldLabel>
+              <SearchableSelect
+                options={availablePredecessorOptions}
+                value=""
+                clearable={false}
+                onChange={(selectedId) => {
+                  if (!selectedId) return
+                  setMinistryForm((prevForm) => {
+                    const existing = prevForm.predecessorTransitions ?? []
+                    if (
+                      existing.some((item) => item.predecessorId === selectedId)
+                    ) {
+                      return prevForm
+                    }
+                    return {
+                      ...prevForm,
+                      predecessorTransitions: [
+                        ...existing,
+                        {
+                          predecessorId: selectedId,
+                          kind: 'REORGANIZE' as const,
+                          era: prevForm.establishedEra ?? 'AD',
+                          year: prevForm.establishedYear ?? null,
+                          month: prevForm.establishedMonth ?? null,
+                        },
+                      ],
+                    }
+                  })
+                }}
+                placeholder="+ 전신 기관 연결…"
+                searchPlaceholder="전신 행정부처·기관명 검색…"
+                ariaLabel="전신 기관 검색 및 추가"
+                emptyMessage="추가 가능한 기관이 없습니다"
+              />
+            </SubField>
+
+            <SubField>
+              <SubFieldLabel>이후(후신) 기관 추가</SubFieldLabel>
+              <SearchableSelect
+                options={availableSuccessorOptions}
+                value=""
+                clearable={false}
+                onChange={(selectedId) => {
+                  if (!selectedId) return
+                  setMinistryForm((prevForm) => {
+                    const existing = prevForm.successorTransitions ?? []
+                    if (
+                      existing.some((item) => item.successorId === selectedId)
+                    ) {
+                      return prevForm
+                    }
+                    const nextList = [
                       ...existing,
                       {
-                        predecessorId: selectedId,
+                        successorId: selectedId,
                         kind: 'REORGANIZE' as const,
-                        era: prevForm.establishedEra ?? 'AD',
-                        year: prevForm.establishedYear ?? null,
-                        month: prevForm.establishedMonth ?? null,
+                        era: prevForm.abolishedEra ?? 'AD',
+                        year: prevForm.abolishedYear ?? null,
+                        month: prevForm.abolishedMonth ?? null,
                       },
-                    ],
-                  }
-                })
-              }}
-              placeholder="+ 전신 기관 연결…"
-              searchPlaceholder="전신 행정부처·기관명 검색…"
-              ariaLabel="전신 기관 검색 및 추가"
-              emptyMessage="추가 가능한 기관이 없습니다"
-            />
-
-            <SearchableSelect
-              options={availableSuccessorOptions}
-              value=""
-              clearable={false}
-              onChange={(selectedId) => {
-                if (!selectedId) return
-                setMinistryForm((prevForm) => {
-                  const existing = prevForm.successorTransitions ?? []
-                  if (existing.some((item) => item.successorId === selectedId)) {
-                    return prevForm
-                  }
-                  const nextList = [
-                    ...existing,
-                    {
-                      successorId: selectedId,
-                      kind: 'REORGANIZE' as const,
-                      era: prevForm.abolishedEra ?? 'AD',
-                      year: prevForm.abolishedYear ?? null,
-                      month: prevForm.abolishedMonth ?? null,
-                    },
-                  ]
-                  return {
-                    ...prevForm,
-                    successorId: nextList[0]?.successorId ?? selectedId,
-                    successorTransitions: nextList,
-                  }
-                })
-              }}
-              placeholder="+ 후신 기관 연결…"
-              searchPlaceholder="후신 행정부처·기관명 검색…"
-              ariaLabel="후신 기관 검색 및 추가"
-              emptyMessage="추가 가능한 기관이 없습니다"
-            />
+                    ]
+                    return {
+                      ...prevForm,
+                      successorId: nextList[0]?.successorId ?? selectedId,
+                      successorTransitions: nextList,
+                    }
+                  })
+                }}
+                placeholder="+ 후신 기관 연결…"
+                searchPlaceholder="후신 행정부처·기관명 검색…"
+                ariaLabel="후신 기관 검색 및 추가"
+                emptyMessage="추가 가능한 기관이 없습니다"
+              />
+            </SubField>
           </SubFieldPair>
         </FieldControl>
       </FieldRow>
@@ -3087,14 +3014,14 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
     </FormGroup>
   )
 
-  /* ═══════════════ 섹션 3: 맥락 · 소개 (사건 등록 모달 contextGroup 대응) ═══════════════ */
+  /* ═══════════════ 섹션 3: 소재지 · 직제 · 소개 (우측 50% 하단 패널) ═══════════════ */
   const contextGroup = (
     <FormGroup
       id="ministry-form-group-context"
       aria-labelledby="ministry-form-group-context-title"
     >
       <FormGroupTitle id="ministry-form-group-context-title">
-        맥락 · 소개
+        소재지 · 직제 · 소개
       </FormGroupTitle>
 
       {/* 청사 · 본부 소재지 (장소 검색 · 지도 핀 선택 · Google 지도 미리보기) */}
@@ -3122,27 +3049,6 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
         </FieldControl>
       </FieldRow>
 
-      {/* 주요 임무 · 관할 */}
-      <FieldRow>
-        <FieldLabel>
-          주요 임무<OptionalTag>(선택)</OptionalTag>
-        </FieldLabel>
-        <FieldControl>
-          <FormTextarea
-            rows={2}
-            aria-label="주요 임무 · 관할"
-            value={ministryForm.defenseMissionScope}
-            onChange={(changeEvent) =>
-              setMinistryForm((prevForm) => ({
-                ...prevForm,
-                defenseMissionScope: changeEvent.target.value,
-              }))
-            }
-            placeholder="핵심 관장 임무 (예: 외교 정책 수립·조약 교섭 및 재외공관 총괄)"
-          />
-        </FieldControl>
-      </FieldRow>
-
       {/* 개요 설명 */}
       <FieldRow>
         <FieldLabel>
@@ -3150,7 +3056,7 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
         </FieldLabel>
         <FieldControl>
           <FormTextarea
-            rows={3}
+            rows={2}
             value={ministryForm.description}
             onChange={(changeEvent) =>
               setMinistryForm((prevForm) => ({
@@ -3163,51 +3069,73 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
         </FieldControl>
       </FieldRow>
 
-      {/* 내부 직제 · 예산 비고 */}
+      {/* 주요 임무 · 직제 · 예산 (접기/펼치기) */}
       <FieldRow>
         <FieldLabel>
-          직제 · 예산<OptionalTag>(선택)</OptionalTag>
+          임무 · 직제<OptionalTag>(선택)</OptionalTag>
         </FieldLabel>
         <FieldControl>
-          {orgDetailExpanded ? (
-            <SubFieldPair $cols={2}>
+          {orgDetailExpanded ||
+          Boolean(
+            ministryForm.defenseMissionScope.trim() ||
+              ministryForm.defenseOrgStructure.trim() ||
+              ministryForm.defenseBudgetOrForcesNote.trim(),
+          ) ? (
+            <>
               <SubField>
-                <SubFieldLabel>산하 실 · 국 · 편제</SubFieldLabel>
+                <SubFieldLabel>주요 임무 · 관할</SubFieldLabel>
                 <FormTextarea
                   rows={2}
-                  aria-label="산하 실·국 · 편제"
-                  value={ministryForm.defenseOrgStructure}
+                  aria-label="주요 임무 · 관할"
+                  value={ministryForm.defenseMissionScope}
                   onChange={(changeEvent) =>
                     setMinistryForm((prevForm) => ({
                       ...prevForm,
-                      defenseOrgStructure: changeEvent.target.value,
+                      defenseMissionScope: changeEvent.target.value,
                     }))
                   }
-                  placeholder="예: 정무국·통상국·조약국 편성"
+                  placeholder="핵심 관장 임무 (예: 외교 정책 수립·조약 교섭 및 재외공관 총괄)"
                 />
               </SubField>
-              <SubField>
-                <SubFieldLabel>예산 · 정원 · 법제 비고</SubFieldLabel>
-                <FormTextarea
-                  rows={2}
-                  aria-label="예산 · 정원 · 비고"
-                  value={ministryForm.defenseBudgetOrForcesNote}
-                  onChange={(changeEvent) =>
-                    setMinistryForm((prevForm) => ({
-                      ...prevForm,
-                      defenseBudgetOrForcesNote: changeEvent.target.value,
-                    }))
-                  }
-                  placeholder="예: 연간 예산·정원 규모, 조직법 근거"
-                />
-              </SubField>
-            </SubFieldPair>
+              <SubFieldPair $cols={2}>
+                <SubField>
+                  <SubFieldLabel>산하 실 · 국 · 편제</SubFieldLabel>
+                  <FormTextarea
+                    rows={2}
+                    aria-label="산하 실·국 · 편제"
+                    value={ministryForm.defenseOrgStructure}
+                    onChange={(changeEvent) =>
+                      setMinistryForm((prevForm) => ({
+                        ...prevForm,
+                        defenseOrgStructure: changeEvent.target.value,
+                      }))
+                    }
+                    placeholder="예: 정무국·통상국·조약국 편성"
+                  />
+                </SubField>
+                <SubField>
+                  <SubFieldLabel>예산 · 정원 · 법제 비고</SubFieldLabel>
+                  <FormTextarea
+                    rows={2}
+                    aria-label="예산 · 정원 · 비고"
+                    value={ministryForm.defenseBudgetOrForcesNote}
+                    onChange={(changeEvent) =>
+                      setMinistryForm((prevForm) => ({
+                        ...prevForm,
+                        defenseBudgetOrForcesNote: changeEvent.target.value,
+                      }))
+                    }
+                    placeholder="예: 연간 예산·정원 규모, 조직법 근거"
+                  />
+                </SubField>
+              </SubFieldPair>
+            </>
           ) : (
             <SubtleExpandLink
               type="button"
               onClick={() => setOrgDetailExpanded(true)}
             >
-              + 산하 실·국 직제 및 예산·정원 비고 입력
+              + 주요 임무 · 산하 직제 · 예산 비고 추가
             </SubtleExpandLink>
           )}
         </FieldControl>
@@ -3329,6 +3257,52 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
     </FormGroup>
   )
 
+  const headerMoreToggles: ModalMoreToggleOption[] = [
+    {
+      key: 'foreign-names',
+      label: '원어 · 영문 표기 입력란 표시',
+      checked:
+        foreignNameExpanded ||
+        Boolean(ministryForm.nameLocal.trim() || ministryForm.nameEn.trim()),
+      onChange: setForeignNameExpanded,
+    },
+    {
+      key: 'org-details',
+      label: '임무 · 산하 직제 · 예산 표시',
+      checked:
+        orgDetailExpanded ||
+        Boolean(
+          ministryForm.defenseMissionScope.trim() ||
+            ministryForm.defenseOrgStructure.trim() ||
+            ministryForm.defenseBudgetOrForcesNote.trim(),
+        ),
+      onChange: setOrgDetailExpanded,
+    },
+  ]
+
+  const headerMoreActions: ModalMoreActionOption[] = [
+    {
+      key: 'kind-guide',
+      label: kindGuideOpen ? '기관 구분 기준 안내 닫기' : '기관 구분 기준 안내',
+      icon: <FiHelpCircle size={14} />,
+      active: kindGuideOpen,
+      onClick: () => setKindGuideOpen((prevOpen) => !prevOpen),
+    },
+    ...(!editingMinistry && isFormDirty && !submittingMinistry
+      ? [
+          {
+            key: 'reset',
+            label: '작성 내용 초기화',
+            icon: <FiRefreshCw size={13.5} />,
+            danger: true,
+            onClick: () => {
+              void handleResetCreateForm()
+            },
+          },
+        ]
+      : []),
+  ]
+
   return (
     <RegisterModal
       isOpen={isOpen}
@@ -3341,7 +3315,14 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
           : '중앙부처 · 국가기관 등록'
       }
       headerActions={
-        <HeaderActionsBar>
+        <HeaderRightBar>
+          {activePolityDisplayName ? (
+            <HeaderPolityBadge title="현재 등록 대상 국가 · 시대 정체">
+              <FiFlag size={11.5} aria-hidden />
+              <span>{activePolityDisplayName}</span>
+            </HeaderPolityBadge>
+          ) : null}
+
           {selectedParentDept && !editingMinistry ? (
             <HeaderContextBadge
               type="button"
@@ -3355,85 +3336,28 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
             </HeaderContextBadge>
           ) : null}
 
-          <SectionJumpNav aria-label="폼 섹션 이동">
-            {FORM_SECTION_LINKS.map((navItem) => {
-              const isActive = activeSectionId === navItem.id
-              const badgeText =
-                navItem.id === 'ministry-form-group-basic'
-                  ? isFormValid
-                    ? '✓'
-                    : null
-                  : navItem.id === 'ministry-form-group-lineage'
-                    ? lineageBadgeCount > 0
-                      ? String(lineageBadgeCount)
-                      : null
-                    : contextBadgeCount > 0
-                      ? String(contextBadgeCount)
-                      : null
-              return (
-                <SectionJumpBtn
-                  key={navItem.id}
-                  type="button"
-                  $active={isActive}
-                  aria-label={navItem.label}
-                  aria-current={isActive ? 'location' : undefined}
-                  onClick={() => scrollToSection(navItem.id)}
-                >
-                  <span>{navItem.label}</span>
-                  {badgeText ? (
-                    <HeaderSectionBadge $done={badgeText === '✓'}>
-                      {badgeText}
-                    </HeaderSectionBadge>
-                  ) : null}
-                </SectionJumpBtn>
-              )
-            })}
-          </SectionJumpNav>
-
-          <LayoutModeToggleBtn
-            type="button"
-            $active={layoutMode === 'split'}
-            aria-pressed={layoutMode === 'split'}
-            aria-label={
-              layoutMode === 'split'
-                ? '1단 세로 보기로 전환'
-                : '2단 좌우 분할 보기로 전환'
-            }
-            title={
-              layoutMode === 'split'
-                ? '좌우 2단 분할 보기 중 (클릭 시 1단 세로 보기로 전환)'
-                : '1단 세로 보기 중 (클릭 시 좌우 2단 분할 보기로 전환)'
-            }
-            onClick={toggleLayoutMode}
-          >
-            <FiColumns size={13} />
-            <span>{layoutMode === 'split' ? '2단 분할' : '1단 보기'}</span>
-          </LayoutModeToggleBtn>
-
-          {!editingMinistry && isFormDirty && !submittingMinistry ? (
-            <HeaderResetBtn
-              type="button"
-              aria-label="작성 내용 초기화"
-              title="입력한 내용을 모두 비우고 처음 상태로 되돌립니다"
-              onClick={() => {
-                void handleResetCreateForm()
-              }}
-            >
-              초기화
-            </HeaderResetBtn>
-          ) : null}
-        </HeaderActionsBar>
+          <RegisterModalMoreMenu
+            layoutMode={layoutMode}
+            onChangeLayoutMode={applyLayoutMode}
+            toggles={headerMoreToggles}
+            actions={headerMoreActions}
+            ariaLabel="모달 설정 더보기"
+            title="화면 배치 · 추가 입력란 · 초기화"
+            hasActiveIndicator={kindGuideOpen}
+            onOpenChange={setHeaderMoreMenuOpen}
+          />
+        </HeaderRightBar>
       }
       maxWidth={
-        layoutMode === 'split' ? 'min(1380px, 96vw)' : 'min(1000px, 96vw)'
+        layoutMode === 'split' ? 'min(1260px, 95vw)' : 'min(820px, 95vw)'
       }
-      minHeight="88vh"
-      height={layoutMode === 'split' ? '88vh' : undefined}
+      minHeight="auto"
       fullBleedOnMobile
       closeOnEsc={
         !submittingMinistry &&
         !establishedDateModalOpen &&
-        !abolishedDateModalOpen
+        !abolishedDateModalOpen &&
+        !headerMoreMenuOpen
       }
       closeOnOverlayClick={
         !submittingMinistry &&
@@ -3444,8 +3368,6 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
       <MinistryModalFormScroll
         ref={scrollContainerRef}
         $layoutMode={layoutMode}
-        onScroll={handleFormScroll}
-        onScrollCapture={handleFormScroll}
       >
         {submittingMinistry && (
           <KitBusyBar role="status" aria-live="polite">
@@ -3460,10 +3382,10 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
             <SplitColumnsGrid data-testid="ministry-form-split-grid">
               <SplitColumnLeft id="ministry-form-split-left">
                 {basicGroup}
-                {contextGroup}
               </SplitColumnLeft>
               <SplitColumnRight id="ministry-form-split-right">
                 {lineageGroup}
+                {contextGroup}
               </SplitColumnRight>
             </SplitColumnsGrid>
           ) : (
@@ -3504,11 +3426,7 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
             </FooterJumpButton>
           ) : editingMinistry ? (
             <FooterReadyGroup>
-              <span>기관 정보를 수정합니다</span>
-              <FooterShortcutItem>
-                <FooterKbd>⌘↵</FooterKbd>
-                <span>바로 저장</span>
-              </FooterShortcutItem>
+              <FooterReadyBadge>수정 준비 완료</FooterReadyBadge>
             </FooterReadyGroup>
           ) : (
             <FooterReadyGroup>
@@ -3516,14 +3434,6 @@ export function MinistryFormModal(props: MinistryFormModalProps) {
                 등록 준비 완료
                 {selectedCategory ? ` · ${selectedCategory.name}` : ''}
               </FooterReadyBadge>
-              <FooterShortcutItem>
-                <FooterKbd>⌘↵</FooterKbd>
-                <span>저장</span>
-              </FooterShortcutItem>
-              <FooterShortcutItem>
-                <FooterKbd>⇧⌘↵</FooterKbd>
-                <span>등록 후 계속</span>
-              </FooterShortcutItem>
             </FooterReadyGroup>
           )}
         </FooterHint>
@@ -3617,9 +3527,9 @@ const MinistryModalFormScroll = styled(PersonRegisterModalFormScroll)<{
   ${({ $layoutMode }) =>
     $layoutMode === 'split'
       ? `
-    @media (min-width: 1180px) {
+    @media (min-width: 980px) {
       overflow-y: hidden;
-      padding: 22px 28px;
+      padding: 20px 28px;
     }
   `
       : ''}
@@ -3627,38 +3537,34 @@ const MinistryModalFormScroll = styled(PersonRegisterModalFormScroll)<{
 
 const DateRangeGrid = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(226px, 1fr));
+  gap: 12px 16px;
   min-width: 0;
-
-  @media (max-width: 640px) {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
 `
 
 const SplitColumnsGrid = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.9fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0;
   align-items: start;
   width: 100%;
   min-width: 0;
   overflow-x: hidden;
 
-  @media (min-width: 1180px) {
+  @media (min-width: 980px) {
     ${FieldRow} {
       grid-template-columns: 112px minmax(0, 1fr);
-      gap: 16px;
+      gap: 14px;
+      padding: 12px 0;
     }
 
-    ${DateRangeGrid} {
-      grid-template-columns: minmax(0, 1fr);
-      gap: 12px;
+    ${FormGroup} + ${FormGroup} {
+      margin-top: 22px;
+      padding-top: 4px;
     }
   }
 
-  @media (max-width: 1179px) {
+  @media (max-width: 979px) {
     grid-template-columns: minmax(0, 1fr);
     gap: 24px;
   }
@@ -3668,11 +3574,11 @@ const splitPaneScrollStyles = ({ theme }: { theme: DefaultTheme }) => `
   min-width: 0;
   overflow-x: hidden;
 
-  @media (min-width: 1180px) {
-    max-height: calc(88vh - 168px);
+  @media (min-width: 980px) {
+    max-height: calc(88vh - 160px);
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding-bottom: 48px;
+    padding-bottom: 40px;
 
     &::-webkit-scrollbar {
       width: 4px;
@@ -3690,8 +3596,8 @@ const splitPaneScrollStyles = ({ theme }: { theme: DefaultTheme }) => `
 const SplitColumnLeft = styled.div`
   ${splitPaneScrollStyles}
 
-  @media (min-width: 1180px) {
-    padding-left: 3px;
+  @media (min-width: 980px) {
+    padding-left: 2px;
     padding-right: 26px;
   }
 `
@@ -3699,10 +3605,36 @@ const SplitColumnLeft = styled.div`
 const SplitColumnRight = styled.div`
   ${splitPaneScrollStyles}
 
-  @media (min-width: 1180px) {
+  @media (min-width: 980px) {
     padding-left: 26px;
-    padding-right: 3px;
+    padding-right: 2px;
     border-left: 1px solid ${({ theme }) => theme.colors.border.light};
+  }
+`
+
+const HeaderPolityBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  height: 27px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => kitC(theme).border};
+  background: ${({ theme }) => kitC(theme).section};
+  color: ${({ theme }) => kitC(theme).textSecondary};
+  font-size: 11.5px;
+  font-weight: 600;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  svg {
+    flex-shrink: 0;
+    color: ${({ theme }) => theme.colors.primary};
   }
 `
 
@@ -3750,80 +3682,12 @@ const HeaderContextBadgeText = styled.span`
   white-space: nowrap;
 `
 
-const HeaderSectionBadge = styled.span<{ $done?: boolean }>`
+const HeaderRightBar = styled.div`
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-width: 15px;
-  height: 15px;
-  padding: 0 4px;
-  margin-left: 5px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  background: ${({ $done, theme }) =>
-    $done
-      ? theme.mode === 'dark'
-        ? 'rgba(16, 185, 129, 0.2)'
-        : 'rgba(16, 185, 129, 0.14)'
-      : theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.24)'
-        : 'rgba(99, 102, 241, 0.12)'};
-  color: ${({ $done, theme }) =>
-    $done
-      ? theme.mode === 'dark'
-        ? '#6ee7b7'
-        : '#047857'
-      : theme.colors.primary};
-`
-
-const LayoutModeToggleBtn = styled.button<{ $active?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 8px;
-  border: 1px solid
-    ${({ $active, theme }) =>
-      $active
-        ? theme.mode === 'dark'
-          ? 'rgba(99, 102, 241, 0.35)'
-          : 'rgba(99, 102, 241, 0.28)'
-        : theme.colors.border.light};
-  background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.14)'
-        : 'rgba(99, 102, 241, 0.06)'
-      : 'transparent'};
-  color: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? '#c7d2fe'
-        : theme.colors.primary
-      : theme.colors.text.secondary};
-  font: inherit;
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    color 0.14s ease,
-    border-color 0.14s ease,
-    background-color 0.14s ease;
-
-  @media (max-width: 1180px) {
-    display: none;
-  }
-
-  &:hover,
-  &:focus-visible {
-    color: ${({ theme }) => theme.colors.primary};
-    border-color: ${({ theme }) => theme.colors.primary};
-    outline: none;
-  }
+  gap: 6px;
+  margin-left: auto;
+  margin-right: 2px;
 `
 
 const BatchSavedBadge = styled.span`
@@ -3864,21 +3728,51 @@ const NameAndAbbrGrid = styled.div`
   }
 `
 
+const PresetSuggestCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  border: 1px solid ${({ theme }) => kitC(theme).border};
+  background: ${({ theme }) => kitC(theme).section};
+`
+
+const PresetSuggestHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+`
+
+const PresetSuggestLabel = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => kitC(theme).textMuted};
+`
+
+const PresetHeaderRight = styled.div`
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+`
+
 const TitleSuggestionRow = styled.div`
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 2px;
 `
 
 const FrameSelectPill = styled.select`
-  height: 26px;
-  max-width: 196px;
+  height: 25px;
+  max-width: 210px;
   padding: 0 9px;
   border-radius: 999px;
   border: 1px solid ${({ theme }) => kitC(theme).border};
-  background: ${({ theme }) => kitC(theme).section};
+  background: ${({ theme }) => kitC(theme).content};
   color: ${({ theme }) => kitC(theme).textSecondary};
   font-family: inherit;
   font-size: 11.5px;
@@ -3889,7 +3783,7 @@ const FrameSelectPill = styled.select`
   &:hover,
   &:focus {
     color: ${({ theme }) => kitC(theme).textPrimary};
-    border-color: ${({ theme }) => kitC(theme).borderHover};
+    border-color: ${({ theme }) => kitC(theme).focus};
   }
 `
 
@@ -4026,25 +3920,40 @@ const InlineControlRow = styled.div`
   flex-wrap: wrap;
 `
 
-const CategoryMetaLine = styled.div`
+const CategoryCompareCard = styled.div`
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px 12px;
   flex-wrap: wrap;
+  padding: 7px 11px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => kitC(theme).border};
+  background: ${({ theme }) => kitC(theme).section};
   font-size: 12px;
   line-height: 1.45;
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#71717a' : '#94a3b8')};
+  color: ${({ theme }) => kitC(theme).textSecondary};
 
   .meta-summary {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
     min-width: 0;
     flex: 1;
   }
 
-  .auto-tag {
-    font-weight: 600;
+  .auto-pill {
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 700;
     color: ${({ theme }) =>
       theme.mode === 'dark' ? '#a5b4fc' : theme.colors.primary};
+    background: ${({ theme }) =>
+      theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.2)'
+        : 'rgba(99, 102, 241, 0.1)'};
   }
 `
 

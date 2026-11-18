@@ -47,6 +47,8 @@ export function entityPath(kind: EntityKind, id: string): string | null {
       return pathKeys.countryDetail(id)
     case 'treaty':
       return pathKeys.treaties.detail(id)
+    case 'organization':
+      return `/organizations?selected=${encodeURIComponent(id)}`
     case 'personGroup':
       return pathKeys.personGroupDetail(id)
     default:
