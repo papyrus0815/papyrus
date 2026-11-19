@@ -10,7 +10,7 @@ import React, { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { FiColumns } from 'react-icons/fi'
 
-import { apiConnection } from '@/shared/api/client'
+import { getApiConnection } from '@/shared/api/client'
 import { getOrganizations } from '@/shared/api/organizations'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import {
@@ -50,7 +50,7 @@ export function OrganizationListSidebar({
 }: OrganizationListSidebarProps) {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['organizations', 'sidebar'],
-    queryFn: () => getOrganizations(apiConnection, { excludeCompanies: true }),
+    queryFn: () => getOrganizations(getApiConnection(), { excludeCompanies: true }),
     staleTime: 60_000,
   })
   const { pinnedIds, togglePin } = useSidebarPins('organization-sidebar-pins')

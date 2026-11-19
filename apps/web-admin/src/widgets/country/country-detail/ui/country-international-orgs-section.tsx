@@ -11,7 +11,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
-import { apiConnection } from '@/shared/api/client'
+import { getApiConnection } from '@/shared/api/client'
 import {
   buildSeriesModalLaunchPayload,
   type EventSeriesItem,
@@ -83,7 +83,7 @@ export const CountryInternationalOrgsSection: React.FC<
   const membershipsQuery = useQuery({
     queryKey: ['country-org-memberships', countryId, historicalCountryId],
     queryFn: () =>
-      getCountryOrganizationMemberships(apiConnection, {
+      getCountryOrganizationMemberships(getApiConnection(), {
         countryId,
         historicalCountryId,
       }),
@@ -99,7 +99,7 @@ export const CountryInternationalOrgsSection: React.FC<
   const candidateOrgsQuery = useQuery({
     queryKey: ['organizations', 'international-candidates'],
     queryFn: () =>
-      getOrganizations(apiConnection, { types: INTERNATIONAL_ORG_TYPES }),
+      getOrganizations(getApiConnection(), { types: INTERNATIONAL_ORG_TYPES }),
     enabled: addingOpen,
     staleTime: 60_000,
   })
@@ -124,7 +124,7 @@ export const CountryInternationalOrgsSection: React.FC<
     mutationFn: async () => {
       if (!selectedOrgId) throw new Error('가입 기구·협의체를 선택하세요.')
       const yr = joinYear.trim() ? Number.parseInt(joinYear.trim(), 10) : null
-      return addOrganizationCountryMembership(apiConnection, selectedOrgId, {
+      return addOrganizationCountryMembership(getApiConnection(), selectedOrgId, {
         countryId: countryId ?? null,
         historicalCountryId: historicalCountryId ?? null,
         role: selectedRole,
@@ -158,7 +158,7 @@ export const CountryInternationalOrgsSection: React.FC<
     if (!ok) return
     try {
       await removeOrganizationCountryMembership(
-        apiConnection,
+        getApiConnection(),
         row.organizationId,
         row.id,
       )

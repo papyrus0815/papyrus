@@ -4,7 +4,7 @@ import { FiArrowLeft, FiSave, FiUser } from 'react-icons/fi'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import styled, { css } from 'styled-components'
 
-import { apiConnection } from '@/shared/api/client'
+import { getApiConnection } from '@/shared/api/client'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import { getAllCountries } from '@/shared/api/countries'
 import type { HistoricalCountryResponseDto } from '@/shared/api/historical-countries'
@@ -345,7 +345,7 @@ export const OrganizationFormPage: React.FC = () => {
 
   const { data: allOrganizations = [] } = useQuery({
     queryKey: ['organizations', 'for-lineage-select'],
-    queryFn: () => getOrganizations(apiConnection, { excludeCompanies: true }),
+    queryFn: () => getOrganizations(getApiConnection(), { excludeCompanies: true }),
     staleTime: 60_000,
   })
   const lineageCandidates = allOrganizations.filter((item) => item.id !== id)
@@ -365,7 +365,7 @@ export const OrganizationFormPage: React.FC = () => {
     if (!isEdit) return
     ;(async () => {
       try {
-        const org = await getOrganizationById(apiConnection, id!)
+        const org = await getOrganizationById(getApiConnection(), id!)
         setForm({
           name: org.name,
           type: org.type,
@@ -399,11 +399,11 @@ export const OrganizationFormPage: React.FC = () => {
     }
     try {
       if (isEdit) {
-        const updated = await updateOrganization(apiConnection, id!, form)
+        const updated = await updateOrganization(getApiConnection(), id!, form)
         notify.success('수정되었습니다.')
         navigate(`/organizations?selected=${encodeURIComponent(updated.id)}`)
       } else {
-        const created = await createOrganization(apiConnection, form)
+        const created = await createOrganization(getApiConnection(), form)
         notify.success(
           isInternationalOrgType(created.type)
             ? '등록되었습니다. 회원국과 정기 회의를 이어서 설정할 수 있습니다.'

@@ -5,6 +5,8 @@
  */
 import type { IConnection } from '@api/IConnection'
 
+import { getApiConnection } from './client'
+
 export type OrganizationType =
   | 'POLITICAL_PARTY'
   | 'INTERGOVERNMENTAL_ORG'
@@ -371,6 +373,30 @@ export function isOrganizationMembershipActiveAtYear(
 
 const base = (conn: IConnection) => conn.host.replace(/\/$/, '')
 
+/**
+ * OrganizationController 전 엔드포인트는 JWT 인증(@UseGuards(AuthGuard('jwt')))이 필요하다.
+ * 호출 측이 정적 apiConnection을 넘기더라도 최신 JWT 헤더와 401 자동 리프레시 래퍼(conn.fetch)를
+ * 보장하도록 getApiConnection()과 병합한다.
+ */
+function orgFetch(
+  conn: IConnection,
+  url: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const authConn = getApiConnection()
+  const fetcher = conn.fetch ?? authConn.fetch ?? fetch
+  const mergedHeaders: Record<string, string> = {
+    ...((authConn.headers ?? {}) as Record<string, string>),
+    ...((conn.headers ?? {}) as Record<string, string>),
+    ...((init.headers ?? {}) as Record<string, string>),
+  }
+  return fetcher(url, {
+    ...init,
+    headers: mergedHeaders,
+    credentials: 'include',
+  })
+}
+
 export async function getOrganizations(
   conn: IConnection,
   params?: OrganizationListParams,
@@ -397,10 +423,7 @@ export async function getOrganizations(
     }
   }
   if (params?.scope) url.searchParams.set('scope', params.scope)
-  const res = await fetch(url.toString(), {
-    headers: (conn.headers ?? {}) as HeadersInit,
-    credentials: 'include',
-  })
+  const res = await orgFetch(conn, url.toString())
   if (!res.ok) throw new Error(await res.text())
   const data: OrganizationResponseDto[] = await res.json()
   return params?.excludeCompanies
@@ -439,10 +462,7 @@ export async function getOrganizationsTree(
     }
   }
   if (params?.scope) url.searchParams.set('scope', params.scope)
-  const res = await fetch(url.toString(), {
-    headers: (conn.headers ?? {}) as HeadersInit,
-    credentials: 'include',
-  })
+  const res = await orgFetch(conn, url.toString())
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
@@ -451,10 +471,7 @@ export async function getOrganizationById(
   conn: IConnection,
   id: string,
 ): Promise<OrganizationResponseDto> {
-  const res = await fetch(`${base(conn)}/organizations/${id}`, {
-    headers: (conn.headers ?? {}) as HeadersInit,
-    credentials: 'include',
-  })
+  const res = await orgFetch(conn, `${base(conn)}/organizations/${id}`)
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
@@ -463,10 +480,7 @@ export async function getOrganizationMembers(
   conn: IConnection,
   id: string,
 ): Promise<OrganizationMemberDto[]> {
-  const res = await fetch(`${base(conn)}/organizations/${id}/members`, {
-    headers: (conn.headers ?? {}) as HeadersInit,
-    credentials: 'include',
-  })
+  const res = await orgFetch(conn, `${base(conn)}/organizations/${id}/members`)
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
@@ -476,12 +490,15 @@ export async function addOrganizationMember(
   organizationId: string,
   body: CreateOrganizationMemberBody,
 ): Promise<OrganizationMemberDto> {
-  const res = await fetch(`${base(conn)}/organizations/${organizationId}/members`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(conn.headers ?? {}) },
-    body: JSON.stringify(body),
-    credentials: 'include',
-  })
+  const res = await orgFetch(
+    conn,
+    `${base(conn)}/organizations/${organizationId}/members`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+  )
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
@@ -491,13 +508,10 @@ export async function removeOrganizationMember(
   organizationId: string,
   personId: string,
 ): Promise<void> {
-  const res = await fetch(
+  const res = await orgFetch(
+    conn,
     `${base(conn)}/organizations/${organizationId}/members/${personId}`,
-    {
-      method: 'DELETE',
-      headers: (conn.headers ?? {}) as HeadersInit,
-      credentials: 'include',
-    },
+    { method: 'DELETE' },
   )
   if (!res.ok) throw new Error(await res.text())
 }
@@ -506,12 +520,9 @@ export async function getOrganizationCountryMemberships(
   conn: IConnection,
   organizationId: string,
 ): Promise<OrganizationCountryMembershipDto[]> {
-  const res = await fetch(
+  const res = await orgFetch(
+    conn,
     `${base(conn)}/organizations/${encodeURIComponent(organizationId)}/country-memberships`,
-    {
-      headers: (conn.headers ?? {}) as HeadersInit,
-      credentials: 'include',
-    },
   )
   if (!res.ok) throw new Error(await res.text())
   return res.json()
@@ -526,10 +537,7 @@ export async function getCountryOrganizationMemberships(
   if (params.historicalCountryId) {
     url.searchParams.set('historicalCountryId', params.historicalCountryId)
   }
-  const res = await fetch(url.toString(), {
-    headers: (conn.headers ?? {}) as HeadersInit,
-    credentials: 'include',
-  })
+  const res = await orgFetch(conn, url.toString())
   if (!res.ok) throw new Error(await res.text())
   return res.json()
 }
@@ -539,13 +547,13 @@ export async function addOrganizationCountryMembership(
   organizationId: string,
   body: CreateOrganizationCountryMembershipBody,
 ): Promise<OrganizationCountryMembershipDto> {
-  const res = await fetch(
+  const res = await orgFetch(
+    conn,
     `${base(conn)}/organizations/${encodeURIComponent(organizationId)}/country-memberships`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(conn.headers ?? {}) },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-      credentials: 'include',
     },
   )
   if (!res.ok) throw new Error(await res.text())
@@ -558,13 +566,13 @@ export async function updateOrganizationCountryMembership(
   membershipId: string,
   body: UpdateOrganizationCountryMembershipBody,
 ): Promise<OrganizationCountryMembershipDto> {
-  const res = await fetch(
+  const res = await orgFetch(
+    conn,
     `${base(conn)}/organizations/${encodeURIComponent(organizationId)}/country-memberships/${encodeURIComponent(membershipId)}`,
     {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...(conn.headers ?? {}) },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
-      credentials: 'include',
     },
   )
   if (!res.ok) throw new Error(await res.text())
@@ -576,13 +584,10 @@ export async function removeOrganizationCountryMembership(
   organizationId: string,
   membershipId: string,
 ): Promise<void> {
-  const res = await fetch(
+  const res = await orgFetch(
+    conn,
     `${base(conn)}/organizations/${encodeURIComponent(organizationId)}/country-memberships/${encodeURIComponent(membershipId)}`,
-    {
-      method: 'DELETE',
-      headers: (conn.headers ?? {}) as HeadersInit,
-      credentials: 'include',
-    },
+    { method: 'DELETE' },
   )
   if (!res.ok) throw new Error(await res.text())
 }
@@ -591,12 +596,9 @@ export async function getOrganizationRelatedEvents(
   conn: IConnection,
   organizationId: string,
 ): Promise<OrganizationRelatedEventDto[]> {
-  const res = await fetch(
+  const res = await orgFetch(
+    conn,
     `${base(conn)}/organizations/${encodeURIComponent(organizationId)}/events`,
-    {
-      headers: (conn.headers ?? {}) as HeadersInit,
-      credentials: 'include',
-    },
   )
   if (!res.ok) throw new Error(await res.text())
   return res.json()
@@ -606,11 +608,10 @@ export async function createOrganization(
   conn: IConnection,
   body: CreateOrganizationBody,
 ): Promise<OrganizationResponseDto> {
-  const res = await fetch(`${base(conn)}/organizations`, {
+  const res = await orgFetch(conn, `${base(conn)}/organizations`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(conn.headers ?? {}) },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
@@ -621,11 +622,10 @@ export async function updateOrganization(
   id: string,
   body: Partial<CreateOrganizationBody>,
 ): Promise<OrganizationResponseDto> {
-  const res = await fetch(`${base(conn)}/organizations/${id}`, {
+  const res = await orgFetch(conn, `${base(conn)}/organizations/${id}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', ...(conn.headers ?? {}) },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
@@ -635,10 +635,8 @@ export async function deleteOrganization(
   conn: IConnection,
   id: string,
 ): Promise<void> {
-  const res = await fetch(`${base(conn)}/organizations/${id}`, {
+  const res = await orgFetch(conn, `${base(conn)}/organizations/${id}`, {
     method: 'DELETE',
-    headers: (conn.headers ?? {}) as HeadersInit,
-    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
 }
@@ -664,11 +662,10 @@ export async function addOrganizationHierarchy(
   conn: IConnection,
   body: CreateOrganizationHierarchyBody,
 ): Promise<{ id: string }> {
-  const res = await fetch(`${base(conn)}/organizations/hierarchy`, {
+  const res = await orgFetch(conn, `${base(conn)}/organizations/hierarchy`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(conn.headers ?? {}) },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-    credentials: 'include',
   })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
@@ -679,13 +676,10 @@ export async function removeOrganizationHierarchy(
   parentId: string,
   childId: string,
 ): Promise<void> {
-  const res = await fetch(
+  const res = await orgFetch(
+    conn,
     `${base(conn)}/organizations/hierarchy/${parentId}/${childId}`,
-    {
-      method: 'DELETE',
-      headers: (conn.headers ?? {}) as HeadersInit,
-      credentials: 'include',
-    },
+    { method: 'DELETE' },
   )
   if (!res.ok) throw new Error(await res.text())
 }

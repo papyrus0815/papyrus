@@ -53,7 +53,7 @@ import {
   type Mode,
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
-import { apiConnection } from '@/shared/api/client'
+import { getApiConnection } from '@/shared/api/client'
 import type { CountryResponseDto } from '@/shared/api/countries'
 import { getAllCountries } from '@/shared/api/countries'
 import {
@@ -786,12 +786,12 @@ export const OrganizationsListPage: React.FC = () => {
 
   const organizationsQuery = useQuery({
     queryKey: ['organizations', 'hub-list-non-company', orgQueryParams],
-    queryFn: () => getOrganizations(apiConnection, orgQueryParams),
+    queryFn: () => getOrganizations(getApiConnection(), orgQueryParams),
   })
 
   const organizationsTreeQuery = useQuery({
     queryKey: ['organizations', 'hub-tree-non-company', orgQueryParams],
-    queryFn: () => getOrganizationsTree(apiConnection, orgQueryParams),
+    queryFn: () => getOrganizationsTree(getApiConnection(), orgQueryParams),
     enabled: hubView !== 'series' && viewMode === 'tree',
   })
 
@@ -816,7 +816,7 @@ export const OrganizationsListPage: React.FC = () => {
     queryKey: ['organization-country-memberships', selectedOrg?.id],
     queryFn: () =>
       selectedOrg
-        ? getOrganizationCountryMemberships(apiConnection, selectedOrg.id)
+        ? getOrganizationCountryMemberships(getApiConnection(), selectedOrg.id)
         : Promise.resolve([] as OrganizationCountryMembershipDto[]),
     enabled: Boolean(selectedOrg?.id),
   })
@@ -834,7 +834,7 @@ export const OrganizationsListPage: React.FC = () => {
     queryKey: ['organization-events', selectedOrg?.id],
     queryFn: () =>
       selectedOrg
-        ? getOrganizationRelatedEvents(apiConnection, selectedOrg.id)
+        ? getOrganizationRelatedEvents(getApiConnection(), selectedOrg.id)
         : Promise.resolve([] as OrganizationRelatedEventDto[]),
     enabled: Boolean(selectedOrg?.id) && detailTab === 'events',
   })
@@ -843,7 +843,7 @@ export const OrganizationsListPage: React.FC = () => {
     queryKey: ['organization-members', selectedOrg?.id],
     queryFn: () =>
       selectedOrg
-        ? getOrganizationMembers(apiConnection, selectedOrg.id)
+        ? getOrganizationMembers(getApiConnection(), selectedOrg.id)
         : Promise.resolve([] as OrganizationMemberDto[]),
     enabled: Boolean(selectedOrg?.id),
   })
@@ -856,7 +856,7 @@ export const OrganizationsListPage: React.FC = () => {
 
   const allOrgsForLineageQuery = useQuery({
     queryKey: ['organizations', 'all-for-lineage-non-company'],
-    queryFn: () => getOrganizations(apiConnection, { excludeCompanies: true }),
+    queryFn: () => getOrganizations(getApiConnection(), { excludeCompanies: true }),
     enabled: Boolean(selectedOrg?.id),
     staleTime: 60_000,
   })
@@ -1185,7 +1185,7 @@ export const OrganizationsListPage: React.FC = () => {
       ? Number.parseInt(countryJoinYearInput.trim(), 10)
       : null
     try {
-      await addOrganizationCountryMembership(apiConnection, selectedOrg.id, {
+      await addOrganizationCountryMembership(getApiConnection(), selectedOrg.id, {
         countryId: picked.isHistorical ? null : picked.id,
         historicalCountryId: picked.isHistorical ? picked.id : null,
         role: countryRoleToAdd,
@@ -1215,7 +1215,7 @@ export const OrganizationsListPage: React.FC = () => {
     if (!selectedOrg) return
     try {
       await updateOrganizationCountryMembership(
-        apiConnection,
+        getApiConnection(),
         selectedOrg.id,
         membership.id,
         { role },
@@ -1257,7 +1257,7 @@ export const OrganizationsListPage: React.FC = () => {
       })
     try {
       await updateOrganizationCountryMembership(
-        apiConnection,
+        getApiConnection(),
         selectedOrg.id,
         membership.id,
         {
@@ -1290,7 +1290,7 @@ export const OrganizationsListPage: React.FC = () => {
       membership.historicalCountry?.name ?? membership.country?.name ?? '국가'
     try {
       await removeOrganizationCountryMembership(
-        apiConnection,
+        getApiConnection(),
         selectedOrg.id,
         membership.id,
       )
@@ -1334,7 +1334,7 @@ export const OrganizationsListPage: React.FC = () => {
   const handleAddMember = async (personId: string, personName: string) => {
     if (!selectedOrg) return
     try {
-      await addOrganizationMember(apiConnection, selectedOrg.id, {
+      await addOrganizationMember(getApiConnection(), selectedOrg.id, {
         personId,
         roleTitle: memberRoleTitle.trim() || '위원',
       })
@@ -1357,7 +1357,7 @@ export const OrganizationsListPage: React.FC = () => {
   const handleRemoveMember = async (personId: string, personName: string) => {
     if (!selectedOrg) return
     try {
-      await removeOrganizationMember(apiConnection, selectedOrg.id, personId)
+      await removeOrganizationMember(getApiConnection(), selectedOrg.id, personId)
       notify.success(`‘${personName}’ 인물을 조직에서 제거했습니다.`)
       void queryClient.invalidateQueries({
         queryKey: ['organization-members', selectedOrg.id],
@@ -1379,7 +1379,7 @@ export const OrganizationsListPage: React.FC = () => {
       return
     }
     try {
-      const updated = await updateOrganization(apiConnection, selectedOrg.id, {
+      const updated = await updateOrganization(getApiConnection(), selectedOrg.id, {
         name: editForm.name.trim(),
         shortName: editForm.shortName.trim() || null,
         localName: editForm.localName.trim() || null,
@@ -1419,7 +1419,7 @@ export const OrganizationsListPage: React.FC = () => {
     }
     playClickSound()
     try {
-      await deleteOrganization(apiConnection, id)
+      await deleteOrganization(getApiConnection(), id)
       if (selectedOrg?.id === id) closeDetail()
       void queryClient.invalidateQueries({ queryKey: ['organizations'] })
       notify.success(`‘${name}’ 조직을 삭제했습니다.`)
