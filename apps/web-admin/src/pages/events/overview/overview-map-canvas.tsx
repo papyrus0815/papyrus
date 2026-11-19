@@ -161,8 +161,9 @@ export default function OverviewMapCanvas({
         style={{ width: '100%', height: '100%', borderRadius: 12, cursor: onMapClick ? 'crosshair' : undefined }}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution="&copy; Google Maps"
+          url="https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=ko&gl=KR"
+          subdomains={['0', '1', '2', '3']}
         />
         <FitToPins points={points} />
         <MapClickListener onMapClick={onMapClick} />

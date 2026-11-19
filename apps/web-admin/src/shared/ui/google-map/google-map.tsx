@@ -7,7 +7,7 @@
  */
 import { useEffect } from 'react'
 
-import L from 'leaflet'
+import Leaflet from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
@@ -24,9 +24,9 @@ import {
 import styled from 'styled-components'
 
 // Leaflet 기본 마커 아이콘 경로 — Vite 환경에서 깨지는 문제 패치
-delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })
+delete (Leaflet.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })
   ._getIconUrl
-L.Icon.Default.mergeOptions({
+Leaflet.Icon.Default.mergeOptions({
   iconRetinaUrl:
     'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -101,15 +101,15 @@ function MapSync({
   useEffect(() => {
     if (markers.length > 0) {
       const sel = selectedId
-        ? markers.find((m) => m.id === selectedId)
+        ? markers.find((marker) => marker.id === selectedId)
         : null
       if (sel) {
         map.setView([sel.latitude, sel.longitude], Math.max(zoom, 10), {
           animate: true,
         })
       } else if (autoFit && markers.length > 0) {
-        const bounds = L.latLngBounds(
-          markers.map((m) => [m.latitude, m.longitude]),
+        const bounds = Leaflet.latLngBounds(
+          markers.map((marker) => [marker.latitude, marker.longitude]),
         )
         map.fitBounds(bounds, { padding: [40, 40], maxZoom: 10 })
       }
@@ -161,8 +161,9 @@ export function GoogleMap({
         scrollWheelZoom={true}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution="&copy; Google Maps"
+          url="https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=ko&gl=KR"
+          subdomains={['0', '1', '2', '3']}
         />
 
         <MapSync
@@ -181,28 +182,28 @@ export function GoogleMap({
             showCoverageOnHover={false}
             maxClusterRadius={40}
           >
-            {markers!.map((m) => {
-              const isSelected = selectedId === m.id
+            {markers!.map((marker) => {
+              const isSelected = selectedId === marker.id
               if (isSelected) {
                 return (
                   <Marker
-                    key={m.id}
-                    position={[m.latitude, m.longitude]}
+                    key={marker.id}
+                    position={[marker.latitude, marker.longitude]}
                     eventHandlers={{
-                      click: () => onMarkerClick?.(m.id),
+                      click: () => onMarkerClick?.(marker.id),
                     }}
                   >
                     <Tooltip direction="top" offset={[0, -32]} opacity={0.95}>
-                      {m.name}
+                      {marker.name}
                     </Tooltip>
-                    <Popup>{m.name}</Popup>
+                    <Popup>{marker.name}</Popup>
                   </Marker>
                 )
               }
               return (
                 <CircleMarker
-                  key={m.id}
-                  center={[m.latitude, m.longitude]}
+                  key={marker.id}
+                  center={[marker.latitude, marker.longitude]}
                   radius={6}
                   pathOptions={{
                     color: '#6366f1',
@@ -211,13 +212,13 @@ export function GoogleMap({
                     weight: 2,
                   }}
                   eventHandlers={{
-                    click: () => onMarkerClick?.(m.id),
+                    click: () => onMarkerClick?.(marker.id),
                   }}
                 >
                   <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
-                    {m.name}
+                    {marker.name}
                   </Tooltip>
-                  <Popup>{m.name}</Popup>
+                  <Popup>{marker.name}</Popup>
                 </CircleMarker>
               )
             })}

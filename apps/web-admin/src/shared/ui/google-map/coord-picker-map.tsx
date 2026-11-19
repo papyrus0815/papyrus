@@ -2,7 +2,7 @@
  * 작은 좌표 픽킹용 지도. 클릭 시 onPick(lat, lng).
  * 현재 좌표가 있으면 미리 마커 표시.
  */
-import L from 'leaflet'
+import Leaflet from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import {
   MapContainer,
@@ -12,9 +12,9 @@ import {
 } from 'react-leaflet'
 
 // 아이콘 경로 패치 (다른 GoogleMap 모듈에서 이미 했을 수도 있지만 안전하게 재실행)
-delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })
+delete (Leaflet.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })
   ._getIconUrl
-L.Icon.Default.mergeOptions({
+Leaflet.Icon.Default.mergeOptions({
   iconRetinaUrl:
     'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
   iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -39,8 +39,11 @@ function ClickHandler({
   onPick: (lat: number, lng: number) => void
 }) {
   useMapEvents({
-    click: (e) => {
-      onPick(Number(e.latlng.lat.toFixed(6)), Number(e.latlng.lng.toFixed(6)))
+    click: (event) => {
+      onPick(
+        Number(event.latlng.lat.toFixed(6)),
+        Number(event.latlng.lng.toFixed(6)),
+      )
     },
   })
   return null
@@ -76,8 +79,9 @@ export function CoordPickerMap({
         scrollWheelZoom
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution="&copy; Google Maps"
+          url="https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=ko&gl=KR"
+          subdomains={['0', '1', '2', '3']}
         />
         <ClickHandler onPick={onPick} />
         {lat != null && lng != null && <Marker position={[lat, lng]} />}

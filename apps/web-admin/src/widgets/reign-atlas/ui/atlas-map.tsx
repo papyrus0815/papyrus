@@ -295,8 +295,9 @@ export function AtlasMap({
         attributionControl
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution="&copy; Google Maps"
+          url="https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=ko&gl=KR"
+          subdomains={['0', '1', '2', '3']}
         />
         <FitOnce nodes={nodes} />
         <ZoomWatcher onZoom={setZoom} />
