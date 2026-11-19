@@ -6,19 +6,19 @@
  *  2) 시기별 행정구역 편제 체계 바 (전체 · 각 시대 체계 · 단위 관리 · 체계 비교)
  *  3) 좌우 병렬 아틀라스 데스크: 좌측 계층·검색 원장 목록 + 우측(인터랙티브 지도 + 상세/총람 패널)
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
 import { useVirtualizer } from '@tanstack/react-virtual'
-import {
-  FiEdit2,
-  FiInfo,
-  FiMapPin,
-  FiPlus,
-  FiRepeat,
-  FiSettings,
-} from 'react-icons/fi'
-import { useSearchParams } from 'react-router-dom'
-import styled, { useTheme } from 'styled-components'
+
+import { FiInfo } from 'react-icons/fi'
+import { useTheme } from 'styled-components'
 
 import {
   type AdminDivisionConfig,
@@ -31,33 +31,21 @@ import {
   useAdministrativeDivisions,
   useDeleteAdministrativeDivision,
 } from '@/entities/country/api.administrative-divisions'
-import {
-  BentoCard,
-  BentoCardBadge,
-  BentoCardBody,
-  BentoCardHeader,
-  BentoCardTitle,
-  BentoCardTitleGroup,
-  BentoGrid3Col,
-  MiniDonutRing,
-  type SegmentSlice,
-  StackedSegmentBar,
-} from '@/entities/event/ui/bento-primitives'
-import {
-  DIGIT_DISPLAY,
-  ledgerAccent,
-  ledgerHairline,
-  ledgerSubtleFill,
-  RADIUS,
-} from '@/entities/event/ui/ledger-tokens'
+import type { SegmentSlice } from '@/entities/event/ui/bento-primitives'
+import type { City } from '@/shared/api/city'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { dateSortKey } from '@/shared/lib/iso-date'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 
 import {
+  ADMIN_SORT_OPTIONS,
+  AdminBentoInfographic,
   AdminDivisionConfigModal,
   AdminDivisionFormModal,
+  type AdminInfographicData,
+  AdminSchemeBar,
+  AdminUnselectedOverview,
   FilterPill,
   ListEmptyState,
   MapCard,
@@ -69,6 +57,9 @@ import {
   RegisterButton,
   SearchInput,
   SortSelect,
+  type StatusFilter,
+  type TopRankMetric,
+  useAdminDivisionUrlState,
   useListKeyboard,
   useRegionPalette,
 } from './map-region'
@@ -87,17 +78,6 @@ import {
   resolvePath,
   sumSubtree,
 } from './map-region/tree-utils'
-
-type AdminSort = 'name' | 'children' | 'established'
-type StatusFilter = 'all' | 'active' | 'abolished'
-type TopRankMetric = 'descendants' | 'cities'
-
-const SORT_OPTIONS = [
-  { value: 'name' as const, label: '이름순' },
-  { value: 'children' as const, label: '하위 구역 많은 순' },
-  { value: 'established' as const, label: '설립 연도순' },
-]
-const SORT_VALUES = ['name', 'children', 'established'] as const
 
 interface MapRegionAdministrativeViewProps {
   country: {
@@ -151,199 +131,33 @@ function flattenTree(
 ): FlatRow[] {
   const out: FlatRow[] = []
   const walk = (nodes: AdministrativeDivision[], path: string[]) => {
-    for (const n of nodes) {
-      const cfg = configs.get(n.adminDivisionId)
+    for (const node of nodes) {
+      const cfg = configs.get(node.adminDivisionId)
       out.push({
-        id: n.id,
-        name: n.name,
-        localName: n.localName ?? null,
+        id: node.id,
+        name: node.name,
+        localName: node.localName ?? null,
         divisionLevel: cfg?.divisionLevel ?? path.length + 1,
         divisionLabel: cfg?.divisionLabel ?? '',
         parentPath: path,
-        childrenCount: n.children?.length ?? 0,
-        descendantCount: countDescendants(n),
-        cityCount: n.cityCount ?? 0,
-        abolished: isAbolished(n),
-        establishedDate: n.establishedDate ?? null,
-        abolishedDate: n.abolishedDate ?? null,
-        predecessorId: n.predecessorId ?? null,
-        successorCount: n.successorCount ?? 0,
-        schemeId: n.schemeId ?? null,
-        centerLat: n.centerLat ?? null,
-        centerLng: n.centerLng ?? null,
+        childrenCount: node.children?.length ?? 0,
+        descendantCount: countDescendants(node),
+        cityCount: node.cityCount ?? 0,
+        abolished: isAbolished(node),
+        establishedDate: node.establishedDate ?? null,
+        abolishedDate: node.abolishedDate ?? null,
+        predecessorId: node.predecessorId ?? null,
+        successorCount: node.successorCount ?? 0,
+        schemeId: node.schemeId ?? null,
+        centerLat: node.centerLat ?? null,
+        centerLng: node.centerLng ?? null,
       })
-      if (n.children?.length) walk(n.children, [...path, n.name])
+      if (node.children?.length) walk(node.children, [...path, node.name])
     }
   }
   walk(roots, [])
   return out
 }
-
-// ─── Bento Infographic Styled Helpers ─────────────────────────────────────────
-
-const BentoLegendWrap = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px 10px;
-`
-
-const BentoLegendChip = styled.button<{ $active?: boolean }>`
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 7px;
-  margin: -1px -4px;
-  border: 1px solid
-    ${({ theme, $active }) =>
-      $active ? ledgerAccent(theme.mode) : 'transparent'};
-  border-radius: ${RADIUS.XS};
-  background: ${({ theme, $active }) =>
-    $active ? theme.colors.activeLight : 'transparent'};
-  font-family: inherit;
-  font-size: 11.5px;
-  color: ${({ theme, $active }) =>
-    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
-  cursor: pointer;
-  ${DIGIT_DISPLAY}
-
-  strong {
-    font-weight: 700;
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.hover};
-  }
-`
-
-const LegendDot = styled.span<{ $color: string }>`
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: ${({ $color }) => $color};
-  flex-shrink: 0;
-`
-
-const MetricSwitchGroup = styled.div`
-  display: inline-flex;
-  align-items: center;
-  padding: 2px;
-  border-radius: ${RADIUS.XS};
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: ${({ theme }) => theme.colors.background.secondary};
-`
-
-const MetricSwitchBtn = styled.button<{ $active: boolean }>`
-  appearance: none;
-  border: none;
-  border-radius: 3px;
-  padding: 2px 7px;
-  font-family: inherit;
-  font-size: 10.5px;
-  font-weight: 700;
-  cursor: pointer;
-  background: ${({ theme, $active }) =>
-    $active ? theme.colors.background.primary : 'transparent'};
-  color: ${({ theme, $active }) =>
-    $active ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
-`
-
-const RankRowList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`
-
-const RankRowBtn = styled.button<{ $active?: boolean }>`
-  appearance: none;
-  display: grid;
-  grid-template-columns: 20px minmax(84px, 128px) minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 3px 6px;
-  margin: 0 -6px;
-  border: none;
-  border-radius: ${RADIUS.XS};
-  background: ${({ theme, $active }) =>
-    $active ? theme.colors.activeLight : 'transparent'};
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-  ${DIGIT_DISPLAY}
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.hover};
-  }
-`
-
-const RankIndex = styled.span`
-  font-size: 11px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const RankName = styled.span`
-  font-size: 12.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`
-
-const RankTrack = styled.div`
-  width: 100%;
-  height: 7px;
-  border-radius: ${RADIUS.XS};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
-  overflow: hidden;
-`
-
-const RankFill = styled.div`
-  height: 100%;
-  border-radius: ${RADIUS.XS};
-  background: ${({ theme }) => ledgerAccent(theme.mode)};
-`
-
-const RankMeta = styled.span`
-  font-size: 11.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  white-space: nowrap;
-`
-
-const CoverageSplit = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-
-  @media (max-width: 480px) {
-    flex-direction: column;
-    align-items: stretch;
-  }
-`
-
-const CoverageRight = styled.div`
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-`
-
-const CoverageSubFoot = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 4px 8px;
-  font-size: 11px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  ${DIGIT_DISPLAY}
-`
 
 export function MapRegionAdministrativeView({
   country,
@@ -373,40 +187,25 @@ export function MapRegionAdministrativeView({
   const [configModalOpen, setConfigModalOpen] = useState(false)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [rankMetric, setRankMetric] = useState<TopRankMetric>('descendants')
+  const [focusedCity, setFocusedCity] = useState<City | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // URL 동기화
-  const [searchParams, setSearchParams] = useSearchParams()
-  const search = searchParams.get('division_q') ?? ''
-  const sort = ((): AdminSort => {
-    const raw = searchParams.get('division_sort')
-    return raw && (SORT_VALUES as readonly string[]).includes(raw)
-      ? (raw as AdminSort)
-      : 'name'
-  })()
-  const pathRaw = searchParams.get('division_path') ?? ''
-  const pathIds = useMemo(
-    () => (pathRaw ? pathRaw.split(',').filter(Boolean) : []),
-    [pathRaw],
-  )
-  const selectedId = searchParams.get('division_id')
-
-  const { levelFilter, unitLabelFilter } = ((): {
-    levelFilter: number | null
-    unitLabelFilter: string | null
-  } => {
-    const raw = searchParams.get('division_level')
-    if (!raw) return { levelFilter: null, unitLabelFilter: null }
-    const sep = raw.indexOf(':')
-    const lvlRaw = sep >= 0 ? raw.slice(0, sep) : raw
-    const label = sep >= 0 ? raw.slice(sep + 1) : ''
-    const parsedLevel = Number(lvlRaw)
-    if (!Number.isFinite(parsedLevel) || parsedLevel <= 0)
-      return { levelFilter: null, unitLabelFilter: null }
-    return { levelFilter: parsedLevel, unitLabelFilter: label || null }
-  })()
-
-  const activeSchemeId = searchParams.get('division_scheme')
+  const {
+    search,
+    sort,
+    pathIds,
+    selectedId,
+    levelFilter,
+    unitLabelFilter,
+    activeSchemeId,
+    updateParams,
+    setSearch,
+    setSort,
+    setPath,
+    setSelectedId,
+    setUnitFilter,
+    setActiveScheme,
+  } = useAdminDivisionUrlState()
 
   // 데이터
   const { data: divisions = [], isLoading } = useAdministrativeDivisions(
@@ -418,106 +217,41 @@ export function MapRegionAdministrativeView({
     useAdminDivisionSchemes(owner)
   const deleteMut = useDeleteAdministrativeDivision(owner)
 
-  const updateParams = useCallback(
-    (
-      updates: Array<{
-        key: string
-        value: string | null
-        defaultValue?: string
-      }>,
-    ) => {
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev)
-          for (const { key, value, defaultValue } of updates) {
-            if (
-              value == null ||
-              value === '' ||
-              (defaultValue != null && value === defaultValue)
-            ) {
-              next.delete(key)
-            } else {
-              next.set(key, value)
-            }
-          }
-          return next
-        },
-        { replace: true },
-      )
-    },
-    [setSearchParams],
-  )
-
-  const updateParam = useCallback(
-    (key: string, value: string | null, defaultValue?: string) => {
-      updateParams([{ key, value, defaultValue }])
-    },
-    [updateParams],
-  )
-
-  const setSearch = useCallback(
-    (v: string) => updateParam('division_q', v),
-    [updateParam],
-  )
-  const setSort = useCallback(
-    (v: AdminSort) => updateParam('division_sort', v, 'name'),
-    [updateParam],
-  )
-  const setPath = useCallback(
-    (ids: string[]) => updateParam('division_path', ids.join(',')),
-    [updateParam],
-  )
-  const setSelectedId = useCallback(
-    (v: string | null) => updateParam('division_id', v),
-    [updateParam],
-  )
-  const setUnitFilter = useCallback(
-    (raw: string | null) => updateParam('division_level', raw),
-    [updateParam],
-  )
-  const setActiveScheme = useCallback(
-    (id: string | null) =>
-      updateParams([
-        { key: 'division_scheme', value: id },
-        { key: 'division_path', value: null },
-        { key: 'division_id', value: null },
-      ]),
-    [updateParams],
-  )
-
   useEffect(() => {
     if (!activeSchemeId || !schemesLoaded) return
-    if (!schemes.some((s) => s.id === activeSchemeId)) {
+    if (!schemes.some((scheme) => scheme.id === activeSchemeId)) {
       setActiveScheme(null)
     }
   }, [activeSchemeId, schemes, schemesLoaded, setActiveScheme])
 
-  const activeScheme = schemes.find((s) => s.id === activeSchemeId) ?? null
+  // 선택 구역이 바뀌면 연결 도시 임시 포커스 해제
+  useEffect(() => {
+    setFocusedCity(null)
+  }, [selectedId, activeSchemeId])
+
+  const activeScheme =
+    schemes.find((scheme) => scheme.id === activeSchemeId) ?? null
 
   // 모드 결정
   const mode: 'search' | 'level' | 'drill' =
-    search.trim() !== ''
-      ? 'search'
-      : levelFilter != null
-        ? 'level'
-        : 'drill'
+    search.trim() !== '' ? 'search' : levelFilter != null ? 'level' : 'drill'
 
   const breadcrumb = useMemo(
     () => resolvePath(divisions, pathIds),
     [divisions, pathIds],
   )
   const currentParent =
-    breadcrumb.length === 0 ? null : breadcrumb[breadcrumb.length - 1] ?? null
+    breadcrumb.length === 0 ? null : (breadcrumb[breadcrumb.length - 1] ?? null)
   const drillItems: AdministrativeDivision[] =
     breadcrumb.length === 0
       ? divisions
-      : breadcrumb[breadcrumb.length - 1]!.children ?? []
+      : (breadcrumb[breadcrumb.length - 1]!.children ?? [])
   const drillLevel = breadcrumb.length + 1
 
   const configsById = useMemo(() => {
-    const m = new Map<string, AdminDivisionConfig>()
-    for (const c of configs) m.set(c.id, c)
-    return m
+    const map = new Map<string, AdminDivisionConfig>()
+    for (const config of configs) map.set(config.id, config)
+    return map
   }, [configs])
 
   const flat = useMemo(
@@ -526,9 +260,9 @@ export function MapRegionAdministrativeView({
   )
 
   const flatById = useMemo(() => {
-    const m = new Map<string, FlatRow>()
-    for (const r of flat) m.set(r.id, r)
-    return m
+    const map = new Map<string, FlatRow>()
+    for (const row of flat) map.set(row.id, row)
+    return map
   }, [flat])
 
   const debouncedSearch = useDebouncedValue(search, 250, country.id)
@@ -552,61 +286,61 @@ export function MapRegionAdministrativeView({
   const rowsForMode: FlatRow[] = useMemo(() => {
     let base: FlatRow[]
     if (mode === 'search') {
-      base = (searchQuery.data ?? []).map((h) => {
-        const localFlat = flatById.get(h.id)
+      base = (searchQuery.data ?? []).map((hit) => {
+        const localFlat = flatById.get(hit.id)
         return {
-          id: h.id,
-          name: h.name,
-          localName: h.localName ?? null,
-          divisionLevel: h.divisionLevel,
-          divisionLabel: h.divisionLabel,
-          parentPath: h.parentPath,
+          id: hit.id,
+          name: hit.name,
+          localName: hit.localName ?? null,
+          divisionLevel: hit.divisionLevel,
+          divisionLabel: hit.divisionLabel,
+          parentPath: hit.parentPath,
           childrenCount: localFlat?.childrenCount ?? 0,
           descendantCount: localFlat?.descendantCount ?? 0,
           cityCount: localFlat?.cityCount ?? 0,
-          abolished: h.abolished,
+          abolished: hit.abolished,
           establishedDate: localFlat?.establishedDate ?? null,
           abolishedDate: localFlat?.abolishedDate ?? null,
           predecessorId: localFlat?.predecessorId ?? null,
           successorCount: localFlat?.successorCount ?? 0,
-          schemeId: h.schemeId ?? null,
-          centerLat: h.centerLat ?? null,
-          centerLng: h.centerLng ?? null,
+          schemeId: hit.schemeId ?? null,
+          centerLat: hit.centerLat ?? null,
+          centerLng: hit.centerLng ?? null,
         }
       })
     } else if (mode === 'level') {
       base = flat.filter(
-        (r) =>
-          r.divisionLevel === levelFilter &&
-          (unitLabelFilter == null || r.divisionLabel === unitLabelFilter),
+        (row) =>
+          row.divisionLevel === levelFilter &&
+          (unitLabelFilter == null || row.divisionLabel === unitLabelFilter),
       )
     } else {
-      base = drillItems.map<FlatRow>((n) => {
-        const cfg = configsById.get(n.adminDivisionId)
+      base = drillItems.map<FlatRow>((node) => {
+        const cfg = configsById.get(node.adminDivisionId)
         return {
-          id: n.id,
-          name: n.name,
-          localName: n.localName ?? null,
+          id: node.id,
+          name: node.name,
+          localName: node.localName ?? null,
           divisionLevel: cfg?.divisionLevel ?? drillLevel,
           divisionLabel: cfg?.divisionLabel ?? '',
-          parentPath: breadcrumb.map((b) => b.name),
-          childrenCount: n.children?.length ?? 0,
-          descendantCount: countDescendants(n),
-          cityCount: n.cityCount ?? 0,
-          abolished: isAbolished(n),
-          establishedDate: n.establishedDate ?? null,
-          abolishedDate: n.abolishedDate ?? null,
-          predecessorId: n.predecessorId ?? null,
-          successorCount: n.successorCount ?? 0,
-          schemeId: n.schemeId ?? null,
-          centerLat: n.centerLat ?? null,
-          centerLng: n.centerLng ?? null,
+          parentPath: breadcrumb.map((crumb) => crumb.name),
+          childrenCount: node.children?.length ?? 0,
+          descendantCount: countDescendants(node),
+          cityCount: node.cityCount ?? 0,
+          abolished: isAbolished(node),
+          establishedDate: node.establishedDate ?? null,
+          abolishedDate: node.abolishedDate ?? null,
+          predecessorId: node.predecessorId ?? null,
+          successorCount: node.successorCount ?? 0,
+          schemeId: node.schemeId ?? null,
+          centerLat: node.centerLat ?? null,
+          centerLng: node.centerLng ?? null,
         }
       })
     }
 
-    if (statusFilter === 'active') return base.filter((r) => !r.abolished)
-    if (statusFilter === 'abolished') return base.filter((r) => r.abolished)
+    if (statusFilter === 'active') return base.filter((row) => !row.abolished)
+    if (statusFilter === 'abolished') return base.filter((row) => row.abolished)
     return base
   }, [
     mode,
@@ -625,22 +359,23 @@ export function MapRegionAdministrativeView({
   const sortedRows = useMemo(() => {
     const list = [...rowsForMode]
     if (sort === 'name') {
-      list.sort((a, b) => a.name.localeCompare(b.name, 'ko'))
+      list.sort((left, right) => left.name.localeCompare(right.name, 'ko'))
     } else if (sort === 'children') {
       list.sort(
-        (a, b) =>
-          b.descendantCount - a.descendantCount ||
-          b.childrenCount - a.childrenCount ||
-          a.name.localeCompare(b.name, 'ko'),
+        (left, right) =>
+          right.descendantCount - left.descendantCount ||
+          right.childrenCount - left.childrenCount ||
+          left.name.localeCompare(right.name, 'ko'),
       )
     } else {
-      list.sort((a, b) => {
-        const ka = dateSortKey(a.establishedDate)
-        const kb = dateSortKey(b.establishedDate)
-        if (ka == null && kb == null) return a.name.localeCompare(b.name, 'ko')
-        if (ka == null) return 1
-        if (kb == null) return -1
-        return ka - kb || a.name.localeCompare(b.name, 'ko')
+      list.sort((left, right) => {
+        const leftKey = dateSortKey(left.establishedDate)
+        const rightKey = dateSortKey(right.establishedDate)
+        if (leftKey == null && rightKey == null)
+          return left.name.localeCompare(right.name, 'ko')
+        if (leftKey == null) return 1
+        if (rightKey == null) return -1
+        return leftKey - rightKey || left.name.localeCompare(right.name, 'ko')
       })
     }
     return list
@@ -649,7 +384,7 @@ export function MapRegionAdministrativeView({
   useEffect(() => {
     if (mode !== 'drill') return
     if (pathIds.length > breadcrumb.length) {
-      setPath(breadcrumb.map((d) => d.id))
+      setPath(breadcrumb.map((item) => item.id))
     }
   }, [mode, pathIds.length, breadcrumb, setPath])
 
@@ -665,15 +400,30 @@ export function MapRegionAdministrativeView({
     }
   }, [isLoading, divisions, selectedId, setSelectedId])
 
+  const isVirtualized = sortedRows.length > 35
+  const virtualizer = useVirtualizer({
+    count: sortedRows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 52,
+    overscan: 10,
+  })
+
   useEffect(() => {
     if (!selectedId) return
-    const el = document.querySelector(
+    if (isVirtualized) {
+      const targetIndex = sortedRows.findIndex((row) => row.id === selectedId)
+      if (targetIndex >= 0) {
+        virtualizer.scrollToIndex(targetIndex, { align: 'auto' })
+      }
+      return
+    }
+    const element = document.querySelector(
       `[data-admin-row="${selectedId}"]`,
     ) as HTMLElement | null
-    if (el) {
-      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    if (element) {
+      element.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
     }
-  }, [selectedId])
+  }, [selectedId, isVirtualized, sortedRows, virtualizer])
 
   // ===== 인포그래픽 집계 (단위 분포 · 상위 구역 Top 5 · 존속/좌표 매핑) =====
   const levelCounts = useMemo(() => {
@@ -681,25 +431,41 @@ export function MapRegionAdministrativeView({
       string,
       { level: number; label: string; count: number }
     >()
-    for (const r of flat) {
-      const label = r.divisionLabel || `${r.divisionLevel}차`
-      const key = `${r.divisionLevel}:${label}`
+    for (const row of flat) {
+      const label = row.divisionLabel || `${row.divisionLevel}차`
+      const key = `${row.divisionLevel}:${label}`
       const cur = counts.get(key)
       if (cur) cur.count += 1
-      else counts.set(key, { level: r.divisionLevel, label, count: 1 })
+      else counts.set(key, { level: row.divisionLevel, label, count: 1 })
     }
     return Array.from(counts.values()).sort(
-      (a, b) => a.level - b.level || b.count - a.count,
+      (left, right) => left.level - right.level || right.count - left.count,
     )
   }, [flat])
 
-  const infographic = useMemo(() => {
+  const infographic = useMemo<AdminInfographicData>(() => {
     const tierColors = isDarkMode
-      ? ['#a5b4fc', '#38bdf8', '#34d399', '#fbbf24', '#c084fc', '#fb7185', '#94a3b8']
-      : ['#4f46e5', '#0284c7', '#059669', '#d97706', '#7c3aed', '#e11d48', '#64748b']
+      ? [
+          '#a5b4fc',
+          '#38bdf8',
+          '#34d399',
+          '#fbbf24',
+          '#c084fc',
+          '#fb7185',
+          '#94a3b8',
+        ]
+      : [
+          '#4f46e5',
+          '#0284c7',
+          '#059669',
+          '#d97706',
+          '#7c3aed',
+          '#e11d48',
+          '#64748b',
+        ]
 
     const maxDepth = flat.reduce(
-      (mx, r) => (r.divisionLevel > mx ? r.divisionLevel : mx),
+      (acc, row) => (row.divisionLevel > acc ? row.divisionLevel : acc),
       0,
     )
 
@@ -711,16 +477,15 @@ export function MapRegionAdministrativeView({
       meta: `${lc.count.toLocaleString('ko-KR')}곳`,
     }))
 
-    // 좌표·존속·계보 현황
     let pinnedCount = 0
     let abolishedCount = 0
     let lineageCount = 0
     let totalLinkedCities = 0
-    for (const r of flat) {
-      if (r.centerLat != null && r.centerLng != null) pinnedCount += 1
-      if (r.abolished) abolishedCount += 1
-      if (r.predecessorId || r.successorCount > 0) lineageCount += 1
-      totalLinkedCities += r.cityCount
+    for (const row of flat) {
+      if (row.centerLat != null && row.centerLng != null) pinnedCount += 1
+      if (row.abolished) abolishedCount += 1
+      if (row.predecessorId || row.successorCount > 0) lineageCount += 1
+      totalLinkedCities += row.cityCount
     }
     const activeCount = flat.length - abolishedCount
     const coordPct =
@@ -766,11 +531,10 @@ export function MapRegionAdministrativeView({
         : []),
     ]
 
-    // 광역 구역 편제 Top 5 (드릴 시 현재 부모의 자식, 루트 시 1차 구역)
     const targetNodes = drillItems.length > 0 ? drillItems : divisions
     const rankCandidates = targetNodes.map((node) => {
       const desc = countDescendants(node)
-      const cities = sumSubtree(node, (n) => n.cityCount ?? 0)
+      const cities = sumSubtree(node, (item) => item.cityCount ?? 0)
       const cfg = configsById.get(node.adminDivisionId)
       return {
         id: node.id,
@@ -790,11 +554,13 @@ export function MapRegionAdministrativeView({
     const effectiveMetric: TopRankMetric =
       rankMetric === 'cities' && hasCitiesMetric ? 'cities' : 'descendants'
 
-    const sortedCandidates = [...rankCandidates].sort((a, b) => {
-      const va = effectiveMetric === 'cities' ? a.cities : a.descendants
-      const vb = effectiveMetric === 'cities' ? b.cities : b.descendants
-      if (vb !== va) return vb - va
-      return a.name.localeCompare(b.name, 'ko')
+    const sortedCandidates = [...rankCandidates].sort((left, right) => {
+      const leftVal =
+        effectiveMetric === 'cities' ? left.cities : left.descendants
+      const rightVal =
+        effectiveMetric === 'cities' ? right.cities : right.descendants
+      if (rightVal !== leftVal) return rightVal - leftVal
+      return left.name.localeCompare(right.name, 'ko')
     })
 
     const topFive = sortedCandidates.slice(0, 5)
@@ -830,23 +596,55 @@ export function MapRegionAdministrativeView({
     rankMetric,
   ])
 
+  /**
+   * 구역 자체 좌표가 있을 때만 상위 지도 위치를 갱신하고,
+   * 좌표가 없거나 선택 해제 시에는 상위 mapLocation을 비워 MapCard의 명칭 검색 폴백이 정상 작동하도록 한다.
+   */
   const reportLocation = useCallback(
     (division: AdministrativeDivision | null) => {
+      if (division?.centerLat != null && division?.centerLng != null) {
+        onCityClick({
+          id: division.id,
+          name: division.name,
+          population: '',
+          latitude: Number(division.centerLat),
+          longitude: Number(division.centerLng),
+        })
+        return
+      }
       onCityClick({
-        id: division?.id ?? '',
-        name: division?.name ?? '',
+        id: '',
+        name: '',
         population: '',
-        latitude:
-          division?.centerLat != null
-            ? Number(division.centerLat)
-            : country.latitude ?? 0,
-        longitude:
-          division?.centerLng != null
-            ? Number(division.centerLng)
-            : country.longitude ?? 0,
+        latitude: 0,
+        longitude: 0,
       })
     },
-    [onCityClick, country.latitude, country.longitude],
+    [onCityClick],
+  )
+
+  const handleSelectLinkedCity = useCallback(
+    (city: City) => {
+      setFocusedCity(city)
+      if (city.latitude != null && city.longitude != null) {
+        onCityClick({
+          id: city.id,
+          name: city.name,
+          population: city.population != null ? String(city.population) : '',
+          latitude: Number(city.latitude),
+          longitude: Number(city.longitude),
+        })
+      } else {
+        onCityClick({
+          id: '',
+          name: '',
+          population: '',
+          latitude: 0,
+          longitude: 0,
+        })
+      }
+    },
+    [onCityClick],
   )
 
   const handleItemClick = useCallback(
@@ -864,6 +662,16 @@ export function MapRegionAdministrativeView({
     [divisions, mode, pathIds, updateParams, reportLocation],
   )
 
+  /** 키보드 ↑↓ 탐색은 하위 드릴다운 없이 형제 목록 내에서 선택만 이동한다 */
+  const handleKeyboardSelect = useCallback(
+    (row: FlatRow) => {
+      const node = findInTree(divisions, row.id)
+      setSelectedId(row.id)
+      reportLocation(node)
+    },
+    [divisions, setSelectedId, reportLocation],
+  )
+
   /** 특정 노드(전신·후계·하위 구역·Top5 막대)로 즉시 포커스 & 부모 경로 동기화 */
   const drillToNode = useCallback(
     (id: string) => {
@@ -877,7 +685,6 @@ export function MapRegionAdministrativeView({
         parentChainIds.unshift(cursor.id)
         cursor = cursor.parentId ? findInTree(divisions, cursor.parentId) : null
       }
-      // 자식이 있는 노드면 그 노드의 하위 목록도 함께 볼 수 있게 path에 포함
       const nextPath =
         (target.children?.length ?? 0) > 0
           ? [...parentChainIds, target.id]
@@ -909,18 +716,27 @@ export function MapRegionAdministrativeView({
     reportLocation(targetNode)
   }
 
-  // 키보드 네비
+  const hasOpenModal =
+    formOpen ||
+    schemeModalOpen ||
+    configModalOpen ||
+    bulkOpen ||
+    !!pendingDelete ||
+    compareOpen
+
   useListKeyboard({
     items: sortedRows,
     selectedId,
+    enabled: !hasOpenModal,
     onSelect: (id) => {
       if (id === null) {
         setSelectedId(null)
+        reportLocation(null)
         return
       }
-      const row = sortedRows.find((d) => d.id === id)
+      const row = sortedRows.find((item) => item.id === id)
       if (!row) return
-      handleItemClick(row)
+      handleKeyboardSelect(row)
     },
   })
 
@@ -958,13 +774,16 @@ export function MapRegionAdministrativeView({
       notify.success('행정구역을 삭제했습니다')
       const updates: Array<{ key: string; value: string | null }> = []
       const idx = pathIds.indexOf(pendingDelete.id)
-      if (idx >= 0)
+      if (idx >= 0) {
         updates.push({
           key: 'division_path',
           value: pathIds.slice(0, idx).join(','),
         })
-      if (selectedId === pendingDelete.id)
+      }
+      if (selectedId === pendingDelete.id) {
         updates.push({ key: 'division_id', value: null })
+        reportLocation(null)
+      }
       if (updates.length) updateParams(updates)
       setPendingDelete(null)
     } catch (err) {
@@ -973,28 +792,43 @@ export function MapRegionAdministrativeView({
   }
 
   const mapLocation = useMemo(() => {
-    if (
-      selectedDivision?.centerLat != null &&
-      selectedDivision?.centerLng != null
-    ) {
-      return {
-        latitude: Number(selectedDivision.centerLat),
-        longitude: Number(selectedDivision.centerLng),
-        name: selectedDivision.name,
+    if (focusedCity) {
+      if (focusedCity.latitude != null && focusedCity.longitude != null) {
+        return {
+          latitude: Number(focusedCity.latitude),
+          longitude: Number(focusedCity.longitude),
+          name: focusedCity.name,
+        }
       }
+      return null
+    }
+    if (selectedDivision) {
+      if (
+        selectedDivision.centerLat != null &&
+        selectedDivision.centerLng != null
+      ) {
+        return {
+          latitude: Number(selectedDivision.centerLat),
+          longitude: Number(selectedDivision.centerLng),
+          name: selectedDivision.name,
+        }
+      }
+      // 선택된 구역에 좌표가 없으면 externalMapLocation(이전/국가 좌표)로 폴백하지 않고
+      // null을 반환해 MapCard가 구글 지도 명칭 검색으로 자동 전환하도록 한다.
+      return null
     }
     return externalMapLocation ?? null
-  }, [selectedDivision, externalMapLocation])
+  }, [focusedCity, selectedDivision, externalMapLocation])
 
   const mapMarkers = useMemo(
     () =>
       sortedRows
-        .filter((r) => r.centerLat != null && r.centerLng != null)
-        .map((r) => ({
-          id: r.id,
-          latitude: Number(r.centerLat),
-          longitude: Number(r.centerLng),
-          name: r.name,
+        .filter((row) => row.centerLat != null && row.centerLng != null)
+        .map((row) => ({
+          id: row.id,
+          latitude: Number(row.centerLat),
+          longitude: Number(row.centerLng),
+          name: row.name,
         })),
     [sortedRows],
   )
@@ -1019,7 +853,7 @@ export function MapRegionAdministrativeView({
       selectedParentChain.length > 0 &&
       pathIds.length === 0
     ) {
-      setPath(selectedParentChain.map((p) => p.id))
+      setPath(selectedParentChain.map((item) => item.id))
     }
   }, [
     mode,
@@ -1031,363 +865,33 @@ export function MapRegionAdministrativeView({
   ])
 
   const selectedDivisionQuery = useMemo(() => {
+    if (focusedCity) {
+      return [selectedDivision?.name, focusedCity.name]
+        .filter(Boolean)
+        .join(' ')
+    }
     if (!selectedDivision) return null
     return [
-      ...selectedParentChain.map((p) => p.name),
+      ...selectedParentChain.map((item) => item.name),
       selectedDivision.name,
     ].join(' ')
-  }, [selectedDivision, selectedParentChain])
+  }, [focusedCity, selectedDivision, selectedParentChain])
 
   const selectedDivisionDisplayName = useMemo(() => {
+    if (focusedCity) {
+      return selectedDivision
+        ? `${selectedDivision.name} › ${focusedCity.name}`
+        : focusedCity.name
+    }
     if (!selectedDivision) return null
     return [
-      ...selectedParentChain.map((p) => p.name),
+      ...selectedParentChain.map((item) => item.name),
       selectedDivision.name,
     ].join(' › ')
-  }, [selectedDivision, selectedParentChain])
+  }, [focusedCity, selectedDivision, selectedParentChain])
 
-  // ===== 1) 3열 벤토 인포그래픽 요약 =====
   const activeLevelFilterKey =
     levelFilter == null ? null : `${levelFilter}:${unitLabelFilter ?? ''}`
-
-  const bentoInfographic =
-    !isLoading && flat.length > 0 ? (
-      <BentoGrid3Col aria-label="행정구역 인포그래픽 요약">
-        {/* Card 1: 계층·단위 편제 분포 */}
-        <BentoCard>
-          <BentoCardHeader>
-            <BentoCardTitleGroup>
-              <BentoCardTitle>계층 · 단위 편제 구성</BentoCardTitle>
-              <BentoCardBadge>
-                총 {flat.length.toLocaleString('ko-KR')}곳 · 최대{' '}
-                {infographic.maxDepth}차
-              </BentoCardBadge>
-            </BentoCardTitleGroup>
-            {activeLevelFilterKey && (
-              <BentoLegendChip
-                type="button"
-                $active
-                onClick={() => setUnitFilter(null)}
-              >
-                필터 해제 ×
-              </BentoLegendChip>
-            )}
-          </BentoCardHeader>
-          <BentoCardBody>
-            <StackedSegmentBar
-              slices={infographic.tierSlices}
-              height={10}
-              showPercent
-            />
-            <BentoLegendWrap>
-              {infographic.tierSlices.map((slice) => {
-                const isActive = activeLevelFilterKey === slice.key
-                return (
-                  <BentoLegendChip
-                    key={slice.key}
-                    type="button"
-                    $active={isActive}
-                    title={`${slice.label} 단위만 필터링`}
-                    onClick={() =>
-                      setUnitFilter(isActive ? null : slice.key)
-                    }
-                  >
-                    <LegendDot $color={slice.color} />
-                    <span>{slice.label}</span>
-                    <strong>{slice.value.toLocaleString('ko-KR')}</strong>
-                  </BentoLegendChip>
-                )
-              })}
-            </BentoLegendWrap>
-          </BentoCardBody>
-        </BentoCard>
-
-        {/* Card 2: 주요 광역 구역 편제 규모 Top 5 */}
-        <BentoCard>
-          <BentoCardHeader>
-            <BentoCardTitleGroup>
-              <BentoCardTitle>
-                {currentParent
-                  ? `${currentParent.name} 하위 편제 Top 5`
-                  : '광역 행정구역 편제 Top 5'}
-              </BentoCardTitle>
-              <BentoCardBadge>
-                {(drillItems.length || divisions.length).toLocaleString('ko-KR')}곳
-              </BentoCardBadge>
-            </BentoCardTitleGroup>
-            {infographic.hasCitiesMetric && (
-              <MetricSwitchGroup role="tablist" aria-label="순위 기준">
-                <MetricSwitchBtn
-                  type="button"
-                  $active={infographic.effectiveMetric === 'descendants'}
-                  onClick={() => setRankMetric('descendants')}
-                >
-                  하위구역
-                </MetricSwitchBtn>
-                <MetricSwitchBtn
-                  type="button"
-                  $active={infographic.effectiveMetric === 'cities'}
-                  onClick={() => setRankMetric('cities')}
-                >
-                  소속도시
-                </MetricSwitchBtn>
-              </MetricSwitchGroup>
-            )}
-          </BentoCardHeader>
-          <BentoCardBody>
-            <RankRowList>
-              {infographic.topFive.map((item, idx) => {
-                const val =
-                  infographic.effectiveMetric === 'cities'
-                    ? item.cities
-                    : item.descendants
-                const hasNumericScale = infographic.maxMetricVal > 0
-                const pct = hasNumericScale
-                  ? Math.max(8, (val / infographic.maxMetricVal) * 100)
-                  : item.hasCoords
-                    ? 100
-                    : 32
-                const isSelected = selectedId === item.id
-                return (
-                  <RankRowBtn
-                    key={item.id}
-                    type="button"
-                    $active={isSelected}
-                    onClick={() => drillToNode(item.id)}
-                    title={`${item.name} 상세 및 하위 구역 포커스`}
-                  >
-                    <RankIndex>#{idx + 1}</RankIndex>
-                    <RankName title={item.name}>{item.name}</RankName>
-                    <RankTrack>
-                      <RankFill
-                        style={{
-                          width: `${pct}%`,
-                          opacity: hasNumericScale ? 1 : 0.45,
-                        }}
-                      />
-                    </RankTrack>
-                    <RankMeta>
-                      {hasNumericScale
-                        ? infographic.effectiveMetric === 'cities'
-                          ? `도시 ${val}곳`
-                          : `하위 ${val}곳`
-                        : item.period ?? (item.unitLabel || (item.hasCoords ? '좌표됨' : '1차'))}
-                    </RankMeta>
-                  </RankRowBtn>
-                )
-              })}
-            </RankRowList>
-          </BentoCardBody>
-        </BentoCard>
-
-        {/* Card 3: 존속 현황 · 좌표 매핑률 */}
-        <BentoCard>
-          <BentoCardHeader>
-            <BentoCardTitleGroup>
-              <BentoCardTitle>존속 현황 · 좌표 매핑</BentoCardTitle>
-              <BentoCardBadge>
-                좌표 {infographic.pinnedCount.toLocaleString('ko-KR')}/
-                {flat.length.toLocaleString('ko-KR')}
-              </BentoCardBadge>
-            </BentoCardTitleGroup>
-          </BentoCardHeader>
-          <BentoCardBody>
-            <CoverageSplit>
-              <MiniDonutRing
-                slices={infographic.coordDonutSlices}
-                size={72}
-                strokeWidth={8.5}
-                centerValue={`${infographic.coordPct}%`}
-                centerLabel="좌표 매핑"
-              />
-              <CoverageRight>
-                <StackedSegmentBar
-                  slices={infographic.statusSlices}
-                  height={8}
-                />
-                <BentoLegendWrap>
-                  <BentoLegendChip
-                    type="button"
-                    $active={statusFilter === 'active'}
-                    onClick={() =>
-                      setStatusFilter((prev) =>
-                        prev === 'active' ? 'all' : 'active',
-                      )
-                    }
-                  >
-                    <LegendDot
-                      $color={isDarkMode ? '#34d399' : '#059669'}
-                    />
-                    <span>현존</span>
-                    <strong>
-                      {infographic.activeCount.toLocaleString('ko-KR')}
-                    </strong>
-                  </BentoLegendChip>
-                  <BentoLegendChip
-                    type="button"
-                    $active={statusFilter === 'abolished'}
-                    onClick={() =>
-                      setStatusFilter((prev) =>
-                        prev === 'abolished' ? 'all' : 'abolished',
-                      )
-                    }
-                  >
-                    <LegendDot
-                      $color={isDarkMode ? '#f87171' : '#dc2626'}
-                    />
-                    <span>폐지</span>
-                    <strong>
-                      {infographic.abolishedCount.toLocaleString('ko-KR')}
-                    </strong>
-                  </BentoLegendChip>
-                </BentoLegendWrap>
-                <CoverageSubFoot>
-                  <span>편제 체계 {schemes.length}개</span>
-                  {infographic.lineageCount > 0 && (
-                    <span>개편 계보 {infographic.lineageCount}곳</span>
-                  )}
-                </CoverageSubFoot>
-              </CoverageRight>
-            </CoverageSplit>
-          </BentoCardBody>
-        </BentoCard>
-      </BentoGrid3Col>
-    ) : null
-
-  // ===== 2) 시기별 행정구역 체계 바 =====
-  const schemeBar = (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: 6,
-        padding: '8px 12px',
-        background: palette.bg,
-        border: `1px solid ${palette.border}`,
-        borderRadius: 8,
-      }}
-    >
-      <span
-        style={{
-          fontSize: 11,
-          fontWeight: 700,
-          color: palette.textSecondary,
-          marginRight: 4,
-          letterSpacing: '0.04em',
-          textTransform: 'uppercase',
-        }}
-      >
-        편제 체계
-      </span>
-      <SchemeChip
-        palette={palette}
-        active={!activeSchemeId}
-        onClick={() => setActiveScheme(null)}
-      >
-        전체
-      </SchemeChip>
-      {schemes.map((s) => (
-        <SchemeChip
-          key={s.id}
-          palette={palette}
-          active={activeSchemeId === s.id}
-          onClick={() => setActiveScheme(s.id)}
-          onEdit={
-            activeSchemeId === s.id
-              ? () => {
-                  setSchemeEditing(s)
-                  setSchemeModalOpen(true)
-                }
-              : undefined
-          }
-        >
-          {s.name}
-          <span
-            style={{
-              marginLeft: 5,
-              fontWeight: 500,
-              opacity: 0.78,
-              fontSize: 11,
-              fontVariantNumeric: 'tabular-nums',
-            }}
-          >
-            {formatYearRange(s.startDate, s.endDate)} · {s.divisionCount}
-          </span>
-        </SchemeChip>
-      ))}
-      <button
-        type="button"
-        onClick={() => {
-          setSchemeEditing(null)
-          setSchemeModalOpen(true)
-        }}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 4,
-          height: 28,
-          padding: '0 9px',
-          fontSize: 11.5,
-          fontWeight: 600,
-          border: `1px dashed ${palette.border}`,
-          background: 'transparent',
-          color: palette.textSecondary,
-          borderRadius: 6,
-          cursor: 'pointer',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        <FiPlus size={12} />
-        <span>체계 등록</span>
-      </button>
-      <span style={{ flex: 1 }} />
-      <button
-        type="button"
-        onClick={() => setConfigModalOpen(true)}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 5,
-          height: 28,
-          padding: '0 9px',
-          fontSize: 11.5,
-          fontWeight: 600,
-          border: `1px solid ${palette.border}`,
-          background: 'transparent',
-          color: palette.textSecondary,
-          borderRadius: 6,
-          cursor: 'pointer',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        <FiSettings size={12} />
-        <span>단위 관리</span>
-      </button>
-      <button
-        type="button"
-        onClick={() => setCompareOpen(true)}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 5,
-          height: 28,
-          padding: '0 9px',
-          fontSize: 11.5,
-          fontWeight: 600,
-          border: `1px solid ${palette.border}`,
-          background: 'transparent',
-          color: palette.textSecondary,
-          borderRadius: 6,
-          cursor: 'pointer',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        <FiRepeat size={12} />
-        <span>체계 비교</span>
-      </button>
-    </div>
-  )
 
   // 컨텍스트 행 (검색 / 단위 필터 / 드릴 브레드크럼)
   const contextBar = (() => {
@@ -1421,8 +925,8 @@ export function MapRegionAdministrativeView({
             <span
               style={{ fontSize: 12, fontWeight: 700, color: palette.primary }}
             >
-              {levelFilter}차
-              {unitLabelFilter ? ` · ${unitLabelFilter}` : ''} 전체
+              {levelFilter}차{unitLabelFilter ? ` · ${unitLabelFilter}` : ''}{' '}
+              전체
             </span>
           }
           right={
@@ -1501,7 +1005,7 @@ export function MapRegionAdministrativeView({
                     style={{ color: palette.textSecondary, padding: '2px 4px' }}
                     title={breadcrumb
                       .slice(1, -2)
-                      .map((n) => n.name)
+                      .map((item) => item.name)
                       .join(' › ')}
                   >
                     …
@@ -1581,7 +1085,7 @@ export function MapRegionAdministrativeView({
         <SortSelect
           palette={palette}
           value={sort}
-          options={SORT_OPTIONS}
+          options={ADMIN_SORT_OPTIONS}
           onChange={setSort}
         />
         <span style={{ flex: 1 }} />
@@ -1635,26 +1139,19 @@ export function MapRegionAdministrativeView({
   )
 
   const distinctUnitInView = useMemo(() => {
-    const s = new Set<string>()
-    for (const r of sortedRows) {
-      if (r.divisionLabel) s.add(r.divisionLabel)
+    const unitSet = new Set<string>()
+    for (const row of sortedRows) {
+      if (row.divisionLabel) unitSet.add(row.divisionLabel)
     }
-    return s.size
+    return unitSet.size
   }, [sortedRows])
 
   const showTypeBadge = mode !== 'drill' || distinctUnitInView > 1
-  const isVirtualized = sortedRows.length > 35
-  const virtualizer = useVirtualizer({
-    count: sortedRows.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 52,
-    overscan: 10,
-  })
 
   const schemeNameById = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const s of schemes) m.set(s.id, s.name)
-    return m
+    const map = new Map<string, string>()
+    for (const scheme of schemes) map.set(scheme.id, scheme.name)
+    return map
   }, [schemes])
 
   const renderRow = (row: FlatRow) => {
@@ -1836,7 +1333,7 @@ export function MapRegionAdministrativeView({
           {hasMoreSearchResults && (
             <button
               type="button"
-              onClick={() => setSearchLimit((n) => Math.min(200, n + 50))}
+              onClick={() => setSearchLimit((prev) => Math.min(200, prev + 50))}
               style={{
                 display: 'block',
                 width: '100%',
@@ -1864,7 +1361,7 @@ export function MapRegionAdministrativeView({
         <button
           key="__more__"
           type="button"
-          onClick={() => setSearchLimit((n) => Math.min(200, n + 50))}
+          onClick={() => setSearchLimit((prev) => Math.min(200, prev + 50))}
           style={{
             display: 'block',
             width: '100%',
@@ -1885,164 +1382,6 @@ export function MapRegionAdministrativeView({
     return items
   })()
 
-  // ===== 미선택 상태일 때 우측 총람 그리드 (빈 공백 대신 즉시 탐색 타일 노출!) =====
-  const unselectedOverview =
-    sortedRows.length > 0 ? (
-      <div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 8,
-            paddingBottom: 10,
-            marginBottom: 12,
-            borderBottom: `1px solid ${palette.border}`,
-          }}
-        >
-          <div>
-            <div
-              style={{
-                fontSize: 14,
-                fontWeight: 800,
-                color: palette.text,
-              }}
-            >
-              {currentParent
-                ? `${currentParent.name} 하위 구역 총람`
-                : `${country.name} 행정구역 총람`}
-            </div>
-            <div
-              style={{
-                fontSize: 11.5,
-                color: palette.textSecondary,
-                marginTop: 2,
-              }}
-            >
-              카드를 클릭하면 상세 변천사·인라인 편집 및 지도 포커스로 전환됩니다 (키보드 ↑↓ 지원)
-            </div>
-          </div>
-          <CountBadge palette={palette}>
-            {sortedRows.length.toLocaleString('ko-KR')}곳
-          </CountBadge>
-        </div>
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))',
-            gap: 8,
-          }}
-        >
-          {sortedRows.slice(0, 24).map((row) => (
-            <button
-              key={row.id}
-              type="button"
-              onClick={() => handleItemClick(row)}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'flex-start',
-                gap: 5,
-                padding: '10px 12px',
-                borderRadius: 6,
-                border: `1px solid ${palette.border}`,
-                background: palette.bgSecondary,
-                textAlign: 'left',
-                cursor: 'pointer',
-                opacity: row.abolished ? 0.68 : 1,
-                fontVariantNumeric: 'tabular-nums',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = palette.primary
-                e.currentTarget.style.background = palette.bgHover
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = palette.border
-                e.currentTarget.style.background = palette.bgSecondary
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  width: '100%',
-                  gap: 6,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 13.5,
-                    fontWeight: 700,
-                    color: palette.text,
-                    textDecoration: row.abolished ? 'line-through' : 'none',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {row.name}
-                </span>
-                {row.divisionLabel && (
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: palette.primary,
-                      background: palette.badgeBg,
-                      padding: '1px 6px',
-                      borderRadius: 4,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {row.divisionLabel}
-                  </span>
-                )}
-              </div>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: 6,
-                  fontSize: 11,
-                  color: palette.textSecondary,
-                }}
-              >
-                {row.localName && <span>{row.localName}</span>}
-                {(row.establishedDate || row.abolishedDate) && (
-                  <span>
-                    {formatYearRange(row.establishedDate, row.abolishedDate)}
-                  </span>
-                )}
-                {row.descendantCount > 0 && (
-                  <span style={{ color: palette.primary, fontWeight: 700 }}>
-                    하위 {row.descendantCount}곳
-                  </span>
-                )}
-                {row.centerLat != null && row.centerLng != null && (
-                  <FiMapPin size={10} style={{ color: palette.primary }} />
-                )}
-              </div>
-            </button>
-          ))}
-        </div>
-        {sortedRows.length > 24 && (
-          <div
-            style={{
-              marginTop: 10,
-              fontSize: 11.5,
-              color: palette.textSecondary,
-              textAlign: 'right',
-            }}
-          >
-            좌측 원장 목록에서 전체 {sortedRows.length.toLocaleString('ko-KR')}곳을 탐색할 수 있습니다
-          </div>
-        )}
-      </div>
-    ) : undefined
-
   // 등록 모달 컨텍스트
   const formDefaultLevel = editing
     ? 1
@@ -2060,7 +1399,7 @@ export function MapRegionAdministrativeView({
         : null
 
   const detailUnitLabel = selectedDivision
-    ? configsById.get(selectedDivision.adminDivisionId)?.divisionLabel ?? null
+    ? (configsById.get(selectedDivision.adminDivisionId)?.divisionLabel ?? null)
     : null
 
   if (compareOpen) {
@@ -2075,8 +1414,40 @@ export function MapRegionAdministrativeView({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {bentoInfographic}
-      {schemeBar}
+      {!isLoading && flat.length > 0 && (
+        <AdminBentoInfographic
+          totalCount={flat.length}
+          scopeCount={drillItems.length || divisions.length}
+          schemeCount={schemes.length}
+          currentParentName={currentParent?.name ?? null}
+          isDarkMode={isDarkMode}
+          infographic={infographic}
+          activeLevelFilterKey={activeLevelFilterKey}
+          statusFilter={statusFilter}
+          selectedId={selectedId}
+          onChangeUnitFilter={setUnitFilter}
+          onChangeStatusFilter={setStatusFilter}
+          onChangeRankMetric={setRankMetric}
+          onSelectRankNode={drillToNode}
+        />
+      )}
+
+      <AdminSchemeBar
+        palette={palette}
+        schemes={schemes}
+        activeSchemeId={activeSchemeId}
+        onSelectScheme={setActiveScheme}
+        onCreateScheme={() => {
+          setSchemeEditing(null)
+          setSchemeModalOpen(true)
+        }}
+        onEditScheme={(scheme) => {
+          setSchemeEditing(scheme)
+          setSchemeModalOpen(true)
+        }}
+        onOpenConfigModal={() => setConfigModalOpen(true)}
+        onOpenCompare={() => setCompareOpen(true)}
+      />
 
       <RegionSplitLayout
         ariaLabel="행정구역"
@@ -2096,11 +1467,12 @@ export function MapRegionAdministrativeView({
               country={country}
               mapLocation={mapLocation}
               markers={mapMarkers}
-              selectedMarkerId={selectedId}
+              selectedMarkerId={focusedCity ? null : selectedId}
               selectedDivisionQuery={selectedDivisionQuery}
               selectedDivisionName={selectedDivisionDisplayName}
               onMarkerClick={(id) => {
-                const row = sortedRows.find((r) => r.id === id)
+                setFocusedCity(null)
+                const row = sortedRows.find((item) => item.id === id)
                 if (row) handleItemClick(row)
                 else drillToNode(id)
               }}
@@ -2109,7 +1481,20 @@ export function MapRegionAdministrativeView({
             <RegionDetailPanel
               palette={palette}
               isSelected={!!selectedDivision}
-              empty={unselectedOverview}
+              empty={
+                sortedRows.length > 0 ? (
+                  <AdminUnselectedOverview
+                    palette={palette}
+                    title={
+                      currentParent
+                        ? `${currentParent.name} 하위 구역 총람`
+                        : `${country.name} 행정구역 총람`
+                    }
+                    rows={sortedRows}
+                    onSelectRow={handleItemClick}
+                  />
+                ) : undefined
+              }
               emptyTitle={
                 divisions.length === 0
                   ? '등록된 행정구역이 없습니다'
@@ -2165,9 +1550,9 @@ export function MapRegionAdministrativeView({
                   >
                     {country.name}
                   </BreadcrumbBtn>
-                  {selectedParentChain.map((p) => (
+                  {selectedParentChain.map((parent) => (
                     <span
-                      key={p.id}
+                      key={parent.id}
                       style={{
                         display: 'inline-flex',
                         gap: 4,
@@ -2178,9 +1563,9 @@ export function MapRegionAdministrativeView({
                       <BreadcrumbBtn
                         palette={palette}
                         active={false}
-                        onClick={() => drillToNode(p.id)}
+                        onClick={() => drillToNode(parent.id)}
                       >
-                        {p.name}
+                        {parent.name}
                       </BreadcrumbBtn>
                     </span>
                   ))}
@@ -2195,6 +1580,12 @@ export function MapRegionAdministrativeView({
                   divisions={divisions}
                   configsById={configsById}
                   onSelectDivision={drillToNode}
+                  onSelectCity={handleSelectLinkedCity}
+                  focusedCityId={focusedCity?.id ?? null}
+                  fallbackCoords={{
+                    latitude: country.latitude,
+                    longitude: country.longitude,
+                  }}
                 />
               )}
             </RegionDetailPanel>
@@ -2256,10 +1647,13 @@ export function MapRegionAdministrativeView({
         message={(() => {
           if (!pendingDelete) return ''
           const desc = countDescendants(pendingDelete)
-          const cities = sumSubtree(pendingDelete, (n) => n.cityCount ?? 0)
+          const cities = sumSubtree(
+            pendingDelete,
+            (item) => item.cityCount ?? 0,
+          )
           const successors = sumSubtree(
             pendingDelete,
-            (n) => n.successorCount ?? 0,
+            (item) => item.successorCount ?? 0,
           )
           const parts: string[] = []
           parts.push(
@@ -2268,9 +1662,7 @@ export function MapRegionAdministrativeView({
               : `"${pendingDelete.name}"과 하위 ${desc}개 구역(총 ${desc + 1}개)이 함께 삭제됩니다.`,
           )
           if (cities > 0) {
-            parts.push(
-              `연결된 도시 ${cities}개의 행정구역 연결이 해제됩니다.`,
-            )
+            parts.push(`연결된 도시 ${cities}개의 행정구역 연결이 해제됩니다.`)
           }
           if (successors > 0) {
             parts.push(
@@ -2290,74 +1682,11 @@ export function MapRegionAdministrativeView({
   )
 }
 
-interface SchemeChipProps {
-  palette: ReturnType<typeof useRegionPalette>
-  active: boolean
-  onClick: () => void
-  onEdit?: () => void
-  children: React.ReactNode
-}
-
-function SchemeChip({
-  palette,
-  active,
-  onClick,
-  onEdit,
-  children,
-}: SchemeChipProps) {
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-      <button
-        type="button"
-        onClick={onClick}
-        aria-pressed={active}
-        style={{
-          height: 28,
-          padding: '0 10px',
-          fontSize: 12,
-          fontWeight: active ? 700 : 600,
-          borderRadius: 6,
-          border: `1px solid ${active ? palette.primary : palette.border}`,
-          background: active ? palette.badgeBg : 'transparent',
-          color: active ? palette.primary : palette.text,
-          cursor: 'pointer',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {children}
-      </button>
-      {onEdit && (
-        <button
-          type="button"
-          onClick={onEdit}
-          aria-label="체계 편집"
-          title="체계 편집"
-          style={{
-            width: 22,
-            height: 22,
-            padding: 0,
-            border: 'none',
-            borderRadius: 4,
-            background: 'transparent',
-            color: palette.textSecondary,
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <FiEdit2 size={11} />
-        </button>
-      )}
-    </span>
-  )
-}
-
 interface BreadcrumbBtnProps {
   palette: ReturnType<typeof useRegionPalette>
   active: boolean
   onClick: () => void
-  children: React.ReactNode
+  children: ReactNode
 }
 
 function BreadcrumbBtn({
@@ -2381,11 +1710,11 @@ function BreadcrumbBtn({
         cursor: active ? 'default' : 'pointer',
         whiteSpace: 'nowrap',
       }}
-      onMouseEnter={(e) => {
-        if (!active) e.currentTarget.style.background = palette.bgSecondary
+      onMouseEnter={(event) => {
+        if (!active) event.currentTarget.style.background = palette.bgSecondary
       }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = 'transparent'
+      onMouseLeave={(event) => {
+        event.currentTarget.style.background = 'transparent'
       }}
     >
       {children}
@@ -2395,8 +1724,8 @@ function BreadcrumbBtn({
 
 interface ContextRowProps {
   palette: ReturnType<typeof useRegionPalette>
-  left: React.ReactNode
-  right: React.ReactNode
+  left: ReactNode
+  right: ReactNode
 }
 
 function ContextRow({ palette, left, right }: ContextRowProps) {
@@ -2431,7 +1760,7 @@ function CountBadge({
   children,
 }: {
   palette: ReturnType<typeof useRegionPalette>
-  children: React.ReactNode
+  children: ReactNode
 }) {
   return (
     <span
@@ -2457,7 +1786,7 @@ function ClearLink({
 }: {
   palette: ReturnType<typeof useRegionPalette>
   onClick: () => void
-  children: React.ReactNode
+  children: ReactNode
 }) {
   return (
     <button

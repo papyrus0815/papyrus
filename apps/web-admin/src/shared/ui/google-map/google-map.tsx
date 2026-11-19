@@ -52,11 +52,13 @@ interface GoogleMapProps {
   onMarkerClick?: (id: string) => void
   /** 다중 모드에서 모든 핀이 보이도록 자동 fit. 기본 true. */
   autoFit?: boolean
+  /** 컨테이너 높이 — 기본 '400px'. 부모 컨테이너에 맞추려면 '100%' 전달 */
+  height?: number | string
 }
 
-const MapWrapper = styled.div`
+const MapWrapper = styled.div<{ $height: string }>`
   width: 100%;
-  height: 400px;
+  height: ${({ $height }) => $height};
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 
@@ -66,9 +68,9 @@ const MapWrapper = styled.div`
   }
 `
 
-const NoLocationMessage = styled.div`
+const NoLocationMessage = styled.div<{ $height: string }>`
   width: 100%;
-  height: 400px;
+  height: ${({ $height }) => $height};
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -79,6 +81,30 @@ const NoLocationMessage = styled.div`
   font-size: 14px;
   gap: 8px;
 `
+
+/** 컨테이너 리사이즈(확장/축소 등) 시 Leaflet 뷰포트 크기 재계산 */
+function MapResizeSync() {
+  const map = useMap()
+
+  useEffect(() => {
+    const container = map.getContainer()
+    if (!container || typeof ResizeObserver === 'undefined') return
+    let rafId = 0
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(rafId)
+      rafId = requestAnimationFrame(() => {
+        map.invalidateSize({ animate: false })
+      })
+    })
+    observer.observe(container)
+    return () => {
+      cancelAnimationFrame(rafId)
+      observer.disconnect()
+    }
+  }, [map])
+
+  return null
+}
 
 /** 모드 전환·선택 변경 시 지도 시점 동기화 */
 function MapSync({
@@ -130,13 +156,15 @@ export function GoogleMap({
   selectedId = null,
   onMarkerClick,
   autoFit = true,
+  height = 400,
 }: GoogleMapProps) {
+  const resolvedHeight = typeof height === 'number' ? `${height}px` : height
   const useMarkers = markers && markers.length > 0
   const hasSingle = !useMarkers && latitude != null && longitude != null
 
   if (!useMarkers && !hasSingle) {
     return (
-      <NoLocationMessage>
+      <NoLocationMessage $height={resolvedHeight}>
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
           <path
             d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"
@@ -154,7 +182,7 @@ export function GoogleMap({
     : [Number(latitude), Number(longitude)]
 
   return (
-    <MapWrapper>
+    <MapWrapper $height={resolvedHeight}>
       <MapContainer
         center={initialCenter}
         zoom={zoom}
@@ -166,6 +194,7 @@ export function GoogleMap({
           subdomains={['0', '1', '2', '3']}
         />
 
+        <MapResizeSync />
         <MapSync
           markers={markers ?? []}
           selectedId={selectedId}

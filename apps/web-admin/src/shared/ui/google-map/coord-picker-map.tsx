@@ -2,12 +2,15 @@
  * 작은 좌표 픽킹용 지도. 클릭 시 onPick(lat, lng).
  * 현재 좌표가 있으면 미리 마커 표시.
  */
+import { useEffect } from 'react'
+
 import Leaflet from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import {
   MapContainer,
   Marker,
   TileLayer,
+  useMap,
   useMapEvents,
 } from 'react-leaflet'
 
@@ -49,6 +52,33 @@ function ClickHandler({
   return null
 }
 
+function MapViewSync({
+  lat,
+  lng,
+  height,
+}: {
+  lat: number | null
+  lng: number | null
+  height: number
+}) {
+  const map = useMap()
+
+  useEffect(() => {
+    const rafId = requestAnimationFrame(() => {
+      map.invalidateSize({ animate: false })
+    })
+    return () => cancelAnimationFrame(rafId)
+  }, [map, height])
+
+  useEffect(() => {
+    if (lat != null && lng != null && Number.isFinite(lat) && Number.isFinite(lng)) {
+      map.setView([lat, lng], Math.max(map.getZoom(), 9), { animate: true })
+    }
+  }, [map, lat, lng])
+
+  return null
+}
+
 export function CoordPickerMap({
   lat,
   lng,
@@ -84,6 +114,7 @@ export function CoordPickerMap({
           subdomains={['0', '1', '2', '3']}
         />
         <ClickHandler onPick={onPick} />
+        <MapViewSync lat={lat} lng={lng} height={height} />
         {lat != null && lng != null && <Marker position={[lat, lng]} />}
       </MapContainer>
     </div>

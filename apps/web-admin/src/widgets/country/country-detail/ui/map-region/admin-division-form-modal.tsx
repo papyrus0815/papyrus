@@ -20,12 +20,12 @@ import {
   useCreateAdministrativeDivision,
   useUpdateAdministrativeDivision,
 } from '@/entities/country/api.administrative-divisions'
-import { type PlaceSearchResult, cityApi } from '@/shared/api/city'
+import { dateSortKey, parseIsoDateParts } from '@/shared/lib/iso-date'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
-import { CoordPickerMap } from '@/shared/ui/google-map/coord-picker-map'
 import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
 
+import { CoordInputSection } from './coord-input-section'
 import { DivisionAutocomplete } from './division-autocomplete'
 import {
   ErrorText,
@@ -126,16 +126,13 @@ function levelExamples(level: number): string {
   return level === 1 ? '도, 주' : level === 2 ? '시, 구' : '읍, 면, 동'
 }
 
-/** ISO 날짜 문자열을 한국어로 표시 (BCE 지원) */
+/** ISO 날짜 문자열을 한국어로 표시 (BCE 안전 파싱) */
 function formatHistoricalDate(iso: string): string {
   if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  const year = d.getUTCFullYear()
-  const month = d.getUTCMonth() + 1
-  const day = d.getUTCDate()
-  const prefix = year < 0 ? 'BCE ' : ''
-  return `${prefix}${Math.abs(year)}년 ${month}월 ${day}일`
+  const parts = parseIsoDateParts(iso)
+  if (!parts) return iso
+  const prefix = parts.year < 0 ? 'BCE ' : ''
+  return `${prefix}${Math.abs(parts.year)}년 ${parts.month}월 ${parts.day}일`
 }
 
 export function AdminDivisionFormModal({
@@ -160,14 +157,8 @@ export function AdminDivisionFormModal({
   const createConfigMut = useCreateAdminDivisionConfig(owner)
   const createDivisionMut = useCreateAdministrativeDivision(owner)
   const updateDivisionMut = useUpdateAdministrativeDivision(owner)
-  const [autoFilling, setAutoFilling] = useState(false)
-  const [coordCandidates, setCoordCandidates] = useState<
-    PlaceSearchResult[] | null
-  >(null)
   const [establishedPickerOpen, setEstablishedPickerOpen] = useState(false)
   const [abolishedPickerOpen, setAbolishedPickerOpen] = useState(false)
-  const [mapPickerOpen, setMapPickerOpen] = useState(false)
-  const [mapPickerLarge, setMapPickerLarge] = useState(false)
   // 점진적 공개: 좌표·시기·모체 등 선택 입력은 기본 접힘. 수정 시 값이 있으면 펼쳐 보여준다.
   const [showAdvanced, setShowAdvanced] = useState(false)
 
@@ -189,25 +180,24 @@ export function AdminDivisionFormModal({
     [allDivisions, form.parentId],
   )
 
-  // 등록 레벨은 "선택된 상위"에서 도출한다 — 상위가 있으면 그 레벨 + 1, 없으면 최상위(1차).
-  // 수정 시엔 노드 자신의 레벨로 고정. 사용자가 레벨/단위를 머릿속으로 따로 맞출 필요가 없다.
+  // 레벨은 "선택된 상위"에서 도출한다 — 상위가 있으면 그 레벨 + 1, 없으면 최상위(1차).
+  // 트리 데이터가 늦게 로드돼 selectedParent가 잠깐 null이어도 레벨이 깜빡이지 않도록 폴백 유지.
   const parentConfig = selectedParent
-    ? allConfigs.find((c) => c.id === selectedParent.adminDivisionId)
+    ? allConfigs.find((config) => config.id === selectedParent.adminDivisionId)
     : null
   const parentLevel = parentConfig?.divisionLevel ?? null
   const parentLabel = parentConfig?.divisionLabel ?? null
-  // parentId(원시 값) 기준으로 분기 — 트리 데이터가 늦게 로드돼 selectedParent가
-  // 잠깐 null이어도 레벨이 1로 깜빡이지 않도록, 그 사이엔 defaultLevel을 쓴다.
-  const targetLevel = editing
-    ? (allConfigs.find((c) => c.id === editing.adminDivisionId)
+  const editingLevel = editing
+    ? (allConfigs.find((config) => config.id === editing.adminDivisionId)
         ?.divisionLevel ?? defaultLevel)
-    : form.parentId
-      ? parentLevel != null
-        ? parentLevel + 1
-        : defaultLevel
-      : 1
+    : defaultLevel
+  const targetLevel = form.parentId
+    ? parentLevel != null
+      ? parentLevel + 1
+      : editingLevel
+    : 1
   const configsForLevel = allConfigs.filter(
-    (c) => c.divisionLevel === targetLevel,
+    (config) => config.divisionLevel === targetLevel,
   )
 
   useEffect(() => {
@@ -231,12 +221,16 @@ export function AdminDivisionFormModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, editing])
 
-  // 등록 중 상위를 바꾸면 레벨이 달라지므로, 그 레벨에 맞는 단위로 다시 맞춘다.
-  // (단위가 1개면 자동 선택, 여러 개면 직접 선택, 없으면 새 단위명 입력으로 전환)
+  // 상위를 바꾸면 레벨이 달라지므로, 현재 선택된 단위가 새 레벨에 없을 때만 재설정한다.
   useEffect(() => {
-    if (!isOpen || editing) return
-    const auto = configsForLevel.length === 1 ? configsForLevel[0]!.id : ''
-    setForm((prev) => ({ ...prev, configId: auto, newConfigLabel: '' }))
+    if (!isOpen) return
+    setForm((prev) => {
+      if (prev.configId && configsForLevel.some((cfg) => cfg.id === prev.configId)) {
+        return prev
+      }
+      const auto = configsForLevel.length === 1 ? configsForLevel[0]!.id : ''
+      return { ...prev, configId: auto, newConfigLabel: '' }
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetLevel])
 
@@ -265,13 +259,11 @@ export function AdminDivisionFormModal({
         errs.name = '같은 상위 안에 같은 이름이 이미 있습니다'
       }
     }
-    if (!editing) {
-      if (configsForLevel.length === 0) {
-        if (!form.newConfigLabel.trim())
-          errs.newConfigLabel = `${targetLevel}차 단위명은 필수입니다`
-      } else {
-        if (!form.configId) errs.configId = '단위를 선택하세요'
-      }
+    if (configsForLevel.length === 0) {
+      if (!form.newConfigLabel.trim())
+        errs.newConfigLabel = `${targetLevel}차 단위명은 필수입니다`
+    } else {
+      if (!form.configId) errs.configId = '단위를 선택하세요'
     }
     if (form.centerLat.trim() !== '') {
       const lat = Number(form.centerLat)
@@ -284,49 +276,13 @@ export function AdminDivisionFormModal({
         errs.centerLng = '경도는 -180 ~ 180 사이여야 합니다'
     }
     if (form.establishedDate && form.abolishedDate) {
-      const est = new Date(form.establishedDate).getTime()
-      const ab = new Date(form.abolishedDate).getTime()
-      if (Number.isFinite(est) && Number.isFinite(ab) && est > ab) {
+      const est = dateSortKey(form.establishedDate)
+      const ab = dateSortKey(form.abolishedDate)
+      if (est != null && ab != null && est > ab) {
         errs.abolishedDate = '폐지일은 설립일 이후여야 합니다'
       }
     }
     return errs
-  }
-
-  const handleAutofillCoords = async () => {
-    const q = form.name.trim()
-    if (!q) {
-      notify.error('이름을 먼저 입력하세요')
-      return
-    }
-    setAutoFilling(true)
-    try {
-      const isoCode = (countryDetail as { isoCode?: string } | undefined)
-        ?.isoCode
-      const results = await cityApi.searchPlaces(q, isoCode)
-      if (results.length === 0) {
-        notify.error(`"${q}" 위치를 찾을 수 없습니다`)
-        return
-      }
-      setCoordCandidates(results.slice(0, 5))
-    } catch (err) {
-      notify.error(
-        err instanceof Error ? err.message : '좌표 검색에 실패했습니다',
-      )
-    } finally {
-      setAutoFilling(false)
-    }
-  }
-
-  const pickCandidate = (hit: PlaceSearchResult) => {
-    setForm((prev) => ({
-      ...prev,
-      centerLat: hit.lat.toFixed(6),
-      centerLng: hit.lng.toFixed(6),
-    }))
-    setErrors((prev) => ({ ...prev, centerLat: '', centerLng: '' }))
-    notify.success(`좌표 채움: ${hit.shortName}`)
-    setCoordCandidates(null)
   }
 
   /** 서버 에러 메시지를 키워드로 form 필드에 매핑 */
@@ -363,10 +319,21 @@ export function AdminDivisionFormModal({
     }
 
     try {
+      let configId = form.configId
+      if (!configId) {
+        const created = await createConfigMut.mutateAsync({
+          ...owner,
+          schemeId: schemeId ?? undefined,
+          divisionLevel: targetLevel,
+          divisionLabel: form.newConfigLabel.trim(),
+        })
+        configId = created.id
+      }
       if (editing) {
         await updateDivisionMut.mutateAsync({
           id: editing.id,
           input: {
+            adminDivisionId: configId,
             name: form.name.trim(),
             parentId: form.parentId || null,
             ...optionalFields,
@@ -374,16 +341,6 @@ export function AdminDivisionFormModal({
         })
         notify.success('행정구역을 수정했습니다')
       } else {
-        let configId = form.configId
-        if (!configId) {
-          const created = await createConfigMut.mutateAsync({
-            ...owner,
-            schemeId: schemeId ?? undefined,
-            divisionLevel: targetLevel,
-            divisionLabel: form.newConfigLabel.trim(),
-          })
-          configId = created.id
-        }
         await createDivisionMut.mutateAsync({
           ...owner,
           schemeId: schemeId ?? undefined,
@@ -489,48 +446,48 @@ export function AdminDivisionFormModal({
               {errors.parentId && <ErrorText>{errors.parentId}</ErrorText>}
             </FieldFull>
 
-            {!editing && (
-              <FieldFull>
-                <Label htmlFor="ad-config">
-                  행정 단위<Required>*</Required>
-                </Label>
-                {configsForLevel.length > 0 ? (
-                  <Select
-                    id="ad-config"
-                    value={form.configId}
-                    onChange={(e) => set('configId', e.target.value)}
-                  >
-                    <option value="">단위 선택 (예: 도·시·구)</option>
-                    {configsForLevel.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.divisionLabel} ({c.divisionLevel}차)
-                      </option>
-                    ))}
-                  </Select>
-                ) : (
-                  <Input
-                    id="ad-config"
-                    value={form.newConfigLabel}
-                    onChange={(e) => set('newConfigLabel', e.target.value)}
-                    maxLength={50}
-                    placeholder={`${targetLevel}차 단위 이름 (예: ${levelExamples(targetLevel)})`}
-                  />
-                )}
-                {errors.configId && <ErrorText>{errors.configId}</ErrorText>}
-                {errors.newConfigLabel && (
-                  <ErrorText>{errors.newConfigLabel}</ErrorText>
-                )}
-                <HintText>
-                  {configsForLevel.length === 0
-                    ? `이 나라엔 아직 ${targetLevel}차 행정 단위가 없어요. 단위 이름을 정하면 함께 만들어집니다.`
-                    : configsForLevel.length > 1
-                      ? `${targetLevel}차에 단위가 여러 개입니다 — 등록할 단위를 선택하세요. (예: 카운티 vs 통합시)`
-                      : selectedParent
-                        ? `'${parentLabel ?? '상위'}' 바로 아래 단위(${targetLevel}차)입니다.`
-                        : `최상위(1차) 단위입니다.`}
-                </HintText>
-              </FieldFull>
-            )}
+            <FieldFull>
+              <Label htmlFor="ad-config">
+                행정 단위<Required>*</Required>
+              </Label>
+              {configsForLevel.length > 0 ? (
+                <Select
+                  id="ad-config"
+                  value={form.configId}
+                  onChange={(event) => set('configId', event.target.value)}
+                >
+                  <option value="">단위 선택 (예: 도·시·구)</option>
+                  {configsForLevel.map((config) => (
+                    <option key={config.id} value={config.id}>
+                      {config.divisionLabel} ({config.divisionLevel}차)
+                    </option>
+                  ))}
+                </Select>
+              ) : (
+                <Input
+                  id="ad-config"
+                  value={form.newConfigLabel}
+                  onChange={(event) =>
+                    set('newConfigLabel', event.target.value)
+                  }
+                  maxLength={50}
+                  placeholder={`${targetLevel}차 단위 이름 (예: ${levelExamples(targetLevel)})`}
+                />
+              )}
+              {errors.configId && <ErrorText>{errors.configId}</ErrorText>}
+              {errors.newConfigLabel && (
+                <ErrorText>{errors.newConfigLabel}</ErrorText>
+              )}
+              <HintText>
+                {configsForLevel.length === 0
+                  ? `이 나라엔 아직 ${targetLevel}차 행정 단위가 없어요. 단위 이름을 정하면 함께 만들어집니다.`
+                  : configsForLevel.length > 1
+                    ? `${targetLevel}차에 단위가 여러 개입니다 — 적용할 단위를 선택하세요. (예: 카운티 vs 통합시)`
+                    : selectedParent
+                      ? `'${parentLabel ?? '상위'}' 바로 아래 단위(${targetLevel}차)입니다.`
+                      : `최상위(1차) 단위입니다.`}
+              </HintText>
+            </FieldFull>
 
             <FieldFull>
               <Label htmlFor="ad-name">
@@ -602,255 +559,51 @@ export function AdminDivisionFormModal({
 
             {showAdvanced && (
               <>
-                <FieldFull>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 8,
-                    }}
-                  >
-                    <Label as="span">중심 좌표</Label>
-                    <div style={{ display: 'inline-flex', gap: 6 }}>
-                      <button
-                        type="button"
-                        onClick={() => setMapPickerOpen((v) => !v)}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          padding: '5px 10px',
-                          fontSize: 11,
-                          fontWeight: 600,
-                          border: `1px solid ${palette.primary}`,
-                          color: mapPickerOpen ? '#ffffff' : palette.primary,
-                          background: mapPickerOpen
-                            ? palette.primary
-                            : 'transparent',
-                          borderRadius: 8,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {mapPickerOpen ? '지도 닫기' : '🗺 지도에서 선택'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleAutofillCoords}
-                        disabled={autoFilling || !form.name.trim()}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          padding: '5px 10px',
-                          fontSize: 11,
-                          fontWeight: 600,
-                          border: `1px solid ${palette.primary}`,
-                          color: palette.primary,
-                          background: 'transparent',
-                          borderRadius: 8,
-                          cursor:
-                            autoFilling || !form.name.trim()
-                              ? 'not-allowed'
-                              : 'pointer',
-                          opacity: autoFilling || !form.name.trim() ? 0.5 : 1,
-                        }}
-                      >
-                        <FiMapPin size={11} />
-                        {autoFilling ? '검색 중…' : '이름으로 자동 채우기'}
-                      </button>
-                    </div>
-                  </div>
-                  {mapPickerOpen && (
-                    <div>
-                      <CoordPickerMap
-                        lat={
-                          form.centerLat.trim() === ''
-                            ? null
-                            : Number(form.centerLat)
-                        }
-                        lng={
-                          form.centerLng.trim() === ''
-                            ? null
-                            : Number(form.centerLng)
-                        }
-                        onPick={(lat, lng) => {
-                          setForm((prev) => ({
-                            ...prev,
-                            centerLat: String(lat),
-                            centerLng: String(lng),
-                          }))
-                          setErrors((prev) => ({
-                            ...prev,
-                            centerLat: '',
-                            centerLng: '',
-                          }))
-                        }}
-                        fallbackLat={
-                          (
-                            countryDetail as
-                              | { latitude?: number | null }
-                              | undefined
-                          )?.latitude ??
-                          countryDisplay?.latitude ??
-                          null
-                        }
-                        fallbackLng={
-                          (
-                            countryDetail as
-                              | { longitude?: number | null }
-                              | undefined
-                          )?.longitude ??
-                          countryDisplay?.longitude ??
-                          null
-                        }
-                        height={mapPickerLarge ? 480 : 220}
-                      />
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'flex-end',
-                          marginTop: 4,
-                        }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => setMapPickerLarge((v) => !v)}
-                          style={{
-                            padding: '4px 8px',
-                            fontSize: 11,
-                            fontWeight: 500,
-                            border: 'none',
-                            background: 'transparent',
-                            color: palette.primary,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {mapPickerLarge ? '⤢ 작게' : '⤡ 크게'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  <HintText>
-                    OpenStreetMap에서 이름으로 검색해 위·경도를 채웁니다. 후보가
-                    여러 개면 골라야 합니다.
-                  </HintText>
-                  {coordCandidates && coordCandidates.length > 0 && (
-                    <div
-                      style={{
-                        marginTop: 6,
-                        border: `1px solid ${palette.borderMedium}`,
-                        borderRadius: 10,
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <div
-                        style={{
-                          padding: '6px 12px',
-                          background: palette.bgHover,
-                          fontSize: 11,
-                          fontWeight: 600,
-                          color: palette.textSecondary,
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <span>후보를 선택하세요</span>
-                        <button
-                          type="button"
-                          onClick={() => setCoordCandidates(null)}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            fontSize: 11,
-                            color: palette.textSecondary,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          취소
-                        </button>
-                      </div>
-                      {coordCandidates.map((hit) => (
-                        <button
-                          key={hit.placeId}
-                          type="button"
-                          onClick={() => pickCandidate(hit)}
-                          style={{
-                            display: 'block',
-                            width: '100%',
-                            textAlign: 'left',
-                            padding: '8px 12px',
-                            border: 'none',
-                            borderTop: `1px solid ${palette.divider}`,
-                            background: palette.bg,
-                            cursor: 'pointer',
-                            fontSize: 12,
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = palette.bgHover
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = palette.bg
-                          }}
-                        >
-                          <div style={{ fontWeight: 600, color: palette.text }}>
-                            {hit.shortName}
-                          </div>
-                          <div
-                            style={{
-                              color: palette.textSecondary,
-                              fontSize: 11,
-                              marginTop: 2,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {hit.displayName}
-                          </div>
-                          <div
-                            style={{
-                              color: palette.textMuted,
-                              fontSize: 11,
-                              marginTop: 2,
-                            }}
-                          >
-                            {hit.lat.toFixed(4)}, {hit.lng.toFixed(4)}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </FieldFull>
-                <Field>
-                  <Label htmlFor="ad-lat">위도</Label>
-                  <Input
-                    id="ad-lat"
-                    type="number"
-                    step="0.000001"
-                    value={form.centerLat}
-                    onChange={(e) => set('centerLat', e.target.value)}
-                    placeholder="-90 ~ 90"
-                  />
-                  {errors.centerLat && (
-                    <ErrorText>{errors.centerLat}</ErrorText>
-                  )}
-                </Field>
-                <Field>
-                  <Label htmlFor="ad-lng">경도</Label>
-                  <Input
-                    id="ad-lng"
-                    type="number"
-                    step="0.000001"
-                    value={form.centerLng}
-                    onChange={(e) => set('centerLng', e.target.value)}
-                    placeholder="-180 ~ 180"
-                  />
-                  {errors.centerLng && (
-                    <ErrorText>{errors.centerLng}</ErrorText>
-                  )}
-                </Field>
+                <CoordInputSection
+                  palette={palette}
+                  lat={form.centerLat}
+                  lng={form.centerLng}
+                  onChangeLat={(value) => set('centerLat', value)}
+                  onChangeLng={(value) => set('centerLng', value)}
+                  onPickCoords={(pickedLat, pickedLng) => {
+                    setForm((prev) => ({
+                      ...prev,
+                      centerLat: pickedLat,
+                      centerLng: pickedLng,
+                    }))
+                    setErrors((prev) => ({
+                      ...prev,
+                      centerLat: '',
+                      centerLng: '',
+                    }))
+                  }}
+                  latError={errors.centerLat}
+                  lngError={errors.centerLng}
+                  searchQuery={form.name}
+                  countryIsoCode={
+                    (countryDetail as { isoCode?: string } | undefined)?.isoCode
+                  }
+                  fallbackLat={
+                    (
+                      countryDetail as
+                        | { latitude?: number | null }
+                        | undefined
+                    )?.latitude ??
+                    countryDisplay?.latitude ??
+                    null
+                  }
+                  fallbackLng={
+                    (
+                      countryDetail as
+                        | { longitude?: number | null }
+                        | undefined
+                    )?.longitude ??
+                    countryDisplay?.longitude ??
+                    null
+                  }
+                  latInputId="ad-lat"
+                  lngInputId="ad-lng"
+                />
 
                 <Field>
                   <Label>설립일</Label>

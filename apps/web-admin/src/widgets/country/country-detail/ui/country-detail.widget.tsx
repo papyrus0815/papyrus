@@ -14,10 +14,16 @@ import styled from 'styled-components'
 
 import { type ContinentOption } from '@/entities/country/api'
 import {
+  type AdministrativeDivision,
+  useAdministrativeDivisions,
+} from '@/entities/country/api.administrative-divisions'
+import {
   useBondYields,
   useDemographicIndicators,
   useEconomicIndicators,
 } from '@/entities/country/api.indicators'
+import { useInfrastructures } from '@/entities/country/api.infrastructure'
+import { useNaturalFeatures } from '@/entities/country/api.natural-feature'
 import { useExportImports } from '@/entities/country/api.trade'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { companyApi } from '@/shared/api/company'
@@ -180,6 +186,12 @@ function CountryDetailInner({
   const { data: demographicRows = [] } = useDemographicIndicators(modernCountry?.id)
   const { data: bondRows = [] } = useBondYields(modernCountry?.id)
   const { data: tradeRows = [] } = useExportImports(modernCountry?.id)
+  const { data: adminDivisionRoots = [], isLoading: adminDivisionsLoading } =
+    useAdministrativeDivisions(modernCountry?.id, null)
+  const { data: naturalFeatureItems = [], isLoading: naturalFeaturesLoading } =
+    useNaturalFeatures(modernCountry?.id)
+  const { data: infrastructureItems = [], isLoading: infrastructuresLoading } =
+    useInfrastructures(modernCountry?.id)
   const { data: allCompanies = [] } = useQuery({
     queryKey: ['companies', 'all'],
     queryFn: () => companyApi.getAll(),
@@ -208,6 +220,23 @@ function CountryDetailInner({
       ...bondRows.map((row) => row.year),
     ]).size
 
+    const countDivisions = (nodes: AdministrativeDivision[]): number => {
+      let total = 0
+      for (const node of nodes) {
+        total += 1
+        if (node.children?.length) total += countDivisions(node.children)
+      }
+      return total
+    }
+    const regionsTotal =
+      countDivisions(adminDivisionRoots) +
+      naturalFeatureItems.length +
+      infrastructureItems.length
+    const regionsLoading =
+      adminDivisionsLoading &&
+      naturalFeaturesLoading &&
+      infrastructuresLoading
+
     return {
       persons: dashboardStats.loading.persons
         ? undefined
@@ -216,9 +245,7 @@ function CountryDetailInner({
         ? undefined
         : dashboardStats.eventCount,
       'linked-historical': dashboardStats.historicalCountryCount,
-      regions: dashboardStats.loading.cities
-        ? undefined
-        : dashboardStats.cityCount,
+      regions: regionsLoading ? undefined : regionsTotal,
       government: dashboardStats.loading.administration
         ? undefined
         : dashboardStats.administrationCount +
@@ -247,6 +274,12 @@ function CountryDetailInner({
     demographicRows,
     bondRows,
     tradeRows.length,
+    adminDivisionRoots,
+    naturalFeatureItems.length,
+    infrastructureItems.length,
+    adminDivisionsLoading,
+    naturalFeaturesLoading,
+    infrastructuresLoading,
     dashboardStats,
   ])
 
@@ -302,12 +335,17 @@ function CountryDetailInner({
 
   const continent = continents.find((cont) => cont.id === country.continentId)
 
-  /** 지도/지역 탭에서 항목을 선택했을 때 — 지도 위치만 갱신 */
+  /** 지도/지역 탭에서 항목을 선택했을 때 — 지도 위치만 갱신 (빈 id/name이면 포커스 해제) */
   const handleCityClick = (city: {
+    id?: string
     name: string
     latitude: number
     longitude: number
   }) => {
+    if (!city.id && !city.name) {
+      setMapLocation(null)
+      return
+    }
     setMapLocation({
       latitude: city.latitude,
       longitude: city.longitude,

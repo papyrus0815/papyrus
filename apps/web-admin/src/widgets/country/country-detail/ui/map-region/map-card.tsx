@@ -360,6 +360,7 @@ export function MapCard({
                 selectedId={selectedMarkerId}
                 onMarkerClick={onMarkerClick}
                 zoom={zoom.withLocation}
+                height="100%"
               />
             ) : (
               <GoogleMap
@@ -367,6 +368,7 @@ export function MapCard({
                 longitude={location.longitude}
                 name={location.name}
                 zoom={mapLocation ? zoom.withLocation : zoom.withoutLocation}
+                height="100%"
               />
             )}
           </div>

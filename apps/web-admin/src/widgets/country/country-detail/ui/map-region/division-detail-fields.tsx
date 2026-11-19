@@ -19,6 +19,7 @@ import {
   FiTrash2,
 } from 'react-icons/fi'
 
+import { useCountry } from '@/entities/country/api'
 import {
   type AdminDivisionConfig,
   type AdminDivisionSection,
@@ -40,12 +41,14 @@ import {
 } from '@/pages/events/detail/components/inline'
 import {
   type City,
+  type PlaceSearchResult,
   type UpdateAdministrativeDivisionInput,
   cityApi,
 } from '@/shared/api/city'
 import { dateSortKey, parseIsoDateParts } from '@/shared/lib/iso-date'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
+import { CoordPickerMap } from '@/shared/ui/google-map/coord-picker-map'
 import { notify } from '@/shared/ui/toast'
 
 import { DivisionAutocomplete } from './division-autocomplete'
@@ -601,6 +604,12 @@ interface DivisionDetailFieldsProps {
   configsById?: Map<string, AdminDivisionConfig>
   /** 하위/전신/후계 구역으로 바로 이동 */
   onSelectDivision?: (id: string) => void
+  /** 연결 도시 클릭 시 지도 포커스 */
+  onSelectCity?: (city: City) => void
+  /** 현재 지도 포커스 중인 연결 도시 ID */
+  focusedCityId?: string | null
+  /** 인라인 좌표 피커 폴백 중심 좌표 (역사적 국가 등) */
+  fallbackCoords?: { latitude?: number | null; longitude?: number | null }
 }
 
 function formatPopulationKo(pop: number | null | undefined): string | null {
@@ -619,13 +628,44 @@ export function DivisionDetailFields({
   divisions,
   configsById,
   onSelectDivision,
+  onSelectCity,
+  focusedCityId = null,
+  fallbackCoords,
 }: DivisionDetailFieldsProps) {
   const { save } = useSaveDivision(owner, division.id)
+  const { data: countryDetail } = useCountry(owner.countryId ?? '')
+  const [inlineMapOpen, setInlineMapOpen] = useState(false)
+  const [coordSearching, setCoordSearching] = useState(false)
+  const [coordCandidates, setCoordCandidates] = useState<
+    PlaceSearchResult[] | null
+  >(null)
 
   const coordValue =
     division.centerLat != null && division.centerLng != null
       ? `${Number(division.centerLat)}, ${Number(division.centerLng)}`
       : ''
+
+  const handleInlineCoordSearch = async () => {
+    const queryText = division.name.trim()
+    if (!queryText) return
+    setCoordSearching(true)
+    try {
+      const isoCode = (countryDetail as { isoCode?: string } | undefined)
+        ?.isoCode
+      const results = await cityApi.searchPlaces(queryText, isoCode)
+      if (results.length === 0) {
+        notify.error(`"${queryText}" 위치를 찾을 수 없습니다`)
+        return
+      }
+      setCoordCandidates(results.slice(0, 5))
+    } catch (err) {
+      notify.error(
+        err instanceof Error ? err.message : '좌표 검색에 실패했습니다',
+      )
+    } finally {
+      setCoordSearching(false)
+    }
+  }
 
   const checkDateOrder = (
     nextEstablished: string | null,
@@ -694,16 +734,15 @@ export function DivisionDetailFields({
   const serverSections = sectionsQuery.data ?? []
   const hasNarrative = serverSections.length > 0
 
+  // 현존·시초 구역에도 공통 적용되는 핵심 5개 항목 기준 (폐지일·전신은 역사적 선택 항목이므로 제외)
   const filledCount = [
     !!division.localName,
     !!division.nameMeaning,
     division.centerLat != null && division.centerLng != null,
     !!division.establishedDate,
-    !!division.abolishedDate,
-    !!division.predecessorId,
     hasNarrative,
   ].filter(Boolean).length
-  const totalCount = 7
+  const totalCount = 5
   const complete = filledCount === totalCount
 
   const progressChip = (
@@ -717,7 +756,7 @@ export function DivisionDetailFields({
         borderRadius: 5,
         fontVariantNumeric: 'tabular-nums',
       }}
-      title="현지어 명칭·명칭 뜻·좌표·설립일·폐지일·이전 행정구역·서술"
+      title="핵심 5항목: 현지어 명칭·명칭 뜻·좌표·설립일·서술"
     >
       {complete ? '기록 완비 ✓' : `${filledCount}/${totalCount} 항목 작성`}
     </span>
@@ -971,22 +1010,39 @@ export function DivisionDetailFields({
                 const popLabel = formatPopulationKo(city.population)
                 const areaNum =
                   city.areaSqKm != null ? Number(city.areaSqKm) : null
+                const hasCityCoords =
+                  city.latitude != null && city.longitude != null
+                const isFocused = focusedCityId === city.id
                 return (
-                  <span
+                  <button
                     key={city.id}
+                    type="button"
+                    onClick={() => onSelectCity?.(city)}
+                    title={
+                      hasCityCoords
+                        ? `${city.name} 위치로 지도 이동`
+                        : `${city.name} 구글 지도 검색`
+                    }
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: 5,
                       padding: '4px 9px',
                       borderRadius: 5,
-                      border: `1px solid ${palette.border}`,
-                      background: palette.bg,
+                      border: `1px solid ${isFocused ? palette.primary : palette.border}`,
+                      background: isFocused ? palette.bgSelected : palette.bg,
                       fontSize: 12,
-                      color: palette.text,
+                      color: isFocused ? palette.primary : palette.text,
+                      cursor: onSelectCity ? 'pointer' : 'default',
                       fontVariantNumeric: 'tabular-nums',
                     }}
                   >
+                    {hasCityCoords && (
+                      <FiMapPin
+                        size={10}
+                        style={{ color: palette.primary, flexShrink: 0 }}
+                      />
+                    )}
                     <strong>{city.name}</strong>
                     {popLabel && (
                       <span style={{ color: palette.textSecondary }}>
@@ -998,7 +1054,7 @@ export function DivisionDetailFields({
                         · {areaNum.toLocaleString('ko-KR')}km²
                       </span>
                     )}
-                  </span>
+                  </button>
                 )
               })}
             </div>
@@ -1036,25 +1092,189 @@ export function DivisionDetailFields({
       </FieldRow>
 
       <FieldRow palette={palette} label="중심 좌표">
-        <InlineText
-          value={coordValue}
-          placeholder="위도, 경도 추가"
-          validate={(v) =>
-            parseCoordPair(v) === null
-              ? '"위도, 경도" 형식 (위도 -90~90 · 경도 -180~180)'
-              : null
-          }
-          onSave={(v) => {
-            const parsed = parseCoordPair(v)
-            if (!parsed) return
-            save(
-              { centerLat: parsed.lat, centerLng: parsed.lng },
-              parsed.lat == null
-                ? '좌표를 해제했습니다'
-                : '좌표를 저장했습니다',
-            )
-          }}
-        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 8,
+            }}
+          >
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <InlineText
+                value={coordValue}
+                placeholder="위도, 경도 추가"
+                validate={(raw) =>
+                  parseCoordPair(raw) === null
+                    ? '"위도, 경도" 형식 (위도 -90~90 · 경도 -180~180)'
+                    : null
+                }
+                onSave={(raw) => {
+                  const parsed = parseCoordPair(raw)
+                  if (!parsed) return
+                  save(
+                    { centerLat: parsed.lat, centerLng: parsed.lng },
+                    parsed.lat == null
+                      ? '좌표를 해제했습니다'
+                      : '좌표를 저장했습니다',
+                  )
+                }}
+              />
+            </div>
+            <div style={{ display: 'inline-flex', gap: 5, flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => setInlineMapOpen((prev) => !prev)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  height: 24,
+                  padding: '0 8px',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  borderRadius: 5,
+                  border: `1px solid ${inlineMapOpen ? palette.primary : palette.border}`,
+                  background: inlineMapOpen ? palette.bgSelected : 'transparent',
+                  color: inlineMapOpen ? palette.primary : palette.textSecondary,
+                  cursor: 'pointer',
+                }}
+              >
+                <FiMapPin size={10} />
+                {inlineMapOpen ? '지도 닫기' : '지도 선택'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleInlineCoordSearch()}
+                disabled={coordSearching}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  height: 24,
+                  padding: '0 8px',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  borderRadius: 5,
+                  border: `1px solid ${palette.border}`,
+                  background: 'transparent',
+                  color: palette.textSecondary,
+                  cursor: coordSearching ? 'not-allowed' : 'pointer',
+                  opacity: coordSearching ? 0.55 : 1,
+                }}
+              >
+                {coordSearching ? '검색 중…' : '자동 채우기'}
+              </button>
+            </div>
+          </div>
+
+          {inlineMapOpen && (
+            <div>
+              <CoordPickerMap
+                lat={division.centerLat != null ? Number(division.centerLat) : null}
+                lng={division.centerLng != null ? Number(division.centerLng) : null}
+                onPick={(pickedLat, pickedLng) => {
+                  save(
+                    { centerLat: pickedLat, centerLng: pickedLng },
+                    '지도에서 좌표를 저장했습니다',
+                  )
+                }}
+                fallbackLat={
+                  (countryDetail as { latitude?: number | null } | undefined)
+                    ?.latitude ??
+                  fallbackCoords?.latitude ??
+                  null
+                }
+                fallbackLng={
+                  (countryDetail as { longitude?: number | null } | undefined)
+                    ?.longitude ??
+                  fallbackCoords?.longitude ??
+                  null
+                }
+                height={200}
+              />
+            </div>
+          )}
+
+          {coordCandidates && coordCandidates.length > 0 && (
+            <div
+              style={{
+                border: `1px solid ${palette.border}`,
+                borderRadius: 6,
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  padding: '5px 10px',
+                  background: palette.bgSecondary,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: palette.textSecondary,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <span>좌표 후보 선택</span>
+                <button
+                  type="button"
+                  onClick={() => setCoordCandidates(null)}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    fontSize: 11,
+                    color: palette.textSecondary,
+                    cursor: 'pointer',
+                  }}
+                >
+                  닫기
+                </button>
+              </div>
+              {coordCandidates.map((hit) => (
+                <button
+                  key={hit.placeId}
+                  type="button"
+                  onClick={() => {
+                    save(
+                      {
+                        centerLat: Number(hit.lat.toFixed(6)),
+                        centerLng: Number(hit.lng.toFixed(6)),
+                      },
+                      `좌표를 저장했습니다 (${hit.shortName})`,
+                    )
+                    setCoordCandidates(null)
+                  }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '6px 10px',
+                    border: 'none',
+                    borderTop: `1px solid ${palette.border}`,
+                    background: palette.bg,
+                    cursor: 'pointer',
+                    fontSize: 11.5,
+                  }}
+                >
+                  <div style={{ fontWeight: 600, color: palette.text }}>
+                    {hit.shortName}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 10.5,
+                      color: palette.textSecondary,
+                      marginTop: 1,
+                    }}
+                  >
+                    {hit.displayName} ({hit.lat.toFixed(4)}, {hit.lng.toFixed(4)})
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </FieldRow>
 
       <FieldRow palette={palette} label="설립일">

@@ -3,6 +3,7 @@
  */
 import { useEffect, useState } from 'react'
 
+import { useCountry } from '@/entities/country/api'
 import {
   type Infrastructure,
   type InfrastructureType,
@@ -12,6 +13,7 @@ import {
 import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
 
+import { CoordInputSection } from './coord-input-section'
 import {
   ErrorText,
   Field,
@@ -24,6 +26,7 @@ import {
   Required,
   Select,
 } from './form-fields'
+import { useRegionPalette } from './use-region-palette'
 
 interface InfrastructureFormModalProps {
   isOpen: boolean
@@ -135,6 +138,8 @@ export function InfrastructureFormModal({
   defaultType = 'highway',
   onClose,
 }: InfrastructureFormModalProps) {
+  const palette = useRegionPalette()
+  const { data: countryDetail } = useCountry(countryId)
   const [form, setForm] = useState<FormState>(() =>
     editing ? fromExisting(editing) : empty(defaultType),
   )
@@ -271,30 +276,37 @@ export function InfrastructureFormModal({
               />
             </Field>
 
-            <Field>
-              <Label htmlFor="if-lat">위도</Label>
-              <Input
-                id="if-lat"
-                type="number"
-                step="0.0000001"
-                value={form.latitude}
-                onChange={(e) => set('latitude', e.target.value)}
-                placeholder="-90 ~ 90"
-              />
-              {errors.latitude && <ErrorText>{errors.latitude}</ErrorText>}
-            </Field>
-            <Field>
-              <Label htmlFor="if-lng">경도</Label>
-              <Input
-                id="if-lng"
-                type="number"
-                step="0.0000001"
-                value={form.longitude}
-                onChange={(e) => set('longitude', e.target.value)}
-                placeholder="-180 ~ 180"
-              />
-              {errors.longitude && <ErrorText>{errors.longitude}</ErrorText>}
-            </Field>
+            <CoordInputSection
+              palette={palette}
+              lat={form.latitude}
+              lng={form.longitude}
+              onChangeLat={(value) => set('latitude', value)}
+              onChangeLng={(value) => set('longitude', value)}
+              onPickCoords={(pickedLat, pickedLng) => {
+                setForm((prev) => ({
+                  ...prev,
+                  latitude: pickedLat,
+                  longitude: pickedLng,
+                }))
+                setErrors((prev) => ({ ...prev, latitude: '', longitude: '' }))
+              }}
+              latError={errors.latitude}
+              lngError={errors.longitude}
+              searchQuery={form.name}
+              countryIsoCode={
+                (countryDetail as { isoCode?: string } | undefined)?.isoCode
+              }
+              fallbackLat={
+                (countryDetail as { latitude?: number | null } | undefined)
+                  ?.latitude ?? null
+              }
+              fallbackLng={
+                (countryDetail as { longitude?: number | null } | undefined)
+                  ?.longitude ?? null
+              }
+              latInputId="if-lat"
+              lngInputId="if-lng"
+            />
 
             {showLength && (
               <Field>

@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 
+import { useSearchParams } from 'react-router-dom'
 import styled from 'styled-components'
 
 import {
@@ -21,6 +22,12 @@ import { MapRegionInfrastructureView } from './map-region-infrastructure-view'
 import { MapRegionNatureView } from './map-region-nature-view'
 
 type ViewMode = 'administrative' | 'nature' | 'infrastructure'
+
+const VIEW_MODES: ReadonlyArray<ViewMode> = [
+  'administrative',
+  'nature',
+  'infrastructure',
+]
 
 interface MapRegionSectionProps {
   country: {
@@ -77,7 +84,27 @@ export function MapRegionSection({
   mapLocation,
   onCityClick,
 }: MapRegionSectionProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>('administrative')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const rawViewMode = searchParams.get('region_view')
+  const viewMode: ViewMode =
+    rawViewMode && (VIEW_MODES as readonly string[]).includes(rawViewMode)
+      ? (rawViewMode as ViewMode)
+      : 'administrative'
+
+  const setViewMode = useCallback(
+    (nextMode: ViewMode) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev)
+          if (nextMode === 'administrative') next.delete('region_view')
+          else next.set('region_view', nextMode)
+          return next
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
 
   // 하위 뷰와 동일한 React Query 캐시 키를 공유하여 추가 요청 없이 탭 건수 표시
   const { data: divisions = [] } = useAdministrativeDivisions(country.id, null)

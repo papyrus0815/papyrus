@@ -15,13 +15,14 @@ import {
   FiMapPin,
   FiTrash2,
 } from 'react-icons/fi'
-import styled, { useTheme } from 'styled-components'
+import { useTheme } from 'styled-components'
 
 import {
   type NaturalFeature,
   type NaturalFeatureType,
   useDeleteNaturalFeature,
   useNaturalFeatures,
+  useUpdateNaturalFeature,
 } from '@/entities/country/api.natural-feature'
 import {
   BentoCard,
@@ -35,23 +36,24 @@ import {
   type SegmentSlice,
   StackedSegmentBar,
 } from '@/entities/event/ui/bento-primitives'
-import {
-  DIGIT_DISPLAY,
-  ledgerAccent,
-  ledgerSubtleFill,
-  RADIUS,
-} from '@/entities/event/ui/ledger-tokens'
+import { InlineText } from '@/pages/events/detail/components/inline'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 
 import {
+  BentoLegendChip,
+  BentoLegendWrap,
   FilterPill,
+  LegendDot,
   ListEmptyState,
   ListToolbarRow,
   MapCard,
-  MetaCard,
   NaturalFeatureFormModal,
   PillToolbar,
+  RankFill,
+  RankRowBtn,
+  RankRowList,
+  RankTrack,
   RegionDetailHeader,
   RegionDetailPanel,
   RegionListItem,
@@ -156,92 +158,27 @@ function metricOf(item: NaturalFeature): number {
   return Number(item.lengthKm ?? 0)
 }
 
-const LegendWrap = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px 10px;
-`
-
-const LegendBtn = styled.button<{ $active?: boolean }>`
-  appearance: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 7px;
-  margin: -1px -4px;
-  border: 1px solid
-    ${({ theme, $active }) =>
-      $active ? ledgerAccent(theme.mode) : 'transparent'};
-  border-radius: ${RADIUS.XS};
-  background: ${({ theme, $active }) =>
-    $active ? theme.colors.activeLight : 'transparent'};
-  font-family: inherit;
-  font-size: 11.5px;
-  color: ${({ theme, $active }) =>
-    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
-  cursor: pointer;
-  ${DIGIT_DISPLAY}
-
-  strong {
-    font-weight: 700;
-    color: ${({ theme }) => theme.colors.text.primary};
+function parseCoordPair(
+  raw: string,
+): { lat: number | null; lng: number | null } | null {
+  const trimmed = raw.trim()
+  if (!trimmed) return { lat: null, lng: null }
+  const parts = trimmed.split(',').map((part) => part.trim())
+  if (parts.length !== 2) return null
+  const lat = Number(parts[0])
+  const lng = Number(parts[1])
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng) ||
+    lat < -90 ||
+    lat > 90 ||
+    lng < -180 ||
+    lng > 180
+  ) {
+    return null
   }
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.hover};
-  }
-`
-
-const Dot = styled.span<{ $color: string }>`
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: ${({ $color }) => $color};
-  flex-shrink: 0;
-`
-
-const RankRows = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`
-
-const RankRowBtn = styled.button<{ $active?: boolean }>`
-  appearance: none;
-  display: grid;
-  grid-template-columns: 20px auto minmax(76px, 128px) minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 7px;
-  width: 100%;
-  padding: 3px 6px;
-  margin: 0 -6px;
-  border: none;
-  border-radius: ${RADIUS.XS};
-  background: ${({ theme, $active }) =>
-    $active ? theme.colors.activeLight : 'transparent'};
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-  ${DIGIT_DISPLAY}
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.hover};
-  }
-`
-
-const RankTrack = styled.div`
-  width: 100%;
-  height: 7px;
-  border-radius: ${RADIUS.XS};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
-  overflow: hidden;
-`
-
-const RankFill = styled.div`
-  height: 100%;
-  border-radius: ${RADIUS.XS};
-  background: ${({ theme }) => ledgerAccent(theme.mode)};
-`
+  return { lat, lng }
+}
 
 export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
   const palette = useRegionPalette()
@@ -263,7 +200,25 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
   )
 
   const { data: allFeatures = [], isLoading } = useNaturalFeatures(country.id)
+  const updateMut = useUpdateNaturalFeature()
   const deleteMut = useDeleteNaturalFeature()
+
+  const saveInline = (
+    itemId: string,
+    patch: Parameters<typeof updateMut.mutate>[0]['data'],
+    successMsg = '저장했습니다',
+  ) => {
+    updateMut.mutate(
+      { id: itemId, data: patch },
+      {
+        onSuccess: () => notify.success(successMsg),
+        onError: (err) =>
+          notify.error(
+            err instanceof Error ? err.message : '저장에 실패했습니다',
+          ),
+      },
+    )
+  }
 
   const filteredAndSorted = useMemo(() => {
     let list = allFeatures
@@ -454,27 +409,27 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
                   height={9}
                   showPercent
                 />
-                <LegendWrap>
-                  {infographic.typeSlices.map((s) => {
-                    const active = url.filter === s.key
+                <BentoLegendWrap>
+                  {infographic.typeSlices.map((slice) => {
+                    const active = url.filter === slice.key
                     return (
-                      <LegendBtn
-                        key={s.key}
+                      <BentoLegendChip
+                        key={slice.key}
                         type="button"
                         $active={active}
                         onClick={() =>
                           url.setFilter(
-                            active ? 'all' : (s.key as NatureFilter),
+                            active ? 'all' : (slice.key as NatureFilter),
                           )
                         }
                       >
-                        <Dot $color={s.color} />
-                        <span>{s.label}</span>
-                        <strong>{s.value}</strong>
-                      </LegendBtn>
+                        <LegendDot $color={slice.color} />
+                        <span>{slice.label}</span>
+                        <strong>{slice.value}</strong>
+                      </BentoLegendChip>
                     )
                   })}
-                </LegendWrap>
+                </BentoLegendWrap>
                 <div
                   style={{
                     fontSize: 11,
@@ -508,7 +463,7 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
             </BentoCardTitleGroup>
           </BentoCardHeader>
           <BentoCardBody>
-            <RankRows>
+            <RankRowList>
               {infographic.ranked.map((item, idx) => {
                 const val = metricOf(item)
                 const pct =
@@ -521,6 +476,7 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
                   <RankRowBtn
                     key={item.id}
                     type="button"
+                    $withBadge
                     $active={url.selectedId === item.id}
                     onClick={() => url.setSelectedId(item.id)}
                   >
@@ -579,7 +535,7 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
                   </RankRowBtn>
                 )
               })}
-            </RankRows>
+            </RankRowList>
           </BentoCardBody>
         </BentoCard>
       </BentoGrid2Col>
@@ -797,6 +753,13 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
               mapLocation={mapLocation}
               markers={mapMarkers}
               selectedMarkerId={url.selectedId}
+              selectedDivisionQuery={
+                selectedItem
+                  ? [selectedItem.region, selectedItem.name]
+                      .filter(Boolean)
+                      .join(' ')
+                  : null
+              }
               selectedDivisionName={selectedItem?.name ?? null}
               onMarkerClick={(id) => url.setSelectedId(id)}
               zoom={{ withLocation: 10, withoutLocation: 6 }}
@@ -873,45 +836,191 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
                 ) : null
               }
             >
-              {selectedItem?.region && (
-                <MetaCard
-                  palette={palette}
-                  label="소재 지역"
-                  value={selectedItem.region}
-                />
+              {selectedItem && (
+                <div
+                  key={selectedItem.id}
+                  style={{
+                    gridColumn: '1 / -1',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
+                  }}
+                >
+                  <InlineDetailRow palette={palette} label="현지어 명칭">
+                    <InlineText
+                      value={selectedItem.localName ?? ''}
+                      placeholder="추가"
+                      onSave={(raw) =>
+                        saveInline(
+                          selectedItem.id,
+                          { localName: raw.trim() || null },
+                          '현지어 명칭을 저장했습니다',
+                        )
+                      }
+                    />
+                  </InlineDetailRow>
+                  <InlineDetailRow palette={palette} label="소재 지역">
+                    <InlineText
+                      value={selectedItem.region ?? ''}
+                      placeholder="추가"
+                      onSave={(raw) =>
+                        saveInline(
+                          selectedItem.id,
+                          { region: raw.trim() || null },
+                          '소재 지역을 저장했습니다',
+                        )
+                      }
+                    />
+                  </InlineDetailRow>
+                  {selectedItem.type === 'mountain' && (
+                    <InlineDetailRow palette={palette} label="해발 고도 (m)">
+                      <InlineText
+                        value={
+                          selectedItem.heightM != null
+                            ? String(selectedItem.heightM)
+                            : ''
+                        }
+                        placeholder="고도(m) 추가"
+                        validate={(raw) => {
+                          if (!raw.trim()) return null
+                          const num = Number(raw.trim())
+                          return Number.isFinite(num) && num >= 0
+                            ? null
+                            : '0 이상의 숫자를 입력하세요'
+                        }}
+                        onSave={(raw) =>
+                          saveInline(
+                            selectedItem.id,
+                            {
+                              heightM: raw.trim()
+                                ? Math.round(Number(raw.trim()))
+                                : null,
+                            },
+                            '해발 고도를 저장했습니다',
+                          )
+                        }
+                      />
+                    </InlineDetailRow>
+                  )}
+                  {(selectedItem.type === 'river' ||
+                    selectedItem.type === 'coast') && (
+                    <InlineDetailRow palette={palette} label="연장 길이 (km)">
+                      <InlineText
+                        value={
+                          selectedItem.lengthKm != null
+                            ? String(Number(selectedItem.lengthKm))
+                            : ''
+                        }
+                        placeholder="길이(km) 추가"
+                        validate={(raw) => {
+                          if (!raw.trim()) return null
+                          const num = Number(raw.trim())
+                          return Number.isFinite(num) && num >= 0
+                            ? null
+                            : '0 이상의 숫자를 입력하세요'
+                        }}
+                        onSave={(raw) =>
+                          saveInline(
+                            selectedItem.id,
+                            {
+                              lengthKm: raw.trim() ? Number(raw.trim()) : null,
+                            },
+                            '연장 길이를 저장했습니다',
+                          )
+                        }
+                      />
+                    </InlineDetailRow>
+                  )}
+                  {selectedItem.type === 'lake' && (
+                    <InlineDetailRow
+                      palette={palette}
+                      label="유역·수면 면적 (km²)"
+                    >
+                      <InlineText
+                        value={
+                          selectedItem.areaSqKm != null
+                            ? String(Number(selectedItem.areaSqKm))
+                            : ''
+                        }
+                        placeholder="면적(km²) 추가"
+                        validate={(raw) => {
+                          if (!raw.trim()) return null
+                          const num = Number(raw.trim())
+                          return Number.isFinite(num) && num >= 0
+                            ? null
+                            : '0 이상의 숫자를 입력하세요'
+                        }}
+                        onSave={(raw) =>
+                          saveInline(
+                            selectedItem.id,
+                            {
+                              areaSqKm: raw.trim() ? Number(raw.trim()) : null,
+                            },
+                            '면적을 저장했습니다',
+                          )
+                        }
+                      />
+                    </InlineDetailRow>
+                  )}
+                  <InlineDetailRow palette={palette} label="보전 지정">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        saveInline(
+                          selectedItem.id,
+                          { isProtected: !selectedItem.isProtected },
+                          selectedItem.isProtected
+                            ? '보호구역 지정을 해제했습니다'
+                            : '보호구역으로 지정했습니다',
+                        )
+                      }
+                      style={{
+                        padding: '3px 9px',
+                        borderRadius: 5,
+                        border: `1px solid ${selectedItem.isProtected ? palette.primary : palette.border}`,
+                        background: selectedItem.isProtected
+                          ? palette.bgSelected
+                          : 'transparent',
+                        color: selectedItem.isProtected
+                          ? palette.primary
+                          : palette.textSecondary,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {selectedItem.isProtected ? '보호구역 지정됨 ✓' : '미지정 (클릭하여 지정)'}
+                    </button>
+                  </InlineDetailRow>
+                  <InlineDetailRow palette={palette} label="중심 좌표">
+                    <InlineText
+                      value={
+                        selectedItem.latitude != null &&
+                        selectedItem.longitude != null
+                          ? `${Number(selectedItem.latitude).toFixed(4)}, ${Number(selectedItem.longitude).toFixed(4)}`
+                          : ''
+                      }
+                      placeholder="위도, 경도 추가"
+                      validate={(raw) =>
+                        parseCoordPair(raw) === null
+                          ? '"위도, 경도" 형식 (위도 -90~90 · 경도 -180~180)'
+                          : null
+                      }
+                      onSave={(raw) => {
+                        const parsed = parseCoordPair(raw)
+                        if (!parsed) return
+                        saveInline(
+                          selectedItem.id,
+                          { latitude: parsed.lat, longitude: parsed.lng },
+                          parsed.lat == null
+                            ? '좌표를 해제했습니다'
+                            : '좌표를 저장했습니다',
+                        )
+                      }}
+                    />
+                  </InlineDetailRow>
+                </div>
               )}
-              {selectedItem?.heightM != null && (
-                <MetaCard
-                  palette={palette}
-                  label="해발 고도"
-                  value={`${selectedItem.heightM.toLocaleString('ko-KR')}m`}
-                />
-              )}
-              {selectedItem?.lengthKm != null && (
-                <MetaCard
-                  palette={palette}
-                  label="연장 길이"
-                  value={`${Number(selectedItem.lengthKm).toLocaleString('ko-KR')}km`}
-                />
-              )}
-              {selectedItem?.areaSqKm != null && (
-                <MetaCard
-                  palette={palette}
-                  label="유역·수면 면적"
-                  value={`${Number(selectedItem.areaSqKm).toLocaleString('ko-KR')}km²`}
-                />
-              )}
-              {selectedItem?.isProtected && (
-                <MetaCard palette={palette} label="보전 지정" value="보호구역" />
-              )}
-              {selectedItem?.latitude != null &&
-                selectedItem?.longitude != null && (
-                  <MetaCard
-                    palette={palette}
-                    label="중심 좌표"
-                    value={`${selectedItem.latitude.toFixed(4)}°, ${selectedItem.longitude.toFixed(4)}°`}
-                  />
-                )}
             </RegionDetailPanel>
           </>
         }
@@ -941,6 +1050,41 @@ export function MapRegionNatureView({ country }: MapRegionNatureViewProps) {
         onConfirm={confirmDelete}
         onCancel={() => setPendingDelete(null)}
       />
+    </div>
+  )
+}
+
+function InlineDetailRow({
+  palette,
+  label,
+  children,
+}: {
+  palette: ReturnType<typeof useRegionPalette>
+  label: string
+  children: ReactNode
+}) {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '124px minmax(0, 1fr)',
+        alignItems: 'center',
+        gap: 10,
+        padding: '6px 0',
+        borderBottom: `1px solid ${palette.border}`,
+        fontSize: 13,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: palette.textSecondary,
+        }}
+      >
+        {label}
+      </span>
+      <div style={{ minWidth: 0, color: palette.text }}>{children}</div>
     </div>
   )
 }

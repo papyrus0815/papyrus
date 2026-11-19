@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 
+import { createPortal } from 'react-dom'
 import {
   FiEdit2,
   FiMapPin,
@@ -7,6 +8,8 @@ import {
   FiPlus,
   FiTrash2,
 } from 'react-icons/fi'
+
+import { Z_INDEX } from '@/shared/styles/z-index'
 
 import { type RegionPalette } from './use-region-palette'
 
@@ -370,36 +373,195 @@ interface ListItemActionsProps {
 
 function ListItemActions({ palette, onEdit, onDelete }: ListItemActionsProps) {
   const [open, setOpen] = useState(false)
-  const wrapperRef = useRef<HTMLDivElement>(null)
+  const [menuPosition, setMenuPosition] = useState<{
+    top: number
+    left: number
+    openUpward: boolean
+  } | null>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLUListElement>(null)
+
+  const calculatePosition = () => {
+    const button = buttonRef.current
+    if (!button) return null
+    const rect = button.getBoundingClientRect()
+    const menuWidth = 124
+    const estimatedHeight = 84
+    const openUpward =
+      window.innerHeight - rect.bottom < estimatedHeight &&
+      rect.top > estimatedHeight
+    const left = Math.max(
+      8,
+      Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8),
+    )
+    const top = openUpward ? rect.top - 4 : rect.bottom + 4
+    return { top, left, openUpward }
+  }
 
   useEffect(() => {
     if (!open) return
-    const handler = (e: MouseEvent) => {
+    const handleMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node
       if (
-        wrapperRef.current &&
-        !wrapperRef.current.contains(e.target as Node)
+        buttonRef.current?.contains(target) ||
+        menuRef.current?.contains(target)
       ) {
-        setOpen(false)
+        return
       }
+      setOpen(false)
     }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    const handleScrollOrResize = () => {
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', handleMouseDown)
+    document.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('scroll', handleScrollOrResize, true)
+    window.addEventListener('resize', handleScrollOrResize)
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown)
+      document.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('scroll', handleScrollOrResize, true)
+      window.removeEventListener('resize', handleScrollOrResize)
+    }
   }, [open])
+
+  const menuPortal =
+    open && menuPosition && typeof document !== 'undefined'
+      ? createPortal(
+          <ul
+            ref={menuRef}
+            role="menu"
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              position: 'fixed',
+              left: menuPosition.left,
+              top: menuPosition.top,
+              transform: menuPosition.openUpward
+                ? 'translateY(-100%)'
+                : undefined,
+              minWidth: 124,
+              padding: '4px',
+              margin: 0,
+              listStyle: 'none',
+              background: palette.bg,
+              border: `1px solid ${palette.border}`,
+              borderRadius: 6,
+              boxShadow: palette.isDark
+                ? '0 8px 24px rgba(0, 0, 0, 0.45)'
+                : '0 8px 20px rgba(15, 23, 42, 0.12)',
+              zIndex: Z_INDEX.ACTION_MENU,
+            }}
+          >
+            {onEdit && (
+              <li role="none">
+                <button
+                  role="menuitem"
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setOpen(false)
+                    onEdit()
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    width: '100%',
+                    padding: '6px 9px',
+                    textAlign: 'left',
+                    border: 'none',
+                    borderRadius: 4,
+                    background: 'transparent',
+                    color: palette.text,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(event) => {
+                    event.currentTarget.style.background = palette.bgHover
+                  }}
+                  onMouseLeave={(event) => {
+                    event.currentTarget.style.background = 'transparent'
+                  }}
+                >
+                  <FiEdit2 size={12} />
+                  <span>모달 편집</span>
+                </button>
+              </li>
+            )}
+            {onDelete && (
+              <li role="none">
+                <button
+                  role="menuitem"
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    setOpen(false)
+                    onDelete()
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    width: '100%',
+                    padding: '6px 9px',
+                    textAlign: 'left',
+                    border: 'none',
+                    borderRadius: 4,
+                    background: 'transparent',
+                    color: palette.textSecondary,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(event) => {
+                    event.currentTarget.style.background = palette.isDark
+                      ? 'rgba(239, 68, 68, 0.14)'
+                      : '#fef2f2'
+                    event.currentTarget.style.color = palette.isDark
+                      ? '#f87171'
+                      : '#dc2626'
+                  }}
+                  onMouseLeave={(event) => {
+                    event.currentTarget.style.background = 'transparent'
+                    event.currentTarget.style.color = palette.textSecondary
+                  }}
+                >
+                  <FiTrash2 size={12} />
+                  <span>삭제</span>
+                </button>
+              </li>
+            )}
+          </ul>,
+          document.fullscreenElement ?? document.body,
+        )
+      : null
 
   return (
     <div
-      ref={wrapperRef}
       style={{ position: 'relative', flexShrink: 0 }}
-      onClick={(e) => e.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
     >
       <button
+        ref={buttonRef}
         type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          setOpen((v) => !v)
+        onClick={(event) => {
+          event.stopPropagation()
+          if (open) {
+            setOpen(false)
+          } else {
+            const nextPosition = calculatePosition()
+            if (nextPosition) {
+              setMenuPosition(nextPosition)
+              setOpen(true)
+            }
+          }
         }}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') setOpen(false)
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') setOpen(false)
         }}
         aria-label="더보기"
         aria-haspopup="menu"
@@ -418,116 +580,16 @@ function ListItemActions({ palette, onEdit, onDelete }: ListItemActionsProps) {
           justifyContent: 'center',
           padding: 0,
         }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = palette.bgHover
+        onMouseEnter={(event) => {
+          event.currentTarget.style.background = palette.bgHover
         }}
-        onMouseLeave={(e) => {
-          if (!open) e.currentTarget.style.background = 'transparent'
+        onMouseLeave={(event) => {
+          if (!open) event.currentTarget.style.background = 'transparent'
         }}
       >
         <FiMoreHorizontal size={14} />
       </button>
-      {open && (
-        <ul
-          role="menu"
-          style={{
-            position: 'absolute',
-            right: 0,
-            top: '100%',
-            marginTop: 4,
-            minWidth: 116,
-            padding: '4px',
-            margin: 0,
-            listStyle: 'none',
-            background: palette.bg,
-            border: `1px solid ${palette.border}`,
-            borderRadius: 6,
-            boxShadow: 'none',
-            zIndex: 30,
-          }}
-        >
-          {onEdit && (
-            <li role="none">
-              <button
-                role="menuitem"
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setOpen(false)
-                  onEdit()
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  width: '100%',
-                  padding: '6px 9px',
-                  textAlign: 'left',
-                  border: 'none',
-                  borderRadius: 4,
-                  background: 'transparent',
-                  color: palette.text,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = palette.bgHover
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent'
-                }}
-              >
-                <FiEdit2 size={12} />
-                <span>모달 편집</span>
-              </button>
-            </li>
-          )}
-          {onDelete && (
-            <li role="none">
-              <button
-                role="menuitem"
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setOpen(false)
-                  onDelete()
-                }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  width: '100%',
-                  padding: '6px 9px',
-                  textAlign: 'left',
-                  border: 'none',
-                  borderRadius: 4,
-                  background: 'transparent',
-                  color: palette.textSecondary,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = palette.isDark
-                    ? 'rgba(239, 68, 68, 0.14)'
-                    : '#fef2f2'
-                  e.currentTarget.style.color = palette.isDark
-                    ? '#f87171'
-                    : '#dc2626'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent'
-                  e.currentTarget.style.color = palette.textSecondary
-                }}
-              >
-                <FiTrash2 size={12} />
-                <span>삭제</span>
-              </button>
-            </li>
-          )}
-        </ul>
-      )}
+      {menuPortal}
     </div>
   )
 }
