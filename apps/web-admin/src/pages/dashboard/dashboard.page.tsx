@@ -1,3 +1,4 @@
+// src/pages/dashboard/dashboard.page.tsx
 import { useEffect, useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
@@ -5,12 +6,10 @@ import {
   FiArrowUpRight,
   FiBookOpen,
   FiCalendar,
-  FiClock,
   FiCompass,
   FiFlag,
   FiGlobe,
   FiLayers,
-  FiPlus,
   FiSearch,
   FiShield,
   FiUsers,
@@ -48,6 +47,8 @@ import { useEventRegisterModalUrl } from '@/widgets/event-form/model/use-event-r
 import { EventRegisterModal } from '@/widgets/event-form/ui/event-register-modal'
 
 import * as S from './dashboard.styles'
+
+type DeckTab = 'feed' | 'infographic' | 'volume' | 'all'
 
 /** 사건 응답에서 부호 있는 연도 추출 (BC는 음수, AD는 양수) */
 function extractSignedEventYear(event: EventResponseDto): number | null {
@@ -87,10 +88,11 @@ function signedYearToCentury(signedYear: number): number | null {
   return Math.abs(c) <= 21 ? c : null
 }
 
-function formatEventYearBadge(event: EventResponseDto): string {
+function eraLabelFromEvent(event: EventResponseDto): string | null {
   const y = extractSignedEventYear(event)
-  if (y == null) return '연대 미상'
-  return y < 0 ? `BC ${Math.abs(y)}` : `${y}년`
+  if (y == null) return null
+  if (y < 0) return `기원전 ${Math.abs(y)}년`
+  return `${y}년`
 }
 
 function stripHtmlSummary(raw?: string | null): string | null {
@@ -104,9 +106,10 @@ function stripHtmlSummary(raw?: string | null): string | null {
 }
 
 /**
- * 매초 갱신되는 시계 영역만 별도 컴포넌트로 분리해 차트·카드의 불필요한 리렌더를 차단한다.
+ * 시계 — 기존 홈 디자인의 핵심 중앙 디지털 시계.
+ * 매초 갱신되는 영역을 분리해 차트·카드의 불필요한 리렌더를 차단한다.
  */
-function LiveClockPill() {
+function Clock() {
   const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
@@ -114,24 +117,62 @@ function LiveClockPill() {
     return () => clearInterval(timer)
   }, [])
 
-  const dateText = now.toLocaleDateString('ko-KR', {
-    month: 'long',
-    day: 'numeric',
-    weekday: 'short',
-  })
-  const timeText = now.toLocaleTimeString('ko-KR', {
+  const timeString = now.toLocaleTimeString('ko-KR', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
   })
+  const dateString = now.toLocaleDateString('ko-KR', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  })
 
   return (
-    <S.ClockPill aria-label="현재 날짜 및 시각">
-      <FiClock size={11} aria-hidden />
-      <span>{dateText}</span>
-      <span>·</span>
-      <S.ClockTime>{timeText}</S.ClockTime>
-    </S.ClockPill>
+    <S.ClockContainer>
+      <S.Time>{timeString}</S.Time>
+      <S.DateText>{dateString}</S.DateText>
+    </S.ClockContainer>
+  )
+}
+
+const PlayIcon = () => (
+  <svg viewBox="0 0 24 24" aria-hidden>
+    <path d="M10 16.5l6-4.5-6-4.5v9z" />
+  </svg>
+)
+
+/** 사건 카드 1개 — 기존 홈 EventCard 디자인틀 유지 + 분야 색상 바·HTML 요약 정제 */
+function EventCardItem({ event }: { event: EventResponseDto }) {
+  const navigate = useNavigate()
+  const theme = useTheme()
+  const era = eraLabelFromEvent(event)
+  const category = formatDomainPath(event.domain, event.type)
+  const summary = stripHtmlSummary(event.description)
+  const accent = domainAccent(event.domain, theme.mode)
+
+  return (
+    <S.EventCard
+      type="button"
+      $accentColor={accent}
+      onClick={() => navigate(pathKeys.events.detail(event.id))}
+    >
+      <S.EventTitle>{event.title}</S.EventTitle>
+      {(era || category) && (
+        <S.CardMetaRow>
+          {era && <span>{era}</span>}
+          {era && category && <S.MetaDot />}
+          {category && <span>{category}</span>}
+        </S.CardMetaRow>
+      )}
+      {summary && <S.DescLine>{summary}</S.DescLine>}
+      <S.CardFooter>
+        <S.OpenChip>
+          <PlayIcon />
+          자세히 보기
+        </S.OpenChip>
+      </S.CardFooter>
+    </S.EventCard>
   )
 }
 
@@ -151,7 +192,7 @@ function EventDomainInfographicCard({
   const [hoveredDomain, setHoveredDomain] = useState<EventDomainKey | null>(
     null,
   )
-  const radius = 40
+  const radius = 38
   const circumference = 2 * Math.PI * radius
   const maxDomainCount = Math.max(1, ...domainBreakdown.map((d) => d.count))
 
@@ -181,7 +222,7 @@ function EventDomainInfographicCard({
     : null
 
   return (
-    <S.BentoCard aria-label="사건 9대 분야 분포">
+    <S.SurfaceCard aria-label="사건 9대 분야 분포">
       <S.CardHeader>
         <S.CardTitleGroup>
           <S.CardTitle>9대 사건 분야 비중</S.CardTitle>
@@ -189,21 +230,21 @@ function EventDomainInfographicCard({
             {domainBreakdown.filter((d) => d.count > 0).length}개 분야
           </S.CardBadge>
         </S.CardTitleGroup>
-        <S.CardLinkBtn type="button" onClick={onOpenEvents}>
+        <S.ViewAllButton type="button" onClick={onOpenEvents}>
           사건 총람
           <FiArrowUpRight size={12} aria-hidden />
-        </S.CardLinkBtn>
+        </S.ViewAllButton>
       </S.CardHeader>
 
       {totalSampled === 0 ? (
-        <S.EmptyBox>아직 집계할 사건 데이터가 없습니다.</S.EmptyBox>
+        <S.EmptyState>아직 집계할 사건 데이터가 없습니다.</S.EmptyState>
       ) : (
         <S.DomainInfographicBody>
           <S.DonutWrap>
-            <svg width={108} height={108} viewBox="0 0 108 108" aria-hidden>
+            <svg width={100} height={100} viewBox="0 0 100 100" aria-hidden>
               <circle
-                cx={54}
-                cy={54}
+                cx={50}
+                cy={50}
                 r={radius}
                 fill="none"
                 stroke={
@@ -211,9 +252,9 @@ function EventDomainInfographicCard({
                     ? 'rgba(255,255,255,0.08)'
                     : 'rgba(15,23,42,0.06)'
                 }
-                strokeWidth={11}
+                strokeWidth={10}
               />
-              <g transform="rotate(-90 54 54)">
+              <g transform="rotate(-90 50 50)">
                 {donutArcs.map((arc) => {
                   const isHovered = hoveredDomain === arc.key
                   const isDimmed =
@@ -221,12 +262,12 @@ function EventDomainInfographicCard({
                   return (
                     <circle
                       key={arc.key}
-                      cx={54}
-                      cy={54}
+                      cx={50}
+                      cy={50}
                       r={radius}
                       fill="none"
                       stroke={arc.color}
-                      strokeWidth={isHovered ? 13.5 : 11}
+                      strokeWidth={isHovered ? 12.5 : 10}
                       strokeOpacity={isDimmed ? 0.35 : 1}
                       strokeDasharray={arc.dashArray}
                       strokeDashoffset={arc.dashOffset}
@@ -292,8 +333,7 @@ function EventDomainInfographicCard({
                       <S.DomainFill $pct={barPct} $color={color} />
                     </S.DomainTrack>
                     <S.DomainStatCell>
-                      {item.count.toLocaleString('ko-KR')}
-                      <S.DomainPctSub>({sharePct}%)</S.DomainPctSub>
+                      {item.count.toLocaleString('ko-KR')} ({sharePct}%)
                     </S.DomainStatCell>
                   </S.DomainBarRow>
                 )
@@ -301,7 +341,7 @@ function EventDomainInfographicCard({
           </S.DomainBarList>
         </S.DomainInfographicBody>
       )}
-    </S.BentoCard>
+    </S.SurfaceCard>
   )
 }
 
@@ -312,6 +352,11 @@ export default function DashboardPage() {
   const { data: user } = useQuery(sessionQueryOptions)
   const displayName = user?.account ?? null
 
+  const [deckTab, setDeckTab] = useState<DeckTab>('feed')
+  const [eraAxisMode, setEraAxisMode] = useState<
+    'events' | 'persons' | 'polities'
+  >('events')
+
   const {
     isOpen: createEventOpen,
     open: openCreateEvent,
@@ -319,11 +364,13 @@ export default function DashboardPage() {
     onDirtyChange: onCreateEventDirtyChange,
   } = useEventRegisterModalUrl()
 
-  // 대시보드 진입 시 배경 3D/캔버스 요소만 숨겨 GPU 점유를 줄이고, 다크/라이트 테마는 그대로 유지한다.
   useEffect(() => {
+    document.body.setAttribute('data-dashboard', 'true')
     const globalBg = document.getElementById('global-bg')
     if (globalBg) globalBg.style.display = 'none'
+
     return () => {
+      document.body.removeAttribute('data-dashboard')
       const gb = document.getElementById('global-bg')
       if (gb) gb.style.display = ''
     }
@@ -334,7 +381,7 @@ export default function DashboardPage() {
     return { month: now.getMonth() + 1, day: now.getDate() }
   }, [])
 
-  // --- 경량·캐시 공유 아카이브 볼륨 쿼리 ---
+  // --- 경량·캐시 공유 아카이브 볼륨 & 큐레이션 쿼리 ---
   const { data: countries = [] } = useQuery({
     queryKey: ['countries'],
     queryFn: getAllCountries,
@@ -379,17 +426,20 @@ export default function DashboardPage() {
     staleTime: 5 * 60_000,
   })
 
-  const { data: onThisDayEvents = [], isLoading: isOnThisDayLoading } =
-    useQuery({
-      queryKey: ['dashboard-on-this-day', today.month, today.day],
-      queryFn: () =>
-        getEventsOnThisDay({ month: today.month, day: today.day, limit: 6 }),
-      staleTime: 30 * 60_000,
-    })
+  const { data: onThisDayEvents = [] } = useQuery({
+    queryKey: ['dashboard-on-this-day', today.month, today.day],
+    queryFn: () =>
+      getEventsOnThisDay({ month: today.month, day: today.day, limit: 2 }),
+    staleTime: 30 * 60_000,
+  })
 
-  const { data: recentEvents = [], isLoading: isRecentLoading } = useQuery({
-    queryKey: [...eventKeys.dashboardRecent(), 6],
-    queryFn: () => getAllEvents({ limit: 6, createdSinceDays: 36500 }),
+  const {
+    data: recentEvents = [],
+    isLoading: isRecentLoading,
+    isError: isRecentError,
+  } = useQuery({
+    queryKey: [...eventKeys.dashboardRecent(), 4],
+    queryFn: () => getAllEvents({ limit: 4, createdSinceDays: 36500 }),
     staleTime: 60_000,
   })
 
@@ -445,10 +495,6 @@ export default function DashboardPage() {
       sampledTotal: allSampledEvents.length,
     }
   }, [allSampledEvents])
-
-  const [eraAxisMode, setEraAxisMode] = useState<
-    'events' | 'persons' | 'polities'
-  >('events')
 
   const personCenturyBuckets = useMemo(() => {
     const map = new Map<number, number>()
@@ -519,468 +565,571 @@ export default function DashboardPage() {
 
   const effectiveEventTotal = totalEventsCount ?? sampledTotal
   const treatyTotal = treatyMeta?.total ?? 0
+  const totalCountriesCount = countries.length + historicalCountries.length
+
+  const showFeed = deckTab === 'feed' || deckTab === 'all'
+  const showInfographic = deckTab === 'infographic' || deckTab === 'all'
+  const showVolume = deckTab === 'volume' || deckTab === 'all'
+
+  // 기본 'feed' 단일 탭일 땐 기존처럼 최근 사건 2개(1줄)로 깔끔한 여백 유지, 전체 펼침 시 4개 노출
+  const visibleRecentEvents =
+    deckTab === 'all' ? recentEvents : recentEvents.slice(0, 2)
 
   return (
-    <S.DashboardViewport
+    <S.DashboardContainer
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: 0.35 }}
     >
-      <S.DashboardInner>
-        {/* 1. 상단 커맨드 헤더 */}
-        <S.HeaderBar>
-          <S.HeaderLead>
-            <S.EyebrowRow>
-              <S.EyebrowBadge>PAPYRUS ARCHIVE INFOGRAPHIC</S.EyebrowBadge>
-              <LiveClockPill />
-            </S.EyebrowRow>
-            <S.GreetingTitle>
-              {displayName
-                ? `${displayName}님의 역사 아카이브 현황판`
-                : '파피루스 역사 아카이브 현황판'}
-            </S.GreetingTitle>
-          </S.HeaderLead>
+      {/* 중앙 런처 영역 — 기존 홈의 환영 인사 · 디지털 시계 · 원형 도크 · 알약 액션 유지 */}
+      <S.CentralContent>
+        {displayName && (
+          <S.Greeting>{displayName}님, 환영합니다</S.Greeting>
+        )}
 
-          <S.HeaderControls>
-            <S.CommandSearchTrigger
+        <Clock />
+
+        <S.SearchPillButton
+          type="button"
+          onClick={openCommandPalette}
+          aria-label="통합 검색 팔레트 열기"
+        >
+          <S.SearchPillLead>
+            <FiSearch size={14} aria-hidden />
+            <span>국가 · 인물 · 사건 · 부대 · 조약 통합 검색…</span>
+          </S.SearchPillLead>
+          <S.SearchKbd>⌘K</S.SearchKbd>
+        </S.SearchPillButton>
+
+        <S.ButtonContainer>
+          <S.ButtonWrapper>
+            <S.CircleButton
               type="button"
-              onClick={openCommandPalette}
-              aria-label="통합 검색 팔레트 열기"
-            >
-              <S.SearchLead>
-                <FiSearch size={14} aria-hidden />
-                <span>국가 · 인물 · 사건 · 부대 · 조약 검색…</span>
-              </S.SearchLead>
-              <S.SearchShortcutKbd>⌘K</S.SearchShortcutKbd>
-            </S.CommandSearchTrigger>
-
-            <S.PrimaryActionBtn type="button" onClick={openCreateEvent}>
-              <FiPlus size={14} aria-hidden />
-              새 사건 기록
-            </S.PrimaryActionBtn>
-          </S.HeaderControls>
-        </S.HeaderBar>
-
-        {/* 2. 6-Cell 아카이브 총량 스트립 + 교차 도메인 허브 바로가기 */}
-        <S.VolumeStripWrap aria-label="아카이브 도메인별 수록 규모">
-          <S.VolumeGrid>
-            <S.VolumeCell
-              type="button"
+              title="국가 아틀라스"
+              aria-label="국가"
               onClick={() => navigate(pathKeys.country())}
             >
-              <S.VolumeTopRow>
-                <span>현대 주권국</span>
-                <FiGlobe size={13} aria-hidden />
-              </S.VolumeTopRow>
-              <S.VolumeNumber>
-                {countries.length.toLocaleString('ko-KR')}
-                <S.VolumeUnit>개국</S.VolumeUnit>
-              </S.VolumeNumber>
-              <S.VolumeSub>글로벌 아틀라스 · 국력 지표</S.VolumeSub>
-            </S.VolumeCell>
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2c1.7 0 3.25.62 4.45 1.64-.53.18-1.12.36-1.45.36-1 0-2-.5-3.5-.5-.86 0-1.6.17-2.22.44C9.73 4.67 10.83 4 12 4zm-7.32 6c.24-1.02.7-1.96 1.33-2.77.43.29.92.77 1.49 1.37.73.78 1.63 1.4 2.5 1.4.71 0 1.48-.31 2.17-.62.52-.24 1.02-.46 1.49-.55.5-.1.98-.04 1.43.18.53.25 1.02.68 1.46 1.29.41.58.73 1.25.94 1.98H4.68zM12 20c-2.56 0-4.83-1.2-6.27-3.06.37-.54.83-1.05 1.3-1.36.58-.38 1.15-.5 1.69-.36.5.13.98.46 1.45.96.5.54 1.02.86 1.56.96.7.13 1.46-.07 2.25-.47.7-.36 1.3-.49 1.83-.39.64.12 1.28.58 1.92 1.32C16.49 19.23 14.35 20 12 20z" />
+              </svg>
+            </S.CircleButton>
+            <S.ButtonLabel>국가</S.ButtonLabel>
+            {totalCountriesCount > 0 && (
+              <S.ButtonSubCount>
+                {totalCountriesCount.toLocaleString('ko-KR')}
+              </S.ButtonSubCount>
+            )}
+          </S.ButtonWrapper>
 
-            <S.VolumeCell
+          <S.ButtonWrapper>
+            <S.CircleButton
               type="button"
-              onClick={() => navigate(pathKeys.country())}
-            >
-              <S.VolumeTopRow>
-                <span>역사 정치체</span>
-                <FiCompass size={13} aria-hidden />
-              </S.VolumeTopRow>
-              <S.VolumeNumber>
-                {historicalCountries.length.toLocaleString('ko-KR')}
-                <S.VolumeUnit>개국</S.VolumeUnit>
-              </S.VolumeNumber>
-              <S.VolumeSub>왕조 · 제국 · 고대~근현대 정권</S.VolumeSub>
-            </S.VolumeCell>
-
-            <S.VolumeCell
-              type="button"
+              title="인물 연표 · 인포그래픽"
+              aria-label="인물"
               onClick={() => navigate(pathKeys.personsTimeline())}
             >
-              <S.VolumeTopRow>
-                <span>등록 인물</span>
-                <FiUsers size={13} aria-hidden />
-              </S.VolumeTopRow>
-              <S.VolumeNumber>
+              <FiUsers size={16} aria-hidden />
+            </S.CircleButton>
+            <S.ButtonLabel>인물</S.ButtonLabel>
+            {persons.length > 0 && (
+              <S.ButtonSubCount>
                 {persons.length.toLocaleString('ko-KR')}
-                <S.VolumeUnit>명</S.VolumeUnit>
-              </S.VolumeNumber>
-              <S.VolumeSub>생애 연표 · 가계도 · 관직 이력</S.VolumeSub>
-            </S.VolumeCell>
+              </S.ButtonSubCount>
+            )}
+          </S.ButtonWrapper>
 
-            <S.VolumeCell
+          <S.ButtonWrapper>
+            <S.CircleButton
               type="button"
-              onClick={() => navigate(pathKeys.events.root())}
+              $primary
+              title="새 사건"
+              aria-label="새 사건 등록"
+              onClick={openCreateEvent}
             >
-              <S.VolumeTopRow>
-                <span>역사 사건</span>
-                <FiCalendar size={13} aria-hidden />
-              </S.VolumeTopRow>
-              <S.VolumeNumber>
-                {effectiveEventTotal.toLocaleString('ko-KR')}
-                <S.VolumeUnit>건</S.VolumeUnit>
-              </S.VolumeNumber>
-              <S.VolumeSub>하위 국면·전투 포함 전체 기록</S.VolumeSub>
-            </S.VolumeCell>
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M20.24 4.56c-2.34-2.34-6.14-2.34-8.48 0L3 13.32V21h7.68l8.56-8.56c2.34-2.34 2.34-6.14 0-8.48zM9.1 19H5v-4.1l6.34-6.34 4.1 4.1L9.1 19zm8.49-8.49-1.41 1.41-4.1-4.1 1.41-1.41c1.56-1.56 4.09-1.56 5.66 0 1.56 1.57 1.56 4.1 0 5.66z" />
+              </svg>
+            </S.CircleButton>
+            <S.ButtonLabel>새 사건</S.ButtonLabel>
+          </S.ButtonWrapper>
 
-            <S.VolumeCell
+          <S.ButtonWrapper>
+            <S.CircleButton
               type="button"
-              onClick={() => navigate(pathKeys.military())}
-            >
-              <S.VolumeTopRow>
-                <span>군사 편제</span>
-                <FiShield size={13} aria-hidden />
-              </S.VolumeTopRow>
-              <S.VolumeNumber>
-                {militaryUnits.length.toLocaleString('ko-KR')}
-                <S.VolumeUnit>개 부대</S.VolumeUnit>
-              </S.VolumeNumber>
-              <S.VolumeSub>지휘 계통 · 참전 ORBAT 카탈로그</S.VolumeSub>
-            </S.VolumeCell>
-
-            <S.VolumeCell
-              type="button"
-              onClick={() => navigate(pathKeys.treaties.list())}
-            >
-              <S.VolumeTopRow>
-                <span>체결 조약</span>
-                <FiFlag size={13} aria-hidden />
-              </S.VolumeTopRow>
-              <S.VolumeNumber>
-                {treatyTotal.toLocaleString('ko-KR')}
-                <S.VolumeUnit>건</S.VolumeUnit>
-              </S.VolumeNumber>
-              <S.VolumeSub>강화 · 동맹 · 국경 · 통상 협정</S.VolumeSub>
-            </S.VolumeCell>
-          </S.VolumeGrid>
-
-          <S.QuickHubStrip aria-label="도메인 전문 뷰 바로가기">
-            <S.QuickHubLabel>전문 뷰 바로가기</S.QuickHubLabel>
-            <S.QuickHubPill
-              type="button"
-              onClick={() => navigate(pathKeys.government.list())}
-            >
-              <FiLayers size={12} aria-hidden />
-              정부·내각 총람
-            </S.QuickHubPill>
-            <S.QuickHubPill
-              type="button"
-              onClick={() => navigate(pathKeys.headsOfState())}
-            >
-              역대 수장 비교 연표
-            </S.QuickHubPill>
-            <S.QuickHubPill
-              type="button"
-              onClick={() => navigate(pathKeys.headsOfStateAtlas())}
-            >
-              수장 지도 아틀라스
-            </S.QuickHubPill>
-            <S.QuickHubPill
-              type="button"
+              title="왕조"
+              aria-label="왕조"
               onClick={() => navigate(pathKeys.dynasty())}
             >
-              왕조·가문
-            </S.QuickHubPill>
-            <S.QuickHubPill
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M5 16h14l1-8-4 3-3-5-3 5-4-3 1 8zm-1 2h16v2H4v-2z" />
+              </svg>
+            </S.CircleButton>
+            <S.ButtonLabel>왕조</S.ButtonLabel>
+          </S.ButtonWrapper>
+
+          <S.ButtonWrapper>
+            <S.CircleButton
               type="button"
+              title="역대 수장 비교"
+              aria-label="역대 수장 비교"
+              onClick={() => navigate(pathKeys.headsOfState())}
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M12 2l2.39 6.95H22l-6 4.36 2.3 7.04L12 16l-6.3 4.35L8 13.31 2 8.95h7.61L12 2z" />
+              </svg>
+            </S.CircleButton>
+            <S.ButtonLabel>수장 비교</S.ButtonLabel>
+          </S.ButtonWrapper>
+
+          <S.ButtonWrapper>
+            <S.CircleButton
+              type="button"
+              title="집단 (세대·계파·사단)"
+              aria-label="집단 (세대·계파·사단)"
               onClick={() => navigate(pathKeys.personGroups())}
             >
-              인물 집단·계파
-            </S.QuickHubPill>
-            <S.QuickHubPill
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M12 5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM5 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm14 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM12 11c-1.6 0-3 .7-3.9 1.8l1.5 1.2c.5-.6 1.4-1 2.4-1s1.9.4 2.4 1l1.5-1.2C15 11.7 13.6 11 12 11z" />
+              </svg>
+            </S.CircleButton>
+            <S.ButtonLabel>집단</S.ButtonLabel>
+          </S.ButtonWrapper>
+
+          <S.ButtonWrapper>
+            <S.CircleButton
               type="button"
-              onClick={() => navigate(pathKeys.companies.root())}
+              title="군사 편제 총람"
+              aria-label="군사 편제"
+              onClick={() => navigate(pathKeys.military())}
             >
-              기업·상단
-            </S.QuickHubPill>
-            <S.QuickHubPill
+              <FiShield size={16} aria-hidden />
+            </S.CircleButton>
+            <S.ButtonLabel>군사</S.ButtonLabel>
+            {militaryUnits.length > 0 && (
+              <S.ButtonSubCount>
+                {militaryUnits.length.toLocaleString('ko-KR')}
+              </S.ButtonSubCount>
+            )}
+          </S.ButtonWrapper>
+
+          <S.ButtonWrapper>
+            <S.CircleButton
               type="button"
-              onClick={() => navigate(pathKeys.sources())}
+              title="조약 카탈로그"
+              aria-label="조약"
+              onClick={() => navigate(pathKeys.treaties.list())}
             >
-              <FiBookOpen size={12} aria-hidden />
-              출처 서고
-            </S.QuickHubPill>
-          </S.QuickHubStrip>
-        </S.VolumeStripWrap>
+              <FiFlag size={16} aria-hidden />
+            </S.CircleButton>
+            <S.ButtonLabel>조약</S.ButtonLabel>
+            {treatyTotal > 0 && (
+              <S.ButtonSubCount>
+                {treatyTotal.toLocaleString('ko-KR')}
+              </S.ButtonSubCount>
+            )}
+          </S.ButtonWrapper>
+        </S.ButtonContainer>
 
-        {/* 3. 2열 아카이브 인포그래픽 (세기별 3축 밀도 & 9대 분야 분포) */}
-        <S.InfographicsGrid>
-          <S.BentoCard aria-label="세기별 역사 아카이브 밀도 히스토그램">
-            <S.CardHeader>
-              <S.CardTitleGroup>
-                <S.CardTitle>
-                  {eraAxisMode === 'events'
-                    ? '기원전 ~ 현대 세기별 사건 밀도'
-                    : eraAxisMode === 'persons'
-                      ? '기원전 ~ 현대 세기별 인물 밀도'
-                      : '기원전 ~ 현대 세기별 존속 정치체'}
-                </S.CardTitle>
-              </S.CardTitleGroup>
+        <S.ActionPillRow>
+          <S.TextButton
+            type="button"
+            onClick={() => navigate(pathKeys.events.root())}
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="M18 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12v-2H6V4h12v16l2-1V3.5A1.5 1.5 0 0 0 18.5 2H18z" />
+            </svg>
+            아카이브 열기
+            {effectiveEventTotal > 0
+              ? ` (${effectiveEventTotal.toLocaleString('ko-KR')})`
+              : ''}
+          </S.TextButton>
 
-              <S.EraModeSwitch role="tablist" aria-label="세기별 밀도 기준 전환">
-                <S.EraModeBtn
-                  type="button"
-                  $active={eraAxisMode === 'events'}
-                  onClick={() => setEraAxisMode('events')}
-                >
-                  사건 ({centuryBuckets.length})
-                </S.EraModeBtn>
-                <S.EraModeBtn
-                  type="button"
-                  $active={eraAxisMode === 'persons'}
-                  onClick={() => setEraAxisMode('persons')}
-                >
-                  인물 ({personCenturyBuckets.length})
-                </S.EraModeBtn>
-                <S.EraModeBtn
-                  type="button"
-                  $active={eraAxisMode === 'polities'}
-                  onClick={() => setEraAxisMode('polities')}
-                >
-                  정치체 ({polityCenturyBuckets.length})
-                </S.EraModeBtn>
-              </S.EraModeSwitch>
-            </S.CardHeader>
-            <S.CardCaption>
-              {eraAxisMode === 'events'
-                ? '막대를 클릭하면 해당 세기 사건 카탈로그로 즉시 필터링됩니다.'
-                : eraAxisMode === 'persons'
-                  ? '생몰·활동 연대 기준 세기별 수록 인물 분포입니다.'
-                  : '존속 시작~종료 기간에 걸쳐 해당 세기에 실존했던 역사 정치체 수입니다.'}
-            </S.CardCaption>
+          <S.TextButton
+            type="button"
+            $subtle
+            onClick={() => navigate(pathKeys.government.list())}
+          >
+            <FiLayers size={12} aria-hidden />
+            정부·내각
+          </S.TextButton>
 
-            {eraAxisMode === 'events' ? (
-              isInfographicLoading ? (
-                <S.EmptyBox>세기별 분포를 집계하는 중…</S.EmptyBox>
-              ) : centuryBuckets.length === 0 ? (
-                <S.EmptyBox>연대가 입력된 사건 기록이 아직 없습니다.</S.EmptyBox>
-              ) : (
-                <StackedCenturyDomainChart
-                  buckets={centuryBuckets}
-                  domainBreakdown={domainBreakdown}
-                  onSelectCentury={(century) =>
-                    navigate(`${pathKeys.events.root()}?century=${century}`)
-                  }
-                />
-              )
-            ) : eraAxisMode === 'persons' ? (
-              personCenturyBuckets.length === 0 ? (
-                <S.EmptyBox>연대가 입력된 인물 기록이 아직 없습니다.</S.EmptyBox>
-              ) : (
-                <S.SimpleCenturyBarsRow>
-                  {(() => {
-                    const maxP = Math.max(
-                      1,
-                      ...personCenturyBuckets.map((b) => b.count),
-                    )
-                    return personCenturyBuckets.map((b) => (
-                      <S.SimpleCenturyCol
-                        key={b.century}
-                        type="button"
-                        onClick={() => navigate(pathKeys.personsTimeline())}
-                        title={`${b.century < 0 ? `기원전 ${Math.abs(b.century)}세기` : `${b.century}세기`}: 인물 ${b.count}명`}
-                      >
-                        <S.SimpleCenturyCount>{b.count}</S.SimpleCenturyCount>
-                        <S.SimpleCenturyTrack>
-                          <S.SimpleCenturyFill
-                            $color={
-                              theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5'
-                            }
-                            style={{
-                              height: `${Math.max(8, Math.round((b.count / maxP) * 100))}%`,
-                            }}
-                          />
-                        </S.SimpleCenturyTrack>
-                        <S.SimpleCenturyLabel>
-                          {b.century < 0 ? `BC${Math.abs(b.century)}` : `${b.century}c`}
-                        </S.SimpleCenturyLabel>
-                      </S.SimpleCenturyCol>
+          <S.TextButton
+            type="button"
+            $subtle
+            onClick={() => navigate(pathKeys.headsOfStateAtlas())}
+          >
+            수장 아틀라스
+          </S.TextButton>
+
+          <S.TextButton
+            type="button"
+            $subtle
+            onClick={() => navigate(pathKeys.companies.root())}
+          >
+            기업·상단
+          </S.TextButton>
+
+          <S.TextButton
+            type="button"
+            $subtle
+            onClick={() => navigate(pathKeys.sources())}
+          >
+            <FiBookOpen size={12} aria-hidden />
+            출처 서고
+          </S.TextButton>
+        </S.ActionPillRow>
+      </S.CentralContent>
+
+      {/* 하단 큐레이션 · 인포그래픽 덱 — 기존 BottomInner 틀 위에 탭으로 기능 통합 */}
+      <S.BottomContainer
+        initial={{ y: 40, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.4, delay: 0.12 }}
+      >
+        <S.BottomInner>
+          <S.DeckModeBar>
+            <S.DeckTabGroup role="tablist" aria-label="홈 하단 보드 전환">
+              <S.DeckTabBtn
+                type="button"
+                role="tab"
+                aria-selected={deckTab === 'feed'}
+                $active={deckTab === 'feed'}
+                onClick={() => setDeckTab('feed')}
+              >
+                최근 · 오늘의 사건
+              </S.DeckTabBtn>
+              <S.DeckTabBtn
+                type="button"
+                role="tab"
+                aria-selected={deckTab === 'infographic'}
+                $active={deckTab === 'infographic'}
+                onClick={() => setDeckTab('infographic')}
+              >
+                시대 · 분야 인포그래픽
+              </S.DeckTabBtn>
+              <S.DeckTabBtn
+                type="button"
+                role="tab"
+                aria-selected={deckTab === 'volume'}
+                $active={deckTab === 'volume'}
+                onClick={() => setDeckTab('volume')}
+              >
+                수록 규모 총람
+                <S.DeckTabCount>6</S.DeckTabCount>
+              </S.DeckTabBtn>
+            </S.DeckTabGroup>
+
+            <S.ViewAllButton
+              type="button"
+              onClick={() =>
+                setDeckTab((prev) => (prev === 'all' ? 'feed' : 'all'))
+              }
+            >
+              {deckTab === 'all' ? '기본 보기로 접기' : '모두 펼쳐보기'}
+            </S.ViewAllButton>
+          </S.DeckModeBar>
+
+          {/* 1) 기존 홈 주력 섹션: 역사 속 오늘 + 최근 사건 2열 카드 */}
+          {showFeed && (
+            <>
+              {onThisDayEvents.length > 0 && (
+                <S.Section>
+                  <S.SectionHeader>
+                    <S.SectionTitle>
+                      역사 속 오늘 · {today.month}월 {today.day}일
+                    </S.SectionTitle>
+                  </S.SectionHeader>
+                  <S.EventGrid>
+                    {onThisDayEvents.map((ev) => (
+                      <EventCardItem key={ev.id} event={ev} />
+                    ))}
+                  </S.EventGrid>
+                </S.Section>
+              )}
+
+              <S.Section>
+                <S.SectionHeader>
+                  <S.SectionTitle>최근 사건</S.SectionTitle>
+                  <S.ViewAllButton
+                    type="button"
+                    onClick={() => navigate(pathKeys.events.root())}
+                  >
+                    전체 보기
+                  </S.ViewAllButton>
+                </S.SectionHeader>
+
+                <S.EventGrid>
+                  {isRecentLoading ? (
+                    <S.EmptyState>불러오는 중…</S.EmptyState>
+                  ) : isRecentError ? (
+                    <S.EmptyState>최근 사건을 불러오지 못했습니다.</S.EmptyState>
+                  ) : visibleRecentEvents.length === 0 ? (
+                    <S.EmptyState>아직 등록된 사건이 없습니다.</S.EmptyState>
+                  ) : (
+                    visibleRecentEvents.map((ev) => (
+                      <EventCardItem key={ev.id} event={ev} />
                     ))
-                  })()}
-                </S.SimpleCenturyBarsRow>
-              )
-            ) : polityCenturyBuckets.length === 0 ? (
-              <S.EmptyBox>존속 연대가 입력된 역사 정치체가 없습니다.</S.EmptyBox>
-            ) : (
-              <S.SimpleCenturyBarsRow>
-                {(() => {
-                  const maxH = Math.max(
-                    1,
-                    ...polityCenturyBuckets.map((b) => b.count),
-                  )
-                  return polityCenturyBuckets.map((b) => (
-                    <S.SimpleCenturyCol
-                      key={b.century}
+                  )}
+                </S.EventGrid>
+              </S.Section>
+            </>
+          )}
+
+          {/* 2) 시대별 3축 밀도 & 9대 분야 도넛 인포그래픽 */}
+          {showInfographic && (
+            <S.InfographicGrid>
+              <S.SurfaceCard aria-label="세기별 역사 아카이브 밀도 히스토그램">
+                <S.CardHeader>
+                  <S.CardTitleGroup>
+                    <S.CardTitle>
+                      {eraAxisMode === 'events'
+                        ? '세기별 사건 밀도'
+                        : eraAxisMode === 'persons'
+                          ? '세기별 인물 밀도'
+                          : '세기별 존속 정치체'}
+                    </S.CardTitle>
+                  </S.CardTitleGroup>
+
+                  <S.EraModeSwitch
+                    role="tablist"
+                    aria-label="세기별 밀도 기준 전환"
+                  >
+                    <S.EraModeBtn
                       type="button"
-                      onClick={() => navigate(pathKeys.country())}
-                      title={`${b.century < 0 ? `기원전 ${Math.abs(b.century)}세기` : `${b.century}세기`}: 존속 정치체 ${b.count}개`}
+                      $active={eraAxisMode === 'events'}
+                      onClick={() => setEraAxisMode('events')}
                     >
-                      <S.SimpleCenturyCount>{b.count}</S.SimpleCenturyCount>
-                      <S.SimpleCenturyTrack>
-                        <S.SimpleCenturyFill
-                          $color={
-                            theme.mode === 'dark' ? '#fcd34d' : '#d97706'
-                          }
-                          style={{
-                            height: `${Math.max(8, Math.round((b.count / maxH) * 100))}%`,
-                          }}
-                        />
-                      </S.SimpleCenturyTrack>
-                      <S.SimpleCenturyLabel>
-                        {b.century < 0 ? `BC${Math.abs(b.century)}` : `${b.century}c`}
-                      </S.SimpleCenturyLabel>
-                    </S.SimpleCenturyCol>
-                  ))
-                })()}
-              </S.SimpleCenturyBarsRow>
-            )}
-          </S.BentoCard>
-
-          <EventDomainInfographicCard
-            domainBreakdown={domainBreakdown}
-            totalSampled={sampledTotal}
-            onSelectDomain={(domainKey) =>
-              navigate(`${pathKeys.events.root()}?cat=${domainKey}`)
-            }
-            onOpenEvents={() => navigate(pathKeys.events.root())}
-          />
-        </S.InfographicsGrid>
-
-        {/* 4. 2열 라이브 큐레이션 (역사 속 오늘 & 최근 기록된 사건) */}
-        <S.FeedsGrid>
-          <S.BentoCard aria-label={`역사 속 오늘 ${today.month}월 ${today.day}일`}>
-            <S.CardHeader>
-              <S.CardTitleGroup>
-                <S.CardTitle>
-                  역사 속 오늘 · {today.month}월 {today.day}일
-                </S.CardTitle>
-                {onThisDayEvents.length > 0 && (
-                  <S.CardBadge>{onThisDayEvents.length}건</S.CardBadge>
-                )}
-              </S.CardTitleGroup>
-              <S.CardLinkBtn type="button" onClick={openCreateEvent}>
-                <FiPlus size={12} aria-hidden />
-                사건 추가
-              </S.CardLinkBtn>
-            </S.CardHeader>
-
-            {isOnThisDayLoading ? (
-              <S.EmptyBox>오늘 날짜의 역사 기록을 찾는 중…</S.EmptyBox>
-            ) : onThisDayEvents.length === 0 ? (
-              <S.EmptyBox>
-                <span>
-                  {today.month}월 {today.day}일자로 기록된 역사 사건이 아직 없습니다.
-                </span>
-                <S.CardLinkBtn
-                  type="button"
-                  onClick={() => navigate(pathKeys.events.root())}
-                >
-                  사건 아카이브 둘러보기
-                  <FiArrowUpRight size={12} aria-hidden />
-                </S.CardLinkBtn>
-              </S.EmptyBox>
-            ) : (
-              <S.SpineList>
-                {onThisDayEvents.map((ev) => {
-                  const color = domainAccent(ev.domain, theme.mode)
-                  const summary = stripHtmlSummary(ev.description)
-                  const categoryPath = formatDomainPath(ev.domain, ev.type)
-                  return (
-                    <S.FeedRowButton
-                      key={ev.id}
+                      사건 ({centuryBuckets.length})
+                    </S.EraModeBtn>
+                    <S.EraModeBtn
                       type="button"
-                      onClick={() => navigate(pathKeys.events.detail(ev.id))}
+                      $active={eraAxisMode === 'persons'}
+                      onClick={() => setEraAxisMode('persons')}
                     >
-                      <S.FeedYearBadge>{formatEventYearBadge(ev)}</S.FeedYearBadge>
-                      <S.FeedMainCol>
-                        <S.FeedTitleLine>
-                          <S.DomainSwatch $color={color} />
-                          <S.FeedEventTitle>{ev.title}</S.FeedEventTitle>
-                        </S.FeedTitleLine>
-                        {summary ? <S.FeedSummary>{summary}</S.FeedSummary> : null}
-                      </S.FeedMainCol>
-                      {categoryPath ? (
-                        <S.FeedCategoryTag $color={color}>
-                          {categoryPath}
-                        </S.FeedCategoryTag>
-                      ) : (
-                        <FiArrowUpRight size={13} aria-hidden />
-                      )}
-                    </S.FeedRowButton>
-                  )
-                })}
-              </S.SpineList>
-            )}
-          </S.BentoCard>
+                      인물 ({personCenturyBuckets.length})
+                    </S.EraModeBtn>
+                    <S.EraModeBtn
+                      type="button"
+                      $active={eraAxisMode === 'polities'}
+                      onClick={() => setEraAxisMode('polities')}
+                    >
+                      정치체 ({polityCenturyBuckets.length})
+                    </S.EraModeBtn>
+                  </S.EraModeSwitch>
+                </S.CardHeader>
 
-          <S.BentoCard aria-label="최근 기록된 사건">
-            <S.CardHeader>
-              <S.CardTitleGroup>
-                <S.CardTitle>최근 기록된 사건</S.CardTitle>
-                {recentEvents.length > 0 && (
-                  <S.CardBadge>최신 {recentEvents.length}건</S.CardBadge>
+                {eraAxisMode === 'events' ? (
+                  isInfographicLoading ? (
+                    <S.EmptyState>세기별 분포를 집계하는 중…</S.EmptyState>
+                  ) : centuryBuckets.length === 0 ? (
+                    <S.EmptyState>
+                      연대가 입력된 사건 기록이 아직 없습니다.
+                    </S.EmptyState>
+                  ) : (
+                    <StackedCenturyDomainChart
+                      buckets={centuryBuckets}
+                      domainBreakdown={domainBreakdown}
+                      onSelectCentury={(century) =>
+                        navigate(`${pathKeys.events.root()}?century=${century}`)
+                      }
+                    />
+                  )
+                ) : eraAxisMode === 'persons' ? (
+                  personCenturyBuckets.length === 0 ? (
+                    <S.EmptyState>
+                      연대가 입력된 인물 기록이 아직 없습니다.
+                    </S.EmptyState>
+                  ) : (
+                    <S.SimpleCenturyBarsRow>
+                      {(() => {
+                        const maxP = Math.max(
+                          1,
+                          ...personCenturyBuckets.map((b) => b.count),
+                        )
+                        return personCenturyBuckets.map((b) => (
+                          <S.SimpleCenturyCol
+                            key={b.century}
+                            type="button"
+                            onClick={() => navigate(pathKeys.personsTimeline())}
+                            title={`${b.century < 0 ? `기원전 ${Math.abs(b.century)}세기` : `${b.century}세기`}: 인물 ${b.count}명`}
+                          >
+                            <S.SimpleCenturyCount>
+                              {b.count}
+                            </S.SimpleCenturyCount>
+                            <S.SimpleCenturyTrack>
+                              <S.SimpleCenturyFill
+                                $color={
+                                  theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5'
+                                }
+                                style={{
+                                  height: `${Math.max(8, Math.round((b.count / maxP) * 100))}%`,
+                                }}
+                              />
+                            </S.SimpleCenturyTrack>
+                            <S.SimpleCenturyLabel>
+                              {b.century < 0
+                                ? `BC${Math.abs(b.century)}`
+                                : `${b.century}c`}
+                            </S.SimpleCenturyLabel>
+                          </S.SimpleCenturyCol>
+                        ))
+                      })()}
+                    </S.SimpleCenturyBarsRow>
+                  )
+                ) : polityCenturyBuckets.length === 0 ? (
+                  <S.EmptyState>
+                    존속 연대가 입력된 역사 정치체가 없습니다.
+                  </S.EmptyState>
+                ) : (
+                  <S.SimpleCenturyBarsRow>
+                    {(() => {
+                      const maxH = Math.max(
+                        1,
+                        ...polityCenturyBuckets.map((b) => b.count),
+                      )
+                      return polityCenturyBuckets.map((b) => (
+                        <S.SimpleCenturyCol
+                          key={b.century}
+                          type="button"
+                          onClick={() => navigate(pathKeys.country())}
+                          title={`${b.century < 0 ? `기원전 ${Math.abs(b.century)}세기` : `${b.century}세기`}: 존속 정치체 ${b.count}개`}
+                        >
+                          <S.SimpleCenturyCount>{b.count}</S.SimpleCenturyCount>
+                          <S.SimpleCenturyTrack>
+                            <S.SimpleCenturyFill
+                              $color={
+                                theme.mode === 'dark' ? '#fcd34d' : '#d97706'
+                              }
+                              style={{
+                                height: `${Math.max(8, Math.round((b.count / maxH) * 100))}%`,
+                              }}
+                            />
+                          </S.SimpleCenturyTrack>
+                          <S.SimpleCenturyLabel>
+                            {b.century < 0
+                              ? `BC${Math.abs(b.century)}`
+                              : `${b.century}c`}
+                          </S.SimpleCenturyLabel>
+                        </S.SimpleCenturyCol>
+                      ))
+                    })()}
+                  </S.SimpleCenturyBarsRow>
                 )}
-              </S.CardTitleGroup>
-              <S.CardLinkBtn
+              </S.SurfaceCard>
+
+              <EventDomainInfographicCard
+                domainBreakdown={domainBreakdown}
+                totalSampled={sampledTotal}
+                onSelectDomain={(domainKey) =>
+                  navigate(`${pathKeys.events.root()}?cat=${domainKey}`)
+                }
+                onOpenEvents={() => navigate(pathKeys.events.root())}
+              />
+            </S.InfographicGrid>
+          )}
+
+          {/* 3) 6대 도메인 아카이브 수록 규모 총람 */}
+          {showVolume && (
+            <S.VolumeGrid aria-label="도메인별 수록 규모">
+              <S.VolumeCard
+                type="button"
+                onClick={() => navigate(pathKeys.country())}
+              >
+                <S.VolumeTop>
+                  <span>현대 주권국</span>
+                  <FiGlobe size={13} aria-hidden />
+                </S.VolumeTop>
+                <S.VolumeValue>
+                  {countries.length.toLocaleString('ko-KR')}
+                  <S.VolumeUnit>개국</S.VolumeUnit>
+                </S.VolumeValue>
+                <S.VolumeDesc>글로벌 아틀라스 · 국력 지표</S.VolumeDesc>
+              </S.VolumeCard>
+
+              <S.VolumeCard
+                type="button"
+                onClick={() => navigate(pathKeys.country())}
+              >
+                <S.VolumeTop>
+                  <span>역사 정치체</span>
+                  <FiCompass size={13} aria-hidden />
+                </S.VolumeTop>
+                <S.VolumeValue>
+                  {historicalCountries.length.toLocaleString('ko-KR')}
+                  <S.VolumeUnit>개국</S.VolumeUnit>
+                </S.VolumeValue>
+                <S.VolumeDesc>왕조 · 제국 · 고대~근현대 정권</S.VolumeDesc>
+              </S.VolumeCard>
+
+              <S.VolumeCard
+                type="button"
+                onClick={() => navigate(pathKeys.personsTimeline())}
+              >
+                <S.VolumeTop>
+                  <span>등록 인물</span>
+                  <FiUsers size={13} aria-hidden />
+                </S.VolumeTop>
+                <S.VolumeValue>
+                  {persons.length.toLocaleString('ko-KR')}
+                  <S.VolumeUnit>명</S.VolumeUnit>
+                </S.VolumeValue>
+                <S.VolumeDesc>생애 연표 · 가계도 · 관직 이력</S.VolumeDesc>
+              </S.VolumeCard>
+
+              <S.VolumeCard
                 type="button"
                 onClick={() => navigate(pathKeys.events.root())}
               >
-                전체 보기
-                <FiArrowUpRight size={12} aria-hidden />
-              </S.CardLinkBtn>
-            </S.CardHeader>
+                <S.VolumeTop>
+                  <span>역사 사건</span>
+                  <FiCalendar size={13} aria-hidden />
+                </S.VolumeTop>
+                <S.VolumeValue>
+                  {effectiveEventTotal.toLocaleString('ko-KR')}
+                  <S.VolumeUnit>건</S.VolumeUnit>
+                </S.VolumeValue>
+                <S.VolumeDesc>하위 국면·전투 포함 전체 기록</S.VolumeDesc>
+              </S.VolumeCard>
 
-            {isRecentLoading ? (
-              <S.EmptyBox>최근 사건을 불러오는 중…</S.EmptyBox>
-            ) : recentEvents.length === 0 ? (
-              <S.EmptyBox>
-                <span>아직 등록된 사건이 없습니다.</span>
-                <S.CardLinkBtn type="button" onClick={openCreateEvent}>
-                  첫 사건 등록하기
-                </S.CardLinkBtn>
-              </S.EmptyBox>
-            ) : (
-              <S.SpineList>
-                {recentEvents.map((ev) => {
-                  const color = domainAccent(ev.domain, theme.mode)
-                  const summary = stripHtmlSummary(ev.description)
-                  const categoryPath = formatDomainPath(ev.domain, ev.type)
-                  return (
-                    <S.FeedRowButton
-                      key={ev.id}
-                      type="button"
-                      onClick={() => navigate(pathKeys.events.detail(ev.id))}
-                    >
-                      <S.FeedYearBadge>{formatEventYearBadge(ev)}</S.FeedYearBadge>
-                      <S.FeedMainCol>
-                        <S.FeedTitleLine>
-                          <S.DomainSwatch $color={color} />
-                          <S.FeedEventTitle>{ev.title}</S.FeedEventTitle>
-                        </S.FeedTitleLine>
-                        {summary ? <S.FeedSummary>{summary}</S.FeedSummary> : null}
-                      </S.FeedMainCol>
-                      {categoryPath ? (
-                        <S.FeedCategoryTag $color={color}>
-                          {categoryPath}
-                        </S.FeedCategoryTag>
-                      ) : (
-                        <FiArrowUpRight size={13} aria-hidden />
-                      )}
-                    </S.FeedRowButton>
-                  )
-                })}
-              </S.SpineList>
-            )}
-          </S.BentoCard>
-        </S.FeedsGrid>
-      </S.DashboardInner>
+              <S.VolumeCard
+                type="button"
+                onClick={() => navigate(pathKeys.military())}
+              >
+                <S.VolumeTop>
+                  <span>군사 편제</span>
+                  <FiShield size={13} aria-hidden />
+                </S.VolumeTop>
+                <S.VolumeValue>
+                  {militaryUnits.length.toLocaleString('ko-KR')}
+                  <S.VolumeUnit>개 부대</S.VolumeUnit>
+                </S.VolumeValue>
+                <S.VolumeDesc>지휘 계통 · 참전 ORBAT 카탈로그</S.VolumeDesc>
+              </S.VolumeCard>
+
+              <S.VolumeCard
+                type="button"
+                onClick={() => navigate(pathKeys.treaties.list())}
+              >
+                <S.VolumeTop>
+                  <span>체결 조약</span>
+                  <FiFlag size={13} aria-hidden />
+                </S.VolumeTop>
+                <S.VolumeValue>
+                  {treatyTotal.toLocaleString('ko-KR')}
+                  <S.VolumeUnit>건</S.VolumeUnit>
+                </S.VolumeValue>
+                <S.VolumeDesc>강화 · 동맹 · 국경 · 통상 협정</S.VolumeDesc>
+              </S.VolumeCard>
+            </S.VolumeGrid>
+          )}
+        </S.BottomInner>
+      </S.BottomContainer>
 
       <EventRegisterModal
         isOpen={createEventOpen}
         onClose={closeCreateEvent}
         onDirtyChange={onCreateEventDirtyChange}
       />
-    </S.DashboardViewport>
+    </S.DashboardContainer>
   )
 }

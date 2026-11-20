@@ -1,373 +1,502 @@
 import { motion } from 'framer-motion'
 import styled from 'styled-components'
 
-import {
-  BODY_TEXT,
-  DIGIT_DISPLAY,
-  ledgerAccent,
-  ledgerAccentBorder,
-  ledgerAccentSubtle,
-  ledgerBackground,
-  ledgerHairline,
-  ledgerHairlineHover,
-  ledgerHairlineStrong,
-  ledgerHoverFill,
-  ledgerRowWash,
-  ledgerSubtleFill,
-  MOTION,
-  RADIUS,
-} from '@/entities/event/ui/ledger-tokens'
+import { DIGIT_DISPLAY } from '@/entities/event/ui/ledger-tokens'
 
-export const DashboardViewport = styled(motion.div)`
+const SANS =
+  "'Pretendard Variable', Pretendard, 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif"
+
+// --- 메인 컨테이너 (기존 디자인틀 유지 + 안전한 세로 스크롤 허용) ---
+export const DashboardContainer = styled(motion.div)`
   width: 100%;
   height: 100vh;
   overflow-y: auto;
   overflow-x: hidden;
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  padding: 0;
+  margin: 0;
+  background: ${({ theme }) => theme.colors.background.primary};
   color: ${({ theme }) => theme.colors.text.primary};
   box-sizing: border-box;
-  ${BODY_TEXT}
-`
-
-export const DashboardInner = styled.div`
-  max-width: 1240px;
-  margin: 0 auto;
-  padding: 28px 32px 56px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-
-  @media (max-width: 900px) {
-    padding: 20px 18px 48px;
-    gap: 14px;
-  }
-`
-
-/* ─── 1. Command Header Row ───────────────────────────────────────────────── */
-
-export const HeaderBar = styled.header`
-  display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding-bottom: 16px;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  transition: background 0.25s ease;
 `
 
-export const HeaderLead = styled.div`
+export const CentralContent = styled.div`
+  margin-top: auto;
+  margin-bottom: auto;
+  padding: clamp(32px, 6vh, 64px) 24px 24px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-`
-
-export const EyebrowRow = styled.div`
-  display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  text-align: center;
+  width: min(760px, 100%);
+  box-sizing: border-box;
 `
 
-export const EyebrowBadge = styled.span`
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-`
-
-export const ClockPill = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 22px;
-  padding: 0 9px;
-  border-radius: 999px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
-  font-size: 11.5px;
+// 환영 인사 (기존 스타일 그대로)
+export const Greeting = styled.div`
+  font-size: 13px;
+  font-weight: 500;
   color: ${({ theme }) => theme.colors.text.secondary};
-  ${DIGIT_DISPLAY}
+  font-family: ${SANS};
+  margin-bottom: 10px;
 `
 
-export const ClockTime = styled.strong`
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-export const GreetingTitle = styled.h1`
-  margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: ${({ theme }) => theme.colors.text.primary};
-
-  @media (max-width: 640px) {
-    font-size: 19px;
-  }
-`
-
-export const HeaderControls = styled.div`
+// 시계 (기존 스타일 그대로)
+export const ClockContainer = styled.div`
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 18px;
 `
 
-export const CommandSearchTrigger = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  height: 36px;
-  min-width: 280px;
-  padding: 0 10px 0 12px;
-  border-radius: ${RADIUS.MD};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+export const Time = styled.div`
+  font-size: 30px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: ${SANS};
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+`
+
+export const DateText = styled.div`
+  font-size: 12px;
+  font-weight: 400;
   color: ${({ theme }) => theme.colors.text.secondary};
-  font-family: inherit;
+  font-family: ${SANS};
+`
+
+// 통합 검색 바 (⌘K — 기존 알약형 버튼 톤과 일체화)
+export const SearchPillButton = styled.button`
+  width: min(420px, calc(100vw - 96px));
+  height: 38px;
+  padding: 0 12px 0 15px;
+  margin-bottom: 20px;
+  border-radius: 24px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: ${SANS};
   font-size: 12.5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   cursor: pointer;
-  box-shadow: none;
   transition:
-    border-color ${MOTION.fast} ease,
-    background ${MOTION.fast} ease,
-    color ${MOTION.fast} ease;
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 
   &:hover {
-    border-color: ${({ theme }) => ledgerHairlineHover(theme.mode)};
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    background: ${({ theme }) => theme.colors.background.secondary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
     color: ${({ theme }) => theme.colors.text.primary};
-  }
-
-  @media (max-width: 640px) {
-    min-width: 0;
-    flex: 1 1 200px;
+    box-shadow: 0 1px 3px ${({ theme }) => theme.colors.shadow.sm};
   }
 `
 
-export const SearchLead = styled.span`
+export const SearchPillLead = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 `
 
-export const SearchShortcutKbd = styled.kbd`
+export const SearchKbd = styled.kbd`
   display: inline-flex;
   align-items: center;
   height: 20px;
   padding: 0 6px;
-  border-radius: 4px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.secondary};
   font-size: 10.5px;
-  font-weight: 700;
+  font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
   ${DIGIT_DISPLAY}
 `
 
-export const PrimaryActionBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 14px;
-  border-radius: ${RADIUS.MD};
-  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? '#6366f1' : '#4f46e5'};
-  color: #ffffff;
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: none;
-  transition: opacity ${MOTION.fast} ease;
-
-  &:hover {
-    opacity: 0.92;
-  }
-`
-
-/* ─── 2. 6-Cell Archive Volume Strip + Quick Hub Bar ─────────────────────── */
-
-export const VolumeStripWrap = styled.section`
+// 원형 아이콘 내비게이션 (기존 디자인틀 유지 + 도메인 확장)
+export const ButtonContainer = styled.div`
   display: flex;
-  flex-direction: column;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: 10px;
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
-  overflow: hidden;
-`
-
-export const VolumeGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-
-  @media (max-width: 1080px) {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  @media (max-width: 580px) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-`
-
-export const VolumeCell = styled.button`
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 5px;
-  padding: 14px 16px;
-  border: none;
-  background: transparent;
-  text-align: left;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background ${MOTION.fast} ease;
-
-  & + & {
-    border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  }
-
-  &:hover {
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-  }
-
-  @media (max-width: 1080px) and (min-width: 581px) {
-    &:nth-child(3n + 1) {
-      border-left: none;
-    }
-    &:nth-child(n + 4) {
-      border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-    }
-  }
-
-  @media (max-width: 580px) {
-    &:nth-child(2n + 1) {
-      border-left: none;
-    }
-    &:nth-child(n + 3) {
-      border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-    }
-  }
-`
-
-export const VolumeTopRow = styled.span`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-export const VolumeNumber = styled.span`
-  display: inline-flex;
-  align-items: baseline;
-  gap: 3px;
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1.15;
-  color: ${({ theme }) => theme.colors.text.primary};
-  ${DIGIT_DISPLAY}
-`
-
-export const VolumeUnit = styled.span`
-  font-size: 11.5px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-export const VolumeSub = styled.span`
-  font-size: 11px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-`
-
-export const QuickHubStrip = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: row;
   flex-wrap: wrap;
-  padding: 9px 14px;
-  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  justify-content: center;
+  align-items: flex-start;
+  gap: 18px 22px;
+  margin-bottom: 14px;
 `
 
-export const QuickHubLabel = styled.span`
-  font-size: 11px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  margin-right: 4px;
-`
-
-export const QuickHubPill = styled.button`
-  display: inline-flex;
+export const ButtonWrapper = styled.div`
+  display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 5px;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-family: inherit;
-  font-size: 11.5px;
-  font-weight: 600;
+  text-align: center;
+  min-width: 48px;
+`
+
+export const CircleButton = styled.button<{ $primary?: boolean }>`
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: ${({ $primary, theme }) =>
+    $primary ? 'none' : `1px solid ${theme.colors.border.default}`};
   cursor: pointer;
-  transition:
-    color ${MOTION.fast} ease,
-    border-color ${MOTION.fast} ease,
-    background ${MOTION.fast} ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: ${({ $primary, theme }) =>
+    $primary ? theme.colors.primary : theme.colors.background.primary};
+  color: ${({ $primary, theme }) =>
+    $primary ? '#ffffff' : theme.colors.text.primary};
+  box-shadow: none;
 
   &:hover {
-    color: ${({ theme }) => ledgerAccent(theme.mode)};
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+    background: ${({ $primary, theme }) =>
+      $primary ? theme.colors.button.hover : theme.colors.background.secondary};
+    border-color: ${({ $primary, theme }) =>
+      $primary ? 'transparent' : theme.colors.border.medium};
+    box-shadow: 0 1px 3px ${({ theme }) => theme.colors.shadow.sm};
+  }
+
+  &:active {
+    background: ${({ $primary, theme }) =>
+      $primary ? theme.colors.button.hover : theme.colors.background.tertiary};
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
   }
 `
 
-/* ─── 3. Bento Grids & Cards ─────────────────────────────────────────────── */
+export const ButtonLabel = styled.span`
+  font-size: 11px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: ${SANS};
+  line-height: 1.2;
+`
 
-export const InfographicsGrid = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
-  gap: 16px;
+export const ButtonSubCount = styled.span`
+  font-size: 10px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  line-height: 1;
+  ${DIGIT_DISPLAY}
+`
 
-  @media (max-width: 980px) {
-    grid-template-columns: minmax(0, 1fr);
+export const ActionPillRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+`
+
+export const TextButton = styled.button<{ $subtle?: boolean }>`
+  background: ${({ theme, $subtle }) =>
+    $subtle ? 'transparent' : theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 24px;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+  font-family: ${SANS};
+  color: ${({ theme, $subtle }) =>
+    $subtle ? theme.colors.text.secondary : theme.colors.text.primary};
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.background.secondary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  svg {
+    width: 12px;
+    height: 12px;
+    fill: currentColor;
   }
 `
 
-export const FeedsGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-
-  @media (max-width: 860px) {
-    grid-template-columns: minmax(0, 1fr);
-  }
+// --- 하단 큐레이션 · 인포그래픽 영역 (기존 BottomInner 프레임 유지) ---
+export const BottomContainer = styled(motion.div)`
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 calc(22px + env(safe-area-inset-bottom, 0px));
+  background: transparent;
+  flex-shrink: 0;
 `
 
-export const BentoCard = styled.section`
+export const BottomInner = styled.div`
+  width: min(880px, calc(100% - 48px));
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 16px 18px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: 10px;
-  background: ${({ theme }) => ledgerBackground(theme.mode)};
-  box-shadow: none;
+
+  @media (max-width: 640px) {
+    width: calc(100% - 32px);
+  }
+`
+
+export const DeckModeBar = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: 6px;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
+`
+
+export const DeckTabGroup = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+`
+
+export const DeckTabBtn = styled.button<{ $active: boolean }>`
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.activeLight : 'transparent'};
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? theme.colors.active : 'transparent'};
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.active : theme.colors.text.secondary};
+  font-family: ${SANS};
+  font-size: 12px;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
+  padding: 5px 11px;
+  border-radius: 20px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition:
+    background-color 0.16s ease,
+    color 0.16s ease,
+    border-color 0.16s ease;
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active ? theme.colors.activeLight : theme.colors.hover};
+    color: ${({ theme, $active }) =>
+      $active ? theme.colors.active : theme.colors.text.primary};
+  }
+`
+
+export const DeckTabCount = styled.span`
+  font-size: 11px;
+  opacity: 0.85;
+  ${DIGIT_DISPLAY}
+`
+
+export const Section = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+`
+
+export const SectionHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+`
+
+export const SectionTitle = styled.h2`
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: ${SANS};
+`
+
+export const ViewAllButton = styled.button`
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: ${SANS};
+  padding: 4px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.hover};
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+export const EventGrid = styled.div`
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+
+  @media (max-width: 680px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+export const EventCard = styled.button<{ $accentColor?: string }>`
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 12px;
+  padding: 14px 14px 12px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+  width: 100%;
+  min-width: 0;
+  position: relative;
+  text-align: left;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.background.secondary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    box-shadow: 0 1px 2px ${({ theme }) => theme.colors.shadow.sm};
+  }
+
+  /* 왼쪽 얇은 상태 바 (기존 디자인 유지 + 사건 분야 색상 반영) */
+  &::before {
+    content: '';
+    position: absolute;
+    left: 10px;
+    top: 16px;
+    width: 2px;
+    height: 20px;
+    background: ${({ $accentColor, theme }) =>
+      $accentColor || theme.colors.active};
+    border-radius: 2px;
+  }
+`
+
+export const EventTitle = styled.div`
+  font-size: 14px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: ${SANS};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+export const CardMetaRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-size: 12px;
+  ${DIGIT_DISPLAY}
+`
+
+export const MetaDot = styled.span`
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+export const DescLine = styled.div`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: ${SANS};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+export const CardFooter = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-top: 2px;
+`
+
+export const OpenChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.active};
+  background: ${({ theme }) => theme.colors.activeLight};
+  color: ${({ theme }) => theme.colors.active};
+  font-size: 11.5px;
+  font-weight: 600;
+
+  svg {
+    width: 13px;
+    height: 13px;
+    fill: ${({ theme }) => theme.colors.active};
+  }
+`
+
+export const EmptyState = styled.div`
+  grid-column: 1 / -1;
+  padding: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: ${SANS};
+  border: 1px dashed ${({ theme }) => theme.colors.border.default};
+  border-radius: 12px;
+`
+
+// --- 인포그래픽 카드 (기존 EventCard의 12px 테두리·배경 톤 통일) ---
+export const InfographicGrid = styled.div`
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 12px;
+
+  @media (max-width: 780px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+export const SurfaceCard = styled.section`
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   min-width: 0;
 `
 
@@ -375,22 +504,23 @@ export const CardHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
 `
 
 export const CardTitleGroup = styled.div`
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
 `
 
-export const CardTitle = styled.h2`
+export const CardTitle = styled.h3`
   margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: 13.5px;
+  font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
+  font-family: ${SANS};
 `
 
 export const CardBadge = styled.span`
@@ -398,56 +528,104 @@ export const CardBadge = styled.span`
   align-items: center;
   height: 20px;
   padding: 0 7px;
-  border-radius: 4px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => theme.colors.border.light};
+  background: ${({ theme }) => theme.colors.background.secondary};
   font-size: 11px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
   ${DIGIT_DISPLAY}
 `
 
-export const CardLinkBtn = styled.button`
+export const EraModeSwitch = styled.div`
   display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  height: 26px;
-  padding: 0 9px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-family: inherit;
-  font-size: 11.5px;
-  font-weight: 600;
+  padding: 2px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  background: ${({ theme }) => theme.colors.background.secondary};
+`
+
+export const EraModeBtn = styled.button<{ $active: boolean }>`
+  height: 22px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.background.primary : 'transparent'};
+  color: ${({ theme, $active }) =>
+    $active ? theme.colors.active : theme.colors.text.secondary};
+  font-family: ${SANS};
+  font-size: 11px;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
   cursor: pointer;
-  transition:
-    color ${MOTION.fast} ease,
-    border-color ${MOTION.fast} ease,
-    background ${MOTION.fast} ease;
-
-  &:hover {
-    color: ${({ theme }) => ledgerAccent(theme.mode)};
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
-  }
+  ${DIGIT_DISPLAY}
 `
 
-export const CardCaption = styled.p`
-  margin: -6px 0 0;
-  font-size: 11.5px;
+export const SimpleCenturyBarsRow = styled.div`
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 112px;
+  padding-top: 12px;
+  overflow-x: auto;
+`
+
+export const SimpleCenturyCol = styled.button`
+  flex: 1 1 24px;
+  min-width: 22px;
+  max-width: 48px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+`
+
+export const SimpleCenturyCount = styled.span`
+  font-size: 10px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+`
+
+export const SimpleCenturyTrack = styled.div`
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  border-radius: 4px;
+  background: ${({ theme }) => theme.colors.background.secondary};
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+`
+
+export const SimpleCenturyFill = styled.div<{ $color: string }>`
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: ${({ $color }) => $color};
+  opacity: 0.88;
+`
+
+export const SimpleCenturyLabel = styled.span`
+  font-size: 10px;
+  font-weight: 600;
   color: ${({ theme }) => theme.colors.text.tertiary};
+  white-space: nowrap;
+  ${DIGIT_DISPLAY}
 `
-
-/* ─── 4. 9-Domain Donut Ring + Horizontal Proportional Bars ───────────────── */
 
 export const DomainInfographicBody = styled.div`
   display: grid;
-  grid-template-columns: 116px minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 14px;
   align-items: center;
 
-  @media (max-width: 520px) {
+  @media (max-width: 500px) {
     grid-template-columns: minmax(0, 1fr);
     justify-items: center;
   }
@@ -455,8 +633,8 @@ export const DomainInfographicBody = styled.div`
 
 export const DonutWrap = styled.div`
   position: relative;
-  width: 112px;
-  height: 112px;
+  width: 104px;
+  height: 104px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -475,7 +653,7 @@ export const DonutCenter = styled.div`
 `
 
 export const DonutTotalNum = styled.span`
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.1;
   color: ${({ theme }) => theme.colors.text.primary};
@@ -490,138 +668,50 @@ export const DonutTotalLabel = styled.span`
 export const DomainBarList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   width: 100%;
   min-width: 0;
 `
 
-export const DomainBarRow = styled.button<{ $active?: boolean; $dimmed?: boolean }>`
+export const DomainBarRow = styled.button<{
+  $active?: boolean
+  $dimmed?: boolean
+}>`
   display: grid;
-  grid-template-columns: 68px minmax(0, 1fr) 68px;
+  grid-template-columns: 64px minmax(0, 1fr) 64px;
   align-items: center;
   gap: 8px;
-  padding: 4px 6px;
+  padding: 3px 6px;
   border: 1px solid
     ${({ theme, $active }) =>
-      $active ? ledgerHairlineStrong(theme.mode) : 'transparent'};
+      $active ? theme.colors.border.default : 'transparent'};
   border-radius: 6px;
   background: ${({ theme, $active }) =>
-    $active ? ledgerHoverFill(theme.mode) : 'transparent'};
+    $active ? theme.colors.hover : 'transparent'};
   opacity: ${({ $dimmed }) => ($dimmed ? 0.45 : 1)};
-  font-family: inherit;
+  font-family: ${SANS};
   text-align: left;
   cursor: pointer;
-  transition:
-    opacity ${MOTION.fast} ease,
-    background ${MOTION.fast} ease,
-    border-color ${MOTION.fast} ease;
 
   &:hover {
     opacity: 1;
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-    border-color: ${({ theme }) => ledgerHairline(theme.mode)};
+    background: ${({ theme }) => theme.colors.hover};
   }
-`
-
-export const EraModeSwitch = styled.div`
-  display: inline-flex;
-  padding: 2px;
-  border-radius: 6px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
-`
-
-export const EraModeBtn = styled.button<{ $active: boolean }>`
-  height: 22px;
-  padding: 0 8px;
-  border: none;
-  border-radius: 4px;
-  background: ${({ theme, $active }) =>
-    $active ? ledgerBackground(theme.mode) : 'transparent'};
-  color: ${({ theme, $active }) =>
-    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: ${({ $active }) => ($active ? 700 : 500)};
-  cursor: pointer;
-`
-
-export const SimpleCenturyBarsRow = styled.div`
-  display: flex;
-  align-items: flex-end;
-  gap: 4px;
-  height: 116px;
-  padding-top: 14px;
-  overflow-x: auto;
-`
-
-export const SimpleCenturyCol = styled.button`
-  flex: 1 1 26px;
-  min-width: 24px;
-  max-width: 52px;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  cursor: pointer;
-
-  &:hover > div > div {
-    opacity: 1;
-  }
-`
-
-export const SimpleCenturyCount = styled.span`
-  font-size: 10px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  ${DIGIT_DISPLAY}
-`
-
-export const SimpleCenturyTrack = styled.div`
-  width: 100%;
-  flex: 1;
-  min-height: 0;
-  border-radius: 4px;
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
-  display: flex;
-  align-items: flex-end;
-  overflow: hidden;
-`
-
-export const SimpleCenturyFill = styled.div<{ $color: string }>`
-  width: 100%;
-  border-radius: 4px 4px 0 0;
-  background: ${({ $color }) => $color};
-  opacity: 0.85;
-  transition: opacity ${MOTION.fast} ease;
-`
-
-export const SimpleCenturyLabel = styled.span`
-  font-size: 10px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  white-space: nowrap;
-  ${DIGIT_DISPLAY}
 `
 
 export const DomainLabelCell = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
   white-space: nowrap;
 `
 
 export const DomainSwatch = styled.span<{ $color: string }>`
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: ${({ $color }) => $color};
   flex-shrink: 0;
@@ -632,7 +722,7 @@ export const DomainTrack = styled.span`
   width: 100%;
   height: 6px;
   border-radius: 999px;
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  background: ${({ theme }) => theme.colors.background.tertiary};
   overflow: hidden;
 `
 
@@ -645,113 +735,75 @@ export const DomainFill = styled.span<{ $pct: number; $color: string }>`
 `
 
 export const DomainStatCell = styled.span`
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
   text-align: right;
   color: ${({ theme }) => theme.colors.text.secondary};
   ${DIGIT_DISPLAY}
 `
 
-export const DomainPctSub = styled.span`
-  margin-left: 3px;
-  font-size: 10.5px;
+// --- 6대 도메인 수록 규모 그리드 (기존 EventCard 12px 톤 통일) ---
+export const VolumeGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+
+  @media (max-width: 680px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`
+
+export const VolumeCard = styled.button`
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 12px;
+  padding: 13px 15px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+  font-family: ${SANS};
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.background.secondary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
+    box-shadow: 0 1px 2px ${({ theme }) => theme.colors.shadow.sm};
+  }
+`
+
+export const VolumeTop = styled.span`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+export const VolumeValue = styled.span`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: 20px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.primary};
+  ${DIGIT_DISPLAY}
+`
+
+export const VolumeUnit = styled.span`
+  font-size: 11.5px;
   font-weight: 500;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-/* ─── 5. Live Feeds (On This Day Spine & Recent Events Ledger) ───────────── */
-
-export const SpineList = styled.div`
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-left: 4px;
-`
-
-export const FeedRowButton = styled.button`
-  display: grid;
-  grid-template-columns: 76px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 10px;
-  border: 1px solid transparent;
-  border-bottom-color: ${({ theme }) => ledgerHairline(theme.mode)};
-  border-radius: 7px;
-  background: transparent;
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background ${MOTION.fast} ease,
-    border-color ${MOTION.fast} ease;
-
-  &:last-child {
-    border-bottom-color: transparent;
-  }
-
-  &:hover {
-    background: ${({ theme }) => ledgerRowWash(theme.mode)};
-    border-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  }
-`
-
-export const FeedYearBadge = styled.span`
-  font-size: 11.5px;
-  font-weight: 700;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-  ${DIGIT_DISPLAY}
-  white-space: nowrap;
-`
-
-export const FeedMainCol = styled.span`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-`
-
-export const FeedTitleLine = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-`
-
-export const FeedEventTitle = styled.span`
-  font-size: 13px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`
-
-export const FeedSummary = styled.span`
-  font-size: 11.5px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`
-
-export const FeedCategoryTag = styled.span<{ $color: string }>`
+export const VolumeDesc = styled.span`
   font-size: 11px;
-  font-weight: 600;
-  color: ${({ $color }) => $color};
-  white-space: nowrap;
-`
-
-export const EmptyBox = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 28px 16px;
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: 8px;
-  text-align: center;
-  font-size: 12.5px;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
