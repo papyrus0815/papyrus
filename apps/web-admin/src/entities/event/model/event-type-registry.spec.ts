@@ -21,8 +21,8 @@ import {
 } from './event-type-registry'
 
 describe('세부 분야 레지스트리', () => {
-  it('서버 enum 30종과 같은 수, 정의의 key가 표와 맞고 핵심·선택 기록은 겹치지 않는다', () => {
-    expect(EVENT_TYPE_ORDER).toHaveLength(30)
+  it('서버 enum 34종과 같은 수, 정의의 key가 표와 맞고 핵심·선택 기록은 겹치지 않는다', () => {
+    expect(EVENT_TYPE_ORDER).toHaveLength(34)
     for (const [key, def] of Object.entries(EVENT_TYPES)) {
       expect(def.key).toBe(key)
       expect(def.core.filter((facet) => def.optional.includes(facet))).toEqual([])
@@ -32,7 +32,8 @@ describe('세부 분야 레지스트리', () => {
   it('세부 이름에 분야를 넣지 않는다 — 분야와 겹쳐 보이던 옛 이름(외교 조치·군사 조치·정치 사건)의 재발 방지', () => {
     const domains = ['정치', '외교', '군사', '경제', '사회', '문화', '종교', '과학기술']
     for (const def of Object.values(EVENT_TYPES)) {
-      for (const domain of domains) expect(def.label).not.toContain(domain)
+      // '준군사조직'의 '군사'는 분야 이름이 아니라 낱말의 일부(정규군 밖의 무장 조직)라 빼고 본다
+      for (const domain of domains) expect(def.label.replace(/준군사/g, '')).not.toContain(domain)
     }
   })
 
@@ -71,7 +72,7 @@ describe('세부 분야 레지스트리', () => {
     expect(formatDomainPath(null, null)).toBe('기타')
   })
 
-  it('의미군 묶음(EVENT_TYPE_GROUPS)은 29종을 빠짐없이 레지스트리 순서대로 분할한다', () => {
+  it('의미군 묶음(EVENT_TYPE_GROUPS)은 34종을 빠짐없이 레지스트리 순서대로 분할한다', () => {
     const flattened = EVENT_TYPE_GROUPS.flatMap((group) => group.types)
     expect(flattened).toEqual(EVENT_TYPE_ORDER)
     expect(groupSubtypes(['BATTLE', 'TREATY'])).toEqual([
@@ -168,6 +169,31 @@ describe('eventTypeFeatures — 상세 지면이 읽는 기능', () => {
     expect(eventTypeFeatures('BATTLE').expectStatehood).toBe(false)
     expect(eventTypeFeatures('DECLARATION').expectWarDeclaration).toBe(false)
   })
+
+  it('관련 정당 칸 — 정당·집회·선전 또는 내분·권력투쟁(핵심 유형)일 때만 비어 있어도 세우고 일반 정치 법령은 접는다', () => {
+    expect(eventTypeFeatures('PARTY_RALLY', 'SOCIETY').expectPoliticalParties).toBe(true)
+    expect(eventTypeFeatures('LAW_POLICY', 'POLITICS').expectPoliticalParties).toBe(false)
+    expect(eventTypeFeatures('DISASTER', 'SOCIETY').expectPoliticalParties).toBe(false)
+    // 군부 파벌 다툼·교단 분열처럼 분야가 정치가 아니어도 내분이면 당이 무대일 수 있다
+    expect(eventTypeFeatures('POWER_STRUGGLE', 'MILITARY').expectPoliticalParties).toBe(true)
+    // 건국·멸망에서 영토·권력은 선택(optional)이라 비어 있으면 기본 펼치지 않는다
+    expect(eventTypeFeatures('STATEHOOD').expectTerritory).toBe(false)
+    expect(eventTypeFeatures('STATEHOOD').expectPower).toBe(false)
+    expect(eventTypeFeatures('TERRITORY').expectTerritory).toBe(true)
+  })
+
+  it('내분·권력투쟁 — 파벌이 주인공이라 진영·인물이 핵심, 다툼 끝에 바뀐 자리는 취임·즉위 칸을 세운다', () => {
+    expect(facetWeight('POWER_STRUGGLE', 'sides')).toBe('core')
+    expect(facetWeight('POWER_STRUGGLE', 'persons')).toBe('core')
+    expect(facetWeight('POWER_STRUGGLE', 'power')).toBe('optional')
+    expect(eventTypeFeatures('POWER_STRUGGLE').expectPower).toBe(true)
+    expect(eventTypeFeatures('POWER_STRUGGLE').suggestedModules).toContain('sides')
+    expect(metricsFor('POWER_STRUGGLE').presets).toContain('human.executed')
+    // 교전선(수장 지도)에 그리지 않는다 — 체제 안의 다툼이지 무력 충돌이 아니다
+    expect(isArmedConflictType('POWER_STRUGGLE')).toBe(false)
+    expect(DOMAIN_SUBTYPES.POLITICS).toContain('POWER_STRUGGLE')
+    expect(defaultDomainForType('POWER_STRUGGLE')).toBe('POLITICS')
+  })
 })
 
 describe('suggestClassificationFromTitle — 사건명 기반 분야·세부 추론', () => {
@@ -230,6 +256,69 @@ describe('suggestClassificationFromTitle — 사건명 기반 분야·세부 추
     })
   })
 
+  it('정당·집회·선전 — 창당·강령·당대회·집회는 여기로, 선전포고·회의는 제자리', () => {
+    const party = { domain: 'POLITICS', type: 'PARTY_RALLY' }
+    expect(suggestClassificationFromTitle('독일 노동자당(DAP) 창당')).toEqual(party)
+    expect(suggestClassificationFromTitle('국가사회주의 독일 노동당(나치당) 25개조 강령 발표')).toEqual(party)
+    expect(suggestClassificationFromTitle('뉘른베르크 전당대회')).toEqual(party)
+    expect(suggestClassificationFromTitle('중국공산당 제20차 당대회')).toEqual(party)
+    expect(suggestClassificationFromTitle('뮌헨 호프브로이하우스 군중집회')).toEqual(party)
+    expect(suggestClassificationFromTitle('반공 선전 활동')).toEqual(party)
+    // '선전'이 들어가도 선전포고는 선전포고, '회의'는 회담
+    expect(suggestClassificationFromTitle('이탈리아 왕국의 대소련 선전 포고')).toMatchObject({ type: 'WAR_DECLARATION' })
+    expect(suggestClassificationFromTitle('베를린 회의')).toMatchObject({ type: 'SUMMIT' })
+  })
+
+  it('내분·권력투쟁 — 분당·숙청·사화·환국·계승 분쟁은 여기로, 무력 정변·한 사람의 실각은 제자리', () => {
+    const struggle = { domain: 'POLITICS', type: 'POWER_STRUGGLE' }
+    expect(suggestClassificationFromTitle('러시아 사회민주노동당 분당')).toEqual(struggle)
+    expect(suggestClassificationFromTitle('자코뱅 클럽 분열')).toEqual(struggle)
+    expect(suggestClassificationFromTitle('당통파 숙청')).toEqual(struggle)
+    expect(suggestClassificationFromTitle('무오사화')).toEqual(struggle)
+    expect(suggestClassificationFromTitle('경신환국 (1680)')).toEqual(struggle)
+    expect(suggestClassificationFromTitle('스페인 왕위 계승 분쟁')).toEqual(struggle)
+    expect(suggestClassificationFromTitle('소련 공산당 지도부 권력 투쟁')).toEqual(struggle)
+    expect(suggestClassificationFromTitle('지롱드파 축출 정변')).toMatchObject({ type: 'UPRISING' })
+    expect(suggestClassificationFromTitle('비스마르크 실각')).toMatchObject({ type: 'POWER_CHANGE' })
+    expect(suggestClassificationFromTitle('국민당 창당')).toMatchObject({ type: 'PARTY_RALLY' })
+  })
+
+  it('군 창설·편제·준군사조직 — 부대·사령부 창설·편성·군제 개편·무장 조직 결성은 여기로, 군을 늘리는 법·일반 결성은 제자리', () => {
+    const formation = { domain: 'MILITARY', type: 'MILITARY_FORMATION' }
+    expect(suggestClassificationFromTitle('참모본부 공식 창설')).toEqual(formation)
+    expect(suggestClassificationFromTitle('오스트리아-헝가리 제국군 제 15군단 창설')).toEqual(formation)
+    expect(suggestClassificationFromTitle('소련 총사령부(스타브카·Stavka) 창설')).toEqual(formation)
+    expect(suggestClassificationFromTitle('독일 국가방위군(10만 간부군) 공식 창설')).toEqual(formation)
+    expect(suggestClassificationFromTitle('메이지 정부 어친병 편성')).toEqual(formation)
+    expect(suggestClassificationFromTitle('나치당 돌격대(SA) 결성')).toEqual(formation)
+    expect(suggestClassificationFromTitle('메이지 정부 군제 개편')).toEqual(formation)
+    expect(suggestClassificationFromTitle('대한제국 군대 해산')).toEqual(formation)
+    expect(suggestClassificationFromTitle('대한제국 군대 해체')).toEqual(formation)
+    // 군을 늘리는 법은 법령, 일반 단체 결성은 설립, 행정구역(郡) 신설은 군 창설이 아니다
+    expect(suggestClassificationFromTitle('1913년 독일 육군법')).toMatchObject({ type: 'LAW_POLICY', domain: 'MILITARY' })
+    expect(suggestClassificationFromTitle('시민 연대 결성')).toMatchObject({ type: 'INSTITUTION' })
+    expect(suggestClassificationFromTitle('옹진군 신설')).toBeNull()
+    expect(suggestClassificationFromTitle('일본군 점령')).toMatchObject({ type: 'BATTLE' })
+  })
+
+  it('폭력·테러·시위·집회 — 시위·항의 집회·소요·테러는 여기로, 당 집회·쿠데타식 폭동·암살·파업은 제자리', () => {
+    const street = { domain: 'SOCIETY', type: 'PROTEST_VIOLENCE' }
+    expect(suggestClassificationFromTitle('마흐사 아미니 시위 (2022년 이란 히잡 시위)')).toEqual(street)
+    expect(suggestClassificationFromTitle('제1차 튈리르 궁전 습격 시위')).toEqual(street)
+    expect(suggestClassificationFromTitle('광화문 촛불 집회')).toEqual(street)
+    expect(suggestClassificationFromTitle('베를린 가두 충돌')).toEqual(street)
+    expect(suggestClassificationFromTitle('9·11 테러')).toEqual(street)
+    expect(suggestClassificationFromTitle('도쿄 지하철 사린 테러 사건')).toEqual(street)
+    expect(suggestClassificationFromTitle('노르드스트림 가스관 사보타주')).toEqual(street)
+    // 정당이 연 집회(주최 모르는 맨 '집회'·군중집회)는 정당, '○○ 폭동'이라 부르는 쿠데타는 봉기
+    expect(suggestClassificationFromTitle('나치당 치르쿠스 크로네 대중 집회')).toMatchObject({ type: 'PARTY_RALLY' })
+    expect(suggestClassificationFromTitle('뮌헨 맥주홀 폭동')).toMatchObject({ type: 'UPRISING' })
+    // 특정인을 노린 살해는 암살, 파업은 운동
+    expect(suggestClassificationFromTitle('사라예보 암살 사건')).toMatchObject({ type: 'ATTACK' })
+    expect(suggestClassificationFromTitle('황태자 암살 테러')).toMatchObject({ type: 'ATTACK' })
+    expect(suggestClassificationFromTitle('루르 탄광 총파업')).toMatchObject({ type: 'MOVEMENT' })
+  })
+
   it('단서가 없거나 빈 문자열이면 null을 돌려준다', () => {
     expect(suggestClassificationFromTitle('')).toBeNull()
     expect(suggestClassificationFromTitle('알 수 없는 일')).toBeNull()
@@ -246,7 +335,7 @@ describe('subtypesForDomain hasParent 정렬 · searchClassifications · 최근 
     expect(withParent.primary[withParent.primary.length - 1]).toBe('WAR')
   })
 
-  it('searchClassifications — 세부 이름·예시·동의어로 29종 전체에서 검색하고 현재 분야를 우선한다', () => {
+  it('searchClassifications — 세부 이름·예시·동의어로 34종 전체에서 검색하고 현재 분야를 우선한다', () => {
     const landing = searchClassifications('상륙작전', null)
     expect(landing[0]).toMatchObject({ type: 'BATTLE', domain: 'MILITARY' })
 
@@ -258,6 +347,22 @@ describe('subtypesForDomain hasParent 정렬 · searchClassifications · 최근 
     expect(lawInMilitary[0]).toMatchObject({ type: 'LAW_POLICY', domain: 'MILITARY' })
 
     expect(searchClassifications('   ', null)).toEqual([])
+
+    expect(searchClassifications('전당대회', null)[0]).toMatchObject({ type: 'PARTY_RALLY', domain: 'POLITICS' })
+    expect(searchClassifications('프로파간다', null)[0]).toMatchObject({ type: 'PARTY_RALLY' })
+    expect(searchClassifications('테러', null)[0]).toMatchObject({ type: 'PROTEST_VIOLENCE', domain: 'SOCIETY' })
+    expect(searchClassifications('촛불집회', null)[0]).toMatchObject({ type: 'PROTEST_VIOLENCE' })
+    expect(searchClassifications('암살', null)[0]).toMatchObject({ type: 'ATTACK' })
+    expect(facetWeight('PROTEST_VIOLENCE', 'sides')).toBe('optional')
+    expect(metricsFor('PROTEST_VIOLENCE').presets).toContain('society.arrested')
+    expect(isArmedConflictType('PROTEST_VIOLENCE')).toBe(false)
+    expect(searchClassifications('준군사', null)[0]).toMatchObject({ type: 'MILITARY_FORMATION', domain: 'MILITARY' })
+    expect(searchClassifications('친위대', null)[0]).toMatchObject({ type: 'MILITARY_FORMATION' })
+    expect(eventTypeFeatures('MILITARY_FORMATION').expectDepartments).toBe(true)
+    expect(eventTypeFeatures('BATTLE').expectDepartments).toBe(false)
+    expect(isArmedConflictType('MILITARY_FORMATION')).toBe(false)
+    expect(searchClassifications('권력투쟁', null)[0]).toMatchObject({ type: 'POWER_STRUGGLE', domain: 'POLITICS' })
+    expect(searchClassifications('환국', null)[0]).toMatchObject({ type: 'POWER_STRUGGLE' })
   })
 
   it('recordRecentClassification / readRecentClassifications — 중복을 제거하고 최근 순 최대 4개를 유지한다', () => {

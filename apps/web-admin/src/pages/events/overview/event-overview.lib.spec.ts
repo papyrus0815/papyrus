@@ -286,7 +286,7 @@ describe('분포', () => {
   it('하위 사건의 세부 분야를 많은 순으로 — 색은 그 세부에서 가장 많은 분야', () => {
     expect(typeBreakdown(descendants)).toEqual([
       { key: 'NONE', label: '세부 없음', count: 2, domain: 'OTHER' },
-      { key: 'ATTACK', label: '암살·테러·학살', count: 1, domain: 'POLITICS' },
+      { key: 'ATTACK', label: '암살·학살', count: 1, domain: 'POLITICS' },
       { key: 'BATTLE', label: '전투·작전', count: 1, domain: 'MILITARY' },
     ])
   })

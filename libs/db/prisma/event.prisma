@@ -110,8 +110,10 @@ enum EventType {
   WAR_DECLARATION // 선전포고·참전 — 선포국(INITIATOR) → 대상국(TARGET)
   BATTLE // 전투·작전
   UPRISING // 봉기·혁명·정변
-  ATTACK // 암살·테러·학살
+  ATTACK // 암살·학살 — 특정인·특정 집단을 노린 살해 (테러는 PROTEST_VIOLENCE)
+  PROTEST_VIOLENCE // 폭력·테러·시위·집회 — 거리·군중의 정치 행동: 시위·행진·항의 집회·폭동·가두 폭력·폭탄 테러
   MOBILIZATION // 동원·배치·작전 지령
+  MILITARY_FORMATION // 군 창설·편제·준군사조직 — 참모본부·군단 창설·사단 편성·군제 개편·친위대·민병대 결성
   // 국가 간
   TREATY // 조약·협정·가입
   SUMMIT // 회담·회의·교섭
@@ -123,11 +125,13 @@ enum EventType {
   STATEHOOD // 건국·멸망·독립
   TERRITORY // 영토 변경 — 할양·분할·병합·교환·매입 (영토 이전 기록)
   POWER_CHANGE // 즉위·취임·실각
+  POWER_STRUGGLE // 내분·권력투쟁 — 파벌 투쟁·당내 분열·숙청·궁정 암투·계승 분쟁(무력으로 뒤엎으면 UPRISING)
   ELECTION // 선거
   LAW_POLICY // 법령·정책·개혁
   INSTITUTION // 기관·조직 설립·해산
   INCIDENT // 탄압·음모·스캔들
   MOVEMENT // 운동·캠페인
+  PARTY_RALLY // 정당·집회·선전 — 당대회·창당·합당·군중집회·선전 활동
   // 경제·산업
   COMPANY // 기업 활동
   MARKET // 시장·지표

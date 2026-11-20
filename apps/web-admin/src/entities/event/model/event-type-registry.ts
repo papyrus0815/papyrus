@@ -2,7 +2,7 @@
  * 사건 세부 분야 레지스트리 — **분야의 2단계(분야 › 세부)이자 "이 사건에는 무엇을 기록하는가"의 단일 정본.**
  *
  *  - 분야(Event.domain, 9종·필수): 무엇에 관한 일인가 — 정치·외교·군사·경제… 색·필터의 기준(event-domain.ts).
- *  - 세부(Event.type, 29종·선택): 어떤 꼴의 일인가 — 전투·조약·법령·즉위… 찾아보기의 2단계이고
+ *  - 세부(Event.type, 34종·선택): 어떤 꼴의 일인가 — 전투·조약·법령·즉위… 찾아보기의 2단계이고
  *    **붙는 기록을 정한다**(전투 → 교전 양측, 조약 → 맺어진 조약, 즉위 → 재임 기록).
  *
  * 화면은 '군사 › 법령·정책·개혁' 한 줄의 2단 분류로 보이지만 **저장은 독립된 두 축**이다. 실측 452건에서
@@ -27,7 +27,9 @@ export type EventTypeKey =
   | 'BATTLE'
   | 'UPRISING'
   | 'ATTACK'
+  | 'PROTEST_VIOLENCE'
   | 'MOBILIZATION'
+  | 'MILITARY_FORMATION'
   | 'TREATY'
   | 'SUMMIT'
   | 'WAR_DECLARATION'
@@ -38,11 +40,13 @@ export type EventTypeKey =
   | 'STATEHOOD'
   | 'TERRITORY'
   | 'POWER_CHANGE'
+  | 'POWER_STRUGGLE'
   | 'ELECTION'
   | 'LAW_POLICY'
   | 'INSTITUTION'
   | 'INCIDENT'
   | 'MOVEMENT'
+  | 'PARTY_RALLY'
   | 'COMPANY'
   | 'MARKET'
   | 'PRODUCT'
@@ -265,14 +269,39 @@ export const EVENT_TYPES: Record<EventTypeKey, EventTypeDef> = {
     core: ['sides', 'participants', 'persons'], optional: ['metrics'],
     metrics: UPRISING_METRICS,
   },
+  /* 암살·학살 — 특정 인물·특정 집단을 노린 살해. 테러·사보타주는 '폭력·테러·시위·집회'로 옮겼다(예전 라벨 '암살·테러·학살') */
   ATTACK: {
-    key: 'ATTACK', short: '암살', label: '암살·테러·학살', examples: '사라예보 암살 · 블랙 홀 사건 · 가스관 폭파', defaultDomain: 'POLITICS',
+    key: 'ATTACK', short: '암살', label: '암살·학살', examples: '사라예보 암살 · 블랙 홀 사건 · 9월 학살 · 표적 사살', defaultDomain: 'POLITICS',
     core: ['persons', 'participants'], optional: ['metrics'],
+    metrics: SOCIETY_METRICS,
+  },
+  /*
+   * 폭력·테러·시위·집회 — 거리와 군중의 정치 행동: 시위·행진·항의 집회, 그것이 번진 소요·난투·가두 폭력, 폭탄 테러·사보타주.
+   * 예전엔 시위가 '운동'(마흐사 아미니 시위·튈르리 궁 습격 시위)에, 테러가 '암살'에, 사보타주가 '암살'(가스관 폭파)에 흩어졌다.
+   * 경계: 정권을 뒤엎으려 들면 봉기·정변(한국어 이름이 '○○ 폭동'인 쿠데타도 봉기 — 카프 폭동·맥주홀 폭동),
+   * 특정인을 노린 살해는 암살·학살, 오래 이어지는 조직적 흐름은 운동·캠페인, **정당이 연 집회**는 정당·집회·선전.
+   * 시위대와 진압 측이 맞섰으면 진영으로 세운다(선택).
+   */
+  PROTEST_VIOLENCE: {
+    key: 'PROTEST_VIOLENCE', short: '소요', label: '폭력·테러·시위·집회', examples: '촛불·항의 집회 · 가두시위·행진 · 소요·난투 · 폭탄 테러·사보타주', defaultDomain: 'SOCIETY',
+    core: ['participants', 'persons'], optional: ['sides', 'metrics', 'organizations'],
     metrics: SOCIETY_METRICS,
   },
   MOBILIZATION: {
     key: 'MOBILIZATION', short: '동원', label: '동원·배치·지령', examples: '총동원령 · 기동훈련 · 함대 정박 · 작전 지령', defaultDomain: 'MILITARY',
     core: ['participants'], optional: ['military', 'metrics', 'persons'],
+    metrics: MILITARY_DOMAIN_METRICS,
+  },
+  /*
+   * 군 창설·편제·준군사조직 — 군대·부대·사령부가 생기고 바뀌는 일(참모본부·군단 창설, 사단 편성, 군제 개편, 해체)과
+   * 정규군 밖의 무장 조직(친위대·돌격대·민병대·의용군·자유군단)의 결성. 예전엔 창설은 '기관·조직 설립',
+   * 편제 전환은 '법령·정책·개혁'으로 흩어졌다(오헝 제15군단 창설이 '설립', 진대→사단 편제 전환이 '법령').
+   * 경계: 군을 늘리는 **법**(함대법·육군법·징병령)은 법령, 이미 있는 부대를 움직이는 일은 동원·배치.
+   * 생긴 부대 자체는 '관련 기관'(사령부·부대 연결)으로 잇고, 당의 무장 조직이면 '기업·조직'으로 당을 함께 건다.
+   */
+  MILITARY_FORMATION: {
+    key: 'MILITARY_FORMATION', short: '편제', label: '군 창설·편제·준군사조직', examples: '참모본부 창설 · 군단·사단 편성 · 군제 개편 · 친위대·돌격대·민병대 결성', defaultDomain: 'MILITARY',
+    core: ['participants'], optional: ['persons', 'organizations', 'military', 'metrics'],
     metrics: MILITARY_DOMAIN_METRICS,
   },
   // ── 국가 간 ────────────────────────────────────────────────────────────
@@ -325,6 +354,22 @@ export const EVENT_TYPES: Record<EventTypeKey, EventTypeDef> = {
     key: 'POWER_CHANGE', short: '권력', label: '즉위·취임·실각', examples: '즉위 · 대통령 취임 · 참모총장 취임 · 해임', defaultDomain: 'POLITICS',
     core: ['power'], optional: ['persons', 'participants'],
   },
+  /*
+   * 내분·권력투쟁 — 한 체제 **안에서** 파벌이 다툰 일(당내 노선 투쟁·분당·숙청·궁정 암투·왕위 계승 분쟁·붕당·환국).
+   * 예전엔 갈 곳이 없어 자코뱅 클럽 분열은 '설립', 당통파·에베르파 숙청은 '탄압', 지롱드파 축출은 '봉기'로 흩어졌다.
+   * 경계: 무력으로 정권을 뒤엎으면 봉기·정변, 한 사람의 자리 이동(실각·해임)은 즉위·취임·실각 — 그 다툼 전체가 여기다.
+   * 파벌이 주인공이라 진영이 핵심(인물 집단 FACTION을 진영으로 세운다), 다툼의 결과로 바뀐 자리는 취임·즉위 기록으로.
+   */
+  POWER_STRUGGLE: {
+    key: 'POWER_STRUGGLE', short: '내분', label: '내분·권력투쟁', examples: '당내 노선 투쟁·분당 · 숙청 · 궁정 암투 · 왕위 계승 분쟁 · 붕당·환국', defaultDomain: 'POLITICS',
+    core: ['sides', 'persons'], optional: ['power', 'participants', 'organizations', 'metrics'],
+    metrics: {
+      menuLabel: '수치 (숙청·처형·체포)',
+      emptyHint: '숙청·처형·체포된 사람 수 같은 숫자를 출처와 함께 기록하면 여기 모입니다.',
+      presets: ['human.executed', 'society.arrested', 'human.deaths_total'],
+      subject: 'event',
+    },
+  },
   ELECTION: {
     key: 'ELECTION', short: '선거', label: '선거', examples: '총선 · 대통령 선거 · 국왕 선출', defaultDomain: 'POLITICS',
     core: ['election'], optional: ['power', 'participants'],
@@ -335,7 +380,7 @@ export const EVENT_TYPES: Record<EventTypeKey, EventTypeDef> = {
     core: ['participants'], optional: ['persons', 'cabinets', 'metrics'],
   },
   INSTITUTION: {
-    key: 'INSTITUTION', short: '설립', label: '기관·조직 설립', examples: '참모본부 창설 · 정당 결성 · 은행 개설 · 국회 해산', defaultDomain: 'POLITICS',
+    key: 'INSTITUTION', short: '설립', label: '기관·조직 설립', examples: '의회 개원 · 위원회 설치 · 은행 개설 · 국회 해산', defaultDomain: 'POLITICS',
     core: ['organizations'], optional: ['participants', 'persons'],
   },
   INCIDENT: {
@@ -346,6 +391,21 @@ export const EVENT_TYPES: Record<EventTypeKey, EventTypeDef> = {
     key: 'MOVEMENT', short: '운동', label: '운동·캠페인', examples: '불매운동 · 여론 운동 · 국유화 반대 운동', defaultDomain: 'SOCIETY',
     core: ['participants'], optional: ['persons', 'metrics'],
     metrics: SOCIETY_METRICS,
+  },
+  /*
+   * 정당·집회·선전 — 정당이 무대인 일(창당·합당·당대회·강령 발표)과 대중을 움직이는 일(군중집회·기관지·선전 활동).
+   * 예전엔 갈 곳이 없어 창당은 '법령'·'설립', 강령 발표는 '법령', 집회 참관은 '인물 행적', 선전 연설은 '선언'에
+   * 흩어졌다(독일 노동자당 창당이 '법령·정책·개혁'으로 서 있었다). 정당 자체는 '관련 정당'으로 잇는다.
+   */
+  PARTY_RALLY: {
+    key: 'PARTY_RALLY', short: '정당', label: '정당·집회·선전', examples: '창당·합당 · 당대회·강령 발표 · 군중집회 · 기관지·선전 활동', defaultDomain: 'POLITICS',
+    core: ['persons', 'participants'], optional: ['organizations', 'metrics'],
+    metrics: {
+      menuLabel: '수치 (참가 인원·당원 수)',
+      emptyHint: '집회 참가 인원·당원 수·발행 부수 같은 숫자를 출처와 함께 기록하면 여기 모입니다.',
+      presets: ['society.participants'],
+      subject: 'event',
+    },
   },
   // ── 경제·산업 ──────────────────────────────────────────────────────────
   COMPANY: {
@@ -404,11 +464,11 @@ export interface EventTypeGroup {
   types: EventTypeKey[]
 }
 
-/** 세부 의미군 5묶음 — '더 보기'·'기타'·분야 미선택 시 30종을 훑기 쉽게 묶는다 */
+/** 세부 의미군 5묶음 — '더 보기'·'기타'·분야 미선택 시 34종을 훑기 쉽게 묶는다 */
 export const EVENT_TYPE_GROUPS: ReadonlyArray<EventTypeGroup> = [
-  { label: '충돌', types: ['WAR', 'BATTLE', 'UPRISING', 'ATTACK', 'MOBILIZATION'] },
+  { label: '충돌', types: ['WAR', 'BATTLE', 'UPRISING', 'ATTACK', 'PROTEST_VIOLENCE', 'MOBILIZATION', 'MILITARY_FORMATION'] },
   { label: '국가 간', types: ['TREATY', 'SUMMIT', 'WAR_DECLARATION', 'DECLARATION', 'VISIT', 'CRISIS', 'EXPANSION'] },
-  { label: '국가·권력', types: ['STATEHOOD', 'TERRITORY', 'POWER_CHANGE', 'ELECTION', 'LAW_POLICY', 'INSTITUTION', 'INCIDENT', 'MOVEMENT'] },
+  { label: '국가·권력', types: ['STATEHOOD', 'TERRITORY', 'POWER_CHANGE', 'POWER_STRUGGLE', 'ELECTION', 'LAW_POLICY', 'INSTITUTION', 'INCIDENT', 'MOVEMENT', 'PARTY_RALLY'] },
   { label: '경제·산업', types: ['COMPANY', 'MARKET', 'PRODUCT', 'CONSTRUCTION'] },
   { label: '자연·문화·사람', types: ['DISASTER', 'DISCOVERY', 'CREATION', 'CONVERSION', 'MIGRATION', 'PERSONAL'] },
 ]
@@ -441,13 +501,13 @@ export function groupSubtypes(types: ReadonlyArray<EventTypeKey>): EventTypeGrou
  * 나머지 세부도 '더 보기'로 고를 수 있다(저장은 독립 축). 기타는 앞줄이 없어 전부 보인다.
  */
 export const DOMAIN_SUBTYPES: Partial<Record<EventDomainKey, EventTypeKey[]>> = {
-  POLITICS: ['STATEHOOD', 'TERRITORY', 'POWER_CHANGE', 'ELECTION', 'LAW_POLICY', 'INSTITUTION', 'UPRISING', 'INCIDENT', 'ATTACK', 'MOVEMENT', 'WAR_DECLARATION', 'DECLARATION', 'PERSONAL'],
+  POLITICS: ['STATEHOOD', 'TERRITORY', 'POWER_CHANGE', 'POWER_STRUGGLE', 'ELECTION', 'PARTY_RALLY', 'LAW_POLICY', 'INSTITUTION', 'MILITARY_FORMATION', 'UPRISING', 'INCIDENT', 'ATTACK', 'PROTEST_VIOLENCE', 'MOVEMENT', 'WAR_DECLARATION', 'DECLARATION', 'PERSONAL'],
   DIPLOMACY: ['TREATY', 'TERRITORY', 'SUMMIT', 'WAR_DECLARATION', 'DECLARATION', 'VISIT', 'CRISIS', 'EXPANSION', 'INSTITUTION'],
-  MILITARY: ['WAR', 'BATTLE', 'WAR_DECLARATION', 'MOBILIZATION', 'LAW_POLICY', 'POWER_CHANGE', 'INSTITUTION', 'UPRISING', 'ATTACK', 'TREATY', 'SUMMIT', 'PERSONAL'],
+  MILITARY: ['WAR', 'BATTLE', 'WAR_DECLARATION', 'MOBILIZATION', 'MILITARY_FORMATION', 'LAW_POLICY', 'POWER_CHANGE', 'POWER_STRUGGLE', 'INSTITUTION', 'UPRISING', 'ATTACK', 'TREATY', 'SUMMIT', 'PERSONAL'],
   ECONOMY: ['COMPANY', 'MARKET', 'PRODUCT', 'CONSTRUCTION', 'LAW_POLICY', 'INSTITUTION', 'TREATY', 'SUMMIT', 'MOVEMENT'],
-  SOCIETY: ['UPRISING', 'MOVEMENT', 'DISASTER', 'MIGRATION', 'ATTACK', 'INCIDENT', 'LAW_POLICY', 'INSTITUTION', 'CONSTRUCTION'],
+  SOCIETY: ['UPRISING', 'PROTEST_VIOLENCE', 'MOVEMENT', 'PARTY_RALLY', 'DISASTER', 'MIGRATION', 'ATTACK', 'INCIDENT', 'LAW_POLICY', 'INSTITUTION', 'CONSTRUCTION'],
   CULTURE: ['CREATION', 'CONSTRUCTION', 'INSTITUTION', 'DISCOVERY', 'MOVEMENT', 'VISIT'],
-  RELIGION: ['CONVERSION', 'SUMMIT', 'LAW_POLICY', 'INSTITUTION', 'MOVEMENT', 'INCIDENT', 'CREATION', 'CONSTRUCTION', 'MIGRATION'],
+  RELIGION: ['CONVERSION', 'SUMMIT', 'LAW_POLICY', 'INSTITUTION', 'MOVEMENT', 'POWER_STRUGGLE', 'INCIDENT', 'CREATION', 'CONSTRUCTION', 'MIGRATION'],
   SCIENCE: ['DISCOVERY', 'PRODUCT', 'CONSTRUCTION', 'INSTITUTION', 'LAW_POLICY', 'DISASTER'],
 }
 
@@ -561,6 +621,10 @@ export interface EventTypeFeatures {
   expectTerritory: boolean
   expectPower: boolean
   expectOrganizations: boolean
+  /** 관련 기관(부처·사령부·부대) 칸을 비어 있어도 세운다 — 지령을 내리고 받는 동원, 기관이 생기는 설립·군 창설 */
+  expectDepartments: boolean
+  /** 관련 정당 칸을 비어 있어도 세운다 — 정치 분야이거나 정당·집회·선전·내분(분야가 사회·군사여도 당이 무대일 수 있다) */
+  expectPoliticalParties: boolean
 }
 
 export function eventTypeFeatures(type?: string | null, domain?: string | null): EventTypeFeatures {
@@ -578,11 +642,13 @@ export function eventTypeFeatures(type?: string | null, domain?: string | null):
     metricSubject: metrics.subject,
     promoteTreaties: core.includes('treaty'),
     expectWarDeclaration: core.includes('warDeclaration'),
-    /* 성립·소멸은 핵심일 때만 비어 있어도 세운다 — 영토 변경은 선택이라(1차 분할에서 연방은 소멸하지 않았다) 빈 안내만 섰다 */
+    /* 핵심(core)일 때만 비어 있어도 섹션을 기본 펼친다 — 선택(optional)·분야 전체 펼침은 빈 섹션 세로 누적을 낳는다 */
     expectStatehood: core.includes('statehood'),
-    expectTerritory: facets.includes('territory'),
-    expectPower: facets.includes('power') || facets.includes('election'),
-    expectOrganizations: facets.includes('organizations'),
+    expectTerritory: core.includes('territory'),
+    expectPower: core.includes('power') || core.includes('election') || type === 'POWER_STRUGGLE',
+    expectOrganizations: core.includes('organizations') || type === 'SUMMIT',
+    expectDepartments: type === 'MOBILIZATION' || type === 'INSTITUTION' || type === 'MILITARY_FORMATION',
+    expectPoliticalParties: type === 'PARTY_RALLY' || type === 'POWER_STRUGGLE',
   }
 }
 
@@ -603,10 +669,37 @@ const TITLE_SUGGESTION_RULES: ReadonlyArray<{
     type: 'TREATY',
   },
   { pattern: /(?:동맹\s*체결|가입)$/, domain: 'DIPLOMACY', type: 'TREATY' },
+  // 폭력·테러·시위·집회 — 정당 규칙('집회$')보다 먼저: 항의·규탄·촛불 집회는 거리의 집회다(주최를 모르는 맨 '집회'는 정당으로 둔다).
+  // 테러·사보타주는 여기서 받지 않고 암살 규칙 뒤에서 받는다('황태자 암살 테러'는 암살).
+  // '폭동'은 받지 않는다 — 카프 폭동·맥주홀 폭동처럼 한국어로 '폭동'이라 부르는 쿠데타가 많아 봉기 규칙에 남긴다
+  {
+    pattern: /(?:시위|데모|행진|소요|소요\s*사태|난동|난투|난투극|유혈\s*충돌|가두\s*(?:투쟁|폭력|충돌)|투석전|(?:반대|규탄|항의|추모|촛불|저항|반정부)\s*집회|집회\s*(?:습격|난입)|총기\s*난사)$/,
+    domain: 'SOCIETY',
+    type: 'PROTEST_VIOLENCE',
+  },
+  // 정당·집회·선전 — 회의 규칙('대회'·'회의')보다 먼저(당대회는 회담이 아니다). '선전포고'는 끝말이 '포고'라 안 걸린다
+  {
+    pattern: /(?:창당|합당|입당|전당\s*대회|당\s*대회|강령\s*(?:발표|채택)|군중\s*집회|집회|궐기\s*대회|선전\s*(?:활동|공작|선동|캠페인|운동)|프로파간다)$/,
+    domain: 'POLITICS',
+    type: 'PARTY_RALLY',
+  },
+  // 군 창설·편제·준군사조직 — 설립 규칙('창설$'·'결성$'·'해산$')과 멸망 규칙('해체$')보다 먼저. '○○군(郡) 신설'과 섞이지 않게 신설·증설은 받지 않는다
+  {
+    pattern: /(?:군|군대|사단|군단|여단|함대|사령부|참모본부|근위대|친위대|친병|돌격대|경비대|민병대|의용대|자유군단|준군사\s*조직|무장\s*(?:조직|단체))(?:\s*\([^)]*\))?\s*(?:공식\s*|정식\s*)?(?:창설|창군|편성|재편성|재편|결성|창립|개편|해체|해산|상설화|조직)$/,
+    domain: 'MILITARY',
+    type: 'MILITARY_FORMATION',
+  },
+  { pattern: /(?:창군|군제\s*개편|편제\s*(?:개편|전환))$/, domain: 'MILITARY', type: 'MILITARY_FORMATION' },
+  // 내분·권력투쟁 — '분당'은 당이 쪼개진 일이라 창당이 아니라 여기. '축출 정변'은 끝말이 정변이라 봉기로 간다
+  {
+    pattern: /(?:내분|내홍|분당|분열|당쟁|정쟁|권력\s*투쟁|파벌\s*(?:투쟁|싸움|항쟁)|노선\s*투쟁|암투|숙청|사화|환국|계승\s*분쟁|후계\s*(?:분쟁|다툼|싸움))$/,
+    domain: 'POLITICS',
+    type: 'POWER_STRUGGLE',
+  },
   // 회담·회의·교섭 (종교 공의회 구분)
   { pattern: /공의회/, domain: 'RELIGION', type: 'SUMMIT' },
   {
-    pattern: /(?:정상\s*회담|정상\s*회의|각료\s*회의|회담|어전\s*회의|강화\s*회의|평화\s*회의|회의|총회|당\s*대회|포럼|교섭|회동)$/,
+    pattern: /(?:정상\s*회담|정상\s*회의|각료\s*회의|회담|어전\s*회의|강화\s*회의|평화\s*회의|회의|총회|포럼|교섭|회동)$/,
     domain: 'DIPLOMACY',
     type: 'SUMMIT',
   },
@@ -654,7 +747,9 @@ const TITLE_SUGGESTION_RULES: ReadonlyArray<{
     type: 'UPRISING',
   },
   // 암살·테러·학살
-  { pattern: /(?:암살|테러|학살|저격|폭탄\s*투척)/, domain: 'POLITICS', type: 'ATTACK' },
+  { pattern: /(?:암살|학살|저격|피살|사살)/, domain: 'POLITICS', type: 'ATTACK' },
+  // 끝말이 아니어도 테러·폭탄·사보타주가 들어가면(○○ 테러 사건) — 암살 규칙 뒤라 '암살 테러'는 암살로 남는다
+  { pattern: /(?:테러|폭탄\s*(?:투척|공격)|사보타주)/, domain: 'SOCIETY', type: 'PROTEST_VIOLENCE' },
   // 즉위·취임·실각
   {
     pattern: /(?:즉위식|즉위|대관식|취임식|취임|퇴위|선위|폐위|하야|탄핵|해임|실각)$/,
@@ -664,7 +759,7 @@ const TITLE_SUGGESTION_RULES: ReadonlyArray<{
   // 선거
   { pattern: /(?:총선|대선|대통령\s*선거|선거|보궐\s*선거|국민\s*투표)$/, domain: 'POLITICS', type: 'ELECTION' },
   // 군사 법령 vs 일반 법령·정책·개혁
-  { pattern: /(?:함대법|징병령|군제\s*개편)/, domain: 'MILITARY', type: 'LAW_POLICY' },
+  { pattern: /(?:함대법|징병령|육군법)/, domain: 'MILITARY', type: 'LAW_POLICY' },
   {
     pattern: /(?:헌법|법률|법령|법안|칙령|조례|개혁|신법|[가-힣]{2,}법)(?:\s*(?:제정|공포|시행|발효|개정|폐지|반포|단행))?$/,
     domain: 'POLITICS',
@@ -692,7 +787,7 @@ const TITLE_SUGGESTION_RULES: ReadonlyArray<{
   { pattern: /(?:출시|공개|발매)$/, domain: 'ECONOMY', type: 'PRODUCT' },
   // 운동·캠페인 / 이주·천도
   {
-    pattern: /(?:불매\s*운동|사회\s*운동|계몽\s*운동|노동\s*운동|민권\s*운동|운동|시위|총파업|파업)$/,
+    pattern: /(?:불매\s*운동|사회\s*운동|계몽\s*운동|노동\s*운동|민권\s*운동|운동|총파업|파업)$/,
     domain: 'SOCIETY',
     type: 'MOVEMENT',
   },
@@ -728,10 +823,12 @@ const SEARCH_KEYWORDS: Partial<Record<EventTypeKey, string>> = {
   WAR: '대전 내전 전역 사변 침공 원정 정벌 정복',
   BATTLE: '해전 회전 공방전 포위전 상륙작전 공습 폭격 함락 점령 진압 교전',
   UPRISING: '쿠데타 반란 민란 항쟁 의거 폭동 난 봉기 혁명 정변',
-  ATTACK: '암살 테러 학살 저격 폭탄 투척 습격',
+  ATTACK: '암살 학살 저격 피살 사살 표적살해 습격',
+  PROTEST_VIOLENCE: '폭력 테러 폭탄테러 폭탄투척 자폭 총기난사 사보타주 시위 데모 행진 가두시위 촛불집회 항의집회 규탄집회 집회 소요 난동 난투 유혈충돌 투석 최루탄 바리케이드 진압',
   MOBILIZATION: '총동원령 동원령 기동훈련 작전지령 계엄령 배치 파병',
+  MILITARY_FORMATION: '창군 창설 편성 재편성 편제 개편 군제 해체 군대 군단 사단 여단 함대 사령부 참모본부 근위대 친위대 돌격대 경비대 민병대 의용군 의용대 자유군단 준군사 무장조직 무장단체 헌병 상비군 SA SS',
   TREATY: '강화조약 화약 의정서 휴전협정 체결 조인 비준 동맹 가입',
-  SUMMIT: '정상회담 정상회의 다자회의 각료회의 총회 당대회 포럼 강화회의 평화회의 어전회의 공의회 교섭 회동 아세안 APEC 쿼드 G7 G20',
+  SUMMIT: '정상회담 정상회의 다자회의 각료회의 총회 포럼 강화회의 평화회의 어전회의 공의회 교섭 회동 아세안 APEC 쿼드 G7 G20',
   WAR_DECLARATION: '선전포고 개전선언 개전포고 참전선언 전쟁선포 참전 개전 각서',
   DECLARATION: '최후통첩 중립선언 담화 성명 통첩 결의 연설',
   VISIT: '국빈방문 사절단 내항 기항 예방 순방',
@@ -742,9 +839,11 @@ const SEARCH_KEYWORDS: Partial<Record<EventTypeKey, string>> = {
   POWER_CHANGE: '즉위식 대관식 취임식 퇴위 선위 폐위 하야 탄핵 해임 실각 계승',
   ELECTION: '총선 대선 대통령선거 보궐선거 국민투표 투표',
   LAW_POLICY: '헌법 법률 법령 법안 칙령 조례 개혁 신법 공포 제정 시행 폐지 함대법 징병령',
-  INSTITUTION: '창설 결성 개설 해산 설립 정당 의회 국회 관청',
-  INCIDENT: '탄압 음모 스캔들 숙청 옥사 사화 환국 대옥 비리',
-  MOVEMENT: '불매운동 사회운동 계몽운동 노동운동 민권운동 독립운동 시위 총파업 파업 캠페인',
+  INSTITUTION: '창설 결성 개설 해산 설립 의회 국회 관청',
+  INCIDENT: '탄압 음모 스캔들 옥사 대옥 비리 의혹',
+  POWER_STRUGGLE: '내분 내홍 분열 분당 당쟁 정쟁 권력투쟁 파벌 계파 노선투쟁 숙청 대숙청 암투 궁정암투 사화 환국 붕당 계승분쟁 후계다툼 장검의밤',
+  MOVEMENT: '불매운동 사회운동 계몽운동 노동운동 민권운동 독립운동 총파업 파업 캠페인 청원',
+  PARTY_RALLY: '정당 창당 합당 입당 탈당 당대회 전당대회 강령 당기 집회 군중집회 궐기대회 대중연설 선전 선동 프로파간다 기관지 당보 유세',
   COMPANY: '창업 창립 상장 IPO 인수 합병 파산 실적발표 법인',
   MARKET: '대공황 금융위기 외환위기 주가지수 금리 차관 모라토리엄 디폴트 공황 폭락',
   PRODUCT: '출시 공개 발매 신제품 발명품',
