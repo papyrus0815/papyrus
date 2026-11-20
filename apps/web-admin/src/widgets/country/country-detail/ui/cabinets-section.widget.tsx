@@ -115,8 +115,6 @@ import {
   type EditableInstitutionTenure,
   InstitutionAppointmentModal,
 } from '@/shared/ui/institution-appointment-modal/institution-appointment-modal'
-import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
-import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
 import {
   FieldControl,
   FieldLabel,
@@ -189,7 +187,11 @@ import {
 } from './cabinets-section.helpers'
 import * as CabS from './cabinets-section.styled'
 import { SubsectionAddBtn } from './country-politics-tab.styles'
-import { CabinetFormModal } from './cabinet-form-modal.widget'
+import { CabinetBulkMinisterModal } from './cabinet-bulk-minister-modal.widget'
+import {
+  CabinetFormModal,
+  type CabinetFormMode,
+} from './cabinet-form-modal.widget'
 import { TenureHistoryHorizTimeline } from './tenure-history-horiz-timeline'
 import { TreatyLinkModal } from './treaty-link-modal'
 import { CabinetEventsSection } from './cabinet-events-section.widget'
@@ -439,6 +441,12 @@ const EMPTY_CONSTITUENT_POLITIES: never[] = []
 
 export interface CabinetsSectionProps {
   country: UnifiedCountry
+  /** 정체·헌정 기록 보유 여부 (빈 상태 온보딩 가이드용) */
+  hasAnyPoliticalSystem?: boolean
+  /** 중앙부처 기록 보유 여부 (빈 상태 온보딩 가이드용) */
+  hasAnyDepartment?: boolean
+  /** 정체·헌정 탭으로 이동 */
+  onOpenPoliticalSystemTab?: () => void
   /** 부처 등록 시 중앙부처 탭으로 전환하고 해당 카테고리로 폼 열기 */
   onOpenMinistriesTab?: (categoryId?: string) => void
   /** 각료 소속 부처 배지 클릭 시 중앙부처 탭의 해당 부처 상세로 이동 */
@@ -447,6 +455,9 @@ export interface CabinetsSectionProps {
 
 export function CabinetsSection({
   country,
+  hasAnyPoliticalSystem = false,
+  hasAnyDepartment = false,
+  onOpenPoliticalSystemTab,
   onOpenMinistriesTab,
   onOpenDepartmentDetail,
 }: CabinetsSectionProps) {
@@ -474,19 +485,6 @@ export function CabinetsSection({
       ...constituentPolities.map((polityItem) => polityItem.id),
     ])
   }, [isHistorical, country.id, constituentPolities])
-
-  const personPickerCountryIds = useMemo(() => {
-    const linkedModernHistIds =
-      country.type === 'modern'
-        ? (country.historicalCountries ?? []).map((histItem) => histItem.id)
-        : []
-    return [
-      countryId,
-      historicalCountryId,
-      ...constituentPolities.map((polityItem) => polityItem.id),
-      ...linkedModernHistIds,
-    ].filter((candidateId): candidateId is string => Boolean(candidateId))
-  }, [country, countryId, historicalCountryId, constituentPolities])
 
   /** 현대국가 + 연결된 역사국가(또는 복합 역사국가 + 구성국)를 한 범위로 — 총리·군주 재임 매칭 */
   const cabinetTimelineCountryScope = useMemo(
@@ -524,6 +522,8 @@ export function CabinetsSection({
     'timeline' | 'ledger'
   >(() => readPersistedCabinetViewPrefs().layout)
   const [showTimelineLegend, setShowTimelineLegend] = useState(false)
+  const [includeCeremonialMonarchs, setIncludeCeremonialMonarchs] =
+    useState(false)
 
   const setRegimeFilterInUrl = useCallback(
     (nextRegimeId: string) => {
@@ -604,6 +604,10 @@ export function CabinetsSection({
   const [addMinisterCabinet, setAddMinisterCabinet] = useState<any | null>(null)
   const [registerCabinetModalOpen, setRegisterCabinetModalOpen] =
     useState(false)
+  const [registerModalInitialMode, setRegisterModalInitialMode] = useState<
+    CabinetFormMode | undefined
+  >(undefined)
+  const [bulkMinisterModalOpen, setBulkMinisterModalOpen] = useState(false)
   const [appointmentModalOpen, setAppointmentModalOpen] = useState(false)
   const [preselectedMinisterDeptId, setPreselectedMinisterDeptId] = useState<
     string | null
@@ -617,9 +621,6 @@ export function CabinetsSection({
     [],
   )
   const [attachingSuggestions, setAttachingSuggestions] = useState(false)
-  /** 군주 등록 — 인물을 고른 뒤 직위 보유 폼을 재위로 연다 */
-  const [monarchPersonPickerOpen, setMonarchPersonPickerOpen] = useState(false)
-  const [monarchPersonId, setMonarchPersonId] = useState<string | null>(null)
   const [deletingCabinetId, setDeletingCabinetId] = useState<string | null>(
     null,
   )
@@ -840,8 +841,8 @@ export function CabinetsSection({
     })
   }, [cabinets])
 
-  /** 내각 목록 — 의례적 원수(천황·황제 등) 중복 행만 제외하고 전제군주 친정·집단지도 내각은 표시 */
-  const executiveCabinetsSorted = useMemo(
+  /** 내각 목록 — 총리 내각이 있는 국가는 의례적 원수 중복 행을 기본 숨기되, 전근대 왕조(군주만 존재)나 토글 ON 시 함께 표시 */
+  const nonCeremonialCabinets = useMemo(
     () =>
       sortedCabinets.filter(
         (cabinetItem) =>
@@ -852,6 +853,14 @@ export function CabinetsSection({
       ),
     [sortedCabinets],
   )
+  const ceremonialMonarchCabinetCount =
+    sortedCabinets.length - nonCeremonialCabinets.length
+  const executiveCabinetsSorted = useMemo(() => {
+    if (includeCeremonialMonarchs || nonCeremonialCabinets.length === 0) {
+      return sortedCabinets
+    }
+    return nonCeremonialCabinets
+  }, [includeCeremonialMonarchs, nonCeremonialCabinets, sortedCabinets])
 
   const historicalConstituentTabs = useMemo(() => {
     if (country.type !== 'historical') return []
@@ -1572,9 +1581,13 @@ export function CabinetsSection({
     [countryTenures, cabinetCountByHeadId],
   )
 
-  const invalidateAfterMonarchRegister = useCallback(() => {
-    invalidateTenureQueries(queryClient)
-  }, [queryClient])
+  const openCabinetRegisterModal = useCallback(
+    (preferredMode?: CabinetFormMode) => {
+      setRegisterModalInitialMode(preferredMode)
+      setRegisterCabinetModalOpen(true)
+    },
+    [],
+  )
 
   const handleDeleteCabinet = async (
     cabinetId: string,
@@ -2181,7 +2194,8 @@ export function CabinetsSection({
                                 cabinetSortOrder !== 'asc' ||
                                 Boolean(cabinetCategoryFilter) ||
                                 Boolean(activeRegimeFilter) ||
-                                showTimelineLegend
+                                showTimelineLegend ||
+                                includeCeremonialMonarchs
                               }
                               segments={[
                                 {
@@ -2306,8 +2320,21 @@ export function CabinetsSection({
                                   </>
                                 ) : undefined
                               }
-                              toggles={
-                                hasLegendItems
+                              toggles={[
+                                ...(ceremonialMonarchCabinetCount > 0 &&
+                                nonCeremonialCabinets.length > 0
+                                  ? [
+                                      {
+                                        key: 'include-ceremonial-monarchs',
+                                        label: `군주·상징 원수 함께 표시 (${ceremonialMonarchCabinetCount})`,
+                                        description:
+                                          '총리 내각 외 국왕·황제 재위 항목도 목록에 표시',
+                                        checked: includeCeremonialMonarchs,
+                                        onChange: setIncludeCeremonialMonarchs,
+                                      },
+                                    ]
+                                  : []),
+                                ...(hasLegendItems
                                   ? [
                                       {
                                         key: 'timeline-legend',
@@ -2318,21 +2345,22 @@ export function CabinetsSection({
                                         onChange: setShowTimelineLegend,
                                       },
                                     ]
-                                  : []
-                              }
+                                  : []),
+                              ]}
                               actions={[
                                 {
                                   key: 'register-monarch',
-                                  label: '군주 재위 등록',
+                                  label: '군주 · 원수 재위 등록',
                                   icon: <FiPlus size={13.5} />,
-                                  onClick: () => setMonarchPersonPickerOpen(true),
+                                  onClick: () =>
+                                    openCabinetRegisterModal('monarch'),
                                 },
                               ]}
                             />
 
                             <CabS.CabListRegisterBtn
                               type="button"
-                              onClick={() => setRegisterCabinetModalOpen(true)}
+                              onClick={() => openCabinetRegisterModal()}
                             >
                               <FiPlus size={14} />
                               <span>행정부 · 내각 등록</span>
@@ -2486,20 +2514,127 @@ export function CabinetsSection({
                         }}
                       />
                     ) : (
-                      <EmptyStateSpotlight
-                        icon={<FiUsers size={30} strokeWidth={1.75} />}
-                        title="등록된 행정부가 없습니다"
-                        description="총리·대통령·재상 등 수반 중심 내각이나 집단지도·과도정부를 한 화면에서 빠르게 등록할 수 있습니다."
-                        primaryAction={{
-                          label: '행정부 · 내각 등록',
-                          onClick: () => setRegisterCabinetModalOpen(true),
-                          icon: <FiPlus size={16} strokeWidth={2.25} />,
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: 14,
+                          width: '100%',
                         }}
-                        secondaryAction={{
-                          label: '군주 재위 등록',
-                          onClick: () => setMonarchPersonPickerOpen(true),
-                        }}
-                      />
+                      >
+                        <EmptyStateSpotlight
+                          icon={<FiUsers size={30} strokeWidth={1.75} />}
+                          title="등록된 행정부가 없습니다"
+                          description="총리·대통령·재상 등 수반 중심 내각, 집단지도정부, 국왕·황제 재위를 한 모달에서 빠르게 등록할 수 있습니다."
+                          primaryAction={{
+                            label: '행정부 · 내각 등록',
+                            onClick: () => openCabinetRegisterModal(),
+                            icon: <FiPlus size={16} strokeWidth={2.25} />,
+                          }}
+                          secondaryAction={{
+                            label: '군주 · 원수 재위 등록',
+                            onClick: () => openCabinetRegisterModal('monarch'),
+                          }}
+                        />
+
+                        {(!hasAnyPoliticalSystem || !hasAnyDepartment) &&
+                        (onOpenPoliticalSystemTab || onOpenMinistriesTab) ? (
+                          <div
+                            aria-label="권장 초기 세팅 순서"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexWrap: 'wrap',
+                              gap: 8,
+                              padding: '8px 14px',
+                              borderRadius: 10,
+                              border: `1px solid ${palette.borderMid}`,
+                              background: palette.bgSubtle,
+                              fontSize: 12,
+                              color: palette.textMuted,
+                            }}
+                          >
+                            <span style={{ fontWeight: 700, color: palette.text }}>
+                              추천 세팅 순서
+                            </span>
+                            {onOpenPoliticalSystemTab ? (
+                              <button
+                                type="button"
+                                onClick={onOpenPoliticalSystemTab}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  padding: '3px 9px',
+                                  borderRadius: 6,
+                                  border: `1px solid ${palette.borderMid}`,
+                                  background: palette.cardBg,
+                                  color: hasAnyPoliticalSystem
+                                    ? palette.textMuted
+                                    : palette.text,
+                                  fontSize: 11.5,
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                {hasAnyPoliticalSystem ? (
+                                  <FiCheck size={11.5} color="#10b981" />
+                                ) : null}
+                                <span>1. 정체·헌정</span>
+                              </button>
+                            ) : null}
+                            <span aria-hidden>→</span>
+                            {onOpenMinistriesTab ? (
+                              <button
+                                type="button"
+                                onClick={() => onOpenMinistriesTab()}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  padding: '3px 9px',
+                                  borderRadius: 6,
+                                  border: `1px solid ${palette.borderMid}`,
+                                  background: palette.cardBg,
+                                  color: hasAnyDepartment
+                                    ? palette.textMuted
+                                    : palette.text,
+                                  fontSize: 11.5,
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                {hasAnyDepartment ? (
+                                  <FiCheck size={11.5} color="#10b981" />
+                                ) : null}
+                                <span>2. 중앙부처</span>
+                              </button>
+                            ) : null}
+                            <span aria-hidden>→</span>
+                            <button
+                              type="button"
+                              onClick={() => openCabinetRegisterModal()}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                padding: '3px 9px',
+                                borderRadius: 6,
+                                border: `1px solid ${palette.borderMid}`,
+                                background: palette.cardBg,
+                                color: palette.text,
+                                fontSize: 11.5,
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              <span>3. 행정부·내각</span>
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
                     )}
                   </EmptyStateFill>
                 </CabS.CabListBody>
@@ -4942,6 +5077,19 @@ export function CabinetsSection({
                                           ),
                                       },
                                     ]}
+                                    actions={[
+                                      {
+                                        key: 'bulk-appoint-ministers',
+                                        label: '부처별 일괄 각료 임명',
+                                        icon: <FiUsers size={13.5} />,
+                                        badge:
+                                          ministriesForCabinet.length > 0
+                                            ? `${ministriesForCabinet.length}개 부처`
+                                            : undefined,
+                                        onClick: () =>
+                                          setBulkMinisterModalOpen(true),
+                                      },
+                                    ]}
                                   />
                                   {!loadingCabinetMinisters && (
                                     <SubsectionAddBtn
@@ -5186,16 +5334,36 @@ export function CabinetsSection({
                                         등록된 각료가 없습니다.
                                       </CabS.CabDetailEmptyText>
                                       {ministriesForCabinet.length > 0 && (
-                                        <SubsectionAddBtn
-                                          type="button"
-                                          onClick={() =>
-                                            setMinisterViewMode('matrix')
-                                          }
-                                          style={{ marginTop: 8 }}
+                                        <div
+                                          style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            flexWrap: 'wrap',
+                                            gap: 8,
+                                            marginTop: 8,
+                                          }}
                                         >
-                                          <FiLayers size={13} />
-                                          부처별 편제표({ministriesForCabinet.length}개 기관)에서 임명하기
-                                        </SubsectionAddBtn>
+                                          <SubsectionAddBtn
+                                            type="button"
+                                            onClick={() =>
+                                              setBulkMinisterModalOpen(true)
+                                            }
+                                          >
+                                            <FiUsers size={13} />
+                                            부처별 일괄 임명 (
+                                            {ministriesForCabinet.length}개 부처)
+                                          </SubsectionAddBtn>
+                                          <SubsectionAddBtn
+                                            type="button"
+                                            onClick={() =>
+                                              setMinisterViewMode('matrix')
+                                            }
+                                          >
+                                            <FiLayers size={13} />
+                                            편제표 보기
+                                          </SubsectionAddBtn>
+                                        </div>
                                       )}
                                     </CabS.CabDetailEmptyStack>
                                   )
@@ -6354,11 +6522,13 @@ export function CabinetsSection({
           isOpen={registerCabinetModalOpen || Boolean(editingCabinet)}
           onClose={() => {
             setRegisterCabinetModalOpen(false)
+            setRegisterModalInitialMode(undefined)
             closeEditCabinetModal()
           }}
           onSaved={(savedCabinetId) => {
             const wasCreating = !editingCabinet
             setRegisterCabinetModalOpen(false)
+            setRegisterModalInitialMode(undefined)
             closeEditCabinetModal()
             invalidateTenureQueries(queryClient)
             void queryClient.invalidateQueries({ queryKey: ['cabinets'] })
@@ -6378,7 +6548,8 @@ export function CabinetsSection({
             ''
           }
           initialMode={
-            cabinetCategoryFilter === 'COLLECTIVE' ? 'collective' : undefined
+            registerModalInitialMode ??
+            (cabinetCategoryFilter === 'COLLECTIVE' ? 'collective' : undefined)
           }
           headPositionOptions={headPositionOptions}
           existingHeadTenures={headTenuresForRegister}
@@ -6386,41 +6557,26 @@ export function CabinetsSection({
         />
       )}
 
-      {monarchPersonPickerOpen && (
-        <PersonSelectModal
-          selectedPersonId={monarchPersonId ?? ''}
-          title="군주 등록 — 인물 선택"
-          allowCreate
-          defaultCountryId={countryId || undefined}
-          defaultHistoricalCountryId={
-            (isHistorical && cabinetCountryFilter
-              ? cabinetCountryFilter
-              : historicalCountryId) || undefined
+      {bulkMinisterModalOpen && selectedCabinet && (
+        <CabinetBulkMinisterModal
+          isOpen={bulkMinisterModalOpen}
+          onClose={() => setBulkMinisterModalOpen(false)}
+          cabinet={selectedCabinet}
+          departments={ministriesForCabinet}
+          existingMinisters={nonHeadMinisters}
+          countryId={
+            selectedCabinet.countryId ??
+            selectedCabinet.headTenure?.countryId ??
+            countryId ??
+            null
           }
-          context={{
-            countryIds: personPickerCountryIds,
-            label: `${country.name} 관련 인물`,
-          }}
-          onSelect={(personId) => {
-            setMonarchPersonId(personId)
-            setMonarchPersonPickerOpen(false)
-          }}
-          onClose={() => setMonarchPersonPickerOpen(false)}
-        />
-      )}
-      {monarchPersonId && (
-        <TenureRegisterPanel
-          personId={monarchPersonId}
-          defaultMonarchical
-          open={!!monarchPersonId}
-          onClose={() => setMonarchPersonId(null)}
-          onSuccess={invalidateAfterMonarchRegister}
-          initialCountryId={countryId || undefined}
-          initialHistoricalCountryId={
-            (isHistorical && cabinetCountryFilter
-              ? cabinetCountryFilter
-              : historicalCountryId) || null
+          historicalCountryId={
+            selectedCabinet.historicalCountryId ??
+            selectedCabinet.headTenure?.historicalCountryId ??
+            historicalCountryId ??
+            null
           }
+          countryName={country.name}
         />
       )}
 

@@ -13,6 +13,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   FiAlertCircle,
   FiArrowRight,
+  FiAward,
   FiBookmark,
   FiCheck,
   FiChevronDown,
@@ -164,7 +165,7 @@ import {
 import { formatDate, getPersonName } from './cabinets-section.helpers'
 import { LinkedEventPickerField } from './linked-event-picker-field'
 
-export type CabinetFormMode = 'head' | 'collective'
+export type CabinetFormMode = 'head' | 'collective' | 'monarch'
 export type HeadTenureActionMode = 'new_tenure' | 'reshuffle_existing'
 
 export interface CabinetFormPolityOption {
@@ -271,7 +272,11 @@ export interface CabinetFormModalProps {
 }
 
 type ModalSectionKey = 'period' | 'leader' | 'role' | 'extra'
-type CabinetEntryChoiceKey = 'head_new' | 'head_reshuffle' | 'collective'
+type CabinetEntryChoiceKey =
+  | 'head_new'
+  | 'head_reshuffle'
+  | 'collective'
+  | 'monarch'
 
 const CABINET_LAYOUT_STORAGE_KEY = 'papyrus:cabinet-register-layout'
 
@@ -330,6 +335,28 @@ const CABINET_MODE_GUIDE_LIST: ReadonlyArray<CabinetModeGuideItem> = [
     examples:
       '프랑스 공안위원회 · 스위스 연방평의회 · 혁명통치평의회 · 과도국가평의회',
   },
+  {
+    key: 'monarch',
+    label: '군주 · 원수 재위',
+    shortBadge: '국왕 · 황제 · 상징 원수',
+    icon: <FiAward size={13.5} />,
+    summary:
+      '국왕·황제·천황 등의 재위 기록을 등록합니다. 내각 타임라인의 재위 띠와 왕조 통치자 목록에 함께 반영됩니다.',
+    criteria:
+      '전근대 왕조의 역대 군주·황제 재위 또는 입헌군주국의 국왕·천황 재위 등록 시 선택',
+    examples: '세종 (조선 제4대 국왕) · 엘리자베스 2세 · 아우구스투스 황제',
+  },
+]
+
+const MONARCH_ROLE_PRESETS: ReadonlyArray<string> = [
+  '국왕',
+  '황제',
+  '여왕',
+  '천황',
+  '술탄',
+  '차르',
+  '대공',
+  '섭정',
 ]
 
 const DEFAULT_EXECUTIVE_ROLE_PRESETS: Array<{
@@ -609,7 +636,7 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
     ],
   )
 
-  const [mode, setMode] = useState<CabinetFormMode>('head')
+  const [mode, setMode] = useState<CabinetFormMode>(() => initialMode ?? 'head')
   const [selectedPolityId, setSelectedPolityId] = useState<string>(
     country?.id ?? '',
   )
@@ -636,15 +663,20 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
   const quickOrderTouchedRef = useRef<boolean>(false)
 
   // Role & term state
-  const [roleTitle, setRoleTitle] = useState<string>('총리')
+  const [roleTitle, setRoleTitle] = useState<string>(() =>
+    initialMode === 'monarch' ? '국왕' : '총리',
+  )
   const [positionTypeOverride, setPositionTypeOverride] = useState<
     'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
-  >('HEAD_OF_GOVERNMENT')
+  >(() =>
+    initialMode === 'monarch' ? 'HEAD_OF_STATE' : 'HEAD_OF_GOVERNMENT',
+  )
   const [selectedPositionDefId, setSelectedPositionDefId] = useState<
     string | null
   >(null)
   const [ordinalInput, setOrdinalInput] = useState<string>('')
   const [subTermInput, setSubTermInput] = useState<string>('')
+  const [regnalNameInput, setRegnalNameInput] = useState<string>('')
 
   // Period state (Start & End)
   const [startEra, setStartEra] = useState<Era>('AD')
@@ -1072,7 +1104,8 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
     setAutoSuggestedPartyLabel(null)
     setInitialOriginEventTitle(null)
 
-    setMode(initialMode ?? 'head')
+    const nextInitialMode = initialMode ?? 'head'
+    setMode(nextInitialMode)
     setHeadActionMode('new_tenure')
     setSelectedExistingTenureId(null)
     setExistingTenureSearch('')
@@ -1101,12 +1134,19 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
       }),
     )
 
-    setRoleTitle(smartRoleDefault.title)
-    setSelectedPositionDefId(smartRoleDefault.positionDefId)
-    setPositionTypeOverride(smartRoleDefault.positionType)
+    if (nextInitialMode === 'monarch') {
+      setRoleTitle('국왕')
+      setSelectedPositionDefId(null)
+      setPositionTypeOverride('HEAD_OF_STATE')
+    } else {
+      setRoleTitle(smartRoleDefault.title)
+      setSelectedPositionDefId(smartRoleDefault.positionDefId)
+      setPositionTypeOverride(smartRoleDefault.positionType)
+    }
 
     setOrdinalInput('')
     setSubTermInput('')
+    setRegnalNameInput('')
     setStartEra('AD')
     setStartYear('')
     setStartMonth('')
@@ -1373,11 +1413,22 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
 
   // Keep smart role synced in create mode until user manually chooses a role
   useEffect(() => {
-    if (!isOpen || isEditing || userTouchedRoleRef.current) return
+    const activeCreateMode =
+      !isEditing && initializedSessionKeyRef.current === null
+        ? (initialMode ?? mode)
+        : mode
+    if (
+      !isOpen ||
+      isEditing ||
+      activeCreateMode === 'monarch' ||
+      userTouchedRoleRef.current
+    ) {
+      return
+    }
     setRoleTitle(smartRoleDefault.title)
     setSelectedPositionDefId(smartRoleDefault.positionDefId)
     setPositionTypeOverride(smartRoleDefault.positionType)
-  }, [isOpen, isEditing, smartRoleDefault])
+  }, [isOpen, isEditing, mode, initialMode, smartRoleDefault])
 
   // Keep quick-person nameDisplayOrder synced to country/polity default until touched
   useEffect(() => {
@@ -1851,6 +1902,34 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
   }, [activePoliticalSystem, effectiveHeadPositionOptions])
 
   const { visibleRoleChips, overflowRoleChips } = useMemo(() => {
+    if (mode === 'monarch') {
+      const seenMonarch = new Set<string>()
+      const monarchMerged: Array<{
+        title: string
+        positionType: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
+        positionDefId: string | null
+      }> = []
+      for (const scopedChip of monarchicalRoleChips) {
+        if (!scopedChip.positionDefId || seenMonarch.has(scopedChip.title)) {
+          continue
+        }
+        seenMonarch.add(scopedChip.title)
+        monarchMerged.push(scopedChip)
+      }
+      for (const presetTitle of MONARCH_ROLE_PRESETS) {
+        if (seenMonarch.has(presetTitle)) continue
+        seenMonarch.add(presetTitle)
+        monarchMerged.push({
+          title: presetTitle,
+          positionType: 'HEAD_OF_STATE',
+          positionDefId: null,
+        })
+      }
+      return {
+        visibleRoleChips: monarchMerged.slice(0, 6),
+        overflowRoleChips: monarchMerged.slice(6),
+      }
+    }
     const quickFive = primaryRoleChips.slice(0, 5)
     const remainingPrimary = primaryRoleChips.slice(5)
     const trimmedCurrent = roleTitle.trim()
@@ -1864,7 +1943,7 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
         : quickFive,
       overflowRoleChips: remainingPrimary,
     }
-  }, [primaryRoleChips, monarchicalRoleChips, roleTitle])
+  }, [mode, primaryRoleChips, monarchicalRoleChips, roleTitle])
 
   const filledExtraCount = useMemo(() => {
     let count = 0
@@ -2760,7 +2839,8 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
 
       const tenurePayload: CreateGovernmentPositionTenureDto = {
         personId: selectedPersonId,
-        positionType: resolvedPositionType,
+        positionType:
+          mode === 'monarch' ? 'HEAD_OF_STATE' : resolvedPositionType,
         title: trimmedRoleTitle,
         ...(matchedDef?.id ? { positionDefinitionId: matchedDef.id } : {}),
         ...(resolvedPolityAxis.countryId
@@ -2772,10 +2852,18 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
         ...(parsedOrdinal != null && Number.isFinite(parsedOrdinal)
           ? { ordinal: parsedOrdinal }
           : {}),
-        ...(parsedSubTerm != null && Number.isFinite(parsedSubTerm)
+        ...(mode !== 'monarch' &&
+        parsedSubTerm != null &&
+        Number.isFinite(parsedSubTerm)
           ? { subTermNumber: parsedSubTerm }
           : {}),
-        ...(partyId ? { partyId } : {}),
+        ...(mode === 'monarch' && regnalNameInput.trim()
+          ? { regnalName: regnalNameInput.trim() }
+          : {}),
+        ...(mode !== 'monarch' && partyId ? { partyId } : {}),
+        ...(originEventId.trim() && mode === 'monarch'
+          ? { accessionEventId: originEventId.trim() }
+          : {}),
         startDateInfo,
         ...(endDateInfo ? { endDateInfo } : {}),
         ...(appointmentMethod
@@ -2783,7 +2871,9 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
               appointmentMethod:
                 appointmentMethod as CreateGovernmentPositionTenureDto['appointmentMethod'],
             }
-          : {}),
+          : mode === 'monarch'
+            ? { appointmentMethod: 'HEREDITARY' }
+            : {}),
         ...(endReason
           ? {
               endReason:
@@ -2799,6 +2889,10 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
       const createdTenure = (await personCareerApi.addGovernmentPositionTenure(
         tenurePayload,
       )) as { id: string }
+
+      if (mode === 'monarch') {
+        return { id: undefined }
+      }
 
       const savedCabinet = (await personCareerApi.createCabinet({
         headTenureId: createdTenure.id,
@@ -2845,6 +2939,7 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
         setEndDay('')
         setOrdinalInput(nextOrdinalStr)
         setSubTermInput('')
+        setRegnalNameInput('')
 
         if (headActionMode === 'reshuffle_existing') {
           setHeadActionMode('new_tenure')
@@ -2881,9 +2976,11 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
       notify.success(
         isEditing
           ? '행정부 · 내각 정보가 수정되었습니다.'
-          : headActionMode === 'reshuffle_existing'
-            ? '기존 수반 임기에 새 내각(개각)이 개설되었습니다.'
-            : '행정부 · 내각이 등록되었습니다.',
+          : mode === 'monarch'
+            ? '군주 · 국가원수 재위 기록이 등록되었습니다.'
+            : headActionMode === 'reshuffle_existing'
+              ? '기존 수반 임기에 새 내각(개각)이 개설되었습니다.'
+              : '행정부 · 내각이 등록되었습니다.',
       )
 
       if (!isEditing && targetId) {
@@ -2984,11 +3081,9 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
     ? '동시대 부처 장관을 각료진에 편입할까요?'
     : isEditing
       ? `${editingCabinet?.name?.trim() || autoCabinetNamePreview} 수정`
-      : '행정부 · 내각 등록'
-
-  const hasMonarchicalContext =
-    monarchicalRoleChips.length > 0 ||
-    /왕국|제국|공국|섭정/.test(resolvedPolityAxis.displayName)
+      : mode === 'monarch'
+        ? '군주 · 국가원수 재위 등록'
+        : '행정부 · 내각 등록'
 
   const activePickerParts =
     activeDatePicker === 'start' ? startDateParts : endDateParts
@@ -3006,9 +3101,11 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
   const activeEntryChoiceKey: CabinetEntryChoiceKey =
     mode === 'collective'
       ? 'collective'
-      : headActionMode === 'reshuffle_existing'
-        ? 'head_reshuffle'
-        : 'head_new'
+      : mode === 'monarch'
+        ? 'monarch'
+        : headActionMode === 'reshuffle_existing'
+          ? 'head_reshuffle'
+          : 'head_new'
 
   const entryModeChipOptions = useMemo<
     ChoiceChipOption<CabinetEntryChoiceKey>[]
@@ -3032,6 +3129,11 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
         label: '집단지도 · 위원회',
         title: '1인 수반 없이 평의회·위원회가 공동 통치한 정부를 등록합니다',
       },
+      {
+        value: 'monarch',
+        label: '군주 · 원수 재위',
+        title: '국왕·황제·천황 등 군주 및 상징 국가원수의 재위 기록을 등록합니다',
+      },
     ],
     [effectiveExistingHeadTenures.length],
   )
@@ -3048,6 +3150,20 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
       setSelectedExistingTenureId(null)
       return
     }
+    if (nextChoice === 'monarch') {
+      setMode('monarch')
+      setHeadActionMode('new_tenure')
+      setSelectedExistingTenureId(null)
+      setPositionTypeOverride('HEAD_OF_STATE')
+      if (!userTouchedRoleRef.current) {
+        const dbMonarch = monarchicalRoleChips.find((chipItem) =>
+          Boolean(chipItem.positionDefId),
+        )
+        setRoleTitle(dbMonarch?.title ?? '국왕')
+        setSelectedPositionDefId(dbMonarch?.positionDefId ?? null)
+      }
+      return
+    }
     if (nextChoice === 'head_reshuffle') {
       setMode('head')
       setHeadActionMode('reshuffle_existing')
@@ -3056,6 +3172,11 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
     setMode('head')
     setHeadActionMode('new_tenure')
     setSelectedExistingTenureId(null)
+    if (!userTouchedRoleRef.current) {
+      setRoleTitle(smartRoleDefault.title)
+      setSelectedPositionDefId(smartRoleDefault.positionDefId)
+      setPositionTypeOverride(smartRoleDefault.positionType)
+    }
   }
 
   const isSplitActive = !onboardingCabinetId && layoutMode === 'split'
@@ -3631,10 +3752,9 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                                   퇴임 후 다시 취임한 경우는{' '}
                                   <strong>1인 수반 내각</strong>을, 퇴임 없이
                                   연속 재임 중 내각만 재편한 경우는{' '}
-                                  <strong>임기 내 개각 추가</strong>를 선택하세요.
-                                  {hasMonarchicalContext
-                                    ? ' (국왕·황제 재위 자체는 「국가원수·군주」 탭에서 등록)'
-                                    : ''}
+                                  <strong>임기 내 개각 추가</strong>를, 국왕·황제
+                                  재위는 <strong>군주 · 원수 재위</strong>를
+                                  선택하세요.
                                 </span>
                               </ModeBoundaryTip>
                             </ModeFullGuidePanel>
@@ -3732,12 +3852,13 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                   </FieldRow>
                 ) : null}
 
-                {/* 2-B. Single Leader Mode (Create or Edit) */}
-                {mode === 'head' &&
+                {/* 2-B. Single Leader / Monarch Mode (Create or Edit) */}
+                {(mode === 'head' || mode === 'monarch') &&
                 (isEditing || headActionMode === 'new_tenure') ? (
                   <FieldRow>
                     <FieldLabel>
-                      수반 인물 <Required>*</Required>
+                      {mode === 'monarch' ? '군주 · 원수' : '수반 인물'}{' '}
+                      <Required>*</Required>
                     </FieldLabel>
                     <FieldControl>
                       {selectedPersonId ? (
@@ -4060,14 +4181,19 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                 >
                   {/* ═══════════════ 우측: 직책 · 명칭 · 정당 ═══════════════ */}
                   <FormGroup ref={roleSectionRef}>
-                    <FormGroupTitle>직책 · 명칭 · 정당</FormGroupTitle>
+                    <FormGroupTitle>
+                      {mode === 'monarch'
+                        ? '군주 직함 · 대수 · 왕호'
+                        : '직책 · 명칭 · 정당'}
+                    </FormGroupTitle>
 
-                    {mode === 'head' &&
+                    {(mode === 'head' || mode === 'monarch') &&
                     (isEditing || headActionMode === 'new_tenure') ? (
                       <>
                         <FieldRow>
                           <FieldLabel>
-                            수반 직책 <Required>*</Required>
+                            {mode === 'monarch' ? '군주 직함' : '수반 직책'}{' '}
+                            <Required>*</Required>
                           </FieldLabel>
                           <FieldControl>
                             <RoleInputBar>
@@ -4079,26 +4205,34 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                                   setRoleTitle(nextTitle)
                                   setSelectedPositionDefId(null)
                                   setPositionTypeOverride(
-                                    inferExecutivePositionType(nextTitle),
+                                    mode === 'monarch'
+                                      ? 'HEAD_OF_STATE'
+                                      : inferExecutivePositionType(nextTitle),
                                   )
                                 }}
-                                placeholder="예: 총리, 대통령, 국무총리, 내각총리대신"
-                              />
-                              <InlineMoreIconBtn
-                                ref={roleOptionsTriggerRef}
-                                type="button"
-                                $open={roleOptionsOpen}
-                                $tall
-                                aria-label="수반 직책 설정 더보기"
-                                aria-haspopup="dialog"
-                                aria-expanded={roleOptionsOpen}
-                                title="행정부 분류 및 추가 직책 프리셋"
-                                onClick={() =>
-                                  setRoleOptionsOpen((prevOpen) => !prevOpen)
+                                placeholder={
+                                  mode === 'monarch'
+                                    ? '예: 국왕, 황제, 천황, 여왕, 술탄'
+                                    : '예: 총리, 대통령, 국무총리, 내각총리대신'
                                 }
-                              >
-                                <FiMoreHorizontal size={16} aria-hidden />
-                              </InlineMoreIconBtn>
+                              />
+                              {mode !== 'monarch' ? (
+                                <InlineMoreIconBtn
+                                  ref={roleOptionsTriggerRef}
+                                  type="button"
+                                  $open={roleOptionsOpen}
+                                  $tall
+                                  aria-label="수반 직책 설정 더보기"
+                                  aria-haspopup="dialog"
+                                  aria-expanded={roleOptionsOpen}
+                                  title="행정부 분류 및 추가 직책 프리셋"
+                                  onClick={() =>
+                                    setRoleOptionsOpen((prevOpen) => !prevOpen)
+                                  }
+                                >
+                                  <FiMoreHorizontal size={16} aria-hidden />
+                                </InlineMoreIconBtn>
+                              ) : null}
                             </RoleInputBar>
 
                             {visibleRoleChips.length > 0 ? (
@@ -4115,7 +4249,9 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                                         userTouchedRoleRef.current = true
                                         setRoleTitle(presetItem.title)
                                         setPositionTypeOverride(
-                                          presetItem.positionType,
+                                          mode === 'monarch'
+                                            ? 'HEAD_OF_STATE'
+                                            : presetItem.positionType,
                                         )
                                         setSelectedPositionDefId(
                                           presetItem.positionDefId,
@@ -4133,13 +4269,18 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
 
                         <FieldRow>
                           <FieldLabel>
-                            대수 · 회차 <OptionalTag>(선택)</OptionalTag>
+                            {mode === 'monarch' ? '대수 · 왕호' : '대수 · 회차'}{' '}
+                            <OptionalTag>(선택)</OptionalTag>
                           </FieldLabel>
                           <FieldControl>
                             <SubFieldPair $cols={2}>
                               <SubField>
                                 <SubFieldHeaderRow>
-                                  <SubFieldLabel>역대 대수</SubFieldLabel>
+                                  <SubFieldLabel>
+                                    {mode === 'monarch'
+                                      ? '왕위 · 재위 대수'
+                                      : '역대 대수'}
+                                  </SubFieldLabel>
                                   {!isEditing &&
                                   previousCabinetBriefing?.suggestedNextOrdinal !=
                                     null &&
@@ -4180,67 +4321,86 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                                 </AdornedNumberBox>
                               </SubField>
 
-                              <SubField>
-                                <SubFieldLabel>재집권 회차</SubFieldLabel>
-                                <AdornedNumberBox>
-                                  <input
-                                    type="number"
-                                    min={1}
-                                    value={subTermInput}
+                              {mode === 'monarch' ? (
+                                <SubField>
+                                  <SubFieldLabel>왕호 · 묘호 · 재직명</SubFieldLabel>
+                                  <Input
+                                    value={regnalNameInput}
                                     onChange={(changeEvent) =>
-                                      setSubTermInput(changeEvent.target.value)
+                                      setRegnalNameInput(
+                                        changeEvent.target.value,
+                                      )
                                     }
-                                    placeholder="1, 2"
+                                    placeholder="예: 세종, 빅토리아"
                                   />
-                                  <span className="suffix">기</span>
-                                </AdornedNumberBox>
-                              </SubField>
+                                </SubField>
+                              ) : (
+                                <SubField>
+                                  <SubFieldLabel>재집권 회차</SubFieldLabel>
+                                  <AdornedNumberBox>
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      value={subTermInput}
+                                      onChange={(changeEvent) =>
+                                        setSubTermInput(
+                                          changeEvent.target.value,
+                                        )
+                                      }
+                                      placeholder="1, 2"
+                                    />
+                                    <span className="suffix">기</span>
+                                  </AdornedNumberBox>
+                                </SubField>
+                              )}
                             </SubFieldPair>
                           </FieldControl>
                         </FieldRow>
                       </>
                     ) : null}
 
-                    <FieldRow>
-                      <FieldLabel>
-                        {mode === 'collective' ? (
-                          <>
-                            기구 · 정부 명칭 <Required>*</Required>
-                          </>
-                        ) : !isEditing &&
-                          headActionMode === 'reshuffle_existing' &&
-                          (selectedExistingTenure?._existingCabinetCount ?? 0) >
-                            0 ? (
-                          <>
-                            개각 명칭 <Required>*</Required>
-                          </>
-                        ) : (
-                          <>
-                            내각 명칭 <OptionalTag>(선택)</OptionalTag>
-                          </>
-                        )}
-                      </FieldLabel>
-                      <FieldControl>
-                        <Input
-                          value={cabinetName}
-                          onChange={(changeEvent) =>
-                            setCabinetName(changeEvent.target.value)
-                          }
-                          placeholder={
-                            mode === 'collective'
-                              ? '예: 혁명통치평의회, 공안위원회, 스위스 연방평의회'
-                              : headActionMode === 'reshuffle_existing'
-                                ? '예: 제2차 개조내각, 전시연립내각, 거국내각'
-                                : `비워두면 "${autoCabinetNamePreview}"(으)로 자동 생성`
-                          }
-                        />
-                      </FieldControl>
-                    </FieldRow>
+                    {mode !== 'monarch' ? (
+                      <>
+                        <FieldRow>
+                          <FieldLabel>
+                            {mode === 'collective' ? (
+                              <>
+                                기구 · 정부 명칭 <Required>*</Required>
+                              </>
+                            ) : !isEditing &&
+                              headActionMode === 'reshuffle_existing' &&
+                              (selectedExistingTenure?._existingCabinetCount ??
+                                0) > 0 ? (
+                              <>
+                                개각 명칭 <Required>*</Required>
+                              </>
+                            ) : (
+                              <>
+                                내각 명칭 <OptionalTag>(선택)</OptionalTag>
+                              </>
+                            )}
+                          </FieldLabel>
+                          <FieldControl>
+                            <Input
+                              value={cabinetName}
+                              onChange={(changeEvent) =>
+                                setCabinetName(changeEvent.target.value)
+                              }
+                              placeholder={
+                                mode === 'collective'
+                                  ? '예: 혁명통치평의회, 공안위원회, 스위스 연방평의회'
+                                  : headActionMode === 'reshuffle_existing'
+                                    ? '예: 제2차 개조내각, 전시연립내각, 거국내각'
+                                    : `비워두면 "${autoCabinetNamePreview}"(으)로 자동 생성`
+                              }
+                            />
+                          </FieldControl>
+                        </FieldRow>
 
-                    <FieldRow>
-                      <FieldLabel>
-                        집권 정당 <OptionalTag>(선택)</OptionalTag>
-                      </FieldLabel>
+                        <FieldRow>
+                          <FieldLabel>
+                            집권 정당 <OptionalTag>(선택)</OptionalTag>
+                          </FieldLabel>
                       <FieldControl>
                         {showQuickCreateParty ? (
                           <QuickPersonCard>
@@ -4362,6 +4522,8 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                         ) : null}
                       </FieldControl>
                     </FieldRow>
+                      </>
+                    ) : null}
                   </FormGroup>
 
                   {/* ═══════════════ 우측 하단: 선택 상세 접기/펼치기 ═══════════════ */}
@@ -4383,7 +4545,9 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                             : '추가 정보 입력'}
                         </strong>
                         <span className="toggle-sub">
-                          출범 사건 · 취임/퇴임 경위 · 내각 개요
+                          {mode === 'monarch'
+                            ? '즉위 사건 · 즉위/퇴위 경위 · 배경 메모'
+                            : '출범 사건 · 취임/퇴임 경위 · 내각 개요'}
                         </span>
                       </div>
                       <div className="toggle-right">
@@ -4403,7 +4567,9 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                     {extraDetailsExpanded ? (
                       <ExtraDetailsBody>
                         <FieldRow>
-                          <FieldLabel>출범 사건</FieldLabel>
+                          <FieldLabel>
+                            {mode === 'monarch' ? '즉위 사건' : '출범 사건'}
+                          </FieldLabel>
                           <FieldControl>
                             <LinkedEventPickerField
                               value={originEventId}
@@ -4417,10 +4583,12 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                           </FieldControl>
                         </FieldRow>
 
-                        {mode === 'head' &&
+                        {(mode === 'head' || mode === 'monarch') &&
                         (isEditing || headActionMode === 'new_tenure') ? (
                           <FieldRow>
-                            <FieldLabel>취임 · 퇴임</FieldLabel>
+                            <FieldLabel>
+                              {mode === 'monarch' ? '즉위 · 퇴위' : '취임 · 퇴임'}
+                            </FieldLabel>
                             <FieldControl>
                               <SubFieldPair $cols={2}>
                                 <SubField>
@@ -4538,20 +4706,22 @@ export const CabinetFormModal: React.FC<CabinetFormModalProps> = ({
                           </FieldRow>
                         ) : null}
 
-                        <FieldRow>
-                          <FieldLabel>내각 개요</FieldLabel>
-                          <FieldControl>
-                            <PersonRegisterModalTextarea
-                              rows={2}
-                              style={{ minHeight: 64 }}
-                              value={cabinetDescription}
-                              onChange={(changeEvent) =>
-                                setCabinetDescription(changeEvent.target.value)
-                              }
-                              placeholder="출범 기조나 연립 구성 등 간단한 설명 (선택)"
-                            />
-                          </FieldControl>
-                        </FieldRow>
+                        {mode !== 'monarch' ? (
+                          <FieldRow>
+                            <FieldLabel>내각 개요</FieldLabel>
+                            <FieldControl>
+                              <PersonRegisterModalTextarea
+                                rows={2}
+                                style={{ minHeight: 64 }}
+                                value={cabinetDescription}
+                                onChange={(changeEvent) =>
+                                  setCabinetDescription(changeEvent.target.value)
+                                }
+                                placeholder="출범 기조나 연립 구성 등 간단한 설명 (선택)"
+                              />
+                            </FieldControl>
+                          </FieldRow>
+                        ) : null}
                       </ExtraDetailsBody>
                     ) : null}
                   </ExtraDetailsWrap>

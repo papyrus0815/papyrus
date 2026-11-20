@@ -9,6 +9,7 @@ import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import { renderWithTheme } from '@/shared/test/render-with-theme'
 
 import { GovernmentInfoSection } from './government-info-section.widget'
+import { OverviewSubTabs } from './overview-sub-tabs'
 
 jest.mock('@/shared/hooks/use-click-sound.hook', () => ({
   useClickSound: () => jest.fn(),
@@ -140,13 +141,15 @@ describe('GovernmentInfoSection page declutter & three-dot menus', () => {
       </QueryClientProvider>,
     )
 
-    // Sub-tabs render cleanly
-    expect(screen.getByRole('tab', { name: /정체·헌정/ })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /행정부·내각/ })).toBeInTheDocument()
-    expect(
-      screen.getByRole('tab', { name: /중앙부처·국가기관/ }),
-    ).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /통계·연혁/ })).toBeInTheDocument()
+    // Sub-tabs render in priority order: 행정부·내각 -> 중앙부처·국가기관 -> 정체·헌정 -> 통계·연혁
+    const govTabs = screen.getAllByRole('tab')
+    expect(govTabs.map((tabEl) => tabEl.textContent?.trim())).toEqual([
+      '행정부·내각',
+      '중앙부처·국가기관',
+      '정체·헌정',
+      '통계·연혁',
+    ])
+    expect(govTabs[0]).toHaveAttribute('aria-selected', 'true')
 
     // Global tools are tucked inside the top-right three-dot menu instead of exposed side-by-side
     expect(
@@ -187,5 +190,29 @@ describe('GovernmentInfoSection page declutter & three-dot menus', () => {
     // Switch to 통계·연혁 -> renders clean KPI cards without verbose zero-count clutter
     fireEvent.click(screen.getByRole('tab', { name: /통계·연혁/ }))
     expect(screen.getByText('성격별 기관 구성')).toBeInTheDocument()
+  })
+
+  it('orders Country Page main tabs by governance/narrative/territory/economy importance', () => {
+    renderWithTheme(
+      <OverviewSubTabs activeSubTab="dashboard" onSubTabChange={jest.fn()} />,
+    )
+
+    const mainTabs = screen.getAllByRole('tab')
+    expect(mainTabs.map((tabEl) => tabEl.textContent?.trim())).toEqual([
+      '대시보드',
+      '정부·행정',
+      '정당·선거',
+      '법령',
+      '사건',
+      '인물',
+      '과거국가',
+      '지리·행정구역',
+      '군사',
+      '조약',
+      '경제·통계',
+      '교역',
+      '기업',
+      '민족',
+    ])
   })
 })

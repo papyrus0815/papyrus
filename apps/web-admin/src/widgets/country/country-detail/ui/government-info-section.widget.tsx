@@ -81,9 +81,7 @@ export function GovernmentInfoSection({
           initialContentTab !== 'military' &&
           initialContentTab !== 'positions'
             ? initialContentTab
-            : cabinetIdQuery
-              ? 'cabinets'
-              : 'system'),
+            : 'cabinets'),
   )
   const [positionsDrawerOpen, setPositionsDrawerOpen] = useState<boolean>(
     rawSubQuery === 'positions' || initialContentTab === 'positions',
@@ -121,7 +119,7 @@ export function GovernmentInfoSection({
       userManuallyPickedTabRef.current = true
       setContentTab(nextTab)
       const nextParams = new URLSearchParams(searchParams)
-      if (nextTab === 'system') {
+      if (nextTab === 'cabinets' && !initialContentTab) {
         nextParams.delete('sub')
       } else {
         nextParams.set('sub', nextTab)
@@ -143,7 +141,7 @@ export function GovernmentInfoSection({
       }
       setSearchParams(nextParams, { replace: true })
     },
-    [searchParams, setSearchParams],
+    [initialContentTab, searchParams, setSearchParams],
   )
 
   const syncSelectedDepartmentParam = useCallback(
@@ -225,10 +223,12 @@ export function GovernmentInfoSection({
 
   const visibleCabinetCount = useMemo(() => {
     if (!cabinetsCountQuery.data) return undefined
-    return cabinetsCountQuery.data.filter(
+    const totalLen = cabinetsCountQuery.data.length
+    const nonCeremonialLen = cabinetsCountQuery.data.filter(
       (cabItem) =>
         !shouldHideCabinetFromExecutiveTimeline(cabItem.headTenure, cabItem),
     ).length
+    return nonCeremonialLen > 0 ? nonCeremonialLen : totalLen
   }, [cabinetsCountQuery.data])
 
   const tabCountByKey: Partial<Record<GovernmentContentTab, number>> = {
@@ -237,7 +237,7 @@ export function GovernmentInfoSection({
     ministries: departmentsQuery.data?.length,
   }
 
-  // URL에 서브탭이 명시되지 않았고 「정체·헌정」이 비어 있는 국가는 데이터가 있는 탭(내각 → 부처)으로 스마트 폴백
+  // URL에 서브탭이 명시되지 않았고 「행정부·내각」이 비어 있는 국가는 데이터가 있는 탭(중앙부처 → 정체·헌정)으로 스마트 폴백
   useEffect(() => {
     if (!effectiveCountryId) return
     if (autoFallbackScopeRef.current === effectiveCountryId) return
@@ -260,12 +260,11 @@ export function GovernmentInfoSection({
       return
     }
     autoFallbackScopeRef.current = effectiveCountryId
-    const systemLen = politicalSystemsQuery.data?.length ?? 0
-    if (systemLen > 0) return
-    if ((visibleCabinetCount ?? 0) > 0) {
-      setContentTab('cabinets')
-    } else if ((departmentsQuery.data?.length ?? 0) > 0) {
+    if ((visibleCabinetCount ?? 0) > 0) return
+    if ((departmentsQuery.data?.length ?? 0) > 0) {
       setContentTab('ministries')
+    } else if ((politicalSystemsQuery.data?.length ?? 0) > 0) {
+      setContentTab('system')
     }
   }, [
     effectiveCountryId,
@@ -520,6 +519,9 @@ export function GovernmentInfoSection({
           >
             <CabinetsSection
               country={country}
+              hasAnyPoliticalSystem={(politicalSystemsQuery.data?.length ?? 0) > 0}
+              hasAnyDepartment={(departmentsQuery.data?.length ?? 0) > 0}
+              onOpenPoliticalSystemTab={() => switchSubTab('system')}
               onOpenMinistriesTab={(categoryId) => {
                 setCabinetMinistryIntent({
                   categoryId: categoryId ?? '',

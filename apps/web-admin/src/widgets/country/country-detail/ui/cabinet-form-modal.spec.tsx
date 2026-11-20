@@ -32,6 +32,7 @@ jest.mock('@/shared/api/person-career', () => ({
     getTenuresByCountry: jest.fn(async () => []),
     createCabinet: jest.fn(),
     updateCabinet: jest.fn(),
+    addGovernmentPositionTenure: jest.fn(),
     createGovernmentPositionTenure: jest.fn(),
     updateGovernmentPositionTenure: jest.fn(),
     getSuggestedCabinetMembers: jest.fn(async () => []),
@@ -257,5 +258,19 @@ describe('CabinetFormModal — 정보 밀도 완화 · 점세개(⋯) 설정 메
         '출범 기조나 연립 구성 등 간단한 설명 (선택)',
       ),
     ).toBeInTheDocument()
+  })
+
+  it('군주 · 원수 재위 모드로 진입 시 군주 전용 직함 프리셋(국왕·황제 등)과 왕호 입력란을 제공하고 정당·내각명 필드는 숨긴다', () => {
+    renderCabinetModal({ initialMode: 'monarch' })
+
+    expect(
+      screen.getByRole('heading', { name: '군주 · 국가원수 재위 등록' }),
+    ).toBeInTheDocument()
+    expect(screen.getByDisplayValue('국왕')).toBeInTheDocument()
+    expect(
+      screen.getByPlaceholderText('예: 세종, 빅토리아'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('집권 정당')).not.toBeInTheDocument()
+    expect(screen.queryByText('내각 명칭')).not.toBeInTheDocument()
   })
 })
