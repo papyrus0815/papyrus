@@ -15,13 +15,37 @@ import {
   FiEdit2,
   FiImage,
   FiPlus,
+  FiSearch,
   FiTrash2,
   FiUpload,
   FiX,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 
+import {
+  BentoActionBtn,
+  BentoCard,
+  BentoCardBadge,
+  BentoCardBody,
+  BentoCardHeader,
+  BentoCardTitle,
+  BentoCardTitleGroup,
+  BentoGrid2Col,
+  MiniDonutRing,
+  type SegmentSlice,
+} from '@/entities/event/ui/bento-primitives'
+import {
+  DIGIT_DISPLAY,
+  RADIUS,
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentSubtle,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerRowWash,
+  ledgerSubtleFill,
+} from '@/entities/event/ui/ledger-tokens'
 import { usePersons } from '@/entities/person/api'
 import {
   type PartyMembershipLeadershipTier,
@@ -78,12 +102,9 @@ import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { SidePanel } from '@/shared/ui/side-panel'
 import { PoliticalPartyRegisterViewModal } from '@/widgets/country/country-list/ui/political-party-register-view-modal'
 
-import * as DashboardStyles from './country-detail-dashboard.styles'
 import {
   DetailHeaderIconBtn,
   EmptyHint,
-  PartyCoalitionSegment,
-  PartyCoalitionStrip,
   PartyDescBody,
   PartyDescContent,
   PartyDescEmptyHint,
@@ -103,6 +124,7 @@ import {
   PartyDetailChipRowCenter,
   PartyDetailDescSection,
   PartyDetailHero,
+  PartyDetailHeroBody,
   PartyDetailHeroStack,
   PartyDetailHeroTitle,
   PartyDetailLayout,
@@ -130,7 +152,6 @@ import {
   PartyIdeologySpectrumBubble,
   PartyIdeologySpectrumBubbleAnchor,
   PartyIdeologySpectrumEnds,
-  PartyIdeologySpectrumLabel,
   PartyIdeologySpectrumPin,
   PartyIdeologySpectrumStage,
   PartyIdeologySpectrumTrackBar,
@@ -140,10 +161,6 @@ import {
   PartyInfographicCardHero,
   PartyInfographicFootHint,
   PartyInfographicGrid,
-  PartyInfographicKicker,
-  PartyInfographicKickerDesc,
-  PartyInfographicKickerLeft,
-  PartyInfographicKickerTitle,
   PartyInfographicLogo,
   PartyInfographicLogoImg,
   PartyInfographicMetaRow,
@@ -347,127 +364,295 @@ const PartyBrandColorInput = styled(Input)<{ $invalid?: boolean }>`
 
 const PartyFilterBar = styled.div`
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
-  margin: 12px 0 16px;
   padding: 10px 0;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-radius: 0;
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   background: transparent;
 `
 
-const PartyFilterRow = styled.div`
+const PartySearchBox = styled.div`
+  flex: 1 1 200px;
+  min-width: 180px;
+  height: 34px;
+  padding: 0 10px;
   display: flex;
-  gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
+  gap: 7px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.SM};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    font-size: 13px;
+    color: ${({ theme }) => theme.colors.text.primary};
+    outline: none;
+
+    &::placeholder {
+      color: ${({ theme }) => theme.colors.text.tertiary};
+    }
+  }
 `
 
-const PartyFilterInput = styled.input`
-  flex: 1;
-  min-width: 0;
-  height: 34px;
-  padding: 0 12px;
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.primary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff'};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 8px;
-  outline: none;
-  &::placeholder {
-    color: ${({ theme }) => theme.colors.text.tertiary};
-  }
-  &:focus-visible {
-    border-color: #6366f1;
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
-  }
+const PartySearchClearBtn = styled.button`
+  border: none;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+  display: inline-flex;
+  padding: 2px;
 `
 
 const PartyFilterSelect = styled.select`
-  flex: 1;
-  min-width: 0;
   height: 34px;
   padding: 0 10px;
   font-size: 12.5px;
   color: ${({ theme }) => theme.colors.text.primary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#ffffff'};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 8px;
+  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.SM};
   outline: none;
   &:focus-visible {
-    border-color: #6366f1;
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 `
 
-const PartyFilterToggleBtn = styled.button<{ $active?: boolean }>`
+const PartyStatusSegmentGroup = styled.div`
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  height: 34px;
-  padding: 0 12px;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: ${({ $active, theme }) =>
-    $active ? '#6366f1' : theme.colors.text.secondary};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.SM};
+  overflow: hidden;
+`
+
+const PartyStatusSegBtn = styled.button<{ $active: boolean }>`
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: ${({ $active }) => ($active ? 600 : 500)};
+  border: none;
   background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? 'rgba(99,102,241,0.16)'
-        : '#eef2ff'
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.04)'
-        : '#ffffff'};
-  border: 1px solid
-    ${({ $active, theme }) =>
-      $active
-        ? theme.mode === 'dark'
-          ? 'rgba(99,102,241,0.4)'
-          : '#c7d2fe'
-        : theme.colors.border.default};
-  border-radius: 8px;
+    $active ? ledgerAccentSubtle(theme.mode) : theme.colors.background.primary};
+  color: ${({ $active, theme }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
   cursor: pointer;
-  &:hover {
-    border-color: #6366f1;
-    color: #6366f1;
-  }
-`
-
-const PartyFilterBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 5px;
-  font-size: 10px;
-  font-weight: 700;
-  color: #fff;
-  background: #6366f1;
-  border-radius: 999px;
 `
 
 const PartyFilterMeta = styled.div`
+  ${DIGIT_DISPLAY}
+  margin-left: auto;
   font-size: 11.5px;
   color: ${({ theme }) => theme.colors.text.tertiary};
-  padding-left: 2px;
+  white-space: nowrap;
 `
 
 const PartyFilterResetBtn = styled.button`
   background: none;
   border: none;
   padding: 0;
-  color: #6366f1;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
   cursor: pointer;
   font: inherit;
+  font-weight: 600;
   text-decoration: underline;
-  &:hover {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5')};
+`
+
+const PartySpectrumChipRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  padding-top: 6px;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const PartySpectrumFilterChip = styled.button<{ $active: boolean }>`
+  ${DIGIT_DISPLAY}
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  border-radius: ${RADIUS.SM};
+  border: 1px solid
+    ${({ $active, theme }) =>
+      $active ? ledgerAccentBorder(theme.mode) : ledgerHairlineStrong(theme.mode)};
+  background: ${({ $active, theme }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  cursor: pointer;
+
+  span {
+    opacity: 0.72;
+    font-size: 10.5px;
   }
+`
+
+const PartyBentoDonutRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const PartyBentoStatusCol = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`
+
+const PartyBentoStatusBtn = styled.button<{ $active: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 6px;
+  margin: 0 -6px;
+  border: none;
+  border-radius: ${RADIUS.SM};
+  background: ${({ $active, theme }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  color: ${({ $active, theme }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ $active, theme }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerRowWash(theme.mode)};
+  }
+
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .lbl {
+    flex: 1;
+    text-align: left;
+    font-weight: ${({ $active }) => ($active ? 600 : 500)};
+  }
+
+  strong {
+    ${DIGIT_DISPLAY}
+    font-weight: 700;
+    color: ${({ $active, theme }) =>
+      $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
+  }
+`
+
+const PartyLifespanMiniList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+`
+
+const PartyLifespanMiniRow = styled.button`
+  display: grid;
+  grid-template-columns: minmax(76px, 124px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 2.5px 6px;
+  margin: 0 -6px;
+  border: none;
+  border-radius: ${RADIUS.SM};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    background: ${({ theme }) => ledgerRowWash(theme.mode)};
+  }
+
+  .name {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .yrs {
+    ${DIGIT_DISPLAY}
+    font-size: 10.5px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+const PartyLifespanMiniTrack = styled.div`
+  position: relative;
+  height: 5px;
+  border-radius: 999px;
+  background: ${({ theme }) => ledgerHairline(theme.mode)};
+  overflow: hidden;
+`
+
+const PartyLifespanMiniFill = styled.div<{
+  $left: number
+  $width: number
+  $color: string
+  $dissolved: boolean
+}>`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: ${({ $left }) => `${$left}%`};
+  width: ${({ $width }) => `${$width}%`};
+  background: ${({ $color }) => $color};
+  opacity: ${({ $dissolved }) => ($dissolved ? 0.55 : 0.9)};
+  border-radius: 999px;
+`
+
+const PartyCardIdeologyChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 1.5px 6px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 500;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const PartyResultCellBarWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 84px;
+  ${DIGIT_DISPLAY}
+`
+
+const PartyResultCellTrack = styled.div`
+  height: 4px;
+  width: 100%;
+  border-radius: 999px;
+  background: ${({ theme }) => ledgerHairline(theme.mode)};
+  overflow: hidden;
+`
+
+const PartyResultCellFill = styled.div<{ $pct: number; $color: string }>`
+  height: 100%;
+  width: ${({ $pct }) => `${Math.min(100, Math.max(2, $pct))}%`};
+  border-radius: 999px;
+  background: ${({ $color }) => $color};
 `
 
 /** 관계 데이터 섹션 공통 테이블 */
@@ -779,10 +964,13 @@ function formatVoteShareShort(raw: string | null | undefined): string {
 function PartyElectionResultsBlock({
   partyId,
   routeCountryId,
+  brandColor,
 }: {
   partyId: string
   routeCountryId: string
+  brandColor?: string | null
 }) {
+  const theme = useTheme()
   const navigate = useNavigate()
   const [showAll, setShowAll] = useState(false)
   const { data = [], isLoading, isError } = useQuery({
@@ -792,6 +980,7 @@ function PartyElectionResultsBlock({
   })
   const visible = showAll ? data : data.slice(0, PARTY_RELATION_DEFAULT_LIMIT)
   const hiddenCount = Math.max(0, data.length - visible.length)
+  const barFill = brandColor || ledgerAccent(theme.mode)
   return (
     <PartyDetailDescSection aria-label="역대 선거 성적">
       <PartyDescSectionLabelRow style={{ marginBottom: 10 }}>
@@ -830,6 +1019,11 @@ function PartyElectionResultsBlock({
                   `${pathKeys.countryElections(routeCountryId)}?electionId=${encodeURIComponent(el.id)}`,
                 )
               }
+              const pctNum = row.voteSharePercent != null ? Number(row.voteSharePercent) : NaN
+              const seatPctNum =
+                row.seatsWon != null && el?.totalSeats && el.totalSeats > 0
+                  ? (row.seatsWon / el.totalSeats) * 100
+                  : NaN
               return (
                 <PartyRelationTr
                   key={row.id}
@@ -855,12 +1049,31 @@ function PartyElectionResultsBlock({
                     {formatVotesLocalized(row.votes)}
                   </PartyRelationTd>
                   <PartyRelationTd>
-                    {formatVoteShareShort(row.voteSharePercent)}
+                    <PartyResultCellBarWrap>
+                      <span>{formatVoteShareShort(row.voteSharePercent)}</span>
+                      {Number.isFinite(pctNum) && pctNum > 0 ? (
+                        <PartyResultCellTrack>
+                          <PartyResultCellFill $pct={pctNum} $color={barFill} />
+                        </PartyResultCellTrack>
+                      ) : null}
+                    </PartyResultCellBarWrap>
                   </PartyRelationTd>
                   <PartyRelationTd>
-                    {row.seatsWon != null
-                      ? `${row.seatsWon}${el?.totalSeats ? ` / ${el.totalSeats}` : ''}석`
-                      : '—'}
+                    <PartyResultCellBarWrap>
+                      <span>
+                        {row.seatsWon != null
+                          ? `${row.seatsWon}${el?.totalSeats ? ` / ${el.totalSeats}` : ''}석`
+                          : '—'}
+                      </span>
+                      {Number.isFinite(seatPctNum) && seatPctNum > 0 ? (
+                        <PartyResultCellTrack>
+                          <PartyResultCellFill
+                            $pct={seatPctNum}
+                            $color={barFill}
+                          />
+                        </PartyResultCellTrack>
+                      ) : null}
+                    </PartyResultCellBarWrap>
                   </PartyRelationTd>
                 </PartyRelationTr>
               )
@@ -2481,6 +2694,7 @@ export function CountryPoliticalPartiesBlock({
   selectedPartyId: string | null
   createRequestTick?: number
 }) {
+  const theme = useTheme()
   const navigate = useNavigate()
   const { handleProseClick } = useRichTextProseClick({
     navigate,
@@ -2510,7 +2724,6 @@ export function CountryPoliticalPartiesBlock({
   >('')
   const [listSortKey, setListSortKey] = useState<'founded' | 'name'>('founded')
   const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('desc')
-  const [filtersExpanded, setFiltersExpanded] = useState(false)
 
   const listParams = partyListParams({ countryId, historicalCountryId })
 
@@ -2585,12 +2798,6 @@ export function CountryPoliticalPartiesBlock({
     })
   }, [parties])
 
-  /** 범례·연정 띠는 스펙트럼 좌→우 순서와 맞춤 */
-  const partiesSpectrumSorted = useMemo(
-    () => [...partyInfographicRows].sort((a, b) => a.leftPct - b.leftPct),
-    [partyInfographicRows],
-  )
-
   /** 스펙트럼 말풍선: 좌표가 가까우면 위로 레인을 나눠 겹침 완화 */
   const spectrumBubbleLanes = useMemo(() => {
     const THRESHOLD_PCT = 8.5
@@ -2630,21 +2837,24 @@ export function CountryPoliticalPartiesBlock({
     queryClient.invalidateQueries({ queryKey: ['elections'] })
   }
 
-  /** 정당 요약 KPI (4칸 헤어라인 스트립용) */
+  /** 정당 요약 KPI 및 벤토 인포그래픽 집계 */
   const partyKpiSummary = useMemo(() => {
     const totalCount = parties.length
     const activeCount = parties.filter((party) => !party.dissolvedDate).length
     const dissolvedCount = totalCount - activeCount
     const posSet = new Set<string>()
+    const posCounts = new Map<string, number>()
     let leftCount = 0
     let centerCount = 0
     let rightCount = 0
     let earliestYear: number | null = null
     let latestYear: number | null = null
+    const nowYear = new Date().getUTCFullYear()
 
     for (const party of parties) {
       if (party.position) {
         posSet.add(party.position)
+        posCounts.set(party.position, (posCounts.get(party.position) ?? 0) + 1)
         if (
           party.position === 'FAR_LEFT' ||
           party.position === 'LEFT' ||
@@ -2673,18 +2883,73 @@ export function CountryPoliticalPartiesBlock({
       }
     }
 
+    const minYear = earliestYear ?? nowYear - 30
+    const spanYears = Math.max(1, nowYear - minYear)
+    const lifespanRows = [...parties]
+      .filter((p) => p.foundedDate != null)
+      .sort((a, b) => {
+        const ya = new Date(a.foundedDate!).getUTCFullYear()
+        const yb = new Date(b.foundedDate!).getUTCFullYear()
+        return ya - yb
+      })
+      .slice(0, 5)
+      .map((p) => {
+        const fy = new Date(p.foundedDate!).getUTCFullYear()
+        const dy = p.dissolvedDate
+          ? new Date(p.dissolvedDate).getUTCFullYear()
+          : null
+        const endVal = dy ?? nowYear
+        const leftPct = Math.max(
+          0,
+          Math.min(94, ((fy - minYear) / spanYears) * 100),
+        )
+        const widthPct = Math.max(
+          4,
+          Math.min(100 - leftPct, ((Math.max(fy, endVal) - fy) / spanYears) * 100),
+        )
+        const color =
+          normalizeBrandColorInput(p.brandColor ?? '') ??
+          partyFallbackBrandColor(p.id)
+        return {
+          party: p,
+          fy,
+          dy,
+          leftPct,
+          widthPct,
+          color,
+        }
+      })
+
+    const statusSlices: SegmentSlice[] = [
+      {
+        key: 'active',
+        label: '활동 중',
+        value: activeCount,
+        color: theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5',
+      },
+      {
+        key: 'dissolved',
+        label: '해산',
+        value: dissolvedCount,
+        color: theme.mode === 'dark' ? '#64748b' : '#94a3b8',
+      },
+    ]
+
     return {
       totalCount,
       activeCount,
       dissolvedCount,
       positionSetSize: posSet.size,
+      posCounts,
       leftCount,
       centerCount,
       rightCount,
       earliestYear,
       latestYear,
+      lifespanRows,
+      statusSlices,
     }
-  }, [parties])
+  }, [parties, theme.mode])
 
   const createMut = useMutation({
     mutationFn: (body: CreatePoliticalPartyInput) =>
@@ -2762,82 +3027,6 @@ export function CountryPoliticalPartiesBlock({
   return (
     <>
       <PartyBlockRoot>
-        {!selectedPartyId && !isLoading && parties.length > 0 ? (
-          <DashboardStyles.SectionHeadlineStrip aria-label="정당 현황 요약">
-            <DashboardStyles.SectionHeadlineCell>
-              <DashboardStyles.SectionHeadlineLabel>
-                전체 등록 정당
-              </DashboardStyles.SectionHeadlineLabel>
-              <DashboardStyles.SectionHeadlineValue>
-                {partyKpiSummary.totalCount}
-                <DashboardStyles.SectionHeadlineUnit>
-                  곳
-                </DashboardStyles.SectionHeadlineUnit>
-              </DashboardStyles.SectionHeadlineValue>
-              <DashboardStyles.SectionHeadlineSub>
-                {historicalCountryId ? '역사 국가 소속 정당' : '현대·연결 역사 국가 정당'}
-              </DashboardStyles.SectionHeadlineSub>
-            </DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineCell>
-              <DashboardStyles.SectionHeadlineLabel>
-                활동 중 · 해산
-              </DashboardStyles.SectionHeadlineLabel>
-              <DashboardStyles.SectionHeadlineValue>
-                {partyKpiSummary.activeCount}
-                <DashboardStyles.SectionHeadlineUnit>
-                  곳 활동
-                </DashboardStyles.SectionHeadlineUnit>
-              </DashboardStyles.SectionHeadlineValue>
-              <DashboardStyles.SectionHeadlineSub>
-                해산 {partyKpiSummary.dissolvedCount}곳
-              </DashboardStyles.SectionHeadlineSub>
-            </DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineCell>
-              <DashboardStyles.SectionHeadlineLabel>
-                이념 스펙트럼 분포
-              </DashboardStyles.SectionHeadlineLabel>
-              <DashboardStyles.SectionHeadlineValue>
-                {partyKpiSummary.positionSetSize > 0
-                  ? `${partyKpiSummary.positionSetSize}`
-                  : '—'}
-                {partyKpiSummary.positionSetSize > 0 ? (
-                  <DashboardStyles.SectionHeadlineUnit>
-                    개 유형
-                  </DashboardStyles.SectionHeadlineUnit>
-                ) : null}
-              </DashboardStyles.SectionHeadlineValue>
-              <DashboardStyles.SectionHeadlineSub>
-                {partyKpiSummary.positionSetSize > 0
-                  ? `좌파권 ${partyKpiSummary.leftCount} · 중도/빅텐트 ${partyKpiSummary.centerCount} · 우파권 ${partyKpiSummary.rightCount}`
-                  : '스펙트럼 미지정'}
-              </DashboardStyles.SectionHeadlineSub>
-            </DashboardStyles.SectionHeadlineCell>
-            <DashboardStyles.SectionHeadlineCell>
-              <DashboardStyles.SectionHeadlineLabel>
-                창당 연도 범위
-              </DashboardStyles.SectionHeadlineLabel>
-              <DashboardStyles.SectionHeadlineValue>
-                {partyKpiSummary.earliestYear != null
-                  ? partyKpiSummary.latestYear != null &&
-                    partyKpiSummary.latestYear !== partyKpiSummary.earliestYear
-                    ? `${partyKpiSummary.earliestYear}–${partyKpiSummary.latestYear}`
-                    : `${partyKpiSummary.earliestYear}`
-                  : '—'}
-                {partyKpiSummary.earliestYear != null ? (
-                  <DashboardStyles.SectionHeadlineUnit>
-                    년
-                  </DashboardStyles.SectionHeadlineUnit>
-                ) : null}
-              </DashboardStyles.SectionHeadlineValue>
-              <DashboardStyles.SectionHeadlineSub>
-                {partyKpiSummary.earliestYear != null
-                  ? `최초 창당 ${partyKpiSummary.earliestYear}년`
-                  : '창당일 미입력'}
-              </DashboardStyles.SectionHeadlineSub>
-            </DashboardStyles.SectionHeadlineCell>
-          </DashboardStyles.SectionHeadlineStrip>
-        ) : null}
-
         {selectedPartyId ? (
           detailLoading || !detailParty ? (
             <PartyDetailLayout>
@@ -2925,10 +3114,18 @@ export function CountryPoliticalPartiesBlock({
                   </DetailHeaderIconBtn>
                 </PartyDetailTopActions>
               </PartyDetailTopBar>
-              <PartyDetailHero>
+              <PartyDetailHero
+                $accent={
+                  normalizeBrandColorInput(detailParty.brandColor ?? '') ??
+                  partyFallbackBrandColor(detailParty.id)
+                }
+              >
                 <PartyDetailHeroStack>
                   <PartyDetailLogoHero
-                    $ring={detailParty.brandColor ?? undefined}
+                    $ring={
+                      normalizeBrandColorInput(detailParty.brandColor ?? '') ??
+                      partyFallbackBrandColor(detailParty.id)
+                    }
                   >
                     {detailParty.logoUrl ? (
                       <PartyDetailLogoImg
@@ -2936,40 +3133,53 @@ export function CountryPoliticalPartiesBlock({
                         alt=""
                       />
                     ) : (
-                      <FiImage size={52} strokeWidth={1.5} />
+                      (detailParty.shortName || detailParty.name).slice(0, 3)
                     )}
                   </PartyDetailLogoHero>
-                  <PartyDetailHeroTitle>
-                    {detailParty.name}
-                    <PartyStatusBadge
-                      $dissolved={Boolean(detailParty.dissolvedDate)}
-                      aria-label={
-                        detailParty.dissolvedDate
-                          ? `해산 · ${formatDate(detailParty.dissolvedDate)}`
-                          : '활동 중'
-                      }
-                    >
-                      {detailParty.dissolvedDate ? '해산' : '활동 중'}
-                    </PartyStatusBadge>
-                  </PartyDetailHeroTitle>
-                  <PartyDetailChipRowCenter>
-                    {detailParty.shortName?.trim() ? (
-                      <PartyDetailChip title="약칭">
-                        <PartyDetailChipMuted>약칭</PartyDetailChipMuted>
-                        {detailParty.shortName.trim()}
-                      </PartyDetailChip>
-                    ) : (
-                      <PartyDetailChip style={{ opacity: 0.72 }}>
-                        약칭 없음
-                      </PartyDetailChip>
-                    )}
-                    {detailParty.localName?.trim() ? (
-                      <PartyDetailChip title="현지어·별도 표기">
-                        <PartyDetailChipMuted>현지어</PartyDetailChipMuted>
-                        {detailParty.localName.trim()}
-                      </PartyDetailChip>
-                    ) : null}
-                  </PartyDetailChipRowCenter>
+                  <PartyDetailHeroBody>
+                    <PartyDetailHeroTitle>
+                      {detailParty.name}
+                      <PartyStatusBadge
+                        $dissolved={Boolean(detailParty.dissolvedDate)}
+                        aria-label={
+                          detailParty.dissolvedDate
+                            ? `해산 · ${formatDate(detailParty.dissolvedDate)}`
+                            : '활동 중'
+                        }
+                      >
+                        {detailParty.dissolvedDate ? '해산' : '활동 중'}
+                      </PartyStatusBadge>
+                    </PartyDetailHeroTitle>
+                    <PartyDetailChipRowCenter>
+                      {detailParty.shortName?.trim() ? (
+                        <PartyDetailChip title="약칭">
+                          <PartyDetailChipMuted>약칭</PartyDetailChipMuted>
+                          {detailParty.shortName.trim()}
+                        </PartyDetailChip>
+                      ) : null}
+                      {detailParty.localName?.trim() ? (
+                        <PartyDetailChip title="현지어·별도 표기">
+                          <PartyDetailChipMuted>현지어</PartyDetailChipMuted>
+                          {detailParty.localName.trim()}
+                        </PartyDetailChip>
+                      ) : null}
+                      {detailParty.position ? (
+                        <PartyDetailChip title="정치 스펙트럼">
+                          <PartyDetailChipMuted>스펙트럼</PartyDetailChipMuted>
+                          {labelPoliticalPosition(detailParty.position)}
+                        </PartyDetailChip>
+                      ) : null}
+                      {detailParty.foundedDate ? (
+                        <PartyDetailChip title="존속 기간">
+                          <PartyDetailChipMuted>존속</PartyDetailChipMuted>
+                          {formatDate(detailParty.foundedDate)} ~{' '}
+                          {detailParty.dissolvedDate
+                            ? formatDate(detailParty.dissolvedDate)
+                            : '현재'}
+                        </PartyDetailChip>
+                      ) : null}
+                    </PartyDetailChipRowCenter>
+                  </PartyDetailHeroBody>
                 </PartyDetailHeroStack>
               </PartyDetailHero>
               <PartyDetailMetaSection>
@@ -3070,6 +3280,9 @@ export function CountryPoliticalPartiesBlock({
               <PartyElectionResultsBlock
                 partyId={detailParty.id}
                 routeCountryId={routeCountryId}
+                brandColor={normalizeBrandColorInput(
+                  detailParty.brandColor ?? '',
+                )}
               />
               <PartyMembershipsBlock partyId={detailParty.id} />
               <PartyCabinetAffiliationsBlock
@@ -3247,270 +3460,448 @@ export function CountryPoliticalPartiesBlock({
           </PartyListAreaBody>
         ) : (
           <PartyInfographicSection>
-            <PartyInfographicKicker>
-              <PartyInfographicKickerLeft>
-                <PartyInfographicKickerTitle>
-                  정당 스펙트럼 · 연정 띠
-                </PartyInfographicKickerTitle>
-                <PartyInfographicKickerDesc>
-                  말풍선·막대 위 포인트·아래 띠는 정당 브랜드 색으로 맞춥니다.
-                  가까운 위치의 말풍선은 위로 나눠 겹치지 않게 배치합니다.
-                </PartyInfographicKickerDesc>
-              </PartyInfographicKickerLeft>
-            </PartyInfographicKicker>
+            {/* 2열 Event-Ledger 벤토 인포그래픽: 좌우 스펙트럼 포지셔닝 맵 + 존속 현황·연대기 */}
+            <BentoGrid2Col aria-label="정당 현황 요약 인포그래픽">
+              <BentoCard>
+                <BentoCardHeader>
+                  <BentoCardTitleGroup>
+                    <BentoCardTitle>이념 스펙트럼 포지셔닝 맵</BentoCardTitle>
+                    <BentoCardBadge>
+                      {partyKpiSummary.positionSetSize > 0
+                        ? `${partyKpiSummary.positionSetSize}개 성향`
+                        : '미분류'}
+                    </BentoCardBadge>
+                  </BentoCardTitleGroup>
+                  {listPositionFilter ? (
+                    <BentoActionBtn
+                      type="button"
+                      onClick={() => setListPositionFilter('')}
+                    >
+                      전체 스펙트럼
+                    </BentoActionBtn>
+                  ) : null}
+                </BentoCardHeader>
+                <BentoCardBody>
+                  <PartyIdeologySpectrumWrap>
+                    <span
+                      id="party-spectrum-axis-help"
+                      style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        width: 1,
+                        height: 1,
+                        padding: 0,
+                        margin: -1,
+                        overflow: 'hidden',
+                        clip: 'rect(0, 0, 0, 0)',
+                        whiteSpace: 'nowrap',
+                        border: 0,
+                      }}
+                    >
+                      가로축은 좌에서 우로 갈수록 정치적 성향이 우측으로 이동하는
+                      배치입니다.
+                    </span>
+                    <PartyIdeologySpectrumStage
+                      role="group"
+                      aria-label="이념·성향 축 (좌 → 우)"
+                      aria-describedby="party-spectrum-axis-help"
+                      $maxLane={spectrumBubbleLanes.maxLane}
+                    >
+                      {partyInfographicRows.map(
+                        (
+                          { party: p, leftPct, displayName, brandColor },
+                          stack,
+                        ) => {
+                          const tooltipParts: string[] = [p.name]
+                          if (p.position)
+                            tooltipParts.push(
+                              labelPoliticalPosition(p.position),
+                            )
+                          if (p.foundedDate)
+                            tooltipParts.push(
+                              `설립 ${formatDate(p.foundedDate)}`,
+                            )
+                          if (p.dissolvedDate)
+                            tooltipParts.push(
+                              `해산 ${formatDate(p.dissolvedDate)}`,
+                            )
+                          const tooltip = tooltipParts.join(' · ')
+                          const goToDetail = () =>
+                            navigate(
+                              pathKeys.countryElectionPartyDetail(
+                                routeCountryId,
+                                p.id,
+                              ),
+                            )
+                          return (
+                            <PartyIdeologySpectrumBubbleAnchor
+                              key={p.id}
+                              $leftPct={leftPct}
+                              $stack={stack}
+                              $lane={
+                                spectrumBubbleLanes.laneByPartyId.get(p.id) ?? 0
+                              }
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`${tooltip} — 상세 보기`}
+                              onClick={goToDetail}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault()
+                                  goToDetail()
+                                }
+                              }}
+                            >
+                              <PartyIdeologySpectrumBubble
+                                $brand={brandColor}
+                                title={tooltip}
+                              >
+                                {displayName}
+                              </PartyIdeologySpectrumBubble>
+                              <PartyIdeologySpectrumPin
+                                $fill={brandColor}
+                                aria-hidden
+                              />
+                            </PartyIdeologySpectrumBubbleAnchor>
+                          )
+                        },
+                      )}
+                      <PartyIdeologySpectrumTrackBar aria-hidden />
+                    </PartyIdeologySpectrumStage>
+                    <PartyIdeologySpectrumEnds>
+                      <span>← 좌파권 ({partyKpiSummary.leftCount})</span>
+                      <span>중도·포괄 ({partyKpiSummary.centerCount})</span>
+                      <span>우파권 ({partyKpiSummary.rightCount}) →</span>
+                    </PartyIdeologySpectrumEnds>
+                  </PartyIdeologySpectrumWrap>
 
+                  {partyKpiSummary.positionSetSize > 0 ? (
+                    <PartySpectrumChipRow>
+                      <PartySpectrumFilterChip
+                        type="button"
+                        $active={!listPositionFilter}
+                        onClick={() => setListPositionFilter('')}
+                      >
+                        전체 <span>{parties.length}</span>
+                      </PartySpectrumFilterChip>
+                      {POSITION_OPTIONS.map((opt) => {
+                        const cnt = partyKpiSummary.posCounts.get(opt.value) ?? 0
+                        if (cnt === 0 && listPositionFilter !== opt.value)
+                          return null
+                        return (
+                          <PartySpectrumFilterChip
+                            key={opt.value}
+                            type="button"
+                            $active={listPositionFilter === opt.value}
+                            onClick={() =>
+                              setListPositionFilter((prev) =>
+                                prev === opt.value ? '' : opt.value,
+                              )
+                            }
+                          >
+                            {opt.label} <span>{cnt}</span>
+                          </PartySpectrumFilterChip>
+                        )
+                      })}
+                    </PartySpectrumChipRow>
+                  ) : null}
+                </BentoCardBody>
+              </BentoCard>
+
+              <BentoCard>
+                <BentoCardHeader>
+                  <BentoCardTitleGroup>
+                    <BentoCardTitle>존속 현황 · 정당 연대기</BentoCardTitle>
+                    <BentoCardBadge>
+                      전체 {partyKpiSummary.totalCount}곳
+                    </BentoCardBadge>
+                  </BentoCardTitleGroup>
+                  {listStatusFilter ? (
+                    <BentoActionBtn
+                      type="button"
+                      onClick={() => setListStatusFilter('')}
+                    >
+                      전체 상태
+                    </BentoActionBtn>
+                  ) : partyKpiSummary.earliestYear != null ? (
+                    <BentoCardBadge>
+                      {partyKpiSummary.earliestYear}–
+                      {partyKpiSummary.latestYear ??
+                        partyKpiSummary.earliestYear}
+                      년 창당
+                    </BentoCardBadge>
+                  ) : null}
+                </BentoCardHeader>
+                <BentoCardBody>
+                  <PartyBentoDonutRow>
+                    <MiniDonutRing
+                      slices={partyKpiSummary.statusSlices}
+                      size={62}
+                      strokeWidth={8}
+                      centerValue={`${Math.round(
+                        (partyKpiSummary.activeCount /
+                          Math.max(1, partyKpiSummary.totalCount)) *
+                          100,
+                      )}%`}
+                      centerLabel="활동"
+                    />
+                    <PartyBentoStatusCol>
+                      <PartyBentoStatusBtn
+                        type="button"
+                        $active={listStatusFilter === 'active'}
+                        onClick={() =>
+                          setListStatusFilter((prev) =>
+                            prev === 'active' ? '' : 'active',
+                          )
+                        }
+                      >
+                        <span
+                          className="dot"
+                          style={{
+                            background:
+                              theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5',
+                          }}
+                        />
+                        <span className="lbl">활동 중 정당</span>
+                        <strong>{partyKpiSummary.activeCount}곳</strong>
+                      </PartyBentoStatusBtn>
+                      <PartyBentoStatusBtn
+                        type="button"
+                        $active={listStatusFilter === 'dissolved'}
+                        onClick={() =>
+                          setListStatusFilter((prev) =>
+                            prev === 'dissolved' ? '' : 'dissolved',
+                          )
+                        }
+                      >
+                        <span
+                          className="dot"
+                          style={{
+                            background:
+                              theme.mode === 'dark' ? '#64748b' : '#94a3b8',
+                          }}
+                        />
+                        <span className="lbl">해산 · 역사 정당</span>
+                        <strong>{partyKpiSummary.dissolvedCount}곳</strong>
+                      </PartyBentoStatusBtn>
+                    </PartyBentoStatusCol>
+                  </PartyBentoDonutRow>
+
+                  {partyKpiSummary.lifespanRows.length > 0 ? (
+                    <PartyLifespanMiniList aria-label="주요 정당 존속 연대기">
+                      {partyKpiSummary.lifespanRows.map((row) => (
+                        <PartyLifespanMiniRow
+                          key={row.party.id}
+                          type="button"
+                          onClick={() =>
+                            navigate(
+                              pathKeys.countryElectionPartyDetail(
+                                routeCountryId,
+                                row.party.id,
+                              ),
+                            )
+                          }
+                        >
+                          <span className="name">
+                            {row.party.shortName?.trim() || row.party.name}
+                          </span>
+                          <PartyLifespanMiniTrack>
+                            <PartyLifespanMiniFill
+                              $left={row.leftPct}
+                              $width={row.widthPct}
+                              $color={row.color}
+                              $dissolved={row.dy != null}
+                            />
+                          </PartyLifespanMiniTrack>
+                          <span className="yrs">
+                            {row.fy}–{row.dy ?? '현재'}
+                          </span>
+                        </PartyLifespanMiniRow>
+                      ))}
+                    </PartyLifespanMiniList>
+                  ) : (
+                    <EmptyHint style={{ fontSize: 12 }}>
+                      설립일이 입력된 정당이 등록되면 존속 기간 연대기 막대가 표시됩니다.
+                    </EmptyHint>
+                  )}
+                </BentoCardBody>
+              </BentoCard>
+            </BentoGrid2Col>
+
+            {/* 단일 행 Event-Ledger 필터·정렬 바 */}
             <PartyFilterBar>
-              <PartyFilterRow>
-                <PartyFilterInput
+              <PartySearchBox>
+                <FiSearch size={14} aria-hidden />
+                <input
                   type="search"
                   value={listSearch}
                   onChange={(e) => setListSearch(e.target.value)}
                   placeholder="정당 이름·약칭·현지어 검색…"
                   aria-label="정당 이름 검색"
                 />
-                <PartyFilterToggleBtn
-                  type="button"
-                  $active={filtersExpanded || activeFilterCount > 0}
-                  onClick={() => setFiltersExpanded((v) => !v)}
-                  aria-expanded={filtersExpanded}
-                  aria-label={filtersExpanded ? '필터·정렬 닫기' : '필터·정렬 열기'}
-                  title="필터·정렬"
-                >
-                  필터
-                  {activeFilterCount > 0 ? (
-                    <PartyFilterBadge>{activeFilterCount}</PartyFilterBadge>
-                  ) : null}
-                </PartyFilterToggleBtn>
-              </PartyFilterRow>
-              {filtersExpanded ? (
-                <>
-                  <PartyFilterRow>
-                    <PartyFilterSelect
-                      value={listPositionFilter}
-                      onChange={(e) => setListPositionFilter(e.target.value)}
-                      aria-label="스펙트럼 필터"
-                    >
-                      <option value="">전체 스펙트럼</option>
-                      {POSITION_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </PartyFilterSelect>
-                    <PartyFilterSelect
-                      value={listStatusFilter}
-                      onChange={(e) =>
-                        setListStatusFilter(
-                          e.target.value as '' | 'active' | 'dissolved',
-                        )
-                      }
-                      aria-label="상태 필터"
-                    >
-                      <option value="">활동 상태 전체</option>
-                      <option value="active">활동 중</option>
-                      <option value="dissolved">해산</option>
-                    </PartyFilterSelect>
-                  </PartyFilterRow>
-                  <PartyFilterRow>
-                    <PartyFilterSelect
-                      value={`${listSortKey}:${listSortDir}`}
-                      onChange={(e) => {
-                        const [key, dir] = e.target.value.split(':') as [
-                          'founded' | 'name',
-                          'asc' | 'desc',
-                        ]
-                        setListSortKey(key)
-                        setListSortDir(dir)
-                      }}
-                      aria-label="정렬"
-                    >
-                      <option value="founded:desc">최근 설립 순</option>
-                      <option value="founded:asc">오래된 설립 순</option>
-                      <option value="name:asc">이름 오름차순</option>
-                      <option value="name:desc">이름 내림차순</option>
-                    </PartyFilterSelect>
-                  </PartyFilterRow>
-                </>
-              ) : null}
+                {listSearch ? (
+                  <PartySearchClearBtn
+                    type="button"
+                    onClick={() => setListSearch('')}
+                    aria-label="검색어 지우기"
+                  >
+                    <FiX size={13} />
+                  </PartySearchClearBtn>
+                ) : null}
+              </PartySearchBox>
+
+              <PartyFilterSelect
+                value={listPositionFilter}
+                onChange={(e) => setListPositionFilter(e.target.value)}
+                aria-label="스펙트럼 필터"
+              >
+                <option value="">전체 스펙트럼</option>
+                {POSITION_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </PartyFilterSelect>
+
+              <PartyStatusSegmentGroup role="group" aria-label="활동 상태 필터">
+                {(
+                  [
+                    ['', '전체'],
+                    ['active', '활동 중'],
+                    ['dissolved', '해산'],
+                  ] as const
+                ).map(([val, lbl]) => (
+                  <PartyStatusSegBtn
+                    key={lbl}
+                    type="button"
+                    $active={listStatusFilter === val}
+                    onClick={() => setListStatusFilter(val)}
+                  >
+                    {lbl}
+                  </PartyStatusSegBtn>
+                ))}
+              </PartyStatusSegmentGroup>
+
+              <PartyFilterSelect
+                value={`${listSortKey}:${listSortDir}`}
+                onChange={(e) => {
+                  const [key, dir] = e.target.value.split(':') as [
+                    'founded' | 'name',
+                    'asc' | 'desc',
+                  ]
+                  setListSortKey(key)
+                  setListSortDir(dir)
+                }}
+                aria-label="정렬"
+              >
+                <option value="founded:desc">최근 설립 순</option>
+                <option value="founded:asc">오래된 설립 순</option>
+                <option value="name:asc">이름 오름차순</option>
+                <option value="name:desc">이름 내림차순</option>
+              </PartyFilterSelect>
+
               <PartyFilterMeta>
-                전체 {parties.length}곳 · 표시 {filteredParties.length}곳
+                표시 {filteredParties.length} / {parties.length}곳
                 {listSearch || activeFilterCount > 0 ? (
                   <>
                     {' · '}
                     <PartyFilterResetBtn type="button" onClick={resetListFilters}>
-                      필터 초기화
+                      초기화
                     </PartyFilterResetBtn>
                   </>
                 ) : null}
               </PartyFilterMeta>
             </PartyFilterBar>
 
-            <PartyIdeologySpectrumWrap>
-              <span
-                id="party-spectrum-axis-help"
-                style={{
-                  position: 'fixed',
-                  top: 0,
-                  left: 0,
-                  width: 1,
-                  height: 1,
-                  padding: 0,
-                  margin: -1,
-                  overflow: 'hidden',
-                  clip: 'rect(0, 0, 0, 0)',
-                  whiteSpace: 'nowrap',
-                  border: 0,
-                }}
-              >
-                가로축은 좌에서 우로 갈수록 정치적 성향이 우측으로 이동하는
-                대략적인 배치입니다. 말풍선은 서로 가까우면 위아래로 나뉩니다.
-              </span>
-              <PartyIdeologySpectrumLabel id="party-spectrum-axis-label">
-                이념·성향 축 (좌 → 우)
-              </PartyIdeologySpectrumLabel>
-              <PartyIdeologySpectrumStage
-                role="group"
-                aria-labelledby="party-spectrum-axis-label"
-                aria-describedby="party-spectrum-axis-help"
-                $maxLane={spectrumBubbleLanes.maxLane}
-              >
-                {partyInfographicRows.map(
-                  ({ party: p, leftPct, displayName, brandColor }, stack) => {
-                    const tooltipParts: string[] = [p.name]
-                    if (p.position)
-                      tooltipParts.push(labelPoliticalPosition(p.position))
-                    if (p.foundedDate)
-                      tooltipParts.push(`설립 ${formatDate(p.foundedDate)}`)
-                    if (p.dissolvedDate)
-                      tooltipParts.push(`해산 ${formatDate(p.dissolvedDate)}`)
-                    const tooltip = tooltipParts.join(' · ')
-                    const goToDetail = () =>
-                      navigate(
-                        pathKeys.countryElectionPartyDetail(
-                          routeCountryId,
-                          p.id,
-                        ),
-                      )
-                    return (
-                      <PartyIdeologySpectrumBubbleAnchor
-                        key={p.id}
-                        $leftPct={leftPct}
-                        $stack={stack}
-                        $lane={
-                          spectrumBubbleLanes.laneByPartyId.get(p.id) ?? 0
-                        }
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`${tooltip} — 상세 보기`}
-                        onClick={goToDetail}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault()
-                            goToDetail()
-                          }
-                        }}
-                      >
-                        <PartyIdeologySpectrumBubble
-                          $brand={brandColor}
-                          title={tooltip}
-                        >
-                          {displayName}
-                        </PartyIdeologySpectrumBubble>
-                        <PartyIdeologySpectrumPin
-                          $fill={brandColor}
-                          aria-hidden
-                        />
-                      </PartyIdeologySpectrumBubbleAnchor>
-                    )
-                  },
-                )}
-                <PartyIdeologySpectrumTrackBar aria-hidden />
-              </PartyIdeologySpectrumStage>
-              <PartyIdeologySpectrumEnds>
-                <span>좌</span>
-                <span>우</span>
-              </PartyIdeologySpectrumEnds>
-            </PartyIdeologySpectrumWrap>
-
-            <PartyCoalitionStrip aria-label="정당 구성 비율 (좌→우 성향 축 순)">
-              {partiesSpectrumSorted.map(({ party: p, brandColor }) => (
-                <PartyCoalitionSegment
-                  key={p.id}
-                  $color={brandColor}
-                  title={p.shortName?.trim() || p.name}
-                />
-              ))}
-            </PartyCoalitionStrip>
-
-            <PartyInfographicGrid>
-              {filteredParties.map((p) => {
-                const accent = normalizeBrandColorInput(p.brandColor ?? '')
-                const dissolved = Boolean(p.dissolvedDate)
-                return (
-                  <PartyInfographicCard
-                    key={p.id}
-                    type="button"
-                    onClick={() =>
-                      navigate(
-                        pathKeys.countryElectionPartyDetail(
-                          routeCountryId,
-                          p.id,
-                        ),
-                      )
-                    }
-                    aria-label={`${p.name} 정당 상세`}
-                  >
-                    <PartyInfographicCardHero $tint={accent}>
-                      <PartyInfographicLogo $ring={accent}>
-                        {p.logoUrl ? (
-                          <PartyInfographicLogoImg
-                            src={getUploadImageUrl(p.logoUrl)}
-                            alt=""
-                          />
-                        ) : (
-                          <FiImage size={18} />
-                        )}
-                      </PartyInfographicLogo>
-                    </PartyInfographicCardHero>
-                    <PartyInfographicCardBody>
-                      <PartyInfographicShortRow>
-                        <PartyInfographicPartyName>
-                          {p.name}
-                        </PartyInfographicPartyName>
-                        {p.shortName?.trim() ? (
-                          <PartyInfographicShortBadge>
-                            {p.shortName.trim()}
-                          </PartyInfographicShortBadge>
-                        ) : null}
-                        <PartyInfographicStatusPill $dissolved={dissolved}>
-                          {dissolved ? '해산' : '활동 중'}
-                        </PartyInfographicStatusPill>
-                      </PartyInfographicShortRow>
-                      <PartyInfographicMetaRow>
-                        {p.position ? (
-                          <PartyInfographicPositionChip>
-                            {labelPoliticalPosition(p.position)}
-                          </PartyInfographicPositionChip>
-                        ) : null}
-                        {p.ideology?.trim() ? (
-                          <span>{p.ideology.trim()}</span>
-                        ) : null}
-                        <span>
-                          설립 {formatDate(p.foundedDate)}
-                          {dissolved
-                            ? ` · 해산 ${formatDate(p.dissolvedDate)}`
-                            : ''}
-                        </span>
-                      </PartyInfographicMetaRow>
-                    </PartyInfographicCardBody>
-                    <PartyInfographicFootHint>
-                      상세
-                      <FiChevronRight size={14} strokeWidth={2} aria-hidden />
-                    </PartyInfographicFootHint>
-                  </PartyInfographicCard>
-                )
-              })}
-            </PartyInfographicGrid>
+            {filteredParties.length === 0 ? (
+              <EmptyHint style={{ padding: '20px 0' }}>
+                조건에 맞는 정당이 없습니다.{' '}
+                <PartyFilterResetBtn type="button" onClick={resetListFilters}>
+                  필터 초기화
+                </PartyFilterResetBtn>
+              </EmptyHint>
+            ) : (
+              <PartyInfographicGrid>
+                {filteredParties.map((p) => {
+                  const accent =
+                    normalizeBrandColorInput(p.brandColor ?? '') ??
+                    partyFallbackBrandColor(p.id)
+                  const dissolved = Boolean(p.dissolvedDate)
+                  const ideologyTags = parseIdeologyKeywords(p.ideology).slice(
+                    0,
+                    3,
+                  )
+                  return (
+                    <PartyInfographicCard
+                      key={p.id}
+                      type="button"
+                      onClick={() =>
+                        navigate(
+                          pathKeys.countryElectionPartyDetail(
+                            routeCountryId,
+                            p.id,
+                          ),
+                        )
+                      }
+                      aria-label={`${p.name} 정당 상세`}
+                    >
+                      <PartyInfographicCardHero $tint={accent}>
+                        <PartyInfographicLogo $ring={accent}>
+                          {p.logoUrl ? (
+                            <PartyInfographicLogoImg
+                              src={getUploadImageUrl(p.logoUrl)}
+                              alt=""
+                            />
+                          ) : (
+                            (p.shortName || p.name).slice(0, 3)
+                          )}
+                        </PartyInfographicLogo>
+                      </PartyInfographicCardHero>
+                      <PartyInfographicCardBody>
+                        <PartyInfographicShortRow>
+                          <PartyInfographicPartyName>
+                            {p.name}
+                          </PartyInfographicPartyName>
+                          {p.shortName?.trim() ? (
+                            <PartyInfographicShortBadge>
+                              {p.shortName.trim()}
+                            </PartyInfographicShortBadge>
+                          ) : null}
+                          <PartyInfographicStatusPill $dissolved={dissolved}>
+                            {dissolved ? '해산' : '활동 중'}
+                          </PartyInfographicStatusPill>
+                        </PartyInfographicShortRow>
+                        <PartyInfographicMetaRow>
+                          {p.position ? (
+                            <PartyInfographicPositionChip>
+                              {labelPoliticalPosition(p.position)}
+                            </PartyInfographicPositionChip>
+                          ) : null}
+                          {ideologyTags.map((tag, idx) => (
+                            <PartyCardIdeologyChip key={`${tag}-${idx}`}>
+                              {tag}
+                            </PartyCardIdeologyChip>
+                          ))}
+                          <span>
+                            {p.foundedDate
+                              ? `설립 ${formatDate(p.foundedDate)}`
+                              : '설립 미상'}
+                            {dissolved
+                              ? ` · 해산 ${formatDate(p.dissolvedDate)}`
+                              : ''}
+                          </span>
+                        </PartyInfographicMetaRow>
+                      </PartyInfographicCardBody>
+                      <PartyInfographicFootHint>
+                        상세
+                        <FiChevronRight size={14} strokeWidth={2} aria-hidden />
+                      </PartyInfographicFootHint>
+                    </PartyInfographicCard>
+                  )
+                })}
+              </PartyInfographicGrid>
+            )}
           </PartyInfographicSection>
         )}
       </PartyBlockRoot>

@@ -26,11 +26,11 @@ export const PoliticsTabPanel = styled.div`
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 20px clamp(20px, 2.5vw, 32px) 48px;
+  padding: 16px 24px 32px;
   min-height: 320px;
 
   @media (max-width: 768px) {
-    padding: 16px 16px 36px;
+    padding: 14px 16px 28px;
   }
 `
 
@@ -388,9 +388,7 @@ export const PartyShareDonutRing = styled.div<{ $gradient: string }>`
   height: 100%;
   border-radius: 50%;
   background: ${({ $gradient }) => $gradient};
-  box-shadow:
-    0 4px 24px rgba(15, 23, 42, 0.1),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  box-shadow: none;
 `
 
 export const PartyShareDonutHole = styled.div`
@@ -402,8 +400,41 @@ export const PartyShareDonutHole = styled.div`
   height: 56%;
   border-radius: 50%;
   background: ${({ theme }) => theme.colors.background.primary};
-  box-shadow: inset 0 2px 8px rgba(15, 23, 42, 0.08);
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  box-shadow: none;
   z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6px;
+  pointer-events: none;
+  ${DIGIT_DISPLAY}
+
+  .kicker {
+    font-size: 10px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    line-height: 1.2;
+  }
+
+  .main {
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: ${({ theme }) => theme.colors.text.primary};
+    line-height: 1.15;
+    margin-top: 1px;
+  }
+
+  .sub {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    line-height: 1.2;
+    margin-top: 2px;
+  }
 `
 
 /** 반원 도넛 — 조각별 fill + 호버 시 해당 조각만 확대 */
@@ -422,22 +453,14 @@ export const PartyShareDonutSliceSvg = styled.svg`
   }
 `
 
-/** 도넛 중심(50,50) 기준 — 호버한 조각만 살짝 확대 + 그림자 */
+/** 도넛 중심(50,50) 기준 — 호버한 조각만 살짝 확대 (플랫 무그림자) */
 export const PartyShareDonutSectorGroup = styled.g<{ $emphasize?: boolean }>`
   transform-origin: 50px 50px;
-  transition:
-    transform 0.16s ease-out,
-    filter 0.16s ease-out;
+  transition: transform 0.16s ease-out;
   transform: ${({ $emphasize }) =>
     $emphasize
-      ? 'translate(50px, 50px) scale(1.028) translate(-50px, -50px)'
+      ? 'translate(50px, 50px) scale(1.024) translate(-50px, -50px)'
       : 'translate(50px, 50px) scale(1) translate(-50px, -50px)'};
-  filter: ${({ $emphasize, theme }) =>
-    $emphasize
-      ? theme.mode === 'dark'
-        ? 'drop-shadow(0 1px 4px rgba(0, 0, 0, 0.35))'
-        : 'drop-shadow(0 1px 5px rgba(15, 23, 42, 0.09))'
-      : 'none'};
 `
 
 export const PartyShareDonutSectorPath = styled.path<{ $fill: string }>`
@@ -1267,9 +1290,9 @@ export const PartyIdeologySpectrumStage = styled.div<{ $maxLane: number }>`
   position: relative;
   width: 100%;
   min-height: ${({ $maxLane }) =>
-    Math.max(112, 52 + ($maxLane + 1) * 44)}px;
-  padding-bottom: 30px;
-  margin-top: 4px;
+    Math.max(82, 36 + ($maxLane + 1) * 34)}px;
+  padding-bottom: 18px;
+  margin-top: 2px;
 `
 
 export const PartyIdeologySpectrumTrackBar = styled.div`
@@ -1277,17 +1300,14 @@ export const PartyIdeologySpectrumTrackBar = styled.div`
   left: 0;
   right: 0;
   bottom: 0;
-  height: 28px;
-  border-radius: 12px;
+  height: 10px;
+  border-radius: 999px;
   background: ${({ theme }) =>
     theme.mode === 'dark'
-      ? 'linear-gradient(90deg, #312e81 0%, #5b21b6 22%, #475569 50%, #be123c 78%, #881337 100%)'
-      : 'linear-gradient(90deg, #4f46e5 0%, #9333ea 24%, #94a3b8 50%, #ea580c 76%, #dc2626 100%)'};
-  box-shadow: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'inset 0 0 0 1px rgba(255,255,255,0.12)'
-      : 'inset 0 0 0 1px rgba(15,23,42,0.06)'};
-  opacity: 0.92;
+      ? 'linear-gradient(90deg, #ef4444 0%, #f97316 24%, #94a3b8 50%, #38bdf8 76%, #6366f1 100%)'
+      : 'linear-gradient(90deg, #dc2626 0%, #ea580c 24%, #94a3b8 50%, #0284c7 76%, #4f46e5 100%)'};
+  box-shadow: none;
+  opacity: 0.88;
 `
 
 export const PartyIdeologySpectrumBubbleAnchor = styled.div<{
@@ -1297,76 +1317,51 @@ export const PartyIdeologySpectrumBubbleAnchor = styled.div<{
 }>`
   position: absolute;
   left: ${({ $leftPct }) => $leftPct}%;
-  bottom: ${({ $lane }) => 30 + $lane * 36}px;
+  bottom: ${({ $lane }) => 18 + $lane * 30}px;
   transform: translateX(-50%);
   z-index: ${({ $stack }) => 20 + $stack};
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-width: min(168px, 44vw);
+  max-width: min(156px, 42vw);
   &[role='button'] {
     cursor: pointer;
   }
   &[role='button']:focus-visible {
-    outline: 2px solid #6366f1;
-    outline-offset: 4px;
-    border-radius: 14px;
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 3px;
+    border-radius: 8px;
   }
 `
 
-/** 브랜드 색 테두리·틴트 말풍선 — color-mix 미지원 시 단색 폴백 */
+/** 브랜드 색 테두리·틴트 플랫 칩 — 무그림자 Event-Ledger 톤 */
 export const PartyIdeologySpectrumBubble = styled.div<{ $brand: string }>`
   position: relative;
   --party-brand: ${({ $brand }) => $brand};
-  padding: 7px 11px;
-  border-radius: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
   font-size: 11px;
   font-weight: 700;
-  line-height: 1.35;
+  line-height: 1.25;
   text-align: center;
   letter-spacing: -0.02em;
   color: ${({ theme }) => theme.colors.text.primary};
-  border: 2px solid var(--party-brand);
-  box-shadow: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? '0 6px 20px rgba(0, 0, 0, 0.35)'
-      : '0 4px 16px rgba(15, 23, 42, 0.1)'};
+  border: 1.5px solid var(--party-brand);
+  box-shadow: none;
   word-break: keep-all;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(15, 23, 42, 0.96)' : '#ffffff'};
-  text-shadow: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? '0 1px 2px rgba(0,0,0,0.5)'
-      : '0 1px 0 rgba(255,255,255,0.9)'};
-
-  &::after {
-    content: '';
-    position: absolute;
-    left: 50%;
-    bottom: -6px;
-    transform: translateX(-50%);
-    width: 0;
-    height: 0;
-    border-left: 6px solid transparent;
-    border-right: 6px solid transparent;
-    border-top: 6px solid
-      ${({ theme }) =>
-        theme.mode === 'dark' ? 'rgba(15, 23, 42, 0.96)' : '#ffffff'};
-  }
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 148px;
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
 
   ${({ theme }) =>
     css`
       @supports (background: color-mix(in srgb, red, blue)) {
         & {
           background: ${theme.mode === 'dark'
-            ? `color-mix(in srgb, var(--party-brand) 28%, rgba(15, 23, 42, 0.97))`
-            : `color-mix(in srgb, var(--party-brand) 12%, #ffffff)`};
-          text-shadow: none;
-        }
-        &::after {
-          border-top-color: ${theme.mode === 'dark'
-            ? `color-mix(in srgb, var(--party-brand) 28%, rgba(15, 23, 42, 0.97))`
-            : `color-mix(in srgb, var(--party-brand) 12%, #ffffff)`};
+            ? `color-mix(in srgb, var(--party-brand) 22%, #13151a)`
+            : `color-mix(in srgb, var(--party-brand) 10%, #ffffff)`};
         }
       }
     `}
@@ -1376,16 +1371,14 @@ export const PartyIdeologySpectrumBubble = styled.div<{ $brand: string }>`
 export const PartyIdeologySpectrumPin = styled.div<{ $fill: string }>`
   position: absolute;
   left: 50%;
-  bottom: -17px;
+  bottom: -13px;
   transform: translateX(-50%);
-  width: 14px;
-  height: 14px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: ${({ $fill }) => $fill};
-  border: 2px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(15, 23, 42, 0.95)' : '#ffffff'};
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+  border: 1.5px solid ${({ theme }) => ledgerBackground(theme.mode)};
+  box-shadow: none;
   z-index: 4;
 `
 
@@ -1507,20 +1500,28 @@ export const PartyInfographicCardHero = styled.div<{ $tint?: string | null }>`
 `
 
 export const PartyInfographicLogo = styled.div<{ $ring?: string | null }>`
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  padding: 2px;
   border: 1px solid
-    ${({ theme, $ring }) => ($ring ? `${$ring}55` : theme.colors.border.light)};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#fff'};
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  font-size: 18px;
+    ${({ theme, $ring }) => ($ring ? `${$ring}44` : ledgerHairlineStrong(theme.mode))};
+  background: ${({ theme, $ring }) =>
+    $ring
+      ? `${$ring}14`
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.05)'
+        : '#f8fafc'};
+  color: ${({ theme, $ring }) => $ring || theme.colors.text.secondary};
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
 `
 
 export const PartyInfographicLogoImg = styled.img`
@@ -1713,47 +1714,66 @@ export const PartyDetailBackLink = styled.button`
 /** @deprecated PartyDetailBackLink 사용 */
 export const PartyDetailBackBtn = PartyDetailBackLink
 
-/** 정당 상세 히어로 — 구분선 아래 일반 흐름 (로고·상단 border 비겹침) */
-export const PartyDetailHero = styled.div`
-  padding: 20px 0 8px;
-  margin: 0;
-  border: none;
-  background: transparent;
+/** 정당 상세 히어로 — 수평 Event-Ledger 아이덴티티 배너 (무그림자) */
+export const PartyDetailHero = styled.div<{ $accent?: string | null }>`
+  padding: 16px 18px;
+  margin: 12px 0 4px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-left: 4px solid
+    ${({ $accent, theme }) => $accent || ledgerAccent(theme.mode)};
+  border-radius: ${RADIUS.MD};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  box-shadow: none;
 `
 
 export const PartyDetailHeroStack = styled.div`
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
+  gap: 16px;
   width: 100%;
   min-width: 0;
-  text-align: center;
+  text-align: left;
+
+  @media (max-width: 560px) {
+    align-items: flex-start;
+    gap: 12px;
+  }
+`
+
+export const PartyDetailHeroBody = styled.div`
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 `
 
 export const PartyDetailLogoHero = styled.div<{ $ring?: string | null }>`
-  width: 156px;
-  height: 156px;
-  border-radius: 28px;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  margin-bottom: 20px;
+  padding: 4px;
+  margin: 0;
   border: 1px solid
     ${({ theme, $ring }) =>
-      $ring
-        ? `${$ring}55`
-        : theme.mode === 'dark'
-          ? 'rgba(255, 255, 255, 0.1)'
-          : '#e8ecf0'};
-  box-shadow: ${({ $ring }) =>
+      $ring ? `${$ring}44` : ledgerHairlineStrong(theme.mode)};
+  box-shadow: none;
+  background: ${({ theme, $ring }) =>
     $ring
-      ? `0 0 0 3px ${$ring}22, 0 16px 48px rgba(15, 23, 42, 0.1)`
-      : '0 16px 48px rgba(15, 23, 42, 0.09)'};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : '#ffffff'};
-  color: ${({ theme }) => theme.colors.text.tertiary};
+      ? `${$ring}14`
+      : theme.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.05)'
+        : '#f8fafc'};
+  color: ${({ theme, $ring }) => $ring || theme.colors.text.secondary};
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 `
 
 export const PartyDetailHeaderRow = styled.div`
@@ -1806,16 +1826,16 @@ export const PartyDetailName = styled.h3`
   line-height: 1.15;
 `
 
-/** 중앙 히어로용 제목 */
+/** 수평 아이덴티티 배너용 제목 */
 export const PartyDetailHeroTitle = styled.h2`
-  margin: 0 0 12px;
+  margin: 0;
   max-width: 100%;
-  font-size: clamp(1.35rem, 3.2vw, 1.65rem);
+  font-size: clamp(1.15rem, 2.2vw, 1.38rem);
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.04em;
-  line-height: 1.2;
-  text-align: center;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+  text-align: left;
   word-break: break-word;
 `
 
@@ -1829,9 +1849,9 @@ export const PartyDetailChipRow = styled.div`
 export const PartyDetailChipRowCenter = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   max-width: 100%;
 `
 
