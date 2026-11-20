@@ -1,12 +1,8 @@
 /**
  * 관련 국가 기관 · 사령부 — "어느 기관·사령부가 이 사건을 발령·수령·주도했나".
  *
- * 총통 지령 제21호 같은 사건은 OKW(기안·하달)와 OKH·OKL·OKM(수령·집행) 없이는 반쪽이다.
- * 민간 행정기관(AdministrationDepartment)과 군 최고사령부·부대(MilitaryUnit)를 함께 연결한다.
- * 경계 규칙: 국가 기관(부처·최고사령부·참모본부·총독부)은 여기, 정당·기업·국제기구는 '관련 기업·조직'.
- *
- * 연결: 기관/사령부 고르기(이름·원어명·약칭 검색) → 역할. 같은 기관을 다른 역할로 거는 것은 된다.
- * 역할 상세('국방군 지휘참모부가 기안')는 줄에서 바로 고친다.
+ * 민간 행정기관(AdministrationDepartment)과 군 최고사령부·부대(MilitaryUnit)를 함께 연결하며,
+ * 연관 탭 `RelatedLinkModal`과 동일한 2단 잇기 모달(`ActorRelationLinkModal`)로 대상과 역할·설명을 한 창에서 정한다.
  */
 import { useMemo, useState } from 'react'
 
@@ -17,8 +13,15 @@ import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
 import * as eventDepartmentsApi from '@api/functional/events/departments'
-import { ledgerAccent, ledgerHairlineStrong, RADIUS } from '@/entities/event/ui/ledger-tokens'
-import { metaText } from '@/pages/events/styles/theme'
+import {
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  RADIUS,
+} from '@/entities/event/ui/ledger-tokens'
+import { metaText, toolbarControlHeight } from '@/pages/events/styles/theme'
 import {
   administrationDepartmentApi,
   DEPARTMENT_KIND_LABEL,
@@ -32,11 +35,19 @@ import { militaryUnitApi } from '@/shared/api/military-unit'
 import { militaryUnitTypeLabelKo } from '@/shared/lib/military-unit-type-label'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
-import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { notify } from '@/shared/ui/toast'
 
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
+import {
+  type ActorRelationDraft,
+  ActorRelationLinkModal,
+  type RelationCandidateItem,
+} from './actors/actor-relation-link-modal'
+import {
+  CollapsedActorChipBtn,
+  CollapsedActorSlot,
+} from './actors/actors.styles'
 import { InlineText } from './inline'
 import { LoadError } from './load-error'
 
@@ -44,9 +55,7 @@ type EventDepartment = Awaited<ReturnType<typeof eventDepartmentsApi.list>>[numb
 
 interface DetailDepartmentsProps {
   event: EventDetail
-  /** 읽기 전용(휴지통 등) — 연결·편집 버튼을 숨긴다 */
   readOnly?: boolean
-  /** 법령·제도·국가/정치 사건 여부 — 비어 있어도 전체 안내를 펼친다 */
   expectDepartments?: boolean
 }
 
@@ -117,6 +126,17 @@ function resolveTargetMeta(relation: EventDepartment): ResolvedTargetMeta {
   }
 }
 
+const DEPARTMENT_ROLE_ITEMS = EVENT_DEPARTMENT_ROLE_OPTIONS.map((option) => ({
+  value: option.value,
+  label: option.label,
+  hint: option.description,
+}))
+
+const DEPARTMENT_CATEGORIES = [
+  { key: 'dept', label: '행정 기관' },
+  { key: 'unit', label: '군사 사령부·부대' },
+]
+
 export function DetailDepartments({
   event,
   readOnly = false,
@@ -136,91 +156,116 @@ export function DetailDepartments({
     staleTime: 30_000,
   })
 
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const [pendingTargetKey, setPendingTargetKey] = useState<string | null>(null)
-  const [roleEditing, setRoleEditing] = useState<EventDepartment | null>(null)
+  const [linkModalOpen, setLinkModalOpen] = useState(false)
+  const [initialDraft, setInitialDraft] = useState<ActorRelationDraft | null>(null)
   const [draggingRelationId, setDraggingRelationId] = useState<string | null>(null)
   const [dragOverLane, setDragOverLane] = useState<'issuer' | 'recipient' | null>(null)
 
-  /* 비어 있어도 펼칠지는 페이지가 정한다(형식·분야 → expectDepartments). 예전 폴백은 없는 값('POLICY'·'STATE')과 견줘 죽은 조건이었다 */
   const shouldExpandEmpty = expectDepartments ?? false
 
-  const { data: allDepartments = [], isLoading: isLoadingDepartments } = useQuery({
+  const {
+    data: allDepartments = [],
+    isLoading: isLoadingDepartments,
+    isError: isDeptError,
+    refetch: refetchDepts,
+  } = useQuery({
     queryKey: ['administration-departments', 'event-link-candidates'],
     queryFn: () => administrationDepartmentApi.getAll({ take: 200 }),
-    enabled: pickerOpen,
+    enabled: linkModalOpen,
     staleTime: 60_000,
   })
 
-  const { data: allMilitaryUnits = [], isLoading: isLoadingUnits } = useQuery({
+  const {
+    data: allMilitaryUnits = [],
+    isLoading: isLoadingUnits,
+    isError: isUnitsError,
+    refetch: refetchUnits,
+  } = useQuery({
     queryKey: ['military-units', 'event-link-candidates'],
     queryFn: () => militaryUnitApi.getAll(),
-    enabled: pickerOpen,
+    enabled: linkModalOpen,
     staleTime: 60_000,
   })
 
-  const isLoadingCandidates = isLoadingDepartments || isLoadingUnits
+  const existingByTargetKey = useMemo(() => {
+    const map = new Map<string, EventDepartment>()
+    for (const relation of relations) {
+      map.set(resolveTargetMeta(relation).targetKey, relation)
+    }
+    return map
+  }, [relations])
 
-  const targetOptions = useMemo(() => {
-    const deptItems = allDepartments.map((department) => ({
-      sortName: department.name,
-      value: `dept:${department.id}`,
-      label: department.abbreviation
-        ? `${department.name} (${department.abbreviation})`
-        : department.name,
-      description: [
-        DEPARTMENT_KIND_LABEL[department.kind],
-        department.historicalCountry?.name ?? department.country?.name,
-        department.nameLocal,
-      ]
-        .filter(Boolean)
-        .join(' · '),
-    }))
+  const modalCandidates = useMemo<RelationCandidateItem[]>(() => {
+    const deptItems: Array<RelationCandidateItem & { sortName: string }> =
+      allDepartments.map((department) => {
+        const key = `dept:${department.id}`
+        const countryEntity = department.historicalCountry ?? department.country ?? null
+        const existing = existingByTargetKey.get(key)
+        return {
+          sortName: department.name,
+          key,
+          name: department.name,
+          shortName: department.abbreviation ?? null,
+          category: 'dept',
+          monogram: '행',
+          metaText: [
+            DEPARTMENT_KIND_LABEL[department.kind],
+            countryEntity?.name,
+            department.nameLocal,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+          detailHref: countryEntity
+            ? `${pathKeys.countryGovernment(countryEntity.id)}?departmentId=${encodeURIComponent(department.id)}`
+            : null,
+          existing: existing
+            ? {
+                relationId: existing.id,
+                role: existing.role,
+                roleDescription: existing.roleDescription,
+              }
+            : undefined,
+        }
+      })
 
-    const unitItems = allMilitaryUnits.map((unitItem) => ({
-      sortName: unitItem.name,
-      value: `unit:${unitItem.id}`,
-      label: unitItem.abbreviation
-        ? `${unitItem.name} (${unitItem.abbreviation})`
-        : unitItem.name,
-      description: [
-        unitItem.unitType
-          ? militaryUnitTypeLabelKo(unitItem.unitType)
-          : '군사 조직',
-        unitItem.historicalCountry?.name ?? unitItem.country?.name,
-        unitItem.nameLocal ?? unitItem.nameEn,
-      ]
-        .filter(Boolean)
-        .join(' · '),
-    }))
+    const unitItems: Array<RelationCandidateItem & { sortName: string }> =
+      allMilitaryUnits.map((unitItem) => {
+        const key = `unit:${unitItem.id}`
+        const countryEntity = unitItem.historicalCountry ?? unitItem.country ?? null
+        const existing = existingByTargetKey.get(key)
+        return {
+          sortName: unitItem.name,
+          key,
+          name: unitItem.name,
+          shortName: unitItem.abbreviation ?? null,
+          category: 'unit',
+          monogram: '군',
+          metaText: [
+            unitItem.unitType
+              ? militaryUnitTypeLabelKo(unitItem.unitType)
+              : '군사 조직',
+            countryEntity?.name,
+            unitItem.nameLocal ?? unitItem.nameEn,
+          ]
+            .filter(Boolean)
+            .join(' · '),
+          detailHref: countryEntity
+            ? `${pathKeys.countryMilitary(countryEntity.id)}?unitId=${encodeURIComponent(unitItem.id)}`
+            : pathKeys.militaryUnitDetail(unitItem.id),
+          existing: existing
+            ? {
+                relationId: existing.id,
+                role: existing.role,
+                roleDescription: existing.roleDescription,
+              }
+            : undefined,
+        }
+      })
 
-    return [...deptItems, ...unitItems]
-      .sort((left, right) => left.sortName.localeCompare(right.sortName, 'ko'))
-      .map(({ value, label, description }) => ({ value, label, description }))
-  }, [allDepartments, allMilitaryUnits])
-
-  /* 같은 기관/사령부에 이미 걸린 역할은 고를 수 없게 뺀다(서버도 409) */
-  const roleOptions = useMemo(() => {
-    const activeTargetKey =
-      pendingTargetKey ??
-      (roleEditing ? resolveTargetMeta(roleEditing).targetKey : null)
-    const taken = new Set(
-      relations
-        .filter(
-          (relation) =>
-            resolveTargetMeta(relation).targetKey === activeTargetKey &&
-            relation.id !== roleEditing?.id,
-        )
-        .map((relation) => relation.role),
+    return [...deptItems, ...unitItems].sort((left, right) =>
+      left.sortName.localeCompare(right.sortName, 'ko'),
     )
-    return EVENT_DEPARTMENT_ROLE_OPTIONS.filter(
-      (option) => !taken.has(option.value),
-    ).map((option) => ({
-      value: option.value,
-      label: option.label,
-      description: option.description,
-    }))
-  }, [relations, pendingTargetKey, roleEditing])
+  }, [allDepartments, allMilitaryUnits, existingByTargetKey])
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey })
@@ -230,22 +275,35 @@ export function DetailDepartments({
   const errorMessage = (error: unknown, fallback: string) =>
     error instanceof Error && error.message ? error.message : fallback
 
-  const addMutation = useMutation({
-    mutationFn: (input: { targetKey: string; role: EventDepartmentRoleValue }) => {
-      const isUnit = input.targetKey.startsWith('unit:')
-      const targetId = input.targetKey.slice(5)
-      return eventDepartmentsApi.add(
+  const saveModalMutation = useMutation({
+    mutationFn: async (draft: ActorRelationDraft) => {
+      const nextRole = draft.role as EventDepartmentRoleValue
+      const roleDesc = draft.roleDescription.trim() || null
+      if (draft.relationId) {
+        const updated = await eventDepartmentsApi.update(
+          getApiConnection(),
+          event.id,
+          draft.relationId,
+          { role: nextRole, roleDescription: roleDesc },
+        )
+        return updated.id
+      }
+      const isUnit = draft.candidateKey.startsWith('unit:')
+      const targetId = draft.candidateKey.slice(5)
+      const created = await eventDepartmentsApi.add(
         getApiConnection(),
         event.id,
         isUnit
-          ? { militaryUnitId: targetId, role: input.role }
-          : { departmentId: targetId, role: input.role },
+          ? { militaryUnitId: targetId, role: nextRole, roleDescription: roleDesc }
+          : { departmentId: targetId, role: nextRole, roleDescription: roleDesc },
       )
+      return created.id
     },
-    onSuccess: (relation) => {
-      const meta = resolveTargetMeta(relation)
+    onSuccess: (_savedId, draft) => {
       notify.success(
-        `${meta.name}을(를) ${EVENT_DEPARTMENT_ROLE_LABEL[relation.role]}(으)로 연결했습니다`,
+        draft.relationId
+          ? `‘${draft.name}’ 역할을 수정했습니다`
+          : `${draft.name}을(를) ${EVENT_DEPARTMENT_ROLE_LABEL[draft.role as EventDepartmentRoleValue]}(으)로 연결했습니다`,
       )
       refresh()
     },
@@ -253,17 +311,24 @@ export function DetailDepartments({
   })
 
   const updateMutation = useMutation({
-    mutationFn: (input: { relationId: string; role?: EventDepartmentRoleValue; roleDescription?: string | null }) =>
+    mutationFn: (input: {
+      relationId: string
+      role?: EventDepartmentRoleValue
+      roleDescription?: string | null
+    }) =>
       eventDepartmentsApi.update(getApiConnection(), event.id, input.relationId, {
         ...(input.role !== undefined && { role: input.role }),
-        ...(input.roleDescription !== undefined && { roleDescription: input.roleDescription }),
+        ...(input.roleDescription !== undefined && {
+          roleDescription: input.roleDescription,
+        }),
       }),
     onSuccess: refresh,
     onError: (error) => notify.error(errorMessage(error, '고치지 못했습니다')),
   })
 
   const removeMutation = useMutation({
-    mutationFn: (relationId: string) => eventDepartmentsApi.remove(getApiConnection(), event.id, relationId),
+    mutationFn: (relationId: string) =>
+      eventDepartmentsApi.remove(getApiConnection(), event.id, relationId),
     onSuccess: () => {
       notify.success('연결을 끊었습니다 (기관·사령부 자체는 남아 있습니다)')
       refresh()
@@ -280,6 +345,26 @@ export function DetailDepartments({
       danger: true,
     })
     if (ok) removeMutation.mutate(relation.id)
+  }
+
+  const openEditRelation = (relation: EventDepartment) => {
+    const meta = resolveTargetMeta(relation)
+    setInitialDraft({
+      relationId: relation.id,
+      candidateKey: meta.targetKey,
+      name: meta.name,
+      metaText: [meta.kindLabel, meta.affiliation].filter(Boolean).join(' · ') || null,
+      detailHref: meta.href,
+      role: relation.role,
+      sideId: 'none',
+      roleDescription: relation.roleDescription ?? '',
+    })
+    setLinkModalOpen(true)
+  }
+
+  const closeLinkModal = () => {
+    setLinkModalOpen(false)
+    setInitialDraft(null)
   }
 
   if (readOnly && relations.length === 0) return null
@@ -315,10 +400,6 @@ export function DetailDepartments({
     updateMutation.mutate({ relationId: targetRelation.id, role: nextRole })
   }
 
-  /*
-   * 조회 실패 — '연결 없음'으로 그리지 않는다. 2026-11-14 실측: 서버가 500을 내는데 기관 4곳이 걸린
-   * 총통 지령 제21호가 빈 '기관·사령부 연결' 버튼으로 보였다(다시 연결하면 409·중복).
-   */
   if (isError) {
     return (
       <S.Section id="departments">
@@ -334,44 +415,50 @@ export function DetailDepartments({
     )
   }
 
+  const linkModalNode = (
+    <ActorRelationLinkModal
+      isOpen={linkModalOpen}
+      onClose={closeLinkModal}
+      title="국가 기관 · 사령부 잇기"
+      nounLabel="국가 기관·사령부"
+      eventTitle={event.title}
+      searchPlaceholder="기관·사령부명 · 원어명 · 약칭으로 찾기"
+      candidates={modalCandidates}
+      categories={DEPARTMENT_CATEGORIES}
+      roleOptions={DEPARTMENT_ROLE_ITEMS}
+      defaultRole="ISSUER"
+      loading={isLoadingDepartments || isLoadingUnits}
+      failed={isDeptError || isUnitsError}
+      saving={saveModalMutation.isPending}
+      onRetry={() => {
+        void refetchDepts()
+        void refetchUnits()
+      }}
+      initialDraft={initialDraft}
+      onSave={async (draft) => saveModalMutation.mutateAsync(draft)}
+      onDelete={async (relationId) => {
+        await removeMutation.mutateAsync(relationId)
+      }}
+    />
+  )
+
   if (relations.length === 0 && !shouldExpandEmpty) {
-    /* 기록이 없으면 칸을 세우지 않는다 — 버튼 하나(참여 탭 끝 '더 이을 수 있는 것' 줄에 조직 버튼과 나란히) */
     if (readOnly) return null
     return (
-      <CollapsedStrip id="departments">
-        <ActionButton
+      <CollapsedActorSlot id="departments">
+        <CollapsedActorChipBtn
           type="button"
-          onClick={() => setPickerOpen(true)}
-          title="지령·법령을 내리거나 집행한 국가 기관(부처·최고사령부·참모본부·총독부)을 잇습니다"
+          title="내각 부처·참모본부·최고사령부·총독부 등 지령·법령을 발령하거나 집행한 국가 기관을 잇습니다"
+          onClick={() => {
+            setInitialDraft(null)
+            setLinkModalOpen(true)
+          }}
         >
-          <FiPlus size={14} aria-hidden /> 국가 기관·사령부
-        </ActionButton>
-        <SelectModal
-          isOpen={pickerOpen}
-          onClose={() => setPickerOpen(false)}
-          title="연결할 국가 기관 · 군사 사령부"
-          options={targetOptions}
-          isLoading={isLoadingCandidates}
-          searchable
-          searchPlaceholder="이름·원어명·약칭으로 검색..."
-          onSelect={(selectedKey) => {
-            setPickerOpen(false)
-            setPendingTargetKey(selectedKey)
-          }}
-        />
-        <SelectModal
-          isOpen={pendingTargetKey !== null}
-          onClose={() => setPendingTargetKey(null)}
-          title="이 사건에서의 역할"
-          options={roleOptions}
-          onSelect={(role) => {
-            const nextRole = role as EventDepartmentRoleValue
-            const targetKey = pendingTargetKey
-            setPendingTargetKey(null)
-            if (targetKey) addMutation.mutate({ targetKey, role: nextRole })
-          }}
-        />
-      </CollapsedStrip>
+          <FiPlus size={13} aria-hidden />
+          <span>국가 기관 · 사령부</span>
+        </CollapsedActorChipBtn>
+        {linkModalNode}
+      </CollapsedActorSlot>
     )
   }
 
@@ -425,9 +512,7 @@ export function DetailDepartments({
                         setDragOverLane(null)
                       }}
                     >
-                      <span>
-                        {meta.abbreviation || meta.name}
-                      </span>
+                      <span>{meta.abbreviation || meta.name}</span>
                       <DepartmentFlowPillRole>
                         {EVENT_DEPARTMENT_ROLE_LABEL[relation.role] ?? relation.role}
                       </DepartmentFlowPillRole>
@@ -492,9 +577,7 @@ export function DetailDepartments({
                         setDragOverLane(null)
                       }}
                     >
-                      <span>
-                        {meta.abbreviation || meta.name}
-                      </span>
+                      <span>{meta.abbreviation || meta.name}</span>
                       <DepartmentFlowPillRole>
                         {EVENT_DEPARTMENT_ROLE_LABEL[relation.role] ?? relation.role}
                       </DepartmentFlowPillRole>
@@ -526,7 +609,11 @@ export function DetailDepartments({
               >
                 <Body>
                   <NameLine>
-                    {!readOnly && <DragGrip aria-hidden title="드래그하여 위 역할 보드로 이동"><MdDragIndicator /></DragGrip>}
+                    {!readOnly && (
+                      <DragGrip aria-hidden title="드래그하여 위 역할 보드로 이동">
+                        <MdDragIndicator />
+                      </DragGrip>
+                    )}
                     <DomainTag $military={meta.isMilitary}>
                       {meta.isMilitary ? '군사' : '행정'}
                     </DomainTag>
@@ -539,17 +626,13 @@ export function DetailDepartments({
                     <RoleBadge
                       type="button"
                       disabled={readOnly}
-                      onClick={() => setRoleEditing(relation)}
-                      title={readOnly ? undefined : '역할 바꾸기'}
+                      onClick={() => openEditRelation(relation)}
+                      title={readOnly ? undefined : '역할·설명 바꾸기'}
                     >
                       {EVENT_DEPARTMENT_ROLE_LABEL[relation.role] ?? relation.role}
                     </RoleBadge>
                   </NameLine>
-                  <Meta>
-                    {[meta.kindLabel, meta.affiliation]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </Meta>
+                  <Meta>{[meta.kindLabel, meta.affiliation].filter(Boolean).join(' · ')}</Meta>
                   {readOnly ? (
                     relation.roleDescription && <Meta>{relation.roleDescription}</Meta>
                   ) : (
@@ -558,7 +641,10 @@ export function DetailDepartments({
                       placeholder="무엇을 했나 (예: 국방군 지휘참모부가 기안)"
                       label={`${meta.name} 역할 상세`}
                       onSave={(next) =>
-                        updateMutation.mutate({ relationId: relation.id, roleDescription: next.trim() || null })
+                        updateMutation.mutate({
+                          relationId: relation.id,
+                          roleDescription: next.trim() || null,
+                        })
                       }
                     />
                   )}
@@ -578,77 +664,40 @@ export function DetailDepartments({
         </Rows>
       ) : (
         <S.HelperText>
-          지령·명령·법령처럼 국가 기관이나 군 최고사령부가 내리거나 받은 사건이면 내린 곳과 받은 곳을 잇습니다. 정당·기업·국제기구는
-          아래 &lsquo;관련 기업·조직&rsquo;에.
+          지령·명령·법령처럼 국가 기관이나 군 최고사령부가 내리거나 받은 사건이면 내린 곳과 받은 곳을 잇습니다.
         </S.HelperText>
       )}
 
       {!readOnly && (
         <Actions>
-          <ActionButton type="button" onClick={() => setPickerOpen(true)}>
-            <FiPlus size={14} /> 기관 · 사령부 연결
+          <ActionButton
+            type="button"
+            onClick={() => {
+              setInitialDraft(null)
+              setLinkModalOpen(true)
+            }}
+          >
+            <FiPlus size={14} /> 기존 기관·사령부와 잇기
           </ActionButton>
         </Actions>
       )}
 
-      <SelectModal
-        isOpen={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        title="연결할 국가 기관 · 군사 사령부"
-        options={targetOptions}
-        isLoading={isLoadingCandidates}
-        searchable
-        searchPlaceholder="이름·원어명·약칭으로 검색..."
-        onSelect={(selectedKey) => {
-          setPickerOpen(false)
-          setPendingTargetKey(selectedKey)
-        }}
-      />
-
-      <SelectModal
-        isOpen={pendingTargetKey !== null || roleEditing !== null}
-        onClose={() => {
-          setPendingTargetKey(null)
-          setRoleEditing(null)
-        }}
-        title="이 사건에서의 역할"
-        options={roleOptions}
-        selectedValue={roleEditing?.role}
-        onSelect={(role) => {
-          const nextRole = role as EventDepartmentRoleValue
-          if (roleEditing) {
-            const relationId = roleEditing.id
-            setRoleEditing(null)
-            if (nextRole !== roleEditing.role) updateMutation.mutate({ relationId, role: nextRole })
-            return
-          }
-          const targetKey = pendingTargetKey
-          setPendingTargetKey(null)
-          if (targetKey) addMutation.mutate({ targetKey, role: nextRole })
-        }}
-      />
+      {linkModalNode}
     </S.Section>
   )
 }
 
 /* ───────────────────────── styles ───────────────────────── */
 
-/** 접힌 상태 — 버튼 하나만(바깥 줄이 조직 버튼과 나란히 세운다) */
-const CollapsedStrip = styled.div`
-  display: inline-flex;
-`
-
 const DepartmentFlowBoard = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(120px, 0.8fr) auto minmax(0, 1fr);
-  align-items: stretch;
-  gap: 8px;
-  padding: 10px 12px;
-  margin-bottom: 12px;
-  border-radius: ${RADIUS.MD};
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.025)' : 'rgba(15,23,42,0.02)'};
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0 12px;
+  margin-bottom: 8px;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
   @media (max-width: 640px) {
     grid-template-columns: minmax(0, 1fr);
@@ -659,19 +708,14 @@ const DepartmentFlowLane = styled.div<{ $dragOver?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 8px 10px;
-  border-radius: ${RADIUS.SM};
-  border: 1px dashed
-    ${({ $dragOver, theme }) =>
-      $dragOver ? theme.colors.primary : theme.colors.border};
+  padding: 4px 6px;
+  border-radius: ${RADIUS.XS};
+  outline: ${({ $dragOver, theme }) =>
+    $dragOver ? `1.5px dashed ${ledgerAccent(theme.mode)}` : 'none'};
   background: ${({ $dragOver, theme }) =>
-    $dragOver
-      ? `${theme.colors.primary}12`
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.02)'
-        : '#ffffff'};
+    $dragOver ? ledgerHoverFill(theme.mode) : 'transparent'};
   min-width: 0;
-  transition: border-color 0.14s ease, background 0.14s ease;
+  transition: background 0.14s ease;
 `
 
 const DepartmentFlowLaneHead = styled.div`
@@ -742,10 +786,9 @@ const DepartmentFlowCenter = styled.div`
   align-items: center;
   justify-content: center;
   gap: 2px;
-  padding: 8px 10px;
-  border-radius: ${RADIUS.SM};
-  border: 1.5px solid ${({ theme }) => theme.colors.primary};
-  background: ${({ theme }) => `${theme.colors.primary}10`};
+  padding: 6px 8px;
+  border-top: 1.5px solid ${({ theme }) => ledgerAccent(theme.mode)};
+  border-bottom: 1.5px solid ${({ theme }) => ledgerAccent(theme.mode)};
   text-align: center;
   min-width: 0;
 `
@@ -894,26 +937,28 @@ const Actions = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin-top: 8px;
 `
 
 const ActionButton = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
+  ${toolbarControlHeight}
   padding: 0 12px;
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   border-radius: ${RADIUS.SM};
-  background: transparent;
+  background: ${({ theme }) => theme.colors.background.primary};
   color: ${({ theme }) => theme.colors.text.secondary};
   font-family: inherit;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 12.5px;
+  font-weight: 600;
   cursor: pointer;
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.text.secondary};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
   }
 `
 

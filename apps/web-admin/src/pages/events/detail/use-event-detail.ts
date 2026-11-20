@@ -41,6 +41,12 @@ export interface EventDetailPerson {
   officesAtEvent?: string[]
   /** 생몰년 밖 사건이면 안내 문구(표시만) */
   lifespanWarning?: string | null
+  /** 이 사건에서 사망·전사·처형된 경우 서버가 내려주는 배지 정보 */
+  deathAtEvent?: {
+    label: string
+    dateLabel: string | null
+    cause: string | null
+  } | null
   /** 진영(D1) */
   sideId?: string | null
   person?: {

@@ -5,7 +5,14 @@ import { FiChevronDown, FiChevronRight, FiPlus, FiTrash2 } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
-import { RADIUS, ledgerHairline } from '@/entities/event/ui/ledger-tokens'
+import {
+  RADIUS,
+  ledgerAccentBorder,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  ledgerSubtleFill,
+} from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { getEventOverview } from '@/shared/api/event-overview'
 import { eventKeys } from '@/shared/api/event-query-keys'
@@ -21,6 +28,7 @@ import {
   syncEventSideWeapons,
 } from '@/shared/api/event-sides'
 import { pathKeys } from '@/shared/router'
+import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { notify } from '@/shared/ui/toast'
 
 import { InlineSelect, InlineText } from './inline'
@@ -467,13 +475,23 @@ export function SideWeaponsSection({
 
 interface SubEventSidesRollupPanelProps {
   eventId: string
+  domain?: string | null
+  defaultOpen?: boolean
 }
 
 /**
- * 묶음 사건(COLLECTION)에서 하위 전투들의 진영별 참전 국가·지휘관·투입 부대를 한눈에 모아보는 패널.
+ * 묶음 사건(COLLECTION)에서 하위 사건들의 진영별 참여 국가·인물·투입 부대를 한눈에 모아보는 패널.
  */
-export function SubEventSidesRollupPanel({ eventId }: SubEventSidesRollupPanelProps) {
-  const [open, setOpen] = useState(false)
+export function SubEventSidesRollupPanel({
+  eventId,
+  domain,
+  defaultOpen = false,
+}: SubEventSidesRollupPanelProps) {
+  const [open, setOpen] = useState(defaultOpen)
+  const isMilitary = domain === 'MILITARY'
+  const toggleLabel = isMilitary
+    ? '하위 사건 참전 진영 · 부대 · 지휘관 모아보기'
+    : '하위 사건 참여 진영 · 인물 · 부대 모아보기'
 
   const overviewQuery = useQuery({
     queryKey: eventKeys.overview(eventId),
@@ -569,7 +587,16 @@ export function SubEventSidesRollupPanel({ eventId }: SubEventSidesRollupPanelPr
           }
           bySideName.set(sideKey, group)
         }
-        const displayName = [person.name, person.surname].filter(Boolean).join(' ') || '이름 미상'
+        const displayName =
+          getPersonDisplayName(
+            {
+              name: person.name ?? '',
+              surname: person.surname,
+              middleName: person.middleName,
+              nameDisplayOrder: person.nameDisplayOrder,
+            },
+            { countryDefaultNameDisplayOrder: person.defaultNameDisplayOrder },
+          ) || '이름 미상'
         const existingPerson = group.persons.get(person.personId)
         if (existingPerson) {
           existingPerson.battleTitles.add(node.title)
@@ -590,16 +617,16 @@ export function SubEventSidesRollupPanel({ eventId }: SubEventSidesRollupPanelPr
     <RollupWrap>
       <RollupToggleBtn type="button" onClick={() => setOpen((prev) => !prev)} aria-expanded={open}>
         {open ? <FiChevronDown size={13} /> : <FiChevronRight size={13} />}
-        <span>하위 사건 참전 진영 · 부대 · 지휘관 모아보기</span>
+        <span>{toggleLabel}</span>
       </RollupToggleBtn>
 
       {open && (
         <RollupBody>
           {overviewQuery.isLoading ? (
-            <RollupEmpty>하위 사건 참전 내역을 집계하는 중…</RollupEmpty>
+            <RollupEmpty>하위 사건 참여 내역을 집계하는 중…</RollupEmpty>
           ) : overviewQuery.isError ? (
             <LoadError
-              message="하위 사건 참전 내역을 불러오지 못했습니다."
+              message="하위 사건 참여 내역을 불러오지 못했습니다."
               onRetry={() => void overviewQuery.refetch()}
               retrying={overviewQuery.isFetching}
             />
@@ -995,107 +1022,115 @@ const SubmitWeaponBtn = styled.button`
 `
 
 const RollupWrap = styled.div`
-  margin-bottom: 12px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-radius: ${RADIUS.MD};
-  background: ${({ theme }) => theme.colors.background.secondary};
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const RollupToggleBtn = styled.button`
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   width: 100%;
-  padding: 8px 12px;
+  padding: 10px 4px;
   border: none;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 12px;
-  font-weight: 600;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
   text-align: left;
   cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
 `
 
 const RollupBody = styled.div`
-  padding: 10px 12px;
+  padding: 12px 2px 14px;
   border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const RollupEmpty = styled.div`
-  font-size: 12px;
+  font-size: 12.5px;
   color: ${metaText};
 `
 
 const RollupGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px 24px;
 `
 
 const RollupSideCard = styled.div<{ $color: string | null }>`
-  padding: 8px 10px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-top: 2.5px solid ${({ $color, theme }) => $color ?? theme.colors.border.medium};
-  background: ${({ theme }) => theme.colors.background.primary};
+  padding: 10px 0 0;
+  border-top: 2.5px solid ${({ $color, theme }) => $color ?? ledgerHairlineStrong(theme.mode)};
 `
 
 const RollupSideTitle = styled.div`
   display: flex;
   align-items: center;
-  font-size: 12.5px;
-  font-weight: 700;
+  font-size: 13.5px;
+  font-weight: 750;
   margin-bottom: 8px;
 `
 
 const RollupGroupSection = styled.div`
-  margin-top: 6px;
+  margin-top: 8px;
 `
 
 const RollupGroupLabel = styled.div`
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   color: ${metaText};
-  margin-bottom: 4px;
+  margin-bottom: 5px;
 `
 
 const RollupChipList = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 5px;
 `
 
 const RollupChipLink = styled(Link)`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 7px;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
   border-radius: 999px;
-  font-size: 11px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  font-size: 11.5px;
+  font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
-  background: ${({ theme }) => theme.colors.background.secondary};
+  background: ${({ theme }) => theme.colors.background.primary};
   text-decoration: none;
 
   &:hover {
-    text-decoration: underline;
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
   }
 `
 
 const RollupStaticChip = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 7px;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
   border-radius: 999px;
-  font-size: 11px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  font-size: 11.5px;
+  font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
-  background: ${({ theme }) => theme.colors.background.secondary};
+  background: ${({ theme }) => theme.colors.background.primary};
 `
 
 const RollupCountBadge = styled.span`
-  padding: 0 4px;
+  padding: 0 5px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 10.5px;
+  font-weight: 700;
   color: ${metaText};
-  background: ${({ theme }) => theme.colors.background.primary};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
 `

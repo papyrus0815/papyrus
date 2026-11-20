@@ -31,7 +31,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { eventDomainDef, eventTypeFeatures, participantKey, toParticipants } from '@/entities/event/model'
-import { ledgerAccent } from '@/entities/event/ui/ledger-tokens'
+import { ledgerAccent, ledgerHairline } from '@/entities/event/ui/ledger-tokens'
 import { EventPanelLoading } from '@/entities/event/ui/panel-loading'
 import { CommentSection } from '@/entities/comment'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
@@ -64,6 +64,7 @@ import { DetailRail } from './components/detail-rail'
 import { DetailStatehood, statehoodEntries } from './components/detail-statehood'
 import { DetailTerritory } from './components/detail-territory'
 import { DetailWarDeclaration } from './components/detail-war-declaration'
+import { SubEventSidesRollupPanel } from './components/side-doctrine-and-weapons'
 import { FillInStrip } from './components/fill-in-strip'
 import { InlineEditProvider } from './components/inline'
 import { ModuleAdd } from './components/module-add'
@@ -354,10 +355,10 @@ function EventDetailContent({
       onPatch(
         {
           relatedPersons: [
-            ...existing.map((p) => ({
-              personId: p.personId,
-              role: p.role ?? undefined,
-              note: p.note ?? undefined,
+            ...existing.map((personEntry) => ({
+              personId: personEntry.personId,
+              role: personEntry.role ?? undefined,
+              note: personEntry.note ?? undefined,
             })),
             { personId: person.id },
           ],
@@ -421,18 +422,14 @@ function EventDetailContent({
   const showTerritory = features.expectTerritory || (territoryQuery.data?.length ?? 0) > 0
   /* 권력 교체·선거 — 취임·즉위·선거가 걸려 있으면 늘, 즉위·취임·선거 형식이면 비어 있어도 보인다 */
   const showPower = features.expectPower || hasPowerData(event)
-  /* 관련 국가 기관 — 연결이 있으면 탭 건수·목차에 포함하고, 비어 있을 땐 정치·제도 사건만 기본 펼침 */
+  /* 관련 국가 기관 — 연결이 있으면 탭 건수·목차에 포함하고, 비어 있을 땐 지령·동원·기관 설립 사건만 기본 펼침 */
   const departmentsQuery = useQuery({
     queryKey: eventDepartmentsQueryKey(event.id),
     queryFn: () => eventDepartmentsApi.list(getApiConnection(), event.id),
     staleTime: 30_000,
   })
   const departmentCount = departmentsQuery.data?.length ?? 0
-  const expectDepartments =
-    features.expectPower ||
-    features.expectStatehood ||
-    event.domain === 'POLITICS' ||
-    event.domain === 'DIPLOMACY'
+  const expectDepartments = features.expectDepartments
   /* 관련 기업·조직 — 연결이 있으면 늘, 경제 사건이면 비어 있어도 보인다 */
   const showOrganizations = features.expectOrganizations || (event.organizations?.length ?? 0) > 0
   /** 묶음 사건 — 전개 자리는 하위 사건이라 비어 있어도 접지 않는다(빈 상태가 곧 '첫 하위 등록' 안내) */
@@ -707,25 +704,24 @@ function EventDetailContent({
     if (showStatehood) items.push({ id: 'statehood', label: '성립·소멸' })
     if (showTerritory) items.push({ id: 'territory', label: '영토 이전' })
     if (showPower) items.push({ id: 'power', label: '권력 교체·선거' })
-    if (departmentCount > 0) items.push({ id: 'departments', label: '관련 기관' })
+    if (departmentCount > 0 || expectDepartments) items.push({ id: 'departments', label: '관련 기관' })
     const politicalPartyCount = (event.politicalParties ?? []).length
-    if (politicalPartyCount > 0 || event.domain === 'POLITICS') {
+    if (politicalPartyCount > 0 || features.expectPoliticalParties) {
       items.push({ id: 'political-parties', label: '관련 정당' })
     }
-    const nonCompanyOrgCount = (event.organizations ?? []).filter((o) => !o.companyId).length
-    const companyOrgCount = (event.organizations ?? []).filter((o) => Boolean(o.companyId)).length
+    const nonCompanyOrgCount = (event.organizations ?? []).filter((orgRel) => !orgRel.companyId).length
+    const companyOrgCount = (event.organizations ?? []).filter((orgRel) => Boolean(orgRel.companyId)).length
     if (
       nonCompanyOrgCount > 0 ||
       event.type === 'SUMMIT' ||
-      event.type === 'INSTITUTION' ||
-      (features.expectOrganizations && event.type !== 'COMPANY' && event.domain !== 'ECONOMY')
+      event.type === 'INSTITUTION'
     ) {
       items.push({ id: 'organizations', label: '관련 기구·조직' })
     }
     if (
       companyOrgCount > 0 ||
       event.type === 'COMPANY' ||
-      (features.expectOrganizations && event.domain === 'ECONOMY')
+      event.type === 'PRODUCT'
     ) {
       items.push({ id: 'companies', label: '관련 기업' })
     }
@@ -870,8 +866,17 @@ function EventDetailContent({
    * 예전엔 연관 탭을 누르면 77px짜리 띠뿐이라 '고장 났나'로 읽혔다. 진영·수치·자료 탭이 쓰는
    * 빈 탭 머리(TabEmpty)로 같은 버튼을 들고 '무엇을 둘 수 있는 탭인지'를 말한다.
    */
+  const hasPoliticalParties = countOf(event.politicalParties) > 0 || features.expectPoliticalParties
   const emptyTab: Partial<Record<EventTabId, { title: string; text: string }>> = {
-    ...(!isVisible('actors') && !showStatehood && !showTerritory && !showPower && !showOrganizations && departmentCount === 0
+    ...(trashedView &&
+    !isVisible('actors') &&
+    !showStatehood &&
+    !showTerritory &&
+    !showPower &&
+    !showOrganizations &&
+    !hasPoliticalParties &&
+    departmentCount === 0 &&
+    !expectDepartments
       ? {
           actors: {
             title: '아직 참여한 인물·국가가 없습니다',
@@ -892,6 +897,8 @@ function EventDetailContent({
   const foldedInActiveTab = folded.filter(
     (section) =>
       tabOf(section.id) === activeTab &&
+      // 참여 탭은 열자마자 국가·인물 검색과 사건명 추천이 바로 뜨므로 접기 단추를 따로 두지 않는다
+      !(activeTab === 'actors' && section.id === 'actors') &&
       // 연관 탭의 조약은 연관 칸 '연결 추가' 줄이 든다 — 추가 자리가 두 곳(연결 추가 · 더 채울 수 있는 것)으로 갈렸다
       !(activeTab === 'links' && section.id === 'treaties') &&
       !(activeTab === 'media' && section.id === 'appendix') &&
@@ -1156,14 +1163,25 @@ function EventDetailContent({
 
               {activeTab === 'actors' && (
                 <>
-                  {/* (제거) 선전포고 당사국 보드 — 개요에 같은 보드가 있고, 바로 아래 국가 목록이 같은 두 나라를 역할과 함께
-                      다시 적는다. 히어로 카드까지 같은 사실이 네 곳이었다 */}
-                  {isVisible('actors') && (
+                  {(!trashedView || isVisible('actors')) && (
                     <DetailActors
                       event={event}
+                      departmentCount={departmentCount}
+                      readOnly={trashedView}
                       onPatch={onPatch}
                       onPersonClick={onPersonClick}
                       onCountryClick={onCountryClick}
+                      onStartSides={trashedView ? undefined : () => void startSides()}
+                      onManageSides={
+                        trashedView ? undefined : () => jumpToSection('module-sides')
+                      }
+                    />
+                  )}
+                  {trashedView && !isVisible('actors') && isCollection && (
+                    <SubEventSidesRollupPanel
+                      eventId={event.id}
+                      domain={event.domain}
+                      defaultOpen
                     />
                   )}
                   {showStatehood && (
@@ -1292,25 +1310,31 @@ function EventDetailContent({
                 * 빈 탭 머리('아직 참여한 인물·국가가 없습니다') **뒤**에 둔다 — 주된 기록이 먼저다.
                 */}
               {activeTab === 'actors' && (
-                <ActorLinkExtras>
-                  <DetailDepartments
-                    event={event}
-                    expectDepartments={expectDepartments}
-                    readOnly={trashedView}
-                  />
-                  <DetailPoliticalParties
-                    event={event}
-                    readOnly={trashedView}
-                    onPatch={onPatch}
-                  />
-                  {(!trashedView || showOrganizations) && (
-                    <DetailOrganizations
+                <ActorLinkExtrasSection aria-label="기관·정당·기구·기업 참여 주체 연결">
+                  <ActorLinkExtrasHeader>
+                    <span>추가 참여 조직 연결</span>
+                    <small>국가 기관 · 정당 · 국제기구 · 기업</small>
+                  </ActorLinkExtrasHeader>
+                  <ActorLinkExtras>
+                    <DetailDepartments
                       event={event}
-                      expectOrganizations={features.expectOrganizations}
+                      expectDepartments={expectDepartments}
+                      readOnly={trashedView}
+                    />
+                    <DetailPoliticalParties
+                      event={event}
+                      readOnly={trashedView}
                       onPatch={onPatch}
                     />
-                  )}
-                </ActorLinkExtras>
+                    {(!trashedView || showOrganizations) && (
+                      <DetailOrganizations
+                        event={event}
+                        expectOrganizations={features.expectOrganizations}
+                        onPatch={onPatch}
+                      />
+                    )}
+                  </ActorLinkExtras>
+                </ActorLinkExtrasSection>
               )}
 
               {/* 맥락 연결 — 기록이 없으면 한 줄로 접힌다. 빈 탭 머리('아직 이어 둔 사건·조약이 없습니다') **뒤**에 둔다
@@ -1407,17 +1431,52 @@ function EventDetailContent({
   )
 }
 
-/** 참여 탭 끝 — 국가 기관·조직. 접힌 버튼은 한 줄에 나란히, 펼친 섹션은 줄 전체 */
+const ActorLinkExtrasSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+
+  &:has(> div:empty) {
+    display: none;
+  }
+`
+
+const ActorLinkExtrasHeader = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 8px;
+
+  span {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+
+  small {
+    font-size: 11.5px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+/** 참여 탭 끝 — 접힌 추가 버튼은 컴팩트 한 줄 띠로, 펼친 섹션은 전체 폭으로 배치 */
 const ActorLinkExtras = styled.div`
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  /* 세로는 본문 섹션 리듬(Main의 64px), 가로는 버튼 사이 */
-  gap: 64px 8px;
+  align-items: center;
+  gap: 8px;
 
   > section {
     flex: 1 1 100%;
+    width: 100%;
     min-width: 0;
+    margin-bottom: 12px;
+  }
+
+  > section:last-child {
+    margin-bottom: 0;
   }
 
   &:empty {

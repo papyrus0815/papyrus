@@ -16,6 +16,15 @@ export const PERSON_PREVIEW_COUNT = 6
 /** 대표단은 나라마다 앞 N명 — 일본 대표단 7명이 화면 한 장을 먹었다 */
 export const DELEGATION_PREVIEW_COUNT = 3
 
+/**
+ * 접어 둘 만큼 남는가 — 남는 게 2명 이하면 다 보인다.
+ * 미국 대표단 4명 중 1명을 접어 '+1명 더 보기'를 세웠다(한 줄 아끼자고 클릭 하나를 더 시켰다).
+ */
+export const MIN_HIDDEN_TO_COLLAPSE = 3
+export function shouldCollapse(total: number, previewCount: number): boolean {
+  return total - previewCount >= MIN_HIDDEN_TO_COLLAPSE
+}
+
 export type EventPersonEntry = NonNullable<EventDetail['relatedPersons']>[number] & {
   deathAtEvent?: {
     label: string
@@ -31,6 +40,7 @@ export type PersonPayload = {
   note?: string
   countryId?: string | null
   historicalCountryId?: string | null
+  sideId?: string | null
 }
 
 /**
@@ -175,6 +185,76 @@ export function delegationKeyOf(person: {
   return null
 }
 
+/** 인물 잇기 모달의 '참여 소속 국가' 선택지 — 값은 `participationValueOf` 모양('c:'·'h:'), 첫 칸은 '없음' */
+export function participationOptionsOf(
+  rows: ReadonlyArray<{ id: string; isHistorical: boolean; name: string; flagEmoji: string | null }>,
+): Array<{ value: string; label: string }> {
+  if (rows.length === 0) return []
+  return [
+    { value: 'none', label: '없음' },
+    ...rows.map((row) => ({
+      value: `${row.isHistorical ? 'h' : 'c'}:${row.id}`,
+      label: `${row.flagEmoji ? `${row.flagEmoji} ` : ''}${row.name}`,
+    })),
+  ]
+}
+
+/** 참여 소속 국가 값('c:'·'h:') → 그 나라의 진영 — 인물 잇기 모달이 '소속국 따름'을 미리 보인다 */
+export function countrySideByParticipationValueOf(
+  rows: ReadonlyArray<{ id: string; isHistorical: boolean; sideId?: string | null }>,
+): Map<string, string | null> {
+  return new Map(rows.map((row) => [`${row.isHistorical ? 'h' : 'c'}:${row.id}`, row.sideId ?? null]))
+}
+
+/**
+ * 참여국 진영 표 — 키는 대표단 키(`m:`/`h:`)와 같은 모양. 진영 탭·참여 탭·히어로가 같은 표를 본다.
+ */
+export function countrySideMapOf(
+  modern: ReadonlyArray<{ id: string; sideId?: string | null }> | null | undefined,
+  historical: ReadonlyArray<{ id: string; sideId?: string | null }> | null | undefined,
+): Map<string, string | null> {
+  const map = new Map<string, string | null>()
+  for (const country of modern ?? []) map.set(`m:${country.id}`, country.sideId ?? null)
+  for (const country of historical ?? []) map.set(`h:${country.id}`, country.sideId ?? null)
+  return map
+}
+
+/**
+ * 인물의 실효 진영 — **인물에 따로 정한 진영이 있으면 그것, 없으면 소속국(참여 자격 국가)의 진영**.
+ *
+ * 인물 진영(person_event.side_id)은 예외(override)다. 내전처럼 같은 나라 사람이 반대편에 선 경우
+ * (리프크네히트·룩셈부르크가 봉기 측, 소속국 바이마르는 과도정부 측)만 따로 적는다. 2026-11-20 실측에서
+ * 소속국은 진영에 들어 있는데 인물은 비어 있는 행이 14개였다(아편전쟁 7, 크림 6 등). 이때 참여 탭은
+ * 소속국 아래에 두어 그 진영 안에 보였고, 진영 탭은 '진영 밖'에 두었다. 두 화면이 이 함수 하나로
+ * 같은 답을 낸다.
+ */
+export function effectivePersonSide(
+  person: { sideId?: string | null; countryId?: string | null; historicalCountryId?: string | null },
+  countrySideByKey: ReadonlyMap<string, string | null>,
+): { sideId: string | null; source: 'own' | 'country' | null; countrySideId: string | null } {
+  const key = delegationKeyOf(person)
+  const countrySideId = key ? (countrySideByKey.get(key) ?? null) : null
+  if (person.sideId) return { sideId: person.sideId, source: 'own', countrySideId }
+  if (countrySideId) return { sideId: countrySideId, source: 'country', countrySideId }
+  return { sideId: null, source: null, countrySideId: null }
+}
+
+/**
+ * 소속국과 **다른 편**에 선 인물인가 — 인물 진영과 소속국 진영의 맨 위 진영이 다르면 그렇다.
+ * 이런 인물을 소속국 줄 밑(대표단)에 두면 반대편 묶음 안에 태그 하나만 달고 서서 편이 거꾸로 읽힌다.
+ * 소속국이 이 사건의 참여국이 아니면 대표단에 들 일이 없으므로 false다.
+ */
+export function isCrossSidePerson(
+  person: { sideId?: string | null; countryId?: string | null; historicalCountryId?: string | null },
+  countrySideByKey: ReadonlyMap<string, string | null>,
+  sideRootOf: (sideId: string | null | undefined) => string | null,
+): boolean {
+  if (!person.sideId) return false
+  const key = delegationKeyOf(person)
+  if (!key || !countrySideByKey.has(key)) return false
+  return sideRootOf(person.sideId) !== sideRootOf(countrySideByKey.get(key) ?? null)
+}
+
 /**
  * 대표단 — 참여국 줄마다 그 나라 자격으로 참여한 인물들. 인물 순서는 원래 순서 그대로.
  * 참여 국가가 없거나 그 나라가 참여국 목록에 없는 인물은 `unassigned`.
@@ -223,11 +303,42 @@ export const PARTICIPATION_LABEL: Record<string, string> = {
 
 /** 시점 한 토막 — '1914.8' · '기원전 44' */
 export function formatPointShort(
-  point: { era: 'BC' | 'AD'; year: number; month?: number | null } | null | undefined,
+  point: { era: 'BC' | 'AD'; year: number; month?: number | null; day?: number | null } | null | undefined,
 ): string | null {
   if (!point) return null
   const year = point.era === 'BC' ? `기원전 ${point.year}` : String(point.year)
+  if (point.month && point.day) return `${year}.${point.month}.${point.day}`
   return point.month ? `${year}.${point.month}` : year
+}
+
+/**
+ * 한 줄 시점 문자열('1917', '1917.4', '1917-04-06', '기원전 44', 'BC 44.3') → StructuredPoint.
+ * 빈 문자열은 null(비움), 형식이 맞지 않으면 'invalid'를 돌려준다.
+ */
+export function parseCompactPoint(raw: string): StructuredPoint | null | 'invalid' {
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  let era: 'BC' | 'AD' = 'AD'
+  let rest = trimmed
+  const bcMatch = rest.match(/^(?:기원전|BC|B\.C\.)\s*(.+)$/i)
+  if (bcMatch) {
+    era = 'BC'
+    rest = bcMatch[1].trim()
+  } else if (rest.startsWith('-')) {
+    era = 'BC'
+    rest = rest.slice(1).trim()
+  }
+  const match = rest.match(/^(\d{1,4})(?:[.\-/](\d{1,2})(?:[.\-/](\d{1,2}))?)?$/)
+  if (!match) return 'invalid'
+  const year = Number(match[1])
+  const month = match[2] !== undefined ? Number(match[2]) : null
+  const day = match[3] !== undefined ? Number(match[3]) : null
+  if (!Number.isInteger(year) || year <= 0) return 'invalid'
+  if (month !== null && (month < 1 || month > 12)) return 'invalid'
+  if (day !== null && (day < 1 || day > 31)) return 'invalid'
+  const precision: StructuredPoint['precision'] =
+    day !== null ? 'day' : month !== null ? 'month' : 'year'
+  return { era, year, month, day, precision }
 }
 
 /** 가담·이탈 한 줄 — '1914.8 가담 · 1918.11 이탈'. 둘 다 없으면 null */

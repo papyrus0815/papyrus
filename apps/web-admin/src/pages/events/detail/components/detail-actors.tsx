@@ -1,230 +1,252 @@
 import { type DragEvent, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
-import { FiSettings, FiUsers } from 'react-icons/fi'
+import {
+  FiBarChart2,
+  FiCheck,
+  FiGitBranch,
+  FiGitMerge,
+  FiList,
+  FiPlus,
+  FiSliders,
+  FiUserPlus,
+} from 'react-icons/fi'
 
+import { observationExtent } from '@/entities/evidence/lib/format-observation'
+import { findReplacementForMismatchedCountry } from '@/entities/event/model'
+import { BentoActionBtn } from '@/entities/event/ui/bento-primitives'
 import { getAllCountries } from '@/shared/api/countries'
-import {
-  getContemporaryLeadersForEvent,
-  type UpdateEventDto,
-} from '@/shared/api/events'
+import { type Observation } from '@/shared/api/evidence'
+import { type UpdateEventDto } from '@/shared/api/events'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
-import { getAllPersons } from '@/shared/api/persons'
-import { getPersonDisplayName } from '@/shared/lib/person-display-name'
-import { CountryPicker } from '@/shared/ui/country-picker'
-import { PersonPickerModal } from '@/shared/ui/person-picker'
-import { notify } from '@/shared/ui/toast'
+import { PopoverMenu, type PopoverMenuEntry } from '@/shared/ui/popover-menu'
 import {
-  comparePersons,
-  contextScore,
-  headlineOffice,
-  matchesQuery,
-  searchHaystack,
-} from '@/shared/ui/person-picker/person-picker.lib'
+  LedgerViewSwitch,
+  LedgerViewSwitchItem,
+} from '@/widgets/country/country-detail/ui/country-ledger-primitives'
 
 import * as S from '../styles'
-import { type PatchOptions } from '../use-undoable-patch'
 import { type EventDetail, eventObservationsQueryOptions } from '../use-event-detail'
+import { type PatchOptions } from '../use-undoable-patch'
+import { ActorsInfographicBoard } from './actors/actors-infographic-board'
+import { ActorsLedgerTable } from './actors/actors-ledger-table'
 import {
   countryRowKey,
+  countrySideByParticipationValueOf,
+  countrySideMapOf,
   DELEGATION_PREVIEW_COUNT,
+  effectivePersonSide,
   groupDelegations,
+  isCrossSidePerson,
+  participationOptionsOf,
   PERSON_PREVIEW_COUNT,
+  shouldCollapse,
 } from './actors/actors.lib'
 import {
-  ActorsBlock,
+  ActorsCanvas,
+  ActorSectionBody,
+  ActorSectionCard,
+  ActorSectionHead,
+  ActorSectionHeadActions,
+  ActorSectionTitleRow,
   ActorsHeader,
+  ActorsHeaderLeft,
   ActorsSummary,
-  AddBtn,
+  CommandToolbarLeft,
+  CommandToolbarRight,
+  CommandToolbarRow,
   CountryList,
+  CrossSideLabel,
   DelegationList,
   DelegationMore,
+  EmptyActorsCard,
   EmptyGroupLine,
   GroupCount,
-  GroupHead,
   GroupLabel,
-  GroupTools,
-  ManageToggle,
+  HeaderControlBtn,
+  ManageBanner,
   PersonList,
-  QuickMatchChip,
-  QuickMatches,
-  QuickSearchInput,
-  RecommendBar,
-  RecommendChip,
-  RecommendLabel,
-  RecommendMoreBtn,
   ShowAllToggle,
   SideColumns,
   SideCountryList,
   SideGroup,
   SideHead,
+  SideHeadRight,
+  SideHeadTitle,
   SideOutcomeTag,
+  SideQuickAddBtn,
   SideSwatch,
 } from './actors/actors.styles'
+import { CountryLinkModal } from './actors/country-link-modal'
 import { ActorCountryRow } from './actors/country-row'
+import { PersonLinkModal } from './actors/person-link-modal'
 import { ActorPersonRow } from './actors/person-row'
 import { useActorMutations } from './actors/use-actor-mutations'
-import { groupBySide } from './hero-countries.lib'
 import { toAxisSpan } from './development-timeline.lib'
+import { groupBySide, makeSideRootOf } from './hero-countries.lib'
 import { withSideColors } from './side-colors'
 import { SubEventSidesRollupPanel } from './side-doctrine-and-weapons'
+import { LOSS_METRIC_PRIORITY, PERSONNEL_METRIC, representativeOf } from './side-metrics.lib'
 import { SIDE_OUTCOME_LABEL } from './side-outcome'
+
+type ActorsViewMode = 'board' | 'ledger'
+
+function pickParticipantHeadlineFigure(list: ReadonlyArray<Observation>): Observation | null {
+  for (const metricKey of [PERSONNEL_METRIC, ...LOSS_METRIC_PRIORITY]) {
+    const candidates = list.filter((entry) => entry.metric.key === metricKey)
+    const picked = representativeOf(candidates) ?? candidates[0]
+    if (picked) return picked
+  }
+  return null
+}
+
+interface CountryLinkTarget {
+  open: boolean
+  defaultSideId?: string | null
+  initialRowKey?: string | null
+}
+
+interface PersonLinkTarget {
+  open: boolean
+  defaultParticipationValue?: string
+  defaultSideId?: string | null
+  countryName?: string | null
+  initialPersonId?: string | null
+  initialCreateMode?: boolean
+}
 
 interface DetailActorsProps {
   event: EventDetail
+  departmentCount?: number
+  readOnly?: boolean
   onPatch: (patch: UpdateEventDto, opts?: PatchOptions) => void
-  /** 인물 클릭 시 상세 모달 오픈. 페이지 레벨 단일 모달이 처리. */
   onPersonClick: (personId: string) => void
-  /**
-   * 관련국 클릭 시 국가 정보 모달 오픈(인물과 대칭). 링크는 유지되므로
-   * 수정자 키(cmd/ctrl/shift)·중클릭의 새 탭 동선은 그대로 보존된다.
-   */
   onCountryClick: (countryId: string) => void
+  onStartSides?: () => void
+  onManageSides?: () => void
 }
 
-/**
- * 참여 행위자 — NYT editorial dramatis personae 사이드바.
- *
- * 디자인 의도
- * - 카드/필/배경색 폐기. 검정 1px 헤어라인 룰만으로 구획 (신문 룰).
- * - 타이틀: 큰 세리프 + italic subtitle, 그 아래 굵은 룰.
- * - 인물: 세로 리스트, 정사각 60px 아바타(b&w 톤) + bold serif 이름 + italic 역할
- *   + 본문체 비고. 행 사이 1px 라이트 룰.
- * - 참여국: 인물과 같은 행 구조. 이름 + 역할(10종 피커) + 역할 서술 + 비고.
- *   현대/역사를 한 목록으로 합쳐 sortOrder 순으로 세운다 — 순서가 두 배열에 걸쳐
- *   하나이기 때문.
- * - 액션(×, 편집)은 hover 시에만 노출.
- * - 인물·국가는 같은 모양의 무리 머리글(이름 · 수 · + 추가)로 연다 — 예전엔 국가에만
- *   머리글이 있고 '+ 인물 추가'가 두 목록 사이에 떠 있었다.
- * - 비고·서술은 절반이 150자를 넘어(인물 비고 83/160) 15명짜리 사건에서 섹션이
- *   4,000px을 넘었다. 2줄에서 접고 '더 보기'로 펼친다. 시드가 쓰는 `*강조*`는 굵게 렌더.
- * - 추가하는 길은 무리 머리 한 줄에 모은다(이름으로 추가 · 목록에서 고르기). 예전엔 머리(+추가) → 빠른 추가 칸 →
- *   추천 칩이 세 줄로 서서 목록이 그 아래에서야 시작했다. 추천은 목록 **뒤**에 둔다(이미 있는 사람이 먼저).
- */
-export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: DetailActorsProps) {
-  const [personModalOpen, setPersonModalOpen] = useState(false)
-  const [countryModalOpen, setCountryModalOpen] = useState(false)
-  const [countryQuery, setCountryQuery] = useState('')
-  const [countrySearchFocused, setCountrySearchFocused] = useState(false)
-  const [personQuery, setPersonQuery] = useState('')
-  const [showAllRecommendedPersons, setShowAllRecommendedPersons] = useState(false)
-  /** 관리 모드 — true일 때만 reorder(↑↓) 버튼이 각 행에 등장한다(평소엔 read-first) */
+export function DetailActors({
+  event,
+  departmentCount = 0,
+  readOnly = false,
+  onPatch,
+  onPersonClick,
+  onCountryClick,
+  onStartSides,
+  onManageSides,
+}: DetailActorsProps) {
+  const [viewMode, setViewMode] = useState<ActorsViewMode>('board')
+  const [showInfographic, setShowInfographic] = useState(true)
+  const [countryLinkTarget, setCountryLinkTarget] = useState<CountryLinkTarget>({
+    open: false,
+  })
+  const [personLinkTarget, setPersonLinkTarget] = useState<PersonLinkTarget>({
+    open: false,
+  })
   const [manageMode, setManageMode] = useState(false)
-  /** 인물은 앞 PERSON_PREVIEW_COUNT명만 — 순서 변경 중엔 전원이 보여야 옮길 수 있어 강제로 펼친다 */
   const [showAllPersons, setShowAllPersons] = useState(false)
-  /** 대표단을 다 펼친 나라(행 키) */
   const [openDelegations, setOpenDelegations] = useState<Set<string>>(() => new Set())
-  /**
-   * 편집 칸이 열린 인물(한 번에 한 사람) — 여기서 쥐어야 참여 국가를 골라 카드가 그 나라 밑으로 옮겨 가
-   * 새로 그려져도 열린 채로 따라간다(행이 쥐고 있을 땐 옮겨 가는 순간 닫혔다).
-   */
-  const [editingKey, setEditingKey] = useState<string | null>(null)
-  /** 편집 칸은 한 번에 하나 — 인물('person:id')과 나라('country:행 키')가 한 자리를 나눠 쓴다 */
-  const editingPersonId = editingKey?.startsWith('person:') ? editingKey.slice('person:'.length) : null
-  const editingCountryKey = editingKey?.startsWith('country:') ? editingKey.slice('country:'.length) : null
-  const setEditingPersonId = (personId: string | null) => setEditingKey(personId ? `person:${personId}` : null)
-  const [importingLeaders, setImportingLeaders] = useState(false)
 
   const actors = useActorMutations({ event, onPatch })
   const { persons, countryRows } = actors
 
-  const handleImportContemporaryLeaders = async () => {
-    if (!event.startDate || countryRows.length === 0 || importingLeaders) return
-    setImportingLeaders(true)
-    try {
-      const modernIds = countryRows
-        .filter((countryRow) => !countryRow.isHistorical)
-        .map((countryRow) => countryRow.id)
-      const histIds = countryRows
-        .filter((countryRow) => countryRow.isHistorical)
-        .map((countryRow) => countryRow.id)
-      const candidates = await getContemporaryLeadersForEvent({
-        date: event.startDate,
-        datePrecision: event.startDatePrecision ?? null,
-        countryIds: modernIds,
-        historicalCountryIds: histIds,
-      })
-      if (candidates.length === 0) {
-        notify.info('사건 시점에 참여국의 등록된 국가원수·정부수반·군주 기록이 없습니다.')
-        return
-      }
-      const addedCount = actors.addPersonsBatch(
-        candidates.map((candidate) => ({
-          personId: candidate.personId,
-          role: candidate.suggestedRole,
-          countryId: candidate.countryId,
-          historicalCountryId: candidate.historicalCountryId,
-        })),
-        `당시 수반 ${candidates.length}명 불러오기`,
-      )
-      if (addedCount === 0) {
-        notify.info('당시 수반이 이미 모두 참여 인물에 포함되어 있습니다.')
-      } else {
-        if (persons.length + addedCount >= PERSON_PREVIEW_COUNT) {
-          setShowAllPersons(true)
-        }
-        notify.success(`참여국 당시 수반·정상 ${addedCount}명을 불러왔습니다.`)
-      }
-    } catch {
-      notify.error('참여국 당시 수반 목록을 불러오지 못했습니다.')
-    } finally {
-      setImportingLeaders(false)
-    }
-  }
-  /**
-   * 나라 몫의 측정값(병력·사상자…) — 수치 모듈과 같은 캐시. 참여국 줄 id(participantId)에 붙은 값만.
-   * 예전엔 진영·수치 모듈에만 있어 참여 탭에서는 나라가 이름뿐이었다.
-   */
   const { data: observations = [] } = useQuery(eventObservationsQueryOptions(event.id))
   const figuresByParticipant = useMemo(() => {
     const byParticipant = new Map<string, typeof observations>()
     for (const observation of observations) {
       if (observation.subjectType !== 'EVENT_PARTICIPANT') continue
-      byParticipant.set(observation.subjectId, [...(byParticipant.get(observation.subjectId) ?? []), observation])
+      byParticipant.set(observation.subjectId, [
+        ...(byParticipant.get(observation.subjectId) ?? []),
+        observation,
+      ])
     }
     return byParticipant
   }, [observations])
 
-  const shouldLoadCountries = countryModalOpen || countrySearchFocused || countryQuery.trim().length > 0
-  const { data: allModern = [], isLoading: modernLoading } = useQuery({
+  const leadParticipantFigures = useMemo(() => {
+    const headlineByParticipant = new Map<string, Observation>()
+    const metricCounts = new Map<string, number>()
+    for (const [participantId, list] of figuresByParticipant.entries()) {
+      const picked = pickParticipantHeadlineFigure(list)
+      if (!picked) continue
+      headlineByParticipant.set(participantId, picked)
+      metricCounts.set(picked.metric.key, (metricCounts.get(picked.metric.key) ?? 0) + 1)
+    }
+    const topMetricKey = [...metricCounts.entries()].sort(
+      (left, right) => right[1] - left[1],
+    )[0]?.[0]
+    if (!topMetricKey) {
+      return { byParticipant: new Map<string, { obs: Observation; pct: number }>() }
+    }
+    const matchingEntries = [...headlineByParticipant.entries()].filter(
+      ([, obs]) => obs.metric.key === topMetricKey,
+    )
+    const maxVal = Math.max(
+      1,
+      ...matchingEntries.map(([, obs]) => observationExtent(obs)?.center ?? 0),
+    )
+    const byParticipant = new Map<string, { obs: Observation; pct: number }>()
+    for (const [participantId, obs] of matchingEntries) {
+      const center = observationExtent(obs)?.center ?? 0
+      if (center > 0) {
+        byParticipant.set(participantId, {
+          obs,
+          pct: Math.max(5, Math.min(100, Math.round((center / maxVal) * 100))),
+        })
+      }
+    }
+    return { byParticipant }
+  }, [figuresByParticipant])
+
+  const hasExistenceMismatch = useMemo(
+    () => countryRows.some((row) => Boolean(row.existenceWarning)),
+    [countryRows],
+  )
+  const shouldLoadCountriesForMismatch = !readOnly && hasExistenceMismatch
+
+  const { data: allModern = [] } = useQuery({
     queryKey: ['countries', 'all'],
     queryFn: getAllCountries,
-    enabled: shouldLoadCountries,
+    enabled: shouldLoadCountriesForMismatch,
     staleTime: 5 * 60_000,
   })
-  const { data: allHistorical = [], isLoading: historicalLoading } = useQuery({
+  const { data: allHistorical = [] } = useQuery({
     queryKey: ['historical-countries', 'all'],
     queryFn: getAllHistoricalCountries,
-    enabled: shouldLoadCountries,
-    staleTime: 5 * 60_000,
-  })
-  const { data: allPersons = [] } = useQuery({
-    queryKey: ['persons', 'all'],
-    queryFn: getAllPersons,
+    enabled: shouldLoadCountriesForMismatch,
     staleTime: 5 * 60_000,
   })
 
-  const addPerson = (personId: string) => {
-    if (!actors.addPerson(personId)) return
-    /* 새 인물은 끝에 붙는다 — 접혀 있으면 추가한 사람이 안 보이므로 펼친다 */
-    if (persons.length >= PERSON_PREVIEW_COUNT) setShowAllPersons(true)
-    /* 방금 더한 사람은 곧 적을 사람 — 편집 칸을 열어 둔다(예전엔 목록 끝에 닫힌 채 붙어 찾아서 ✎를 눌러야 했다) */
-    setEditingPersonId(personId)
-  }
+  const existingCountryKeys = useMemo(() => new Set(countryRows.map(countryRowKey)), [countryRows])
 
-  const selectedCountryIds = useMemo(() => countryRows.map((row) => row.id), [countryRows])
-  const selectedCountrySet = useMemo(() => new Set(selectedCountryIds), [selectedCountryIds])
-  const selectedPersonSet = useMemo(() => new Set(persons.map((entry) => entry.personId)), [persons])
-  /** 인물 고르기 맥락 — 사건 기간(앞뒤 여유는 고르기 쪽이 생몰 겹침으로 판단)·참여국 */
   const personContext = useMemo(() => {
     const span = toAxisSpan(event)
+    const targetPartValue = personLinkTarget.defaultParticipationValue
+    const scopedCountryId =
+      targetPartValue && targetPartValue !== 'none'
+        ? (targetPartValue.split(':')[1] ?? null)
+        : null
     return {
       fromYear: span ? Math.floor(span.from) : null,
       toYear: span ? Math.floor(span.to) : null,
-      countryIds: countryRows.map((row) => row.id),
-      label: '이 사건 무렵 · 참여국 인물',
+      countryIds: scopedCountryId ? [scopedCountryId] : countryRows.map((row) => row.id),
+      label: personLinkTarget.countryName
+        ? `이 사건 무렵 · ${personLinkTarget.countryName} 관련 인물`
+        : '이 사건 무렵 · 참여국 인물',
     }
-  }, [event, countryRows])
+  }, [
+    event,
+    countryRows,
+    personLinkTarget.defaultParticipationValue,
+    personLinkTarget.countryName,
+  ])
+
+  const hintYearRange = useMemo(
+    () => ({ startYear: personContext.fromYear, endYear: personContext.toYear }),
+    [personContext.fromYear, personContext.toYear],
+  )
+
   const countryPickerInitialKind = useMemo<'modern' | 'historical' | undefined>(() => {
     const refYear = personContext.toYear ?? personContext.fromYear
     if (refYear != null && refYear < 1945) return 'historical'
@@ -234,74 +256,54 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
     return undefined
   }, [personContext.fromYear, personContext.toYear, countryRows])
 
-  const countryQuickMatches = useMemo(() => {
-    const trimmed = countryQuery.trim().toLowerCase()
-    if (!trimmed) return []
-    const modernItems = allModern
-      .filter((country) => !selectedCountrySet.has(country.id) && country.name.toLowerCase().includes(trimmed))
-      .map((country) => ({
-        id: country.id,
-        name: country.name,
-        flagEmoji: (country as { flagEmoji?: string | null }).flagEmoji ?? null,
-        isHistorical: false,
-      }))
-    const historicalItems = allHistorical
-      .filter((country) => !selectedCountrySet.has(country.id) && country.name.toLowerCase().includes(trimmed))
-      .map((country) => ({
-        id: country.id,
-        name: country.name,
-        flagEmoji: null as string | null,
-        isHistorical: true,
-      }))
-    const ordered =
-      countryPickerInitialKind === 'historical'
-        ? [...historicalItems, ...modernItems]
-        : [...modernItems, ...historicalItems]
-    return ordered.slice(0, 6)
-  }, [countryQuery, allModern, allHistorical, selectedCountrySet, countryPickerInitialKind])
+  const replacementByRowKey = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; isHistorical: boolean }>()
+    const refYear = personContext.fromYear ?? personContext.toYear
+    if (readOnly || refYear == null || (allModern.length === 0 && allHistorical.length === 0)) {
+      return map
+    }
+    for (const row of countryRows) {
+      if (!row.isHistorical || !row.existenceWarning) continue
+      const candidate = findReplacementForMismatchedCountry(
+        { id: row.id, name: row.name },
+        refYear,
+        allModern,
+        allHistorical,
+        existingCountryKeys,
+      )
+      if (!candidate) continue
+      const targetId = candidate.historicalCountryId ?? candidate.countryId
+      if (!targetId) continue
+      map.set(countryRowKey(row), {
+        id: targetId,
+        name: candidate.name,
+        isHistorical: Boolean(candidate.historicalCountryId),
+      })
+    }
+    return map
+  }, [
+    readOnly,
+    personContext.fromYear,
+    personContext.toYear,
+    allModern,
+    allHistorical,
+    countryRows,
+    existingCountryKeys,
+  ])
 
-  const personQuickMatches = useMemo(() => {
-    const trimmed = personQuery.trim()
-    if (!trimmed) return []
-    return allPersons
-      .filter((person) => !selectedPersonSet.has(person.id) && matchesQuery(searchHaystack(person), trimmed))
-      .sort(comparePersons('relevance', personContext))
-      .slice(0, 6)
-  }, [personQuery, allPersons, selectedPersonSet, personContext])
-
-  const recommendedPersons = useMemo(() => {
-    const hasContext = personContext.fromYear !== null || personContext.countryIds.length > 0
-    if (!hasContext || allPersons.length === 0) return []
-    const minScore = personContext.fromYear !== null && personContext.countryIds.length > 0 ? 3 : 1
-    return allPersons
-      .filter((person) => !selectedPersonSet.has(person.id) && contextScore(person, personContext) >= minScore)
-      .sort(comparePersons('relevance', personContext))
-      .slice(0, 12)
-  }, [allPersons, selectedPersonSet, personContext])
   const totalCountries = countryRows.length
   const hasAnything = persons.length > 0 || totalCountries > 0
-  /** 순서 변경 토글은 행이 2개 이상일 때만 의미가 있다 */
-  const canManage = persons.length > 1 || totalCountries > 1
+  /* 제목 줄 수 — 요약판의 '참여 주체 구성'이 하던 일(기관·정당·기구 수)을 여기로 모았다 */
+  const institutionalCount =
+    departmentCount + (event.politicalParties?.length ?? 0) + (event.organizations?.length ?? 0)
+  const canManage = !readOnly && (persons.length > 1 || totalCountries > 1)
   const personsCollapsedBase = !showAllPersons && !manageMode
   const showAllToggleRef = useRef<HTMLButtonElement>(null)
 
-  /** 참여 자격 국가 선택지 — 이 사건의 참여국 */
-  const participationOptions = useMemo(
-    () =>
-      countryRows.length === 0
-        ? []
-        : [
-            // 비우기는 별도 값 — ''(미지정)과 겹치면 '참여 국가 지정' 안내가 안 보였다
-            { value: 'none', label: '지정 안 함' },
-            ...countryRows.map((row) => ({
-              value: `${row.isHistorical ? 'h' : 'c'}:${row.id}`,
-              label: `${row.flagEmoji ? `${row.flagEmoji} ` : ''}${row.name}`,
-            })),
-          ],
-    [countryRows],
-  )
+  const participationOptions = useMemo(() => participationOptionsOf(countryRows), [countryRows])
 
-  /** 긴 목록을 접으면 버튼이 수천 px 위로 올라간다 — 접은 직후 버튼을 화면에 다시 데려온다 */
+  const countrySideByValue = useMemo(() => countrySideByParticipationValueOf(countryRows), [countryRows])
+
   const togglePersons = () => {
     const willCollapse = showAllPersons
     setShowAllPersons(!showAllPersons)
@@ -309,19 +311,44 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
       requestAnimationFrame(() => showAllToggleRef.current?.scrollIntoView({ block: 'center' }))
     }
   }
-  /** 항목을 1개 이하로 지우면 토글이 사라진다 — 모드가 갇히지 않게 함께 끈다 */
+
   useEffect(() => {
     if (!canManage && manageMode) setManageMode(false)
   }, [canManage, manageMode])
 
-  /* 순서 바꾸기 중에는 평평하게 — 진영으로 나누면 '위로·아래로'가 진영 경계를 넘는 게 보이지 않는다 */
   const countrySideGroups = manageMode ? null : groupBySide(countryRows, event.sides ?? [])
-  /** 진영 색 — 진영 모듈·조망 진영 칩과 같은 색(저장 색 없으면 순서대로 팔레트) */
+  /** 소속국 진영 표 — 인물의 실효 진영(따로 정한 진영 ?? 소속국 진영)을 진영 탭과 같은 규칙으로 낸다 */
+  const countrySideByKey = useMemo(
+    () => countrySideMapOf(event.relatedCountries, event.relatedHistoricalCountries),
+    [event.relatedCountries, event.relatedHistoricalCountries],
+  )
+  const sideRootOf = useMemo(() => makeSideRootOf(event.sides ?? []), [event.sides])
+  /* 나라가 진영으로 안 갈릴 때는 인물을 실효 진영으로 가른다 — 소속국 진영을 따르는 인물도 그 편에 선다 */
+  const personSideGroups = useMemo(() => {
+    if (manageMode || countrySideGroups) return null
+    const grouped = groupBySide(
+      persons.map((entry) => ({ entry, sideId: effectivePersonSide(entry, countrySideByKey).sideId })),
+      event.sides ?? [],
+    )
+    return grouped
+      ? grouped.map((group) => ({ ...group, items: group.items.map((item) => item.entry) }))
+      : null
+  }, [manageMode, countrySideGroups, persons, countrySideByKey, event.sides])
+
   const coloredSides = withSideColors(event.sides ?? [])
   const sideColorById = new Map(coloredSides.map((side) => [side.id, side.color] as const))
   const sideById = new Map(
     coloredSides.map(
-      (side) => [side.id, { name: side.name, color: side.color, outcome: side.outcome, outcomeNote: side.outcomeNote }] as const,
+      (side) =>
+        [
+          side.id,
+          {
+            name: side.name,
+            color: side.color,
+            outcome: side.outcome,
+            outcomeNote: side.outcomeNote,
+          },
+        ] as const,
     ),
   )
   const sideOptions = useMemo(
@@ -329,23 +356,111 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
       coloredSides.length === 0
         ? []
         : [
-            { value: 'none', label: '진영 미지정' },
-            ...coloredSides.map((side) => ({ value: side.id, label: side.name })),
+            { value: 'none', label: '없음' },
+            ...coloredSides.map((side) => ({
+              value: side.id,
+              label: side.name,
+              color: side.color,
+            })),
           ],
     [coloredSides],
   )
 
-  /**
-   * 대표단 보기 — 나라 줄 밑에 그 나라 자격으로 참여한 인물을 매단다(진영 → 나라 → 인물).
-   * 예전엔 인물과 나라가 따로 늘어서 '일본 대표가 누구였나'를 두 목록을 오가며 맞춰야 했다.
-   * 순서 바꾸기 중에는 예전처럼 두 목록(옮기는 단위가 목록이라서).
+  /*
+   * 소속국과 다른 편에 선 인물(내전 등) — 나라가 진영별로 갈려 있을 때 소속국 줄 밑에 두면 반대편 묶음
+   * 안에 서 버린다. 대표단에서 빼서 **자기 진영 묶음 끝**에 세운다. 그 진영 묶음이 없으면(나라 없는
+   * 진영) 단독 목록으로 내린다 — 어디에도 안 보이는 일은 없게.
    */
-  const delegations = groupDelegations(countryRows, persons)
-  const delegationMode = !manageMode && delegations.byCountry.size > 0
-  /** 아래 '인물' 무리에 남는 사람 — 대표단 보기면 참여 국가가 없는 인물만 */
-  const listedPersons = delegationMode ? delegations.unassigned : persons
-  const personsCollapsed = personsCollapsedBase && listedPersons.length > PERSON_PREVIEW_COUNT
+  const crossSidePersons = countrySideGroups
+    ? persons.filter((entry) => isCrossSidePerson(entry, countrySideByKey, sideRootOf))
+    : []
+  const shownSideGroupIds = new Set((countrySideGroups ?? []).map((group) => group.sideId).filter(Boolean))
+  const crossSideByGroup = new Map<string, typeof persons>()
+  const crossSideOrphans: typeof persons = []
+  for (const entry of crossSidePersons) {
+    const rootId = sideRootOf(entry.sideId)
+    if (rootId && shownSideGroupIds.has(rootId)) {
+      crossSideByGroup.set(rootId, [...(crossSideByGroup.get(rootId) ?? []), entry])
+    } else {
+      crossSideOrphans.push(entry)
+    }
+  }
+  const crossSideIds = new Set(crossSidePersons.map((entry) => entry.personId))
+  const delegations = groupDelegations(
+    countryRows,
+    persons.filter((entry) => !crossSideIds.has(entry.personId)),
+  )
+  const delegationMode = !manageMode && !personSideGroups && delegations.byCountry.size > 0
+  const listedPersons = delegationMode
+    ? [...delegations.unassigned, ...crossSideOrphans]
+    : persons
+  const personsCollapsed =
+    !personSideGroups &&
+    personsCollapsedBase &&
+    shouldCollapse(listedPersons.length, PERSON_PREVIEW_COUNT)
   const sideCount = (event.sides ?? []).filter((side) => !side.parentSideId).length
+
+  const settingsMenuItems = useMemo<PopoverMenuEntry[]>(() => {
+    const entries: PopoverMenuEntry[] = [
+      { type: 'section', id: 'sec-display', label: '화면 표시' },
+      {
+        id: 'toggle-infographic',
+        label: '상단 요약 인포그래픽 표시',
+        icon: <FiBarChart2 size={13} />,
+        checked: showInfographic,
+        onSelect: () => setShowInfographic((prev) => !prev),
+      },
+    ]
+
+    if (!readOnly) {
+      const hasStructureActions =
+        (sideCount === 0 && Boolean(onStartSides)) ||
+        (sideCount >= 2 && Boolean(onManageSides)) ||
+        (canManage && viewMode === 'board')
+
+      if (hasStructureActions) {
+        entries.push({ type: 'divider', id: 'div-structure' })
+        entries.push({ type: 'section', id: 'sec-structure', label: '구도 · 정렬' })
+
+        if (sideCount === 0 && onStartSides) {
+          entries.push({
+            id: 'start-sides',
+            label: '대립 진영 나누기',
+            icon: <FiGitMerge size={13} />,
+            onSelect: () => onStartSides(),
+          })
+        } else if (sideCount >= 2 && onManageSides) {
+          entries.push({
+            id: 'manage-sides',
+            label: '진영 이름 · 결과 편집',
+            icon: <FiGitMerge size={13} />,
+            onSelect: () => onManageSides(),
+          })
+        }
+
+        if (canManage && viewMode === 'board') {
+          entries.push({
+            id: 'toggle-manage',
+            label: manageMode ? '표시 순서 정렬 완료' : '표시 순서 정렬 모드',
+            icon: <FiSliders size={13} />,
+            checked: manageMode,
+            onSelect: () => setManageMode((prev) => !prev),
+          })
+        }
+      }
+    }
+
+    return entries
+  }, [
+    showInfographic,
+    readOnly,
+    sideCount,
+    onStartSides,
+    onManageSides,
+    canManage,
+    viewMode,
+    manageMode,
+  ])
 
   type ActorDragItem = { kind: 'country' | 'person'; key: string }
   const [dragItem, setDragItem] = useState<ActorDragItem | null>(null)
@@ -353,10 +468,10 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
 
   const encodeDrag = (item: ActorDragItem) => `${item.kind}|${item.key}`
   const decodeDrag = (raw: string): ActorDragItem | null => {
-    const sep = raw.indexOf('|')
-    if (sep <= 0) return null
-    const kind = raw.slice(0, sep)
-    const key = raw.slice(sep + 1)
+    const separator = raw.indexOf('|')
+    if (separator <= 0) return null
+    const kind = raw.slice(0, separator)
+    const key = raw.slice(separator + 1)
     if ((kind === 'country' || kind === 'person') && key) return { kind, key }
     return null
   }
@@ -365,10 +480,25 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
     setDragOverTarget(null)
   }
 
+  const openEditPersonModal = (personId: string) => {
+    setPersonLinkTarget({
+      open: true,
+      initialPersonId: personId,
+    })
+  }
+
+  const openEditCountryModal = (rowKey: string) => {
+    setCountryLinkTarget({
+      open: true,
+      initialRowKey: rowKey,
+    })
+  }
+
   const renderPersonRow = (
     entry: (typeof persons)[number],
     position: { isFirst: boolean; isLast: boolean },
     compact = false,
+    groupSideId?: string | null,
   ) => {
     const targetKey = `person:${entry.personId}`
     return (
@@ -377,10 +507,14 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
         compact={compact}
         entry={entry}
         side={entry.sideId && sideById.get(entry.sideId) ? sideById.get(entry.sideId) : null}
+        countrySideName={
+          sideById.get(effectivePersonSide(entry, countrySideByKey).countrySideId ?? '')?.name ?? null
+        }
+        groupSideId={groupSideId}
         sideOptions={sideOptions}
         participationOptions={participationOptions}
-        editing={editingPersonId === entry.personId}
-        onEditingChange={(open) => setEditingPersonId(open ? entry.personId : null)}
+        readOnly={readOnly}
+        onOpenEdit={() => openEditPersonModal(entry.personId)}
         manageMode={manageMode}
         isFirst={position.isFirst}
         isLast={position.isLast}
@@ -388,10 +522,7 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
         onUpdate={actors.updatePerson}
         onParticipation={actors.setParticipationCountry}
         onMove={actors.movePerson}
-        onRemove={(personId) => {
-          if (editingPersonId === personId) setEditingPersonId(null)
-          actors.removePerson(personId)
-        }}
+        onRemove={actors.removePerson}
         isDragOver={dragOverTarget === targetKey}
         onDragStart={(dragEvent) => {
           dragEvent.stopPropagation()
@@ -429,12 +560,11 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
     const targetKey = `country:${rowKey}`
     const delegates = delegationMode ? (delegations.byCountry.get(rowKey) ?? []) : []
     const delegationOpen = openDelegations.has(rowKey)
-    /* 고치는 중인 사람은 접힌 대표단 뒤쪽이어도 보인다 — 참여 국가를 골라 옮겨 간 카드가 '+N명' 뒤로 숨지 않게 */
-    const shownDelegates = delegationOpen
-      ? delegates
-      : delegates.filter(
-          (entry, position) => position < DELEGATION_PREVIEW_COUNT || entry.personId === editingPersonId,
-        )
+    const delegationCollapsible = shouldCollapse(delegates.length, DELEGATION_PREVIEW_COUNT)
+    const shownDelegates =
+      delegationOpen || !delegationCollapsible
+        ? delegates
+        : delegates.slice(0, DELEGATION_PREVIEW_COUNT)
     const toggleDelegation = () =>
       setOpenDelegations((previous) => {
         const next = new Set(previous)
@@ -442,26 +572,46 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
         else next.add(rowKey)
         return next
       })
+
+    const leadEntry = row.participantId
+      ? leadParticipantFigures.byParticipant.get(row.participantId)
+      : undefined
+    const resolvedSide =
+      row.sideId && sideById.get(row.sideId) ? sideById.get(row.sideId) : null
+
     return (
       <ActorCountryRow
-        key={countryRowKey(row)}
+        key={rowKey}
         row={row}
         figures={row.participantId ? figuresByParticipant.get(row.participantId) : undefined}
-        side={row.sideId && sideById.get(row.sideId) ? sideById.get(row.sideId) : null}
+        leadObservation={leadEntry?.obs ?? null}
+        leadSharePct={leadEntry?.pct ?? null}
+        side={resolvedSide}
+        sideColor={resolvedSide?.color ?? null}
         sideOptions={sideOptions}
         groupSideId={groupSideId}
-        editing={editingCountryKey === rowKey}
-        onEditingChange={(open) => setEditingKey(open ? `country:${rowKey}` : null)}
+        replacement={replacementByRowKey.get(rowKey) ?? null}
+        readOnly={readOnly}
+        onOpenEdit={() => openEditCountryModal(rowKey)}
         manageMode={manageMode}
         isFirst={index === 0}
         isLast={index === countryRows.length - 1}
         onCountryClick={onCountryClick}
+        onAddDelegate={
+          readOnly
+            ? undefined
+            : () =>
+                setPersonLinkTarget({
+                  open: true,
+                  defaultParticipationValue: `${row.isHistorical ? 'h' : 'c'}:${row.id}`,
+                  defaultSideId: row.sideId,
+                  countryName: row.name,
+                })
+        }
         onUpdate={actors.updateCountry}
+        onReplace={actors.replaceCountry}
         onMove={actors.moveCountry}
-        onRemove={(removedKey) => {
-          if (editingCountryKey === removedKey) setEditingKey(null)
-          actors.removeCountry(removedKey)
-        }}
+        onRemove={actors.removeCountry}
         isDragOver={dragOverTarget === targetKey}
         onDragStart={(dragEvent) => {
           dragEvent.stopPropagation()
@@ -497,7 +647,9 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
             actors.reorderCountry(payload.key, rowKey)
           }
           if (!manageMode) {
-            const draggedCountry = countryRows.find((candidate) => countryRowKey(candidate) === payload.key)
+            const draggedCountry = countryRows.find(
+              (candidate) => countryRowKey(candidate) === payload.key,
+            )
             if (draggedCountry && draggedCountry.sideId !== row.sideId) {
               actors.updateCountry(payload.key, { sideId: row.sideId ?? null })
             }
@@ -509,376 +661,599 @@ export function DetailActors({ event, onPatch, onPersonClick, onCountryClick }: 
           <DelegationList aria-label={`${row.name} 대표·인물`}>
             {shownDelegates.map((entry) => {
               const order = persons.indexOf(entry)
-              return renderPersonRow(entry, { isFirst: order === 0, isLast: order === persons.length - 1 }, true)
+              return renderPersonRow(
+                entry,
+                { isFirst: order === 0, isLast: order === persons.length - 1 },
+                true,
+                row.sideId,
+              )
             })}
-            {delegates.length > DELEGATION_PREVIEW_COUNT && (delegationOpen || delegates.length > shownDelegates.length) && (
-              <li>
-                <DelegationMore type="button" aria-expanded={delegationOpen} onClick={toggleDelegation}>
-                  {delegationOpen ? '접기' : `+${delegates.length - shownDelegates.length}명 더 보기`}
-                </DelegationMore>
-              </li>
-            )}
+            {delegationCollapsible &&
+              (delegationOpen || delegates.length > shownDelegates.length) && (
+                <li>
+                  <DelegationMore
+                    type="button"
+                    aria-expanded={delegationOpen}
+                    onClick={toggleDelegation}
+                  >
+                    {delegationOpen ? '접기' : `+${delegates.length - shownDelegates.length}명 더 보기`}
+                  </DelegationMore>
+                </li>
+              )}
           </DelegationList>
         )}
       </ActorCountryRow>
     )
   }
 
-  /** 국가 무리(진영별·대표단 포함) */
-  const nationsBlock = (
-      <ActorsBlock $divided={!delegationMode}>
-        <GroupHead>
-          <GroupLabel>
-            국가
-            {totalCountries > 0 && <GroupCount>{totalCountries}</GroupCount>}
-          </GroupLabel>
-          <GroupTools>
-            <QuickSearchInput
-              type="search"
-              value={countryQuery}
-              onFocus={() => setCountrySearchFocused(true)}
-              onChange={(changeEvent) => setCountryQuery(changeEvent.target.value)}
-              onKeyDown={(keyEvent) => {
-                if (keyEvent.key === 'Enter' && countryQuickMatches.length > 0) {
-                  keyEvent.preventDefault()
-                  const firstMatch = countryQuickMatches[0]
-                  actors.addCountries([
-                    {
-                      id: firstMatch.id,
-                      name: firstMatch.name,
-                      isHistorical: firstMatch.isHistorical,
-                    },
-                  ])
-                  setCountryQuery('')
-                }
-              }}
-              placeholder="이름으로 추가 (Enter)"
-              aria-label="참여국 이름으로 추가"
-            />
-            <AddBtn type="button" onClick={() => setCountryModalOpen(true)} title="국가 목록에서 여러 나라를 골라 추가">
-              목록에서 고르기
-            </AddBtn>
-          </GroupTools>
-        </GroupHead>
-        {countryQuickMatches.length > 0 && (
-          <QuickMatches aria-label="이름이 맞는 나라">
-            {countryQuickMatches.map((candidate) => (
-              <QuickMatchChip
-                key={`${candidate.isHistorical ? 'h' : 'c'}:${candidate.id}`}
-                type="button"
-                onClick={() => {
-                  actors.addCountries([
-                    {
-                      id: candidate.id,
-                      name: candidate.name,
-                      isHistorical: candidate.isHistorical,
-                    },
-                  ])
-                  setCountryQuery('')
-                }}
-              >
-                + {candidate.flagEmoji ? `${candidate.flagEmoji} ` : ''}
-                {candidate.name}
-                {candidate.isHistorical ? ' (역사)' : ''}
-              </QuickMatchChip>
-            ))}
-          </QuickMatches>
-        )}
-        {/*
-          * 진영은 있는데 어느 나라도 진영에 들지 않았다 — 머리엔 '진영 4'가 서 있는데 목록은 평평해 진영이 어디 갔는지 몰랐다
-          * (프랑스 혁명: 진영 4 · 진영에 든 나라 0). 어디서 넣는지 한 줄로.
-          */}
-        {sideCount >= 2 && !manageMode && countryRows.length > 0 && !countryRows.some((row) => row.sideId) && (
-          <EmptyGroupLine>
-            진영 {sideCount}개에 아직 나라가 들지 않았습니다 — 각 나라의 <strong>진영 지정</strong> 배지를 눌러 바로
-            지정하거나 <a href="#module-sides">진영·수치</a>에서 나라를 진영에 넣으면 여기서 진영별로 나뉩니다.
-          </EmptyGroupLine>
-        )}
-        {countryRows.length > 0 &&
-          (countrySideGroups ? (
-            /*
-             * 진영이 있으면 진영별 — 진영 색 머리를 달고 넓으면 나란히(동맹국 | 협상국).
-             * 진영에 안 든 나라('그 밖')는 맨 아래 한 줄을 다 쓴다.
-             */
-            <SideColumns $stack={delegationMode}>
-              {countrySideGroups.map((group) => {
-                const color = group.sideId ? sideColorById.get(group.sideId) : undefined
-                const groupTargetKey = `side:${group.sideId ?? 'rest'}`
-                return (
-                  <SideGroup
-                    key={group.sideId ?? 'rest'}
-                    $rest={!group.sideId}
-                    $dragOver={dragOverTarget === groupTargetKey}
-                    data-side-group={group.sideId ?? 'rest'}
-                    onDragOver={(dragEvent: DragEvent<HTMLDivElement>) => {
-                      dragEvent.preventDefault()
-                      if (dragOverTarget !== groupTargetKey) setDragOverTarget(groupTargetKey)
-                    }}
-                    onDragLeave={(dragEvent: DragEvent<HTMLDivElement>) => {
-                      if (!dragEvent.currentTarget.contains(dragEvent.relatedTarget as globalThis.Node | null)) {
-                        setDragOverTarget((current) => (current === groupTargetKey ? null : current))
-                      }
-                    }}
-                    onDrop={(dragEvent: DragEvent<HTMLDivElement>) => {
-                      dragEvent.preventDefault()
-                      const payload = dragItem ?? decodeDrag(dragEvent.dataTransfer.getData('text/plain'))
-                      clearDrag()
-                      if (!payload) return
-                      if (payload.kind === 'country') {
-                        actors.updateCountry(payload.key, { sideId: group.sideId ?? null })
-                      } else {
-                        actors.updatePerson(payload.key, { sideId: group.sideId ?? null })
-                      }
-                    }}
-                  >
-                    <SideHead $color={color}>
-                      {color && <SideSwatch $color={color} aria-hidden />}
-                      {group.label}
-                      <GroupCount>{group.items.length}</GroupCount>
-                      {group.sideId && sideById.get(group.sideId)?.outcome && (
-                        <SideOutcomeTag title={sideById.get(group.sideId)?.outcomeNote ?? undefined}>
-                          {SIDE_OUTCOME_LABEL[sideById.get(group.sideId)!.outcome!]}
-                        </SideOutcomeTag>
-                      )}
-                    </SideHead>
-                    <SideCountryList>{group.items.map((row) => renderCountryRow(row, group.sideId))}</SideCountryList>
-                  </SideGroup>
-                )
-              })}
-            </SideColumns>
-          ) : (
-            <CountryList>{countryRows.map((row) => renderCountryRow(row))}</CountryList>
-          ))}
-      </ActorsBlock>
-  )
-  const visibleRecommendedPersons = showAllRecommendedPersons
-    ? recommendedPersons
-    : recommendedPersons.slice(0, 3)
+  const targetPartValue = personLinkTarget.defaultParticipationValue
+  const defaultCountryForPersonCreate =
+    (targetPartValue?.startsWith('c:') ? targetPartValue.slice(2) : null) ??
+    countryRows.find((row) => !row.isHistorical)?.id ??
+    undefined
+  const defaultHistoricalCountryForPersonCreate =
+    (targetPartValue?.startsWith('h:') ? targetPartValue.slice(2) : null) ??
+    countryRows.find((row) => row.isHistorical)?.id ??
+    undefined
 
-  /** 인물 무리 — 대표단 보기면 참여 국가가 없는 인물만 */
-  const personsBlock = (
-      <ActorsBlock
-        $divided={delegationMode}
-        onDragOver={(dragEvent: DragEvent<HTMLDivElement>) => {
-          if (!delegationMode) return
-          dragEvent.preventDefault()
-          if (dragOverTarget !== 'unassigned-persons') setDragOverTarget('unassigned-persons')
-        }}
-        onDragLeave={(dragEvent: DragEvent<HTMLDivElement>) => {
-          if (!dragEvent.currentTarget.contains(dragEvent.relatedTarget as globalThis.Node | null)) {
-            setDragOverTarget((current) => (current === 'unassigned-persons' ? null : current))
-          }
-        }}
-        onDrop={(dragEvent: DragEvent<HTMLDivElement>) => {
-          if (!delegationMode) return
-          dragEvent.preventDefault()
-          const payload = dragItem ?? decodeDrag(dragEvent.dataTransfer.getData('text/plain'))
-          clearDrag()
-          if (payload?.kind === 'person') {
-            actors.setParticipationCountry(payload.key, 'none')
-          }
-        }}
-      >
-        <GroupHead>
-          <GroupLabel>
-            {delegationMode && listedPersons.length > 0 ? '나라 없이 참여한 인물' : '인물'}
-            {listedPersons.length > 0 && <GroupCount>{listedPersons.length}</GroupCount>}
-            {/* 빈 무리도 비었다고 말한다 — 예전엔 머리 아래 따로 한 줄('아직 없습니다 — …')을 세웠다 */}
-            {persons.length === 0 && hasAnything && <GroupCount>아직 없음</GroupCount>}
-          </GroupLabel>
-          <GroupTools>
-            <QuickSearchInput
-              type="search"
-              value={personQuery}
-              onChange={(changeEvent) => setPersonQuery(changeEvent.target.value)}
-              onKeyDown={(keyEvent) => {
-                if (keyEvent.key === 'Enter' && personQuickMatches.length > 0) {
-                  keyEvent.preventDefault()
-                  addPerson(personQuickMatches[0].id)
-                  setPersonQuery('')
-                }
-              }}
-              placeholder="이름·직위로 추가 (Enter)"
-              aria-label="참여 인물 이름으로 추가"
-              title="이끈 사람·지휘관·대표를 걸어 두면 인물 문서에도 이 사건이 보입니다"
-            />
-            <AddBtn type="button" onClick={() => setPersonModalOpen(true)} title="인물 목록에서 여러 사람을 골라 추가">
-              목록에서 고르기
-            </AddBtn>
-            {countryRows.length > 0 && Boolean(event.startDate) && (
-              <AddBtn
-                type="button"
-                disabled={importingLeaders}
-                onClick={() => void handleImportContemporaryLeaders()}
-                title="참여국들의 사건 시작일 당시 재임·재위 중인 국가원수·정부수반·군주를 한 번에 불러옵니다"
-              >
-                {importingLeaders ? '불러오는 중…' : '👑 당시 수반 불러오기'}
-              </AddBtn>
-            )}
-          </GroupTools>
-        </GroupHead>
-        {personQuickMatches.length > 0 && (
-          <QuickMatches aria-label="이름이 맞는 인물">
-            {personQuickMatches.map((candidate) => {
-              const displayName = getPersonDisplayName(candidate)
-              const office = headlineOffice(candidate)
-              return (
-                <QuickMatchChip
-                  key={candidate.id}
-                  type="button"
-                  title={office ?? undefined}
-                  onClick={() => {
-                    addPerson(candidate.id)
-                    setPersonQuery('')
-                  }}
-                >
-                  + {displayName}
-                </QuickMatchChip>
-              )
-            })}
-          </QuickMatches>
-        )}
-        {listedPersons.length > 0 && (
-          <PersonList>
-            {(personsCollapsed ? listedPersons.slice(0, PERSON_PREVIEW_COUNT) : listedPersons).map((entry) => {
-              const order = persons.indexOf(entry)
-              return renderPersonRow(entry, { isFirst: order === 0, isLast: order === persons.length - 1 })
-            })}
-          </PersonList>
-        )}
-        {listedPersons.length > PERSON_PREVIEW_COUNT && !manageMode && (
-          <ShowAllToggle ref={showAllToggleRef} type="button" aria-expanded={showAllPersons} onClick={togglePersons}>
-            {showAllPersons
-              ? '접기'
-              : `${listedPersons.length}명 모두 보기 (+${listedPersons.length - PERSON_PREVIEW_COUNT})`}
-          </ShowAllToggle>
-        )}
-          {recommendedPersons.length > 0 && !personQuery.trim() && !manageMode && (
-            <RecommendBar aria-label="이 사건 무렵 · 참여국 추천 인물">
-              <RecommendLabel>동시대·참여국 추천</RecommendLabel>
-              {visibleRecommendedPersons.map((candidate) => {
-                const displayName = getPersonDisplayName(candidate)
-                const office = headlineOffice(candidate)
-                return (
-                  <RecommendChip
-                    key={candidate.id}
-                    type="button"
-                    title={office ? `${displayName} · ${office}` : displayName}
-                    onClick={() => addPerson(candidate.id)}
-                  >
-                    + {displayName}
-                  </RecommendChip>
-                )
-              })}
-              {recommendedPersons.length > 3 && (
-                <RecommendMoreBtn
-                  type="button"
-                  onClick={() => setShowAllRecommendedPersons((previous) => !previous)}
-                >
-                  {showAllRecommendedPersons
-                    ? '접기'
-                    : `+${recommendedPersons.length - 3}명 더 보기`}
-                </RecommendMoreBtn>
-              )}
-            </RecommendBar>
-          )}
-      </ActorsBlock>
-  )
+  const showPersonSection = listedPersons.length > 0 || Boolean(personSideGroups)
 
   return (
     <>
       <S.Section id="actors">
         <ActorsHeader>
-          {/* 탭 이름('참여')과 같은 말을 되풀이하던 제목 — 이 사건의 참여 규모를 한 줄로 */}
-          <S.SectionTitle>
-            참여
-            {hasAnything && (
-              <ActorsSummary>
-                {[
-                  totalCountries > 0 && `국가 ${totalCountries}`,
-                  persons.length > 0 && `인물 ${persons.length}`,
-                  sideCount >= 2 && `진영 ${sideCount}`,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </ActorsSummary>
-            )}
-          </S.SectionTitle>
-          {canManage && (
-            <S.SectionActions>
-              <ManageToggle
-                type="button"
-                onClick={() => setManageMode((previous) => !previous)}
-                $active={manageMode}
-                aria-pressed={manageMode}
-              >
-                <FiSettings />
-                {manageMode ? '관리 끝' : '순서 변경'}
-              </ManageToggle>
-            </S.SectionActions>
-          )}
+          <ActorsHeaderLeft>
+            <S.SectionTitle>
+              참여 주체 · 구도
+              {hasAnything && (
+                <ActorsSummary>
+                  {[
+                    totalCountries > 0 && `국가 ${totalCountries}`,
+                    persons.length > 0 && `인물 ${persons.length}`,
+                    institutionalCount > 0 && `기관·조직 ${institutionalCount}`,
+                    sideCount >= 2 && `진영 ${sideCount}`,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </ActorsSummary>
+              )}
+            </S.SectionTitle>
+          </ActorsHeaderLeft>
         </ActorsHeader>
 
-        {/* 비어 있을 때 통일 안내 — 인물·국가 모두 없을 때만 */}
-        {!hasAnything && (
-          <S.EmptyState>
-            <S.EmptyStateHead>
-              <S.EmptyStateIcon aria-hidden>
-                <FiUsers />
-              </S.EmptyStateIcon>
-              <S.EmptyStateLine>
-                아직 등록된 인물·국가가 없습니다. <strong>인물 추가</strong>·
-                <strong>국가 추가</strong>로 시작하세요.
-              </S.EmptyStateLine>
-            </S.EmptyStateHead>
-          </S.EmptyState>
-        )}
+        <ActorsCanvas>
+          {showInfographic && (
+            <ActorsInfographicBoard
+              event={event}
+              countryRows={countryRows}
+              persons={persons}
+              observations={observations}
+              departmentCount={departmentCount}
+              readOnly={readOnly}
+              onStartSides={onStartSides}
+              onManageSides={onManageSides}
+              onCountryClick={onCountryClick}
+              onPersonClick={onPersonClick}
+            />
+          )}
 
-        {/*
-          * 대표단 보기면 나라(+그 인물)가 먼저, 아니면 인물이 먼저 — 단 인물이 0명이면 나라가 먼저.
-          * 사건 602건 중 인물이 걸린 사건은 59건이라, 대부분의 탭이 빈 인물 칸으로 시작했다.
-          */}
-        {delegationMode || (persons.length === 0 && totalCountries > 0) ? (
-          <>
-            {nationsBlock}
-            {personsBlock}
-          </>
-        ) : (
-          <>
-            {personsBlock}
-            {nationsBlock}
-          </>
-        )}
+          {/* 연관 탭 '기존 사건과 잇기'와 동일한 잇기 버튼 줄 + 보기 방식 전환 */}
+          <CommandToolbarRow>
+            {!readOnly ? (
+              <CommandToolbarLeft style={{ gap: '8px', flexWrap: 'wrap' }}>
+                {/* 짧은 이름 — 진영 묶음 머리의 '+ 국가 잇기'와 같은 말. 긴 이름일 땐 보기 전환이 6px 차로 둘째 줄로 밀렸다 */}
+                <HeaderControlBtn
+                  type="button"
+                  title="이미 등록된 국가를 이 사건의 참여국으로 잇기"
+                  onClick={() => setCountryLinkTarget({ open: true })}
+                >
+                  <FiPlus aria-hidden />
+                  국가 잇기
+                </HeaderControlBtn>
+                <HeaderControlBtn
+                  type="button"
+                  title="이미 등록된 인물을 이 사건의 참여 인물로 잇기"
+                  onClick={() => setPersonLinkTarget({ open: true })}
+                >
+                  <FiPlus aria-hidden />
+                  인물 잇기
+                </HeaderControlBtn>
+                <HeaderControlBtn
+                  type="button"
+                  title="아직 없는 인물을 등록하고 바로 잇기"
+                  onClick={() =>
+                    setPersonLinkTarget({ open: true, initialCreateMode: true })
+                  }
+                >
+                  <FiUserPlus aria-hidden />
+                  새 인물
+                </HeaderControlBtn>
+              </CommandToolbarLeft>
+            ) : (
+              <div />
+            )}
 
-        {/* 하위 사건 모아보기 — 이 사건 자신의 참여가 먼저다(예전엔 머리 바로 밑에 서서 목록을 한 칸 밀었다) */}
-        {event.kind === 'COLLECTION' && <SubEventSidesRollupPanel eventId={event.id} />}
+            <CommandToolbarRight>
+              {hasAnything && (
+                <LedgerViewSwitch role="group" aria-label="참여 보기 방식 전환">
+                  <LedgerViewSwitchItem
+                    type="button"
+                    $active={viewMode === 'board'}
+                    onClick={() => setViewMode('board')}
+                  >
+                    <FiGitBranch size={13} />
+                    구도 보드
+                  </LedgerViewSwitchItem>
+                  <LedgerViewSwitchItem
+                    type="button"
+                    $active={viewMode === 'ledger'}
+                    onClick={() => setViewMode('ledger')}
+                  >
+                    <FiList size={13} />
+                    원장 표
+                  </LedgerViewSwitchItem>
+                </LedgerViewSwitch>
+              )}
+
+              <PopoverMenu
+                size="md"
+                items={settingsMenuItems}
+                active={manageMode || !showInfographic}
+                ariaLabel="참여 보기 및 구도 작업 메뉴"
+                title="진영 설정 · 순서 정렬 · 화면 표시"
+                minWidth={220}
+              />
+            </CommandToolbarRight>
+          </CommandToolbarRow>
+
+          {manageMode && viewMode === 'board' && (
+            <ManageBanner role="status">
+              <span>
+                <strong>표시 순서 정렬 모드</strong> — 행을 드래그하거나 우측 <strong>↑ · ↓</strong> 버튼으로 순서를 조정하세요.
+              </span>
+              <HeaderControlBtn type="button" $active onClick={() => setManageMode(false)}>
+                <FiCheck />
+                정렬 완료
+              </HeaderControlBtn>
+            </ManageBanner>
+          )}
+
+          {viewMode === 'ledger' && hasAnything ? (
+            <ActorsLedgerTable
+              countryRows={countryRows}
+              persons={persons}
+              figuresByParticipant={figuresByParticipant}
+              sideById={sideById}
+              sideOptions={sideOptions}
+              participationOptions={participationOptions}
+              readOnly={readOnly}
+              onCountryClick={onCountryClick}
+              onPersonClick={onPersonClick}
+              onOpenEditCountry={openEditCountryModal}
+              onOpenEditPerson={openEditPersonModal}
+              onUpdateCountry={actors.updateCountry}
+              onRemoveCountry={actors.removeCountry}
+              onUpdatePerson={actors.updatePerson}
+              onParticipation={actors.setParticipationCountry}
+              onRemovePerson={actors.removePerson}
+            />
+          ) : (
+            <>
+              {(countryRows.length > 0 || !hasAnything) && (
+                <ActorSectionCard>
+                  <ActorSectionHead>
+                    <ActorSectionTitleRow>
+                      <GroupLabel>{hasAnything ? '참여 국가' : '참여 주체'}</GroupLabel>
+                      {totalCountries > 0 ? (
+                        <GroupCount>{totalCountries}개국</GroupCount>
+                      ) : (
+                        <GroupCount $muted>미등록</GroupCount>
+                      )}
+                    </ActorSectionTitleRow>
+
+                    {!readOnly && (
+                      <ActorSectionHeadActions>
+                        {sideCount === 0 && onStartSides && countryRows.length >= 2 && (
+                          <BentoActionBtn type="button" $accent onClick={onStartSides}>
+                            <FiGitMerge size={12} />
+                            진영 나누기
+                          </BentoActionBtn>
+                        )}
+                        {sideCount >= 2 && onManageSides && (
+                          <BentoActionBtn type="button" onClick={onManageSides}>
+                            진영 편집
+                          </BentoActionBtn>
+                        )}
+                      </ActorSectionHeadActions>
+                    )}
+                  </ActorSectionHead>
+
+                  <ActorSectionBody>
+                    {countryRows.length === 0 && (
+                      <EmptyActorsCard>
+                        <strong>등록된 참여 국가·인물이 없습니다.</strong>
+                        <span>
+                          위 ‘국가 잇기’ 또는 ‘인물 잇기’ 버튼을 눌러 참여 역할·소속과 함께 연결하세요.
+                        </span>
+                      </EmptyActorsCard>
+                    )}
+
+                    {sideCount >= 2 &&
+                      !manageMode &&
+                      !readOnly &&
+                      !personSideGroups &&
+                      countryRows.length >= 2 &&
+                      !countryRows.some((row) => row.sideId) && (
+                        <EmptyGroupLine>
+                          진영 {sideCount}개가 준비되어 있습니다 — 각 국가 행의{' '}
+                          <strong>+ 진영 배정</strong> 버튼이나 <strong>참여 바꾸기</strong>에서 진영을 지정하세요.
+                        </EmptyGroupLine>
+                      )}
+
+                    {countryRows.length > 0 &&
+                      (countrySideGroups ? (
+                        <SideColumns>
+                          {countrySideGroups.map((group) => {
+                            const color = group.sideId ? sideColorById.get(group.sideId) : undefined
+                            const groupTargetKey = `side:${group.sideId ?? 'rest'}`
+                            return (
+                              <SideGroup
+                                key={group.sideId ?? 'rest'}
+                                $rest={!group.sideId}
+                                $color={color}
+                                $dragOver={dragOverTarget === groupTargetKey}
+                                data-side-group={group.sideId ?? 'rest'}
+                                onDragOver={(dragEvent: DragEvent<HTMLDivElement>) => {
+                                  dragEvent.preventDefault()
+                                  if (dragOverTarget !== groupTargetKey) {
+                                    setDragOverTarget(groupTargetKey)
+                                  }
+                                }}
+                                onDragLeave={(dragEvent: DragEvent<HTMLDivElement>) => {
+                                  if (
+                                    !dragEvent.currentTarget.contains(
+                                      dragEvent.relatedTarget as globalThis.Node | null,
+                                    )
+                                  ) {
+                                    setDragOverTarget((current) =>
+                                      current === groupTargetKey ? null : current,
+                                    )
+                                  }
+                                }}
+                                onDrop={(dragEvent: DragEvent<HTMLDivElement>) => {
+                                  dragEvent.preventDefault()
+                                  const payload =
+                                    dragItem ??
+                                    decodeDrag(dragEvent.dataTransfer.getData('text/plain'))
+                                  clearDrag()
+                                  if (!payload) return
+                                  if (payload.kind === 'country') {
+                                    actors.updateCountry(payload.key, {
+                                      sideId: group.sideId ?? null,
+                                    })
+                                  } else {
+                                    actors.updatePerson(payload.key, {
+                                      sideId: group.sideId ?? null,
+                                    })
+                                  }
+                                }}
+                              >
+                                <SideHead $color={color}>
+                                  <SideHeadTitle>
+                                    {color && <SideSwatch $color={color} aria-hidden />}
+                                    <span>{group.label}</span>
+                                    <GroupCount>{group.items.length}</GroupCount>
+                                    {group.sideId && sideById.get(group.sideId)?.outcome && (
+                                      <SideOutcomeTag
+                                        title={
+                                          sideById.get(group.sideId)?.outcomeNote ?? undefined
+                                        }
+                                      >
+                                        {SIDE_OUTCOME_LABEL[sideById.get(group.sideId)!.outcome!]}
+                                      </SideOutcomeTag>
+                                    )}
+                                  </SideHeadTitle>
+                                  {!readOnly && group.sideId && (
+                                    <SideHeadRight>
+                                      <SideQuickAddBtn
+                                        type="button"
+                                        title={`‘${group.label}’ 진영에 국가 잇기`}
+                                        onClick={() =>
+                                          setCountryLinkTarget({
+                                            open: true,
+                                            defaultSideId: group.sideId,
+                                          })
+                                        }
+                                      >
+                                        <FiPlus size={11} aria-hidden />
+                                        국가 잇기
+                                      </SideQuickAddBtn>
+                                    </SideHeadRight>
+                                  )}
+                                </SideHead>
+                                <SideCountryList>
+                                  {group.items.map((row) => renderCountryRow(row, group.sideId))}
+                                  {delegationMode &&
+                                    group.sideId &&
+                                    (crossSideByGroup.get(group.sideId) ?? []).length > 0 && (
+                                      <>
+                                        <CrossSideLabel
+                                          title="소속국은 다른 진영이지만 이 인물은 따로 이 진영으로 정해 두었습니다"
+                                        >
+                                          소속국과 다른 편
+                                        </CrossSideLabel>
+                                        {(crossSideByGroup.get(group.sideId) ?? []).map((entry) => {
+                                          const order = persons.indexOf(entry)
+                                          return renderPersonRow(
+                                            entry,
+                                            { isFirst: order === 0, isLast: order === persons.length - 1 },
+                                            false,
+                                            group.sideId,
+                                          )
+                                        })}
+                                      </>
+                                    )}
+                                </SideCountryList>
+                              </SideGroup>
+                            )
+                          })}
+                        </SideColumns>
+                      ) : (
+                        <CountryList>{countryRows.map((row) => renderCountryRow(row))}</CountryList>
+                      ))}
+                  </ActorSectionBody>
+                </ActorSectionCard>
+              )}
+
+              {showPersonSection && (
+                <ActorSectionCard
+                  $dragOver={dragOverTarget === 'unassigned-persons'}
+                  onDragOver={(dragEvent: DragEvent<HTMLDivElement>) => {
+                    if (!delegationMode) return
+                    dragEvent.preventDefault()
+                    if (dragOverTarget !== 'unassigned-persons') {
+                      setDragOverTarget('unassigned-persons')
+                    }
+                  }}
+                  onDragLeave={(dragEvent: DragEvent<HTMLDivElement>) => {
+                    if (
+                      !dragEvent.currentTarget.contains(
+                        dragEvent.relatedTarget as globalThis.Node | null,
+                      )
+                    ) {
+                      setDragOverTarget((current) =>
+                        current === 'unassigned-persons' ? null : current,
+                      )
+                    }
+                  }}
+                  onDrop={(dragEvent: DragEvent<HTMLDivElement>) => {
+                    if (!delegationMode) return
+                    dragEvent.preventDefault()
+                    const payload =
+                      dragItem ?? decodeDrag(dragEvent.dataTransfer.getData('text/plain'))
+                    clearDrag()
+                    if (payload?.kind === 'person') {
+                      actors.setParticipationCountry(payload.key, 'none')
+                    }
+                  }}
+                >
+                  <ActorSectionHead>
+                    <ActorSectionTitleRow>
+                      <GroupLabel>
+                        {delegationMode ? '단독 · 소속국 외 참여 인물' : '참여 인물'}
+                      </GroupLabel>
+                      <GroupCount>{listedPersons.length}명</GroupCount>
+                    </ActorSectionTitleRow>
+
+                    {!readOnly && (
+                      <ActorSectionHeadActions>
+                        <BentoActionBtn
+                          type="button"
+                          onClick={() => setPersonLinkTarget({ open: true })}
+                        >
+                          <FiPlus size={12} />
+                          인물 잇기
+                        </BentoActionBtn>
+                      </ActorSectionHeadActions>
+                    )}
+                  </ActorSectionHead>
+
+                  <ActorSectionBody>
+                    {sideCount >= 2 &&
+                      !manageMode &&
+                      !readOnly &&
+                      countryRows.length <= 1 &&
+                      !personSideGroups &&
+                      persons.length >= 2 &&
+                      !persons.some((person) => person.sideId) && (
+                        <EmptyGroupLine>
+                          진영 {sideCount}개가 준비되어 있습니다 — 각 인물 우측 <strong>참여 바꾸기</strong>나 <strong>⋯</strong> 메뉴에서 진영을 배정하면 진영별로 나뉩니다.
+                        </EmptyGroupLine>
+                      )}
+
+                    {listedPersons.length > 0 &&
+                      (personSideGroups ? (
+                        <SideColumns>
+                          {personSideGroups.map((group) => {
+                            const color = group.sideId ? sideColorById.get(group.sideId) : undefined
+                            const groupTargetKey = `person-side:${group.sideId ?? 'rest'}`
+                            return (
+                              <SideGroup
+                                key={group.sideId ?? 'rest'}
+                                $rest={!group.sideId}
+                                $color={color}
+                                $dragOver={dragOverTarget === groupTargetKey}
+                                data-side-group={group.sideId ?? 'rest'}
+                                onDragOver={(dragEvent: DragEvent<HTMLDivElement>) => {
+                                  dragEvent.preventDefault()
+                                  if (dragOverTarget !== groupTargetKey) {
+                                    setDragOverTarget(groupTargetKey)
+                                  }
+                                }}
+                                onDragLeave={(dragEvent: DragEvent<HTMLDivElement>) => {
+                                  if (
+                                    !dragEvent.currentTarget.contains(
+                                      dragEvent.relatedTarget as globalThis.Node | null,
+                                    )
+                                  ) {
+                                    setDragOverTarget((current) =>
+                                      current === groupTargetKey ? null : current,
+                                    )
+                                  }
+                                }}
+                                onDrop={(dragEvent: DragEvent<HTMLDivElement>) => {
+                                  dragEvent.preventDefault()
+                                  const payload =
+                                    dragItem ??
+                                    decodeDrag(dragEvent.dataTransfer.getData('text/plain'))
+                                  clearDrag()
+                                  if (!payload || payload.kind !== 'person') return
+                                  actors.updatePerson(payload.key, { sideId: group.sideId ?? null })
+                                }}
+                              >
+                                <SideHead $color={color}>
+                                  <SideHeadTitle>
+                                    {color && <SideSwatch $color={color} aria-hidden />}
+                                    <span>{group.label}</span>
+                                    <GroupCount>{group.items.length}</GroupCount>
+                                    {group.sideId && sideById.get(group.sideId)?.outcome && (
+                                      <SideOutcomeTag
+                                        title={
+                                          sideById.get(group.sideId)?.outcomeNote ?? undefined
+                                        }
+                                      >
+                                        {SIDE_OUTCOME_LABEL[sideById.get(group.sideId)!.outcome!]}
+                                      </SideOutcomeTag>
+                                    )}
+                                  </SideHeadTitle>
+                                  {!readOnly && group.sideId && (
+                                    <SideHeadRight>
+                                      <SideQuickAddBtn
+                                        type="button"
+                                        title={`‘${group.label}’ 진영에 인물 잇기`}
+                                        onClick={() =>
+                                          setPersonLinkTarget({
+                                            open: true,
+                                            defaultSideId: group.sideId,
+                                          })
+                                        }
+                                      >
+                                        <FiPlus size={11} aria-hidden />
+                                        인물 잇기
+                                      </SideQuickAddBtn>
+                                    </SideHeadRight>
+                                  )}
+                                </SideHead>
+                                <SideCountryList>
+                                  {group.items.map((entry) => {
+                                    const order = persons.indexOf(entry)
+                                    return renderPersonRow(
+                                      entry,
+                                      { isFirst: order === 0, isLast: order === persons.length - 1 },
+                                      false,
+                                      group.sideId,
+                                    )
+                                  })}
+                                </SideCountryList>
+                              </SideGroup>
+                            )
+                          })}
+                        </SideColumns>
+                      ) : (
+                        <PersonList>
+                          {(personsCollapsed
+                            ? listedPersons.slice(0, PERSON_PREVIEW_COUNT)
+                            : listedPersons
+                          ).map((entry) => {
+                            const order = persons.indexOf(entry)
+                            return renderPersonRow(entry, {
+                              isFirst: order === 0,
+                              isLast: order === persons.length - 1,
+                            })
+                          })}
+                        </PersonList>
+                      ))}
+
+                    {!personSideGroups &&
+                      shouldCollapse(listedPersons.length, PERSON_PREVIEW_COUNT) &&
+                      !manageMode && (
+                        <ShowAllToggle
+                          ref={showAllToggleRef}
+                          type="button"
+                          aria-expanded={showAllPersons}
+                          onClick={togglePersons}
+                        >
+                          {showAllPersons
+                            ? '목록 접기'
+                            : `${listedPersons.length}명 전체 보기 (+${listedPersons.length - PERSON_PREVIEW_COUNT}명)`}
+                        </ShowAllToggle>
+                      )}
+                  </ActorSectionBody>
+                </ActorSectionCard>
+              )}
+            </>
+          )}
+
+          {event.kind === 'COLLECTION' && (
+            <SubEventSidesRollupPanel
+              eventId={event.id}
+              domain={event.domain}
+              defaultOpen={persons.length === 0}
+            />
+          )}
+        </ActorsCanvas>
       </S.Section>
 
-      {personModalOpen && (
-        /* 인물 목록은 고르기 모달이 스스로 받는다(앱 전역 캐시 공유) */
-        <PersonPickerModal
-          onSelect={(id) => addPerson(id)}
-          onClose={() => setPersonModalOpen(false)}
-          excludeIds={persons.map((person) => person.personId)}
-          /* 이 사건 무렵·참여국 인물을 위로 — 470명 이름순 맨 앞은 대개 이 사건과 무관했다 */
-          context={personContext}
-          title="참여 인물 추가"
-          multiSelect
-        />
-      )}
-      {/* 추가 전용 — 이미 관련국인 나라는 잠기고, 빼기는 행의 ✕(undo 있음)에서만 */}
-      <CountryPicker
-        isOpen={countryModalOpen}
-        onClose={() => setCountryModalOpen(false)}
-        mode="add"
-        title="관련 국가 추가"
-        onCommit={actors.addCountries}
-        modernCountries={allModern}
-        historicalCountries={allHistorical}
-        hintYearRange={{ startYear: personContext.fromYear, endYear: personContext.toYear }}
+      <PersonLinkModal
+        isOpen={personLinkTarget.open}
+        onClose={() => setPersonLinkTarget({ open: false })}
+        eventTitle={event.title}
+        existingPersons={persons}
+        context={personContext}
+        participationOptions={participationOptions}
+        countrySideByValue={countrySideByValue}
+        sideOptions={sideOptions}
+        defaultCountryId={defaultCountryForPersonCreate}
+        defaultHistoricalCountryId={defaultHistoricalCountryForPersonCreate}
+        defaultParticipationValue={personLinkTarget.defaultParticipationValue}
+        defaultSideId={personLinkTarget.defaultSideId}
+        initialPersonId={personLinkTarget.initialPersonId}
+        initialCreateMode={personLinkTarget.initialCreateMode}
+        onSave={(input) => {
+          const result = actors.upsertPerson(input)
+          if (result === 'added' && persons.length >= PERSON_PREVIEW_COUNT) {
+            setShowAllPersons(true)
+          }
+          const targetRowKey = input.historicalCountryId
+            ? `h:${input.historicalCountryId}`
+            : input.countryId
+              ? `m:${input.countryId}`
+              : null
+          if (targetRowKey) {
+            setOpenDelegations((previous) => {
+              if (previous.has(targetRowKey)) return previous
+              const next = new Set(previous)
+              next.add(targetRowKey)
+              return next
+            })
+          }
+          return result
+        }}
+        onRemove={actors.removePerson}
+      />
+
+      <CountryLinkModal
+        isOpen={countryLinkTarget.open}
+        onClose={() => setCountryLinkTarget({ open: false })}
+        eventTitle={event.title}
+        existingRows={countryRows}
+        hintYearRange={hintYearRange}
         initialKind={countryPickerInitialKind}
-        selectedIds={selectedCountryIds}
-        isLoading={modernLoading || historicalLoading}
+        sideOptions={sideOptions}
+        defaultSideId={countryLinkTarget.defaultSideId}
+        initialRowKey={countryLinkTarget.initialRowKey}
+        onSave={actors.upsertCountry}
+        onRemove={actors.removeCountry}
       />
     </>
   )

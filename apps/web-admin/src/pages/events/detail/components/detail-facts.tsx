@@ -518,13 +518,18 @@ export function DetailFacts({
           <FactRow label="기관·조직">
             <JumpButton
               type="button"
-              onClick={() =>
+              onClick={() => {
+                const orgs = event.organizations ?? []
+                const hasNonCompany = orgs.some((org) => !org.companyId)
+                const hasCompany = orgs.some((org) => Boolean(org.companyId))
                 jumpTo(
-                  (event.organizations?.length ?? 0) > 0
+                  hasNonCompany
                     ? 'organizations'
-                    : 'departments',
+                    : hasCompany
+                      ? 'companies'
+                      : 'departments',
                 )
-              }
+              }}
             >
               {(event.organizations?.length ?? 0) + departmentCount}곳
             </JumpButton>

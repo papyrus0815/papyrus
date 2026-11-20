@@ -1,4 +1,4 @@
-import { type MouseEvent, type ReactNode, useEffect, useRef, useState } from 'react'
+import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 
 import { FiArrowLeft, FiAward, FiChevronDown, FiChevronUp, FiHelpCircle } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
@@ -28,10 +28,12 @@ import { EVENT_TYPES, subtypesForDomain } from '@/entities/event/model/event-typ
 
 import * as S from '../styles'
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
+import { countrySideMapOf, effectivePersonSide } from './actors/actors.lib'
 import { HeroCountryCards } from './hero-country-cards'
 import { HeroThumbnail } from './hero-thumbnail'
 import { ParentFlowStrip } from './parent-flow-strip'
 import { SeriesFlowStrip } from './series-flow-strip'
+import { withSideColors } from './side-colors'
 import {
   InlineSelect,
   InlineText,
@@ -609,6 +611,15 @@ function HeroActors({
   const allPersons = event.relatedPersons ?? []
   const allModern = event.relatedCountries ?? []
   const allHistorical = event.relatedHistoricalCountries ?? []
+  const sideColorMap = useMemo(
+    () => new Map(withSideColors(event.sides ?? []).map((side) => [side.id, { name: side.name, color: side.color }])),
+    [event.sides],
+  )
+  /* 인물 진영은 참여·진영 탭과 같은 실효 진영(따로 정한 진영 ?? 소속국 진영) */
+  const countrySideByKey = useMemo(
+    () => countrySideMapOf(allModern, allHistorical),
+    [allModern, allHistorical],
+  )
 
   const persons = allPersons.slice(0, PERSON_CAP)
 
@@ -632,13 +643,16 @@ function HeroActors({
                   }) || '미상'
                 : '미상'
               const avatar = p.person?.profileImageUrl ?? undefined
+              const effectiveSideId = effectivePersonSide(p, countrySideByKey).sideId
+              const sideInfo = effectiveSideId ? sideColorMap.get(effectiveSideId) : undefined
+              const tooltip = [sideInfo?.name, p.role].filter(Boolean).join(' · ') || undefined
               return (
                 // detail-actors와 동일하게 personId로 키잉 — 관계 행 id(p.id)는
                 // 저장 후 refetch에서 바뀌어 hero 행이 불필요하게 remount된다.
                 <span key={p.personId}>
                   <PersonInlineButton
                     type="button"
-                    title={p.role ?? undefined}
+                    title={tooltip}
                     onClick={() => onPersonClick(p.personId)}
                   >
                     <PersonAvatar $hasImage={Boolean(avatar)}>
@@ -652,6 +666,7 @@ function HeroActors({
                         <span>{name.charAt(0)}</span>
                       )}
                     </PersonAvatar>
+                    {sideInfo && <PersonSideDot $color={sideInfo.color} aria-hidden />}
                     <PersonName>{name}</PersonName>
                   </PersonInlineButton>
                   {i < persons.length - 1 && <PersonSep>·</PersonSep>}
@@ -763,6 +778,14 @@ const PersonAvatar = styled.span<{ $hasImage: boolean }>`
     /* 살짝 desaturate — 깔끔한 사진 톤 */
     filter: grayscale(0.3) contrast(1.02);
   }
+`
+
+const PersonSideDot = styled.span<{ $color: string }>`
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: ${({ $color }) => $color};
 `
 
 const PersonName = styled.span`

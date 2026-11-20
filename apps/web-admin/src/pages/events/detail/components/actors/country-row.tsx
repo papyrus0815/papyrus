@@ -1,15 +1,27 @@
-import { type DragEvent, type ReactNode } from 'react'
+import { type DragEvent, type ReactNode, useMemo } from 'react'
 
-import { FiAlertTriangle, FiArrowDown, FiArrowUp, FiEdit2, FiX } from 'react-icons/fi'
+import {
+  FiAlertTriangle,
+  FiArrowDown,
+  FiArrowUp,
+  FiChevronDown,
+  FiEdit2,
+  FiUserPlus,
+} from 'react-icons/fi'
+import { MdDragIndicator } from 'react-icons/md'
 
-import { EVENT_COUNTRY_ROLE_OPTIONS, type EventCountryRole } from '@/entities/event/model'
-import { formatObservationExact, formatObservationValue } from '@/entities/evidence/lib/format-observation'
+import { EVENT_COUNTRY_ROLE_OPTIONS } from '@/entities/event/model'
+import {
+  formatObservationExact,
+  formatObservationValue,
+} from '@/entities/evidence/lib/format-observation'
 import { type Observation } from '@/shared/api/evidence'
 import { renderEmphasis } from '@/shared/lib/emphasis-markup'
 import { pathKeys } from '@/shared/router'
+import { confirm } from '@/shared/ui/confirm-dialog/confirm'
+import { PopoverMenu, type PopoverMenuEntry } from '@/shared/ui/popover-menu'
 import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal'
 
-import { ActorEditPanel } from './actor-edit-panel'
 import {
   type CountryRowData,
   countryRowKey,
@@ -21,55 +33,57 @@ import {
   CountryCard,
   CountryFacts,
   CountryFlag,
+  CountryForceFill,
+  CountryForceHead,
+  CountryForceInline,
+  CountryForceTrack,
   CountryLink,
   CountryNameLine,
   CountryNoteLine,
   CountryRoleLine,
   CountryRoleTag,
   CountryRow,
-  EditToggle,
+  DelegationSection,
+  DragGrip,
   FactTag,
   FigureChip,
   FigureChips,
+  GhostRowBtn,
   HistoricalCountryName,
   MismatchNote,
-  RemoveInline,
-  ReorderBtn,
-  RowActions,
+  QuickSideAssignBtn,
+  ReplaceCountryBtn,
+  roleVisualToneOf,
+  RowControls,
+  RowTopBar,
+  SemanticRolePill,
 } from './actors.styles'
 import { ClampedProse } from './clamped-prose'
 import { type CountryPatch } from './use-actor-mutations'
 
-const ROLE_LABEL = Object.fromEntries(EVENT_COUNTRY_ROLE_OPTIONS.map((option) => [option.value, option.label])) as Record<
-  string,
-  string
->
+const ROLE_LABEL = Object.fromEntries(
+  EVENT_COUNTRY_ROLE_OPTIONS.map((option) => [option.value, option.label]),
+) as Record<string, string>
 
-/**
- * 참여국 한 행 — 이름 · 역할 · 이 나라가 한 일 · 비고.
- * 진영별 묶음과 평평한 목록이 같이 쓴다.
- *
- * **나라 카드에는 나라만.** 그 나라 자격의 인물(대표단, children)은 카드 **밖**, 바로 아래에 들여 쓴 제 카드로 선다.
- * 예전엔 나라 카드 안에 인물 카드가 들어 있어(카드 안의 카드) 인물에 마우스를 올려도 나라의 ✎·✕가 켜지고,
- * 인물 편집 칸이 회색 상자 안에서 좁게 열렸다.
- *
- * **읽기와 쓰기를 가른다(인물 카드와 같다).** 읽을 땐 글과 정보 있는 역할만, 고칠 땐 ✎ 하나로 편집 칸이 열려
- * 역할·진영(한 번 누르기)·한 일·비고를 한 자리에서. 예전엔 칸마다 숨은 ✎, 역할은 ▾ 모달이었고, 진영을 바꾸면
- * 나라가 다른 진영 칸으로 옮겨 새로 그려지며 편집이 닫혔다 — 이제 열려 있는지는 위(DetailActors)가 쥔다.
- */
 export function ActorCountryRow({
   row,
   figures = [],
+  leadObservation = null,
+  leadSharePct = null,
   side = null,
+  sideColor = null,
   sideOptions = [],
   groupSideId,
-  editing,
-  onEditingChange,
+  replacement = null,
+  readOnly = false,
+  onOpenEdit,
   manageMode,
   isFirst,
   isLast,
   onCountryClick,
+  onAddDelegate,
   onUpdate,
+  onReplace,
   onMove,
   onRemove,
   draggable = true,
@@ -82,26 +96,23 @@ export function ActorCountryRow({
   children,
 }: {
   row: CountryRowData
-  /** 이 나라 몫의 측정값(병력·사상자 등) — 진영 모듈·수치 모듈에서 적은 값 */
   figures?: Observation[]
-  /** 진영 — 진영별 칸 밖(평평한 목록)에서만 넘긴다. 칸 안이면 머리가 이미 말한다 */
+  leadObservation?: Observation | null
+  leadSharePct?: number | null
   side?: { name: string; color: string } | null
-  /** 진영 선택지('none' = 진영 미지정) — 사건에 진영이 있을 때 */
-  sideOptions?: Array<{ value: string; label: string }>
-  /**
-   * 이 행이 놓인 진영 칸(진영별 묶음일 때). 행의 진영이 칸과 같으면 진영 칩을 세우지 않는다 —
-   * 칸 머리가 이미 말한다(1차대전: '동맹국' 칸 안 네 줄이 모두 '동맹국 ▾' 칩을 달고 있었다).
-   * undefined = 평평한 목록.
-   */
+  sideColor?: string | null
+  sideOptions?: Array<{ value: string; label: string; color?: string }>
   groupSideId?: string | null
-  /** 편집 칸이 열렸나 — 위가 쥔다(진영을 바꿔 다른 칸으로 옮겨 가도 열린 채로) */
-  editing: boolean
-  onEditingChange: (open: boolean) => void
+  replacement?: { id: string; name: string; isHistorical: boolean } | null
+  readOnly?: boolean
+  onOpenEdit: () => void
   manageMode: boolean
   isFirst: boolean
   isLast: boolean
   onCountryClick: (countryId: string) => void
+  onAddDelegate?: () => void
   onUpdate: (rowKey: string, patch: CountryPatch) => void
+  onReplace?: (oldRowKey: string, next: { id: string; name: string; isHistorical: boolean }) => void
   onMove: (rowKey: string, direction: -1 | 1) => void
   onRemove: (rowKey: string) => void
   draggable?: boolean
@@ -111,7 +122,6 @@ export function ActorCountryRow({
   onDragLeave?: (dragEvent: DragEvent<HTMLLIElement>) => void
   onDrop?: (dragEvent: DragEvent<HTMLLIElement>) => void
   onDragEnd?: () => void
-  /** 행 아래에 매다는 것 — 대표단(그 나라 인물) 등 */
   children?: ReactNode
 }) {
   const rowKey = countryRowKey(row)
@@ -119,66 +129,358 @@ export function ActorCountryRow({
   const hasNote = Boolean(row.note && row.note.trim())
   const hasRoleDescription = Boolean(row.roleDescription?.trim())
   const period = membershipPeriodLabel(row)
-  const participation = row.participation && row.participation !== 'FULL' ? PARTICIPATION_LABEL[row.participation] : null
-  /*
-   * 기본값은 말하지 않는다 — 역할 '참여국'(참여국 1,201줄 중 720줄)과 칸이 이미 말하는 진영은 세우지 않는다.
-   * 편집 중엔 편집 칸의 칩이 말하므로 여기선 걷는다(같은 것이 두 번 서지 않게).
-   */
-  const isDefaultRole = !row.role || row.role === 'PARTICIPANT'
-  const showRoleTag = !isDefaultRole && !editing
-  const sideImplied = groupSideId !== undefined && Boolean(row.sideId) && row.sideId === groupSideId
-  const showSideTag = Boolean(side) && !sideImplied && !editing
-  const hasFacts = Boolean(period || participation || showSideTag)
+  const participation =
+    row.participation && row.participation !== 'FULL'
+      ? PARTICIPATION_LABEL[row.participation]
+      : null
+
+  const currentRole = row.role || 'PARTICIPANT'
+  const isDefaultRole = currentRole === 'PARTICIPANT'
+  const roleDisplayLabel = ROLE_LABEL[currentRole] ?? currentRole
+  const roleTone = roleVisualToneOf(currentRole)
+
+  const sideImplied =
+    groupSideId !== undefined && Boolean(row.sideId) && row.sideId === groupSideId
+  const showSideFactTag = Boolean(side) && !sideImplied
+  const showUnassignedSidePrompt = !readOnly && sideOptions.length > 1 && !row.sideId
+  const hasFacts = Boolean(period || participation || showSideFactTag)
+
+  const secondaryFigures = useMemo(
+    () =>
+      leadObservation
+        ? figures.filter((obs) => obs.id !== leadObservation.id)
+        : figures,
+    [figures, leadObservation],
+  )
+
+  const roleMenuItems = useMemo<PopoverMenuEntry[]>(() => {
+    const visibleOptions = EVENT_COUNTRY_ROLE_OPTIONS.filter(
+      (option) => !option.deprecated || option.value === row.role,
+    )
+    return [
+      { type: 'section', id: 'sec-role', label: `${row.name} 역할 선택` },
+      ...visibleOptions.map((option) => ({
+        id: `role-${option.value}`,
+        label: option.label,
+        checked: option.value === currentRole,
+        onSelect: () => {
+          if (option.value !== currentRole) {
+            onUpdate(rowKey, { role: option.value })
+          }
+        },
+      })),
+    ]
+  }, [row.name, row.role, currentRole, onUpdate, rowKey])
+
+  const sideMenuItems = useMemo<PopoverMenuEntry[]>(() => {
+    if (sideOptions.length <= 1) return []
+    const currentSideValue = row.sideId ?? 'none'
+    return [
+      { type: 'section', id: 'sec-side', label: `${row.name} 진영 배정` },
+      ...sideOptions.map((option) => ({
+        id: `side-${option.value}`,
+        label: option.value === 'none' ? '진영 미배정' : option.label,
+        checked: option.value === currentSideValue,
+        onSelect: () => {
+          if (option.value !== currentSideValue) {
+            onUpdate(rowKey, { sideId: option.value === 'none' ? null : option.value })
+          }
+        },
+      })),
+    ]
+  }, [row.name, row.sideId, sideOptions, onUpdate, rowKey])
+
+  const handleRemoveClick = async () => {
+    if (figures.length > 0) {
+      const metricNames = figures
+        .map((item) => item.metric.name)
+        .slice(0, 3)
+        .join(' · ')
+      const ok = await confirm({
+        title: `'${row.name}'을(를) 참여국에서 제외할까요?`,
+        message: `이 나라에 기록된 수치 ${figures.length}건(${metricNames}${figures.length > 3 ? ' 외' : ''})도 함께 삭제됩니다.`,
+        confirmLabel: '제외하기',
+        danger: true,
+      })
+      if (!ok) return
+    }
+    onRemove(rowKey)
+  }
+
+  const combinedMenuItems = useMemo<PopoverMenuEntry[]>(() => {
+    const visibleRoleOptions = EVENT_COUNTRY_ROLE_OPTIONS.filter(
+      (option) => !option.deprecated || option.value === row.role,
+    )
+    const currentSideValue = row.sideId ?? 'none'
+    return [
+      {
+        id: 'edit-detail',
+        label: '참여 내용 바꾸기 (한 일 · 비고 · 시점)',
+        icon: <FiEdit2 size={13} />,
+        onSelect: () => onOpenEdit(),
+      },
+      ...(onAddDelegate
+        ? ([
+            {
+              id: 'add-delegate',
+              label: `‘${row.name}’ 소속 인물 잇기`,
+              icon: <FiUserPlus size={13} />,
+              onSelect: () => onAddDelegate(),
+            },
+          ] as PopoverMenuEntry[])
+        : []),
+      { type: 'divider', id: 'div-role' },
+      { type: 'section', id: 'sec-role', label: '국가 역할 변경' },
+      ...visibleRoleOptions.map((option) => ({
+        id: `role-${option.value}`,
+        label: option.label,
+        checked: option.value === currentRole,
+        onSelect: () => {
+          if (option.value !== currentRole) {
+            onUpdate(rowKey, { role: option.value })
+          }
+        },
+      })),
+      ...(sideOptions.length > 1
+        ? ([
+            { type: 'divider', id: 'div-side' },
+            { type: 'section', id: 'sec-side', label: '진영 배정' },
+            ...sideOptions.map((option) => ({
+              id: `side-${option.value}`,
+              label: option.value === 'none' ? '진영 미배정' : option.label,
+              checked: option.value === currentSideValue,
+              onSelect: () => {
+                if (option.value !== currentSideValue) {
+                  onUpdate(rowKey, {
+                    sideId: option.value === 'none' ? null : option.value,
+                  })
+                }
+              },
+            })),
+          ] as PopoverMenuEntry[])
+        : []),
+      { type: 'divider', id: 'div-rm' },
+      {
+        id: 'remove',
+        label: '참여국에서 제외',
+        danger: true,
+        onSelect: () => void handleRemoveClick(),
+      },
+    ]
+  }, [
+    row.role,
+    row.sideId,
+    row.name,
+    currentRole,
+    sideOptions,
+    onAddDelegate,
+    onOpenEdit,
+    onUpdate,
+    rowKey,
+    figures.length,
+  ])
 
   return (
     <CountryRow
-      draggable={draggable && !editing}
+      $dragOver={isDragOver}
+      draggable={draggable && manageMode && !readOnly}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       onDragEnd={onDragEnd}
     >
-      <CountryCard $dragOver={isDragOver} $editing={editing}>
+      <CountryCard>
         <CountryBody>
-          <CountryNameLine>
-            <NameLink
-              to={pathKeys.countryDetail(row.id)}
-              aria-haspopup="dialog"
-              onClick={(clickEvent) => {
-                if (!shouldInterceptEntityClick(clickEvent)) return
-                clickEvent.preventDefault()
-                onCountryClick(row.id)
-              }}
-            >
-              {row.flagEmoji && <CountryFlag aria-hidden>{row.flagEmoji}</CountryFlag>}
-              {row.name}
-            </NameLink>
-            {row.existenceWarning && (
-              <MismatchNote role="note" title="막지는 않습니다 — 날짜나 연결을 한번 확인해 보세요">
-                <FiAlertTriangle aria-hidden size={11} />
-                {row.existenceWarning}
-              </MismatchNote>
+          <RowTopBar>
+            <CountryNameLine>
+              {manageMode && !readOnly && (
+                <DragGrip aria-hidden title="드래그하여 순서 변경">
+                  <MdDragIndicator />
+                </DragGrip>
+              )}
+              <NameLink
+                to={pathKeys.countryDetail(row.id)}
+                aria-haspopup="dialog"
+                onClick={(clickEvent) => {
+                  if (!shouldInterceptEntityClick(clickEvent)) return
+                  clickEvent.preventDefault()
+                  onCountryClick(row.id)
+                }}
+              >
+                <CountryFlag aria-hidden $monogram={!row.flagEmoji}>
+                  {row.flagEmoji || row.name.charAt(0)}
+                </CountryFlag>
+                {row.name}
+              </NameLink>
+
+              {!isDefaultRole &&
+                (readOnly ? (
+                  <CountryRoleTag $tone={roleTone}>{roleDisplayLabel}</CountryRoleTag>
+                ) : (
+                  <PopoverMenu
+                    items={roleMenuItems}
+                    align="left"
+                    minWidth={170}
+                    ariaLabel={`${row.name} 역할 변경`}
+                    renderTrigger={({ isOpen, toggle, ref: triggerRef }) => (
+                      <SemanticRolePill
+                        ref={triggerRef}
+                        type="button"
+                        $tone={roleTone}
+                        $active={isOpen}
+                        title="클릭하여 역할 변경"
+                        onClick={toggle}
+                      >
+                        <span>{roleDisplayLabel}</span>
+                        <FiChevronDown aria-hidden />
+                      </SemanticRolePill>
+                    )}
+                  />
+                ))}
+
+              {showUnassignedSidePrompt && (
+                <PopoverMenu
+                  items={sideMenuItems}
+                  align="left"
+                  minWidth={170}
+                  ariaLabel={`${row.name} 진영 배정`}
+                  renderTrigger={({ toggle, ref: triggerRef }) => (
+                    <QuickSideAssignBtn
+                      ref={triggerRef}
+                      type="button"
+                      title="클릭하여 소속 진영 배정"
+                      onClick={toggle}
+                    >
+                      <span>+ 진영 배정</span>
+                      <FiChevronDown size={10} aria-hidden />
+                    </QuickSideAssignBtn>
+                  )}
+                />
+              )}
+
+              {row.existenceWarning && (
+                <MismatchNote role="note" title="막지는 않습니다 — 날짜나 연결을 한번 확인해 보세요">
+                  <FiAlertTriangle aria-hidden size={11} />
+                  {row.existenceWarning}
+                </MismatchNote>
+              )}
+              {row.existenceWarning && replacement && !readOnly && onReplace && (
+                <ReplaceCountryBtn
+                  type="button"
+                  title={`역할·서술·진영을 유지한 채 ‘${replacement.name}’(으)로 바꿉니다(되돌리기 가능)`}
+                  onClick={() => onReplace(rowKey, replacement)}
+                >
+                  → {replacement.name}(으)로 교체
+                </ReplaceCountryBtn>
+              )}
+            </CountryNameLine>
+
+            {!readOnly && (
+              <RowControls data-pinned={manageMode || undefined}>
+                {manageMode ? (
+                  <>
+                    <GhostRowBtn
+                      type="button"
+                      onClick={() => onMove(rowKey, -1)}
+                      disabled={isFirst}
+                      aria-label={`${row.name} 위로`}
+                      title="위로 이동"
+                    >
+                      <FiArrowUp />
+                    </GhostRowBtn>
+                    <GhostRowBtn
+                      type="button"
+                      onClick={() => onMove(rowKey, 1)}
+                      disabled={isLast}
+                      aria-label={`${row.name} 아래로`}
+                      title="아래로 이동"
+                    >
+                      <FiArrowDown />
+                    </GhostRowBtn>
+                  </>
+                ) : (
+                  <>
+                    {onAddDelegate && (
+                      <GhostRowBtn
+                        type="button"
+                        onClick={onAddDelegate}
+                        title={`‘${row.name}’ 소속 수반·지휘관·대표 잇기`}
+                      >
+                        <FiUserPlus aria-hidden />
+                        <span>인물</span>
+                      </GhostRowBtn>
+                    )}
+                    <GhostRowBtn
+                      type="button"
+                      onClick={onOpenEdit}
+                      title={`${row.name} 참여 내용 바꾸기`}
+                    >
+                      <span>참여 바꾸기</span>
+                    </GhostRowBtn>
+                  </>
+                )}
+                <PopoverMenu
+                  size="sm"
+                  items={combinedMenuItems}
+                  ariaLabel={`${row.name} 설정 및 작업 메뉴`}
+                  title="역할·진영·참여 편집·제거"
+                />
+              </RowControls>
             )}
-            {showRoleTag && <CountryRoleTag>{ROLE_LABEL[row.role ?? ''] ?? row.role}</CountryRoleTag>}
-          </CountryNameLine>
+          </RowTopBar>
+
           {hasFacts && (
             <CountryFacts>
-              {showSideTag && side && <FactTag $color={side.color}>{side.name}</FactTag>}
+              {showSideFactTag && side && <FactTag $color={side.color}>{side.name}</FactTag>}
               {participation && <FactTag>{participation}</FactTag>}
               {period && (
-                <span title={[row.joinReason, row.withdrawReason].filter(Boolean).join(' / ') || undefined}>
+                <span
+                  title={
+                    [row.joinReason, row.withdrawReason].filter(Boolean).join(' / ') || undefined
+                  }
+                >
                   {period}
                 </span>
               )}
             </CountryFacts>
           )}
-          {figures.length > 0 && (
+
+          {leadObservation && leadSharePct != null && (
+            <CountryForceInline
+              title={
+                [
+                  leadObservation.metric.definition,
+                  formatObservationExact(leadObservation),
+                  leadObservation.qualifier,
+                ]
+                  .filter(Boolean)
+                  .join(' — ') || undefined
+              }
+            >
+              <CountryForceHead>
+                <span>{leadObservation.metric.name}</span>
+                <strong>{formatObservationValue(leadObservation)}</strong>
+              </CountryForceHead>
+              <CountryForceTrack aria-hidden>
+                <CountryForceFill
+                  $color={sideColor ?? side?.color ?? null}
+                  style={{ width: `${leadSharePct}%` }}
+                />
+              </CountryForceTrack>
+            </CountryForceInline>
+          )}
+
+          {secondaryFigures.length > 0 && (
             <FigureChips aria-label={`${row.name} 수치`}>
-              {figures.map((observation) => (
+              {secondaryFigures.map((observation) => (
                 <FigureChip
                   key={observation.id}
-                  title={[observation.metric.definition, formatObservationExact(observation), observation.qualifier]
+                  title={[
+                    observation.metric.definition,
+                    formatObservationExact(observation),
+                    observation.qualifier,
+                  ]
                     .filter(Boolean)
                     .join(' — ')}
                 >
@@ -189,99 +491,24 @@ export function ActorCountryRow({
             </FigureChips>
           )}
 
-          {editing ? (
-            <ActorEditPanel
-              name={row.name}
-              choices={[
-                {
-                  id: 'role',
-                  label: '역할',
-                  value: row.role || 'PARTICIPANT',
-                  options: EVENT_COUNTRY_ROLE_OPTIONS.filter(
-                    // 동맹국·적대국은 진영(D1)으로 대체 — 현재 값일 때만 보인다
-                    (option) => !option.deprecated || option.value === row.role,
-                  ).map((option) => ({ value: option.value, label: option.label, hint: option.hint })),
-                  onPick: (next) => onUpdate(rowKey, { role: next as EventCountryRole }),
-                },
-                ...(sideOptions.length > 1
-                  ? [
-                      {
-                        id: 'side',
-                        label: '진영',
-                        value: row.sideId ?? 'none',
-                        options: sideOptions.map((option) => ({ ...option, muted: option.value === 'none' })),
-                        onPick: (next: string) => onUpdate(rowKey, { sideId: next === 'none' ? null : next }),
-                      },
-                    ]
-                  : []),
-              ]}
-              texts={[
-                {
-                  id: 'roleDescription',
-                  label: '이 나라가 한 일',
-                  value: row.roleDescription ?? '',
-                  placeholder: '이 사건에서 이 나라가 한 일 (*강조*는 굵게)',
-                  multiline: true,
-                  onSave: (next) => onUpdate(rowKey, { roleDescription: next }),
-                },
-                {
-                  id: 'note',
-                  label: '비고',
-                  value: row.note ?? '',
-                  placeholder: '근거 · 덧붙일 말',
-                  multiline: true,
-                  onSave: (next) => onUpdate(rowKey, { note: next }),
-                },
-              ]}
-              onClose={() => onEditingChange(false)}
-            />
-          ) : (
-            <>
-              {hasRoleDescription && (
-                <CountryRoleLine $hasContent>
-                  <ClampedProse measureKey={row.roleDescription ?? ''}>
-                    <span>{renderEmphasis(row.roleDescription ?? '')}</span>
-                  </ClampedProse>
-                </CountryRoleLine>
-              )}
-              {hasNote && (
-                <CountryNoteLine $hasContent>
-                  <ClampedProse measureKey={row.note ?? ''}>
-                    <span>{renderEmphasis(row.note ?? '')}</span>
-                  </ClampedProse>
-                </CountryNoteLine>
-              )}
-            </>
+          {hasRoleDescription && (
+            <CountryRoleLine $hasContent onDoubleClick={() => !readOnly && onOpenEdit()}>
+              <ClampedProse measureKey={row.roleDescription ?? ''}>
+                <span>{renderEmphasis(row.roleDescription ?? '')}</span>
+              </ClampedProse>
+            </CountryRoleLine>
+          )}
+          {hasNote && (
+            <CountryNoteLine $hasContent onDoubleClick={() => !readOnly && onOpenEdit()}>
+              <ClampedProse measureKey={row.note ?? ''}>
+                <span>{renderEmphasis(row.note ?? '')}</span>
+              </ClampedProse>
+            </CountryNoteLine>
           )}
         </CountryBody>
-
-        <RowActions>
-          {!editing && (
-            <EditToggle
-              type="button"
-              onClick={() => onEditingChange(true)}
-              aria-label={`${row.name} 고치기(역할·진영·한 일·비고)`}
-              title="역할·진영·한 일·비고 고치기"
-            >
-              <FiEdit2 aria-hidden />
-            </EditToggle>
-          )}
-          {manageMode && (
-            <>
-              <ReorderBtn type="button" onClick={() => onMove(rowKey, -1)} disabled={isFirst} aria-label={`${row.name} 위로`}>
-                <FiArrowUp />
-              </ReorderBtn>
-              <ReorderBtn type="button" onClick={() => onMove(rowKey, 1)} disabled={isLast} aria-label={`${row.name} 아래로`}>
-                <FiArrowDown />
-              </ReorderBtn>
-            </>
-          )}
-          <RemoveInline type="button" onClick={() => onRemove(rowKey)} aria-label={`${row.name} 제거`}>
-            <FiX />
-          </RemoveInline>
-        </RowActions>
       </CountryCard>
-      {children}
+
+      {children && <DelegationSection>{children}</DelegationSection>}
     </CountryRow>
   )
 }

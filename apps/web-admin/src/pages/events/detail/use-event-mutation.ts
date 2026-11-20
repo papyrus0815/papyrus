@@ -419,6 +419,11 @@ export function buildOptimisticEvent(
             ...(row.roleDescription !== undefined && { roleDescription: row.roleDescription?.trim() || null }),
             ...(row.note !== undefined && { note: row.note?.trim() || null }),
             ...(row.sideId !== undefined && { sideId: row.sideId || null }),
+            ...(row.participation !== undefined && { participation: row.participation || null }),
+            ...(row.join !== undefined && { join: row.join || null }),
+            ...(row.joinReason !== undefined && { joinReason: row.joinReason?.trim() || null }),
+            ...(row.withdraw !== undefined && { withdraw: row.withdraw || null }),
+            ...(row.withdrawReason !== undefined && { withdrawReason: row.withdrawReason?.trim() || null }),
           }
     const modernRows = new Map(patch.relatedCountriesPatch.filter((row) => row.countryId).map((row) => [row.countryId!, row]))
     const historicalRows = new Map(
@@ -842,6 +847,7 @@ function resolvePersons(
     note?: string
     countryId?: string | null
     historicalCountryId?: string | null
+    sideId?: string | null
   }>,
   prevList: EventDetailPerson[] | undefined,
   all: unknown,
@@ -859,43 +865,49 @@ function resolvePersons(
     : []
   const out: EventDetailPerson[] = []
   for (const item of items) {
-    const ex = prevList?.find((x) => x.personId === item.personId)
-    let person = ex?.person ?? null
+    const existing = prevList?.find((candidate) => candidate.personId === item.personId)
+    let person = existing?.person ?? null
     if (!person) {
-      const a = allArr.find((x) => x?.id === item.personId)
-      if (a)
+      const matched = allArr.find((candidate) => candidate?.id === item.personId)
+      if (matched)
         person = {
-          id: a.id,
-          name: a.name,
-          surname: a.surname,
-          middleName: a.middleName ?? null,
-          profileImageUrl: a.profileImageUrl,
-          nameDisplayOrder: a.nameDisplayOrder ?? null,
-          country: a.country
+          id: matched.id,
+          name: matched.name,
+          surname: matched.surname,
+          middleName: matched.middleName ?? null,
+          profileImageUrl: matched.profileImageUrl,
+          nameDisplayOrder: matched.nameDisplayOrder ?? null,
+          country: matched.country
             ? {
                 defaultNameDisplayOrder:
-                  a.country.defaultNameDisplayOrder ?? null,
+                  matched.country.defaultNameDisplayOrder ?? null,
               }
             : null,
         }
       else return null
     }
-    // 참여 자격 국가·당시 직위는 patch에 없으면 이전 값 유지(3상: 생략=유지) — 안 그러면
-    // 역할 한 글자 고칠 때마다 국가 칩·직위 줄이 재조회까지 사라졌다.
+    // 참여 자격 국가·진영·당시 직위는 patch에 없으면 이전 값 유지(3상: 생략=유지) — 안 그러면
+    // 역할 한 글자 고칠 때마다 국가 칩·진영 열·직위 줄이 재조회까지 사라졌다.
     const countryTouched =
       item.countryId !== undefined || item.historicalCountryId !== undefined
     out.push({
-      id: ex?.id ?? `opt-${item.personId}`,
+      id: existing?.id ?? `opt-${item.personId}`,
       personId: item.personId,
       role: item.role ?? null,
       note: item.note ?? null,
-      countryId: countryTouched ? (item.countryId ?? null) : (ex?.countryId ?? null),
+      countryId: countryTouched ? (item.countryId ?? null) : (existing?.countryId ?? null),
       historicalCountryId: countryTouched
         ? (item.historicalCountryId ?? null)
-        : (ex?.historicalCountryId ?? null),
+        : (existing?.historicalCountryId ?? null),
+      sideId:
+        item.sideId !== undefined
+          ? (item.sideId ?? null)
+          : (existing?.sideId ?? null),
       // 새로 고른 국가의 이름은 화면이 참여국 목록에서 id로 찾는다
-      participationCountryName: countryTouched ? null : (ex?.participationCountryName ?? null),
-      officesAtEvent: ex?.officesAtEvent ?? [],
+      participationCountryName: countryTouched ? null : (existing?.participationCountryName ?? null),
+      officesAtEvent: existing?.officesAtEvent ?? [],
+      lifespanWarning: existing?.lifespanWarning ?? null,
+      deathAtEvent: existing?.deathAtEvent ?? null,
       person,
     })
   }

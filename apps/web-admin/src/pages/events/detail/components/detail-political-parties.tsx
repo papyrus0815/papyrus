@@ -1,25 +1,26 @@
 /**
  * 사건 ↔ 정당(`PoliticalParty`) 연결 섹션 — 「관련 정당」.
  *
- * 혁명·봉기·쿠데타·총파업·연정 위기·창당·해산 사건에서 `Organization` 우회 편법 없이
- * 정본 `PoliticalParty`(당색·이념 스펙트럼·계보·당원 포함)를 진영(`sideId`)과 역할로 직접 연결한다.
+ * 연관 탭 `RelatedLinkModal`과 동일한 2단 잇기 모달(`ActorRelationLinkModal`)로
+ * 정당 선택 + 역할·진영·설명을 한 창에서 지정한다.
  */
-import React, { useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiArrowUpRight, FiFlag, FiPlus, FiX } from 'react-icons/fi'
+import { FiArrowUpRight, FiPlus, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
+import { eventTypeFeatures } from '@/entities/event/model'
 import {
   ledgerAccent,
   ledgerAccentBorder,
-  ledgerAccentSubtle,
   ledgerHairline,
   ledgerHairlineStrong,
+  ledgerHoverFill,
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
-import { metaText } from '@/pages/events/styles/theme'
+import { metaText, toolbarControlHeight } from '@/pages/events/styles/theme'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import {
   addEventPoliticalParty,
@@ -38,14 +39,21 @@ import {
 } from '@/shared/api/political-party'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
-import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { notify } from '@/shared/ui/toast'
 import { PoliticalPartyQuickCreateModal } from '@/widgets/political-party/political-party-quick-create-modal'
 
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
+import {
+  type ActorRelationDraft,
+  ActorRelationLinkModal,
+  type RelationCandidateItem,
+} from './actors/actor-relation-link-modal'
+import {
+  CollapsedActorChipBtn,
+  CollapsedActorSlot,
+} from './actors/actors.styles'
 import { InlineSelect, InlineText } from './inline'
-import { organizationActiveDuring } from './organization-era.lib'
 import { withSideColors } from './side-colors'
 
 interface DetailPoliticalPartiesProps {
@@ -54,18 +62,22 @@ interface DetailPoliticalPartiesProps {
   onPatch?: (dto: UpdateEventDto) => void
 }
 
-const PARTY_ROLE_OPTIONS: Array<{ value: EventOrganizationRole; label: string }> = [
-  { value: 'PRINCIPAL', label: '주도·주체' },
-  { value: 'PARTICIPANT', label: '참여·가담' },
-  { value: 'FOUNDED', label: '이 사건으로 창당' },
-  { value: 'DISSOLVED', label: '이 사건으로 해산·불법화' },
-  { value: 'BENEFICIARY', label: '수혜·집권' },
-  { value: 'VICTIM', label: '탄압·피해' },
-  { value: 'OTHER', label: '기타 관여' },
+const PARTY_ROLE_OPTIONS: Array<{
+  value: EventOrganizationRole
+  label: string
+  hint: string
+}> = [
+  { value: 'PRINCIPAL', label: '주도·주체', hint: '혁명·쿠데타·연정 등을 주도한 핵심 정당' },
+  { value: 'PARTICIPANT', label: '참여·가담', hint: '연정·시위·선거 등에 함께 참여한 정당' },
+  { value: 'FOUNDED', label: '창당', hint: '이 사건을 통해 창당·결성된 정당' },
+  { value: 'DISSOLVED', label: '해산·불법화', hint: '이 사건으로 해산되거나 불법화된 정당' },
+  { value: 'BENEFICIARY', label: '수혜·집권', hint: '이 사건의 결과로 집권하거나 이익을 얻은 정당' },
+  { value: 'VICTIM', label: '탄압·피해', hint: '이 사건에서 탄압·숙청·피해를 입은 정당' },
+  { value: 'OTHER', label: '기타 관여', hint: '그 밖의 방식으로 사건에 관여한 정당' },
 ]
 
 const PARTY_ROLE_LABEL: Record<string, string> = Object.fromEntries(
-  PARTY_ROLE_OPTIONS.map((opt) => [opt.value, opt.label]),
+  PARTY_ROLE_OPTIONS.map((option) => [option.value, option.label]),
 )
 
 function resolvePartyColor(party: {
@@ -92,114 +104,91 @@ export function DetailPoliticalParties({
     () => event.politicalParties ?? [],
     [event.politicalParties],
   )
-  const expectPoliticalParties = event.domain === 'POLITICS'
+  const expectPoliticalParties = eventTypeFeatures(event.type, event.domain).expectPoliticalParties
 
-  const [opened, setOpened] = useState(false)
-  const [pickerOpen, setPickerOpen] = useState(false)
+  const [linkModalOpen, setLinkModalOpen] = useState(false)
+  const [initialDraft, setInitialDraft] = useState<ActorRelationDraft | null>(null)
   const [creatingOpen, setCreatingOpen] = useState(false)
-  const [pendingPartyId, setPendingPartyId] = useState<string | null>(null)
-  const [partyQuery, setPartyQuery] = useState('')
-  const [searchFocused, setSearchFocused] = useState(false)
 
-  const collapsed =
-    relations.length === 0 && !expectPoliticalParties && !opened
+  const collapsed = relations.length === 0 && !expectPoliticalParties
 
   const coloredSides = useMemo(
     () => withSideColors(event.sides ?? []),
     [event.sides],
   )
-  const sideOptions = useMemo(
-    () => coloredSides.map((s) => ({ value: s.id, label: s.name })),
+  const inlineSideOptions = useMemo(
+    () => coloredSides.map((side) => ({ value: side.id, label: side.name })),
     [coloredSides],
   )
-
-  const participantCountryKeys = useMemo(() => {
-    const keys = new Set<string>()
-    for (const c of event.relatedCountries ?? []) keys.add(`C:${c.id}`)
-    for (const hc of event.relatedHistoricalCountries ?? []) keys.add(`H:${hc.id}`)
-    return keys
-  }, [event.relatedCountries, event.relatedHistoricalCountries])
+  const modalSideOptions = useMemo(
+    () =>
+      coloredSides.length === 0
+        ? []
+        : [
+            { value: 'none', label: '진영 미지정' },
+            ...coloredSides.map((side) => ({
+              value: side.id,
+              label: side.name,
+              color: side.color,
+            })),
+          ],
+    [coloredSides],
+  )
 
   const defaultCountryId = event.relatedCountries?.[0]?.id ?? null
   const defaultHistoricalCountryId =
     event.relatedHistoricalCountries?.[0]?.id ?? null
 
-  const { data: allParties = [], isLoading } = useQuery({
+  const {
+    data: allParties = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['political-parties', 'event-link-candidates'],
     queryFn: () => politicalPartyApi.getAll(),
-    enabled:
-      !collapsed &&
-      !readOnly &&
-      (pickerOpen ||
-        participantCountryKeys.size > 0 ||
-        searchFocused ||
-        partyQuery.trim().length > 0),
+    enabled: linkModalOpen && !readOnly,
     staleTime: 60_000,
   })
 
-  const linkedPartyIds = useMemo(
-    () => new Set(relations.map((rel) => rel.partyId)),
+  const existingByPartyId = useMemo(
+    () => new Map(relations.map((rel) => [rel.partyId, rel])),
     [relations],
   )
 
-  const recommendedParties = useMemo(() => {
-    if (participantCountryKeys.size === 0 || allParties.length === 0) return []
-    return allParties
-      .filter((party) => {
-        if (linkedPartyIds.has(party.id)) return false
-        if (
-          !organizationActiveDuring(
-            {
-              foundedDate: party.foundedDate ?? null,
-              dissolvedDate: party.dissolvedDate ?? null,
-            },
-            event,
-          )
-        ) {
-          return false
-        }
-        const matchC =
-          party.countryId && participantCountryKeys.has(`C:${party.countryId}`)
-        const matchH =
-          party.historicalCountryId &&
-          participantCountryKeys.has(`H:${party.historicalCountryId}`)
-        return Boolean(matchC || matchH)
-      })
-      .slice(0, 6)
-  }, [allParties, linkedPartyIds, participantCountryKeys, event])
-
-  const quickMatches = useMemo(() => {
-    const q = partyQuery.trim().toLowerCase()
-    if (!q) return []
-    return allParties
-      .filter(
-        (p) =>
-          !linkedPartyIds.has(p.id) &&
-          (p.name.toLowerCase().includes(q) ||
-            (p.shortName?.toLowerCase().includes(q) ?? false) ||
-            (p.localName?.toLowerCase().includes(q) ?? false)),
-      )
-      .slice(0, 6)
-  }, [partyQuery, allParties, linkedPartyIds])
-
-  const selectOptions = useMemo(
+  const modalCandidates = useMemo<RelationCandidateItem[]>(
     () =>
       allParties
-        .map((p: PoliticalParty) => ({
-          value: p.id,
-          label: p.name,
-          description: [
-            p.shortName,
-            p.historicalCountry?.name ?? p.country?.name ?? null,
-            p.position
-              ? POLITICAL_POSITION_LABEL[p.position]
-              : p.ideology ?? null,
-          ]
-            .filter(Boolean)
-            .join(' · '),
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label, 'ko')),
-    [allParties],
+        .slice()
+        .sort((left, right) => left.name.localeCompare(right.name, 'ko'))
+        .map((partyItem: PoliticalParty) => {
+          const existing = existingByPartyId.get(partyItem.id)
+          return {
+            key: partyItem.id,
+            name: partyItem.name,
+            shortName: partyItem.shortName ?? null,
+            logoUrl: partyItem.logoUrl ?? null,
+            metaText:
+              [
+                partyItem.historicalCountry?.name ?? partyItem.country?.name ?? null,
+                partyItem.position
+                  ? POLITICAL_POSITION_LABEL[partyItem.position]
+                  : partyItem.ideology ?? null,
+              ]
+                .filter(Boolean)
+                .join(' · ') || null,
+            detailHref: pathKeys.politicalParties.detail(partyItem.id),
+            existing: existing
+              ? {
+                  relationId: existing.relationId,
+                  role: existing.role,
+                  sideId: existing.sideId ?? null,
+                  roleDescription: existing.roleDescription ?? null,
+                }
+              : undefined,
+          }
+        }),
+    [allParties, existingByPartyId],
   )
 
   const refreshEvent = () => {
@@ -207,16 +196,37 @@ export function DetailPoliticalParties({
     void queryClient.invalidateQueries({ queryKey: ['political-parties'] })
   }
 
-  const addMutation = useMutation({
-    mutationFn: (input: { partyId: string; role: EventOrganizationRole }) =>
-      addEventPoliticalParty(event.id, input),
-    onSuccess: () => {
+  const saveModalMutation = useMutation({
+    mutationFn: async (draft: ActorRelationDraft) => {
+      const nextRole = draft.role as EventOrganizationRole
+      const nextSideId = draft.sideId === 'none' ? null : draft.sideId
+      const nextDesc = draft.roleDescription.trim() || null
+
+      if (draft.relationId) {
+        const updated = await updateEventPoliticalParty(event.id, draft.relationId, {
+          role: nextRole,
+          sideId: nextSideId,
+          roleDescription: nextDesc,
+        })
+        return updated.relationId
+      }
+      const created = await addEventPoliticalParty(event.id, {
+        partyId: draft.candidateKey,
+        role: nextRole,
+        sideId: nextSideId,
+        roleDescription: nextDesc,
+      })
+      return created.relationId
+    },
+    onSuccess: (_savedId, draft) => {
       refreshEvent()
-      notify.success('정당을 사건에 연결했습니다.')
+      notify.success(
+        draft.relationId ? '정당 참여 내용을 수정했습니다.' : '정당을 사건에 연결했습니다.',
+      )
     },
     onError: (err) => {
       notify.error(
-        err instanceof Error ? err.message : '정당 연결에 실패했습니다.',
+        err instanceof Error ? err.message : '정당 연결 저장에 실패했습니다.',
       )
     },
   })
@@ -235,9 +245,7 @@ export function DetailPoliticalParties({
           : {}),
         ...(input.sideId !== undefined ? { sideId: input.sideId } : {}),
       }),
-    onSuccess: () => {
-      refreshEvent()
-    },
+    onSuccess: refreshEvent,
     onError: (err) => {
       notify.error(
         err instanceof Error ? err.message : '정당 연결 수정에 실패했습니다.',
@@ -270,20 +278,20 @@ export function DetailPoliticalParties({
         return
       }
       const existingPersons = event.relatedPersons ?? []
-      const existingIds = new Set(existingPersons.map((p) => p.personId))
-      const nextPersons = existingPersons.map((p) => ({
-        personId: p.personId,
-        role: p.role ?? undefined,
-        note: p.note ?? undefined,
-        sideId: p.sideId ?? undefined,
+      const existingIds = new Set(existingPersons.map((person) => person.personId))
+      const nextPersons = existingPersons.map((person) => ({
+        personId: person.personId,
+        role: person.role ?? undefined,
+        note: person.note ?? undefined,
+        sideId: person.sideId ?? undefined,
       }))
       let added = 0
-      for (const m of memberships) {
-        if (!m.personId || existingIds.has(m.personId)) continue
-        existingIds.add(m.personId)
+      for (const membership of memberships) {
+        if (!membership.personId || existingIds.has(membership.personId)) continue
+        existingIds.add(membership.personId)
         nextPersons.push({
-          personId: m.personId,
-          role: m.roleTitle ?? `${relation.shortName || relation.name} 당원`,
+          personId: membership.personId,
+          role: membership.roleTitle ?? `${relation.shortName || relation.name} 당원`,
           note: undefined,
           sideId: relation.sideId ?? undefined,
         })
@@ -314,20 +322,78 @@ export function DetailPoliticalParties({
     if (ok) removeMutation.mutate(relation.relationId)
   }
 
+  const closeLinkModal = () => {
+    setLinkModalOpen(false)
+    setInitialDraft(null)
+  }
+
+  const modalsNode = !readOnly && (
+    <>
+      <ActorRelationLinkModal
+        isOpen={linkModalOpen && !creatingOpen}
+        onClose={closeLinkModal}
+        title="관련 정당 잇기"
+        nounLabel="정당"
+        eventTitle={event.title}
+        searchPlaceholder="정당명 · 약칭 · 원어명으로 찾기"
+        candidates={modalCandidates}
+        roleOptions={PARTY_ROLE_OPTIONS}
+        defaultRole="PRINCIPAL"
+        sideOptions={modalSideOptions}
+        loading={isLoading}
+        failed={isError}
+        saving={saveModalMutation.isPending}
+        onRetry={() => void refetch()}
+        initialDraft={initialDraft}
+        createLabel="새 정당"
+        onCreateNew={() => setCreatingOpen(true)}
+        onSave={async (draft) => saveModalMutation.mutateAsync(draft)}
+        onDelete={async (relationId) => {
+          await removeMutation.mutateAsync(relationId)
+        }}
+      />
+
+      {creatingOpen && (
+        <PoliticalPartyQuickCreateModal
+          defaultCountryId={defaultCountryId}
+          defaultHistoricalCountryId={defaultHistoricalCountryId}
+          onClose={() => setCreatingOpen(false)}
+          onSaved={(saved) => {
+            setCreatingOpen(false)
+            void queryClient.invalidateQueries({ queryKey: ['political-parties'] })
+            setInitialDraft({
+              candidateKey: saved.id,
+              name: saved.name,
+              detailHref: pathKeys.politicalParties.detail(saved.id),
+              role: 'PRINCIPAL',
+              sideId: 'none',
+              roleDescription: '',
+            })
+            setLinkModalOpen(true)
+          }}
+        />
+      )}
+    </>
+  )
+
   if (readOnly && relations.length === 0) return null
 
   if (collapsed) {
     return (
-      <CollapsedStrip id="political-parties">
-        <ActionButton
+      <CollapsedActorSlot id="political-parties">
+        <CollapsedActorChipBtn
           type="button"
-          onClick={() => setOpened(true)}
-          title="혁명·봉기·쿠데타·연정 위기·창당·해산 등으로 이 사건에 관여한 정당을 연결합니다"
+          title="혁명·선거·연정·쿠데타·창당·해산 등에서 관여한 정당을 잇습니다"
+          onClick={() => {
+            setInitialDraft(null)
+            setLinkModalOpen(true)
+          }}
         >
-          <FiPlus size={14} aria-hidden />
-          관련 정당
-        </ActionButton>
-      </CollapsedStrip>
+          <FiPlus size={13} aria-hidden />
+          <span>관련 정당</span>
+        </CollapsedActorChipBtn>
+        {modalsNode}
+      </CollapsedActorSlot>
     )
   }
 
@@ -347,14 +413,14 @@ export function DetailPoliticalParties({
             const polity =
               relation.historicalCountry?.name ?? relation.country?.name ?? null
             const side = relation.sideId
-              ? coloredSides.find((s) => s.id === relation.sideId) ?? null
+              ? coloredSides.find((sideItem) => sideItem.id === relation.sideId) ?? null
               : null
             const posLabel = relation.position
               ? POLITICAL_POSITION_LABEL[relation.position as PoliticalPosition]
               : null
 
             return (
-              <PartyRowCard key={relation.relationId} $brandColor={color}>
+              <PartyLedgerRow key={relation.relationId} $brandColor={color}>
                 <RowTopLine>
                   <TitleGroup>
                     <PartyColorDot $color={color} />
@@ -373,11 +439,11 @@ export function DetailPoliticalParties({
 
                   {!readOnly && (
                     <ControlGroup>
-                      {sideOptions.length > 0 && (
+                      {inlineSideOptions.length > 0 && (
                         <SideWrap $color={side?.color ?? null}>
                           <InlineSelect
                             value={relation.sideId ?? ''}
-                            options={sideOptions}
+                            options={inlineSideOptions}
                             placeholder="진영 지정"
                             label={`${relation.name} 진영`}
                             onSave={(nextSideId) =>
@@ -446,144 +512,37 @@ export function DetailPoliticalParties({
                     <ReadOnlyDesc>{relation.roleDescription}</ReadOnlyDesc>
                   )
                 )}
-              </PartyRowCard>
+              </PartyLedgerRow>
             )
           })}
         </Rows>
       ) : (
         <S.HelperText>
-          혁명·봉기·총파업·쿠데타·연정 위기·창당·해산처럼 정당이 주요 행위자인 사건이면 연결하세요. 정당 편람의 계보·당원·선거 기록과 양방향으로 이어집니다.
+          혁명·봉기·총파업·쿠데타·연정 위기·창당·해산처럼 정당이 주요 행위자인 사건이면 연결하세요.
         </S.HelperText>
       )}
 
-      {!readOnly && recommendedParties.length > 0 && (
-        <RecommendBar aria-label="참여국 동시대 정당 빠른 연결">
-          <RecommendLabel>참여국 동시대 정당 빠른 연결</RecommendLabel>
-          <RecommendChips>
-            {recommendedParties.map((party) => (
-              <RecommendChipBtn
-                key={party.id}
-                type="button"
-                disabled={addMutation.isPending}
-                onClick={() =>
-                  addMutation.mutate({
-                    partyId: party.id,
-                    role: 'PRINCIPAL',
-                  })
-                }
-              >
-                <PartyColorDot $color={resolvePartyColor(party)} />
-                <strong>{party.name}</strong>
-                {party.shortName && <span>({party.shortName})</span>}
-                <RecommendPlus>+ 연결</RecommendPlus>
-              </RecommendChipBtn>
-            ))}
-          </RecommendChips>
-        </RecommendBar>
-      )}
-
       {!readOnly && (
-        <>
-          <QuickAddRow>
-            <QuickSearchInput
-              type="search"
-              value={partyQuery}
-              onFocus={() => setSearchFocused(true)}
-              onChange={(e) => setPartyQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && quickMatches.length > 0) {
-                  e.preventDefault()
-                  addMutation.mutate({
-                    partyId: quickMatches[0].id,
-                    role: 'PRINCIPAL',
-                  })
-                  setPartyQuery('')
-                }
-              }}
-              placeholder="+ 정당 빠른 연결 (당명·약칭 입력 후 Enter)…"
-              aria-label="정당 빠른 검색"
-            />
-            {quickMatches.map((candidate) => (
-              <QuickMatchBtn
-                key={candidate.id}
-                type="button"
-                disabled={addMutation.isPending}
-                onClick={() => {
-                  addMutation.mutate({
-                    partyId: candidate.id,
-                    role: 'PRINCIPAL',
-                  })
-                  setPartyQuery('')
-                }}
-              >
-                + {candidate.name}
-                {candidate.shortName ? ` (${candidate.shortName})` : ''}
-              </QuickMatchBtn>
-            ))}
-          </QuickAddRow>
-
-          <Actions>
-            <ActionButton type="button" onClick={() => setPickerOpen(true)}>
-              <FiFlag size={13} aria-hidden />
-              정당 연결
-            </ActionButton>
-            <ActionButton type="button" onClick={() => setCreatingOpen(true)}>
-              <FiPlus size={14} aria-hidden />
-              새 정당 등록
-            </ActionButton>
-          </Actions>
-
-          <SelectModal
-            isOpen={pickerOpen}
-            onClose={() => setPickerOpen(false)}
-            title="연결할 정당 선택"
-            options={selectOptions}
-            isLoading={isLoading}
-            searchable
-            searchPlaceholder="정당명·약칭 검색 (예: SPD, KPD, 자민당, 민주당)…"
-            onSelect={(partyId) => {
-              setPickerOpen(false)
-              setPendingPartyId(partyId)
+        <ActionRow>
+          <ActionBtn
+            type="button"
+            onClick={() => {
+              setInitialDraft(null)
+              setLinkModalOpen(true)
             }}
-          />
-
-          <SelectModal
-            isOpen={pendingPartyId !== null}
-            onClose={() => setPendingPartyId(null)}
-            title="이 사건에서의 정당 역할"
-            options={PARTY_ROLE_OPTIONS}
-            onSelect={(role) => {
-              const partyId = pendingPartyId
-              setPendingPartyId(null)
-              if (partyId) {
-                addMutation.mutate({
-                  partyId,
-                  role: role as EventOrganizationRole,
-                })
-              }
-            }}
-          />
-
-          {creatingOpen && (
-            <PoliticalPartyQuickCreateModal
-              defaultCountryId={defaultCountryId}
-              defaultHistoricalCountryId={defaultHistoricalCountryId}
-              onClose={() => setCreatingOpen(false)}
-              onSaved={(saved) => {
-                setCreatingOpen(false)
-                setPendingPartyId(saved.id)
-              }}
-            />
-          )}
-        </>
+          >
+            <FiPlus size={14} /> 기존 정당과 잇기
+          </ActionBtn>
+          <ActionBtn type="button" onClick={() => setCreatingOpen(true)}>
+            <FiPlus size={14} /> 새 정당 등록
+          </ActionBtn>
+        </ActionRow>
       )}
+
+      {modalsNode}
     </S.Section>
   )
 }
-
-const CollapsedStrip = styled.div`
-  display: inline-flex;
-`
 
 const Rows = styled.ul`
   list-style: none;
@@ -591,18 +550,20 @@ const Rows = styled.ul`
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
-const PartyRowCard = styled.li<{ $brandColor: string }>`
-  padding: 10px 12px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+const PartyLedgerRow = styled.li<{ $brandColor: string }>`
+  padding: 10px 4px 10px 10px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   border-left: 3px solid ${({ $brandColor }) => $brandColor};
-  border-radius: ${RADIUS.SM};
-  background: ${({ theme }) => theme.colors.background.primary};
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
 `
 
 const RowTopLine = styled.div`
@@ -633,7 +594,7 @@ const PartyLink = styled(Link)`
   align-items: center;
   gap: 3px;
   font-size: 0.875rem;
-  font-weight: 600;
+  font-weight: 650;
   color: ${({ theme }) => theme.colors.text.primary};
   text-decoration: none;
 
@@ -650,7 +611,6 @@ const MetaBadge = styled.span`
   border-radius: 4px;
   background: ${({ theme }) => theme.colors.background.secondary};
   color: ${({ theme }) => theme.colors.text.secondary};
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const PosBadge = styled.span<{ $color: string }>`
@@ -686,7 +646,7 @@ const TinyActionBtn = styled.button`
   padding: 0 8px;
   font-size: 0.71rem;
   font-weight: 500;
-  border-radius: ${RADIUS.SM};
+  border-radius: ${RADIUS.XS};
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
   color: ${metaText};
@@ -702,7 +662,7 @@ const RemoveBtn = styled.button`
   width: 24px;
   height: 24px;
   border: none;
-  border-radius: ${RADIUS.SM};
+  border-radius: ${RADIUS.XS};
   background: transparent;
   color: ${metaText};
   display: inline-flex;
@@ -711,7 +671,7 @@ const RemoveBtn = styled.button`
   cursor: pointer;
 
   &:hover {
-    background: ${({ theme }) => theme.colors.background.secondary};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
     color: ${({ theme }) => theme.colors.text.primary};
   }
 `
@@ -728,118 +688,31 @@ const ReadOnlyDesc = styled.p`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-const RecommendBar = styled.div`
-  margin-top: 8px;
-  padding: 9px 11px;
-  border-radius: ${RADIUS.SM};
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`
-
-const RecommendLabel = styled.div`
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: ${metaText};
-`
-
-const RecommendChips = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-`
-
-const RecommendChipBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 27px;
-  padding: 0 9px;
-  font-size: 0.75rem;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.primary};
-  cursor: pointer;
-
-  span {
-    color: ${metaText};
-    font-size: 0.71rem;
-  }
-
-  &:hover {
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-    background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
-  }
-`
-
-const RecommendPlus = styled.em`
-  font-style: normal;
-  font-weight: 600;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-`
-
-const QuickAddRow = styled.div`
-  margin-top: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-`
-
-const QuickSearchInput = styled.input`
-  flex: 1;
-  min-width: 220px;
-  height: 32px;
-  padding: 0 10px;
-  font-size: 0.8rem;
-  color: ${({ theme }) => theme.colors.text.primary};
-  background: ${({ theme }) => theme.colors.background.primary};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: ${RADIUS.SM};
-
-  &:focus {
-    outline: none;
-    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-`
-
-const QuickMatchBtn = styled.button`
-  height: 28px;
-  padding: 0 9px;
-  font-size: 0.74rem;
-  font-weight: 600;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
-  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-  cursor: pointer;
-`
-
-const Actions = styled.div`
-  margin-top: 8px;
+const ActionRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin-top: 10px;
 `
 
-const ActionButton = styled.button`
+const ActionBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 30px;
-  padding: 0 11px;
-  font-size: 0.78rem;
-  font-weight: 500;
-  border-radius: ${RADIUS.SM};
+  ${toolbarControlHeight}
+  padding: 0 12px;
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.SM};
   background: ${({ theme }) => theme.colors.background.primary};
   color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
   cursor: pointer;
 
   &:hover {
-    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
-    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    color: ${({ theme }) => theme.colors.text.primary};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
   }
 `

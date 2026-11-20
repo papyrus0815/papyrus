@@ -148,3 +148,88 @@ describe('buildInverse — 연결 사유(parentLinkReasons·childLinkReasons)', 
     ])
   })
 })
+
+describe('buildInverse — 참여 인물·참여국 무손실 복원', () => {
+  it('인물 제거(relatedPersons) 후 되돌릴 때 sideId와 참여 자격 국가까지 그대로 복원한다', () => {
+    const eventWithActors = {
+      id: 'E',
+      title: '베를린 봉기',
+      relatedPersons: [
+        {
+          id: 'pe-1',
+          personId: 'p-1',
+          role: '봉기 지도',
+          note: '비고',
+          countryId: null,
+          historicalCountryId: 'hc-weimar',
+          sideId: 'side-spartacus',
+        },
+      ],
+    } as EventDetail
+    const inverse = buildInverse(eventWithActors, { relatedPersons: [] } as unknown as Patch)
+    expect(inverse.relatedPersons).toEqual([
+      {
+        personId: 'p-1',
+        role: '봉기 지도',
+        note: '비고',
+        countryId: null,
+        historicalCountryId: 'hc-weimar',
+        sideId: 'side-spartacus',
+      },
+    ])
+  })
+
+  it('참여국 제거(relatedCountries) 후 되돌릴 때 진영·참여 형태·가담/이탈 시점까지 복원한다', () => {
+    const eventWithCountries = {
+      id: 'E',
+      title: '1차세계대전',
+      relatedCountries: [
+        {
+          id: 'c-us',
+          name: '미국',
+          role: 'PARTICIPANT',
+          roleDescription: '후발 참전',
+          note: null,
+          sortOrder: 1,
+          sideId: 'side-entente',
+          participation: 'FULL',
+          join: { era: 'AD', year: 1917, month: 4, day: 6 },
+          joinReason: '무제한 잠수함 작전',
+          withdraw: null,
+          withdrawReason: null,
+        },
+      ],
+      relatedHistoricalCountries: [
+        {
+          id: 'hc-ru',
+          name: '러시아 제국',
+          role: 'PARTICIPANT',
+          roleDescription: null,
+          note: null,
+          sortOrder: 0,
+          sideId: 'side-entente',
+          participation: 'FULL',
+          join: null,
+          joinReason: null,
+          withdraw: { era: 'AD', year: 1918, month: 3, day: 3 },
+          withdrawReason: '브레스트-리토프스크 조약',
+        },
+      ],
+    } as EventDetail
+    const inverse = buildInverse(eventWithCountries, { relatedCountries: [] } as unknown as Patch)
+    expect(inverse.relatedCountries).toEqual([
+      expect.objectContaining({
+        historicalCountryId: 'hc-ru',
+        sideId: 'side-entente',
+        withdraw: { era: 'AD', year: 1918, month: 3, day: 3 },
+        withdrawReason: '브레스트-리토프스크 조약',
+      }),
+      expect.objectContaining({
+        countryId: 'c-us',
+        sideId: 'side-entente',
+        join: { era: 'AD', year: 1917, month: 4, day: 6 },
+        joinReason: '무제한 잠수함 작전',
+      }),
+    ])
+  })
+})

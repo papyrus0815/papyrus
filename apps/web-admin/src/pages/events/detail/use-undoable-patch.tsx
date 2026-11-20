@@ -18,7 +18,6 @@ import {
   ledgerHairlineStrong,
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
-import { toParticipants } from '@/entities/event/model'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { notify } from '@/shared/ui/toast'
 
@@ -242,6 +241,9 @@ export function buildInverse(
           personId: p.personId,
           role: p.role ?? undefined,
           note: p.note ?? undefined,
+          countryId: p.countryId ?? null,
+          historicalCountryId: p.historicalCountryId ?? null,
+          sideId: p.sideId ?? null,
         }))
         break
       /**
@@ -276,19 +278,54 @@ export function buildInverse(
           if ('roleDescription' in row) back.roleDescription = current?.roleDescription ?? null
           if ('note' in row) back.note = current?.note ?? null
           if ('sideId' in row) back.sideId = current?.sideId ?? null
+          if ('participation' in row) back.participation = current?.participation ?? null
+          if ('join' in row) back.join = current?.join ?? null
+          if ('joinReason' in row) back.joinReason = current?.joinReason ?? null
+          if ('withdraw' in row) back.withdraw = current?.withdraw ?? null
+          if ('withdrawReason' in row) back.withdrawReason = current?.withdrawReason ?? null
           return back
         })
         break
       /**
-       * 참여국 되돌리기 — 역할·서술·비고까지 통째로 복원해야 진짜 undo다.
-       * id만 되돌리던 예전 코드는 역할 편집을 undo해도 역할이 돌아오지 않았다.
+       * 참여국 되돌리기 — 역할·서술·비고·진영·참여 형태·가담/이탈 시점까지 통째로 복원해야 진짜 undo다.
        */
-      case 'relatedCountries':
-        inv.relatedCountries = toParticipants(
-          event.relatedCountries,
-          event.relatedHistoricalCountries,
-        )
+      case 'relatedCountries': {
+        const snapshotRows = [
+          ...(event.relatedCountries ?? []).map((country, index) => ({
+            sortOrder: country.sortOrder ?? index,
+            item: {
+              countryId: country.id,
+              role: (country.role ?? undefined) as NonNullable<UpdateEventDto['relatedCountries']>[number]['role'],
+              roleDescription: country.roleDescription ?? null,
+              note: country.note ?? null,
+              sideId: country.sideId ?? null,
+              participation: country.participation ?? null,
+              join: country.join ?? null,
+              joinReason: country.joinReason ?? null,
+              withdraw: country.withdraw ?? null,
+              withdrawReason: country.withdrawReason ?? null,
+            },
+          })),
+          ...(event.relatedHistoricalCountries ?? []).map((country, index) => ({
+            sortOrder: country.sortOrder ?? index,
+            item: {
+              historicalCountryId: country.id,
+              role: (country.role ?? undefined) as NonNullable<UpdateEventDto['relatedCountries']>[number]['role'],
+              roleDescription: country.roleDescription ?? null,
+              note: country.note ?? null,
+              sideId: country.sideId ?? null,
+              participation: country.participation ?? null,
+              join: country.join ?? null,
+              joinReason: country.joinReason ?? null,
+              withdraw: country.withdraw ?? null,
+              withdrawReason: country.withdrawReason ?? null,
+            },
+          })),
+        ]
+        snapshotRows.sort((left, right) => left.sortOrder - right.sortOrder)
+        inv.relatedCountries = snapshotRows.map((row) => row.item)
         break
+      }
       /**
        * 모듈 객체 키 — 원래 값이 null/없음이면 inverse는 `null`을 명시 전송해야
        * 서버가 컬럼을 비울 수 있다(서버는 `=== undefined` 가드라 undefined는 무시).

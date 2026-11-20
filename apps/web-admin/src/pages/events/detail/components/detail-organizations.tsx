@@ -1,14 +1,13 @@
 /**
  * 사건 ↔ 기구·협의체·조직(`!relation.companyId`) 및 기업(`Boolean(relation.companyId)`) 분리 섹션.
  *
- * DB의 `event_organization_relation`은 기구·조직(`Organization`)과 기업(`Company` 1:1 `Organization(type=COMPANY)`)이
- * 같은 외래키를 공유하지만, 도메인·검색 모집단·등록 모달·메타데이터(회원국 불러오기 vs 주가·시가총액)가 완전히 다르므로
- * 화면에서는 **「관련 기구·협의체·조직」**과 **「관련 기업」** 두 섹션으로 명확히 분리한다.
+ * 연관 탭 `RelatedLinkModal`과 동일한 2단 잇기 모달(`ActorRelationLinkModal`)로
+ * 기구/기업 선택 + 역할·진영·설명을 한 창에서 지정한다.
  */
 import React, { lazy, Suspense, useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiBriefcase, FiExternalLink, FiPlus, FiShare2, FiX } from 'react-icons/fi'
+import { FiExternalLink, FiPlus, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -18,12 +17,14 @@ import {
   toParticipants,
 } from '@/entities/event/model/country-participant'
 import {
-  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerHairline,
   ledgerHairlineStrong,
+  ledgerHoverFill,
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
 import { ORGANIZATION_ROLE_OPTIONS as ROLE_OPTIONS } from '@/features/event-facets/model/organization-roles'
-import { metaText } from '@/pages/events/styles/theme'
+import { metaText, toolbarControlHeight } from '@/pages/events/styles/theme'
 import { getApiConnection } from '@/shared/api/client'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import {
@@ -38,7 +39,6 @@ import {
   getOrganizationCountryMemberships,
   getOrganizationMembers,
   getOrganizations,
-  isInternationalOrgType,
   isOrganizationMembershipActiveAtYear,
   ORGANIZATION_TYPE_LABEL,
   resolveOrganizationMembershipRoleAtYear,
@@ -46,25 +46,31 @@ import {
 import { signedYearFromIsoLike } from '@/shared/lib/country-period'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
-import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { notify } from '@/shared/ui/toast'
 import { OrganizationQuickCreateModal } from '@/widgets/organization/organization-quick-create-modal'
 
 const LazyCompanyRegisterModal = lazy(() =>
-  import('@/widgets/company-form').then((m) => ({
-    default: m.CompanyRegisterModal,
+  import('@/widgets/company-form').then((moduleRef) => ({
+    default: moduleRef.CompanyRegisterModal,
   })),
 )
 
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
+import {
+  type ActorRelationDraft,
+  ActorRelationLinkModal,
+  type RelationCandidateItem,
+} from './actors/actor-relation-link-modal'
+import {
+  CollapsedActorChipBtn,
+  CollapsedActorSlot,
+} from './actors/actors.styles'
 import { InlineSelect } from './inline'
-import { organizationActiveDuring } from './organization-era.lib'
 import { withSideColors } from './side-colors'
 
 interface DetailOrganizationsProps {
   event: EventDetail
-  /** 핵심 기록으로 조직·기업이 기대되는 사건인지 */
   expectOrganizations: boolean
   onPatch?: (dto: UpdateEventDto) => void
 }
@@ -72,6 +78,12 @@ interface DetailOrganizationsProps {
 const ROLE_LABEL = Object.fromEntries(
   ROLE_OPTIONS.map((option) => [option.value, option.label]),
 ) as Record<EventOrganizationRole, string>
+
+const ORG_ROLE_ITEMS = ROLE_OPTIONS.map((option) => ({
+  value: option.value,
+  label: option.label,
+  hint: option.description,
+}))
 
 function formatCompactMoney(
   raw: string | null,
@@ -121,11 +133,11 @@ export function DetailOrganizations({
   const expectInstitutions =
     event.type === 'SUMMIT' ||
     event.type === 'INSTITUTION' ||
-    (expectOrganizations && event.type !== 'COMPANY' && event.domain !== 'ECONOMY')
+    (expectOrganizations && event.type !== 'COMPANY' && event.type !== 'PRODUCT')
 
   const expectCompanies =
     event.type === 'COMPANY' ||
-    (expectOrganizations && event.domain === 'ECONOMY')
+    event.type === 'PRODUCT'
 
   return (
     <>
@@ -188,49 +200,37 @@ function DomainOrganizationSection({
             ...coloredSides.map((side) => ({
               value: side.id,
               label: side.name,
+              color: side.color,
             })),
           ],
     [coloredSides],
   )
 
-  const [pickerOpen, setPickerOpen] = useState(false)
+  const [linkModalOpen, setLinkModalOpen] = useState(false)
+  const [initialDraft, setInitialDraft] = useState<ActorRelationDraft | null>(null)
   const [creatingOpen, setCreatingOpen] = useState(false)
-  const [pendingOrganizationId, setPendingOrganizationId] = useState<
-    string | null
-  >(null)
-  const [orgQuery, setOrgQuery] = useState('')
-  const [orgSearchFocused, setOrgSearchFocused] = useState(false)
-  const [showAllRecommended, setShowAllRecommended] = useState(false)
   const [dragRelationId, setDragRelationId] = useState<string | null>(null)
   const [dragOverSideKey, setDragOverSideKey] = useState<string | null>(null)
-  const [opened, setOpened] = useState(false)
 
-  const collapsed = relations.length === 0 && !expectExpanded && !opened
+  const collapsed = relations.length === 0 && !expectExpanded
 
   const defaultCountryId = (event.relatedCountries ?? [])[0]?.id ?? undefined
   const defaultHistoricalCountryId =
     (event.relatedHistoricalCountries ?? [])[0]?.id ?? undefined
 
-  const hasParticipantCountries =
-    (event.relatedCountries?.length ?? 0) +
-      (event.relatedHistoricalCountries?.length ?? 0) >
-    0
-
-  const { data: rawOrganizations = [], isLoading } = useQuery({
+  const {
+    data: rawOrganizations = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['organizations', 'event-link-candidates', mode],
     queryFn: () =>
       getOrganizations(
         getApiConnection(),
         isCompanyMode ? { type: 'COMPANY' } : { excludeCompanies: true },
       ),
-    enabled:
-      !collapsed &&
-      (pickerOpen ||
-        hasParticipantCountries ||
-        event.type === 'SUMMIT' ||
-        event.type === 'TREATY' ||
-        orgSearchFocused ||
-        orgQuery.trim().length > 0),
+    enabled: linkModalOpen,
     staleTime: 60_000,
   })
 
@@ -242,23 +242,10 @@ function DomainOrganizationSection({
     [rawOrganizations, isCompanyMode],
   )
 
-  const linkedOrgIdSet = useMemo(
-    () => new Set(relations.map((relation) => relation.organizationId)),
+  const existingByOrgId = useMemo(
+    () => new Map(relations.map((rel) => [rel.organizationId, rel])),
     [relations],
   )
-
-  const quickMatches = useMemo(() => {
-    const trimmed = orgQuery.trim().toLowerCase()
-    if (!trimmed) return []
-    return candidatePool
-      .filter(
-        (organization) =>
-          !linkedOrgIdSet.has(organization.id) &&
-          (organization.name.toLowerCase().includes(trimmed) ||
-            (organization.shortName?.toLowerCase().includes(trimmed) ?? false)),
-      )
-      .slice(0, 6)
-  }, [orgQuery, candidatePool, linkedOrgIdSet])
 
   const participantCountrySideMap = useMemo(() => {
     const map = new Map<string, { name: string; sideId: string | null }>()
@@ -277,106 +264,95 @@ function DomainOrganizationSection({
     return map
   }, [event.relatedCountries, event.relatedHistoricalCountries])
 
-  const recommendedItems = useMemo(() => {
-    const isDiplomaticForumEvent =
-      !isCompanyMode &&
-      (event.type === 'SUMMIT' ||
-        event.type === 'TREATY' ||
-        event.domain === 'DIPLOMACY')
-    if (
-      (participantCountrySideMap.size === 0 && !isDiplomaticForumEvent) ||
-      candidatePool.length === 0
-    ) {
-      return []
-    }
-    return candidatePool
-      .filter((organization) => {
-        if (linkedOrgIdSet.has(organization.id)) return false
-        if (!organizationActiveDuring(organization, event)) return false
-        const countryMatch =
-          organization.countryId &&
-          participantCountrySideMap.has(`C:${organization.countryId}`)
-        const histMatch =
-          organization.historicalCountryId &&
-          participantCountrySideMap.has(`H:${organization.historicalCountryId}`)
-        const intlMatch =
-          isDiplomaticForumEvent && isInternationalOrgType(organization.type)
-        return Boolean(countryMatch || histMatch || intlMatch)
-      })
-      .slice(0, 8)
-  }, [
-    isCompanyMode,
-    candidatePool,
-    linkedOrgIdSet,
-    participantCountrySideMap,
-    event,
-  ])
-
-  const selectOptions = useMemo(
+  const modalCandidates = useMemo<RelationCandidateItem[]>(
     () =>
       candidatePool
-        .map((organization) => ({
-          value: organization.id,
-          label: organization.name,
-          description: [
-            organization.shortName,
-            isCompanyMode
-              ? organization.country?.name ??
-                organization.historicalCountry?.name ??
-                null
-              : (ORGANIZATION_TYPE_LABEL[organization.type] ?? null),
-          ]
-            .filter(Boolean)
-            .join(' · '),
-        }))
-        .sort((left, right) => left.label.localeCompare(right.label, 'ko')),
-    [candidatePool, isCompanyMode],
+        .slice()
+        .sort((left, right) => left.name.localeCompare(right.name, 'ko'))
+        .map((organization) => {
+          const existing = existingByOrgId.get(organization.id)
+          const countryName =
+            organization.historicalCountry?.name ?? organization.country?.name ?? null
+          const resolvedCompanyId =
+            (organization as { companyId?: string | null }).companyId ??
+            existing?.companyId ??
+            null
+          return {
+            key: organization.id,
+            name: organization.name,
+            shortName: organization.shortName ?? null,
+            logoUrl: organization.logoUrl ?? null,
+            metaText:
+              [
+                !isCompanyMode && organization.type
+                  ? ORGANIZATION_TYPE_LABEL[organization.type]
+                  : null,
+                countryName,
+              ]
+                .filter(Boolean)
+                .join(' · ') || null,
+            detailHref: isCompanyMode
+              ? resolvedCompanyId
+                ? pathKeys.companies.detail(resolvedCompanyId)
+                : null
+              : `/organizations?selected=${encodeURIComponent(organization.id)}`,
+            existing: existing
+              ? {
+                  relationId: existing.relationId,
+                  role: existing.role,
+                  sideId: existing.sideId ?? null,
+                  roleDescription: existing.roleDescription ?? null,
+                }
+              : undefined,
+          }
+        }),
+    [candidatePool, existingByOrgId, isCompanyMode],
   )
-
-  const roleOptions = useMemo(() => {
-    const taken = new Set(
-      (event.organizations ?? [])
-        .filter((relation) => relation.organizationId === pendingOrganizationId)
-        .map((relation) => relation.role),
-    )
-    return ROLE_OPTIONS.filter((option) => !taken.has(option.value))
-  }, [event.organizations, pendingOrganizationId])
 
   const refresh = () =>
     void queryClient.invalidateQueries({ queryKey: eventKeys.detail(event.id) })
 
-  const addMutation = useMutation({
-    mutationFn: async (body: {
-      organizationId: string
-      role: EventOrganizationRole
-    }) => {
-      const relation = await addEventOrganization(event.id, body)
+  const saveModalMutation = useMutation({
+    mutationFn: async (draft: ActorRelationDraft) => {
+      const nextRole = draft.role as EventOrganizationRole
+      const explicitSideId = draft.sideId === 'none' ? null : draft.sideId
+      const nextDesc = draft.roleDescription.trim() || null
+
+      if (draft.relationId) {
+        const updated = await updateEventOrganization(event.id, draft.relationId, {
+          role: nextRole,
+          sideId: explicitSideId,
+          roleDescription: nextDesc,
+        })
+        return updated.relationId
+      }
+
       const matchedOrg = candidatePool.find(
-        (candidate) => candidate.id === body.organizationId,
+        (candidate) => candidate.id === draft.candidateKey,
       )
       const inferredSideId =
+        explicitSideId ??
         (matchedOrg?.countryId
           ? participantCountrySideMap.get(`C:${matchedOrg.countryId}`)?.sideId
           : null) ??
         (matchedOrg?.historicalCountryId
-          ? participantCountrySideMap.get(`H:${matchedOrg.historicalCountryId}`)
-              ?.sideId
+          ? participantCountrySideMap.get(`H:${matchedOrg.historicalCountryId}`)?.sideId
           : null) ??
         null
-      if (inferredSideId && !relation.sideId) {
-        try {
-          await updateEventOrganization(event.id, relation.relationId, {
-            sideId: inferredSideId,
-          })
-        } catch {
-          // 진영 자동 지정 실패 시 기본 연결은 유지
-        }
-      }
-      return relation
+
+      const created = await addEventOrganization(event.id, {
+        organizationId: draft.candidateKey,
+        role: nextRole,
+        sideId: inferredSideId,
+        roleDescription: nextDesc,
+      })
+      return created.relationId
     },
-    onSuccess: (relation) => {
+    onSuccess: (_savedId, draft) => {
       notify.success(
-        `${relation.name}을(를) ${ROLE_LABEL[relation.role]}(으)로 연결했습니다`,
+        draft.relationId
+          ? `‘${draft.name}’ 참여 내용을 수정했습니다`
+          : `${draft.name}을(를) ${ROLE_LABEL[draft.role as EventOrganizationRole]}(으)로 연결했습니다`,
       )
       refresh()
     },
@@ -502,9 +478,9 @@ function DomainOrganizationSection({
       )
       const targetYear = signedYearFromIsoLike(event.startDate)
       const activeMemberships = memberships
-        .map((m) => ({
-          membership: m,
-          resolvedRole: resolveOrganizationMembershipRoleAtYear(m, targetYear),
+        .map((membership) => ({
+          membership,
+          resolvedRole: resolveOrganizationMembershipRoleAtYear(membership, targetYear),
         }))
         .filter(
           (
@@ -512,7 +488,9 @@ function DomainOrganizationSection({
           ): entry is {
             membership: (typeof memberships)[number]
             resolvedRole: NonNullable<typeof entry.resolvedRole>
-          } => entry.resolvedRole !== null && isOrganizationMembershipActiveAtYear(entry.membership, targetYear),
+          } =>
+            entry.resolvedRole !== null &&
+            isOrganizationMembershipActiveAtYear(entry.membership, targetYear),
         )
       if (activeMemberships.length === 0) {
         notify.info(
@@ -525,25 +503,25 @@ function DomainOrganizationSection({
         event.relatedHistoricalCountries,
       )
       const existingKeys = new Set(
-        existingParticipants.map((p) => participantKey(p)),
+        existingParticipants.map((participant) => participantKey(participant)),
       )
       const nextParticipants: EventCountryParticipant[] = [
         ...existingParticipants,
       ]
       let addedCount = 0
-      for (const { membership: m, resolvedRole } of activeMemberships) {
+      for (const { membership, resolvedRole } of activeMemberships) {
         const mappedRole =
           resolvedRole === 'OBSERVER' || resolvedRole === 'DIALOGUE_PARTNER'
             ? 'OBSERVER'
             : 'PARTICIPANT'
-        const candidate: EventCountryParticipant = m.historicalCountryId
+        const candidate: EventCountryParticipant = membership.historicalCountryId
           ? {
-              historicalCountryId: m.historicalCountryId,
+              historicalCountryId: membership.historicalCountryId,
               role: mappedRole,
               ...(relation.sideId ? { sideId: relation.sideId } : {}),
             }
           : {
-              countryId: m.countryId,
+              countryId: membership.countryId,
               role: mappedRole,
               ...(relation.sideId ? { sideId: relation.sideId } : {}),
             }
@@ -583,27 +561,139 @@ function DomainOrganizationSection({
     if (ok) removeMutation.mutate(relation.relationId)
   }
 
-  if (collapsed) {
-    return (
-      <CollapsedStrip id={anchorId}>
-        <ActionButton
-          type="button"
-          onClick={() => setOpened(true)}
-          title={
-            isCompanyMode
-              ? '상장·설립·교역·인수 등으로 이 사건에 관여한 기업을 연결합니다'
-              : '국제기구·다자협의체·군사동맹·비정부·민간단체 등 이 사건에 관여한 기구·조직을 연결합니다'
-          }
-        >
-          <FiPlus size={14} aria-hidden />
-          {isCompanyMode ? '관련 기업' : '기구·조직'}
-        </ActionButton>
-      </CollapsedStrip>
-    )
+  const closeLinkModal = () => {
+    setLinkModalOpen(false)
+    setInitialDraft(null)
   }
 
   const sectionTitle = isCompanyMode ? '관련 기업' : '관련 기구·협의체·조직'
   const nounShort = isCompanyMode ? '기업' : '기구·조직'
+
+  const modalsNode = (
+    <>
+      <ActorRelationLinkModal
+        isOpen={linkModalOpen && !creatingOpen}
+        onClose={closeLinkModal}
+        title={isCompanyMode ? '관련 기업 잇기' : '관련 기구·협의체·조직 잇기'}
+        nounLabel={nounShort}
+        eventTitle={event.title}
+        searchPlaceholder={
+          isCompanyMode
+            ? '기업명 · 약칭으로 찾기 (예: 삼성전자, 동인도회사)'
+            : '기구·협의체·조직명으로 찾기 (예: 유엔, NATO, 아세안)'
+        }
+        candidates={modalCandidates}
+        roleOptions={ORG_ROLE_ITEMS}
+        defaultRole="PRINCIPAL"
+        sideOptions={sideOptions}
+        loading={isLoading}
+        failed={isError}
+        saving={saveModalMutation.isPending}
+        onRetry={() => void refetch()}
+        initialDraft={initialDraft}
+        createLabel={isCompanyMode ? '새 기업' : '새 기구·조직'}
+        onCreateNew={() => setCreatingOpen(true)}
+        onSave={async (draft) => saveModalMutation.mutateAsync(draft)}
+        onDelete={async (relationId) => {
+          await removeMutation.mutateAsync(relationId)
+        }}
+      />
+
+      {!isCompanyMode && creatingOpen && (
+        <OrganizationQuickCreateModal
+          defaultCountryId={defaultCountryId}
+          defaultHistoricalCountryId={defaultHistoricalCountryId}
+          defaultType={
+            event.type === 'SUMMIT' || event.domain === 'DIPLOMACY'
+              ? 'MULTILATERAL_FORUM'
+              : 'NGO'
+          }
+          candidateCountries={[
+            ...(event.relatedCountries ?? []).map((countryItem) => ({
+              countryId: countryItem.id,
+              name: countryItem.name,
+              flagEmoji: countryItem.flagEmoji,
+            })),
+            ...(event.relatedHistoricalCountries ?? []).map((histCountryItem) => ({
+              historicalCountryId: histCountryItem.id,
+              name: histCountryItem.name,
+            })),
+          ]}
+          candidatePersons={(event.relatedPersons ?? []).map((related) => ({
+            id: related.personId,
+            name: [related.person?.name, related.person?.surname]
+              .filter(Boolean)
+              .join(' '),
+            role: related.role ?? undefined,
+          }))}
+          onClose={() => setCreatingOpen(false)}
+          onCreated={(created) => {
+            setCreatingOpen(false)
+            void queryClient.invalidateQueries({ queryKey: ['organizations'] })
+            setInitialDraft({
+              candidateKey: created.id,
+              name: created.name,
+              detailHref: `/organizations?selected=${encodeURIComponent(created.id)}`,
+              role: 'PRINCIPAL',
+              sideId: 'none',
+              roleDescription: '',
+            })
+            setLinkModalOpen(true)
+          }}
+        />
+      )}
+
+      {isCompanyMode && creatingOpen && (
+        <Suspense fallback={null}>
+          <LazyCompanyRegisterModal
+            isOpen={creatingOpen}
+            onClose={() => setCreatingOpen(false)}
+            defaultCountryId={defaultCountryId}
+            defaultHistoricalCountryId={defaultHistoricalCountryId}
+            onSaved={(created) => {
+              setCreatingOpen(false)
+              void queryClient.invalidateQueries({
+                queryKey: ['organizations'],
+              })
+              if (created.organizationId) {
+                setInitialDraft({
+                  candidateKey: created.organizationId,
+                  name: created.name,
+                  role: 'PRINCIPAL',
+                  sideId: 'none',
+                  roleDescription: '',
+                })
+                setLinkModalOpen(true)
+              }
+            }}
+          />
+        </Suspense>
+      )}
+    </>
+  )
+
+  if (collapsed) {
+    return (
+      <CollapsedActorSlot id={anchorId}>
+        <CollapsedActorChipBtn
+          type="button"
+          title={
+            isCompanyMode
+              ? '상장·창립·인수·특허·교역 등 이 사건의 당사 기업을 잇습니다'
+              : 'UN·NATO 등 다자기구(회원국 일괄 반영) 또는 민간·노동·학술단체를 잇습니다'
+          }
+          onClick={() => {
+            setInitialDraft(null)
+            setLinkModalOpen(true)
+          }}
+        >
+          <FiPlus size={13} aria-hidden />
+          <span>{isCompanyMode ? '관련 기업' : '국제기구 · 협의체 · 조직'}</span>
+        </CollapsedActorChipBtn>
+        {modalsNode}
+      </CollapsedActorSlot>
+    )
+  }
 
   return (
     <S.Section id={anchorId}>
@@ -718,217 +808,29 @@ function DomainOrganizationSection({
       ) : (
         <S.HelperText>
           {isCompanyMode
-            ? '상장·창립·인수·특허독점처럼 기업이 당사자인 사건이면 연결하세요. 최신 시가총액·주가와 기업 상세 링크가 함께 표시됩니다.'
-            : '국제기구·다자협의체(UN·아세안·쿼드·APEC·NATO 등) 또는 비정부·민간·노동·학술단체를 연결하세요. 회원국과 소속 인물을 원클릭으로 불러올 수 있습니다.'}
+            ? '상장·창립·인수·특허독점처럼 기업이 당사자인 사건이면 연결하세요.'
+            : '국제기구·다자협의체(UN·아세안·NATO 등) 또는 민간·노동·학술단체를 연결하세요.'}
         </S.HelperText>
       )}
 
-      {recommendedItems.length > 0 && (
-        <RecommendBar
-          aria-label={
-            isCompanyMode ? '참여국 소속 추천 기업' : '참여국·외교 추천 기구·조직'
-          }
+      <ActionRow>
+        <ActionBtn
+          type="button"
+          onClick={() => {
+            setInitialDraft(null)
+            setLinkModalOpen(true)
+          }}
         >
-          <RecommendLabel>
-            {isCompanyMode
-              ? '참여국 소속 기업 빠른 연결'
-              : '관련 기구·협의체·조직 빠른 연결'}
-          </RecommendLabel>
-          <RecommendChips>
-            {(showAllRecommended
-              ? recommendedItems
-              : recommendedItems.slice(0, 4)
-            ).map((organization) => {
-              const ownerCountry =
-                (organization.countryId
-                  ? participantCountrySideMap.get(`C:${organization.countryId}`)
-                  : null) ??
-                (organization.historicalCountryId
-                  ? participantCountrySideMap.get(
-                      `H:${organization.historicalCountryId}`,
-                    )
-                  : null)
-              return (
-                <RecommendChipBtn
-                  key={organization.id}
-                  type="button"
-                  disabled={addMutation.isPending}
-                  onClick={() =>
-                    addMutation.mutate({
-                      organizationId: organization.id,
-                      role: 'PRINCIPAL',
-                    })
-                  }
-                >
-                  <strong>{organization.name}</strong>
-                  {ownerCountry && (
-                    <RecommendChipCountry>
-                      · {ownerCountry.name}
-                    </RecommendChipCountry>
-                  )}
-                  <RecommendChipPlus>+ 연결</RecommendChipPlus>
-                </RecommendChipBtn>
-              )
-            })}
-            {recommendedItems.length > 4 && (
-              <RecommendMoreBtn
-                type="button"
-                onClick={() => setShowAllRecommended((prev) => !prev)}
-              >
-                {showAllRecommended
-                  ? '접기'
-                  : `+${recommendedItems.length - 4}곳 더 보기`}
-              </RecommendMoreBtn>
-            )}
-          </RecommendChips>
-        </RecommendBar>
-      )}
-
-      <QuickAddRow>
-        <QuickSearchInput
-          type="search"
-          value={orgQuery}
-          onFocus={() => setOrgSearchFocused(true)}
-          onChange={(changeEvent) => setOrgQuery(changeEvent.target.value)}
-          onKeyDown={(keyEvent) => {
-            if (keyEvent.key === 'Enter' && quickMatches.length > 0) {
-              keyEvent.preventDefault()
-              addMutation.mutate({
-                organizationId: quickMatches[0].id,
-                role: 'PRINCIPAL',
-              })
-              setOrgQuery('')
-            }
-          }}
-          placeholder={
-            isCompanyMode
-              ? '+ 기업 빠른 연결 (이름 입력 후 Enter)…'
-              : '+ 기구·협의체·조직 빠른 연결 (이름 입력 후 Enter)…'
-          }
-          aria-label={isCompanyMode ? '기업 빠른 검색' : '기구·조직 빠른 검색'}
-        />
-        {quickMatches.map((candidate) => (
-          <QuickMatchBtn
-            key={candidate.id}
-            type="button"
-            disabled={addMutation.isPending}
-            onClick={() => {
-              addMutation.mutate({
-                organizationId: candidate.id,
-                role: 'PRINCIPAL',
-              })
-              setOrgQuery('')
-            }}
-          >
-            + {candidate.name}
-          </QuickMatchBtn>
-        ))}
-      </QuickAddRow>
-
-      <Actions>
-        <ActionButton type="button" onClick={() => setPickerOpen(true)}>
-          {isCompanyMode ? (
-            <FiBriefcase size={13} aria-hidden />
-          ) : (
-            <FiShare2 size={13} aria-hidden />
-          )}
-          {isCompanyMode ? '기업 연결' : '기구·조직 연결'}
-        </ActionButton>
-        <ActionButton type="button" onClick={() => setCreatingOpen(true)}>
-          <FiPlus size={14} aria-hidden />
+          <FiPlus size={14} />
+          {isCompanyMode ? '기존 기업과 잇기' : '기존 기구·조직과 잇기'}
+        </ActionBtn>
+        <ActionBtn type="button" onClick={() => setCreatingOpen(true)}>
+          <FiPlus size={14} />
           {isCompanyMode ? '새 기업 등록' : '새 기구·조직 등록'}
-        </ActionButton>
-      </Actions>
+        </ActionBtn>
+      </ActionRow>
 
-      <SelectModal
-        isOpen={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        title={isCompanyMode ? '연결할 기업' : '연결할 기구·협의체·조직'}
-        options={selectOptions}
-        isLoading={isLoading}
-        searchable
-        searchPlaceholder={
-          isCompanyMode
-            ? '기업명 검색 (예: 삼성전자, 동인도회사)…'
-            : '기구·협의체·조직명 검색 (예: 아세안, 쿼드, 유엔)…'
-        }
-        onSelect={(organizationId) => {
-          setPickerOpen(false)
-          setPendingOrganizationId(organizationId)
-        }}
-      />
-
-      {!isCompanyMode && creatingOpen && (
-        <OrganizationQuickCreateModal
-          defaultCountryId={defaultCountryId}
-          defaultHistoricalCountryId={defaultHistoricalCountryId}
-          defaultType={
-            event.type === 'SUMMIT' || event.domain === 'DIPLOMACY'
-              ? 'MULTILATERAL_FORUM'
-              : 'NGO'
-          }
-          candidateCountries={[
-            ...(event.relatedCountries ?? []).map((c) => ({
-              countryId: c.id,
-              name: c.name,
-              flagEmoji: c.flagEmoji,
-            })),
-            ...(event.relatedHistoricalCountries ?? []).map((hc) => ({
-              historicalCountryId: hc.id,
-              name: hc.name,
-            })),
-          ]}
-          candidatePersons={(event.relatedPersons ?? []).map((related) => ({
-            id: related.personId,
-            name: [related.person?.name, related.person?.surname]
-              .filter(Boolean)
-              .join(' '),
-            role: related.role ?? undefined,
-          }))}
-          onClose={() => setCreatingOpen(false)}
-          onCreated={(created) => {
-            setCreatingOpen(false)
-            setPendingOrganizationId(created.id)
-          }}
-        />
-      )}
-
-      {isCompanyMode && creatingOpen && (
-        <Suspense fallback={null}>
-          <LazyCompanyRegisterModal
-            isOpen={creatingOpen}
-            onClose={() => setCreatingOpen(false)}
-            defaultCountryId={defaultCountryId}
-            defaultHistoricalCountryId={defaultHistoricalCountryId}
-            onSaved={(created) => {
-              setCreatingOpen(false)
-              void queryClient.invalidateQueries({
-                queryKey: ['organizations'],
-              })
-              if (created.organizationId) {
-                setPendingOrganizationId(created.organizationId)
-              }
-            }}
-          />
-        </Suspense>
-      )}
-
-      <SelectModal
-        isOpen={pendingOrganizationId !== null}
-        onClose={() => setPendingOrganizationId(null)}
-        title="이 사건에서의 역할"
-        options={roleOptions}
-        onSelect={(role) => {
-          const organizationId = pendingOrganizationId
-          setPendingOrganizationId(null)
-          if (organizationId) {
-            addMutation.mutate({
-              organizationId,
-              role: role as EventOrganizationRole,
-            })
-          }
-        }}
-      />
+      {modalsNode}
     </S.Section>
   )
 }
@@ -1068,15 +970,20 @@ const Rows = styled.ul`
   padding: 0;
   display: flex;
   flex-direction: column;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const Row = styled.li`
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
   align-items: start;
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  gap: 10px;
+  padding: 10px 4px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
 
   &[draggable='true'] {
     cursor: grab;
@@ -1085,20 +992,12 @@ const Row = styled.li`
   &[draggable='true']:active {
     cursor: grabbing;
   }
-
-  &:first-child {
-    padding-top: 4px;
-  }
-
-  &:last-child {
-    border-bottom: none;
-  }
 `
 
 const Logo = styled.img`
-  width: 32px;
-  height: 32px;
-  border-radius: ${RADIUS.SM};
+  width: 30px;
+  height: 30px;
+  border-radius: ${RADIUS.XS};
   object-fit: contain;
   outline: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   outline-offset: -1px;
@@ -1108,11 +1007,11 @@ const LogoFallback = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: ${RADIUS.SM};
+  width: 30px;
+  height: 30px;
+  border-radius: ${RADIUS.XS};
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
@@ -1135,8 +1034,8 @@ const NameLink = styled(Link)`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 14.5px;
+  font-weight: 650;
   color: ${({ theme }) => theme.colors.text.primary};
   text-decoration: none;
 
@@ -1159,51 +1058,20 @@ const RoleBadge = styled.span`
 `
 
 const Meta = styled.div`
-  font-size: 13px;
+  font-size: 12.5px;
   font-variant-numeric: tabular-nums;
   color: ${metaText};
-`
-
-const CollapsedStrip = styled.div`
-  display: inline-flex;
-`
-
-const Actions = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-`
-
-const ActionButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: ${RADIUS.SM};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.text.secondary};
-  }
 `
 
 const RemoveButton = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   padding: 0;
   border: none;
-  border-radius: ${RADIUS.SM};
+  border-radius: ${RADIUS.XS};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;
@@ -1241,7 +1109,7 @@ const ImportMembersBtn = styled.button`
   gap: 4px;
   height: 24px;
   padding: 0 8px;
-  border-radius: ${RADIUS.SM};
+  border-radius: ${RADIUS.XS};
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   background: transparent;
   color: ${({ theme }) => theme.colors.text.secondary};
@@ -1261,11 +1129,7 @@ const SideDropZoneBar = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  padding: 8px 10px;
-  margin-bottom: 8px;
-  border-radius: ${RADIUS.SM};
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => theme.colors.background.secondary};
+  padding: 6px 0 8px;
 `
 
 const SideDropHint = styled.span`
@@ -1279,7 +1143,7 @@ const SideDropPill = styled.span<{ $color?: string; $dragOver?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 26px;
+  height: 25px;
   padding: 0 9px;
   border-radius: ${RADIUS.PILL};
   border: 1px solid
@@ -1309,133 +1173,31 @@ const SideDropCount = styled.span`
   opacity: 0.75;
 `
 
-const RecommendBar = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  padding: 10px 12px;
-  margin-top: 8px;
-  margin-bottom: 10px;
-  border-radius: ${RADIUS.SM};
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => theme.colors.background.secondary};
-`
-
-const RecommendLabel = styled.span`
-  font-size: 11.5px;
-  font-weight: 600;
-  color: ${metaText};
-`
-
-const RecommendChips = styled.div`
+const ActionRow = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
+  margin-top: 10px;
 `
 
-const RecommendChipBtn = styled.button`
+const ActionBtn = styled.button`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: ${RADIUS.PILL};
+  gap: 6px;
+  ${toolbarControlHeight}
+  padding: 0 12px;
   border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-radius: ${RADIUS.SM};
   background: ${({ theme }) => theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.primary};
+  color: ${({ theme }) => theme.colors.text.secondary};
   font-family: inherit;
   font-size: 12.5px;
-  cursor: pointer;
-  transition: border-color 0.14s, background 0.14s;
-
-  &:hover:not(:disabled) {
-    border-color: ${({ theme }) => theme.colors.accent};
-    background: ${({ theme }) => `${theme.colors.accent}0e`};
-  }
-
-  &:disabled {
-    opacity: 0.55;
-    cursor: default;
-  }
-`
-
-const RecommendChipCountry = styled.span`
-  font-size: 11.5px;
-  color: ${metaText};
-`
-
-const RecommendChipPlus = styled.span`
-  margin-left: 2px;
-  font-size: 11px;
-  font-weight: 700;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-`
-
-const RecommendMoreBtn = styled.button`
-  padding: 2px 8px;
-  border: none;
-  background: transparent;
-  color: ${metaText};
-  font-family: inherit;
-  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
 
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-`
-
-const QuickAddRow = styled.div`
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px 8px;
-  margin-top: 6px;
-  margin-bottom: 10px;
-`
-
-const QuickSearchInput = styled.input`
-  width: 280px;
-  max-width: 100%;
-  height: 30px;
-  padding: 0 10px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => theme.colors.background.secondary};
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-family: inherit;
-  font-size: 12.5px;
-
-  &::placeholder {
-    color: ${metaText};
-  }
-
-  &:focus {
-    outline: none;
-    border-color: ${({ theme }) => theme.colors.accent};
-    background: ${({ theme }) => theme.colors.background.primary};
-  }
-`
-
-const QuickMatchBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: ${RADIUS.PILL};
-  border: 1px dashed ${({ theme }) => theme.colors.accent};
-  background: ${({ theme }) => `${theme.colors.accent}0e`};
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    background: ${({ theme }) => `${theme.colors.accent}1c`};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
   }
 `

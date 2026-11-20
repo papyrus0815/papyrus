@@ -31,12 +31,23 @@ import {
 } from '@/shared/api/person-groups'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
-import { PersonPickerModal } from '@/shared/ui/person-picker'
 import { notify } from '@/shared/ui/toast'
 import { PersonGroupCreateModal } from '@/widgets/person/person-group-create-modal/person-group-create-modal'
 
 import * as S from '../styles'
 import { type EventDetail, eventKeys } from '../use-event-detail'
+import { type PatchOptions } from '../use-undoable-patch'
+import { koParticle } from './actors/actor-link-modal.styles'
+import {
+  countrySideByParticipationValueOf,
+  effectivePersonSide,
+  type EventPersonEntry,
+  participationOptionsOf,
+  personNameOf,
+} from './actors/actors.lib'
+import { PersonLinkModal } from './actors/person-link-modal'
+import { useActorMutations } from './actors/use-actor-mutations'
+import { toAxisSpan } from './development-timeline.lib'
 import { InlineSelect, InlineText } from './inline'
 import { LoadError } from './load-error'
 import { MODULE_COLOR } from './module-colors'
@@ -52,7 +63,7 @@ import { SIDE_OUTCOME_LABEL, SIDE_OUTCOME_OPTIONS } from './side-outcome'
 
 interface ModuleSidesProps {
   event: EventDetail
-  onPatch: (patch: UpdateEventDto) => void
+  onPatch: (patch: UpdateEventDto, opts?: PatchOptions) => void
   focusUnitId?: string | null
 }
 
@@ -129,6 +140,10 @@ function computeJoinSpanRatio(
  * 진영 자체(이름·설명·순서)는 진영 API로 저장하고, 나라·인물이 어느 편인지는 **참여국 줄·참여 인물
  * 줄의 sideId**로 저장한다(사건 수정 patch → 되돌리기 가능). 같은 나라를 진영과 참여국에 두 번
  * 적지 않는다 — 여기서 고르는 나라는 이미 이 사건의 참여국이다.
+ *
+ * 인물은 **실효 진영**으로 보인다(actors.lib `effectivePersonSide`). 따로 정한 진영이 있으면 그것이고,
+ * 없으면 소속국의 진영이다. 참여 탭과 같은 규칙이다. 인물 쓰기는 참여 탭과 같은 `useActorMutations`로
+ * 하고, 인물을 새로 들일 때도 참여 탭과 같은 잇기 모달(역할·소속국까지 받는다)을 연다.
  */
 export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
   const queryClient = useQueryClient()
@@ -161,6 +176,22 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
   }, [event.relatedCountries, event.relatedHistoricalCountries])
 
   const persons = useMemo(() => event.relatedPersons ?? [], [event.relatedPersons])
+  const actors = useActorMutations({ event, onPatch })
+  const { countrySideByKey } = actors
+  /** 진영 id → 그 진영에 선 인물(실효 진영). inherited = 소속국을 따라 선 인물 */
+  const personsBySide = useMemo(() => {
+    const map = new Map<string, Array<{ entry: EventPersonEntry; inherited: boolean }>>()
+    for (const entry of persons) {
+      const effective = effectivePersonSide(entry, countrySideByKey)
+      if (!effective.sideId) continue
+      map.set(effective.sideId, [
+        ...(map.get(effective.sideId) ?? []),
+        { entry, inherited: effective.source === 'country' },
+      ])
+    }
+    return map
+  }, [persons, countrySideByKey])
+  const personsOnSide = (sideId: string) => personsBySide.get(sideId) ?? []
   const organizations = useMemo(() => event.organizations ?? [], [event.organizations])
   const politicalParties = useMemo(
     () => event.politicalParties ?? [],
@@ -168,11 +199,34 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
   )
 
   /**
-   * 인물 넣기 — 예전엔 **이 사건의 참여 인물** 중에서만 고를 수 있어, 사건에 없는 지휘관은 넣을 길이 없었다
+   * 인물 잇기 — 예전엔 **이 사건의 참여 인물** 중에서만 고를 수 있어, 사건에 없는 지휘관은 넣을 길이 없었다
    * (진영 설명 10개가 전부 '지휘관(인물 연결 대기): …'를 글로 적고 있었고, 진영 소속 인물은 0명).
-   * 전체 인물에서 찾되 이 사건의 참여 인물을 맨 위에 고정하고, 사건에 없던 인물은 참여 인물로 함께 넣는다.
+   * 그 뒤엔 별도 고르기 모달(역할·소속국 없이)로 넣다 보니 참여 탭의 '인물 잇기'와 같은 일을 다른 모달로
+   * 했다. 이제 참여 탭과 **같은 잇기 모달**을 이 진영을 기본값으로 연다.
    */
   const [personPickerSide, setPersonPickerSide] = useState<EventSide | null>(null)
+  const countryRows = actors.countryRows
+  const linkParticipationOptions = useMemo(() => participationOptionsOf(countryRows), [countryRows])
+  const linkCountrySideByValue = useMemo(() => countrySideByParticipationValueOf(countryRows), [countryRows])
+  const linkSideOptions = useMemo(
+    () =>
+      coloredSides.length === 0
+        ? []
+        : [
+            { value: 'none', label: '없음' },
+            ...coloredSides.map((side) => ({ value: side.id, label: side.name, color: side.color })),
+          ],
+    [coloredSides],
+  )
+  const linkContext = useMemo(() => {
+    const span = toAxisSpan(event)
+    return {
+      fromYear: span ? Math.floor(span.from) : null,
+      toYear: span ? Math.floor(span.to) : null,
+      countryIds: countryRows.map((row) => row.id),
+      label: '이 사건 무렵 · 참여국 인물',
+    }
+  }, [event, countryRows])
   const [creatingGroupSide, setCreatingGroupSide] = useState<EventSide | null>(null)
 
   /* 계파 목록은 고르기 보조라 실패해도 '연결' 고르기만 빠진다 — 삼켜 둔다(등록 버튼은 남는다) */
@@ -319,36 +373,13 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
       const detailed = await getPersonGroup(groupId)
       const members = detailed.members ?? []
       if (members.length === 0) return
-      const existingById = new Map(persons.map((person) => [person.personId, person]))
-      const nextPersons = [...persons.map((person) => ({
-        personId: person.personId,
-        role: person.role ?? undefined,
-        note: person.note ?? undefined,
-        sideId: person.sideId ?? undefined,
-      }))]
-      let addedCount = 0
-      for (const member of members) {
-        const pid = member.person.id
-        const existing = existingById.get(pid)
-        if (existing) {
-          if (existing.sideId !== sideId) {
-            const idx = nextPersons.findIndex((np) => np.personId === pid)
-            if (idx >= 0) nextPersons[idx] = { ...nextPersons[idx], sideId }
-            addedCount += 1
-          }
-        } else {
-          nextPersons.push({
-            personId: pid,
-            role: member.roleLabel ?? undefined,
-            note: undefined,
-            sideId,
-          })
-          addedCount += 1
-        }
-      }
-      if (addedCount > 0) {
-        onPatch({ relatedPersons: nextPersons } as UpdateEventDto)
-        notify.success(`집단 소속 인물 ${addedCount}명을 이 진영에 반영했습니다`)
+      const appliedCount = actors.assignPersonsToSide(
+        members.map((member) => ({ personId: member.person.id, role: member.roleLabel ?? null })),
+        sideId,
+        `계파 소속 인물 → 진영`,
+      )
+      if (appliedCount > 0) {
+        notify.success(`집단 소속 인물 ${appliedCount}명을 이 진영에 반영했습니다`)
       } else {
         notify.success('이미 모든 소속 인물이 이 진영에 들어 있습니다')
       }
@@ -422,41 +453,17 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
         notify.info(`‘${organizationName}’에 등록된 소속 인물이 없습니다`)
         return
       }
-      const existingById = new Map(
-        persons.map((person) => [person.personId, person]),
-      )
-      const nextPersons = [
-        ...persons.map((person) => ({
-          personId: person.personId,
-          role: person.role ?? undefined,
-          note: person.note ?? undefined,
-          sideId: person.sideId ?? undefined,
+      const appliedCount = actors.assignPersonsToSide(
+        members.map((member) => ({
+          personId: member.person.id,
+          role: member.roleTitle ?? organizationName,
         })),
-      ]
-      let addedCount = 0
-      for (const member of members) {
-        const pid = member.person.id
-        const existing = existingById.get(pid)
-        if (existing) {
-          if (existing.sideId !== sideId) {
-            const idx = nextPersons.findIndex((np) => np.personId === pid)
-            if (idx >= 0) nextPersons[idx] = { ...nextPersons[idx], sideId }
-            addedCount += 1
-          }
-        } else {
-          nextPersons.push({
-            personId: pid,
-            role: member.roleTitle ?? organizationName,
-            note: undefined,
-            sideId,
-          })
-          addedCount += 1
-        }
-      }
-      if (addedCount > 0) {
-        onPatch({ relatedPersons: nextPersons } as UpdateEventDto)
+        sideId,
+        `${organizationName} 소속 인물 → 진영`,
+      )
+      if (appliedCount > 0) {
         notify.success(
-          `‘${organizationName}’ 소속 인물 ${addedCount}명을 이 진영에 반영했습니다`,
+          `‘${organizationName}’ 소속 인물 ${appliedCount}명을 이 진영에 반영했습니다`,
         )
       } else {
         notify.success('이미 모든 소속 인물이 이 진영에 들어 있습니다')
@@ -471,7 +478,7 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
   }
 
   const removeSide = async (side: EventSide) => {
-    const memberCount = side.participants.length + side.persons.length
+    const memberCount = side.participants.length + personsOnSide(side.id).filter((member) => !member.inherited).length
     const ok = await confirm({
       title: `'${side.name}' 진영을 지울까요?`,
       message:
@@ -496,20 +503,28 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
     } as UpdateEventDto)
   }
 
+  /**
+   * 참여 인물을 진영에 넣거나(sideId) 진영 지정을 푼다(null) — 고친 줄만 보낸다(참여 탭과 같은 쓰기).
+   * 지정을 풀면 진영 밖이 아니라 **소속국 진영을 따른다**. 그래서 소속국이 진영에 있으면 그쪽으로
+   * 옮겨 보이고, 그렇다고 알린다. 소속국을 따라 선 인물은 따로 지정한 진영이 없으니 풀 것도 없다.
+   */
   const assignPerson = (personId: string, sideId: string | null) => {
-    const known = persons.some((person) => person.personId === personId)
-    onPatch({
-      relatedPersons: [
-        ...persons.map((person) => ({
-          personId: person.personId,
-          role: person.role ?? undefined,
-          note: person.note ?? undefined,
-          ...(person.personId === personId ? { sideId } : {}),
-        })),
-        /* 사건에 없던 인물 — 참여 인물로 들이면서 바로 이 진영에 */
-        ...(known || !sideId ? [] : [{ personId, sideId }]),
-      ],
-    } as UpdateEventDto)
+    const entry = persons.find((person) => person.personId === personId)
+    if (!entry) return
+    const personName = personNameOf(entry)
+    const effective = effectivePersonSide(entry, countrySideByKey)
+    if (!sideId && effective.source === 'country') {
+      notify.info(
+        `‘${personName}’${koParticle(personName, '은/는')} 소속국을 따라 이 진영에 있습니다 — 참여 탭에서 소속국을 바꾸거나 다른 진영으로 옮기세요`,
+      )
+      return
+    }
+    if (effective.sideId === sideId) return
+    actors.updatePerson(personId, { sideId })
+    const fallbackSide = !sideId && effective.countrySideId ? sides.find((side) => side.id === effective.countrySideId) : null
+    if (fallbackSide) {
+      notify.info(`‘${personName}’${koParticle(personName, '은/는')} 이제 소속국을 따라 ‘${fallbackSide.name}’에 섭니다`)
+    }
   }
 
   const swapFirstTwoSides = () => {
@@ -577,7 +592,9 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
   const unassignedCountries = participants.filter(
     (participant) => !participantInfo.get(participantKey(participant))?.sideId,
   )
-  const unassignedPersons = persons.filter((person) => !person.sideId)
+  const unassignedPersons = persons.filter(
+    (person) => !effectivePersonSide(person, countrySideByKey).sideId,
+  )
   const unassignedOrgs = organizations.filter(
     (org) =>
       !sides.some((side) =>
@@ -602,7 +619,7 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
     (sum, side) =>
       sum +
       side.participants.length +
-      side.persons.length +
+      personsOnSide(side.id).length +
       side.organizations.length +
       (side.politicalParties?.length ?? 0),
     0,
@@ -629,7 +646,7 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                 const sidePartyCount = side.politicalParties?.length ?? 0
                 const countParts = [
                   side.participants.length > 0 ? `국가 ${side.participants.length}` : '',
-                  side.persons.length > 0 ? `인물 ${side.persons.length}` : '',
+                  personsOnSide(side.id).length > 0 ? `인물 ${personsOnSide(side.id).length}` : '',
                   sidePartyCount > 0 ? `정당 ${sidePartyCount}` : '',
                   side.organizations.length > 0 ? `조직 ${side.organizations.length}` : '',
                   sideUnitCount > 0 ? `부대 ${sideUnitCount}` : '',
@@ -667,7 +684,7 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
             {coloredSides.map((side) => {
               const memberCount =
                 side.participants.length +
-                side.persons.length +
+                personsOnSide(side.id).length +
                 (side.politicalParties?.length ?? 0) +
                 side.organizations.length
               const weight =
@@ -964,7 +981,8 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                     </Member>
                   )
                 })}
-                {side.persons.map((member) => {
+                {personsOnSide(side.id).map(({ entry: member, inherited }) => {
+                  const memberName = personNameOf(member)
                   const dragPayload: DraggedDetailMember = {
                     kind: 'person',
                     key: member.personId,
@@ -972,10 +990,14 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                   }
                   return (
                     <Member
-                      key={member.personEventId}
+                      key={member.personId}
                       $person
                       draggable
-                      title="드래그하여 다른 진영이나 미지정으로 이동"
+                      title={
+                        inherited
+                          ? `소속국(${member.participationCountryName ?? '참여 국가'})을 따라 이 진영 — 다른 진영으로 끌면 따로 정해집니다`
+                          : '드래그하여 다른 진영이나 미지정으로 이동'
+                      }
                       onDragStart={(dragEvent) => {
                         setDraggedMember(dragPayload)
                         dragEvent.dataTransfer?.setData(
@@ -988,24 +1010,28 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                         setDragOverTarget(null)
                       }}
                     >
-                      <MemberName>{[member.name, member.surname].filter(Boolean).join(' ')}</MemberName>
+                      <MemberName>{memberName}</MemberName>
+                      {inherited && <MemberTag>소속국 따름</MemberTag>}
                       {otherSide && (
                         <MemberSwitchBtn
                           type="button"
                           onClick={() => assignPerson(member.personId, otherSide.id)}
-                          aria-label={`${member.name} ${otherSide.name}(으)로 이동`}
+                          aria-label={`${memberName} ${otherSide.name}(으)로 이동`}
                           title={`${otherSide.name}(으)로 이동`}
                         >
                           →{otherIndex + 1}편
                         </MemberSwitchBtn>
                       )}
-                      <MemberRemove
-                        type="button"
-                        onClick={() => assignPerson(member.personId, null)}
-                        aria-label={`${member.name}을(를) 진영에서 빼기`}
-                      >
-                        <FiX />
-                      </MemberRemove>
+                      {!inherited && (
+                        <MemberRemove
+                          type="button"
+                          onClick={() => assignPerson(member.personId, null)}
+                          aria-label={`${memberName}의 진영 지정 풀기`}
+                          title="진영 지정 풀기 — 참여 인물에는 그대로 남습니다"
+                        >
+                          <FiX />
+                        </MemberRemove>
+                      )}
                     </Member>
                   )
                 })}
@@ -1146,7 +1172,7 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                   )
                 })}
                 {side.participants.length +
-                  side.persons.length +
+                  personsOnSide(side.id).length +
                   (side.politicalParties?.length ?? 0) +
                   side.organizations.length ===
                   0 && (
@@ -1164,8 +1190,12 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                     label={`${side.name}에 넣을 참여국`}
                   />
                 )}
-                <PersonPickButton type="button" onClick={() => setPersonPickerSide(side)}>
-                  인물 넣기
+                <PersonPickButton
+                  type="button"
+                  onClick={() => setPersonPickerSide(side)}
+                  title="참여 탭의 '인물 잇기'와 같은 창 — 역할·소속국도 함께 적습니다"
+                >
+                  인물 잇기
                 </PersonPickButton>
                 {partyOptions.length > 0 && (
                   <InlineSelect
@@ -1433,17 +1463,22 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
         <FiPlus /> 진영 추가
       </AddSideButton>
 
-      {personPickerSide && (
-        /* 인물 목록은 고르기 모달이 스스로 받는다(앱 전역 캐시 공유) */
-        <PersonPickerModal
-          onSelect={(personId) => assignPerson(personId, personPickerSide.id)}
-          onClose={() => setPersonPickerSide(null)}
-          excludeIds={personPickerSide.persons.map((member) => member.personId)}
-          excludeReason="이미 이 진영"
-          pinnedIds={persons.map((person) => person.personId)}
-          title={`${personPickerSide.name}에 넣을 인물`}
-        />
-      )}
+      {/* 참여 탭과 같은 잇기 모달 — 이 진영이 기본값. 이미 참여한 인물을 고르면 그 줄을 고친다 */}
+      <PersonLinkModal
+        isOpen={Boolean(personPickerSide)}
+        onClose={() => setPersonPickerSide(null)}
+        eventTitle={event.title}
+        existingPersons={persons}
+        context={linkContext}
+        participationOptions={linkParticipationOptions}
+        countrySideByValue={linkCountrySideByValue}
+        sideOptions={linkSideOptions}
+        defaultCountryId={countryRows.find((row) => !row.isHistorical)?.id}
+        defaultHistoricalCountryId={countryRows.find((row) => row.isHistorical)?.id}
+        defaultSideId={personPickerSide?.id ?? null}
+        onSave={actors.upsertPerson}
+        onRemove={actors.removePerson}
+      />
 
       {creatingGroupSide && (
         <PersonGroupCreateModal
@@ -1451,9 +1486,9 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
           defaultName={creatingGroupSide.name}
           defaultCountryId={event.relatedCountries?.[0]?.id}
           defaultHistoricalCountryId={event.relatedHistoricalCountries?.[0]?.id}
-          defaultMembers={creatingGroupSide.persons.map((member) => ({
-            id: member.personId,
-            name: [member.name, member.surname].filter(Boolean).join(' '),
+          defaultMembers={personsOnSide(creatingGroupSide.id).map(({ entry }) => ({
+            id: entry.personId,
+            name: personNameOf(entry),
           }))}
           /* 사건의 참여 인물(relatedPersons) — 예전엔 없는 필드(event.persons)를 읽어 추천이 늘 비었다 */
           candidatePersons={persons.map((related) => ({

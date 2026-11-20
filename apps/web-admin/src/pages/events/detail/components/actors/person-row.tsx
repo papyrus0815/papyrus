@@ -1,21 +1,29 @@
-import { type DragEvent } from 'react'
+import { type DragEvent, useMemo } from 'react'
 
-import { FiAlertTriangle, FiArrowDown, FiArrowUp, FiEdit2, FiX } from 'react-icons/fi'
+import {
+  FiAlertTriangle,
+  FiArrowDown,
+  FiArrowUp,
+  FiChevronDown,
+  FiEdit2,
+} from 'react-icons/fi'
+import { MdDragIndicator } from 'react-icons/md'
 
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { renderEmphasis } from '@/shared/lib/emphasis-markup'
+import { PopoverMenu, type PopoverMenuEntry } from '@/shared/ui/popover-menu'
 
 import {
   type EventPersonEntry,
   participationValueOf,
   personNameOf,
 } from './actors.lib'
-import { ActorEditPanel } from './actor-edit-panel'
 import {
   AddInfoButton,
   DeathAtEventBadge,
-  EditToggle,
+  DragGrip,
   FactTag,
+  GhostRowBtn,
   MismatchNote,
   OfficeAtEvent,
   PersonAvatar,
@@ -23,35 +31,28 @@ import {
   PersonBody,
   PersonMetaLine,
   PersonNameBtn,
+  PersonNameLine,
   PersonNoteLine,
   PersonRoleLine,
   PersonRow,
-  RemoveInline,
-  ReorderBtn,
-  RowActions,
+  QuickSideAssignBtn,
+  RowControls,
+  RowTopBar,
 } from './actors.styles'
 import { ClampedProse } from './clamped-prose'
 
 type PersonUpdate = { role?: string; note?: string; sideId?: string | null }
 
-/**
- * 참여 인물 한 행 — 아바타 · 이름 · (진영 · 참여 국가 · 당시 직위 · 경고) · 무엇을 했나 · 비고.
- * key는 personId로 줄 것 — 사건·인물 쌍이 자연키다(서버는 쌍으로 upsert한다. 예전 delete-and-recreate
- * 시절엔 join 행 id가 저장마다 바뀌어 인라인 편집 포커스가 끊겼다).
- *
- * **읽기와 쓰기를 가른다.** 읽을 땐 글만, 고칠 땐 ✎(또는 빈 행의 '+ 적기') 하나로 편집 칸이 열려
- * 참여 국가·진영·무엇을 했나·비고를 한 자리에서 채운다. 예전엔 칸마다 숨은 ✎를 찾아 따로 열고(비고는 ✎ 두 번),
- * 참여 국가는 ▾ 모달로 골랐는데, 고르는 순간 카드가 그 나라 밑으로 옮겨 가며 새로 그려져 편집이 닫혔다.
- * 이제 편집 중 여부는 위(DetailActors)가 쥐어 카드가 옮겨 가도 열린 채 따라간다.
- */
 export function ActorPersonRow({
   compact = false,
   entry,
   side = null,
+  countrySideName = null,
+  groupSideId,
   sideOptions = [],
   participationOptions,
-  editing,
-  onEditingChange,
+  readOnly = false,
+  onOpenEdit,
   manageMode,
   isFirst,
   isLast,
@@ -68,18 +69,19 @@ export function ActorPersonRow({
   onDrop,
   onDragEnd,
 }: {
-  /** 대표단 줄 — 나라 줄 밑에 들여 놓는 작은 모양(아바타 28px) */
   compact?: boolean
   entry: EventPersonEntry
-  /** 이 인물이 속한 진영(예: 산악파, 지롱드파) */
   side?: { name: string; color: string } | null
-  /** 진영 선택지 — 사건에 진영이 있을 때 진영 지정/변경('none' = 미지정) */
+  /**
+   * 소속국의 진영 이름 — 인물 진영을 비우면 이 진영을 따른다. 그래서 메뉴의 '비움'은
+   * '진영 미배정'이 아니라 '소속국 따름'이다(비워도 진영 밖으로 나가지 않는다).
+   */
+  countrySideName?: string | null
+  groupSideId?: string | null
   sideOptions?: Array<{ value: string; label: string }>
-  /** 참여 자격 국가 선택지('none' = 지정 안 함) — 2개 미만이면 고를 게 없어 칸을 감춘다 */
   participationOptions: Array<{ value: string; label: string }>
-  /** 편집 칸이 열렸나 — 위가 쥔다(카드가 대표단으로 옮겨 가 새로 그려져도 열린 채로) */
-  editing: boolean
-  onEditingChange: (open: boolean) => void
+  readOnly?: boolean
+  onOpenEdit: () => void
   manageMode: boolean
   isFirst: boolean
   isLast: boolean
@@ -101,20 +103,115 @@ export function ActorPersonRow({
   const hasNote = Boolean(entry.note && entry.note.trim())
   const hasRole = Boolean(entry.role && entry.role.trim())
   const offices = entry.officesAtEvent ?? []
-  /* 대표단 줄에선 참여 국가가 곧 위의 나라 — 읽을 땐 되풀이하지 않는다 */
-  const participationName = !compact ? (entry.participationCountryName ?? null) : null
-  const showMeta =
-    Boolean(side) ||
-    Boolean(participationName) ||
-    offices.length > 0 ||
-    Boolean(entry.deathAtEvent) ||
-    Boolean(entry.lifespanWarning)
+  const currentParticipation = participationValueOf(entry) || 'none'
+  const selectedCountryOption =
+    currentParticipation !== 'none'
+      ? participationOptions.find((option) => option.value === currentParticipation)
+      : undefined
+  const participationName = !compact
+    ? (entry.participationCountryName ?? selectedCountryOption?.label ?? null)
+    : null
+
+  const sideImplied =
+    groupSideId !== undefined && Boolean(entry.sideId) && entry.sideId === groupSideId
+  const showSideTag = Boolean(side) && !sideImplied
+  const showUnassignedCountryPrompt =
+    !compact && !readOnly && participationOptions.length > 1 && !participationName
+
+  const showEmptyPromptInlineWithMeta =
+    compact && !hasRole && !hasNote && !readOnly && offices.length > 0
+  const showMeta = showSideTag || Boolean(participationName) || offices.length > 0
+
+  const countryMenuItems = useMemo<PopoverMenuEntry[]>(() => {
+    if (participationOptions.length <= 1) return []
+    return [
+      { type: 'section', id: 'sec-country', label: `${fullName} 소속 국가 지정` },
+      ...participationOptions.map((option) => ({
+        id: `country-${option.value}`,
+        label: option.value === 'none' ? '소속 국가 없음 (단독)' : option.label,
+        checked: option.value === currentParticipation,
+        onSelect: () => {
+          if (option.value !== currentParticipation) {
+            onParticipation(entry.personId, option.value)
+          }
+        },
+      })),
+    ]
+  }, [fullName, participationOptions, currentParticipation, onParticipation, entry.personId])
+
+  const combinedMenuItems = useMemo<PopoverMenuEntry[]>(() => {
+    const currentSideValue = entry.sideId ?? 'none'
+    return [
+      {
+        id: 'edit',
+        label: '참여 내용 바꾸기 (역할 · 행적 · 소속)',
+        icon: <FiEdit2 size={13} />,
+        onSelect: () => onOpenEdit(),
+      },
+      ...(participationOptions.length > 1
+        ? ([
+            { type: 'divider', id: 'div-country' },
+            { type: 'section', id: 'sec-country', label: '소속 국가 지정' },
+            ...participationOptions.map((option) => ({
+              id: `country-${option.value}`,
+              label: option.value === 'none' ? '소속 국가 없음 (단독)' : option.label,
+              checked: option.value === currentParticipation,
+              onSelect: () => {
+                if (option.value !== currentParticipation) {
+                  onParticipation(entry.personId, option.value)
+                }
+              },
+            })),
+          ] as PopoverMenuEntry[])
+        : []),
+      ...(sideOptions.length > 1
+        ? ([
+            { type: 'divider', id: 'div-side' },
+            { type: 'section', id: 'sec-side', label: '진영 배정' },
+            ...sideOptions.map((option) => ({
+              id: `side-${option.value}`,
+              label:
+                option.value === 'none'
+                  ? countrySideName
+                    ? `소속국 따름 (${countrySideName})`
+                    : '진영 미배정'
+                  : option.label,
+              checked: option.value === currentSideValue,
+              onSelect: () => {
+                if (option.value !== currentSideValue) {
+                  onUpdate(entry.personId, {
+                    sideId: option.value === 'none' ? null : option.value,
+                  })
+                }
+              },
+            })),
+          ] as PopoverMenuEntry[])
+        : []),
+      { type: 'divider', id: 'div-rm' },
+      {
+        id: 'remove',
+        label: '참여 인물에서 제외',
+        danger: true,
+        onSelect: () => onRemove(entry.personId),
+      },
+    ]
+  }, [
+    entry.sideId,
+    entry.personId,
+    countrySideName,
+    participationOptions,
+    currentParticipation,
+    sideOptions,
+    onOpenEdit,
+    onParticipation,
+    onUpdate,
+    onRemove,
+  ])
 
   return (
     <PersonRow
       $compact={compact}
-      $editing={editing}
-      draggable={draggable && !editing}
+      draggable={draggable && manageMode && !readOnly}
       $dragOver={isDragOver}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
@@ -122,29 +219,55 @@ export function ActorPersonRow({
       onDrop={onDrop}
       onDragEnd={onDragEnd}
     >
-      <PersonAvatarBtn type="button" onClick={() => onOpen(entry.personId)} aria-label={`${fullName} 상세 보기`}>
-        <PersonAvatar $hasImage={Boolean(avatarUrl)} $compact={compact}>
-          {avatarUrl ? (
-            <img src={getUploadImageUrl(avatarUrl) || avatarUrl} alt="" loading="lazy" />
-          ) : (
-            <span>{fullName.charAt(0)}</span>
-          )}
-        </PersonAvatar>
-      </PersonAvatarBtn>
-
       <PersonBody>
-        <PersonNameBtn type="button" $compact={compact} onClick={() => onOpen(entry.personId)}>
-          {fullName}
-        </PersonNameBtn>
-        {showMeta && (
-          <PersonMetaLine>
-            {side && !editing && <FactTag $color={side.color}>{side.name}</FactTag>}
-            {participationName && !editing && <span>{participationName}</span>}
-            {offices.length > 0 && (
-              <OfficeAtEvent title="재임·재위 기록에서 사건 날짜에 맞춰 자동으로 보여 줍니다">
-                당시 {offices.join(' · ')}
-              </OfficeAtEvent>
+        <RowTopBar>
+          <PersonNameLine $compact={compact}>
+            {manageMode && !readOnly && (
+              <DragGrip aria-hidden title="드래그하여 순서 변경">
+                <MdDragIndicator />
+              </DragGrip>
             )}
+            <PersonAvatarBtn
+              type="button"
+              onClick={() => onOpen(entry.personId)}
+              aria-label={`${fullName} 상세 보기`}
+            >
+              <PersonAvatar $hasImage={Boolean(avatarUrl)} $compact={compact}>
+                {avatarUrl ? (
+                  <img src={getUploadImageUrl(avatarUrl) || avatarUrl} alt="" loading="lazy" />
+                ) : (
+                  <span>{fullName.charAt(0)}</span>
+                )}
+              </PersonAvatar>
+            </PersonAvatarBtn>
+            <PersonNameBtn
+              type="button"
+              $compact={compact}
+              onClick={() => onOpen(entry.personId)}
+            >
+              {fullName}
+            </PersonNameBtn>
+
+            {showUnassignedCountryPrompt && (
+              <PopoverMenu
+                items={countryMenuItems}
+                align="left"
+                minWidth={185}
+                ariaLabel={`${fullName} 소속 국가 지정`}
+                renderTrigger={({ toggle, ref: triggerRef }) => (
+                  <QuickSideAssignBtn
+                    ref={triggerRef}
+                    type="button"
+                    title="소속 국가를 지정하면 해당 국가 아래로 묶입니다"
+                    onClick={toggle}
+                  >
+                    <span>+ 소속국</span>
+                    <FiChevronDown size={10} aria-hidden />
+                  </QuickSideAssignBtn>
+                )}
+              />
+            )}
+
             {entry.deathAtEvent && (
               <DeathAtEventBadge
                 title={
@@ -163,111 +286,100 @@ export function ActorPersonRow({
                 {entry.lifespanWarning}
               </MismatchNote>
             )}
+          </PersonNameLine>
+
+          {!readOnly && (
+            <RowControls data-pinned={manageMode || undefined}>
+              {manageMode ? (
+                <>
+                  <GhostRowBtn
+                    type="button"
+                    onClick={() => onMove(entry.personId, -1)}
+                    disabled={isFirst}
+                    aria-label={`${fullName} 위로`}
+                    title="위로 이동"
+                  >
+                    <FiArrowUp />
+                  </GhostRowBtn>
+                  <GhostRowBtn
+                    type="button"
+                    onClick={() => onMove(entry.personId, 1)}
+                    disabled={isLast}
+                    aria-label={`${fullName} 아래로`}
+                    title="아래로 이동"
+                  >
+                    <FiArrowDown />
+                  </GhostRowBtn>
+                </>
+              ) : (
+                !compact && (
+                  <GhostRowBtn
+                    type="button"
+                    onClick={onOpenEdit}
+                    title={`${fullName} 참여 내용 바꾸기`}
+                  >
+                    <span>참여 바꾸기</span>
+                  </GhostRowBtn>
+                )
+              )}
+              <PopoverMenu
+                size="sm"
+                items={combinedMenuItems}
+                ariaLabel={`${fullName} 설정 및 작업 메뉴`}
+                title="역할·소속국·진영 편집 및 제거"
+              />
+            </RowControls>
+          )}
+        </RowTopBar>
+
+        {showMeta && (
+          <PersonMetaLine $compact={compact}>
+            {showSideTag && side && <FactTag $color={side.color}>{side.name}</FactTag>}
+            {participationName && <FactTag>{participationName}</FactTag>}
+            {offices.length > 0 && (
+              <OfficeAtEvent title="재임·재위 기록에서 사건 날짜에 맞춰 자동으로 보여 줍니다">
+                당시 {offices.join(' · ')}
+              </OfficeAtEvent>
+            )}
+            {showEmptyPromptInlineWithMeta && (
+              <AddInfoButton
+                type="button"
+                $compact
+                $inline
+                onClick={onOpenEdit}
+              >
+                + 역할·행적 적기
+              </AddInfoButton>
+            )}
           </PersonMetaLine>
         )}
 
-        {editing ? (
-          <ActorEditPanel
-            name={fullName}
-            choices={[
-              ...(participationOptions.length > 1
-                ? [
-                    {
-                      id: 'country',
-                      label: '참여 국가',
-                      value: participationValueOf(entry) || 'none',
-                      options: participationOptions.map((option) => ({ ...option, muted: option.value === 'none' })),
-                      onPick: (next: string) => onParticipation(entry.personId, next),
-                    },
-                  ]
-                : []),
-              ...(sideOptions.length > 1
-                ? [
-                    {
-                      id: 'side',
-                      label: '진영',
-                      value: entry.sideId ?? 'none',
-                      options: sideOptions.map((option) => ({ ...option, muted: option.value === 'none' })),
-                      onPick: (next: string) => onUpdate(entry.personId, { sideId: next === 'none' ? null : next }),
-                    },
-                  ]
-                : []),
-            ]}
-            texts={[
-              {
-                id: 'role',
-                label: '무엇을 했나',
-                value: entry.role ?? '',
-                placeholder: '예: 협상 대표, 지휘관, 서명',
-                maxLength: 100,
-                onSave: (next) => onUpdate(entry.personId, { role: next }),
-              },
-              {
-                id: 'note',
-                label: '비고',
-                value: entry.note ?? '',
-                placeholder: '이 사건에서의 행적 · 근거 · 덧붙일 말 (*강조*는 굵게)',
-                multiline: true,
-                onSave: (next) => onUpdate(entry.personId, { note: next }),
-              },
-            ]}
-            onClose={() => onEditingChange(false)}
-          />
-        ) : (
-          <>
-            {hasRole && <PersonRoleLine>{entry.role}</PersonRoleLine>}
-            {hasNote && (
-              <PersonNoteLine $hasContent>
-                <ClampedProse measureKey={entry.note ?? ''}>
-                  <span>{renderEmphasis(entry.note ?? '')}</span>
-                </ClampedProse>
-              </PersonNoteLine>
-            )}
-            {/* 아무것도 적지 않은 사람 — 무엇을 적을 자리인지 말하고 한 번에 편집 칸을 연다(대표단 줄은 ✎만) */}
-            {!hasRole && !hasNote && !compact && (
-              <AddInfoButton type="button" onClick={() => onEditingChange(true)}>
-                + 무엇을 했나 · 비고 적기
-              </AddInfoButton>
-            )}
-          </>
+        {hasRole && (
+          <PersonRoleLine $compact={compact} onDoubleClick={() => !readOnly && onOpenEdit()}>
+            {entry.role}
+          </PersonRoleLine>
+        )}
+        {hasNote && (
+          <PersonNoteLine
+            $hasContent
+            $compact={compact}
+            onDoubleClick={() => !readOnly && onOpenEdit()}
+          >
+            <ClampedProse measureKey={entry.note ?? ''}>
+              <span>{renderEmphasis(entry.note ?? '')}</span>
+            </ClampedProse>
+          </PersonNoteLine>
+        )}
+        {!hasRole && !hasNote && !showEmptyPromptInlineWithMeta && !readOnly && (
+          <AddInfoButton
+            type="button"
+            $compact={compact}
+            onClick={onOpenEdit}
+          >
+            {compact ? '+ 역할·행적 적기' : '+ 역할 · 행적 기록하기'}
+          </AddInfoButton>
         )}
       </PersonBody>
-
-      <RowActions>
-        {!editing && (
-          <EditToggle
-            type="button"
-            aria-label={`${fullName} 고치기(참여 국가·진영·무엇을 했나·비고)`}
-            title="참여 국가·진영·무엇을 했나·비고 고치기"
-            onClick={() => onEditingChange(true)}
-          >
-            <FiEdit2 aria-hidden />
-          </EditToggle>
-        )}
-        {manageMode && (
-          <>
-            <ReorderBtn
-              type="button"
-              onClick={() => onMove(entry.personId, -1)}
-              disabled={isFirst}
-              aria-label={`${fullName} 위로`}
-            >
-              <FiArrowUp />
-            </ReorderBtn>
-            <ReorderBtn
-              type="button"
-              onClick={() => onMove(entry.personId, 1)}
-              disabled={isLast}
-              aria-label={`${fullName} 아래로`}
-            >
-              <FiArrowDown />
-            </ReorderBtn>
-          </>
-        )}
-        <RemoveInline type="button" onClick={() => onRemove(entry.personId)} aria-label={`${fullName} 제거`}>
-          <FiX />
-        </RemoveInline>
-      </RowActions>
     </PersonRow>
   )
 }

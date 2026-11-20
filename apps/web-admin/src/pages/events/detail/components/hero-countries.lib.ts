@@ -32,6 +32,24 @@ interface SideRef {
 }
 
 /**
+ * 진영 → 맨 위 진영 id. 하위 진영은 부모를 거슬러 올라간다(순환은 끊는다).
+ * 모르는 id·null은 null — '어느 편인가'를 물을 때 같은 편 판정에 쓴다.
+ */
+export function makeSideRootOf(sides: ReadonlyArray<SideRef>): (sideId: string | null | undefined) => string | null {
+  const byId = new Map(sides.map((side) => [side.id, side]))
+  return (sideId) => {
+    if (!sideId) return null
+    let side = byId.get(sideId)
+    const seen = new Set<string>()
+    while (side?.parentSideId && byId.has(side.parentSideId) && !seen.has(side.id)) {
+      seen.add(side.id)
+      side = byId.get(side.parentSideId)
+    }
+    return side?.id ?? null
+  }
+}
+
+/**
  * 진영별로 가른다 — 하위 진영 소속은 맨 위 진영으로 접는다(히어로·참여 탭은 편이 몇인지만 말한다).
  * 나라가 든 진영이 **둘 미만**이면 null(편이 하나면 대립이 아니라 묶을 이유가 없다).
  * 진영에 안 든 것은 마지막 `sideId: null` 묶음(라벨 '그 밖').
@@ -41,20 +59,12 @@ export function groupBySide<T extends { sideId?: string | null }>(
   sides: ReadonlyArray<SideRef>,
 ): Array<{ sideId: string | null; label: string; items: T[] }> | null {
   const byId = new Map(sides.map((side) => [side.id, side]))
-  const rootOf = (sideId: string): SideRef | undefined => {
-    let side = byId.get(sideId)
-    const seen = new Set<string>()
-    while (side?.parentSideId && byId.has(side.parentSideId) && !seen.has(side.id)) {
-      seen.add(side.id)
-      side = byId.get(side.parentSideId)
-    }
-    return side
-  }
+  const sideRootOf = makeSideRootOf(sides)
   const roots = sides
     .filter((side) => !side.parentSideId || !byId.has(side.parentSideId))
     .slice()
     .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0))
-  const rootIdOf = (item: T) => (item.sideId ? rootOf(item.sideId)?.id ?? null : null)
+  const rootIdOf = (item: T) => sideRootOf(item.sideId)
 
   const grouped = roots
     .map((side) => ({
