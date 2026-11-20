@@ -1,19 +1,26 @@
-import { useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiGlobe, FiPlus, FiUser, FiX } from 'react-icons/fi'
-import styled from 'styled-components'
+/**
+ * 새 기구·협의체·조직 등록 모달 — **사건 등록 모달(`widgets/event-form/ui/event-register-modal`)과
+ * 같은 문법**으로 짠다. 기구 목록·사건 상세 '기구·조직'·사건 등록 폼 세 곳이 같은 인스턴스를 쓴다.
+ *
+ * 사건 모달에서 가져온 것:
+ * - 셸: 공용 `RegisterModal`(Esc·스크롤락·포커스 트랩·aria). 예전엔 createPortal + 손수 만든 오버레이·
+ *   Esc 처리라 포커스가 모달 밖으로 새고, 바깥을 한 번 잘못 누르면 쓰던 내용이 경고 없이 날아갔다.
+ * - 헤더: 섹션 이동 알약(완료 ✓ · 개수 배지) + 2단/1단 전환 + 작성 중일 때만 '초기화'
+ * - 본문: 2단이면 좌(기본 정보) / 우(회원국·소재 · 소속 인물)가 각자 스크롤, 1단이면 위에서 아래로
+ * - 섹션 머리: 점(•) + 구분선 + 오른쪽 요약 배지 — 점·배지 색은 고른 기구 유형 색
+ * - 행: 왼쪽 라벨 열 · 오른쪽 입력(사건 폼 `FormRow`)
+ * - 푸터: 빠진 필수 칸·잘못된 설립 연도로 **이동하는** 버튼 / 준비 완료 + ⌘↵ 저장
+ * - 작성 중 닫기 확인
+ *
+ * 칸·힌트·추천 칩·노출 조건은 예전 그대로다(국제형이면 회원국 칸, 국내형이면 소재 국가 칸).
+ * 등록 뒤 무엇을 할지(상세 열기·사건에 잇기)는 부르는 쪽 `onCreated`가 정한다.
+ */
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import {
-  ledgerAccent,
-  ledgerAccentBorder,
-  ledgerAccentSubtle,
-  ledgerHairline,
-  ledgerHairlineStrong,
-  ledgerOverlay,
-  ledgerScrim,
-  RADIUS,
-} from '@/entities/event/ui/ledger-tokens'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { FiColumns, FiGlobe, FiPlus, FiUser, FiX } from 'react-icons/fi'
+
+import * as S from '@/pages/events/create/event-create.styles'
 import { getApiConnection } from '@/shared/api/client'
 import { getAllCountries } from '@/shared/api/countries'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
@@ -22,16 +29,40 @@ import {
   isInternationalOrgType,
   ORGANIZATION_COUNTRY_ROLE_LABEL,
   ORGANIZATION_SCOPE_LABEL,
+  ORGANIZATION_TYPE_HUE,
   type OrganizationCountryRole,
   type OrganizationResponseDto,
   type OrganizationScope,
   type OrganizationType,
 } from '@/shared/api/organizations'
 import { getAllPersons } from '@/shared/api/persons'
-import { Z_INDEX } from '@/shared/styles/z-index'
+import { confirm } from '@/shared/ui/confirm-dialog/confirm'
 import { CountryPicker } from '@/shared/ui/country-picker'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
+import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
+import {
+  FooterActions,
+  FooterHint,
+  FooterJumpArrow,
+  FooterJumpButton,
+  FooterKbd,
+  FooterReadyBadge,
+  FooterReadyGroup,
+  FooterShortcutItem,
+  HeaderActionsBar,
+  HeaderResetBtn,
+  SectionJumpBtn,
+  SectionJumpNav,
+  useModalSubmitShortcut,
+} from '@/shared/ui/register-modal-shell/register-modal-chrome'
+import {
+  PersonRegisterModalCancelBtn,
+  PersonRegisterModalStickyFooter,
+} from '@/shared/ui/register-modal-shell/register-modal-shell'
+import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
 import { notify } from '@/shared/ui/toast'
+
+import * as OrgS from './organization-quick-create-modal.styles'
 
 const QUICK_ORG_TYPES: Array<{
   value: OrganizationType
@@ -93,6 +124,13 @@ const MEMBER_COUNTRY_ROLES: OrganizationCountryRole[] = [
   'SECRETARIAT_HOST',
 ]
 
+const LAYOUT_STORAGE_KEY = 'papyrus:organization-register-layout-v1'
+
+type FormSectionKey = 'basic' | 'countries' | 'members'
+
+const NAME_INPUT_ID = 'org-quick-create-name'
+const FOUNDED_INPUT_ID = 'org-quick-create-founded'
+
 export interface OrganizationQuickMemberDraft {
   id: string
   name: string
@@ -140,6 +178,23 @@ function defaultScopeForType(orgType: OrganizationType): OrganizationScope {
   return 'NATIONAL'
 }
 
+function readInitialLayoutMode(): 'split' | 'single' {
+  try {
+    const saved = window.localStorage.getItem(LAYOUT_STORAGE_KEY)
+    if (saved === 'split' || saved === 'single') return saved
+  } catch {
+    // storage disabled
+  }
+  return 'split'
+}
+
+/** '#6366f1' → '99, 102, 241' — 섹션 점·배지의 rgba() 재료 */
+function hexToRgbTriplet(hex: string): string {
+  const matched = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex.trim())
+  if (!matched) return '99, 102, 241'
+  return [matched[1], matched[2], matched[3]].map((part) => Number.parseInt(part, 16)).join(', ')
+}
+
 export function OrganizationQuickCreateModal({
   defaultCountryId,
   defaultHistoricalCountryId,
@@ -158,6 +213,14 @@ export function OrganizationQuickCreateModal({
     defaultType === 'GOVERNMENT_AGENCY'
       ? 'NGO'
       : defaultType
+  /* 첫 렌더 값만 쓴다 — 부르는 쪽이 매 렌더 새 배열을 넘겨도 작성 중인 목록을 덮지 않게 */
+  const [initialMembers] = useState<OrganizationQuickMemberDraft[]>(() =>
+    defaultMembers.map((member) => ({
+      id: member.id,
+      name: member.name,
+      roleTitle: member.roleTitle?.trim() || '위원',
+    })),
+  )
   const [name, setName] = useState(defaultName ?? '')
   const [shortName, setShortName] = useState('')
   const [localName, setLocalName] = useState('')
@@ -169,24 +232,24 @@ export function OrganizationQuickCreateModal({
     isInternationalOrgType(safeDefaultType) ? '' : (defaultCountryId ?? ''),
   )
   const [historicalCountryId, setHistoricalCountryId] = useState(() =>
-    isInternationalOrgType(safeDefaultType)
-      ? ''
-      : (defaultHistoricalCountryId ?? ''),
+    isInternationalOrgType(safeDefaultType) ? '' : (defaultHistoricalCountryId ?? ''),
   )
   const [foundedYear, setFoundedYear] = useState('')
   const [description, setDescription] = useState('')
-  const [members, setMembers] = useState<OrganizationQuickMemberDraft[]>(() =>
-    defaultMembers.map((member) => ({
-      id: member.id,
-      name: member.name,
-      roleTitle: member.roleTitle?.trim() || '위원',
-    })),
-  )
+  const [members, setMembers] = useState<OrganizationQuickMemberDraft[]>(initialMembers)
   const [countryMemberships, setCountryMemberships] = useState<
     OrganizationQuickCountryDraft[]
   >([])
   const [personPickerOpen, setPersonPickerOpen] = useState(false)
   const [countryPickerOpen, setCountryPickerOpen] = useState(false)
+  const [layoutMode, setLayoutMode] = useState<'split' | 'single'>(readInitialLayoutMode)
+  const [activeSection, setActiveSection] = useState<FormSectionKey>('basic')
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const sectionRefs = useRef<Record<FormSectionKey, HTMLElement | null>>({
+    basic: null,
+    countries: null,
+    members: null,
+  })
 
   const handleSelectType = (nextType: OrganizationType) => {
     setType(nextType)
@@ -218,23 +281,25 @@ export function OrganizationQuickCreateModal({
     enabled: personPickerOpen,
   })
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !personPickerOpen && !countryPickerOpen) {
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose, personPickerOpen, countryPickerOpen])
-
+  const trimmedFoundedYear = foundedYear.trim()
   const parsedFoundedIso = (() => {
-    const trimmed = foundedYear.trim()
-    if (!trimmed) return null
-    const yr = Number.parseInt(trimmed, 10)
-    if (!Number.isFinite(yr) || yr < 1000 || yr > 9999) return null
-    return `${String(yr).padStart(4, '0')}-01-01T00:00:00.000Z`
+    if (!trimmedFoundedYear) return null
+    const year = Number.parseInt(trimmedFoundedYear, 10)
+    if (!Number.isFinite(year) || year < 1000 || year > 9999) return null
+    return `${String(year).padStart(4, '0')}-01-01T00:00:00.000Z`
   })()
+  /** 적었는데 못 쓰는 연도 — 예전엔 조용히 버려져 '설립 연도 없음'으로 저장됐다 */
+  const foundedYearInvalid = trimmedFoundedYear !== '' && parsedFoundedIso === null
+
+  const isDirty =
+    name.trim() !== (defaultName ?? '').trim() ||
+    shortName.trim() !== '' ||
+    localName.trim() !== '' ||
+    trimmedFoundedYear !== '' ||
+    description.trim() !== '' ||
+    countryMemberships.length > 0 ||
+    members.length !== initialMembers.length ||
+    type !== safeDefaultType
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -258,11 +323,11 @@ export function OrganizationQuickCreateModal({
           : {}),
         ...(countryMemberships.length > 0
           ? {
-              countryMemberships: countryMemberships.map((cm, idx) => ({
-                countryId: cm.countryId ?? null,
-                historicalCountryId: cm.historicalCountryId ?? null,
-                role: cm.role,
-                sortOrder: idx,
+              countryMemberships: countryMemberships.map((membership, index) => ({
+                countryId: membership.countryId ?? null,
+                historicalCountryId: membership.historicalCountryId ?? null,
+                role: membership.role,
+                sortOrder: index,
               })),
             }
           : {}),
@@ -284,10 +349,12 @@ export function OrganizationQuickCreateModal({
       onCreated(created, members)
     },
     onError: (error) =>
-      notify.error(
-        error instanceof Error ? error.message : '기관·조직 생성에 실패했습니다.',
-      ),
+      notify.error(error instanceof Error ? error.message : '기관·조직 생성에 실패했습니다.'),
   })
+
+  const busy = createMutation.isPending
+  const missingName = !name.trim()
+  const canSubmit = !missingName && !foundedYearInvalid && !busy
 
   const availableCandidates = candidatePersons.filter(
     (candidate) => !members.some((member) => member.id === candidate.id),
@@ -304,14 +371,7 @@ export function OrganizationQuickCreateModal({
     setMembers((previous) =>
       previous.some((member) => member.id === id)
         ? previous
-        : [
-            ...previous,
-            {
-              id,
-              name: personName,
-              roleTitle: roleHint?.trim() || '위원',
-            },
-          ],
+        : [...previous, { id, name: personName, roleTitle: roleHint?.trim() || '위원' }],
     )
   }
 
@@ -322,15 +382,13 @@ export function OrganizationQuickCreateModal({
     flagEmoji?: string | null
     role?: OrganizationCountryRole
   }) => {
-    const key = draft.historicalCountryId
-      ? `H:${draft.historicalCountryId}`
-      : `C:${draft.countryId}`
+    const key = draft.historicalCountryId ? `H:${draft.historicalCountryId}` : `C:${draft.countryId}`
     if (!draft.countryId && !draft.historicalCountryId) return
-    setCountryMemberships((prev) =>
-      prev.some((item) => item.key === key)
-        ? prev
+    setCountryMemberships((previous) =>
+      previous.some((item) => item.key === key)
+        ? previous
         : [
-            ...prev,
+            ...previous,
             {
               key,
               countryId: draft.countryId,
@@ -343,227 +401,399 @@ export function OrganizationQuickCreateModal({
     )
   }
 
-  const currentTypeMeta =
-    QUICK_ORG_TYPES.find((item) => item.value === type) ?? QUICK_ORG_TYPES[0]
+  const currentTypeMeta = QUICK_ORG_TYPES.find((item) => item.value === type) ?? QUICK_ORG_TYPES[0]
   const isInternational = isInternationalOrgType(type)
+  const showCountryMemberships =
+    isInternational || countryMemberships.length > 0 || availableCountryCandidates.length > 0
 
-  return createPortal(
-    <Overlay onClick={onClose}>
-      <Modal onClick={(event) => event.stopPropagation()}>
-        <Header>
-          <Title>새 기구·협의체·조직 등록</Title>
-          <CloseBtn type="button" onClick={onClose} aria-label="닫기">
-            <FiX size={20} />
-          </CloseBtn>
-        </Header>
+  const seatCountryName = useMemo(() => {
+    if (historicalCountryId) {
+      return (historicalCountriesQuery.data ?? []).find((country) => country.id === historicalCountryId)?.name ?? null
+    }
+    if (countryId) {
+      return (countriesQuery.data ?? []).find((country) => country.id === countryId)?.name ?? null
+    }
+    return null
+  }, [historicalCountryId, countryId, historicalCountriesQuery.data, countriesQuery.data])
 
-        <Body>
-          <FieldLabel>유형 선택</FieldLabel>
-          <TypeChipRow>
-            {QUICK_ORG_TYPES.map((item) => (
-              <TypeChip
-                key={item.value}
-                type="button"
-                $active={type === item.value}
-                onClick={() => handleSelectType(item.value)}
-              >
-                {item.label}
-              </TypeChip>
-            ))}
-          </TypeChipRow>
-          <ExampleNote>
-            {currentTypeMeta.example} · 정당(/political-parties)·행정부처(/government)·기업(/companies)은 각각 전용 도메인에서 등록합니다.
-          </ExampleNote>
+  /* ─── 닫기 · 초기화 ─── */
 
-          <Field>
-            <FieldLabel>기구·조직명 *</FieldLabel>
-            <BigInput
-              aria-label="기관·조직명"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder={
-                isInternational
-                  ? '예: 쿼드(4자 안보 대화), 동남아시아국가연합, 아시아태평양경제협력체'
-                  : '예: 공안위원회, 국민공회, 파리 코뮌'
-              }
-              autoFocus
-            />
-          </Field>
+  const requestClose = useCallback(async () => {
+    if (busy) return
+    if (isDirty) {
+      const ok = await confirm({
+        title: '작성 중인 기구·조직이 있습니다',
+        message: '저장하지 않고 닫으면 입력한 내용이 사라집니다.',
+        confirmLabel: '닫기',
+        danger: true,
+      })
+      if (!ok) return
+    }
+    onClose()
+  }, [busy, isDirty, onClose])
 
-          <CondRow>
-            <Field style={{ flex: 1, minWidth: 140 }}>
-              <FieldLabel>
-                약칭 <Muted>(선택)</Muted>
-              </FieldLabel>
-              <BigInput
+  const resetForm = async () => {
+    const ok = await confirm({
+      title: '작성 내용을 초기화할까요?',
+      message: '입력한 내용을 모두 비우고 처음 상태로 되돌립니다.',
+      confirmLabel: '초기화',
+      danger: true,
+    })
+    if (!ok) return
+    setName(defaultName ?? '')
+    setShortName('')
+    setLocalName('')
+    setType(safeDefaultType)
+    setScope(defaultScopeForType(safeDefaultType))
+    setCountryId(isInternationalOrgType(safeDefaultType) ? '' : (defaultCountryId ?? ''))
+    setHistoricalCountryId(
+      isInternationalOrgType(safeDefaultType) ? '' : (defaultHistoricalCountryId ?? ''),
+    )
+    setFoundedYear('')
+    setDescription('')
+    setMembers(initialMembers)
+    setCountryMemberships([])
+  }
+
+  /* ─── 섹션 이동 ─── */
+
+  const scrollToSection = (key: FormSectionKey) => {
+    setActiveSection(key)
+    sectionRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const focusField = (inputId: string) => {
+    scrollToSection('basic')
+    requestAnimationFrame(() => document.getElementById(inputId)?.focus())
+  }
+
+  const toggleLayoutMode = () => {
+    setLayoutMode((previous) => {
+      const next = previous === 'split' ? 'single' : 'split'
+      try {
+        window.localStorage.setItem(LAYOUT_STORAGE_KEY, next)
+      } catch {
+        // storage disabled
+      }
+      return next
+    })
+  }
+
+  /* 1단 보기에서 스크롤 위치로 현재 섹션 알약을 켠다 */
+  useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container || layoutMode === 'split') return
+    const handleScroll = () => {
+      const top = container.getBoundingClientRect().top
+      let current: FormSectionKey = 'basic'
+      for (const key of ['basic', 'countries', 'members'] as const) {
+        const element = sectionRefs.current[key]
+        if (element && element.getBoundingClientRect().top - top < 120) current = key
+      }
+      setActiveSection(current)
+    }
+    container.addEventListener('scroll', handleScroll, { passive: true })
+    return () => container.removeEventListener('scroll', handleScroll)
+  }, [layoutMode])
+
+  const submitRef = useRef(() => {})
+  submitRef.current = () => {
+    if (canSubmit) createMutation.mutate()
+  }
+  const handleShortcutSubmit = useCallback(() => submitRef.current(), [])
+  useModalSubmitShortcut({
+    enabled: canSubmit && !personPickerOpen && !countryPickerOpen,
+    scrollContainerRef,
+    onSubmit: handleShortcutSubmit,
+  })
+
+  /* ─── 섹션 배지 ─── */
+
+  const sectionMeta: Array<{ key: FormSectionKey; label: string; badge: string | null }> = [
+    { key: 'basic', label: '기본 정보', badge: missingName ? null : '✓' },
+    {
+      key: 'countries',
+      label: isInternational ? '회원국' : '소재 국가',
+      badge: isInternational
+        ? countryMemberships.length > 0
+          ? String(countryMemberships.length)
+          : null
+        : seatCountryName || countryMemberships.length > 0
+          ? '✓'
+          : null,
+    },
+    {
+      key: 'members',
+      label: '소속 인물',
+      badge: members.length > 0 ? String(members.length) : null,
+    },
+  ]
+
+  const typeHue = ORGANIZATION_TYPE_HUE[type] ?? '#6366f1'
+  const typeToneStyle = {
+    '--org-type-accent': typeHue,
+    '--org-type-rgb': hexToRgbTriplet(typeHue),
+  } as React.CSSProperties
+
+  /* ─── 섹션 ─── */
+
+  const basicSectionNode = (
+    <OrgS.FormGroupSection
+      ref={(element) => {
+        sectionRefs.current.basic = element
+      }}
+      aria-labelledby="org-quick-create-basic-title"
+    >
+      <OrgS.FormGroupTitle id="org-quick-create-basic-title">
+        기본 정보
+        <OrgS.FormGroupSummaryBadge>{currentTypeMeta.label}</OrgS.FormGroupSummaryBadge>
+      </OrgS.FormGroupTitle>
+
+      <S.FormRow>
+        <S.FormLabel as="div">
+          유형 <S.Required>*</S.Required>
+        </S.FormLabel>
+        <S.FormField>
+          <SegmentControl
+            appearance="chips"
+            ariaLabel="기구·조직 유형"
+            value={type}
+            onChange={handleSelectType}
+            options={QUICK_ORG_TYPES.map((item) => ({ value: item.value, label: item.label }))}
+          />
+          <OrgS.TypeExample>
+            {currentTypeMeta.example} · 정당(/political-parties)·행정부처(/government)·기업(/companies)은
+            각각 전용 도메인에서 등록합니다.
+          </OrgS.TypeExample>
+        </S.FormField>
+      </S.FormRow>
+
+      <S.FormRow>
+        <S.FormLabel htmlFor={NAME_INPUT_ID}>
+          기구·조직명 <S.Required>*</S.Required>
+        </S.FormLabel>
+        <S.FormField>
+          <S.Input
+            id={NAME_INPUT_ID}
+            aria-label="기관·조직명"
+            value={name}
+            onChange={(changeEvent) => setName(changeEvent.target.value)}
+            placeholder={
+              isInternational
+                ? '예: 쿼드(4자 안보 대화), 동남아시아국가연합, 아시아태평양경제협력체'
+                : '예: 공안위원회, 국민공회, 파리 코뮌'
+            }
+            autoFocus
+          />
+          <OrgS.SubFieldGrid>
+            <OrgS.SubField>
+              <OrgS.SubFieldLabel>
+                약칭<OrgS.OptionalTag>(선택)</OrgS.OptionalTag>
+              </OrgS.SubFieldLabel>
+              <S.Input
                 value={shortName}
-                onChange={(event) => setShortName(event.target.value)}
+                onChange={(changeEvent) => setShortName(changeEvent.target.value)}
                 placeholder={isInternational ? '예: Quad, ASEAN, APEC' : '예: 공안위'}
               />
-            </Field>
-            <Field style={{ flex: 1, minWidth: 140 }}>
-              <FieldLabel>
-                현지·영문 표기 <Muted>(선택)</Muted>
-              </FieldLabel>
-              <BigInput
+            </OrgS.SubField>
+            <OrgS.SubField>
+              <OrgS.SubFieldLabel>
+                현지·영문 표기<OrgS.OptionalTag>(선택)</OrgS.OptionalTag>
+              </OrgS.SubFieldLabel>
+              <S.Input
                 value={localName}
-                onChange={(event) => setLocalName(event.target.value)}
+                onChange={(changeEvent) => setLocalName(changeEvent.target.value)}
                 placeholder={
-                  isInternational
-                    ? '예: Quadrilateral Security Dialogue'
-                    : '예: Comité de salut public'
+                  isInternational ? '예: Quadrilateral Security Dialogue' : '예: Comité de salut public'
                 }
               />
-            </Field>
-          </CondRow>
+            </OrgS.SubField>
+          </OrgS.SubFieldGrid>
+        </S.FormField>
+      </S.FormRow>
 
-          <CondRow>
-            <Field style={{ flex: 1, minWidth: 160 }}>
-              <FieldLabel>활동 범위</FieldLabel>
-              <BigSelect
+      <S.FormRow>
+        <S.FormLabel as="div">활동 범위 · 설립</S.FormLabel>
+        <S.FormField>
+          <OrgS.SubFieldGrid>
+            <OrgS.SubField>
+              <OrgS.SubFieldLabel>활동 범위</OrgS.SubFieldLabel>
+              <OrgS.FieldSelect
                 value={scope}
-                onChange={(event) => setScope(event.target.value as OrganizationScope)}
+                onChange={(changeEvent) => setScope(changeEvent.target.value as OrganizationScope)}
               >
-                {(Object.keys(ORGANIZATION_SCOPE_LABEL) as OrganizationScope[]).map(
-                  (sc) => (
-                    <option key={sc} value={sc}>
-                      {ORGANIZATION_SCOPE_LABEL[sc]}
-                    </option>
-                  ),
-                )}
-              </BigSelect>
-            </Field>
-            <Field style={{ flex: 1, minWidth: 130 }}>
-              <FieldLabel>
-                설립·출범 연도 <Muted>(선택, AD 1000~)</Muted>
-              </FieldLabel>
-              <BigInput
+                {(Object.keys(ORGANIZATION_SCOPE_LABEL) as OrganizationScope[]).map((scopeKey) => (
+                  <option key={scopeKey} value={scopeKey}>
+                    {ORGANIZATION_SCOPE_LABEL[scopeKey]}
+                  </option>
+                ))}
+              </OrgS.FieldSelect>
+            </OrgS.SubField>
+            <OrgS.SubField htmlFor={FOUNDED_INPUT_ID}>
+              <OrgS.SubFieldLabel>
+                설립·출범 연도<OrgS.OptionalTag>(선택, AD 1000~)</OrgS.OptionalTag>
+              </OrgS.SubFieldLabel>
+              <S.Input
+                id={FOUNDED_INPUT_ID}
                 type="number"
                 min={1000}
                 max={9999}
+                $error={foundedYearInvalid}
+                aria-invalid={foundedYearInvalid || undefined}
                 value={foundedYear}
-                onChange={(event) => setFoundedYear(event.target.value)}
+                onChange={(changeEvent) => setFoundedYear(changeEvent.target.value)}
                 placeholder={isInternational ? '예: 1967, 1989, 2007' : '예: 1793'}
               />
-            </Field>
-          </CondRow>
+            </OrgS.SubField>
+          </OrgS.SubFieldGrid>
+        </S.FormField>
+      </S.FormRow>
 
-          {/* 회원국·파트너국 (국제기구·다자협의체·군사동맹일 때 상단 강조, 국내 조직도 필요시 사용 가능) */}
-          {(isInternational || countryMemberships.length > 0 || availableCountryCandidates.length > 0) && (
-            <Field>
-              <FieldLabel>
-                회원국·참여국{' '}
-                <Muted>
-                  (등록해 두면 정상회의·사건 등록 시 회원국을 한 번에 불러올 수 있습니다)
-                </Muted>
-              </FieldLabel>
-              {availableCountryCandidates.length > 0 && (
-                <CandidateQuickBox>
-                  <CandidateQuickLabel>
-                    현재 사건 참여국에서 빠른 추가:
-                  </CandidateQuickLabel>
-                  {availableCountryCandidates.map((candidate) => (
-                    <CandidateQuickChip
-                      key={
-                        candidate.historicalCountryId
-                          ? `H:${candidate.historicalCountryId}`
-                          : `C:${candidate.countryId}`
-                      }
-                      type="button"
-                      onClick={() => addCountryDraft(candidate)}
-                    >
-                      + {candidate.flagEmoji ? `${candidate.flagEmoji} ` : ''}
-                      {candidate.name}
-                    </CandidateQuickChip>
-                  ))}
-                  {availableCountryCandidates.length > 1 && (
-                    <CandidateQuickChip
-                      type="button"
-                      $accent
-                      onClick={() => {
-                        for (const candidate of availableCountryCandidates) {
-                          addCountryDraft(candidate)
-                        }
-                      }}
-                    >
-                      + 전체 회원국 담기 ({availableCountryCandidates.length})
-                    </CandidateQuickChip>
-                  )}
-                </CandidateQuickBox>
-              )}
-              <MemberRows>
-                {countryMemberships.map((cm) => (
-                  <MemberRow key={cm.key}>
-                    <MemberName>
-                      {cm.flagEmoji ? `${cm.flagEmoji} ` : ''}
-                      {cm.name}
-                    </MemberName>
-                    <MemberRoleSelect
-                      aria-label={`${cm.name} 멤버십 역할`}
-                      value={cm.role}
-                      onChange={(event) => {
-                        const nextRole = event.target.value as OrganizationCountryRole
-                        setCountryMemberships((prev) =>
-                          prev.map((item) =>
-                            item.key === cm.key ? { ...item, role: nextRole } : item,
+      <S.FormRow>
+        <S.FormLabel htmlFor="org-quick-create-description">
+          설명<OrgS.OptionalTag>(선택)</OrgS.OptionalTag>
+        </S.FormLabel>
+        <S.FormField>
+          <S.Textarea
+            id="org-quick-create-description"
+            value={description}
+            onChange={(changeEvent) => setDescription(changeEvent.target.value)}
+            rows={3}
+            placeholder="설립 배경·역할·성격 등 자유 서술"
+          />
+        </S.FormField>
+      </S.FormRow>
+    </OrgS.FormGroupSection>
+  )
+
+  const countriesSectionNode = (
+    <OrgS.FormGroupSection
+      ref={(element) => {
+        sectionRefs.current.countries = element
+      }}
+      aria-labelledby="org-quick-create-countries-title"
+    >
+      <OrgS.FormGroupTitle id="org-quick-create-countries-title">
+        {isInternational ? '회원국 · 참여국' : '소재 국가'}
+        {isInternational && countryMemberships.length > 0 ? (
+          <OrgS.FormGroupSummaryBadge>{countryMemberships.length}개국</OrgS.FormGroupSummaryBadge>
+        ) : !isInternational && seatCountryName ? (
+          <OrgS.FormGroupSummaryBadge>{seatCountryName}</OrgS.FormGroupSummaryBadge>
+        ) : null}
+      </OrgS.FormGroupTitle>
+
+      {/* 회원국·파트너국 (국제기구·다자협의체·군사동맹일 때 앞에, 국내 조직도 필요하면 쓴다) */}
+      {showCountryMemberships && (
+        <S.FormRow>
+          <S.FormLabel as="div">회원국·참여국</S.FormLabel>
+          <S.FormField>
+            <S.Hint>등록해 두면 정상회의·사건 등록 시 회원국을 한 번에 불러올 수 있습니다</S.Hint>
+            {availableCountryCandidates.length > 0 && (
+              <OrgS.CandidateQuickBox>
+                <OrgS.CandidateQuickLabel>현재 사건 참여국에서 빠른 추가:</OrgS.CandidateQuickLabel>
+                {availableCountryCandidates.map((candidate) => (
+                  <OrgS.CandidateQuickChip
+                    key={
+                      candidate.historicalCountryId
+                        ? `H:${candidate.historicalCountryId}`
+                        : `C:${candidate.countryId}`
+                    }
+                    type="button"
+                    onClick={() => addCountryDraft(candidate)}
+                  >
+                    + {candidate.flagEmoji ? `${candidate.flagEmoji} ` : ''}
+                    {candidate.name}
+                  </OrgS.CandidateQuickChip>
+                ))}
+                {availableCountryCandidates.length > 1 && (
+                  <OrgS.CandidateQuickChip
+                    type="button"
+                    $accent
+                    onClick={() => {
+                      for (const candidate of availableCountryCandidates) addCountryDraft(candidate)
+                    }}
+                  >
+                    + 전체 회원국 담기 ({availableCountryCandidates.length})
+                  </OrgS.CandidateQuickChip>
+                )}
+              </OrgS.CandidateQuickBox>
+            )}
+            {countryMemberships.length > 0 && (
+              <OrgS.PickedList aria-label="회원국·참여국">
+                {countryMemberships.map((membership) => (
+                  <OrgS.PickedRow key={membership.key}>
+                    <OrgS.PickedName>
+                      {membership.flagEmoji ? `${membership.flagEmoji} ` : ''}
+                      {membership.name}
+                    </OrgS.PickedName>
+                    <OrgS.PickedRoleSelect
+                      aria-label={`${membership.name} 멤버십 역할`}
+                      value={membership.role}
+                      onChange={(changeEvent) => {
+                        const nextRole = changeEvent.target.value as OrganizationCountryRole
+                        setCountryMemberships((previous) =>
+                          previous.map((item) =>
+                            item.key === membership.key ? { ...item, role: nextRole } : item,
                           ),
                         )
                       }}
                     >
-                      {MEMBER_COUNTRY_ROLES.map((r) => (
-                        <option key={r} value={r}>
-                          {ORGANIZATION_COUNTRY_ROLE_LABEL[r]}
+                      {MEMBER_COUNTRY_ROLES.map((role) => (
+                        <option key={role} value={role}>
+                          {ORGANIZATION_COUNTRY_ROLE_LABEL[role]}
                         </option>
                       ))}
-                    </MemberRoleSelect>
-                    <RemoveMemberBtn
+                    </OrgS.PickedRoleSelect>
+                    <OrgS.PickedRemoveBtn
                       type="button"
-                      aria-label={`${cm.name} 제거`}
+                      aria-label={`${membership.name} 제거`}
                       onClick={() =>
-                        setCountryMemberships((prev) =>
-                          prev.filter((item) => item.key !== cm.key),
+                        setCountryMemberships((previous) =>
+                          previous.filter((item) => item.key !== membership.key),
                         )
                       }
                     >
                       <FiX size={13} />
-                    </RemoveMemberBtn>
-                  </MemberRow>
+                    </OrgS.PickedRemoveBtn>
+                  </OrgS.PickedRow>
                 ))}
-                <AddMemberBtn
-                  type="button"
-                  onClick={() => setCountryPickerOpen(true)}
-                >
-                  <FiGlobe size={13} /> 회원국·파트너국 검색·추가
-                </AddMemberBtn>
-              </MemberRows>
-            </Field>
-          )}
+              </OrgS.PickedList>
+            )}
+            <OrgS.AddPillBtn type="button" onClick={() => setCountryPickerOpen(true)}>
+              <FiGlobe size={13} aria-hidden /> 회원국·파트너국 검색·추가
+            </OrgS.AddPillBtn>
+          </S.FormField>
+        </S.FormRow>
+      )}
 
-          {!isInternational && (
-            <CondRow>
-              <Field style={{ flex: 1, minWidth: 180 }}>
-                <FieldLabel>
-                  역사 국가 <Muted>(예: 프랑스 제1공화국, 조선)</Muted>
-                </FieldLabel>
-                <BigSelect
+      {!isInternational && (
+        <S.FormRow>
+          <S.FormLabel as="div">소재 국가</S.FormLabel>
+          <S.FormField>
+            <OrgS.SubFieldGrid>
+              <OrgS.SubField>
+                <OrgS.SubFieldLabel>
+                  역사 국가<OrgS.OptionalTag>(예: 프랑스 제1공화국, 조선)</OrgS.OptionalTag>
+                </OrgS.SubFieldLabel>
+                <OrgS.FieldSelect
                   value={historicalCountryId}
-                  onChange={(event) => setHistoricalCountryId(event.target.value)}
+                  onChange={(changeEvent) => setHistoricalCountryId(changeEvent.target.value)}
                 >
                   <option value="">미지정</option>
-                  {(historicalCountriesQuery.data ?? []).map((histCountry) => (
-                    <option key={histCountry.id} value={histCountry.id}>
-                      {histCountry.name}
+                  {(historicalCountriesQuery.data ?? []).map((historicalCountry) => (
+                    <option key={historicalCountry.id} value={historicalCountry.id}>
+                      {historicalCountry.name}
                     </option>
                   ))}
-                </BigSelect>
-              </Field>
-              <Field style={{ flex: 1, minWidth: 180 }}>
-                <FieldLabel>
-                  현대 국가 <Muted>(선택)</Muted>
-                </FieldLabel>
-                <BigSelect
+                </OrgS.FieldSelect>
+              </OrgS.SubField>
+              <OrgS.SubField>
+                <OrgS.SubFieldLabel>
+                  현대 국가<OrgS.OptionalTag>(선택)</OrgS.OptionalTag>
+                </OrgS.SubFieldLabel>
+                <OrgS.FieldSelect
                   value={countryId}
-                  onChange={(event) => setCountryId(event.target.value)}
+                  onChange={(changeEvent) => setCountryId(changeEvent.target.value)}
                 >
                   <option value="">미지정</option>
                   {(countriesQuery.data ?? []).map((country) => (
@@ -571,113 +801,249 @@ export function OrganizationQuickCreateModal({
                       {country.name}
                     </option>
                   ))}
-                </BigSelect>
-              </Field>
-            </CondRow>
-          )}
+                </OrgS.FieldSelect>
+              </OrgS.SubField>
+            </OrgS.SubFieldGrid>
+          </S.FormField>
+        </S.FormRow>
+      )}
+    </OrgS.FormGroupSection>
+  )
 
-          <Field>
-            <FieldLabel>
-              설명 <Muted>(선택)</Muted>
-            </FieldLabel>
-            <BigTextarea
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              rows={2}
-              placeholder="설립 배경·역할·성격 등 자유 서술"
-            />
-          </Field>
+  const membersSectionNode = (
+    <OrgS.FormGroupSection
+      ref={(element) => {
+        sectionRefs.current.members = element
+      }}
+      aria-labelledby="org-quick-create-members-title"
+    >
+      <OrgS.FormGroupTitle id="org-quick-create-members-title">
+        초기 소속 인물 · 위원
+        {members.length > 0 ? (
+          <OrgS.FormGroupSummaryBadge>{members.length}명</OrgS.FormGroupSummaryBadge>
+        ) : null}
+      </OrgS.FormGroupTitle>
 
-          <Field>
-            <FieldLabel>
-              초기 소속 인물·위원{' '}
-              <Muted>(선택 — 등록해 두면 사건에서 소속 인물로 바로 불러올 수 있습니다)</Muted>
-            </FieldLabel>
-            {availableCandidates.length > 0 && (
-              <CandidateQuickBox>
-                <CandidateQuickLabel>
-                  현재 사건 인물에서 빠른 추가:
-                </CandidateQuickLabel>
-                {availableCandidates.map((candidate) => (
-                  <CandidateQuickChip
-                    key={candidate.id}
-                    type="button"
-                    onClick={() =>
+      <S.FormRow>
+        <S.FormLabel as="div">
+          소속 인물<OrgS.OptionalTag>(선택)</OrgS.OptionalTag>
+        </S.FormLabel>
+        <S.FormField>
+          <S.Hint>등록해 두면 사건에서 소속 인물로 바로 불러올 수 있습니다</S.Hint>
+          {availableCandidates.length > 0 && (
+            <OrgS.CandidateQuickBox>
+              <OrgS.CandidateQuickLabel>현재 사건 인물에서 빠른 추가:</OrgS.CandidateQuickLabel>
+              {availableCandidates.map((candidate) => (
+                <OrgS.CandidateQuickChip
+                  key={candidate.id}
+                  type="button"
+                  onClick={() => addMember(candidate.id, candidate.name, candidate.role)}
+                >
+                  + {candidate.name}
+                </OrgS.CandidateQuickChip>
+              ))}
+              {availableCandidates.length > 1 && (
+                <OrgS.CandidateQuickChip
+                  type="button"
+                  $accent
+                  onClick={() => {
+                    for (const candidate of availableCandidates) {
                       addMember(candidate.id, candidate.name, candidate.role)
                     }
-                  >
-                    + {candidate.name}
-                  </CandidateQuickChip>
-                ))}
-                {availableCandidates.length > 1 && (
-                  <CandidateQuickChip
-                    type="button"
-                    $accent
-                    onClick={() => {
-                      for (const candidate of availableCandidates) {
-                        addMember(candidate.id, candidate.name, candidate.role)
-                      }
-                    }}
-                  >
-                    + 전체 담기 ({availableCandidates.length})
-                  </CandidateQuickChip>
-                )}
-              </CandidateQuickBox>
-            )}
-            <MemberRows>
+                  }}
+                >
+                  + 전체 담기 ({availableCandidates.length})
+                </OrgS.CandidateQuickChip>
+              )}
+            </OrgS.CandidateQuickBox>
+          )}
+          {members.length > 0 && (
+            <OrgS.PickedList aria-label="초기 소속 인물">
               {members.map((member) => (
-                <MemberRow key={member.id}>
-                  <MemberName>
-                    <FiUser size={12} style={{ marginRight: 5, verticalAlign: -1 }} />
+                <OrgS.PickedRow key={member.id}>
+                  <OrgS.PickedName>
+                    <FiUser size={12} aria-hidden />
                     {member.name}
-                  </MemberName>
-                  <MemberRoleInput
+                  </OrgS.PickedName>
+                  <OrgS.PickedRoleInput
                     aria-label={`${member.name} 조직 내 역할`}
                     value={member.roleTitle}
-                    onChange={(event) => {
-                      const nextRole = event.target.value
+                    onChange={(changeEvent) => {
+                      const nextRole = changeEvent.target.value
                       setMembers((previous) =>
                         previous.map((item) =>
-                          item.id === member.id
-                            ? { ...item, roleTitle: nextRole }
-                            : item,
+                          item.id === member.id ? { ...item, roleTitle: nextRole } : item,
                         ),
                       )
                     }}
                     placeholder="역할 (예: 사무총장, 의장, 위원)"
                   />
-                  <RemoveMemberBtn
+                  <OrgS.PickedRemoveBtn
                     type="button"
                     aria-label={`${member.name} 제거`}
                     onClick={() =>
-                      setMembers((previous) =>
-                        previous.filter((item) => item.id !== member.id),
-                      )
+                      setMembers((previous) => previous.filter((item) => item.id !== member.id))
                     }
                   >
                     <FiX size={13} />
-                  </RemoveMemberBtn>
-                </MemberRow>
+                  </OrgS.PickedRemoveBtn>
+                </OrgS.PickedRow>
               ))}
-              <AddMemberBtn
-                type="button"
-                onClick={() => setPersonPickerOpen(true)}
-              >
-                <FiPlus size={13} /> 소속 인물 검색·추가
-              </AddMemberBtn>
-            </MemberRows>
-          </Field>
+            </OrgS.PickedList>
+          )}
+          <OrgS.AddPillBtn type="button" onClick={() => setPersonPickerOpen(true)}>
+            <FiPlus size={13} aria-hidden /> 소속 인물 검색·추가
+          </OrgS.AddPillBtn>
+        </S.FormField>
+      </S.FormRow>
+    </OrgS.FormGroupSection>
+  )
 
-          <PrimaryBtn
-            type="button"
-            disabled={!name.trim() || createMutation.isPending}
-            onClick={() => createMutation.mutate()}
-          >
-            <FiPlus size={16} />
-            기구·조직 만들기
-          </PrimaryBtn>
-        </Body>
-      </Modal>
+  const nestedPickerOpen = personPickerOpen || countryPickerOpen
+
+  return (
+    <>
+      <RegisterModal
+        isOpen
+        onClose={() => {
+          void requestClose()
+        }}
+        title="새 기구·협의체·조직 등록"
+        headerActions={
+          <HeaderActionsBar>
+            <SectionJumpNav aria-label="폼 섹션 이동">
+              {sectionMeta.map((sectionItem) => {
+                const isActiveSection = activeSection === sectionItem.key
+                return (
+                  <SectionJumpBtn
+                    key={sectionItem.key}
+                    type="button"
+                    $active={isActiveSection}
+                    aria-current={isActiveSection ? 'location' : undefined}
+                    onClick={() => scrollToSection(sectionItem.key)}
+                  >
+                    <span>{sectionItem.label}</span>
+                    {sectionItem.badge ? (
+                      <OrgS.SectionJumpBadge $done={sectionItem.badge === '✓'} aria-hidden="true">
+                        {sectionItem.badge}
+                      </OrgS.SectionJumpBadge>
+                    ) : null}
+                  </SectionJumpBtn>
+                )
+              })}
+            </SectionJumpNav>
+            <OrgS.LayoutModeToggleBtn
+              type="button"
+              $active={layoutMode === 'split'}
+              aria-pressed={layoutMode === 'split'}
+              aria-label={layoutMode === 'split' ? '1단 세로 보기로 전환' : '2단 좌우 분할 보기로 전환'}
+              onClick={toggleLayoutMode}
+            >
+              <FiColumns size={13} aria-hidden="true" />
+              <span>{layoutMode === 'split' ? '2단 분할' : '1단 보기'}</span>
+            </OrgS.LayoutModeToggleBtn>
+            {isDirty && !busy ? (
+              <HeaderResetBtn
+                type="button"
+                title="입력한 내용을 모두 비우고 처음 상태로 되돌립니다"
+                onClick={() => {
+                  void resetForm()
+                }}
+              >
+                초기화
+              </HeaderResetBtn>
+            ) : null}
+          </HeaderActionsBar>
+        }
+        maxWidth={layoutMode === 'split' ? 'min(1240px, 96vw)' : 'min(880px, 96vw)'}
+        minHeight="min(640px, 90vh)"
+        height={layoutMode === 'split' ? '90vh' : undefined}
+        fullBleedOnMobile
+        /* 위에 국가·인물 고르기 창이 떠 있으면 그 창이 Esc를 먹는다. 저장 중엔 닫히지 않는다 */
+        closeOnEsc={!nestedPickerOpen && !busy}
+        closeOnOverlayClick={!busy}
+      >
+        <OrgS.OrgModalFormScroll
+          ref={scrollContainerRef}
+          $layoutMode={layoutMode}
+          style={typeToneStyle}
+        >
+          {busy ? (
+            <OrgS.BusyBar role="status" aria-live="polite">
+              기구·조직을 등록하는 중...
+            </OrgS.BusyBar>
+          ) : null}
+          <S.FormSection>
+            {layoutMode === 'split' ? (
+              <OrgS.SplitColumnsGrid>
+                <OrgS.SplitColumnLeft>{basicSectionNode}</OrgS.SplitColumnLeft>
+                <OrgS.SplitColumnRight>
+                  {countriesSectionNode}
+                  {membersSectionNode}
+                </OrgS.SplitColumnRight>
+              </OrgS.SplitColumnsGrid>
+            ) : (
+              <>
+                {basicSectionNode}
+                {countriesSectionNode}
+                {membersSectionNode}
+              </>
+            )}
+          </S.FormSection>
+        </OrgS.OrgModalFormScroll>
+
+        <PersonRegisterModalStickyFooter>
+          <FooterHint $warning={missingName || foundedYearInvalid}>
+            {missingName ? (
+              <FooterJumpButton
+                type="button"
+                onClick={() => focusField(NAME_INPUT_ID)}
+                title="클릭하면 해당 필수 입력 칸으로 이동합니다"
+              >
+                <span>필수 입력: 기구·조직명</span>
+                <FooterJumpArrow aria-hidden="true">→</FooterJumpArrow>
+              </FooterJumpButton>
+            ) : foundedYearInvalid ? (
+              <FooterJumpButton
+                type="button"
+                onClick={() => focusField(FOUNDED_INPUT_ID)}
+                title="클릭하면 설립·출범 연도 칸으로 이동합니다"
+              >
+                <span>설립·출범 연도는 1000~9999 사이로 적거나 비워 두세요</span>
+                <FooterJumpArrow aria-hidden="true">→</FooterJumpArrow>
+              </FooterJumpButton>
+            ) : (
+              <FooterReadyGroup>
+                <FooterReadyBadge>등록 준비 완료</FooterReadyBadge>
+                <FooterShortcutItem>
+                  <FooterKbd>⌘↵</FooterKbd>
+                  <span>저장</span>
+                </FooterShortcutItem>
+              </FooterReadyGroup>
+            )}
+          </FooterHint>
+          <FooterActions>
+            <PersonRegisterModalCancelBtn
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                void requestClose()
+              }}
+            >
+              취소
+            </PersonRegisterModalCancelBtn>
+            <OrgS.ModalPrimarySubmitBtn
+              type="button"
+              disabled={!canSubmit}
+              title={missingName ? '필수 입력: 기구·조직명' : '단축키: ⌘/Ctrl + Enter'}
+              onClick={() => createMutation.mutate()}
+            >
+              {busy ? '등록 중...' : '기구·조직 만들기'}
+            </OrgS.ModalPrimarySubmitBtn>
+          </FooterActions>
+        </PersonRegisterModalStickyFooter>
+      </RegisterModal>
+
       {personPickerOpen && (
         <PersonSelectModal
           persons={allPersonsQuery.data ?? []}
@@ -699,13 +1065,13 @@ export function OrganizationQuickCreateModal({
         modernCountries={countriesQuery.data ?? []}
         historicalCountries={historicalCountriesQuery.data ?? []}
         selectedIds={countryMemberships
-          .map((cm) => cm.countryId ?? cm.historicalCountryId ?? '')
+          .map((membership) => membership.countryId ?? membership.historicalCountryId ?? '')
           .filter(Boolean)}
         onSelect={(picked) => {
           const matchedFlag = picked.isHistorical
             ? null
-            : ((countriesQuery.data ?? []).find((c) => c.id === picked.id)
-                ?.flagEmoji ?? null)
+            : ((countriesQuery.data ?? []).find((country) => country.id === picked.id)?.flagEmoji ??
+              null)
           addCountryDraft({
             countryId: picked.isHistorical ? undefined : picked.id,
             historicalCountryId: picked.isHistorical ? picked.id : undefined,
@@ -715,302 +1081,6 @@ export function OrganizationQuickCreateModal({
           setCountryPickerOpen(false)
         }}
       />
-    </Overlay>,
-    document.body,
+    </>
   )
 }
-
-const Overlay = styled.div`
-  position: fixed;
-  inset: 0;
-  z-index: ${Z_INDEX.MODAL_OVERLAY};
-  background: ${({ theme }) => ledgerScrim(theme.mode)};
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-`
-
-const Modal = styled.div`
-  width: min(580px, 100%);
-  max-height: 90vh;
-  overflow-y: auto;
-  border-radius: ${RADIUS.MD};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerOverlay(theme.mode)};
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.34);
-`
-
-const Header = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px 13px;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-`
-
-const Title = styled.h3`
-  margin: 0;
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const CloseBtn = styled.button`
-  border: none;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-  padding: 4px;
-  border-radius: ${RADIUS.SM};
-  display: inline-flex;
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
-
-const Body = styled.div`
-  padding: 16px 20px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-`
-
-const Field = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-`
-
-const CondRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-`
-
-const FieldLabel = styled.label`
-  font-size: 11.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const Muted = styled.span`
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const TypeChipRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-`
-
-const TypeChip = styled.button<{ $active: boolean }>`
-  padding: 4px 10px;
-  border-radius: ${RADIUS.SM};
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid
-    ${({ theme, $active }) =>
-      $active
-        ? ledgerAccentBorder(theme.mode)
-        : ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme, $active }) =>
-    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
-  color: ${({ theme, $active }) =>
-    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
-  transition: border-color 0.12s, color 0.12s, background 0.12s;
-  &:hover {
-    color: ${({ theme, $active }) =>
-      $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
-  }
-`
-
-const ExampleNote = styled.div`
-  font-size: 11.5px;
-  line-height: 1.45;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const BigInput = styled.input`
-  height: 35px;
-  padding: 0 11px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => theme.colors.background.secondary};
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 13px;
-  &:focus {
-    outline: none;
-    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-`
-
-const BigSelect = styled.select`
-  height: 35px;
-  padding: 0 9px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => theme.colors.background.secondary};
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 13px;
-  &:focus {
-    outline: none;
-    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-`
-
-const BigTextarea = styled.textarea`
-  padding: 9px 11px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => theme.colors.background.secondary};
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 13px;
-  resize: vertical;
-  font-family: inherit;
-  &:focus {
-    outline: none;
-    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-`
-
-const PrimaryBtn = styled.button`
-  margin-top: 6px;
-  height: 38px;
-  border-radius: ${RADIUS.SM};
-  border: none;
-  background: ${({ theme }) => ledgerAccent(theme.mode)};
-  color: ${({ theme }) => (theme.mode === 'dark' ? '#0e0f12' : '#ffffff')};
-  font-size: 13px;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  cursor: pointer;
-  &:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-`
-
-const CandidateQuickBox = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 5px;
-  padding: 7px 10px;
-  border-radius: ${RADIUS.SM};
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => theme.colors.background.secondary};
-`
-
-const CandidateQuickLabel = styled.span`
-  font-size: 11.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  margin-right: 2px;
-`
-
-const CandidateQuickChip = styled.button<{ $accent?: boolean }>`
-  padding: 3px 9px;
-  border-radius: ${RADIUS.PILL};
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid
-    ${({ theme, $accent }) =>
-      $accent
-        ? ledgerAccentBorder(theme.mode)
-        : ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme, $accent }) =>
-    $accent ? ledgerAccentSubtle(theme.mode) : theme.colors.background.primary};
-  color: ${({ theme, $accent }) =>
-    $accent ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
-  &:hover {
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-    color: ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-`
-
-const MemberRows = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-`
-
-const MemberRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 10px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => theme.colors.background.secondary};
-`
-
-const MemberName = styled.span`
-  font-size: 12.5px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.primary};
-  min-width: 110px;
-`
-
-const MemberRoleInput = styled.input`
-  flex: 1;
-  min-width: 110px;
-  height: 27px;
-  padding: 0 8px;
-  border-radius: ${RADIUS.XS};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 12px;
-`
-
-const MemberRoleSelect = styled.select`
-  flex: 1;
-  min-width: 120px;
-  height: 27px;
-  padding: 0 8px;
-  border-radius: ${RADIUS.XS};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 12px;
-`
-
-const RemoveMemberBtn = styled.button`
-  border: none;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  cursor: pointer;
-  display: inline-flex;
-  padding: 3px;
-  &:hover {
-    color: ${({ theme }) => theme.colors.error};
-  }
-`
-
-const AddMemberBtn = styled.button`
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  border-radius: ${RADIUS.SM};
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  &:hover {
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-    color: ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-`

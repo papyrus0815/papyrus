@@ -104,6 +104,26 @@ export const DOMESTIC_ORG_TYPES: OrganizationType[] = NON_COMPANY_ORG_TYPES.filt
   (t) => !INTERNATIONAL_ORG_TYPES.includes(t),
 )
 
+/**
+ * 유형별 시그니처 컬러 — 다크·라이트 모두에서 채도·대비가 안정적인 값.
+ * 기구 목록의 유형 표지와 등록 모달의 섹션 점·요약 배지가 같은 색을 쓴다.
+ */
+export const ORGANIZATION_TYPE_HUE: Record<OrganizationType, string> = {
+  MULTILATERAL_FORUM: '#6366f1',
+  INTERGOVERNMENTAL_ORG: '#10b981',
+  MILITARY_ALLIANCE: '#ec4899',
+  GOVERNMENT_AGENCY: '#3b82f6',
+  POLITICAL_PARTY: '#f59e0b',
+  NGO: '#14b8a6',
+  TRADE_UNION: '#f97316',
+  BUSINESS_ASSOCIATION: '#0ea5e9',
+  RELIGIOUS_ORG: '#8b5cf6',
+  EDUCATION: '#06b6d4',
+  MILITARY_ACADEMY: '#64748b',
+  COMPANY: '#64748b',
+  OTHER: '#94a3b8',
+}
+
 export function isInternationalOrgType(type?: OrganizationType | string | null): boolean {
   return (
     type === 'INTERGOVERNMENTAL_ORG' ||

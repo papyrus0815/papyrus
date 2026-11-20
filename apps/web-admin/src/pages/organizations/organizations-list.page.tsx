@@ -91,6 +91,7 @@ import {
   NON_COMPANY_ORG_TYPES,
   ORGANIZATION_COUNTRY_ROLE_LABEL,
   ORGANIZATION_SCOPE_LABEL,
+  ORGANIZATION_TYPE_HUE,
   ORGANIZATION_TYPE_LABEL,
   removeOrganizationCountryMembership,
   removeOrganizationMember,
@@ -127,22 +128,8 @@ type OrgDetailTab =
   | 'edit'
   | 'positions'
 
-/** 다크·라이트 모두에서 채도·대비가 안정적인 유형별 시그니처 컬러 */
-const ORG_TYPE_HUE: Record<OrganizationType, string> = {
-  MULTILATERAL_FORUM: '#6366f1',
-  INTERGOVERNMENTAL_ORG: '#10b981',
-  MILITARY_ALLIANCE: '#ec4899',
-  GOVERNMENT_AGENCY: '#3b82f6',
-  POLITICAL_PARTY: '#f59e0b',
-  NGO: '#14b8a6',
-  TRADE_UNION: '#f97316',
-  BUSINESS_ASSOCIATION: '#0ea5e9',
-  RELIGIOUS_ORG: '#8b5cf6',
-  EDUCATION: '#06b6d4',
-  MILITARY_ACADEMY: '#64748b',
-  COMPANY: '#64748b',
-  OTHER: '#94a3b8',
-}
+/** 유형별 시그니처 컬러 — 정본은 shared/api/organizations(등록 모달 섹션 점도 같은 색) */
+const ORG_TYPE_HUE = ORGANIZATION_TYPE_HUE
 
 const COUNTRY_ROLE_OPTIONS: OrganizationCountryRole[] = [
   'FOUNDER',
