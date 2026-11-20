@@ -683,7 +683,8 @@ export class EventService {
         await tx.personEvent.deleteMany({
           where: { eventId: id, personId: { notIn: [...wanted.keys()] } },
         })
-        // 참여 자격 국가: 새로 오는 인물 + 아직 비어 있는 기존 인물만 추론한다(사람이 고른 값은 보존).
+        // 참여 자격 국가: 새로 추가되는 인물(!existing)만 추론한다.
+        // 기존 행의 (null, null)은 사용자가 '없음'으로 비운 선택일 수 있으므로 순서 변경·추가 시 덮어쓰지 않는다.
         const existing = await tx.personEvent.findMany({
           where: { eventId: id },
           select: { personId: true, countryId: true, historicalCountryId: true },
@@ -692,10 +693,7 @@ export class EventService {
         const inferred = await inferParticipationCountries(
           tx,
           id,
-          [...wanted.keys()].filter((personId) => {
-            const row = existingById.get(personId)
-            return !row || (!row.countryId && !row.historicalCountryId)
-          }),
+          [...wanted.keys()].filter((personId) => !existingById.has(personId)),
         )
         let index = 0
         for (const [personId, person] of wanted) {

@@ -171,22 +171,73 @@ describe('resolveOfficesAtEvent — 사건 당시 직위', () => {
     )
     expect(result.get('p-bock')).toEqual(['나치 독일 중부집단군 사령관 (원수)'])
   })
+
+  it('다년·기간 사건(포즈담 회담·크림 전쟁 등) 중간에 취임한 인물도 사건 기간과 겹치면 직위를 파생한다', async () => {
+    const db = fakeDb({
+      tenures: [
+        {
+          personId: 'p-attlee',
+          startDate: new Date('1945-07-26T00:00:00Z'),
+          endDate: new Date('1951-10-26T00:00:00Z'),
+          title: '총리',
+          positionDefinition: null,
+          country: { name: '영국' },
+          historicalCountry: null,
+        },
+      ],
+    })
+    const result = await resolveOfficesAtEvent(
+      db,
+      {
+        startEra: 'AD',
+        startYear: 1945,
+        startMonth: 7,
+        startDay: 17,
+        endEra: 'AD',
+        endYear: 1945,
+        endMonth: 8,
+        endDay: 2,
+      },
+      ['p-attlee'],
+    )
+    expect(result.get('p-attlee')).toEqual(['영국 총리'])
+  })
 })
 
 describe('앞뒤 안 맞는 연결 경고', () => {
+  const year = (start: number, end: number | null = null) => ({ start, end })
+
   it('생몰년 밖이면 문구, 안이면 null(태어난 해·죽은 해는 안)', () => {
-    expect(describeLifespanMismatch(1700, 1770, 1861)).toBe('생몰(1770~1861) 밖의 사건입니다')
-    expect(describeLifespanMismatch(1861, 1770, 1861)).toBeNull()
-    expect(describeLifespanMismatch(1900, null, null)).toBeNull()
+    expect(describeLifespanMismatch(year(1700), 1770, 1861)).toBe('생몰(1770~1861) 밖의 사건입니다')
+    expect(describeLifespanMismatch(year(1861), 1770, 1861)).toBeNull()
+    expect(describeLifespanMismatch(year(1900), null, null)).toBeNull()
+  })
+
+  it('생몰년과 사건 기간이 겹치면 시작 연도가 밖이어도 맞다', () => {
+    // 1차대전(1914~1918) — 1918년에 태어난 사람은 겹치고, 1919년에 태어난 사람은 겹치지 않는다
+    expect(describeLifespanMismatch(year(1914, 1918), 1918, 2000)).toBeNull()
+    expect(describeLifespanMismatch(year(1914, 1918), 1919, 2000)).toBe('생몰(1919~2000) 밖의 사건입니다')
   })
 
   it('존속 기간 밖이면 문구 — 건국·멸망 역할은 경계라 보지 않는다', () => {
-    expect(describeExistenceMismatch(1911, 'PARTICIPANT', 1912, 1949)).toBe(
+    expect(describeExistenceMismatch(year(1911), 'PARTICIPANT', 1912, 1949)).toBe(
       '존속(1912~1949) 밖의 사건입니다',
     )
-    expect(describeExistenceMismatch(1911, 'FOUNDED', 1912, 1949)).toBeNull()
-    expect(describeExistenceMismatch(-100, 'PARTICIPANT', -27, 476)).toBe(
+    expect(describeExistenceMismatch(year(1911), 'FOUNDED', 1912, 1949)).toBeNull()
+    expect(describeExistenceMismatch(year(-100), 'PARTICIPANT', -27, 476)).toBe(
       '존속(기원전 27~476) 밖의 사건입니다',
+    )
+  })
+
+  it('존속 기간과 사건 기간이 겹치면 맞다 — 프랑스 혁명의 제1공화국', () => {
+    expect(describeExistenceMismatch(year(1789, 1799), 'PARTICIPANT', 1792, 1804)).toBeNull()
+    expect(describeExistenceMismatch(year(1700, 1721), 'PARTICIPANT', 1701, 1918)).toBeNull()
+    expect(describeExistenceMismatch(year(1789, 1791), 'PARTICIPANT', 1792, 1804)).toBe(
+      '존속(1792~1804) 밖의 사건입니다',
+    )
+    // 끝이 시작보다 앞서게 잘못 적혔으면 시작 한 해로 본다
+    expect(describeExistenceMismatch(year(1700, 1600), 'PARTICIPANT', 1650, 1690)).toBe(
+      '존속(1650~1690) 밖의 사건입니다',
     )
   })
 })

@@ -115,6 +115,8 @@ export interface ContemporaryLeaderCandidate {
 export async function getContemporaryLeadersForEvent(params: {
   date: string
   datePrecision?: string | null
+  endDate?: string | null
+  endDatePrecision?: string | null
   countryIds?: string[]
   historicalCountryIds?: string[]
 }): Promise<ContemporaryLeaderCandidate[]> {
@@ -128,6 +130,12 @@ export async function getContemporaryLeadersForEvent(params: {
   url.searchParams.set('date', params.date.trim())
   if (params.datePrecision) {
     url.searchParams.set('datePrecision', params.datePrecision)
+  }
+  if (params.endDate?.trim()) {
+    url.searchParams.set('endDate', params.endDate.trim())
+  }
+  if (params.endDatePrecision) {
+    url.searchParams.set('endDatePrecision', params.endDatePrecision)
   }
   if (cIds.length > 0) url.searchParams.set('countryIds', cIds.join(','))
   if (hcIds.length > 0) {

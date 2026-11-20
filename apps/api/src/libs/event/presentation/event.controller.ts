@@ -2331,15 +2331,13 @@ export class EventController {
       }
     }
 
-    // 앞뒤 안 맞는 연결 — 생몰년 밖 참여 인물, 존속 기간 밖 역사 참여국(표시만, 막지 않음)
-    const eventYear = partsOf(
-      event.startEra,
-      event.startYear,
-      event.startMonth,
-      event.startDay,
-      event.startDate,
-    ).year
-    if (eventYear != null) {
+    // 앞뒤 안 맞는 연결 — 생몰년 밖 참여 인물, 존속 기간 밖 역사 참여국(표시만, 막지 않음).
+    // 사건 시작 한 해가 아니라 사건 기간 전체와 견준다(겹치면 맞다).
+    const eventYears = {
+      start: partsOf(event.startEra, event.startYear, event.startMonth, event.startDay, event.startDate).year,
+      end: partsOf(event.endEra, event.endYear, event.endMonth, event.endDay, event.endDate).year,
+    }
+    if (eventYears.start != null) {
       if (response.relatedPersons && response.relatedPersons.length > 0) {
         const lifespans = await this.prisma.person.findMany({
           where: { id: { in: response.relatedPersons.map((person) => person.personId) } },
@@ -2359,7 +2357,7 @@ export class EventController {
           const row = lifespanById.get(person.personId)
           person.lifespanWarning = row
             ? describeLifespanMismatch(
-                eventYear,
+                eventYears,
                 signedYearOfDate(row.birthEra, row.birthDate),
                 signedYearOfDate(row.deathEra, row.deathDate),
               )
@@ -2380,7 +2378,7 @@ export class EventController {
           const toSigned = (era: string | null, year: number | null) =>
             year == null ? null : era === 'BC' ? -year : year
           country.existenceWarning = describeExistenceMismatch(
-            eventYear,
+            eventYears,
             relation.role,
             toSigned(period.startEra, period.startYear),
             toSigned(period.endEra, period.endYear),
@@ -2447,6 +2445,8 @@ export class EventController {
   async getContemporaryLeaders(
     @Query('date') date?: string,
     @Query('datePrecision') datePrecision?: string,
+    @Query('endDate') endDate?: string,
+    @Query('endDatePrecision') endDatePrecision?: string,
     @Query('countryIds') countryIds?: string,
     @Query('historicalCountryIds') historicalCountryIds?: string,
     @Request() req?: any,
@@ -2459,12 +2459,36 @@ export class EventController {
 
     const signedYear = parsed.era === 'BC' ? -parsed.year : parsed.year
     const prec = datePrecision ?? 'day'
-    const eventRange = keyRange(
+    const startRange = keyRange(
       signedYear,
       prec === 'year' ? null : (parsed.month ?? null),
       prec === 'year' || prec === 'month' ? null : (parsed.day ?? null),
     )
-    if (!eventRange) return []
+    if (!startRange) return []
+
+    const parsedEnd = endDate?.trim()
+      ? parseEventDate(endDate.trim(), endDatePrecision as any)
+      : null
+    const signedEndYear =
+      parsedEnd && parsedEnd.year != null
+        ? parsedEnd.era === 'BC'
+          ? -parsedEnd.year
+          : parsedEnd.year
+        : null
+    const endPrec = endDatePrecision ?? 'day'
+    const endRange =
+      signedEndYear != null
+        ? keyRange(
+            signedEndYear,
+            endPrec === 'year' ? null : (parsedEnd?.month ?? null),
+            endPrec === 'year' || endPrec === 'month' ? null : (parsedEnd?.day ?? null),
+          )
+        : null
+    const eventSpanStart = startRange[0]
+    const eventSpanEnd =
+      endRange && endRange[1] >= startRange[0] ? endRange[1] : startRange[1]
+    const spanEndYear =
+      signedEndYear != null && signedEndYear >= signedYear ? signedEndYear : signedYear
 
     const splitIds = (raw?: string): string[] =>
       raw
@@ -2510,7 +2534,7 @@ export class EventController {
               ? -hc.endYear
               : hc.endYear
             : null
-        const afterStart = hcStart == null || signedYear >= hcStart
+        const afterStart = hcStart == null || spanEndYear >= hcStart
         const beforeEnd = hcEnd == null || signedYear <= hcEnd
         if (afterStart && beforeEnd) {
           bridgedHistoricalSet.add(hc.id)
@@ -2590,7 +2614,7 @@ export class EventController {
       if (!sRange) return false
       const eRange = keyRange(end.year, end.month, end.day)
       const endKey = eRange ? eRange[1] : Number.MAX_SAFE_INTEGER
-      return sRange[0] <= eventRange[1] && endKey >= eventRange[0]
+      return sRange[0] <= eventSpanEnd && endKey >= eventSpanStart
     }
 
     const modernOrder = new Map(modernIds.map((id, idx) => [id, idx]))

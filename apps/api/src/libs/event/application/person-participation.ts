@@ -126,7 +126,7 @@ export function partsOf(
   return { year: null, month: null, day: null }
 }
 
-/** 사건 시점 → 인물별 '당시 직위' 라벨(재위 먼저, 최대 2개) */
+/** 사건 시점(기간 전체) → 인물별 '당시 직위' 라벨(재위 먼저, 최대 3개) */
 export async function resolveOfficesAtEvent(
   db: Db,
   event: {
@@ -135,28 +135,44 @@ export async function resolveOfficesAtEvent(
     startMonth?: number | null
     startDay?: number | null
     startDate?: Date | null
+    endEra?: string | null
+    endYear?: number | null
+    endMonth?: number | null
+    endDay?: number | null
+    endDate?: Date | null
   },
   personIds: string[],
 ): Promise<Map<string, string[]>> {
   const result = new Map<string, string[]>()
   if (personIds.length === 0) return result
-  const eventParts = partsOf(
+  const startParts = partsOf(
     event.startEra,
     event.startYear,
     event.startMonth,
     event.startDay,
     event.startDate,
   )
-  const eventRange = keyRange(eventParts.year, eventParts.month, eventParts.day)
-  if (!eventRange) return result
+  const startRange = keyRange(startParts.year, startParts.month, startParts.day)
+  if (!startRange) return result
+  const endParts = partsOf(
+    event.endEra,
+    event.endYear,
+    event.endMonth,
+    event.endDay,
+    event.endDate,
+  )
+  const endRange = keyRange(endParts.year, endParts.month, endParts.day)
+  const eventSpanStart = startRange[0]
+  const eventSpanEnd =
+    endRange && endRange[1] >= startRange[0] ? endRange[1] : startRange[1]
 
   const overlaps = (start: DateParts, end: DateParts) => {
-    const startRange = keyRange(start.year, start.month, start.day)
-    if (!startRange) return false
-    const endRange = keyRange(end.year, end.month, end.day)
+    const startRangeItem = keyRange(start.year, start.month, start.day)
+    if (!startRangeItem) return false
+    const endRangeItem = keyRange(end.year, end.month, end.day)
     // 끝이 없으면 진행 중 — 시작 이후 전부
-    const endKey = endRange ? endRange[1] : Number.MAX_SAFE_INTEGER
-    return startRange[0] <= eventRange[1] && endKey >= eventRange[0]
+    const endKey = endRangeItem ? endRangeItem[1] : Number.MAX_SAFE_INTEGER
+    return startRangeItem[0] <= eventSpanEnd && endKey >= eventSpanStart
   }
 
   const [reigns, tenures, unitCommands, militaryCareers] = await Promise.all([
@@ -314,40 +330,56 @@ export function signedYearOfDate(
 }
 
 /**
- * 참여 인물의 생몰년 밖 사건이면 안내 문구, 아니면 null.
- * 사망한 해·태어난 해 안의 사건은 맞는 것으로 본다(연도 단위 비교).
+ * 사건이 걸친 연도 — 시작(부호 연도)과 끝. 끝을 모르면 시작 한 해로 본다.
+ * 경고는 이 기간 전체와 견준다 — 예전엔 시작 연도 하나만 봐서, 프랑스 혁명(1789~1799)에 걸린
+ * 프랑스 제1공화국(1792~1804)이 "존속 밖"으로 떴다(존속 경고 17건 중 7건이 이런 오탐).
+ */
+export interface EventYearSpan {
+  start: number | null
+  end: number | null
+}
+
+/** 사건 기간과 [from, to]가 한 해도 겹치지 않으면 true — 양끝을 모르면 그쪽은 열려 있다 */
+function isOutside(span: EventYearSpan, from: number | null, to: number | null): boolean {
+  if (span.start == null) return false
+  const spanEnd = span.end != null && span.end >= span.start ? span.end : span.start
+  const endsBefore = from != null && spanEnd < from
+  const startsAfter = to != null && span.start > to
+  return endsBefore || startsAfter
+}
+
+const rangeLabel = (from: number | null, to: number | null) =>
+  `${from != null ? formatSignedYear(from) : '?'}~${to != null ? formatSignedYear(to) : ''}`
+
+/**
+ * 참여 인물의 생몰년과 사건 기간이 한 해도 겹치지 않으면 안내 문구, 아니면 null.
+ * 태어난 해·죽은 해 안의 사건은 맞는 것으로 본다(연도 단위 비교).
  */
 export function describeLifespanMismatch(
-  eventYear: number | null,
+  span: EventYearSpan,
   birthYear: number | null,
   deathYear: number | null,
 ): string | null {
-  if (eventYear == null || (birthYear == null && deathYear == null)) return null
-  const before = birthYear != null && eventYear < birthYear
-  const after = deathYear != null && eventYear > deathYear
-  if (!before && !after) return null
-  const range = `${birthYear != null ? formatSignedYear(birthYear) : '?'}~${deathYear != null ? formatSignedYear(deathYear) : ''}`
-  return `생몰(${range}) 밖의 사건입니다`
+  if (birthYear == null && deathYear == null) return null
+  if (!isOutside(span, birthYear, deathYear)) return null
+  return `생몰(${rangeLabel(birthYear, deathYear)}) 밖의 사건입니다`
 }
 
 /**
- * 역사국가가 존속 기간 밖 사건에 참여국으로 걸렸으면 안내 문구, 아니면 null.
+ * 역사국가의 존속 기간과 사건 기간이 한 해도 겹치지 않으면 안내 문구, 아니면 null.
  * 건국·멸망 역할(FOUNDED·DISSOLVED)은 경계에 걸치는 게 정상이라 보지 않는다
  * (예: 중화민국 수립 전의 신해혁명).
  */
 export function describeExistenceMismatch(
-  eventYear: number | null,
+  span: EventYearSpan,
   role: string | null | undefined,
   startYear: number | null,
   endYear: number | null,
 ): string | null {
-  if (eventYear == null || role === 'FOUNDED' || role === 'DISSOLVED') return null
+  if (role === 'FOUNDED' || role === 'DISSOLVED') return null
   if (startYear == null && endYear == null) return null
-  const before = startYear != null && eventYear < startYear
-  const after = endYear != null && eventYear > endYear
-  if (!before && !after) return null
-  const range = `${startYear != null ? formatSignedYear(startYear) : '?'}~${endYear != null ? formatSignedYear(endYear) : ''}`
-  return `존속(${range}) 밖의 사건입니다`
+  if (!isOutside(span, startYear, endYear)) return null
+  return `존속(${rangeLabel(startYear, endYear)}) 밖의 사건입니다`
 }
 
 // ─── 사건 당시 사망·전사·처형·피살 파생 ─────────────────────────────────────
