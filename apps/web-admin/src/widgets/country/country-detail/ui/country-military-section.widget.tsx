@@ -1,32 +1,27 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  FiBarChart2,
-  FiCheck,
-  FiExternalLink,
-  FiMoreHorizontal,
-  FiPlus,
-} from 'react-icons/fi'
+import { FiBarChart2, FiExternalLink, FiPlus } from 'react-icons/fi'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import { ledgerHairline } from '@/entities/event/ui/ledger-tokens'
 import {
-  ledgerElevated,
-  ledgerHairline,
-  ledgerHairlineStrong,
-  ledgerHoverFill,
-} from '@/entities/event/ui/ledger-tokens'
+  fetchCountryScopedMilitaryUnits,
+  HIGH_AND_OPERATIONAL_UNIT_TYPES,
+  militaryUnitQueryKeys,
+} from '@/entities/military-unit'
 import { useHistoricalCountriesByModernCountry } from '@/features/country/api/use-historical-countries-by-modern-country.hook'
 import { useConstituentHistoricalPolities } from '@/features/government-info/model/use-constituent-historical-polities'
 import { GovernmentMilitaryTab } from '@/features/government-info/ui/government-military-tab.widget'
 import { EVENTS_LIMIT_ALL, getAllEvents } from '@/shared/api/events'
-import { type MilitaryUnit, militaryUnitApi } from '@/shared/api/military-unit'
+import { type MilitaryUnit } from '@/shared/api/military-unit'
 import {
   administrationDepartmentsByCountryQueryKey,
   administrationDepartmentsByHistoricalCountryQueryKey,
 } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { pathKeys } from '@/shared/router'
+import { PopoverMenu } from '@/shared/ui/popover-menu'
 import { AddButton } from '@/shared/ui/section-page-layout'
 import {
   UnderlineTabBadge,
@@ -35,10 +30,7 @@ import {
 } from '@/shared/ui/underline-tabs'
 
 import * as DashboardStyles from './country-detail-dashboard.styles'
-import {
-  countryTabCanvasPadding,
-  LedgerIconButton,
-} from './country-ledger-primitives'
+import { countryTabCanvasPadding } from './country-ledger-primitives'
 import { CountryMilitaryWarsPanel } from './country-military-wars-panel'
 import { MilitaryUnitFormModal } from './military-unit-form.modal'
 
@@ -47,21 +39,6 @@ export interface CountryMilitarySectionProps {
 }
 
 type MilitarySubTab = 'units' | 'wars'
-
-const HIGH_AND_OPERATIONAL_TYPES = new Set<string>([
-  'SUPREME_COMMAND',
-  'GENERAL_STAFF',
-  'SERVICE_HQ',
-  'THEATER',
-  'ARMY_GROUP',
-  'FRONT',
-  'MILITARY_DISTRICT',
-  'FIELD_ARMY',
-  'FLEET',
-  'AIR_FLEET',
-  'CORPS',
-  'AIR_CORPS',
-])
 
 export function CountryMilitarySection({
   country,
@@ -94,18 +71,6 @@ export function CountryMilitarySection({
     string | null
   >(null)
   const [showHeadlineStats, setShowHeadlineStats] = useState(false)
-  const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
-
-  useEffect(() => {
-    if (!headerMenuOpen) return
-    const handlePointerDown = (evt: MouseEvent) => {
-      const target = evt.target as HTMLElement | null
-      if (target?.closest('[data-country-military-menu]')) return
-      setHeaderMenuOpen(false)
-    }
-    document.addEventListener('mousedown', handlePointerDown)
-    return () => document.removeEventListener('mousedown', handlePointerDown)
-  }, [headerMenuOpen])
 
   useEffect(() => {
     if (unitIdQuery) {
@@ -146,43 +111,19 @@ export function CountryMilitarySection({
 
   const relatedHistKey = relatedHistoricalIds.join(',')
 
-  // GovernmentMilitaryTab과 동일한 캐시 키를 사용하여 중복 요청 방지
+  // GovernmentMilitaryTab과 동일한 캐시 키·조회 함수 사용 (현대국 N+1 중복 요청 제거)
   const unitsSummaryQuery = useQuery({
-    queryKey: [
-      'military-units',
-      'country-scope',
+    queryKey: militaryUnitQueryKeys.countryScope(
       isHistorical ? 'hist' : 'mod',
       country.id,
-      relatedHistKey,
-    ],
-    queryFn: async () => {
-      if (isHistorical) {
-        const histIds = Array.from(
-          new Set([country.id, ...relatedHistoricalIds]),
-        )
-        const results = await Promise.all(
-          histIds.map((hid) =>
-            militaryUnitApi.getAll({ historicalCountryId: hid }),
-          ),
-        )
-        const dedup = new Map<string, MilitaryUnit>()
-        for (const batch of results) {
-          for (const unitItem of batch) dedup.set(unitItem.id, unitItem)
-        }
-        return [...dedup.values()]
-      }
-      const results = await Promise.all([
-        militaryUnitApi.getAll({ countryId: country.id }),
-        ...relatedHistoricalIds.map((hid) =>
-          militaryUnitApi.getAll({ historicalCountryId: hid }),
-        ),
-      ])
-      const dedup = new Map<string, MilitaryUnit>()
-      for (const batch of results) {
-        for (const unitItem of batch) dedup.set(unitItem.id, unitItem)
-      }
-      return [...dedup.values()]
-    },
+      isHistorical ? relatedHistKey : '',
+    ),
+    queryFn: () =>
+      fetchCountryScopedMilitaryUnits({
+        countryId: country.id,
+        isHistorical,
+        relatedHistoricalIds,
+      }),
     staleTime: 1000 * 60 * 2,
   })
 
@@ -229,7 +170,10 @@ export function CountryMilitarySection({
     let orbatDeployments = 0
 
     for (const unitItem of units) {
-      if (unitItem.unitType && HIGH_AND_OPERATIONAL_TYPES.has(unitItem.unitType)) {
+      if (
+        unitItem.unitType &&
+        HIGH_AND_OPERATIONAL_UNIT_TYPES.has(unitItem.unitType)
+      ) {
         highCommandAndOps += 1
       }
       const tCount = unitItem.tenures?.length ?? 0
@@ -305,7 +249,7 @@ export function CountryMilitarySection({
             </UnderlineTabButton>
           </UnderlineTabNav>
 
-          <HeaderActions data-country-military-menu>
+          <HeaderActions>
             {subQuery === 'wars' ? (
               <AddButton
                 type="button"
@@ -331,76 +275,52 @@ export function CountryMilitarySection({
               </AddButton>
             )}
 
-            <HeaderMenuWrap>
-              <LedgerIconButton
-                type="button"
-                aria-label="군사 화면 설정 및 이동 메뉴"
-                aria-expanded={headerMenuOpen}
-                title="요약 지표 표시 · 군사 카탈로그 이동"
-                onClick={() => setHeaderMenuOpen((prev) => !prev)}
-              >
-                <FiMoreHorizontal size={16} />
-              </LedgerIconButton>
-
-              {headerMenuOpen ? (
-                <HeaderDropdownMenu role="menu">
-                  <HeaderDropdownItem
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setShowHeadlineStats((prev) => !prev)
-                      setHeaderMenuOpen(false)
-                    }}
-                  >
-                    <FiBarChart2 size={13} />
-                    <span>요약 지표 카드 표시</span>
-                    {showHeadlineStats ? (
-                      <FiCheck size={13} style={{ marginLeft: 'auto' }} />
-                    ) : null}
-                  </HeaderDropdownItem>
-                  <HeaderDropdownItem
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setHeaderMenuOpen(false)
-                      if (subQuery === 'wars') {
-                        setMilitaryUnitEditingId(null)
-                        setMilitaryDeptDefaultId(null)
-                        setMilitaryParentDefaultId(null)
-                        setMilitaryHistCountryDefaultId(
-                          isHistorical ? country.id : null,
-                        )
-                        setMilitaryBranchDefault(null)
-                        setMilitaryUnitModalOpen(true)
-                      } else {
-                        navigate(pathKeys.events.create())
-                      }
-                    }}
-                  >
-                    <FiPlus size={13} />
-                    <span>
-                      {subQuery === 'wars'
-                        ? '사령부·부대 등록'
-                        : '군사 사건 등록'}
-                    </span>
-                  </HeaderDropdownItem>
-                  <HeaderDropdownDivider />
-                  <HeaderDropdownItem
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setHeaderMenuOpen(false)
-                      navigate(
-                        `${pathKeys.military()}?country=${encodeURIComponent(country.name)}`,
+            <PopoverMenu
+              ariaLabel="군사 화면 설정 및 이동 메뉴"
+              title="요약 지표 표시 · 군사 카탈로그 이동"
+              active={showHeadlineStats}
+              items={[
+                {
+                  id: 'toggle-summary',
+                  label: '요약 지표 카드 표시',
+                  icon: <FiBarChart2 size={13} />,
+                  checked: showHeadlineStats,
+                  onSelect: () => setShowHeadlineStats((prev) => !prev),
+                },
+                {
+                  id: 'alt-create',
+                  label:
+                    subQuery === 'wars'
+                      ? '사령부·부대 등록'
+                      : '군사 사건 등록',
+                  icon: <FiPlus size={13} />,
+                  onSelect: () => {
+                    if (subQuery === 'wars') {
+                      setMilitaryUnitEditingId(null)
+                      setMilitaryDeptDefaultId(null)
+                      setMilitaryParentDefaultId(null)
+                      setMilitaryHistCountryDefaultId(
+                        isHistorical ? country.id : null,
                       )
-                    }}
-                  >
-                    <FiExternalLink size={13} />
-                    <span>전체 군사 카탈로그에서 보기</span>
-                  </HeaderDropdownItem>
-                </HeaderDropdownMenu>
-              ) : null}
-            </HeaderMenuWrap>
+                      setMilitaryBranchDefault(null)
+                      setMilitaryUnitModalOpen(true)
+                    } else {
+                      navigate(pathKeys.events.create())
+                    }
+                  },
+                },
+                { type: 'divider', id: 'div-catalog' },
+                {
+                  id: 'open-catalog',
+                  label: '전체 군사 카탈로그에서 보기',
+                  icon: <FiExternalLink size={13} />,
+                  onSelect: () =>
+                    navigate(
+                      `${pathKeys.military()}?country=${encodeURIComponent(country.name)}`,
+                    ),
+                },
+              ]}
+            />
           </HeaderActions>
         </HeaderBar>
 
@@ -605,51 +525,4 @@ const HeaderActions = styled.div`
   flex-wrap: wrap;
 `
 
-const HeaderMenuWrap = styled.div`
-  position: relative;
-  display: inline-flex;
-`
-
-const HeaderDropdownMenu = styled.div`
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 45;
-  min-width: 210px;
-  padding: 6px;
-  border-radius: 10px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerElevated(theme.mode)};
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-`
-
-const HeaderDropdownItem = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 10px;
-  border: none;
-  border-radius: 7px;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-
-  &:hover {
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-  }
-`
-
-const HeaderDropdownDivider = styled.div`
-  height: 1px;
-  margin: 4px;
-  background: ${({ theme }) => ledgerHairline(theme.mode)};
-`
 

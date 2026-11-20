@@ -1,15 +1,13 @@
-import { type MouseEvent, useEffect, useMemo, useState } from 'react'
+import { type MouseEvent, useMemo, useState } from 'react'
 import {
   FiAnchor,
   FiArrowDown,
   FiArrowUp,
   FiAward,
-  FiCheck,
   FiCompass,
   FiCrosshair,
   FiGitCommit,
   FiLayers,
-  FiMoreHorizontal,
   FiNavigation,
   FiPlus,
   FiShield,
@@ -35,6 +33,7 @@ import type {
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { parseSignedDateParts } from '@/shared/lib/tenure-person-utils'
+import { PopoverMenu } from '@/shared/ui/popover-menu'
 
 export interface LedgerMilitaryUnitItem {
   id: string
@@ -272,18 +271,6 @@ export function MilitaryUnitsLedgerView({
 }: MilitaryUnitsLedgerViewProps) {
   const [sortField, setSortField] = useState<SortField>('echelon')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
-  const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
-
-  useEffect(() => {
-    if (!headerMenuOpen) return
-    const handlePointerDown = (mouseEvent: globalThis.MouseEvent) => {
-      const targetEl = mouseEvent.target as HTMLElement | null
-      if (targetEl?.closest('[data-ledger-more-menu]')) return
-      setHeaderMenuOpen(false)
-    }
-    document.addEventListener('mousedown', handlePointerDown)
-    return () => document.removeEventListener('mousedown', handlePointerDown)
-  }, [headerMenuOpen])
 
   const unitById = useMemo(() => {
     const lookup = new Map<string, LedgerMilitaryUnitItem>()
@@ -338,73 +325,45 @@ export function MilitaryUnitsLedgerView({
         <LedgerMetaText>
           원장 목록 <strong>{sortedUnits.length}</strong>개 편제
         </LedgerMetaText>
-        <LedgerHeaderActions data-ledger-more-menu>
-          <HeaderMenuAnchor>
-            <HeaderMoreBtn
-              type="button"
-              $active={headerMenuOpen}
-              aria-expanded={headerMenuOpen}
-              aria-label="원장 정렬 및 작업 메뉴"
-              title="정렬 기준 변경 · 부대 등록"
-              onClick={() => setHeaderMenuOpen((prev) => !prev)}
-            >
-              <FiMoreHorizontal size={15} />
-            </HeaderMoreBtn>
-            {headerMenuOpen ? (
-              <HeaderMorePopover role="menu">
-                <HeaderMoreLabel>정렬 기준</HeaderMoreLabel>
-                <HeaderMoreItem
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    toggleSort('echelon')
-                    setHeaderMenuOpen(false)
-                  }}
-                >
-                  <span>위계순</span>
-                  {sortField === 'echelon' && <FiCheck size={12.5} />}
-                </HeaderMoreItem>
-                <HeaderMoreItem
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    toggleSort('established')
-                    setHeaderMenuOpen(false)
-                  }}
-                >
-                  <span>창설연도순</span>
-                  {sortField === 'established' && <FiCheck size={12.5} />}
-                </HeaderMoreItem>
-                <HeaderMoreItem
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    toggleSort('name')
-                    setHeaderMenuOpen(false)
-                  }}
-                >
-                  <span>이름순</span>
-                  {sortField === 'name' && <FiCheck size={12.5} />}
-                </HeaderMoreItem>
-                {onAddRoot ? (
-                  <>
-                    <HeaderMoreDivider />
-                    <HeaderMoreItem
-                      type="button"
-                      role="menuitem"
-                      onClick={() => {
-                        setHeaderMenuOpen(false)
-                        onAddRoot()
-                      }}
-                    >
-                      <FiPlus size={12.5} />
-                      <span>새 사령부·부대 등록</span>
-                    </HeaderMoreItem>
-                  </>
-                ) : null}
-              </HeaderMorePopover>
-            ) : null}
-          </HeaderMenuAnchor>
+        <LedgerHeaderActions>
+          <PopoverMenu
+            size="sm"
+            ariaLabel="원장 정렬 및 작업 메뉴"
+            title="정렬 기준 변경 · 부대 등록"
+            minWidth={184}
+            items={[
+              { type: 'section', id: 'sec-sort', label: '정렬 기준' },
+              {
+                id: 'sort-echelon',
+                label: '위계순',
+                checked: sortField === 'echelon',
+                onSelect: () => toggleSort('echelon'),
+              },
+              {
+                id: 'sort-established',
+                label: '창설연도순',
+                checked: sortField === 'established',
+                onSelect: () => toggleSort('established'),
+              },
+              {
+                id: 'sort-name',
+                label: '이름순',
+                checked: sortField === 'name',
+                onSelect: () => toggleSort('name'),
+              },
+              ...(onAddRoot
+                ? [
+                    { type: 'divider' as const, id: 'div-add' },
+                    {
+                      id: 'add-root',
+                      label: '새 사령부·부대 등록',
+                      icon: <FiPlus size={12.5} />,
+                      onSelect: onAddRoot,
+                    },
+                  ]
+                : []),
+            ]}
+          />
         </LedgerHeaderActions>
       </LedgerHeaderBar>
 
@@ -726,93 +685,6 @@ const LedgerHeaderActions = styled.div`
   display: inline-flex;
   align-items: center;
   gap: 5px;
-`
-
-const HeaderMenuAnchor = styled.div`
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-`
-
-const HeaderMoreBtn = styled.button<{ $active?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border-radius: 6px;
-  border: 1px solid
-    ${({ theme, $active }) =>
-      $active
-        ? ledgerAccentBorder(theme.mode)
-        : ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme, $active }) =>
-    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
-  color: ${({ theme, $active }) =>
-    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-  }
-`
-
-const HeaderMorePopover = styled.div`
-  position: absolute;
-  top: calc(100% + 5px);
-  right: 0;
-  z-index: 30;
-  min-width: 176px;
-  padding: 5px;
-  border-radius: 9px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? '#141925' : '#ffffff'};
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.14);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-`
-
-const HeaderMoreLabel = styled.div`
-  padding: 4px 8px 2px;
-  font-size: 10.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const HeaderMoreDivider = styled.div`
-  height: 1px;
-  margin: 4px 2px;
-  background: ${({ theme }) => ledgerHairline(theme.mode)};
-`
-
-const HeaderMoreItem = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  width: 100%;
-  padding: 6px 8px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-
-  > span {
-    flex: 1;
-    min-width: 0;
-  }
-
-  &:hover {
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-  }
 `
 
 const TableScrollArea = styled.div`

@@ -10,7 +10,6 @@ import {
   FiChevronRight,
   FiGitBranch,
   FiList,
-  FiMoreHorizontal,
   FiPlus,
   FiRotateCcw,
   FiSearch,
@@ -38,7 +37,6 @@ import {
   ledgerAccentBorder,
   ledgerAccentSubtle,
   ledgerBackground,
-  ledgerElevated,
   ledgerHairline,
   ledgerHairlineStrong,
   ledgerHoverFill,
@@ -46,6 +44,21 @@ import {
   MOTION,
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
+import {
+  extractUnitSignedYear,
+  matchesMilitaryBranchTab,
+  matchesMilitaryEchelonTier,
+  MILITARY_BRANCH_LABELS,
+  MILITARY_BRANCH_TABS,
+  MILITARY_ECHELON_ORDER,
+  MILITARY_ECHELON_TIER_OPTIONS,
+  MILITARY_UNIT_TYPE_LABELS,
+  type MilitaryBranchTabKey,
+  type MilitaryEchelonTierFilter,
+  militaryUnitQueryKeys,
+  parseSnapshotYearInput,
+  sortUnitsByEchelon,
+} from '@/entities/military-unit'
 import {
   type LedgerMilitaryUnitItem,
   MilitaryUnitsLedgerView,
@@ -58,20 +71,20 @@ import {
   type GovernmentEraSpanItem,
   GovernmentEraStrip,
 } from '@/pages/government/components/government-era-strip'
-import {
-  militaryUnitApi,
-  type MilitaryUnitDatePartsDto,
-  type MilitaryUnitType,
-} from '@/shared/api/military-unit'
+import { militaryUnitApi } from '@/shared/api/military-unit'
 import { useDebouncedValue } from '@/shared/hooks/use-debounced-value'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
-import { parseSignedDateParts } from '@/shared/lib/tenure-person-utils'
 import { pathKeys } from '@/shared/router'
 import { EmptyStateSpotlight } from '@/shared/ui/empty-state/empty-state'
+import {
+  PopoverMenu,
+  PopoverMenuDivider,
+  PopoverMenuItem,
+  PopoverMenuSectionLabel,
+} from '@/shared/ui/popover-menu'
 import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
 import {
   LedgerFilterChip,
-  LedgerIconButton,
   LedgerSearchBox,
   LedgerSearchInput,
   LedgerViewSwitch,
@@ -82,190 +95,22 @@ import {
   CountryInlineModal,
   type CountryInlineModalTarget,
 } from '@/widgets/country/country-inline-modal/country-inline-modal'
+import type { CreateSubUnitDefaults } from '@/widgets/military-unit-detail'
 
 import { MilitaryUnitDetailDrawer } from './components/military-unit-detail-drawer'
 
-const UNIT_TYPE_LABELS: Record<MilitaryUnitType, string> = {
-  SUPREME_COMMAND: '최고통수·최고사령부',
-  GENERAL_STAFF: '참모본부·합참',
-  SERVICE_HQ: '군종 본부·총사령부',
-  THEATER: '전구·전역사령부',
-  ARMY_GROUP: '집단군',
-  FRONT: '전선군',
-  MILITARY_DISTRICT: '군관구·방면군',
-  FIELD_ARMY: '야전군',
-  FLEET: '함대',
-  AIR_FLEET: '항공함대',
-  CORPS: '군단',
-  AIR_CORPS: '항공군단',
-  DIVISION: '사단',
-  WING: '비행단·전대',
-  BRIGADE: '여단',
-  REGIMENT: '연대',
-  SQUADRON: '전대·대대급',
-  BATTALION: '대대',
-  COMPANY: '중대',
-  PLATOON: '소대',
-  SQUAD: '분대',
-  DETACHMENT: '분견대·특임대',
-  SPECIAL_FORCES: '특수부대',
-  OTHER: '기타 편제',
-}
-
-const BRANCH_LABELS: Record<string, string> = {
-  ARMY: '육군',
-  NAVY: '해군',
-  AIR_FORCE: '공군',
-  MARINE_CORPS: '해병대',
-  COAST_GUARD: '해안경비대',
-  SPACE_FORCE: '우주군',
-  JOINT: '합동',
-  OTHER: '기타',
-}
-
-const ECHELON_ORDER: Record<string, number> = {
-  SUPREME_COMMAND: -3,
-  GENERAL_STAFF: -2,
-  SERVICE_HQ: -1,
-  THEATER: 1,
-  ARMY_GROUP: 2,
-  FRONT: 2,
-  MILITARY_DISTRICT: 3,
-  FIELD_ARMY: 4,
-  FLEET: 4,
-  AIR_FLEET: 4,
-  CORPS: 5,
-  AIR_CORPS: 5,
-  DIVISION: 6,
-  WING: 6,
-  BRIGADE: 7,
-  REGIMENT: 8,
-  SQUADRON: 8,
-  BATTALION: 9,
-  SPECIAL_FORCES: 9,
-  DETACHMENT: 10,
-  COMPANY: 11,
-  PLATOON: 12,
-  SQUAD: 13,
-  OTHER: 99,
-}
-
-type BranchTabKey =
-  | 'ALL'
-  | 'ARMY'
-  | 'NAVY'
-  | 'AIR_FORCE'
-  | 'MARINE_CORPS'
-  | 'JOINT_OTHER'
-
-type EchelonTierFilter =
-  | 'ALL'
-  | 'HIGH_COMMAND'
-  | 'STRATEGIC'
-  | 'OPERATIONAL'
-  | 'TACTICAL'
-
+type BranchTabKey = MilitaryBranchTabKey
+type EchelonTierFilter = MilitaryEchelonTierFilter
 type CatalogViewMode = 'ledger' | 'tree'
 
-const BRANCH_TABS: Array<{ key: BranchTabKey; label: string }> = [
-  { key: 'ALL', label: '전체 편제' },
-  { key: 'ARMY', label: '육군' },
-  { key: 'NAVY', label: '해군 · 해안경비대' },
-  { key: 'AIR_FORCE', label: '공군 · 우주군' },
-  { key: 'MARINE_CORPS', label: '해병대' },
-  { key: 'JOINT_OTHER', label: '합동 · 특수 · 기타' },
-]
-
-const ECHELON_TIER_OPTIONS: Array<{
-  value: EchelonTierFilter
-  label: string
-}> = [
-  { value: 'ALL', label: '전체 제대' },
-  { value: 'HIGH_COMMAND', label: '최고통수 · 참모본부 · 군종본부' },
-  { value: 'STRATEGIC', label: '전역 · 집단군 · 전선군 · 군관구' },
-  { value: 'OPERATIONAL', label: '야전군 · 함대 · 군단 · 사단' },
-  { value: 'TACTICAL', label: '여단 · 연대 · 대대 이하' },
-]
-
-function extractSignedYear(
-  parts: MilitaryUnitDatePartsDto | null | undefined,
-  isoValue: string | null | undefined,
-): number | null {
-  if (parts && typeof parts.year === 'number' && parts.year > 0) {
-    return parts.era === 'BC' ? -Math.abs(parts.year) : parts.year
-  }
-  const parsed = parseSignedDateParts(isoValue)
-  return parsed ? parsed.signedYear : null
-}
-
-function matchesEchelonTier(
-  unitType: string | null | undefined,
-  tier: EchelonTierFilter,
-): boolean {
-  if (tier === 'ALL') return true
-  if (!unitType) return false
-  if (tier === 'HIGH_COMMAND') {
-    return ['SUPREME_COMMAND', 'GENERAL_STAFF', 'SERVICE_HQ'].includes(unitType)
-  }
-  if (tier === 'STRATEGIC') {
-    return ['THEATER', 'ARMY_GROUP', 'FRONT', 'MILITARY_DISTRICT'].includes(
-      unitType,
-    )
-  }
-  if (tier === 'OPERATIONAL') {
-    return [
-      'FIELD_ARMY',
-      'FLEET',
-      'AIR_FLEET',
-      'CORPS',
-      'AIR_CORPS',
-      'DIVISION',
-      'WING',
-    ].includes(unitType)
-  }
-  return [
-    'BRIGADE',
-    'REGIMENT',
-    'SQUADRON',
-    'BATTALION',
-    'COMPANY',
-    'PLATOON',
-    'SQUAD',
-    'DETACHMENT',
-    'SPECIAL_FORCES',
-    'OTHER',
-  ].includes(unitType)
-}
-
-function matchesBranchTab(
-  branch: string | null | undefined,
-  tab: BranchTabKey,
-): boolean {
-  if (tab === 'ALL') return true
-  if (tab === 'ARMY') return branch === 'ARMY'
-  if (tab === 'NAVY') return branch === 'NAVY' || branch === 'COAST_GUARD'
-  if (tab === 'AIR_FORCE') {
-    return branch === 'AIR_FORCE' || branch === 'SPACE_FORCE'
-  }
-  if (tab === 'MARINE_CORPS') return branch === 'MARINE_CORPS'
-  return !branch || branch === 'JOINT' || branch === 'OTHER'
-}
-
-function parseSnapshotYearInput(rawInput: string): number | null {
-  const trimmed = rawInput.trim()
-  if (!trimmed) return null
-  const bcMatch = /^(?:bc|기원전)\s*(\d{1,5})$/i.exec(trimmed)
-  if (bcMatch) {
-    const abs = Number(bcMatch[1])
-    return abs > 0 ? -abs : null
-  }
-  const numMatch = /^([+-]?\d{1,5})$/.exec(trimmed)
-  if (numMatch) {
-    const val = Number(numMatch[1])
-    return Number.isFinite(val) && val !== 0 ? val : null
-  }
-  return null
-}
+const UNIT_TYPE_LABELS = MILITARY_UNIT_TYPE_LABELS
+const BRANCH_LABELS = MILITARY_BRANCH_LABELS
+const ECHELON_ORDER = MILITARY_ECHELON_ORDER
+const BRANCH_TABS = MILITARY_BRANCH_TABS
+const ECHELON_TIER_OPTIONS = MILITARY_ECHELON_TIER_OPTIONS
+const extractSignedYear = extractUnitSignedYear
+const matchesEchelonTier = matchesMilitaryEchelonTier
+const matchesBranchTab = matchesMilitaryBranchTab
 
 function formatCenturyChipLabel(centuryKey: string): string {
   const centuryNum = Number(centuryKey.replace(/^c:/, ''))
@@ -328,26 +173,11 @@ export function MilitaryCatalogPage() {
   const [previewUnitId, setPreviewUnitId] = useState<string | null>(null)
   const [unitFormOpen, setUnitFormOpen] = useState(false)
   const [editingUnitId, setEditingUnitId] = useState<string | null>(null)
+  const [formDefaults, setFormDefaults] = useState<CreateSubUnitDefaults>({})
   const [countryModalTarget, setCountryModalTarget] =
     useState<CountryInlineModalTarget | null>(null)
   const [showInfographic, setShowInfographic] = useState(false)
   const [showEraStrip, setShowEraStrip] = useState(false)
-  const [toolbarMenuOpen, setToolbarMenuOpen] = useState(false)
-  const [openCountryMenuKey, setOpenCountryMenuKey] = useState<string | null>(
-    null,
-  )
-
-  useEffect(() => {
-    if (!toolbarMenuOpen && !openCountryMenuKey) return
-    const handlePointerDown = (evt: MouseEvent) => {
-      const target = evt.target as HTMLElement | null
-      if (target?.closest('[data-catalog-more-menu]')) return
-      setToolbarMenuOpen(false)
-      setOpenCountryMenuKey(null)
-    }
-    document.addEventListener('mousedown', handlePointerDown)
-    return () => document.removeEventListener('mousedown', handlePointerDown)
-  }, [toolbarMenuOpen, openCountryMenuKey])
 
   // URL 쿼리 동기화 (뒤로 가기 시 필터 복원용)
   useEffect(() => {
@@ -378,7 +208,7 @@ export function MilitaryCatalogPage() {
   ])
 
   const unitsQuery = useQuery({
-    queryKey: ['military-units', 'global-catalog'],
+    queryKey: militaryUnitQueryKeys.globalCatalog(),
     queryFn: () => militaryUnitApi.getAll(),
     staleTime: 60_000,
   })
@@ -1102,7 +932,7 @@ export function MilitaryCatalogPage() {
           </ToolbarSelect>
         </ToolbarLeftGroup>
 
-        <ToolbarRightGroup data-catalog-more-menu>
+        <ToolbarRightGroup>
           <LedgerViewSwitch role="group" aria-label="보기 방식 전환">
             <LedgerViewSwitchItem
               type="button"
@@ -1122,21 +952,22 @@ export function MilitaryCatalogPage() {
             </LedgerViewSwitchItem>
           </LedgerViewSwitch>
 
-          <MoreMenuWrap>
-            <LedgerIconButton
-              type="button"
-              aria-label="화면 보기 및 상세 필터 설정"
-              aria-expanded={toolbarMenuOpen}
-              title="상세 필터 · 통계 요약 · 시대 막대 설정"
-              onClick={() => setToolbarMenuOpen((prev) => !prev)}
-            >
-              <FiMoreHorizontal size={16} />
-            </LedgerIconButton>
-
-            {toolbarMenuOpen ? (
-              <MoreDropdownMenu role="dialog" aria-label="총람 설정 및 상세 필터">
-                <MoreDropdownSectionLabel>보조 패널 표시</MoreDropdownSectionLabel>
-                <MoreDropdownItem
+          <PopoverMenu
+            ariaLabel="화면 보기 및 상세 필터 설정"
+            title="상세 필터 · 통계 요약 · 시대 막대 설정"
+            minWidth={260}
+            active={
+              showInfographic ||
+              showEraStrip ||
+              echelonTier !== 'ALL' ||
+              parsedSnapshotYear !== null ||
+              currentOnly
+            }
+          >
+            {(closeMenu) => (
+              <>
+                <PopoverMenuSectionLabel>보조 패널 표시</PopoverMenuSectionLabel>
+                <PopoverMenuItem
                   type="button"
                   onClick={() => setShowInfographic((prev) => !prev)}
                 >
@@ -1145,9 +976,9 @@ export function MilitaryCatalogPage() {
                   {showInfographic ? (
                     <FiCheck size={13} style={{ marginLeft: 'auto' }} />
                   ) : null}
-                </MoreDropdownItem>
+                </PopoverMenuItem>
                 {eraStripData.buckets.length > 0 ? (
-                  <MoreDropdownItem
+                  <PopoverMenuItem
                     type="button"
                     onClick={() => setShowEraStrip((prev) => !prev)}
                   >
@@ -1156,17 +987,17 @@ export function MilitaryCatalogPage() {
                     {showEraStrip ? (
                       <FiCheck size={13} style={{ marginLeft: 'auto' }} />
                     ) : null}
-                  </MoreDropdownItem>
+                  </PopoverMenuItem>
                 ) : null}
 
                 {viewMode === 'tree' && countryTreeGroups.length > 1 ? (
                   <>
-                    <MoreDropdownDivider />
-                    <MoreDropdownItem
+                    <PopoverMenuDivider />
+                    <PopoverMenuItem
                       type="button"
                       onClick={() => {
                         toggleAllTreeGroups()
-                        setToolbarMenuOpen(false)
+                        closeMenu()
                       }}
                     >
                       <FiGitBranch size={13} />
@@ -1175,12 +1006,12 @@ export function MilitaryCatalogPage() {
                           ? '국가 그룹 모두 펼치기'
                           : '국가 그룹 모두 접기'}
                       </span>
-                    </MoreDropdownItem>
+                    </PopoverMenuItem>
                   </>
                 ) : null}
 
-                <MoreDropdownDivider />
-                <MoreDropdownSectionLabel>제대 규모 필터</MoreDropdownSectionLabel>
+                <PopoverMenuDivider />
+                <PopoverMenuSectionLabel>제대 규모 필터</PopoverMenuSectionLabel>
                 <ToolbarSelect
                   aria-label="제대 규모 필터"
                   value={echelonTier}
@@ -1196,7 +1027,7 @@ export function MilitaryCatalogPage() {
                   ))}
                 </ToolbarSelect>
 
-                <MoreDropdownSectionLabel>기준 연도 스냅샷</MoreDropdownSectionLabel>
+                <PopoverMenuSectionLabel>기준 연도 스냅샷</PopoverMenuSectionLabel>
                 <SnapshotInputWrap
                   style={{ width: '100%', boxSizing: 'border-box' }}
                   title="특정 연도에 존속했던 편제만 단면 조회 (예: 1941, BC 218)"
@@ -1220,7 +1051,7 @@ export function MilitaryCatalogPage() {
                   ) : null}
                 </SnapshotInputWrap>
 
-                <MoreDropdownItem
+                <PopoverMenuItem
                   type="button"
                   onClick={() => setCurrentOnly((prev) => !prev)}
                 >
@@ -1229,26 +1060,26 @@ export function MilitaryCatalogPage() {
                   {currentOnly ? (
                     <FiCheck size={13} style={{ marginLeft: 'auto' }} />
                   ) : null}
-                </MoreDropdownItem>
+                </PopoverMenuItem>
 
                 {hasActiveFilters ? (
                   <>
-                    <MoreDropdownDivider />
-                    <MoreDropdownItem
+                    <PopoverMenuDivider />
+                    <PopoverMenuItem
                       type="button"
                       onClick={() => {
                         handleResetFilters()
-                        setToolbarMenuOpen(false)
+                        closeMenu()
                       }}
                     >
                       <FiRotateCcw size={13} />
                       <span>모든 필터 초기화</span>
-                    </MoreDropdownItem>
+                    </PopoverMenuItem>
                   </>
                 ) : null}
-              </MoreDropdownMenu>
-            ) : null}
-          </MoreMenuWrap>
+              </>
+            )}
+          </PopoverMenu>
         </ToolbarRightGroup>
       </ToolbarRow>
 
@@ -1402,18 +1233,7 @@ export function MilitaryCatalogPage() {
               const childrenMap = new Map<string, LedgerMilitaryUnitItem[]>()
               const roots: LedgerMilitaryUnitItem[] = []
 
-              const sortedGroupUnits = [...group.units].sort(
-                (leftUnit, rightUnit) => {
-                  const rA = leftUnit.unitType
-                    ? (ECHELON_ORDER[leftUnit.unitType] ?? 50)
-                    : 50
-                  const rB = rightUnit.unitType
-                    ? (ECHELON_ORDER[rightUnit.unitType] ?? 50)
-                    : 50
-                  if (rA !== rB) return rA - rB
-                  return leftUnit.name.localeCompare(rightUnit.name, 'ko')
-                },
-              )
+              const sortedGroupUnits = sortUnitsByEchelon(group.units)
 
               for (const unitItem of sortedGroupUnits) {
                 if (
@@ -1504,37 +1324,23 @@ export function MilitaryCatalogPage() {
                       </CountryGroupCount>
                     </CountryGroupToggle>
                     {group.countryId ? (
-                      <MoreMenuWrap data-catalog-more-menu>
-                        <LedgerIconButton
-                          type="button"
-                          $size="sm"
-                          aria-label={`${group.label} 메뉴`}
-                          title="국가 군사 탭으로 이동"
-                          onClick={() =>
-                            setOpenCountryMenuKey((prev) =>
-                              prev === group.key ? null : group.key,
-                            )
-                          }
-                        >
-                          <FiMoreHorizontal size={14} />
-                        </LedgerIconButton>
-                        {openCountryMenuKey === group.key ? (
-                          <MoreDropdownMenu role="menu">
-                            <MoreDropdownItem
-                              type="button"
-                              onClick={() => {
-                                setOpenCountryMenuKey(null)
-                                navigate(
-                                  pathKeys.countryMilitary(group.countryId!),
-                                )
-                              }}
-                            >
-                              <FiArrowUpRight size={13} />
-                              <span>국가 군사 탭 열기</span>
-                            </MoreDropdownItem>
-                          </MoreDropdownMenu>
-                        ) : null}
-                      </MoreMenuWrap>
+                      <PopoverMenu
+                        size="sm"
+                        ariaLabel={`${group.label} 메뉴`}
+                        title="국가 군사 탭으로 이동"
+                        minWidth={172}
+                        items={[
+                          {
+                            id: 'open-country-military',
+                            label: '국가 군사 탭 열기',
+                            icon: <FiArrowUpRight size={13} />,
+                            onSelect: () =>
+                              navigate(
+                                pathKeys.countryMilitary(group.countryId!),
+                              ),
+                          },
+                        ]}
+                      />
                     ) : null}
                   </CountryGroupBand>
                   {!isCollapsed ? (
@@ -1556,6 +1362,12 @@ export function MilitaryCatalogPage() {
         onSelectUnit={(nextId) => setPreviewUnitId(nextId)}
         onEditUnit={(targetId) => {
           setEditingUnitId(targetId)
+          setFormDefaults({})
+          setUnitFormOpen(true)
+        }}
+        onCreateSubUnit={(defaults) => {
+          setEditingUnitId(null)
+          setFormDefaults(defaults)
           setUnitFormOpen(true)
         }}
       />
@@ -1565,12 +1377,22 @@ export function MilitaryCatalogPage() {
         onClose={() => {
           setUnitFormOpen(false)
           setEditingUnitId(null)
+          setFormDefaults({})
         }}
         onSaved={() => {
-          void queryClient.invalidateQueries({ queryKey: ['military-units'] })
+          void queryClient.invalidateQueries({
+            queryKey: militaryUnitQueryKeys.all,
+          })
           void queryClient.invalidateQueries({ queryKey: ['military-unit'] })
         }}
         editingUnitId={editingUnitId}
+        defaultCountryId={formDefaults.countryId ?? null}
+        defaultHistoricalCountryId={formDefaults.historicalCountryId ?? null}
+        defaultParentUnitId={formDefaults.parentUnitId ?? null}
+        defaultAdministrationDepartmentId={
+          formDefaults.administrationDepartmentId ?? null
+        }
+        defaultBranch={formDefaults.branch ?? null}
       />
 
       <CountryInlineModal
@@ -1941,58 +1763,4 @@ const SummaryEmptyText = styled.div`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const MoreMenuWrap = styled.div`
-  position: relative;
-  display: inline-flex;
-`
-
-const MoreDropdownMenu = styled.div`
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 45;
-  min-width: 248px;
-  padding: 8px;
-  border-radius: 10px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerElevated(theme.mode)};
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-`
-
-const MoreDropdownSectionLabel = styled.div`
-  padding: 4px 6px 2px;
-  font-size: 10.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const MoreDropdownItem = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 7px 10px;
-  border: none;
-  border-radius: 7px;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-
-  &:hover {
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-  }
-`
-
-const MoreDropdownDivider = styled.div`
-  height: 1px;
-  margin: 4px 2px;
-  background: ${({ theme }) => ledgerHairline(theme.mode)};
-`
 

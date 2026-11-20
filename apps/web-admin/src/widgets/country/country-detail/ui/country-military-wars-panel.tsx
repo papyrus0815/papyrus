@@ -1,16 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import {
   FiArrowDown,
   FiArrowUp,
   FiArrowUpRight,
-  FiCheck,
   FiChevronDown,
   FiChevronRight,
   FiCompass,
   FiCornerDownRight,
-  FiMoreHorizontal,
   FiRotateCcw,
   FiSearch,
   FiShield,
@@ -26,7 +24,6 @@ import {
   ledgerAccentBorder,
   ledgerAccentSubtle,
   ledgerBackground,
-  ledgerElevated,
   ledgerHairline,
   ledgerHairlineStrong,
   ledgerHoverFill,
@@ -47,11 +44,11 @@ import { formatDateRange, parseIsoDateParts } from '@/shared/lib/iso-date'
 import { militaryUnitTypeLabelKo } from '@/shared/lib/military-unit-type-label'
 import { pathKeys } from '@/shared/router'
 import { EmptyStateSpotlight } from '@/shared/ui/empty-state/empty-state'
+import { PopoverMenu } from '@/shared/ui/popover-menu'
 import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal/country-inline-modal'
 
 import {
   LedgerFilterChip,
-  LedgerIconButton,
   LedgerSearchBox,
   LedgerSearchInput,
 } from './country-ledger-primitives'
@@ -243,18 +240,6 @@ export function CountryMilitaryWarsPanel({
     () => new Set(),
   )
   const [showWarDeclarations, setShowWarDeclarations] = useState(false)
-  const [toolbarMenuOpen, setToolbarMenuOpen] = useState(false)
-
-  useEffect(() => {
-    if (!toolbarMenuOpen) return
-    const handlePointerDown = (evt: MouseEvent) => {
-      const target = evt.target as HTMLElement | null
-      if (target?.closest('[data-wars-toolbar-menu]')) return
-      setToolbarMenuOpen(false)
-    }
-    document.addEventListener('mousedown', handlePointerDown)
-    return () => document.removeEventListener('mousedown', handlePointerDown)
-  }, [toolbarMenuOpen])
 
   const relatedHistKey = linkedHistoricalCountryIds.join(',')
 
@@ -539,7 +524,7 @@ export function CountryMilitaryWarsPanel({
             </LedgerFilterChip>
           </ChipRow>
 
-          <FilterRight data-wars-toolbar-menu>
+          <FilterRight>
             <LedgerSearchBox style={{ maxWidth: 270 }}>
               <FiSearch />
               <LedgerSearchInput
@@ -559,86 +544,52 @@ export function CountryMilitaryWarsPanel({
               ) : null}
             </LedgerSearchBox>
 
-            <MoreMenuWrap>
-              <LedgerIconButton
-                type="button"
-                aria-label="전쟁·참전사 정렬 및 보기 설정"
-                aria-expanded={toolbarMenuOpen}
-                title="정렬 순서 · 선전포고 이력 보기 설정"
-                onClick={() => setToolbarMenuOpen((prev) => !prev)}
-              >
-                <FiMoreHorizontal size={16} />
-              </LedgerIconButton>
-
-              {toolbarMenuOpen ? (
-                <MoreDropdownMenu role="menu">
-                  <MoreDropdownSectionLabel>정렬 순서</MoreDropdownSectionLabel>
-                  <MoreDropdownItem
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setSortDir('desc')
-                      setToolbarMenuOpen(false)
-                    }}
-                  >
-                    <FiArrowDown size={12.5} />
-                    <span>최신순 (최근 사건부터)</span>
-                    {sortDir === 'desc' ? (
-                      <FiCheck size={12.5} style={{ marginLeft: 'auto' }} />
-                    ) : null}
-                  </MoreDropdownItem>
-                  <MoreDropdownItem
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setSortDir('asc')
-                      setToolbarMenuOpen(false)
-                    }}
-                  >
-                    <FiArrowUp size={12.5} />
-                    <span>연대순 (과거 사건부터)</span>
-                    {sortDir === 'asc' ? (
-                      <FiCheck size={12.5} style={{ marginLeft: 'auto' }} />
-                    ) : null}
-                  </MoreDropdownItem>
-
-                  <MoreDropdownDivider />
-                  <MoreDropdownSectionLabel>보조 패널</MoreDropdownSectionLabel>
-                  <MoreDropdownItem
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setShowWarDeclarations((prev) => !prev)
-                      setToolbarMenuOpen(false)
-                    }}
-                  >
-                    <FiShield size={12.5} />
-                    <span>선전포고 · 참전 이력 섹션 표시</span>
-                    {showWarDeclarations ? (
-                      <FiCheck size={12.5} style={{ marginLeft: 'auto' }} />
-                    ) : null}
-                  </MoreDropdownItem>
-
-                  {(conflictFilter !== 'ALL' || Boolean(searchQuery.trim())) && (
-                    <>
-                      <MoreDropdownDivider />
-                      <MoreDropdownItem
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
+            <PopoverMenu
+              ariaLabel="전쟁·참전사 정렬 및 보기 설정"
+              title="정렬 순서 · 선전포고 이력 보기 설정"
+              active={showWarDeclarations}
+              minWidth={224}
+              items={[
+                { type: 'section', id: 'sec-sort', label: '정렬 순서' },
+                {
+                  id: 'sort-desc',
+                  label: '최신순 (최근 사건부터)',
+                  icon: <FiArrowDown size={12.5} />,
+                  checked: sortDir === 'desc',
+                  onSelect: () => setSortDir('desc'),
+                },
+                {
+                  id: 'sort-asc',
+                  label: '연대순 (과거 사건부터)',
+                  icon: <FiArrowUp size={12.5} />,
+                  checked: sortDir === 'asc',
+                  onSelect: () => setSortDir('asc'),
+                },
+                { type: 'divider', id: 'div-panel' },
+                { type: 'section', id: 'sec-panel', label: '보조 패널' },
+                {
+                  id: 'toggle-declarations',
+                  label: '선전포고 · 참전 이력 섹션 표시',
+                  icon: <FiShield size={12.5} />,
+                  checked: showWarDeclarations,
+                  onSelect: () => setShowWarDeclarations((prev) => !prev),
+                },
+                ...(conflictFilter !== 'ALL' || Boolean(searchQuery.trim())
+                  ? [
+                      { type: 'divider' as const, id: 'div-reset' },
+                      {
+                        id: 'reset',
+                        label: '필터 초기화',
+                        icon: <FiRotateCcw size={12.5} />,
+                        onSelect: () => {
                           setConflictFilter('ALL')
                           setSearchQuery('')
-                          setToolbarMenuOpen(false)
-                        }}
-                      >
-                        <FiRotateCcw size={12.5} />
-                        <span>필터 초기화</span>
-                      </MoreDropdownItem>
-                    </>
-                  )}
-                </MoreDropdownMenu>
-              ) : null}
-            </MoreMenuWrap>
+                        },
+                      },
+                    ]
+                  : []),
+              ]}
+            />
           </FilterRight>
         </FilterToolbar>
 
@@ -1279,58 +1230,4 @@ const SurveyJumpLink = styled(Link)`
   }
 `
 
-const MoreMenuWrap = styled.div`
-  position: relative;
-  display: inline-flex;
-`
-
-const MoreDropdownMenu = styled.div`
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 45;
-  min-width: 220px;
-  padding: 6px;
-  border-radius: 10px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => ledgerElevated(theme.mode)};
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-`
-
-const MoreDropdownSectionLabel = styled.div`
-  padding: 4px 8px 2px;
-  font-size: 10.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const MoreDropdownItem = styled.button`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 7px 10px;
-  border: none;
-  border-radius: 7px;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-
-  &:hover {
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-  }
-`
-
-const MoreDropdownDivider = styled.div`
-  height: 1px;
-  margin: 4px;
-  background: ${({ theme }) => ledgerHairline(theme.mode)};
-`
 

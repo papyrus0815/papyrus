@@ -23,6 +23,8 @@ interface EventPickerModalProps {
   onSelect: (picked: EventPickerSelection) => void
   /** 모달 헤더 제목 */
   title?: string
+  /** 이미 연결된 사건 — 목록엔 두되 고를 수 없게(왜 없는지 헷갈리지 않게 숨기지 않는다) */
+  excludeEventIds?: ReadonlyArray<string>
 }
 
 const EventPickerSearchRow = styled.div`
@@ -69,8 +71,12 @@ const EventPickerRow = styled.button`
   text-align: left;
   cursor: pointer;
   transition: background 0.12s;
-  &:hover {
+  &:hover:not(:disabled) {
     background: ${({ theme }) => theme.colors.hover};
+  }
+  &:disabled {
+    cursor: default;
+    opacity: 0.55;
   }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => theme.colors.primary};
@@ -175,7 +181,9 @@ export function EventPickerModal({
   onClose,
   onSelect,
   title = '사건 연결',
+  excludeEventIds,
 }: EventPickerModalProps) {
+  const excluded = new Set(excludeEventIds ?? [])
   const {
     query: search,
     setQuery: setSearch,
@@ -211,7 +219,9 @@ export function EventPickerModal({
         ) : (
           <>
             {results.map((eventRow) => {
+              const alreadyLinked = excluded.has(eventRow.id)
               const meta = [
+                alreadyLinked ? '이미 연결됨' : null,
                 eventDateLabel(eventRow),
                 // 하위 사건은 어느 사건 아래인지 — 이름이 같은 전투·회담을 가른다
                 eventRow.parentEventTitle ? `↳ ${eventRow.parentEventTitle}` : null,
@@ -222,6 +232,8 @@ export function EventPickerModal({
                 <EventPickerRow
                   key={eventRow.id}
                   type="button"
+                  disabled={alreadyLinked}
+                  aria-disabled={alreadyLinked}
                   onClick={() =>
                     onSelect({
                       id: eventRow.id,
