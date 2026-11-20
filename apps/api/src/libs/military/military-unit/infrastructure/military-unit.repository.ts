@@ -630,6 +630,7 @@ export class MilitaryUnitRepository {
     search?: string
     unitType?: string
     branch?: string
+    summary?: boolean
   }) {
     const search = filters?.search?.trim()
     let linkedHistoricalIds: string[] = []
@@ -706,6 +707,52 @@ export class MilitaryUnitRepository {
           : searchOrClause
             ? searchOrClause
             : {}),
+    }
+
+    if (filters?.summary) {
+      const summaryRows = await this.prisma.militaryUnit.findMany({
+        ...(Object.keys(where).length > 0 ? { where } : {}),
+        include: {
+          country: {
+            select: {
+              id: true,
+              name: true,
+              flagEmoji: true,
+            },
+          },
+          historicalCountry: {
+            select: {
+              id: true,
+              name: true,
+              enName: true,
+              startEra: true,
+              startYear: true,
+              endEra: true,
+              endYear: true,
+            },
+          },
+          parentUnit: {
+            select: {
+              id: true,
+              name: true,
+              abbreviation: true,
+              unitType: true,
+            },
+          },
+          administrationDepartment: {
+            select: {
+              id: true,
+              name: true,
+              abbreviation: true,
+              kind: true,
+            },
+          },
+        },
+        orderBy: {
+          name: 'asc',
+        },
+      })
+      return summaryRows.map((row) => this.enrichUnitRecord(row))
     }
 
     const rows = await this.prisma.militaryUnit.findMany({

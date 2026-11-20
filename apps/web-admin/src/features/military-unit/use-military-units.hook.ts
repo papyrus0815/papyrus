@@ -9,7 +9,8 @@ import type {
 export function useMilitaryUnits() {
   return useQuery<MilitaryUnit[], Error>({
     queryKey: ['militaryUnits'],
-    queryFn: militaryUnitApi.getAll,
+    /* 함수를 그대로 넘기면 react-query 컨텍스트가 필터 인자로 들어간다 */
+    queryFn: () => militaryUnitApi.getAll(),
   })
 }
 

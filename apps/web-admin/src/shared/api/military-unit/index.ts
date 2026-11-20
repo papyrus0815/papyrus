@@ -13,7 +13,7 @@ import type {
   UpdateMilitaryUnitTransitionDto,
 } from '../../../../api/src/libs/military/military-unit/presentation/dto'
 import type { AdministrationDepartmentTenureItem } from '../administration-department'
-import { apiConnection, getApiConnection } from '../client'
+import { getApiConnection } from '../client'
 
 export type MilitaryUnit = MilitaryUnitDto
 export type MilitaryUnitType = ServerMilitaryUnitType
@@ -61,7 +61,22 @@ export const militaryUnitApi = {
     search?: string
     unitType?: string
     branch?: string
+    summary?: boolean
   }): Promise<MilitaryUnit[]> => {
+    if (params?.summary) {
+      const query = new URLSearchParams()
+      if (params.countryId) query.set('countryId', params.countryId)
+      if (params.historicalCountryId) {
+        query.set('historicalCountryId', params.historicalCountryId)
+      }
+      if (params.search) query.set('search', params.search)
+      if (params.unitType) query.set('unitType', params.unitType)
+      if (params.branch) query.set('branch', params.branch)
+      query.set('summary', '1')
+      return fetchMilitaryJsonList<MilitaryUnit>(
+        `/military-units?${query.toString()}`,
+      )
+    }
     const result = await militaryUnitsApi.getAll(
       getApiConnection(),
       params?.countryId,
@@ -93,7 +108,7 @@ export const militaryUnitApi = {
 
   getById: async (id: string): Promise<MilitaryUnit> => {
     return (await militaryUnitsApi.getById(
-      apiConnection,
+      getApiConnection(),
       id,
     )) as MilitaryUnit
   },

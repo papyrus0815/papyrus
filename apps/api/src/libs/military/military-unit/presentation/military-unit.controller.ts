@@ -47,6 +47,7 @@ export class MilitaryUnitController {
     @Query('search') search?: string,
     @Query('unitType') unitType?: string,
     @Query('branch') branch?: string,
+    @Query('summary') summary?: string,
   ): Promise<any> {
     return this.militaryUnitService.findAll({
       countryId,
@@ -54,6 +55,7 @@ export class MilitaryUnitController {
       search,
       unitType,
       branch,
+      summary: summary === '1' || summary === 'true',
     })
   }
 
