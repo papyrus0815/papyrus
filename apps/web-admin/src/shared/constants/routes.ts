@@ -21,6 +21,7 @@ export const ROUTES = {
   HEADS_OF_STATE: 'heads-of-state',
   PERSONS_TIMELINE: 'persons-timeline',
   ETHNICITY: 'ethnicity',
+  ETHNICITIES: 'ethnicities',
   LEGISLATURE: 'legislature',
   MILITARY: 'military',
   /** 전 국가 행정부·내각 및 중앙부처·국가기관 통합 허브 */

@@ -11,6 +11,8 @@ export type City = {
   countryName?: string
   population?: number | null
   areaSqKm?: number | string | null
+  latitude?: number | string | null
+  longitude?: number | string | null
   administrativeDivisionId?: string | null
   administrativeDivisionName?: string | null
   createdAt?: string

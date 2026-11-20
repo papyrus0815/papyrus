@@ -180,6 +180,88 @@ export interface MilitaryBranchSummary {
   count: number
 }
 
+export interface ExecutiveTimelineItem {
+  recordId: string
+  personId: string | null
+  personName: string
+  profileImageUrl: string | null
+  title: string | null
+  axis: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT'
+  ordinal: number | null
+  startYear: number
+  endYear: number | null
+  partyName?: string | null
+  partyColor?: string | null
+}
+
+export interface PersonSpotlightItem {
+  id: string
+  name: string
+  subLabel: string | null
+  profileImageUrl: string | null
+  polityName: string | null
+  roleKind: 'ruler' | 'minister' | 'figure'
+}
+
+export interface PersonSpotlightSummary {
+  featured: PersonSpotlightItem[]
+  roleCounts: { rulers: number; ministers: number; figures: number }
+  eraSlices: Array<{ key: string; label: string; count: number }>
+}
+
+export interface MilestoneEventItem {
+  id: string
+  title: string
+  yearLabel: string
+  signedYear: number
+  domain: string
+  polityName: string | null
+}
+
+export interface RegimeEraBand {
+  id: string
+  label: string
+  governmentFormLabel: string | null
+  startYear: number
+  endYear: number | null
+}
+
+export interface PeerCountryMetric {
+  id: string
+  name: string
+  flagEmoji: string | null
+  continentId: string | null
+  population: number | null
+  areaSqKm: number | null
+}
+
+export interface CivicInstitutionalSnapshot {
+  turnoutSparkPoints: Array<{ year: number; value: number }>
+  avgTurnout: number | null
+  electionTypeCounts: Array<{ type: string; count: number }>
+  latestLegislativeElectionId: string | null
+  regimeEras: RegimeEraBand[]
+  recentTreaties: Array<{
+    id: string
+    name: string
+    type: string
+    yearLabel: string | null
+  }>
+  recentLaws: Array<{ id: string; title: string; yearLabel: string | null }>
+  ethnicGroups: Array<{ id: string; name: string; nameLocal: string | null }>
+  activePolitySeats: {
+    name: string | null
+    lowerName: string | null
+    lowerSeats: number | null
+    upperName: string | null
+    upperSeats: number | null
+    governmentForm: string | null
+    stateStructure: string | null
+    legislatureType: string | null
+    partySystem: string | null
+  } | null
+}
+
 export interface CountryDashboardStats {
   personCount: number
   militaryCount: number
@@ -188,6 +270,11 @@ export interface CountryDashboardStats {
   eventDomainBreakdown: Array<{ domain: string; count: number }>
   eventCenturyDomainCounts: CenturyDomainBucket[]
   warSummary: WarOutcomeSummary
+  executiveTimeline: ExecutiveTimelineItem[]
+  personSpotlight: PersonSpotlightSummary
+  milestoneEvents: MilestoneEventItem[]
+  civicSnapshot: CivicInstitutionalSnapshot
+  peerCountries: PeerCountryMetric[]
   eventCount: number
   historicalCountryCount: number
   administrationCount: number
@@ -567,8 +654,8 @@ export function useCountryDashboardStats(
         staleTime: 1000 * 60 * 5,
       },
       {
-        queryKey: ['treaties-by-country', countryId],
-        queryFn: () => treatyApi.getAll({ countryId, take: 1 }),
+        queryKey: ['treaties-by-country-preview', countryId],
+        queryFn: () => treatyApi.getAll({ countryId, take: 8 }),
         enabled: Boolean(countryId),
         staleTime: 1000 * 60 * 5,
       },
@@ -1699,6 +1786,449 @@ export function useCountryDashboardStats(
     loading.cities ||
     loading.tenures
 
+  const executiveTimeline = useMemo<ExecutiveTimelineItem[]>(() => {
+    const tenures = (tenuresQuery.data ?? []) as any[]
+    const defaultOrder = country?.defaultNameDisplayOrder ?? null
+    const parseSignedYear = (
+      iso?: string | null,
+      era?: string | null,
+      yr?: number | null,
+    ): number | null => {
+      if (yr != null && Number.isFinite(Number(yr)) && Number(yr) !== 0) {
+        const abs = Math.abs(Number(yr))
+        return era === 'BC' || Number(yr) < 0 ? -abs : abs
+      }
+      if (!iso || typeof iso !== 'string') return null
+      const m = /^(-?)(\d{1,6})/.exec(iso.trim())
+      if (!m) return null
+      const n = Number(m[2])
+      if (!Number.isFinite(n) || n === 0) return null
+      return m[1] === '-' || era === 'BC' ? -n : n
+    }
+
+    const out: ExecutiveTimelineItem[] = []
+    for (const t of tenures) {
+      if (country?.type === 'modern' && t.historicalCountryId != null) continue
+      const pt =
+        t?.positionType ??
+        t?.positionDefinition?.positionType ??
+        t?.position?.positionType
+      if (pt !== 'HEAD_OF_STATE' && pt !== 'HEAD_OF_GOVERNMENT') continue
+      const sY = parseSignedYear(t.startDate, t.startEra, t.startYear)
+      if (sY == null) continue
+      const eY =
+        t.endDate || t.endYear != null
+          ? parseSignedYear(t.endDate, t.endEra, t.endYear)
+          : null
+      const order = t.person?.country?.defaultNameDisplayOrder ?? defaultOrder
+      const personName =
+        t.regnalName?.trim() ||
+        getPersonDisplayName(
+          {
+            name: t.person?.name ?? '',
+            surname: t.person?.surname,
+            middleName: t.person?.middleName,
+            nameDisplayOrder: t.person?.nameDisplayOrder ?? null,
+            country: t.person?.country ?? undefined,
+          },
+          order != null ? { countryDefaultNameDisplayOrder: order } : undefined,
+        ) ||
+        t.person?.name ||
+        '수반'
+      const memberships =
+        t.person?.partyMemberships ?? t.partyMemberships ?? []
+      const activeParty = (Array.isArray(memberships) ? memberships : [])[0]
+      const rawColor =
+        t.electionCandidacy?.party?.brandColor ??
+        activeParty?.party?.brandColor ??
+        activeParty?.party?.color ??
+        null
+      const partyColor =
+        typeof rawColor === 'string' && /^#[0-9A-Fa-f]{6}$/.test(rawColor)
+          ? rawColor
+          : null
+      const partyName =
+        t.electionCandidacy?.party?.shortName ??
+        t.electionCandidacy?.party?.name ??
+        activeParty?.party?.shortName ??
+        activeParty?.party?.name ??
+        null
+      out.push({
+        recordId: String(t.id),
+        personId: t.person?.id ?? t.personId ?? null,
+        personName,
+        profileImageUrl:
+          t.person?.profileImageUrl ?? t.person?.profile_image_url ?? null,
+        title:
+          t.title?.trim() ?? t.positionDefinition?.title?.trim() ?? null,
+        axis: pt,
+        ordinal: typeof t.ordinal === 'number' ? t.ordinal : null,
+        startYear: sY,
+        endYear: eY,
+        partyName,
+        partyColor,
+      })
+    }
+    return out.sort((a, b) => a.startYear - b.startYear)
+  }, [tenuresQuery.data, country?.type, country?.defaultNameDisplayOrder])
+
+  const personSpotlight = useMemo<PersonSpotlightSummary>(() => {
+    const defaultOrder = country?.defaultNameDisplayOrder ?? null
+    const rulerPersonIds = new Set<string>()
+    const ministerPersonIds = new Set<string>()
+    for (const t of allTenureRows) {
+      const pid = t?.person?.id ?? t?.personId
+      if (!pid) continue
+      const pt =
+        t?.positionType ??
+        t?.positionDefinition?.positionType ??
+        t?.position?.positionType
+      if (HEAD_TYPES.has(pt)) rulerPersonIds.add(pid)
+      else ministerPersonIds.add(pid)
+    }
+
+    let rulersCnt = 0
+    let ministersCnt = 0
+    let figuresCnt = 0
+    const eraMap = new Map<string, number>()
+
+    const scored = (persons as any[]).map((p) => {
+      const id = String(p.id ?? '')
+      const roleKind: 'ruler' | 'minister' | 'figure' = rulerPersonIds.has(id)
+        ? 'ruler'
+        : ministerPersonIds.has(id)
+          ? 'minister'
+          : 'figure'
+      if (roleKind === 'ruler') rulersCnt += 1
+      else if (roleKind === 'minister') ministersCnt += 1
+      else figuresCnt += 1
+
+      const polityName = personPolityById.get(id) ?? null
+      const eraLabel = polityName || '현대 본국'
+      eraMap.set(eraLabel, (eraMap.get(eraLabel) ?? 0) + 1)
+
+      const order = p.country?.defaultNameDisplayOrder ?? defaultOrder
+      const name =
+        getPersonDisplayName(
+          {
+            name: p.name ?? '',
+            surname: p.surname,
+            middleName: p.middleName,
+            nameDisplayOrder: p.nameDisplayOrder ?? null,
+            country: p.country ?? undefined,
+          },
+          order != null ? { countryDefaultNameDisplayOrder: order } : undefined,
+        ) ||
+        p.name ||
+        '이름 없음'
+      const img = p.profileImageUrl ?? p.profile_image_url ?? null
+      const score =
+        (img ? 10 : 0) +
+        (roleKind === 'ruler' ? 6 : roleKind === 'minister' ? 3 : 2)
+      return {
+        item: {
+          id,
+          name,
+          subLabel: formatPersonSubLabel(p, polityName, country?.name ?? null),
+          profileImageUrl: img,
+          polityName,
+          roleKind,
+        } satisfies PersonSpotlightItem,
+        score,
+      }
+    })
+
+    scored.sort((a, b) => b.score - a.score)
+    const eraSlices = [...eraMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([label, count]) => ({ key: label, label, count }))
+
+    return {
+      featured: scored.slice(0, 8).map((s) => s.item),
+      roleCounts: {
+        rulers: rulersCnt,
+        ministers: ministersCnt,
+        figures: figuresCnt,
+      },
+      eraSlices,
+    }
+  }, [
+    persons,
+    allTenureRows,
+    personPolityById,
+    country?.name,
+    country?.defaultNameDisplayOrder,
+  ])
+
+  const milestoneEvents = useMemo<MilestoneEventItem[]>(() => {
+    const rawList = (eventsQuery.data ?? []) as any[]
+    const PRIORITY_TYPES = new Set([
+      'WAR',
+      'REVOLUTION',
+      'TREATY',
+      'COUP',
+      'INDEPENDENCE',
+      'FOUNDING',
+      'REFORM',
+    ])
+    const candidates: Array<{ item: MilestoneEventItem; weight: number }> = []
+    for (const ev of rawList) {
+      if (!ev?.id || !ev?.title) continue
+      // 하위 사건(parentId 보유)보다 최상위 역사 사건 우선
+      const m = /^(-?)(\d{1,6})/.exec(String(ev.startDate ?? ''))
+      const yr =
+        ev.startYear != null
+          ? ev.startEra === 'BC'
+            ? -Math.abs(Number(ev.startYear))
+            : Number(ev.startYear)
+          : m
+            ? m[1] === '-'
+              ? -Number(m[2])
+              : Number(m[2])
+            : null
+      if (yr == null || !Number.isFinite(yr) || yr === 0) continue
+      const yearLabel = yr < 0 ? `BC ${Math.abs(yr)}` : `${yr}년`
+      const weight =
+        (ev.parentId ? 0 : 5) +
+        (PRIORITY_TYPES.has(String(ev.type ?? '')) ? 4 : 0) +
+        ((ev.domain ?? '') === 'POLITICS' ||
+        (ev.domain ?? '') === 'MILITARY' ||
+        (ev.domain ?? '') === 'DIPLOMACY'
+          ? 2
+          : 0)
+      candidates.push({
+        item: {
+          id: String(ev.id),
+          title: String(ev.title).trim(),
+          yearLabel,
+          signedYear: yr,
+          domain: String(ev.domain ?? 'OTHER'),
+          polityName: ev.historicalCountry?.name?.trim() ?? null,
+        },
+        weight,
+      })
+    }
+    candidates.sort(
+      (a, b) => b.weight - a.weight || a.item.signedYear - b.item.signedYear,
+    )
+    const picked = candidates.slice(0, 6).map((c) => c.item)
+    return picked.sort((a, b) => a.signedYear - b.signedYear)
+  }, [eventsQuery.data])
+
+  const civicSnapshot = useMemo<CivicInstitutionalSnapshot>(() => {
+    const elections = Array.isArray(electionsQuery.data)
+      ? (electionsQuery.data as any[])
+      : []
+    const byYearTurnout = new Map<number, { sum: number; cnt: number }>()
+    const byElType = new Map<string, number>()
+    let tSum = 0
+    let tCnt = 0
+    for (const el of elections) {
+      if (el?.electionType) {
+        byElType.set(el.electionType, (byElType.get(el.electionType) ?? 0) + 1)
+      }
+      const tv = Number(el?.voterTurnoutPercent)
+      const ym = /^(\d{4})/.exec(String(el?.pollDate ?? ''))
+      if (
+        el?.voterTurnoutPercent != null &&
+        String(el.voterTurnoutPercent).trim() !== '' &&
+        Number.isFinite(tv) &&
+        tv > 0 &&
+        ym
+      ) {
+        const y = Number(ym[1])
+        const cur = byYearTurnout.get(y) ?? { sum: 0, cnt: 0 }
+        cur.sum += tv
+        cur.cnt += 1
+        byYearTurnout.set(y, cur)
+        tSum += tv
+        tCnt += 1
+      }
+    }
+    const turnoutSparkPoints = [...byYearTurnout.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([year, agg]) => ({
+        year,
+        value: Math.round((agg.sum / agg.cnt) * 10) / 10,
+      }))
+
+    const rawTreaties =
+      (treatiesQuery.data as { items?: any[]; data?: any[] } | undefined)
+        ?.items ??
+      (treatiesQuery.data as { items?: any[]; data?: any[] } | undefined)
+        ?.data ??
+      []
+    const recentTreaties = (Array.isArray(rawTreaties) ? rawTreaties : [])
+      .slice(0, 5)
+      .map((tr: any) => ({
+        id: String(tr.id),
+        name: String(tr.name ?? tr.title ?? '조약').trim(),
+        type: String(tr.type ?? 'OTHER'),
+        yearLabel: formatActivityYearFromIso(tr.signDate ?? tr.effectiveDate),
+      }))
+
+    const rawLaws = Array.isArray(lawsQuery.data)
+      ? (lawsQuery.data as any[])
+      : []
+    const recentLaws = rawLaws.slice(0, 5).map((lw: any) => ({
+      id: String(lw.id),
+      title: String(lw.title ?? lw.name ?? '법령').trim(),
+      yearLabel: formatActivityYearFromIso(
+        lw.enactedDate ?? lw.promulgatedDate ?? lw.startDate,
+        lw.era,
+        lw.year,
+      ),
+    }))
+
+    const rawEth = Array.isArray(ethnicityQuery.data)
+      ? (ethnicityQuery.data as any[])
+      : []
+    const ethnicGroups = rawEth.slice(0, 8).map((eth: any) => ({
+      id: String(eth.id),
+      name: String(eth.name ?? '').trim(),
+      nameLocal: eth.nameLocal ? String(eth.nameLocal).trim() : null,
+    }))
+
+    const sysList = Array.isArray(politicalSystemsQuery.data)
+      ? (politicalSystemsQuery.data as any[])
+      : []
+    const activeSys =
+      sysList.find((s) => !s.endDate && s.endYear == null) ?? sysList[0] ?? null
+
+    const parseSysYear = (
+      iso?: string | null,
+      era?: string | null,
+      yr?: number | null,
+    ): number | null => {
+      if (yr != null && Number.isFinite(Number(yr)) && Number(yr) !== 0) {
+        const abs = Math.abs(Number(yr))
+        return era === 'BC' || Number(yr) < 0 ? -abs : abs
+      }
+      if (!iso || typeof iso !== 'string') return null
+      const m = /^(-?)(\d{1,6})/.exec(iso.trim())
+      if (!m) return null
+      const n = Number(m[2])
+      if (!Number.isFinite(n) || n === 0) return null
+      return m[1] === '-' || era === 'BC' ? -n : n
+    }
+
+    const regimeEras: RegimeEraBand[] = sysList
+      .filter((s) => !(country?.type === 'modern' && s.historicalCountryId != null))
+      .map((s) => {
+        const sY = parseSysYear(s.startDate, s.startEra, s.startYear)
+        if (sY == null) return null
+        const eY =
+          s.endDate || s.endYear != null
+            ? parseSysYear(s.endDate, s.endEra, s.endYear)
+            : null
+        const formLabel = s.governmentForm
+          ? (GOVERNMENT_FORM_LABEL[
+              s.governmentForm as keyof typeof GOVERNMENT_FORM_LABEL
+            ] ?? String(s.governmentForm))
+          : null
+        const label =
+          String(s.name ?? s.title ?? formLabel ?? '헌정 체제').trim()
+        return {
+          id: String(s.id),
+          label,
+          governmentFormLabel: formLabel,
+          startYear: sY,
+          endYear: eY,
+        }
+      })
+      .filter((x): x is RegimeEraBand => x !== null)
+      .sort((a, b) => a.startYear - b.startYear)
+
+    const nowMs = Date.now()
+    const legTypes = new Set([
+      'PARLIAMENTARY_CONSTITUENCY',
+      'PARLIAMENTARY_PROPORTIONAL',
+    ])
+    const sortedPastLeg = elections
+      .filter((el) => {
+        if (!el?.id || !legTypes.has(String(el.electionType))) return false
+        if (el.status === 'CANCELLED' || el.status === 'SCHEDULED') return false
+        const t = Date.parse(String(el.pollDate ?? ''))
+        return Number.isFinite(t) && t <= nowMs + 86_400_000
+      })
+      .sort(
+        (a, b) =>
+          Date.parse(String(b.pollDate ?? '')) -
+          Date.parse(String(a.pollDate ?? '')),
+      )
+    const latestLegislativeElectionId = sortedPastLeg[0]?.id
+      ? String(sortedPastLeg[0].id)
+      : null
+
+    return {
+      turnoutSparkPoints,
+      avgTurnout: tCnt > 0 ? Math.round((tSum / tCnt) * 10) / 10 : null,
+      electionTypeCounts: [...byElType.entries()]
+        .map(([type, count]) => ({ type, count }))
+        .sort((a, b) => b.count - a.count),
+      latestLegislativeElectionId,
+      regimeEras,
+      recentTreaties,
+      recentLaws,
+      ethnicGroups,
+      activePolitySeats: activeSys
+        ? {
+            name: activeSys.name ?? activeSys.title ?? null,
+            lowerName: activeSys.lowerHouseName ?? null,
+            lowerSeats:
+              activeSys.lowerHouseSeats != null
+                ? Number(activeSys.lowerHouseSeats)
+                : null,
+            upperName: activeSys.upperHouseName ?? null,
+            upperSeats:
+              activeSys.upperHouseSeats != null
+                ? Number(activeSys.upperHouseSeats)
+                : null,
+            governmentForm: activeSys.governmentForm ?? null,
+            stateStructure: activeSys.stateStructure ?? null,
+            legislatureType: activeSys.legislatureType ?? null,
+            partySystem: activeSys.partySystem ?? null,
+          }
+        : null,
+    }
+  }, [
+    country?.type,
+    electionsQuery.data,
+    treatiesQuery.data,
+    lawsQuery.data,
+    ethnicityQuery.data,
+    politicalSystemsQuery.data,
+  ])
+
+  const peerCountries = useMemo<PeerCountryMetric[]>(() => {
+    const rawList = Array.isArray(allCountriesQuery.data)
+      ? (allCountriesQuery.data as any[])
+      : ((allCountriesQuery.data as { data?: any[] } | undefined)?.data ?? [])
+    return rawList
+      .filter((c) => c?.id && c?.name)
+      .map((c) => {
+        const popRaw = c.population
+        const pop =
+          popRaw != null && String(popRaw).trim() !== '' && Number.isFinite(Number(popRaw))
+            ? Number(popRaw)
+            : null
+        const areaRaw = c.areaSqKm
+        const area =
+          areaRaw != null && String(areaRaw).trim() !== '' && Number.isFinite(Number(areaRaw))
+            ? Number(areaRaw)
+            : null
+        return {
+          id: String(c.id),
+          name: String(c.name),
+          flagEmoji: c.flagEmoji ? String(c.flagEmoji) : null,
+          continentId: c.continentId ? String(c.continentId) : null,
+          population: pop,
+          areaSqKm: area,
+        }
+      })
+  }, [allCountriesQuery.data])
+
   return {
     personCount,
     militaryCount,
@@ -1707,6 +2237,11 @@ export function useCountryDashboardStats(
     eventDomainBreakdown,
     eventCenturyDomainCounts,
     warSummary,
+    executiveTimeline,
+    personSpotlight,
+    milestoneEvents,
+    civicSnapshot,
+    peerCountries,
     eventCount,
     historicalCountryCount,
     administrationCount,

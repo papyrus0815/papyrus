@@ -741,6 +741,24 @@ export function EventsTimelineSection({
     return `c${century > 0 ? 1 : -1}-${Math.abs(century)}`
   }, [focusCentury])
 
+  const urlDomainParam = searchParams.get('domain')
+  const urlCenturyParam = searchParams.get('century')
+
+  useEffect(() => {
+    if (urlDomainParam && isEventDomainKey(urlDomainParam)) {
+      setDomainFilter(urlDomainParam)
+    }
+  }, [urlDomainParam])
+
+  useEffect(() => {
+    const rawC = urlCenturyParam ?? focusCentury
+    if (!rawC) return
+    const num = Number(rawC)
+    if (Number.isFinite(num) && num !== 0) {
+      setSelectedCentury(num)
+    }
+  }, [urlCenturyParam, focusCentury])
+
   useEffect(() => {
     setCenturyFocused(false)
   }, [focusKey])

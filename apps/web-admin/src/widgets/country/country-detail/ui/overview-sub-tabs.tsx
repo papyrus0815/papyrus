@@ -40,20 +40,25 @@ const TAB_LABELS: Array<{
   label: string
   groupEnd?: boolean
 }> = [
+  // 1. 종합 개요
   { key: 'dashboard', label: '대시보드', groupEnd: true },
-  { key: 'persons', label: '인물' },
-  { key: 'events', label: '사건' },
-  { key: 'linked-historical', label: '과거국가', groupEnd: true },
+  // 2. 통치·정치·제도 (국가 권력 구조 핵심)
   { key: 'government', label: '정부·행정' },
-  { key: 'military', label: '군사' },
-  { key: 'regions', label: '지리·행정구역' },
   { key: 'elections', label: '정당·선거' },
   { key: 'laws', label: '법령', groupEnd: true },
-  { key: 'treaty', label: '조약' },
-  { key: 'ethnicity', label: '민족', groupEnd: true },
+  // 3. 역사·인물·계보 (시간축 서사)
+  { key: 'events', label: '사건' },
+  { key: 'persons', label: '인물' },
+  { key: 'linked-historical', label: '과거국가', groupEnd: true },
+  // 4. 영토·안보·외교 (공간 및 대외 주권)
+  { key: 'regions', label: '지리·행정구역' },
+  { key: 'military', label: '군사' },
+  { key: 'treaty', label: '조약', groupEnd: true },
+  // 5. 경제·산업·사회
   { key: 'statistics', label: '경제·통계' },
   { key: 'trade', label: '교역' },
   { key: 'companies', label: '기업' },
+  { key: 'ethnicity', label: '민족' },
 ]
 
 /** 탭과 패널을 연결하는 ID 생성. 탭은 `tab-<key>`, 패널은 `panel-<key>` 규칙. */

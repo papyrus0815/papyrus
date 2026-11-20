@@ -11,9 +11,38 @@ import {
   FiTrash2,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
+import {
+  BentoActionBtn,
+  BentoCard,
+  BentoCardBadge,
+  BentoCardBody,
+  BentoCardHeader,
+  BentoCardTitle,
+  BentoCardTitleGroup,
+  BentoDivider,
+  BentoGrid3Col,
+  BentoSubLabel,
+  MiniDonutRing,
+  type SegmentSlice,
+  StackedSegmentBar,
+} from '@/entities/event/ui/bento-primitives'
+import {
+  centuryOf,
+  DIGIT_DISPLAY,
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentSubtle,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  ledgerSubtleFill,
+  type Mode,
+  MOTION,
+  RADIUS,
+} from '@/entities/event/ui/ledger-tokens'
 import {
   companyApi,
   type Company,
@@ -32,7 +61,6 @@ import {
   CompanyRegisterModal,
 } from '@/widgets/company-form'
 
-import * as DashboardStyles from './country-detail-dashboard.styles'
 import {
   countryTabCanvasPadding,
   LedgerToolbarButton,
@@ -105,6 +133,28 @@ function axisPercent(axis: TimelineAxis, year: number): number {
   )
 }
 
+function companyStatusColor(status: CompanyStatus, mode: Mode): string {
+  switch (status) {
+    case 'ACTIVE':
+      return mode === 'dark' ? '#34d399' : '#059669'
+    case 'DISSOLVED':
+      return mode === 'dark' ? '#94a3b8' : '#64748b'
+    case 'MERGED':
+      return mode === 'dark' ? '#a5b4fc' : '#4f46e5'
+    case 'SUSPENDED':
+      return mode === 'dark' ? '#fbbf24' : '#d97706'
+    case 'OTHER':
+    default:
+      return mode === 'dark' ? '#5eead4' : '#0f766e'
+  }
+}
+
+function formatCenturyBucketLabel(centuryIdx: number): string {
+  return centuryIdx < 0
+    ? `BC ${Math.abs(centuryIdx)}세기`
+    : `${centuryIdx}세기`
+}
+
 /**
  * 국가 상세 「기업」 전용 탭 (현대·역사 국가 공용).
  *
@@ -116,6 +166,8 @@ export function CountryCompaniesTabSection({
 }: CountryCompaniesTabSectionProps) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const theme = useTheme()
+  const mode = theme.mode
   const isModern = country.type === 'modern'
   const currentYear = new Date().getFullYear()
 
@@ -238,6 +290,192 @@ export function CountryCompaniesTabSection({
     }
   }, [countryCompanies])
 
+  const bentoData = useMemo(() => {
+    const statusItems = COMPANY_STATUS_ORDER.map((statusKey) => {
+      const count = countryCompanies.filter(
+        (company) => (company.status ?? 'ACTIVE') === statusKey,
+      ).length
+      const color = companyStatusColor(statusKey, mode)
+      return {
+        status: statusKey,
+        label: COMPANY_STATUS_META[statusKey].label,
+        count,
+        color,
+      }
+    }).filter((item) => item.count > 0)
+
+    const statusSlices: SegmentSlice[] = statusItems.map((item) => ({
+      key: item.status,
+      label: item.label,
+      value: item.count,
+      color: item.color,
+      meta: `${item.count.toLocaleString('ko-KR')}개사`,
+    }))
+
+    const eraSlices: SegmentSlice[] =
+      isModern && historicalCount > 0
+        ? [
+            {
+              key: 'MODERN',
+              label: `현대 설립 (${modernCount.toLocaleString('ko-KR')})`,
+              value: modernCount,
+              color: ledgerAccent(mode),
+            },
+            {
+              key: 'HISTORICAL',
+              label: `전신 국가 (${historicalCount.toLocaleString('ko-KR')})`,
+              value: historicalCount,
+              color: mode === 'dark' ? '#fbbf24' : '#d97706',
+            },
+          ]
+        : []
+
+    // Card 2: 거점 본사 도시 Top 5 (도시 미기재 시 historicalCountry 폴백, 전체 미기재 시 설립 세기·시대 분포 폴백)
+    const hqMap = new Map<
+      string,
+      { name: string; count: number; isPolityFallback: boolean }
+    >()
+    let locatedCount = 0
+    for (const company of countryCompanies) {
+      const cityName = company.headquartersCity?.name?.trim()
+      const histName = company.historicalCountry?.name?.trim()
+      const fallbackPolity =
+        !cityName && histName && (isModern || histName !== country.name)
+          ? histName
+          : undefined
+      const keyName = cityName ?? fallbackPolity
+      if (!keyName) continue
+      locatedCount += 1
+      const existing = hqMap.get(keyName)
+      if (existing) {
+        existing.count += 1
+      } else {
+        hqMap.set(keyName, {
+          name: keyName,
+          count: 1,
+          isPolityFallback: !cityName,
+        })
+      }
+    }
+
+    const hqSorted = [...hqMap.values()].sort(
+      (left, right) =>
+        right.count - left.count || left.name.localeCompare(right.name, 'ko-KR'),
+    )
+    const hqTopFive = hqSorted.slice(0, 5)
+    const maxHqCount =
+      hqTopFive.length > 0
+        ? Math.max(1, ...hqTopFive.map((row) => row.count))
+        : 1
+
+    const centuryMap = new Map<
+      string,
+      { key: string; label: string; sortOrder: number; count: number }
+    >()
+    for (const company of countryCompanies) {
+      const yr = startYearOf(company)
+      if (yr == null) {
+        const prev = centuryMap.get('UNDATED')
+        if (prev) prev.count += 1
+        else {
+          centuryMap.set('UNDATED', {
+            key: 'UNDATED',
+            label: '설립 연도 미상',
+            sortOrder: Number.MAX_SAFE_INTEGER,
+            count: 1,
+          })
+        }
+        continue
+      }
+      const cIdx = yr < 0 ? -Math.ceil(Math.abs(yr) / 100) : centuryOf(yr)
+      const cKey = `C_${cIdx}`
+      const prev = centuryMap.get(cKey)
+      if (prev) {
+        prev.count += 1
+      } else {
+        centuryMap.set(cKey, {
+          key: cKey,
+          label: formatCenturyBucketLabel(cIdx),
+          sortOrder: cIdx,
+          count: 1,
+        })
+      }
+    }
+    const centuryFallbackTopFive = [...centuryMap.values()]
+      .sort(
+        (left, right) =>
+          right.count - left.count || left.sortOrder - right.sortOrder,
+      )
+      .slice(0, 5)
+    const maxCenturyCount =
+      centuryFallbackTopFive.length > 0
+        ? Math.max(1, ...centuryFallbackTopFive.map((row) => row.count))
+        : 1
+
+    // Card 3: 최장수 · 대표 기업 존속 스팬 Top 5
+    const lifespanRows = countryCompanies
+      .map((company) => {
+        const startYr = startYearOf(company)
+        if (startYr == null) return null
+        const endYr = endYearOf(company)
+        const ongoing = isOngoing(company)
+        const duration = Math.max(0, (endYr ?? currentYear) - startYr)
+        const startText =
+          startYr < 0 ? `BC ${Math.abs(startYr)}` : `${startYr}`
+        const endText =
+          endYr != null
+            ? endYr < 0
+              ? `BC ${Math.abs(endYr)}`
+              : `${endYr}`
+            : ongoing
+              ? '현재'
+              : COMPANY_STATUS_META[company.status ?? 'DISSOLVED'].label
+        return {
+          company,
+          startYr,
+          ongoing,
+          duration,
+          spanLabel: `${startText}–${endText} · ${duration.toLocaleString('ko-KR')}년`,
+        }
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null)
+      .sort(
+        (left, right) =>
+          right.duration - left.duration ||
+          left.startYr - right.startYr ||
+          left.company.name.localeCompare(right.company.name, 'ko-KR'),
+      )
+    const datedCompanyCount = lifespanRows.length
+    const lifespanTopFive = lifespanRows.slice(0, 5)
+    const maxDuration =
+      lifespanTopFive.length > 0
+        ? Math.max(1, ...lifespanTopFive.map((row) => row.duration))
+        : 1
+
+    return {
+      statusItems,
+      statusSlices,
+      eraSlices,
+      locatedCount,
+      distinctHqCount: hqSorted.length,
+      hqTopFive,
+      maxHqCount,
+      centuryFallbackTopFive,
+      maxCenturyCount,
+      datedCompanyCount,
+      lifespanTopFive,
+      maxDuration,
+    }
+  }, [
+    countryCompanies,
+    mode,
+    isModern,
+    historicalCount,
+    modernCount,
+    country.name,
+    currentYear,
+  ])
+
   const handleToggleSort = (nextKey: SortKey) => {
     if (sortKey === nextKey) {
       setSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'))
@@ -303,95 +541,6 @@ export function CountryCompaniesTabSection({
         }
       />
 
-      <DashboardStyles.SectionHeadlineStrip aria-label="기업 요약 지표">
-        <DashboardStyles.SectionHeadlineCell>
-          <DashboardStyles.SectionHeadlineLabel>
-            전체 소속 기업
-          </DashboardStyles.SectionHeadlineLabel>
-          <DashboardStyles.SectionHeadlineValue $muted={stats.total === 0}>
-            {stats.total > 0 ? (
-              <>
-                {stats.total.toLocaleString('ko-KR')}
-                <DashboardStyles.SectionHeadlineUnit>
-                  개사
-                </DashboardStyles.SectionHeadlineUnit>
-              </>
-            ) : (
-              '미등록'
-            )}
-          </DashboardStyles.SectionHeadlineValue>
-          <DashboardStyles.SectionHeadlineSub>
-            {stats.total > 0
-              ? isModern && historicalCount > 0
-                ? `현대 국가 ${modernCount}개 · 연결 과거 국가 ${historicalCount}개`
-                : '국가 소속 기업 · 상단 · 공방'
-              : '등록된 소속 기업 없음'}
-          </DashboardStyles.SectionHeadlineSub>
-        </DashboardStyles.SectionHeadlineCell>
-
-        <DashboardStyles.SectionHeadlineCell>
-          <DashboardStyles.SectionHeadlineLabel>
-            활동 중
-          </DashboardStyles.SectionHeadlineLabel>
-          <DashboardStyles.SectionHeadlineValue $muted={stats.active === 0}>
-            {stats.active > 0 ? (
-              <>
-                {stats.active.toLocaleString('ko-KR')}
-                <DashboardStyles.SectionHeadlineUnit>
-                  개사
-                </DashboardStyles.SectionHeadlineUnit>
-              </>
-            ) : (
-              '없음'
-            )}
-          </DashboardStyles.SectionHeadlineValue>
-          <DashboardStyles.SectionHeadlineSub>
-            {stats.total > 0
-              ? `전체의 ${Math.round((stats.active / stats.total) * 100)}% 존속·운영 중`
-              : '현존 기업 데이터 대기'}
-          </DashboardStyles.SectionHeadlineSub>
-        </DashboardStyles.SectionHeadlineCell>
-
-        <DashboardStyles.SectionHeadlineCell>
-          <DashboardStyles.SectionHeadlineLabel>
-            해산 · 합병 · 중단
-          </DashboardStyles.SectionHeadlineLabel>
-          <DashboardStyles.SectionHeadlineValue $muted={stats.ended === 0}>
-            {stats.ended > 0 ? (
-              <>
-                {stats.ended.toLocaleString('ko-KR')}
-                <DashboardStyles.SectionHeadlineUnit>
-                  개사
-                </DashboardStyles.SectionHeadlineUnit>
-              </>
-            ) : (
-              '없음'
-            )}
-          </DashboardStyles.SectionHeadlineValue>
-          <DashboardStyles.SectionHeadlineSub>
-            {stats.ended > 0
-              ? '해산 · 인수합병 · 국유화 · 운영 종료'
-              : '종료 이력 기업 없음'}
-          </DashboardStyles.SectionHeadlineSub>
-        </DashboardStyles.SectionHeadlineCell>
-
-        <DashboardStyles.SectionHeadlineCell>
-          <DashboardStyles.SectionHeadlineLabel>
-            최초 설립 기록
-          </DashboardStyles.SectionHeadlineLabel>
-          <DashboardStyles.SectionHeadlineValue
-            $muted={!stats.earliestLabel}
-          >
-            {stats.earliestLabel ?? '—'}
-          </DashboardStyles.SectionHeadlineValue>
-          <DashboardStyles.SectionHeadlineSub>
-            {stats.earliestLabel
-              ? '확인된 가장 이른 설립 연도'
-              : '설립 연도 데이터 미등록'}
-          </DashboardStyles.SectionHeadlineSub>
-        </DashboardStyles.SectionHeadlineCell>
-      </DashboardStyles.SectionHeadlineStrip>
-
       {isLoading ? (
         <LoadingBox>기업 목록을 불러오는 중…</LoadingBox>
       ) : countryCompanies.length === 0 ? (
@@ -436,6 +585,338 @@ export function CountryCompaniesTabSection({
         </CompaniesEmptySpecGrid>
       ) : (
         <>
+          <BentoGrid3Col aria-label="기업 요약 인포그래픽">
+            {/* Card 1: 존속 상태 도넛 · 시대 소속 */}
+            <BentoCard>
+              <BentoCardHeader>
+                <BentoCardTitleGroup>
+                  <BentoCardTitle>존속 상태 · 시대 소속</BentoCardTitle>
+                  <BentoCardBadge>
+                    총 {stats.total.toLocaleString('ko-KR')}개사
+                  </BentoCardBadge>
+                </BentoCardTitleGroup>
+                {statusFilter !== 'ALL' && (
+                  <BentoActionBtn
+                    type="button"
+                    $accent
+                    onClick={() => setStatusFilter('ALL')}
+                  >
+                    상태 해제 ×
+                  </BentoActionBtn>
+                )}
+              </BentoCardHeader>
+              <BentoCardBody>
+                <DonutSplitRow>
+                  <MiniDonutRing
+                    slices={bentoData.statusSlices}
+                    size={76}
+                    strokeWidth={9.5}
+                    centerValue={stats.total.toLocaleString('ko-KR')}
+                    centerLabel="전체 기업"
+                  />
+                  <DonutRightCol>
+                    <BentoLegendWrap
+                      role="group"
+                      aria-label="존속 상태별 필터"
+                    >
+                      {bentoData.statusItems.map((item) => {
+                        const active = statusFilter === item.status
+                        return (
+                          <BentoLegendChip
+                            key={item.status}
+                            type="button"
+                            $active={active}
+                            aria-pressed={active}
+                            title={`${item.label} 기업만 필터링`}
+                            onClick={() =>
+                              setStatusFilter((prev) =>
+                                prev === item.status ? 'ALL' : item.status,
+                              )
+                            }
+                          >
+                            <BentoSwatchDot $color={item.color} />
+                            <span>{item.label}</span>
+                            <strong>
+                              {item.count.toLocaleString('ko-KR')}
+                            </strong>
+                          </BentoLegendChip>
+                        )
+                      })}
+                    </BentoLegendWrap>
+                    <BentoFootMeta>
+                      <span>
+                        현존 가동률{' '}
+                        <strong>
+                          {Math.round((stats.active / stats.total) * 100)}%
+                        </strong>
+                      </span>
+                      {stats.earliestLabel && (
+                        <span>
+                          최초 설립 <strong>{stats.earliestLabel}</strong>
+                        </span>
+                      )}
+                    </BentoFootMeta>
+                  </DonutRightCol>
+                </DonutSplitRow>
+
+                {isModern && historicalCount > 0 && (
+                  <>
+                    <BentoDivider />
+                    <BentoSubLabel>
+                      <span>시대 소속 구성</span>
+                      <span>
+                        현대 {modernCount.toLocaleString('ko-KR')} · 전신{' '}
+                        {historicalCount.toLocaleString('ko-KR')}
+                      </span>
+                    </BentoSubLabel>
+                    <StackedSegmentBar
+                      slices={bentoData.eraSlices}
+                      height={8}
+                      showPercent
+                    />
+                  </>
+                )}
+              </BentoCardBody>
+            </BentoCard>
+
+            {/* Card 2: 거점 본사 도시 Top 5 (미설정 시 설립 세기·시대 분포 폴백) */}
+            <BentoCard>
+              <BentoCardHeader>
+                <BentoCardTitleGroup>
+                  <BentoCardTitle>
+                    {bentoData.hqTopFive.length > 0
+                      ? '거점 본사 도시 Top 5'
+                      : '설립 세기 · 시대 분포'}
+                  </BentoCardTitle>
+                  <BentoCardBadge>
+                    {bentoData.hqTopFive.length > 0
+                      ? `${bentoData.distinctHqCount.toLocaleString('ko-KR')}곳 · 확인 ${bentoData.locatedCount.toLocaleString('ko-KR')}개사`
+                      : '본사 미기재 대체'}
+                  </BentoCardBadge>
+                </BentoCardTitleGroup>
+                {bentoData.hqTopFive.some(
+                  (row) =>
+                    searchQuery.trim().toLowerCase() === row.name.toLowerCase(),
+                ) && (
+                  <BentoActionBtn
+                    type="button"
+                    $accent
+                    onClick={() => setSearchQuery('')}
+                  >
+                    검색 해제 ×
+                  </BentoActionBtn>
+                )}
+              </BentoCardHeader>
+              <BentoCardBody>
+                {bentoData.hqTopFive.length > 0 ? (
+                  <>
+                    <BentoRankList>
+                      {bentoData.hqTopFive.map((row, idx) => {
+                        const pct = Math.max(
+                          8,
+                          Math.round((row.count / bentoData.maxHqCount) * 100),
+                        )
+                        const isSelected =
+                          searchQuery.trim().toLowerCase() ===
+                          row.name.toLowerCase()
+                        return (
+                          <BentoRankBtn
+                            key={row.name}
+                            type="button"
+                            $active={isSelected}
+                            aria-pressed={isSelected}
+                            title={`${row.name} 소속 기업 검색 연동`}
+                            onClick={() =>
+                              setSearchQuery((prev) =>
+                                prev.trim().toLowerCase() ===
+                                row.name.toLowerCase()
+                                  ? ''
+                                  : row.name,
+                              )
+                            }
+                          >
+                            <BentoRankIndex>#{idx + 1}</BentoRankIndex>
+                            <BentoRankLabel title={row.name}>
+                              {row.name}
+                              {row.isPolityFallback && (
+                                <BentoInlineSubTag>전신</BentoInlineSubTag>
+                              )}
+                            </BentoRankLabel>
+                            <BentoBarTrack>
+                              <BentoBarFill
+                                $tone={
+                                  row.isPolityFallback
+                                    ? mode === 'dark'
+                                      ? '#fbbf24'
+                                      : '#d97706'
+                                    : ledgerAccent(mode)
+                                }
+                                style={{ width: `${pct}%` }}
+                              />
+                            </BentoBarTrack>
+                            <BentoRankValue>
+                              {row.count.toLocaleString('ko-KR')}개사
+                            </BentoRankValue>
+                          </BentoRankBtn>
+                        )
+                      })}
+                    </BentoRankList>
+                    <BentoFootMeta>
+                      <span>클릭 시 검색어 연동</span>
+                      {stats.total > bentoData.locatedCount && (
+                        <span>
+                          본사 미기재{' '}
+                          <strong>
+                            {(
+                              stats.total - bentoData.locatedCount
+                            ).toLocaleString('ko-KR')}
+                            개사
+                          </strong>
+                        </span>
+                      )}
+                    </BentoFootMeta>
+                  </>
+                ) : (
+                  <>
+                    <BentoRankList>
+                      {bentoData.centuryFallbackTopFive.map((bucket, idx) => {
+                        const pct = Math.max(
+                          8,
+                          Math.round(
+                            (bucket.count / bentoData.maxCenturyCount) * 100,
+                          ),
+                        )
+                        return (
+                          <BentoStaticRow key={bucket.key}>
+                            <BentoRankIndex>#{idx + 1}</BentoRankIndex>
+                            <BentoRankLabel title={bucket.label}>
+                              {bucket.label}
+                            </BentoRankLabel>
+                            <BentoBarTrack>
+                              <BentoBarFill
+                                $tone={
+                                  bucket.key === 'UNDATED'
+                                    ? mode === 'dark'
+                                      ? '#94a3b8'
+                                      : '#64748b'
+                                    : ledgerAccent(mode)
+                                }
+                                style={{ width: `${pct}%` }}
+                              />
+                            </BentoBarTrack>
+                            <BentoRankValue>
+                              {bucket.count.toLocaleString('ko-KR')}개사
+                            </BentoRankValue>
+                          </BentoStaticRow>
+                        )
+                      })}
+                    </BentoRankList>
+                    <BentoFootMeta>
+                      <span>본사 도시 등록 시 거점 순위로 자동 전환</span>
+                    </BentoFootMeta>
+                  </>
+                )}
+              </BentoCardBody>
+            </BentoCard>
+
+            {/* Card 3: 최장수 · 대표 기업 존속 스팬 Top 5 */}
+            <BentoCard>
+              <BentoCardHeader>
+                <BentoCardTitleGroup>
+                  <BentoCardTitle>
+                    최장수 · 대표 기업 존속 스팬 Top 5
+                  </BentoCardTitle>
+                  <BentoCardBadge>
+                    {bentoData.datedCompanyCount > 0
+                      ? `연도 확인 ${bentoData.datedCompanyCount.toLocaleString('ko-KR')}개사`
+                      : '설립일 대기'}
+                  </BentoCardBadge>
+                </BentoCardTitleGroup>
+              </BentoCardHeader>
+              <BentoCardBody>
+                {bentoData.lifespanTopFive.length > 0 ? (
+                  <>
+                    <BentoRankList>
+                      {bentoData.lifespanTopFive.map((row, idx) => {
+                        const pct = Math.max(
+                          8,
+                          Math.round(
+                            (row.duration / bentoData.maxDuration) * 100,
+                          ),
+                        )
+                        return (
+                          <BentoRankBtn
+                            key={row.company.id}
+                            type="button"
+                            title={`${row.company.name} 상세 페이지로 이동`}
+                            onClick={() =>
+                              navigate(pathKeys.companies.detail(row.company.id))
+                            }
+                          >
+                            <BentoRankIndex>#{idx + 1}</BentoRankIndex>
+                            <BentoRankLabel title={row.company.name}>
+                              {row.company.name}
+                            </BentoRankLabel>
+                            <BentoBarTrack>
+                              <BentoBarFill
+                                $tone={
+                                  row.ongoing
+                                    ? ledgerAccent(mode)
+                                    : mode === 'dark'
+                                      ? '#94a3b8'
+                                      : '#64748b'
+                                }
+                                style={{ width: `${pct}%` }}
+                              />
+                            </BentoBarTrack>
+                            <BentoRankValue>{row.spanLabel}</BentoRankValue>
+                          </BentoRankBtn>
+                        )
+                      })}
+                    </BentoRankList>
+                    <BentoFootMeta>
+                      <span>행 클릭 시 기업 상세 원장 열기</span>
+                      {stats.ended > 0 && (
+                        <span>
+                          해산·합병·종료{' '}
+                          <strong>{stats.ended.toLocaleString('ko-KR')}개사</strong>
+                        </span>
+                      )}
+                    </BentoFootMeta>
+                  </>
+                ) : (
+                  <>
+                    <BentoRankList>
+                      {countryCompanies.slice(0, 5).map((company, idx) => (
+                        <BentoRankBtn
+                          key={company.id}
+                          type="button"
+                          title={`${company.name} 정보 수정 모달 열기`}
+                          onClick={() => setModalTarget(company.id)}
+                        >
+                          <BentoRankIndex>#{idx + 1}</BentoRankIndex>
+                          <BentoRankLabel title={company.name}>
+                            {company.name}
+                          </BentoRankLabel>
+                          <BentoBarTrack>
+                            <BentoBarFill
+                              $tone={mode === 'dark' ? '#94a3b8' : '#64748b'}
+                              style={{ width: '18%', opacity: 0.45 }}
+                            />
+                          </BentoBarTrack>
+                          <BentoRankValue>설립일 입력 →</BentoRankValue>
+                        </BentoRankBtn>
+                      ))}
+                    </BentoRankList>
+                    <BentoFootMeta>
+                      <span>설립 연도 입력 시 최장수 존속 스팬 자동 산출</span>
+                    </BentoFootMeta>
+                  </>
+                )}
+              </BentoCardBody>
+            </BentoCard>
+          </BentoGrid3Col>
+
           <Toolbar>
             <SearchWrap>
               <FiSearch size={14} />
@@ -1049,7 +1530,12 @@ const TimelineBar = styled.span<{ $ongoing: boolean }>`
   top: 0;
   bottom: 0;
   border-radius: 999px;
-  background: ${({ $ongoing }) => ($ongoing ? '#4f46e5' : '#64748b')};
+  background: ${({ $ongoing, theme }) =>
+    $ongoing
+      ? ledgerAccent(theme.mode)
+      : theme.mode === 'dark'
+        ? '#94a3b8'
+        : '#64748b'};
 `
 
 const TimelineUnknown = styled.span`
@@ -1105,4 +1591,195 @@ const LoadingBox = styled.div`
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   font-size: 13px;
   color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/* ─── Event-Ledger Bento Infographic Primitives ───────────────────────────── */
+
+const DonutSplitRow = styled.div`
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+`
+
+const DonutRightCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+`
+
+const BentoLegendWrap = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+`
+
+const BentoLegendChip = styled.button<{ $active?: boolean }>`
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active
+        ? ledgerAccentBorder(theme.mode)
+        : ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  box-shadow: none;
+  cursor: pointer;
+  transition:
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    color ${MOTION.fast} ease;
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
+    ${DIGIT_DISPLAY}
+  }
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    color: ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
+  }
+`
+
+const BentoSwatchDot = styled.span<{ $color: string }>`
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: ${({ $color }) => $color};
+  flex-shrink: 0;
+`
+
+const BentoRankList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+`
+
+const BentoRankBtn = styled.button<{ $active?: boolean }>`
+  appearance: none;
+  display: grid;
+  grid-template-columns: 22px minmax(78px, 1.1fr) minmax(56px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 7px;
+  margin: 0;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? ledgerAccentBorder(theme.mode) : 'transparent'};
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  font-family: inherit;
+  text-align: left;
+  box-shadow: none;
+  cursor: pointer;
+  transition:
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease;
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+    border-color: ${({ theme, $active }) =>
+      $active ? ledgerAccentBorder(theme.mode) : ledgerHairline(theme.mode)};
+  }
+`
+
+const BentoStaticRow = styled.div`
+  display: grid;
+  grid-template-columns: 22px minmax(78px, 1.1fr) minmax(56px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 7px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid transparent;
+`
+
+const BentoRankIndex = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+`
+
+const BentoRankLabel = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.primary};
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`
+
+const BentoInlineSubTag = styled.span`
+  padding: 0 4px;
+  border-radius: ${RADIUS.XS};
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+  color: ${({ theme }) => (theme.mode === 'dark' ? '#fbbf24' : '#b45309')};
+  background: rgba(245, 158, 11, 0.14);
+`
+
+const BentoBarTrack = styled.div`
+  width: 100%;
+  height: 7px;
+  border-radius: ${RADIUS.XS};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  overflow: hidden;
+`
+
+const BentoBarFill = styled.div<{ $tone: string }>`
+  height: 100%;
+  border-radius: ${RADIUS.XS};
+  background: ${({ $tone }) => $tone};
+`
+
+const BentoRankValue = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  white-space: nowrap;
+  ${DIGIT_DISPLAY}
+`
+
+const BentoFootMeta = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 10px;
+  margin-top: auto;
+  padding-top: 6px;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
 `

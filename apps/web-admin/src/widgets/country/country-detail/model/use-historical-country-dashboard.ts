@@ -37,6 +37,9 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import {
   type CalendarEventItem,
   type CompletenessField,
+  type MilestoneEventItem,
+  type PersonSpotlightItem,
+  type PersonSpotlightSummary,
   type RecentActivityItem,
   formatActivityYearFromIso,
   formatEventSubLabel,
@@ -925,11 +928,139 @@ export function useHistoricalCountryDashboard(
     founding: foundingQuery.isLoading,
   }
 
+  const personSpotlight = useMemo<PersonSpotlightSummary>(() => {
+    const rulerIds = new Set<string>()
+    const ministerIds = new Set<string>()
+    for (const t of asArray(tenuresQuery.data)) {
+      const pid = t.person?.id ?? t.personId
+      if (!pid) continue
+      const pt = t.positionType ?? t.positionDefinition?.positionType
+      if (pt === 'HEAD_OF_STATE' || pt === 'HEAD_OF_GOVERNMENT') {
+        rulerIds.add(String(pid))
+      } else {
+        ministerIds.add(String(pid))
+      }
+    }
+
+    let rulersCnt = 0
+    let ministersCnt = 0
+    let figuresCnt = 0
+    const eraMap = new Map<string, number>()
+
+    const scored = asArray(personsQuery.data).map((p) => {
+      const pid = String(p.id ?? '')
+      const roleKind: 'ruler' | 'minister' | 'figure' = rulerIds.has(pid)
+        ? 'ruler'
+        : ministerIds.has(pid)
+          ? 'minister'
+          : 'figure'
+      if (roleKind === 'ruler') rulersCnt += 1
+      else if (roleKind === 'minister') ministersCnt += 1
+      else figuresCnt += 1
+
+      const bYear = tenureYear(
+        (p as { birthEra?: string | null }).birthEra,
+        (p as { birthYear?: number | null }).birthYear,
+        (p as { birthDate?: string | null }).birthDate,
+      )
+      const centuryLabel =
+        bYear != null
+          ? bYear < 0
+            ? `BC ${Math.ceil(Math.abs(bYear) / 100)}세기`
+            : `${Math.ceil(bYear / 100)}세기`
+          : '시대 미상'
+      eraMap.set(centuryLabel, (eraMap.get(centuryLabel) ?? 0) + 1)
+
+      const img = p.profileImageUrl ?? null
+      const score =
+        (img ? 10 : 0) +
+        (roleKind === 'ruler' ? 6 : roleKind === 'minister' ? 3 : 2)
+      return {
+        item: {
+          id: pid,
+          name: personNameOf(p),
+          subLabel: formatPersonSubLabel(p, null, country.name),
+          profileImageUrl: img,
+          polityName: null,
+          roleKind,
+        } satisfies PersonSpotlightItem,
+        score,
+      }
+    })
+
+    scored.sort((a, b) => b.score - a.score)
+    const eraSlices = [...eraMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([label, count]) => ({ key: label, label, count }))
+
+    return {
+      featured: scored
+        .filter((s) => Boolean(s.item.id))
+        .slice(0, 8)
+        .map((s) => s.item),
+      roleCounts: {
+        rulers: rulersCnt,
+        ministers: ministersCnt,
+        figures: figuresCnt,
+      },
+      eraSlices,
+    }
+  }, [personsQuery.data, tenuresQuery.data, country.name])
+
+  const milestoneEvents = useMemo<MilestoneEventItem[]>(() => {
+    const PRIORITY_TYPES = new Set([
+      'WAR',
+      'REVOLUTION',
+      'TREATY',
+      'COUP',
+      'INDEPENDENCE',
+      'FOUNDING',
+      'REFORM',
+    ])
+    const candidates: Array<{ item: MilestoneEventItem; weight: number }> = []
+    for (const ev of asArray(eventsQuery.data)) {
+      if (!ev.id || !ev.title) continue
+      const yr = tenureYear(ev.startEra, ev.startYear, ev.startDate)
+      if (yr == null || yr === 0) continue
+      const yearLabel = yr < 0 ? `BC ${Math.abs(yr)}` : `${yr}년`
+      const parentId = (ev as { parentId?: string | null }).parentId
+      const weight =
+        (parentId ? 0 : 5) +
+        (PRIORITY_TYPES.has(String(ev.type ?? '')) ? 4 : 0) +
+        ((ev.domain ?? '') === 'POLITICS' ||
+        (ev.domain ?? '') === 'MILITARY' ||
+        (ev.domain ?? '') === 'DIPLOMACY'
+          ? 2
+          : 0)
+      candidates.push({
+        item: {
+          id: String(ev.id),
+          title: String(ev.title).trim(),
+          yearLabel,
+          signedYear: yr,
+          domain: String(ev.domain ?? 'OTHER'),
+          polityName: null,
+        },
+        weight,
+      })
+    }
+    candidates.sort(
+      (a, b) => b.weight - a.weight || a.item.signedYear - b.item.signedYear,
+    )
+    return candidates
+      .slice(0, 6)
+      .map((c) => c.item)
+      .sort((a, b) => a.signedYear - b.signedYear)
+  }, [eventsQuery.data])
+
   return {
     personCount: persons.length,
     eventCount: events.length,
     rulers,
     lineage,
+    personSpotlight,
+    milestoneEvents,
     transitionCount: transitions.length,
     membershipCount: memberships.length,
     relationCount: relations.length,

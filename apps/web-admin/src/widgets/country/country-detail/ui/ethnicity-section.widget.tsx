@@ -3,8 +3,34 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiExternalLink, FiPlus, FiSearch } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
-import styled from 'styled-components'
+import styled, { useTheme } from 'styled-components'
 
+import {
+  BentoActionBtn,
+  BentoCard,
+  BentoCardBadge,
+  BentoCardBody,
+  BentoCardHeader,
+  BentoCardTitle,
+  BentoCardTitleGroup,
+  BentoGrid2Col,
+  MiniDonutRing,
+  type SegmentSlice,
+  StackedSegmentBar,
+} from '@/entities/event/ui/bento-primitives'
+import {
+  DIGIT_DISPLAY,
+  ledgerAccent,
+  ledgerAccentBorder,
+  ledgerAccentSubtle,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  ledgerSubtleFill,
+  type Mode,
+  MOTION,
+  RADIUS,
+} from '@/entities/event/ui/ledger-tokens'
 import type { Ethnicity } from '@/shared/api/ethnicity'
 import { ethnicityApi } from '@/shared/api/ethnicity'
 import { getUploadImageUrl } from '@/shared/api/upload'
@@ -14,7 +40,10 @@ import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { notify } from '@/shared/ui/toast'
 
-import * as DashboardStyles from './country-detail-dashboard.styles'
+import {
+  countryTabCanvasPadding,
+  LedgerToolbarButton,
+} from './country-ledger-primitives'
 
 export interface EthnicitySectionProps {
   /** 현대 국가 ID (있으면 해당 국가 구성 민족 조회·설정) */
@@ -25,9 +54,28 @@ export interface EthnicitySectionProps {
 
 type EthnicityFilterKey = 'all' | 'local' | 'documented' | 'thumbnail'
 
+const UNCLASSIFIED_LINEAGE = '독립·미분류 계통'
+
+const LINEAGE_PALETTE: ReadonlyArray<{ light: string; dark: string }> = [
+  { light: '#4f46e5', dark: '#a5b4fc' },
+  { light: '#0f766e', dark: '#5eead4' },
+  { light: '#059669', dark: '#34d399' },
+  { light: '#d97706', dark: '#fbbf24' },
+  { light: '#1e40af', dark: '#93c5fd' },
+  { light: '#7c3aed', dark: '#c4b5fd' },
+]
+
+function lineageColorAt(index: number, isUnclassified: boolean, mode: Mode): string {
+  if (isUnclassified) {
+    return mode === 'dark' ? '#94a3b8' : '#64748b'
+  }
+  const pair = LINEAGE_PALETTE[index % LINEAGE_PALETTE.length]
+  return mode === 'dark' ? pair.dark : pair.light
+}
+
 /**
  * 국가/역사적 국가별 구성 민족 섹션
- * - 4칸 헤어라인 KPI 요약 바 + 필터·검색 + 무박스 2열 헤어라인 원장 + 2열 빈 상태 스펙 원장
+ * - 2열 Event-Ledger 벤토 인포그래픽 + 필터·검색 + 무박스 2열 헤어라인 원장 + 2열 빈 상태 스펙 원장
  */
 export function EthnicitySection({
   countryId,
@@ -35,6 +83,8 @@ export function EthnicitySection({
 }: EthnicitySectionProps) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const theme = useTheme()
+  const mode = theme.mode
   const entityId = countryId ?? historicalCountryId
 
   const [searchQuery, setSearchQuery] = useState('')
@@ -102,6 +152,85 @@ export function EthnicitySection({
     [list],
   )
 
+  const lineageStats = useMemo(() => {
+    const groupMap = new Map<string, number>()
+    for (const item of list) {
+      const parentName = item.parent?.name?.trim() || UNCLASSIFIED_LINEAGE
+      groupMap.set(parentName, (groupMap.get(parentName) ?? 0) + 1)
+    }
+
+    const entries = [...groupMap.entries()].sort(([nameA, countA], [nameB, countB]) => {
+      const unclassA = nameA === UNCLASSIFIED_LINEAGE
+      const unclassB = nameB === UNCLASSIFIED_LINEAGE
+      if (unclassA !== unclassB) return unclassA ? 1 : -1
+      return countB - countA || nameA.localeCompare(nameB, 'ko-KR')
+    })
+
+    let namedIdx = 0
+    const groups = entries.map(([name, count]) => {
+      const isUnclassified = name === UNCLASSIFIED_LINEAGE
+      const color = lineageColorAt(namedIdx, isUnclassified, mode)
+      if (!isUnclassified) namedIdx += 1
+      return { name, count, color, isUnclassified }
+    })
+
+    const slices: SegmentSlice[] = groups.map((group) => ({
+      key: group.name,
+      label: group.name,
+      value: group.count,
+      color: group.color,
+      meta: `${group.count.toLocaleString('ko-KR')}개`,
+    }))
+
+    return { groups, slices }
+  }, [list, mode])
+
+  const coverageRows = useMemo(() => {
+    const total = Math.max(list.length, 1)
+    const localPct =
+      list.length > 0 ? Math.round((withLocalNameList.length / total) * 100) : 0
+    const docPct =
+      list.length > 0
+        ? Math.round((withDocOrParentList.length / total) * 100)
+        : 0
+    const thumbPct =
+      list.length > 0 ? Math.round((withThumbnailList.length / total) * 100) : 0
+    const avgPct = Math.round((localPct + docPct + thumbPct) / 3)
+
+    return {
+      avgPct,
+      items: [
+        {
+          key: 'local' as const,
+          label: `원어·한자·로마자 표기 보유 (${withLocalNameList.length}/${list.length})`,
+          count: withLocalNameList.length,
+          pct: localPct,
+          color: ledgerAccent(mode),
+        },
+        {
+          key: 'documented' as const,
+          label: `계통·역사 해설 수록 (${withDocOrParentList.length}/${list.length})`,
+          count: withDocOrParentList.length,
+          pct: docPct,
+          color: mode === 'dark' ? '#34d399' : '#059669',
+        },
+        {
+          key: 'thumbnail' as const,
+          label: `시각 자료(썸네일) (${withThumbnailList.length}/${list.length})`,
+          count: withThumbnailList.length,
+          pct: thumbPct,
+          color: mode === 'dark' ? '#5eead4' : '#0f766e',
+        },
+      ],
+    }
+  }, [
+    list.length,
+    withLocalNameList.length,
+    withDocOrParentList.length,
+    withThumbnailList.length,
+    mode,
+  ])
+
   const filteredList = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase()
     return list.filter((item) => {
@@ -115,11 +244,12 @@ export function EthnicitySection({
       }
       if (filterKey === 'thumbnail' && !item.thumbnailUrl) return false
       if (!keyword) return true
+      const lineageLabel = item.parent?.name?.trim() || UNCLASSIFIED_LINEAGE
       return [
         item.name,
         item.nameLocal,
         item.description,
-        item.parent?.name,
+        lineageLabel,
       ].some((field) => field?.toLowerCase().includes(keyword))
     })
   }, [list, filterKey, searchQuery])
@@ -190,7 +320,7 @@ export function EthnicitySection({
           <HeaderActions>
             <SecondaryBtn
               type="button"
-              onClick={() => navigate(pathKeys.ethnicityTimeline())}
+              onClick={() => navigate(pathKeys.ethnicities())}
             >
               <FiExternalLink size={14} />
               민족 전체 관리
@@ -202,106 +332,6 @@ export function EthnicitySection({
           </HeaderActions>
         }
       />
-
-      <DashboardStyles.SectionHeadlineStrip aria-label="구성 민족 요약 지표">
-        <DashboardStyles.SectionHeadlineCell>
-          <DashboardStyles.SectionHeadlineLabel>
-            연결된 구성 민족
-          </DashboardStyles.SectionHeadlineLabel>
-          <DashboardStyles.SectionHeadlineValue $muted={list.length === 0}>
-            {list.length > 0 ? (
-              <>
-                {list.length.toLocaleString('ko-KR')}
-                <DashboardStyles.SectionHeadlineUnit>
-                  개
-                </DashboardStyles.SectionHeadlineUnit>
-              </>
-            ) : (
-              '미등록'
-            )}
-          </DashboardStyles.SectionHeadlineValue>
-          <DashboardStyles.SectionHeadlineSub>
-            {list.length > 0
-              ? '국가 소속·거주 주요 민족 집단'
-              : '연결된 구성 민족 없음'}
-          </DashboardStyles.SectionHeadlineSub>
-        </DashboardStyles.SectionHeadlineCell>
-
-        <DashboardStyles.SectionHeadlineCell>
-          <DashboardStyles.SectionHeadlineLabel>
-            현지·원어 표기
-          </DashboardStyles.SectionHeadlineLabel>
-          <DashboardStyles.SectionHeadlineValue
-            $muted={withLocalNameList.length === 0}
-          >
-            {withLocalNameList.length > 0 ? (
-              <>
-                {withLocalNameList.length.toLocaleString('ko-KR')}
-                <DashboardStyles.SectionHeadlineUnit>
-                  개
-                </DashboardStyles.SectionHeadlineUnit>
-              </>
-            ) : (
-              '없음'
-            )}
-          </DashboardStyles.SectionHeadlineValue>
-          <DashboardStyles.SectionHeadlineSub>
-            {list.length > 0
-              ? `전체의 ${Math.round((withLocalNameList.length / list.length) * 100)}% · 원어·한자·로마자 병기`
-              : '현지 표기 데이터 대기'}
-          </DashboardStyles.SectionHeadlineSub>
-        </DashboardStyles.SectionHeadlineCell>
-
-        <DashboardStyles.SectionHeadlineCell>
-          <DashboardStyles.SectionHeadlineLabel>
-            설명 · 계통 기록
-          </DashboardStyles.SectionHeadlineLabel>
-          <DashboardStyles.SectionHeadlineValue
-            $muted={withDocOrParentList.length === 0}
-          >
-            {withDocOrParentList.length > 0 ? (
-              <>
-                {withDocOrParentList.length.toLocaleString('ko-KR')}
-                <DashboardStyles.SectionHeadlineUnit>
-                  개
-                </DashboardStyles.SectionHeadlineUnit>
-              </>
-            ) : (
-              '없음'
-            )}
-          </DashboardStyles.SectionHeadlineValue>
-          <DashboardStyles.SectionHeadlineSub>
-            {list.length > 0
-              ? `역사·문화 서술 또는 상위 민족 계통 ${withDocOrParentList.length}/${list.length}개`
-              : '민족 해설·상위 계통 미집계'}
-          </DashboardStyles.SectionHeadlineSub>
-        </DashboardStyles.SectionHeadlineCell>
-
-        <DashboardStyles.SectionHeadlineCell>
-          <DashboardStyles.SectionHeadlineLabel>
-            대표 이미지 보유율
-          </DashboardStyles.SectionHeadlineLabel>
-          <DashboardStyles.SectionHeadlineValue
-            $muted={withThumbnailList.length === 0}
-          >
-            {list.length > 0 ? (
-              <>
-                {Math.round((withThumbnailList.length / list.length) * 100)}
-                <DashboardStyles.SectionHeadlineUnit>
-                  %
-                </DashboardStyles.SectionHeadlineUnit>
-              </>
-            ) : (
-              '—'
-            )}
-          </DashboardStyles.SectionHeadlineValue>
-          <DashboardStyles.SectionHeadlineSub>
-            {list.length > 0
-              ? `대표 썸네일 ${withThumbnailList.length}/${list.length}개`
-              : '썸네일 이미지 미등록'}
-          </DashboardStyles.SectionHeadlineSub>
-        </DashboardStyles.SectionHeadlineCell>
-      </DashboardStyles.SectionHeadlineStrip>
 
       {isLoading ? (
         <LoadingLine>구성 민족 목록을 불러오는 중…</LoadingLine>
@@ -328,7 +358,7 @@ export function EthnicitySection({
             </EmptySpecDesc>
             <EmptySpecAction
               type="button"
-              onClick={() => navigate(pathKeys.ethnicityTimeline())}
+              onClick={() => navigate(pathKeys.ethnicities())}
             >
               민족 전체 관리로 이동 →
             </EmptySpecAction>
@@ -336,6 +366,149 @@ export function EthnicitySection({
         </EmptySpecGrid>
       ) : (
         <>
+          <BentoGrid2Col aria-label="구성 민족 요약 인포그래픽">
+            {/* Card 1: 상위 계통 · 어족 분포 */}
+            <BentoCard>
+              <BentoCardHeader>
+                <BentoCardTitleGroup>
+                  <BentoCardTitle>상위 계통 · 어족 분포</BentoCardTitle>
+                  <BentoCardBadge>
+                    총 {list.length.toLocaleString('ko-KR')}개 민족 ·{' '}
+                    {lineageStats.groups.length.toLocaleString('ko-KR')}개 계통
+                  </BentoCardBadge>
+                </BentoCardTitleGroup>
+                {lineageStats.groups.some(
+                  (group) =>
+                    searchQuery.trim().toLowerCase() ===
+                    group.name.toLowerCase(),
+                ) && (
+                  <BentoActionBtn
+                    type="button"
+                    $accent
+                    onClick={() => setSearchQuery('')}
+                  >
+                    계통 해제 ×
+                  </BentoActionBtn>
+                )}
+              </BentoCardHeader>
+              <BentoCardBody>
+                <LineageSplitRow>
+                  <MiniDonutRing
+                    slices={lineageStats.slices}
+                    size={76}
+                    strokeWidth={9.5}
+                    centerValue={list.length.toLocaleString('ko-KR')}
+                    centerLabel="민족"
+                  />
+                  <LineageRightCol>
+                    <StackedSegmentBar
+                      slices={lineageStats.slices}
+                      height={9}
+                      showPercent
+                    />
+                    <LineageChipWrap
+                      role="group"
+                      aria-label="상위 계통별 필터"
+                    >
+                      {lineageStats.groups.map((group) => {
+                        const isSelected =
+                          searchQuery.trim().toLowerCase() ===
+                          group.name.toLowerCase()
+                        return (
+                          <LineageChipBtn
+                            key={group.name}
+                            type="button"
+                            $active={isSelected}
+                            aria-pressed={isSelected}
+                            title={`${group.name} 민족만 검색 필터`}
+                            onClick={() =>
+                              setSearchQuery((prev) =>
+                                prev.trim().toLowerCase() ===
+                                group.name.toLowerCase()
+                                  ? ''
+                                  : group.name,
+                              )
+                            }
+                          >
+                            <LineageSwatchDot $color={group.color} />
+                            <span>{group.name}</span>
+                            <strong>
+                              {group.count.toLocaleString('ko-KR')}
+                            </strong>
+                          </LineageChipBtn>
+                        )
+                      })}
+                    </LineageChipWrap>
+                  </LineageRightCol>
+                </LineageSplitRow>
+              </BentoCardBody>
+            </BentoCard>
+
+            {/* Card 2: 사료 기록 충실도 & 원어 병기 커버리지 */}
+            <BentoCard>
+              <BentoCardHeader>
+                <BentoCardTitleGroup>
+                  <BentoCardTitle>
+                    사료 기록 충실도 &amp; 원어 병기 커버리지
+                  </BentoCardTitle>
+                  <BentoCardBadge>
+                    평균 {coverageRows.avgPct}%
+                  </BentoCardBadge>
+                </BentoCardTitleGroup>
+                {filterKey !== 'all' && (
+                  <BentoActionBtn
+                    type="button"
+                    $accent
+                    onClick={() => setFilterKey('all')}
+                  >
+                    필터 해제 ×
+                  </BentoActionBtn>
+                )}
+              </BentoCardHeader>
+              <BentoCardBody>
+                <CoverageBarList
+                  role="group"
+                  aria-label="사료 기록 충실도 필터"
+                >
+                  {coverageRows.items.map((row) => {
+                    const isSelected = filterKey === row.key
+                    const widthPct =
+                      row.count > 0 ? Math.max(4, row.pct) : 0
+                    return (
+                      <CoverageRowBtn
+                        key={row.key}
+                        type="button"
+                        $active={isSelected}
+                        aria-pressed={isSelected}
+                        title="클릭하여 해당 기준 충족 민족만 필터링"
+                        onClick={() =>
+                          setFilterKey((prev) =>
+                            prev === row.key ? 'all' : row.key,
+                          )
+                        }
+                      >
+                        <CoverageRowTop>
+                          <CoverageRowLabel $active={isSelected}>
+                            {row.label}
+                          </CoverageRowLabel>
+                          <CoverageRowPct $active={isSelected}>
+                            {row.pct}%
+                          </CoverageRowPct>
+                        </CoverageRowTop>
+                        <CoverageTrack>
+                          <CoverageFill
+                            $tone={row.color}
+                            style={{ width: `${widthPct}%` }}
+                          />
+                        </CoverageTrack>
+                      </CoverageRowBtn>
+                    )
+                  })}
+                </CoverageBarList>
+              </BentoCardBody>
+            </BentoCard>
+          </BentoGrid2Col>
+
           <Toolbar>
             <FilterChipRow role="tablist" aria-label="구성 민족 필터">
               <FilterChip
@@ -456,7 +629,7 @@ export function EthnicitySection({
                     <LedgerActions>
                       <RowActionBtn
                         type="button"
-                        onClick={() => navigate(pathKeys.ethnicityTimeline())}
+                        onClick={() => navigate(pathKeys.ethnicities())}
                       >
                         마스터 관리 →
                       </RowActionBtn>
@@ -518,15 +691,11 @@ const Root = styled.div`
   display: flex;
   flex-direction: column;
   gap: 20px;
-  padding: 28px 32px 48px;
+  ${countryTabCanvasPadding}
   min-height: calc(100vh - 200px);
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
-
-  @media (max-width: 768px) {
-    padding: 20px 16px 36px;
-  }
 `
 
 const HeaderActions = styled.div`
@@ -536,25 +705,7 @@ const HeaderActions = styled.div`
   flex-wrap: wrap;
 `
 
-const SecondaryBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.primary};
-    background: ${({ theme }) => theme.colors.hover};
-  }
-`
+const SecondaryBtn = styled(LedgerToolbarButton)``
 
 const EmptyNotice = styled.p`
   margin: 0;
@@ -933,4 +1084,152 @@ const ModalSaveBtn = styled.button`
     opacity: 0.6;
     cursor: not-allowed;
   }
+`
+
+/* ─── Event-Ledger Bento Infographic Primitives ───────────────────────────── */
+
+const LineageSplitRow = styled.div`
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+`
+
+const LineageRightCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+`
+
+const LineageChipWrap = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+`
+
+const LineageChipBtn = styled.button<{ $active?: boolean }>`
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active
+        ? ledgerAccentBorder(theme.mode)
+        : ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: ${({ $active }) => ($active ? 700 : 500)};
+  box-shadow: none;
+  cursor: pointer;
+  transition:
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease,
+    color ${MOTION.fast} ease;
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
+    ${DIGIT_DISPLAY}
+  }
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    color: ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
+  }
+`
+
+const LineageSwatchDot = styled.span<{ $color: string }>`
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: ${({ $color }) => $color};
+  flex-shrink: 0;
+`
+
+const CoverageBarList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`
+
+const CoverageRowBtn = styled.button<{ $active?: boolean }>`
+  appearance: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  padding: 6px 9px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? ledgerAccentBorder(theme.mode) : ledgerHairline(theme.mode)};
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  font-family: inherit;
+  text-align: left;
+  box-shadow: none;
+  cursor: pointer;
+  transition:
+    background ${MOTION.fast} ease,
+    border-color ${MOTION.fast} ease;
+
+  &:hover {
+    background: ${({ theme, $active }) =>
+      $active ? ledgerAccentSubtle(theme.mode) : ledgerHoverFill(theme.mode)};
+    border-color: ${({ theme, $active }) =>
+      $active
+        ? ledgerAccentBorder(theme.mode)
+        : ledgerHairlineStrong(theme.mode)};
+  }
+`
+
+const CoverageRowTop = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+`
+
+const CoverageRowLabel = styled.span<{ $active?: boolean }>`
+  font-size: 12px;
+  font-weight: ${({ $active }) => ($active ? 700 : 600)};
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
+`
+
+const CoverageRowPct = styled.strong<{ $active?: boolean }>`
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  flex-shrink: 0;
+  ${DIGIT_DISPLAY}
+`
+
+const CoverageTrack = styled.div`
+  width: 100%;
+  height: 6px;
+  border-radius: ${RADIUS.XS};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  overflow: hidden;
+`
+
+const CoverageFill = styled.div<{ $tone: string }>`
+  height: 100%;
+  border-radius: ${RADIUS.XS};
+  background: ${({ $tone }) => $tone};
 `

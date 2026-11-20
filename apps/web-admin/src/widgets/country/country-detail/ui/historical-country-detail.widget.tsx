@@ -98,9 +98,10 @@ import {
   BentoGrid2Col,
   BentoGridAsym,
   BentoHeaderActions,
+  CenturyEventMatrixAndMilestones,
+  FiguresSpotlightBentoCard,
   MilitaryForceInfographicBlock,
   type MissingAxisChip,
-  StackedCenturyDomainChart,
 } from './dashboard-infographic/bento-primitives'
 import {
   getHistoricalCountryTerritoryChanges,
@@ -217,9 +218,7 @@ export function HistoricalCountryDetail({
   })
   const [governmentSubTab, setGovernmentSubTab] = useState<
     'system' | 'cabinets' | 'ministries'
-  >(() =>
-    initialTab === 'heads' || queryTabParam === 'heads' ? 'cabinets' : 'system',
-  )
+  >('cabinets')
   const [focusEventsCentury, setFocusEventsCentury] = useState<number | null>(
     null,
   )
@@ -300,7 +299,7 @@ export function HistoricalCountryDetail({
         : dashboardStats.treatyCount,
       government: dashboardStats.loading.administration
         ? undefined
-        : dashboardStats.administrationCount,
+        : dashboardStats.administrationCount + dashboardStats.rulers.length,
       military: dashboardStats.loading.military
         ? undefined
         : dashboardStats.militaryCount,
@@ -327,7 +326,7 @@ export function HistoricalCountryDetail({
       setFocusEventsCentury(null)
     }
     if (tab === 'heads') {
-      setGovernmentSubTab('system')
+      setGovernmentSubTab('cabinets')
       setActiveTab('government')
       onTabChangeToUrl?.('government')
       return
@@ -361,15 +360,16 @@ export function HistoricalCountryDetail({
     }
   }
 
-  const handleOpenEventsCentury = (century: number) => {
+  const handleOpenEventsCentury = (century: number, domain?: string) => {
     setFocusEventsCentury(century)
-    handleTabChange('events')
+    setActiveTab('events')
+    navigate(pathKeys.countryEvents(country.id, undefined, century, domain))
   }
 
   // URL에서 직접 진입·뒤로가기 시 탭 동기화 — initialTab이 있으면 그 탭, 없으면 synced 탭에 머물러 있을 때만 overview로 복귀.
   useEffect(() => {
     if (initialTab === 'heads' || queryTabParam === 'heads') {
-      setGovernmentSubTab('system')
+      setGovernmentSubTab('cabinets')
       setActiveTab('government')
       return
     }
@@ -716,22 +716,26 @@ const HISTORICAL_TABS: ReadonlyArray<{
   label: string
   groupEnd?: boolean
 }> = [
-  // id는 URL·동기화 탭 키라 그대로 두고 이름만 — 현대 국가 지면도 '대시보드'다
+  // 1. 종합 개요
   { id: 'overview', label: '대시보드', groupEnd: true },
-  { id: 'events', label: '사건' },
-  { id: 'figures', label: '인물', groupEnd: true },
-  { id: 'succession', label: '계승' },
-  { id: 'membership', label: '소속·구성' },
-  { id: 'relation', label: '국가 관계' },
-  { id: 'treaty', label: '조약', groupEnd: true },
+  // 2. 통치·정치·제도 (현대 국가와 동일한 핵심 위치)
   { id: 'government', label: '정부·행정' },
-  { id: 'military', label: '군사' },
+  { id: 'elections', label: '정당·선거' },
+  { id: 'laws', label: '법령', groupEnd: true },
+  // 3. 역사·인물·계승 (시간축 서사 및 정통성 계보)
+  { id: 'events', label: '사건' },
+  { id: 'figures', label: '인물' },
+  { id: 'succession', label: '계승', groupEnd: true },
+  // 4. 강역·군사·대외 관계
   { id: 'regions', label: '행정구역' },
-  { id: 'laws', label: '법령' },
-  { id: 'ethnicity', label: '민족', groupEnd: true },
+  { id: 'military', label: '군사' },
+  { id: 'treaty', label: '조약' },
+  { id: 'relation', label: '국가 관계' },
+  { id: 'membership', label: '소속·구성', groupEnd: true },
+  // 5. 경제·산업·사회
   { id: 'trade', label: '교역' },
   { id: 'companies', label: '기업' },
-  { id: 'elections', label: '정당·선거' },
+  { id: 'ethnicity', label: '민족' },
 ]
 
 const historicalTabId = (tab: HistoricalCountryTab) => `historical-country-tab-${tab}`
@@ -844,7 +848,7 @@ function HistoricalOverviewSection({
   onOpenGovernmentSubTab?: (
     subTab: 'system' | 'cabinets' | 'ministries' | 'military',
   ) => void
-  onOpenEventsCentury: (century: number) => void
+  onOpenEventsCentury: (century: number, domain?: string) => void
 }) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -1139,6 +1143,7 @@ function HistoricalOverviewSection({
 
   const hasEventsOrMilitary =
     stats.eventCenturyDomainCounts.length > 0 ||
+    stats.milestoneEvents.length > 0 ||
     stats.militaryCount > 0 ||
     tradeYearCount > 0 ||
     companyCount > 0
@@ -1147,7 +1152,7 @@ function HistoricalOverviewSection({
     <BentoCard aria-label="세기별 역사 사건 밀도 및 군사·교역 요약">
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <BentoCardTitle>세기별 사건 리듬 · 군사 · 경제</BentoCardTitle>
+          <BentoCardTitle>세기별 사건 매트릭스 · 분수령 사건 · 군사</BentoCardTitle>
           {stats.eventCount > 0 ? (
             <BentoCardBadge>사건 {stats.eventCount}건</BentoCardBadge>
           ) : null}
@@ -1177,20 +1182,23 @@ function HistoricalOverviewSection({
       </BentoCardHeader>
 
       <BentoCardBody>
-        {stats.eventCenturyDomainCounts.length > 0 ? (
-          <div>
-            <StackedCenturyDomainChart
-              buckets={stats.eventCenturyDomainCounts}
-              domainBreakdown={stats.eventDomainBreakdown}
-              onSelectCentury={onOpenEventsCentury}
-            />
-          </div>
+        {stats.eventCenturyDomainCounts.length > 0 ||
+        stats.milestoneEvents.length > 0 ? (
+          <CenturyEventMatrixAndMilestones
+            buckets={stats.eventCenturyDomainCounts}
+            domainBreakdown={stats.eventDomainBreakdown}
+            milestones={stats.milestoneEvents}
+            onSelectCentury={(cent) => onOpenEventsCentury(cent)}
+            onSelectCell={(cent, dom) => onOpenEventsCentury(cent, dom)}
+            onSelectEvent={(eid) => setPreviewEventId(eid)}
+          />
         ) : null}
 
         {(stats.militaryCount > 0 ||
           stats.warSummary.totalMilitaryEvents > 0) && (
           <>
-            {stats.eventCenturyDomainCounts.length > 0 ? (
+            {stats.eventCenturyDomainCounts.length > 0 ||
+            stats.milestoneEvents.length > 0 ? (
               <BentoDivider />
             ) : null}
             <MilitaryForceInfographicBlock
@@ -1238,11 +1246,17 @@ function HistoricalOverviewSection({
         {/* 2단: 역대 통치자 비례 치세 스펙트럼 (클릭 시 상단 마인드맵 즉시 연동) */}
         <HistoricalRulerSpectrumCard
           rulers={stats.rulers}
+          politicalSystems={stats.politicalSystems}
           spanStart={span.start}
           spanEnd={span.end}
           activeTenureId={activeMindMapTenureId}
           onFocusRulerTenure={(tid) => setFocusedTenureId(tid)}
           onSelectPerson={(pid) => setPreviewPersonId(pid)}
+          onOpenPoliticalSystem={() =>
+            onOpenGovernmentSubTab
+              ? onOpenGovernmentSubTab('system')
+              : onGoToTab('government')
+          }
           onOpenRulersTab={() =>
             onOpenGovernmentSubTab
               ? onOpenGovernmentSubTab('cabinets')
@@ -1375,6 +1389,14 @@ function HistoricalOverviewSection({
             ) : null}
           </>
         )}
+
+        {/* 5단: 소속 인물 역할·시대 분포 도넛 & 주요 인물 초상 갤러리 */}
+        <FiguresSpotlightBentoCard
+          spotlight={stats.personSpotlight}
+          personCount={stats.personCount}
+          onSelectPerson={(pid) => setPreviewPersonId(pid)}
+          onOpenPersonsTab={() => onGoToTab('figures')}
+        />
 
         {/* 하단 1줄: 아카이브 완성도 도넛 링 + 미입력 보완 칩 + 최근 기록 티커 */}
         <ArchiveFootprintBar

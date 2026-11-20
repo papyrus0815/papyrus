@@ -14,6 +14,7 @@ import {
 } from 'react-icons/fi'
 import styled, { useTheme } from 'styled-components'
 
+import { useAdministrativeDivisions } from '@/entities/country/api.administrative-divisions'
 import type { ExportImport } from '@/entities/country/api.trade'
 import { toPyramidRows } from '@/entities/country/model/population-pyramid'
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
@@ -37,14 +38,25 @@ import {
   ledgerSubtleFill,
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
-import { cityApi } from '@/shared/api/city'
 import type {
   BondYield,
   DemographicIndicator,
   DevelopmentIndicator,
   EconomicIndicator,
 } from '@/shared/api/country-indicators'
+import { getElection, labelElectionType } from '@/shared/api/election'
+import {
+  POLITICAL_POSITION_COLOR,
+  POLITICAL_POSITION_LABEL,
+  type PoliticalParty,
+  type PoliticalPosition,
+} from '@/shared/api/political-party'
 import type { PoliticalSystem } from '@/shared/api/political-system'
+import {
+  TREATY_TYPE_LABELS,
+  treatyTypeTone,
+  type TreatyType,
+} from '@/shared/api/treaty'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import {
   formatCountryPeriod,
@@ -57,11 +69,16 @@ import {
 
 import type {
   CenturyDomainBucket,
+  CivicInstitutionalSnapshot,
   ContinentComparison,
   CurrentCabinetSummary,
   CurrentHead,
   ElectionSummary,
+  ExecutiveTimelineItem,
+  MilestoneEventItem,
   MilitaryBranchSummary,
+  PeerCountryMetric,
+  RegimeEraBand,
   WarOutcomeSummary,
 } from '../../model/use-country-dashboard-stats'
 import { formatAreaValue, formatPopulation } from '../dashboard-panels/format'
@@ -79,14 +96,18 @@ import {
   BentoHeaderActions,
   BentoPill,
   BentoSubLabel,
+  CenturyEventMatrixAndMilestones,
   HdiScaleBar,
   MilitaryForceInfographicBlock,
   MiniDonutRing,
   MiniSvgSparkline,
+  NationalRadarPolygonChart,
+  ParliamentHemicycleSvg,
   PercentileBulletBar,
+  type RadarAxisMetric,
   SemiCircleGauge,
   type SegmentSlice,
-  StackedCenturyDomainChart,
+  SovereignYieldCurveSvg,
   StackedSegmentBar,
 } from './bento-primitives'
 
@@ -673,6 +694,23 @@ export function NationalPowerGaugeStrip({
     }
   }, [economicIndicators, developmentIndicators, bondYields])
 
+  const hasYieldCurve = useMemo(() => {
+    const byYear = new Map<number, Set<string>>()
+    for (const row of bondYields) {
+      if (row.yieldRate == null || !Number.isFinite(Number(row.yieldRate))) {
+        continue
+      }
+      const s = byYear.get(row.year) ?? new Set<string>()
+      s.add(row.maturity)
+      byYear.set(row.year, s)
+    }
+    return [...byYear.values()].some((s) => s.size >= 2)
+  }, [bondYields])
+
+  const [cell3View, setCell3View] = useState<'curve' | 'macro'>('curve')
+  const showCurveInCell3 =
+    hasYieldCurve && (cell3View === 'curve' || macroPts.length === 0)
+
   const popRankTotal = continentComparison.populationRankTotal ?? 0
   const popTopPct =
     continentComparison.populationRank != null && popRankTotal > 1
@@ -753,36 +791,85 @@ export function NationalPowerGaugeStrip({
           )}
         </GaugeCellBtn>
 
-        {/* 3. 성장률 / 물가 / 국채금리 추이 */}
+        {/* 3. 국채 수익률곡선(1M~30Y) / 성장률 · 물가 추이 */}
         <GaugeCellBtn
-          type="button"
-          onClick={latestY10 && macroPts.length === 0 ? onOpenBonds : onOpenEconomics}
+          as="div"
+          role="button"
+          tabIndex={0}
+          onClick={
+            showCurveInCell3 || (latestY10 && macroPts.length === 0)
+              ? onOpenBonds
+              : onOpenEconomics
+          }
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              if (showCurveInCell3 || (latestY10 && macroPts.length === 0)) {
+                onOpenBonds()
+              } else {
+                onOpenEconomics()
+              }
+            }
+          }}
         >
           <GaugeCellTop>
-            <SparkTitle>{macroLabel}</SparkTitle>
-            {macroDelta ? (
+            <SparkTitle>
+              {showCurveInCell3 ? '국채 수익률곡선' : macroLabel}
+            </SparkTitle>
+            {hasYieldCurve && macroPts.length > 0 ? (
+              <MiniDirSwitch onClick={(e) => e.stopPropagation()}>
+                <MiniDirBtn
+                  type="button"
+                  $active={cell3View === 'curve'}
+                  onClick={() => setCell3View('curve')}
+                >
+                  곡선
+                </MiniDirBtn>
+                <MiniDirBtn
+                  type="button"
+                  $active={cell3View === 'macro'}
+                  onClick={() => setCell3View('macro')}
+                >
+                  성장
+                </MiniDirBtn>
+              </MiniDirSwitch>
+            ) : macroDelta ? (
               <DeltaChip>{macroDelta}</DeltaChip>
             ) : latestY10 ? (
               <DeltaChip>10Y {latestY10.value.toFixed(2)}%</DeltaChip>
             ) : null}
           </GaugeCellTop>
-          <SparkBigNum>
-            {macroLatestText ??
-              (latestY10 ? `${latestY10.value.toFixed(2)}%` : '미등록')}
-            {latestY10 && macroLatestText ? (
-              <SparkYear>국채10Y {latestY10.value.toFixed(2)}%</SparkYear>
-            ) : null}
-          </SparkBigNum>
-          {macroPts.length > 0 ? (
-            <MiniSvgSparkline
-              points={macroPts}
-              color={theme.mode === 'dark' ? '#34d399' : '#059669'}
-              height={46}
-              showZeroLine={macroZeroLine}
-              formatValue={(v) => `${v.toFixed(2)}%`}
-            />
+          {showCurveInCell3 ? (
+            <>
+              <SparkBigNum>
+                {latestY10 ? `10Y ${latestY10.value.toFixed(2)}%` : '만기구조'}
+                {macroLatestText ? (
+                  <SparkYear>성장 {macroLatestText}</SparkYear>
+                ) : null}
+              </SparkBigNum>
+              <SovereignYieldCurveSvg bondYields={bondYields} height={46} />
+            </>
           ) : (
-            <GaugeEmptyHint>성장률 · 물가 · 금리 시계열</GaugeEmptyHint>
+            <>
+              <SparkBigNum>
+                {macroLatestText ??
+                  (latestY10 ? `${latestY10.value.toFixed(2)}%` : '미등록')}
+                {latestY10 && macroLatestText ? (
+                  <SparkYear>국채10Y {latestY10.value.toFixed(2)}%</SparkYear>
+                ) : null}
+              </SparkBigNum>
+              {macroPts.length > 0 ? (
+                <MiniSvgSparkline
+                  points={macroPts}
+                  color={theme.mode === 'dark' ? '#34d399' : '#059669'}
+                  height={46}
+                  showZeroLine={macroZeroLine}
+                  formatValue={(v) => `${v.toFixed(2)}%`}
+                />
+              ) : (
+                <GaugeEmptyHint>성장률 · 물가 · 금리 시계열</GaugeEmptyHint>
+              )}
+            </>
           )}
         </GaugeCellBtn>
 
@@ -1413,6 +1500,7 @@ export function ModernHistoryForceBentoCard({
   eventCount,
   centuryBuckets,
   domainBreakdown,
+  milestoneEvents = [],
   militaryCount,
   highCommandCount,
   militaryBranchBreakdown,
@@ -1420,6 +1508,8 @@ export function ModernHistoryForceBentoCard({
   onOpenHistoricalTab,
   onSelectHistoricalCountry,
   onSelectCentury,
+  onSelectCell,
+  onSelectEvent,
   onOpenEvents,
   onOpenMilitary,
 }: {
@@ -1428,6 +1518,7 @@ export function ModernHistoryForceBentoCard({
   eventCount: number
   centuryBuckets: CenturyDomainBucket[]
   domainBreakdown: Array<{ domain: string; count: number }>
+  milestoneEvents?: MilestoneEventItem[]
   militaryCount: number
   highCommandCount: number
   militaryBranchBreakdown: MilitaryBranchSummary[]
@@ -1435,6 +1526,8 @@ export function ModernHistoryForceBentoCard({
   onOpenHistoricalTab: () => void
   onSelectHistoricalCountry: (id: string) => void
   onSelectCentury: (century: number) => void
+  onSelectCell?: (century: number, domain: string) => void
+  onSelectEvent?: (eventId: string) => void
   onOpenEvents: () => void
   onOpenMilitary: () => void
 }) {
@@ -1452,9 +1545,42 @@ export function ModernHistoryForceBentoCard({
       .slice(-6)
   }, [historicalCountries])
 
+  const lineageSpanBars = useMemo(() => {
+    const nowYr = new Date().getFullYear()
+    const withRange = lineageChain
+      .map((hc) => {
+        const r = getCountryYearRange(hc)
+        if (r.start == null) return null
+        const end = r.end ?? nowYr
+        return {
+          id: hc.id,
+          name: hc.name,
+          periodLabel: formatCountryPeriod(hc),
+          start: r.start,
+          end: Math.max(r.start + 1, end),
+          years: Math.max(1, end - r.start),
+        }
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+    if (withRange.length === 0) return null
+    const minY = Math.min(...withRange.map((w) => w.start))
+    const maxY = Math.max(nowYr, ...withRange.map((w) => w.end))
+    const totalSpan = Math.max(10, maxY - minY)
+    return {
+      minY,
+      maxY,
+      items: withRange.map((w) => ({
+        ...w,
+        leftPct: ((w.start - minY) / totalSpan) * 100,
+        widthPct: Math.max(2.5, ((w.end - w.start) / totalSpan) * 100),
+      })),
+    }
+  }, [lineageChain])
+
   if (
     lineageChain.length === 0 &&
     centuryBuckets.length === 0 &&
+    milestoneEvents.length === 0 &&
     militaryCount === 0
   ) {
     return null
@@ -1464,7 +1590,7 @@ export function ModernHistoryForceBentoCard({
     <BentoCard aria-label="통사 국가 계보 및 사건·군사 리듬">
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <BentoCardTitle>통사 계보 · 세기별 사건 · 군사력</BentoCardTitle>
+          <BentoCardTitle>통사 계보 · 세기별 사건 매트릭스 · 군사력</BentoCardTitle>
           {eventCount > 0 ? (
             <BentoCardBadge>사건 {eventCount}건</BentoCardBadge>
           ) : null}
@@ -1483,11 +1609,11 @@ export function ModernHistoryForceBentoCard({
       </BentoCardHeader>
 
       <BentoCardBody>
-        {/* 1. 직계 전신 → 현대 국가 타임라인 스파인 */}
+        {/* 1. 직계 전신 → 현대 국가 타임라인 스파인 & 비례 존속 스팬 바 */}
         {lineageChain.length > 0 ? (
           <div>
             <BentoSubLabel style={{ marginBottom: 7 }}>
-              <span>국가 계승 스파인</span>
+              <span>국가 계승 스파인 · 존속 연대기</span>
               {historicalCountries.length > lineageChain.length ? (
                 <span>최근 {lineageChain.length}대 표시</span>
               ) : null}
@@ -1507,31 +1633,56 @@ export function ModernHistoryForceBentoCard({
               ))}
               <LineageCurrentPill>{countryName}</LineageCurrentPill>
             </LineageSpineRow>
+
+            {lineageSpanBars && lineageSpanBars.items.length >= 2 ? (
+              <LineageGanttWrap>
+                {lineageSpanBars.items.map((bar, idx) => (
+                  <LineageGanttRowBtn
+                    key={bar.id}
+                    type="button"
+                    onClick={() => onSelectHistoricalCountry(bar.id)}
+                    title={`${bar.name} (${bar.periodLabel} · 약 ${bar.years}년)`}
+                  >
+                    <span className="nm">{bar.name}</span>
+                    <div className="track">
+                      <div
+                        className="fill"
+                        style={{
+                          left: `${bar.leftPct.toFixed(2)}%`,
+                          width: `${bar.widthPct.toFixed(2)}%`,
+                          opacity: 0.55 + (idx / lineageSpanBars.items.length) * 0.45,
+                        }}
+                      />
+                    </div>
+                    <span className="dur">{bar.years}년</span>
+                  </LineageGanttRowBtn>
+                ))}
+              </LineageGanttWrap>
+            ) : null}
           </div>
         ) : null}
 
-        {/* 2. 세기별 사건 도메인 스택 히스토그램 */}
-        {centuryBuckets.length > 0 ? (
+        {/* 2. 세기×분야 히트맵 매트릭스 & 분수령 사건 핀 */}
+        {centuryBuckets.length > 0 || milestoneEvents.length > 0 ? (
           <>
             {lineageChain.length > 0 ? <BentoDivider /> : null}
-            <div>
-              <BentoSubLabel style={{ marginBottom: 4 }}>
-                <span>세기별 역사 사건 밀도 · 분야 분포</span>
-                <span>막대 클릭 시 세기 필터</span>
-              </BentoSubLabel>
-              <StackedCenturyDomainChart
-                buckets={centuryBuckets}
-                domainBreakdown={domainBreakdown}
-                onSelectCentury={onSelectCentury}
-              />
-            </div>
+            <CenturyEventMatrixAndMilestones
+              buckets={centuryBuckets}
+              domainBreakdown={domainBreakdown}
+              milestones={milestoneEvents}
+              onSelectCentury={onSelectCentury}
+              onSelectCell={onSelectCell}
+              onSelectEvent={onSelectEvent}
+            />
           </>
         ) : null}
 
         {/* 3. 군사 전력 · 참전 요약 */}
         {militaryCount > 0 || warSummary.totalMilitaryEvents > 0 ? (
           <>
-            {lineageChain.length > 0 || centuryBuckets.length > 0 ? (
+            {lineageChain.length > 0 ||
+            centuryBuckets.length > 0 ||
+            milestoneEvents.length > 0 ? (
               <BentoDivider />
             ) : null}
             <MilitaryForceInfographicBlock
@@ -1559,18 +1710,15 @@ export function CompactGeoBentoCard({
   cityCount: number
   onOpenRegions: (divisionId?: string) => void
 }) {
-  const [layer, setLayer] = useState<'roadmap' | 'hybrid'>('roadmap')
+  const theme = useTheme()
+  const [geoMode, setGeoMode] = useState<'atlas' | 'roadmap' | 'hybrid'>('atlas')
 
-  const divisionsQuery = useQuery({
-    queryKey: ['administrative-divisions-top-preview', country.id],
-    queryFn: () =>
-      cityApi.getAdministrativeDivisions(
-        country.type === 'historical'
-          ? { historicalCountryId: country.id }
-          : { countryId: country.id },
-      ),
-    staleTime: 1000 * 60 * 5,
-  })
+  const divisionsQuery = useAdministrativeDivisions(
+    country.type === 'historical'
+      ? { historicalCountryId: country.id }
+      : { countryId: country.id },
+    null,
+  )
 
   const topDivisions = useMemo(() => {
     const raw = divisionsQuery.data ?? []
@@ -1585,11 +1733,23 @@ export function CompactGeoBentoCard({
         latitude: validCoord?.lat ?? null,
         longitude: validCoord?.lng ?? null,
         countryName: country.enName || country.name,
-        zoom: validCoord ? 5 : 5,
-        mapLayer: layer,
+        zoom: 5,
+        mapLayer: geoMode === 'hybrid' ? 'hybrid' : 'roadmap',
       }),
-    [country, validCoord, layer],
+    [country, validCoord, geoMode],
   )
+
+  const svgPin = useMemo(() => {
+    if (!validCoord) return { x: 180, y: 88, hasExact: false }
+    // Equirectangular projection into 360 x 180 box
+    const x = Math.max(18, Math.min(342, ((validCoord.lng + 180) / 360) * 360))
+    const y = Math.max(16, Math.min(164, ((90 - validCoord.lat) / 180) * 180))
+    return { x, y, hasExact: true }
+  }, [validCoord])
+
+  const coordLabel = validCoord
+    ? `${Math.abs(validCoord.lat).toFixed(2)}°${validCoord.lat >= 0 ? 'N' : 'S'} · ${Math.abs(validCoord.lng).toFixed(2)}°${validCoord.lng >= 0 ? 'E' : 'W'}`
+    : '좌표 미기재'
 
   return (
     <BentoCard aria-label="지리 위치 및 최상위 행정구역">
@@ -1602,14 +1762,29 @@ export function CompactGeoBentoCard({
           ) : null}
         </BentoCardTitleGroup>
         <BentoHeaderActions>
-          <BentoActionBtn
-            type="button"
-            onClick={() =>
-              setLayer((prev) => (prev === 'roadmap' ? 'hybrid' : 'roadmap'))
-            }
-          >
-            {layer === 'roadmap' ? '위성' : '일반'}
-          </BentoActionBtn>
+          <MiniDirSwitch>
+            <MiniDirBtn
+              type="button"
+              $active={geoMode === 'atlas'}
+              onClick={() => setGeoMode('atlas')}
+            >
+              벡터
+            </MiniDirBtn>
+            <MiniDirBtn
+              type="button"
+              $active={geoMode === 'roadmap'}
+              onClick={() => setGeoMode('roadmap')}
+            >
+              지도
+            </MiniDirBtn>
+            <MiniDirBtn
+              type="button"
+              $active={geoMode === 'hybrid'}
+              onClick={() => setGeoMode('hybrid')}
+            >
+              위성
+            </MiniDirBtn>
+          </MiniDirSwitch>
           <BentoActionBtn
             type="button"
             $accent
@@ -1621,7 +1796,115 @@ export function CompactGeoBentoCard({
       </BentoCardHeader>
 
       <MapIframeWrap>
-        {mapSpec ? (
+        {geoMode === 'atlas' ? (
+          <VectorGeoAtlasBox onClick={() => onOpenRegions()}>
+            <svg viewBox="0 0 360 180" preserveAspectRatio="xMidYMid slice" aria-hidden>
+              {[30, 60, 90, 120, 150].map((gy) => (
+                <line
+                  key={`lat-${gy}`}
+                  x1="0"
+                  y1={gy}
+                  x2="360"
+                  y2={gy}
+                  stroke={
+                    gy === 90
+                      ? ledgerHairlineStrong(theme.mode)
+                      : ledgerHairline(theme.mode)
+                  }
+                  strokeWidth={gy === 90 ? '1' : '0.7'}
+                  strokeDasharray={gy === 90 ? undefined : '2.5 3.5'}
+                />
+              ))}
+              {[60, 120, 180, 240, 300].map((gx) => (
+                <line
+                  key={`lng-${gx}`}
+                  x1={gx}
+                  y1="0"
+                  x2={gx}
+                  y2="180"
+                  stroke={
+                    gx === 180
+                      ? ledgerHairlineStrong(theme.mode)
+                      : ledgerHairline(theme.mode)
+                  }
+                  strokeWidth={gx === 180 ? '1' : '0.7'}
+                  strokeDasharray={gx === 180 ? undefined : '2.5 3.5'}
+                />
+              ))}
+              {/* Reticle crosshairs */}
+              <line
+                x1={svgPin.x}
+                y1="0"
+                x2={svgPin.x}
+                y2="180"
+                stroke={ledgerAccent(theme.mode)}
+                strokeOpacity="0.45"
+                strokeWidth="0.9"
+                strokeDasharray="3 3"
+              />
+              <line
+                x1="0"
+                y1={svgPin.y}
+                x2="360"
+                y2={svgPin.y}
+                stroke={ledgerAccent(theme.mode)}
+                strokeOpacity="0.45"
+                strokeWidth="0.9"
+                strokeDasharray="3 3"
+              />
+              {/* Surrounding division orbit nodes */}
+              {topDivisions.slice(0, 6).map((div, idx, arr) => {
+                const ang = -Math.PI / 2 + (idx * 2 * Math.PI) / arr.length
+                const ox = Math.max(16, Math.min(344, svgPin.x + Math.cos(ang) * 34))
+                const oy = Math.max(16, Math.min(164, svgPin.y + Math.sin(ang) * 24))
+                return (
+                  <g key={div.id}>
+                    <line
+                      x1={svgPin.x}
+                      y1={svgPin.y}
+                      x2={ox}
+                      y2={oy}
+                      stroke={ledgerAccent(theme.mode)}
+                      strokeOpacity="0.28"
+                      strokeWidth="0.9"
+                    />
+                    <circle
+                      cx={ox}
+                      cy={oy}
+                      r="2.6"
+                      fill={theme.mode === 'dark' ? '#38bdf8' : '#0284c7'}
+                    />
+                  </g>
+                )
+              })}
+              <circle
+                cx={svgPin.x}
+                cy={svgPin.y}
+                r="13"
+                fill={ledgerAccent(theme.mode)}
+                fillOpacity="0.16"
+                stroke={ledgerAccent(theme.mode)}
+                strokeOpacity="0.55"
+                strokeWidth="1"
+              />
+              <circle
+                cx={svgPin.x}
+                cy={svgPin.y}
+                r="4.5"
+                fill={ledgerAccent(theme.mode)}
+                stroke={ledgerBackground(theme.mode)}
+                strokeWidth="1.5"
+              />
+            </svg>
+            <VectorGeoHud>
+              <span>
+                <strong>{country.capital || country.name}</strong>
+                {country.isoCode ? ` · ${country.isoCode}` : ''}
+              </span>
+              <span>{coordLabel}</span>
+            </VectorGeoHud>
+          </VectorGeoAtlasBox>
+        ) : mapSpec ? (
           <>
             <iframe
               title={`${country.name} 위치 지도`}
@@ -2456,4 +2739,1712 @@ const MiniDirBtn = styled.button<{ $active: boolean }>`
   font-size: 10.5px;
   font-weight: ${({ $active }) => ($active ? 700 : 500)};
   cursor: pointer;
+`
+
+const LineageGanttWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px dashed ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const LineageGanttRowBtn = styled.button`
+  display: grid;
+  grid-template-columns: 112px 1fr 48px;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+
+  .nm {
+    font-size: 11px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .track {
+    position: relative;
+    height: 7px;
+    border-radius: 999px;
+    background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+    overflow: hidden;
+  }
+
+  .fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    border-radius: 999px;
+    background: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+
+  .dur {
+    text-align: right;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    ${DIGIT_DISPLAY}
+  }
+`
+
+/* ─── 8. Modern Executive Reign Spectrum Card (MindMap Live Sync) ─────────── */
+
+export function ModernExecutiveSpectrumCard({
+  timeline,
+  regimeEras = [],
+  activeTenureId,
+  onFocusTenure,
+  onSelectPerson,
+  onOpenCabinets,
+  onOpenPoliticalSystem,
+  onOpenHeadsTab,
+}: {
+  timeline: ExecutiveTimelineItem[]
+  regimeEras?: RegimeEraBand[]
+  activeTenureId?: string | null
+  onFocusTenure: (tenureId: string) => void
+  onSelectPerson: (personId: string) => void
+  onOpenCabinets: () => void
+  onOpenPoliticalSystem?: () => void
+  onOpenHeadsTab: () => void
+}) {
+  const theme = useTheme()
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
+
+  const model = useMemo(() => {
+    if (timeline.length === 0) return null
+    const nowYr = new Date().getFullYear()
+    const stateItems = timeline.filter((t) => t.axis === 'HEAD_OF_STATE')
+    const govItems = timeline.filter((t) => t.axis === 'HEAD_OF_GOVERNMENT')
+    const allStarts = [
+      ...timeline.map((t) => t.startYear),
+      ...regimeEras.map((e) => e.startYear),
+    ]
+    const minY = Math.min(...allStarts)
+    const maxY = Math.max(
+      nowYr,
+      ...timeline.map((t) => t.endYear ?? nowYr),
+      ...regimeEras.map((e) => e.endYear ?? nowYr),
+    )
+    const span = Math.max(4, maxY - minY)
+
+    const eraBands = regimeEras
+      .map((era, idx) => {
+        const end = era.endYear ?? nowYr
+        const dur = Math.max(0.8, end - era.startYear)
+        const leftPct = Math.max(
+          0,
+          Math.min(98, ((era.startYear - minY) / span) * 100),
+        )
+        const widthPct = Math.max(2, Math.min(100 - leftPct, (dur / span) * 100))
+        return {
+          ...era,
+          endResolved: end,
+          leftPct,
+          widthPct,
+          even: idx % 2 === 0,
+        }
+      })
+      .filter((b) => b.widthPct > 0)
+
+    const mapTrack = (
+      items: ExecutiveTimelineItem[],
+      defaultDark: string,
+      defaultLight: string,
+    ) =>
+      items.map((item, idx) => {
+        const end = item.endYear ?? nowYr
+        const dur = Math.max(0.8, end - item.startYear)
+        const leftPct = Math.max(
+          0,
+          Math.min(98.2, ((item.startYear - minY) / span) * 100),
+        )
+        const widthPct = Math.max(1.8, Math.min(100 - leftPct, (dur / span) * 100))
+        const fallback = theme.mode === 'dark' ? defaultDark : defaultLight
+        return {
+          ...item,
+          endResolved: end,
+          leftPct,
+          widthPct,
+          barColor: item.partyColor || fallback,
+          altAlpha: idx % 2 === 0 ? 0.92 : 0.68,
+        }
+      })
+
+    const tracks: Array<{
+      key: string
+      label: string
+      rows: ReturnType<typeof mapTrack>
+    }> = []
+
+    if (stateItems.length > 0) {
+      tracks.push({
+        key: 'state',
+        label: govItems.length > 0 ? '국가원수' : '역대 수반',
+        rows: mapTrack(stateItems, '#a5b4fc', '#4f46e5'),
+      })
+    }
+    if (govItems.length > 0) {
+      tracks.push({
+        key: 'gov',
+        label: '정부수반',
+        rows: mapTrack(govItems, '#38bdf8', '#0284c7'),
+      })
+    }
+
+    const ticks = [
+      minY,
+      Math.round(minY + span * 0.25),
+      Math.round(minY + span * 0.5),
+      Math.round(minY + span * 0.75),
+      maxY,
+    ]
+    const uniqueTicks = [...new Set(ticks)]
+
+    const recentChips = [...timeline]
+      .sort((a, b) => (b.endYear ?? nowYr) - (a.endYear ?? nowYr) || b.startYear - a.startYear)
+      .slice(0, 10)
+      .reverse()
+
+    return { minY, maxY, eraBands, tracks, ticks: uniqueTicks, recentChips }
+  }, [timeline, regimeEras, theme.mode])
+
+  if (!model) return null
+
+  const hoveredItem =
+    timeline.find((t) => t.recordId === (hoveredId ?? activeTenureId)) ??
+    timeline[timeline.length - 1]
+  const hasLabelCol = model.tracks.length > 1 || model.eraBands.length > 0
+
+  return (
+    <BentoCard aria-label="역대 국가수반 재임 스펙트럼">
+      <BentoCardHeader>
+        <BentoCardTitleGroup>
+          <BentoCardTitle>헌정 체제 · 역대 국가수반 집권 스펙트럼</BentoCardTitle>
+          <BentoCardBadge>
+            {model.minY}–현재 · {timeline.length}대 재임
+          </BentoCardBadge>
+        </BentoCardTitleGroup>
+        <BentoHeaderActions>
+          {hoveredItem ? (
+            <ExecHoverReadout>
+              {hoveredItem.partyColor ? (
+                <span
+                  className="dot"
+                  style={{ background: hoveredItem.partyColor }}
+                />
+              ) : null}
+              <strong>
+                {hoveredItem.ordinal != null ? `제${hoveredItem.ordinal}대 ` : ''}
+                {hoveredItem.personName}
+              </strong>
+              <span>
+                {hoveredItem.partyName ? `${hoveredItem.partyName} · ` : ''}
+                {hoveredItem.startYear}–{hoveredItem.endYear ?? '현직'}
+              </span>
+            </ExecHoverReadout>
+          ) : null}
+          <BentoActionBtn type="button" onClick={onOpenCabinets}>
+            역대 내각
+          </BentoActionBtn>
+          <BentoActionBtn type="button" $accent onClick={onOpenHeadsTab}>
+            수반 연표 <FiArrowUpRight size={11} />
+          </BentoActionBtn>
+        </BentoHeaderActions>
+      </BentoCardHeader>
+
+      <BentoCardBody style={{ gap: 10 }}>
+        <ExecTracksStack>
+          {/* 상단 동기화 헌정 체제(PoliticalSystem) 시대 밴드 */}
+          {model.eraBands.length > 0 ? (
+            <ExecTrackRow $dual={hasLabelCol}>
+              {hasLabelCol ? (
+                <ExecTrackAxisLabel>헌정체제</ExecTrackAxisLabel>
+              ) : null}
+              <RegimeEraBar>
+                {model.eraBands.map((band) => (
+                  <RegimeEraSegBtn
+                    key={band.id}
+                    type="button"
+                    $even={band.even}
+                    style={{
+                      left: `${band.leftPct.toFixed(2)}%`,
+                      width: `${band.widthPct.toFixed(2)}%`,
+                    }}
+                    onClick={() => onOpenPoliticalSystem?.()}
+                    title={`${band.label}${band.governmentFormLabel ? ` (${band.governmentFormLabel})` : ''} · ${band.startYear}–${band.endYear ?? '현재'}`}
+                  >
+                    {band.widthPct >= 9 ? <span>{band.label}</span> : null}
+                  </RegimeEraSegBtn>
+                ))}
+              </RegimeEraBar>
+            </ExecTrackRow>
+          ) : null}
+
+          {model.tracks.map((track) => (
+            <ExecTrackRow key={track.key} $dual={hasLabelCol}>
+              {hasLabelCol ? (
+                <ExecTrackAxisLabel>{track.label}</ExecTrackAxisLabel>
+              ) : null}
+              <ExecSpectrumBar>
+                {track.rows.map((seg) => {
+                  const isActive = seg.recordId === activeTenureId
+                  return (
+                    <ExecSegmentBtn
+                      key={seg.recordId}
+                      type="button"
+                      $active={isActive}
+                      style={{
+                        left: `${seg.leftPct.toFixed(2)}%`,
+                        width: `${seg.widthPct.toFixed(2)}%`,
+                        background: seg.barColor,
+                        opacity: isActive ? 1 : seg.altAlpha,
+                      }}
+                      onMouseEnter={() => setHoveredId(seg.recordId)}
+                      onMouseLeave={() => setHoveredId(null)}
+                      onClick={() => onFocusTenure(seg.recordId)}
+                      title={`${seg.ordinal != null ? `제${seg.ordinal}대 ` : ''}${seg.personName}${seg.partyName ? ` (${seg.partyName})` : ''} · ${seg.startYear}–${seg.endYear ?? '현직'} — 클릭 시 상단 마인드맵 전환`}
+                    />
+                  )
+                })}
+              </ExecSpectrumBar>
+            </ExecTrackRow>
+          ))}
+          <ExecTickRow $indented={hasLabelCol}>
+            {model.ticks.map((yr, i) => (
+              <span key={`${yr}-${i}`}>
+                {i === model.ticks.length - 1 ? `현재(${yr})` : `${yr}년`}
+              </span>
+            ))}
+          </ExecTickRow>
+        </ExecTracksStack>
+
+        <ExecQuickChipsRow>
+          {model.recentChips.map((chip) => {
+            const isSelected = chip.recordId === activeTenureId
+            const avatar = chip.profileImageUrl
+              ? getUploadImageUrl(chip.profileImageUrl)
+              : null
+            return (
+              <ExecChipGroup key={chip.recordId} $active={isSelected}>
+                <ExecLeaderChipBtn
+                  type="button"
+                  $active={isSelected}
+                  onClick={() => onFocusTenure(chip.recordId)}
+                  title="클릭 시 상단 행정부 마인드맵 전환"
+                >
+                  <span className="av">
+                    {avatar ? (
+                      <img src={avatar} alt="" />
+                    ) : (
+                      <FiUser size={10} aria-hidden />
+                    )}
+                  </span>
+                  {chip.partyColor ? (
+                    <span
+                      className="pdot"
+                      style={{ background: chip.partyColor }}
+                    />
+                  ) : null}
+                  <strong>
+                    {chip.ordinal != null ? `${chip.ordinal}대 ` : ''}
+                    {chip.personName}
+                  </strong>
+                  <small>{chip.startYear}</small>
+                </ExecLeaderChipBtn>
+                {chip.personId ? (
+                  <ExecPersonPinBtn
+                    type="button"
+                    onClick={() => onSelectPerson(chip.personId!)}
+                    title={`${chip.personName} 인물 상세 미리보기`}
+                    aria-label={`${chip.personName} 인물 정보`}
+                  >
+                    <FiArrowUpRight size={10} />
+                  </ExecPersonPinBtn>
+                ) : null}
+              </ExecChipGroup>
+            )
+          })}
+        </ExecQuickChipsRow>
+      </BentoCardBody>
+    </BentoCard>
+  )
+}
+
+/* ─── 9. 6-Axis National Radar Profile & 10-Domain Density Card ──────────── */
+
+export interface ModernDomainDensityItem {
+  key: string
+  label: string
+  count: number
+  unit?: string
+  onClick: () => void
+}
+
+export function NationalRadarProfileCard({
+  countryId,
+  countryName,
+  continentId,
+  powerAxes,
+  archiveAxes,
+  peerCountries = [],
+  domainItems,
+  totalRecords,
+}: {
+  countryId: string
+  countryName: string
+  continentId?: string | null
+  powerAxes: RadarAxisMetric[]
+  archiveAxes: RadarAxisMetric[]
+  peerCountries?: PeerCountryMetric[]
+  domainItems: ModernDomainDensityItem[]
+  totalRecords: number
+}) {
+  const [radarMode, setRadarMode] = useState<'power' | 'archive'>('power')
+  const [compareId, setCompareId] = useState<string>('')
+
+  const populated = domainItems.filter((d) => d.count > 0).length
+  const maxCount = Math.max(1, ...domainItems.map((d) => d.count))
+
+  const sortedPeers = useMemo(() => {
+    const others = peerCountries.filter((p) => p.id !== countryId)
+    return [...others].sort((a, b) => {
+      const aSame = continentId && a.continentId === continentId ? 0 : 1
+      const bSame = continentId && b.continentId === continentId ? 0 : 1
+      if (aSame !== bSame) return aSame - bSame
+      return (b.population ?? 0) - (a.population ?? 0)
+    })
+  }, [peerCountries, countryId, continentId])
+
+  const selectedPeer = useMemo(
+    () => sortedPeers.find((p) => p.id === compareId) ?? null,
+    [sortedPeers, compareId],
+  )
+
+  const compareRadarAxes = useMemo<RadarAxisMetric[] | null>(() => {
+    if (!selectedPeer || radarMode !== 'power') return null
+    const popPeers = peerCountries
+      .map((p) => p.population)
+      .filter((v): v is number => v != null && v > 0)
+      .sort((a, b) => a - b)
+    const areaPeers = peerCountries
+      .map((p) => p.areaSqKm)
+      .filter((v): v is number => v != null && v > 0)
+      .sort((a, b) => a - b)
+    const densPeers = peerCountries
+      .map((p) =>
+        p.population && p.areaSqKm && p.areaSqKm > 0
+          ? p.population / p.areaSqKm
+          : null,
+      )
+      .filter((v): v is number => v != null && v > 0)
+      .sort((a, b) => a - b)
+
+    const pctRank = (arr: number[], val: number | null) => {
+      if (val == null || val <= 0 || arr.length === 0) return 20
+      let below = 0
+      for (const item of arr) {
+        if (item <= val) below += 1
+      }
+      return Math.max(14, Math.min(100, Math.round((below / arr.length) * 100)))
+    }
+
+    const peerDens =
+      selectedPeer.population &&
+      selectedPeer.areaSqKm &&
+      selectedPeer.areaSqKm > 0
+        ? selectedPeer.population / selectedPeer.areaSqKm
+        : null
+    const popScore = pctRank(popPeers, selectedPeer.population)
+    const areaScore = pctRank(areaPeers, selectedPeer.areaSqKm)
+    const densScore = pctRank(densPeers, peerDens)
+    const scaleBlend = Math.round((popScore * 0.6 + areaScore * 0.4))
+
+    return powerAxes.map((ax) => {
+      if (ax.key === 'pop') {
+        return {
+          key: ax.key,
+          label: ax.label,
+          score: popScore,
+          valueLabel:
+            selectedPeer.population != null
+              ? formatPopulation(selectedPeer.population)
+              : '—',
+        }
+      }
+      if (ax.key === 'area') {
+        return {
+          key: ax.key,
+          label: ax.label,
+          score: areaScore,
+          valueLabel:
+            selectedPeer.areaSqKm != null
+              ? formatAreaValue(selectedPeer.areaSqKm)
+              : '—',
+        }
+      }
+      if (ax.key === 'density') {
+        return {
+          key: ax.key,
+          label: ax.label,
+          score: densScore,
+          valueLabel: peerDens != null ? `${peerDens.toFixed(0)}명/km²` : '—',
+        }
+      }
+      return {
+        key: ax.key,
+        label: ax.label,
+        score: scaleBlend,
+        valueLabel: `${selectedPeer.name} 추정`,
+      }
+    })
+  }, [selectedPeer, radarMode, peerCountries, powerAxes])
+
+  const selfPeer = useMemo(
+    () => peerCountries.find((p) => p.id === countryId) ?? null,
+    [peerCountries, countryId],
+  )
+
+  const activeAxes = radarMode === 'power' ? powerAxes : archiveAxes
+
+  return (
+    <BentoCard aria-label="6축 국가 역량 레이더 및 도메인 아카이브 밀도">
+      <BentoCardHeader>
+        <BentoCardTitleGroup>
+          <BentoCardTitle>국가 6축 레이더 · 도메인 밀도</BentoCardTitle>
+          <BentoCardBadge>
+            {populated}/{domainItems.length}축 ·{' '}
+            {totalRecords.toLocaleString('ko-KR')}건
+          </BentoCardBadge>
+        </BentoCardTitleGroup>
+        <BentoHeaderActions>
+          {radarMode === 'power' && sortedPeers.length > 0 ? (
+            <ComparePeerSelect
+              aria-label="레이더 비교 국가 선택"
+              value={compareId}
+              onChange={(e) => setCompareId(e.target.value)}
+            >
+              <option value="">비교 국가 선택…</option>
+              {sortedPeers.slice(0, 40).map((peer) => (
+                <option key={peer.id} value={peer.id}>
+                  {peer.flagEmoji ? `${peer.flagEmoji} ` : ''}
+                  {peer.name}
+                </option>
+              ))}
+            </ComparePeerSelect>
+          ) : null}
+          <MiniDirSwitch>
+            <MiniDirBtn
+              type="button"
+              $active={radarMode === 'power'}
+              onClick={() => setRadarMode('power')}
+            >
+              국력 백분위
+            </MiniDirBtn>
+            <MiniDirBtn
+              type="button"
+              $active={radarMode === 'archive'}
+              onClick={() => setRadarMode('archive')}
+            >
+              사료 밀도
+            </MiniDirBtn>
+          </MiniDirSwitch>
+        </BentoHeaderActions>
+      </BentoCardHeader>
+
+      <BentoCardBody>
+        {selectedPeer && radarMode === 'power' ? (
+          <PeerComparisonStrip>
+            <span>
+              <strong>{countryName}</strong> vs{' '}
+              <strong>
+                {selectedPeer.flagEmoji ? `${selectedPeer.flagEmoji} ` : ''}
+                {selectedPeer.name}
+              </strong>
+            </span>
+            <span className="nums">
+              {selfPeer?.population && selectedPeer.population
+                ? `인구 ${(selfPeer.population / selectedPeer.population).toFixed(2)}배`
+                : ''}
+              {selfPeer?.population &&
+              selectedPeer.population &&
+              selfPeer?.areaSqKm &&
+              selectedPeer.areaSqKm
+                ? ' · '
+                : ''}
+              {selfPeer?.areaSqKm && selectedPeer.areaSqKm
+                ? `면적 ${(selfPeer.areaSqKm / selectedPeer.areaSqKm).toFixed(2)}배`
+                : ''}
+            </span>
+          </PeerComparisonStrip>
+        ) : null}
+
+        <RadarProfileSplit>
+          <RadarChartCol>
+            <NationalRadarPolygonChart
+              axes={activeAxes}
+              compareAxes={compareRadarAxes}
+              primaryLabel={countryName}
+              compareLabel={selectedPeer?.name ?? null}
+            />
+          </RadarChartCol>
+
+          <DomainMatrixGrid>
+            {domainItems.map((item) => {
+              const pct =
+                item.count > 0
+                  ? Math.max(7, Math.round((item.count / maxCount) * 100))
+                  : 0
+              return (
+                <DomainDensityBtn
+                  key={item.key}
+                  type="button"
+                  $empty={item.count === 0}
+                  onClick={item.onClick}
+                >
+                  <div className="top">
+                    <span className="lb">{item.label}</span>
+                    <strong className="val">
+                      {item.count > 0
+                        ? `${item.count.toLocaleString('ko-KR')}${item.unit ?? '건'}`
+                        : '+ 입력'}
+                    </strong>
+                  </div>
+                  <div className="bar">
+                    {pct > 0 ? <div className="fill" style={{ width: `${pct}%` }} /> : null}
+                  </div>
+                </DomainDensityBtn>
+              )
+            })}
+          </DomainMatrixGrid>
+        </RadarProfileSplit>
+      </BentoCardBody>
+    </BentoCard>
+  )
+}
+
+/* ─── 10. Parliament Hemicycle + Party Spectrum + Turnout Bento Card ─────── */
+
+const SPECTRUM_ORDER: PoliticalPosition[] = [
+  'FAR_LEFT',
+  'LEFT',
+  'CENTER_LEFT',
+  'CENTER',
+  'CENTER_RIGHT',
+  'RIGHT',
+  'FAR_RIGHT',
+  'BIG_TENT',
+]
+
+const POSITION_SORT_WEIGHT: Record<string, number> = {
+  FAR_LEFT: 1,
+  LEFT: 2,
+  CENTER_LEFT: 3,
+  CENTER: 4,
+  BIG_TENT: 5,
+  CENTER_RIGHT: 6,
+  RIGHT: 7,
+  FAR_RIGHT: 8,
+}
+
+export function ParliamentAndPartyBentoCard({
+  parties,
+  civicSnapshot,
+  currentCabinet,
+  electionCount,
+  nextElection,
+  recentElection,
+  onOpenElections,
+  onOpenPoliticalSystem,
+  onOpenPartyCatalog,
+}: {
+  parties: PoliticalParty[]
+  civicSnapshot: CivicInstitutionalSnapshot
+  currentCabinet: CurrentCabinetSummary | null
+  electionCount: number
+  nextElection: ElectionSummary | null
+  recentElection: ElectionSummary | null
+  onOpenElections: (electionId?: string) => void
+  onOpenPoliticalSystem: () => void
+  onOpenPartyCatalog: () => void
+}) {
+  const theme = useTheme()
+  const seatsInfo = civicSnapshot.activePolitySeats
+  const latestLegId = civicSnapshot.latestLegislativeElectionId
+
+  const latestLegQuery = useQuery({
+    queryKey: ['election-detail-dashboard', latestLegId],
+    queryFn: () => getElection(latestLegId!),
+    enabled: Boolean(latestLegId),
+    staleTime: 1000 * 60 * 5,
+  })
+
+  const partyMetaById = useMemo(
+    () => new Map(parties.map((p) => [p.id, p])),
+    [parties],
+  )
+
+  const activeParties = useMemo(
+    () => parties.filter((p) => !p.dissolvedDate),
+    [parties],
+  )
+
+  const spectrumSlices = useMemo<SegmentSlice[]>(() => {
+    const counts = new Map<string, number>()
+    for (const p of activeParties.length > 0 ? activeParties : parties) {
+      const pos = p.position ?? 'UNCLASSIFIED'
+      counts.set(pos, (counts.get(pos) ?? 0) + 1)
+    }
+    const list: SegmentSlice[] = []
+    for (const pos of SPECTRUM_ORDER) {
+      const c = counts.get(pos) ?? 0
+      if (c > 0) {
+        list.push({
+          key: pos,
+          label: POLITICAL_POSITION_LABEL[pos],
+          value: c,
+          color: POLITICAL_POSITION_COLOR[pos],
+          meta: `${c}당`,
+        })
+      }
+    }
+    const unc = counts.get('UNCLASSIFIED') ?? 0
+    if (unc > 0) {
+      list.push({
+        key: 'UNCLASSIFIED',
+        label: '기타·미분류',
+        value: unc,
+        color: theme.mode === 'dark' ? '#64748b' : '#94a3b8',
+        meta: `${unc}당`,
+      })
+    }
+    return list
+  }, [activeParties, parties, theme.mode])
+
+  const { hemicycleSpec, governanceBalance } = useMemo(() => {
+    const lowerSeats = seatsInfo?.lowerSeats ?? null
+    const upperSeats = seatsInfo?.upperSeats ?? null
+    const totalLegSeats = lowerSeats ?? upperSeats ?? null
+
+    // 1순위: 최신 국회의원/의회 선거 실제 정당별 의석(seatsWon)
+    const legDetail = latestLegQuery.data
+    const seatRows = (legDetail?.partyResults ?? []).filter(
+      (pr) => (pr.seatsWon ?? 0) > 0,
+    )
+    if (legDetail && seatRows.length > 0) {
+      const enriched = seatRows
+        .map((pr, idx) => {
+          const master = partyMetaById.get(pr.partyId)
+          const pos = master?.position ?? null
+          const color =
+            pr.party?.brandColor ||
+            master?.brandColor ||
+            (pos ? POLITICAL_POSITION_COLOR[pos] : null) ||
+            PARTY_FALLBACK_PALETTE[idx % PARTY_FALLBACK_PALETTE.length]
+          return {
+            partyId: pr.partyId,
+            label:
+              pr.party?.shortName ||
+              master?.shortName ||
+              pr.party?.name ||
+              master?.name ||
+              '정당',
+            seats: Number(pr.seatsWon ?? 0),
+            color,
+            posWeight: pos ? (POSITION_SORT_WEIGHT[pos] ?? 5) : 5.5,
+          }
+        })
+        .sort((a, b) => a.posWeight - b.posWeight || b.seats - a.seats)
+
+      const sumWon = enriched.reduce((acc, r) => acc + r.seats, 0)
+      const resolvedTotal = Math.max(
+        sumWon,
+        legDetail.totalSeats ?? totalLegSeats ?? sumWon,
+      )
+      const majority = Math.floor(resolvedTotal / 2) + 1
+
+      // 여소야대 / 여대야소 판별 (내각 제1집권당 또는 내각 참여정당 기준)
+      const rulingPartyIds = new Set(
+        (currentCabinet?.partyDistribution ?? [])
+          .map((pd) => pd.partyId)
+          .filter((id): id is string => Boolean(id)),
+      )
+      let balanceBadge: {
+        tone: 'majority' | 'divided' | 'plurality'
+        text: string
+      } | null = null
+
+      if (rulingPartyIds.size > 0) {
+        const rulingSeats = enriched
+          .filter((r) => rulingPartyIds.has(r.partyId))
+          .reduce((acc, r) => acc + r.seats, 0)
+        if (rulingSeats >= majority) {
+          balanceBadge = {
+            tone: 'majority',
+            text:
+              rulingPartyIds.size > 1
+                ? `여대야소 · 연정 과반 (${rulingSeats}/${resolvedTotal}석)`
+                : `여대야소 · 여당 과반 (${rulingSeats}/${resolvedTotal}석)`,
+          }
+        } else if (rulingSeats > 0) {
+          balanceBadge = {
+            tone: 'divided',
+            text: `여소야대 · 분점의회 (여권 ${rulingSeats}석 / 과반 ${majority}석)`,
+          }
+        }
+      }
+      if (!balanceBadge) {
+        const largest = [...enriched].sort((a, b) => b.seats - a.seats)[0]
+        if (largest) {
+          balanceBadge = {
+            tone: largest.seats >= majority ? 'majority' : 'plurality',
+            text:
+              largest.seats >= majority
+                ? `${largest.label} 단독 과반 (${largest.seats}/${resolvedTotal}석)`
+                : `원내 제1당 ${largest.label} (${largest.seats}/${resolvedTotal}석)`,
+          }
+        }
+      }
+
+      return {
+        hemicycleSpec: {
+          slices: enriched.map((r) => ({
+            key: r.partyId,
+            label: r.label,
+            value: r.seats,
+            color: r.color,
+            meta: `${r.seats}석`,
+          })),
+          totalSeats: resolvedTotal,
+          subCaption: `과반 ${majority}석 · ${legDetail.shortName || legDetail.name}`,
+          showMajority: true,
+        },
+        governanceBalance: balanceBadge,
+      }
+    }
+
+    if (currentCabinet && currentCabinet.partyDistribution.length > 0) {
+      const slices: SegmentSlice[] = currentCabinet.partyDistribution.map(
+        (pd, idx) => ({
+          key: pd.partyId ?? `cab-${idx}`,
+          label: pd.partyName,
+          value: pd.count,
+          color:
+            pd.color ||
+            PARTY_FALLBACK_PALETTE[idx % PARTY_FALLBACK_PALETTE.length],
+          meta: `각료 ${pd.count}`,
+        }),
+      )
+      return {
+        hemicycleSpec: {
+          slices,
+          totalSeats: totalLegSeats ?? currentCabinet.ministerCount,
+          subCaption: totalLegSeats
+            ? `${seatsInfo?.lowerName || '의회'} 정원 (내각 정당비)`
+            : `${currentCabinet.name} 각료`,
+          showMajority: Boolean(totalLegSeats),
+        },
+        governanceBalance: null,
+      }
+    }
+
+    if (spectrumSlices.length > 0) {
+      return {
+        hemicycleSpec: {
+          slices: spectrumSlices,
+          totalSeats:
+            totalLegSeats ??
+            (activeParties.length > 0 ? activeParties.length : parties.length),
+          subCaption: totalLegSeats
+            ? `과반 ${Math.floor(totalLegSeats / 2) + 1}석`
+            : '등록 정당 분포',
+          showMajority: Boolean(totalLegSeats),
+        },
+        governanceBalance: null,
+      }
+    }
+
+    if (lowerSeats || upperSeats) {
+      const houseSlices: SegmentSlice[] = []
+      if (lowerSeats) {
+        houseSlices.push({
+          key: 'lower',
+          label: seatsInfo?.lowerName || '하원·단원',
+          value: lowerSeats,
+          color: ledgerAccent(theme.mode),
+          meta: `${lowerSeats}석`,
+        })
+      }
+      if (upperSeats) {
+        houseSlices.push({
+          key: 'upper',
+          label: seatsInfo?.upperName || '상원',
+          value: upperSeats,
+          color: theme.mode === 'dark' ? '#38bdf8' : '#0284c7',
+          meta: `${upperSeats}석`,
+        })
+      }
+      return {
+        hemicycleSpec: {
+          slices: houseSlices,
+          totalSeats: (lowerSeats ?? 0) + (upperSeats ?? 0),
+          subCaption: upperSeats && lowerSeats ? '양원 합계 의석' : '법정 의석 정원',
+          showMajority: !(upperSeats && lowerSeats),
+        },
+        governanceBalance: null,
+      }
+    }
+
+    return { hemicycleSpec: null, governanceBalance: null }
+  }, [
+    seatsInfo,
+    latestLegQuery.data,
+    partyMetaById,
+    currentCabinet,
+    spectrumSlices,
+    activeParties.length,
+    parties.length,
+    theme.mode,
+  ])
+
+  const polityTags = useMemo(() => {
+    if (!seatsInfo) return []
+    const tags: string[] = []
+    if (seatsInfo.governmentForm) {
+      tags.push(
+        GOVERNMENT_FORM_LABEL[
+          seatsInfo.governmentForm as keyof typeof GOVERNMENT_FORM_LABEL
+        ] ?? seatsInfo.governmentForm,
+      )
+    }
+    if (seatsInfo.legislatureType) {
+      tags.push(
+        LEGISLATURE_TYPE_LABEL[
+          seatsInfo.legislatureType as keyof typeof LEGISLATURE_TYPE_LABEL
+        ] ?? seatsInfo.legislatureType,
+      )
+    }
+    if (seatsInfo.partySystem) {
+      tags.push(
+        PARTY_SYSTEM_LABEL[
+          seatsInfo.partySystem as keyof typeof PARTY_SYSTEM_LABEL
+        ] ?? seatsInfo.partySystem,
+      )
+    }
+    if (seatsInfo.stateStructure) {
+      tags.push(
+        STATE_STRUCTURE_LABEL[
+          seatsInfo.stateStructure as keyof typeof STATE_STRUCTURE_LABEL
+        ] ?? seatsInfo.stateStructure,
+      )
+    }
+    return tags
+  }, [seatsInfo])
+
+  const featuredElection = nextElection ?? recentElection
+
+  return (
+    <BentoCard aria-label="의회 의석 아치 및 정당·선거 인포그래픽">
+      <BentoCardHeader>
+        <BentoCardTitleGroup>
+          <BentoCardTitle>의회 · 정당 스펙트럼 · 선거 동향</BentoCardTitle>
+          <BentoCardBadge>
+            정당 {parties.length} · 선거 {electionCount}
+          </BentoCardBadge>
+        </BentoCardTitleGroup>
+        <BentoHeaderActions>
+          <BentoActionBtn type="button" onClick={onOpenPoliticalSystem}>
+            정체·의회
+          </BentoActionBtn>
+          <BentoActionBtn type="button" onClick={onOpenPartyCatalog}>
+            정당 편람
+          </BentoActionBtn>
+          <BentoActionBtn
+            type="button"
+            $accent
+            onClick={() => onOpenElections()}
+          >
+            선거·정당 <FiArrowUpRight size={11} />
+          </BentoActionBtn>
+        </BentoHeaderActions>
+      </BentoCardHeader>
+
+      <BentoCardBody>
+        {polityTags.length > 0 || governanceBalance ? (
+          <BadgeCluster>
+            {governanceBalance ? (
+              <GovernanceBalanceChip $tone={governanceBalance.tone}>
+                {governanceBalance.text}
+              </GovernanceBalanceChip>
+            ) : null}
+            {polityTags.map((tg) => (
+              <ArchBadge key={tg}>{tg}</ArchBadge>
+            ))}
+            {seatsInfo?.lowerSeats ? (
+              <BentoPill>
+                {seatsInfo.lowerName || '하원'} {seatsInfo.lowerSeats}석
+              </BentoPill>
+            ) : null}
+            {seatsInfo?.upperSeats ? (
+              <BentoPill>
+                {seatsInfo.upperName || '상원'} {seatsInfo.upperSeats}석
+              </BentoPill>
+            ) : null}
+          </BadgeCluster>
+        ) : null}
+
+        <ParliamentSplitGrid $hasHemicycle={Boolean(hemicycleSpec)}>
+          {hemicycleSpec ? (
+            <ParliamentLeftBox>
+              <ParliamentHemicycleSvg
+                slices={hemicycleSpec.slices}
+                totalSeats={hemicycleSpec.totalSeats}
+                subCaption={hemicycleSpec.subCaption}
+                showMajorityLine={hemicycleSpec.showMajority}
+              />
+            </ParliamentLeftBox>
+          ) : null}
+
+          <ParliamentRightCol>
+            {spectrumSlices.length > 0 ? (
+              <div>
+                <BentoSubLabel style={{ marginBottom: 5 }}>
+                  <span>정당 이념 스펙트럼 (좌 → 우)</span>
+                  <span>
+                    활동 {activeParties.length} · 해산{' '}
+                    {parties.length - activeParties.length}
+                  </span>
+                </BentoSubLabel>
+                <StackedSegmentBar
+                  slices={spectrumSlices}
+                  height={8}
+                />
+              </div>
+            ) : null}
+
+            {civicSnapshot.turnoutSparkPoints.length > 0 ? (
+              <div>
+                <BentoSubLabel style={{ marginBottom: 4 }}>
+                  <span>역대 선거 투표율 추이</span>
+                  {civicSnapshot.avgTurnout != null ? (
+                    <span>평균 {civicSnapshot.avgTurnout.toFixed(1)}%</span>
+                  ) : null}
+                </BentoSubLabel>
+                <MiniSvgSparkline
+                  points={civicSnapshot.turnoutSparkPoints}
+                  color={theme.mode === 'dark' ? '#38bdf8' : '#0284c7'}
+                  height={44}
+                  formatValue={(v) => `${v.toFixed(1)}%`}
+                />
+              </div>
+            ) : civicSnapshot.electionTypeCounts.length > 0 ? (
+              <ElectionTypePills>
+                {civicSnapshot.electionTypeCounts.slice(0, 4).map((et) => (
+                  <BentoPill key={et.type}>
+                    {labelElectionType(et.type)} · {et.count}회
+                  </BentoPill>
+                ))}
+              </ElectionTypePills>
+            ) : null}
+
+            {featuredElection ? (
+              <ElectionBarBtn
+                type="button"
+                onClick={() => onOpenElections(featuredElection.id)}
+              >
+                <ElectionBarLeft>
+                  <FiCalendar size={12} />
+                  <span className="kind">
+                    {nextElection ? '예정 선거' : '최근 선거'}
+                  </span>
+                  <strong>{featuredElection.name}</strong>
+                </ElectionBarLeft>
+                <PeriodSpan>
+                  {featuredElection.pollDate.slice(0, 10)}
+                </PeriodSpan>
+              </ElectionBarBtn>
+            ) : parties.length === 0 && electionCount === 0 ? (
+              <EmptyInlinePrompt
+                type="button"
+                onClick={() => onOpenElections()}
+              >
+                <FiPlus size={12} /> 정당 · 역대 선거 기록 등록하기
+              </EmptyInlinePrompt>
+            ) : null}
+          </ParliamentRightCol>
+        </ParliamentSplitGrid>
+      </BentoCardBody>
+    </BentoCard>
+  )
+}
+
+/* ─── 11. Diplomacy (Treaties) · Laws · Ethnicities Atlas Card ───────────── */
+
+export function DiplomacyTreatyLawBentoCard({
+  treatyCount,
+  lawCount,
+  ethnicityCount,
+  civicSnapshot,
+  onOpenTreaties,
+  onSelectTreaty,
+  onOpenLaws,
+  onOpenEthnicity,
+}: {
+  treatyCount: number
+  lawCount: number
+  ethnicityCount: number
+  civicSnapshot: CivicInstitutionalSnapshot
+  onOpenTreaties: () => void
+  onSelectTreaty: (treatyId: string) => void
+  onOpenLaws: () => void
+  onOpenEthnicity: () => void
+}) {
+  const theme = useTheme()
+
+  const treatySlices = useMemo<SegmentSlice[]>(() => {
+    const map = new Map<string, number>()
+    for (const tr of civicSnapshot.recentTreaties) {
+      map.set(tr.type, (map.get(tr.type) ?? 0) + 1)
+    }
+    return [...map.entries()].map(([type, count]) => ({
+      key: type,
+      label:
+        TREATY_TYPE_LABELS[type as TreatyType] ?? type,
+      value: count,
+      color: treatyTypeTone(type as TreatyType, theme.mode),
+      meta: `${count}건`,
+    }))
+  }, [civicSnapshot.recentTreaties, theme.mode])
+
+  if (treatyCount === 0 && lawCount === 0 && ethnicityCount === 0) {
+    return null
+  }
+
+  return (
+    <BentoCard aria-label="외교 조약, 법령 및 구성 민족 현황">
+      <BentoCardHeader>
+        <BentoCardTitleGroup>
+          <BentoCardTitle>외교 조약 · 헌법/법령 · 민족 구성</BentoCardTitle>
+          <BentoCardBadge>
+            조약 {treatyCount} · 법령 {lawCount} · 민족 {ethnicityCount}
+          </BentoCardBadge>
+        </BentoCardTitleGroup>
+        <BentoHeaderActions>
+          <BentoActionBtn type="button" onClick={onOpenLaws}>
+            법령 {lawCount}
+          </BentoActionBtn>
+          <BentoActionBtn type="button" onClick={onOpenEthnicity}>
+            민족 {ethnicityCount}
+          </BentoActionBtn>
+          <BentoActionBtn type="button" $accent onClick={onOpenTreaties}>
+            조약 <FiArrowUpRight size={11} />
+          </BentoActionBtn>
+        </BentoHeaderActions>
+      </BentoCardHeader>
+
+      <BentoCardBody>
+        {treatySlices.length > 0 ? (
+          <div>
+            <BentoSubLabel style={{ marginBottom: 5 }}>
+              <span>주요 체결 조약 유형 분포</span>
+              <span>총 {treatyCount}건</span>
+            </BentoSubLabel>
+            <StackedSegmentBar slices={treatySlices} height={7} />
+          </div>
+        ) : null}
+
+        {civicSnapshot.recentTreaties.length > 0 ? (
+          <CivicLedgerList>
+            {civicSnapshot.recentTreaties.slice(0, 4).map((tr) => {
+              const tone = treatyTypeTone(tr.type as TreatyType, theme.mode)
+              const typeText =
+                TREATY_TYPE_LABELS[tr.type as TreatyType] ?? tr.type
+              return (
+                <CivicLedgerRowBtn
+                  key={tr.id}
+                  type="button"
+                  onClick={() => onSelectTreaty(tr.id)}
+                >
+                  <span className="tag" style={{ color: tone }}>
+                    {typeText}
+                  </span>
+                  <strong className="nm">{tr.name}</strong>
+                  <span className="yr">{tr.yearLabel ?? '—'}</span>
+                </CivicLedgerRowBtn>
+              )
+            })}
+          </CivicLedgerList>
+        ) : null}
+
+        {civicSnapshot.recentLaws.length > 0 ? (
+          <>
+            {civicSnapshot.recentTreaties.length > 0 ? <BentoDivider /> : null}
+            <div>
+              <BentoSubLabel style={{ marginBottom: 5 }}>
+                <span>주요 헌법 · 제정 법령</span>
+                <span>총 {lawCount}건</span>
+              </BentoSubLabel>
+              <CivicLedgerList>
+                {civicSnapshot.recentLaws.slice(0, 3).map((lw) => (
+                  <CivicLedgerRowBtn
+                    key={lw.id}
+                    type="button"
+                    onClick={onOpenLaws}
+                  >
+                    <span className="tag law">법령</span>
+                    <strong className="nm">{lw.title}</strong>
+                    <span className="yr">{lw.yearLabel ?? '—'}</span>
+                  </CivicLedgerRowBtn>
+                ))}
+              </CivicLedgerList>
+            </div>
+          </>
+        ) : null}
+
+        {civicSnapshot.ethnicGroups.length > 0 ? (
+          <>
+            {civicSnapshot.recentTreaties.length > 0 ||
+            civicSnapshot.recentLaws.length > 0 ? (
+              <BentoDivider />
+            ) : null}
+            <div>
+              <BentoSubLabel style={{ marginBottom: 6 }}>
+                <span>등록 구성 민족 ({ethnicityCount})</span>
+              </BentoSubLabel>
+              <DivisionChipsWrap>
+                {civicSnapshot.ethnicGroups.map((eg) => (
+                  <DivisionChipBtn
+                    key={eg.id}
+                    type="button"
+                    onClick={onOpenEthnicity}
+                  >
+                    {eg.name}
+                    {eg.nameLocal ? ` (${eg.nameLocal})` : ''}
+                  </DivisionChipBtn>
+                ))}
+              </DivisionChipsWrap>
+            </div>
+          </>
+        ) : null}
+      </BentoCardBody>
+    </BentoCard>
+  )
+}
+
+/* ─── Styled Helpers for Cards 8 ~ 11 ────────────────────────────────────── */
+
+const ExecHoverReadout = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  @media (max-width: 760px) {
+    display: none;
+  }
+`
+
+const ExecTracksStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+`
+
+const ExecTrackRow = styled.div<{ $dual: boolean }>`
+  display: grid;
+  grid-template-columns: ${({ $dual }) => ($dual ? '62px 1fr' : '1fr')};
+  align-items: center;
+  gap: 8px;
+`
+
+const ExecTrackAxisLabel = styled.span`
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+const ExecSpectrumBar = styled.div`
+  position: relative;
+  width: 100%;
+  height: 20px;
+  border-radius: 5px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  overflow: hidden;
+`
+
+const ExecSegmentBtn = styled.button<{ $active: boolean }>`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border: none;
+  border-right: 1px solid ${({ theme }) => ledgerBackground(theme.mode)};
+  padding: 0;
+  cursor: pointer;
+  z-index: ${({ $active }) => ($active ? 3 : 1)};
+  box-shadow: ${({ theme, $active }) =>
+    $active ? `inset 0 0 0 2px ${ledgerBackground(theme.mode)}, 0 0 0 1.5px ${ledgerAccent(theme.mode)}` : 'none'};
+
+  &:hover {
+    opacity: 1 !important;
+    z-index: 4;
+  }
+`
+
+const ExecTickRow = styled.div<{ $indented: boolean }>`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: ${({ $indented }) => ($indented ? '70px' : '0')};
+  font-size: 10px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+`
+
+const ExecQuickChipsRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+`
+
+const ExecLeaderChipBtn = styled.button<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px 3px 4px;
+  border-radius: 999px;
+  border: 1px solid
+    ${({ theme, $active }) =>
+      $active ? ledgerAccent(theme.mode) : ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme, $active }) =>
+    $active ? ledgerAccentSubtle(theme.mode) : ledgerSubtleFill(theme.mode)};
+  color: ${({ theme, $active }) =>
+    $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  }
+
+  .av {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: ${({ theme }) => ledgerBackground(theme.mode)};
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    flex-shrink: 0;
+
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  }
+
+  .pdot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  strong {
+    font-weight: 700;
+  }
+
+  small {
+    font-size: 10px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    ${DIGIT_DISPLAY}
+  }
+`
+
+const RadarProfileSplit = styled.div`
+  display: grid;
+  grid-template-columns: 224px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+
+  @media (max-width: 720px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+const RadarChartCol = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 0;
+`
+
+const DomainMatrixGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 8px;
+
+  @media (max-width: 480px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+const DomainDensityBtn = styled.button<{ $empty: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 5.5px 8px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  opacity: ${({ $empty }) => ($empty ? 0.68 : 1)};
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 1;
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+
+  .top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  .lb {
+    font-size: 11px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+
+  .val {
+    font-size: 11px;
+    font-weight: 700;
+    color: ${({ theme, $empty }) =>
+      $empty ? ledgerAccent(theme.mode) : theme.colors.text.primary};
+    ${DIGIT_DISPLAY}
+  }
+
+  .bar {
+    width: 100%;
+    height: 4px;
+    border-radius: 999px;
+    background: ${({ theme }) => ledgerBackground(theme.mode)};
+    overflow: hidden;
+  }
+
+  .fill {
+    height: 100%;
+    border-radius: 999px;
+    background: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+`
+
+const ParliamentSplitGrid = styled.div<{ $hasHemicycle: boolean }>`
+  display: grid;
+  grid-template-columns: ${({ $hasHemicycle }) =>
+    $hasHemicycle ? '210px minmax(0, 1fr)' : 'minmax(0, 1fr)'};
+  align-items: center;
+  gap: 14px;
+
+  @media (max-width: 720px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+const ParliamentLeftBox = styled.div`
+  padding: 4px 6px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+`
+
+const ParliamentRightCol = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+`
+
+const ElectionTypePills = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+`
+
+const CivicLedgerList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`
+
+const CivicLedgerRowBtn = styled.button`
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5.5px 8px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+  }
+
+  .tag {
+    font-size: 10.5px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .tag.law {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+
+  .nm {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.primary};
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .yr {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+    ${DIGIT_DISPLAY}
+  }
+`
+
+const VectorGeoAtlasBox = styled.div`
+  position: relative;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  background: ${({ theme }) =>
+    theme.mode === 'dark'
+      ? 'rgba(15, 23, 42, 0.55)'
+      : 'rgba(248, 250, 252, 0.85)'};
+
+  svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+`
+
+const VectorGeoHud = styled.div`
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  font-size: 10.5px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`
+
+const RegimeEraBar = styled.div`
+  position: relative;
+  width: 100%;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  overflow: hidden;
+`
+
+const RegimeEraSegBtn = styled.button<{ $even: boolean }>`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  padding: 0 4px;
+  border: none;
+  border-right: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme, $even }) =>
+    $even
+      ? ledgerAccentSubtle(theme.mode)
+      : ledgerSubtleFill(theme.mode)};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 9.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+`
+
+const ExecChipGroup = styled.span<{ $active: boolean }>`
+  display: inline-flex;
+  align-items: stretch;
+  border-radius: 999px;
+`
+
+const ExecPersonPinBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  margin-left: -4px;
+  padding: 0;
+  border-radius: 0 999px 999px 0;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  }
+`
+
+const ComparePeerSelect = styled.select`
+  height: 23px;
+  max-width: 132px;
+  padding: 0 6px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerBackground(theme.mode)};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+`
+
+const PeerComparisonStrip = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 9px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+
+  strong {
+    color: ${({ theme }) => theme.colors.text.primary};
+    font-weight: 700;
+  }
+
+  .nums {
+    color: ${({ theme }) => (theme.mode === 'dark' ? '#38bdf8' : '#0284c7')};
+    font-weight: 700;
+  }
+`
+
+const GovernanceBalanceChip = styled.span<{
+  $tone: 'majority' | 'divided' | 'plurality'
+}>`
+  padding: 2.5px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  ${DIGIT_DISPLAY}
+  border: 1px solid
+    ${({ theme, $tone }) =>
+      $tone === 'majority'
+        ? theme.mode === 'dark'
+          ? 'rgba(52, 211, 153, 0.35)'
+          : 'rgba(5, 150, 105, 0.28)'
+        : $tone === 'divided'
+          ? theme.mode === 'dark'
+            ? 'rgba(251, 191, 36, 0.38)'
+            : 'rgba(217, 119, 6, 0.3)'
+          : ledgerAccentBorder(theme.mode)};
+  background: ${({ theme, $tone }) =>
+    $tone === 'majority'
+      ? theme.mode === 'dark'
+        ? 'rgba(52, 211, 153, 0.12)'
+        : 'rgba(5, 150, 105, 0.08)'
+      : $tone === 'divided'
+        ? theme.mode === 'dark'
+          ? 'rgba(251, 191, 36, 0.13)'
+          : 'rgba(217, 119, 6, 0.08)'
+        : ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme, $tone }) =>
+    $tone === 'majority'
+      ? theme.mode === 'dark'
+        ? '#34d399'
+        : '#047857'
+      : $tone === 'divided'
+        ? theme.mode === 'dark'
+          ? '#fbbf24'
+          : '#b45309'
+        : ledgerAccent(theme.mode)};
 `

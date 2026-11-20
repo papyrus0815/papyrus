@@ -14,9 +14,11 @@ import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
 import {
+  formatPeriod,
   GOVERNMENT_FORM_LABEL,
   resolveCurrentSystem,
   STATE_STRUCTURE_LABEL,
+  toSignedYear,
 } from '@/entities/political-system/model/political-system'
 import {
   DIGIT_DISPLAY,
@@ -60,6 +62,8 @@ import {
   BentoHeaderActions,
   BentoPill,
   BentoSubLabel,
+  NationalRadarPolygonChart,
+  type RadarAxisMetric,
 } from './bento-primitives'
 
 /* ─── 1. Historical Polity Identity & Rise-and-Fall Flow Card ────────────── */
@@ -337,19 +341,23 @@ export function HistoricalHeroFlowCard({
 
 export function HistoricalRulerSpectrumCard({
   rulers,
+  politicalSystems = [],
   spanStart,
   spanEnd,
   activeTenureId,
   onFocusRulerTenure,
   onSelectPerson,
+  onOpenPoliticalSystem,
   onOpenRulersTab,
 }: {
   rulers: HistoricalRulerItem[]
+  politicalSystems?: PoliticalSystem[]
   spanStart: number | null
   spanEnd: number | null
   activeTenureId?: string | null
   onFocusRulerTenure?: (tenureId: string) => void
   onSelectPerson: (personId: string) => void
+  onOpenPoliticalSystem?: () => void
   onOpenRulersTab: () => void
 }) {
   const [hoveredRecordId, setHoveredRecordId] = useState<string | null>(null)
@@ -358,45 +366,71 @@ export function HistoricalRulerSpectrumCard({
     [rulers],
   )
 
-  const { lo, hi, hosSegments, hogSegments, longestRuler } = useMemo(() => {
-    const years = inSpanRulers.flatMap((r) =>
-      [r.startYear, r.endYear].filter((y): y is number => y != null),
-    )
-    const minY =
-      spanStart ?? (years.length > 0 ? Math.min(...years) : 0)
-    const maxY =
-      spanEnd ?? (years.length > 0 ? Math.max(...years) : minY + 1)
-    const safeHi = Math.max(minY + 1, maxY)
+  const { lo, hi, eraSegments, hosSegments, hogSegments, longestRuler } =
+    useMemo(() => {
+      const years = inSpanRulers.flatMap((r) =>
+        [r.startYear, r.endYear].filter((y): y is number => y != null),
+      )
+      const minY =
+        spanStart ?? (years.length > 0 ? Math.min(...years) : 0)
+      const maxY =
+        spanEnd ?? (years.length > 0 ? Math.max(...years) : minY + 1)
+      const safeHi = Math.max(minY + 1, maxY)
 
-    const buildSegs = (axis: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT') =>
-      inSpanRulers
-        .filter((r) => r.axis === axis && r.startYear != null)
-        .map((r, idx) => {
-          const s = Math.max(minY, r.startYear!)
-          const e = Math.min(safeHi, Math.max(s + 1, r.endYear ?? s + 1))
+      const eraSegs = politicalSystems
+        .map((ps, idx) => {
+          const rawS = toSignedYear(ps.startEra, ps.startYear)
+          if (rawS == null) return null
+          const rawE = toSignedYear(ps.endEra, ps.endYear) ?? safeHi
+          const s = Math.max(minY, rawS)
+          const e = Math.min(safeHi, Math.max(s + 1, rawE))
+          const formText = ps.governmentForm
+            ? (GOVERNMENT_FORM_LABEL[
+                ps.governmentForm as keyof typeof GOVERNMENT_FORM_LABEL
+              ] ?? ps.governmentForm)
+            : '정체'
+          const label = ps.name?.trim() || formText
           return {
-            ruler: r,
+            id: ps.id,
+            label,
+            periodText: formatPeriod(ps),
             leftPct: ((s - minY) / (safeHi - minY)) * 100,
-            widthPct: Math.max(1.2, ((e - s) / (safeHi - minY)) * 100),
+            widthPct: Math.max(2, ((e - s) / (safeHi - minY)) * 100),
             even: idx % 2 === 0,
-            years: Math.max(1, (r.endYear ?? s) - r.startYear!),
           }
         })
+        .filter((x): x is NonNullable<typeof x> => x !== null)
 
-    const hos = buildSegs('HEAD_OF_STATE')
-    const hog = buildSegs('HEAD_OF_GOVERNMENT')
-    const allSegs = [...hos, ...hog]
-    const longest =
-      [...allSegs].sort((a, b) => b.years - a.years)[0]?.ruler ?? null
+      const buildSegs = (axis: 'HEAD_OF_STATE' | 'HEAD_OF_GOVERNMENT') =>
+        inSpanRulers
+          .filter((r) => r.axis === axis && r.startYear != null)
+          .map((r, idx) => {
+            const s = Math.max(minY, r.startYear!)
+            const e = Math.min(safeHi, Math.max(s + 1, r.endYear ?? s + 1))
+            return {
+              ruler: r,
+              leftPct: ((s - minY) / (safeHi - minY)) * 100,
+              widthPct: Math.max(1.2, ((e - s) / (safeHi - minY)) * 100),
+              even: idx % 2 === 0,
+              years: Math.max(1, (r.endYear ?? s) - r.startYear!),
+            }
+          })
 
-    return {
-      lo: minY,
-      hi: safeHi,
-      hosSegments: hos,
-      hogSegments: hog,
-      longestRuler: longest,
-    }
-  }, [inSpanRulers, spanStart, spanEnd])
+      const hos = buildSegs('HEAD_OF_STATE')
+      const hog = buildSegs('HEAD_OF_GOVERNMENT')
+      const allSegs = [...hos, ...hog]
+      const longest =
+        [...allSegs].sort((a, b) => b.years - a.years)[0]?.ruler ?? null
+
+      return {
+        lo: minY,
+        hi: safeHi,
+        eraSegments: eraSegs,
+        hosSegments: hos,
+        hogSegments: hog,
+        longestRuler: longest,
+      }
+    }, [inSpanRulers, politicalSystems, spanStart, spanEnd])
 
   if (rulers.length === 0) return null
 
@@ -454,6 +488,29 @@ export function HistoricalRulerSpectrumCard({
       </BentoCardHeader>
 
       <BentoCardBody>
+        {eraSegments.length > 0 ? (
+          <SpectrumRow>
+            <SpectrumAxisLabel>정체·관제</SpectrumAxisLabel>
+            <SpectrumTrack>
+              {eraSegments.map((seg) => (
+                <HistEraBlockBtn
+                  key={seg.id}
+                  type="button"
+                  $even={seg.even}
+                  style={{
+                    left: `${seg.leftPct}%`,
+                    width: `${seg.widthPct}%`,
+                  }}
+                  title={`${seg.label} (${seg.periodText})`}
+                  onClick={() => onOpenPoliticalSystem?.()}
+                >
+                  {seg.widthPct >= 10 ? <span>{seg.label}</span> : null}
+                </HistEraBlockBtn>
+              ))}
+            </SpectrumTrack>
+          </SpectrumRow>
+        ) : null}
+
         {hosSegments.length > 0 ? (
           <SpectrumRow>
             <SpectrumAxisLabel>군주·원수</SpectrumAxisLabel>
@@ -1277,6 +1334,14 @@ export interface HistoricalDomainMetricItem {
   onOpen: () => void
 }
 
+function histLogScore(val: number, refMax: number): number {
+  if (val <= 0) return 14
+  return Math.min(
+    100,
+    Math.round(22 + (Math.log1p(val) / Math.log1p(Math.max(2, refMax))) * 78),
+  )
+}
+
 export function HistoricalDomainArchiveCard({
   items,
 }: {
@@ -1287,11 +1352,68 @@ export function HistoricalDomainArchiveCard({
   const maxCount = Math.max(1, ...items.map((item) => item.count))
   const sorted = [...items].sort((a, b) => b.count - a.count)
 
+  const radarAxes = useMemo<RadarAxisMetric[]>(() => {
+    const byKey = new Map(items.map((i) => [i.key, i]))
+    const get = (k: string) => byKey.get(k)?.count ?? 0
+    const open = (k: string) => byKey.get(k)?.onOpen
+    const govCnt = get('government')
+    const evtCnt = get('events')
+    const figCnt = get('figures')
+    const milCnt = get('military')
+    const dipCnt = get('relation') + get('treaty')
+    const regLawCnt = get('regions') + get('laws') + get('ethnicity')
+
+    return [
+      {
+        key: 'gov',
+        label: '통치·관제',
+        score: histLogScore(govCnt, 28),
+        valueLabel: `${govCnt}건`,
+        onClick: open('government'),
+      },
+      {
+        key: 'events',
+        label: '역사·사건',
+        score: histLogScore(evtCnt, 60),
+        valueLabel: `${evtCnt}건`,
+        onClick: open('events'),
+      },
+      {
+        key: 'figures',
+        label: '인물·왕실',
+        score: histLogScore(figCnt, 60),
+        valueLabel: `${figCnt}명`,
+        onClick: open('figures'),
+      },
+      {
+        key: 'military',
+        label: '군사·편제',
+        score: histLogScore(milCnt, 20),
+        valueLabel: `${milCnt}개`,
+        onClick: open('military'),
+      },
+      {
+        key: 'diplomacy',
+        label: '계승·외교',
+        score: histLogScore(dipCnt, 18),
+        valueLabel: `${dipCnt}건`,
+        onClick: open('relation'),
+      },
+      {
+        key: 'territory',
+        label: '강역·율령',
+        score: histLogScore(regLawCnt, 24),
+        valueLabel: `${regLawCnt}건`,
+        onClick: open('regions'),
+      },
+    ]
+  }, [items])
+
   return (
     <BentoCard aria-label="역사 도메인 아카이브 현황">
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <BentoCardTitle>도메인별 사료 · 아카이브 밀도</BentoCardTitle>
+          <BentoCardTitle>왕조 6축 역량 레이더 · 사료 아카이브 밀도</BentoCardTitle>
           <BentoCardBadge>
             {populatedCount}/{items.length}개 분야 · 총{' '}
             {totalRecords.toLocaleString('ko-KR')}건
@@ -1300,40 +1422,94 @@ export function HistoricalDomainArchiveCard({
       </BentoCardHeader>
 
       <BentoCardBody>
-        <ArchiveDomainGrid>
-          {sorted.map((item, idx) => {
-            const pct =
-              item.count > 0
-                ? Math.max(6, Math.round((item.count / maxCount) * 100))
-                : 0
-            return (
-              <ArchiveDomainRowBtn
-                key={item.key}
-                type="button"
-                $empty={item.count === 0}
-                onClick={item.onOpen}
-              >
-                <ArchiveDomainTop>
-                  <ArchiveDomainLabel>{item.label}</ArchiveDomainLabel>
-                  <ArchiveDomainCount $empty={item.count === 0}>
-                    {item.count > 0
-                      ? `${item.count.toLocaleString('ko-KR')}${item.unit ?? '건'}`
-                      : '미등록 +'}
-                  </ArchiveDomainCount>
-                </ArchiveDomainTop>
-                <ArchiveDomainTrack>
-                  {pct > 0 && (
-                    <ArchiveDomainFill $pct={pct} $top={idx < 2} />
-                  )}
-                </ArchiveDomainTrack>
-              </ArchiveDomainRowBtn>
-            )
-          })}
-        </ArchiveDomainGrid>
+        <ArchiveRadarSplit>
+          <ArchiveRadarBox>
+            <NationalRadarPolygonChart axes={radarAxes} />
+          </ArchiveRadarBox>
+
+          <ArchiveDomainGrid>
+            {sorted.map((item, idx) => {
+              const pct =
+                item.count > 0
+                  ? Math.max(6, Math.round((item.count / maxCount) * 100))
+                  : 0
+              return (
+                <ArchiveDomainRowBtn
+                  key={item.key}
+                  type="button"
+                  $empty={item.count === 0}
+                  onClick={item.onOpen}
+                >
+                  <ArchiveDomainTop>
+                    <ArchiveDomainLabel>{item.label}</ArchiveDomainLabel>
+                    <ArchiveDomainCount $empty={item.count === 0}>
+                      {item.count > 0
+                        ? `${item.count.toLocaleString('ko-KR')}${item.unit ?? '건'}`
+                        : '미등록 +'}
+                    </ArchiveDomainCount>
+                  </ArchiveDomainTop>
+                  <ArchiveDomainTrack>
+                    {pct > 0 && (
+                      <ArchiveDomainFill $pct={pct} $top={idx < 2} />
+                    )}
+                  </ArchiveDomainTrack>
+                </ArchiveDomainRowBtn>
+              )
+            })}
+          </ArchiveDomainGrid>
+        </ArchiveRadarSplit>
       </BentoCardBody>
     </BentoCard>
   )
 }
+
+const ArchiveRadarSplit = styled.div`
+  display: grid;
+  grid-template-columns: 212px minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+
+  @media (max-width: 820px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
+
+const ArchiveRadarBox = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 0;
+`
+
+const HistEraBlockBtn = styled.button<{ $even: boolean }>`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  padding: 0 4px;
+  border: none;
+  border-right: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme, $even }) =>
+    $even ? ledgerAccentSubtle(theme.mode) : ledgerBackground(theme.mode)};
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font-family: inherit;
+  font-size: 9.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+`
 
 const ArchiveDomainGrid = styled.div`
   display: grid;

@@ -20,6 +20,7 @@ import {
 import {
   useBondYields,
   useDemographicIndicators,
+  useDevelopmentIndicators,
   useEconomicIndicators,
 } from '@/entities/country/api.indicators'
 import { useInfrastructures } from '@/entities/country/api.infrastructure'
@@ -184,6 +185,7 @@ function CountryDetailInner({
   const dashboardStats = useCountryDashboardStats(modernCountry)
   const { data: economicRows = [] } = useEconomicIndicators(modernCountry?.id)
   const { data: demographicRows = [] } = useDemographicIndicators(modernCountry?.id)
+  const { data: developmentRows = [] } = useDevelopmentIndicators(modernCountry?.id)
   const { data: bondRows = [] } = useBondYields(modernCountry?.id)
   const { data: tradeRows = [] } = useExportImports(modernCountry?.id)
   const { data: adminDivisionRoots = [], isLoading: adminDivisionsLoading } =
@@ -217,6 +219,7 @@ function CountryDetailInner({
     const statYearCount = new Set([
       ...economicRows.map((row) => row.year),
       ...demographicRows.map((row) => row.year),
+      ...developmentRows.map((row) => row.year),
       ...bondRows.map((row) => row.year),
     ]).size
 
@@ -272,6 +275,7 @@ function CountryDetailInner({
     allCompanies,
     economicRows,
     demographicRows,
+    developmentRows,
     bondRows,
     tradeRows.length,
     adminDivisionRoots,

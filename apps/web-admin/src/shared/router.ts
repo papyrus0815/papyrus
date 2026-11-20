@@ -185,13 +185,19 @@ export const pathKeys = {
     countryId: string,
     form?: 'create',
     century?: number | null,
+    domain?: string | null,
   ) => {
     const base = `/${ROUTES.COUNTRY}/${encodeURIComponent(countryId)}/events`
     if (form === 'create') return `${base}?form=create`
+    const qs = new URLSearchParams()
     if (century != null && Number.isFinite(century)) {
-      return `${base}?century=${century}`
+      qs.set('century', String(century))
     }
-    return base
+    if (domain && domain.trim()) {
+      qs.set('domain', domain.trim())
+    }
+    const query = qs.toString()
+    return query ? `${base}?${query}` : base
   },
 
   // --- Timeline 뷰 (ContentShell 셸 — 구 /history/dashboard/*) ---
@@ -221,6 +227,8 @@ export const pathKeys = {
     }`,
   /** 민족 타임라인 */
   ethnicityTimeline: () => `/${ROUTES.ETHNICITY}/`,
+  /** 민족 마스터 카탈로그 (CRUD) */
+  ethnicities: () => `/${ROUTES.ETHNICITIES}`,
   /** 저원(입법) 타임라인 */
   legislatureTimeline: () => `/${ROUTES.LEGISLATURE}/`,
   /** 군사 카탈로그 총람 */
