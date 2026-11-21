@@ -1,6 +1,12 @@
-import { useEffect, useMemo, useState, type RefObject } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type MutableRefObject,
+  type RefObject,
+} from 'react'
 
-import { FiChevronLeft, FiChevronRight, FiPlus, FiX } from 'react-icons/fi'
+import { FiChevronDown, FiChevronLeft, FiChevronRight, FiPlus, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 
@@ -9,6 +15,7 @@ import { type UpdateEventDto, getEventsByParentId } from '@/shared/api/events'
 import { formatYearLabel } from '@/shared/lib/iso-date'
 import { pathKeys } from '@/shared/router'
 import { InlineText } from '@/shared/ui/inline-edit'
+import { PopoverMenu, type PopoverMenuEntry } from '@/shared/ui/popover-menu'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
@@ -162,6 +169,38 @@ export function ParentBlock({
    * 비어 있는 '연결 사유 추가'·'추가 상위 + 추가' 줄이 늘 섰다. 이제 경로 줄 하나 + 국면·이전/다음 한 줄씩.
    * 사유·추가 상위는 값이 있을 때만 줄로, 없으면 경로 줄 끝의 '사유'·'추가 상위' 버튼(올리면 보임)으로.
    */
+  const parentMenuEntries: PopoverMenuEntry[] = parentEvent
+    ? [
+        ...(!hasReason && !reasonEditing
+          ? [
+              {
+                id: 'reason',
+                label: '연결 사유 적기',
+                onSelect: () => setReasonEditing(true),
+              },
+            ]
+          : []),
+        ...(extraParents.length === 0
+          ? [
+              {
+                id: 'extra-parent',
+                label: '추가 상위 연결',
+                onSelect: onOpenExtrasModal,
+              },
+            ]
+          : []),
+        ...((!hasReason && !reasonEditing) || extraParents.length === 0
+          ? [{ type: 'divider' as const, id: 'sep-release' }]
+          : []),
+        {
+          id: 'release',
+          label: '상위 사건에서 빼기',
+          danger: true,
+          onSelect: onReleaseParent,
+        },
+      ]
+    : []
+
   return (
     <NetStyles.MembershipBar role="group" aria-label="소속">
       <NetStyles.MembershipRow $reveal>
@@ -187,28 +226,27 @@ export function ParentBlock({
               <NetStyles.TextBtn type="button" onClick={onOpenParentModal} aria-label="상위 사건 변경">
                 변경
               </NetStyles.TextBtn>
-              <NetStyles.TextBtn type="button" onClick={onReleaseParent} aria-label="상위 사건에서 빼기">
-                상위에서 빼기
-              </NetStyles.TextBtn>
-              {!hasReason && !reasonEditing && (
-                <NetStyles.TextBtn
-                  type="button"
-                  onClick={() => setReasonEditing(true)}
-                  aria-label={`'${parentEvent.title}'과 이어진 사유 적기`}
-                >
-                  사유
-                </NetStyles.TextBtn>
-              )}
-              {extraParents.length === 0 && (
-                <NetStyles.TextBtn
-                  type="button"
-                  ref={extrasAddRef}
-                  onClick={onOpenExtrasModal}
-                  title="이 사건이 함께 속한 다른 큰 사건"
-                >
-                  추가 상위
-                </NetStyles.TextBtn>
-              )}
+              <PopoverMenu
+                align="left"
+                ariaLabel="소속 상위 사건 관리"
+                items={parentMenuEntries}
+                renderTrigger={({ ref, isOpen, toggle }) => (
+                  <NetStyles.TextBtn
+                    ref={(node) => {
+                      ;(ref as MutableRefObject<HTMLButtonElement | null>).current = node
+                      if (extraParents.length === 0) {
+                        extrasAddRef.current = node
+                      }
+                    }}
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-expanded={isOpen}
+                    onClick={toggle}
+                  >
+                    관리 <FiChevronDown size={11} aria-hidden />
+                  </NetStyles.TextBtn>
+                )}
+              />
             </NetStyles.MembershipActions>
           </>
         ) : (

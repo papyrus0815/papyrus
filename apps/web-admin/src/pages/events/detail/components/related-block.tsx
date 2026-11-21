@@ -1,10 +1,15 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiPlus, FiX } from 'react-icons/fi'
+import { FiEdit2, FiPlus, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { ledgerAccent } from '@/entities/event/ui/ledger-tokens'
+import {
+  ledgerAccent,
+  ledgerAccentSubtle,
+  ledgerHairline,
+  ledgerHairlineStrong,
+} from '@/entities/event/ui/ledger-tokens'
 import { eventDomainDef } from '@/entities/event/model/event-domain'
 import { metaText } from '@/pages/events/styles/theme'
 import { formatDateRange } from '@/pages/events/utils/events.utils'
@@ -63,6 +68,8 @@ interface RelatedBlockProps {
   onHoverEvent?: (id: string | null) => void
   /** 묶음 — 지도에 그린 아래 사건끼리의 연결 수. 자기 관계가 0이면 '위 지도에서'를 한 줄 알린다 */
   descendantRelationCount?: number
+  /** 상위 구역 헤더의 '관련 사건 잇기' 클릭 신호 (증가할 때마다 잇기 모달 열기) */
+  openPickerSeq?: number
 }
 
 type Draft = RelationDraft
@@ -142,6 +149,7 @@ export function RelatedBlock({
   hotEventId = null,
   onHoverEvent,
   descendantRelationCount = 0,
+  openPickerSeq = 0,
 }: RelatedBlockProps) {
   const queryClient = useQueryClient()
   const prefetchEvent = usePrefetchEventDetail()
@@ -151,12 +159,19 @@ export function RelatedBlock({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [initialDraft, setInitialDraft] = useState<Draft | null>(null)
   const [descriptionDraftId, setDescriptionDraftId] = useState<string | null>(null)
-  /** 잇기 창을 열 때의 거르기 — '같은 키워드 후보 N'은 키워드로 거른 채 연다 */
+  /** 잇기 창을 열 때의 거르기 */
   const [pickerFilter, setPickerFilter] = useState<RelatedLinkFilter>('all')
   /** 긴 목록에서 펼친 묶음 */
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(() => new Set())
   const [expandedCausalBefore, setExpandedCausalBefore] = useState(false)
   const [expandedCausalAfter, setExpandedCausalAfter] = useState(false)
+
+  useEffect(() => {
+    if (openPickerSeq <= 0) return
+    setInitialDraft(null)
+    setPickerFilter('all')
+    setPickerOpen(true)
+  }, [openPickerSeq])
 
   // ── 후보 검색(서버) — 상위/하위 픽커와 같은 link-candidates 엔드포인트 ──
   const [searchTerm, setSearchTerm] = useState('')
@@ -185,9 +200,6 @@ export function RelatedBlock({
     () => new Map(relations.map((relation) => [relation.event.id, relation])),
     [relations],
   )
-
-  /** 이미 이은 사건은 후보에서 뺀다(연결 직후 목록이 바로 줄어든다) */
-  const visibleSuggestions = suggestions.filter((suggestion) => !relatedIds.has(suggestion.id))
 
   /* 창이 열려 있을 때만 — 많아야 55줄. 같은 키워드(둘러볼 때만) + 서버 후보(가까운 순) */
   const buildCandidates = (): LinkCandidate[] => {
@@ -441,10 +453,11 @@ export function RelatedBlock({
     >
 
       {isError && <NetStyles.HelperNote>관련 사건을 불러오지 못했습니다</NetStyles.HelperNote>}
-      {/* 묶음의 자기 관계 0 — 아래 사건끼리의 연결은 위 지도에 있다(잇기 버튼만 덩그러니 서서 지도와 따로 놀았다) */}
-      {relations.length === 0 && descendantRelationCount > 0 && (
+      {relations.length === 0 && !isError && (
         <NetStyles.HelperNote>
-          이 사건 자체에 이은 관련 사건은 없습니다 — 아래 사건끼리의 연결 {descendantRelationCount}개는 위 지도에서 보고 고칩니다
+          {descendantRelationCount > 0
+            ? `이 사건 자체에 이은 관련 사건은 없습니다 — 아래 사건끼리의 연결 ${descendantRelationCount}개는 위 지도에서 보고 고칩니다.`
+            : '아직 연결된 관련 사건이 없습니다. 우측 상단 ‘관련 사건 잇기’를 눌러 기존 사건과 잇거나 새 사건을 등록할 수 있습니다.'}
         </NetStyles.HelperNote>
       )}
 
@@ -779,9 +792,9 @@ export function RelatedBlock({
                     <NetStyles.AddReasonBtn
                       type="button"
                       onClick={() => openEdit(relation)}
-                      aria-label={`'${other.title}' 관계 유형·방향 수정`}
+                      aria-label={`'${other.title}' 관계 유형·방향 편집`}
                     >
-                      관계 바꾸기
+                      <FiEdit2 aria-hidden /> 편집
                     </NetStyles.AddReasonBtn>
                     <NetStyles.RemoveChildBtn
                       type="button"
@@ -831,34 +844,6 @@ export function RelatedBlock({
         )
       })}
 
-      <NetStyles.HierRow>
-        <NetStyles.AddBtn type="button" onClick={() => setPickerOpen(true)}>
-          <FiPlus /> 기존 사건과 잇기
-        </NetStyles.AddBtn>
-        {onOpenCreateRelated && (
-          <NetStyles.AddBtn type="button" onClick={onOpenCreateRelated}>
-            <FiPlus /> 새 관련 사건 등록
-          </NetStyles.AddBtn>
-        )}
-        {/*
-          * 같은 키워드의 사건 — 예전엔 버튼 아래 접힌 상자에 따로 있었고, 잇기 창에도 '같은 키워드' 거르기가 있어
-          * 같은 후보가 두 자리에 있었다. 한 자리(잇기 창)로 — 누르면 키워드로 거른 채 열린다. 이미 이은 사건은 빠진 수.
-          */}
-        {visibleSuggestions.length > 0 && (
-          <NetStyles.TextBtn
-            type="button"
-            onClick={() => {
-              setPickerFilter('keyword')
-              setPickerOpen(true)
-            }}
-            title="이미 적어 둔 키워드가 겹치는 사건 — 잇기 창에서 키워드로 거른 채 열립니다"
-          >
-            같은 키워드 후보 {visibleSuggestions.length}
-          </NetStyles.TextBtn>
-        )}
-      </NetStyles.HierRow>
-
-
       <RelatedLinkModal
         isOpen={pickerOpen}
         onClose={closePicker}
@@ -902,18 +887,17 @@ const CausalFlowBoard = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px;
-  margin-bottom: 8px;
-  border-radius: 10px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(15,23,42,0.025)'};
+  padding: 10px 0;
+  margin-bottom: 6px;
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const CausalFlowMainGrid = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(140px, 0.9fr) auto minmax(0, 1fr);
   align-items: stretch;
-  gap: 8px;
+  gap: 10px;
 
   @media (max-width: 680px) {
     grid-template-columns: minmax(0, 1fr);
@@ -924,23 +908,15 @@ const CausalFlowNode = styled.div<{ $dragOver?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px dashed
+  padding: 4px 10px;
+  border-left: 2px solid
     ${({ $dragOver, theme }) =>
-      $dragOver
-        ? ledgerAccent(theme.mode)
-        : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.14)'
-          : 'rgba(15,23,42,0.14)'};
+      $dragOver ? ledgerAccent(theme.mode) : ledgerHairlineStrong(theme.mode)};
   background: ${({ $dragOver, theme }) =>
-    $dragOver
-      ? theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.14)'
-        : 'rgba(99, 102, 241, 0.08)'
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.02)'
-        : '#ffffff'};
+    $dragOver ? ledgerAccentSubtle(theme.mode) : 'transparent'};
+  outline: ${({ $dragOver, theme }) =>
+    $dragOver ? `1.5px dashed ${ledgerAccent(theme.mode)}` : 'none'};
+  outline-offset: 2px;
   min-width: 0;
   transition: border-color 0.14s ease, background 0.14s ease;
 `
@@ -1059,11 +1035,10 @@ const CausalFlowSelfNode = styled.div`
   justify-content: center;
   align-items: center;
   gap: 2px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1.5px solid ${({ theme }) => ledgerAccent(theme.mode)};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.12)' : 'rgba(99, 102, 241, 0.06)'};
+  padding: 6px 10px;
+  border-left: 2.5px solid ${({ theme }) => ledgerAccent(theme.mode)};
+  border-right: 2.5px solid ${({ theme }) => ledgerAccent(theme.mode)};
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
   text-align: center;
   min-width: 0;
 `
@@ -1094,21 +1069,12 @@ const CausalFlowBesideBar = styled.div<{ $dragOver?: boolean }>`
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px dashed
+  padding: 6px 2px 0;
+  border-top: 1px dashed
     ${({ $dragOver, theme }) =>
-      $dragOver
-        ? ledgerAccent(theme.mode)
-        : theme.mode === 'dark'
-          ? 'rgba(255,255,255,0.12)'
-          : 'rgba(15,23,42,0.12)'};
+      $dragOver ? ledgerAccent(theme.mode) : ledgerHairline(theme.mode)};
   background: ${({ $dragOver, theme }) =>
-    $dragOver
-      ? theme.mode === 'dark'
-        ? 'rgba(99, 102, 241, 0.14)'
-        : 'rgba(99, 102, 241, 0.08)'
-      : 'transparent'};
+    $dragOver ? ledgerAccentSubtle(theme.mode) : 'transparent'};
 `
 
 const CausalFlowBesideLabel = styled.span`

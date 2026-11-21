@@ -50,6 +50,7 @@ import {
 
 import * as S from '../styles'
 import { type EventDetail, eventKeys, eventObservationsQueryOptions } from '../use-event-detail'
+import { HeaderControlBtn, SectionHintText } from './actors/actors.styles'
 import { MODULE_COLOR } from './module-colors'
 import { ObservationFormModal, type ObservationSubjectOption } from './observation-form-modal'
 import { SideMetricsChart } from './side-metrics-chart'
@@ -398,40 +399,44 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
 
   return (
     <S.Section id="module-metrics">
-      <S.SectionHeader>
-        <S.SectionTitle>
-          <S.SectionTitleDot $color={MODULE_COLOR.metrics} />
-          수치
-        </S.SectionTitle>
-        {observations.length > 0 && <S.SectionSubtitle>{observations.length}</S.SectionSubtitle>}
-        <S.SectionActions>
-          {unverifiedCount > 0 && (
-            /* 배너 대신 머리 칩 — 시드 값 72개가 전부 미검증이라 배너가 늘 떠 있었다 */
-            <UnverifiedChip
-              title={`${allUnverified ? '이 사건의 수치는 모두' : `${unverifiedCount}개 수치는`} 출처가 없거나 검증되지 않았습니다. 값을 눌러 출처를 달 수 있습니다.`}
+      <MetricsHeaderBlock>
+        <S.SectionHeader>
+          <S.SectionTitle>
+            <S.SectionTitleDot $color={MODULE_COLOR.metrics} />
+            수치
+          </S.SectionTitle>
+          {observations.length > 0 && <S.SectionSubtitle>{observations.length}</S.SectionSubtitle>}
+          <S.SectionActions>
+            {unverifiedCount > 0 && (
+              /* 배너 대신 머리 칩 — 시드 값 72개가 전부 미검증이라 배너가 늘 떠 있었다 */
+              <UnverifiedChip
+                title={`${allUnverified ? '이 사건의 수치는 모두' : `${unverifiedCount}개 수치는`} 출처가 없거나 검증되지 않았습니다. 값을 눌러 출처를 달 수 있습니다.`}
+              >
+                <FiAlertTriangle aria-hidden="true" />
+                {observations.filter(isUnverified).every((observation) => observation.citations.length === 0)
+                  ? '출처 없음'
+                  : '출처 미검증'}{' '}
+                {unverifiedCount}
+              </UnverifiedChip>
+            )}
+            <LibraryLink
+              to={
+                observations[0]?.citations[0]
+                  ? pathKeys.sources(observations[0].citations[0].source.id)
+                  : pathKeys.sources()
+              }
             >
-              <FiAlertTriangle aria-hidden="true" />
-              {observations.filter(isUnverified).every((observation) => observation.citations.length === 0)
-                ? '출처 없음'
-                : '출처 미검증'}{' '}
-              {unverifiedCount}
-            </UnverifiedChip>
-          )}
-          {/* 출처 서고 — 이 사건 수치의 출처를 등급·관점까지 손보는 곳 */}
-          <LibraryLink
-            to={
-              observations[0]?.citations[0]
-                ? pathKeys.sources(observations[0].citations[0].source.id)
-                : pathKeys.sources()
-            }
-          >
-            출처 서고
-          </LibraryLink>
-          <AddButton type="button" onClick={() => setEditing({ kind: 'new' })}>
-            <FiPlus /> 수치 추가
-          </AddButton>
-        </S.SectionActions>
-      </S.SectionHeader>
+              출처 서고
+            </LibraryLink>
+            <HeaderControlBtn type="button" onClick={() => setEditing({ kind: 'new' })}>
+              <FiPlus /> 수치 추가
+            </HeaderControlBtn>
+          </S.SectionActions>
+        </S.SectionHeader>
+        <SectionHintText>
+          병력·사상자·피해액 등 숫자로 남는 기록을 출처·추정 범위와 함께 비교합니다. 막대나 숫자를 누르면 수정할 수 있습니다.
+        </SectionHintText>
+      </MetricsHeaderBlock>
 
       {commentary.length > 0 && (
         /* 해설 — 표를 읽기 전에 '그래서 무슨 뜻인가'. 값이 말하는 것만(배수·손실률), 추정 오차 안쪽은 '비슷' */
@@ -992,6 +997,12 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
   )
 }
 
+const MetricsHeaderBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
 /** 그래프·표 전환 — 참여 탭 원장 스위치와 동일한 높이·문법 */
 const ViewSwitchRow = styled.div`
   display: flex;
@@ -999,39 +1010,22 @@ const ViewSwitchRow = styled.div`
   margin-bottom: 12px;
 `
 
-const AddButton = styled.button`
+const LibraryLink = styled(Link)`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
+  height: 34px;
+  padding: 0 12px;
   border-radius: ${RADIUS.SM};
-  border: none;
-  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)')};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-
-  svg {
-    width: 12px;
-    height: 12px;
-  }
-`
-
-const LibraryLink = styled(Link)`
-  padding: 4px 8px;
-  border-radius: ${RADIUS.SM};
-  font-size: 12px;
-  font-weight: 600;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => theme.colors.background.primary};
+  font-size: 12.5px;
+  font-weight: 650;
   text-decoration: none;
+  white-space: nowrap;
   color: ${({ theme }) => theme.colors.text.secondary};
   &:hover {
     color: ${({ theme }) => theme.colors.text.primary};
-    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)')};
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
   }
 `
 

@@ -1300,13 +1300,6 @@ function EventDetailContent({
 
               {activeTab === 'modules' && enabledModules.length > 0 && (
                 <>
-                  <ModuleAdd
-                    event={event}
-                    enabledModules={enabledModules}
-                    onPatch={onPatch}
-                    onStartSides={startSides}
-                    onShowMetrics={() => setMetricsOpened(true)}
-                  />
                   {enabledModules.includes('sides') && (
                     <ModuleSides
                       event={event}
@@ -1319,6 +1312,15 @@ function EventDetailContent({
                     <ModuleMilitaryDetails event={event} onPatch={onPatch} />
                   )}
                   {enabledModules.includes('cabinets') && <ModuleCabinets event={event} />}
+                  {!trashedView && (
+                    <ModuleAdd
+                      event={event}
+                      enabledModules={enabledModules}
+                      onPatch={onPatch}
+                      onStartSides={startSides}
+                      onShowMetrics={() => setMetricsOpened(true)}
+                    />
+                  )}
                 </>
               )}
 

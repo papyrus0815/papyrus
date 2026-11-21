@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiExternalLink, FiPlus, FiRepeat, FiX } from 'react-icons/fi'
+import { FiChevronDown, FiExternalLink, FiPlus, FiRepeat, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -38,6 +38,7 @@ import {
 } from '@/shared/api/person-groups'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
+import { PopoverMenu, type PopoverMenuEntry } from '@/shared/ui/popover-menu'
 import { notify } from '@/shared/ui/toast'
 import { PersonGroupCreateModal } from '@/widgets/person/person-group-create-modal/person-group-create-modal'
 
@@ -52,6 +53,7 @@ import {
   participationOptionsOf,
   personNameOf,
 } from './actors/actors.lib'
+import { HeaderControlBtn, SectionHintText } from './actors/actors.styles'
 import { PersonLinkModal } from './actors/person-link-modal'
 import { useActorMutations } from './actors/use-actor-mutations'
 import { toAxisSpan } from './development-timeline.lib'
@@ -90,10 +92,10 @@ interface ModuleSidesProps {
 type SideExtra = 'faction' | 'orbat' | 'weapons' | 'description'
 
 const SIDE_EXTRA_LABEL: Record<SideExtra, string> = {
-  faction: '계파 연결',
-  orbat: '투입 부대',
-  weapons: '병기·장비',
-  description: '설명',
+  faction: '영구 계파 연결',
+  orbat: '투입 부대 (전투서열)',
+  weapons: '투입 병기·장비',
+  description: '진영 설명',
 }
 
 const SIDE_EXTRA_ORDER: readonly SideExtra[] = ['orbat', 'weapons', 'faction', 'description']
@@ -715,14 +717,23 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
 
   return (
     <S.Section id="module-sides" aria-busy={busy}>
-      <S.SectionHeader>
-        <S.SectionTitle>
-          <S.SectionTitleDot $color={MODULE_COLOR.sides} />
-          진영
-        </S.SectionTitle>
-        {/* 제목이 이미 '진영' — '2개 진영'은 같은 말을 두 번 한다 */}
-        {sides.length > 0 && <S.SectionSubtitle>{sides.length}</S.SectionSubtitle>}
-      </S.SectionHeader>
+      <SidesHeaderBlock>
+        <S.SectionHeader>
+          <S.SectionTitle>
+            <S.SectionTitleDot $color={MODULE_COLOR.sides} />
+            진영
+          </S.SectionTitle>
+          {sides.length > 0 && <S.SectionSubtitle>{sides.length}</S.SectionSubtitle>}
+          <S.SectionActions>
+            <HeaderControlBtn type="button" onClick={addSide} disabled={busy}>
+              <FiPlus /> 진영 추가
+            </HeaderControlBtn>
+          </S.SectionActions>
+        </S.SectionHeader>
+        <SectionHintText>
+          참여 국가·인물·단체를 대립 진영으로 나누고, 진영별 결과·투입 부대·병기를 기록합니다.
+        </SectionHintText>
+      </SidesHeaderBlock>
 
       {/* 소속이나 병력 수치가 하나라도 있으면 대결 구도 배너를 세운다 */}
       {sides.length >= 2 && (totalAssignedAcrossSides > 0 || Boolean(sideQuantSummary?.allHaveSize)) && (
@@ -903,6 +914,26 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                   : ''
             }`,
           }))
+          const otherSideShortName =
+            otherSide && otherSide.name.length > 8
+              ? `${otherSide.name.slice(0, 8)}…`
+              : (otherSide?.name ?? '')
+          const sideMenuEntries: PopoverMenuEntry[] = [
+            ...hiddenExtras.map((extra) => ({
+              id: `extra-${extra}`,
+              label: `${SIDE_EXTRA_LABEL[extra]} 기록 열기`,
+              onSelect: () => openExtra(side.id, extra),
+            })),
+            ...(hiddenExtras.length > 0
+              ? [{ type: 'divider' as const, id: 'sep-remove' }]
+              : []),
+            {
+              id: 'remove-side',
+              label: '이 진영 삭제',
+              danger: true,
+              onSelect: () => void removeSide(side),
+            },
+          ]
           return (
             <SideCard
               key={side.id}
@@ -928,12 +959,52 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
             >
               <SideHead $color={sideColor}>
                 <SideName>
+                  <SideSwatchDot $color={sideColor} aria-hidden />
                   <InlineText value={side.name} onSave={(next) => renameSide(side, next)} as="span" />
                 </SideName>
-                <RemoveButton type="button" onClick={() => void removeSide(side)} aria-label={`${side.name} 진영 지우기`}>
-                  <FiX />
-                </RemoveButton>
+                <SideHeadRight>
+                  <SideOutcomeField aria-label={`${side.name}의 결과`}>
+                    <OutcomeLabel>결과</OutcomeLabel>
+                    <InlineSelect
+                      value={side.outcome ?? ''}
+                      options={SIDE_OUTCOME_OPTIONS}
+                      onSave={(next) => setOutcome(side, { outcome: (next || null) as SideOutcome | null })}
+                      placeholder="미정"
+                      label={`${side.name} 결과`}
+                    />
+                  </SideOutcomeField>
+                  <PopoverMenu
+                    align="right"
+                    ariaLabel={`${side.name} 세부 기록 및 관리`}
+                    items={sideMenuEntries}
+                    renderTrigger={({ ref, isOpen, toggle }) => (
+                      <SideMoreBtn
+                        ref={ref}
+                        type="button"
+                        $open={isOpen}
+                        aria-haspopup="menu"
+                        aria-expanded={isOpen}
+                        onClick={toggle}
+                      >
+                        세부·관리 <FiChevronDown size={12} aria-hidden />
+                      </SideMoreBtn>
+                    )}
+                  />
+                </SideHeadRight>
               </SideHead>
+
+              {side.outcome && (
+                <OutcomeNoteRow>
+                  <OutcomeNote>
+                    <InlineText
+                      value={side.outcomeNote ?? ''}
+                      onSave={(next) => setOutcome(side, { outcomeNote: next.trim() || null })}
+                      placeholder="결과 단서 추가 — 예: 전략적 승리, 전술적 패배"
+                      as="span"
+                    />
+                  </OutcomeNote>
+                </OutcomeNoteRow>
+              )}
 
               {shownExtra.faction && (
               <FactionLinkRow aria-label={`${side.name} 영구 계파 연결`}>
@@ -987,27 +1058,6 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                 )}
               </FactionLinkRow>
               )}
-
-              <OutcomeRow aria-label={`${side.name}의 결과`}>
-                <OutcomeLabel>결과</OutcomeLabel>
-                <InlineSelect
-                  value={side.outcome ?? ''}
-                  options={SIDE_OUTCOME_OPTIONS}
-                  onSave={(next) => setOutcome(side, { outcome: (next || null) as SideOutcome | null })}
-                  placeholder="미정"
-                  label={`${side.name} 결과`}
-                />
-                {side.outcome && (
-                  <OutcomeNote>
-                    <InlineText
-                      value={side.outcomeNote ?? ''}
-                      onSave={(next) => setOutcome(side, { outcomeNote: next.trim() || null })}
-                      placeholder="단서 — 예: 전략적 승리, 전술적 패배"
-                      as="span"
-                    />
-                  </OutcomeNote>
-                )}
-              </OutcomeRow>
 
               <MemberList aria-label={`${side.name} 소속 국가`}>
                 {side.participants.map((member) => {
@@ -1076,7 +1126,7 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                           aria-label={`${member.name} ${otherSide.name}(으)로 이동`}
                           title={`${otherSide.name}(으)로 이동`}
                         >
-                          →{otherIndex + 1}편
+                          → {otherSideShortName}
                         </MemberSwitchBtn>
                       )}
                       <MemberRemove
@@ -1127,7 +1177,7 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                           aria-label={`${memberName} ${otherSide.name}(으)로 이동`}
                           title={`${otherSide.name}(으)로 이동`}
                         >
-                          →{otherIndex + 1}편
+                          → {otherSideShortName}
                         </MemberSwitchBtn>
                       )}
                       {!inherited && (
@@ -1196,7 +1246,7 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                           aria-label={`${org.name} ${otherSide.name}(으)로 이동`}
                           title={`${otherSide.name}(으)로 이동`}
                         >
-                          →{otherIndex + 1}편
+                          → {otherSideShortName}
                         </MemberSwitchBtn>
                       )}
                       <MemberRemove
@@ -1266,7 +1316,7 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                           aria-label={`${party.name} ${otherSide.name}(으)로 이동`}
                           title={`${otherSide.name}(으)로 이동`}
                         >
-                          →{otherIndex + 1}편
+                          → {otherSideShortName}
                         </MemberSwitchBtn>
                       )}
                       <MemberRemove
@@ -1284,7 +1334,7 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                   (side.politicalParties?.length ?? 0) +
                   side.organizations.length ===
                   0 && (
-                  <EmptyLine>아직 소속이 없습니다 — 이 사건의 참여국·인물·정당·조직에서 고르거나 칩을 끌어 놓으세요</EmptyLine>
+                  <EmptyLine>아직 소속이 없습니다 — 아래에서 국가·인물을 배정하거나 항목을 끌어 놓으세요.</EmptyLine>
                 )}
               </MemberList>
 
@@ -1294,7 +1344,7 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                     value=""
                     options={countryOptions}
                     onSave={(key) => assignCountry(key, side.id)}
-                    placeholder="국가 넣기"
+                    placeholder="+ 국가 배정"
                     label={`${side.name}에 넣을 참여국`}
                   />
                 )}
@@ -1303,14 +1353,14 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                   onClick={() => setPersonPickerSide(side)}
                   title="참여 탭의 '인물 잇기'와 같은 창 — 역할·소속국도 함께 적습니다"
                 >
-                  인물 잇기
+                  + 인물 잇기
                 </PersonPickButton>
                 {partyOptions.length > 0 && (
                   <InlineSelect
                     value=""
                     options={partyOptions}
                     onSave={(relationId) => void assignPoliticalParty(relationId, side.id)}
-                    placeholder="정당 넣기"
+                    placeholder="+ 정당 배정"
                     label={`${side.name}에 넣을 정당`}
                   />
                 )}
@@ -1319,7 +1369,7 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                     value=""
                     options={orgOptions}
                     onSave={(relationId) => void assignOrganization(relationId, side.id)}
-                    placeholder="조직 넣기"
+                    placeholder="+ 조직 배정"
                     label={`${side.name}에 넣을 조직`}
                   />
                 )}
@@ -1381,17 +1431,6 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                   multilineEnter
                 />
               </SideDescription>
-              )}
-
-              {hiddenExtras.length > 0 && (
-                <ExtraAddRow aria-label={`${side.name}에 더 적기`}>
-                  {hiddenExtras.map((extra) => (
-                    <ExtraAddButton key={extra} type="button" onClick={() => openExtra(side.id, extra)}>
-                      <FiPlus size={11} aria-hidden />
-                      {SIDE_EXTRA_LABEL[extra]}
-                    </ExtraAddButton>
-                  ))}
-                </ExtraAddRow>
               )}
             </SideCard>
           )
@@ -1566,10 +1605,6 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
           })}
         </Unassigned>
       )}
-
-      <AddSideButton type="button" onClick={addSide} disabled={busy}>
-        <FiPlus /> 진영 추가
-      </AddSideButton>
 
       {/* 참여 탭과 같은 잇기 모달 — 이 진영이 기본값. 이미 참여한 인물을 고르면 그 줄을 고친다 */}
       <PersonLinkModal
@@ -1792,95 +1827,119 @@ const VsGaugeLossHatch = styled.span<{ $fromCenter?: boolean }>`
   pointer-events: none;
 `
 
+const SidesHeaderBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
 const SideGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 20px 28px;
 `
 
 /**
- * 진영 카드 — 선 없이 면으로(참여 탭과 같은 문법). 진영 색은 위 테두리가 아니라 머리 띠의 옅은 바탕으로.
+ * 진영 칼럼 — 카드 안의 카드(음영 박스)를 쓰지 않고, 상단 진영 색 선 + 평면 원장 열로 세운다(참여 탭 SideGroup과 동일 문법).
  */
 const SideCard = styled.section<{ $dragOver?: boolean; $color?: string }>`
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 0 16px 14px;
-  border-radius: ${RADIUS.MD};
+  padding: 0 0 12px;
+  border-top: 2.5px solid ${({ $color }) => $color ?? 'currentColor'};
   background: ${({ theme, $dragOver, $color }) =>
     $dragOver && $color
       ? `color-mix(in srgb, ${$color} ${theme.mode === 'dark' ? 14 : 8}%, transparent)`
-      : theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.035)'
-        : 'rgba(15,23,42,0.03)'};
+      : 'transparent'};
   outline: ${({ $dragOver, $color }) =>
     $dragOver && $color ? `2px dashed ${$color}` : 'none'};
-  outline-offset: -2px;
-  overflow: hidden;
+  outline-offset: 2px;
   min-width: 0;
   transition: background 0.14s ease, outline-color 0.14s ease;
 `
 
 const SideHead = styled.div<{ $color: string }>`
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin: 0 -16px;
-  padding: 10px 12px 10px 16px;
-  background: ${({ $color, theme }) => `color-mix(in srgb, ${$color} ${theme.mode === 'dark' ? 18 : 10}%, transparent)`};
-  &::before {
-    content: '';
-    flex-shrink: 0;
-    width: 10px;
-    height: 10px;
-    border-radius: 3px;
-    background: ${({ $color }) => $color};
-  }
-  > :first-child {
-    flex: 1;
-  }
+  gap: 6px 10px;
+  padding: 8px 2px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const SideSwatchDot = styled.span<{ $color: string }>`
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  background: ${({ $color }) => $color};
 `
 
 const SideName = styled.div`
-  font-size: 15px;
-  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14.5px;
+  font-weight: 750;
   color: ${({ theme }) => theme.colors.text.primary};
   min-width: 0;
 `
 
-const RemoveButton = styled.button`
+const SideHeadRight = styled.div`
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: none;
-  border-radius: ${RADIUS.XS};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
+  gap: 8px;
+  flex-shrink: 0;
+`
 
-  &:hover {
-    color: ${({ theme }) => theme.colors.error};
-  }
+const SideOutcomeField = styled.div`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: ${({ theme }) => theme.colors.text.primary};
 
-  svg {
-    width: 13px;
-    height: 13px;
+  [data-empty='true'] {
+    font-style: normal;
+    font-size: 12px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 `
 
-/** 결과 줄 — 머리 띠 바로 아래. 진영의 '끝'을 이름 다음으로 읽게 */
-const OutcomeRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 8px;
-  font-size: 13px;
+const SideMoreBtn = styled.button<{ $open?: boolean }>`
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid
+    ${({ theme, $open }) =>
+      $open ? theme.colors.text.secondary : ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => theme.colors.background.primary};
+  color: ${({ theme, $open }) =>
+    $open ? theme.colors.text.primary : theme.colors.text.secondary};
+  font: inherit;
+  font-size: 11.5px;
   font-weight: 650;
-  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.text.secondary};
+  }
+`
+
+const OutcomeNoteRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  padding: 0 2px;
+  margin-top: -4px;
 `
 
 const FactionLinkRow = styled.div`
@@ -2064,39 +2123,17 @@ const EmptyLine = styled.li`
 const Pickers = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  font-size: 12.5px;
-`
-
-/** 진영 카드 끝 '더 적기' — 아직 비어 접어 둔 칸들 */
-const ExtraAddRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 2px;
-`
-
-const ExtraAddButton = styled.button`
-  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 9px;
-  border-radius: 999px;
-  border: 1px dashed
-    ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.22)' : 'rgba(15,23,42,0.24)')};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
+  gap: 6px 12px;
+  padding-top: 6px;
+  border-top: 1px dashed ${({ theme }) => ledgerHairline(theme.mode)};
+  font-size: 12.5px;
 
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-style: solid;
-  }
-  &:focus-visible {
-    outline: 2px solid currentColor;
-    outline-offset: 2px;
+  [data-empty='true'] {
+    font-style: normal;
+    font-size: 12px;
+    font-weight: 650;
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
 `
 
@@ -2150,45 +2187,14 @@ const UnassignedChip = styled.span`
   }
 `
 
-const AddSideButton = styled.button`
-  align-self: flex-start;
-  margin-top: 14px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: ${RADIUS.SM};
-  border: none;
-  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)')};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: progress;
-  }
-
-  svg {
-    width: 12px;
-    height: 12px;
-  }
-`
-
-/** '인물 넣기' — 옆의 '국가 넣기'(인라인 피커 자리표시)와 같은 목소리의 글자 버튼 */
 const PersonPickButton = styled.button`
   padding: 0;
   border: none;
   background: transparent;
   font: inherit;
-  font-size: 13px;
-  font-style: italic;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  font-size: 12px;
+  font-weight: 650;
+  color: ${({ theme }) => theme.colors.text.secondary};
   cursor: pointer;
 
   &:hover {

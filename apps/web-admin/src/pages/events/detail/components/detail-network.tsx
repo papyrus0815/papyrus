@@ -10,7 +10,8 @@ import {
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useBlocker } from 'react-router-dom'
-import { FiLayers, FiShuffle } from 'react-icons/fi'
+import { FiLayers, FiPlus, FiShuffle } from 'react-icons/fi'
+import styled from 'styled-components'
 
 import { toParticipants, useEvents } from '@/entities/event/model'
 
@@ -40,7 +41,13 @@ import {
 } from './detail-network.lib'
 import { KeywordsBlock } from './keywords-block'
 import { NetworkZone, ZoneTail } from './network-zone'
-import { HeaderTextAction } from './section-collapse'
+import {
+  CollapsedActorChipBtn,
+  CollapsedActorInfo,
+  CollapsedActorSlot,
+  HeaderControlBtn,
+  SectionHintText,
+} from './actors/actors.styles'
 import { EventRelationMindmap } from '../../mindmap/event-relation-mindmap'
 import { RelatedHelp } from './related-help'
 import { sectionKindOf } from './narrative-sections.lib'
@@ -157,6 +164,8 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
    * 등록 1단계로 줄인다. */
   const [createChildOpen, setCreateChildOpen] = useState(false)
   const [createRelatedOpen, setCreateRelatedOpen] = useState(false)
+  const [relatedPickerSeq, setRelatedPickerSeq] = useState(0)
+  const childAddBtnRef = useRef<HTMLButtonElement | null>(null)
 
   /**
    * 뒤로가기 미저장 보호 — 브라우저 뒤로가기는 이 모달을 우회 언마운트해 작성분을
@@ -797,24 +806,30 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
 
   return (
     <S.Section id="network">
-      <S.SectionHeader>
-        <S.SectionTitle>연관</S.SectionTitle>
-        {relationSummary && (
-          <S.SectionSubtitle>{relationSummary}</S.SectionSubtitle>
-        )}
-        {mapAvailable && (
-          <S.SectionActions>
-            <HeaderTextAction type="button" onClick={() => setMapShown(!mapShown)} aria-expanded={mapShown}>
-              {mapShown ? '연결 지도 접기' : '연결 지도 보기'}
-            </HeaderTextAction>
-          </S.SectionActions>
-        )}
-      </S.SectionHeader>
+      <NetworkHeaderBlock>
+        <S.SectionHeader>
+          <S.SectionTitle>연관</S.SectionTitle>
+          {relationSummary && (
+            <S.SectionSubtitle>{relationSummary}</S.SectionSubtitle>
+          )}
+          {mapAvailable && (
+            <S.SectionActions>
+              <HeaderControlBtn
+                type="button"
+                $active={mapShown}
+                onClick={() => setMapShown(!mapShown)}
+                aria-expanded={mapShown}
+              >
+                {mapShown ? '연결 지도 접기' : '연결 지도 보기'}
+              </HeaderControlBtn>
+            </S.SectionActions>
+          )}
+        </S.SectionHeader>
+        <SectionHintText>
+          이 사건이 속한 상위·하위 묶음과, 전후 원인·결과로 이어진 다른 사건을 기록합니다.
+        </SectionHintText>
+      </NetworkHeaderBlock>
 
-      {/*
-        * 소속 — 맨 위 한 줄(소속 프랑스 혁명 › 제1차 대불동맹 전쟁 › 발미 전투). 지도를 읽기 전에 이 사건의 자리부터.
-        * 예전엔 이 경로 줄 아래 '소속' 칸이 상위를 한 번 더 말했다(287px)
-        */}
       {isBlockShown('parent') && (
         <ParentBlock
           event={event}
@@ -840,10 +855,6 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
         />
       )}
 
-      {/*
-        * 소속 구역 — 상위·하위(어느 묶음 안에 있나). 아래 '관련 사건'(원인·결과)과 종류가 다른 연결이라
-        * 아이콘·제목·세로선 색이 다른 구역으로 가른다.
-        */}
       {hierarchyZoneShown() && (
       <NetworkZone
         kind="hierarchy"
@@ -851,9 +862,30 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
         title="하위 사건"
         titleId="network-zone-hierarchy"
         description="이 사건 안에서 일어난 작은 사건"
+        actions={
+          isCollection ? (
+            <>
+              <HeaderControlBtn
+                ref={childAddBtnRef}
+                type="button"
+                onClick={() => setChildModalOpen(true)}
+              >
+                <FiPlus /> 하위 사건 모으기
+              </HeaderControlBtn>
+              <HeaderControlBtn
+                type="button"
+                onClick={() => setCreateChildOpen(true)}
+              >
+                <FiPlus /> 새 하위 등록
+              </HeaderControlBtn>
+            </>
+          ) : onRequestSplit && narrativeCount >= 2 ? (
+            <HeaderControlBtn type="button" onClick={onRequestSplit}>
+              하위 사건으로 나누기
+            </HeaderControlBtn>
+          ) : undefined
+        }
       >
-      {/* 단일 사건 — 하위 대신 '나누기'. 전개가 국면으로 커지면 묶음이 되어 국면마다 하위 사건이 된다 */}
-      {/* 한 단락짜리 전개까지 단일 사건 452건 모두에 같은 안내가 서 있었다 — 나눌 단락이 있을 때만 */}
       {!isCollection && onRequestSplit && narrativeCount >= 2 && (
         <NetStyles.HierBlock role="group" aria-labelledby="network-children-label">
           <NetStyles.VisuallyHidden id="network-children-label">하위 사건</NetStyles.VisuallyHidden>
@@ -861,11 +893,6 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
             단일 사건은 하위 사건을 두지 않습니다. 여러 국면으로 이뤄진 사건이라면 묶음 사건으로
             나누세요 — 전개 단락이 하위 사건이 됩니다.
           </NetStyles.HelperNote>
-          <NetStyles.HierRow>
-            <NetStyles.AddBtn type="button" onClick={onRequestSplit}>
-              하위 사건으로 나누기
-            </NetStyles.AddBtn>
-          </NetStyles.HierRow>
         </NetStyles.HierBlock>
       )}
 
@@ -875,8 +902,7 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
           childEvents={children}
           extraChildren={event.extraChildren ?? []}
           onPatch={onPatch}
-          onOpenChildModal={() => setChildModalOpen(true)}
-          onOpenCreateChild={() => setCreateChildOpen(true)}
+          addButtonRef={childAddBtnRef}
         />
       )}
       </NetworkZone>
@@ -891,6 +917,14 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
           titleId="network-related-label"
           description="묶음과 상관없이 원인·결과로 이어진 다른 사건"
           extra={<RelatedHelp />}
+          actions={
+            <HeaderControlBtn
+              type="button"
+              onClick={() => setRelatedPickerSeq((seq) => seq + 1)}
+            >
+              <FiPlus /> 관련 사건 잇기
+            </HeaderControlBtn>
+          }
         >
         <RelatedBlock
           eventId={event.id}
@@ -908,6 +942,7 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
           descendantRelationCount={mapAvailable && mapShown ? descendantRelationCount : 0}
           hotEventId={hotEventId}
           onHoverEvent={mapShown && mapAvailable ? setHotEventId : undefined}
+          openPickerSeq={relatedPickerSeq}
         />
         </NetworkZone>
       )}
@@ -918,29 +953,45 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
       )}
 
       {(foldedBlocks.length > 0 || onAddTreaty) && (
-        <NetStyles.FoldedLinks>
-          <NetStyles.FoldedLinksLabel>연결 추가</NetStyles.FoldedLinksLabel>
-          {foldedBlocks.map((block) => (
-            <NetStyles.FoldedLinkChip
-              key={block.id}
-              type="button"
-              onClick={() =>
-                /* 상위는 펼칠 칸이 없다(맨 위 소속 줄) — 바로 고르는 창으로 */
-                block.id === 'parent'
-                  ? setParentModalOpen(true)
-                  : setShownBlocks((prev) => new Set(prev).add(block.id))
-              }
-              title={block.hint}
-            >
-              + {block.label}
-            </NetStyles.FoldedLinkChip>
-          ))}
-          {onAddTreaty && (
-            <NetStyles.FoldedLinkChip type="button" onClick={onAddTreaty} title="이 사건과 맺어진·이 사건을 끝낸 조약">
-              + 조약
-            </NetStyles.FoldedLinkChip>
-          )}
-        </NetStyles.FoldedLinks>
+        <AdditionalLinksSection aria-label="연결 추가">
+          <AdditionalLinksHeader>
+            <strong>추가 연결 항목</strong>
+            <small>아직 비어 있는 상위 묶음·조약·키워드가 있다면 필요한 것만 선택해 엽니다.</small>
+          </AdditionalLinksHeader>
+          <AdditionalLinksList>
+            {foldedBlocks.map((block) => (
+              <CollapsedActorSlot key={block.id}>
+                <CollapsedActorInfo>
+                  <strong>{block.label}</strong>
+                  <span>{block.hint}</span>
+                </CollapsedActorInfo>
+                <CollapsedActorChipBtn
+                  type="button"
+                  onClick={() =>
+                    block.id === 'parent'
+                      ? setParentModalOpen(true)
+                      : setShownBlocks((prev) => new Set(prev).add(block.id))
+                  }
+                >
+                  <FiPlus size={12} aria-hidden />
+                  {block.id === 'parent' ? `${block.label} 지정` : `${block.label} 추가`}
+                </CollapsedActorChipBtn>
+              </CollapsedActorSlot>
+            ))}
+            {onAddTreaty && (
+              <CollapsedActorSlot>
+                <CollapsedActorInfo>
+                  <strong>조약</strong>
+                  <span>이 사건에서 체결·비준·파기된 조약을 만들거나 연결합니다.</span>
+                </CollapsedActorInfo>
+                <CollapsedActorChipBtn type="button" onClick={onAddTreaty}>
+                  <FiPlus size={12} aria-hidden />
+                  조약 추가
+                </CollapsedActorChipBtn>
+              </CollapsedActorSlot>
+            )}
+          </AdditionalLinksList>
+        </AdditionalLinksSection>
       )}
       </ZoneTail>
 
@@ -1084,3 +1135,38 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
     </S.Section>
   )
 }
+
+const NetworkHeaderBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
+const AdditionalLinksSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+const AdditionalLinksHeader = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  strong {
+    font-size: 13.5px;
+    font-weight: 750;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  small {
+    font-size: 12px;
+    line-height: 1.45;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+`
+
+const AdditionalLinksList = styled.div`
+  display: flex;
+  flex-direction: column;
+`

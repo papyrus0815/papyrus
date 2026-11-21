@@ -21,7 +21,7 @@ import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
 import {
-  ledgerAccent,
+  ledgerHairline,
   ledgerHairlineStrong,
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
@@ -42,6 +42,7 @@ import { notify } from '@/shared/ui/toast'
 
 import { metaText } from '@/pages/events/styles/theme'
 import * as S from '../styles'
+import { HeaderControlBtn, SectionHintText } from './actors/actors.styles'
 import { TreatyContent } from './treaty-content'
 import {
   type EventDetail,
@@ -63,53 +64,40 @@ interface DetailTreatiesProps {
 export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
   const queryClient = useQueryClient()
   const [linkModalOpen, setLinkModalOpen] = useState(false)
-  const [showAllRecommended, setShowAllRecommended] = useState(false)
   /** 2단계 연결 — 조약을 고른 뒤 '이 사건과의 관계'(체결·비준·파기·관련)를 고른다 */
   const [pendingTreatyId, setPendingTreatyId] = useState<string | null>(null)
   const treaties = useMemo(() => event.treaties ?? [], [event.treaties])
   const eventYear = parseTreatyYmd(event.startDate)?.year ?? null
-  const RECOMMEND_CHIP_CAP = 4
 
-  /** 연결 후보 — 이미 걸린 조약은 뺀다. 사건 연도가 있거나 모달을 열 때 가져온다. */
+  /** 연결 후보 — 모달을 열 때만 불러오며, 동시대·제목 일치 조약을 모달 상단에 먼저 정렬한다. */
   const { data: candidates, isLoading: candidatesLoading } = useQuery({
     queryKey: ['treaties', 'link-candidates'],
     queryFn: () => treatyApi.getAll({ take: 200 }),
-    enabled: linkModalOpen || eventYear !== null,
+    enabled: linkModalOpen,
     staleTime: 60_000,
   })
 
-  const recommendedTreaties = useMemo(() => {
-    const items = candidates?.items ?? []
-    if (items.length === 0) return []
-    const linkedIds = new Set(treaties.map((treaty) => treaty.id))
-    const normalizedTitle = treatyNameFromEventTitle(event.title).toLowerCase()
-    return items
-      .filter((treaty) => {
-        if (linkedIds.has(treaty.id)) return false
-        const treatyNameLower = treaty.name.toLowerCase()
-        const nameMatch =
-          normalizedTitle.length >= 2 &&
-          (treatyNameLower.includes(normalizedTitle) ||
-            normalizedTitle.includes(treatyNameLower))
-        const signYear = parseTreatyYmd(treaty.signDate)?.year ?? null
-        const yearMatch =
-          eventYear !== null && signYear !== null && Math.abs(signYear - eventYear) <= 1
-        return nameMatch || yearMatch
-      })
-      .sort((left, right) => {
-        const leftNameMatch = left.name.toLowerCase().includes(normalizedTitle) ? 1 : 0
-        const rightNameMatch = right.name.toLowerCase().includes(normalizedTitle) ? 1 : 0
-        if (leftNameMatch !== rightNameMatch) return rightNameMatch - leftNameMatch
-        const leftYear = parseTreatyYmd(left.signDate)?.year ?? (eventYear ?? 0)
-        const rightYear = parseTreatyYmd(right.signDate)?.year ?? (eventYear ?? 0)
-        return Math.abs(leftYear - (eventYear ?? 0)) - Math.abs(rightYear - (eventYear ?? 0))
-      })
-  }, [candidates?.items, event.title, eventYear, treaties])
-
   const candidateOptions = useMemo(() => {
     const linkedIds = new Set(treaties.map((treaty) => treaty.id))
+    const normalizedTitle = treatyNameFromEventTitle(event.title).toLowerCase()
     return (candidates?.items ?? [])
       .filter((treaty) => !linkedIds.has(treaty.id))
+      .slice()
+      .sort((left, right) => {
+        const leftNameMatch =
+          normalizedTitle.length >= 2 && left.name.toLowerCase().includes(normalizedTitle) ? 1 : 0
+        const rightNameMatch =
+          normalizedTitle.length >= 2 && right.name.toLowerCase().includes(normalizedTitle) ? 1 : 0
+        if (leftNameMatch !== rightNameMatch) return rightNameMatch - leftNameMatch
+        if (eventYear !== null) {
+          const leftYear = parseTreatyYmd(left.signDate)?.year ?? null
+          const rightYear = parseTreatyYmd(right.signDate)?.year ?? null
+          const leftDist = leftYear !== null ? Math.abs(leftYear - eventYear) : 9999
+          const rightDist = rightYear !== null ? Math.abs(rightYear - eventYear) : 9999
+          if (leftDist !== rightDist) return leftDist - rightDist
+        }
+        return 0
+      })
       .map((treaty) => ({
         value: treaty.id,
         label: treaty.name,
@@ -123,7 +111,7 @@ export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
           .filter(Boolean)
           .join(' · '),
       }))
-  }, [candidates, treaties])
+  }, [candidates, event.title, eventYear, treaties])
 
   const invalidateTreaties = () => {
     void queryClient.invalidateQueries({ queryKey: ['treaties'] })
@@ -243,9 +231,33 @@ export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
 
   return (
     <S.Section id="treaties">
-      <S.SectionHeader>
-        <S.SectionTitle>조약</S.SectionTitle>
-      </S.SectionHeader>
+      <TreatiesHeaderBlock>
+        <S.SectionHeader>
+          <S.SectionTitle>조약</S.SectionTitle>
+          {treaties.length > 0 && <S.SectionSubtitle>{treaties.length}</S.SectionSubtitle>}
+          <S.SectionActions>
+            <HeaderControlBtn type="button" onClick={() => setLinkModalOpen(true)}>
+              기존 조약 연결
+            </HeaderControlBtn>
+            <HeaderControlBtn
+              type="button"
+              onClick={() => void handleCreate()}
+              disabled={createMutation.isPending}
+              title={
+                hasParticipants
+                  ? '참여국을 서명국 초안으로 옮겨 새 조약을 만듭니다'
+                  : '참여국이 없어 서명국은 빈 채로 만들어집니다'
+              }
+            >
+              <FiPlus size={14} />
+              {createMutation.isPending ? '만드는 중…' : '새 조약 만들기'}
+            </HeaderControlBtn>
+          </S.SectionActions>
+        </S.SectionHeader>
+        <SectionHintText>
+          이 사건에서 체결·비준·파기된 조약을 연결합니다. ‘새 조약 만들기’를 누르면 참여국이 서명국 초안으로 반영됩니다.
+        </SectionHintText>
+      </TreatiesHeaderBlock>
 
       {treaties.length > 0 ? (
         <TreatyList>
@@ -269,71 +281,10 @@ export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
       ) : (
         <EmptyNote>
           {hasParticipants
-            ? '참여국을 그대로 서명국으로 옮겨 조약을 만들 수 있습니다.'
-            : '이 사건에서 체결된 조약을 만들거나, 이미 등록된 조약을 연결하세요.'}
+            ? '아직 연결된 조약이 없습니다. 상단 ‘새 조약 만들기’ 또는 ‘기존 조약 연결’을 눌러 기록하세요.'
+            : '아직 연결된 조약이 없습니다. 이 사건에서 체결된 조약을 만들거나 기존 조약을 연결하세요.'}
         </EmptyNote>
       )}
-
-      {recommendedTreaties.length > 0 && (
-        <RecommendBar aria-label="동시대 추천 조약 빠른 연결">
-          <RecommendLabel>동시대·제목 일치 추천 조약 원클릭 연결</RecommendLabel>
-          <RecommendChipGroup>
-            {(showAllRecommended
-              ? recommendedTreaties
-              : recommendedTreaties.slice(0, RECOMMEND_CHIP_CAP)
-            ).map((candidateTreaty) => {
-              const dateText = formatTreatyDate(candidateTreaty.signDate)
-              return (
-                <RecommendChipBtn
-                  key={candidateTreaty.id}
-                  type="button"
-                  disabled={linkMutation.isPending}
-                  onClick={() =>
-                    linkMutation.mutate({
-                      treatyId: candidateTreaty.id,
-                      linkType: 'SIGNING',
-                    })
-                  }
-                >
-                  <strong>{candidateTreaty.name}</strong>
-                  {dateText && <RecommendChipSub>({dateText})</RecommendChipSub>}
-                  <RecommendChipPlus>+ 체결 연결</RecommendChipPlus>
-                </RecommendChipBtn>
-              )
-            })}
-            {recommendedTreaties.length > RECOMMEND_CHIP_CAP && (
-              <RecommendMoreBtn
-                type="button"
-                onClick={() => setShowAllRecommended((previous) => !previous)}
-              >
-                {showAllRecommended
-                  ? '접기'
-                  : `+${recommendedTreaties.length - RECOMMEND_CHIP_CAP}건 더 보기`}
-              </RecommendMoreBtn>
-            )}
-          </RecommendChipGroup>
-        </RecommendBar>
-      )}
-
-      <Actions>
-        <ActionBtn
-          type="button"
-          $primary
-          onClick={() => void handleCreate()}
-          disabled={createMutation.isPending}
-          title={
-            hasParticipants
-              ? '참여국을 서명국 초안으로 옮겨 새 조약을 만듭니다'
-              : '참여국이 없어 서명국은 빈 채로 만들어집니다'
-          }
-        >
-          <FiPlus size={14} />
-          {createMutation.isPending ? '만드는 중…' : '조약 만들기'}
-        </ActionBtn>
-        <ActionBtn type="button" onClick={() => setLinkModalOpen(true)}>
-          기존 조약 연결
-        </ActionBtn>
-      </Actions>
 
       <SelectModal
         isOpen={linkModalOpen}
@@ -632,17 +583,21 @@ const TreatyMeta = styled.div`
   color: ${metaText};
 `
 
-/* 수명 — 단계 사이를 가는 선으로 잇는다. 파기는 오류색, 만료는 흐린 잉크. */
+const TreatiesHeaderBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
 const LifecycleBar = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px 12px;
-  padding: 8px 12px;
-  border-radius: ${RADIUS.SM};
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  background: ${({ theme }) => theme.colors.background.secondary};
+  padding: 8px 0;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const Lifecycle = styled.ol`
@@ -803,139 +758,9 @@ const MoreNote = styled.li`
 
 const EmptyNote = styled.p`
   margin: 0;
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: 13.5px;
+  line-height: 1.6;
   color: ${metaText};
-`
-
-const RecommendBar = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  margin-top: 10px;
-  padding: 10px 12px;
-  border-radius: ${RADIUS.SM};
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => theme.colors.background.secondary};
-`
-
-const RecommendLabel = styled.span`
-  font-size: 11.5px;
-  font-weight: 600;
-  color: ${metaText};
-`
-
-const RecommendChipGroup = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-`
-
-const RecommendChipBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: ${RADIUS.PILL};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: ${({ theme }) => theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-family: inherit;
-  font-size: 12.5px;
-  cursor: pointer;
-  transition: border-color 0.14s, background 0.14s;
-
-  &:hover:not(:disabled) {
-    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-
-  &:disabled {
-    opacity: 0.55;
-    cursor: default;
-  }
-`
-
-const RecommendChipSub = styled.span`
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: ${metaText};
-`
-
-const RecommendChipPlus = styled.span`
-  margin-left: 2px;
-  font-size: 11px;
-  font-weight: 700;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-`
-
-const RecommendMoreBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  height: 28px;
-  padding: 0 9px;
-  border-radius: ${RADIUS.PILL};
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
-  color: ${metaText};
-  font-family: inherit;
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-`
-
-const Actions = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
-`
-
-/**
- * 두 동작의 무게를 가른다 — 만들기가 이 섹션의 본 동작이고 연결은 보조다.
- *
- * 다만 **검은 면 버튼**은 이 지면 전체에서 가장 진한 덩어리였다 — 조약은 대개 비어 있는
- * 섹션이라(실측 0건이 다수) 문서 끝자락의 빈 칸이 본문보다 먼저 시선을 끌었다. 면을 걷고
- * 진한 테두리 + 본문 잉크로만 무게를 준다. 보조는 흐린 테두리 + 보조 잉크.
- */
-const ActionBtn = styled.button<{ $primary?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid
-    ${({ theme, $primary }) =>
-      $primary ? theme.colors.text.secondary : ledgerHairlineStrong(theme.mode)};
-  border-radius: ${RADIUS.SM};
-  background-color: transparent;
-  color: ${({ theme, $primary }) =>
-    $primary ? theme.colors.text.primary : theme.colors.text.secondary};
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: ${({ $primary }) => ($primary ? 600 : 500)};
-  cursor: pointer;
-  transition: color 0.14s, border-color 0.14s, opacity 0.14s;
-
-  &:hover:not(:disabled) {
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.text.secondary};
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 2px;
-  }
-
-  &:disabled {
-    opacity: 0.55;
-    cursor: default;
-  }
 `
 
 const UnlinkBtn = styled.button`

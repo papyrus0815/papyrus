@@ -3,8 +3,7 @@ import { useState } from 'react'
 import { FiChevronDown, FiChevronUp } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { RADIUS } from '@/entities/event/ui/ledger-tokens'
-
+import { ledgerHairlineStrong, RADIUS } from '@/entities/event/ui/ledger-tokens'
 import { type UpdateEventDto } from '@/shared/api/events'
 
 import {
@@ -14,6 +13,7 @@ import {
 } from '../military-edit'
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
+import { SectionHintText } from './actors/actors.styles'
 import { InlineSelect, InlineText } from './inline'
 import { MODULE_COLOR } from './module-colors'
 import { ModuleRemoveAction } from './module-remove-action'
@@ -69,7 +69,7 @@ export function ModuleMilitaryDetails({
 
   const toggleCombatType = (value: string) => {
     const next = combatTypes.includes(value)
-      ? combatTypes.filter((t) => t !== value)
+      ? combatTypes.filter((combatItem) => combatItem !== value)
       : [...combatTypes, value]
     updateDetails({ combatTypes: next })
   }
@@ -116,89 +116,108 @@ export function ModuleMilitaryDetails({
 
   return (
     <S.Section id="module-military-details">
-      <S.SectionHeader>
-        <S.SectionTitle>
-          <S.SectionTitleDot $color={MODULE_COLOR['military-details']} />
-          작전 정보
-        </S.SectionTitle>
-        <S.SectionActions>
-          <ModuleRemoveAction
-            label="작전 정보"
-            onRemove={() =>
-              onPatch(
-                buildMilitaryPatch(event, () => null),
-              )
-            }
-          />
-        </S.SectionActions>
-      </S.SectionHeader>
+      <HeaderBlock>
+        <S.SectionHeader>
+          <S.SectionTitle>
+            <S.SectionTitleDot $color={MODULE_COLOR['military-details']} />
+            작전 정보
+          </S.SectionTitle>
+          <S.SectionActions>
+            <ModuleRemoveAction
+              label="작전 정보"
+              onRemove={() =>
+                onPatch(
+                  buildMilitaryPatch(event, () => null),
+                )
+              }
+            />
+          </S.SectionActions>
+        </S.SectionHeader>
+        <SectionHintText>
+          작전 목적·전술·전략·전투 유형·전쟁 비용 등 군사 작전 세부 사실을 기록합니다. 값을 누르면 바로 수정됩니다.
+        </SectionHintText>
+      </HeaderBlock>
 
-      <S.ModuleDataCard $accent={MODULE_COLOR['military-details']}>
+      <FlatLedgerBody>
         <S.Definitions>
           {showConflictType && isShown(Boolean(md.conflictType)) && (
-          <S.DefRow>
-            <S.DefLabel>분쟁 유형</S.DefLabel>
-            <S.DefValue>
-              <InlineSelect
-                value={md.conflictType ?? ''}
-                options={CONFLICT_TYPES}
-                onSave={(next) =>
-                  updateDetails({ conflictType: next || undefined })
-                }
-                placeholder="선택"
-              />
-            </S.DefValue>
-          </S.DefRow>
+            <S.DefRow>
+              <S.DefLabel>분쟁 유형</S.DefLabel>
+              <S.DefValue>
+                <InlineSelect
+                  value={md.conflictType ?? ''}
+                  options={CONFLICT_TYPES}
+                  onSave={(next) =>
+                    updateDetails({ conflictType: next || undefined })
+                  }
+                  placeholder="선택"
+                />
+              </S.DefValue>
+            </S.DefRow>
           )}
 
           {isShown(combatTypes.length > 0) && (
-          <S.DefRow>
-            <S.DefLabel>전투 유형</S.DefLabel>
-            <S.DefValue>
-              <ChipRow>
-                {COMBAT_TYPES.map((ct) => (
-                  <ToggleChip
-                    key={ct.value}
-                    type="button"
-                    $active={combatTypes.includes(ct.value)}
-                    aria-pressed={combatTypes.includes(ct.value)}
-                    onClick={() => toggleCombatType(ct.value)}
-                  >
-                    {ct.label}
-                  </ToggleChip>
-                ))}
-              </ChipRow>
-            </S.DefValue>
-          </S.DefRow>
+            <S.DefRow>
+              <S.DefLabel>전투 유형</S.DefLabel>
+              <S.DefValue>
+                <ChipRow>
+                  {COMBAT_TYPES.map((ct) => (
+                    <ToggleChip
+                      key={ct.value}
+                      type="button"
+                      $active={combatTypes.includes(ct.value)}
+                      aria-pressed={combatTypes.includes(ct.value)}
+                      onClick={() => toggleCombatType(ct.value)}
+                    >
+                      {ct.label}
+                    </ToggleChip>
+                  ))}
+                </ChipRow>
+              </S.DefValue>
+            </S.DefRow>
           )}
 
           {/* 순서는 고정(목적→…→전략적 영향) — 채운 줄과 빈 줄을 갈라 놓지 않는다 */}
           {TEXT_FIELDS.filter((field) => isShown(filledText.includes(field))).map(textRow)}
 
           {isShown(warCost.trim() !== '') && (
-          <S.DefRow>
-            <S.DefLabel>전쟁 비용</S.DefLabel>
-            <S.DefValue>
-              <InlineText
-                value={warCost}
-                onSave={(next) => onPatch({ warCost: next.trim() || undefined })}
-                placeholder="입력"
-              />
-            </S.DefValue>
-          </S.DefRow>
+            <S.DefRow>
+              <S.DefLabel>전쟁 비용</S.DefLabel>
+              <S.DefValue>
+                <InlineText
+                  value={warCost}
+                  onSave={(next) => onPatch({ warCost: next.trim() || undefined })}
+                  placeholder="입력"
+                />
+              </S.DefValue>
+            </S.DefRow>
           )}
         </S.Definitions>
         {!hasAnything && !showEmpty && <EmptyNote>아직 적은 작전 정보가 없습니다.</EmptyNote>}
         {emptyCount > 0 && (
           <EmptyToggle type="button" aria-expanded={showEmpty} onClick={() => setShowEmpty((prev) => !prev)}>
             {showEmpty ? <FiChevronUp aria-hidden /> : <FiChevronDown aria-hidden />}
-            {showEmpty ? '빈 항목 접기' : hasAnything ? `비어 있는 항목 ${emptyCount}개` : `항목 채우기 (${emptyCount})`}
+            {showEmpty ? '빈 항목 접기' : hasAnything ? `비어 있는 항목 ${emptyCount}개 펼치기` : `항목 채우기 (${emptyCount})`}
           </EmptyToggle>
         )}
-      </S.ModuleDataCard>
+      </FlatLedgerBody>
     </S.Section>
   )
 }
+
+const HeaderBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
+const FlatLedgerBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+`
 
 const ChipRow = styled.div`
   display: flex;

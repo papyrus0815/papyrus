@@ -1,14 +1,16 @@
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
-import { ledgerAccent,
-  RADIUS,
+import {
+  ledgerAccent,
+  ledgerHairline,
+  ledgerHairlineStrong,
 } from '@/entities/event/ui/ledger-tokens'
-
 import { pathKeys } from '@/shared/router'
 
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
+import { SectionHintText } from './actors/actors.styles'
 import { MODULE_COLOR } from './module-colors'
 
 interface ModuleCabinetsProps {
@@ -37,13 +39,18 @@ export function ModuleCabinets({ event }: ModuleCabinetsProps) {
 
   return (
     <S.Section id="module-cabinets">
-      <S.SectionHeader>
-        <S.SectionTitle>
-          <S.SectionTitleDot $color={MODULE_COLOR.cabinets} />
-          관련 행정부
-        </S.SectionTitle>
-        <S.SectionSubtitle>{entries.length}건</S.SectionSubtitle>
-      </S.SectionHeader>
+      <HeaderBlock>
+        <S.SectionHeader>
+          <S.SectionTitle>
+            <S.SectionTitleDot $color={MODULE_COLOR.cabinets} />
+            관련 행정부
+          </S.SectionTitle>
+          <S.SectionSubtitle>{entries.length}건</S.SectionSubtitle>
+        </S.SectionHeader>
+        <SectionHintText>
+          이 사건을 다룬 각국 행정부(내각)입니다. 내각 이름을 누르면 해당 국가 상세로 이동합니다.
+        </SectionHintText>
+      </HeaderBlock>
 
       <Table>
         {entries.map((entry) => {
@@ -67,7 +74,6 @@ export function ModuleCabinets({ event }: ModuleCabinetsProps) {
           const countryId = headTenure?.country?.id ?? null
 
           const labelParts = [countryName, cabinetName, personName].filter(Boolean)
-          // 표시할 이름이 하나도 없으면 cabinet UUID를 노출하는 대신 사람이 읽는 placeholder.
           const label = labelParts.join(' · ') || '내각 정보 미상'
 
           return (
@@ -89,10 +95,16 @@ export function ModuleCabinets({ event }: ModuleCabinetsProps) {
   )
 }
 
+const HeaderBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+`
+
 const Table = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
 const Row = styled.div`
@@ -101,14 +113,8 @@ const Row = styled.div`
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 11px 13px 11px 15px;
-  border: 1px solid
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.1)'};
-  border-radius: ${RADIUS.MD};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : 'rgba(15,23,42,0.015)'};
-  transition: border-color 0.15s, background 0.15s;
+  padding: 10px 4px 10px 12px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
   &::before {
     content: '';
@@ -117,14 +123,9 @@ const Row = styled.div`
     left: 0;
     width: 3px;
     height: 14px;
-    border-radius: 0 2px 2px 0;
+    border-radius: 2px;
     background: ${MODULE_COLOR.cabinets};
-    opacity: 0.55;
-  }
-
-  &:hover {
-    border-color: ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(15,23,42,0.16)'};
+    opacity: 0.65;
   }
 `
 

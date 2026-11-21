@@ -5,7 +5,12 @@ import { FiPlus, FiTrash2 } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
-import { RADIUS, ledgerAccentSubtle, ledgerHairline } from '@/entities/event/ui/ledger-tokens'
+import {
+  RADIUS,
+  ledgerAccentSubtle,
+  ledgerHairline,
+  ledgerHairlineStrong,
+} from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { getEventOverview } from '@/shared/api/event-overview'
 import {
@@ -25,6 +30,13 @@ import { notify } from '@/shared/ui/toast'
 
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
+import {
+  CollapsedActorChipBtn,
+  CollapsedActorInfo,
+  CollapsedActorSlot,
+  HeaderControlBtn,
+  SectionHintText,
+} from './actors/actors.styles'
 import { InlineSelect } from './inline'
 import { LoadError } from './load-error'
 import { withSideColors } from './side-colors'
@@ -252,32 +264,40 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
 
   const hasContent = links.length > 0 || subEventContextRollup.length > 0
 
-  /* 기록도 없고 펼치지도 않았다 — 섹션 대신 한 줄(휴지통 사건은 그 한 줄도 없다) */
+  /* 기록도 없고 펼치지도 않았다 — 섹션 대신 한 줄 안내(참여·연관 공통 디렉터리 줄과 동일 문법) */
   if (!hasContent && !adding && !linksQuery.isError) {
     if (readOnly) return null
     return (
-      <CollapsedRow id="context-links">
-        <span>이 사건에 작용한 지형·기반시설·법령·기후·자원을 이어 둘 수 있습니다.</span>
-        <AddToggleButton type="button" onClick={() => setAdding(true)}>
+      <CollapsedActorSlot id="context-links">
+        <CollapsedActorInfo>
+          <strong>배경 맥락 (지형·법령·기후·자원)</strong>
+          <span>이 사건에 작용한 지형·기반시설·법령·기후·자원·사회 현상을 연결합니다.</span>
+        </CollapsedActorInfo>
+        <CollapsedActorChipBtn type="button" onClick={() => setAdding(true)}>
           <FiPlus size={12} aria-hidden /> 맥락 연결
-        </AddToggleButton>
-      </CollapsedRow>
+        </CollapsedActorChipBtn>
+      </CollapsedActorSlot>
     )
   }
 
   return (
     <S.Section id="context-links">
-      <S.SectionHeader>
-        <S.SectionTitle>맥락</S.SectionTitle>
-        {links.length > 0 && <S.SectionSubtitle>{links.length}</S.SectionSubtitle>}
-        {!readOnly && !linksQuery.isError && (
-          <S.SectionActions>
-            <AddToggleButton type="button" onClick={() => setAdding((prev) => !prev)}>
-              {!adding && <FiPlus size={12} aria-hidden />} {adding ? '닫기' : '맥락 연결'}
-            </AddToggleButton>
-          </S.SectionActions>
-        )}
-      </S.SectionHeader>
+      <ContextHeaderBlock>
+        <S.SectionHeader>
+          <S.SectionTitle>배경 맥락</S.SectionTitle>
+          {links.length > 0 && <S.SectionSubtitle>{links.length}</S.SectionSubtitle>}
+          {!readOnly && !linksQuery.isError && (
+            <S.SectionActions>
+              <HeaderControlBtn type="button" onClick={() => setAdding((prev) => !prev)}>
+                {!adding && <FiPlus size={14} aria-hidden />} {adding ? '입력 닫기' : '맥락 연결'}
+              </HeaderControlBtn>
+            </S.SectionActions>
+          )}
+        </S.SectionHeader>
+        <SectionHintText>
+          이 사건에 작용한 지형·기반시설·법령·기후·자원·사회 현상을 구실과 함께 기록합니다.
+        </SectionHintText>
+      </ContextHeaderBlock>
 
       {linksQuery.isError && (
         <LoadError
@@ -450,32 +470,23 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
   )
 }
 
-const AddToggleButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 9px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-radius: ${RADIUS.SM};
-  background: ${({ theme }) => theme.colors.background.secondary};
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
+const ContextHeaderBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 `
 
 const LinksGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 10px;
-  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  margin-top: 4px;
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
 const LinkCard = styled.div`
-  padding: 10px 12px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-radius: ${RADIUS.MD};
-  background: ${({ theme }) => theme.colors.background.secondary};
+  padding: 10px 4px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: transparent;
 `
 
 const CardTop = styled.div`
@@ -483,7 +494,7 @@ const CardTop = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 5px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 `
 
 const KindTag = styled.span`
@@ -492,7 +503,7 @@ const KindTag = styled.span`
   font-size: 10.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.secondary};
-  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const RoleTag = styled.span`
@@ -510,7 +521,7 @@ const SideTag = styled.span<{ $color: string | null }>`
   font-size: 10.5px;
   font-weight: 600;
   color: ${({ $color, theme }) => $color ?? theme.colors.text.secondary};
-  background: ${({ theme }) => theme.colors.background.primary};
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const RemoveBtn = styled.button`
@@ -592,11 +603,10 @@ const AddFormBox = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 10px;
-  padding: 10px 12px;
-  border: 1px dashed ${({ theme }) => ledgerHairline(theme.mode)};
-  border-radius: ${RADIUS.MD};
-  background: ${({ theme }) => theme.colors.background.secondary};
+  margin-top: 6px;
+  padding: 10px 0 4px;
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const FormRow = styled.div`
@@ -625,19 +635,6 @@ const FormPickLabel = styled.span`
 const FormPickNote = styled.span`
   font-size: 12px;
   color: ${metaText};
-`
-
-/** 접힌 상태 — 기록이 없을 때 섹션 대신 서는 한 줄 */
-const CollapsedRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 12px;
-  padding-top: 14px;
-  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  font-size: 12.5px;
-  color: ${metaText};
-  word-break: keep-all;
 `
 
 const FormInput = styled.input`

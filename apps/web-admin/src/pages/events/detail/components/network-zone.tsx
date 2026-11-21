@@ -26,23 +26,37 @@ interface NetworkZoneProps {
   description: string
   /** 제목 옆 — 도움말 '?' 등 */
   extra?: ReactNode
+  /** 구역 헤더 우측 실행 버튼 슬롯 */
+  actions?: ReactNode
   children: ReactNode
 }
 
-export function NetworkZone({ kind, icon, title, titleId, description, extra, children }: NetworkZoneProps) {
+export function NetworkZone({
+  kind,
+  icon,
+  title,
+  titleId,
+  description,
+  extra,
+  actions,
+  children,
+}: NetworkZoneProps) {
   return (
     <Zone $kind={kind} aria-labelledby={titleId}>
       <Head>
-        <IconBadge $kind={kind} aria-hidden>
-          {icon}
-        </IconBadge>
-        <HeadText>
-          <TitleRow>
-            <Title id={titleId}>{title}</Title>
-            {extra}
-          </TitleRow>
-          <Description>{description}</Description>
-        </HeadText>
+        <HeadLeft>
+          <IconBadge $kind={kind} aria-hidden>
+            {icon}
+          </IconBadge>
+          <HeadText>
+            <TitleRow>
+              <Title id={titleId}>{title}</Title>
+              {extra}
+            </TitleRow>
+            <Description>{description}</Description>
+          </HeadText>
+        </HeadLeft>
+        {actions && <HeadActions>{actions}</HeadActions>}
       </Head>
       <Body $kind={kind}>{children}</Body>
     </Zone>
@@ -66,8 +80,26 @@ const Zone = styled.section<{ $kind: NetworkZoneKind }>`
 
 const Head = styled.div`
   display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 14px;
+`
+
+const HeadLeft = styled.div`
+  display: flex;
   align-items: flex-start;
   gap: 10px;
+  min-width: 0;
+  flex: 1 1 240px;
+`
+
+const HeadActions = styled.div`
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 `
 
 const IconBadge = styled.span<{ $kind: NetworkZoneKind }>`

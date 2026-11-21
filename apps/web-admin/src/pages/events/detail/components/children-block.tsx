@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { type RefObject, useRef, useState } from 'react'
 
 import { FiPlus, FiX } from 'react-icons/fi'
 
@@ -27,52 +27,38 @@ interface ChildrenBlockProps {
   /** 추가 하위(역방향 엣지) — 읽기전용 표시. 편집은 자식 사건 쪽에서만. */
   extraChildren: NonNullable<EventDetail['extraChildren']>
   onPatch: (patch: UpdateEventDto) => void
-  onOpenChildModal: () => void
-  onOpenCreateChild: () => void
+  /** 마지막 하위 사건 제거 시 포커스를 넘길 구역 헤더 버튼 ref */
+  addButtonRef?: RefObject<HTMLButtonElement | null>
 }
 
 /**
- * 하위 사건 블록 — 시간순 플랫 리스트 행(+연결 사유) + 추가/새로 만들기 버튼 행 +
- * 추가 하위(역방향 엣지) 읽기전용 칩 행.
- *
- * 하위 연결/이동의 confirm 연쇄(SelectModal 경유)는 컨테이너 몫 — 이 블록은
- * 행 표시·직접 제거(X)·사유 편집만 가진다.
+ * 하위 사건 블록 — 시간순 플랫 리스트 행(+연결 사유) + 추가 하위(역방향 엣지) 읽기전용 칩 행.
+ * 주요 추가 실행 버튼은 NetworkZone 헤더 우측 슬롯이 맡는다.
  */
 export function ChildrenBlock({
   childEvents,
   extraChildren,
   onPatch,
-  onOpenChildModal,
-  onOpenCreateChild,
+  addButtonRef,
 }: ChildrenBlockProps) {
   const prefetchEvent = usePrefetchEventDetail()
 
-  // 하위 행은 상한까지만 렌더(그 이상은 '더 보기'로 펼침) — 하위가 수십~수백인 상위
-  // 사건에서 행 리스트·hover prefetch가 무한 확장되지 않게(히어로의 참여자/국가 캡과 대칭).
   const [showAllChildren, setShowAllChildren] = useState(false)
   const visibleChildren = showAllChildren
     ? childEvents
     : childEvents.slice(0, CHILD_CARD_CAP)
   const hiddenChildCount = childEvents.length - visibleChildren.length
 
-  /* 추가 하위(역방향 엣지) — 읽기전용 표시. 상한 초과분은 '더 보기'로 펼침. */
   const [showAllExtraChildren, setShowAllExtraChildren] = useState(false)
   const visibleExtraChildren = showAllExtraChildren
     ? extraChildren
     : extraChildren.slice(0, EXTRA_CHILD_CAP)
   const hiddenExtraChildCount = extraChildren.length - visibleExtraChildren.length
 
-  /* 제거 버튼 포커스 이양용 ref — 카드를 지우면 포커스가 body로 낙하해 키보드
-   * 흐름이 끊기므로, 제거 직전 다음 형제의 제거 버튼(없으면 '추가' 버튼)으로 옮긴다. */
   const childRemoveRefs = useRef(new Map<string, HTMLButtonElement>())
-  const childAddRef = useRef<HTMLButtonElement | null>(null)
 
   const childIds = childEvents.map((child) => child.id)
 
-  /**
-   * 사유가 빈 행은 사유 줄을 세우지 않는다(행 hover 때 ✕ 옆 '사유' 버튼만). 누르면 이 id의
-   * 행에만 입력이 열린다. 포커스가 그 행을 떠나면 닫는다 — 저장된 사유는 값으로 계속 보인다.
-   */
   const [reasonDraftId, setReasonDraftId] = useState<string | null>(null)
 
   const removeChild = (childId: string) => {
@@ -80,7 +66,7 @@ export function ChildrenBlock({
       childRemoveRefs.current,
       childIds,
       childId,
-      childAddRef.current,
+      addButtonRef?.current ?? null,
     )
     onPatch({ childEventIds: childIds.filter((id) => id !== childId) })
   }
@@ -215,16 +201,11 @@ export function ChildrenBlock({
             접기 ({CHILD_CARD_CAP}개만 표시)
           </NetStyles.MoreBtn>
         )}
-        {/* 추가 어포던스 행 — $reveal 미지정: '하위 사건 추가'(AddBtn)와 강등된
-            '새 하위 사건 만들기'(TextBtn) 모두 rest 상태 상시 노출. */}
-        <NetStyles.HierRow>
-          <NetStyles.AddBtn type="button" ref={childAddRef} onClick={onOpenChildModal}>
-            <FiPlus /> 하위 사건 추가
-          </NetStyles.AddBtn>
-          <NetStyles.TextBtn type="button" onClick={onOpenCreateChild}>
-            새 하위 사건 만들기
-          </NetStyles.TextBtn>
-        </NetStyles.HierRow>
+        {childEvents.length === 0 && (
+          <NetStyles.HelperNote>
+            아직 묶인 하위 사건이 없습니다. 우측 상단 ‘하위 사건 모으기’ 또는 ‘새 하위 등록’을 눌러 연결하세요.
+          </NetStyles.HelperNote>
+        )}
       </NetStyles.HierBlock>
 
       {/* 추가 하위(역방향 엣지) — 이 사건을 '추가 상위'로 갖는 사건들. 읽기전용 —
