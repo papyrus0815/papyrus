@@ -52,6 +52,7 @@ import {
   formatRate,
   lossRate,
   memberSum,
+  orderSideMetricRows,
   representativeOf,
   sumMismatch,
 } from './side-metrics.lib'
@@ -216,7 +217,8 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
         const sample = anyMember ?? anyUnit
         return { key, name: sample?.observation.metric.name ?? key, cells: new Map<string, Observation[]>() }
       })
-    return [...sideRows, ...extra]
+    /* 규모 → 손실 합계 → 나머지 — 표와 그래프가 같은 순서로 읽힌다 */
+    return orderSideMetricRows([...sideRows, ...extra])
   }, [sideRows, memberCells, unitCells])
   /**
    * 빈 비교표 — 진영은 있는데 값이 하나도 없으면 추천 지표(형식이 권하는 앞 3개) 행 × 모든 진영 열을 빈 칸으로 세운다.
@@ -402,6 +404,7 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
           memberCells={memberCells}
           onEdit={(observation) => setEditing(observation)}
           onAdd={(sideId, metricKey) => setEditing({ kind: 'new', subjectId: sideId, metricKey })}
+          onShowTable={() => setView('table')}
           sourceLabel={sourceLine}
         />
       )}

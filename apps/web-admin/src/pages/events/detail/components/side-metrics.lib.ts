@@ -88,24 +88,172 @@ export const centerOf = (observation: MetricObservationLike): number | null => {
 }
 
 /**
+ * 비교에 쓸 수 있는 값 — 대표값이 있고, '~이상'이 아니고, 0보다 클 때만. 해설·그래프 배수·참여 요약판이 같이 쓴다.
+ * 예전엔 셋이 제각각이었다: 그래프는 '~이상'(크림 전쟁 동맹국 총사망 ≥30만)으로 '1.5배'를 냈고,
+ * 참여 요약판은 대표가 없으면 첫 값을 아무거나 집었다.
+ */
+export function comparableOf<Entry extends MetricObservationLike>(
+  list: ReadonlyArray<Entry>,
+): { observation: Entry; value: number } | null {
+  const picked = representativeOf(list)
+  if (!picked || picked.atLeast) return null
+  const value = centerOf(picked)
+  return value != null && value > 0 ? { observation: picked, value } : null
+}
+
+/** 진영 규모 한 값 — 진영 값, 없으면 나라 몫의 합 */
+export interface SideSize<Entry> {
+  metricKey: string
+  metricName: string
+  value: number
+  /** 표기를 빌릴 측정값(나라 합이면 나라 값 하나) */
+  observation: Entry
+  /** 나라 몫을 더한 계산 값인가 */
+  derived: boolean
+}
+
+/**
+ * 진영의 규모 — SIZE_METRIC_PRIORITY 순(병력 → 참여 인원)으로 첫 비교 가능 값.
+ * 진영 값이 없으면 나라 몫의 합(나라마다 대표값이 있을 때만, memberSum).
+ */
+export function sideSizeOf<Entry extends MetricObservationLike>(
+  rows: ReadonlyArray<SideMetricRow<Entry>>,
+  memberCells: ReadonlyMap<string, ReadonlyMap<string, ReadonlyArray<MemberEntry<Entry>>>>,
+  sideId: string,
+): SideSize<Entry> | null {
+  for (const key of SIZE_METRIC_PRIORITY) {
+    const direct = comparableOf(rows.find((row) => row.key === key)?.cells.get(sideId) ?? [])
+    if (direct) {
+      return {
+        metricKey: key,
+        metricName: direct.observation.metric.name,
+        value: direct.value,
+        observation: direct.observation,
+        derived: false,
+      }
+    }
+    const members = memberCells.get(key)?.get(sideId) ?? []
+    const sum = memberSum(members)
+    if (sum !== null && sum > 0 && members[0]) {
+      return {
+        metricKey: key,
+        metricName: members[0].observation.metric.name,
+        value: sum,
+        observation: members[0].observation,
+        derived: true,
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * 비교 행 순서 — 규모(병력·참여 인원) → 손실 합계 → 나머지(서버 지표 순 유지).
+ * 지표 정렬 순 그대로면 '동원 병력'이 맨 아래였다(보불·보오·플라시·아편 전부). 읽는 질문의 순서는
+ * '얼마나 모였나 → 얼마나 잃었나 → 무엇으로 잃었나'다.
+ */
+export function orderSideMetricRows<Row extends { key: string }>(rows: ReadonlyArray<Row>): Row[] {
+  const rank = (key: string) =>
+    (SIZE_METRIC_PRIORITY as ReadonlyArray<string>).includes(key) ? 0 : key === 'military.casualties_total' ? 1 : 2
+  return rows
+    .map((row, index) => ({ row, index }))
+    .sort((left, right) => rank(left.row.key) - rank(right.row.key) || left.index - right.index)
+    .map(({ row }) => row)
+}
+
+/**
+ * 손실 구성 요소 — 사망·부상·실종·포로(전통적 '손실 합계'의 네 몫). 사망은 전투 사망 쪽 정의만:
+ * 질병 사망까지 든 '군 총사망'은 손실 합계의 몫이 아니라 섞지 않는다.
+ */
+export const LOSS_COMPONENTS = [
+  {
+    key: 'deaths',
+    label: '사망',
+    metricKeys: ['military.killed_in_action', 'military.combat_deaths', 'military.deaths_unspecified'],
+  },
+  { key: 'wounded', label: '부상', metricKeys: ['military.wounded'] },
+  { key: 'missing', label: '실종', metricKeys: ['military.missing'] },
+  { key: 'captured', label: '포로', metricKeys: ['military.captured'] },
+] as const
+
+export interface LossPart<Entry> {
+  key: (typeof LOSS_COMPONENTS)[number]['key']
+  label: string
+  value: number
+  observation: Entry
+}
+
+export interface LossComposition<Entry> {
+  sideId: string
+  parts: LossPart<Entry>[]
+  /** 몫의 합 */
+  sum: number
+  /** 기록된 '군 손실 합계'(비교 가능할 때) */
+  total: { value: number; observation: Entry } | null
+  /** 몫의 합과 기록된 합계가 5% 넘게 어긋나면 그 차(합계 − 몫의 합) */
+  mismatch: number | null
+}
+
+export function lossCompositionOf<Entry extends MetricObservationLike>(
+  rows: ReadonlyArray<SideMetricRow<Entry>>,
+  sideId: string,
+): LossComposition<Entry> | null {
+  const parts: LossPart<Entry>[] = []
+  for (const component of LOSS_COMPONENTS) {
+    for (const metricKey of component.metricKeys) {
+      const picked = comparableOf(rows.find((row) => row.key === metricKey)?.cells.get(sideId) ?? [])
+      if (picked) {
+        parts.push({ key: component.key, label: component.label, value: picked.value, observation: picked.observation })
+        break
+      }
+    }
+  }
+  if (parts.length === 0) return null
+  const sum = parts.reduce((total, part) => total + part.value, 0)
+  const total = comparableOf(rows.find((row) => row.key === 'military.casualties_total')?.cells.get(sideId) ?? [])
+  return {
+    sideId,
+    parts,
+    sum,
+    total,
+    mismatch: parts.length >= 2 ? sumMismatch(total?.value ?? null, sum) : null,
+  }
+}
+
+/**
+ * 진영들의 손실 구성 — 둘 이상 진영에 몫이 있고, 그중 하나라도 몫이 둘 이상일 때만(몫 하나면 쌓을 게 없다).
+ */
+export function lossCompositions<Entry extends MetricObservationLike>(
+  rows: ReadonlyArray<SideMetricRow<Entry>>,
+  sideIds: ReadonlyArray<string>,
+): LossComposition<Entry>[] {
+  const list = sideIds
+    .map((sideId) => lossCompositionOf(rows, sideId))
+    .filter((composition): composition is LossComposition<Entry> => composition !== null)
+  return list.length >= 2 && list.some((composition) => composition.parts.length >= 2) ? list : []
+}
+
+/**
  * 손실률 — (손실 ÷ 동원 병력). 둘 다 **대표값**이 있을 때만 낸다: 시점·전선이 다른 값이 여럿이면
  * 어느 둘을 나눠야 하는지 모른다(채택 추정치가 정해졌으면 그것으로). '~이상' 값은 비율을 거짓으로 만들어 뺀다.
  */
 export function lossRate(
   rows: ReadonlyArray<SideMetricRow<MetricObservationLike>>,
   sideId: string,
-): { rate: number; lossName: string } | null {
+): { rate: number; lossName: string; sizeKey: string } | null {
   const single = (key: string) => {
     const picked = representativeOf(rows.find((row) => row.key === key)?.cells.get(sideId) ?? [])
     return picked && !picked.atLeast ? picked : null
   }
   const personnel = single(PERSONNEL_METRIC) ?? single('society.participants')
   const personnelValue = personnel ? centerOf(personnel) : null
-  if (!personnelValue || personnelValue <= 0) return null
+  if (!personnel || !personnelValue || personnelValue <= 0) return null
   for (const key of LOSS_METRIC_PRIORITY) {
     const loss = single(key)
     const lossValue = loss ? centerOf(loss) : null
-    if (lossValue != null) return { rate: lossValue / personnelValue, lossName: loss!.metric.name }
+    if (lossValue != null) {
+      return { rate: lossValue / personnelValue, lossName: loss!.metric.name, sizeKey: personnel.metric.key }
+    }
   }
   return null
 }

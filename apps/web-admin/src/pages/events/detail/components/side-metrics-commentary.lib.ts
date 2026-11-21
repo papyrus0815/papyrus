@@ -11,9 +11,8 @@
  *  - 병력 → 손실(우선순위 한 지표) → 손실률 순, 최대 세 줄
  */
 import {
-  centerOf,
+  comparableOf,
   formatRate,
-  representativeOf,
   LOSS_METRIC_PRIORITY,
   lossRate,
   type MetricObservationLike,
@@ -65,12 +64,7 @@ function compareLine(
   kind: 'size' | 'loss',
   format: Formatter,
 ): CommentaryLine | null {
-  const pick = (side: CommentarySide) => {
-    const picked = representativeOf(row.cells.get(side.id) ?? [])
-    if (!picked || picked.atLeast) return null
-    const value = centerOf(picked)
-    return value && value > 0 ? { observation: picked, value } : null
-  }
+  const pick = (side: CommentarySide) => comparableOf(row.cells.get(side.id) ?? [])
   const first = pick(sides[0])
   const second = pick(sides[1])
   if (!first || !second) return null

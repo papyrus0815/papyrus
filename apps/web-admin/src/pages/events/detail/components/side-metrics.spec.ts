@@ -6,7 +6,11 @@ import {
   lossRate,
   memberSum,
   alternativesOf,
+  comparableOf,
+  lossCompositions,
+  orderSideMetricRows,
   representativeOf,
+  sideSizeOf,
   sumMismatch,
 } from './side-metrics.lib'
 
@@ -185,5 +189,93 @@ describe('buildUnitCells — 진영 산하 부대별 측정값', () => {
     const axisUnits = cells.get('military.personnel')?.get('axis') ?? []
     expect(axisUnits.map((entry) => entry.name)).toEqual(['북부집단군', '중부집단군'])
     expect(memberSum(axisUnits)).toBe(1963000)
+  })
+})
+
+describe('comparableOf — 해설·그래프 배수·참여 요약판의 공용 판정', () => {
+  it("'~이상'·대표 없는 여러 값·0은 비교하지 않는다", () => {
+    expect(comparableOf([obs('1', 'A', 'military.deaths_total', null, { low: '300000', atLeast: true })])).toBeNull()
+    expect(comparableOf([obs('1', 'A', 'k', '520'), obs('2', 'A', 'k', null, { low: '1000', high: '2000' })])).toBeNull()
+    expect(comparableOf([obs('1', 'A', 'k', '0')])).toBeNull()
+    expect(comparableOf([obs('1', 'A', 'k', null, { low: '700000', high: '900000' })])?.value).toBe(800000)
+  })
+})
+
+describe('sideSizeOf — 진영 규모', () => {
+  it('병력 → 참여 인원 순, 진영 값이 없으면 나라 합', () => {
+    const observations = [
+      obs('1', 'A', 'military.personnel', '3000'),
+      obs('2', 'B', 'society.participants', null, { low: '3000', high: '10000' }),
+      obs('3', 'P1', 'military.personnel', '400', { subjectType: 'EVENT_PARTICIPANT' }),
+      obs('4', 'P2', 'military.personnel', '600', { subjectType: 'EVENT_PARTICIPANT' }),
+    ]
+    const rows = buildSideMetricRows(observations, ['A', 'B', 'C'])
+    const members = buildMemberCells(
+      observations,
+      new Map([
+        ['P1', { sideId: 'C', name: '갑' }],
+        ['P2', { sideId: 'C', name: '을' }],
+      ]),
+    )
+    expect(sideSizeOf(rows, members, 'A')).toMatchObject({ metricKey: 'military.personnel', value: 3000, derived: false })
+    expect(sideSizeOf(rows, members, 'B')).toMatchObject({ metricKey: 'society.participants', value: 6500 })
+    expect(sideSizeOf(rows, members, 'C')).toMatchObject({ value: 1000, derived: true })
+  })
+})
+
+describe('orderSideMetricRows', () => {
+  it('규모 → 손실 합계 → 나머지(원래 순서 유지)', () => {
+    const order = orderSideMetricRows(
+      ['military.deaths_unspecified', 'military.wounded', 'military.casualties_total', 'military.personnel'].map(
+        (key) => ({ key }),
+      ),
+    )
+    expect(order.map((row) => row.key)).toEqual([
+      'military.personnel',
+      'military.casualties_total',
+      'military.deaths_unspecified',
+      'military.wounded',
+    ])
+  })
+})
+
+describe('lossCompositions — 손실 구성', () => {
+  it('보불전쟁 프랑스 측 — 네 몫, 기록된 합계와 5% 넘게 어긋나면 차이', () => {
+    const rows = buildSideMetricRows(
+      [
+        obs('1', 'FR', 'military.deaths_unspecified', '138800'),
+        obs('2', 'FR', 'military.wounded', '143000'),
+        obs('3', 'FR', 'military.missing', '41000'),
+        obs('4', 'FR', 'military.captured', '474000'),
+        obs('5', 'FR', 'military.casualties_total', '756000'),
+        obs('6', 'DE', 'military.deaths_unspecified', '44700'),
+        obs('7', 'DE', 'military.wounded', '89700'),
+        obs('8', 'DE', 'military.casualties_total', '139000'),
+      ],
+      ['DE', 'FR'],
+    )
+    const [germany, france] = lossCompositions(rows, ['DE', 'FR'])
+    expect(france.parts.map((part) => part.key)).toEqual(['deaths', 'wounded', 'missing', 'captured'])
+    expect(france.sum).toBe(796800)
+    expect(france.mismatch).toBe(756000 - 796800)
+    expect(germany.parts).toHaveLength(2)
+  })
+
+  it("질병 사망까지 든 '군 총사망'은 몫이 아니다 · 몫이 하나뿐인 진영끼리는 쌓지 않는다", () => {
+    const rows = buildSideMetricRows(
+      [obs('1', 'A', 'military.deaths_total', '450000'), obs('2', 'B', 'military.combat_deaths', '70000')],
+      ['A', 'B'],
+    )
+    expect(lossCompositions(rows, ['A', 'B'])).toEqual([])
+  })
+})
+
+describe('lossRate — 어느 규모로 나눴는가', () => {
+  it('병력이 없으면 참여 인원, sizeKey로 알린다', () => {
+    const rows = buildSideMetricRows(
+      [obs('1', 'B', 'society.participants', '10000'), obs('2', 'B', 'human.deaths_total', '156')],
+      ['B'],
+    )
+    expect(lossRate(rows, 'B')).toMatchObject({ sizeKey: 'society.participants' })
   })
 })
