@@ -21,8 +21,8 @@ import {
 } from './event-type-registry'
 
 describe('세부 분야 레지스트리', () => {
-  it('서버 enum 34종과 같은 수, 정의의 key가 표와 맞고 핵심·선택 기록은 겹치지 않는다', () => {
-    expect(EVENT_TYPE_ORDER).toHaveLength(34)
+  it('서버 enum 35종과 같은 수, 정의의 key가 표와 맞고 핵심·선택 기록은 겹치지 않는다', () => {
+    expect(EVENT_TYPE_ORDER).toHaveLength(35)
     for (const [key, def] of Object.entries(EVENT_TYPES)) {
       expect(def.key).toBe(key)
       expect(def.core.filter((facet) => def.optional.includes(facet))).toEqual([])
@@ -72,7 +72,7 @@ describe('세부 분야 레지스트리', () => {
     expect(formatDomainPath(null, null)).toBe('기타')
   })
 
-  it('의미군 묶음(EVENT_TYPE_GROUPS)은 34종을 빠짐없이 레지스트리 순서대로 분할한다', () => {
+  it('의미군 묶음(EVENT_TYPE_GROUPS)은 35종을 빠짐없이 레지스트리 순서대로 분할한다', () => {
     const flattened = EVENT_TYPE_GROUPS.flatMap((group) => group.types)
     expect(flattened).toEqual(EVENT_TYPE_ORDER)
     expect(groupSubtypes(['BATTLE', 'TREATY'])).toEqual([
@@ -335,7 +335,46 @@ describe('subtypesForDomain hasParent 정렬 · searchClassifications · 최근 
     expect(withParent.primary[withParent.primary.length - 1]).toBe('WAR')
   })
 
-  it('searchClassifications — 세부 이름·예시·동의어로 34종 전체에서 검색하고 현재 분야를 우선한다', () => {
+  it('언론·출판 — 매체의 창간·인수·폐간·보도·검열은 여기로, 책 한 권의 출간·건국·매체 법·정당 선전은 제자리', () => {
+    const press = { domain: 'CULTURE', type: 'PRESS_PUBLICATION' }
+    // 실DB에서 '정당·집회·선전'으로 서 있던 두 건
+    expect(
+      suggestClassificationFromTitle("베니토 무솔리니의 참전 선동 일간지 《일 포폴로 디탈리아(Il Popolo d'Italia)》 창간"),
+    ).toEqual(press)
+    expect(
+      suggestClassificationFromTitle('나치당(NSDAP)의 기관지 『푈키셔 베오바흐터(Völkischer Beobachter)』 인수'),
+    ).toEqual(press)
+    expect(suggestClassificationFromTitle('독립신문 창간')).toEqual(press)
+    expect(suggestClassificationFromTitle('동아일보 정간')).toEqual(press)
+    expect(suggestClassificationFromTitle('로이터 통신사 설립')).toEqual(press)
+    expect(suggestClassificationFromTitle('경성방송국 개국')).toEqual(press)
+    expect(suggestClassificationFromTitle('펜타곤 페이퍼 폭로 보도')).toEqual(press)
+    expect(suggestClassificationFromTitle('국민신보 필화 사건')).toEqual(press)
+    expect(suggestClassificationFromTitle('카를스바트 결의 이후 출판 검열')).toEqual(press)
+    // 매체 없는 책 한 권의 출간은 창작, 맨 '개국'은 건국이 아니라 미분류, 매체를 묶는 법은 법령, 정당 선전은 정당
+    expect(suggestClassificationFromTitle('《자본론》 제1권 출간')).toMatchObject({ type: 'CREATION' })
+    expect(suggestClassificationFromTitle('조선 개국')?.type).not.toBe('PRESS_PUBLICATION')
+    expect(suggestClassificationFromTitle('광무 신문지법')).toMatchObject({ type: 'LAW_POLICY' })
+    expect(suggestClassificationFromTitle('반공 선전 활동')).toMatchObject({ type: 'PARTY_RALLY' })
+    // 일반 기업 인수는 기업
+    expect(suggestClassificationFromTitle('삼성전자의 하만 인수')).toMatchObject({ type: 'COMPANY' })
+  })
+
+  it('언론·출판 — 매체·발행인이 핵심이라 기업·조직 칸을 비어 있어도 세우고, 문화·정치·사회 앞줄에 선다', () => {
+    expect(facetWeight('PRESS_PUBLICATION', 'organizations')).toBe('core')
+    expect(facetWeight('PRESS_PUBLICATION', 'persons')).toBe('core')
+    expect(eventTypeFeatures('PRESS_PUBLICATION').expectOrganizations).toBe(true)
+    expect(isArmedConflictType('PRESS_PUBLICATION')).toBe(false)
+    expect(defaultDomainForType('PRESS_PUBLICATION')).toBe('CULTURE')
+    expect(DOMAIN_SUBTYPES.CULTURE).toContain('PRESS_PUBLICATION')
+    expect(DOMAIN_SUBTYPES.POLITICS).toContain('PRESS_PUBLICATION')
+    expect(DOMAIN_SUBTYPES.SOCIETY).toContain('PRESS_PUBLICATION')
+    expect(searchClassifications('신문', null)[0]).toMatchObject({ type: 'PRESS_PUBLICATION' })
+    expect(searchClassifications('검열', null)[0]).toMatchObject({ type: 'PRESS_PUBLICATION' })
+    expect(searchClassifications('창간', null)[0]).toMatchObject({ type: 'PRESS_PUBLICATION' })
+  })
+
+  it('searchClassifications — 세부 이름·예시·동의어로 35종 전체에서 검색하고 현재 분야를 우선한다', () => {
     const landing = searchClassifications('상륙작전', null)
     expect(landing[0]).toMatchObject({ type: 'BATTLE', domain: 'MILITARY' })
 

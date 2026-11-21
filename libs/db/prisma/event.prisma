@@ -141,6 +141,7 @@ enum EventType {
   DISASTER // 재해·사고
   DISCOVERY // 발견·학술
   CREATION // 창제·저작·작품
+  PRESS_PUBLICATION // 언론·출판 — 신문·잡지 창간·폐간·발행 정지, 보도·특종·폭로, 출판사·통신사 설립, 검열·필화
   CONVERSION // 개종·세례
   MIGRATION // 이주·천도
   PERSONAL // 인물 행적

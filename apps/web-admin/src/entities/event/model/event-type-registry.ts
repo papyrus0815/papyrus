@@ -2,7 +2,7 @@
  * 사건 세부 분야 레지스트리 — **분야의 2단계(분야 › 세부)이자 "이 사건에는 무엇을 기록하는가"의 단일 정본.**
  *
  *  - 분야(Event.domain, 9종·필수): 무엇에 관한 일인가 — 정치·외교·군사·경제… 색·필터의 기준(event-domain.ts).
- *  - 세부(Event.type, 34종·선택): 어떤 꼴의 일인가 — 전투·조약·법령·즉위… 찾아보기의 2단계이고
+ *  - 세부(Event.type, 35종·선택): 어떤 꼴의 일인가 — 전투·조약·법령·즉위… 찾아보기의 2단계이고
  *    **붙는 기록을 정한다**(전투 → 교전 양측, 조약 → 맺어진 조약, 즉위 → 재임 기록).
  *
  * 화면은 '군사 › 법령·정책·개혁' 한 줄의 2단 분류로 보이지만 **저장은 독립된 두 축**이다. 실측 452건에서
@@ -54,6 +54,7 @@ export type EventTypeKey =
   | 'DISASTER'
   | 'DISCOVERY'
   | 'CREATION'
+  | 'PRESS_PUBLICATION'
   | 'CONVERSION'
   | 'MIGRATION'
   | 'PERSONAL'
@@ -441,6 +442,18 @@ export const EVENT_TYPES: Record<EventTypeKey, EventTypeDef> = {
     key: 'CREATION', short: '창작', label: '창제·저작·작품', examples: '문자 창제 · 책 출간 · 기념물 제작', defaultDomain: 'CULTURE',
     core: ['persons'], optional: ['participants'],
   },
+  /*
+   * 언론·출판 — **매체와 보도**가 주인공인 일: 신문·잡지·통신사·방송의 창간·인수·폐간·정간, 특종·폭로 보도,
+   * 출판사 설립, 검열·필화·언론 탄압. 예전엔 갈 곳이 없어 신문 창간·인수가 '정당·집회·선전'에 섰다
+   * (무솔리니 《일 포폴로 디탈리아》 창간, 나치당 『푈키셔 베오바흐터』 인수 — 실DB 2건).
+   * 경계: 특정 저작 한 권(소설·사상서·사서)의 출간은 창제·저작·작품, 매체를 묶는 **법**(신문지법)은 법령,
+   * 정당의 선전 활동은 정당·집회·선전 — 기관지라도 창간·인수·폐간은 매체의 일이라 여기다.
+   * 신문사·출판사는 '기업·조직'으로, 발행인·기자는 인물로 잇는다.
+   */
+  PRESS_PUBLICATION: {
+    key: 'PRESS_PUBLICATION', short: '언론', label: '언론·출판', examples: '신문·잡지 창간·폐간 · 특종·폭로 보도 · 출판사 설립 · 검열·필화', defaultDomain: 'CULTURE',
+    core: ['organizations', 'persons'], optional: ['participants', 'metrics'],
+  },
   CONVERSION: {
     key: 'CONVERSION', short: '개종', label: '개종·세례', examples: '폴란드의 세례 · 기독교 수용', defaultDomain: 'RELIGION',
     core: ['participants'], optional: ['persons'],
@@ -464,13 +477,13 @@ export interface EventTypeGroup {
   types: EventTypeKey[]
 }
 
-/** 세부 의미군 5묶음 — '더 보기'·'기타'·분야 미선택 시 34종을 훑기 쉽게 묶는다 */
+/** 세부 의미군 5묶음 — '더 보기'·'기타'·분야 미선택 시 35종을 훑기 쉽게 묶는다 */
 export const EVENT_TYPE_GROUPS: ReadonlyArray<EventTypeGroup> = [
   { label: '충돌', types: ['WAR', 'BATTLE', 'UPRISING', 'ATTACK', 'PROTEST_VIOLENCE', 'MOBILIZATION', 'MILITARY_FORMATION'] },
   { label: '국가 간', types: ['TREATY', 'SUMMIT', 'WAR_DECLARATION', 'DECLARATION', 'VISIT', 'CRISIS', 'EXPANSION'] },
   { label: '국가·권력', types: ['STATEHOOD', 'TERRITORY', 'POWER_CHANGE', 'POWER_STRUGGLE', 'ELECTION', 'LAW_POLICY', 'INSTITUTION', 'INCIDENT', 'MOVEMENT', 'PARTY_RALLY'] },
   { label: '경제·산업', types: ['COMPANY', 'MARKET', 'PRODUCT', 'CONSTRUCTION'] },
-  { label: '자연·문화·사람', types: ['DISASTER', 'DISCOVERY', 'CREATION', 'CONVERSION', 'MIGRATION', 'PERSONAL'] },
+  { label: '자연·문화·사람', types: ['DISASTER', 'DISCOVERY', 'CREATION', 'PRESS_PUBLICATION', 'CONVERSION', 'MIGRATION', 'PERSONAL'] },
 ]
 
 /** 분야를 고르기 전에 앞줄로 보여 줄 대표 세부 — 고르면 defaultDomain이 함께 채워진다 */
@@ -501,12 +514,12 @@ export function groupSubtypes(types: ReadonlyArray<EventTypeKey>): EventTypeGrou
  * 나머지 세부도 '더 보기'로 고를 수 있다(저장은 독립 축). 기타는 앞줄이 없어 전부 보인다.
  */
 export const DOMAIN_SUBTYPES: Partial<Record<EventDomainKey, EventTypeKey[]>> = {
-  POLITICS: ['STATEHOOD', 'TERRITORY', 'POWER_CHANGE', 'POWER_STRUGGLE', 'ELECTION', 'PARTY_RALLY', 'LAW_POLICY', 'INSTITUTION', 'MILITARY_FORMATION', 'UPRISING', 'INCIDENT', 'ATTACK', 'PROTEST_VIOLENCE', 'MOVEMENT', 'WAR_DECLARATION', 'DECLARATION', 'PERSONAL'],
+  POLITICS: ['STATEHOOD', 'TERRITORY', 'POWER_CHANGE', 'POWER_STRUGGLE', 'ELECTION', 'PARTY_RALLY', 'LAW_POLICY', 'INSTITUTION', 'MILITARY_FORMATION', 'UPRISING', 'INCIDENT', 'ATTACK', 'PROTEST_VIOLENCE', 'MOVEMENT', 'PRESS_PUBLICATION', 'WAR_DECLARATION', 'DECLARATION', 'PERSONAL'],
   DIPLOMACY: ['TREATY', 'TERRITORY', 'SUMMIT', 'WAR_DECLARATION', 'DECLARATION', 'VISIT', 'CRISIS', 'EXPANSION', 'INSTITUTION'],
   MILITARY: ['WAR', 'BATTLE', 'WAR_DECLARATION', 'MOBILIZATION', 'MILITARY_FORMATION', 'LAW_POLICY', 'POWER_CHANGE', 'POWER_STRUGGLE', 'INSTITUTION', 'UPRISING', 'ATTACK', 'TREATY', 'SUMMIT', 'PERSONAL'],
   ECONOMY: ['COMPANY', 'MARKET', 'PRODUCT', 'CONSTRUCTION', 'LAW_POLICY', 'INSTITUTION', 'TREATY', 'SUMMIT', 'MOVEMENT'],
-  SOCIETY: ['UPRISING', 'PROTEST_VIOLENCE', 'MOVEMENT', 'PARTY_RALLY', 'DISASTER', 'MIGRATION', 'ATTACK', 'INCIDENT', 'LAW_POLICY', 'INSTITUTION', 'CONSTRUCTION'],
-  CULTURE: ['CREATION', 'CONSTRUCTION', 'INSTITUTION', 'DISCOVERY', 'MOVEMENT', 'VISIT'],
+  SOCIETY: ['UPRISING', 'PROTEST_VIOLENCE', 'MOVEMENT', 'PARTY_RALLY', 'PRESS_PUBLICATION', 'DISASTER', 'MIGRATION', 'ATTACK', 'INCIDENT', 'LAW_POLICY', 'INSTITUTION', 'CONSTRUCTION'],
+  CULTURE: ['CREATION', 'PRESS_PUBLICATION', 'CONSTRUCTION', 'INSTITUTION', 'DISCOVERY', 'MOVEMENT', 'VISIT'],
   RELIGION: ['CONVERSION', 'SUMMIT', 'LAW_POLICY', 'INSTITUTION', 'MOVEMENT', 'POWER_STRUGGLE', 'INCIDENT', 'CREATION', 'CONSTRUCTION', 'MIGRATION'],
   SCIENCE: ['DISCOVERY', 'PRODUCT', 'CONSTRUCTION', 'INSTITUTION', 'LAW_POLICY', 'DISASTER'],
 }
@@ -696,6 +709,14 @@ const TITLE_SUGGESTION_RULES: ReadonlyArray<{
     domain: 'POLITICS',
     type: 'POWER_STRUGGLE',
   },
+  // 언론·출판 — 기업 규칙('인수$')·설립 규칙('설립$')·창작 규칙('간행$·출간$')보다 먼저.
+  // 매체 이름(신문·일간지·기관지·출판사…)이 앞에 있고 끝이 창간·인수·폐간이면 매체의 일이다.
+  // 맨 '개국'은 받지 않는다(조선 개국 = 건국). 매체 없는 맨 '출간·간행'은 창작에 남긴다(책 한 권의 일)
+  {
+    pattern: /(?:(?:신문|일보|신보|일간지|주간지|월간지|잡지|기관지|통신사|방송사|방송국|출판사|언론사|신문사|잡지사).*(?:창간|폐간|복간|정간|속간|종간|인수|매각|설립|창립|개국|발행|간행)|창간|폐간|복간|정간|속간|종간|발행\s*(?:정지|금지|중단)|판매\s*금지|필화(?:\s*사건)?|(?:언론|출판|보도)\s*(?:탄압|통제|통폐합|검열)|검열|특종(?:\s*보도)?|폭로\s*(?:기사|보도)|보도)$/,
+    domain: 'CULTURE',
+    type: 'PRESS_PUBLICATION',
+  },
   // 회담·회의·교섭 (종교 공의회 구분)
   { pattern: /공의회/, domain: 'RELIGION', type: 'SUMMIT' },
   {
@@ -851,6 +872,7 @@ const SEARCH_KEYWORDS: Partial<Record<EventTypeKey, string>> = {
   DISASTER: '대지진 지진 대화재 화재 홍수 태풍 해일 쓰나미 대기근 기근 역병 전염병 페스트 콜레라 참사 침몰 폭발',
   DISCOVERY: '발견 발명 노벨상 법칙 학설 논문 관측 탐험',
   CREATION: '창제 편찬 간행 출간 초연 저술 작품 건축 예술',
+  PRESS_PUBLICATION: '언론 출판 신문 일보 일간지 주간지 월간지 잡지 기관지 통신사 방송 창간 폐간 복간 정간 발행정지 판매금지 판금 보도 특종 폭로 기사 사설 논설 필화 검열 언론탄압 언론통제 출판사 인쇄 간행물 저널리즘 기자 편집장 발행인 언론인',
   CONVERSION: '개종 세례 국교 공인 기독교 불교 이슬람 종교',
   MIGRATION: '천도 대이동 이주 이민 망명 유배 피난',
   PERSONAL: '요양 휴가 여행 탄생 사망 별세 서거 유학',
