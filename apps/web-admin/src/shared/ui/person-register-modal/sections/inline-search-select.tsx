@@ -2,13 +2,27 @@
  * 인라인 검색 셀렉트 — 정적 옵션 목록을 모달 대신 폼 안에서 검색·선택.
  * 가문/종교처럼 "리스트에서 하나 고르기"를 SelectModal 왕복 없이 콤보박스로.
  * value:''(선택 안 함) 옵션은 드롭다운에서 숨기고, 값이 있으면 × 로 해제.
+ *
+ * 목록 조판은 공용 dropdown-list(장소 칸과 같은 문법): 묶음 머리(group)·앞 칸(leading, 국기)·
+ * 검색어 강조·선택 ✓·발(잘린 수·키보드 안내).
  */
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react'
 
-import { FiChevronDown, FiPlus, FiX } from 'react-icons/fi'
+import { FiCheck, FiChevronDown, FiPlus, FiX } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { Z_INDEX } from '@/shared/styles/z-index'
+import {
+  DropdownEmpty,
+  DropdownFoot,
+  DropdownGroupLabel,
+  DropdownOption,
+  DropdownSurface,
+  OptionBody,
+  OptionCheck,
+  OptionLeading,
+  OptionMeta,
+} from '@/shared/ui/dropdown-list/dropdown-list.styles'
+import { HighlightedText } from '@/shared/ui/highlighted-text'
 
 import { FONT, RADIUS } from '../_form-primitives'
 
@@ -19,6 +33,10 @@ export interface SearchOption {
   meta?: string
   /** 추가 검색 키워드 (ISO 코드·영문명·수도 등) */
   keywords?: string
+  /** 묶음 머리 — 이어지는 옵션이 같은 group이면 한 묶음(예: '현대 국가' · '역사 국가') */
+  group?: string
+  /** 앞 칸(국기 등) — 칸 폭은 비어 있어도 지켜 이름 열이 한 줄로 선다 */
+  leading?: string
 }
 
 interface InlineSearchSelectProps {
@@ -73,6 +91,11 @@ export function InlineSearchSelect({
   const inputRef = useRef<HTMLInputElement>(null)
   const listId = useId()
 
+  const selectedOption = useMemo(
+    () => (value ? options.find((option) => option.value === value) : undefined),
+    [options, value],
+  )
+  const anyLeading = useMemo(() => options.some((option) => option.leading), [options])
   const selectedLabel = useMemo(
     // value '' 은 '선택 안 함'이 아니라 미선택 — placeholder가 보이도록 빈 라벨
     () =>
@@ -192,6 +215,8 @@ export function InlineSearchSelect({
           }
         }}
       >
+        {/* 고른 항목의 앞 칸(국기) — 칸 안에서도 목록과 같은 자리에 */}
+        {!open && selectedOption?.leading && <InputLeading aria-hidden>{selectedOption.leading}</InputLeading>}
         <Input
           ref={inputRef}
           id={id}
@@ -209,6 +234,7 @@ export function InlineSearchSelect({
               ? `${listId}-opt-${active}`
               : undefined
           }
+          autoComplete="off"
           placeholder={open && selectedLabel ? selectedLabel : placeholder}
           value={open ? query : selectedLabel}
           onFocus={() => {
@@ -260,28 +286,46 @@ export function InlineSearchSelect({
         )}
       </InputBox>
       {open && (
-        <Dropdown id={listId} role="listbox" aria-label={ariaLabel}>
+        <DropdownSurface id={listId} role="listbox" aria-label={ariaLabel}>
           {filtered.length === 0 && !onCreateNew && (
-            <Empty>검색 결과 없음</Empty>
+            <DropdownEmpty>
+              {query.trim() ? `'${query.trim()}'와 맞는 항목이 없습니다` : '고를 항목이 없습니다'}
+            </DropdownEmpty>
           )}
-          {filtered.map((option, index) => (
-            <Option
-              key={option.value}
-              id={`${listId}-opt-${index}`}
-              type="button"
-              role="option"
-              aria-selected={option.value === value}
-              $active={index === active}
-              $selected={option.value === value}
-              onMouseDown={(event) => event.preventDefault()}
-              onMouseEnter={() => setActive(index)}
-              onClick={() => choose(option.value)}
-            >
-              <OptionLabel>{option.label}</OptionLabel>
-              {option.meta && <OptionMeta>{option.meta}</OptionMeta>}
-            </Option>
-          ))}
-          {hiddenCount > 0 && <MoreHint>외 {hiddenCount}개 — 검색어로 좁혀 보세요</MoreHint>}
+          {filtered.map((option, index) => {
+            const selected = option.value === value
+            const startsGroup = option.group && option.group !== filtered[index - 1]?.group
+            return (
+              <React.Fragment key={option.value}>
+                {startsGroup && <DropdownGroupLabel role="presentation">{option.group}</DropdownGroupLabel>}
+                <DropdownOption
+                  id={`${listId}-opt-${index}`}
+                  role="option"
+                  aria-selected={selected}
+                  $active={index === active}
+                  $selected={selected}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onMouseEnter={() => setActive(index)}
+                  onClick={() => choose(option.value)}
+                >
+                  {anyLeading && <OptionLeading aria-hidden>{option.leading}</OptionLeading>}
+                  <OptionBody>
+                    <span className="label">
+                      <HighlightedText text={option.label} query={query} />
+                    </span>
+                  </OptionBody>
+                  {option.meta && (
+                    <OptionMeta>
+                      <HighlightedText text={option.meta} query={query} />
+                    </OptionMeta>
+                  )}
+                  <OptionCheck $visible={selected} aria-hidden>
+                    <FiCheck size={14} />
+                  </OptionCheck>
+                </DropdownOption>
+              </React.Fragment>
+            )
+          })}
           {onCreateNew && (
             <CreateRow
               id={`${listId}-opt-${filtered.length}`}
@@ -295,7 +339,21 @@ export function InlineSearchSelect({
               {createLabel}
             </CreateRow>
           )}
-        </Dropdown>
+          {filtered.length > 0 && (
+            <DropdownFoot>
+              <span>
+                {hiddenCount > 0
+                  ? `${filtered.length}개 표시 · 외 ${hiddenCount}개 — 검색어로 좁혀 보세요`
+                  : query.trim()
+                    ? `${filtered.length}개 찾음`
+                    : `${filtered.length}개`}
+              </span>
+              <span aria-hidden>
+                <kbd>↑</kbd> <kbd>↓</kbd> 이동 · <kbd>Enter</kbd> 선택 · <kbd>Esc</kbd> 닫기
+              </span>
+            </DropdownFoot>
+          )}
+        </DropdownSurface>
       )}
     </Wrap>
   )
@@ -330,10 +388,21 @@ const InputBox = styled.div<{ $open?: boolean; $error?: boolean }>`
     box-shadow 0.15s ease;
 `
 
+const InputLeading = styled.span`
+  flex-shrink: 0;
+  padding-left: 12px;
+  font-size: 15px;
+  line-height: 1;
+`
+
 const Input = styled.input`
   flex: 1;
   min-width: 0;
   padding: 9px 4px 9px 12px;
+  /* 앞 칸(국기) 뒤에선 여백을 줄인다 */
+  span + & {
+    padding-left: 8px;
+  }
   font-size: ${FONT.body};
   color: ${({ theme }) => theme.colors.text.primary};
   background: transparent;
@@ -377,71 +446,11 @@ const IconBtn = styled.button`
   }
 `
 
-const Dropdown = styled.div`
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  max-height: 240px;
-  overflow-y: auto;
-  padding: 4px;
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(28,28,32,0.98)' : '#fff'};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: ${RADIUS.control};
-  box-shadow: 0 8px 24px ${({ theme }) => theme.colors.shadow.md};
-  z-index: ${Z_INDEX.DROPDOWN};
-`
 
-const Option = styled.button<{ $active?: boolean; $selected?: boolean }>`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-  text-align: left;
-  padding: 8px 10px;
-  font-size: ${FONT.label};
-  font-weight: ${({ $selected }) => ($selected ? 600 : 400)};
-  color: ${({ $selected, theme }) =>
-    $selected ? theme.colors.active : theme.colors.text.primary};
-  background: ${({ $active, theme }) =>
-    $active
-      ? theme.mode === 'dark'
-        ? 'rgba(255,255,255,0.06)'
-        : '#f1f5f9'
-      : 'transparent'};
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-`
 
-const OptionLabel = styled.span`
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-`
 
-const OptionMeta = styled.span`
-  flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
 
-const Empty = styled.div`
-  padding: 10px;
-  font-size: ${FONT.meta};
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  text-align: center;
-`
 
-const MoreHint = styled.div`
-  padding: 6px 10px 4px;
-  font-size: ${FONT.meta};
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
 
 const CreateRow = styled.button<{ $active?: boolean }>`
   display: flex;

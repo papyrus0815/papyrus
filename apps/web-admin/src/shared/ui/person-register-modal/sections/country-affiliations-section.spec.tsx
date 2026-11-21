@@ -30,19 +30,20 @@ describe('buildCountrySearchOptions', () => {
   it('힌트 없음 → 현대 묶음 먼저, 역사국가는 존속기간 표기', () => {
     const options = buildCountrySearchOptions(MODERN, HISTORICAL, null)
     expect(options.map((option) => option.value)).toEqual(['m:de', 'm:fr', 'h:rome', 'h:prussia'])
-    expect(options[3].meta).toBe('역사 · 1701–1918')
-    expect(options[1].label).toBe('🇫🇷 프랑스')
-    expect(options[1].name).toBe('프랑스')
+    expect(options[3]).toMatchObject({ meta: '1701–1918', group: '역사 국가' })
+    expect(options[1]).toMatchObject({ label: '프랑스', leading: '🇫🇷', group: '현대 국가' })
   })
 
   it('1945년 이전 시기 힌트 → 역사 묶음 먼저, 겹치는 나라를 앞으로(제외 없음)', () => {
     const options = buildCountrySearchOptions(MODERN, HISTORICAL, { startYear: 1815, endYear: 1898 })
     expect(options.map((option) => option.value)).toEqual(['h:prussia', 'h:rome', 'm:de', 'm:fr'])
+    expect(options[0].group).toBe('1815–1898 존속 역사 국가')
+    expect(options[1].group).toBe('역사 국가')
   })
 
   it('주 국적에 표지', () => {
     const options = buildCountrySearchOptions(MODERN, HISTORICAL, null, { primaryValue: 'm:fr' })
-    expect(options.find((option) => option.value === 'm:fr')?.meta).toBe('현대 · 주 국적')
+    expect(options.find((option) => option.value === 'm:fr')?.meta).toBe('주 국적')
   })
 })
 
@@ -84,7 +85,7 @@ describe('CountryAffiliationsSection — 국가 드롭다운', () => {
       <Harness initial={[makeAffiliationRow({ countryId: 'fr', countryLabel: '프랑스' })]} primary="m:fr" />,
     )
     expect(screen.getByText(/주 국적과 같은 국가입니다/)).toBeInTheDocument()
-    expect(screen.getByRole('combobox', { name: '소속 1 국가' })).toHaveValue('🇫🇷 프랑스')
+    expect(screen.getByRole('combobox', { name: '소속 1 국가' })).toHaveValue('프랑스')
   })
 
   it('유형도 같은 콤보박스로 바꾼다', () => {
