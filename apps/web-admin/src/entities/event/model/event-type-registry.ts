@@ -2,7 +2,7 @@
  * 사건 세부 분야 레지스트리 — **분야의 2단계(분야 › 세부)이자 "이 사건에는 무엇을 기록하는가"의 단일 정본.**
  *
  *  - 분야(Event.domain, 9종·필수): 무엇에 관한 일인가 — 정치·외교·군사·경제… 색·필터의 기준(event-domain.ts).
- *  - 세부(Event.type, 35종·선택): 어떤 꼴의 일인가 — 전투·조약·법령·즉위… 찾아보기의 2단계이고
+ *  - 세부(Event.type, 39종·선택): 어떤 꼴의 일인가 — 전투·조약·법령·즉위… 찾아보기의 2단계이고
  *    **붙는 기록을 정한다**(전투 → 교전 양측, 조약 → 맺어진 조약, 즉위 → 재임 기록).
  *
  * 화면은 '군사 › 법령·정책·개혁' 한 줄의 2단 분류로 보이지만 **저장은 독립된 두 축**이다. 실측 452건에서
@@ -28,6 +28,7 @@ export type EventTypeKey =
   | 'UPRISING'
   | 'ATTACK'
   | 'PROTEST_VIOLENCE'
+  | 'POLITICAL_VIOLENCE'
   | 'MOBILIZATION'
   | 'MILITARY_FORMATION'
   | 'TREATY'
@@ -47,6 +48,9 @@ export type EventTypeKey =
   | 'INCIDENT'
   | 'MOVEMENT'
   | 'PARTY_RALLY'
+  | 'JUSTICE'
+  | 'ARREST_DETENTION'
+  | 'CRIME'
   | 'COMPANY'
   | 'MARKET'
   | 'PRODUCT'
@@ -194,6 +198,22 @@ const SOCIETY_METRICS: EventTypeMetrics = {
   subject: 'event',
 }
 
+/** 재판·체포·구금 — 사람 수(피고·체포·처형)가 수치의 중심 */
+const DETENTION_METRICS: EventTypeMetrics = {
+  menuLabel: '수치 (체포·구금·처형 인원)',
+  emptyHint: '체포·구금된 사람 수나 처형된 사람 수 같은 숫자를 출처와 함께 기록하면 여기 모입니다.',
+  presets: ['society.arrested', 'human.executed'],
+  subject: 'event',
+}
+
+/** 범죄 — 피해 규모(사망·부상·손실)와 검거 인원 */
+const CRIME_METRICS: EventTypeMetrics = {
+  menuLabel: '수치 (피해·검거)',
+  emptyHint: '사망·부상·피해액·검거 인원 같은 숫자를 출처와 함께 기록하면 여기 모입니다.',
+  presets: ['human.deaths_total', 'civilian.killed', 'civilian.wounded', 'economy.loss', 'society.arrested'],
+  subject: 'event',
+}
+
 const ECONOMY_METRICS: EventTypeMetrics = {
   menuLabel: '수치 (지수·시가총액·금리)',
   emptyHint: '지수 종가·수익률·시가총액·금리 같은 숫자를 출처와 함께 기록하면 여기 모입니다.',
@@ -270,22 +290,35 @@ export const EVENT_TYPES: Record<EventTypeKey, EventTypeDef> = {
     core: ['sides', 'participants', 'persons'], optional: ['metrics'],
     metrics: UPRISING_METRICS,
   },
-  /* 암살·학살 — 특정 인물·특정 집단을 노린 살해. 테러·사보타주는 '폭력·테러·시위·집회'로 옮겼다(예전 라벨 '암살·테러·학살') */
+  /* 암살·학살 — 특정 인물·특정 집단을 노린 살해. 테러·사보타주는 '폭력·테러'로 옮겼다(예전 라벨 '암살·테러·학살') */
   ATTACK: {
     key: 'ATTACK', short: '암살', label: '암살·학살', examples: '사라예보 암살 · 블랙 홀 사건 · 9월 학살 · 표적 사살', defaultDomain: 'POLITICS',
     core: ['persons', 'participants'], optional: ['metrics'],
     metrics: SOCIETY_METRICS,
   },
   /*
-   * 폭력·테러·시위·집회 — 거리와 군중의 정치 행동: 시위·행진·항의 집회, 그것이 번진 소요·난투·가두 폭력, 폭탄 테러·사보타주.
-   * 예전엔 시위가 '운동'(마흐사 아미니 시위·튈르리 궁 습격 시위)에, 테러가 '암살'에, 사보타주가 '암살'(가스관 폭파)에 흩어졌다.
+   * 시위·집회·소요 — 거리와 군중의 정치 행동: 시위·행진·항의 집회, 그것이 번진 소요·난투·유혈 충돌.
+   * 예전엔 시위가 '운동'(마흐사 아미니 시위·튈르리 궁 습격 시위)에 흩어졌다. 예전 이름 '폭력·테러·시위·집회'에서
+   * **누군가를 겨눈 폭력·테러는 '폭력·테러'로 나눴다** — 군중이 모인 일이면 여기, 표적을 노린 일이면 거기.
    * 경계: 정권을 뒤엎으려 들면 봉기·정변(한국어 이름이 '○○ 폭동'인 쿠데타도 봉기 — 카프 폭동·맥주홀 폭동),
    * 특정인을 노린 살해는 암살·학살, 오래 이어지는 조직적 흐름은 운동·캠페인, **정당이 연 집회**는 정당·집회·선전.
    * 시위대와 진압 측이 맞섰으면 진영으로 세운다(선택).
    */
   PROTEST_VIOLENCE: {
-    key: 'PROTEST_VIOLENCE', short: '소요', label: '폭력·테러·시위·집회', examples: '촛불·항의 집회 · 가두시위·행진 · 소요·난투 · 폭탄 테러·사보타주', defaultDomain: 'SOCIETY',
+    key: 'PROTEST_VIOLENCE', short: '시위', label: '시위·집회·소요', examples: '촛불·항의 집회 · 가두시위·행진 · 소요·난투 · 유혈 충돌', defaultDomain: 'SOCIETY',
     core: ['participants', 'persons'], optional: ['sides', 'metrics', 'organizations'],
+    metrics: SOCIETY_METRICS,
+  },
+  /*
+   * 폭력·테러(정치 폭력) — 정치적 목적으로 **누군가를 겨눈** 폭력: 정적·당사·신문사·집회장 습격·난입·방화, 정적 폭행·린치,
+   * 폭탄 테러·사보타주, 준군사조직의 가두 장악·시가전. 이름에 '정치'를 넣지 않는다(분야와 겹친다 — 화면엔 '정치 › 폭력·테러').
+   * 예전엔 '폭력·테러·시위·집회' 한 칸에 시위와 섞였고, 당사 습격이 봉기(바이에른분트 집회 난입·폭행)에도 섰다.
+   * 경계: 사람을 죽이는 것이 목적이면 암살·학살, 군중이 모인 일이 번진 것이면 시위·집회·소요,
+   * 정권을 뒤엎으려 들면 봉기·정변, 정치 동기 없는 폭행·살인은 범죄. 가해 조직(돌격대·행동대)은 '기업·조직'·관련 정당으로 잇는다.
+   */
+  POLITICAL_VIOLENCE: {
+    key: 'POLITICAL_VIOLENCE', short: '폭력', label: '폭력·테러', examples: '당사·편집국 습격·방화 · 정적 폭행·린치 · 폭탄 테러 · 사보타주', defaultDomain: 'POLITICS',
+    core: ['persons', 'participants'], optional: ['organizations', 'sides', 'metrics'],
     metrics: SOCIETY_METRICS,
   },
   MOBILIZATION: {
@@ -408,6 +441,39 @@ export const EVENT_TYPES: Record<EventTypeKey, EventTypeDef> = {
       subject: 'event',
     },
   },
+  // ── 사법·치안 ──────────────────────────────────────────────────────────
+  /*
+   * 사법·재판 — 법정이 무대인 일: 재판·공판·판결·선고, 형 집행(처형), 사면·복권, 군법회의·종교재판·전범재판.
+   * 예전엔 갈 곳이 없어 루이 16세 처형은 '즉위·취임·실각', 마리 앙투아네트 처형은 '탄압'에 섰다.
+   * 경계: 재판소를 **세우는** 일은 기관·조직 설립, 재판 없이 노린 살해는 암살·학살, 사람을 잡아 가두는 일은 치안·체포·구금,
+   * 당 안의 숙청 전체는 내분·권력투쟁(그 안의 한 재판은 여기). 피고·판사·검사는 인물, 재판소는 '기업·조직'으로 잇는다.
+   */
+  JUSTICE: {
+    key: 'JUSTICE', short: '재판', label: '사법·재판', examples: '드레퓌스 재판 · 루이 16세 재판·처형 · 사형 선고·집행 · 대사면 · 전범 재판', defaultDomain: 'POLITICS',
+    core: ['persons'], optional: ['participants', 'organizations', 'metrics'],
+    metrics: DETENTION_METRICS,
+  },
+  /*
+   * 치안·체포·구금 — 사람을 잡고 가두고 풀어 주는 일: 체포·검거·연행, 투옥·수감·가택 연금·유폐·억류, 석방·탈옥, 경찰·헌병의 단속.
+   * 예전엔 무솔리니 체포·구금이 '인물 행적', 4인방 체포가 '즉위·취임·실각', 탕플 탑 유폐가 '탄압'에 섰다.
+   * 경계: 여러 해에 걸친 탄압 정책·대옥(안세이 대옥) 전체는 탄압·음모·스캔들 — 그 안의 한 체포는 여기,
+   * 잡힌 뒤의 재판은 사법·재판, 계엄령은 동원·배치·지령.
+   */
+  ARREST_DETENTION: {
+    key: 'ARREST_DETENTION', short: '체포', label: '치안·체포·구금', examples: '혐의 체포·연행 · 일제 검거 · 투옥·가택 연금·유폐 · 석방·탈옥', defaultDomain: 'POLITICS',
+    core: ['persons'], optional: ['participants', 'organizations', 'metrics'],
+    metrics: DETENTION_METRICS,
+  },
+  /*
+   * 범죄 — 정치 동기 없는 범행이 주인공인 일: 살인·강도·절도·사기·횡령·밀수·위조·유괴, 조직범죄.
+   * 경계: 정치적 표적 살해는 암살·학살, 정치 목적의 폭력은 폭력·테러, 권력자의 부패 의혹은 탄압·음모·스캔들,
+   * 범인을 잡는 일은 치안·체포·구금, 재판은 사법·재판(한 사건 안에 하위로 나눠도 된다).
+   */
+  CRIME: {
+    key: 'CRIME', short: '범죄', label: '범죄', examples: '살인·강도 사건 · 절도·도난 · 사기·횡령 · 밀수·위조 · 조직범죄', defaultDomain: 'SOCIETY',
+    core: ['persons'], optional: ['participants', 'organizations', 'metrics'],
+    metrics: CRIME_METRICS,
+  },
   // ── 경제·산업 ──────────────────────────────────────────────────────────
   COMPANY: {
     key: 'COMPANY', short: '기업', label: '기업 활동', examples: '설립 · 상장 · 실적 발표 · 인수', defaultDomain: 'ECONOMY',
@@ -477,11 +543,12 @@ export interface EventTypeGroup {
   types: EventTypeKey[]
 }
 
-/** 세부 의미군 5묶음 — '더 보기'·'기타'·분야 미선택 시 35종을 훑기 쉽게 묶는다 */
+/** 세부 의미군 6묶음 — '더 보기'·'기타'·분야 미선택 시 39종을 훑기 쉽게 묶는다 */
 export const EVENT_TYPE_GROUPS: ReadonlyArray<EventTypeGroup> = [
-  { label: '충돌', types: ['WAR', 'BATTLE', 'UPRISING', 'ATTACK', 'PROTEST_VIOLENCE', 'MOBILIZATION', 'MILITARY_FORMATION'] },
+  { label: '충돌', types: ['WAR', 'BATTLE', 'UPRISING', 'ATTACK', 'PROTEST_VIOLENCE', 'POLITICAL_VIOLENCE', 'MOBILIZATION', 'MILITARY_FORMATION'] },
   { label: '국가 간', types: ['TREATY', 'SUMMIT', 'WAR_DECLARATION', 'DECLARATION', 'VISIT', 'CRISIS', 'EXPANSION'] },
   { label: '국가·권력', types: ['STATEHOOD', 'TERRITORY', 'POWER_CHANGE', 'POWER_STRUGGLE', 'ELECTION', 'LAW_POLICY', 'INSTITUTION', 'INCIDENT', 'MOVEMENT', 'PARTY_RALLY'] },
+  { label: '사법·치안', types: ['JUSTICE', 'ARREST_DETENTION', 'CRIME'] },
   { label: '경제·산업', types: ['COMPANY', 'MARKET', 'PRODUCT', 'CONSTRUCTION'] },
   { label: '자연·문화·사람', types: ['DISASTER', 'DISCOVERY', 'CREATION', 'PRESS_PUBLICATION', 'CONVERSION', 'MIGRATION', 'PERSONAL'] },
 ]
@@ -514,13 +581,13 @@ export function groupSubtypes(types: ReadonlyArray<EventTypeKey>): EventTypeGrou
  * 나머지 세부도 '더 보기'로 고를 수 있다(저장은 독립 축). 기타는 앞줄이 없어 전부 보인다.
  */
 export const DOMAIN_SUBTYPES: Partial<Record<EventDomainKey, EventTypeKey[]>> = {
-  POLITICS: ['STATEHOOD', 'TERRITORY', 'POWER_CHANGE', 'POWER_STRUGGLE', 'ELECTION', 'PARTY_RALLY', 'LAW_POLICY', 'INSTITUTION', 'MILITARY_FORMATION', 'UPRISING', 'INCIDENT', 'ATTACK', 'PROTEST_VIOLENCE', 'MOVEMENT', 'PRESS_PUBLICATION', 'WAR_DECLARATION', 'DECLARATION', 'PERSONAL'],
+  POLITICS: ['STATEHOOD', 'TERRITORY', 'POWER_CHANGE', 'POWER_STRUGGLE', 'ELECTION', 'PARTY_RALLY', 'LAW_POLICY', 'INSTITUTION', 'MILITARY_FORMATION', 'UPRISING', 'INCIDENT', 'JUSTICE', 'ARREST_DETENTION', 'ATTACK', 'POLITICAL_VIOLENCE', 'PROTEST_VIOLENCE', 'MOVEMENT', 'PRESS_PUBLICATION', 'WAR_DECLARATION', 'DECLARATION', 'PERSONAL'],
   DIPLOMACY: ['TREATY', 'TERRITORY', 'SUMMIT', 'WAR_DECLARATION', 'DECLARATION', 'VISIT', 'CRISIS', 'EXPANSION', 'INSTITUTION'],
   MILITARY: ['WAR', 'BATTLE', 'WAR_DECLARATION', 'MOBILIZATION', 'MILITARY_FORMATION', 'LAW_POLICY', 'POWER_CHANGE', 'POWER_STRUGGLE', 'INSTITUTION', 'UPRISING', 'ATTACK', 'TREATY', 'SUMMIT', 'PERSONAL'],
-  ECONOMY: ['COMPANY', 'MARKET', 'PRODUCT', 'CONSTRUCTION', 'LAW_POLICY', 'INSTITUTION', 'TREATY', 'SUMMIT', 'MOVEMENT'],
-  SOCIETY: ['UPRISING', 'PROTEST_VIOLENCE', 'MOVEMENT', 'PARTY_RALLY', 'PRESS_PUBLICATION', 'DISASTER', 'MIGRATION', 'ATTACK', 'INCIDENT', 'LAW_POLICY', 'INSTITUTION', 'CONSTRUCTION'],
+  ECONOMY: ['COMPANY', 'MARKET', 'PRODUCT', 'CONSTRUCTION', 'LAW_POLICY', 'INSTITUTION', 'TREATY', 'SUMMIT', 'MOVEMENT', 'CRIME'],
+  SOCIETY: ['UPRISING', 'PROTEST_VIOLENCE', 'POLITICAL_VIOLENCE', 'MOVEMENT', 'PARTY_RALLY', 'PRESS_PUBLICATION', 'CRIME', 'ARREST_DETENTION', 'JUSTICE', 'DISASTER', 'MIGRATION', 'ATTACK', 'INCIDENT', 'LAW_POLICY', 'INSTITUTION', 'CONSTRUCTION'],
   CULTURE: ['CREATION', 'PRESS_PUBLICATION', 'CONSTRUCTION', 'INSTITUTION', 'DISCOVERY', 'MOVEMENT', 'VISIT'],
-  RELIGION: ['CONVERSION', 'SUMMIT', 'LAW_POLICY', 'INSTITUTION', 'MOVEMENT', 'POWER_STRUGGLE', 'INCIDENT', 'CREATION', 'CONSTRUCTION', 'MIGRATION'],
+  RELIGION: ['CONVERSION', 'SUMMIT', 'LAW_POLICY', 'INSTITUTION', 'MOVEMENT', 'POWER_STRUGGLE', 'INCIDENT', 'JUSTICE', 'CREATION', 'CONSTRUCTION', 'MIGRATION'],
   SCIENCE: ['DISCOVERY', 'PRODUCT', 'CONSTRUCTION', 'INSTITUTION', 'LAW_POLICY', 'DISASTER'],
 }
 
@@ -636,7 +703,7 @@ export interface EventTypeFeatures {
   expectOrganizations: boolean
   /** 관련 기관(부처·사령부·부대) 칸을 비어 있어도 세운다 — 지령을 내리고 받는 동원, 기관이 생기는 설립·군 창설 */
   expectDepartments: boolean
-  /** 관련 정당 칸을 비어 있어도 세운다 — 정치 분야이거나 정당·집회·선전·내분(분야가 사회·군사여도 당이 무대일 수 있다) */
+  /** 관련 정당 칸을 비어 있어도 세운다 — 정당·집회·선전·내분·폭력·테러(분야가 사회·군사여도 당이 무대거나 가해·피해 측일 수 있다) */
   expectPoliticalParties: boolean
 }
 
@@ -661,7 +728,7 @@ export function eventTypeFeatures(type?: string | null, domain?: string | null):
     expectPower: core.includes('power') || core.includes('election') || type === 'POWER_STRUGGLE',
     expectOrganizations: core.includes('organizations') || type === 'SUMMIT',
     expectDepartments: type === 'MOBILIZATION' || type === 'INSTITUTION' || type === 'MILITARY_FORMATION',
-    expectPoliticalParties: type === 'PARTY_RALLY' || type === 'POWER_STRUGGLE',
+    expectPoliticalParties: type === 'PARTY_RALLY' || type === 'POWER_STRUGGLE' || type === 'POLITICAL_VIOLENCE',
   }
 }
 
@@ -682,13 +749,19 @@ const TITLE_SUGGESTION_RULES: ReadonlyArray<{
     type: 'TREATY',
   },
   { pattern: /(?:동맹\s*체결|가입)$/, domain: 'DIPLOMACY', type: 'TREATY' },
-  // 폭력·테러·시위·집회 — 정당 규칙('집회$')보다 먼저: 항의·규탄·촛불 집회는 거리의 집회다(주최를 모르는 맨 '집회'는 정당으로 둔다).
-  // 테러·사보타주는 여기서 받지 않고 암살 규칙 뒤에서 받는다('황태자 암살 테러'는 암살).
+  // 시위·집회·소요 — 정당 규칙('집회$')보다 먼저: 항의·규탄·촛불 집회는 거리의 집회다(주최를 모르는 맨 '집회'는 정당으로 둔다).
   // '폭동'은 받지 않는다 — 카프 폭동·맥주홀 폭동처럼 한국어로 '폭동'이라 부르는 쿠데타가 많아 봉기 규칙에 남긴다
   {
-    pattern: /(?:시위|데모|행진|소요|소요\s*사태|난동|난투|난투극|유혈\s*충돌|가두\s*(?:투쟁|폭력|충돌)|투석전|(?:반대|규탄|항의|추모|촛불|저항|반정부)\s*집회|집회\s*(?:습격|난입)|총기\s*난사)$/,
+    pattern: /(?:시위|데모|행진|소요|소요\s*사태|난동|난투|난투극|유혈\s*충돌|가두\s*(?:투쟁|폭력|충돌)|투석전|(?:반대|규탄|항의|추모|촛불|저항|반정부)\s*집회)$/,
     domain: 'SOCIETY',
     type: 'PROTEST_VIOLENCE',
+  },
+  // 폭력·테러 — 겨눈 곳(당사·신문사·집회장…)이 붙은 습격·난입·방화와 끝말 폭행·린치·총기 난사.
+  // 맨 '습격'은 받지 않는다(바스티유 감옥 습격 = 봉기). 테러·사보타주는 암살 규칙 뒤에서 받는다('황태자 암살 테러'는 암살)
+  {
+    pattern: /(?:본사|사옥|당사|당\s*본부|사무소|편집국|신문사|집회장?|연설회장?|연회장)[^\s]*\s*(?:습격|난입|방화|피습)|(?:폭행|린치|총기\s*난사|정치\s*폭력)(?:\s*사건)?$/,
+    domain: 'POLITICS',
+    type: 'POLITICAL_VIOLENCE',
   },
   // 정당·집회·선전 — 회의 규칙('대회'·'회의')보다 먼저(당대회는 회담이 아니다). '선전포고'는 끝말이 '포고'라 안 걸린다
   {
@@ -708,6 +781,19 @@ const TITLE_SUGGESTION_RULES: ReadonlyArray<{
     pattern: /(?:내분|내홍|분당|분열|당쟁|정쟁|권력\s*투쟁|파벌\s*(?:투쟁|싸움|항쟁)|노선\s*투쟁|암투|숙청|사화|환국|계승\s*분쟁|후계\s*(?:분쟁|다툼|싸움))$/,
     domain: 'POLITICS',
     type: 'POWER_STRUGGLE',
+  },
+  // 사법·재판 — 끝말이 재판·판결·선고·처형·사면이면 법정의 일. 맨 '심판'은 받지 않는다(최후의 심판), '특사'는 사절과 겹쳐 뺀다.
+  // 암살 규칙보다 먼저('암살범 재판'은 재판), 즉위 규칙의 '탄핵$'과는 끝말로 갈린다('탄핵 심판'은 여기)
+  {
+    pattern: /(?:재판|공판|판결|선고|사형\s*(?:선고|집행)|처형|사면|대사면|기소|(?:탄핵|헌법)\s*심판|군법\s*회의|이단\s*심문|소송)(?:\s*사건)?$/,
+    domain: 'POLITICS',
+    type: 'JUSTICE',
+  },
+  // 치안·체포·구금 — 잡고 가두고 풀어 주는 끝말. '연금'은 국민연금과 겹쳐 가택 연금만 받는다
+  {
+    pattern: /(?:체포|검거|연행|구속|구금|투옥|수감|가택\s*연금|유폐|감금|억류|석방|출옥|출소|탈옥|일제\s*단속)(?:\s*사건)?$/,
+    domain: 'POLITICS',
+    type: 'ARREST_DETENTION',
   },
   // 언론·출판 — 기업 규칙('인수$')·설립 규칙('설립$')·창작 규칙('간행$·출간$')보다 먼저.
   // 매체 이름(신문·일간지·기관지·출판사…)이 앞에 있고 끝이 창간·인수·폐간이면 매체의 일이다.
@@ -770,7 +856,13 @@ const TITLE_SUGGESTION_RULES: ReadonlyArray<{
   // 암살·테러·학살
   { pattern: /(?:암살|학살|저격|피살|사살)/, domain: 'POLITICS', type: 'ATTACK' },
   // 끝말이 아니어도 테러·폭탄·사보타주가 들어가면(○○ 테러 사건) — 암살 규칙 뒤라 '암살 테러'는 암살로 남는다
-  { pattern: /(?:테러|폭탄\s*(?:투척|공격)|사보타주)/, domain: 'SOCIETY', type: 'PROTEST_VIOLENCE' },
+  { pattern: /(?:테러|폭탄\s*(?:투척|공격)|사보타주)/, domain: 'POLITICS', type: 'POLITICAL_VIOLENCE' },
+  // 범죄 — 암살 규칙 뒤라 '피살'은 암살로 남는다. 납치는 정치 납치와 겹쳐 받지 않는다
+  {
+    pattern: /(?:살인|연쇄\s*살인|강도|절도|도난|사기|횡령|밀수|밀매|유괴|위조|강탈)(?:\s*사건)?$/,
+    domain: 'SOCIETY',
+    type: 'CRIME',
+  },
   // 즉위·취임·실각
   {
     pattern: /(?:즉위식|즉위|대관식|취임식|취임|퇴위|선위|폐위|하야|탄핵|해임|실각)$/,
@@ -845,7 +937,8 @@ const SEARCH_KEYWORDS: Partial<Record<EventTypeKey, string>> = {
   BATTLE: '해전 회전 공방전 포위전 상륙작전 공습 폭격 함락 점령 진압 교전',
   UPRISING: '쿠데타 반란 민란 항쟁 의거 폭동 난 봉기 혁명 정변',
   ATTACK: '암살 학살 저격 피살 사살 표적살해 습격',
-  PROTEST_VIOLENCE: '폭력 테러 폭탄테러 폭탄투척 자폭 총기난사 사보타주 시위 데모 행진 가두시위 촛불집회 항의집회 규탄집회 집회 소요 난동 난투 유혈충돌 투석 최루탄 바리케이드 진압',
+  PROTEST_VIOLENCE: '시위 데모 행진 가두시위 촛불집회 항의집회 규탄집회 집회 소요 난동 난투 유혈충돌 투석 최루탄 바리케이드 진압',
+  POLITICAL_VIOLENCE: '정치폭력 정치 폭력 테러 정치테러 폭탄테러 폭탄투척 자폭 총기난사 사보타주 습격 난입 방화 폭행 린치 백색테러 적색테러 행동대 가두장악 시가전',
   MOBILIZATION: '총동원령 동원령 기동훈련 작전지령 계엄령 배치 파병',
   MILITARY_FORMATION: '창군 창설 편성 재편성 편제 개편 군제 해체 군대 군단 사단 여단 함대 사령부 참모본부 근위대 친위대 돌격대 경비대 민병대 의용군 의용대 자유군단 준군사 무장조직 무장단체 헌병 상비군 SA SS',
   TREATY: '강화조약 화약 의정서 휴전협정 체결 조인 비준 동맹 가입',
@@ -864,6 +957,9 @@ const SEARCH_KEYWORDS: Partial<Record<EventTypeKey, string>> = {
   INCIDENT: '탄압 음모 스캔들 옥사 대옥 비리 의혹',
   POWER_STRUGGLE: '내분 내홍 분열 분당 당쟁 정쟁 권력투쟁 파벌 계파 노선투쟁 숙청 대숙청 암투 궁정암투 사화 환국 붕당 계승분쟁 후계다툼 장검의밤',
   MOVEMENT: '불매운동 사회운동 계몽운동 노동운동 민권운동 독립운동 총파업 파업 캠페인 청원',
+  JUSTICE: '사법 재판 공판 판결 선고 사형 사형선고 사형집행 처형 단두대 교수형 화형 사면 특별사면 대사면 복권 기소 고발 소송 군법회의 군사재판 종교재판 이단심문 혁명재판소 전범재판 배심 법정 판사 검사 변호 무죄 유죄 탄핵심판',
+  ARREST_DETENTION: '치안 경찰 헌병 비밀경찰 체포 검거 일제검거 연행 구속 구금 투옥 수감 감옥 감금 가택연금 연금 유폐 억류 인질 석방 출옥 출소 탈옥 단속 수배 정치범',
+  CRIME: '범죄 살인 연쇄살인 강도 절도 도난 사기 횡령 배임 밀수 밀매 마약 유괴 위조 강탈 조직범죄 마피아 갱 해적 수사 미제',
   PARTY_RALLY: '정당 창당 합당 입당 탈당 당대회 전당대회 강령 당기 집회 군중집회 궐기대회 대중연설 선전 선동 프로파간다 기관지 당보 유세',
   COMPANY: '창업 창립 상장 IPO 인수 합병 파산 실적발표 법인',
   MARKET: '대공황 금융위기 외환위기 주가지수 금리 차관 모라토리엄 디폴트 공황 폭락',

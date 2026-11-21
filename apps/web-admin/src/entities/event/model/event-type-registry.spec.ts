@@ -21,8 +21,8 @@ import {
 } from './event-type-registry'
 
 describe('세부 분야 레지스트리', () => {
-  it('서버 enum 35종과 같은 수, 정의의 key가 표와 맞고 핵심·선택 기록은 겹치지 않는다', () => {
-    expect(EVENT_TYPE_ORDER).toHaveLength(35)
+  it('서버 enum 39종과 같은 수, 정의의 key가 표와 맞고 핵심·선택 기록은 겹치지 않는다', () => {
+    expect(EVENT_TYPE_ORDER).toHaveLength(39)
     for (const [key, def] of Object.entries(EVENT_TYPES)) {
       expect(def.key).toBe(key)
       expect(def.core.filter((facet) => def.optional.includes(facet))).toEqual([])
@@ -72,7 +72,7 @@ describe('세부 분야 레지스트리', () => {
     expect(formatDomainPath(null, null)).toBe('기타')
   })
 
-  it('의미군 묶음(EVENT_TYPE_GROUPS)은 35종을 빠짐없이 레지스트리 순서대로 분할한다', () => {
+  it('의미군 묶음(EVENT_TYPE_GROUPS)은 39종을 빠짐없이 레지스트리 순서대로 분할한다', () => {
     const flattened = EVENT_TYPE_GROUPS.flatMap((group) => group.types)
     expect(flattened).toEqual(EVENT_TYPE_ORDER)
     expect(groupSubtypes(['BATTLE', 'TREATY'])).toEqual([
@@ -301,22 +301,72 @@ describe('suggestClassificationFromTitle — 사건명 기반 분야·세부 추
     expect(suggestClassificationFromTitle('일본군 점령')).toMatchObject({ type: 'BATTLE' })
   })
 
-  it('폭력·테러·시위·집회 — 시위·항의 집회·소요·테러는 여기로, 당 집회·쿠데타식 폭동·암살·파업은 제자리', () => {
+  it('시위·집회·소요 vs 폭력·테러 — 군중이 모인 일은 시위, 겨눈 습격·폭행·테러는 폭력, 당 집회·쿠데타식 폭동·암살·파업은 제자리', () => {
     const street = { domain: 'SOCIETY', type: 'PROTEST_VIOLENCE' }
+    const violence = { domain: 'POLITICS', type: 'POLITICAL_VIOLENCE' }
     expect(suggestClassificationFromTitle('마흐사 아미니 시위 (2022년 이란 히잡 시위)')).toEqual(street)
     expect(suggestClassificationFromTitle('제1차 튈리르 궁전 습격 시위')).toEqual(street)
     expect(suggestClassificationFromTitle('광화문 촛불 집회')).toEqual(street)
     expect(suggestClassificationFromTitle('베를린 가두 충돌')).toEqual(street)
-    expect(suggestClassificationFromTitle('9·11 테러')).toEqual(street)
-    expect(suggestClassificationFromTitle('도쿄 지하철 사린 테러 사건')).toEqual(street)
-    expect(suggestClassificationFromTitle('노르드스트림 가스관 사보타주')).toEqual(street)
-    // 정당이 연 집회(주최 모르는 맨 '집회'·군중집회)는 정당, '○○ 폭동'이라 부르는 쿠데타는 봉기
+    expect(suggestClassificationFromTitle('호프브로이하우스 연회장 대난투극')).toEqual(street)
+    // 겨눈 폭력·테러 — 실DB에서 시위·봉기에 서 있던 습격·폭행
+    expect(suggestClassificationFromTitle('밀라노 《아반티!》 본사 습격·방화 사건')).toEqual(violence)
+    expect(suggestClassificationFromTitle('바이에른분트(Bayernbund) 집회 폭력 난입 및 오토 발러슈테트 폭행 사건')).toEqual(violence)
+    expect(suggestClassificationFromTitle('9·11 테러')).toEqual(violence)
+    expect(suggestClassificationFromTitle('도쿄 지하철 사린 테러 사건')).toEqual(violence)
+    expect(suggestClassificationFromTitle('노르드스트림 가스관 사보타주')).toEqual(violence)
+    expect(suggestClassificationFromTitle('크라이스트처치 총기 난사')).toEqual(violence)
+    // 맨 '습격'은 봉기(바스티유), 정당이 연 집회(주최 모르는 맨 '집회'·군중집회)는 정당, '○○ 폭동'이라 부르는 쿠데타는 봉기
+    expect(suggestClassificationFromTitle('바스티유 감옥 습격')?.type).not.toBe('POLITICAL_VIOLENCE')
     expect(suggestClassificationFromTitle('나치당 치르쿠스 크로네 대중 집회')).toMatchObject({ type: 'PARTY_RALLY' })
     expect(suggestClassificationFromTitle('뮌헨 맥주홀 폭동')).toMatchObject({ type: 'UPRISING' })
     // 특정인을 노린 살해는 암살, 파업은 운동
     expect(suggestClassificationFromTitle('사라예보 암살 사건')).toMatchObject({ type: 'ATTACK' })
     expect(suggestClassificationFromTitle('황태자 암살 테러')).toMatchObject({ type: 'ATTACK' })
     expect(suggestClassificationFromTitle('루르 탄광 총파업')).toMatchObject({ type: 'MOVEMENT' })
+  })
+
+  it('사법·재판 · 치안·체포·구금 · 범죄 — 끝말로 갈리고, 탄핵·재판소 설치·암살·대옥은 제자리', () => {
+    const justice = { domain: 'POLITICS', type: 'JUSTICE' }
+    const arrest = { domain: 'POLITICS', type: 'ARREST_DETENTION' }
+    const crime = { domain: 'SOCIETY', type: 'CRIME' }
+    expect(suggestClassificationFromTitle('드레퓌스 재판')).toEqual(justice)
+    expect(suggestClassificationFromTitle('루이 16세 처형')).toEqual(justice)
+    expect(suggestClassificationFromTitle('뉘른베르크 전범 재판 판결')).toEqual(justice)
+    expect(suggestClassificationFromTitle('사라예보 암살범 재판')).toEqual(justice)
+    expect(suggestClassificationFromTitle('박근혜 대통령 탄핵 심판')).toEqual(justice)
+    expect(suggestClassificationFromTitle('무솔리니의 불법 무기·폭발물 은닉 혐의 체포 및 단기 구금')).toEqual(arrest)
+    expect(suggestClassificationFromTitle('문화대혁명 4인방 체포')).toEqual(arrest)
+    expect(suggestClassificationFromTitle('넬슨 만델라 석방')).toEqual(arrest)
+    expect(suggestClassificationFromTitle('아웅산 수치 가택 연금')).toEqual(arrest)
+    expect(suggestClassificationFromTitle('화성 연쇄 살인 사건')).toEqual(crime)
+    expect(suggestClassificationFromTitle('모나리자 도난 사건')).toEqual(crime)
+    // 탄핵 자체는 즉위·취임·실각, 재판소를 세우는 일은 설립, 노린 살해는 암살, 최후의 심판(작품)·국민연금은 사법·체포가 아니다
+    expect(suggestClassificationFromTitle('닉슨 탄핵')).toMatchObject({ type: 'POWER_CHANGE' })
+    expect(suggestClassificationFromTitle('혁명재판소 설치')?.type).not.toBe('JUSTICE')
+    expect(suggestClassificationFromTitle('티서 이슈트반 전 총리 피살')).toMatchObject({ type: 'ATTACK' })
+    expect(suggestClassificationFromTitle('미켈란젤로 최후의 심판')?.type).not.toBe('JUSTICE')
+    expect(suggestClassificationFromTitle('국민연금 개혁')?.type).not.toBe('ARREST_DETENTION')
+  })
+
+  it('사법·치안 묶음 — 인물이 핵심, 체포·처형 수치, 정치·사회 앞줄에 선다', () => {
+    expect(EVENT_TYPE_GROUPS.find((group) => group.label === '사법·치안')?.types).toEqual(['JUSTICE', 'ARREST_DETENTION', 'CRIME'])
+    for (const type of ['JUSTICE', 'ARREST_DETENTION', 'CRIME'] as const) {
+      expect(facetWeight(type, 'persons')).toBe('core')
+      expect(isArmedConflictType(type)).toBe(false)
+      expect(DOMAIN_SUBTYPES.SOCIETY).toContain(type)
+    }
+    expect(DOMAIN_SUBTYPES.POLITICS).toEqual(expect.arrayContaining(['JUSTICE', 'ARREST_DETENTION', 'POLITICAL_VIOLENCE']))
+    expect(metricsFor('ARREST_DETENTION').presets).toContain('society.arrested')
+    expect(metricsFor('JUSTICE').presets).toContain('human.executed')
+    expect(eventTypeFeatures('POLITICAL_VIOLENCE').expectPoliticalParties).toBe(true)
+    expect(formatDomainPath('POLITICS', 'POLITICAL_VIOLENCE')).toBe('정치 › 폭력·테러')
+    expect(searchClassifications('재판', null)[0]).toMatchObject({ type: 'JUSTICE' })
+    expect(searchClassifications('사법', null)[0]).toMatchObject({ type: 'JUSTICE' })
+    expect(searchClassifications('체포', null)[0]).toMatchObject({ type: 'ARREST_DETENTION' })
+    expect(searchClassifications('치안', null)[0]).toMatchObject({ type: 'ARREST_DETENTION' })
+    expect(searchClassifications('범죄', null)[0]).toMatchObject({ type: 'CRIME' })
+    expect(searchClassifications('정치 폭력', null)[0]).toMatchObject({ type: 'POLITICAL_VIOLENCE' })
   })
 
   it('단서가 없거나 빈 문자열이면 null을 돌려준다', () => {
@@ -374,7 +424,7 @@ describe('subtypesForDomain hasParent 정렬 · searchClassifications · 최근 
     expect(searchClassifications('창간', null)[0]).toMatchObject({ type: 'PRESS_PUBLICATION' })
   })
 
-  it('searchClassifications — 세부 이름·예시·동의어로 35종 전체에서 검색하고 현재 분야를 우선한다', () => {
+  it('searchClassifications — 세부 이름·예시·동의어로 39종 전체에서 검색하고 현재 분야를 우선한다', () => {
     const landing = searchClassifications('상륙작전', null)
     expect(landing[0]).toMatchObject({ type: 'BATTLE', domain: 'MILITARY' })
 
@@ -389,7 +439,7 @@ describe('subtypesForDomain hasParent 정렬 · searchClassifications · 최근 
 
     expect(searchClassifications('전당대회', null)[0]).toMatchObject({ type: 'PARTY_RALLY', domain: 'POLITICS' })
     expect(searchClassifications('프로파간다', null)[0]).toMatchObject({ type: 'PARTY_RALLY' })
-    expect(searchClassifications('테러', null)[0]).toMatchObject({ type: 'PROTEST_VIOLENCE', domain: 'SOCIETY' })
+    expect(searchClassifications('테러', null)[0]).toMatchObject({ type: 'POLITICAL_VIOLENCE', domain: 'POLITICS' })
     expect(searchClassifications('촛불집회', null)[0]).toMatchObject({ type: 'PROTEST_VIOLENCE' })
     expect(searchClassifications('암살', null)[0]).toMatchObject({ type: 'ATTACK' })
     expect(facetWeight('PROTEST_VIOLENCE', 'sides')).toBe('optional')

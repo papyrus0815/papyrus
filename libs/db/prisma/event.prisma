@@ -110,8 +110,9 @@ enum EventType {
   WAR_DECLARATION // 선전포고·참전 — 선포국(INITIATOR) → 대상국(TARGET)
   BATTLE // 전투·작전
   UPRISING // 봉기·혁명·정변
-  ATTACK // 암살·학살 — 특정인·특정 집단을 노린 살해 (테러는 PROTEST_VIOLENCE)
-  PROTEST_VIOLENCE // 폭력·테러·시위·집회 — 거리·군중의 정치 행동: 시위·행진·항의 집회·폭동·가두 폭력·폭탄 테러
+  ATTACK // 암살·학살 — 특정인·특정 집단을 노린 살해 (테러는 POLITICAL_VIOLENCE)
+  PROTEST_VIOLENCE // 시위·집회·소요 — 거리·군중의 정치 행동: 시위·행진·항의 집회·번진 소요·난투 (겨눈 폭력·테러는 POLITICAL_VIOLENCE)
+  POLITICAL_VIOLENCE // 폭력·테러(정치 폭력) — 정적·당사·신문사를 겨눈 습격·난입·방화·폭행, 폭탄 테러·사보타주
   MOBILIZATION // 동원·배치·작전 지령
   MILITARY_FORMATION // 군 창설·편제·준군사조직 — 참모본부·군단 창설·사단 편성·군제 개편·친위대·민병대 결성
   // 국가 간
@@ -132,6 +133,10 @@ enum EventType {
   INCIDENT // 탄압·음모·스캔들
   MOVEMENT // 운동·캠페인
   PARTY_RALLY // 정당·집회·선전 — 당대회·창당·합당·군중집회·선전 활동
+  // 사법·치안
+  JUSTICE // 사법·재판 — 재판·판결·선고·형 집행·사면
+  ARREST_DETENTION // 치안·체포·구금 — 체포·검거·투옥·가택 연금·유폐·석방·탈옥
+  CRIME // 범죄 — 정치 동기 없는 살인·강도·절도·사기·밀수·위조
   // 경제·산업
   COMPANY // 기업 활동
   MARKET // 시장·지표
