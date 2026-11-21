@@ -17,7 +17,6 @@ import React, {
 import {
   FiAlertCircle,
   FiAlertTriangle,
-  FiImage,
   FiRotateCcw,
   FiX,
 } from 'react-icons/fi'
@@ -74,16 +73,7 @@ import {
   Required,
   SubmitButton,
 } from '@/shared/ui/register-form-layout/register-form-layout.styles'
-import {
-  KitFormLoading,
-  KitUploadActions,
-  KitUploadButton,
-  KitUploadFilled,
-  KitUploadRemove,
-  KitUploadStrip,
-  KitUploadText,
-  KitUploadThumb,
-} from '@/shared/ui/register-form-kit/register-form-kit'
+import { KitFormLoading } from '@/shared/ui/register-form-kit/register-form-kit'
 import { notify } from '@/shared/ui/toast'
 
 import {
@@ -116,6 +106,7 @@ import {
   type SpouseFormRow,
 } from './sections/family-section'
 import { InlineSearchSelect } from './sections/inline-search-select'
+import { ProfilePhotoField } from './sections/profile-photo-field'
 import { LifeSection } from './sections/life-section'
 import { NicknameSection, type NicknameRow } from './sections/nickname-section'
 import { PlaceFields } from './sections/place-fields'
@@ -147,7 +138,6 @@ import {
   SplitColumnLeft,
   SplitColumnRight,
   SplitColumnsGrid,
-  ThumbnailUploadInput,
   TopAlert,
   UndoToastBody,
   UndoToastButton,
@@ -394,7 +384,6 @@ export function PersonRegisterView({
   const [thumbnailObjectUrl, setThumbnailObjectUrl] = useState<string | null>(
     null,
   )
-  const [thumbnailDragOver, setThumbnailDragOver] = useState(false)
   /** 수정 시 서버에 있던 썸네일을 저장 시 제거 */
   const [thumbnailMarkedForRemoval, setThumbnailMarkedForRemoval] =
     useState(false)
@@ -1634,20 +1623,6 @@ export function PersonRegisterView({
         err instanceof Error ? err.message : '이미지를 선택할 수 없습니다.',
       )
     }
-  }
-
-  const handleThumbnailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    e.target.value = ''
-    acceptThumbnailFile(file)
-  }
-
-  const handleThumbnailDrop = (e: React.DragEvent<HTMLElement>) => {
-    e.preventDefault()
-    setThumbnailDragOver(false)
-    const file = e.dataTransfer.files?.[0]
-    if (file) acceptThumbnailFile(file)
   }
 
   // 폼 영역에서 paste 시 이미지 자동 붙여넣기.
@@ -3187,98 +3162,29 @@ export function PersonRegisterView({
           </FieldControl>
         </FieldRow>
 
-        {/* 프로필 사진 — 한 줄 업로드 띠 */}
+        {/* 프로필 사진 — 실제로 보일 원 모양 그대로 미리 본다(profile-photo-field) */}
         <FieldRow>
           <FieldLabel htmlFor="person-thumbnail-upload">
             프로필 사진
           </FieldLabel>
-          <FieldControl
-            onDragEnter={(e) => {
-              e.preventDefault()
-              setThumbnailDragOver(true)
-            }}
-            onDragOver={(e) => {
-              e.preventDefault()
-              setThumbnailDragOver(true)
-            }}
-            onDragLeave={() => setThumbnailDragOver(false)}
-            onDrop={handleThumbnailDrop}
-          >
-            {thumbnailObjectUrl || profileImageUrl.trim() ? (
-              <KitUploadFilled>
-                <KitUploadThumb>
-                  <img
-                    src={
-                      thumbnailObjectUrl ||
-                      getUploadImageUrl(profileImageUrl) ||
-                      profileImageUrl
-                    }
-                    alt={namePreview ? `${namePreview} 프로필 사진` : '프로필 사진'}
-                  />
-                </KitUploadThumb>
-                <KitUploadText>
-                  <strong>프로필 사진</strong>
-                  <span id="person-thumbnail-hint">
-                    {pendingThumbnailFile
-                      ? '저장할 때 올라갑니다'
-                      : '끌어 놓거나 붙여넣어(⌘V) 바꿀 수 있습니다'}
-                  </span>
-                </KitUploadText>
-                <KitUploadActions>
-                  <KitUploadButton
-                    type="button"
-                    onClick={() =>
-                      document.getElementById('person-thumbnail-upload')?.click()
-                    }
-                    disabled={isSubmitting}
-                  >
-                    바꾸기
-                  </KitUploadButton>
-                  <KitUploadRemove
-                    type="button"
-                    onClick={() => {
-                      handleRemoveThumbnail()
-                      markDirty()
-                    }}
-                    disabled={isSubmitting}
-                    aria-label={
-                      pendingThumbnailFile ? '선택한 이미지 취소' : '프로필 사진 제거'
-                    }
-                  >
-                    <FiX size={15} />
-                  </KitUploadRemove>
-                </KitUploadActions>
-              </KitUploadFilled>
-            ) : (
-              <KitUploadStrip
-                type="button"
-                $dragOver={thumbnailDragOver}
-                onClick={() =>
-                  document.getElementById('person-thumbnail-upload')?.click()
-                }
-                disabled={isSubmitting}
-              >
-                <KitUploadThumb aria-hidden>
-                  <FiImage size={18} />
-                </KitUploadThumb>
-                <KitUploadText>
-                  <strong>
-                    {thumbnailDragOver ? '여기에 놓아 올리기' : '프로필 사진 올리기'}
-                  </strong>
-                  <span id="person-thumbnail-hint">
-                    누르거나 끌어 놓기 · 붙여넣기(⌘V)도 됩니다
-                  </span>
-                </KitUploadText>
-              </KitUploadStrip>
-            )}
-            <ThumbnailUploadInput
-              id="person-thumbnail-upload"
-              type="file"
-              accept="image/*"
-              onChange={handleThumbnailChange}
+          <FieldControl>
+            <ProfilePhotoField
+              inputId="person-thumbnail-upload"
+              hintId="person-thumbnail-hint"
+              src={
+                thumbnailObjectUrl ||
+                (profileImageUrl.trim()
+                  ? getUploadImageUrl(profileImageUrl) || profileImageUrl
+                  : null)
+              }
+              pendingFile={pendingThumbnailFile}
+              personName={namePreview}
               disabled={isSubmitting}
-              aria-label="프로필 사진 업로드"
-              aria-describedby="person-thumbnail-hint"
+              onFile={acceptThumbnailFile}
+              onRemove={() => {
+                handleRemoveThumbnail()
+                markDirty()
+              }}
             />
           </FieldControl>
         </FieldRow>

@@ -38,21 +38,6 @@ export {
 // ─── 프로필 사진 ────────────────────────────────────────────────────────────
 // 모양은 사건 등록 폼 썸네일 칸(register-form-kit KitUpload*)을 그대로 쓴다. 여기엔 파일 입력만.
 
-/**
- * 시각적으로 숨기되 포커스 가능(sr-only) — display:none이면 Tab 순서에서 빠져 키보드로
- * 사진을 못 올린다. '이미지 업로드' 버튼·칸 클릭이 이 입력을 연다.
- */
-export const ThumbnailUploadInput = styled.input`
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-`
 
 // ─── Inline grouping ────────────────────────────────────────────────────────
 
