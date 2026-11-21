@@ -15,19 +15,8 @@ import {
   FiX,
 } from 'react-icons/fi'
 import { Link, useSearchParams } from 'react-router-dom'
-import styled, { useTheme } from 'styled-components'
+import styled from 'styled-components'
 
-import {
-  BentoActionBtn,
-  BentoCard,
-  BentoCardBadge,
-  BentoCardBody,
-  BentoCardHeader,
-  BentoCardTitle,
-  BentoCardTitleGroup,
-  MiniDonutRing,
-  type SegmentSlice,
-} from '@/entities/event/ui/bento-primitives'
 import {
   DIGIT_DISPLAY,
   ledgerAccent,
@@ -160,6 +149,16 @@ function partyPolityKey(party: PoliticalParty): string {
   return 'none'
 }
 
+/**
+ * 로고 없는 정당의 배지 글자 — 약칭이 짧으면(≤5자) 약칭 그대로, 아니면 당명 앞 두 글자.
+ * 예전엔 약칭을 4자에서 잘라 'Libe'(Liberal)·'Zent'(Zentrum)처럼 낱말이 끊겼다.
+ */
+function badgeTextOf(party: PoliticalParty): string {
+  const shortName = party.shortName?.trim()
+  if (shortName && [...shortName].length <= 5) return shortName
+  return [...party.name.replace(/\s+/g, '')].slice(0, 2).join('')
+}
+
 function totalRecordsOf(party: PoliticalParty): number {
   const c = party._count
   if (!c) return 0
@@ -247,7 +246,6 @@ export function PoliticalPartiesCatalogPage() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [selectedId, modalState.open, selectParty])
 
-  const theme = useTheme()
 
   // 요약 KPI 및 스펙트럼 집계
   const summaryStats = useMemo(() => {
@@ -281,24 +279,6 @@ export function PoliticalPartiesCatalogPage() {
       spectrumCounts,
     }
   }, [allParties])
-
-  const statusDonutSlices = useMemo<SegmentSlice[]>(
-    () => [
-      {
-        key: 'active',
-        label: '현존',
-        value: summaryStats.active,
-        color: theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5',
-      },
-      {
-        key: 'dissolved',
-        label: '해산·역사',
-        value: summaryStats.dissolved,
-        color: theme.mode === 'dark' ? '#64748b' : '#94a3b8',
-      },
-    ],
-    [summaryStats.active, summaryStats.dissolved, theme.mode],
-  )
 
   // 국가·역사체제 옵션 목록
   const polityOptions = useMemo(() => {
@@ -377,6 +357,41 @@ export function PoliticalPartiesCatalogPage() {
       if (fy != null && fy < minYear) minYear = fy
     }
     return { minYear: Math.min(minYear, currentYear - 20), maxYear: currentYear }
+  }, [filteredParties])
+
+  /** 존속 열 머리 눈금 — 50년(범위가 짧으면 25년) 간격 */
+  const axisTicks = useMemo(() => {
+    const span = Math.max(1, yearBounds.maxYear - yearBounds.minYear)
+    const step = span > 150 ? 50 : 25
+    const ticks: Array<{ year: number; pct: number }> = []
+    for (
+      let year = Math.ceil(yearBounds.minYear / step) * step;
+      year <= yearBounds.maxYear;
+      year += step
+    ) {
+      const pct = ((year - yearBounds.minYear) / span) * 100
+      if (pct >= 4 && pct <= 96) ticks.push({ year, pct })
+    }
+    return ticks
+  }, [yearBounds])
+
+  /**
+   * 국가·체제 묶음 — 정당은 한 나라 안의 일이라 나라로 묶는다(행마다 '독일 제국' 알약을 10번 되풀이하던 것).
+   * 묶음 순서는 정당 수 많은 순, 소속 미상은 맨 뒤. 묶음 안 순서는 고른 정렬 그대로.
+   */
+  const partyGroups = useMemo(() => {
+    const groups = new Map<string, { key: string; label: string; parties: PoliticalParty[] }>()
+    for (const party of filteredParties) {
+      const key = partyPolityKey(party)
+      const existing = groups.get(key)
+      if (existing) existing.parties.push(party)
+      else groups.set(key, { key, label: partyPolityLabel(party) ?? '소속 미상', parties: [party] })
+    }
+    return Array.from(groups.values()).sort((left, right) => {
+      if (left.key === 'none') return 1
+      if (right.key === 'none') return -1
+      return right.parties.length - left.parties.length || left.label.localeCompare(right.label, 'ko')
+    })
   }, [filteredParties])
 
   // 선택된 정당 상세 하위 쿼리
@@ -497,7 +512,7 @@ export function PoliticalPartiesCatalogPage() {
   return (
     <Workspace>
       <CatalogPane $detailOpen={Boolean(selectedParty)}>
-        {/* 상단 에디토리얼 바 */}
+        {/* 머리 — 제목 · 한 줄 요약 · 다른 지면 링크 · 등록 */}
         <TopChrome>
           <TopHeadlineGroup>
             <AccentBar aria-hidden />
@@ -513,29 +528,23 @@ export function PoliticalPartiesCatalogPage() {
                 </span>
                 <span className="sep">·</span>
                 <span>
-                  역사·해산 <b>{summaryStats.dissolved}</b>
+                  해산·역사 <b>{summaryStats.dissolved}</b>
                 </span>
-                {summaryStats.eventLinked > 0 && (
-                  <>
-                    <span className="sep">·</span>
-                    <span className="accent">
-                      역사 사건 관여 <b>{summaryStats.eventLinked}</b>
-                    </span>
-                  </>
-                )}
                 <span className="sep">·</span>
-                <CrossDomainLink to="/government">
-                  정부·내각 <FiArrowUpRight size={12} />
-                </CrossDomainLink>
-                <span className="sep">·</span>
-                <CrossDomainLink to="/organizations?view=domestic">
-                  비정부·민간단체 <FiArrowUpRight size={12} />
-                </CrossDomainLink>
+                <span>
+                  국가·체제 <b>{polityOptions.length}</b>
+                </span>
               </SummaryLine>
             </div>
           </TopHeadlineGroup>
 
           <HeaderActions>
+            <CrossDomainLink to="/government">
+              정부·내각 <FiArrowUpRight size={12} aria-hidden />
+            </CrossDomainLink>
+            <CrossDomainLink to="/organizations?view=domestic">
+              비정부·민간단체 <FiArrowUpRight size={12} aria-hidden />
+            </CrossDomainLink>
             <PrimaryActionBtn
               type="button"
               onClick={() => setModalState({ open: true, editingParty: null })}
@@ -546,318 +555,150 @@ export function PoliticalPartiesCatalogPage() {
           </HeaderActions>
         </TopChrome>
 
-        {/* 3열 Event-Ledger 벤토 인포그래픽: 스펙트럼 · 국가 체제 · 존속/아카이브 밀도 */}
-        {!partiesQuery.isLoading && summaryStats.total > 0 && (
-          <CatalogBentoSection aria-label="정당 아카이브 현황 인포그래픽">
-            <CatalogBentoGrid $detailOpen={Boolean(selectedParty)}>
-              {/* Card 1: 좌→우 이념 스펙트럼 분포 */}
-              <BentoCard>
-                <BentoCardHeader>
-                  <BentoCardTitleGroup>
-                    <BentoCardTitle>이념 스펙트럼 분포</BentoCardTitle>
-                    <BentoCardBadge>
-                      {SPECTRUM_ORDER.filter(
-                        (pos) => (summaryStats.spectrumCounts[pos] ?? 0) > 0,
-                      ).length}
-                      개 성향
-                    </BentoCardBadge>
-                  </BentoCardTitleGroup>
-                  {positionFilter !== 'ALL' && (
-                    <BentoActionBtn
-                      type="button"
-                      onClick={() => setPositionFilter('ALL')}
-                    >
-                      전체 해제
-                    </BentoActionBtn>
-                  )}
-                </BentoCardHeader>
-                <BentoCardBody>
-                  <SpectrumTrack>
-                    {SPECTRUM_ORDER.map((pos) => {
-                      const cnt = summaryStats.spectrumCounts[pos] ?? 0
-                      if (cnt === 0) return null
-                      return (
-                        <SpectrumSegment
-                          key={pos}
-                          $color={POLITICAL_POSITION_COLOR[pos]}
-                          $ratio={(cnt / summaryStats.total) * 100}
-                          $dimmed={
-                            positionFilter !== 'ALL' && positionFilter !== pos
-                          }
-                          title={`${POLITICAL_POSITION_LABEL[pos]} ${cnt}개 정당`}
-                          onClick={() =>
-                            setPositionFilter((prev) =>
-                              prev === pos ? 'ALL' : pos,
-                            )
-                          }
-                        />
-                      )
-                    })}
-                    {(summaryStats.spectrumCounts.UNSPECIFIED ?? 0) > 0 && (
-                      <SpectrumSegment
-                        $color="#94a3b8"
-                        $ratio={
-                          ((summaryStats.spectrumCounts.UNSPECIFIED ?? 0) /
-                            summaryStats.total) *
-                          100
-                        }
-                        $dimmed={
-                          positionFilter !== 'ALL' &&
-                          positionFilter !== 'UNSPECIFIED'
-                        }
-                        title={`스펙트럼 미지정 ${summaryStats.spectrumCounts.UNSPECIFIED}개 정당`}
-                        onClick={() =>
-                          setPositionFilter((prev) =>
-                            prev === 'UNSPECIFIED' ? 'ALL' : 'UNSPECIFIED',
-                          )
-                        }
-                      />
-                    )}
-                  </SpectrumTrack>
+        {/*
+          거르기 — 검색 · 국가 · 존속 · 정렬 한 줄 + 스펙트럼 한 줄.
+          예전엔 위에 그래프 카드 3장(스펙트럼·국가 Top5·존속 도넛)이 230~380px를 차지했는데,
+          셋 다 이 줄의 거르기를 한 번 더 둔 것이었다. 분포 정보는 스펙트럼 막대 하나로 남긴다.
+        */}
+        <FilterArea>
+          <FilterBar>
+            <SearchBox>
+              <FiSearch size={14} aria-hidden />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="정당명, 약칭(SPD·KPD·자민당·GOP), 원어명, 이념 검색…"
+                aria-label="정당 검색"
+              />
+              {searchQuery && (
+                <ClearBtn
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  aria-label="검색어 지우기"
+                >
+                  <FiX size={13} />
+                </ClearBtn>
+              )}
+            </SearchBox>
 
-                  <SpectrumChipRow>
-                    <SpectrumChip
-                      type="button"
-                      $active={positionFilter === 'ALL'}
-                      onClick={() => setPositionFilter('ALL')}
-                    >
-                      전체 <span>{summaryStats.total}</span>
-                    </SpectrumChip>
-                    {SPECTRUM_ORDER.map((pos) => {
-                      const cnt = summaryStats.spectrumCounts[pos] ?? 0
-                      if (cnt === 0 && positionFilter !== pos) return null
-                      return (
-                        <SpectrumChip
-                          key={pos}
-                          type="button"
-                          $active={positionFilter === pos}
-                          onClick={() =>
-                            setPositionFilter((prev) =>
-                              prev === pos ? 'ALL' : pos,
-                            )
-                          }
-                        >
-                          <Dot $color={POLITICAL_POSITION_COLOR[pos]} />
-                          {POLITICAL_POSITION_LABEL[pos]}
-                          <span>{cnt}</span>
-                        </SpectrumChip>
-                      )
-                    })}
-                    {(summaryStats.spectrumCounts.UNSPECIFIED ?? 0) > 0 && (
-                      <SpectrumChip
-                        type="button"
-                        $active={positionFilter === 'UNSPECIFIED'}
-                        onClick={() =>
-                          setPositionFilter((prev) =>
-                            prev === 'UNSPECIFIED' ? 'ALL' : 'UNSPECIFIED',
-                          )
-                        }
-                      >
-                        <Dot $color="#94a3b8" />
-                        미분류
-                        <span>{summaryStats.spectrumCounts.UNSPECIFIED}</span>
-                      </SpectrumChip>
-                    )}
-                  </SpectrumChipRow>
-                </BentoCardBody>
-              </BentoCard>
+            <FilterSelect
+              value={polityFilter}
+              onChange={(event) => setPolityFilter(event.target.value)}
+              aria-label="소속 국가·시대 체제 필터"
+            >
+              <option value="all">모든 국가·체제</option>
+              {polityOptions.map((opt) => (
+                <option key={opt.key} value={opt.key}>
+                  {opt.label} ({opt.count})
+                </option>
+              ))}
+            </FilterSelect>
 
-              {/* Card 2: 주요 국가·시대 체제 Top 5 */}
-              <BentoCard>
-                <BentoCardHeader>
-                  <BentoCardTitleGroup>
-                    <BentoCardTitle>주요 국가 · 시대 체제</BentoCardTitle>
-                    <BentoCardBadge>{polityOptions.length}개 체제</BentoCardBadge>
-                  </BentoCardTitleGroup>
-                  {polityFilter !== 'all' && (
-                    <BentoActionBtn
-                      type="button"
-                      onClick={() => setPolityFilter('all')}
-                    >
-                      전체 체제
-                    </BentoActionBtn>
-                  )}
-                </BentoCardHeader>
-                <BentoCardBody>
-                  {polityOptions.length === 0 ? (
-                    <MutedEmpty>소속 국가·시대 체제 정보가 없습니다.</MutedEmpty>
-                  ) : (
-                    <PolityBarList>
-                      {polityOptions.slice(0, 5).map((opt) => {
-                        const maxCnt = Math.max(1, polityOptions[0]?.count ?? 1)
-                        const pct = Math.max(6, (opt.count / maxCnt) * 100)
-                        const isActive = polityFilter === opt.key
-                        return (
-                          <PolityBarBtn
-                            key={opt.key}
-                            type="button"
-                            $active={isActive}
-                            onClick={() =>
-                              setPolityFilter((prev) =>
-                                prev === opt.key ? 'all' : opt.key,
-                              )
-                            }
-                          >
-                            <span className="name">{opt.label}</span>
-                            <PolityBarTrack>
-                              <PolityBarFill $pct={pct} $active={isActive} />
-                            </PolityBarTrack>
-                            <strong className="cnt">{opt.count}</strong>
-                          </PolityBarBtn>
-                        )
-                      })}
-                    </PolityBarList>
-                  )}
-                </BentoCardBody>
-              </BentoCard>
+            <StatusSegment role="group" aria-label="존속 상태 필터">
+              {(
+                [
+                  ['all', '전체', summaryStats.total],
+                  ['active', '현존', summaryStats.active],
+                  ['dissolved', '해산·역사', summaryStats.dissolved],
+                ] as const
+              ).map(([val, label, count]) => (
+                <StatusSegBtn
+                  key={val}
+                  type="button"
+                  aria-pressed={statusFilter === val}
+                  $active={statusFilter === val}
+                  onClick={() => setStatusFilter(val)}
+                >
+                  {label}
+                  <span>{count}</span>
+                </StatusSegBtn>
+              ))}
+            </StatusSegment>
 
-              {/* Card 3: 존속 현황 · 아카이브 연결 밀도 */}
-              <BentoCard>
-                <BentoCardHeader>
-                  <BentoCardTitleGroup>
-                    <BentoCardTitle>존속 현황 · 아카이브 연동</BentoCardTitle>
-                    <BentoCardBadge>전체 {summaryStats.total}곳</BentoCardBadge>
-                  </BentoCardTitleGroup>
-                  {statusFilter !== 'all' && (
-                    <BentoActionBtn
-                      type="button"
-                      onClick={() => setStatusFilter('all')}
-                    >
-                      전체 상태
-                    </BentoActionBtn>
-                  )}
-                </BentoCardHeader>
-                <BentoCardBody>
-                  <StatusDonutSplit>
-                    <MiniDonutRing
-                      slices={statusDonutSlices}
-                      size={66}
-                      strokeWidth={8}
-                      centerValue={`${Math.round(
-                        (summaryStats.active / Math.max(1, summaryStats.total)) *
-                          100,
-                      )}%`}
-                      centerLabel="현존"
+            <FilterSelect
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value as SortOption)}
+              aria-label="정렬 기준"
+            >
+              <option value="founded_asc">창당 오래된순</option>
+              <option value="founded_desc">창당 최신순</option>
+              <option value="records">사건·선거·내각 기록순</option>
+              <option value="name">당명 가나다순</option>
+            </FilterSelect>
+          </FilterBar>
+
+          {summaryStats.total > 0 && (
+            <SpectrumRow role="group" aria-label="이념 스펙트럼 필터">
+              <SpectrumRowLabel>스펙트럼</SpectrumRowLabel>
+              <SpectrumTrack aria-hidden>
+                {[...SPECTRUM_ORDER, 'UNSPECIFIED' as const].map((pos) => {
+                  const cnt = summaryStats.spectrumCounts[pos] ?? 0
+                  if (cnt === 0) return null
+                  return (
+                    <SpectrumSegment
+                      key={pos}
+                      $color={
+                        pos === 'UNSPECIFIED'
+                          ? '#94a3b8'
+                          : POLITICAL_POSITION_COLOR[pos]
+                      }
+                      $ratio={(cnt / summaryStats.total) * 100}
+                      $dimmed={positionFilter !== 'ALL' && positionFilter !== pos}
                     />
-                    <StatusDonutLegend>
-                      <StatusLegendBtn
-                        type="button"
-                        $active={statusFilter === 'active'}
-                        onClick={() =>
-                          setStatusFilter((prev) =>
-                            prev === 'active' ? 'all' : 'active',
-                          )
-                        }
-                      >
-                        <Dot
-                          $color={theme.mode === 'dark' ? '#a5b4fc' : '#4f46e5'}
-                        />
-                        <span>현존 정당</span>
-                        <strong>{summaryStats.active}</strong>
-                      </StatusLegendBtn>
-                      <StatusLegendBtn
-                        type="button"
-                        $active={statusFilter === 'dissolved'}
-                        onClick={() =>
-                          setStatusFilter((prev) =>
-                            prev === 'dissolved' ? 'all' : 'dissolved',
-                          )
-                        }
-                      >
-                        <Dot
-                          $color={theme.mode === 'dark' ? '#64748b' : '#94a3b8'}
-                        />
-                        <span>해산 · 역사 정당</span>
-                        <strong>{summaryStats.dissolved}</strong>
-                      </StatusLegendBtn>
-                      <ArchiveDensityRow>
-                        <span>
-                          사건 <b>{summaryStats.eventLinked}</b>
-                        </span>
-                        <span>·</span>
-                        <span>
-                          선거 <b>{summaryStats.electionLinked}</b>
-                        </span>
-                        <span>·</span>
-                        <span>
-                          내각 <b>{summaryStats.cabinetLinked}</b>
-                        </span>
-                      </ArchiveDensityRow>
-                    </StatusDonutLegend>
-                  </StatusDonutSplit>
-                </BentoCardBody>
-              </BentoCard>
-            </CatalogBentoGrid>
-          </CatalogBentoSection>
-        )}
+                  )
+                })}
+              </SpectrumTrack>
+              <SpectrumChipRow>
+                <SpectrumChip
+                  type="button"
+                  aria-pressed={positionFilter === 'ALL'}
+                  $active={positionFilter === 'ALL'}
+                  onClick={() => setPositionFilter('ALL')}
+                >
+                  전체 <span>{summaryStats.total}</span>
+                </SpectrumChip>
+                {SPECTRUM_ORDER.map((pos) => {
+                  const cnt = summaryStats.spectrumCounts[pos] ?? 0
+                  if (cnt === 0 && positionFilter !== pos) return null
+                  return (
+                    <SpectrumChip
+                      key={pos}
+                      type="button"
+                      aria-pressed={positionFilter === pos}
+                      $active={positionFilter === pos}
+                      onClick={() =>
+                        setPositionFilter((prev) => (prev === pos ? 'ALL' : pos))
+                      }
+                    >
+                      <Dot $color={POLITICAL_POSITION_COLOR[pos]} />
+                      {POLITICAL_POSITION_LABEL[pos]}
+                      <span>{cnt}</span>
+                    </SpectrumChip>
+                  )
+                })}
+                {(summaryStats.spectrumCounts.UNSPECIFIED ?? 0) > 0 && (
+                  <SpectrumChip
+                    type="button"
+                    aria-pressed={positionFilter === 'UNSPECIFIED'}
+                    $active={positionFilter === 'UNSPECIFIED'}
+                    onClick={() =>
+                      setPositionFilter((prev) =>
+                        prev === 'UNSPECIFIED' ? 'ALL' : 'UNSPECIFIED',
+                      )
+                    }
+                  >
+                    <Dot $color="#94a3b8" />
+                    미분류
+                    <span>{summaryStats.spectrumCounts.UNSPECIFIED}</span>
+                  </SpectrumChip>
+                )}
+              </SpectrumChipRow>
+            </SpectrumRow>
+          )}
+        </FilterArea>
 
-        {/* 검색 · 국가/체제 · 존속상태 · 정렬 바 */}
-        <FilterBar>
-          <SearchBox>
-            <FiSearch size={14} aria-hidden />
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="정당명, 약칭(SPD·KPD·자민당·GOP), 원어명, 이념 검색…"
-              aria-label="정당 검색"
-            />
-            {searchQuery && (
-              <ClearBtn
-                type="button"
-                onClick={() => setSearchQuery('')}
-                aria-label="검색어 지우기"
-              >
-                <FiX size={13} />
-              </ClearBtn>
-            )}
-          </SearchBox>
-
-          <FilterSelect
-            value={polityFilter}
-            onChange={(e) => setPolityFilter(e.target.value)}
-            aria-label="소속 국가·시대 체제 필터"
-          >
-            <option value="all">국가·시대 체제 전체</option>
-            {polityOptions.map((opt) => (
-              <option key={opt.key} value={opt.key}>
-                {opt.label} ({opt.count})
-              </option>
-            ))}
-          </FilterSelect>
-
-          <StatusSegment role="group" aria-label="존속 상태 필터">
-            {(
-              [
-                ['all', '전체'],
-                ['active', '현존'],
-                ['dissolved', '해산·역사'],
-              ] as const
-            ).map(([val, label]) => (
-              <StatusSegBtn
-                key={val}
-                type="button"
-                $active={statusFilter === val}
-                onClick={() => setStatusFilter(val)}
-              >
-                {label}
-              </StatusSegBtn>
-            ))}
-          </StatusSegment>
-
-          <FilterSelect
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortOption)}
-            aria-label="정렬 기준"
-          >
-            <option value="founded_asc">창당 오래된순</option>
-            <option value="founded_desc">창당 최신순</option>
-            <option value="records">사건·선거·내각 기록순</option>
-            <option value="name">당명 가나다순</option>
-          </FilterSelect>
-        </FilterBar>
-
-        {/* 정당 원장 리스트 */}
+        {/* 정당 원장 — 열 머리(존속 연도 눈금) + 국가·체제 묶음 */}
         <ListScroll>
           {partiesQuery.isLoading ? (
             <EmptyBox>정당 편람을 불러오는 중입니다…</EmptyBox>
@@ -878,129 +719,126 @@ export function PoliticalPartiesCatalogPage() {
             </EmptyBox>
           ) : (
             <LedgerTable>
-              {filteredParties.map((party) => {
-                const isSelected = party.id === selectedParty?.id
-                const color = partyAccentColor(party)
-                const polity = partyPolityLabel(party)
-                const fYear = parseYear(party.foundedDate)
-                const dYear = parseYear(party.dissolvedDate)
-                const spanTotal = Math.max(
-                  1,
-                  yearBounds.maxYear - yearBounds.minYear,
-                )
-                const barLeft =
-                  fYear != null
-                    ? Math.max(
-                        0,
-                        Math.min(
-                          96,
-                          ((fYear - yearBounds.minYear) / spanTotal) * 100,
-                        ),
-                      )
-                    : 0
-                const endVal = dYear ?? yearBounds.maxYear
-                const barWidth =
-                  fYear != null
-                    ? Math.max(
-                        2.5,
-                        Math.min(
-                          100 - barLeft,
-                          ((Math.max(fYear, endVal) - fYear) / spanTotal) * 100,
-                        ),
-                      )
-                    : 0
+              <ColumnHead aria-hidden>
+                <span />
+                <span>정당</span>
+                <span>존속</span>
+                <AxisRuler>
+                  {axisTicks.map((tick) => (
+                    <AxisTick key={tick.year} style={{ left: `${tick.pct}%` }}>
+                      {tick.year}
+                    </AxisTick>
+                  ))}
+                </AxisRuler>
+                <span className="end">기록</span>
+              </ColumnHead>
+              {partyGroups.map((group) => (
+                <section key={group.key} aria-label={`${group.label} 정당 ${group.parties.length}곳`}>
+                  <GroupHead>
+                    <span className="name">{group.label}</span>
+                    <span className="count">{group.parties.length}</span>
+                  </GroupHead>
+                  {group.parties.map((party) => {
+                    const isSelected = party.id === selectedParty?.id
+                    const color = partyAccentColor(party)
+                    const fYear = parseYear(party.foundedDate)
+                    const dYear = parseYear(party.dissolvedDate)
+                    const spanTotal = Math.max(1, yearBounds.maxYear - yearBounds.minYear)
+                    const barLeft =
+                      fYear != null
+                        ? Math.max(0, Math.min(96, ((fYear - yearBounds.minYear) / spanTotal) * 100))
+                        : 0
+                    const endVal = dYear ?? yearBounds.maxYear
+                    const barWidth =
+                      fYear != null
+                        ? Math.max(
+                            1.5,
+                            Math.min(100 - barLeft, ((Math.max(fYear, endVal) - fYear) / spanTotal) * 100),
+                          )
+                        : 0
+                    const counts = party._count
+                    const recordParts = [
+                      ['사건', counts?.eventRelations ?? 0],
+                      ['선거', counts?.electionPartyResults ?? 0],
+                      ['내각', counts?.cabinetAffiliations ?? 0],
+                      ['계보', (counts?.transitionsFrom ?? 0) + (counts?.transitionsTo ?? 0)],
+                    ] as const
+                    const shownRecords = recordParts.filter(([, value]) => value > 0)
 
-                const counts = party._count
-                const eventCnt = counts?.eventRelations ?? 0
-                const electionCnt = counts?.electionPartyResults ?? 0
-                const cabinetCnt = counts?.cabinetAffiliations ?? 0
-                const lineageCnt =
-                  (counts?.transitionsFrom ?? 0) + (counts?.transitionsTo ?? 0)
+                    return (
+                      <PartyRow
+                        key={party.id}
+                        $selected={isSelected}
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={isSelected}
+                        onClick={() => selectParty(party.id)}
+                        onKeyDown={(keyEvent) => {
+                          if (keyEvent.key === 'Enter' || keyEvent.key === ' ') {
+                            keyEvent.preventDefault()
+                            selectParty(party.id)
+                          }
+                        }}
+                      >
+                        <PartyBadge $color={color}>
+                          {party.logoUrl ? (
+                            <PartyBadgeImg src={getUploadImageUrl(party.logoUrl)} alt="" />
+                          ) : (
+                            <PartyBadgeText $length={badgeTextOf(party).length}>
+                              {badgeTextOf(party)}
+                            </PartyBadgeText>
+                          )}
+                        </PartyBadge>
 
-                return (
-                  <PartyRow
-                    key={party.id}
-                    $selected={isSelected}
-                    $brandColor={color}
-                    onClick={() => selectParty(party.id)}
-                  >
-                    <PartyBadge $color={color}>
-                      {party.logoUrl ? (
-                        <PartyBadgeImg
-                          src={getUploadImageUrl(party.logoUrl)}
-                          alt=""
-                        />
-                      ) : (
-                        (party.shortName || party.name).slice(0, 4)
-                      )}
-                    </PartyBadge>
+                        <PartyMainCol>
+                          <PartyTitleLine>
+                            <PartyName>{party.name}</PartyName>
+                            {party.shortName && <ShortName>{party.shortName}</ShortName>}
+                          </PartyTitleLine>
+                          <PartyMetaLine>
+                            {party.position ? (
+                              <PosLabel>
+                                <Dot $color={POLITICAL_POSITION_COLOR[party.position]} />
+                                {POLITICAL_POSITION_LABEL[party.position]}
+                              </PosLabel>
+                            ) : null}
+                            {(party.ideology || party.localName) && (
+                              <IdeologyText>{party.ideology || party.localName}</IdeologyText>
+                            )}
+                          </PartyMetaLine>
+                        </PartyMainCol>
 
-                    <PartyMainCol>
-                      <PartyTitleLine>
-                        <PartyName>{party.name}</PartyName>
-                        {party.shortName && (
-                          <ShortBadge>{party.shortName}</ShortBadge>
-                        )}
-                        {polity && <PolityPill>{polity}</PolityPill>}
-                      </PartyTitleLine>
-                      <PartyMetaLine>
-                        {party.position && (
-                          <PosBadge $color={POLITICAL_POSITION_COLOR[party.position]}>
-                            {POLITICAL_POSITION_LABEL[party.position]}
-                          </PosBadge>
-                        )}
-                        {party.ideology && (
-                          <IdeologyText>{party.ideology}</IdeologyText>
-                        )}
-                        {!party.ideology && party.localName && (
-                          <IdeologyText>{party.localName}</IdeologyText>
-                        )}
-                      </PartyMetaLine>
-                    </PartyMainCol>
+                        <LifespanYears $dissolved={Boolean(party.dissolvedDate)}>
+                          {fYear != null ? fYear : '—'}–{dYear != null ? dYear : '현재'}
+                        </LifespanYears>
 
-                    <LifespanCol>
-                      <LifespanLabel $dissolved={Boolean(party.dissolvedDate)}>
-                        {fYear != null ? fYear : '—'}
-                        {' — '}
-                        {dYear != null ? dYear : '현재'}
-                      </LifespanLabel>
-                      <LifespanTrack>
-                        {fYear != null && (
-                          <LifespanFill
-                            $left={barLeft}
-                            $width={barWidth}
-                            $color={color}
-                            $dissolved={Boolean(party.dissolvedDate)}
-                          />
-                        )}
-                      </LifespanTrack>
-                    </LifespanCol>
+                        <LifespanTrack>
+                          {fYear != null && (
+                            <LifespanFill
+                              $left={barLeft}
+                              $width={barWidth}
+                              $color={color}
+                              $dissolved={Boolean(party.dissolvedDate)}
+                            />
+                          )}
+                        </LifespanTrack>
 
-                    <MetricsCol>
-                      {eventCnt > 0 && (
-                        <MetricChip $accent title="관여한 역사 사건 수">
-                          사건 <b>{eventCnt}</b>
-                        </MetricChip>
-                      )}
-                      {electionCnt > 0 && (
-                        <MetricChip title="선거 결과 집계 수">
-                          선거 <b>{electionCnt}</b>
-                        </MetricChip>
-                      )}
-                      {cabinetCnt > 0 && (
-                        <MetricChip title="참여 내각 수">
-                          내각 <b>{cabinetCnt}</b>
-                        </MetricChip>
-                      )}
-                      {lineageCnt > 0 && (
-                        <MetricChip title="전신·후신·합당·분당 계보 수">
-                          계보 <b>{lineageCnt}</b>
-                        </MetricChip>
-                      )}
-                    </MetricsCol>
-                  </PartyRow>
-                )
-              })}
+                        <RecordsCol>
+                          {shownRecords.length === 0 ? (
+                            <span className="none">—</span>
+                          ) : (
+                            shownRecords.map(([label, value]) => (
+                              <span key={label}>
+                                {label} <b>{value}</b>
+                              </span>
+                            ))
+                          )}
+                        </RecordsCol>
+                      </PartyRow>
+                    )
+                  })}
+                </section>
+              ))}
             </LedgerTable>
           )}
         </ListScroll>
@@ -1691,6 +1529,8 @@ const CrossDomainLink = styled(Link)`
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  margin-right: 6px;
+  font-size: 0.76rem;
   color: ${({ theme }) => theme.colors.text.secondary};
   text-decoration: none;
   font-weight: 500;
@@ -1727,189 +1567,37 @@ const PrimaryActionBtn = styled.button`
   }
 `
 
-const CatalogBentoSection = styled.section`
-  padding: 12px 24px;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
-`
-
-const CatalogBentoGrid = styled.div<{ $detailOpen: boolean }>`
-  display: grid;
-  grid-template-columns: ${({ $detailOpen }) =>
-    $detailOpen
-      ? 'repeat(3, minmax(0, 1fr))'
-      : 'minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr)'};
-  gap: 12px;
-  align-items: stretch;
-
-  @media (max-width: 1360px) {
-    grid-template-columns: ${({ $detailOpen }) =>
-      $detailOpen ? '1fr' : 'repeat(2, minmax(0, 1fr))'};
-  }
-
-  @media (max-width: 820px) {
-    grid-template-columns: 1fr;
-  }
-`
-
-const PolityBarList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`
-
-const PolityBarBtn = styled.button<{ $active: boolean }>`
-  display: grid;
-  grid-template-columns: minmax(76px, 118px) minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 3px 6px;
-  margin: 0 -6px;
-  border: none;
-  border-radius: ${RADIUS.SM};
-  background: ${({ $active, theme }) =>
-    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
-  color: ${({ $active, theme }) =>
-    $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
-  font-family: inherit;
-  font-size: 0.75rem;
-  cursor: pointer;
-  text-align: left;
-
-  &:hover {
-    background: ${({ $active, theme }) =>
-      $active ? ledgerAccentSubtle(theme.mode) : ledgerRowWash(theme.mode)};
-  }
-
-  .name {
-    font-weight: ${({ $active }) => ($active ? 700 : 500)};
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .cnt {
-    ${DIGIT_DISPLAY}
-    font-size: 0.72rem;
-    font-weight: 700;
-    color: ${({ $active, theme }) =>
-      $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
-  }
-`
-
-const PolityBarTrack = styled.div`
-  height: 6px;
-  border-radius: 999px;
-  background: ${({ theme }) => ledgerHairline(theme.mode)};
-  overflow: hidden;
-`
-
-const PolityBarFill = styled.div<{ $pct: number; $active: boolean }>`
-  height: 100%;
-  width: ${({ $pct }) => `${Math.min(100, Math.max(4, $pct))}%`};
-  border-radius: 999px;
-  background: ${({ theme }) => ledgerAccent(theme.mode)};
-  opacity: ${({ $active }) => ($active ? 0.95 : 0.62)};
-`
-
-const StatusDonutSplit = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 14px;
-`
-
-const StatusDonutLegend = styled.div`
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-`
-
-const StatusLegendBtn = styled.button<{ $active: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 3px 6px;
-  margin: 0 -6px;
-  border: none;
-  border-radius: ${RADIUS.SM};
-  background: ${({ $active, theme }) =>
-    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
-  color: ${({ $active, theme }) =>
-    $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
-  font-family: inherit;
-  font-size: 0.75rem;
-  cursor: pointer;
-
-  &:hover {
-    background: ${({ $active, theme }) =>
-      $active ? ledgerAccentSubtle(theme.mode) : ledgerRowWash(theme.mode)};
-  }
-
-  span {
-    flex: 1;
-    text-align: left;
-    font-weight: ${({ $active }) => ($active ? 600 : 500)};
-  }
-
-  strong {
-    ${DIGIT_DISPLAY}
-    font-weight: 700;
-    color: ${({ $active, theme }) =>
-      $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
-  }
-`
-
-const ArchiveDensityRow = styled.div`
-  ${DIGIT_DISPLAY}
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 5px;
-  padding-top: 4px;
-  margin-top: 2px;
-  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  font-size: 0.7rem;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-
-  b {
-    font-weight: 700;
-    color: ${({ theme }) => theme.colors.text.secondary};
-  }
-`
-
 const SpectrumTrack = styled.div`
+  flex: 0 0 160px;
   display: flex;
-  height: 8px;
-  width: 100%;
+  height: 6px;
   border-radius: 999px;
   overflow: hidden;
   background: ${({ theme }) => ledgerHairline(theme.mode)};
   gap: 1.5px;
+
+  @media (max-width: 900px) {
+    display: none;
+  }
 `
 
-const SpectrumSegment = styled.button<{
+const SpectrumSegment = styled.span<{
   $color: string
   $ratio: number
   $dimmed: boolean
 }>`
-  border: none;
-  padding: 0;
   height: 100%;
   width: ${({ $ratio }) => `${Math.max(1.5, $ratio)}%`};
   background: ${({ $color }) => $color};
-  opacity: ${({ $dimmed }) => ($dimmed ? 0.25 : 0.92)};
-  cursor: pointer;
+  opacity: ${({ $dimmed }) => ($dimmed ? 0.22 : 0.9)};
   transition: opacity 0.15s ease;
 `
 
 const SpectrumChipRow = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
+  min-width: 0;
 `
 
 const SpectrumChip = styled.button<{ $active: boolean }>`
@@ -1952,9 +1640,30 @@ const FilterBar = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  padding: 10px 24px;
+`
+
+/** 거르기 두 줄(검색·국가·존속·정렬 / 스펙트럼)을 한 덩어리로 — 밑선 하나 */
+const FilterArea = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 24px;
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   background: ${({ theme }) => ledgerSurface(theme.mode)};
+`
+
+const SpectrumRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+`
+
+const SpectrumRowLabel = styled.span`
+  flex: none;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const SearchBox = styled.div`
@@ -2007,6 +1716,10 @@ const StatusSegment = styled.div`
 `
 
 const StatusSegBtn = styled.button<{ $active: boolean }>`
+  ${DIGIT_DISPLAY}
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   height: 31px;
   padding: 0 10px;
   font-size: 0.76rem;
@@ -2017,6 +1730,11 @@ const StatusSegBtn = styled.button<{ $active: boolean }>`
   color: ${({ $active, theme }) =>
     $active ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
   cursor: pointer;
+
+  span {
+    font-size: 0.7rem;
+    opacity: 0.7;
+  }
 `
 
 const ListScroll = styled.div`
@@ -2029,14 +1747,24 @@ const LedgerTable = styled.div`
   flex-direction: column;
 `
 
-const PartyRow = styled.div<{ $selected: boolean; $brandColor: string }>`
+/*
+ * 행 — 고정 열(배지 · 정당 · 존속 연도 · 존속 막대 · 기록). 예전엔 마지막 열이 auto라 기록 칩 개수에 따라
+ * 막대 열 시작이 행마다 30~60px 흔들렸다. 열 머리(ColumnHead)와 같은 틀을 쓴다.
+ * 당색은 배지와 막대에만 — 왼쪽 3px 띠까지 칠하면 32행이 무지개 줄이 됐다.
+ */
+const ROW_GRID = '40px minmax(0, 1fr) 84px minmax(140px, 0.9fr) 124px'
+const ROW_GRID_NARROW = '40px minmax(0, 1fr) 84px'
+
+const PartyRow = styled.div<{ $selected: boolean }>`
   display: grid;
-  grid-template-columns: 52px minmax(220px, 1.8fr) minmax(140px, 1fr) auto;
+  grid-template-columns: ${ROW_GRID};
   align-items: center;
-  gap: 14px;
-  padding: 11px 24px 11px 21px;
-  border-left: 3px solid ${({ $brandColor }) => $brandColor};
+  column-gap: 16px;
+  min-height: 56px;
+  padding: 8px 24px;
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  box-shadow: ${({ $selected, theme }) =>
+    $selected ? `inset 3px 0 0 ${ledgerAccent(theme.mode)}` : 'none'};
   background: ${({ $selected, theme }) =>
     $selected ? ledgerExpandedFill(theme.mode) : 'transparent'};
   cursor: pointer;
@@ -2046,27 +1774,103 @@ const PartyRow = styled.div<{ $selected: boolean; $brandColor: string }>`
     background: ${({ $selected, theme }) =>
       $selected ? ledgerExpandedFill(theme.mode) : ledgerRowWash(theme.mode)};
   }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: -2px;
+  }
 
   @media (max-width: 900px) {
-    grid-template-columns: 44px 1fr auto;
+    grid-template-columns: ${ROW_GRID_NARROW};
+  }
+`
+
+const ColumnHead = styled.div`
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: ${ROW_GRID};
+  align-items: center;
+  column-gap: 16px;
+  height: 30px;
+  padding: 0 24px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => theme.colors.background.primary};
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+
+  .end {
+    text-align: right;
+  }
+
+  @media (max-width: 900px) {
+    grid-template-columns: ${ROW_GRID_NARROW};
+    > :nth-child(n + 4) {
+      display: none;
+    }
+  }
+`
+
+/** 존속 막대 열 머리의 연도 눈금 — 막대와 같은 좌표(yearBounds) */
+const AxisRuler = styled.div`
+  ${DIGIT_DISPLAY}
+  position: relative;
+  height: 100%;
+  letter-spacing: 0;
+`
+
+const AxisTick = styled.span`
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.66rem;
+  font-weight: 500;
+`
+
+/** 국가·체제 묶음 머리 — 지면색 위 글자만(회색 띠 없이), 행보다 한 단계 굵게 */
+const GroupHead = styled.div`
+  ${DIGIT_DISPLAY}
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 18px 24px 6px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+
+  .name {
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+  .count {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.tertiary};
   }
 `
 
 const PartyBadge = styled.div<{ $color: string }>`
-  height: 34px;
-  border-radius: ${RADIUS.SM};
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.72rem;
+  color: ${({ $color }) => $color};
+  background: ${({ $color }) => `${$color}14`};
+  border: 1px solid ${({ $color }) => `${$color}33`};
+  overflow: hidden;
+  padding: 3px;
+`
+
+/** 배지 글자 — 길이에 따라 크기를 줄여 낱말을 자르지 않는다 */
+const PartyBadgeText = styled.span<{ $length: number }>`
+  font-size: ${({ $length }) => ($length <= 2 ? '0.8rem' : $length <= 3 ? '0.72rem' : '0.62rem')};
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: ${({ $color }) => $color};
-  background: ${({ $color }) => `${$color}16`};
-  border: 1px solid ${({ $color }) => `${$color}38`};
-  overflow: hidden;
   white-space: nowrap;
-  padding: 2px;
 `
 
 const PartyBadgeImg = styled.img`
@@ -2085,15 +1889,42 @@ const PartyMainCol = styled.div`
 
 const PartyTitleLine = styled.div`
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
 `
 
 const PartyName = styled.span`
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 0.875rem;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
+`
+
+const ShortName = styled.span`
+  flex: none;
+  font-size: 0.74rem;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
+/** 스펙트럼 — 색 점 + 글자(알약 면 없이) */
+const PosLabel = styled.span`
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  & + span::before {
+    content: '·';
+    margin-right: 6px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
 `
 
 const ShortBadge = styled.span`
@@ -2108,34 +1939,11 @@ const ShortBadge = styled.span`
   border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
-const PolityPill = styled.span`
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 7px;
-  font-size: 0.7rem;
-  font-weight: 500;
-  border-radius: 999px;
-  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-`
-
 const PartyMetaLine = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
-`
-
-const PosBadge = styled.span<{ $color: string }>`
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 6px;
-  font-size: 0.68rem;
-  font-weight: 600;
-  border-radius: 4px;
-  color: ${({ $color }) => $color};
-  background: ${({ $color }) => `${$color}15`};
-  flex-shrink: 0;
 `
 
 const IdeologyText = styled.span`
@@ -2146,29 +1954,29 @@ const IdeologyText = styled.span`
   text-overflow: ellipsis;
 `
 
-const LifespanCol = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-
-  @media (max-width: 900px) {
-    display: none;
-  }
-`
-
-const LifespanLabel = styled.span<{ $dissolved: boolean }>`
+const LifespanYears = styled.span<{ $dissolved: boolean }>`
   ${DIGIT_DISPLAY}
-  font-size: 0.72rem;
+  font-size: 0.74rem;
+  white-space: nowrap;
   color: ${({ $dissolved, theme }) =>
     $dissolved ? theme.colors.text.tertiary : theme.colors.text.secondary};
+  font-weight: ${({ $dissolved }) => ($dissolved ? 500 : 600)};
+
+  @media (max-width: 900px) {
+    text-align: right;
+  }
 `
 
 const LifespanTrack = styled.div`
   position: relative;
-  height: 5px;
+  height: 6px;
   border-radius: 999px;
   background: ${({ theme }) => ledgerHairline(theme.mode)};
   overflow: hidden;
+
+  @media (max-width: 900px) {
+    display: none;
+  }
 `
 
 const LifespanFill = styled.div<{
@@ -2183,31 +1991,31 @@ const LifespanFill = styled.div<{
   left: ${({ $left }) => `${$left}%`};
   width: ${({ $width }) => `${$width}%`};
   background: ${({ $color }) => $color};
-  opacity: ${({ $dissolved }) => ($dissolved ? 0.55 : 0.9)};
+  /* 해산 정당은 흐리게 — 다크에선 어두운 당색이 바탕에 묻혀 덜 흐리게 */
+  opacity: ${({ $dissolved, theme }) => ($dissolved ? (theme.mode === 'dark' ? 0.72 : 0.5) : 0.9)};
   border-radius: 999px;
 `
 
-const MetricsCol = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 5px;
-`
-
-const MetricChip = styled.span<{ $accent?: boolean }>`
+/** 기록 수 — 칩 면 없이 글자만, 오른쪽 정렬(열 폭 고정) */
+const RecordsCol = styled.div`
   ${DIGIT_DISPLAY}
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px 7px;
-  font-size: 0.7rem;
-  border-radius: 4px;
-  background: ${({ $accent, theme }) =>
-    $accent ? ledgerAccentSubtle(theme.mode) : theme.colors.background.secondary};
-  color: ${({ $accent, theme }) =>
-    $accent ? ledgerAccent(theme.mode) : theme.colors.text.secondary};
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  font-size: 0.72rem;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 
   b {
     font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+  .none {
+    opacity: 0.6;
+  }
+
+  @media (max-width: 900px) {
+    display: none;
   }
 `
 
