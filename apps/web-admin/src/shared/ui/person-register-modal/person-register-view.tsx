@@ -17,7 +17,6 @@ import React, {
 import {
   FiAlertCircle,
   FiAlertTriangle,
-  FiChevronDown,
   FiImage,
   FiRotateCcw,
   FiX,
@@ -61,6 +60,8 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { CountryPicker } from '@/shared/ui/country-picker'
+import { formatCountryPeriod, toSignedYear } from '@/shared/lib/country-period'
+import { boostByHintYearRange, type CountrySearchShape } from '@/shared/lib/country-picker-filter'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { FormInput } from '@/shared/ui/form-input/form-input'
 import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
@@ -99,7 +100,6 @@ import {
   parseDateString,
   resolveNameRequiredError,
 } from './person-register-view.helpers'
-import { SelectBtn } from './_form-primitives'
 import { AffiliationSection } from './sections/affiliation-section'
 import {
   CountryAffiliationsSection,
@@ -112,6 +112,7 @@ import {
   normalizeSpouseRow,
   type SpouseFormRow,
 } from './sections/family-section'
+import { InlineSearchSelect, type SearchOption } from './sections/inline-search-select'
 import { LifeSection } from './sections/life-section'
 import { NicknameSection, type NicknameRow } from './sections/nickname-section'
 import { PlaceFields } from './sections/place-fields'
@@ -248,6 +249,9 @@ function makeFormField<K extends keyof PersonDraftSnapshot>(
   }
 }
 
+/** 국적 드롭다운에 한 번에 그리는 국가 수 — 넘으면 '외 N개'(검색으로 좁힌다) */
+const NATIONALITY_OPTION_LIMIT = 120
+
 export function PersonRegisterView({
   initialCountryId,
   onCancel,
@@ -343,7 +347,6 @@ export function PersonRegisterView({
   // 기타
   const [profileImageUrl, setProfileImageUrl] = useState('')
 
-  const [showCountryModal, setShowCountryModal] = useState(false)
   const [showBirthDateModal, setShowBirthDateModal] = useState(false)
   const [showDeathDateModal, setShowDeathDateModal] = useState(false)
   const [showFatherModal, setShowFatherModal] = useState(false)
@@ -1429,11 +1432,63 @@ export function PersonRegisterView({
       setHistoricalCountryId('')
     }
     setCountryName(c.name)
-    setShowCountryModal(false)
     clearFieldError('countryId')
     markDirty()
     // 출생지·사망지는 국적이 바뀌어도 그대로 둔다 — 장소 제안이 국가 구분 없이 검색되고
     // DB 장소는 제 나라를 스스로 갖는다(해외 출생 인물). 예전엔 '이전 국가의 ID에 묶였다'며 비웠다.
+  }
+
+  /*
+   * 국적 — 모달 왕복 대신 칸 안에서 검색하는 드롭다운. 값은 'm:<현대 id>' / 'h:<역사 id>'로 두 FK를 한 칸에.
+   * 검색은 국가 피커와 같은 필드(이름·영문명·현지명·ISO), 역사국가는 존속기간을 옆에 적어 동명을 가른다.
+   * 생몰년이 있으면 그 시기에 존속한 역사국가를 앞으로 끌어올린다(제외는 없다 — 망명·사후 추존 등 경계 사례).
+   * 생몰년이 1945년 이전이면 역사국가 묶음을, 아니면 현대 국가 묶음을 먼저 보인다(국가 피커의 첫 탭 규칙과 같다).
+   */
+  const nationalityValue = countryId ? `m:${countryId}` : historicalCountryId ? `h:${historicalCountryId}` : ''
+  const nationalityOptions = useMemo<SearchOption[]>(() => {
+    const signed = (era: Era, year: string) => {
+      const numeric = Number(year)
+      return year.trim() && Number.isFinite(numeric) ? toSignedYear(era, numeric) : null
+    }
+    const hint = { startYear: signed(birthEra, birthYear), endYear: signed(deathEra, deathYear) }
+    const keywordsOf = (country: CountrySearchShape) =>
+      [country.enName, country.localName, country.isoCode].filter(Boolean).join(' ')
+    const byName = (left: { name: string }, right: { name: string }) => left.name.localeCompare(right.name, 'ko')
+    const modern: SearchOption[] = [...modernCountries].sort(byName).map((country) => ({
+      value: `m:${country.id}`,
+      label: country.flagEmoji ? `${country.flagEmoji} ${country.name}` : country.name,
+      meta: '현대',
+      keywords: keywordsOf(country as CountrySearchShape),
+    }))
+    const historical: SearchOption[] = boostByHintYearRange([...historicalCountries].sort(byName), hint).map(
+      (country) => {
+        const period = formatCountryPeriod(country, { variant: 'short' })
+        return {
+          value: `h:${country.id}`,
+          label: country.name,
+          meta: period ? `역사 · ${period}` : '역사',
+          keywords: keywordsOf(country as CountrySearchShape),
+        }
+      },
+    )
+    const hintEnd = hint.endYear ?? hint.startYear
+    return hintEnd != null && hintEnd < 1945 ? [...historical, ...modern] : [...modern, ...historical]
+  }, [modernCountries, historicalCountries, birthEra, birthYear, deathEra, deathYear])
+
+  const handleNationalityChange = (next: string) => {
+    if (!next) {
+      setCountryId('')
+      setHistoricalCountryId('')
+      setCountryName('')
+      markDirty()
+      return
+    }
+    const isHistorical = next.startsWith('h:')
+    const id = next.slice(2)
+    const country = isHistorical
+      ? historicalCountries.find((entry) => entry.id === id)
+      : modernCountries.find((entry) => entry.id === id)
+    if (country) handleCountrySelect({ id, name: country.name, isHistorical })
   }
 
   /**
@@ -1640,7 +1695,6 @@ export function PersonRegisterView({
   // 날짜·국가·인물·가문·종교 선택 모달 또는 등록완료 다이얼로그가 떠 있으면
   // ⌘Enter가 그 모달의 입력 중 폼을 제출해버리지 않도록 단축키를 막는다.
   const anyModalOpen =
-    showCountryModal ||
     showBirthDateModal ||
     showDeathDateModal ||
     showFatherModal ||
@@ -3071,21 +3125,20 @@ export function PersonRegisterView({
                 <FieldLabel htmlFor={fid('countryId')}>
                   국적<Required>*</Required>
                 </FieldLabel>
-                <SelectBtn
+                <InlineSearchSelect
                   id={fid('countryId')}
-                  data-jump-target="countryId"
-                  type="button"
-                  $hasValue={!!countryName}
-                  $error={!!errors.countryId}
-                  aria-invalid={!!errors.countryId}
-                  aria-describedby={
-                    errors.countryId ? fid('countryId-err') : undefined
-                  }
-                  onClick={() => setShowCountryModal(true)}
-                >
-                  <span>{countryName || '국가 선택 (현대·역사)'}</span>
-                  <FiChevronDown size={18} />
-                </SelectBtn>
+                  dataJumpTarget="countryId"
+                  ariaLabel="국적"
+                  placeholder="국가 검색 (현대·역사)"
+                  options={nationalityOptions}
+                  value={nationalityValue}
+                  selectedLabelFallback={countryName}
+                  onChange={handleNationalityChange}
+                  limit={NATIONALITY_OPTION_LIMIT}
+                  error={!!errors.countryId}
+                  ariaInvalid={!!errors.countryId}
+                  ariaDescribedBy={errors.countryId ? fid('countryId-err') : undefined}
+                />
                 {errors.countryId && (
                   <FieldError id={fid('countryId-err')} role="alert">
                     <FiAlertCircle size={13} />
@@ -3628,16 +3681,6 @@ export function PersonRegisterView({
         onCancel={handleClosePostSuccess}
       />
 
-      <CountryPicker
-        mode="single"
-        isOpen={showCountryModal}
-        onClose={() => setShowCountryModal(false)}
-        onSelect={handleCountrySelect}
-        modernCountries={modernCountries}
-        historicalCountries={historicalCountries}
-        title="국적 선택"
-        selectedIds={primaryCountryId ? [primaryCountryId] : []}
-      />
       <CountryPicker
         mode="single"
         isOpen={affCountryPickerRow !== null}

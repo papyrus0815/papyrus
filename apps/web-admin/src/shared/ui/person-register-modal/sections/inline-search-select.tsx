@@ -40,6 +40,11 @@ interface InlineSearchSelectProps {
   dataJumpTarget?: string
   /** 선택 해제(×) 버튼 노출 여부 (기본 true) */
   clearable?: boolean
+  /**
+   * 옵션이 아직 안 왔을 때 보일 선택값 라벨 — 수정 모드에서 목록 로드 전에 칸이 빈 것처럼 보이지 않게.
+   * 옵션에 그 값이 있으면 옵션 라벨이 이긴다.
+   */
+  selectedLabelFallback?: string
 }
 
 export function InlineSearchSelect({
@@ -57,6 +62,7 @@ export function InlineSearchSelect({
   ariaDescribedBy,
   dataJumpTarget,
   clearable = true,
+  selectedLabelFallback,
 }: InlineSearchSelectProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -70,11 +76,13 @@ export function InlineSearchSelect({
   const selectedLabel = useMemo(
     // value '' 은 '선택 안 함'이 아니라 미선택 — placeholder가 보이도록 빈 라벨
     () =>
-      value ? (options.find((option) => option.value === value)?.label ?? '') : '',
-    [options, value],
+      value
+        ? (options.find((option) => option.value === value)?.label ?? selectedLabelFallback ?? '')
+        : '',
+    [options, value, selectedLabelFallback],
   )
 
-  const filtered = useMemo(() => {
+  const { filtered, hiddenCount } = useMemo(() => {
     const list = options.filter((option) => option.value)
     const text = query.trim().toLowerCase()
     const matched = text
@@ -85,7 +93,9 @@ export function InlineSearchSelect({
             (option.keywords && option.keywords.toLowerCase().includes(text)),
         )
       : list
-    return limit ? matched.slice(0, limit) : matched
+    const shown = limit ? matched.slice(0, limit) : matched
+    /* 캡에 걸려 안 보이는 수 — 말없이 자르지 않고 '외 N개'로 알린다 */
+    return { filtered: shown, hiddenCount: matched.length - shown.length }
   }, [options, query, limit])
 
   useEffect(() => {
@@ -271,6 +281,7 @@ export function InlineSearchSelect({
               {option.meta && <OptionMeta>{option.meta}</OptionMeta>}
             </Option>
           ))}
+          {hiddenCount > 0 && <MoreHint>외 {hiddenCount}개 — 검색어로 좁혀 보세요</MoreHint>}
           {onCreateNew && (
             <CreateRow
               id={`${listId}-opt-${filtered.length}`}
@@ -424,6 +435,12 @@ const Empty = styled.div`
   font-size: ${FONT.meta};
   color: ${({ theme }) => theme.colors.text.tertiary};
   text-align: center;
+`
+
+const MoreHint = styled.div`
+  padding: 6px 10px 4px;
+  font-size: ${FONT.meta};
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const CreateRow = styled.button<{ $active?: boolean }>`
