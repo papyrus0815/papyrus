@@ -124,6 +124,8 @@ interface DetailActorsProps {
   onCountryClick: (countryId: string) => void
   onStartSides?: () => void
   onManageSides?: () => void
+  /** 참여 요약판의 '수치 자세히' — 수치 모듈로 */
+  onShowMetrics?: () => void
 }
 
 export function DetailActors({
@@ -135,6 +137,7 @@ export function DetailActors({
   onCountryClick,
   onStartSides,
   onManageSides,
+  onShowMetrics,
 }: DetailActorsProps) {
   const [viewMode, setViewMode] = useState<ActorsViewMode>('board')
   const [showInfographic, setShowInfographic] = useState(true)
@@ -732,6 +735,7 @@ export function DetailActors({
               readOnly={readOnly}
               onStartSides={onStartSides}
               onManageSides={onManageSides}
+              onShowMetrics={onShowMetrics}
               onCountryClick={onCountryClick}
               onPersonClick={onPersonClick}
             />

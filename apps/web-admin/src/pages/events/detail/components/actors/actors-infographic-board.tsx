@@ -2,10 +2,7 @@ import { useMemo } from 'react'
 
 import styled, { useTheme } from 'styled-components'
 
-import {
-  formatObservationValue,
-  observationExtent,
-} from '@/entities/evidence/lib/format-observation'
+import { formatObservationValue } from '@/entities/evidence/lib/format-observation'
 import {
   type SegmentSlice,
   StackedSegmentBar,
@@ -26,66 +23,40 @@ import { type Observation, type StructuredPoint } from '@/shared/api/evidence'
 import { type EventDetail } from '../../use-event-detail'
 import { toAxisSpan } from '../development-timeline.lib'
 import { withSideColors } from '../side-colors'
-import { LOSS_METRIC_PRIORITY, PERSONNEL_METRIC, representativeOf } from '../side-metrics.lib'
+import { buildMemberCells, buildSideMetricRows, sideSizeOf } from '../side-metrics.lib'
 import { SIDE_OUTCOME_LABEL } from '../side-outcome'
 import {
   type CountryRowData,
   countryRowKey,
-  delegationKeyOf,
+  countrySideMapOf,
+  effectivePersonSide,
   type EventPersonEntry,
   formatPointShort,
 } from './actors.lib'
 
+/*
+ * 역할 묶음 — 색은 묶음마다 고정하지 않고 **무채 짙기 사다리**로 칠한다. 예전 역할 색(주도 파랑 #2563eb·중재 호박)이
+ * 바로 위 진영 막대의 진영 색(1번 파랑 #1d4ed8·5번 호박 #a16207)과 같은 자리에 서서 '주도국 = 1번 진영'처럼 읽혔다.
+ * 이름·개수는 범례가 말한다.
+ */
 const ROLE_GROUP_CONFIG: ReadonlyArray<{
   key: string
   label: string
   roles: ReadonlyArray<string>
-  lightColor: string
-  darkColor: string
 }> = [
-  {
-    key: 'initiator',
-    label: '주도·선포',
-    roles: ['INITIATOR'],
-    lightColor: '#2563eb',
-    darkColor: '#60a5fa',
-  },
-  {
-    key: 'target',
-    label: '대상·피해',
-    roles: ['TARGET', 'VICTIM'],
-    lightColor: '#dc2626',
-    darkColor: '#f87171',
-  },
-  {
-    key: 'beneficiary',
-    label: '수혜',
-    roles: ['BENEFICIARY'],
-    lightColor: '#059669',
-    darkColor: '#34d399',
-  },
-  {
-    key: 'mediator',
-    label: '중재·참관',
-    roles: ['MEDIATOR', 'OBSERVER'],
-    lightColor: '#d97706',
-    darkColor: '#fbbf24',
-  },
-  {
-    key: 'statehood',
-    label: '성립·소멸',
-    roles: ['FOUNDED', 'DISSOLVED'],
-    lightColor: '#7c3aed',
-    darkColor: '#c4b5fd',
-  },
-  {
-    key: 'participant',
-    label: '일반 참여',
-    roles: ['PARTICIPANT', 'ALLY', 'ADVERSARY', 'OTHER'],
-    lightColor: '#64748b',
-    darkColor: '#94a3b8',
-  },
+  { key: 'initiator', label: '주도·선포', roles: ['INITIATOR'] },
+  { key: 'target', label: '대상·피해', roles: ['TARGET', 'VICTIM'] },
+  { key: 'beneficiary', label: '수혜', roles: ['BENEFICIARY'] },
+  { key: 'mediator', label: '중재·참관', roles: ['MEDIATOR', 'OBSERVER'] },
+  { key: 'statehood', label: '성립·소멸', roles: ['FOUNDED', 'DISSOLVED'] },
+  { key: 'participant', label: '일반 참여', roles: ['PARTICIPANT', 'ALLY', 'ADVERSARY', 'OTHER'] },
 ]
+
+const ROLE_RAMP_LIGHT = ['#1e293b', '#475569', '#64748b', '#94a3b8', '#cbd5e1', '#e2e8f0'] as const
+const ROLE_RAMP_DARK = ['#f1f5f9', '#cbd5e1', '#94a3b8', '#64748b', '#475569', '#334155'] as const
+
+/** 중도 가담·이탈 막대에 싣는 나라 수 — 넘으면 '외 N개국'으로 알린다(예전엔 말없이 잘렸다) */
+const TIMELINE_LIMIT = 4
 
 function pointToDecimalYear(point: StructuredPoint | null | undefined): number | null {
   if (!point) return null
@@ -107,15 +78,6 @@ function sideMemberLabel(countryCount: number, personCount: number): string {
     .join(' · ')
 }
 
-function pickHeadlineObservation(list: ReadonlyArray<Observation>): Observation | null {
-  for (const metricKey of [PERSONNEL_METRIC, ...LOSS_METRIC_PRIORITY]) {
-    const matching = list.filter((entry) => entry.metric.key === metricKey)
-    const chosen = representativeOf(matching) ?? matching[0]
-    if (chosen) return chosen
-  }
-  return null
-}
-
 export interface ActorsInfographicBoardProps {
   event: EventDetail
   countryRows: CountryRowData[]
@@ -127,6 +89,8 @@ export interface ActorsInfographicBoardProps {
   onManageSides?: () => void
   onCountryClick: (countryId: string) => void
   onPersonClick: (personId: string) => void
+  /** 수치 모듈로 — 대립 막대의 숫자를 자세히(지표별 비교·출처) */
+  onShowMetrics?: () => void
 }
 
 export function ActorsInfographicBoard({
@@ -135,6 +99,7 @@ export function ActorsInfographicBoard({
   persons,
   observations,
   onCountryClick,
+  onShowMetrics,
 }: ActorsInfographicBoardProps) {
   const theme = useTheme()
   const isDarkMode = theme.mode === 'dark'
@@ -146,125 +111,79 @@ export function ActorsInfographicBoard({
 
   const roleSlices = useMemo<SegmentSlice[]>(() => {
     if (countryRows.length === 0) return []
-    return ROLE_GROUP_CONFIG.map((group) => {
-      const matchedCount = countryRows.filter((row) =>
-        group.roles.includes(row.role || 'PARTICIPANT'),
-      ).length
-      return {
-        key: group.key,
-        label: group.label,
-        value: matchedCount,
-        color: isDarkMode ? group.darkColor : group.lightColor,
-      }
-    }).filter((slice) => slice.value > 0)
+    const ramp = isDarkMode ? ROLE_RAMP_DARK : ROLE_RAMP_LIGHT
+    return ROLE_GROUP_CONFIG.map((group) => ({
+      key: group.key,
+      label: group.label,
+      value: countryRows.filter((row) => group.roles.includes(row.role || 'PARTICIPANT')).length,
+    }))
+      .filter((slice) => slice.value > 0)
+      /* 있는 묶음끼리 사다리 순번 — 이웃한 조각이 늘 다른 짙기 */
+      .map((slice, index) => ({ ...slice, color: ramp[index % ramp.length] }))
   }, [countryRows, isDarkMode])
 
+  /**
+   * 진영 세력 — 규모 값은 수치 모듈과 **같은 판정**(sideSizeOf: 대표값·'~이상' 제외, 진영 값 없으면 나라 합).
+   * 예전엔 한쪽만 병력이 있으면 다른 쪽을 '나라 수×2+인물 수'로 채워 단위가 섞였다(자유군단 진압 사건:
+   * 진압군 3,000명 대 봉기군 '3' — 봉기군 막대가 0.1%). 이제 막대는 모두 같은 단위일 때만 비례로 그린다.
+   */
   const sideStats = useMemo(() => {
     if (coloredSides.length < 2) return null
 
-    const sideObsMap = new Map<string, Observation[]>()
-    const participantObsMap = new Map<string, Observation[]>()
-    for (const obs of observations) {
-      if (obs.subjectType === 'EVENT_SIDE') {
-        sideObsMap.set(obs.subjectId, [...(sideObsMap.get(obs.subjectId) ?? []), obs])
-      } else if (obs.subjectType === 'EVENT_PARTICIPANT') {
-        participantObsMap.set(obs.subjectId, [
-          ...(participantObsMap.get(obs.subjectId) ?? []),
-          obs,
-        ])
+    const sideIds = coloredSides.map((side) => side.id)
+    const metricRows = buildSideMetricRows(observations, sideIds)
+    const participantSide = new Map<string, { sideId: string; name: string }>()
+    for (const row of countryRows) {
+      if (row.participantId && row.sideId && sideIds.includes(row.sideId)) {
+        participantSide.set(row.participantId, { sideId: row.sideId, name: row.name })
       }
     }
-
-    const countrySideLookup = new Map(
-      countryRows.map((row) => [countryRowKey(row), row.sideId] as const),
+    const memberCells = buildMemberCells(observations, participantSide)
+    /* 인물 진영 — 참여 목록·진영 탭과 같은 실효 진영(인물 진영 > 소속국 진영) */
+    const countrySideByKey = countrySideMapOf(
+      countryRows.filter((row) => !row.isHistorical),
+      countryRows.filter((row) => row.isHistorical),
     )
-
-    let sharedMetricKey: string | null = null
-    let sharedMetricName: string | null = null
-    for (const metricKey of [PERSONNEL_METRIC, ...LOSS_METRIC_PRIORITY]) {
-      const hasAny = observations.some((obs) => obs.metric.key === metricKey)
-      if (hasAny) {
-        sharedMetricKey = metricKey
-        sharedMetricName =
-          observations.find((obs) => obs.metric.key === metricKey)?.metric.name ?? null
-        break
-      }
-    }
 
     const items = coloredSides.map((side) => {
       const sideCountries = countryRows.filter((row) => row.sideId === side.id)
-      const sidePersons = persons.filter((person) => {
-        if (person.sideId === side.id) return true
-        if (!person.sideId) {
-          const delKey = delegationKeyOf(person)
-          if (delKey && countrySideLookup.get(delKey) === side.id) return true
-        }
-        return false
-      })
-
-      let numericForce: number | null = null
-      let forceLabel: string | null = null
-
-      if (sharedMetricKey) {
-        const directList = (sideObsMap.get(side.id) ?? []).filter(
-          (obs) => obs.metric.key === sharedMetricKey,
-        )
-        const directPick = representativeOf(directList) ?? directList[0]
-        if (directPick) {
-          numericForce = observationExtent(directPick)?.center ?? null
-          forceLabel = formatObservationValue(directPick)
-        } else {
-          let sum = 0
-          let sampleObs: Observation | null = null
-          for (const country of sideCountries) {
-            if (!country.participantId) continue
-            const partList = (participantObsMap.get(country.participantId) ?? []).filter(
-              (obs) => obs.metric.key === sharedMetricKey,
-            )
-            const picked = representativeOf(partList) ?? partList[0]
-            const center = picked ? observationExtent(picked)?.center : null
-            if (picked && center != null) {
-              sum += center
-              sampleObs = sampleObs ?? picked
-            }
-          }
-          if (sampleObs && sum > 0) {
-            numericForce = sum
-            forceLabel = formatObservationValue({
-              ...sampleObs,
-              value: String(Math.round(sum)),
-              low: null,
-              high: null,
-              atLeast: false,
-            })
-          }
-        }
-      } else {
-        const fallbackObs = pickHeadlineObservation(sideObsMap.get(side.id) ?? [])
-        if (fallbackObs) {
-          numericForce = observationExtent(fallbackObs)?.center ?? null
-          forceLabel = `${fallbackObs.metric.name} ${formatObservationValue(fallbackObs)}`
-        }
-      }
-
-      const fallbackWeight = Math.max(1, sideCountries.length * 2 + sidePersons.length)
+      const personCount = persons.filter(
+        (person) => effectivePersonSide(person, countrySideByKey).sideId === side.id,
+      ).length
+      const size = sideSizeOf(metricRows, memberCells, side.id)
+      const forceLabel = size
+        ? formatObservationValue(
+            size.derived
+              ? { ...size.observation, value: String(Math.round(size.value)), low: null, high: null, atLeast: false }
+              : size.observation,
+          )
+        : null
       return {
         id: side.id,
         name: side.name,
         color: side.color,
         outcome: side.outcome ? SIDE_OUTCOME_LABEL[side.outcome] : null,
         countries: sideCountries,
-        personCount: sidePersons.length,
-        numericForce,
-        forceLabel,
-        weight: numericForce != null && numericForce > 0 ? numericForce : fallbackWeight,
+        personCount,
+        size,
+        forceLabel: forceLabel && size?.derived ? `${forceLabel} (나라 합)` : forceLabel,
+        countWeight: Math.max(1, sideCountries.length * 2 + personCount),
       }
     })
 
-    const hasNumericComparison = items.some((item) => item.numericForce != null)
+    const measured = items.filter((item) => item.size)
+    /* 'numeric' = 모두 규모 값 · 'count' = 아무도 없음(참여 국가·인물 수로) · 'mixed' = 일부만(막대를 그리지 않는다) */
+    const mode: 'numeric' | 'count' | 'mixed' =
+      measured.length === items.length ? 'numeric' : measured.length === 0 ? 'count' : 'mixed'
+    const metricNames = [...new Set(measured.map((item) => item.size!.metricName))]
     return {
-      metricName: hasNumericComparison ? sharedMetricName : null,
-      items,
+      mode,
+      metricName: mode === 'count' ? null : metricNames.join(' · '),
+      missingNames: items.filter((item) => !item.size).map((item) => item.name),
+      items: items.map((item) => ({
+        ...item,
+        weight: mode === 'numeric' ? item.size!.value : item.countWeight,
+      })),
     }
   }, [coloredSides, observations, countryRows, persons])
 
@@ -276,8 +195,10 @@ export function ActorsInfographicBoard({
     if (timedRows.length === 0) return null
 
     const sideColorMap = new Map(coloredSides.map((side) => [side.id, side.color] as const))
+    /* 진영 없는 나라 — 진영 색과 헷갈리지 않는 무채색 */
+    const neutralColor = isDarkMode ? '#94a3b8' : '#64748b'
 
-    const bars = timedRows.slice(0, 4).map((row) => {
+    const bars = timedRows.slice(0, TIMELINE_LIMIT).map((row) => {
       const joinVal = pointToDecimalYear(row.join)
       const withdrawVal = pointToDecimalYear(row.withdraw)
       const startRatio =
@@ -292,7 +213,7 @@ export function ActorsInfographicBoard({
         key: countryRowKey(row),
         id: row.id,
         name: row.name,
-        color: (row.sideId && sideColorMap.get(row.sideId)) || '#4f46e5',
+        color: (row.sideId && sideColorMap.get(row.sideId)) || neutralColor,
         leftPct: Math.round(startRatio * 100),
         widthPct: Math.max(6, Math.round((endRatio - startRatio) * 100)),
         periodText: [joinText && `${joinText}~`, withdrawText && `~${withdrawText}`]
@@ -305,8 +226,9 @@ export function ActorsInfographicBoard({
       startLabel: formatAxisYear(axis.from),
       endLabel: formatAxisYear(axis.to),
       bars,
+      hiddenCount: timedRows.length - bars.length,
     }
-  }, [event, countryRows, coloredSides])
+  }, [event, countryRows, coloredSides, isDarkMode])
 
   /* 역할이 '일반 참여' 한 가지뿐이면 막대가 말해 주는 것이 없다 */
   const showRoleLine = roleSlices.length >= 2
@@ -326,8 +248,13 @@ export function ActorsInfographicBoard({
             <StripTitleRow>
               <StripTitle>진영 세력 대립 구도</StripTitle>
               <MetricTag $accent={Boolean(sideStats.metricName)}>
-                {sideStats.metricName ?? '참여 규모'}
+                {sideStats.metricName ?? '참여 규모 (국가·인물 수)'}
               </MetricTag>
+              {onShowMetrics && sideStats.mode !== 'count' && (
+                <MetricsLink type="button" onClick={onShowMetrics}>
+                  수치 자세히 ↓
+                </MetricsLink>
+              )}
             </StripTitleRow>
           </StripHead>
 
@@ -350,15 +277,33 @@ export function ActorsInfographicBoard({
                   ))}
                 </DuelHeaderRow>
 
-                <DuelTugTrack aria-hidden>
-                  {sideStats.items.map((sideItem) => (
-                    <DuelTugBar
-                      key={sideItem.id}
-                      $color={sideItem.color}
-                      style={{ flexGrow: sideItem.weight }}
-                    />
-                  ))}
-                </DuelTugTrack>
+                {sideStats.mode === 'mixed' ? (
+                  <TugNote>
+                    {sideStats.missingNames.join(' · ')}의 {sideStats.metricName} 기록이 없어 막대를 그리지 않습니다
+                  </TugNote>
+                ) : (
+                  <DuelTugTrack
+                    role="img"
+                    aria-label={`${sideStats.metricName ?? '참여 규모(국가·인물 수)'} 비교: ${sideStats.items
+                      .map(
+                        (sideItem) =>
+                          `${sideItem.name} ${
+                            sideStats.mode === 'numeric'
+                              ? sideItem.forceLabel
+                              : sideMemberLabel(sideItem.countries.length, sideItem.personCount)
+                          }`,
+                      )
+                      .join(', ')}`}
+                  >
+                    {sideStats.items.map((sideItem) => (
+                      <DuelTugBar
+                        key={sideItem.id}
+                        $color={sideItem.color}
+                        style={{ flexGrow: sideItem.weight }}
+                      />
+                    ))}
+                  </DuelTugTrack>
+                )}
 
                 <DuelFlagsRow>
                   {sideStats.items.map((sideItem, sideIdx) => (
@@ -398,17 +343,24 @@ export function ActorsInfographicBoard({
                           <span>{sideMemberLabel(sideItem.countries.length, sideItem.personCount)}</span>
                         </DuelSideMetrics>
                       </MultiSideHead>
-                      <MultiSideBarTrack>
-                        <MultiSideBarFill
-                          $color={sideItem.color}
-                          style={{
-                            width: `${Math.max(8, Math.round((sideItem.weight / maxWeight) * 100))}%`,
-                          }}
-                        />
-                      </MultiSideBarTrack>
+                      {sideStats.mode !== 'mixed' && (
+                        <MultiSideBarTrack aria-hidden>
+                          <MultiSideBarFill
+                            $color={sideItem.color}
+                            style={{
+                              width: `${Math.max(8, Math.round((sideItem.weight / maxWeight) * 100))}%`,
+                            }}
+                          />
+                        </MultiSideBarTrack>
+                      )}
                     </MultiSideRow>
                   ))
                 })()}
+                {sideStats.mode === 'mixed' && (
+                  <TugNote>
+                    {sideStats.missingNames.join(' · ')}의 {sideStats.metricName} 기록이 없어 막대를 그리지 않습니다
+                  </TugNote>
+                )}
               </MultiSideList>
             )}
 
@@ -439,6 +391,9 @@ export function ActorsInfographicBoard({
                       <TimelinePeriodText>{bar.periodText}</TimelinePeriodText>
                     </TimelineRow>
                   ))}
+                  {timelineSpans.hiddenCount > 0 && (
+                    <TimelineMore>외 {timelineSpans.hiddenCount}개국 — 참여 목록에서 모두 봅니다</TimelineMore>
+                  )}
                 </TimelineRows>
               </TimelineMiniBox>
             )}
@@ -546,6 +501,37 @@ const MetricTag = styled.span<{ $accent?: boolean }>`
     $accent ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
   font-size: 10.5px;
   font-weight: 700;
+`
+
+const MetricsLink = styled.button`
+  margin-left: auto;
+  padding: 2px 4px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+`
+
+const TugNote = styled.p`
+  margin: 0;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const TimelineMore = styled.div`
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const StripBody = styled.div`

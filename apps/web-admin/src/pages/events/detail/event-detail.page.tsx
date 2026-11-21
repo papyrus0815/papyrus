@@ -1175,6 +1175,9 @@ function EventDetailContent({
                       onManageSides={
                         trashedView ? undefined : () => jumpToSection('module-sides')
                       }
+                      onShowMetrics={
+                        enabledModules.includes('metrics') ? () => jumpToSection('module-metrics') : undefined
+                      }
                     />
                   )}
                   {trashedView && !isVisible('actors') && isCollection && (
