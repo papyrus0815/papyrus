@@ -14,6 +14,7 @@ import styled from 'styled-components'
 
 import {
   PlaceSelect as PlaceAutocomplete,
+  type PlaceHistoryEntry,
   type PlaceResult,
 } from '@/shared/ui/place-autocomplete/place-autocomplete'
 import {
@@ -37,6 +38,10 @@ export interface PlaceFieldsProps {
   /** 출생지를 사망지로 복사하는 핸들러 — 부모가 토스트까지 처리 */
   onCopyBirthToDeathPlace: () => void
   markDirty: () => void
+  /** 다른 인물들이 적은 출생지·사망지 — 드롭다운 후보(같은 국적 인물 것이 앞) */
+  placeHistory?: ReadonlyArray<PlaceHistoryEntry>
+  /** 장소 목록을 처음 열 때 — 부모가 인물 풀을 늦게 불러온다 */
+  onPlaceListOpen?: () => void
 }
 
 export function PlaceFields({
@@ -49,6 +54,8 @@ export function PlaceFields({
   setDeathCityId,
   onCopyBirthToDeathPlace,
   markDirty,
+  placeHistory,
+  onPlaceListOpen,
 }: PlaceFieldsProps) {
   return (
     <FormRows>
@@ -66,6 +73,8 @@ export function PlaceFields({
                   markDirty()
                 }}
                 countryId={countryId || undefined}
+                history={placeHistory}
+                onOpen={onPlaceListOpen}
               />
             </PlaceAutocompleteWrap>
           </FieldControl>
@@ -96,6 +105,8 @@ export function PlaceFields({
                   markDirty()
                 }}
                 countryId={countryId || undefined}
+                history={placeHistory}
+                onOpen={onPlaceListOpen}
               />
             </PlaceAutocompleteWrap>
           </FieldControl>

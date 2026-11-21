@@ -1451,6 +1451,36 @@ export function PersonRegisterView({
     [modernCountries, historicalCountries, lifespanHint],
   )
 
+  /**
+   * 장소 후보 — 다른 인물들이 적은 출생지·사망지(직접 입력 텍스트). DB 도시가 3개뿐이라 이게 가장 쓸모 있는 후보다
+   * (2026-11 실측: 출생지 250명·사망지 332명, 서로 다른 지명 226종). 같은 국적 인물 것을 앞에, 그다음 많이 쓴 순.
+   */
+  const placeHistory = useMemo(() => {
+    const byText = new Map<string, { text: string; count: number; inScope: number }>()
+    for (const person of persons) {
+      if (person.id === editPersonId) continue
+      const sameNationality =
+        !!primaryCountryId &&
+        (person.countryId === primaryCountryId || person.historicalCountryId === primaryCountryId)
+      for (const raw of [person.birthPlaceText, person.deathPlaceText]) {
+        const text = raw?.trim()
+        if (!text) continue
+        const entry = byText.get(text) ?? { text, count: 0, inScope: 0 }
+        entry.count += 1
+        if (sameNationality) entry.inScope += 1
+        byText.set(text, entry)
+      }
+    }
+    return [...byText.values()]
+      .sort(
+        (left, right) =>
+          Number(right.inScope > 0) - Number(left.inScope > 0) ||
+          right.count - left.count ||
+          left.text.localeCompare(right.text, 'ko'),
+      )
+      .map(({ text, count }) => ({ text, count }))
+  }, [persons, editPersonId, primaryCountryId])
+
   const handleNationalityChange = (next: string) => {
     if (!next) {
       setCountryId('')
@@ -3390,6 +3420,8 @@ export function PersonRegisterView({
         setDeathCityId={setDeathCityId}
         onCopyBirthToDeathPlace={handleCopyBirthToDeathPlace}
         markDirty={markDirty}
+        placeHistory={placeHistory}
+        onPlaceListOpen={loadPersons}
       />
       <LifeSection
         mode="details"

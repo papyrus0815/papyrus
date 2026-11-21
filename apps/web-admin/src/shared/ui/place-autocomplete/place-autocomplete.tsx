@@ -11,10 +11,14 @@
  *  - 탭을 바꾸면 값이 지워졌고, 선택 결과가 입력칸 아래 뱃지로 한 번 더 그려졌다.
  *
  * 값 계약(PlaceResult)은 그대로 — 호출부(인물 등록·군부대 주둔지) 무변경.
+ *
+ * 2026-11-21 드롭다운화: 칸을 누르면 바로 목록이 열린다(▾). 비었으면 '자주 쓴 장소'(다른 인물이 적은 지명,
+ * history), 치면 '직접 입력'(친 그대로) · '등록 지역'(DB 도시·행정구역) · '다른 인물 기록' 묶음.
+ * 목록 조판은 공용 dropdown-list(국적 드롭다운과 같은 문법).
  */
-import React, { useEffect, useId, useRef, useState } from 'react'
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react'
 
-import { FiMapPin, FiX } from 'react-icons/fi'
+import { FiCheck, FiChevronDown, FiClock, FiEdit3, FiMapPin, FiX } from 'react-icons/fi'
 import styled, { keyframes } from 'styled-components'
 
 import {
@@ -23,7 +27,18 @@ import {
   cityApi,
 } from '@/shared/api/city'
 import { type Country, countryApi } from '@/shared/api/country'
-import { Z_INDEX } from '@/shared/styles/z-index'
+import {
+  DropdownEmpty,
+  DropdownFoot,
+  DropdownGroupLabel,
+  DropdownOption,
+  DropdownSurface,
+  OptionBody,
+  OptionCheck,
+  OptionLeading,
+  OptionMeta,
+} from '@/shared/ui/dropdown-list/dropdown-list.styles'
+import { HighlightedText } from '@/shared/ui/highlighted-text'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -51,6 +66,19 @@ export interface PlaceSelectProps {
   /** @deprecated 강조색은 테마 토큰을 따른다 — 호환용으로만 받는다 */
   accentColor?: string
   placeholder?: string
+  /**
+   * 다른 인물들이 적은 장소(직접 입력) — 칸이 비면 '자주 쓴 장소', 치면 '다른 인물 기록'으로 뜬다.
+   * 앞에 둘 것(같은 국적 인물의 기록)을 먼저 정렬해 넘긴다.
+   */
+  history?: ReadonlyArray<PlaceHistoryEntry>
+  /** 목록을 처음 열 때 — 호출부가 후보(인물 풀)를 늦게 불러올 자리 */
+  onOpen?: () => void
+}
+
+export interface PlaceHistoryEntry {
+  text: string
+  /** 그 지명을 적은 인물 수 */
+  count: number
 }
 
 /** 제안 한 줄 — DB 도시 또는 행정구역 */
@@ -136,12 +164,28 @@ function toDivisionSuggestion(
 // Component
 // ---------------------------------------------------------------------------
 
+/** 목록 한 줄 — 직접 입력 / DB 장소 / 다른 인물 기록 */
+interface ListEntry {
+  key: string
+  group: string
+  place: PlaceResult
+  label: string
+  sub?: string
+  meta?: string
+  icon: 'manual' | 'registered' | 'history'
+}
+
+const MAX_HISTORY_DEFAULT = 8
+const MAX_HISTORY_MATCHES = 6
+
 export function PlaceSelect({
   value,
   onChange,
   countryId,
   disabled = false,
   placeholder = '지명 입력 (예: 한성부, 코르시카)',
+  history = [],
+  onOpen,
 }: PlaceSelectProps) {
   const listId = useId()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -153,6 +197,8 @@ export function PlaceSelect({
   const searchSeqRef = useRef(0)
 
   const isRegistered = !!value && !value.isManual
+  /* DB 장소를 고른 뒤엔 칸 글자가 그 이름이라 검색어로 보지 않는다(목록은 기본 묶음) */
+  const query = isRegistered && text.trim() === value?.shortName ? '' : text.trim()
 
   // 밖에서 값이 바뀌면(편집 하이드레이트·'출생지와 동일'·국가 변경으로 비움) 칸 글자를 맞춘다.
   // 직접 입력 중에는 value.shortName === text.trim()이라 커서가 튀지 않는다.
@@ -163,8 +209,7 @@ export function PlaceSelect({
 
   // 제안 검색 — 도시·행정구역을 함께, 지정 국가 것을 앞에.
   useEffect(() => {
-    const query = text.trim()
-    if (!open || !query || isRegistered) {
+    if (!open || !query) {
       setSuggestions([])
       setLoading(false)
       return
@@ -192,16 +237,65 @@ export function PlaceSelect({
         .sort((left, right) => Number(right.inScope) - Number(left.inScope))
         .slice(0, MAX_SUGGESTIONS)
       setSuggestions(merged)
-      setActiveIndex(-1)
       setLoading(false)
     }, SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timer)
-  }, [text, open, isRegistered, countryId])
+  }, [query, open, countryId])
+
+  /**
+   * 목록 — 치는 중이면 [직접 입력 · 등록 지역 · 다른 인물 기록], 비었으면 [자주 쓴 장소].
+   * 예전엔 글자를 쳐야만, 그것도 DB 제안이 있을 때만 목록이 떠서(DB 도시 3개) 사실상 드롭다운이 없었다.
+   * 인물들이 이미 적은 지명(직접 입력 226종)이 가장 쓸모 있는 후보다.
+   */
+  const entries = useMemo<ListEntry[]>(() => {
+    const list: ListEntry[] = []
+    const lowered = query.toLowerCase()
+    if (query) {
+      list.push({
+        key: 'manual',
+        group: '직접 입력',
+        place: { displayName: query, shortName: query, isManual: true },
+        label: query,
+        sub: '친 그대로 저장합니다',
+        icon: 'manual',
+      })
+      for (const suggestion of suggestions) {
+        list.push({
+          key: suggestion.key,
+          group: '등록 지역',
+          place: suggestion.place,
+          label: suggestion.place.shortName,
+          sub: suggestion.context || undefined,
+          meta: suggestion.kind,
+          icon: 'registered',
+        })
+      }
+    }
+    const historyMatches = (query
+      ? history.filter(
+          (entry) => entry.text.toLowerCase().includes(lowered) && entry.text.toLowerCase() !== lowered,
+        )
+      : history
+    ).slice(0, query ? MAX_HISTORY_MATCHES : MAX_HISTORY_DEFAULT)
+    for (const entry of historyMatches) {
+      list.push({
+        key: `history:${entry.text}`,
+        group: query ? '다른 인물 기록' : '자주 쓴 장소',
+        place: { displayName: entry.text, shortName: entry.text, isManual: true },
+        label: entry.text,
+        meta: entry.count > 1 ? `${entry.count}명` : undefined,
+        icon: 'history',
+      })
+    }
+    return list
+  }, [query, suggestions, history])
 
   /** 친 글자가 곧 값 — '저장' 단계 없음 */
   const handleType = (next: string) => {
     setText(next)
     setOpen(true)
+    /* 치는 중엔 '직접 입력' 행이 활성 — Enter가 친 글자를 그대로 둔다 */
+    setActiveIndex(next.trim() ? 0 : -1)
     const trimmed = next.trim()
     onChange(
       trimmed
@@ -210,9 +304,9 @@ export function PlaceSelect({
     )
   }
 
-  const pick = (suggestion: Suggestion) => {
-    onChange(suggestion.place)
-    setText(suggestion.place.shortName)
+  const pick = (entry: ListEntry) => {
+    onChange(entry.place)
+    setText(entry.place.shortName)
     setOpen(false)
     setActiveIndex(-1)
   }
@@ -220,28 +314,40 @@ export function PlaceSelect({
   const clear = () => {
     onChange(null)
     setText('')
-    setOpen(false)
+    setActiveIndex(-1)
     inputRef.current?.focus()
   }
 
-  const showList = open && !isRegistered && !!text.trim() && suggestions.length > 0
+  const openList = () => {
+    if (open) return
+    setOpen(true)
+    setActiveIndex(-1)
+    onOpen?.()
+  }
+
+  const showList = open && !disabled
+  const hasEntries = entries.length > 0
+
+  // 방향키로 옮긴 활성 항목을 보이게
+  useEffect(() => {
+    if (!showList || activeIndex < 0) return
+    document.getElementById(`${listId}-${activeIndex}`)?.scrollIntoView?.({ block: 'nearest' })
+  }, [activeIndex, showList, listId])
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown') {
-      if (!suggestions.length) return
       event.preventDefault()
-      setOpen(true)
-      setActiveIndex((index) => (index + 1) % suggestions.length)
+      openList()
+      if (!entries.length) return
+      setActiveIndex((index) => (index + 1) % entries.length)
     } else if (event.key === 'ArrowUp') {
-      if (!suggestions.length) return
+      if (!entries.length) return
       event.preventDefault()
-      setActiveIndex((index) =>
-        index <= 0 ? suggestions.length - 1 : index - 1,
-      )
+      setActiveIndex((index) => (index <= 0 ? entries.length - 1 : index - 1))
     } else if (event.key === 'Enter') {
-      // 폼 조기 제출 방지 — 제안을 고르거나, 없으면 친 글자를 그대로 두고 닫는다
+      // 폼 조기 제출 방지 — 항목을 고르거나, 없으면 친 글자를 그대로 두고 닫는다
       event.preventDefault()
-      if (showList && activeIndex >= 0) pick(suggestions[activeIndex])
+      if (showList && activeIndex >= 0 && entries[activeIndex]) pick(entries[activeIndex])
       else setOpen(false)
     } else if (event.key === 'Escape' && showList) {
       // 셸의 Esc(모달 닫기)로 번지지 않게 — 목록만 닫는다
@@ -252,6 +358,14 @@ export function PlaceSelect({
       setOpen(false)
     }
   }
+
+  const isSelected = (entry: ListEntry) =>
+    !!value &&
+    (entry.place.cityId
+      ? entry.place.cityId === value.cityId
+      : entry.place.adminDivisionId
+        ? entry.place.adminDivisionId === value.adminDivisionId && !value.cityId
+        : !!value.isManual && entry.place.shortName === value.shortName)
 
   return (
     <Wrap>
@@ -272,7 +386,8 @@ export function PlaceSelect({
           disabled={disabled}
           autoComplete="off"
           onChange={(event) => handleType(event.target.value)}
-          onFocus={() => setOpen(true)}
+          onFocus={openList}
+          onClick={openList}
           onBlur={() => setOpen(false)}
           onKeyDown={handleKeyDown}
         />
@@ -282,45 +397,106 @@ export function PlaceSelect({
               '등록 지역'}
           </RegisteredTag>
         )}
-        {loading && open && !isRegistered && <Spinner aria-hidden="true" />}
-        {!!text && !disabled && (
+        {loading && showList && <Spinner aria-hidden="true" />}
+        {!!text && !disabled ? (
           <ClearBtn
             type="button"
+            onMouseDown={(event) => event.preventDefault()}
             onClick={clear}
             aria-label="지우기"
             title="지우기"
           >
             <FiX size={13} />
           </ClearBtn>
+        ) : (
+          <ChevronBtn
+            type="button"
+            tabIndex={-1}
+            aria-hidden="true"
+            $open={showList}
+            disabled={disabled}
+            onMouseDown={(event) => {
+              event.preventDefault()
+              if (showList) setOpen(false)
+              else {
+                inputRef.current?.focus()
+                openList()
+              }
+            }}
+          >
+            <FiChevronDown size={16} />
+          </ChevronBtn>
         )}
       </Box>
       {showList && (
-        <List id={listId} role="listbox">
-          {suggestions.map((suggestion, index) => (
-            <Option
-              key={suggestion.key}
-              id={`${listId}-${index}`}
-              role="option"
-              aria-selected={index === activeIndex}
-              $active={index === activeIndex}
-              // blur보다 먼저 — 고르기 전에 목록이 닫히지 않게
-              onMouseDown={(event) => {
-                event.preventDefault()
-                pick(suggestion)
-              }}
-              onMouseEnter={() => setActiveIndex(index)}
-            >
-              <OptionName>{suggestion.place.shortName}</OptionName>
-              {suggestion.context && (
-                <OptionContext>{suggestion.context}</OptionContext>
-              )}
-              <OptionKind>{suggestion.kind}</OptionKind>
-            </Option>
-          ))}
-          <ListFoot>
-            목록에 없으면 친 그대로 저장돼요
-          </ListFoot>
-        </List>
+        <DropdownSurface id={listId} role="listbox" aria-label="장소 후보">
+          {!hasEntries && (
+            <DropdownEmpty>
+              {loading
+                ? '찾는 중…'
+                : '지명을 입력하면 등록 지역과 다른 인물이 적은 장소에서 찾습니다. 목록에 없으면 친 그대로 저장돼요.'}
+            </DropdownEmpty>
+          )}
+          {entries.map((entry, index) => {
+            const startsGroup = entry.group !== entries[index - 1]?.group
+            const selected = isSelected(entry)
+            return (
+              <React.Fragment key={entry.key}>
+                {startsGroup && (
+                  <DropdownGroupLabel role="presentation">
+                    {entry.group}
+                    {entry.group === '등록 지역' && loading && <span className="hint">찾는 중…</span>}
+                  </DropdownGroupLabel>
+                )}
+                <DropdownOption
+                  id={`${listId}-${index}`}
+                  role="option"
+                  aria-selected={selected}
+                  $active={index === activeIndex}
+                  $selected={selected}
+                  // blur보다 먼저 — 고르기 전에 목록이 닫히지 않게
+                  onMouseDown={(event) => {
+                    event.preventDefault()
+                    pick(entry)
+                  }}
+                  onMouseEnter={() => setActiveIndex(index)}
+                >
+                  <OptionLeading aria-hidden>
+                    {entry.icon === 'manual' ? (
+                      <FiEdit3 size={14} />
+                    ) : entry.icon === 'registered' ? (
+                      <FiMapPin size={14} />
+                    ) : (
+                      <FiClock size={14} />
+                    )}
+                  </OptionLeading>
+                  <OptionBody>
+                    <span className="label">
+                      {entry.icon === 'manual' ? (
+                        `“${entry.label}”`
+                      ) : (
+                        <HighlightedText text={entry.label} query={query} />
+                      )}
+                    </span>
+                    {entry.sub && <span className="sub">{entry.sub}</span>}
+                  </OptionBody>
+                  {entry.meta && <OptionMeta>{entry.meta}</OptionMeta>}
+                  <OptionCheck $visible={selected} aria-hidden>
+                    <FiCheck size={14} />
+                  </OptionCheck>
+                </DropdownOption>
+              </React.Fragment>
+            )
+          })}
+          {hasEntries && (
+            <DropdownFoot>
+              <span>목록에 없으면 친 그대로 저장돼요</span>
+              <span aria-hidden>
+                <kbd>↑</kbd> <kbd>↓</kbd> 이동 · <kbd>Enter</kbd> 선택
+              </span>
+            </DropdownFoot>
+          )}
+        </DropdownSurface>
       )}
     </Wrap>
   )
@@ -458,62 +634,18 @@ const ClearBtn = styled.button`
   }
 `
 
-const List = styled.div`
-  position: absolute;
-  z-index: ${Z_INDEX.DROPDOWN};
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  max-height: 280px;
-  overflow-y: auto;
-  padding: 4px;
-  /* 인물 폼 InlineSearchSelect 드롭다운과 같은 표면 */
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(28,28,32,0.98)' : '#fff'};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: 8px;
-  box-shadow: 0 8px 24px ${({ theme }) => theme.colors.shadow.md};
-`
-
-const Option = styled.div<{ $active: boolean }>`
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  background: ${({ $active, theme }) =>
-    $active ? theme.colors.activeLight : 'transparent'};
-`
-
-const OptionName = styled.span`
-  font-size: 14px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.primary};
-  white-space: nowrap;
-`
-
-const OptionContext = styled.span`
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const OptionKind = styled.span`
-  margin-left: auto;
+const ChevronBtn = styled.button<{ $open?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
   flex-shrink: 0;
-  font-size: 11px;
+  padding: 0;
   color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const ListFoot = styled.div`
-  padding: 6px 10px 4px;
-  margin-top: 2px;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+  transform: rotate(${({ $open }) => ($open ? '180deg' : '0deg')});
 `
