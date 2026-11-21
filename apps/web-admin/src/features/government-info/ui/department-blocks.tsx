@@ -23,6 +23,7 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { getSignedDateChronologyKey } from '@/shared/lib/tenure-person-utils'
 import { pathKeys } from '@/shared/router'
 import { useThemeStore } from '@/shared/styles/theme.store'
+import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import type { EventPickerSelection } from '@/shared/ui/event-picker-modal/event-picker-modal'
 import { EventPickerModal } from '@/shared/ui/event-picker-modal/event-picker-modal'
@@ -1019,9 +1020,7 @@ export function DepartmentEventsBlock({
       )}
 
       {isLoading ? (
-        <div style={{ fontSize: 12, color: tokens.textFaint }}>
-          불러오는 중…
-        </div>
+        <ChartSkeleton variant="bars" rows={3} />
       ) : events.length === 0 ? (
         !pendingEvent && (
           <div style={{ fontSize: 12.5, color: tokens.textFaint }}>

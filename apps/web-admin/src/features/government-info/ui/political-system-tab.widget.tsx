@@ -44,6 +44,7 @@ import {
 } from '@/shared/lib/ministry-department/department-cabinet-matcher'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { getSignedDateChronologyKey } from '@/shared/lib/tenure-person-utils'
+import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
 import { TenureRegisterPanel } from '@/shared/ui/tenure-register-panel/tenure-register-panel'
@@ -322,7 +323,7 @@ export function PoliticalSystemTab({
       </ToolbarSurface>
 
       {query.isLoading ? (
-        <LoadingHint>헌정 체제 기록을 불러오는 중…</LoadingHint>
+        <ChartSkeleton variant="bars" rows={4} />
       ) : systems.length === 0 ? (
         <EmptyCard>
           <EmptyIconCircle>
@@ -851,13 +852,6 @@ const PrimaryAddBtn = styled.button`
   @media (max-width: 768px) {
     height: 40px;
   }
-`
-
-const LoadingHint = styled.p`
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  text-align: center;
-  padding: 36px 0;
 `
 
 const EmptyCard = styled.div`

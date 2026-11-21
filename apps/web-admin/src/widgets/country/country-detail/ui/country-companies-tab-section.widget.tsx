@@ -1,14 +1,19 @@
+import { CountryTabEmptyState } from './country-tab-empty-state'
 import { useMemo, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
+  FiBriefcase,
+  FiClock,
   FiEdit2,
   FiExternalLink,
+  FiGlobe,
   FiPlus,
   FiSearch,
   FiTag,
   FiTrash2,
+  FiUser,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import styled, { useTheme } from 'styled-components'
@@ -51,8 +56,10 @@ import {
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { dateSortKey, parseIsoDateParts } from '@/shared/lib/iso-date'
 import { pathKeys } from '@/shared/router'
+import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
+import { SectionSubNav, SubNavFigure } from '@/shared/ui/section-sub-nav/section-sub-nav'
 import { confirm } from '@/shared/ui/confirm-dialog'
-import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
+import { AddButton } from '@/shared/ui/section-page-layout'
 import { notify } from '@/shared/ui/toast'
 import {
   COMPANY_STATUS_META,
@@ -517,11 +524,14 @@ export function CountryCompaniesTabSection({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.28, ease: [0.25, 0.46, 0.45, 0.94] }}
     >
-      <SectionTabHeader
-        variant="plain"
-        title="기업 · 상단"
-        description={`${country.name}에 설립·소속된 기업 및 시대별 상단·공방·금융기관의 존속 기간, 창업자, 본사 도시 및 이력을 관리합니다.`}
-        rightSlot={
+      {/* 제목은 위 탭('기업')이 맡는다. 목록이 비면 등록은 빈 화면의 버튼 하나만 */}
+      <SectionSubNav
+        summary={
+          <span>
+            기업·상단 <SubNavFigure>{countryCompanies.length.toLocaleString('ko-KR')}</SubNavFigure>곳
+          </span>
+        }
+        actions={
           <HeaderButtons>
             <SecondaryBtn
               type="button"
@@ -530,59 +540,40 @@ export function CountryCompaniesTabSection({
               <FiTag size={14} />
               업종 카탈로그
             </SecondaryBtn>
-            <AddButton
-              type="button"
-              onClick={() => setModalTarget('new')}
-            >
-              <FiPlus size={14} />
-              기업 등록
-            </AddButton>
+            {isLoading || countryCompanies.length === 0 ? null : (
+              <AddButton
+                type="button"
+                onClick={() => setModalTarget('new')}
+              >
+                <FiPlus size={14} />
+                기업 등록
+              </AddButton>
+            )}
           </HeaderButtons>
         }
       />
 
       {isLoading ? (
-        <LoadingBox>기업 목록을 불러오는 중…</LoadingBox>
+        <ChartSkeleton variant="bars" rows={5} />
       ) : countryCompanies.length === 0 ? (
-        <CompaniesEmptySpecGrid>
-          <CompaniesEmptySpecCell>
-            <CompaniesEmptySpecTitle>
-              1. 소속 기업 · 상단 · 금융기관 등록
-            </CompaniesEmptySpecTitle>
-            <CompaniesEmptySpecDesc>
-              {country.name}에 설립·소속된 기업이나 역사적 특권 상단·공방·금융기관을 등록하면 설립 연도부터 현재(또는 해산 시점)까지의 존속 타임라인과 창업자·본사 정보가 정리됩니다.
-            </CompaniesEmptySpecDesc>
-            <CompaniesEmptySpecAction
-              type="button"
-              onClick={() => setModalTarget('new')}
-            >
-              + 첫 기업 등록 →
-            </CompaniesEmptySpecAction>
-          </CompaniesEmptySpecCell>
-
-          <CompaniesEmptySpecCell>
-            <CompaniesEmptySpecTitle>
-              2. 업종 카탈로그 및 전체 국가 기업 대시보드
-            </CompaniesEmptySpecTitle>
-            <CompaniesEmptySpecDesc>
-              업종 카탈로그를 구성해 산업군을 분류하거나, 전체 국가 기업 목록에서 타 국가 소속 기업들과의 설립 시기·존속 기간을 비교할 수 있습니다.
-            </CompaniesEmptySpecDesc>
-            <CompaniesEmptySpecActionRow>
-              <CompaniesEmptySpecAction
-                type="button"
-                onClick={() => setCategoriesOpen(true)}
-              >
-                업종 카탈로그 관리
-              </CompaniesEmptySpecAction>
-              <CompaniesEmptySpecAction
-                type="button"
-                onClick={() => navigate(pathKeys.companies.root())}
-              >
-                전체 기업 목록 보기 →
-              </CompaniesEmptySpecAction>
-            </CompaniesEmptySpecActionRow>
-          </CompaniesEmptySpecCell>
-        </CompaniesEmptySpecGrid>
+        <CountryTabEmptyState
+          Icon={FiBriefcase}
+          title="아직 등록된 기업이 없습니다"
+          description={`${country.name}에 설립·소속된 기업이나 시대별 상단·공방·금융기관을 등록하면 존속 기간과 창업자·본사가 정리됩니다.`}
+          actionLabel="기업 등록"
+          onAction={() => setModalTarget('new')}
+          secondaryAction={{
+            label: '전체 기업 목록',
+            Icon: FiExternalLink,
+            onClick: () => navigate(pathKeys.companies.root()),
+          }}
+          features={[
+            { Icon: FiClock, title: '존속 타임라인', description: '설립부터 현재(또는 해산)까지 기간을 막대로' },
+            { Icon: FiUser, title: '창업자 · 본사', description: '창업 인물과 본사 도시를 연결' },
+            { Icon: FiTag, title: '업종 분류', description: '업종 카탈로그로 산업군을 묶어 비교' },
+            { Icon: FiGlobe, title: '국가 간 비교', description: '전체 기업 목록에서 다른 나라 기업과 설립 시기를 비교' },
+          ]}
+        />
       ) : (
         <>
           <BentoGrid3Col aria-label="기업 요약 인포그래픽">
@@ -1202,74 +1193,6 @@ const HeaderButtons = styled.div`
 `
 
 const SecondaryBtn = styled(LedgerToolbarButton)``
-
-const CompaniesEmptySpecGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-  }
-`
-
-const CompaniesEmptySpecCell = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 20px 22px;
-
-  &:first-child {
-    border-right: 1px solid ${({ theme }) => theme.colors.border.light};
-  }
-
-  @media (max-width: 768px) {
-    &:first-child {
-      border-right: none;
-      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-    }
-  }
-`
-
-const CompaniesEmptySpecTitle = styled.div`
-  font-size: 13.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const CompaniesEmptySpecDesc = styled.p`
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const CompaniesEmptySpecActionRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 4px;
-`
-
-const CompaniesEmptySpecAction = styled.button`
-  margin-top: 4px;
-  padding: 5px 10px;
-  border-radius: 6px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-    color: ${({ theme }) => theme.colors.primary};
-    background: ${({ theme }) => theme.colors.hover};
-  }
-`
 
 const Toolbar = styled.div`
   display: flex;

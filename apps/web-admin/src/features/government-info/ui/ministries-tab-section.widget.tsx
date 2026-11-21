@@ -29,6 +29,7 @@ import {
   resolveDepartmentLifecycleStatus,
   toSignedHistoricalYear,
 } from '@/shared/lib/ministry-department/ministry-department-utils'
+import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
 import {
   EmptyStateFeatureCard,
   EmptyStateFill,
@@ -949,9 +950,7 @@ export function MinistriesTabSection({
               </EmptyStateSimple>
             </EmptyStateFill>
           ) : ministriesLoading ? (
-            <EmptyStateFill>
-              <EmptyStateSimple border="solid">불러오는 중…</EmptyStateSimple>
-            </EmptyStateFill>
+            <ChartSkeleton variant="bars" rows={5} />
           ) : displayCategoriesList.length === 0 ? (
             <EmptyStateFill>
               <EmptyStateFeatureCard

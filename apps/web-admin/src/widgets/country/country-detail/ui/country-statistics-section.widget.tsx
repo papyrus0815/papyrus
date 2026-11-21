@@ -13,11 +13,7 @@ import {
   BentoCardTitleGroup,
   BentoSubLabel,
 } from '@/entities/event/ui/bento-primitives'
-import { SectionTabHeader } from '@/shared/ui/section-page-layout'
-import {
-  UnderlineTabButton,
-  UnderlineTabNav,
-} from '@/shared/ui/underline-tabs'
+import { SectionSubNav } from '@/shared/ui/section-sub-nav/section-sub-nav'
 
 import { CountryDataManagerModal } from './country-data-manager/country-data-manager-modal'
 import { RecordsPanel } from './country-data-manager/records-panel'
@@ -105,16 +101,19 @@ export function CountryStatisticsSection({
     setSearchParams(nextParams, { replace: true })
   }
 
-  const activeMeta =
-    STAT_SUB_TABS.find((tabItem) => tabItem.key === subTab) ?? STAT_SUB_TABS[0]
 
   return (
     <Wrap>
-      <SectionTabHeader
-        variant="plain"
-        title="경제·통계"
-        description={`${countryName} · ${activeMeta.desc}`}
-        rightSlot={
+      <SectionSubNav<StatisticsSubTab>
+        ariaLabel="경제·통계 하위 탭"
+        tabs={STAT_SUB_TABS.map((tabItem) => ({
+          key: tabItem.key,
+          label: tabItem.label,
+          title: tabItem.desc,
+        }))}
+        activeTab={subTab}
+        onTabChange={handleSelectSubTab}
+        actions={
           <BentoActionBtn
             type="button"
             $accent
@@ -125,19 +124,6 @@ export function CountryStatisticsSection({
           </BentoActionBtn>
         }
       />
-
-      <UnderlineTabNav aria-label="경제·통계 하위 탭">
-        {STAT_SUB_TABS.map((tabItem) => (
-          <UnderlineTabButton
-            key={tabItem.key}
-            type="button"
-            $active={subTab === tabItem.key}
-            onClick={() => handleSelectSubTab(tabItem.key)}
-          >
-            {tabItem.label}
-          </UnderlineTabButton>
-        ))}
-      </UnderlineTabNav>
 
       {subTab === 'indicators' && (
         <TabBody>

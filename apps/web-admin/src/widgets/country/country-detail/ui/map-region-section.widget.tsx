@@ -9,12 +9,7 @@ import {
 } from '@/entities/country/api.administrative-divisions'
 import { useInfrastructures } from '@/entities/country/api.infrastructure'
 import { useNaturalFeatures } from '@/entities/country/api.natural-feature'
-import { DIGIT_DISPLAY } from '@/entities/event/ui/ledger-tokens'
-import { SectionTabHeader } from '@/shared/ui/section-page-layout'
-import {
-  UnderlineTabButton,
-  UnderlineTabNav,
-} from '@/shared/ui/underline-tabs'
+import { SectionSubNav } from '@/shared/ui/section-sub-nav/section-sub-nav'
 
 import { countryTabCanvasPadding } from './country-ledger-primitives'
 import { MapRegionAdministrativeView } from './map-region-administrative-view'
@@ -68,14 +63,6 @@ const SectionCanvas = styled.div`
   position: relative;
 `
 
-const TabCount = styled.span<{ $active?: boolean }>`
-  margin-left: 5px;
-  font-size: 11px;
-  font-weight: 700;
-  opacity: ${({ $active }) => ($active ? 0.95 : 0.65)};
-  ${DIGIT_DISPLAY}
-`
-
 /**
  * 지도 & 행정구역 섹션 — 보기 전환 탭(건수 배지) + 모드별 Event-Ledger 아틀라스 뷰 위임.
  */
@@ -118,60 +105,31 @@ export function MapRegionSection({
 
   return (
     <SectionCanvas>
-      <SectionTabHeader
-        variant="plain"
-        title="행정구역 · 지리"
-        description="행정구역 계층 편제와 시기별 개편 체계, 자연 지형, 국가 기간시설을 인포그래픽과 지도로 탐색합니다."
+      <SectionSubNav<ViewMode>
+        ariaLabel="행정구역 보기 전환"
+        tabs={[
+          {
+            key: 'administrative',
+            label: '행정구역',
+            count: divisionTotal > 0 ? divisionTotal : null,
+            title: '행정구역 계층 편제와 시기별 개편 체계',
+          },
+          {
+            key: 'nature',
+            label: '자연 지리',
+            count: natureItems.length > 0 ? natureItems.length : null,
+            title: '산·강·호수 등 자연 지형',
+          },
+          {
+            key: 'infrastructure',
+            label: '인프라',
+            count: infraItems.length > 0 ? infraItems.length : null,
+            title: '철도·항만·발전소 등 국가 기간시설',
+          },
+        ]}
+        activeTab={viewMode}
+        onTabChange={setViewMode}
       />
-
-      <UnderlineTabNav
-        role="tablist"
-        aria-label="행정구역 보기 전환"
-        style={{ marginBottom: 0 }}
-      >
-        <UnderlineTabButton
-          type="button"
-          role="tab"
-          aria-selected={viewMode === 'administrative'}
-          $active={viewMode === 'administrative'}
-          onClick={() => setViewMode('administrative')}
-        >
-          행정구역
-          {divisionTotal > 0 && (
-            <TabCount $active={viewMode === 'administrative'}>
-              {divisionTotal.toLocaleString('ko-KR')}
-            </TabCount>
-          )}
-        </UnderlineTabButton>
-        <UnderlineTabButton
-          type="button"
-          role="tab"
-          aria-selected={viewMode === 'nature'}
-          $active={viewMode === 'nature'}
-          onClick={() => setViewMode('nature')}
-        >
-          자연 지리
-          {natureItems.length > 0 && (
-            <TabCount $active={viewMode === 'nature'}>
-              {natureItems.length.toLocaleString('ko-KR')}
-            </TabCount>
-          )}
-        </UnderlineTabButton>
-        <UnderlineTabButton
-          type="button"
-          role="tab"
-          aria-selected={viewMode === 'infrastructure'}
-          $active={viewMode === 'infrastructure'}
-          onClick={() => setViewMode('infrastructure')}
-        >
-          인프라
-          {infraItems.length > 0 && (
-            <TabCount $active={viewMode === 'infrastructure'}>
-              {infraItems.length.toLocaleString('ko-KR')}
-            </TabCount>
-          )}
-        </UnderlineTabButton>
-      </UnderlineTabNav>
 
       {viewMode === 'administrative' && (
         <MapRegionAdministrativeView

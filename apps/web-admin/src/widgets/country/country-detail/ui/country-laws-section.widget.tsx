@@ -1,10 +1,15 @@
+import { CountryTabEmptyState } from './country-tab-empty-state'
 import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  FiBookOpen,
   FiChevronRight,
+  FiClock,
   FiEdit2,
+  FiLayers,
+  FiLink,
   FiPlus,
   FiSearch,
   FiTrash2,
@@ -38,6 +43,8 @@ import {
   getLaws,
   updateLaw,
 } from '@/shared/api/election'
+import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
+import { SectionSubNav, SubNavFigure } from '@/shared/ui/section-sub-nav/section-sub-nav'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { FormSidePanel } from '@/shared/ui/form-side-panel/form-side-panel'
 import {
@@ -55,12 +62,8 @@ import {
 import { notify } from '@/shared/ui/toast'
 
 import {
-  EmptyHint,
   PoliticsTabPanel,
   RowIconBtn,
-  SectionHeaderRow,
-  SectionKicker,
-  SectionLead,
   SubsectionAddBtn,
 } from './country-politics-tab.styles'
 
@@ -575,28 +578,32 @@ export function CountryLawsSection({
   return (
     <CountryLawsSectionRoot>
       <LawsPoliticsTabPanel>
-        <SectionHeaderRow>
-          <div style={{ flex: '1 1 240px', minWidth: 0 }}>
-            <SectionKicker>법령</SectionKicker>
-            <SectionLead>
-              이 국가의 헌법·법률·율령·조례 목록입니다. 조·항은 숫자만 입력하며,
-              선거·정당 화면에서 여기 등록한 법령을 근거 법으로 연결합니다.
-            </SectionLead>
-          </div>
-          <HeaderActionGroup>
-            <HeaderGhostBtn
-              type="button"
-              onClick={() => setLawTypeAddOpen((prev) => !prev)}
-              aria-expanded={lawTypeAddOpen}
-            >
-              <FiPlus size={14} strokeWidth={2.25} />법 분류 추가
-            </HeaderGhostBtn>
-            <SubsectionAddBtn type="button" onClick={openCreate}>
-              <FiPlus size={15} strokeWidth={2.25} />
-              법령 등록
-            </SubsectionAddBtn>
-          </HeaderActionGroup>
-        </SectionHeaderRow>
+        {/* 제목은 위 탭('법령')이 맡는다. 근거 법 연결 안내는 수치에 마우스를 올리면 */}
+        <SectionSubNav
+          summary={
+            <span title="헌법·법률·율령·조례 목록 — 선거·정당 화면에서 여기 등록한 법령을 근거 법으로 연결합니다">
+              법령 <SubNavFigure>{rows.length.toLocaleString('ko-KR')}</SubNavFigure>건
+            </span>
+          }
+          actions={
+            <>
+              <HeaderGhostBtn
+                type="button"
+                onClick={() => setLawTypeAddOpen((prev) => !prev)}
+                aria-expanded={lawTypeAddOpen}
+              >
+                <FiPlus size={14} strokeWidth={2.25} />법 분류 추가
+              </HeaderGhostBtn>
+              {/* 비어 있으면 등록은 빈 화면의 버튼 하나만 */}
+              {isLoading || sorted.length === 0 ? null : (
+                <SubsectionAddBtn type="button" onClick={openCreate}>
+                  <FiPlus size={15} strokeWidth={2.25} />
+                  법령 등록
+                </SubsectionAddBtn>
+              )}
+            </>
+          }
+        />
 
         {lawTypeAddOpen ? (
           <LawTypeAddStrip>
@@ -765,36 +772,20 @@ export function CountryLawsSection({
 
         <LawPanelBody>
           {isLoading ? (
-            <EmptyHint>불러오는 중…</EmptyHint>
+            <ChartSkeleton variant="bars" rows={5} />
           ) : sorted.length === 0 ? (
-            <LawsEmptySpecGrid>
-              <LawsEmptySpecCell>
-                <LawsEmptySpecTitle>
-                  1. 헌법 · 법률 · 역사 율령 등록
-                </LawsEmptySpecTitle>
-                <LawsEmptySpecDesc>
-                  국가의 기본 헌법, 주요 법률, 과거 왕조의 율령·법전(예: 경국대전, 대명률)과 핵심 조·항 번호 및 요약 설명을 등록합니다.
-                </LawsEmptySpecDesc>
-                <LawsEmptySpecAction type="button" onClick={openCreate}>
-                  + 첫 법령 등록 →
-                </LawsEmptySpecAction>
-              </LawsEmptySpecCell>
-
-              <LawsEmptySpecCell>
-                <LawsEmptySpecTitle>
-                  2. 법 분류 카탈로그 구성 및 선거·정당 연동
-                </LawsEmptySpecTitle>
-                <LawsEmptySpecDesc>
-                  헌법·법률·시행령·칙령 등 법 분류를 먼저 구성해 두면 법령을 체계적으로 분류할 수 있으며, 선거·정당 탭에서 근거 법령으로 즉시 연결됩니다.
-                </LawsEmptySpecDesc>
-                <LawsEmptySpecAction
-                  type="button"
-                  onClick={() => setLawTypeAddOpen(true)}
-                >
-                  + 법 분류 추가 열기 →
-                </LawsEmptySpecAction>
-              </LawsEmptySpecCell>
-            </LawsEmptySpecGrid>
+            <CountryTabEmptyState
+              Icon={FiBookOpen}
+              title="아직 등록된 법령이 없습니다"
+              description="헌법·법률과 과거 왕조의 율령·법전(경국대전·대명률 등)을 핵심 조·항과 함께 등록합니다. 헌법·법률·칙령 같은 법 분류는 위 ‘법 분류 추가’로 먼저 만들 수 있습니다."
+              actionLabel="법령 등록"
+              onAction={openCreate}
+              features={[
+                { Icon: FiLayers, title: '법 분류 체계', description: '헌법·법률·시행령·칙령으로 나눠 위계를 봄' },
+                { Icon: FiClock, title: '연대별 제정', description: '언제 어떤 법이 만들어지고 폐지됐는지' },
+                { Icon: FiLink, title: '선거·정당 근거 법', description: '정당·선거 화면에서 근거 법령으로 연결' },
+              ]}
+            />
           ) : (
             <>
               <LawsToolbar>
@@ -1162,14 +1153,6 @@ const ClauseSuffix = styled.span`
   user-select: none;
 `
 
-const HeaderActionGroup = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-`
-
 const LawTypeAddStrip = styled.div`
   display: flex;
   flex-direction: column;
@@ -1317,67 +1300,6 @@ const LawPanelBody = styled.div`
   display: flex;
   flex-direction: column;
   gap: 14px;
-`
-
-const LawsEmptySpecGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-  }
-`
-
-const LawsEmptySpecCell = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 20px 22px;
-
-  &:first-child {
-    border-right: 1px solid ${({ theme }) => theme.colors.border.light};
-  }
-
-  @media (max-width: 768px) {
-    &:first-child {
-      border-right: none;
-      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-    }
-  }
-`
-
-const LawsEmptySpecTitle = styled.div`
-  font-size: 13.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const LawsEmptySpecDesc = styled.p`
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const LawsEmptySpecAction = styled.button`
-  margin-top: 4px;
-  padding: 5px 10px;
-  border-radius: 6px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-    color: ${({ theme }) => theme.colors.primary};
-    background: ${({ theme }) => theme.colors.hover};
-  }
 `
 
 const LawsToolbar = styled.div`

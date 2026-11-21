@@ -81,6 +81,7 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
 import { pathKeys } from '@/shared/router'
+import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
@@ -202,7 +203,7 @@ import {
   ToolbarGhostBtnSm,
 } from './country-politics-tab.styles'
 import * as FormS from './military-unit-form/styles'
-import { PoliticsEmptyState } from './politics-form/politics-empty-state'
+import { CountryTabEmptyState } from './country-tab-empty-state'
 import {
   POSITION_TONE_OPTIONS,
   ToneChipGroup,
@@ -774,7 +775,7 @@ function PartyTopLeadersBlock({ partyId }: { partyId: string }) {
         당선된 경우, 또는 재임 기간과 겹치는 당원 소속이 있으면 표시합니다.
       </PartyTopLeadersHint>
       {isLoading ? (
-        <PartyDescEmptyHint>불러오는 중…</PartyDescEmptyHint>
+        <ChartSkeleton variant="text" lines={3} />
       ) : isError ? (
         <PartyDescEmptyHint>목록을 불러오지 못했습니다.</PartyDescEmptyHint>
       ) : data.length === 0 ? (
@@ -854,7 +855,7 @@ function PartyElectionResultsBlock({
         <PartyDescSectionLabel>역대 선거 성적</PartyDescSectionLabel>
       </PartyDescSectionLabelRow>
       {isLoading ? (
-        <PartyDescEmptyHint>불러오는 중…</PartyDescEmptyHint>
+        <ChartSkeleton variant="text" lines={3} />
       ) : isError ? (
         <PartyDescEmptyHint>목록을 불러오지 못했습니다.</PartyDescEmptyHint>
       ) : data.length === 0 ? (
@@ -1251,7 +1252,7 @@ function PartyMembershipsBlock({ partyId }: { partyId: string }) {
         </PartyInlineFormStrip>
       ) : null}
       {isLoading ? (
-        <PartyDescEmptyHint>불러오는 중…</PartyDescEmptyHint>
+        <ChartSkeleton variant="text" lines={3} />
       ) : isError ? (
         <PartyDescEmptyHint>목록을 불러오지 못했습니다.</PartyDescEmptyHint>
       ) : data.length === 0 ? (
@@ -1402,7 +1403,7 @@ function PartyCabinetAffiliationsBlock({
         <PartyDescSectionLabel>내각 참여</PartyDescSectionLabel>
       </PartyDescSectionLabelRow>
       {isLoading ? (
-        <PartyDescEmptyHint>불러오는 중…</PartyDescEmptyHint>
+        <ChartSkeleton variant="text" lines={3} />
       ) : isError ? (
         <PartyDescEmptyHint>목록을 불러오지 못했습니다.</PartyDescEmptyHint>
       ) : data.length === 0 ? (
@@ -1627,7 +1628,7 @@ function PartyLawsBlock({
         </PartyInlineFormStrip>
       ) : null}
       {isLoading ? (
-        <PartyDescEmptyHint>불러오는 중…</PartyDescEmptyHint>
+        <ChartSkeleton variant="text" lines={3} />
       ) : isError ? (
         <PartyDescEmptyHint>목록을 불러오지 못했습니다.</PartyDescEmptyHint>
       ) : data.length === 0 ? (
@@ -1962,7 +1963,7 @@ function PartyLineageBlock({
         <PartyDescriptionLabel>전신·후신</PartyDescriptionLabel>
       </PartyDescriptionLabelRow>
       {isLoading ? (
-        <EmptyHint style={{ margin: 0 }}>계보 불러오는 중…</EmptyHint>
+        <ChartSkeleton variant="text" lines={3} />
       ) : (
         <>
           <PartyDetailLineageIntro>
@@ -2908,7 +2909,7 @@ export function CountryPoliticalPartiesBlock({
               </PartyDetailTopBar>
               <PartyDetailHero>
                 <PartyDetailHeroStack>
-                  <EmptyHint style={{ margin: 0 }}>불러오는 중…</EmptyHint>
+                  <ChartSkeleton variant="text" lines={2} />
                 </PartyDetailHeroStack>
               </PartyDetailHero>
             </PartyDetailLayout>
@@ -3255,11 +3256,11 @@ export function CountryPoliticalPartiesBlock({
           )
         ) : isLoading ? (
           <PartyListAreaBody>
-            <EmptyHint>불러오는 중…</EmptyHint>
+            <ChartSkeleton variant="bars" rows={5} />
           </PartyListAreaBody>
         ) : parties.length === 0 ? (
           <PartyListAreaBody>
-            <PoliticsEmptyState
+            <CountryTabEmptyState
               Icon={FiFlag}
               title="아직 등록된 정당이 없습니다"
               description="정당을 등록하면 선거·후보·집계와 배출한 국가원수·정부수반, 정당 계보를 이어 붙일 수 있습니다."

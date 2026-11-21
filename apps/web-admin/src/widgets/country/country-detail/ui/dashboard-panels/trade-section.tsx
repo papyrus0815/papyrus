@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { FiBarChart2, FiGlobe, FiGrid, FiRepeat } from 'react-icons/fi'
 
 import styled, { useTheme } from 'styled-components'
 
@@ -31,6 +32,7 @@ import {
   VALUE_SCALE_LABEL,
 } from '@/entities/trade/vocab'
 
+import { CountryTabEmptyState } from '../country-tab-empty-state'
 import { ChartEmpty } from './chart-empty'
 import { ChartSkeleton } from './chart-skeleton'
 import { SectionHelpPopover } from './section-help-popover'
@@ -302,36 +304,57 @@ export function TradeSection({
   if (isLoading) {
     return (
       <S.Section>
-        <S.SectionTitleRow>
-          <S.SectionTitleIcon>
-            <IconTrade />
-          </S.SectionTitleIcon>
-          <S.SectionTitleText>교역</S.SectionTitleText>
-        </S.SectionTitleRow>
+        {/* 교역 탭 안이면 제목은 탭 하위 메뉴가 맡는다 — '교역'을 두 번 세우지 않는다 */}
+        {!embeddedInTab && (
+          <S.SectionTitleRow>
+            <S.SectionTitleIcon>
+              <IconTrade />
+            </S.SectionTitleIcon>
+            <S.SectionTitleText>교역</S.SectionTitleText>
+          </S.SectionTitleRow>
+        )}
         <ChartSkeleton variant="bars" rows={4} />
       </S.Section>
     )
   }
 
   if (years.length === 0 || !current) {
+    // 교역 탭 안 — 다른 탭과 같은 빈 화면. 편집 버튼은 하위 메뉴의 '교역 데이터 편집' 하나만 둔다
+    if (embeddedInTab) {
+      return (
+        <CountryTabEmptyState
+          Icon={FiRepeat}
+          title="아직 교역 자료가 없습니다"
+          description="오른쪽 위 ‘교역 데이터 편집’에서 연도별 수출·수입 총액이나 품목·상대국 명세를 넣으면 여기 그려집니다."
+          features={[
+            { Icon: FiBarChart2, title: '규모와 무역수지', description: '연도별 수출·수입과 흑자·적자' },
+            { Icon: FiGlobe, title: '상대국 비교', description: '주요 교역 상대국 양방향 비교' },
+            { Icon: FiGrid, title: '품목 구성', description: '수출·수입 품목을 트리맵으로' },
+          ]}
+        />
+      )
+    }
     return (
       <S.Section>
-        <S.SectionTitleRow>
-          <S.SectionTitleIcon>
-            <IconTrade />
-          </S.SectionTitleIcon>
-          <S.SectionTitleText>교역</S.SectionTitleText>
-          <SectionHelpPopover sectionKey="trade" />
-          {!embeddedInTab && onOpenDetailTab && (
-            <S.SectionLink type="button" onClick={onOpenDetailTab}>
-              교역 탭 열기
-            </S.SectionLink>
-          )}
-        </S.SectionTitleRow>
+        {!embeddedInTab && (
+          <S.SectionTitleRow>
+            <S.SectionTitleIcon>
+              <IconTrade />
+            </S.SectionTitleIcon>
+            <S.SectionTitleText>교역</S.SectionTitleText>
+            <SectionHelpPopover sectionKey="trade" />
+            {onOpenDetailTab && (
+              <S.SectionLink type="button" onClick={onOpenDetailTab}>
+                교역 탭 열기
+              </S.SectionLink>
+            )}
+          </S.SectionTitleRow>
+        )}
         <ChartEmpty
           text="연도별 수출·수입액을 넣으면 여기에 규모와 무역수지가 그려집니다."
           hint="수출·수입 총액 또는 품목·상대국 명세를 입력하면 무역수지, 상대국 양방향 비교, 품목 트리맵이 생성됩니다"
-          actionLabel="교역 자료 등록"
+          // 교역 탭 안에선 하위 메뉴의 '교역 데이터 편집'이 같은 일을 한다 — 버튼을 두 개 세우지 않는다
+          actionLabel={embeddedInTab ? undefined : '교역 자료 등록'}
           onAction={() => {
             if (onOpenEditor) onOpenEditor()
             else if (countryId) setManagerOpen(true)

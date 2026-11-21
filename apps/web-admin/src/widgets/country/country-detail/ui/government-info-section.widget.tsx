@@ -20,10 +20,6 @@ import { useConstituentHistoricalPolities } from '@/features/government-info/mod
 import { GovMorePopover } from '@/features/government-info/ui/gov-more-popover'
 import {
   GovLedgerPage,
-  GovSubNavBar,
-  GovSubTabBtn,
-  GovSubTabCount,
-  GovSubTabList,
 } from '@/features/government-info/ui/government-ledger.styles'
 import { GovernmentStatisticsTab } from '@/features/government-info/ui/government-statistics-tab.widget'
 import { MinistriesTabSection } from '@/features/government-info/ui/ministries-tab-section.widget'
@@ -36,6 +32,7 @@ import {
   administrationDepartmentsByHistoricalCountryQueryKey,
 } from '@/shared/lib/ministry-department/ministry-department-query-keys'
 import { pathKeys } from '@/shared/router'
+import { SectionSubNav } from '@/shared/ui/section-sub-nav/section-sub-nav'
 import { useThemeStore } from '@/shared/styles/theme.store'
 import { SidePanel } from '@/shared/ui/side-panel'
 
@@ -336,83 +333,71 @@ export function GovernmentInfoSection({
   return (
     <>
       <GovLedgerPage>
-        <GovSubNavBar>
-          <GovSubTabList role="tablist" aria-label="정부·행정 하위 메뉴">
-            {GOVERNMENT_TAB_ORDER.map((tabKey) => {
-              const isActive = contentTab === tabKey
-              const countVal = tabCountByKey[tabKey]
-              return (
-                <GovSubTabBtn
-                  key={tabKey}
-                  type="button"
-                  role="tab"
-                  aria-selected={isActive}
-                  $active={isActive}
-                  onClick={() => {
-                    setPositionFilterContext(null)
-                    switchSubTab(tabKey)
-                  }}
-                  title={GOV_TAB_META[tabKey].hint}
-                >
-                  <span>{GOV_TAB_META[tabKey].label}</span>
-                  {typeof countVal === 'number' && countVal > 0 ? (
-                    <GovSubTabCount $active={isActive}>
-                      {countVal}
-                    </GovSubTabCount>
-                  ) : null}
-                </GovSubTabBtn>
-              )
-            })}
-          </GovSubTabList>
-
-          {effectiveCountryId ? (
-            <GovSubNavActions>
-              <GovMorePopover
-                ariaLabel="정부·행정 도구 및 사전 메뉴"
-                title="관직 사전 · 직능 분류 · 전 국가 허브"
-                triggerSize="sm"
-                hasActiveIndicator={positionsDrawerOpen || categoryModalOpen}
-                actions={[
-                  {
-                    key: 'country-positions',
-                    label: '고유 관직 · 직제 사전',
-                    icon: <FiAward size={14} />,
-                    badge:
-                      dedicatedPositionCount > 0
-                        ? String(dedicatedPositionCount)
-                        : undefined,
-                    active: positionsDrawerOpen,
-                    onClick: () => {
-                      setPositionFilterContext(null)
-                      setPositionsDrawerOpen(true)
-                    },
-                  },
-                  {
-                    key: 'global-categories',
-                    label: '전역 직능 분류 관리',
-                    icon: <FiGrid size={14} />,
-                    onClick: () => openCategoryModal(),
-                  },
-                  {
-                    key: 'global-hub',
-                    label: '전 국가 정부·내각 허브 ↗',
-                    icon: <FiGlobe size={14} />,
-                    onClick: () =>
-                      navigate(
-                        pathKeys.government.list({
-                          tab:
-                            contentTab === 'ministries'
-                              ? 'departments'
-                              : 'cabinets',
-                        }),
-                        { state: { skipGovernmentMemoryRestore: true } },
-                      ),
-                  },
-                ]}
-              />
-            </GovSubNavActions>
-          ) : null}
-        </GovSubNavBar>
+        {/* 하위 메뉴 한 줄 — 국가 상세 다른 탭과 같은 공용 부품(알약 하위 탭 + 오른쪽 도구) */}
+        <SectionSubNav<GovernmentContentTab>
+          ariaLabel="정부·행정 하위 메뉴"
+          tabs={GOVERNMENT_TAB_ORDER.map((tabKey) => ({
+            key: tabKey,
+            label: GOV_TAB_META[tabKey].label,
+            title: GOV_TAB_META[tabKey].hint,
+            count:
+              typeof tabCountByKey[tabKey] === 'number' && (tabCountByKey[tabKey] ?? 0) > 0
+                ? tabCountByKey[tabKey]
+                : null,
+          }))}
+          activeTab={contentTab}
+          onTabChange={(tabKey) => {
+            setPositionFilterContext(null)
+            switchSubTab(tabKey)
+          }}
+          actions={
+            effectiveCountryId ? (
+          <GovMorePopover
+            ariaLabel="정부·행정 도구 및 사전 메뉴"
+            title="관직 사전 · 직능 분류 · 전 국가 허브"
+            triggerSize="sm"
+            hasActiveIndicator={positionsDrawerOpen || categoryModalOpen}
+            actions={[
+              {
+                key: 'country-positions',
+                label: '고유 관직 · 직제 사전',
+                icon: <FiAward size={14} />,
+                badge:
+                  dedicatedPositionCount > 0
+                    ? String(dedicatedPositionCount)
+                    : undefined,
+                active: positionsDrawerOpen,
+                onClick: () => {
+                  setPositionFilterContext(null)
+                  setPositionsDrawerOpen(true)
+                },
+              },
+              {
+                key: 'global-categories',
+                label: '전역 직능 분류 관리',
+                icon: <FiGrid size={14} />,
+                onClick: () => openCategoryModal(),
+              },
+              {
+                key: 'global-hub',
+                label: '전 국가 정부·내각 허브 ↗',
+                icon: <FiGlobe size={14} />,
+                onClick: () =>
+                  navigate(
+                    pathKeys.government.list({
+                      tab:
+                        contentTab === 'ministries'
+                          ? 'departments'
+                          : 'cabinets',
+                    }),
+                    { state: { skipGovernmentMemoryRestore: true } },
+                  ),
+              },
+            ]}
+          />
+            ) : null
+          }
+        />
 
         {contentTab === 'system' && (
           <GovContentStage aria-label="정체·헌정">

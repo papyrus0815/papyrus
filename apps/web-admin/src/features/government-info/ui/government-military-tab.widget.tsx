@@ -43,10 +43,9 @@ import type { MilitaryUnitType } from '@/shared/api/military-unit'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { useThemeStore } from '@/shared/styles/theme.store'
 import {
-  EmptyStateFill,
-  EmptyStateSimple,
   EmptyStateSpotlight,
 } from '@/shared/ui/empty-state/empty-state'
+import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
 import {
   PopoverMenu,
   PopoverMenuDivider,
@@ -1644,9 +1643,7 @@ export function GovernmentMilitaryTab({
 
         <WorkspaceStage>
           {unitsQuery.isLoading ? (
-            <EmptyStateFill>
-              <EmptyStateSimple border="solid">불러오는 중…</EmptyStateSimple>
-            </EmptyStateFill>
+            <ChartSkeleton variant="bars" rows={5} />
           ) : countryUnits.length === 0 ? (
             <EmptyStateSpotlight
               flat

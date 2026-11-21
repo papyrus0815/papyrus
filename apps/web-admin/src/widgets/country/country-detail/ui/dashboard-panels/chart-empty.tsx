@@ -6,8 +6,9 @@ interface Props {
   /** 하위 호환용 — 빈 차트 골격 대신 단일화된 SectionEmpty 레이아웃을 사용한다 */
   children?: ReactNode
   text: string
-  actionLabel: string
-  onAction: () => void
+  /** 비우면 버튼 없이(SectionEmpty와 같다) */
+  actionLabel?: string
+  onAction?: () => void
   hint?: string
 }
 

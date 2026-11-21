@@ -9,6 +9,7 @@
  * - 행 클릭 시 EventInlineModal 빠른 미리보기 오픈(스크롤·필터 보존), 우측 '상세 →'로 전용 페이지 진입
  * - '+ 새 사건 등록' 시 현재 국가(현대/역사) 및 선택 분야 자동 프리필
  */
+import { CountryTabEmptyState } from './country-tab-empty-state'
 import React, { useEffect, useMemo, useState } from 'react'
 
 import { motion } from 'framer-motion'
@@ -19,6 +20,7 @@ import {
   FiChevronDown,
   FiList,
   FiMapPin,
+  FiPieChart,
   FiPlus,
   FiSearch,
   FiX,
@@ -71,6 +73,7 @@ import {
   formatSignedYear,
 } from '@/shared/lib/lifespan-text'
 import { pathKeys } from '@/shared/router'
+import { SectionSubNav, SubNavFigure } from '@/shared/ui/section-sub-nav/section-sub-nav'
 import { EventRegisterModal } from '@/widgets/event-form/ui/event-register-modal'
 import { EventInlineModal } from '@/widgets/event/event-inline-modal/event-inline-modal'
 
@@ -847,44 +850,38 @@ export function EventsTimelineSection({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22 }}
     >
-      <Header>
-        <HeaderText>
-          <HeaderTitleRow>
-            <HeaderTitle>
-              {countryName ? `${countryName} 사건 연대표` : '사건 연대표'}
-            </HeaderTitle>
-            {list.length > 0 && (
-              <HeaderCount>
-                {list.length.toLocaleString('ko-KR')}건
-              </HeaderCount>
-            )}
-          </HeaderTitleRow>
-          <HeaderDesc>
-            {countryId
-              ? '상단 인포그래픽 막대·도넛을 클릭해 세기·분야별로 즉시 좁히고, 사건 행을 클릭해 흐름을 끊지 않고 미리보세요.'
-              : '등록된 역사·현대 사건 원장입니다.'}
-          </HeaderDesc>
-        </HeaderText>
+      {/* 제목은 위 탭('사건')이 맡는다 — 여기는 수치 한 줄과 할 일만 */}
+      <SectionSubNav
+        summary={
+          <span>
+            사건{' '}
+            <SubNavFigure>{list.length.toLocaleString('ko-KR')}</SubNavFigure>건
+          </span>
+        }
+        actions={
+          <>
+              <LedgerToolbarButton
+                type="button"
+                onClick={() => navigate(pathKeys.events.root())}
+              >
+                <span>사건 허브</span>
+                <FiArrowUpRight size={13} />
+              </LedgerToolbarButton>
 
-        <HeaderActions>
-          <LedgerToolbarButton
-            type="button"
-            onClick={() => navigate(pathKeys.events.root())}
-          >
-            <span>사건 허브</span>
-            <FiArrowUpRight size={13} />
-          </LedgerToolbarButton>
-
-          <LedgerPrimaryButton
-            type="button"
-            onClick={openCreate}
-            aria-label="새 사건 등록"
-          >
-            <FiPlus size={14} />
-            <span>새 사건 등록</span>
-          </LedgerPrimaryButton>
-        </HeaderActions>
-      </Header>
+              {/* 비어 있으면 등록은 빈 화면의 버튼 하나만 */}
+              {isLoading || list.length === 0 ? null : (
+                <LedgerPrimaryButton
+                  type="button"
+                  onClick={openCreate}
+                  aria-label="새 사건 등록"
+                >
+                  <FiPlus size={14} />
+                  <span>새 사건 등록</span>
+                </LedgerPrimaryButton>
+              )}
+          </>
+        }
+      />
 
       <EventRegisterModal
         isOpen={isCreateOpen}
@@ -1306,36 +1303,18 @@ export function EventsTimelineSection({
         {isLoading && list.length === 0 ? (
           <ChartSkeleton variant="bars" rows={6} />
         ) : list.length === 0 ? (
-          <EventEmptySpecGrid>
-            <EventEmptySpecCell>
-              <EventEmptySpecTitle>
-                1. 기원전(BC) ~ 현대 세기별 통사 원장
-              </EventEmptySpecTitle>
-              <EventEmptySpecDesc>
-                시작 연도 기준으로 세기별 묶음과 연도열, 9대 사건 분야 배지를 정렬해 국가 통사를 한눈에 훑을 수 있습니다.
-              </EventEmptySpecDesc>
-            </EventEmptySpecCell>
-            <EventEmptySpecCell>
-              <EventEmptySpecTitle>
-                2. 기간 간트(스팬 타임라인) & 월별 캘린더
-              </EventEmptySpecTitle>
-              <EventEmptySpecDesc>
-                전쟁·조약·개혁 등 다년도 사건의 동시대 중첩을 간트 막대로 비교하거나, 일자가 확인된 사건을 월별 달력으로 탐색합니다.
-              </EventEmptySpecDesc>
-            </EventEmptySpecCell>
-            <EventEmptySpecCell>
-              <EventEmptySpecTitle>
-                3. 이 국가의 첫 사건 등록하기
-              </EventEmptySpecTitle>
-              <EventEmptySpecDesc>
-                새 사건 등록 창을 열면 현재 국가가 참여국으로 자동 채워집니다.
-              </EventEmptySpecDesc>
-              <EmptyCreateBtn type="button" onClick={openCreate}>
-                <FiPlus size={12} />
-                <span>새 사건 등록하기</span>
-              </EmptyCreateBtn>
-            </EventEmptySpecCell>
-          </EventEmptySpecGrid>
+          <CountryTabEmptyState
+            Icon={FiCalendar}
+            title="아직 이 국가의 사건이 없습니다"
+            description="사건 등록 창을 열면 이 국가가 참여국으로 자동으로 채워집니다."
+            actionLabel="새 사건 등록"
+            onAction={openCreate}
+            features={[
+              { Icon: FiList, title: '세기별 통사 원장', description: '기원전부터 현대까지 세기로 묶고 분야 배지로 훑기' },
+              { Icon: FiAlignLeft, title: '기간 막대', description: '전쟁·조약·개혁처럼 여러 해에 걸친 사건의 겹침 비교' },
+              { Icon: FiPieChart, title: '분야 · 세기 분포', description: '정치·군사·외교 비중과 세기별 사건 수' },
+            ]}
+          />
         ) : filteredList.length === 0 ? (
           <EmptyFilterBox>
             <span>조건에 맞는 사건이 없습니다.</span>
@@ -1632,55 +1611,6 @@ const Root = styled(motion.div)`
   position: relative;
   min-height: calc(100vh - 200px);
   box-sizing: border-box;
-`
-
-const Header = styled.header`
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-`
-
-const HeaderText = styled.div`
-  min-width: 0;
-`
-
-const HeaderTitleRow = styled.div`
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-`
-
-const HeaderTitle = styled.h2`
-  margin: 0;
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const HeaderCount = styled.span`
-  font-size: 13.5px;
-  font-weight: 700;
-  ${DIGIT_DISPLAY}
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-`
-
-const HeaderDesc = styled.p`
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const HeaderActions = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  flex-wrap: wrap;
 `
 
 const CardResetMiniBtn = styled.button`
@@ -2435,48 +2365,6 @@ const EmptyFilterBox = styled.div`
   font-size: 13px;
   color: ${({ theme }) => theme.colors.text.secondary};
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-`
-
-const EventEmptySpecGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-
-  @media (max-width: 820px) {
-    grid-template-columns: 1fr;
-  }
-`
-
-const EventEmptySpecCell = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 16px 14px;
-
-  & + & {
-    border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  }
-
-  @media (max-width: 820px) {
-    & + & {
-      border-left: none;
-      border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-    }
-  }
-`
-
-const EventEmptySpecTitle = styled.div`
-  font-size: 12.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const EventEmptySpecDesc = styled.p`
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.55;
-  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const EmptyCreateBtn = styled.button`

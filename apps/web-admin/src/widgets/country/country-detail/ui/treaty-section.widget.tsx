@@ -1,3 +1,4 @@
+import { CountryTabEmptyState } from './country-tab-empty-state'
 import React, {
   useCallback,
   useLayoutEffect,
@@ -12,12 +13,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   FiChevronLeft,
   FiChevronRight,
+  FiClock,
   FiEdit2,
   FiExternalLink,
   FiFileText,
   FiGlobe,
   FiImage,
   FiMapPin,
+  FiPieChart,
   FiPlus,
   FiSearch,
   FiTrash2,
@@ -78,10 +81,12 @@ import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
 import { getTreatySectionPalette } from '@/shared/styles/country-detail-palette'
 import { useThemeStore } from '@/shared/styles/theme.store'
+import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
+import { SectionSubNav, SubNavFigure } from '@/shared/ui/section-sub-nav/section-sub-nav'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { CountryPicker } from '@/shared/ui/country-picker'
 import { PersonSelectModal } from '@/shared/ui/person-select-modal/person-select-modal'
-import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
+import { AddButton } from '@/shared/ui/section-page-layout'
 import { notify } from '@/shared/ui/toast'
 
 import {
@@ -276,71 +281,6 @@ const Empty = styled.div`
   border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
   color: ${({ theme }) => theme.colors.text.tertiary};
   font-size: 13px;
-`
-
-const TreatyEmptySpecGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-  }
-`
-
-const TreatyEmptySpecCell = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 20px 22px;
-
-  &:first-child {
-    border-right: 1px solid ${({ theme }) => theme.colors.border.light};
-  }
-
-  @media (max-width: 768px) {
-    &:first-child {
-      border-right: none;
-      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-    }
-  }
-`
-
-const TreatyEmptySpecTitle = styled.div`
-  font-size: 13.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const TreatyEmptySpecDesc = styled.p`
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const TreatyEmptySpecAction = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 4px;
-  height: 30px;
-  padding: 0 10px;
-  border-radius: 6px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-    color: ${({ theme }) => theme.colors.primary};
-    background: ${({ theme }) => theme.colors.hover};
-  }
 `
 
 const TreatyToolbar = styled.div`
@@ -1185,11 +1125,14 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
     />
   ) : (
     <Wrap>
-      <SectionTabHeader
-        variant="plain"
-        title="조약 · 협정"
-        description={`${country.name}이(가) 서명·참여한 조약과 협정의 체결일, 발효·만료·파기 이력 및 당사국을 관리합니다.`}
-        rightSlot={
+      {/* 제목은 위 탭('조약')이 맡는다. 목록이 비면 등록은 빈 화면의 버튼 하나만 */}
+      <SectionSubNav
+        summary={
+          <span>
+            조약·협정 <SubNavFigure>{treaties.length.toLocaleString('ko-KR')}</SubNavFigure>건
+          </span>
+        }
+        actions={
           <TreatyHeaderActions>
             <TreatySecondaryBtn
               type="button"
@@ -1198,9 +1141,11 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
               <FiExternalLink size={14} />
               조약 카탈로그
             </TreatySecondaryBtn>
-            <AddButton type="button" onClick={() => setCreateOpen(true)}>
-              <FiPlus size={14} /> 조약 등록
-            </AddButton>
+            {isLoading || treaties.length === 0 ? null : (
+              <AddButton type="button" onClick={() => setCreateOpen(true)}>
+                <FiPlus size={14} /> 조약 등록
+              </AddButton>
+            )}
           </TreatyHeaderActions>
         }
       />
@@ -1347,41 +1292,20 @@ export const TreatySectionWidget: React.FC<TreatySectionProps> = ({
       )}
 
       {isLoading ? (
-        <Empty>불러오는 중…</Empty>
+        <ChartSkeleton variant="bars" rows={5} />
       ) : treaties.length === 0 ? (
-        <TreatyEmptySpecGrid>
-          <TreatyEmptySpecCell>
-            <TreatyEmptySpecTitle>
-              1. 신규 조약 · 협정 직접 등록
-            </TreatyEmptySpecTitle>
-            <TreatyEmptySpecDesc>
-              강화도조약, 베르사유 조약, 상호방위조약 등 {country.name}이(가) 서명·참여한 조약의 체결일, 조항, 서명국을 등록합니다.
-            </TreatyEmptySpecDesc>
-            <TreatyEmptySpecAction
-              type="button"
-              onClick={() => setCreateOpen(true)}
-            >
-              <FiPlus size={12} />
-              <span>첫 조약 등록</span>
-            </TreatyEmptySpecAction>
-          </TreatyEmptySpecCell>
-
-          <TreatyEmptySpecCell>
-            <TreatyEmptySpecTitle>
-              2. 전역 조약 카탈로그에서 당사국 연결
-            </TreatyEmptySpecTitle>
-            <TreatyEmptySpecDesc>
-              전체 조약 카탈로그에 이미 등록된 다자·양자 조약에서 이 국가를 서명국·비준국으로 추가하면 이 탭과 대시보드에 자동 집계됩니다.
-            </TreatyEmptySpecDesc>
-            <TreatyEmptySpecAction
-              type="button"
-              onClick={() => navigate(pathKeys.treaties.list())}
-            >
-              <span>조약 카탈로그로 이동</span>
-              <FiExternalLink size={12} />
-            </TreatyEmptySpecAction>
-          </TreatyEmptySpecCell>
-        </TreatyEmptySpecGrid>
+        <CountryTabEmptyState
+          Icon={FiFileText}
+          title="아직 등록된 조약이 없습니다"
+          description={`${country.name}이(가) 서명·참여한 조약의 체결일·조항·서명국을 등록합니다. 이미 있는 다자·양자 조약이면 ‘조약 카탈로그’에서 이 국가를 당사국으로 추가하세요.`}
+          actionLabel="조약 등록"
+          onAction={() => setCreateOpen(true)}
+          features={[
+            { Icon: FiPieChart, title: '유형 분포 · 효력', description: '평화·동맹·통상 등 유형별 비중과 유효·만료·파기 비율' },
+            { Icon: FiUsers, title: '주요 상대국', description: '가장 많이 조약을 맺은 상대국 순위' },
+            { Icon: FiClock, title: '체결 · 발효 · 만료', description: '조약마다 체결부터 파기까지 이력' },
+          ]}
+        />
       ) : (
         <>
           <TreatyToolbar>
@@ -2306,7 +2230,7 @@ export const TreatyDetail: React.FC<{
   if (isLoading || !treaty)
     return (
       <Wrap>
-        <Empty>불러오는 중…</Empty>
+        <ChartSkeleton variant="text" lines={6} />
       </Wrap>
     )
 

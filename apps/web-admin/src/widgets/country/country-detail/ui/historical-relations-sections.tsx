@@ -10,10 +10,19 @@
  *  - 추가·수정 = 공용 Modal(Esc·스크롤 잠금·포커스 트랩)
  *  - 색은 전부 테마 토큰
  */
+import { CountryTabEmptyState } from './country-tab-empty-state'
 import { useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiArrowRight, FiArrowUpRight, FiPlus, FiX } from 'react-icons/fi'
+import {
+  FiArrowRight,
+  FiArrowUpRight,
+  FiFlag,
+  FiGitBranch,
+  FiLayers,
+  FiPlus,
+  FiX,
+} from 'react-icons/fi'
 import { Link, useNavigate } from 'react-router-dom'
 import styled, { useTheme } from 'styled-components'
 
@@ -73,6 +82,7 @@ import {
   updateHistoricalCountryTransition,
 } from '@/shared/api/historical-countries'
 import { pathKeys } from '@/shared/router'
+import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { CountryPicker, CountryPickerField } from '@/shared/ui/country-picker'
 import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
@@ -615,34 +625,16 @@ export function SuccessionSection({ country }: { country: UnifiedCountry }) {
         )}
 
         {isLoading ? (
-          <Muted>불러오는 중…</Muted>
+          <ChartSkeleton variant="bars" rows={3} />
         ) : transitions.length === 0 ? (
-          <EmptySpecGrid>
-            <EmptySpecCell>
-              <EmptySpecTitle>전신 (이전 국가 → {country.name})</EmptySpecTitle>
-              <EmptySpecDesc>
-                이 국가의 성립 기반이 된 이전 왕조·정권·국가가 아직 연결되지 않았습니다.
-              </EmptySpecDesc>
-              <EmptySpecAction
-                type="button"
-                onClick={() => openAddWithDirection(false)}
-              >
-                <FiPlus aria-hidden /> 전신 국가 연결
-              </EmptySpecAction>
-            </EmptySpecCell>
-            <EmptySpecCell>
-              <EmptySpecTitle>후신 ({country.name} → 이후 국가)</EmptySpecTitle>
-              <EmptySpecDesc>
-                이 국가의 멸망·전환 이후 주권이나 정통성을 이어받은 후속 국가가 아직 연결되지 않았습니다.
-              </EmptySpecDesc>
-              <EmptySpecAction
-                type="button"
-                onClick={() => openAddWithDirection(true)}
-              >
-                <FiPlus aria-hidden /> 후신 국가 연결
-              </EmptySpecAction>
-            </EmptySpecCell>
-          </EmptySpecGrid>
+          <CountryTabEmptyState
+            Icon={FiGitBranch}
+            title="아직 연결된 전신·후신 국가가 없습니다"
+            description="이 국가의 성립 기반이 된 이전 왕조·정권(전신)이나, 멸망·전환 뒤 주권·정통성을 이어받은 국가(후신)를 연결합니다."
+            actionLabel="전신 국가 연결"
+            onAction={() => openAddWithDirection(false)}
+            secondaryAction={{ label: '후신 국가 연결', onClick: () => openAddWithDirection(true) }}
+          />
         ) : (
           <>
             <FilterToolbar>
@@ -1223,34 +1215,16 @@ export function MembershipSection({ country }: { country: UnifiedCountry }) {
         )}
 
         {isLoading ? (
-          <Muted>불러오는 중…</Muted>
+          <ChartSkeleton variant="bars" rows={3} />
         ) : memberships.length === 0 ? (
-          <EmptySpecGrid>
-            <EmptySpecCell>
-              <EmptySpecTitle>소속된 상위 정치체 (상위 ⊃ {country.name})</EmptySpecTitle>
-              <EmptySpecDesc>
-                이 국가가 제후국·속국·식민지·연방 구성원으로서 소속되었던 상위 정치체가 아직 등록되지 않았습니다.
-              </EmptySpecDesc>
-              <EmptySpecAction
-                type="button"
-                onClick={() => openAddWithPosition(false)}
-              >
-                <FiPlus aria-hidden /> 상위 정치체 연결
-              </EmptySpecAction>
-            </EmptySpecCell>
-            <EmptySpecCell>
-              <EmptySpecTitle>거느린 하위 구성국 ({country.name} ⊃ 하위)</EmptySpecTitle>
-              <EmptySpecDesc>
-                이 국가가 종주국·제국·연방으로서 포함한 하위 구성국이나 속령 기록이 아직 등록되지 않았습니다.
-              </EmptySpecDesc>
-              <EmptySpecAction
-                type="button"
-                onClick={() => openAddWithPosition(true)}
-              >
-                <FiPlus aria-hidden /> 하위 구성국 연결
-              </EmptySpecAction>
-            </EmptySpecCell>
-          </EmptySpecGrid>
+          <CountryTabEmptyState
+            Icon={FiLayers}
+            title="아직 등록된 소속·구성 관계가 없습니다"
+            description="이 국가가 제후국·속국·식민지·연방 구성원으로 속했던 상위 정치체나, 종주국·제국으로서 거느린 하위 구성국·속령을 등록합니다."
+            actionLabel="상위 정치체 연결"
+            onAction={() => openAddWithPosition(false)}
+            secondaryAction={{ label: '하위 구성국 연결', onClick: () => openAddWithPosition(true) }}
+          />
         ) : (
           <>
             <FilterToolbar>
@@ -1880,34 +1854,16 @@ export function RelationSection({ country }: { country: UnifiedCountry }) {
         )}
 
         {isLoading ? (
-          <Muted>불러오는 중…</Muted>
+          <ChartSkeleton variant="bars" rows={3} />
         ) : relations.length === 0 ? (
-          <EmptySpecGrid>
-            <EmptySpecCell>
-              <EmptySpecTitle>외교 · 조공·책봉 · 동맹 관계</EmptySpecTitle>
-              <EmptySpecDesc>
-                주변 국가와 맺은 동맹, 조공·책봉, 종주국-속국, 동군연합 등 외교 질서가 아직 등록되지 않았습니다.
-              </EmptySpecDesc>
-              <EmptySpecAction
-                type="button"
-                onClick={() => openAddWithRelationType('TRIBUTARY')}
-              >
-                <FiPlus aria-hidden /> 조공·동맹 관계 추가
-              </EmptySpecAction>
-            </EmptySpecCell>
-            <EmptySpecCell>
-              <EmptySpecTitle>대립 · 전쟁 관계</EmptySpecTitle>
-              <EmptySpecDesc>
-                경쟁 국가나 인접 세력과 벌인 전쟁·대립 관계 기록이 아직 등록되지 않았습니다.
-              </EmptySpecDesc>
-              <EmptySpecAction
-                type="button"
-                onClick={() => openAddWithRelationType('WAR')}
-              >
-                <FiPlus aria-hidden /> 전쟁 관계 추가
-              </EmptySpecAction>
-            </EmptySpecCell>
-          </EmptySpecGrid>
+          <CountryTabEmptyState
+            Icon={FiFlag}
+            title="아직 등록된 외교·전쟁 관계가 없습니다"
+            description="주변 국가와 맺은 동맹·조공·책봉·동군연합 같은 외교 질서나, 경쟁 세력과 벌인 전쟁·대립을 기록합니다."
+            actionLabel="조공·동맹 관계 추가"
+            onAction={() => openAddWithRelationType('TRIBUTARY')}
+            secondaryAction={{ label: '전쟁 관계 추가', onClick: () => openAddWithRelationType('WAR') }}
+          />
         ) : (
           <>
             <FilterToolbar>
@@ -2332,70 +2288,6 @@ const QuickAddBtn = styled.button`
 
   &:hover {
     background: ${({ theme }) => theme.colors.activeLight};
-  }
-`
-
-const EmptySpecGrid = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  border-top: 1px solid ${({ theme }) => theme.colors.border.medium};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-
-  @media (min-width: 720px) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-`
-
-const EmptySpecCell = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 16px 14px;
-  min-width: 0;
-
-  & + & {
-    border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-  }
-
-  @media (min-width: 720px) {
-    & + & {
-      border-top: none;
-      border-left: 1px solid ${({ theme }) => theme.colors.border.light};
-    }
-  }
-`
-
-const EmptySpecTitle = styled.div`
-  font-size: 12.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const EmptySpecDesc = styled.p`
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.55;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const EmptySpecAction = styled.button`
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 4px;
-  padding: 4px 10px;
-  border: none;
-  border-radius: 4px;
-  background: ${({ theme }) => theme.colors.activeLight};
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.active};
-  cursor: pointer;
-
-  &:hover {
-    opacity: 0.9;
   }
 `
 

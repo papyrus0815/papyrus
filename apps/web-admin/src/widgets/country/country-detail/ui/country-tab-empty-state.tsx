@@ -1,9 +1,10 @@
 /**
- * 선거·정당 탭의 빈 상태 — 선 없는 한 덩어리.
+ * 국가 상세 탭의 빈 상태 — 선 없는 한 덩어리(처음 정당·선거 탭에서 정했다, 2026-11-21).
  *
- * 예전엔 머리(위·아래 선) + 2×2 칸(칸마다 선)이라, 탭 밑줄·섹션 머리 선과 겹쳐 빈 화면에 선이
- * 일곱 줄 그어졌다. 이제 가운데 아이콘·제목·설명·등록 버튼 하나, 그 아래 '등록하면 생기는 것'을
- * 선 없이 아이콘 목록으로 둔다. 등록 버튼은 여기 하나뿐 — 목록이 비어 있을 땐 머리의 같은 버튼을 숨긴다.
+ * 예전엔 탭마다 '1. … / 2. …' 칸 표(칸마다 선)를 두어, 탭 하위 메뉴 밑선과 겹쳐 빈 화면에 선이
+ * 여러 줄 그어졌고 칸 안 버튼이 하위 메뉴 버튼과 같은 일을 또 했다. 이제 가운데 아이콘·제목·설명·
+ * 주 버튼 하나(+ 필요하면 보조 버튼), 그 아래 '등록하면 생기는 것'을 선 없이 아이콘 목록으로 둔다.
+ * 주 버튼은 여기 하나뿐 — 목록이 비어 있을 땐 하위 메뉴의 같은 버튼을 숨긴다.
  */
 import React from 'react'
 
@@ -11,27 +12,32 @@ import type { IconType } from 'react-icons'
 import { FiPlus } from 'react-icons/fi'
 import styled from 'styled-components'
 
-export interface PoliticsEmptyFeature {
+export interface CountryTabEmptyFeature {
   Icon: IconType
   title: string
   description: string
 }
 
-export function PoliticsEmptyState({
+export function CountryTabEmptyState({
   Icon,
   title,
   description,
   actionLabel,
   onAction,
-  features,
+  secondaryAction,
+  features = [],
 }: {
   Icon: IconType
   title: string
   description: string
-  actionLabel: string
-  onAction: () => void
-  features: ReadonlyArray<PoliticsEmptyFeature>
+  /** 주 버튼 — 비우면 버튼 없이(등록이 다른 탭에서 일어나는 경우) */
+  actionLabel?: string
+  onAction?: () => void
+  /** 보조 버튼 — 카탈로그·다른 지면으로 가기 */
+  secondaryAction?: { label: string; onClick: () => void; Icon?: IconType }
+  features?: ReadonlyArray<CountryTabEmptyFeature>
 }) {
+  const SecondaryIcon = secondaryAction?.Icon
   return (
     <EmptyRoot role="region" aria-label={title}>
       <EmptyHero>
@@ -40,11 +46,24 @@ export function PoliticsEmptyState({
         </EmptyIcon>
         <EmptyTitle>{title}</EmptyTitle>
         <EmptyDescription>{description}</EmptyDescription>
-        <EmptyAction type="button" onClick={onAction}>
-          <FiPlus size={15} strokeWidth={2.25} aria-hidden="true" />
-          {actionLabel}
-        </EmptyAction>
+        {(actionLabel && onAction) || secondaryAction ? (
+          <EmptyActions>
+            {actionLabel && onAction ? (
+              <EmptyAction type="button" onClick={onAction}>
+                <FiPlus size={15} strokeWidth={2.25} aria-hidden="true" />
+                {actionLabel}
+              </EmptyAction>
+            ) : null}
+            {secondaryAction ? (
+              <EmptySecondaryAction type="button" onClick={secondaryAction.onClick}>
+                {SecondaryIcon ? <SecondaryIcon size={14} aria-hidden="true" /> : null}
+                {secondaryAction.label}
+              </EmptySecondaryAction>
+            ) : null}
+          </EmptyActions>
+        ) : null}
       </EmptyHero>
+      {features.length > 0 ? (
       <FeatureList aria-label="등록하면 기록할 수 있는 것">
         {features.map((feature) => {
           const FeatureIcon = feature.Icon
@@ -61,6 +80,7 @@ export function PoliticsEmptyState({
           )
         })}
       </FeatureList>
+      ) : null}
     </EmptyRoot>
   )
 }
@@ -112,12 +132,44 @@ const EmptyDescription = styled.p`
   word-break: keep-all;
 `
 
+const EmptyActions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+`
+
+const EmptySecondaryAction = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid ${({ theme }) => theme.colors.border.default};
+  border-radius: 8px;
+  background: transparent;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+    border-color: ${({ theme }) => theme.colors.border.medium};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.primary};
+    outline-offset: 2px;
+  }
+`
+
 const EmptyAction = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 6px;
   height: 36px;
-  margin-top: 10px;
   padding: 0 16px;
   border: none;
   border-radius: 8px;

@@ -5,7 +5,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import styled from 'styled-components'
 
 import type { UnifiedCountry } from '@/entities/country/model/unified-types'
-import { ledgerHairline } from '@/entities/event/ui/ledger-tokens'
 import {
   fetchCountryScopedMilitaryUnits,
   HIGH_AND_OPERATIONAL_UNIT_TYPES,
@@ -23,11 +22,7 @@ import {
 import { pathKeys } from '@/shared/router'
 import { PopoverMenu } from '@/shared/ui/popover-menu'
 import { AddButton } from '@/shared/ui/section-page-layout'
-import {
-  UnderlineTabBadge,
-  UnderlineTabButton,
-  UnderlineTabNav,
-} from '@/shared/ui/underline-tabs'
+import { SectionSubNav } from '@/shared/ui/section-sub-nav/section-sub-nav'
 
 import * as DashboardStyles from './country-detail-dashboard.styles'
 import { countryTabCanvasPadding } from './country-ledger-primitives'
@@ -225,104 +220,98 @@ export function CountryMilitarySection({
   return (
     <>
       <SectionCanvas aria-label="군사 사령부 및 전쟁사">
-        <HeaderBar>
-          <UnderlineTabNav aria-label="군사 하위 지면" style={{ flex: 1, borderBottom: 'none' }}>
-            <UnderlineTabButton
-              type="button"
-              $active={subQuery === 'units'}
-              onClick={() => handleSubTabChange('units')}
-            >
-              <span>편제 · 사령부</span>
-              <UnderlineTabBadge $active={subQuery === 'units'}>
-                {headlineStats.totalUnits.toLocaleString('ko-KR')}
-              </UnderlineTabBadge>
-            </UnderlineTabButton>
-            <UnderlineTabButton
-              type="button"
-              $active={subQuery === 'wars'}
-              onClick={() => handleSubTabChange('wars')}
-            >
-              <span>전쟁 · 참전사</span>
-              <UnderlineTabBadge $active={subQuery === 'wars'}>
-                {headlineStats.totalMilitaryEvents.toLocaleString('ko-KR')}
-              </UnderlineTabBadge>
-            </UnderlineTabButton>
-          </UnderlineTabNav>
+        <SectionSubNav<MilitarySubTab>
+          ariaLabel="군사 하위 지면"
+          tabs={[
+            {
+              key: 'units',
+              label: '편제 · 사령부',
+              count: headlineStats.totalUnits,
+            },
+            {
+              key: 'wars',
+              label: '전쟁 · 참전사',
+              count: headlineStats.totalMilitaryEvents,
+            },
+          ]}
+          activeTab={subQuery}
+          onTabChange={handleSubTabChange}
+          actions={
+            <>
+              {subQuery === 'wars' ? (
+                <AddButton
+                  type="button"
+                  onClick={() => navigate(pathKeys.events.create())}
+                >
+                  <FiPlus size={14} /> 군사 사건 등록
+                </AddButton>
+              ) : (
+                <AddButton
+                  type="button"
+                  onClick={() => {
+                    setMilitaryUnitEditingId(null)
+                    setMilitaryDeptDefaultId(null)
+                    setMilitaryParentDefaultId(null)
+                    setMilitaryHistCountryDefaultId(
+                      isHistorical ? country.id : null,
+                    )
+                    setMilitaryBranchDefault(null)
+                    setMilitaryUnitModalOpen(true)
+                  }}
+                >
+                  <FiPlus size={14} /> 사령부·부대 등록
+                </AddButton>
+              )}
 
-          <HeaderActions>
-            {subQuery === 'wars' ? (
-              <AddButton
-                type="button"
-                onClick={() => navigate(pathKeys.events.create())}
-              >
-                <FiPlus size={14} /> 군사 사건 등록
-              </AddButton>
-            ) : (
-              <AddButton
-                type="button"
-                onClick={() => {
-                  setMilitaryUnitEditingId(null)
-                  setMilitaryDeptDefaultId(null)
-                  setMilitaryParentDefaultId(null)
-                  setMilitaryHistCountryDefaultId(
-                    isHistorical ? country.id : null,
-                  )
-                  setMilitaryBranchDefault(null)
-                  setMilitaryUnitModalOpen(true)
-                }}
-              >
-                <FiPlus size={14} /> 사령부·부대 등록
-              </AddButton>
-            )}
-
-            <PopoverMenu
-              ariaLabel="군사 화면 설정 및 이동 메뉴"
-              title="요약 지표 표시 · 군사 카탈로그 이동"
-              active={showHeadlineStats}
-              items={[
-                {
-                  id: 'toggle-summary',
-                  label: '요약 지표 카드 표시',
-                  icon: <FiBarChart2 size={13} />,
-                  checked: showHeadlineStats,
-                  onSelect: () => setShowHeadlineStats((prev) => !prev),
-                },
-                {
-                  id: 'alt-create',
-                  label:
-                    subQuery === 'wars'
-                      ? '사령부·부대 등록'
-                      : '군사 사건 등록',
-                  icon: <FiPlus size={13} />,
-                  onSelect: () => {
-                    if (subQuery === 'wars') {
-                      setMilitaryUnitEditingId(null)
-                      setMilitaryDeptDefaultId(null)
-                      setMilitaryParentDefaultId(null)
-                      setMilitaryHistCountryDefaultId(
-                        isHistorical ? country.id : null,
-                      )
-                      setMilitaryBranchDefault(null)
-                      setMilitaryUnitModalOpen(true)
-                    } else {
-                      navigate(pathKeys.events.create())
-                    }
+              <PopoverMenu
+                ariaLabel="군사 화면 설정 및 이동 메뉴"
+                title="요약 지표 표시 · 군사 카탈로그 이동"
+                active={showHeadlineStats}
+                items={[
+                  {
+                    id: 'toggle-summary',
+                    label: '요약 지표 카드 표시',
+                    icon: <FiBarChart2 size={13} />,
+                    checked: showHeadlineStats,
+                    onSelect: () => setShowHeadlineStats((prev) => !prev),
                   },
-                },
-                { type: 'divider', id: 'div-catalog' },
-                {
-                  id: 'open-catalog',
-                  label: '전체 군사 카탈로그에서 보기',
-                  icon: <FiExternalLink size={13} />,
-                  onSelect: () =>
-                    navigate(
-                      `${pathKeys.military()}?country=${encodeURIComponent(country.name)}`,
-                    ),
-                },
-              ]}
-            />
-          </HeaderActions>
-        </HeaderBar>
+                  {
+                    id: 'alt-create',
+                    label:
+                      subQuery === 'wars'
+                        ? '사령부·부대 등록'
+                        : '군사 사건 등록',
+                    icon: <FiPlus size={13} />,
+                    onSelect: () => {
+                      if (subQuery === 'wars') {
+                        setMilitaryUnitEditingId(null)
+                        setMilitaryDeptDefaultId(null)
+                        setMilitaryParentDefaultId(null)
+                        setMilitaryHistCountryDefaultId(
+                          isHistorical ? country.id : null,
+                        )
+                        setMilitaryBranchDefault(null)
+                        setMilitaryUnitModalOpen(true)
+                      } else {
+                        navigate(pathKeys.events.create())
+                      }
+                    },
+                  },
+                  { type: 'divider', id: 'div-catalog' },
+                  {
+                    id: 'open-catalog',
+                    label: '전체 군사 카탈로그에서 보기',
+                    icon: <FiExternalLink size={13} />,
+                    onSelect: () =>
+                      navigate(
+                        `${pathKeys.military()}?country=${encodeURIComponent(country.name)}`,
+                      ),
+                  },
+                ]}
+              />
+            </>
+          }
+        />
 
         {showHeadlineStats ? (
           <DashboardStyles.SectionHeadlineStrip aria-label="군사 전력 요약 지표">
@@ -506,23 +495,6 @@ const SectionCanvas = styled.div`
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
-`
-
-const HeaderBar = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  padding-bottom: 2px;
-`
-
-const HeaderActions = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
 `
 
 

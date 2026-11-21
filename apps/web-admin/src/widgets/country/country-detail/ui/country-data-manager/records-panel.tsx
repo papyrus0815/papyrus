@@ -6,6 +6,7 @@ import {
   useUpdateCountryRecord,
   useDeleteCountryRecord,
 } from '@/entities/country/api.records'
+import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 
@@ -99,7 +100,7 @@ export function RecordsPanel({ countryId }: Props) {
             {isLoading ? (
               <tr>
                 <td colSpan={3}>
-                  <S.EmptyHint>불러오는 중…</S.EmptyHint>
+                  <ChartSkeleton variant="bars" rows={3} />
                 </td>
               </tr>
             ) : records.length === 0 ? (

@@ -5,6 +5,7 @@
  * - 단일 레벨 3모드 보기 전환: [2열 원장 | 존속 스팬 바 | 세기 계보도] (중복 헤드라인·이중 스위처 제거)
  * - 2열 원장 내 전체 통사 대비 '상대 존속 위치 미니 스팬 바' + 존속 연수 배지 + 변천/소속/외교 관계 칩
  */
+import { CountryTabEmptyState } from './country-tab-empty-state'
 import { useMemo, useState } from 'react'
 
 import { useQueryClient } from '@tanstack/react-query'
@@ -12,6 +13,8 @@ import {
   FiAlignLeft,
   FiArrowRight,
   FiChevronRight,
+  FiClock,
+  FiGitBranch,
   FiGitCommit,
   FiLayers,
   FiList,
@@ -69,6 +72,7 @@ import {
   toLinkScopedPeriod,
 } from '@/shared/lib/country-period'
 import { pathKeys } from '@/shared/router'
+import { SectionSubNav, SubNavFigure } from '@/shared/ui/section-sub-nav/section-sub-nav'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import {
   CountryPicker,
@@ -88,8 +92,6 @@ import * as DashboardStyles from './country-detail-dashboard.styles'
 import {
   LedgerFilterChip,
   LedgerPrimaryButton,
-  LedgerViewSwitch,
-  LedgerViewSwitchItem,
 } from './country-ledger-primitives'
 import { ChartSkeleton } from './dashboard-panels/chart-skeleton'
 import { LineageFlow } from './dashboard-panels/lineage-flow'
@@ -817,59 +819,42 @@ export function LinkedHistoricalCountriesSection({
   return (
     <DashboardStyles.DashboardRoot>
       <SectionWrap>
-        <HeadRow>
-          <HeadText>
-            <Title>과거 국가 · 역사 계보</Title>
-            <Description>
-              {country.name}의 직계 전신·구성 정치체·역사 유산 계보와 국체 분포, 변천·외교 관계를 인포그래픽으로 조망합니다.
-            </Description>
-          </HeadText>
-
-          <HeadActions>
-            {count > 0 && (
-              <LedgerViewSwitch role="tablist" aria-label="과거 국가 보기 방식">
-                <LedgerViewSwitchItem
-                  type="button"
-                  role="tab"
-                  aria-selected={viewMode === 'list'}
-                  $active={viewMode === 'list'}
-                  onClick={() => setViewMode('list')}
-                >
-                  <FiList size={13} />
-                  <span>2열 원장</span>
-                </LedgerViewSwitchItem>
-                <LedgerViewSwitchItem
-                  type="button"
-                  role="tab"
-                  aria-selected={viewMode === 'span'}
-                  $active={viewMode === 'span'}
-                  onClick={() => setViewMode('span')}
-                >
-                  <FiAlignLeft size={13} />
-                  <span>존속 스팬 바</span>
-                </LedgerViewSwitchItem>
-                <LedgerViewSwitchItem
-                  type="button"
-                  role="tab"
-                  aria-selected={viewMode === 'century'}
-                  $active={viewMode === 'century'}
-                  onClick={() => setViewMode('century')}
-                >
-                  <FiGitCommit size={13} />
-                  <span>세기 계보도</span>
-                </LedgerViewSwitchItem>
-              </LedgerViewSwitch>
+        {/* 제목은 위 탭('과거국가')이 맡는다 — 보기 전환을 왼쪽 알약으로, 연결은 오른쪽 */}
+        <SectionSubNav<LinkedViewMode>
+          ariaLabel="과거 국가 보기 방식"
+          kind="views"
+          tabs={
+            count > 0
+              ? [
+                  { key: 'list', label: '2열 원장', icon: <FiList size={13} aria-hidden /> },
+                  { key: 'span', label: '존속 스팬 바', icon: <FiAlignLeft size={13} aria-hidden /> },
+                  { key: 'century', label: '세기 계보도', icon: <FiGitCommit size={13} aria-hidden /> },
+                ]
+              : undefined
+          }
+          activeTab={viewMode}
+          onTabChange={setViewMode}
+          summary={
+            <span>
+              연결된 과거 국가 <SubNavFigure>{count}</SubNavFigure>
+            </span>
+          }
+          actions={
+            <>
+            {/* 비어 있으면 등록은 빈 화면의 버튼 하나만 */}
+            {isLinkedDataLoading || count === 0 ? null : (
+              <LedgerPrimaryButton
+                type="button"
+                disabled={isMutatingLink}
+                onClick={() => setIsPickerOpen(true)}
+              >
+                <FiPlus size={14} />
+                <span>과거 국가 연결</span>
+              </LedgerPrimaryButton>
             )}
-            <LedgerPrimaryButton
-              type="button"
-              disabled={isMutatingLink}
-              onClick={() => setIsPickerOpen(true)}
-            >
-              <FiPlus size={14} />
-              <span>과거 국가 연결</span>
-            </LedgerPrimaryButton>
-          </HeadActions>
-        </HeadRow>
+            </>
+          }
+        />
 
         {count > 0 && (
           <BentoHeaderWrap aria-label="연결된 과거 국가 인포그래픽 요약">
@@ -1059,32 +1044,18 @@ export function LinkedHistoricalCountriesSection({
         {isLinkedDataLoading ? (
           <ChartSkeleton variant="bars" rows={5} />
         ) : count === 0 ? (
-          <EmptySpecGrid>
-            <EmptySpecCell>
-              <EmptySpecTitle>
-                1. 이 탭에서 과거 국가 직접 연결
-              </EmptySpecTitle>
-              <EmptySpecDesc>
-                「+ 과거 국가 연결」로 기존 역사적 국가를 선택하거나 새로 등록하면 {country.name}의 전신·구성 정치체·역사 유산 계보에 즉시 연결됩니다.
-              </EmptySpecDesc>
-              <EmptyActionBtn
-                type="button"
-                disabled={isMutatingLink}
-                onClick={() => setIsPickerOpen(true)}
-              >
-                <FiPlus size={12} />
-                <span>과거 국가 연결하기</span>
-              </EmptyActionBtn>
-            </EmptySpecCell>
-            <EmptySpecCell>
-              <EmptySpecTitle>
-                2. 전신 · 구성 정치체 · 역사 유산 자동 분류
-              </EmptySpecTitle>
-              <EmptySpecDesc>
-                연결된 역사 국가들 사이에 계승·변천이나 소속·구성 관계를 입력하면 직계 전신, 구성 정치체, 역사 유산으로 자동 분류됩니다.
-              </EmptySpecDesc>
-            </EmptySpecCell>
-          </EmptySpecGrid>
+          <CountryTabEmptyState
+            Icon={FiClock}
+            title="아직 연결된 과거 국가가 없습니다"
+            description="이 국가의 전신이거나 이 국가를 이룬 역사 국가를 연결합니다. 역사 국가끼리 계승·소속 관계를 넣으면 계보가 자동으로 나뉩니다."
+            actionLabel="과거 국가 연결"
+            onAction={() => setIsPickerOpen(true)}
+            features={[
+              { Icon: FiGitBranch, title: '계보 자동 분류', description: '직계 전신 · 구성 정치체 · 역사 유산으로 나눔' },
+              { Icon: FiAlignLeft, title: '존속 스팬 바', description: '나라마다 존속 기간을 한 시간축에 겹쳐 보기' },
+              { Icon: FiGitCommit, title: '세기 계보도', description: '세기마다 어떤 정치체가 이어졌는지 흐름으로' },
+            ]}
+          />
         ) : viewMode !== 'list' ? (
           <FlowSectionWrap>
             <LineageFlow
@@ -1487,44 +1458,6 @@ const SectionWrap = styled.section`
   display: flex;
   flex-direction: column;
   width: 100%;
-`
-
-const HeadRow = styled.div`
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding-bottom: 14px;
-`
-
-const HeadText = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-`
-
-const HeadActions = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-`
-
-const Title = styled.h3`
-  margin: 0;
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const Description = styled.p`
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const BentoHeaderWrap = styled.div`
@@ -2239,66 +2172,3 @@ const RelationArrow = styled.span`
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const EmptySpecGrid = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-
-  @media (min-width: 720px) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-`
-
-const EmptySpecCell = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 16px 14px;
-  min-width: 0;
-
-  & + & {
-    border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  }
-
-  @media (min-width: 720px) {
-    & + & {
-      border-top: none;
-      border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-    }
-  }
-`
-
-const EmptySpecTitle = styled.div`
-  font-size: 12.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const EmptySpecDesc = styled.p`
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.55;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const EmptyActionBtn = styled.button`
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 4px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
-`

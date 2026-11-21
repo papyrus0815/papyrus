@@ -128,6 +128,7 @@ import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
 import { pathKeys } from '@/shared/router'
 import { Z_INDEX } from '@/shared/styles/z-index'
+import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { PersonSelectField } from '@/shared/ui/form-fields/person-select-field'
@@ -171,6 +172,7 @@ import {
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { RichTextProseWithEntityClicks } from '@/shared/ui/rich-text-read-view'
 import { AddButton } from '@/shared/ui/section-page-layout'
+import { SectionSubNav } from '@/shared/ui/section-sub-nav/section-sub-nav'
 import { notify } from '@/shared/ui/toast'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 
@@ -188,7 +190,7 @@ import {
 import * as DashboardStyles from './country-detail-dashboard.styles'
 import { CountryPoliticalPartiesBlock } from './country-political-parties-block.widget'
 import { LinkedEventPickerField } from './linked-event-picker-field'
-import { PoliticsEmptyState } from './politics-form/politics-empty-state'
+import { CountryTabEmptyState } from './country-tab-empty-state'
 import * as FormS from './military-unit-form/styles'
 import {
   ELECTION_STATUS_TONE,
@@ -279,10 +281,6 @@ import {
   PartyShareStats,
   PartyShareSwatch,
   PartyTableCellStrong,
-  PoliticsSubNavBar,
-  PoliticsSubTabBtn,
-  PoliticsSubTabCount,
-  PoliticsSubTabList,
   PoliticsTabPanel,
   PoliticsTabSubsection,
   ReferendumBallotAddRow,
@@ -2281,63 +2279,49 @@ export function CountryElectionsSection({
           예전엔 위 탭('정당·선거') 아래에 제목 '선거·투표' + 사용법 설명 줄이 끼고, 그 아래 위 탭과
           같은 부품의 탭이 또 서서 두 단계가 구분되지 않았다. 하위 탭은 알약으로 낮춰 위 탭과 가른다.
         */}
-        <PoliticsSubNavBar>
-          <PoliticsSubTabList role="tablist" aria-label="정당·선거 하위 메뉴">
-            {(
-              [
-                { key: 'parties', label: '정당', count: parties.length },
-                { key: 'elections', label: '선거', count: list.length },
-              ] as const
-            ).map((tab) => {
-              const isActive = politicsViewTab === tab.key
-              return (
-                <PoliticsSubTabBtn
-                  key={tab.key}
+        <SectionSubNav<'parties' | 'elections'>
+          ariaLabel="정당·선거 하위 메뉴"
+          tabs={[
+            { key: 'parties', label: '정당', count: parties.length },
+            { key: 'elections', label: '선거', count: list.length },
+          ]}
+          activeTab={politicsViewTab}
+          onTabChange={handlePoliticsViewTab}
+          actions={
+            <>
+              {/* 목록이 비어 있으면 빈 상태의 등록 버튼 하나만 — 같은 버튼이 두 개 서지 않게 */}
+              {politicsViewTab === 'elections' ? (
+                listLoading || list.length === 0 ? null : (
+                  <AddButton
+                    type="button"
+                    onClick={() => setElectionModal({ mode: 'create' })}
+                    title={
+                      historicalCountryId
+                        ? '이 역사 국가 기준으로 선거를 등록합니다'
+                        : '이 국가의 선거를 등록합니다 — 정당을 먼저 등록하면 집계·후보에 연결할 수 있습니다'
+                    }
+                  >
+                    <FiPlus size={14} strokeWidth={2.25} aria-hidden />
+                    선거 등록
+                  </AddButton>
+                )
+              ) : !electionPartyId && parties.length > 0 ? (
+                <AddButton
                   type="button"
-                  role="tab"
-                  aria-selected={isActive}
-                  $active={isActive}
-                  onClick={() => handlePoliticsViewTab(tab.key)}
+                  onClick={() => setPartyCreateTick((tick) => tick + 1)}
+                  title={
+                    historicalCountryId
+                      ? '이 역사 국가 기준으로 정당을 등록합니다'
+                      : '이 국가의 정당을 등록합니다'
+                  }
                 >
-                  <span>{tab.label}</span>
-                  <PoliticsSubTabCount $active={isActive}>
-                    {tab.count}
-                  </PoliticsSubTabCount>
-                </PoliticsSubTabBtn>
-              )
-            })}
-          </PoliticsSubTabList>
-          {/* 목록이 비어 있으면 빈 상태의 등록 버튼 하나만 — 같은 버튼이 두 개 서지 않게 */}
-          {politicsViewTab === 'elections' ? (
-            listLoading || list.length === 0 ? null : (
-              <AddButton
-                type="button"
-                onClick={() => setElectionModal({ mode: 'create' })}
-                title={
-                  historicalCountryId
-                    ? '이 역사 국가 기준으로 선거를 등록합니다'
-                    : '이 국가의 선거를 등록합니다 — 정당을 먼저 등록하면 집계·후보에 연결할 수 있습니다'
-                }
-              >
-                <FiPlus size={14} strokeWidth={2.25} aria-hidden />
-                선거 등록
-              </AddButton>
-            )
-          ) : !electionPartyId && parties.length > 0 ? (
-            <AddButton
-              type="button"
-              onClick={() => setPartyCreateTick((tick) => tick + 1)}
-              title={
-                historicalCountryId
-                  ? '이 역사 국가 기준으로 정당을 등록합니다'
-                  : '이 국가의 정당을 등록합니다'
-              }
-            >
-              <FiPlus size={14} strokeWidth={2.25} aria-hidden />
-              정당 등록
-            </AddButton>
-          ) : null}
-        </PoliticsSubNavBar>
+                  <FiPlus size={14} strokeWidth={2.25} aria-hidden />
+                  정당 등록
+                </AddButton>
+              ) : null}
+            </>
+          }
+        />
 
         {politicsViewTab === 'parties' ? (
           <CountryPoliticalPartiesBlock
@@ -2534,7 +2518,7 @@ export function CountryElectionsSection({
             ) : null}
 
             {!listLoading && list.length === 0 ? (
-              <PoliticsEmptyState
+              <CountryTabEmptyState
                 Icon={FiCheckSquare}
                 title="아직 등록된 선거가 없습니다"
                 description="첫 선거를 등록하면 정당별 득표·의석, 선거구·후보 개표 결과, 국민투표 안건을 이 국가에 쌓아 갈 수 있습니다."
@@ -2702,7 +2686,7 @@ export function CountryElectionsSection({
                 ) : null}
                 {listLoading ? (
                   <ElectionListScrollArea>
-                    <EmptyHint>목록 불러오는 중…</EmptyHint>
+                    <ChartSkeleton variant="bars" rows={6} />
                   </ElectionListScrollArea>
                 ) : sortedList.length === 0 ? (
                   <ElectionListScrollArea>
@@ -2856,11 +2840,7 @@ export function CountryElectionsSection({
                     </ElectionDetailEmptyCard>
                   )
                 ) : detailLoading || !detailMatchesSelection || !detail ? (
-                  <ElectionDetailEmptyCard>
-                    <ElectionDetailEmptyTitle>
-                      불러오는 중…
-                    </ElectionDetailEmptyTitle>
-                  </ElectionDetailEmptyCard>
+                  <ChartSkeleton variant="text" lines={6} />
                 ) : (
                   <ElectionDetailSurface key={detail.id}>
                     <ElectionDetailPanel
@@ -6963,7 +6943,7 @@ function ElectionDetailPanel({
                   }}
                 >
                   {electionMentionPartyLoading ? (
-                    <EmptyHint style={{ padding: 16 }}>불러오는 중…</EmptyHint>
+                    <ChartSkeleton variant="text" lines={4} />
                   ) : electionMentionParty ? (
                     <>
                       <PartyDetailHero

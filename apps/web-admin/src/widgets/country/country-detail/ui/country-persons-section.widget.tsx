@@ -8,17 +8,22 @@
  * - 3모드 보기 전환: [2열 원장 | 초상 카드 | 생애 연대기(동시대 코호트 바)]
  * - 행 클릭 시 PersonInlineModal 인라인 상세 미리보기(편집·상세 페이지 이동 연동)
  */
+import { CountryTabEmptyState } from './country-tab-empty-state'
 import { useMemo, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   FiAlignLeft,
   FiArrowUpRight,
+  FiBarChart2,
+  FiBriefcase,
   FiChevronDown,
+  FiFlag,
   FiGrid,
   FiList,
   FiPlus,
   FiSearch,
+  FiUsers,
   FiX,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
@@ -56,6 +61,7 @@ import {
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
+import { SectionSubNav, SubNavFigure } from '@/shared/ui/section-sub-nav/section-sub-nav'
 import { InfluenceBadge } from '@/shared/ui/influence-badge'
 import { PersonRegisterViewModal } from '@/widgets/country/country-list/ui/person-register-view-modal'
 import { PersonInlineModal } from '@/widgets/person/person-inline-modal/person-inline-modal'
@@ -940,48 +946,50 @@ export function CountryPersonsSection({
   return (
     <DashboardStyles.DashboardRoot>
       <SectionWrap>
-        <HeadRow>
-          <HeadText>
-            <Title>
-              {isHistoricalCountry
-                ? `${country.name} 소속 인물 원장`
-                : '소속 인물 · 역사 인물 원장'}
-            </Title>
-            <Description>
-              {isHistoricalCountry
-                ? `${country.name} 주 국적 · 재위 · 관직 재임 · 소속 기록이 있는 3원 합집합 인물입니다. 상단 차트를 클릭해 직역·세기별로 즉시 좁혀보세요.`
-                : `${country.name} 현대 국가 축과 연결된 과거 국가별 인물을 함께 조망합니다. 상단 차트 막대·범례를 클릭하면 목록이 즉시 연동됩니다.`}
-            </Description>
-          </HeadText>
-
-          <HeadActions>
-            <LedgerToolbarButton type="button" onClick={handleGoGovernment}>
-              <span>정부·행정</span>
-              <FiArrowUpRight size={13} />
-            </LedgerToolbarButton>
-            <LedgerToolbarButton
-              type="button"
-              onClick={() =>
-                navigate(
-                  `${pathKeys.personsTimeline()}?countries=${encodeURIComponent(country.name)}`,
-                )
-              }
-            >
-              <span>인물 타임라인</span>
-              <FiArrowUpRight size={13} />
-            </LedgerToolbarButton>
-            <LedgerPrimaryButton
-              type="button"
-              onClick={() => {
-                setEditPersonId(null)
-                setRegisterModalOpen(true)
-              }}
-            >
-              <FiPlus size={14} />
-              <span>인물 등록</span>
-            </LedgerPrimaryButton>
-          </HeadActions>
-        </HeadRow>
+        {/* 제목은 위 탭('인물')이 맡는다 — 여기는 수치 한 줄과 할 일만 */}
+        <SectionSubNav
+          summary={
+            <span>
+              {isHistoricalCountry ? '소속 인물' : '소속·역사 인물'}{' '}
+              <SubNavFigure>
+                {summaryStats.totalCount.toLocaleString('ko-KR')}
+              </SubNavFigure>
+              명
+            </span>
+          }
+          actions={
+            <>
+              <LedgerToolbarButton type="button" onClick={handleGoGovernment}>
+                <span>정부·행정</span>
+                <FiArrowUpRight size={13} />
+              </LedgerToolbarButton>
+              <LedgerToolbarButton
+                type="button"
+                onClick={() =>
+                  navigate(
+                    `${pathKeys.personsTimeline()}?countries=${encodeURIComponent(country.name)}`,
+                  )
+                }
+              >
+                <span>인물 타임라인</span>
+                <FiArrowUpRight size={13} />
+              </LedgerToolbarButton>
+              {/* 비어 있으면 등록은 빈 화면의 버튼 하나만 */}
+              {isLoading || !hasAny ? null : (
+                <LedgerPrimaryButton
+                  type="button"
+                  onClick={() => {
+                    setEditPersonId(null)
+                    setRegisterModalOpen(true)
+                  }}
+                >
+                  <FiPlus size={14} />
+                  <span>인물 등록</span>
+                </LedgerPrimaryButton>
+              )}
+            </>
+          }
+        />
 
         {hasAny && (
           <PersonsBentoWrap aria-label="소속 인물 인포그래픽 요약">
@@ -1291,39 +1299,26 @@ export function CountryPersonsSection({
             </RetryButton>
           </ErrorRow>
         ) : !hasAny ? (
-          <EmptySpecGrid>
-            <EmptySpecCell>
-              <EmptySpecTitle>
-                1. 주 국적 · 시대별 소속 국가 지정
-              </EmptySpecTitle>
-              <EmptySpecDesc>
-                인물 등록·수정 화면에서 주 국적 또는 소속 국가를 {country.name}
-                {isHistoricalCountry ? '' : ' 및 연결된 과거 국가'}로 지정하면 자동 집계됩니다.
-              </EmptySpecDesc>
-              <EmptyActionBtn
-                type="button"
-                onClick={() => {
-                  setEditPersonId(null)
-                  setRegisterModalOpen(true)
-                }}
-              >
-                <FiPlus size={12} />
-                <span>인물 등록하기</span>
-              </EmptyActionBtn>
-            </EmptySpecCell>
-            <EmptySpecCell>
-              <EmptySpecTitle>
-                2. 내각 · 행정기관 · 군 부대 재임 등록
-              </EmptySpecTitle>
-              <EmptySpecDesc>
-                정부·행정 또는 군사 탭에서 내각 각료·중앙부처 기관장·지휘관 재임 기록을 연결하면 별도 국적 설정 없이도 함께 묶입니다.
-              </EmptySpecDesc>
-              <EmptyActionBtn type="button" onClick={handleGoGovernment}>
-                <span>정부·행정으로 이동</span>
-                <FiArrowUpRight size={12} />
-              </EmptyActionBtn>
-            </EmptySpecCell>
-          </EmptySpecGrid>
+          <CountryTabEmptyState
+            Icon={FiUsers}
+            title="아직 이 국가와 연결된 인물이 없습니다"
+            description={`인물의 주 국적이나 시대별 소속 국가를 ${country.name}${isHistoricalCountry ? '' : '(또는 연결된 과거 국가)'}로 지정하면 여기에 모입니다. 내각·행정기관·군 부대 재임을 기록해도 함께 묶입니다.`}
+            actionLabel="인물 등록"
+            onAction={() => {
+              setEditPersonId(null)
+              setRegisterModalOpen(true)
+            }}
+            secondaryAction={{
+              label: '정부·행정에서 재임 기록',
+              Icon: FiArrowUpRight,
+              onClick: handleGoGovernment,
+            }}
+            features={[
+              { Icon: FiFlag, title: '소속 정치체 · 시대', description: '현대 국가와 과거 국가별로 나눠 비중을 봄' },
+              { Icon: FiBarChart2, title: '세기별 활동', description: '어느 세기에 인물이 몰렸는지 막대로' },
+              { Icon: FiBriefcase, title: '직역 · 역할', description: '군주·관료·군인 등 역할 구성' },
+            ]}
+          />
         ) : (
           <>
             <FilterToolbar>
@@ -1832,43 +1827,6 @@ const SectionWrap = styled.section`
   display: flex;
   flex-direction: column;
   width: 100%;
-`
-
-const HeadRow = styled.div`
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding-bottom: 14px;
-`
-
-const HeadText = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-`
-
-const Title = styled.h3`
-  margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const Description = styled.p`
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const HeadActions = styled.div`
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
 `
 
 const InlineCardResetBtn = styled.button`
@@ -2465,70 +2423,6 @@ const RetryButton = styled.button`
   color: ${({ theme }) => ledgerAccent(theme.mode)};
   text-decoration: underline;
   cursor: pointer;
-`
-
-const EmptySpecGrid = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-
-  @media (min-width: 720px) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-`
-
-const EmptySpecCell = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 16px 14px;
-  min-width: 0;
-
-  & + & {
-    border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  }
-
-  @media (min-width: 720px) {
-    & + & {
-      border-top: none;
-      border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-    }
-  }
-`
-
-const EmptySpecTitle = styled.div`
-  font-size: 12.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const EmptySpecDesc = styled.p`
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.55;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const EmptyActionBtn = styled.button`
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 4px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
-  cursor: pointer;
-
-  &:hover {
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
 `
 
 const PersonsBentoWrap = styled.div`

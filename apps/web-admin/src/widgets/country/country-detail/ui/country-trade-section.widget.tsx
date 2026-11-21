@@ -14,7 +14,7 @@ import {
   ModalOverlay,
   ModalTitle,
 } from '@/shared/ui/modal/modal.styles'
-import { SectionTabHeader } from '@/shared/ui/section-page-layout'
+import { SectionSubNav } from '@/shared/ui/section-sub-nav/section-sub-nav'
 
 import { CountryDataManagerModal } from './country-data-manager/country-data-manager-modal'
 import { TradePanel } from './country-data-manager/trade-panel'
@@ -55,11 +55,10 @@ export function CountryTradeSection({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.28, ease: [0.25, 0.46, 0.45, 0.94] }}
     >
-      <SectionTabHeader
-        variant="plain"
-        title="교역"
-        description="연도별 수출·수입 규모와 무역수지, 주요 교역 상대국 Top 5 비교 및 품목 구성을 탐색합니다."
-        rightSlot={
+      {/* 제목은 위 탭('교역')이 맡는다 — 본문 첫 묶음이 '연도별 교역 추이'로 이어진다 */}
+      <SectionSubNav
+        summary={<span>연도별 수출·수입 · 교역 상대국 · 품목</span>}
+        actions={
           <BentoActionBtn
             type="button"
             $accent

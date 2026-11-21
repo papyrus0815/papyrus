@@ -43,6 +43,7 @@ import {
 import { formatDateRange, parseIsoDateParts } from '@/shared/lib/iso-date'
 import { militaryUnitTypeLabelKo } from '@/shared/lib/military-unit-type-label'
 import { pathKeys } from '@/shared/router'
+import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
 import { EmptyStateSpotlight } from '@/shared/ui/empty-state/empty-state'
 import { PopoverMenu } from '@/shared/ui/popover-menu'
 import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal/country-inline-modal'
@@ -594,7 +595,7 @@ export function CountryMilitaryWarsPanel({
         </FilterToolbar>
 
         {militaryEventsQuery.isLoading ? (
-          <LoadingBox>참전 전쟁·전투 기록을 불러오는 중입니다…</LoadingBox>
+          <ChartSkeleton variant="bars" rows={5} />
         ) : rawEvents.length === 0 ? (
           <EmptyStateSpotlight
             flat
@@ -947,13 +948,6 @@ const ClearBtn = styled.button`
   background: transparent;
   color: ${({ theme }) => theme.colors.text.tertiary};
   cursor: pointer;
-`
-
-const LoadingBox = styled.div`
-  padding: 44px 20px;
-  text-align: center;
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.secondary};
 `
 
 const TableScroll = styled.div`

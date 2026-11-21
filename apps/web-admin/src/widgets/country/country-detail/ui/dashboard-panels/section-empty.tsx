@@ -3,8 +3,9 @@ import styled from 'styled-components'
 interface Props {
   /** 이 자리에 무엇이 들어오는지 — '없습니다'로 끝내지 않고 무엇을 넣으면 뭐가 보이는지까지 */
   text: string
-  actionLabel: string
-  onAction: () => void
+  /** 비우면 버튼 없이 — 같은 일을 하는 버튼이 이미 위(탭 하위 메뉴)에 있을 때 */
+  actionLabel?: string
+  onAction?: () => void
   /** 부차 진입(전체 목록으로 가기 등) */
   secondaryLabel?: string
   onSecondary?: () => void
@@ -43,16 +44,20 @@ export function SectionEmpty({
           </HintRow>
         )}
       </TextColumn>
-      <Actions>
-        <Primary type="button" onClick={onAction}>
-          + {actionLabel}
-        </Primary>
-        {secondaryLabel && onSecondary && (
-          <Secondary type="button" onClick={onSecondary}>
-            {secondaryLabel}
-          </Secondary>
-        )}
-      </Actions>
+      {(actionLabel && onAction) || (secondaryLabel && onSecondary) ? (
+        <Actions>
+          {actionLabel && onAction ? (
+            <Primary type="button" onClick={onAction}>
+              + {actionLabel}
+            </Primary>
+          ) : null}
+          {secondaryLabel && onSecondary && (
+            <Secondary type="button" onClick={onSecondary}>
+              {secondaryLabel}
+            </Secondary>
+          )}
+        </Actions>
+      ) : null}
     </Box>
   )
 }

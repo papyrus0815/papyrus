@@ -1,7 +1,16 @@
+import { CountryTabEmptyState } from './country-tab-empty-state'
 import { useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiExternalLink, FiPlus, FiSearch } from 'react-icons/fi'
+import {
+  FiBookOpen,
+  FiExternalLink,
+  FiGitBranch,
+  FiLayers,
+  FiPlus,
+  FiSearch,
+  FiUsers,
+} from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import styled, { useTheme } from 'styled-components'
 
@@ -35,8 +44,10 @@ import type { Ethnicity } from '@/shared/api/ethnicity'
 import { ethnicityApi } from '@/shared/api/ethnicity'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import { pathKeys } from '@/shared/router'
+import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
+import { SectionSubNav, SubNavFigure } from '@/shared/ui/section-sub-nav/section-sub-nav'
 import { confirm } from '@/shared/ui/confirm-dialog'
-import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
+import { AddButton } from '@/shared/ui/section-page-layout'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 import { notify } from '@/shared/ui/toast'
 
@@ -312,11 +323,14 @@ export function EthnicitySection({
 
   return (
     <Root>
-      <SectionTabHeader
-        variant="plain"
-        title="구성 민족"
-        description="이 국가에 거주·소속된 주요 민족 집단을 연결하고 관리합니다. 민족 마스터 데이터는 전체 민족 관리에서 등록·수정할 수 있습니다."
-        rightSlot={
+      {/* 제목은 위 탭('민족')이 맡는다. 목록이 비면 편집은 빈 화면의 버튼 하나만 */}
+      <SectionSubNav
+        summary={
+          <span>
+            구성 민족 <SubNavFigure>{list.length.toLocaleString('ko-KR')}</SubNavFigure>
+          </span>
+        }
+        actions={
           <HeaderActions>
             <SecondaryBtn
               type="button"
@@ -325,45 +339,31 @@ export function EthnicitySection({
               <FiExternalLink size={14} />
               민족 전체 관리
             </SecondaryBtn>
-            <AddButton type="button" onClick={openEditModal}>
-              <FiPlus size={14} />
-              구성 민족 편집
-            </AddButton>
+            {isLoading || list.length === 0 ? null : (
+              <AddButton type="button" onClick={openEditModal}>
+                <FiPlus size={14} />
+                구성 민족 편집
+              </AddButton>
+            )}
           </HeaderActions>
         }
       />
 
       {isLoading ? (
-        <LoadingLine>구성 민족 목록을 불러오는 중…</LoadingLine>
+        <ChartSkeleton variant="bars" rows={4} />
       ) : list.length === 0 ? (
-        <EmptySpecGrid>
-          <EmptySpecCell>
-            <EmptySpecTitle>
-              1. 민족 마스터에서 구성 민족 선택·연결
-            </EmptySpecTitle>
-            <EmptySpecDesc>
-              이미 등록된 민족 마스터 카탈로그에서 이 국가를 구성하는 주류 민족과 소수 민족을 복수로 선택해 즉시 연결할 수 있습니다.
-            </EmptySpecDesc>
-            <EmptySpecAction type="button" onClick={openEditModal}>
-              + 구성 민족 편집 열기 →
-            </EmptySpecAction>
-          </EmptySpecCell>
-
-          <EmptySpecCell>
-            <EmptySpecTitle>
-              2. 신규 민족 등록 및 계통·서술 관리
-            </EmptySpecTitle>
-            <EmptySpecDesc>
-              민족 전체 관리 페이지에서 새로운 민족 명칭, 현지 표기, 상위 민족 계통, 역사·문화적 배경 설명을 등록한 뒤 국가와 연결하세요.
-            </EmptySpecDesc>
-            <EmptySpecAction
-              type="button"
-              onClick={() => navigate(pathKeys.ethnicities())}
-            >
-              민족 전체 관리로 이동 →
-            </EmptySpecAction>
-          </EmptySpecCell>
-        </EmptySpecGrid>
+        <CountryTabEmptyState
+          Icon={FiUsers}
+          title="아직 연결된 구성 민족이 없습니다"
+          description="민족 카탈로그에서 이 국가를 이루는 주류 민족과 소수 민족을 골라 연결합니다. 카탈로그에 없는 민족은 ‘민족 전체 관리’에서 먼저 등록합니다."
+          actionLabel="구성 민족 편집"
+          onAction={openEditModal}
+          features={[
+            { Icon: FiLayers, title: '주류 · 소수 민족', description: '여러 민족을 한 번에 골라 이 국가와 연결' },
+            { Icon: FiGitBranch, title: '민족 계통', description: '상위 민족 계통과 현지 표기를 카탈로그에서 관리' },
+            { Icon: FiBookOpen, title: '역사·문화 서술', description: '민족마다 배경 설명을 남기고 여러 국가에서 같이 씀' },
+          ]}
+        />
       ) : (
         <>
           <BentoGrid2Col aria-label="구성 민족 요약 인포그래픽">
@@ -711,75 +711,6 @@ const EmptyNotice = styled.p`
   margin: 0;
   font-size: 13.5px;
   color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const LoadingLine = styled.div`
-  padding: 28px 0;
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const EmptySpecGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-top: 1px solid ${({ theme }) => theme.colors.border.light};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-
-  @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-  }
-`
-
-const EmptySpecCell = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 20px 22px;
-
-  &:first-child {
-    border-right: 1px solid ${({ theme }) => theme.colors.border.light};
-  }
-
-  @media (max-width: 768px) {
-    &:first-child {
-      border-right: none;
-      border-bottom: 1px solid ${({ theme }) => theme.colors.border.light};
-    }
-  }
-`
-
-const EmptySpecTitle = styled.div`
-  font-size: 13.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const EmptySpecDesc = styled.p`
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const EmptySpecAction = styled.button`
-  margin-top: 4px;
-  padding: 5px 10px;
-  border-radius: 6px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-    color: ${({ theme }) => theme.colors.primary};
-    background: ${({ theme }) => theme.colors.hover};
-  }
 `
 
 const Toolbar = styled.div`

@@ -64,7 +64,6 @@ import {
 import { CountryDetailHeader } from './country-detail-header.widget'
 import * as TabStyles from './overview-sub-tabs.styles'
 import * as DashboardStyles from './country-detail-dashboard.styles'
-import { SectionTabHeader } from '@/shared/ui/section-page-layout'
 import { UnderlineTabButton } from '@/shared/ui/underline-tabs'
 import {
   historicalCountryKeys,
@@ -1448,11 +1447,6 @@ function HistoricalRegionsSection({ country }: { country: UnifiedCountry }) {
 
   return (
     <HistoricalRegionsPane>
-      <SectionTabHeader
-        variant="plain"
-        title="행정구역 · 강역 편제"
-        description="시기별 행정구역 체계(도·주·부·목·군·현)와 치소 좌표, 개편 계보를 인포그래픽과 계층 트리로 탐색합니다."
-      />
       <MapRegionAdministrativeView
         country={{
           id: country.id,

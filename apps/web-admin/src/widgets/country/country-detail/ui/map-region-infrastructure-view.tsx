@@ -30,6 +30,7 @@ import {
   StackedSegmentBar,
 } from '@/entities/event/ui/bento-primitives'
 import { InlineText } from '@/pages/events/detail/components/inline'
+import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { notify } from '@/shared/ui/toast'
 
@@ -535,7 +536,7 @@ export function MapRegionInfrastructureView({
 
   const listContent = (() => {
     if (isLoading) {
-      return <ListEmptyState palette={palette} message="불러오는 중..." />
+      return <ChartSkeleton variant="bars" rows={5} />
     }
     if (allInfra.length === 0) {
       return (
