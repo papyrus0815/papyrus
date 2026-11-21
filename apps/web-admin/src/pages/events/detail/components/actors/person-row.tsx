@@ -118,8 +118,6 @@ export function ActorPersonRow({
   const showUnassignedCountryPrompt =
     !compact && !readOnly && participationOptions.length > 1 && !participationName
 
-  const showEmptyPromptInlineWithMeta =
-    compact && !hasRole && !hasNote && !readOnly && offices.length > 0
   const showMeta = showSideTag || Boolean(participationName) || offices.length > 0
 
   const countryMenuItems = useMemo<PopoverMenuEntry[]>(() => {
@@ -144,7 +142,7 @@ export function ActorPersonRow({
     return [
       {
         id: 'edit',
-        label: '참여 내용 바꾸기 (역할 · 행적 · 소속)',
+        label: '편집 (역할 · 행적 · 소속국)',
         icon: <FiEdit2 size={13} />,
         onSelect: () => onOpenEdit(),
       },
@@ -312,21 +310,20 @@ export function ActorPersonRow({
                   </GhostRowBtn>
                 </>
               ) : (
-                !compact && (
-                  <GhostRowBtn
-                    type="button"
-                    onClick={onOpenEdit}
-                    title={`${fullName} 참여 내용 바꾸기`}
-                  >
-                    <span>참여 바꾸기</span>
-                  </GhostRowBtn>
-                )
+                <GhostRowBtn
+                  type="button"
+                  onClick={onOpenEdit}
+                  title={`${fullName} 역할 · 행적 · 소속국 편집`}
+                >
+                  <FiEdit2 aria-hidden />
+                  <span>편집</span>
+                </GhostRowBtn>
               )}
               <PopoverMenu
                 size="sm"
                 items={combinedMenuItems}
-                ariaLabel={`${fullName} 설정 및 작업 메뉴`}
-                title="역할·소속국·진영 편집 및 제거"
+                ariaLabel={`${fullName} 더보기 메뉴`}
+                title="역할 · 소속국 · 진영 배정 · 제외"
               />
             </RowControls>
           )}
@@ -340,16 +337,6 @@ export function ActorPersonRow({
               <OfficeAtEvent title="재임·재위 기록에서 사건 날짜에 맞춰 자동으로 보여 줍니다">
                 당시 {offices.join(' · ')}
               </OfficeAtEvent>
-            )}
-            {showEmptyPromptInlineWithMeta && (
-              <AddInfoButton
-                type="button"
-                $compact
-                $inline
-                onClick={onOpenEdit}
-              >
-                + 역할·행적 적기
-              </AddInfoButton>
             )}
           </PersonMetaLine>
         )}
@@ -370,13 +357,9 @@ export function ActorPersonRow({
             </ClampedProse>
           </PersonNoteLine>
         )}
-        {!hasRole && !hasNote && !showEmptyPromptInlineWithMeta && !readOnly && (
-          <AddInfoButton
-            type="button"
-            $compact={compact}
-            onClick={onOpenEdit}
-          >
-            {compact ? '+ 역할·행적 적기' : '+ 역할 · 행적 기록하기'}
+        {!compact && !hasRole && !hasNote && !readOnly && (
+          <AddInfoButton type="button" onClick={onOpenEdit}>
+            역할 · 행적 기록하기
           </AddInfoButton>
         )}
       </PersonBody>

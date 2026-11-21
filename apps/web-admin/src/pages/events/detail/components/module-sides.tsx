@@ -5,8 +5,15 @@ import { FiExternalLink, FiPlus, FiRepeat, FiX } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
+import { formatObservationValue } from '@/entities/evidence/lib/format-observation'
 import { toParticipants, participantKey } from '@/entities/event/model'
-import { RADIUS } from '@/entities/event/ui/ledger-tokens'
+import {
+  DIGIT_DISPLAY,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerSubtleFill,
+  RADIUS,
+} from '@/entities/event/ui/ledger-tokens'
 import { getApiConnection } from '@/shared/api/client'
 import {
   type EventSide,
@@ -35,7 +42,7 @@ import { notify } from '@/shared/ui/toast'
 import { PersonGroupCreateModal } from '@/widgets/person/person-group-create-modal/person-group-create-modal'
 
 import * as S from '../styles'
-import { type EventDetail, eventKeys } from '../use-event-detail'
+import { type EventDetail, eventKeys, eventObservationsQueryOptions } from '../use-event-detail'
 import { type PatchOptions } from '../use-undoable-patch'
 import { koParticle } from './actors/actor-link-modal.styles'
 import {
@@ -59,6 +66,14 @@ import {
   SubEventSidesRollupPanel,
 } from './side-doctrine-and-weapons'
 import { type AvailableMilitaryUnitItem, SideOrbatSection } from './side-orbat-tree'
+import {
+  buildMemberCells,
+  buildSideMetricRows,
+  buildUnitCells,
+  formatRate,
+  lossRate,
+  sideSizeOf,
+} from './side-metrics.lib'
 import { SIDE_OUTCOME_LABEL, SIDE_OUTCOME_OPTIONS } from './side-outcome'
 
 interface ModuleSidesProps {
@@ -252,6 +267,11 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
     staleTime: 30_000,
   })
 
+  const { data: observations = [] } = useQuery({
+    ...eventObservationsQueryOptions(event.id),
+    enabled: sides.length >= 2,
+  })
+
   /* 부대 고르기 목록(전체 군사 부대, 250KB) — 전투서열 칸이 하나라도 서 있을 때만 받는다 */
   const anyOrbatShown =
     (sideUnitsQuery.data?.length ?? 0) > 0 ||
@@ -271,6 +291,19 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
     return counts
   }, [sideWeaponsQuery.data])
 
+  const weaponTotalsBySideId = useMemo(() => {
+    const totals = new Map<string, { quantity: number; lost: number; itemCount: number }>()
+    for (const weapon of sideWeaponsQuery.data ?? []) {
+      const prev = totals.get(weapon.sideId) ?? { quantity: 0, lost: 0, itemCount: 0 }
+      totals.set(weapon.sideId, {
+        quantity: prev.quantity + (weapon.quantity ?? 0),
+        lost: prev.lost + (weapon.lost ?? 0),
+        itemCount: prev.itemCount + 1,
+      })
+    }
+    return totals
+  }, [sideWeaponsQuery.data])
+
   const sideUnitsBySideId = useMemo(() => {
     const map = new Map<string, SideUnitView[]>()
     for (const unit of sideUnitsQuery.data ?? []) {
@@ -280,6 +313,61 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
     }
     return map
   }, [sideUnitsQuery.data])
+
+  const sideQuantSummary = useMemo(() => {
+    if (coloredSides.length < 2) return null
+    const sideIds = coloredSides.map((side) => side.id)
+    const metricRows = buildSideMetricRows(observations, sideIds)
+    const participantSide = new Map<string, { sideId: string; name: string }>()
+    for (const row of countryRows) {
+      if (row.participantId && row.sideId && sideIds.includes(row.sideId)) {
+        participantSide.set(row.participantId, { sideId: row.sideId, name: row.name })
+      }
+    }
+    const unitSide = new Map<string, { sideId: string; name: string }>()
+    for (const unitEntry of sideUnitsQuery.data ?? []) {
+      if (sideIds.includes(unitEntry.sideId)) {
+        unitSide.set(unitEntry.id, { sideId: unitEntry.sideId, name: unitEntry.unit.name })
+      }
+    }
+    const memberCells = buildMemberCells(observations, participantSide)
+    const unitCells = buildUnitCells(observations, unitSide)
+
+    const bySideId = new Map<
+      string,
+      {
+        sizeValue: number | null
+        sizeLabel: string | null
+        rateValue: number | null
+        rateLabel: string | null
+      }
+    >()
+    for (const side of coloredSides) {
+      const size = sideSizeOf(metricRows, memberCells, side.id, unitCells)
+      const rate = lossRate(metricRows, side.id, memberCells, unitCells)
+      const sizeLabel = size
+        ? formatObservationValue(
+            size.derived
+              ? {
+                  ...size.observation,
+                  value: String(Math.round(size.value)),
+                  low: null,
+                  high: null,
+                  atLeast: false,
+                }
+              : size.observation,
+          )
+        : null
+      bySideId.set(side.id, {
+        sizeValue: size?.value ?? null,
+        sizeLabel,
+        rateValue: rate?.rate ?? null,
+        rateLabel: rate ? formatRate(rate.rate) : null,
+      })
+    }
+    const allHaveSize = coloredSides.every((side) => (bySideId.get(side.id)?.sizeValue ?? 0) > 0)
+    return { bySideId, allHaveSize }
+  }, [coloredSides, observations, countryRows, sideUnitsQuery.data])
 
   const sortedGroups = useMemo(() => {
     const all = groupsQuery.data ?? []
@@ -636,20 +724,25 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
         {sides.length > 0 && <S.SectionSubtitle>{sides.length}</S.SectionSubtitle>}
       </S.SectionHeader>
 
-      {/* 소속이 하나도 없으면 맞세울 것이 없다 — 예전엔 '진영 1 VS 진영 2 VS 진영 3 VS 진영 4 (소속 0)'이 그림으로 섰다 */}
-      {sides.length >= 2 && totalAssignedAcrossSides > 0 && (
+      {/* 소속이나 병력 수치가 하나라도 있으면 대결 구도 배너를 세운다 */}
+      {sides.length >= 2 && (totalAssignedAcrossSides > 0 || Boolean(sideQuantSummary?.allHaveSize)) && (
         <VsBanner role="region" aria-label="진영 대결 구도 요약">
           <VsTopRow>
             <VsTeamsWrap>
               {coloredSides.map((side, index) => {
                 const sideUnitCount = (sideUnitsBySideId.get(side.id) ?? []).length
                 const sidePartyCount = side.politicalParties?.length ?? 0
+                const quant = sideQuantSummary?.bySideId.get(side.id)
+                const weaponStat = weaponTotalsBySideId.get(side.id)
                 const countParts = [
                   side.participants.length > 0 ? `국가 ${side.participants.length}` : '',
                   personsOnSide(side.id).length > 0 ? `인물 ${personsOnSide(side.id).length}` : '',
                   sidePartyCount > 0 ? `정당 ${sidePartyCount}` : '',
                   side.organizations.length > 0 ? `조직 ${side.organizations.length}` : '',
                   sideUnitCount > 0 ? `부대 ${sideUnitCount}` : '',
+                  weaponStat && weaponStat.quantity > 0
+                    ? `병기 ${weaponStat.quantity.toLocaleString()}${weaponStat.lost > 0 ? `(손실 ${weaponStat.lost.toLocaleString()})` : ''}`
+                    : '',
                 ].filter(Boolean)
                 return (
                   <VsTeamGroup key={side.id}>
@@ -661,6 +754,8 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
                         {SIDE_OUTCOME_LABEL[side.outcome]}
                       </VsOutcomeBadge>
                     )}
+                    {quant?.sizeLabel && <VsForceFigure>{quant.sizeLabel}</VsForceFigure>}
+                    {quant?.rateLabel && <VsLossPill>손실 {quant.rateLabel}</VsLossPill>}
                     <VsTeamMeta>
                       ({countParts.length > 0 ? countParts.join(' · ') : '소속 0'})
                     </VsTeamMeta>
@@ -669,7 +764,9 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
               })}
             </VsTeamsWrap>
             <VsActionsWrap>
-              <VsDragHint>항목을 끌어 진영 이동</VsDragHint>
+              <VsDragHint>
+                {sideQuantSummary?.allHaveSize ? '막대: 병력 비례 · ' : ''}항목을 끌어 진영 이동
+              </VsDragHint>
               <VsSwapButton
                 type="button"
                 disabled={busy}
@@ -681,21 +778,32 @@ export function ModuleSides({ event, onPatch, focusUnitId }: ModuleSidesProps) {
             </VsActionsWrap>
           </VsTopRow>
           <VsGaugeTrack aria-hidden>
-            {coloredSides.map((side) => {
+            {coloredSides.map((side, sideIdx) => {
+              const quant = sideQuantSummary?.bySideId.get(side.id)
               const memberCount =
                 side.participants.length +
                 personsOnSide(side.id).length +
                 (side.politicalParties?.length ?? 0) +
                 side.organizations.length
-              const weight =
-                totalAssignedAcrossSides > 0 ? Math.max(memberCount, 0.25) : 1
+              const weight = sideQuantSummary?.allHaveSize
+                ? Math.max(1, quant?.sizeValue ?? 1)
+                : totalAssignedAcrossSides > 0
+                  ? Math.max(memberCount, 0.25)
+                  : 1
               return (
                 <VsGaugeSegment
                   key={side.id}
                   $color={side.color}
-                  $empty={memberCount === 0}
+                  $empty={!sideQuantSummary?.allHaveSize && memberCount === 0}
                   style={{ flexGrow: weight }}
-                />
+                >
+                  {sideQuantSummary?.allHaveSize && quant?.rateValue != null && quant.rateValue > 0 && (
+                    <VsGaugeLossHatch
+                      $fromCenter={coloredSides.length === 2 && sideIdx === 0}
+                      style={{ width: `${Math.min(100, Math.round(quant.rateValue * 100))}%` }}
+                    />
+                  )}
+                </VsGaugeSegment>
               )
             })}
           </VsGaugeTrack>
@@ -1512,10 +1620,9 @@ const VsBanner = styled.div`
   flex-direction: column;
   gap: 8px;
   margin-bottom: 14px;
-  padding: 10px 14px;
-  border-radius: ${RADIUS.MD};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(15,23,42,0.025)'};
+  padding: 10px 0;
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const VsTopRow = styled.div`
@@ -1584,9 +1691,27 @@ const VsOutcomeBadge = styled.span<{ $outcome: SideOutcome }>`
         : theme.colors.text.secondary};
 `
 
+const VsForceFigure = styled.strong`
+  font-size: 12.5px;
+  font-weight: 800;
+  color: ${({ theme }) => theme.colors.text.primary};
+  ${DIGIT_DISPLAY}
+`
+
+const VsLossPill = styled.span`
+  padding: 0 5px;
+  border-radius: ${RADIUS.XS};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+`
+
 const VsTeamMeta = styled.span`
   font-size: 12px;
   color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
 `
 
 const VsDividerBadge = styled.span`
@@ -1645,11 +1770,26 @@ const VsGaugeTrack = styled.div`
 `
 
 const VsGaugeSegment = styled.div<{ $color: string; $empty?: boolean }>`
+  position: relative;
   height: 100%;
   border-radius: 999px;
   background: ${({ $color }) => $color};
-  opacity: ${({ $empty }) => ($empty ? 0.25 : 0.85)};
+  opacity: ${({ $empty }) => ($empty ? 0.25 : 0.88)};
+  overflow: hidden;
   transition: flex-grow 0.22s ease, opacity 0.18s ease;
+`
+
+const VsGaugeLossHatch = styled.span<{ $fromCenter?: boolean }>`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  ${({ $fromCenter }) => ($fromCenter ? 'right: 0;' : 'left: 0;')}
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(0, 0, 0, 0.42) 0 2px,
+    rgba(0, 0, 0, 0.16) 2px 5px
+  );
+  pointer-events: none;
 `
 
 const SideGrid = styled.div`

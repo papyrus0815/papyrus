@@ -10,20 +10,31 @@ import {
 import {
   DIGIT_DISPLAY,
   ledgerAccent,
-  ledgerAccentBorder,
   ledgerAccentSubtle,
   ledgerHairline,
   ledgerHairlineStrong,
   ledgerSubtleFill,
-  MOTION,
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
 import { type Observation, type StructuredPoint } from '@/shared/api/evidence'
+import { type SideUnitView } from '@/shared/api/event-sides'
 
 import { type EventDetail } from '../../use-event-detail'
 import { toAxisSpan } from '../development-timeline.lib'
 import { withSideColors } from '../side-colors'
-import { buildMemberCells, buildSideMetricRows, sideSizeOf } from '../side-metrics.lib'
+import { subjectParticle } from '../side-metrics-commentary.lib'
+import {
+  buildMemberCells,
+  buildSideMetricRows,
+  buildUnitCells,
+  comparableOf,
+  formatRate,
+  lossRate,
+  representativeOf,
+  sideLossOf,
+  type SideSize,
+  sideSizeOf,
+} from '../side-metrics.lib'
 import { SIDE_OUTCOME_LABEL } from '../side-outcome'
 import {
   type CountryRowData,
@@ -78,11 +89,33 @@ function sideMemberLabel(countryCount: number, personCount: number): string {
     .join(' · ')
 }
 
+function formatSideFigure(metric: SideSize<Observation> | null): string | null {
+  if (!metric) return null
+  const formatted = formatObservationValue(
+    metric.derived
+      ? {
+          ...metric.observation,
+          value: String(Math.round(metric.value)),
+          low: null,
+          high: null,
+          atLeast: false,
+        }
+      : metric.observation,
+  )
+  if (!metric.derived) return formatted
+  return `${formatted} (${metric.derivedFrom === 'unit' ? '부대 합' : '나라 합'})`
+}
+
+function formatRatioShort(ratio: number): string {
+  return ratio >= 10 ? String(Math.round(ratio)) : ratio.toFixed(1)
+}
+
 export interface ActorsInfographicBoardProps {
   event: EventDetail
   countryRows: CountryRowData[]
   persons: EventPersonEntry[]
   observations: Observation[]
+  sideUnits?: ReadonlyArray<SideUnitView>
   departmentCount?: number
   readOnly?: boolean
   onStartSides?: () => void
@@ -98,6 +131,7 @@ export function ActorsInfographicBoard({
   countryRows,
   persons,
   observations,
+  sideUnits = [],
   onCountryClick,
   onShowMetrics,
 }: ActorsInfographicBoardProps) {
@@ -123,9 +157,9 @@ export function ActorsInfographicBoard({
   }, [countryRows, isDarkMode])
 
   /**
-   * 진영 세력 — 규모 값은 수치 모듈과 **같은 판정**(sideSizeOf: 대표값·'~이상' 제외, 진영 값 없으면 나라 합).
-   * 예전엔 한쪽만 병력이 있으면 다른 쪽을 '나라 수×2+인물 수'로 채워 단위가 섞였다(자유군단 진압 사건:
-   * 진압군 3,000명 대 봉기군 '3' — 봉기군 막대가 0.1%). 이제 막대는 모두 같은 단위일 때만 비례로 그린다.
+   * 진영 세력 — 규모(병력·참여 인원)와 손실·손실률을 수치 모듈과 **같은 판정**(sideSizeOf · sideLossOf · lossRate)으로 낸다.
+   * 둘 다 있으면 규모 막대(손실률 빗금 포함) 아래 손실 비교 막대를 함께 세우고, 규모 없이 손실만 같은 지표로
+   * 기록된 사건은 손실 막대를 대표로 그린다. 단위가 섞이는 혼합 상태에서는 막대를 생략한다.
    */
   const sideStats = useMemo(() => {
     if (coloredSides.length < 2) return null
@@ -138,7 +172,14 @@ export function ActorsInfographicBoard({
         participantSide.set(row.participantId, { sideId: row.sideId, name: row.name })
       }
     }
+    const unitSide = new Map<string, { sideId: string; name: string }>()
+    for (const unitItem of sideUnits) {
+      if (sideIds.includes(unitItem.sideId)) {
+        unitSide.set(unitItem.id, { sideId: unitItem.sideId, name: unitItem.unit.name })
+      }
+    }
     const memberCells = buildMemberCells(observations, participantSide)
+    const unitCells = buildUnitCells(observations, unitSide)
     /* 인물 진영 — 참여 목록·진영 탭과 같은 실효 진영(인물 진영 > 소속국 진영) */
     const countrySideByKey = countrySideMapOf(
       countryRows.filter((row) => !row.isHistorical),
@@ -150,14 +191,9 @@ export function ActorsInfographicBoard({
       const personCount = persons.filter(
         (person) => effectivePersonSide(person, countrySideByKey).sideId === side.id,
       ).length
-      const size = sideSizeOf(metricRows, memberCells, side.id)
-      const forceLabel = size
-        ? formatObservationValue(
-            size.derived
-              ? { ...size.observation, value: String(Math.round(size.value)), low: null, high: null, atLeast: false }
-              : size.observation,
-          )
-        : null
+      const size = sideSizeOf(metricRows, memberCells, side.id, unitCells)
+      const loss = sideLossOf(metricRows, memberCells, side.id, unitCells)
+      const rate = lossRate(metricRows, side.id, memberCells, unitCells)
       return {
         id: side.id,
         name: side.name,
@@ -166,26 +202,178 @@ export function ActorsInfographicBoard({
         countries: sideCountries,
         personCount,
         size,
-        forceLabel: forceLabel && size?.derived ? `${forceLabel} (나라 합)` : forceLabel,
+        loss,
+        rate,
+        forceLabel: formatSideFigure(size),
+        lossLabel: formatSideFigure(loss),
         countWeight: Math.max(1, sideCountries.length * 2 + personCount),
       }
     })
 
-    const measured = items.filter((item) => item.size)
-    /* 'numeric' = 모두 규모 값 · 'count' = 아무도 없음(참여 국가·인물 수로) · 'mixed' = 일부만(막대를 그리지 않는다) */
+    const measuredSize = items.filter((item) => item.size)
+    const allLossSameKey =
+      items.every((item) => item.loss !== null) &&
+      new Set(items.map((item) => item.loss?.metricKey)).size === 1
+
+    const primaryKind: 'size' | 'loss' | 'count' | 'mixed' =
+      measuredSize.length === items.length
+        ? 'size'
+        : measuredSize.length > 0
+          ? 'mixed'
+          : allLossSameKey
+            ? 'loss'
+            : 'count'
+
     const mode: 'numeric' | 'count' | 'mixed' =
-      measured.length === items.length ? 'numeric' : measured.length === 0 ? 'count' : 'mixed'
-    const metricNames = [...new Set(measured.map((item) => item.size!.metricName))]
+      primaryKind === 'size' || primaryKind === 'loss'
+        ? 'numeric'
+        : primaryKind === 'mixed'
+          ? 'mixed'
+          : 'count'
+
+    const metricNames =
+      primaryKind === 'loss'
+        ? [items[0].loss!.metricName]
+        : [...new Set(measuredSize.map((item) => item.size!.metricName))]
+
+    /* 규모 막대와 별개로 양쪽 모두 같은 손실 지표가 있으면 보조 손실 대조 줄을 세운다 */
+    const showSecondaryLoss = primaryKind === 'size' && allLossSameKey
+    const secondaryLossName = showSecondaryLoss ? items[0].loss!.metricName : null
+
+    const weightedItems = items.map((item) => ({
+      ...item,
+      primaryLabel: primaryKind === 'loss' ? item.lossLabel : item.forceLabel,
+      weight:
+        primaryKind === 'size'
+          ? item.size!.value
+          : primaryKind === 'loss'
+            ? item.loss!.value
+            : item.countWeight,
+    }))
+
+    /* 2자 대결 시 배수·비중 계산 */
+    let primaryDuelMeta: {
+      leftPct: number
+      rightPct: number
+      ratioText: string | null
+      largerSideName: string | null
+      largerColor: string | null
+      direction: 'start' | 'end' | null
+    } | null = null
+    if (mode === 'numeric' && weightedItems.length === 2) {
+      const [leftItem, rightItem] = weightedItems
+      const sum = leftItem.weight + rightItem.weight
+      const leftPct = sum > 0 ? Math.max(1, Math.min(99, Math.round((leftItem.weight / sum) * 100))) : 50
+      const ratio = Math.max(leftItem.weight, rightItem.weight) / Math.max(1, Math.min(leftItem.weight, rightItem.weight))
+      const larger = leftItem.weight >= rightItem.weight ? leftItem : rightItem
+      primaryDuelMeta = {
+        leftPct,
+        rightPct: 100 - leftPct,
+        ratioText: ratio >= 1.05 ? `${formatRatioShort(ratio)}배` : null,
+        largerSideName: ratio >= 1.05 ? larger.name : null,
+        largerColor: ratio >= 1.05 ? larger.color : null,
+        direction: ratio >= 1.05 ? (leftItem.weight >= rightItem.weight ? 'start' : 'end') : null,
+      }
+    }
+
+    let secondaryLossDuelMeta: {
+      leftPct: number
+      rightPct: number
+      ratioText: string | null
+      direction: 'start' | 'end' | null
+      largerColor: string | null
+    } | null = null
+    if (showSecondaryLoss && weightedItems.length === 2) {
+      const leftVal = weightedItems[0].loss!.value
+      const rightVal = weightedItems[1].loss!.value
+      const sum = leftVal + rightVal
+      const leftPct = sum > 0 ? Math.max(1, Math.min(99, Math.round((leftVal / sum) * 100))) : 50
+      const ratio = Math.max(leftVal, rightVal) / Math.max(1, Math.min(leftVal, rightVal))
+      secondaryLossDuelMeta = {
+        leftPct,
+        rightPct: 100 - leftPct,
+        ratioText: ratio >= 1.05 ? `${formatRatioShort(ratio)}배` : null,
+        direction: ratio >= 1.05 ? (leftVal >= rightVal ? 'start' : 'end') : null,
+        largerColor:
+          ratio >= 1.05
+            ? leftVal >= rightVal
+              ? weightedItems[0].color
+              : weightedItems[1].color
+            : null,
+      }
+    }
+
     return {
       mode,
+      primaryKind,
       metricName: mode === 'count' ? null : metricNames.join(' · '),
       missingNames: items.filter((item) => !item.size).map((item) => item.name),
-      items: items.map((item) => ({
-        ...item,
-        weight: mode === 'numeric' ? item.size!.value : item.countWeight,
-      })),
+      showSecondaryLoss,
+      secondaryLossName,
+      primaryDuelMeta,
+      secondaryLossDuelMeta,
+      hasAnyLossData: items.some((item) => Boolean(item.loss || item.rate)),
+      items: weightedItems,
     }
-  }, [coloredSides, observations, countryRows, persons])
+  }, [coloredSides, observations, countryRows, persons, sideUnits])
+
+  /** 진영 없는 사건(재난·조약·외교·사회 사건 등) — 사건 전체 대표 수치 요약 + 당사국 비례 비교 */
+  const nonSideMetrics = useMemo(() => {
+    if (coloredSides.length >= 2 || observations.length === 0) return null
+
+    const eventByMetric = new Map<string, Observation[]>()
+    for (const obs of observations) {
+      if (obs.subjectType !== 'EVENT') continue
+      eventByMetric.set(obs.metric.key, [...(eventByMetric.get(obs.metric.key) ?? []), obs])
+    }
+    const headlines = [...eventByMetric.values()]
+      .map((list) => representativeOf(list))
+      .filter((picked): picked is Observation => Boolean(picked))
+      .slice(0, 4)
+
+    const rowByParticipantId = new Map(
+      countryRows.filter((row) => row.participantId).map((row) => [row.participantId!, row] as const),
+    )
+    const countryByMetric = new Map<
+      string,
+      Array<{ country: CountryRowData; observation: Observation; value: number }>
+    >()
+    const rawParticipantMetric = new Map<string, Map<string, Observation[]>>()
+    for (const obs of observations) {
+      if (obs.subjectType !== 'EVENT_PARTICIPANT') continue
+      if (!rowByParticipantId.has(obs.subjectId)) continue
+      const perParticipant = rawParticipantMetric.get(obs.metric.key) ?? new Map<string, Observation[]>()
+      perParticipant.set(obs.subjectId, [...(perParticipant.get(obs.subjectId) ?? []), obs])
+      rawParticipantMetric.set(obs.metric.key, perParticipant)
+    }
+    for (const [metricKey, perParticipant] of rawParticipantMetric.entries()) {
+      const entries: Array<{ country: CountryRowData; observation: Observation; value: number }> = []
+      for (const [participantId, list] of perParticipant.entries()) {
+        const comp = comparableOf(list)
+        const country = rowByParticipantId.get(participantId)
+        if (comp && country) {
+          entries.push({ country, observation: comp.observation, value: comp.value })
+        }
+      }
+      if (entries.length >= 2) {
+        entries.sort((left, right) => right.value - left.value)
+        countryByMetric.set(metricKey, entries)
+      }
+    }
+    const topCountryComparison = [...countryByMetric.values()][0] ?? null
+
+    if (headlines.length === 0 && !topCountryComparison) return null
+    return {
+      headlines,
+      countryComparison: topCountryComparison
+        ? {
+            metricName: topCountryComparison[0].observation.metric.name,
+            entries: topCountryComparison,
+            total: topCountryComparison.reduce((acc, item) => acc + item.value, 0),
+          }
+        : null,
+    }
+  }, [coloredSides.length, observations, countryRows])
 
   const timelineSpans = useMemo(() => {
     const axis = toAxisSpan(event)
@@ -232,14 +420,8 @@ export function ActorsInfographicBoard({
 
   /* 역할이 '일반 참여' 한 가지뿐이면 막대가 말해 주는 것이 없다 */
   const showRoleLine = roleSlices.length >= 2
-  if (!sideStats && !showRoleLine) return null
+  if (!sideStats && !nonSideMetrics && !showRoleLine) return null
 
-  /*
-   * 요약판은 목록이 못 보여 주는 것만 싣는다 — 진영 세력 비교와 당사국 역할 분포.
-   * 예전의 '참여 주체 구성'(도넛·막대)은 제목 줄의 국가·인물 수를 되풀이했고, '사건 참여 관계도'는
-   * 바로 아래 목록의 앞 4개국·4명을 300px 칸에 다시 그려 이름이 '일..'·'소 소'로 잘렸다.
-   * 진영 나누기·진영 편집 버튼은 목록 머리('참여 국가') 하나만 둔다(예전엔 요약판과 목록 머리에 둘씩 섰다).
-   */
   return (
     <InfographicStrip aria-label="참여 구도 요약">
       {sideStats && (
@@ -250,12 +432,15 @@ export function ActorsInfographicBoard({
               <MetricTag $accent={Boolean(sideStats.metricName)}>
                 {sideStats.metricName ?? '참여 규모 (국가·인물 수)'}
               </MetricTag>
-              {onShowMetrics && sideStats.mode !== 'count' && (
-                <MetricsLink type="button" onClick={onShowMetrics}>
-                  수치 자세히 ↓
-                </MetricsLink>
+              {sideStats.showSecondaryLoss && sideStats.secondaryLossName && (
+                <MetricTag $accent>{sideStats.secondaryLossName}</MetricTag>
               )}
             </StripTitleRow>
+            {onShowMetrics && (sideStats.mode !== 'count' || sideStats.hasAnyLossData) && (
+              <MetricsLink type="button" onClick={onShowMetrics}>
+                수치 그래프 자세히 ↓
+              </MetricsLink>
+            )}
           </StripHead>
 
           <StripBody>
@@ -269,8 +454,13 @@ export function ActorsInfographicBoard({
                         <strong>{sideItem.name}</strong>
                         {sideItem.outcome && <OutcomeBadge>{sideItem.outcome}</OutcomeBadge>}
                       </DuelSideTitle>
-                      <DuelSideMetrics>
-                        {sideItem.forceLabel && <ForceNumber>{sideItem.forceLabel}</ForceNumber>}
+                      <DuelSideMetrics $alignRight={sideIdx === 1}>
+                        {sideItem.primaryLabel && <ForceNumber>{sideItem.primaryLabel}</ForceNumber>}
+                        {sideItem.rate && (
+                          <LossRatePill title={`${sideItem.rate.lossName} ÷ ${sideItem.rate.sizeName}`}>
+                            손실 {formatRate(sideItem.rate.rate)}
+                          </LossRatePill>
+                        )}
                         <span>{sideMemberLabel(sideItem.countries.length, sideItem.personCount)}</span>
                       </DuelSideMetrics>
                     </DuelSideSummary>
@@ -282,27 +472,96 @@ export function ActorsInfographicBoard({
                     {sideStats.missingNames.join(' · ')}의 {sideStats.metricName} 기록이 없어 막대를 그리지 않습니다
                   </TugNote>
                 ) : (
-                  <DuelTugTrack
-                    role="img"
-                    aria-label={`${sideStats.metricName ?? '참여 규모(국가·인물 수)'} 비교: ${sideStats.items
-                      .map(
-                        (sideItem) =>
-                          `${sideItem.name} ${
-                            sideStats.mode === 'numeric'
-                              ? sideItem.forceLabel
-                              : sideMemberLabel(sideItem.countries.length, sideItem.personCount)
-                          }`,
-                      )
-                      .join(', ')}`}
-                  >
-                    {sideStats.items.map((sideItem) => (
-                      <DuelTugBar
-                        key={sideItem.id}
-                        $color={sideItem.color}
-                        style={{ flexGrow: sideItem.weight }}
-                      />
-                    ))}
-                  </DuelTugTrack>
+                  <DuelTrackBlock>
+                    <DuelTugTrack
+                      role="img"
+                      aria-label={`${sideStats.metricName ?? '참여 규모(국가·인물 수)'} 비교: ${sideStats.items
+                        .map(
+                          (sideItem) =>
+                            `${sideItem.name} ${
+                              sideStats.mode === 'numeric'
+                                ? sideItem.primaryLabel
+                                : sideMemberLabel(sideItem.countries.length, sideItem.personCount)
+                            }`,
+                        )
+                        .join(', ')}`}
+                    >
+                      {sideStats.items.map((sideItem, sideIdx) => (
+                        <DuelTugBar
+                          key={sideItem.id}
+                          $color={sideItem.color}
+                          style={{ flexGrow: sideItem.weight }}
+                        >
+                          {sideStats.primaryKind === 'size' && sideItem.rate && (
+                            <DuelTugLossHatch
+                              $fromCenter={sideIdx === 0}
+                              style={{ width: `${Math.min(100, Math.round(sideItem.rate.rate * 100))}%` }}
+                              title={`병력 대비 손실률 ${formatRate(sideItem.rate.rate)}`}
+                            />
+                          )}
+                        </DuelTugBar>
+                      ))}
+                    </DuelTugTrack>
+
+                    {sideStats.primaryDuelMeta && (
+                      <DuelMetaLine>
+                        <span>{sideStats.primaryDuelMeta.leftPct}%</span>
+                        {sideStats.primaryDuelMeta.ratioText && sideStats.primaryDuelMeta.largerSideName ? (
+                          <strong
+                            title={`${sideStats.primaryDuelMeta.largerSideName}${subjectParticle(sideStats.primaryDuelMeta.largerSideName)} ${sideStats.primaryDuelMeta.ratioText}`}
+                          >
+                            {sideStats.primaryDuelMeta.direction === 'start' && (
+                              <em style={{ color: sideStats.primaryDuelMeta.largerColor ?? undefined }}>◀ </em>
+                            )}
+                            {sideStats.metricName} {sideStats.primaryDuelMeta.ratioText}
+                            {sideStats.primaryDuelMeta.direction === 'end' && (
+                              <em style={{ color: sideStats.primaryDuelMeta.largerColor ?? undefined }}> ▶</em>
+                            )}
+                          </strong>
+                        ) : (
+                          <span>비슷한 규모</span>
+                        )}
+                        <span>{sideStats.primaryDuelMeta.rightPct}%</span>
+                      </DuelMetaLine>
+                    )}
+                  </DuelTrackBlock>
+                )}
+
+                {sideStats.showSecondaryLoss && sideStats.secondaryLossDuelMeta && (
+                  <SecondaryLossWrap>
+                    <SecondaryLossHeader>
+                      <span>{sideStats.items[0].lossLabel}</span>
+                      <strong>
+                        {sideStats.secondaryLossDuelMeta.direction === 'start' && (
+                          <em style={{ color: sideStats.secondaryLossDuelMeta.largerColor ?? undefined }}>◀ </em>
+                        )}
+                        {sideStats.secondaryLossName}
+                        {sideStats.secondaryLossDuelMeta.ratioText
+                          ? ` ${sideStats.secondaryLossDuelMeta.ratioText}`
+                          : ''}
+                        {sideStats.secondaryLossDuelMeta.direction === 'end' && (
+                          <em style={{ color: sideStats.secondaryLossDuelMeta.largerColor ?? undefined }}> ▶</em>
+                        )}
+                      </strong>
+                      <span>{sideStats.items[1].lossLabel}</span>
+                    </SecondaryLossHeader>
+                    <DuelTugTrack
+                      $thin
+                      role="img"
+                      aria-label={`${sideStats.secondaryLossName} 비교: ${sideStats.items
+                        .map((sideItem) => `${sideItem.name} ${sideItem.lossLabel}`)
+                        .join(', ')}`}
+                    >
+                      {sideStats.items.map((sideItem) => (
+                        <DuelTugBar
+                          key={`loss-${sideItem.id}`}
+                          $color={sideItem.color}
+                          $muted
+                          style={{ flexGrow: sideItem.loss?.value ?? 1 }}
+                        />
+                      ))}
+                    </DuelTugTrack>
+                  </SecondaryLossWrap>
                 )}
 
                 <DuelFlagsRow>
@@ -339,7 +598,13 @@ export function ActorsInfographicBoard({
                           {sideItem.outcome && <OutcomeBadge>{sideItem.outcome}</OutcomeBadge>}
                         </DuelSideTitle>
                         <DuelSideMetrics>
-                          {sideItem.forceLabel && <ForceNumber>{sideItem.forceLabel}</ForceNumber>}
+                          {sideItem.primaryLabel && <ForceNumber>{sideItem.primaryLabel}</ForceNumber>}
+                          {sideStats.primaryKind === 'size' && sideItem.lossLabel && (
+                            <span>손실 {sideItem.lossLabel}</span>
+                          )}
+                          {sideItem.rate && (
+                            <LossRatePill>손실률 {formatRate(sideItem.rate.rate)}</LossRatePill>
+                          )}
                           <span>{sideMemberLabel(sideItem.countries.length, sideItem.personCount)}</span>
                         </DuelSideMetrics>
                       </MultiSideHead>
@@ -350,7 +615,13 @@ export function ActorsInfographicBoard({
                             style={{
                               width: `${Math.max(8, Math.round((sideItem.weight / maxWeight) * 100))}%`,
                             }}
-                          />
+                          >
+                            {sideStats.primaryKind === 'size' && sideItem.rate && (
+                              <DuelTugLossHatch
+                                style={{ width: `${Math.min(100, Math.round(sideItem.rate.rate * 100))}%` }}
+                              />
+                            )}
+                          </MultiSideBarFill>
                         </MultiSideBarTrack>
                       )}
                     </MultiSideRow>
@@ -398,6 +669,58 @@ export function ActorsInfographicBoard({
               </TimelineMiniBox>
             )}
           </StripBody>
+        </StripColumn>
+      )}
+
+      {nonSideMetrics && (
+        <StripColumn>
+          <StripHead>
+            <StripTitleRow>
+              <StripTitle>핵심 규모 · 피해 지표</StripTitle>
+              {nonSideMetrics.countryComparison && (
+                <MetricTag $accent>{nonSideMetrics.countryComparison.metricName}</MetricTag>
+              )}
+            </StripTitleRow>
+            {onShowMetrics && (
+              <MetricsLink type="button" onClick={onShowMetrics}>
+                수치 자세히 ↓
+              </MetricsLink>
+            )}
+          </StripHead>
+
+          {nonSideMetrics.headlines.length > 0 && (
+            <EventKpiStrip>
+              {nonSideMetrics.headlines.map((obs) => (
+                <EventKpiItem key={obs.id}>
+                  <span className="kpi-label">{obs.metric.name}</span>
+                  <strong className="kpi-value">{formatObservationValue(obs)}</strong>
+                </EventKpiItem>
+              ))}
+            </EventKpiStrip>
+          )}
+
+          {nonSideMetrics.countryComparison && (
+            <RoleLine>
+              <RoleLineLabel>
+                당사국 {nonSideMetrics.countryComparison.metricName}
+                <span>{nonSideMetrics.countryComparison.entries.length}개국</span>
+              </RoleLineLabel>
+              <RoleLineBar>
+                <StackedSegmentBar
+                  height={6}
+                  slices={nonSideMetrics.countryComparison.entries.map((entry, index) => {
+                    const ramp = isDarkMode ? ROLE_RAMP_DARK : ROLE_RAMP_LIGHT
+                    return {
+                      key: countryRowKey(entry.country),
+                      label: `${entry.country.name} ${formatObservationValue(entry.observation)}`,
+                      value: entry.value,
+                      color: ramp[index % ramp.length],
+                    }
+                  })}
+                />
+              </RoleLineBar>
+            </RoleLine>
+          )}
         </StripColumn>
       )}
 
@@ -607,10 +930,11 @@ const OutcomeBadge = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-const DuelSideMetrics = styled.div`
+const DuelSideMetrics = styled.div<{ $alignRight?: boolean }>`
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
+  justify-content: ${({ $alignRight }) => ($alignRight ? 'flex-end' : 'flex-start')};
   gap: 6px;
   font-size: 11.5px;
   color: ${({ theme }) => theme.colors.text.secondary};
@@ -623,20 +947,121 @@ const ForceNumber = styled.strong`
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
-const DuelTugTrack = styled.div`
+const LossRatePill = styled.span`
+  padding: 0 5px;
+  border-radius: ${RADIUS.XS};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  font-size: 10.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const DuelTrackBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`
+
+const DuelTugTrack = styled.div<{ $thin?: boolean }>`
   display: flex;
   gap: 3px;
   width: 100%;
-  height: 8px;
+  height: ${({ $thin }) => ($thin ? '6px' : '9px')};
   border-radius: ${RADIUS.PILL};
   overflow: hidden;
   background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
 `
 
-const DuelTugBar = styled.div<{ $color: string }>`
+const DuelTugBar = styled.div<{ $color: string; $muted?: boolean }>`
+  position: relative;
   flex: 1 1 0;
   min-width: 8px;
   background: ${({ $color }) => $color};
+  opacity: ${({ $muted }) => ($muted ? 0.68 : 0.92)};
+`
+
+const DuelTugLossHatch = styled.span<{ $fromCenter?: boolean }>`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  ${({ $fromCenter }) => ($fromCenter ? 'right: 0;' : 'left: 0;')}
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(0, 0, 0, 0.42) 0 2px,
+    rgba(0, 0, 0, 0.16) 2px 5px
+  );
+  pointer-events: none;
+`
+
+const DuelMetaLine = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+  ${DIGIT_DISPLAY}
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+  em {
+    font-style: normal;
+    font-size: 9px;
+  }
+`
+
+const SecondaryLossWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 6px;
+  border-top: 1px dashed ${({ theme }) => ledgerHairline(theme.mode)};
+`
+
+const SecondaryLossHeader = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+  color: ${({ theme }) => theme.colors.text.secondary};
+  ${DIGIT_DISPLAY}
+
+  strong {
+    font-size: 11px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+  em {
+    font-style: normal;
+    font-size: 9px;
+  }
+`
+
+const EventKpiStrip = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  ${DIGIT_DISPLAY}
+`
+
+const EventKpiItem = styled.div`
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+
+  .kpi-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+  .kpi-value {
+    font-size: 14px;
+    font-weight: 800;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `
 
 const DuelFlagsRow = styled.div`
@@ -721,9 +1146,11 @@ const MultiSideBarTrack = styled.div`
 `
 
 const MultiSideBarFill = styled.div<{ $color: string }>`
+  position: relative;
   height: 100%;
   border-radius: ${RADIUS.PILL};
   background: ${({ $color }) => $color};
+  overflow: hidden;
 `
 
 const TimelineMiniBox = styled.div`

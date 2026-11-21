@@ -133,7 +133,7 @@ export function ActorsLedgerTable({
               const menuItems: PopoverMenuEntry[] = [
                 {
                   id: 'edit',
-                  label: '참여 내용 바꾸기',
+                  label: '편집 (역할 · 한 일 · 시점)',
                   icon: <FiEdit2 size={13} />,
                   onSelect: () => onOpenEditCountry(rowKey),
                 },
@@ -269,7 +269,7 @@ export function ActorsLedgerTable({
               const menuItems: PopoverMenuEntry[] = [
                 {
                   id: 'edit',
-                  label: '참여 내용 바꾸기',
+                  label: '편집 (역할 · 행적 · 소속국)',
                   icon: <FiEdit2 size={13} />,
                   onSelect: () => onOpenEditPerson(entry.personId),
                 },

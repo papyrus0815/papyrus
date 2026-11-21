@@ -7,7 +7,7 @@
 import { useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiArrowRight, FiPlus, FiX } from 'react-icons/fi'
+import { FiArrowRight, FiEdit2, FiPlus } from 'react-icons/fi'
 import { MdDragIndicator } from 'react-icons/md'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
@@ -15,13 +15,11 @@ import styled from 'styled-components'
 import * as eventDepartmentsApi from '@api/functional/events/departments'
 import {
   ledgerAccent,
-  ledgerAccentBorder,
   ledgerHairline,
-  ledgerHairlineStrong,
   ledgerHoverFill,
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
-import { metaText, toolbarControlHeight } from '@/pages/events/styles/theme'
+import { metaText } from '@/pages/events/styles/theme'
 import {
   administrationDepartmentApi,
   DEPARTMENT_KIND_LABEL,
@@ -35,6 +33,7 @@ import { militaryUnitApi } from '@/shared/api/military-unit'
 import { militaryUnitTypeLabelKo } from '@/shared/lib/military-unit-type-label'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
+import { PopoverMenu } from '@/shared/ui/popover-menu'
 import { notify } from '@/shared/ui/toast'
 
 import * as S from '../styles'
@@ -46,9 +45,13 @@ import {
 } from './actors/actor-relation-link-modal'
 import {
   CollapsedActorChipBtn,
+  CollapsedActorInfo,
   CollapsedActorSlot,
+  GhostRowBtn,
+  HeaderControlBtn,
+  RowControls,
+  SectionHintText,
 } from './actors/actors.styles'
-import { InlineText } from './inline'
 import { LoadError } from './load-error'
 
 type EventDepartment = Awaited<ReturnType<typeof eventDepartmentsApi.list>>[number]
@@ -57,6 +60,7 @@ interface DetailDepartmentsProps {
   event: EventDetail
   readOnly?: boolean
   expectDepartments?: boolean
+  displayFilter?: 'expanded-only' | 'collapsed-only'
 }
 
 export const eventDepartmentsQueryKey = (eventId: string) =>
@@ -141,6 +145,7 @@ export function DetailDepartments({
   event,
   readOnly = false,
   expectDepartments,
+  displayFilter,
 }: DetailDepartmentsProps) {
   const queryClient = useQueryClient()
   const queryKey = eventDepartmentsQueryKey(event.id)
@@ -401,10 +406,11 @@ export function DetailDepartments({
   }
 
   if (isError) {
+    if (displayFilter === 'collapsed-only') return null
     return (
       <S.Section id="departments">
         <S.SectionHeader>
-          <S.SectionTitle>관련 국가 기관·사령부</S.SectionTitle>
+          <S.SectionTitle>국가 기관 · 사령부</S.SectionTitle>
         </S.SectionHeader>
         <LoadError
           message="관련 기관·사령부를 불러오지 못했습니다."
@@ -442,32 +448,58 @@ export function DetailDepartments({
     />
   )
 
-  if (relations.length === 0 && !shouldExpandEmpty) {
-    if (readOnly) return null
+  const isCollapsed = relations.length === 0 && !shouldExpandEmpty
+
+  if (isCollapsed) {
+    if (readOnly || displayFilter === 'expanded-only') return null
     return (
       <CollapsedActorSlot id="departments">
+        <CollapsedActorInfo>
+          <strong>국가 기관 · 사령부</strong>
+          <span>내각 부처·참모본부·최고사령부 등 지령·법령을 발령하거나 집행한 기관</span>
+        </CollapsedActorInfo>
         <CollapsedActorChipBtn
           type="button"
-          title="내각 부처·참모본부·최고사령부·총독부 등 지령·법령을 발령하거나 집행한 국가 기관을 잇습니다"
           onClick={() => {
             setInitialDraft(null)
             setLinkModalOpen(true)
           }}
         >
           <FiPlus size={13} aria-hidden />
-          <span>국가 기관 · 사령부</span>
+          <span>기관·사령부 잇기</span>
         </CollapsedActorChipBtn>
         {linkModalNode}
       </CollapsedActorSlot>
     )
   }
 
+  if (displayFilter === 'collapsed-only') return null
+
   return (
     <S.Section id="departments">
       <S.SectionHeader>
-        <S.SectionTitle>관련 국가 기관·사령부</S.SectionTitle>
+        <S.SectionTitle>국가 기관 · 사령부</S.SectionTitle>
         {relations.length > 0 && <S.SectionSubtitle>{relations.length}곳</S.SectionSubtitle>}
+        {!readOnly && (
+          <S.SectionActions>
+            <HeaderControlBtn
+              type="button"
+              onClick={() => {
+                setInitialDraft(null)
+                setLinkModalOpen(true)
+              }}
+            >
+              <FiPlus aria-hidden />
+              기관·사령부 잇기
+            </HeaderControlBtn>
+          </S.SectionActions>
+        )}
       </S.SectionHeader>
+      <SectionLeadWrap>
+        <SectionHintText>
+          지령·명령·법령을 내린 기관(발령·주도)과 받아 집행한 기관(수령·관여)의 역할을 기록합니다.
+        </SectionHintText>
+      </SectionLeadWrap>
 
       {relations.length > 0 && (
         <DepartmentFlowBoard role="region" aria-label="관련 기관 역할 흐름 인포그래픽">
@@ -633,30 +665,53 @@ export function DetailDepartments({
                     </RoleBadge>
                   </NameLine>
                   <Meta>{[meta.kindLabel, meta.affiliation].filter(Boolean).join(' · ')}</Meta>
-                  {readOnly ? (
-                    relation.roleDescription && <Meta>{relation.roleDescription}</Meta>
-                  ) : (
-                    <InlineText
-                      value={relation.roleDescription ?? ''}
-                      placeholder="무엇을 했나 (예: 국방군 지휘참모부가 기안)"
-                      label={`${meta.name} 역할 상세`}
-                      onSave={(next) =>
-                        updateMutation.mutate({
-                          relationId: relation.id,
-                          roleDescription: next.trim() || null,
-                        })
-                      }
-                    />
-                  )}
+                  {relation.roleDescription && <Meta>{relation.roleDescription}</Meta>}
                 </Body>
                 {!readOnly && (
-                  <RemoveButton
-                    type="button"
-                    onClick={() => void handleRemove(relation)}
-                    aria-label={`${meta.name} 연결 끊기`}
-                  >
-                    <FiX />
-                  </RemoveButton>
+                  <RowControls>
+                    <GhostRowBtn
+                      type="button"
+                      onClick={() => openEditRelation(relation)}
+                      title={`${meta.name} 역할 · 설명 편집`}
+                    >
+                      <FiEdit2 aria-hidden />
+                      <span>편집</span>
+                    </GhostRowBtn>
+                    <PopoverMenu
+                      size="sm"
+                      ariaLabel={`${meta.name} 더보기 메뉴`}
+                      items={[
+                        {
+                          id: 'edit',
+                          label: '편집 (역할 · 한 일)',
+                          icon: <FiEdit2 size={13} />,
+                          onSelect: () => openEditRelation(relation),
+                        },
+                        { type: 'divider', id: 'div-role' },
+                        { type: 'section', id: 'sec-role', label: '기관 역할 변경' },
+                        ...EVENT_DEPARTMENT_ROLE_OPTIONS.map((option) => ({
+                          id: `role-${option.value}`,
+                          label: option.label,
+                          checked: option.value === relation.role,
+                          onSelect: () => {
+                            if (option.value !== relation.role) {
+                              updateMutation.mutate({
+                                relationId: relation.id,
+                                role: option.value,
+                              })
+                            }
+                          },
+                        })),
+                        { type: 'divider', id: 'div-rm' },
+                        {
+                          id: 'remove',
+                          label: '연결 해제',
+                          danger: true,
+                          onSelect: () => void handleRemove(relation),
+                        },
+                      ]}
+                    />
+                  </RowControls>
                 )}
               </Row>
             )
@@ -664,22 +719,8 @@ export function DetailDepartments({
         </Rows>
       ) : (
         <S.HelperText>
-          지령·명령·법령처럼 국가 기관이나 군 최고사령부가 내리거나 받은 사건이면 내린 곳과 받은 곳을 잇습니다.
+          아직 연결된 기관·사령부가 없습니다 — 우측 ‘기관·사령부 잇기’로 발령·집행 기관을 연결하세요.
         </S.HelperText>
-      )}
-
-      {!readOnly && (
-        <Actions>
-          <ActionButton
-            type="button"
-            onClick={() => {
-              setInitialDraft(null)
-              setLinkModalOpen(true)
-            }}
-          >
-            <FiPlus size={14} /> 기존 기관·사령부와 잇기
-          </ActionButton>
-        </Actions>
       )}
 
       {linkModalNode}
@@ -688,6 +729,10 @@ export function DetailDepartments({
 }
 
 /* ───────────────────────── styles ───────────────────────── */
+
+const SectionLeadWrap = styled.div`
+  margin: -4px 0 10px;
+`
 
 const DepartmentFlowBoard = styled.div`
   display: grid;
@@ -931,51 +976,4 @@ const RoleBadge = styled.button`
 const Meta = styled.div`
   font-size: 13px;
   color: ${metaText};
-`
-
-const Actions = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-`
-
-const ActionButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  ${toolbarControlHeight}
-  padding: 0 12px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: ${RADIUS.SM};
-  background: ${({ theme }) => theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-  }
-`
-
-const RemoveButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: none;
-  border-radius: ${RADIUS.SM};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.error};
-  }
 `

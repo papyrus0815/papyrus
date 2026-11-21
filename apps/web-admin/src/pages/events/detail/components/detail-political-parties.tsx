@@ -7,20 +7,16 @@
 import { useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiArrowUpRight, FiPlus, FiX } from 'react-icons/fi'
+import { FiArrowUpRight, FiEdit2, FiPlus, FiUsers } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { eventTypeFeatures } from '@/entities/event/model'
 import {
   ledgerAccent,
-  ledgerAccentBorder,
   ledgerHairline,
-  ledgerHairlineStrong,
   ledgerHoverFill,
-  RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
-import { metaText, toolbarControlHeight } from '@/pages/events/styles/theme'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import {
   addEventPoliticalParty,
@@ -39,6 +35,7 @@ import {
 } from '@/shared/api/political-party'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
+import { PopoverMenu, type PopoverMenuEntry } from '@/shared/ui/popover-menu'
 import { notify } from '@/shared/ui/toast'
 import { PoliticalPartyQuickCreateModal } from '@/widgets/political-party/political-party-quick-create-modal'
 
@@ -51,14 +48,20 @@ import {
 } from './actors/actor-relation-link-modal'
 import {
   CollapsedActorChipBtn,
+  CollapsedActorInfo,
   CollapsedActorSlot,
+  FactTag,
+  GhostRowBtn,
+  HeaderControlBtn,
+  RowControls,
+  SectionHintText,
 } from './actors/actors.styles'
-import { InlineSelect, InlineText } from './inline'
 import { withSideColors } from './side-colors'
 
 interface DetailPoliticalPartiesProps {
   event: EventDetail
   readOnly?: boolean
+  displayFilter?: 'expanded-only' | 'collapsed-only'
   onPatch?: (dto: UpdateEventDto) => void
 }
 
@@ -97,6 +100,7 @@ function resolvePartyColor(party: {
 export function DetailPoliticalParties({
   event,
   readOnly = false,
+  displayFilter,
   onPatch,
 }: DetailPoliticalPartiesProps) {
   const queryClient = useQueryClient()
@@ -115,10 +119,6 @@ export function DetailPoliticalParties({
   const coloredSides = useMemo(
     () => withSideColors(event.sides ?? []),
     [event.sides],
-  )
-  const inlineSideOptions = useMemo(
-    () => coloredSides.map((side) => ({ value: side.id, label: side.name })),
-    [coloredSides],
   )
   const modalSideOptions = useMemo(
     () =>
@@ -322,6 +322,24 @@ export function DetailPoliticalParties({
     if (ok) removeMutation.mutate(relation.relationId)
   }
 
+  const openEditRelation = (relation: EventPoliticalParty) => {
+    const polity = relation.historicalCountry?.name ?? relation.country?.name ?? null
+    const posLabel = relation.position
+      ? POLITICAL_POSITION_LABEL[relation.position as PoliticalPosition]
+      : null
+    setInitialDraft({
+      relationId: relation.relationId,
+      candidateKey: relation.partyId,
+      name: relation.name,
+      metaText: [polity, posLabel].filter(Boolean).join(' · ') || null,
+      detailHref: pathKeys.politicalParties.detail(relation.partyId),
+      role: relation.role,
+      sideId: relation.sideId ?? 'none',
+      roleDescription: relation.roleDescription ?? '',
+    })
+    setLinkModalOpen(true)
+  }
+
   const closeLinkModal = () => {
     setLinkModalOpen(false)
     setInitialDraft(null)
@@ -379,23 +397,29 @@ export function DetailPoliticalParties({
   if (readOnly && relations.length === 0) return null
 
   if (collapsed) {
+    if (displayFilter === 'expanded-only') return null
     return (
       <CollapsedActorSlot id="political-parties">
+        <CollapsedActorInfo>
+          <strong>관련 정당</strong>
+          <span>혁명·선거·연정·쿠데타·창당·해산 등에 관여한 정당</span>
+        </CollapsedActorInfo>
         <CollapsedActorChipBtn
           type="button"
-          title="혁명·선거·연정·쿠데타·창당·해산 등에서 관여한 정당을 잇습니다"
           onClick={() => {
             setInitialDraft(null)
             setLinkModalOpen(true)
           }}
         >
           <FiPlus size={13} aria-hidden />
-          <span>관련 정당</span>
+          <span>정당 잇기</span>
         </CollapsedActorChipBtn>
         {modalsNode}
       </CollapsedActorSlot>
     )
   }
+
+  if (displayFilter === 'collapsed-only') return null
 
   return (
     <S.Section id="political-parties">
@@ -404,7 +428,26 @@ export function DetailPoliticalParties({
         {relations.length > 0 && (
           <S.SectionSubtitle>{relations.length}개 정당</S.SectionSubtitle>
         )}
+        {!readOnly && (
+          <S.SectionActions>
+            <HeaderControlBtn
+              type="button"
+              onClick={() => {
+                setInitialDraft(null)
+                setLinkModalOpen(true)
+              }}
+            >
+              <FiPlus aria-hidden />
+              정당 잇기
+            </HeaderControlBtn>
+          </S.SectionActions>
+        )}
       </S.SectionHeader>
+      <SectionLeadWrap>
+        <SectionHintText>
+          사건을 주도·참여했거나 이 사건으로 창당·해산된 정당과 그 입장을 기록합니다.
+        </SectionHintText>
+      </SectionLeadWrap>
 
       {relations.length > 0 ? (
         <Rows>
@@ -419,6 +462,63 @@ export function DetailPoliticalParties({
               ? POLITICAL_POSITION_LABEL[relation.position as PoliticalPosition]
               : null
 
+            const menuItems: PopoverMenuEntry[] = [
+              {
+                id: 'edit',
+                label: '편집 (역할 · 진영 · 설명)',
+                icon: <FiEdit2 size={13} />,
+                onSelect: () => openEditRelation(relation),
+              },
+              ...(onPatch
+                ? ([
+                    {
+                      id: 'import-members',
+                      label: '소속 당원을 참여 인물로 불러오기',
+                      icon: <FiUsers size={13} />,
+                      onSelect: () => void handleImportPartyMembers(relation),
+                    },
+                  ] as PopoverMenuEntry[])
+                : []),
+              { type: 'divider', id: 'div-role' },
+              { type: 'section', id: 'sec-role', label: '정당 역할 변경' },
+              ...PARTY_ROLE_OPTIONS.map((option) => ({
+                id: `role-${option.value}`,
+                label: option.label,
+                checked: option.value === relation.role,
+                onSelect: () => {
+                  if (option.value !== relation.role) {
+                    updateMutation.mutate({
+                      relationId: relation.relationId,
+                      role: option.value,
+                    })
+                  }
+                },
+              })),
+              ...(modalSideOptions.length > 1
+                ? ([
+                    { type: 'divider', id: 'div-side' },
+                    { type: 'section', id: 'sec-side', label: '진영 배정' },
+                    ...modalSideOptions.map((option) => ({
+                      id: `side-${option.value}`,
+                      label: option.label,
+                      checked: option.value === (relation.sideId ?? 'none'),
+                      onSelect: () =>
+                        updateMutation.mutate({
+                          relationId: relation.relationId,
+                          sideId: option.value === 'none' ? null : option.value,
+                        }),
+                    })),
+                  ] as PopoverMenuEntry[])
+                : []),
+              { type: 'divider', id: 'div-rm' },
+              {
+                id: 'remove',
+                label: '정당 연결 해제',
+                danger: true,
+                onSelect: () => void handleRemove(relation),
+              },
+            ]
+
             return (
               <PartyLedgerRow key={relation.relationId} $brandColor={color}>
                 <RowTopLine>
@@ -428,6 +528,8 @@ export function DetailPoliticalParties({
                       {relation.name}
                       <FiArrowUpRight size={12} />
                     </PartyLink>
+                    <FactTag>{PARTY_ROLE_LABEL[relation.role] ?? relation.role}</FactTag>
+                    {side && <FactTag $color={side.color}>{side.name}</FactTag>}
                     {relation.shortName && (
                       <MetaBadge>{relation.shortName}</MetaBadge>
                     )}
@@ -438,79 +540,26 @@ export function DetailPoliticalParties({
                   </TitleGroup>
 
                   {!readOnly && (
-                    <ControlGroup>
-                      {inlineSideOptions.length > 0 && (
-                        <SideWrap $color={side?.color ?? null}>
-                          <InlineSelect
-                            value={relation.sideId ?? ''}
-                            options={inlineSideOptions}
-                            placeholder="진영 지정"
-                            label={`${relation.name} 진영`}
-                            onSave={(nextSideId) =>
-                              updateMutation.mutate({
-                                relationId: relation.relationId,
-                                sideId: nextSideId || null,
-                              })
-                            }
-                          />
-                        </SideWrap>
-                      )}
-
-                      <InlineSelect
-                        value={relation.role}
-                        options={PARTY_ROLE_OPTIONS}
-                        clearable={false}
-                        label={`${relation.name} 역할`}
-                        onSave={(nextRole) => {
-                          if (nextRole) {
-                            updateMutation.mutate({
-                              relationId: relation.relationId,
-                              role: nextRole as EventOrganizationRole,
-                            })
-                          }
-                        }}
-                      />
-
-                      {onPatch && (
-                        <TinyActionBtn
-                          type="button"
-                          onClick={() => void handleImportPartyMembers(relation)}
-                          title="이 정당 소속 당원을 사건 참여 인물로 불러오기"
-                        >
-                          당원 불러오기
-                        </TinyActionBtn>
-                      )}
-
-                      <RemoveBtn
+                    <RowControls>
+                      <GhostRowBtn
                         type="button"
-                        onClick={() => void handleRemove(relation)}
-                        aria-label={`${relation.name} 연결 해제`}
-                        title="연결 해제"
+                        onClick={() => openEditRelation(relation)}
+                        title={`${relation.name} 역할 · 설명 편집`}
                       >
-                        <FiX size={14} />
-                      </RemoveBtn>
-                    </ControlGroup>
+                        <FiEdit2 aria-hidden />
+                        <span>편집</span>
+                      </GhostRowBtn>
+                      <PopoverMenu
+                        size="sm"
+                        items={menuItems}
+                        ariaLabel={`${relation.name} 더보기 메뉴`}
+                      />
+                    </RowControls>
                   )}
                 </RowTopLine>
 
-                {!readOnly ? (
-                  <DescLine>
-                    <InlineText
-                      value={relation.roleDescription ?? ''}
-                      placeholder="이 사건에서 정당이 수행한 역할·입장·결과 기록…"
-                      label={`${relation.name} 역할 설명`}
-                      onSave={(val) =>
-                        updateMutation.mutate({
-                          relationId: relation.relationId,
-                          roleDescription: val || null,
-                        })
-                      }
-                    />
-                  </DescLine>
-                ) : (
-                  relation.roleDescription && (
-                    <ReadOnlyDesc>{relation.roleDescription}</ReadOnlyDesc>
-                  )
+                {relation.roleDescription && (
+                  <ReadOnlyDesc>{relation.roleDescription}</ReadOnlyDesc>
                 )}
               </PartyLedgerRow>
             )
@@ -518,31 +567,18 @@ export function DetailPoliticalParties({
         </Rows>
       ) : (
         <S.HelperText>
-          혁명·봉기·총파업·쿠데타·연정 위기·창당·해산처럼 정당이 주요 행위자인 사건이면 연결하세요.
+          아직 연결된 정당이 없습니다 — 우측 ‘정당 잇기’로 기존 정당을 찾거나 새 정당을 등록해 연결하세요.
         </S.HelperText>
-      )}
-
-      {!readOnly && (
-        <ActionRow>
-          <ActionBtn
-            type="button"
-            onClick={() => {
-              setInitialDraft(null)
-              setLinkModalOpen(true)
-            }}
-          >
-            <FiPlus size={14} /> 기존 정당과 잇기
-          </ActionBtn>
-          <ActionBtn type="button" onClick={() => setCreatingOpen(true)}>
-            <FiPlus size={14} /> 새 정당 등록
-          </ActionBtn>
-        </ActionRow>
       )}
 
       {modalsNode}
     </S.Section>
   )
 }
+
+const SectionLeadWrap = styled.div`
+  margin: -4px 0 10px;
+`
 
 const Rows = styled.ul`
   list-style: none;
@@ -622,97 +658,9 @@ const PosBadge = styled.span<{ $color: string }>`
   background: ${({ $color }) => `${$color}16`};
 `
 
-const ControlGroup = styled.div`
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-`
-
-const SideWrap = styled.span<{ $color: string | null }>`
-  display: inline-flex;
-  align-items: center;
-  ${({ $color }) =>
-    $color
-      ? `
-    padding-left: 6px;
-    border-left: 3px solid ${$color};
-  `
-      : ''}
-`
-
-const TinyActionBtn = styled.button`
-  height: 24px;
-  padding: 0 8px;
-  font-size: 0.71rem;
-  font-weight: 500;
-  border-radius: ${RADIUS.XS};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
-  color: ${metaText};
-  cursor: pointer;
-
-  &:hover {
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-    color: ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-`
-
-const RemoveBtn = styled.button`
-  width: 24px;
-  height: 24px;
-  border: none;
-  border-radius: ${RADIUS.XS};
-  background: transparent;
-  color: ${metaText};
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-
-  &:hover {
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
-
-const DescLine = styled.div`
-  font-size: 0.8125rem;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
 const ReadOnlyDesc = styled.p`
   margin: 0;
   font-size: 0.8125rem;
   line-height: 1.5;
   color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const ActionRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-`
-
-const ActionBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  ${toolbarControlHeight}
-  padding: 0 12px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: ${RADIUS.SM};
-  background: ${({ theme }) => theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-  }
 `

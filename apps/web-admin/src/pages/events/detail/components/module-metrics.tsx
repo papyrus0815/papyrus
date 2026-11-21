@@ -4,9 +4,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
   FiAlertTriangle,
+  FiBarChart2,
   FiChevronDown,
   FiEdit2,
   FiInfo,
+  FiList,
   FiMessageSquare,
   FiPlus,
   FiTrash2,
@@ -28,13 +30,23 @@ import {
   unverifiedLabel,
 } from '@/entities/evidence/lib/format-observation'
 import { eventTypeFeatures } from '@/entities/event/model'
-import { RADIUS } from '@/entities/event/ui/ledger-tokens'
+import {
+  ledgerAccent,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerSubtleFill,
+  RADIUS,
+} from '@/entities/event/ui/ledger-tokens'
 import { deleteObservation, listMetricDefinitions, type Observation } from '@/shared/api/evidence'
 import { getEventOverview } from '@/shared/api/event-overview'
 import { listEventSideUnits, type SideUnitView } from '@/shared/api/event-sides'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
 import { notify } from '@/shared/ui/toast'
+import {
+  LedgerViewSwitch,
+  LedgerViewSwitchItem,
+} from '@/widgets/country/country-detail/ui/country-ledger-primitives'
 
 import * as S from '../styles'
 import { type EventDetail, eventKeys, eventObservationsQueryOptions } from '../use-event-detail'
@@ -247,10 +259,17 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
         : sides,
     [sides, comparedRows, memberCells, unitCells],
   )
-  /** 해설 — 진영 둘의 병력·손실·손실률을 문장으로(side-metrics-commentary.lib) */
+  /** 해설 — 진영 둘의 병력·손실·손실률을 문장으로(side-metrics-commentary.lib, 나라·부대 합 포함) */
   const commentary = useMemo(
-    () => buildSideCommentary(sideRows, tableSides, (observation) => formatObservationValue(observation as Observation)),
-    [sideRows, tableSides],
+    () =>
+      buildSideCommentary(
+        sideRows,
+        tableSides,
+        (observation) => formatObservationValue(observation as Observation),
+        memberCells,
+        unitCells,
+      ),
+    [sideRows, tableSides, memberCells, unitCells],
   )
   /** 다른 추정치를 펼친 칸 — `지표:진영` */
   const [openAlternatives, setOpenAlternatives] = useState<Set<string>>(() => new Set())
@@ -267,10 +286,13 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
     metricDefinitions.find((definition) => definition.key === key)?.definition ??
     observations.find((observation) => observation.metric.key === key)?.metric.definition ??
     null
-  /* 손실률(파생) — 동원 병력과 손실 지표가 하나씩 있는 진영만. 한 진영이라도 있으면 줄을 세운다 */
+  /* 손실률(파생) — 동원 병력과 손실 지표가 하나씩 있는 진영만(나라·부대 합도 지원). 한 진영이라도 있으면 줄을 세운다 */
   const lossRates = useMemo(
-    () => new Map(tableSides.map((side) => [side.id, lossRate(sideRows, side.id)] as const)),
-    [tableSides, sideRows],
+    () =>
+      new Map(
+        tableSides.map((side) => [side.id, lossRate(sideRows, side.id, memberCells, unitCells)] as const),
+      ),
+    [tableSides, sideRows, memberCells, unitCells],
   )
   const hasLossRate = [...lossRates.values()].some(Boolean)
 
@@ -288,7 +310,51 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
     return subjects
       .map((option) => ({ option, rows: groups.get(`${option.subjectType}:${option.subjectId}`) ?? [] }))
       .filter((group) => group.rows.length > 0)
-  }, [observations, subjects, sides, participantSide])
+  }, [observations, subjects, sides, participantSide, unitSide])
+
+  /** 진영 밖 참여국 간 동일 지표 비례 비교 — 비전쟁·다자 사건에서 2개국 이상 같은 지표가 있을 때 */
+  const participantComparisonBlocks = useMemo(() => {
+    const participantGroups = grouped.filter(({ option }) => option.subjectType === 'EVENT_PARTICIPANT')
+    if (participantGroups.length < 2) return []
+    const byMetric = new Map<
+      string,
+      {
+        metricKey: string
+        metricName: string
+        items: Array<{ label: string; color: string | null; observation: Observation; center: number }>
+      }
+    >()
+    for (const group of participantGroups) {
+      const perMetric = new Map<string, Observation[]>()
+      for (const obs of group.rows) {
+        perMetric.set(obs.metric.key, [...(perMetric.get(obs.metric.key) ?? []), obs])
+      }
+      for (const [metricKey, list] of perMetric.entries()) {
+        const picked = representativeOf(list)
+        if (!picked || picked.atLeast) continue
+        const extent = observationExtent(picked)
+        if (!extent || extent.center <= 0) continue
+        const block = byMetric.get(metricKey) ?? {
+          metricKey,
+          metricName: picked.metric.name,
+          items: [],
+        }
+        block.items.push({
+          label: group.option.label,
+          color: group.option.color,
+          observation: picked,
+          center: extent.center,
+        })
+        byMetric.set(metricKey, block)
+      }
+    }
+    return [...byMetric.values()]
+      .filter((block) => block.items.length >= 2)
+      .map((block) => ({
+        ...block,
+        items: [...block.items].sort((left, right) => right.center - left.center),
+      }))
+  }, [grouped])
 
   /* 그래프는 값이 하나라도 있을 때만 — 빈 비교표(추천 지표 빈 칸)는 그 자체가 '여기 적으세요' 자리라 표로 둔다 */
   const [view, setViewState] = useState<MetricsView>(readMetricsView)
@@ -387,14 +453,28 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
       )}
 
       {chartable && (
-        <ViewSwitch role="group" aria-label="비교 보기">
-          <ViewOption type="button" aria-pressed={view === 'chart'} onClick={() => setView('chart')}>
-            그래프
-          </ViewOption>
-          <ViewOption type="button" aria-pressed={view === 'table'} onClick={() => setView('table')}>
-            표
-          </ViewOption>
-        </ViewSwitch>
+        <ViewSwitchRow>
+          <LedgerViewSwitch role="group" aria-label="비교 보기">
+            <LedgerViewSwitchItem
+              type="button"
+              $active={view === 'chart'}
+              aria-pressed={view === 'chart'}
+              onClick={() => setView('chart')}
+            >
+              <FiBarChart2 size={13} aria-hidden />
+              그래프
+            </LedgerViewSwitchItem>
+            <LedgerViewSwitchItem
+              type="button"
+              $active={view === 'table'}
+              aria-pressed={view === 'table'}
+              onClick={() => setView('table')}
+            >
+              <FiList size={13} aria-hidden />
+              표
+            </LedgerViewSwitchItem>
+          </LedgerViewSwitch>
+        </ViewSwitchRow>
       )}
 
       {showChart && (
@@ -402,6 +482,7 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
           rows={comparedRows}
           sides={tableSides}
           memberCells={memberCells}
+          unitCells={unitCells}
           onEdit={(observation) => setEditing(observation)}
           onAdd={(sideId, metricKey) => setEditing({ kind: 'new', subjectId: sideId, metricKey })}
           onShowTable={() => setView('table')}
@@ -425,9 +506,16 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
             </thead>
             <tbody>
               {tableRows.map((row) => {
-                /* 막대 눈금은 행(지표)마다 — 병력과 사상자를 한 자로 재면 작은 쪽이 다 0이 된다 */
+                /* 막대 눈금은 행(지표)마다 — 직접 기록 값과 하위 합산 값을 같은 행 눈금으로 잰다 */
+                const derivedValues = tableSides.map((side) => {
+                  const countryTotal = memberSum(memberCells.get(row.key)?.get(side.id) ?? [])
+                  const unitTotal = memberSum(unitCells.get(row.key)?.get(side.id) ?? [])
+                  return Math.max(countryTotal ?? 0, unitTotal ?? 0)
+                })
                 const max = Math.max(
+                  0,
                   ...[...row.cells.values()].flat().map((observation) => observationExtent(observation)?.high ?? 0),
+                  ...derivedValues,
                 )
                 return (
                   <tr key={row.key}>
@@ -541,13 +629,23 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
                         /* 진영 값이 없고 나라·부대 몫만 있으면 — 합을 계산 값으로 세운다 */
                         const derivedSum = sum ?? unitSumVal
                         const derivedLabel = sum !== null ? '나라 합' : '부대 합'
+                        const derivedWidth = derivedSum !== null && max > 0 ? (derivedSum / max) * 100 : 0
                         return (
                           <td key={side.id}>
                             {derivedSum !== null && (
-                              <CellTop>
-                                <CellValue>{formatObservationValue(syntheticOf(unit, derivedSum))}</CellValue>
-                                <DerivedHint title="진영 값이 없어 하위 항목 값을 더했습니다">{derivedLabel}</DerivedHint>
-                              </CellTop>
+                              <CellEntry>
+                                <CellTop>
+                                  <CellValue>{formatObservationValue(syntheticOf(unit, derivedSum))}</CellValue>
+                                  <DerivedHint title="진영 값이 없어 하위 항목 값을 더했습니다">{derivedLabel}</DerivedHint>
+                                </CellTop>
+                                <BarTrack aria-hidden>
+                                  <Bar
+                                    style={{ width: `${derivedWidth}%`, background: side.color }}
+                                    $unverified={false}
+                                    $derived
+                                  />
+                                </BarTrack>
+                              </CellEntry>
                             )}
                             {memberBlock}
                             {unitBlock}
@@ -687,9 +785,11 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
                   {tableSides.map((side) => {
                     const derived = lossRates.get(side.id)
                     return derived ? (
-                      <td key={side.id} title={`${derived.lossName} ÷ 동원 병력`}>
+                      <td key={side.id} title={`${derived.lossName} ÷ ${derived.sizeName}`}>
                         <CellValue>{formatRate(derived.rate)}</CellValue>
-                        <CellNote>{derived.lossName} ÷ 동원 병력</CellNote>
+                        <CellNote>
+                          {derived.lossName} ÷ {derived.sizeName}
+                        </CellNote>
                       </td>
                     ) : (
                       <EmptyCell key={side.id}>—</EmptyCell>
@@ -706,7 +806,7 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
         const descendants = overviewData?.descendants ?? []
         const byMetricAndScope = new Map<
           string,
-          { metricName: string; unit: string | null; scopeLabel: string; total: number; battleCount: number }
+          { metricKey: string; metricName: string; unit: string | null; scopeLabel: string; total: number; battleCount: number }
         >()
         for (const childNode of descendants) {
           for (const metric of childNode.metrics ?? []) {
@@ -724,6 +824,7 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
               existing.battleCount += 1
             } else {
               byMetricAndScope.set(groupKey, {
+                metricKey: metric.metricKey,
                 metricName: metric.metricName,
                 unit: metric.unit,
                 scopeLabel: scopeName,
@@ -735,26 +836,94 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
         }
         const entries = [...byMetricAndScope.values()]
         if (entries.length === 0) return null
+        const maxByMetric = new Map<string, number>()
+        for (const entry of entries) {
+          maxByMetric.set(entry.metricKey, Math.max(maxByMetric.get(entry.metricKey) ?? 0, entry.total))
+        }
         return (
           <SubjectBlock>
             <SubjectName $color={NEUTRAL}>하위 사건 수치 합산 (하위 {descendants.length}건 기준)</SubjectName>
             <Rows>
-              {entries.map((entry) => (
-                <Row key={`${entry.metricName}-${entry.scopeLabel}`}>
-                  <RowMetric>{entry.scopeLabel} · {entry.metricName}</RowMetric>
-                  <RowValue>
-                    {Math.round(entry.total).toLocaleString()}
-                    {entry.unit ? ` ${entry.unit}` : ''}
-                  </RowValue>
-                  <RowDetail>
-                    <DerivedHint>하위 {entry.battleCount}개 사건 합산</DerivedHint>
-                  </RowDetail>
-                </Row>
-              ))}
+              {entries.map((entry) => {
+                const metricMax = maxByMetric.get(entry.metricKey) ?? 0
+                const matchedSide = sides.find((side) => side.name === entry.scopeLabel)
+                const fillPct = metricMax > 0 ? Math.max(2, Math.round((entry.total / metricMax) * 100)) : 0
+                return (
+                  <RollupRow key={`${entry.metricKey}-${entry.scopeLabel}`}>
+                    <RowMetric>
+                      {matchedSide && <SideSwatch style={{ background: matchedSide.color }} aria-hidden />}
+                      {entry.scopeLabel} · {entry.metricName}
+                    </RowMetric>
+                    <BarTrack aria-hidden>
+                      <Bar
+                        style={{
+                          width: `${fillPct}%`,
+                          background: matchedSide?.color ?? NEUTRAL,
+                        }}
+                        $unverified={false}
+                      />
+                    </BarTrack>
+                    <RowValue>
+                      {Math.round(entry.total).toLocaleString()}
+                      {entry.unit ? ` ${entry.unit}` : ''}
+                    </RowValue>
+                    <RowDetail>
+                      <DerivedHint>하위 {entry.battleCount}건 합산</DerivedHint>
+                    </RowDetail>
+                  </RollupRow>
+                )
+              })}
             </Rows>
           </SubjectBlock>
         )
       })()}
+
+      {participantComparisonBlocks.length > 0 && (
+        <SubjectBlock aria-label="참여국 수치 비교">
+          <SubjectName $color={MODULE_COLOR.metrics}>참여국 수치 비교</SubjectName>
+          <ComparisonGrid>
+            {participantComparisonBlocks.map((block) => {
+              const maxVal = block.items[0]?.center ?? 1
+              const sumVal = block.items.reduce((acc, item) => acc + item.center, 0)
+              return (
+                <ComparisonGroup key={block.metricKey}>
+                  <ComparisonMetricTitle>{block.metricName}</ComparisonMetricTitle>
+                  <ComparisonList>
+                    {block.items.map((item) => {
+                      const widthPct = maxVal > 0 ? Math.max(2, (item.center / maxVal) * 100) : 0
+                      const sharePct = sumVal > 0 ? Math.round((item.center / sumVal) * 100) : 0
+                      return (
+                        <li key={item.observation.id}>
+                          <ComparisonBarBtn
+                            type="button"
+                            onClick={() => setEditing(item.observation)}
+                            title={formatObservationExact(item.observation)}
+                          >
+                            <span className="country">{item.label}</span>
+                            <BarTrack aria-hidden>
+                              <Bar
+                                style={{
+                                  width: `${widthPct}%`,
+                                  background: item.color ?? MODULE_COLOR.metrics,
+                                }}
+                                $unverified={isUnverified(item.observation) && !allUnverified}
+                              />
+                            </BarTrack>
+                            <span className="figure">
+                              {formatObservationValue(item.observation)}
+                              <em>{sharePct}%</em>
+                            </span>
+                          </ComparisonBarBtn>
+                        </li>
+                      )
+                    })}
+                  </ComparisonList>
+                </ComparisonGroup>
+              )
+            })}
+          </ComparisonGrid>
+        </SubjectBlock>
+      )}
 
       {grouped.map(({ option, rows }) => (
         <SubjectBlock key={`${option.subjectType}:${option.subjectId}`}>
@@ -823,37 +992,11 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
   )
 }
 
-/** 그래프·표 전환 — 작은 두 칸 세그먼트 */
-const ViewSwitch = styled.div`
-  display: inline-flex;
-  align-self: flex-start;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 8px;
-  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)')};
-`
-
-const ViewOption = styled.button`
-  padding: 4px 12px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-
-  &[aria-pressed='true'] {
-    font-weight: 700;
-    color: ${({ theme }) => theme.colors.text.primary};
-    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.12)' : '#ffffff')};
-    box-shadow: ${({ theme }) => (theme.mode === 'dark' ? 'none' : '0 1px 2px rgba(15,23,42,0.12)')};
-  }
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
-    outline-offset: 1px;
-  }
+/** 그래프·표 전환 — 참여 탭 원장 스위치와 동일한 높이·문법 */
+const ViewSwitchRow = styled.div`
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
 `
 
 const AddButton = styled.button`
@@ -913,16 +1056,20 @@ const UnverifiedChip = styled.span`
 
 const BarTrack = styled.div`
   position: relative;
-  height: 14px;
+  height: 12px;
   border-radius: 3px;
-  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(15,23,42,0.05)')};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
 `
 
-const Bar = styled.div<{ $unverified: boolean }>`
+const Bar = styled.div<{ $unverified: boolean; $derived?: boolean }>`
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: 3px;
-  opacity: ${({ $unverified }) => ($unverified ? 0.55 : 0.9)};
+  opacity: ${({ $unverified }) => ($unverified ? 0.5 : 0.9)};
+  ${({ $derived }) =>
+    $derived
+      ? 'background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.45) 0 3px, transparent 3px 7px) !important;'
+      : ''}
 `
 
 const Whisker = styled.div`
@@ -982,16 +1129,112 @@ const Rows = styled.ul`
   list-style: none;
 `
 
+const RollupRow = styled.li`
+  display: grid;
+  grid-template-columns: minmax(130px, 28%) minmax(80px, 1fr) auto auto;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 6px 4px;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  font-size: 13px;
+
+  &:last-child {
+    border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  }
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr auto;
+
+    & > :nth-child(2) {
+      grid-column: 1 / -1;
+    }
+  }
+`
+
+const ComparisonGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px 28px;
+  padding: 8px 0 4px;
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+`
+
+const ComparisonGroup = styled.div`
+  min-width: 0;
+`
+
+const ComparisonMetricTitle = styled.div`
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+const ComparisonList = styled.ul`
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`
+
+const ComparisonBarBtn = styled.button`
+  display: grid;
+  grid-template-columns: minmax(64px, 110px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  .country {
+    font-size: 12px;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .figure {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: ${({ theme }) => theme.colors.text.primary};
+    white-space: nowrap;
+
+    em {
+      font-style: normal;
+      font-size: 11px;
+      font-weight: 500;
+      color: ${({ theme }) => theme.colors.text.tertiary};
+    }
+  }
+
+  &:hover .country {
+    color: ${({ theme }) => theme.colors.text.primary};
+    text-decoration: underline;
+  }
+`
+
 const Row = styled.li`
   display: grid;
   grid-template-columns: minmax(110px, 24%) minmax(90px, auto) 1fr auto;
   align-items: baseline;
   gap: 4px 12px;
-  padding: 6px 10px;
-  border-radius: 8px;
+  padding: 6px 4px;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   font-size: 13px;
-  &:nth-child(odd) {
-    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.025)' : 'rgba(15,23,42,0.025)')};
+
+  &:last-child {
+    border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   }
 
   @media (max-width: 640px) {
@@ -1269,31 +1512,31 @@ const DerivedHint = styled.span`
   font-weight: 600;
 `
 
-/** 해설 상자 — 표 위 '한눈에'. 선 없이 옅은 면 */
+/** 해설 줄 — 카드 안의 카드 대신 왼쪽 악센트 선 + 헤어라인 원장 요약 */
 const Commentary = styled.section`
   margin: 0 0 16px;
-  padding: 12px 14px;
-  border-radius: ${RADIUS.MD};
-  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.035)')};
+  padding: 8px 0 8px 12px;
+  border-left: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
   ul {
     margin: 6px 0 0;
     padding: 0;
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
   }
   li {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
     gap: 2px 10px;
-    font-size: 13.5px;
+    font-size: 13px;
     line-height: 1.5;
   }
   .label {
     min-width: 88px;
-    font-size: 12.5px;
+    font-size: 12px;
+    font-weight: 600;
     color: ${({ theme }) => theme.colors.text.secondary};
   }
   strong {
@@ -1301,7 +1544,7 @@ const Commentary = styled.section`
     color: ${({ theme }) => theme.colors.text.primary};
   }
   .evidence {
-    font-size: 12.5px;
+    font-size: 12px;
     font-variant-numeric: tabular-nums;
     color: ${({ theme }) => theme.colors.text.tertiary};
   }
@@ -1364,13 +1607,13 @@ const ObservationNote = styled.p`
   white-space: pre-line;
 `
 
-/** 진영 칸 아래 나라 몫 */
+/** 진영 칸 아래 나라·부대 몫 — 중첩 카드 없이 헤어라인 들여쓰기 */
 const MemberFigures = styled.ul`
   margin: 8px 0 0;
-  padding: 6px 8px;
+  padding: 6px 0 0 8px;
   list-style: none;
-  border-radius: 8px;
-  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.035)' : 'rgba(255,255,255,0.85)')};
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  border-left: 2px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -1391,6 +1634,7 @@ const MemberFigures = styled.ul`
   .sum {
     margin-top: 2px;
     padding-top: 4px;
+    border-top: 1px dashed ${({ theme }) => ledgerHairline(theme.mode)};
     flex-wrap: wrap;
     font-weight: 650;
   }
@@ -1486,10 +1730,9 @@ const AlternativeToggle = styled.button`
 
 const AlternativeList = styled.ul`
   margin: 4px 0 0;
-  padding: 6px 8px;
+  padding: 6px 0 0 8px;
   list-style: none;
-  border-radius: 8px;
-  background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.035)' : 'rgba(255,255,255,0.85)')};
+  border-left: 2px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   display: flex;
   flex-direction: column;
   gap: 4px;

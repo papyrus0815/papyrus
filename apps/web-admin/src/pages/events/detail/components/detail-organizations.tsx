@@ -7,7 +7,7 @@
 import React, { lazy, Suspense, useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiExternalLink, FiPlus, FiX } from 'react-icons/fi'
+import { FiEdit2, FiExternalLink, FiGlobe, FiPlus, FiUsers } from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
@@ -17,14 +17,13 @@ import {
   toParticipants,
 } from '@/entities/event/model/country-participant'
 import {
-  ledgerAccentBorder,
   ledgerHairline,
   ledgerHairlineStrong,
   ledgerHoverFill,
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
 import { ORGANIZATION_ROLE_OPTIONS as ROLE_OPTIONS } from '@/features/event-facets/model/organization-roles'
-import { metaText, toolbarControlHeight } from '@/pages/events/styles/theme'
+import { metaText } from '@/pages/events/styles/theme'
 import { getApiConnection } from '@/shared/api/client'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import {
@@ -46,6 +45,7 @@ import {
 import { signedYearFromIsoLike } from '@/shared/lib/country-period'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
+import { PopoverMenu, type PopoverMenuEntry } from '@/shared/ui/popover-menu'
 import { notify } from '@/shared/ui/toast'
 import { OrganizationQuickCreateModal } from '@/widgets/organization/organization-quick-create-modal'
 
@@ -64,14 +64,21 @@ import {
 } from './actors/actor-relation-link-modal'
 import {
   CollapsedActorChipBtn,
+  CollapsedActorInfo,
   CollapsedActorSlot,
+  FactTag,
+  GhostRowBtn,
+  HeaderControlBtn,
+  RowControls,
+  SectionHintText,
 } from './actors/actors.styles'
-import { InlineSelect } from './inline'
 import { withSideColors } from './side-colors'
 
 interface DetailOrganizationsProps {
   event: EventDetail
   expectOrganizations: boolean
+  readOnly?: boolean
+  displayFilter?: 'expanded-only' | 'collapsed-only'
   onPatch?: (dto: UpdateEventDto) => void
 }
 
@@ -115,6 +122,8 @@ function formatPrice(
 export function DetailOrganizations({
   event,
   expectOrganizations,
+  readOnly = false,
+  displayFilter,
   onPatch,
 }: DetailOrganizationsProps) {
   const allLinked = useMemo(
@@ -147,6 +156,8 @@ export function DetailOrganizations({
         event={event}
         relations={institutionRelations}
         expectExpanded={expectInstitutions}
+        readOnly={readOnly}
+        displayFilter={displayFilter}
         onPatch={onPatch}
       />
       <DomainOrganizationSection
@@ -155,6 +166,8 @@ export function DetailOrganizations({
         event={event}
         relations={companyRelations}
         expectExpanded={expectCompanies}
+        readOnly={readOnly}
+        displayFilter={displayFilter}
         onPatch={onPatch}
       />
     </>
@@ -167,6 +180,8 @@ function DomainOrganizationSection({
   event,
   relations,
   expectExpanded,
+  readOnly = false,
+  displayFilter,
   onPatch,
 }: {
   mode: 'institutions' | 'companies'
@@ -174,6 +189,8 @@ function DomainOrganizationSection({
   event: EventDetail
   relations: EventOrganization[]
   expectExpanded: boolean
+  readOnly?: boolean
+  displayFilter?: 'expanded-only' | 'collapsed-only'
   onPatch?: (dto: UpdateEventDto) => void
 }) {
   const isCompanyMode = mode === 'companies'
@@ -209,8 +226,6 @@ function DomainOrganizationSection({
   const [linkModalOpen, setLinkModalOpen] = useState(false)
   const [initialDraft, setInitialDraft] = useState<ActorRelationDraft | null>(null)
   const [creatingOpen, setCreatingOpen] = useState(false)
-  const [dragRelationId, setDragRelationId] = useState<string | null>(null)
-  const [dragOverSideKey, setDragOverSideKey] = useState<string | null>(null)
 
   const collapsed = relations.length === 0 && !expectExpanded
 
@@ -561,6 +576,21 @@ function DomainOrganizationSection({
     if (ok) removeMutation.mutate(relation.relationId)
   }
 
+  const openEditRelation = (relation: EventOrganization) => {
+    setInitialDraft({
+      relationId: relation.relationId,
+      candidateKey: relation.organizationId,
+      name: relation.name,
+      detailHref: relation.companyId
+        ? pathKeys.companies.detail(relation.companyId)
+        : `/organizations?selected=${encodeURIComponent(relation.organizationId)}`,
+      role: relation.role,
+      sideId: relation.sideId ?? 'none',
+      roleDescription: relation.roleDescription ?? '',
+    })
+    setLinkModalOpen(true)
+  }
+
   const closeLinkModal = () => {
     setLinkModalOpen(false)
     setInitialDraft(null)
@@ -672,101 +702,66 @@ function DomainOrganizationSection({
     </>
   )
 
+  if (readOnly && relations.length === 0) return null
+
   if (collapsed) {
+    if (displayFilter === 'expanded-only') return null
     return (
       <CollapsedActorSlot id={anchorId}>
+        <CollapsedActorInfo>
+          <strong>{isCompanyMode ? '관련 기업' : '국제기구 · 협의체 · 민간조직'}</strong>
+          <span>
+            {isCompanyMode
+              ? '창립·상장·인수합병·특허·교역 등의 당사 기업'
+              : '유엔·NATO 등 국제기구(회원국 일괄 반영) 또는 노동·시민·학술단체'}
+          </span>
+        </CollapsedActorInfo>
         <CollapsedActorChipBtn
           type="button"
-          title={
-            isCompanyMode
-              ? '상장·창립·인수·특허·교역 등 이 사건의 당사 기업을 잇습니다'
-              : 'UN·NATO 등 다자기구(회원국 일괄 반영) 또는 민간·노동·학술단체를 잇습니다'
-          }
           onClick={() => {
             setInitialDraft(null)
             setLinkModalOpen(true)
           }}
         >
           <FiPlus size={13} aria-hidden />
-          <span>{isCompanyMode ? '관련 기업' : '국제기구 · 협의체 · 조직'}</span>
+          <span>{isCompanyMode ? '기업 잇기' : '기구·조직 잇기'}</span>
         </CollapsedActorChipBtn>
         {modalsNode}
       </CollapsedActorSlot>
     )
   }
 
+  if (displayFilter === 'collapsed-only') return null
+
   return (
     <S.Section id={anchorId}>
       <S.SectionHeader>
         <S.SectionTitle>{sectionTitle}</S.SectionTitle>
-        {relations.length > 1 && (
+        {relations.length > 0 && (
           <S.SectionSubtitle>{relations.length}곳</S.SectionSubtitle>
         )}
+        {!readOnly && (
+          <S.SectionActions>
+            <HeaderControlBtn
+              type="button"
+              onClick={() => {
+                setInitialDraft(null)
+                setLinkModalOpen(true)
+              }}
+            >
+              <FiPlus aria-hidden />
+              {isCompanyMode ? '기업 잇기' : '기구·조직 잇기'}
+            </HeaderControlBtn>
+          </S.SectionActions>
+        )}
       </S.SectionHeader>
-
-      {relations.length > 0 && coloredSides.length > 0 && (
-        <SideDropZoneBar aria-label={`${nounShort} 진영 드래그 배정 바`}>
-          <SideDropHint>드래그하여 진영 배정:</SideDropHint>
-          {coloredSides.map((side) => {
-            const count = relations.filter(
-              (relation) => relation.sideId === side.id,
-            ).length
-            return (
-              <SideDropPill
-                key={side.id}
-                $color={side.color}
-                $dragOver={dragOverSideKey === side.id}
-                onDragOver={(dragEvent) => {
-                  if (!dragRelationId) return
-                  dragEvent.preventDefault()
-                  dragEvent.dataTransfer.dropEffect = 'move'
-                  if (dragOverSideKey !== side.id) setDragOverSideKey(side.id)
-                }}
-                onDragLeave={() => {
-                  if (dragOverSideKey === side.id) setDragOverSideKey(null)
-                }}
-                onDrop={(dragEvent) => {
-                  dragEvent.preventDefault()
-                  setDragOverSideKey(null)
-                  if (dragRelationId) {
-                    void handleUpdateSide(dragRelationId, side.id)
-                    setDragRelationId(null)
-                  }
-                }}
-              >
-                <SideDot $color={side.color} aria-hidden />
-                <span>{side.name}</span>
-                <SideDropCount>{count}</SideDropCount>
-              </SideDropPill>
-            )
-          })}
-          <SideDropPill
-            $dragOver={dragOverSideKey === 'none'}
-            onDragOver={(dragEvent) => {
-              if (!dragRelationId) return
-              dragEvent.preventDefault()
-              dragEvent.dataTransfer.dropEffect = 'move'
-              if (dragOverSideKey !== 'none') setDragOverSideKey('none')
-            }}
-            onDragLeave={() => {
-              if (dragOverSideKey === 'none') setDragOverSideKey(null)
-            }}
-            onDrop={(dragEvent) => {
-              dragEvent.preventDefault()
-              setDragOverSideKey(null)
-              if (dragRelationId) {
-                void handleUpdateSide(dragRelationId, null)
-                setDragRelationId(null)
-              }
-            }}
-          >
-            <span>진영 미지정</span>
-            <SideDropCount>
-              {relations.filter((relation) => !relation.sideId).length}
-            </SideDropCount>
-          </SideDropPill>
-        </SideDropZoneBar>
-      )}
+      <SectionLeadWrap>
+        <SectionHintText>
+          {isCompanyMode
+            ? '이 사건의 당사·수혜·피해 기업과 주요 역할을 기록합니다.'
+            : '국제기구·다자협의체 및 민간·노동·학술단체의 역할을 기록합니다. 더보기(⋯)에서 회원국·소속 인물을 일괄 반영할 수 있습니다.'}
+        </SectionHintText>
+      </SectionLeadWrap>
 
       {relations.length > 0 ? (
         <Rows>
@@ -778,15 +773,8 @@ function DomainOrganizationSection({
                 relation.sideId ? (sideById.get(relation.sideId) ?? null) : null
               }
               sideOptions={sideOptions}
-              draggable={coloredSides.length > 0}
-              onDragStart={(dragEvent) => {
-                setDragRelationId(relation.relationId)
-                dragEvent.dataTransfer.effectAllowed = 'move'
-              }}
-              onDragEnd={() => {
-                setDragRelationId(null)
-                setDragOverSideKey(null)
-              }}
+              readOnly={readOnly}
+              onOpenEdit={() => openEditRelation(relation)}
               onUpdateSide={(sideId) =>
                 void handleUpdateSide(relation.relationId, sideId)
               }
@@ -808,27 +796,10 @@ function DomainOrganizationSection({
       ) : (
         <S.HelperText>
           {isCompanyMode
-            ? '상장·창립·인수·특허독점처럼 기업이 당사자인 사건이면 연결하세요.'
-            : '국제기구·다자협의체(UN·아세안·NATO 등) 또는 민간·노동·학술단체를 연결하세요.'}
+            ? '아직 연결된 기업이 없습니다 — 우측 ‘기업 잇기’로 기존 기업을 찾거나 새로 등록해 연결하세요.'
+            : '아직 연결된 기구·조직이 없습니다 — 우측 ‘기구·조직 잇기’로 연결하세요.'}
         </S.HelperText>
       )}
-
-      <ActionRow>
-        <ActionBtn
-          type="button"
-          onClick={() => {
-            setInitialDraft(null)
-            setLinkModalOpen(true)
-          }}
-        >
-          <FiPlus size={14} />
-          {isCompanyMode ? '기존 기업과 잇기' : '기존 기구·조직과 잇기'}
-        </ActionBtn>
-        <ActionBtn type="button" onClick={() => setCreatingOpen(true)}>
-          <FiPlus size={14} />
-          {isCompanyMode ? '새 기업 등록' : '새 기구·조직 등록'}
-        </ActionBtn>
-      </ActionRow>
 
       {modalsNode}
     </S.Section>
@@ -839,9 +810,8 @@ function OrganizationRow({
   relation,
   side,
   sideOptions,
-  draggable,
-  onDragStart,
-  onDragEnd,
+  readOnly = false,
+  onOpenEdit,
   onUpdateSide,
   onUpdateRole,
   onImportCountries,
@@ -851,9 +821,8 @@ function OrganizationRow({
   relation: EventOrganization
   side: { name: string; color: string } | null
   sideOptions: Array<{ value: string; label: string }>
-  draggable?: boolean
-  onDragStart?: (dragEvent: React.DragEvent<HTMLLIElement>) => void
-  onDragEnd?: (dragEvent: React.DragEvent<HTMLLIElement>) => void
+  readOnly?: boolean
+  onOpenEdit: () => void
   onUpdateSide: (sideId: string | null) => void
   onUpdateRole: (role: EventOrganizationRole) => void
   onImportCountries?: () => void
@@ -872,12 +841,69 @@ function OrganizationRow({
     .filter(Boolean)
     .join(' · ')
 
+  const menuItems: PopoverMenuEntry[] = [
+    {
+      id: 'edit',
+      label: '편집 (역할 · 진영 · 설명)',
+      icon: <FiEdit2 size={13} />,
+      onSelect: () => onOpenEdit(),
+    },
+    ...(onImportCountries && !relation.companyId
+      ? ([
+          {
+            id: 'import-countries',
+            label: '회원국·파트너국을 참여국으로 불러오기',
+            icon: <FiGlobe size={13} />,
+            onSelect: () => onImportCountries(),
+          },
+        ] as PopoverMenuEntry[])
+      : []),
+    ...(onImportMembers
+      ? ([
+          {
+            id: 'import-members',
+            label: '소속 인물을 참여 인물로 불러오기',
+            icon: <FiUsers size={13} />,
+            onSelect: () => onImportMembers(),
+          },
+        ] as PopoverMenuEntry[])
+      : []),
+    { type: 'divider', id: 'div-role' },
+    { type: 'section', id: 'sec-role', label: '역할 변경' },
+    ...ROLE_OPTIONS.map((option) => ({
+      id: `role-${option.value}`,
+      label: option.label,
+      checked: option.value === relation.role,
+      onSelect: () => {
+        if (option.value !== relation.role) {
+          onUpdateRole(option.value)
+        }
+      },
+    })),
+    ...(sideOptions.length > 1
+      ? ([
+          { type: 'divider', id: 'div-side' },
+          { type: 'section', id: 'sec-side', label: '진영 배정' },
+          ...sideOptions.map((option) => ({
+            id: `side-${option.value}`,
+            label: option.label,
+            checked: option.value === (relation.sideId ?? 'none'),
+            onSelect: () =>
+              onUpdateSide(option.value === 'none' ? null : option.value),
+          })),
+        ] as PopoverMenuEntry[])
+      : []),
+    { type: 'divider', id: 'div-rm' },
+    {
+      id: 'remove',
+      label: '연결 해제',
+      danger: true,
+      onSelect: () => onRemove(),
+    },
+  ]
+
   return (
-    <Row
-      draggable={draggable}
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-    >
+    <Row>
       {relation.logoUrl ? (
         <Logo src={relation.logoUrl} alt="" />
       ) : (
@@ -899,49 +925,8 @@ function OrganizationRow({
               <FiExternalLink size={12} aria-hidden />
             </NameLink>
           )}
-          <RoleBadge>
-            <InlineSelect
-              value={relation.role}
-              options={ROLE_OPTIONS}
-              onSave={(nextRole) =>
-                onUpdateRole(nextRole as EventOrganizationRole)
-              }
-              placeholder={ROLE_LABEL[relation.role] ?? relation.role}
-              label={`${relation.name}의 사건 내 역할`}
-            />
-          </RoleBadge>
-          {sideOptions.length > 0 && (
-            <SideBadge $color={side?.color}>
-              {side && <SideDot $color={side.color} aria-hidden />}
-              <InlineSelect
-                value={relation.sideId ?? 'none'}
-                options={sideOptions}
-                onSave={(next) =>
-                  onUpdateSide(next === 'none' ? null : next)
-                }
-                placeholder="진영 지정"
-                label={`${relation.name}의 소속 진영`}
-              />
-            </SideBadge>
-          )}
-          {onImportCountries && !relation.companyId && (
-            <ImportMembersBtn
-              type="button"
-              title={`${relation.name} 회원국·파트너국을 사건 참여국으로 일괄 불러오기`}
-              onClick={onImportCountries}
-            >
-              회원국 불러오기
-            </ImportMembersBtn>
-          )}
-          {onImportMembers && (
-            <ImportMembersBtn
-              type="button"
-              title={`${relation.name} 소속 인물(위원·역할)을 사건 참여 인물로 불러오기`}
-              onClick={onImportMembers}
-            >
-              소속 인물 불러오기
-            </ImportMembersBtn>
-          )}
+          <FactTag>{ROLE_LABEL[relation.role] ?? relation.role}</FactTag>
+          {side && <FactTag $color={side.color}>{side.name}</FactTag>}
         </NameLine>
         {relation.roleDescription && <Meta>{relation.roleDescription}</Meta>}
         {stockLine && (
@@ -951,18 +936,32 @@ function OrganizationRow({
           </Meta>
         )}
       </Body>
-      <RemoveButton
-        type="button"
-        onClick={onRemove}
-        aria-label={`${relation.name} 연결 해제`}
-      >
-        <FiX />
-      </RemoveButton>
+      {!readOnly && (
+        <RowControls>
+          <GhostRowBtn
+            type="button"
+            onClick={onOpenEdit}
+            title={`${relation.name} 역할 · 설명 편집`}
+          >
+            <FiEdit2 aria-hidden />
+            <span>편집</span>
+          </GhostRowBtn>
+          <PopoverMenu
+            size="sm"
+            items={menuItems}
+            ariaLabel={`${relation.name} 더보기 메뉴`}
+          />
+        </RowControls>
+      )}
     </Row>
   )
 }
 
 /* ───────────────────────── styles ───────────────────────── */
+
+const SectionLeadWrap = styled.div`
+  margin: -4px 0 10px;
+`
 
 const Rows = styled.ul`
   list-style: none;
@@ -1046,158 +1045,8 @@ const NameLink = styled(Link)`
   }
 `
 
-const RoleBadge = styled.span`
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 7px;
-  border-radius: ${RADIUS.PILL};
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  font-size: 11px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
 const Meta = styled.div`
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
   color: ${metaText};
-`
-
-const RemoveButton = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 0;
-  border: none;
-  border-radius: ${RADIUS.XS};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.error};
-  }
-`
-
-const SideBadge = styled.span<{ $color?: string }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 1px 7px;
-  border-radius: ${RADIUS.PILL};
-  border: 1px solid
-    ${({ theme, $color }) => ($color ? `${$color}55` : theme.colors.border)};
-  background: ${({ $color }) => ($color ? `${$color}14` : 'transparent')};
-  font-size: 11.5px;
-  font-weight: 600;
-  color: ${({ theme, $color }) => $color ?? theme.colors.text.secondary};
-`
-
-const SideDot = styled.span<{ $color: string }>`
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: ${({ $color }) => $color};
-  flex-shrink: 0;
-`
-
-const ImportMembersBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 24px;
-  padding: 0 8px;
-  border-radius: ${RADIUS.XS};
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-family: inherit;
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.text.secondary};
-  }
-`
-
-const SideDropZoneBar = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 0 8px;
-`
-
-const SideDropHint = styled.span`
-  font-size: 11.5px;
-  font-weight: 600;
-  color: ${metaText};
-  margin-right: 2px;
-`
-
-const SideDropPill = styled.span<{ $color?: string; $dragOver?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 25px;
-  padding: 0 9px;
-  border-radius: ${RADIUS.PILL};
-  border: 1px solid
-    ${({ theme, $color, $dragOver }) =>
-      $dragOver
-        ? ($color ?? theme.colors.accent)
-        : $color
-          ? `${$color}55`
-          : theme.colors.border};
-  background: ${({ theme, $color, $dragOver }) =>
-    $dragOver
-      ? $color
-        ? `${$color}28`
-        : `${theme.colors.accent}18`
-      : $color
-        ? `${$color}12`
-        : theme.colors.background.primary};
-  font-size: 12px;
-  font-weight: 600;
-  color: ${({ theme, $color }) => $color ?? theme.colors.text.secondary};
-  transition: border-color 0.14s, background 0.14s;
-`
-
-const SideDropCount = styled.span`
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  opacity: 0.75;
-`
-
-const ActionRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-`
-
-const ActionBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  ${toolbarControlHeight}
-  padding: 0 12px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-radius: ${RADIUS.SM};
-  background: ${({ theme }) => theme.colors.background.primary};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
-    border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
-  }
 `

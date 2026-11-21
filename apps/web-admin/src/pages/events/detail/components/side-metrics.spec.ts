@@ -10,6 +10,7 @@ import {
   lossCompositions,
   orderSideMetricRows,
   representativeOf,
+  sideLossOf,
   sideSizeOf,
   sumMismatch,
 } from './side-metrics.lib'
@@ -277,5 +278,42 @@ describe('lossRate — 어느 규모로 나눴는가', () => {
       ['B'],
     )
     expect(lossRate(rows, 'B')).toMatchObject({ sizeKey: 'society.participants' })
+  })
+
+  it('진영 직접 값이 없어도 나라 합(memberCells)과 부대 합(unitCells)으로 규모·손실·손실률을 낸다', () => {
+    const observations = [
+      obs('u1', 'su-north', 'military.personnel', '600000', { subjectType: 'EVENT_SIDE_UNIT' }),
+      obs('u2', 'su-south', 'military.personnel', '400000', { subjectType: 'EVENT_SIDE_UNIT' }),
+      obs('p1', 'part-1', 'military.casualties_total', '120000', { subjectType: 'EVENT_PARTICIPANT' }),
+      obs('p2', 'part-2', 'military.casualties_total', '80000', { subjectType: 'EVENT_PARTICIPANT' }),
+    ]
+    const rows = buildSideMetricRows(observations, ['axis'])
+    const members = buildMemberCells(
+      observations,
+      new Map([
+        ['part-1', { sideId: 'axis', name: '독일국' }],
+        ['part-2', { sideId: 'axis', name: '루마니아 왕국' }],
+      ]),
+    )
+    const units = buildUnitCells(
+      observations,
+      new Map([
+        ['su-north', { sideId: 'axis', name: '북부집단군' }],
+        ['su-south', { sideId: 'axis', name: '남부집단군' }],
+      ]),
+    )
+    expect(sideSizeOf(rows, members, 'axis', units)).toMatchObject({
+      value: 1000000,
+      derived: true,
+      derivedFrom: 'unit',
+    })
+    expect(sideLossOf(rows, members, 'axis', units)).toMatchObject({
+      value: 200000,
+      derived: true,
+      derivedFrom: 'country',
+    })
+    const derivedRate = lossRate(rows, 'axis', members, units)!
+    expect(formatRate(derivedRate.rate)).toBe('20%')
+    expect(derivedRate.derived).toBe(true)
   })
 })

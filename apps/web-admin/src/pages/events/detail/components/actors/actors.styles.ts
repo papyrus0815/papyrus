@@ -97,20 +97,34 @@ export const ActorsCanvas = styled.div`
 export const ActorsHeader = styled(S.SectionHeader)`
   ${S.breakout}
   padding-left: ${S.breakoutGutter};
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px 16px;
 `
 
 export const ActorsHeaderLeft = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
+  flex: 1 1 280px;
+`
+
+export const ActorsHeaderRight = styled.div`
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 `
 
 export const ActorsSubtitle = styled.p`
   margin: 0;
   font-size: 12.5px;
-  line-height: 1.45;
+  line-height: 1.5;
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
@@ -256,12 +270,26 @@ export const ActorSectionHead = styled.div`
   border-bottom: 1.5px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
+export const ActorSectionTitleGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+`
+
 export const ActorSectionTitleRow = styled.div`
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 7px;
   min-width: 0;
+`
+
+export const SectionHintText = styled.p`
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: ${({ theme }) => mutedTextColor(theme.mode)};
 `
 
 export const GroupLabel = styled.h3`
@@ -829,8 +857,18 @@ export const CountryNoteLine = styled.div<{ $hasContent: boolean }>`
 /** 나라 행 아래에 상자 없이 들여쓰기 트리로 이어지는 소속 대표·인물 */
 export const DelegationSection = styled.div`
   margin: 0 6px 8px 20px;
-  padding: 1px 0 1px 11px;
+  padding: 2px 0 2px 11px;
   border-left: 1.5px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+`
+
+export const DelegationCaption = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 6px 3px;
+  font-size: 11px;
+  font-weight: 650;
+  color: ${({ theme }) => mutedTextColor(theme.mode)};
 `
 
 export const DelegationList = styled.ol`
@@ -1364,27 +1402,61 @@ export const ShowAllToggle = styled.button`
   }
 `
 
-/* ─── Compact Flat Dashed Add Chips for Secondary Institutional Links ─── */
+/* ─── Self-Explanatory Flat Add Rows for Secondary Institutional Links ─── */
 
 export const CollapsedActorSlot = styled.div`
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 14px;
+  width: 100%;
+  padding: 8px 2px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+
+  &:first-child {
+    border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  }
+`
+
+export const CollapsedActorInfo = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  min-width: 0;
+  flex: 1 1 240px;
+
+  strong {
+    font-size: 13px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+    white-space: nowrap;
+  }
+
+  span {
+    font-size: 12px;
+    line-height: 1.45;
+    color: ${({ theme }) => mutedTextColor(theme.mode)};
+  }
 `
 
 export const CollapsedActorChipBtn = styled.button`
   appearance: none;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  ${toolbarControlHeight}
-  padding: 0 12px;
+  gap: 5px;
+  height: 30px;
+  padding: 0 11px;
   border-radius: ${RADIUS.SM};
-  border: 1px dashed ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => theme.colors.background.primary};
   color: ${({ theme }) => theme.colors.text.secondary};
   font: inherit;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 650;
   white-space: nowrap;
+  flex-shrink: 0;
   cursor: pointer;
   transition:
     border-color ${MOTION.fast} ease,
@@ -1397,7 +1469,6 @@ export const CollapsedActorChipBtn = styled.button`
   }
 
   &:hover {
-    border-style: solid;
     border-color: ${({ theme }) => ledgerAccentBorder(theme.mode)};
     background: ${({ theme }) => ledgerHoverFill(theme.mode)};
     color: ${({ theme }) => theme.colors.text.primary};

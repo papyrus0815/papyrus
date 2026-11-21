@@ -9,7 +9,6 @@ import {
   FiList,
   FiPlus,
   FiSliders,
-  FiUserPlus,
 } from 'react-icons/fi'
 
 import { observationExtent } from '@/entities/evidence/lib/format-observation'
@@ -17,6 +16,7 @@ import { findReplacementForMismatchedCountry } from '@/entities/event/model'
 import { BentoActionBtn } from '@/entities/event/ui/bento-primitives'
 import { getAllCountries } from '@/shared/api/countries'
 import { type Observation } from '@/shared/api/evidence'
+import { listEventSideUnits, type SideUnitView } from '@/shared/api/event-sides'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import { PopoverMenu, type PopoverMenuEntry } from '@/shared/ui/popover-menu'
@@ -26,7 +26,7 @@ import {
 } from '@/widgets/country/country-detail/ui/country-ledger-primitives'
 
 import * as S from '../styles'
-import { type EventDetail, eventObservationsQueryOptions } from '../use-event-detail'
+import { type EventDetail, eventKeys, eventObservationsQueryOptions } from '../use-event-detail'
 import { type PatchOptions } from '../use-undoable-patch'
 import { ActorsInfographicBoard } from './actors/actors-infographic-board'
 import { ActorsLedgerTable } from './actors/actors-ledger-table'
@@ -48,15 +48,16 @@ import {
   ActorSectionCard,
   ActorSectionHead,
   ActorSectionHeadActions,
+  ActorSectionTitleGroup,
   ActorSectionTitleRow,
   ActorsHeader,
   ActorsHeaderLeft,
+  ActorsHeaderRight,
+  ActorsSubtitle,
   ActorsSummary,
-  CommandToolbarLeft,
-  CommandToolbarRight,
-  CommandToolbarRow,
   CountryList,
   CrossSideLabel,
+  DelegationCaption,
   DelegationList,
   DelegationMore,
   EmptyActorsCard,
@@ -66,15 +67,14 @@ import {
   HeaderControlBtn,
   ManageBanner,
   PersonList,
+  SectionHintText,
   ShowAllToggle,
   SideColumns,
   SideCountryList,
   SideGroup,
   SideHead,
-  SideHeadRight,
   SideHeadTitle,
   SideOutcomeTag,
-  SideQuickAddBtn,
   SideSwatch,
 } from './actors/actors.styles'
 import { CountryLinkModal } from './actors/country-link-modal'
@@ -94,7 +94,7 @@ type ActorsViewMode = 'board' | 'ledger'
 function pickParticipantHeadlineFigure(list: ReadonlyArray<Observation>): Observation | null {
   for (const metricKey of [PERSONNEL_METRIC, ...LOSS_METRIC_PRIORITY]) {
     const candidates = list.filter((entry) => entry.metric.key === metricKey)
-    const picked = representativeOf(candidates) ?? candidates[0]
+    const picked = representativeOf(candidates)
     if (picked) return picked
   }
   return null
@@ -155,6 +155,12 @@ export function DetailActors({
   const { persons, countryRows } = actors
 
   const { data: observations = [] } = useQuery(eventObservationsQueryOptions(event.id))
+  const { data: sideUnits = [] } = useQuery<SideUnitView[]>({
+    queryKey: eventKeys.sideUnits(event.id),
+    queryFn: () => listEventSideUnits(event.id),
+    staleTime: 30_000,
+    enabled: (event.sides ?? []).length > 0,
+  })
   const figuresByParticipant = useMemo(() => {
     const byParticipant = new Map<string, typeof observations>()
     for (const observation of observations) {
@@ -174,23 +180,31 @@ export function DetailActors({
       const picked = pickParticipantHeadlineFigure(list)
       if (!picked) continue
       headlineByParticipant.set(participantId, picked)
-      metricCounts.set(picked.metric.key, (metricCounts.get(picked.metric.key) ?? 0) + 1)
+      if (!picked.atLeast) {
+        metricCounts.set(picked.metric.key, (metricCounts.get(picked.metric.key) ?? 0) + 1)
+      }
     }
     const topMetricKey = [...metricCounts.entries()].sort(
       (left, right) => right[1] - left[1],
     )[0]?.[0]
-    if (!topMetricKey) {
-      return { byParticipant: new Map<string, { obs: Observation; pct: number }>() }
+    const byParticipant = new Map<string, { obs: Observation; pct: number | null }>()
+    for (const [participantId, obs] of headlineByParticipant.entries()) {
+      byParticipant.set(participantId, { obs, pct: null })
     }
-    const matchingEntries = [...headlineByParticipant.entries()].filter(
-      ([, obs]) => obs.metric.key === topMetricKey,
+    if (!topMetricKey) {
+      return { byParticipant }
+    }
+    const comparableEntries = [...headlineByParticipant.entries()].filter(
+      ([, obs]) => obs.metric.key === topMetricKey && !obs.atLeast,
     )
+    if (comparableEntries.length < 2) {
+      return { byParticipant }
+    }
     const maxVal = Math.max(
       1,
-      ...matchingEntries.map(([, obs]) => observationExtent(obs)?.center ?? 0),
+      ...comparableEntries.map(([, obs]) => observationExtent(obs)?.center ?? 0),
     )
-    const byParticipant = new Map<string, { obs: Observation; pct: number }>()
-    for (const [participantId, obs] of matchingEntries) {
+    for (const [participantId, obs] of comparableEntries) {
       const center = observationExtent(obs)?.center ?? 0
       if (center > 0) {
         byParticipant.set(participantId, {
@@ -435,7 +449,7 @@ export function DetailActors({
         } else if (sideCount >= 2 && onManageSides) {
           entries.push({
             id: 'manage-sides',
-            label: '진영 이름 · 결과 편집',
+            label: '진영·수치 탭에서 진영 편집 →',
             icon: <FiGitMerge size={13} />,
             onSelect: () => onManageSides(),
           })
@@ -661,29 +675,32 @@ export function DetailActors({
         onDragEnd={clearDrag}
       >
         {delegates.length > 0 && (
-          <DelegationList aria-label={`${row.name} 대표·인물`}>
-            {shownDelegates.map((entry) => {
-              const order = persons.indexOf(entry)
-              return renderPersonRow(
-                entry,
-                { isFirst: order === 0, isLast: order === persons.length - 1 },
-                true,
-                row.sideId,
-              )
-            })}
-            {delegationCollapsible &&
-              (delegationOpen || delegates.length > shownDelegates.length) && (
-                <li>
-                  <DelegationMore
-                    type="button"
-                    aria-expanded={delegationOpen}
-                    onClick={toggleDelegation}
-                  >
-                    {delegationOpen ? '접기' : `+${delegates.length - shownDelegates.length}명 더 보기`}
-                  </DelegationMore>
-                </li>
-              )}
-          </DelegationList>
+          <>
+            <DelegationCaption>소속 인물 {delegates.length}명</DelegationCaption>
+            <DelegationList aria-label={`${row.name} 대표·인물`}>
+              {shownDelegates.map((entry) => {
+                const order = persons.indexOf(entry)
+                return renderPersonRow(
+                  entry,
+                  { isFirst: order === 0, isLast: order === persons.length - 1 },
+                  true,
+                  row.sideId,
+                )
+              })}
+              {delegationCollapsible &&
+                (delegationOpen || delegates.length > shownDelegates.length) && (
+                  <li>
+                    <DelegationMore
+                      type="button"
+                      aria-expanded={delegationOpen}
+                      onClick={toggleDelegation}
+                    >
+                      {delegationOpen ? '접기' : `+${delegates.length - shownDelegates.length}명 더 보기`}
+                    </DelegationMore>
+                  </li>
+                )}
+            </DelegationList>
+          </>
         )}
       </ActorCountryRow>
     )
@@ -699,7 +716,9 @@ export function DetailActors({
     countryRows.find((row) => row.isHistorical)?.id ??
     undefined
 
-  const showPersonSection = listedPersons.length > 0 || Boolean(personSideGroups)
+  const showCountrySection = countryRows.length > 0 || !readOnly || !hasAnything
+  const showPersonSection = persons.length > 0 || !readOnly || Boolean(personSideGroups)
+  const delegatedPersonCount = delegationMode ? persons.length - listedPersons.length : 0
 
   return (
     <>
@@ -707,13 +726,13 @@ export function DetailActors({
         <ActorsHeader>
           <ActorsHeaderLeft>
             <S.SectionTitle>
-              참여 주체 · 구도
+              참여 국가 · 인물
               {hasAnything && (
                 <ActorsSummary>
                   {[
                     totalCountries > 0 && `국가 ${totalCountries}`,
                     persons.length > 0 && `인물 ${persons.length}`,
-                    institutionalCount > 0 && `기관·조직 ${institutionalCount}`,
+                    institutionalCount > 0 && `기관·단체 ${institutionalCount}`,
                     sideCount >= 2 && `진영 ${sideCount}`,
                   ]
                     .filter(Boolean)
@@ -721,7 +740,63 @@ export function DetailActors({
                 </ActorsSummary>
               )}
             </S.SectionTitle>
+            <ActorsSubtitle>
+              {viewMode === 'ledger'
+                ? '등록된 모든 참여 국가와 인물을 한 표에서 비교하고 편집합니다.'
+                : '사건에 관여한 국가와 인물의 역할을 기록합니다. 인물에 소속국을 지정하면 해당 국가 아래에 묶이며 진영도 함께 따릅니다.'}
+            </ActorsSubtitle>
           </ActorsHeaderLeft>
+
+          <ActorsHeaderRight>
+            {viewMode === 'ledger' && !readOnly && (
+              <>
+                <HeaderControlBtn
+                  type="button"
+                  onClick={() => setCountryLinkTarget({ open: true })}
+                >
+                  <FiPlus aria-hidden />
+                  국가 잇기
+                </HeaderControlBtn>
+                <HeaderControlBtn
+                  type="button"
+                  onClick={() => setPersonLinkTarget({ open: true })}
+                >
+                  <FiPlus aria-hidden />
+                  인물 잇기
+                </HeaderControlBtn>
+              </>
+            )}
+
+            {hasAnything && (
+              <LedgerViewSwitch role="group" aria-label="참여 보기 방식 전환">
+                <LedgerViewSwitchItem
+                  type="button"
+                  $active={viewMode === 'board'}
+                  onClick={() => setViewMode('board')}
+                >
+                  <FiGitBranch size={13} />
+                  그룹 보기
+                </LedgerViewSwitchItem>
+                <LedgerViewSwitchItem
+                  type="button"
+                  $active={viewMode === 'ledger'}
+                  onClick={() => setViewMode('ledger')}
+                >
+                  <FiList size={13} />
+                  표로 보기
+                </LedgerViewSwitchItem>
+              </LedgerViewSwitch>
+            )}
+
+            <PopoverMenu
+              size="md"
+              items={settingsMenuItems}
+              active={manageMode || !showInfographic}
+              ariaLabel="화면 표시 및 정렬 설정"
+              title="요약 인포그래픽 표시 · 순서 정렬 · 진영 설정"
+              minWidth={220}
+            />
+          </ActorsHeaderRight>
         </ActorsHeader>
 
         <ActorsCanvas>
@@ -731,6 +806,7 @@ export function DetailActors({
               countryRows={countryRows}
               persons={persons}
               observations={observations}
+              sideUnits={sideUnits}
               departmentCount={departmentCount}
               readOnly={readOnly}
               onStartSides={onStartSides}
@@ -740,75 +816,6 @@ export function DetailActors({
               onPersonClick={onPersonClick}
             />
           )}
-
-          {/* 연관 탭 '기존 사건과 잇기'와 동일한 잇기 버튼 줄 + 보기 방식 전환 */}
-          <CommandToolbarRow>
-            {!readOnly ? (
-              <CommandToolbarLeft style={{ gap: '8px', flexWrap: 'wrap' }}>
-                {/* 짧은 이름 — 진영 묶음 머리의 '+ 국가 잇기'와 같은 말. 긴 이름일 땐 보기 전환이 6px 차로 둘째 줄로 밀렸다 */}
-                <HeaderControlBtn
-                  type="button"
-                  title="이미 등록된 국가를 이 사건의 참여국으로 잇기"
-                  onClick={() => setCountryLinkTarget({ open: true })}
-                >
-                  <FiPlus aria-hidden />
-                  국가 잇기
-                </HeaderControlBtn>
-                <HeaderControlBtn
-                  type="button"
-                  title="이미 등록된 인물을 이 사건의 참여 인물로 잇기"
-                  onClick={() => setPersonLinkTarget({ open: true })}
-                >
-                  <FiPlus aria-hidden />
-                  인물 잇기
-                </HeaderControlBtn>
-                <HeaderControlBtn
-                  type="button"
-                  title="아직 없는 인물을 등록하고 바로 잇기"
-                  onClick={() =>
-                    setPersonLinkTarget({ open: true, initialCreateMode: true })
-                  }
-                >
-                  <FiUserPlus aria-hidden />
-                  새 인물
-                </HeaderControlBtn>
-              </CommandToolbarLeft>
-            ) : (
-              <div />
-            )}
-
-            <CommandToolbarRight>
-              {hasAnything && (
-                <LedgerViewSwitch role="group" aria-label="참여 보기 방식 전환">
-                  <LedgerViewSwitchItem
-                    type="button"
-                    $active={viewMode === 'board'}
-                    onClick={() => setViewMode('board')}
-                  >
-                    <FiGitBranch size={13} />
-                    구도 보드
-                  </LedgerViewSwitchItem>
-                  <LedgerViewSwitchItem
-                    type="button"
-                    $active={viewMode === 'ledger'}
-                    onClick={() => setViewMode('ledger')}
-                  >
-                    <FiList size={13} />
-                    원장 표
-                  </LedgerViewSwitchItem>
-                </LedgerViewSwitch>
-              )}
-
-              <PopoverMenu
-                size="md"
-                items={settingsMenuItems}
-                active={manageMode || !showInfographic}
-                ariaLabel="참여 보기 및 구도 작업 메뉴"
-                title="진영 설정 · 순서 정렬 · 화면 표시"
-                minWidth={220}
-              />
-            </CommandToolbarRight>
-          </CommandToolbarRow>
 
           {manageMode && viewMode === 'board' && (
             <ManageBanner role="status">
@@ -843,17 +850,24 @@ export function DetailActors({
             />
           ) : (
             <>
-              {(countryRows.length > 0 || !hasAnything) && (
+              {showCountrySection && (
                 <ActorSectionCard>
                   <ActorSectionHead>
-                    <ActorSectionTitleRow>
-                      <GroupLabel>{hasAnything ? '참여 국가' : '참여 주체'}</GroupLabel>
-                      {totalCountries > 0 ? (
-                        <GroupCount>{totalCountries}개국</GroupCount>
-                      ) : (
-                        <GroupCount $muted>미등록</GroupCount>
-                      )}
-                    </ActorSectionTitleRow>
+                    <ActorSectionTitleGroup>
+                      <ActorSectionTitleRow>
+                        <GroupLabel>참여 국가</GroupLabel>
+                        {totalCountries > 0 ? (
+                          <GroupCount>{totalCountries}개국</GroupCount>
+                        ) : (
+                          <GroupCount $muted>미등록</GroupCount>
+                        )}
+                      </ActorSectionTitleRow>
+                      <SectionHintText>
+                        {sideCount >= 2
+                          ? '대립 진영별로 국가를 나누어 표시합니다. 행을 다른 진영으로 끌어 옮기거나 편집에서 진영을 바꿀 수 있습니다.'
+                          : '주도·대상·중재 등 당사국의 역할과 사건 중 수행한 일을 기록합니다.'}
+                      </SectionHintText>
+                    </ActorSectionTitleGroup>
 
                     {!readOnly && (
                       <ActorSectionHeadActions>
@@ -864,10 +878,21 @@ export function DetailActors({
                           </BentoActionBtn>
                         )}
                         {sideCount >= 2 && onManageSides && (
-                          <BentoActionBtn type="button" onClick={onManageSides}>
-                            진영 편집
+                          <BentoActionBtn
+                            type="button"
+                            onClick={onManageSides}
+                            title="진영·수치 탭으로 이동해 진영 이름·승패 결과·전투서열을 편집합니다"
+                          >
+                            진영·수치 탭에서 편집 →
                           </BentoActionBtn>
                         )}
+                        <HeaderControlBtn
+                          type="button"
+                          onClick={() => setCountryLinkTarget({ open: true })}
+                        >
+                          <FiPlus aria-hidden />
+                          국가 잇기
+                        </HeaderControlBtn>
                       </ActorSectionHeadActions>
                     )}
                   </ActorSectionHead>
@@ -875,9 +900,9 @@ export function DetailActors({
                   <ActorSectionBody>
                     {countryRows.length === 0 && (
                       <EmptyActorsCard>
-                        <strong>등록된 참여 국가·인물이 없습니다.</strong>
+                        <strong>등록된 참여 국가가 없습니다.</strong>
                         <span>
-                          위 ‘국가 잇기’ 또는 ‘인물 잇기’ 버튼을 눌러 참여 역할·소속과 함께 연결하세요.
+                          우측 ‘국가 잇기’ 버튼으로 현대 국가나 역사 국가를 찾아 역할과 함께 연결하세요.
                         </span>
                       </EmptyActorsCard>
                     )}
@@ -889,8 +914,8 @@ export function DetailActors({
                       countryRows.length >= 2 &&
                       !countryRows.some((row) => row.sideId) && (
                         <EmptyGroupLine>
-                          진영 {sideCount}개가 준비되어 있습니다 — 각 국가 행의{' '}
-                          <strong>+ 진영 배정</strong> 버튼이나 <strong>참여 바꾸기</strong>에서 진영을 지정하세요.
+                          진영 {sideCount}개가 준비되어 있습니다 — 각 국가 이름 옆의{' '}
+                          <strong>+ 진영 배정</strong> 버튼이나 <strong>편집</strong>에서 진영을 지정하세요.
                         </EmptyGroupLine>
                       )}
 
@@ -957,23 +982,6 @@ export function DetailActors({
                                       </SideOutcomeTag>
                                     )}
                                   </SideHeadTitle>
-                                  {!readOnly && group.sideId && (
-                                    <SideHeadRight>
-                                      <SideQuickAddBtn
-                                        type="button"
-                                        title={`‘${group.label}’ 진영에 국가 잇기`}
-                                        onClick={() =>
-                                          setCountryLinkTarget({
-                                            open: true,
-                                            defaultSideId: group.sideId,
-                                          })
-                                        }
-                                      >
-                                        <FiPlus size={11} aria-hidden />
-                                        국가 잇기
-                                      </SideQuickAddBtn>
-                                    </SideHeadRight>
-                                  )}
                                 </SideHead>
                                 <SideCountryList>
                                   {group.items.map((row) => renderCountryRow(row, group.sideId))}
@@ -1042,27 +1050,47 @@ export function DetailActors({
                   }}
                 >
                   <ActorSectionHead>
-                    <ActorSectionTitleRow>
-                      <GroupLabel>
-                        {delegationMode ? '단독 · 소속국 외 참여 인물' : '참여 인물'}
-                      </GroupLabel>
-                      <GroupCount>{listedPersons.length}명</GroupCount>
-                    </ActorSectionTitleRow>
+                    <ActorSectionTitleGroup>
+                      <ActorSectionTitleRow>
+                        <GroupLabel>참여 인물</GroupLabel>
+                        {persons.length > 0 ? (
+                          <GroupCount>{persons.length}명</GroupCount>
+                        ) : (
+                          <GroupCount $muted>미등록</GroupCount>
+                        )}
+                      </ActorSectionTitleRow>
+                      <SectionHintText>
+                        {delegationMode && listedPersons.length === 0
+                          ? `등록된 인물 ${persons.length}명 모두 위 소속 국가 행 아래에 표시 중입니다.`
+                          : delegationMode && delegatedPersonCount > 0
+                            ? `소속국이 지정된 ${delegatedPersonCount}명은 위 국가 아래에, 소속국 없는 단독 참여 ${listedPersons.length}명은 아래에 표시됩니다.`
+                            : '지휘관·국가원수·외교 대표 등 이 사건에서 활동한 주요 인물과 역할을 기록합니다.'}
+                      </SectionHintText>
+                    </ActorSectionTitleGroup>
 
                     {!readOnly && (
                       <ActorSectionHeadActions>
-                        <BentoActionBtn
+                        <HeaderControlBtn
                           type="button"
                           onClick={() => setPersonLinkTarget({ open: true })}
                         >
-                          <FiPlus size={12} />
+                          <FiPlus aria-hidden />
                           인물 잇기
-                        </BentoActionBtn>
+                        </HeaderControlBtn>
                       </ActorSectionHeadActions>
                     )}
                   </ActorSectionHead>
 
                   <ActorSectionBody>
+                    {persons.length === 0 && (
+                      <EmptyActorsCard>
+                        <strong>등록된 참여 인물이 없습니다.</strong>
+                        <span>
+                          우측 ‘인물 잇기’ 버튼으로 기존 인물을 찾거나 새 인물을 바로 만들어 연결할 수 있습니다.
+                        </span>
+                      </EmptyActorsCard>
+                    )}
+
                     {sideCount >= 2 &&
                       !manageMode &&
                       !readOnly &&
@@ -1071,7 +1099,7 @@ export function DetailActors({
                       persons.length >= 2 &&
                       !persons.some((person) => person.sideId) && (
                         <EmptyGroupLine>
-                          진영 {sideCount}개가 준비되어 있습니다 — 각 인물 우측 <strong>참여 바꾸기</strong>나 <strong>⋯</strong> 메뉴에서 진영을 배정하면 진영별로 나뉩니다.
+                          진영 {sideCount}개가 준비되어 있습니다 — 각 인물 우측 <strong>편집</strong>이나 <strong>⋯</strong> 메뉴에서 진영을 배정하면 진영별로 나뉩니다.
                         </EmptyGroupLine>
                       )}
 
@@ -1130,23 +1158,6 @@ export function DetailActors({
                                       </SideOutcomeTag>
                                     )}
                                   </SideHeadTitle>
-                                  {!readOnly && group.sideId && (
-                                    <SideHeadRight>
-                                      <SideQuickAddBtn
-                                        type="button"
-                                        title={`‘${group.label}’ 진영에 인물 잇기`}
-                                        onClick={() =>
-                                          setPersonLinkTarget({
-                                            open: true,
-                                            defaultSideId: group.sideId,
-                                          })
-                                        }
-                                      >
-                                        <FiPlus size={11} aria-hidden />
-                                        인물 잇기
-                                      </SideQuickAddBtn>
-                                    </SideHeadRight>
-                                  )}
                                 </SideHead>
                                 <SideCountryList>
                                   {group.items.map((entry) => {

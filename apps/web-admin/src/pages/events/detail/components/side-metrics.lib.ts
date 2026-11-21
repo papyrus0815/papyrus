@@ -101,27 +101,32 @@ export function comparableOf<Entry extends MetricObservationLike>(
   return value != null && value > 0 ? { observation: picked, value } : null
 }
 
-/** 진영 규모 한 값 — 진영 값, 없으면 나라 몫의 합 */
+export type MemberCellsMap<Entry> = ReadonlyMap<
+  string,
+  ReadonlyMap<string, ReadonlyArray<MemberEntry<Entry>>>
+>
+
+/** 진영 규모·손실 한 값 — 진영 직접 값, 없으면 나라·부대 몫의 합 */
 export interface SideSize<Entry> {
   metricKey: string
   metricName: string
   value: number
-  /** 표기를 빌릴 측정값(나라 합이면 나라 값 하나) */
+  /** 표기를 빌릴 측정값(나라·부대 합이면 첫 항목의 측정값) */
   observation: Entry
-  /** 나라 몫을 더한 계산 값인가 */
+  /** 하위 항목(나라·부대) 몫을 더한 계산 값인가 */
   derived: boolean
+  /** 계산 값의 출처 — 'country'(나라 합) | 'unit'(부대 합) | null */
+  derivedFrom?: 'country' | 'unit' | null
 }
 
-/**
- * 진영의 규모 — SIZE_METRIC_PRIORITY 순(병력 → 참여 인원)으로 첫 비교 가능 값.
- * 진영 값이 없으면 나라 몫의 합(나라마다 대표값이 있을 때만, memberSum).
- */
-export function sideSizeOf<Entry extends MetricObservationLike>(
+function firstMetricFromPriority<Entry extends MetricObservationLike>(
+  priorityKeys: ReadonlyArray<string>,
   rows: ReadonlyArray<SideMetricRow<Entry>>,
-  memberCells: ReadonlyMap<string, ReadonlyMap<string, ReadonlyArray<MemberEntry<Entry>>>>,
+  memberCells: MemberCellsMap<Entry> | undefined,
+  unitCells: MemberCellsMap<Entry> | undefined,
   sideId: string,
 ): SideSize<Entry> | null {
-  for (const key of SIZE_METRIC_PRIORITY) {
+  for (const key of priorityKeys) {
     const direct = comparableOf(rows.find((row) => row.key === key)?.cells.get(sideId) ?? [])
     if (direct) {
       return {
@@ -130,21 +135,61 @@ export function sideSizeOf<Entry extends MetricObservationLike>(
         value: direct.value,
         observation: direct.observation,
         derived: false,
+        derivedFrom: null,
       }
     }
-    const members = memberCells.get(key)?.get(sideId) ?? []
-    const sum = memberSum(members)
-    if (sum !== null && sum > 0 && members[0]) {
+    const members = memberCells?.get(key)?.get(sideId) ?? []
+    const countryTotal = memberSum(members)
+    if (countryTotal !== null && countryTotal > 0 && members[0]) {
       return {
         metricKey: key,
         metricName: members[0].observation.metric.name,
-        value: sum,
+        value: countryTotal,
         observation: members[0].observation,
         derived: true,
+        derivedFrom: 'country',
+      }
+    }
+    const units = unitCells?.get(key)?.get(sideId) ?? []
+    const unitTotal = memberSum(units)
+    if (unitTotal !== null && unitTotal > 0 && units[0]) {
+      return {
+        metricKey: key,
+        metricName: units[0].observation.metric.name,
+        value: unitTotal,
+        observation: units[0].observation,
+        derived: true,
+        derivedFrom: 'unit',
       }
     }
   }
   return null
+}
+
+/**
+ * 진영의 규모 — SIZE_METRIC_PRIORITY 순(병력 → 참여 인원)으로 첫 비교 가능 값.
+ * 진영 값이 없으면 나라 몫의 합, 그다음 부대 몫의 합(항목마다 대표값이 있을 때만, memberSum).
+ */
+export function sideSizeOf<Entry extends MetricObservationLike>(
+  rows: ReadonlyArray<SideMetricRow<Entry>>,
+  memberCells: MemberCellsMap<Entry>,
+  sideId: string,
+  unitCells?: MemberCellsMap<Entry>,
+): SideSize<Entry> | null {
+  return firstMetricFromPriority(SIZE_METRIC_PRIORITY, rows, memberCells, unitCells, sideId)
+}
+
+/**
+ * 진영의 대표 손실 — LOSS_METRIC_PRIORITY 순(손실 합계 → 총사망 → 전사 …)으로 첫 비교 가능 값.
+ * 진영 값이 없으면 나라 몫의 합, 그다음 부대 몫의 합.
+ */
+export function sideLossOf<Entry extends MetricObservationLike>(
+  rows: ReadonlyArray<SideMetricRow<Entry>>,
+  memberCells: MemberCellsMap<Entry>,
+  sideId: string,
+  unitCells?: MemberCellsMap<Entry>,
+): SideSize<Entry> | null {
+  return firstMetricFromPriority(LOSS_METRIC_PRIORITY, rows, memberCells, unitCells, sideId)
 }
 
 /**
@@ -234,25 +279,57 @@ export function lossCompositions<Entry extends MetricObservationLike>(
 }
 
 /**
- * 손실률 — (손실 ÷ 동원 병력). 둘 다 **대표값**이 있을 때만 낸다: 시점·전선이 다른 값이 여럿이면
- * 어느 둘을 나눠야 하는지 모른다(채택 추정치가 정해졌으면 그것으로). '~이상' 값은 비율을 거짓으로 만들어 뺀다.
+ * 손실률 — (손실 ÷ 동원 병력·참여 인원). 둘 다 **대표값**(또는 하위 나라·부대 합)이 있을 때만 낸다:
+ * 시점·전선이 다른 값이 여럿이면 어느 둘을 나눠야 하는지 모른다(채택 추정치가 정해졌으면 그것으로).
+ * '~이상' 값은 비율을 거짓으로 만들어 뺀다.
  */
 export function lossRate(
   rows: ReadonlyArray<SideMetricRow<MetricObservationLike>>,
   sideId: string,
-): { rate: number; lossName: string; sizeKey: string } | null {
-  const single = (key: string) => {
+  memberCells?: MemberCellsMap<MetricObservationLike>,
+  unitCells?: MemberCellsMap<MetricObservationLike>,
+): {
+  rate: number
+  lossName: string
+  lossKey: string
+  sizeKey: string
+  sizeName: string
+  derived: boolean
+} | null {
+  const resolveMetric = (key: string, allowZero: boolean) => {
     const picked = representativeOf(rows.find((row) => row.key === key)?.cells.get(sideId) ?? [])
-    return picked && !picked.atLeast ? picked : null
+    if (picked && !picked.atLeast) {
+      const numeric = centerOf(picked)
+      if (numeric != null && (allowZero ? numeric >= 0 : numeric > 0)) {
+        return { value: numeric, name: picked.metric.name, key, derived: false }
+      }
+    }
+    const members = memberCells?.get(key)?.get(sideId) ?? []
+    const countrySum = memberSum(members)
+    if (countrySum !== null && (allowZero ? countrySum >= 0 : countrySum > 0) && members[0]) {
+      return { value: countrySum, name: members[0].observation.metric.name, key, derived: true }
+    }
+    const units = unitCells?.get(key)?.get(sideId) ?? []
+    const unitSumVal = memberSum(units)
+    if (unitSumVal !== null && (allowZero ? unitSumVal >= 0 : unitSumVal > 0) && units[0]) {
+      return { value: unitSumVal, name: units[0].observation.metric.name, key, derived: true }
+    }
+    return null
   }
-  const personnel = single(PERSONNEL_METRIC) ?? single('society.participants')
-  const personnelValue = personnel ? centerOf(personnel) : null
-  if (!personnel || !personnelValue || personnelValue <= 0) return null
+
+  const personnel = resolveMetric(PERSONNEL_METRIC, false) ?? resolveMetric('society.participants', false)
+  if (!personnel) return null
   for (const key of LOSS_METRIC_PRIORITY) {
-    const loss = single(key)
-    const lossValue = loss ? centerOf(loss) : null
-    if (lossValue != null) {
-      return { rate: lossValue / personnelValue, lossName: loss!.metric.name, sizeKey: personnel.metric.key }
+    const loss = resolveMetric(key, true)
+    if (loss != null) {
+      return {
+        rate: loss.value / personnel.value,
+        lossName: loss.name,
+        lossKey: loss.key,
+        sizeKey: personnel.key,
+        sizeName: personnel.name,
+        derived: personnel.derived || loss.derived,
+      }
     }
   }
   return null

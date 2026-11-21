@@ -1,5 +1,10 @@
 import { buildSideCommentary, ratioVerdict, subjectParticle } from './side-metrics-commentary.lib'
-import { buildSideMetricRows, type MetricObservationLike } from './side-metrics.lib'
+import {
+  buildMemberCells,
+  buildSideMetricRows,
+  buildUnitCells,
+  type MetricObservationLike,
+} from './side-metrics.lib'
 
 const observation = (
   sideId: string,
@@ -76,5 +81,31 @@ describe('수치 해설', () => {
     expect(subjectParticle('협상국')).toBe('이')
     expect(subjectParticle('프랑스')).toBe('가')
     expect(ratioVerdict({ id: 'x', name: '동맹국' }, 1.1, 'size')).toBe('비슷했다')
+  })
+
+  it('진영 직접 값이 없어도 나라 합·부대 합으로 해설 줄을 세운다', () => {
+    const list: MetricObservationLike[] = [
+      observation('p-prussia', 'military.personnel', '437000', { subjectType: 'EVENT_PARTICIPANT' }),
+      observation('p-italy', 'military.personnel', '200000', { subjectType: 'EVENT_PARTICIPANT' }),
+      observation('u-north', 'military.personnel', '300000', { subjectType: 'EVENT_SIDE_UNIT' }),
+      observation('prussia', 'military.casualties_total', '18500'),
+      observation('austria', 'military.casualties_total', '60000'),
+    ]
+    const rows = buildSideMetricRows(list, ['prussia', 'austria'])
+    const memberCells = buildMemberCells(
+      list,
+      new Map([
+        ['p-prussia', { sideId: 'prussia', name: '프로이센 왕국' }],
+        ['p-italy', { sideId: 'prussia', name: '이탈리아 왕국' }],
+      ]),
+    )
+    const unitCells = buildUnitCells(
+      list,
+      new Map([['u-north', { sideId: 'austria', name: '북부군' }]]),
+    )
+    const lines = buildSideCommentary(rows, sides, format, memberCells, unitCells)
+    expect(lines.map((line) => line.label)).toEqual(['동원 병력', '군 손실 합계', '손실률'])
+    expect(lines[0].evidence).toContain('(나라 합)')
+    expect(lines[0].evidence).toContain('(부대 합)')
   })
 })

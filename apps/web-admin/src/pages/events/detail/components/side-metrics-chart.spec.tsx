@@ -7,7 +7,7 @@ import { type Observation } from '@/shared/api/evidence'
 import { renderWithTheme } from '@/shared/test/render-with-theme'
 
 import { type ChartRow, SideMetricsChart } from './side-metrics-chart'
-import { buildSideMetricRows, orderSideMetricRows } from './side-metrics.lib'
+import { buildSideMetricRows, buildUnitCells, orderSideMetricRows } from './side-metrics.lib'
 
 jest.mock('@/shared/api/client', () => ({ getApiConnection: () => ({}) }))
 /* api.service의 import.meta(vite env)는 ts-jest가 못 읽는다 */
@@ -209,5 +209,42 @@ describe('SideMetricsChart', () => {
     touchPointerDown(bar)
     fireEvent.click(bar)
     expect(onEdit).toHaveBeenCalledTimes(1)
+  })
+
+  it('산하 부대(EVENT_SIDE_UNIT) 수치만 있는 지표도 부대 합 막대와 부대별 몫으로 그린다', () => {
+    const unitSide = new Map([
+      ['su-north', { sideId: 'AXIS', name: '북부집단군' }],
+      ['su-center', { sideId: 'AXIS', name: '중부집단군' }],
+      ['su-west', { sideId: 'SOV', name: '서부전선군' }],
+    ])
+    const allObservations = [
+      observation('su-north', 'military.personnel', '동원 병력', '650000', { subjectType: 'EVENT_SIDE_UNIT' }),
+      observation('su-center', 'military.personnel', '동원 병력', '1350000', { subjectType: 'EVENT_SIDE_UNIT' }),
+      observation('su-west', 'military.personnel', '동원 병력', '1000000', { subjectType: 'EVENT_SIDE_UNIT' }),
+    ]
+    const unitCells = buildUnitCells(allObservations, unitSide)
+    const rows: ChartRow[] = [{ key: 'military.personnel', name: '동원 병력', cells: new Map() }]
+
+    renderWithTheme(
+      <SideMetricsChart
+        rows={rows}
+        sides={[
+          { id: 'AXIS', name: '추축국', color: '#1d4ed8' },
+          { id: 'SOV', name: '소련군', color: '#dc2626' },
+        ]}
+        memberCells={new Map()}
+        unitCells={unitCells}
+        onEdit={jest.fn()}
+        onAdd={jest.fn()}
+        sourceLabel={() => '사료'}
+      />,
+    )
+
+    const list = screen.getByRole('list', { name: '진영 수치 비교' })
+    expect(list).toHaveTextContent('부대 합')
+    expect(list).toHaveTextContent('2.0배')
+    const unitSection = screen.getByRole('region', { name: '부대별 몫' })
+    expect(unitSection).toHaveTextContent('북부집단군')
+    expect(unitSection).toHaveTextContent('중부집단군')
   })
 })

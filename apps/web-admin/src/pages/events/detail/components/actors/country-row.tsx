@@ -215,7 +215,7 @@ export function ActorCountryRow({
     return [
       {
         id: 'edit-detail',
-        label: '참여 내용 바꾸기 (한 일 · 비고 · 시점)',
+        label: '편집 (역할 · 한 일 · 시점)',
         icon: <FiEdit2 size={13} />,
         onSelect: () => onOpenEdit(),
       },
@@ -400,31 +400,20 @@ export function ActorCountryRow({
                     </GhostRowBtn>
                   </>
                 ) : (
-                  <>
-                    {onAddDelegate && (
-                      <GhostRowBtn
-                        type="button"
-                        onClick={onAddDelegate}
-                        title={`‘${row.name}’ 소속 수반·지휘관·대표 잇기`}
-                      >
-                        <FiUserPlus aria-hidden />
-                        <span>인물</span>
-                      </GhostRowBtn>
-                    )}
-                    <GhostRowBtn
-                      type="button"
-                      onClick={onOpenEdit}
-                      title={`${row.name} 참여 내용 바꾸기`}
-                    >
-                      <span>참여 바꾸기</span>
-                    </GhostRowBtn>
-                  </>
+                  <GhostRowBtn
+                    type="button"
+                    onClick={onOpenEdit}
+                    title={`${row.name} 역할 · 한 일 · 참전 시점 편집`}
+                  >
+                    <FiEdit2 aria-hidden />
+                    <span>편집</span>
+                  </GhostRowBtn>
                 )}
                 <PopoverMenu
                   size="sm"
                   items={combinedMenuItems}
-                  ariaLabel={`${row.name} 설정 및 작업 메뉴`}
-                  title="역할·진영·참여 편집·제거"
+                  ariaLabel={`${row.name} 더보기 메뉴`}
+                  title="역할 변경 · 진영 배정 · 소속 인물 잇기 · 제외"
                 />
               </RowControls>
             )}

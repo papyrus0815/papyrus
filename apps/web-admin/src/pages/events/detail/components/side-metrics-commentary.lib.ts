@@ -15,6 +15,8 @@ import {
   formatRate,
   LOSS_METRIC_PRIORITY,
   lossRate,
+  type MemberCellsMap,
+  memberSum,
   type MetricObservationLike,
   SIZE_METRIC_PRIORITY,
   type SideMetricRow,
@@ -55,62 +57,146 @@ export function ratioVerdict(
 
 type Formatter = (observation: MetricObservationLike) => string
 
-/**
- * 두 진영(첫째·둘째)의 한 지표 비교 줄 — 대표값이 있고·'이상' 아님·0 초과일 때만.
- */
-function compareLine(
-  row: SideMetricRow<MetricObservationLike>,
+interface ResolvedSideValue {
+  metricName: string
+  value: number
+  formatted: string
+}
+
+function resolveForKey(
+  key: string,
+  sideId: string,
+  rows: ReadonlyArray<SideMetricRow<MetricObservationLike>>,
+  memberCells: MemberCellsMap<MetricObservationLike> | undefined,
+  unitCells: MemberCellsMap<MetricObservationLike> | undefined,
+  format: Formatter,
+): ResolvedSideValue | null {
+  const row = rows.find((candidate) => candidate.key === key)
+  const direct = row ? comparableOf(row.cells.get(sideId) ?? []) : null
+  if (direct) {
+    return {
+      metricName: row?.name ?? direct.observation.metric.name,
+      value: direct.value,
+      formatted: format(direct.observation),
+    }
+  }
+  const members = memberCells?.get(key)?.get(sideId) ?? []
+  const countryTotal = memberSum(members)
+  if (countryTotal !== null && countryTotal > 0 && members[0]) {
+    const synthetic: MetricObservationLike = {
+      ...members[0].observation,
+      value: String(Math.round(countryTotal)),
+      low: null,
+      high: null,
+      atLeast: false,
+    }
+    return {
+      metricName: row?.name ?? members[0].observation.metric.name,
+      value: countryTotal,
+      formatted: `${format(synthetic)} (나라 합)`,
+    }
+  }
+  const units = unitCells?.get(key)?.get(sideId) ?? []
+  const unitTotal = memberSum(units)
+  if (unitTotal !== null && unitTotal > 0 && units[0]) {
+    const synthetic: MetricObservationLike = {
+      ...units[0].observation,
+      value: String(Math.round(unitTotal)),
+      low: null,
+      high: null,
+      atLeast: false,
+    }
+    return {
+      metricName: row?.name ?? units[0].observation.metric.name,
+      value: unitTotal,
+      formatted: `${format(synthetic)} (부대 합)`,
+    }
+  }
+  return null
+}
+
+function buildLineFromPair(
+  label: string,
+  first: ResolvedSideValue,
+  second: ResolvedSideValue,
   sides: readonly [CommentarySide, CommentarySide],
   kind: 'size' | 'loss',
-  format: Formatter,
-): CommentaryLine | null {
-  const pick = (side: CommentarySide) => comparableOf(row.cells.get(side.id) ?? [])
-  const first = pick(sides[0])
-  const second = pick(sides[1])
-  if (!first || !second) return null
+): CommentaryLine {
   const [larger, smaller] =
-    first.value >= second.value ? [{ side: sides[0], ...first }, { side: sides[1], ...second }] : [{ side: sides[1], ...second }, { side: sides[0], ...first }]
+    first.value >= second.value
+      ? [
+          { side: sides[0], ...first },
+          { side: sides[1], ...second },
+        ]
+      : [
+          { side: sides[1], ...second },
+          { side: sides[0], ...first },
+        ]
   return {
-    label: row.name,
+    label,
     verdict: ratioVerdict(larger.side, larger.value / smaller.value, kind),
-    evidence: `${sides[0].name} ${format(first.observation)} · ${sides[1].name} ${format(second.observation)}`,
+    evidence: `${sides[0].name} ${first.formatted} · ${sides[1].name} ${second.formatted}`,
   }
 }
 
 /**
  * 해설 줄 — 진영이 정확히 둘일 때만(셋 이상은 '누가 몇 배'가 한 문장으로 안 선다).
+ * 진영 직접 값뿐 아니라 참여국 합(`memberCells`)·투입 부대 합(`unitCells`)도 같은 기준으로 읽는다.
  */
 export function buildSideCommentary(
   rows: ReadonlyArray<SideMetricRow<MetricObservationLike>>,
   sides: ReadonlyArray<CommentarySide>,
   format: Formatter,
+  memberCells?: MemberCellsMap<MetricObservationLike>,
+  unitCells?: MemberCellsMap<MetricObservationLike>,
 ): CommentaryLine[] {
   if (sides.length !== 2) return []
   const pair = [sides[0], sides[1]] as const
   const lines: CommentaryLine[] = []
+
+  let matchedSize = false
   for (const key of SIZE_METRIC_PRIORITY) {
-    const row = rows.find((candidate) => candidate.key === key)
-    const line = row ? compareLine(row, pair, 'size', format) : null
-    if (line) {
-      lines.push(line)
+    const first = resolveForKey(key, pair[0].id, rows, memberCells, unitCells, format)
+    const second = resolveForKey(key, pair[1].id, rows, memberCells, unitCells, format)
+    if (first && second) {
+      lines.push(buildLineFromPair(first.metricName, first, second, pair, 'size'))
+      matchedSize = true
       break
     }
   }
+  /* 한쪽은 정규 병력, 다른 쪽은 참여 인원(봉기·진압 등) — 그래프의 PAIRED_SIZE_KEY와 같은 규칙 */
+  if (!matchedSize) {
+    const firstSize =
+      resolveForKey('military.personnel', pair[0].id, rows, memberCells, unitCells, format) ??
+      resolveForKey('society.participants', pair[0].id, rows, memberCells, unitCells, format)
+    const secondSize =
+      resolveForKey('military.personnel', pair[1].id, rows, memberCells, unitCells, format) ??
+      resolveForKey('society.participants', pair[1].id, rows, memberCells, unitCells, format)
+    if (firstSize && secondSize) {
+      const label =
+        firstSize.metricName === secondSize.metricName
+          ? firstSize.metricName
+          : `${firstSize.metricName} · ${secondSize.metricName}`
+      lines.push(buildLineFromPair(label, firstSize, secondSize, pair, 'size'))
+    }
+  }
+
   for (const key of LOSS_METRIC_PRIORITY) {
-    const row = rows.find((candidate) => candidate.key === key)
-    const line = row ? compareLine(row, pair, 'loss', format) : null
-    if (line) {
-      lines.push(line)
+    const first = resolveForKey(key, pair[0].id, rows, memberCells, unitCells, format)
+    const second = resolveForKey(key, pair[1].id, rows, memberCells, unitCells, format)
+    if (first && second) {
+      lines.push(buildLineFromPair(first.metricName, first, second, pair, 'loss'))
       break
     }
   }
-  const rates = pair.map((side) => lossRate(rows, side.id))
-  if (rates[0] && rates[1]) {
-    const [high, low] = rates[0].rate >= rates[1].rate ? [0, 1] : [1, 0]
-    const ratio = rates[high]!.rate / rates[low]!.rate
+
+  const rates = pair.map((side) => lossRate(rows, side.id, memberCells, unitCells))
+  if (rates[0] && rates[1] && rates[0].rate > 0 && rates[1].rate > 0) {
+    const [highIdx, lowIdx] = rates[0].rate >= rates[1].rate ? [0, 1] : [1, 0]
+    const ratio = rates[highIdx]!.rate / rates[lowIdx]!.rate
     lines.push({
       label: '손실률',
-      verdict: ratioVerdict(pair[high], ratio, 'loss'),
+      verdict: ratioVerdict(pair[highIdx], ratio, 'loss'),
       evidence: `${pair[0].name} ${formatRate(rates[0].rate)} · ${pair[1].name} ${formatRate(rates[1].rate)}`,
     })
   }

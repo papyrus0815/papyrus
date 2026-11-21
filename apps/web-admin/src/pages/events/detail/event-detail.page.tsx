@@ -31,7 +31,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import styled from 'styled-components'
 
 import { eventDomainDef, eventTypeFeatures, participantKey, toParticipants } from '@/entities/event/model'
-import { ledgerAccent, ledgerHairline } from '@/entities/event/ui/ledger-tokens'
+import { ledgerAccent, ledgerHairline, ledgerHairlineStrong } from '@/entities/event/ui/ledger-tokens'
 import { EventPanelLoading } from '@/entities/event/ui/panel-loading'
 import { CommentSection } from '@/entities/comment'
 import { useDocumentTitle } from '@/shared/hooks/use-document-title.hook'
@@ -701,10 +701,9 @@ function EventDetailContent({
         label: '여파',
         children: withParagraphs('aftermath'),
       })
-    if (showStatehood) items.push({ id: 'statehood', label: '성립·소멸' })
-    if (showTerritory) items.push({ id: 'territory', label: '영토 이전' })
-    if (showPower) items.push({ id: 'power', label: '권력 교체·선거' })
-    if (departmentCount > 0 || expectDepartments) items.push({ id: 'departments', label: '관련 기관' })
+    if (promoteTreaties && shown('treaties')) items.push({ id: 'treaties', label: '조약' })
+    if (shown('actors')) items.push({ id: 'actors', label: '참여 국가·인물' })
+    if (departmentCount > 0 || expectDepartments) items.push({ id: 'departments', label: '국가 기관·사령부' })
     const politicalPartyCount = (event.politicalParties ?? []).length
     if (politicalPartyCount > 0 || features.expectPoliticalParties) {
       items.push({ id: 'political-parties', label: '관련 정당' })
@@ -725,8 +724,9 @@ function EventDetailContent({
     ) {
       items.push({ id: 'companies', label: '관련 기업' })
     }
-    if (promoteTreaties && shown('treaties')) items.push({ id: 'treaties', label: '조약' })
-    if (shown('actors')) items.push({ id: 'actors', label: '참여 행위자' })
+    if (showStatehood) items.push({ id: 'statehood', label: '성립·소멸' })
+    if (showTerritory) items.push({ id: 'territory', label: '영토 이전' })
+    if (showPower) items.push({ id: 'power', label: '권력 교체·선거' })
 
     if (enabledModules.includes('sides'))
       items.push({ id: 'module-sides', label: '진영' })
@@ -1163,6 +1163,7 @@ function EventDetailContent({
 
               {activeTab === 'actors' && (
                 <>
+                  {/* 1단: 참여 국가 · 인물 */}
                   {(!trashedView || isVisible('actors')) && (
                     <DetailActors
                       event={event}
@@ -1187,29 +1188,93 @@ function EventDetailContent({
                       defaultOpen
                     />
                   )}
-                  {showStatehood && (
-                    <DetailStatehood
+
+                  {/* 2단: 이미 등록되었거나 사건 성격상 기본 펼쳐지는 기관·정당·기구·기업 */}
+                  <DetailDepartments
+                    event={event}
+                    expectDepartments={expectDepartments}
+                    readOnly={trashedView}
+                    displayFilter="expanded-only"
+                  />
+                  <DetailPoliticalParties
+                    event={event}
+                    readOnly={trashedView}
+                    displayFilter="expanded-only"
+                    onPatch={onPatch}
+                  />
+                  {(!trashedView || showOrganizations) && (
+                    <DetailOrganizations
                       event={event}
-                      expectStatehood={features.expectStatehood}
-                      onCountryClick={onCountryClick}
-                      onPersonClick={onPersonClick}
+                      expectOrganizations={features.expectOrganizations}
+                      readOnly={trashedView}
+                      displayFilter="expanded-only"
                       onPatch={onPatch}
                     />
                   )}
-                  {showTerritory && (
-                    <DetailTerritory
-                      event={event}
-                      expectTerritory={features.expectTerritory}
-                      readOnly={trashedView}
-                      onCountryClick={onCountryClick}
-                    />
+
+                  {/* 2단 보조: 아직 비어 있는 기관·단체 추가 연결 안내 (섹션과 뒤섞이지 않게 한곳에 모음) */}
+                  {!trashedView && (
+                    <ActorLinkExtrasSection aria-label="기관·정당·기구·기업 참여 주체 연결">
+                      <ActorLinkExtrasHeader>
+                        <span>기관 · 정당 · 단체 추가 연결</span>
+                        <small>국가·인물 외에 이 사건에 직접 관여한 기관이나 단체가 있다면 선택해 연결합니다.</small>
+                      </ActorLinkExtrasHeader>
+                      <ActorLinkExtras>
+                        <DetailDepartments
+                          event={event}
+                          expectDepartments={expectDepartments}
+                          readOnly={trashedView}
+                          displayFilter="collapsed-only"
+                        />
+                        <DetailPoliticalParties
+                          event={event}
+                          readOnly={trashedView}
+                          displayFilter="collapsed-only"
+                          onPatch={onPatch}
+                        />
+                        <DetailOrganizations
+                          event={event}
+                          expectOrganizations={features.expectOrganizations}
+                          readOnly={trashedView}
+                          displayFilter="collapsed-only"
+                          onPatch={onPatch}
+                        />
+                      </ActorLinkExtras>
+                    </ActorLinkExtrasSection>
                   )}
-                  {showPower && (
-                    <DetailPower
-                      event={event}
-                      expectPower={features.expectPower}
-                      onPersonClick={onPersonClick}
-                    />
+
+                  {/* 3단: 사건으로 인한 국가 성립·영토·권력 변동 (참여 주체 목록과 명확히 구분) */}
+                  {(showStatehood || showTerritory || showPower) && (
+                    <OutcomeChapterSection aria-label="사건 결과 및 제도 변동">
+                      <OutcomeChapterHeader>
+                        <strong>사건 결과 · 제도 변동</strong>
+                        <small>이 사건으로 성립·소멸한 국가, 이전된 영토, 교체된 권력·선거를 기록합니다.</small>
+                      </OutcomeChapterHeader>
+                      {showStatehood && (
+                        <DetailStatehood
+                          event={event}
+                          expectStatehood={features.expectStatehood}
+                          onCountryClick={onCountryClick}
+                          onPersonClick={onPersonClick}
+                          onPatch={onPatch}
+                        />
+                      )}
+                      {showTerritory && (
+                        <DetailTerritory
+                          event={event}
+                          expectTerritory={features.expectTerritory}
+                          readOnly={trashedView}
+                          onCountryClick={onCountryClick}
+                        />
+                      )}
+                      {showPower && (
+                        <DetailPower
+                          event={event}
+                          expectPower={features.expectPower}
+                          onPersonClick={onPersonClick}
+                        />
+                      )}
+                    </OutcomeChapterSection>
                   )}
                 </>
               )}
@@ -1305,39 +1370,6 @@ function EventDetailContent({
                     ))}
                   </S.TabEmptyActions>
                 </S.TabEmpty>
-              )}
-
-              {/*
-                * 국가 기관(부처·최고사령부·총독부)과 조직(정당·기업·국제기구) — 다른 표라 칸을 나눈다.
-                * 기록이 없으면 둘 다 버튼 하나로 접혀 한 줄에 나란히 선다(예전엔 빈 블록 둘이 260~480px).
-                * 빈 탭 머리('아직 참여한 인물·국가가 없습니다') **뒤**에 둔다 — 주된 기록이 먼저다.
-                */}
-              {activeTab === 'actors' && (
-                <ActorLinkExtrasSection aria-label="기관·정당·기구·기업 참여 주체 연결">
-                  <ActorLinkExtrasHeader>
-                    <span>추가 참여 조직 연결</span>
-                    <small>국가 기관 · 정당 · 국제기구 · 기업</small>
-                  </ActorLinkExtrasHeader>
-                  <ActorLinkExtras>
-                    <DetailDepartments
-                      event={event}
-                      expectDepartments={expectDepartments}
-                      readOnly={trashedView}
-                    />
-                    <DetailPoliticalParties
-                      event={event}
-                      readOnly={trashedView}
-                      onPatch={onPatch}
-                    />
-                    {(!trashedView || showOrganizations) && (
-                      <DetailOrganizations
-                        event={event}
-                        expectOrganizations={features.expectOrganizations}
-                        onPatch={onPatch}
-                      />
-                    )}
-                  </ActorLinkExtras>
-                </ActorLinkExtrasSection>
               )}
 
               {/* 맥락 연결 — 기록이 없으면 한 줄로 접힌다. 빈 탭 머리('아직 이어 둔 사건·조약이 없습니다') **뒤**에 둔다
@@ -1437,9 +1469,9 @@ function EventDetailContent({
 const ActorLinkExtrasSection = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding-top: 16px;
-  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  gap: 8px;
+  padding-top: 18px;
+  border-top: 1.5px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 
   &:has(> div:empty) {
     display: none;
@@ -1448,42 +1480,57 @@ const ActorLinkExtrasSection = styled.div`
 
 const ActorLinkExtrasHeader = styled.div`
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px 8px;
+  flex-direction: column;
+  gap: 2px;
 
   span {
-    font-size: 12.5px;
-    font-weight: 700;
-    color: ${({ theme }) => theme.colors.text.secondary};
+    font-size: 13.5px;
+    font-weight: 750;
+    color: ${({ theme }) => theme.colors.text.primary};
   }
 
   small {
-    font-size: 11.5px;
-    color: ${({ theme }) => theme.colors.text.tertiary};
+    font-size: 12px;
+    line-height: 1.45;
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
 `
 
-/** 참여 탭 끝 — 접힌 추가 버튼은 컴팩트 한 줄 띠로, 펼친 섹션은 전체 폭으로 배치 */
+/** 아직 연결하지 않은 기관·단체 항목 — 용도 설명과 함께 세로 원장 줄로 가지런히 배치 */
 const ActorLinkExtras = styled.div`
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-
-  > section {
-    flex: 1 1 100%;
-    width: 100%;
-    min-width: 0;
-    margin-bottom: 12px;
-  }
-
-  > section:last-child {
-    margin-bottom: 0;
-  }
+  flex-direction: column;
 
   &:empty {
     display: none;
+  }
+`
+
+const OutcomeChapterSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-top: 8px;
+  padding-top: 22px;
+  border-top: 2px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+`
+
+const OutcomeChapterHeader = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+
+  strong {
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  small {
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: ${({ theme }) => theme.colors.text.secondary};
   }
 `
 

@@ -31,7 +31,12 @@ import {
   unverifiedLabel,
 } from '@/entities/evidence/lib/format-observation'
 import { glassCardMixin } from '@/shared/styles/mixins'
-import { ledgerHairline, ledgerHairlineStrong, ledgerAccent } from '@/entities/event/ui/ledger-tokens'
+import {
+  ledgerAccent,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerSubtleFill,
+} from '@/entities/event/ui/ledger-tokens'
 import { type Observation } from '@/shared/api/evidence'
 import { metaText } from '@/pages/events/styles/theme'
 
@@ -63,6 +68,7 @@ interface SideMetricsChartProps {
   rows: ReadonlyArray<ChartRow>
   sides: ReadonlyArray<ChartSide>
   memberCells: Map<string, Map<string, MemberEntry<Observation>[]>>
+  unitCells?: Map<string, Map<string, MemberEntry<Observation>[]>>
   onEdit: (observation: Observation) => void
   onAdd: (sideId: string, metricKey: string) => void
   /** 값이 여럿인 칸을 누르면 — 표 보기로(어느 값을 고칠지 표에서 고른다) */
@@ -77,7 +83,7 @@ const PAIRED_SIZE_KEY = 'size:paired'
  * 한 진영·한 지표의 그릴 값.
  *  - value: 대표값(값 하나, 또는 채택 하나)
  *  - multiple: 값이 여럿인데 대표가 없음 — 예전엔 '+ 값'(빈칸)으로 그렸다(1차 아편전쟁 영국 측 손실 합계 520 · 1천~2천)
- *  - derived: 진영 값이 없어 나라 몫을 더한 계산 값
+ *  - derived: 진영 값이 없어 나라 몫 또는 산하 부대 몫을 더한 계산 값
  *  - empty: 아무 값 없음 → '+ 값'
  */
 type DatumKind = 'value' | 'multiple' | 'derived' | 'empty'
@@ -86,6 +92,8 @@ interface BarDatum {
   key: string
   side: ChartSide
   kind: DatumKind
+  metricKey: string
+  derivedSource: 'country' | 'unit' | null
   observation: Observation | null
   /** multiple일 때 그 칸의 값들 */
   candidates: Observation[]
@@ -121,9 +129,17 @@ function datumOf(
   row: ChartRow,
   side: ChartSide,
   memberCells: SideMetricsChartProps['memberCells'],
+  unitCells?: SideMetricsChartProps['unitCells'],
 ): BarDatum {
   const key = `${row.key}:${side.id}`
-  const base = { key, side, candidates: [] as Observation[], openEnded: false }
+  const base = {
+    key,
+    side,
+    metricKey: row.key,
+    derivedSource: null as 'country' | 'unit' | null,
+    candidates: [] as Observation[],
+    openEnded: false,
+  }
   const list = row.cells.get(side.id) ?? []
   const representative = representativeOf(list)
   const extent = representative ? observationExtent(representative) : null
@@ -131,6 +147,7 @@ function datumOf(
     return {
       ...base,
       kind: 'value',
+      metricKey: representative.metric.key,
       observation: representative,
       center: extent.center,
       low: extent.low,
@@ -166,12 +183,30 @@ function datumOf(
     return {
       ...base,
       kind: 'derived',
+      metricKey: members[0].observation.metric.key,
+      derivedSource: 'country',
       observation: null,
       center: sum,
       low: sum,
       high: sum,
       unverified: members.every((member) => isUnverified(member.observation)),
       label: sumLabel(members[0].observation, sum),
+    }
+  }
+  const units = unitCells?.get(row.key)?.get(side.id) ?? []
+  const unitTotal = memberSum(units)
+  if (unitTotal !== null && units[0]) {
+    return {
+      ...base,
+      kind: 'derived',
+      metricKey: units[0].observation.metric.key,
+      derivedSource: 'unit',
+      observation: null,
+      center: unitTotal,
+      low: unitTotal,
+      high: unitTotal,
+      unverified: units.every((unitItem) => isUnverified(unitItem.observation)),
+      label: sumLabel(units[0].observation, unitTotal),
     }
   }
   return { ...base, kind: 'empty', observation: null, center: null, low: null, high: null, unverified: false, label: '' }
@@ -181,11 +216,19 @@ function datumOf(
  * 진영 둘 중 한쪽은 병력만, 다른 쪽은 참여 인원만 있으면 한 줄로 — 봉기 진압처럼 한편은 정규군, 다른 편은
  * 군중일 때 '얼마나 모였나'를 마주 세운다(손실률도 병력이 없으면 참여 인원으로 잰다 — lossRate와 같은 규칙).
  */
-function pairSizeRows(rows: ReadonlyArray<ChartRow>, sides: ReadonlyArray<ChartSide>): ChartRow[] {
+function pairSizeRows(
+  rows: ReadonlyArray<ChartRow>,
+  sides: ReadonlyArray<ChartSide>,
+  memberCells: SideMetricsChartProps['memberCells'],
+  unitCells?: SideMetricsChartProps['unitCells'],
+): ChartRow[] {
   const personnel = rows.find((row) => row.key === 'military.personnel')
   const participants = rows.find((row) => row.key === 'society.participants')
   if (sides.length !== 2 || !personnel || !participants) return [...rows]
-  const has = (row: ChartRow, sideId: string) => (row.cells.get(sideId)?.length ?? 0) > 0
+  const has = (row: ChartRow, sideId: string) =>
+    (row.cells.get(sideId)?.length ?? 0) > 0 ||
+    (memberCells.get(row.key)?.get(sideId)?.length ?? 0) > 0 ||
+    (unitCells?.get(row.key)?.get(sideId)?.length ?? 0) > 0
   if (!sides.every((side) => has(personnel, side.id) !== has(participants, side.id))) return [...rows]
   const merged: ChartRow = {
     key: PAIRED_SIZE_KEY,
@@ -197,13 +240,20 @@ function pairSizeRows(rows: ReadonlyArray<ChartRow>, sides: ReadonlyArray<ChartS
   return rows.flatMap((row) => (row === personnel ? [merged] : row === participants ? [] : [row]))
 }
 
-/** 배수 — 두 값이 다 비교 가능할 때만('~이상'·값 여럿·한쪽만 나라 합이면 내지 않는다) */
+function isComparableDatum(datum: BarDatum): datum is BarDatum & { center: number } {
+  return (
+    (datum.kind === 'value' || datum.kind === 'derived') &&
+    !datum.openEnded &&
+    datum.center !== null &&
+    datum.center > 0
+  )
+}
+
+/** 배수 — 두 값이 다 비교 가능할 때만('~이상'·값 여럿이면 내지 않는다) */
 function ratioOf(left: BarDatum, right: BarDatum): { ratio: number; larger: BarDatum; direction: 'start' | 'end' } | null {
-  const usable = (datum: BarDatum) =>
-    (datum.kind === 'value' || datum.kind === 'derived') && !datum.openEnded && datum.center !== null && datum.center > 0
-  if (!usable(left) || !usable(right) || left.kind !== right.kind) return null
-  const leftCenter = left.center as number
-  const rightCenter = right.center as number
+  if (!isComparableDatum(left) || !isComparableDatum(right)) return null
+  const leftCenter = left.center
+  const rightCenter = right.center
   const ratio = Math.max(leftCenter, rightCenter) / Math.min(leftCenter, rightCenter)
   if (ratio < 1.05) return null
   return leftCenter >= rightCenter
@@ -211,28 +261,73 @@ function ratioOf(left: BarDatum, right: BarDatum): { ratio: number; larger: BarD
     : { ratio, larger: right, direction: 'end' }
 }
 
+/** 양쪽 점유 비('57 : 43') — 두 값이 모두 비교 가능할 때만 */
+function shareSplitOf(left: BarDatum, right: BarDatum): { leftPct: number; rightPct: number } | null {
+  if (!isComparableDatum(left) || !isComparableDatum(right)) return null
+  const total = left.center + right.center
+  if (total <= 0) return null
+  const leftPct = Math.max(1, Math.min(99, Math.round((left.center / total) * 100)))
+  return { leftPct, rightPct: 100 - leftPct }
+}
+
 const formatRatio = (ratio: number) => (ratio >= 10 ? String(Math.round(ratio)) : ratio.toFixed(1))
 
-/** 손실 구성 몫의 짙기 — 진영 색 하나를 짙기로 가른다(진영 정체는 색, 몫은 짙기) */
+/** 손실 구성 몫의 짙기·결 — 진영 정체는 색으로, 네 몫(사망·부상·실종·포로)은 짙기와 미세 패턴으로 가른다 */
 const PART_OPACITY: Record<(typeof LOSS_COMPONENTS)[number]['key'], number> = {
   deaths: 0.95,
-  wounded: 0.68,
-  missing: 0.46,
-  captured: 0.28,
+  wounded: 0.72,
+  missing: 0.56,
+  captured: 0.38,
+}
+
+const PART_PATTERN: Record<(typeof LOSS_COMPONENTS)[number]['key'], string | undefined> = {
+  deaths: undefined,
+  wounded: undefined,
+  missing:
+    'repeating-linear-gradient(135deg, rgba(255,255,255,0.38) 0 2px, transparent 2px 5px)',
+  captured:
+    'repeating-linear-gradient(45deg, rgba(255,255,255,0.42) 0 2px, transparent 2px 5px)',
 }
 
 interface TooltipState {
   key: string
-  x: number
-  y: number
+  posX: number
+  posY: number
   title: string
   lines: string[]
+}
+
+function buildBreakdownBlocks(
+  rows: ReadonlyArray<ChartRow>,
+  sides: ReadonlyArray<ChartSide>,
+  cellsMap: Map<string, Map<string, MemberEntry<Observation>[]>> | undefined,
+) {
+  if (!cellsMap) return []
+  return rows.flatMap((row) =>
+    sides.flatMap((side) => {
+      const members = cellsMap.get(row.key)?.get(side.id) ?? []
+      const perMember = new Map<string, MemberEntry<Observation>[]>()
+      for (const member of members) {
+        perMember.set(member.name, [...(perMember.get(member.name) ?? []), member])
+      }
+      const entries = [...perMember.entries()]
+        .map(([name, list]) => {
+          const picked = representativeOf(list.map((member) => member.observation))
+          const extent = picked ? observationExtent(picked) : null
+          return picked && extent ? { name, observation: picked, center: extent.center } : null
+        })
+        .filter((entry): entry is { name: string; observation: Observation; center: number } => Boolean(entry))
+        .sort((left, right) => right.center - left.center)
+      return entries.length >= 2 ? [{ row, side, entries }] : []
+    }),
+  )
 }
 
 export function SideMetricsChart({
   rows,
   sides,
   memberCells,
+  unitCells,
   onEdit,
   onAdd,
   onShowTable,
@@ -256,41 +351,43 @@ export function SideMetricsChart({
     return () => document.removeEventListener('pointerdown', close)
   }, [tooltip])
 
-  const displayRows = butterfly ? pairSizeRows(rows, sides) : [...rows]
-  const table = displayRows.map((row) => ({ row, data: sides.map((side) => datumOf(row, side, memberCells)) }))
-  /* 손실률 — 표의 '손실률' 줄과 같은 계산(원래 행 기준) */
-  const rates = new Map(sides.map((side) => [side.id, lossRate(rows, side.id)] as const))
+  const displayRows = butterfly ? pairSizeRows(rows, sides, memberCells, unitCells) : [...rows]
+  const resolveRowDatum = (row: ChartRow, side: ChartSide) => {
+    if (row.key === PAIRED_SIZE_KEY) {
+      const personnelRow = rows.find((candidate) => candidate.key === 'military.personnel')
+      const participantRow = rows.find((candidate) => candidate.key === 'society.participants')
+      const personnelDatum = personnelRow ? datumOf(personnelRow, side, memberCells, unitCells) : null
+      if (personnelDatum && personnelDatum.kind !== 'empty') return personnelDatum
+      const participantDatum = participantRow ? datumOf(participantRow, side, memberCells, unitCells) : null
+      if (participantDatum && participantDatum.kind !== 'empty') return participantDatum
+    }
+    return datumOf(row, side, memberCells, unitCells)
+  }
+  const table = displayRows.map((row) => ({ row, data: sides.map((side) => resolveRowDatum(row, side)) }))
+  /* 손실률 — 표의 '손실률' 줄과 같은 계산(원래 행 + 나라·부대 합 기준) */
+  const rates = new Map(sides.map((side) => [side.id, lossRate(rows, side.id, memberCells, unitCells)] as const))
   const compositions = lossCompositions(rows, sides.map((side) => side.id))
 
-  /** 나라별 몫 — 나라 값이 둘 이상 있는 (지표, 진영)만 */
-  const memberBlocks = rows.flatMap((row) =>
-    sides.flatMap((side) => {
-      const members = memberCells.get(row.key)?.get(side.id) ?? []
-      const perCountry = new Map<string, MemberEntry<Observation>[]>()
-      for (const member of members) perCountry.set(member.name, [...(perCountry.get(member.name) ?? []), member])
-      const entries = [...perCountry.entries()]
-        .map(([name, list]) => {
-          const picked = representativeOf(list.map((member) => member.observation))
-          const extent = picked ? observationExtent(picked) : null
-          return picked && extent ? { name, observation: picked, center: extent.center } : null
-        })
-        .filter((entry): entry is { name: string; observation: Observation; center: number } => Boolean(entry))
-        .sort((left, right) => right.center - left.center)
-      return entries.length >= 2 ? [{ row, side, entries }] : []
-    }),
-  )
+  /** 나라별 몫 · 부대별 몫 — 값이 둘 이상 있는 (지표, 진영)만 */
+  const memberBlocks = buildBreakdownBlocks(rows, sides, memberCells)
+  const unitBlocks = buildBreakdownBlocks(rows, sides, unitCells)
 
   const drawn = table.flatMap(({ data }) => data).filter((datum) => datum.kind !== 'empty')
-  const memberObservations = memberBlocks.flatMap(({ entries }) => entries.map((entry) => entry.observation))
+  const subObservations = [
+    ...memberBlocks.flatMap(({ entries }) => entries.map((entry) => entry.observation)),
+    ...unitBlocks.flatMap(({ entries }) => entries.map((entry) => entry.observation)),
+  ]
   /* 흐림은 '검증된 값과 섞였을 때'만 — 시드 수치 80개 중 72개가 미검증이라 7건 중 6건이 통째로 흐렸다 */
-  const verifiedFlags = [...drawn.map((datum) => datum.unverified), ...memberObservations.map(isUnverified)]
+  const verifiedFlags = [...drawn.map((datum) => datum.unverified), ...subObservations.map(isUnverified)]
   const fadeUnverified = verifiedFlags.includes(true) && verifiedFlags.includes(false)
   const anyOpenEnded = drawn.some((datum) => datum.openEnded)
   const anyMultiple = drawn.some((datum) => datum.kind === 'multiple')
+  const anyDerived = drawn.some((datum) => datum.kind === 'derived')
 
   const rateFor = (datum: BarDatum) => {
     const rate = rates.get(datum.side.id)
-    return rate && datum.kind === 'value' && datum.observation?.metric.key === rate.sizeKey ? rate : null
+    if (!rate) return null
+    return (datum.kind === 'value' || datum.kind === 'derived') && datum.metricKey === rate.sizeKey ? rate : null
   }
   const anyRate = table.some(({ data }) => data.some((datum) => rateFor(datum) !== null))
 
@@ -318,7 +415,12 @@ export function SideMetricsChart({
         }),
       ]
     } else if (datum.kind === 'derived') {
-      lines = [`${datum.label} — 나라별 값을 더한 계산 값`, datum.unverified ? '출처 미검증 값이 섞임' : '']
+      const sourceText = datum.derivedSource === 'unit' ? '산하 부대별 값을 더한 계산 값' : '나라별 값을 더한 계산 값'
+      lines = [
+        `${datum.label} — ${sourceText}`,
+        rate ? `손실률 ${formatRate(rate.rate)} — ${rate.lossName} ÷ ${rate.sizeName}` : '',
+        datum.unverified ? '출처 미검증 값이 섞임' : '',
+      ]
     } else if (datum.observation) {
       lines = [
         formatObservationExact(datum.observation),
@@ -335,8 +437,8 @@ export function SideMetricsChart({
     const center = rect.left - hostRect.left + rect.width / 2
     setTooltip({
       key: datum.key,
-      x: Math.max(half, Math.min(hostRect.width - half, center)),
-      y: rect.top - hostRect.top,
+      posX: Math.max(half, Math.min(hostRect.width - half, center)),
+      posY: rect.top - hostRect.top,
       title: `${datum.side.name} · ${metricName}`,
       lines,
     })
@@ -372,7 +474,14 @@ export function SideMetricsChart({
    * 막대 하나 — 진영 값이면 버튼(고치기), 값 여럿이면 버튼(표로), 나라 합이면 그림만, 값이 없으면 '+ 값' 자리.
    * bare = 막대 없이 값만(대결형에서 상대가 없는 줄).
    */
-  const renderBar = (row: ChartRow, datum: BarDatum, max: number, direction: 'start' | 'end', bare = false) => {
+  const renderBar = (
+    row: ChartRow,
+    datum: BarDatum,
+    max: number,
+    direction: 'start' | 'end',
+    bare = false,
+    sharePct: number | null = null,
+  ) => {
     if (datum.kind === 'empty') {
       /* 합친 규모 행에는 빈칸이 없다(양쪽 다 값이 있을 때만 합친다) — 그래도 지표 키가 아니므로 '+ 값'을 내지 않는다 */
       if (row.key === PAIRED_SIZE_KEY) return null
@@ -449,13 +558,16 @@ export function SideMetricsChart({
         </Track>
       )
     }
+    const derivedBadgeText = datum.derivedSource === 'unit' ? '부대 합' : '나라 합'
+    const derivedAccessible = datum.derivedSource === 'unit' ? '(산하 부대별 값의 합)' : '(나라별 값의 합)'
     const content = (
       <>
         {track}
         <BarValue $direction={direction}>
           {datum.label}
-          {datum.kind === 'derived' && <span className="derived">나라 합</span>}
-          {rate && <span className="derived">손실 {formatRate(rate.rate)}</span>}
+          {datum.kind === 'derived' && <span className="derived">{derivedBadgeText}</span>}
+          {sharePct !== null && <span className="derived">{sharePct}%</span>}
+          {rate && <span className="derived loss-tag">손실 {formatRate(rate.rate)}</span>}
         </BarValue>
       </>
     )
@@ -490,7 +602,7 @@ export function SideMetricsChart({
       <BarStatic
         $direction={direction}
         role="img"
-        aria-label={datum.kind === 'derived' ? `${accessibleName}(나라별 값의 합)` : accessibleName}
+        aria-label={datum.kind === 'derived' ? `${accessibleName}${derivedAccessible}` : accessibleName}
         tabIndex={0}
         {...interactionFor(datum, row.name, null)}
       >
@@ -503,6 +615,7 @@ export function SideMetricsChart({
     const [left, right] = data
     const max = Math.max(left.high ?? 0, right.high ?? 0)
     const ratio = bare ? null : ratioOf(left, right)
+    const split = bare ? null : shareSplitOf(left, right)
     return (
       <ButterflyRow key={row.key} role="listitem">
         <Half>{renderBar(row, left, max, 'start', bare)}</Half>
@@ -518,13 +631,18 @@ export function SideMetricsChart({
                   ◀
                 </span>
               )}
-              {formatRatio(ratio.ratio)}배
+              <span>{formatRatio(ratio.ratio)}배</span>
               {ratio.direction === 'end' && (
                 <span className="arrow" style={{ color: ratio.larger.side.color }} aria-hidden>
                   ▶
                 </span>
               )}
               <span className="sr-only">, {ratio.larger.side.name} 쪽이 큼</span>
+            </span>
+          )}
+          {split && (
+            <span className="split" aria-hidden title={`비중 ${split.leftPct}% : ${split.rightPct}%`}>
+              {split.leftPct} : {split.rightPct}
             </span>
           )}
         </MetricLabel>
@@ -540,10 +658,62 @@ export function SideMetricsChart({
   const legendNotes = [
     '막대 길이는 지표마다 따로 잽니다',
     fadeUnverified && '흐린 막대 = 출처 없음·미검증',
+    anyDerived && '흰 빗금 막대 = 나라·부대 합산',
     anyOpenEnded && '끝이 흐려지는 막대 = ~이상(하한)',
     anyMultiple && '옅은 띠 = 대표가 정해지지 않은 여러 추정치',
-    anyRate && '빗금 = 병력 중 손실',
+    anyRate && '진한 빗금 = 병력 중 손실',
   ].filter(Boolean)
+
+  const renderBreakdownSection = (
+    title: string,
+    blocks: ReturnType<typeof buildBreakdownBlocks>,
+  ) => (
+    <Members aria-label={title}>
+      <MembersTitle>{title}</MembersTitle>
+      <MembersGrid>
+        {blocks.map(({ row, side, entries }) => {
+          const total = entries.reduce((sum, entry) => sum + entry.center, 0)
+          const max = entries[0]?.center ?? 0
+          return (
+            <MemberCard key={`${title}:${row.key}:${side.id}`}>
+              <MemberHead>
+                <Swatch style={{ background: side.color }} aria-hidden />
+                {side.name} · {row.name}
+              </MemberHead>
+              <ul>
+                {entries.map((entry) => (
+                  <li key={entry.name}>
+                    <button
+                      type="button"
+                      onClick={() => onEdit(entry.observation)}
+                      aria-label={`${entry.name} ${row.name} ${formatObservationValue(entry.observation)} — 고치기`}
+                      title={formatObservationExact(entry.observation)}
+                    >
+                      <span className="name">{entry.name}</span>
+                      <span className="track">
+                        <span
+                          className="fill"
+                          style={{
+                            width: `${max > 0 ? Math.max(1.5, (entry.center / max) * 100) : 0}%`,
+                            background: side.color,
+                            opacity: fadeUnverified && isUnverified(entry.observation) ? 0.45 : 0.9,
+                          }}
+                        />
+                      </span>
+                      <span className="value">
+                        {formatObservationValue(entry.observation)}
+                        {total > 0 && <span className="share">{Math.round((entry.center / total) * 100)}%</span>}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </MemberCard>
+          )
+        })}
+      </MembersGrid>
+    </Members>
+  )
 
   return (
     <Host
@@ -565,9 +735,22 @@ export function SideMetricsChart({
       {butterfly ? (
         <>
           {comparedEntries.length > 0 && (
-            <Butterfly role="list" aria-label="진영 수치 비교">
-              {comparedEntries.map(({ row, data }) => renderButterflyRow(row, data, false))}
-            </Butterfly>
+            <div>
+              <ButterflyAxisHead aria-hidden>
+                <span className="wing left">
+                  <Swatch style={{ background: sides[0].color }} />
+                  {sides[0].name}
+                </span>
+                <span className="axis">지표 · 우세 배수</span>
+                <span className="wing right">
+                  <Swatch style={{ background: sides[1].color }} />
+                  {sides[1].name}
+                </span>
+              </ButterflyAxisHead>
+              <Butterfly role="list" aria-label="진영 수치 비교">
+                {comparedEntries.map(({ row, data }) => renderButterflyRow(row, data, false))}
+              </Butterfly>
+            </div>
           )}
           {loneEntries.length > 0 && (
             <LoneBlock>
@@ -585,15 +768,26 @@ export function SideMetricsChart({
         <Grouped role="list" aria-label="진영 수치 비교">
           {table.map(({ row, data }) => {
             const max = Math.max(0, ...data.map((datum) => datum.high ?? 0))
+            const allComparable = data.length >= 2 && data.every(isComparableDatum)
+            const rowSum = allComparable ? data.reduce((acc, datum) => acc + (datum.center ?? 0), 0) : 0
             return (
               <GroupBlock key={row.key} role="listitem">
                 <GroupTitle>{row.name}</GroupTitle>
-                {data.map((datum) => (
-                  <GroupLine key={datum.side.id}>
-                    <span className="side">{datum.side.name}</span>
-                    {renderBar(row, datum, max, 'end')}
-                  </GroupLine>
-                ))}
+                {data.map((datum) => {
+                  const sharePct =
+                    allComparable && rowSum > 0 && datum.center !== null
+                      ? Math.round((datum.center / rowSum) * 100)
+                      : null
+                  return (
+                    <GroupLine key={datum.side.id}>
+                      <span className="side">
+                        <Swatch style={{ background: datum.side.color }} aria-hidden />
+                        {datum.side.name}
+                      </span>
+                      {renderBar(row, datum, max, 'end', false, sharePct)}
+                    </GroupLine>
+                  )
+                })}
               </GroupBlock>
             )
           })}
@@ -604,56 +798,11 @@ export function SideMetricsChart({
         <LossCompositionBlock compositions={compositions} sides={sides} onEdit={onEdit} />
       )}
 
-      {memberBlocks.length > 0 && (
-        <Members aria-label="나라별 몫">
-          <MembersTitle>나라별 몫</MembersTitle>
-          <MembersGrid>
-            {memberBlocks.map(({ row, side, entries }) => {
-              const total = entries.reduce((sum, entry) => sum + entry.center, 0)
-              const max = entries[0]?.center ?? 0
-              return (
-                <MemberCard key={`${row.key}:${side.id}`}>
-                  <MemberHead>
-                    <Swatch style={{ background: side.color }} aria-hidden />
-                    {side.name} · {row.name}
-                  </MemberHead>
-                  <ul>
-                    {entries.map((entry) => (
-                      <li key={entry.name}>
-                        <button
-                          type="button"
-                          onClick={() => onEdit(entry.observation)}
-                          aria-label={`${entry.name} ${row.name} ${formatObservationValue(entry.observation)} — 고치기`}
-                          title={formatObservationExact(entry.observation)}
-                        >
-                          <span className="name">{entry.name}</span>
-                          <span className="track">
-                            <span
-                              className="fill"
-                              style={{
-                                width: `${max > 0 ? Math.max(1.5, (entry.center / max) * 100) : 0}%`,
-                                background: side.color,
-                                opacity: fadeUnverified && isUnverified(entry.observation) ? 0.45 : 0.9,
-                              }}
-                            />
-                          </span>
-                          <span className="value">
-                            {formatObservationValue(entry.observation)}
-                            {total > 0 && <span className="share">{Math.round((entry.center / total) * 100)}%</span>}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </MemberCard>
-              )
-            })}
-          </MembersGrid>
-        </Members>
-      )}
+      {memberBlocks.length > 0 && renderBreakdownSection('나라별 몫', memberBlocks)}
+      {unitBlocks.length > 0 && renderBreakdownSection('부대별 몫', unitBlocks)}
 
       {tooltip && (
-        <Tooltip role="tooltip" style={{ left: tooltip.x, top: tooltip.y }}>
+        <Tooltip role="tooltip" style={{ left: tooltip.posX, top: tooltip.posY }}>
           <strong>{tooltip.title}</strong>
           {tooltip.lines.map((line) => (
             <span key={line}>{line}</span>
@@ -690,7 +839,12 @@ function LossCompositionBlock({
         <CompositionLegend aria-hidden>
           {usedParts.map((component) => (
             <span key={component.key}>
-              <i style={{ opacity: PART_OPACITY[component.key] }} />
+              <i
+                style={{
+                  opacity: PART_OPACITY[component.key],
+                  backgroundImage: PART_PATTERN[component.key],
+                }}
+              />
               {component.label}
             </span>
           ))}
@@ -703,7 +857,10 @@ function LossCompositionBlock({
         const base = composition.parts[0].observation
         return (
           <CompositionLine key={composition.sideId}>
-            <span className="side">{side.name}</span>
+            <span className="side">
+              <Swatch style={{ background: side.color }} aria-hidden />
+              {side.name}
+            </span>
             <CompositionTrack aria-hidden>
               {composition.parts.map((part) => (
                 <span
@@ -711,8 +868,9 @@ function LossCompositionBlock({
                   className="part"
                   title={`${part.label} ${formatObservationValue(part.observation)}`}
                   style={{
-                    width: `${max > 0 ? (part.value / max) * 100 : 0}%`,
-                    background: side.color,
+                    width: `${max > 0 ? Math.max(0.8, (part.value / max) * 100) : 0}%`,
+                    backgroundColor: side.color,
+                    backgroundImage: PART_PATTERN[part.key],
                     opacity: PART_OPACITY[part.key],
                   }}
                 />
@@ -733,6 +891,15 @@ function LossCompositionBlock({
                   aria-label={`${side.name} ${part.observation.metric.name} ${formatObservationValue(part.observation)} — 고치기`}
                   title={part.observation.metric.name}
                 >
+                  <i
+                    className="part-dot"
+                    aria-hidden
+                    style={{
+                      backgroundColor: side.color,
+                      backgroundImage: PART_PATTERN[part.key],
+                      opacity: PART_OPACITY[part.key],
+                    }}
+                  />
                   {part.label} {formatObservationValue(part.observation)}
                   {composition.parts.length >= 2 && (
                     <span className="share">{Math.round((part.value / composition.sum) * 100)}%</span>
@@ -796,6 +963,44 @@ const LegendNote = styled.span`
   color: ${metaText};
 `
 
+const ButterflyAxisHead = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(96px, 150px) minmax(0, 1fr);
+  align-items: center;
+  padding: 0 0 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  @media (max-width: 639px) {
+    grid-template-columns: minmax(0, 1fr) minmax(64px, 84px) minmax(0, 1fr);
+  }
+
+  .wing {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .wing.left {
+    justify-content: flex-end;
+    padding-right: 10px;
+  }
+  .wing.right {
+    justify-content: flex-start;
+    padding-left: 10px;
+  }
+  .axis {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: ${metaText};
+  }
+`
+
 const Butterfly = styled.div`
   display: flex;
   flex-direction: column;
@@ -804,8 +1009,8 @@ const Butterfly = styled.div`
 const ButterflyRow = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(96px, 150px) minmax(0, 1fr);
-  align-items: center;
-  min-height: 40px;
+  align-items: stretch;
+  min-height: 44px;
 
   /* 휴대폰 폭 — 가운데 지표 칸을 줄여 막대 자리를 돌려준다 */
   @media (max-width: 639px) {
@@ -819,26 +1024,33 @@ const ButterflyRow = styled.div`
 `
 
 const Half = styled.div`
+  display: flex;
+  align-items: center;
   min-width: 0;
-  padding: 8px 0;
+  padding: 8px 10px;
+
+  @media (max-width: 639px) {
+    padding: 8px 4px;
+  }
 `
 
 const MetricLabel = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
-  padding: 0 10px;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 10px;
   text-align: center;
   border-inline: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 
   @media (max-width: 639px) {
-    padding: 0 6px;
+    padding: 6px 4px;
   }
 
   .name {
     font-size: 12.5px;
-    font-weight: 600;
+    font-weight: 650;
     line-height: 1.35;
     word-break: keep-all;
     color: ${({ theme }) => theme.colors.text.primary};
@@ -848,6 +1060,12 @@ const MetricLabel = styled.div`
     align-items: center;
     gap: 3px;
     font-size: 11.5px;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+  .split {
+    font-size: 10.5px;
     font-variant-numeric: tabular-nums;
     color: ${metaText};
   }
@@ -909,7 +1127,8 @@ const Track = styled.span<Direction>`
   flex: 1 1 auto;
   min-width: 28px;
   height: 14px;
-  border-radius: 4px;
+  border-radius: 3px;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
   transition: background 0.14s;
 `
 
@@ -1085,13 +1304,17 @@ const GroupTitle = styled.div`
 
 const GroupLine = styled.div`
   display: grid;
-  grid-template-columns: minmax(80px, 160px) minmax(0, 1fr);
+  grid-template-columns: minmax(90px, 170px) minmax(0, 1fr);
   align-items: center;
   gap: 10px;
 
   .side {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     overflow: hidden;
     font-size: 12px;
+    font-weight: 500;
     color: ${({ theme }) => theme.colors.text.secondary};
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1102,6 +1325,8 @@ const Members = styled.section`
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const MembersTitle = styled.h4`
@@ -1114,7 +1339,7 @@ const MembersTitle = styled.h4`
 const MembersGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px 24px;
+  gap: 14px 28px;
 `
 
 const MemberCard = styled.div`
@@ -1138,6 +1363,11 @@ const MemberCard = styled.div`
     text-align: left;
     cursor: pointer;
 
+    &:hover .name {
+      color: ${({ theme }) => theme.colors.text.primary};
+      text-decoration: underline;
+    }
+
     &:focus-visible {
       outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
       outline-offset: 2px;
@@ -1154,11 +1384,13 @@ const MemberCard = styled.div`
   .track {
     position: relative;
     height: 10px;
+    border-radius: 2px;
+    background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
   }
   .fill {
     position: absolute;
     inset: 0 auto 0 0;
-    border-radius: 0 4px 4px 0;
+    border-radius: 0 3px 3px 0;
   }
   .value {
     display: inline-flex;
@@ -1210,6 +1442,8 @@ const Composition = styled.section`
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const CompositionHead = styled.div`
@@ -1236,19 +1470,23 @@ const CompositionLegend = styled.span`
     width: 10px;
     height: 10px;
     border-radius: 3px;
-    background: ${({ theme }) => theme.colors.text.primary};
+    background-color: ${({ theme }) => theme.colors.text.primary};
   }
 `
 
 const CompositionLine = styled.div`
   display: grid;
-  grid-template-columns: minmax(80px, 160px) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(90px, 170px) minmax(0, 1fr) auto;
   align-items: center;
   gap: 4px 10px;
 
   .side {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     overflow: hidden;
     font-size: 12px;
+    font-weight: 600;
     color: ${({ theme }) => theme.colors.text.secondary};
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1273,6 +1511,8 @@ const CompositionTrack = styled.span`
   position: relative;
   display: flex;
   height: 16px;
+  border-radius: 3px;
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
 
   .part {
     flex: 0 0 auto;
@@ -1282,8 +1522,14 @@ const CompositionTrack = styled.span`
   .part + .part {
     margin-left: 1px;
   }
+  .part:first-of-type {
+    border-radius: 3px 0 0 3px;
+  }
   .part:last-of-type {
-    border-radius: 0 4px 4px 0;
+    border-radius: 0 3px 3px 0;
+  }
+  .part:only-of-type {
+    border-radius: 3px;
   }
   .total {
     position: absolute;
@@ -1299,7 +1545,7 @@ const CompositionParts = styled.div`
   grid-column: 2 / -1;
   display: flex;
   flex-wrap: wrap;
-  gap: 2px 12px;
+  gap: 3px 12px;
   font-size: 12px;
 
   @media (max-width: 639px) {
@@ -1308,7 +1554,7 @@ const CompositionParts = styled.div`
 
   button {
     display: inline-flex;
-    align-items: baseline;
+    align-items: center;
     gap: 4px;
     padding: 1px 0;
     border: 0;
@@ -1317,6 +1563,14 @@ const CompositionParts = styled.div`
     font-variant-numeric: tabular-nums;
     color: ${({ theme }) => theme.colors.text.primary};
     cursor: pointer;
+
+    .part-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
 
     &:hover {
       text-decoration: underline;
