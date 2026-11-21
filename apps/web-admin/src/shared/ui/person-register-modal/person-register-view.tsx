@@ -59,9 +59,6 @@ import {
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
 import { confirm } from '@/shared/ui/confirm-dialog'
-import { CountryPicker } from '@/shared/ui/country-picker'
-import { formatCountryPeriod, toSignedYear } from '@/shared/lib/country-period'
-import { boostByHintYearRange, type CountrySearchShape } from '@/shared/lib/country-picker-filter'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { FormInput } from '@/shared/ui/form-input/form-input'
 import { SegmentControl } from '@/shared/ui/segment-control/segment-control'
@@ -100,6 +97,12 @@ import {
   parseDateString,
   resolveNameRequiredError,
 } from './person-register-view.helpers'
+import {
+  buildCountrySearchOptions,
+  COUNTRY_OPTION_LIMIT,
+  encodeCountryValue,
+  signedYearOf,
+} from './country-search-options'
 import { AffiliationSection } from './sections/affiliation-section'
 import {
   CountryAffiliationsSection,
@@ -112,7 +115,7 @@ import {
   normalizeSpouseRow,
   type SpouseFormRow,
 } from './sections/family-section'
-import { InlineSearchSelect, type SearchOption } from './sections/inline-search-select'
+import { InlineSearchSelect } from './sections/inline-search-select'
 import { LifeSection } from './sections/life-section'
 import { NicknameSection, type NicknameRow } from './sections/nickname-section'
 import { PlaceFields } from './sections/place-fields'
@@ -249,9 +252,6 @@ function makeFormField<K extends keyof PersonDraftSnapshot>(
   }
 }
 
-/** 국적 드롭다운에 한 번에 그리는 국가 수 — 넘으면 '외 N개'(검색으로 좁힌다) */
-const NATIONALITY_OPTION_LIMIT = 120
-
 export function PersonRegisterView({
   initialCountryId,
   onCancel,
@@ -316,10 +316,6 @@ export function PersonRegisterView({
   const [countryAffiliations, setCountryAffiliations] = useState<
     CountryAffiliationRow[]
   >([])
-  // 소속 행별 국가 선택 모달 대상 (행 key, null이면 닫힘)
-  const [affCountryPickerRow, setAffCountryPickerRow] = useState<string | null>(
-    null,
-  )
   const [birthCityId, setBirthCityId] = useState('')
   const [deathCityId, setDeathCityId] = useState('')
   const [birthPlace, setBirthPlace] = useState<PlaceResult | null>(null)
@@ -1444,36 +1440,16 @@ export function PersonRegisterView({
    * 생몰년이 있으면 그 시기에 존속한 역사국가를 앞으로 끌어올린다(제외는 없다 — 망명·사후 추존 등 경계 사례).
    * 생몰년이 1945년 이전이면 역사국가 묶음을, 아니면 현대 국가 묶음을 먼저 보인다(국가 피커의 첫 탭 규칙과 같다).
    */
-  const nationalityValue = countryId ? `m:${countryId}` : historicalCountryId ? `h:${historicalCountryId}` : ''
-  const nationalityOptions = useMemo<SearchOption[]>(() => {
-    const signed = (era: Era, year: string) => {
-      const numeric = Number(year)
-      return year.trim() && Number.isFinite(numeric) ? toSignedYear(era, numeric) : null
-    }
-    const hint = { startYear: signed(birthEra, birthYear), endYear: signed(deathEra, deathYear) }
-    const keywordsOf = (country: CountrySearchShape) =>
-      [country.enName, country.localName, country.isoCode].filter(Boolean).join(' ')
-    const byName = (left: { name: string }, right: { name: string }) => left.name.localeCompare(right.name, 'ko')
-    const modern: SearchOption[] = [...modernCountries].sort(byName).map((country) => ({
-      value: `m:${country.id}`,
-      label: country.flagEmoji ? `${country.flagEmoji} ${country.name}` : country.name,
-      meta: '현대',
-      keywords: keywordsOf(country as CountrySearchShape),
-    }))
-    const historical: SearchOption[] = boostByHintYearRange([...historicalCountries].sort(byName), hint).map(
-      (country) => {
-        const period = formatCountryPeriod(country, { variant: 'short' })
-        return {
-          value: `h:${country.id}`,
-          label: country.name,
-          meta: period ? `역사 · ${period}` : '역사',
-          keywords: keywordsOf(country as CountrySearchShape),
-        }
-      },
-    )
-    const hintEnd = hint.endYear ?? hint.startYear
-    return hintEnd != null && hintEnd < 1945 ? [...historical, ...modern] : [...modern, ...historical]
-  }, [modernCountries, historicalCountries, birthEra, birthYear, deathEra, deathYear])
+  const nationalityValue = encodeCountryValue({ countryId, historicalCountryId })
+  /** 생몰년 시기 힌트 — 국적·소속 드롭다운이 그 시기 역사국가를 앞으로 */
+  const lifespanHint = useMemo(
+    () => ({ startYear: signedYearOf(birthEra, birthYear), endYear: signedYearOf(deathEra, deathYear) }),
+    [birthEra, birthYear, deathEra, deathYear],
+  )
+  const nationalityOptions = useMemo(
+    () => buildCountrySearchOptions(modernCountries, historicalCountries, lifespanHint),
+    [modernCountries, historicalCountries, lifespanHint],
+  )
 
   const handleNationalityChange = (next: string) => {
     if (!next) {
@@ -1483,12 +1459,8 @@ export function PersonRegisterView({
       markDirty()
       return
     }
-    const isHistorical = next.startsWith('h:')
-    const id = next.slice(2)
-    const country = isHistorical
-      ? historicalCountries.find((entry) => entry.id === id)
-      : modernCountries.find((entry) => entry.id === id)
-    if (country) handleCountrySelect({ id, name: country.name, isHistorical })
+    const picked = nationalityOptions.find((option) => option.value === next)
+    if (picked) handleCountrySelect({ id: picked.id, name: picked.name, isHistorical: picked.isHistorical })
   }
 
   /**
@@ -1702,7 +1674,6 @@ export function PersonRegisterView({
     showAdoptiveFatherModal ||
     showAdoptiveMotherModal ||
     showSpouseModal ||
-    affCountryPickerRow !== null ||
     affDateModalOpen ||
     spouseDateModalOpen ||
     showRegisterAgainDialog
@@ -3134,7 +3105,7 @@ export function PersonRegisterView({
                   value={nationalityValue}
                   selectedLabelFallback={countryName}
                   onChange={handleNationalityChange}
-                  limit={NATIONALITY_OPTION_LIMIT}
+                  limit={COUNTRY_OPTION_LIMIT}
                   error={!!errors.countryId}
                   ariaInvalid={!!errors.countryId}
                   ariaDescribedBy={errors.countryId ? fid('countryId-err') : undefined}
@@ -3497,7 +3468,10 @@ export function PersonRegisterView({
         fid={fid}
         rows={countryAffiliations}
         setRows={setCountryAffiliations}
-        onPickCountry={(rowKey) => setAffCountryPickerRow(rowKey)}
+        modernCountries={modernCountries}
+        historicalCountries={historicalCountries}
+        lifespanHint={lifespanHint}
+        primaryCountryValue={nationalityValue}
         onDateModalOpenChange={setAffDateModalOpen}
         markDirty={markDirty}
       />
@@ -3681,32 +3655,6 @@ export function PersonRegisterView({
         onCancel={handleClosePostSuccess}
       />
 
-      <CountryPicker
-        mode="single"
-        isOpen={affCountryPickerRow !== null}
-        onClose={() => setAffCountryPickerRow(null)}
-        onSelect={(c) => {
-          if (affCountryPickerRow) {
-            setCountryAffiliations((prev) =>
-              prev.map((r) =>
-                r.key === affCountryPickerRow
-                  ? {
-                      ...r,
-                      countryId: c.isHistorical ? undefined : c.id,
-                      historicalCountryId: c.isHistorical ? c.id : undefined,
-                      countryLabel: c.name,
-                    }
-                  : r,
-              ),
-            )
-            markDirty()
-          }
-          setAffCountryPickerRow(null)
-        }}
-        modernCountries={modernCountries}
-        historicalCountries={historicalCountries}
-        title="소속 국가 선택"
-      />
       {showBirthDateModal && (
         <DatePickerModal
           isOpen={showBirthDateModal}

@@ -1,16 +1,19 @@
 /**
  * 인물 등록/수정 폼의 "국가 소속(다중)" 입력.
  * - 주 국적(countryId)과 별개로 출생지·복무·망명·이중국적 등 여러 소속을 행 단위로 추가/삭제.
- * - 국가 선택은 부모가 소유한 CountryPicker를 onPickCountry(rowKey)로 위임.
+ * - 국가 선택은 칸 안에서 검색하는 드롭다운(InlineSearchSelect) — 주 국적 칸과 같은 옵션(country-search-options).
+ *   예전엔 행마다 국가 피커 모달을 왕복했다. 행에 기간이 있으면 그 시기, 없으면 생몰년 시기의 역사국가가 앞에 온다.
  * - 시작/종료일은 폼 전역과 동일한 공용 DatePickerModal(era 인식)로 통일.
  *   · 서버 DTO가 @IsDateString(ISO, AD)이라 BC 확장연도(`-YYYY-...`)는 저장 불가 →
  *     모달에서 BC를 고르면 차단·안내한다. (BC 지원은 백엔드 date 포맷 완화가 선행돼야 함)
  */
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 
-import { FiPlus, FiTrash2, FiChevronDown, FiCalendar, FiAlertCircle } from 'react-icons/fi'
+import { FiPlus, FiTrash2, FiCalendar, FiAlertCircle, FiInfo } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { signedYearFromIsoLike } from '@/shared/lib/country-period'
+import { type CountryHintYearRange } from '@/shared/lib/country-picker-filter'
 import { dateSortKey, parseIsoDateParts } from '@/shared/lib/iso-date'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import {
@@ -24,10 +27,17 @@ import {
   FieldError,
   FONT,
   RADIUS,
-  SelectBtn,
   inputFocusMixin,
   mobileInputFontMixin,
 } from '../_form-primitives'
+import {
+  buildCountrySearchOptions,
+  COUNTRY_OPTION_LIMIT,
+  type CountryOptionSource,
+  encodeCountryValue,
+} from '../country-search-options'
+
+import { InlineSearchSelect } from './inline-search-select'
 
 /** 국가 소속 한 행의 폼 상태 (저장 시 DTO로 변환) */
 export type CountryAffiliationRow = {
@@ -125,7 +135,67 @@ export function hasAffiliationDateError(
   rows: CountryAffiliationRow[],
 ): boolean {
   return rows.some(
-    (r) => isReversed(r.startDate, r.endDate),
+    (row) => isReversed(row.startDate, row.endDate),
+  )
+}
+
+/** 유형 드롭다운 옵션 — 국가 칸과 같은 콤보박스(예전엔 네이티브 select라 다크·높이가 따로 놀았다) */
+const AFFILIATION_TYPE_SEARCH_OPTIONS = AFFILIATION_TYPE_OPTIONS.map((option) => ({
+  value: option.value,
+  label: option.label,
+}))
+
+/**
+ * 소속 행의 국가 칸 — 그 행의 기간이 있으면 그 시기, 없으면 생몰년 시기의 역사국가를 앞으로.
+ * 행마다 옵션을 따로 만든다(기간이 행마다 다르다).
+ */
+function AffiliationCountrySelect({
+  id,
+  ariaLabel,
+  row,
+  modernCountries,
+  historicalCountries,
+  lifespanHint,
+  primaryCountryValue,
+  error,
+  onPick,
+}: {
+  id: string
+  ariaLabel: string
+  row: CountryAffiliationRow
+  modernCountries: ReadonlyArray<CountryOptionSource>
+  historicalCountries: ReadonlyArray<CountryOptionSource>
+  lifespanHint: CountryHintYearRange | null
+  primaryCountryValue: string
+  error: boolean
+  onPick: (picked: { id: string; name: string; isHistorical: boolean } | null) => void
+}) {
+  const rowStart = signedYearFromIsoLike(row.startDate)
+  const rowEnd = signedYearFromIsoLike(row.endDate)
+  const options = useMemo(() => {
+    const hint = rowStart != null || rowEnd != null ? { startYear: rowStart, endYear: rowEnd } : lifespanHint
+    return buildCountrySearchOptions(modernCountries, historicalCountries, hint, { primaryValue: primaryCountryValue })
+  }, [modernCountries, historicalCountries, lifespanHint, primaryCountryValue, rowStart, rowEnd])
+  return (
+    <InlineSearchSelect
+      id={id}
+      ariaLabel={ariaLabel}
+      placeholder="국가 검색 (현대·역사)"
+      options={options}
+      value={encodeCountryValue(row)}
+      selectedLabelFallback={row.countryLabel}
+      limit={COUNTRY_OPTION_LIMIT}
+      error={error}
+      ariaInvalid={error}
+      onChange={(next) => {
+        if (!next) {
+          onPick(null)
+          return
+        }
+        const picked = options.find((option) => option.value === next)
+        if (picked) onPick({ id: picked.id, name: picked.name, isHistorical: picked.isHistorical })
+      }}
+    />
   )
 }
 
@@ -133,8 +203,13 @@ export interface CountryAffiliationsSectionProps {
   fid: (key: string) => string
   rows: CountryAffiliationRow[]
   setRows: React.Dispatch<React.SetStateAction<CountryAffiliationRow[]>>
-  /** 행의 국가 선택 모달 열기 (부모가 공용 CountryPicker 제어) */
-  onPickCountry: (rowKey: string) => void
+  /** 국가 목록 — 주 국적 칸과 같은 원본 */
+  modernCountries: ReadonlyArray<CountryOptionSource>
+  historicalCountries: ReadonlyArray<CountryOptionSource>
+  /** 생몰년 시기 — 기간 없는 행의 국가 정렬 힌트 */
+  lifespanHint: CountryHintYearRange | null
+  /** 주 국적 값('m:'/'h:') — 목록에 '주 국적' 표지, 같은 국가를 국적/시민권으로 또 적으면 안내 */
+  primaryCountryValue: string
   /** 시작/종료일 피커 열림 여부 보고 — 부모의 ⌘Enter 제출 가드(anyModalOpen)에 포함용 */
   onDateModalOpenChange?: (open: boolean) => void
   markDirty: () => void
@@ -144,7 +219,10 @@ export function CountryAffiliationsSection({
   fid,
   rows,
   setRows,
-  onPickCountry,
+  modernCountries,
+  historicalCountries,
+  lifespanHint,
+  primaryCountryValue,
   onDateModalOpenChange,
   markDirty,
 }: CountryAffiliationsSectionProps) {
@@ -164,16 +242,19 @@ export function CountryAffiliationsSection({
   const [bcBlockedRow, setBcBlockedRow] = useState<string | null>(null)
 
   const patchRow = (key: string, patch: Partial<CountryAffiliationRow>) => {
-    setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)))
+    setRows((previous) => previous.map((row) => (row.key === key ? { ...row, ...patch } : row)))
     markDirty()
   }
   const removeRow = (key: string) => {
-    setRows((prev) => prev.filter((r) => r.key !== key))
+    setRows((previous) => previous.filter((row) => row.key !== key))
     markDirty()
   }
   const addRow = () => {
-    setRows((prev) => [...prev, makeAffiliationRow()])
+    const row = makeAffiliationRow()
+    setRows((prev) => [...prev, row])
     markDirty()
+    /* 새 행의 국가 칸으로 바로 — 행을 더하는 이유가 국가를 적기 위해서다 */
+    requestAnimationFrame(() => document.getElementById(fid(`aff-country-${row.key}`))?.focus())
   }
 
   const openDateModal = (
@@ -219,36 +300,40 @@ export function CountryAffiliationsSection({
                 return (
                   <RowCard key={row.key} $invalid={!!err}>
                     <RowTop>
-                      <TypeSelectWrap>
-                        <TypeSelect
-                          aria-label={`소속 유형 ${idx + 1}`}
+                      <TypeCell>
+                        <InlineSearchSelect
+                          ariaLabel={`소속 유형 ${idx + 1}`}
+                          options={AFFILIATION_TYPE_SEARCH_OPTIONS}
                           value={row.affiliationType}
-                          onChange={(e) =>
-                            patchRow(row.key, {
-                              affiliationType: e.target.value,
-                            })
-                          }
-                        >
-                          {AFFILIATION_TYPE_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </TypeSelect>
-                        <SelectCaret>
-                          <FiChevronDown size={16} />
-                        </SelectCaret>
-                      </TypeSelectWrap>
+                          clearable={false}
+                          onChange={(next) => next && patchRow(row.key, { affiliationType: next })}
+                        />
+                      </TypeCell>
 
-                      <SelectBtn
-                        type="button"
-                        $hasValue={!!row.countryLabel}
-                        $error={missingCountry}
-                        onClick={() => onPickCountry(row.key)}
-                      >
-                        <span>{row.countryLabel || '국가 선택'}</span>
-                        <FiChevronDown size={18} />
-                      </SelectBtn>
+                      <CountryCell>
+                        <AffiliationCountrySelect
+                          id={fid(`aff-country-${row.key}`)}
+                          ariaLabel={`소속 ${idx + 1} 국가`}
+                          row={row}
+                          modernCountries={modernCountries}
+                          historicalCountries={historicalCountries}
+                          lifespanHint={lifespanHint}
+                          primaryCountryValue={primaryCountryValue}
+                          error={missingCountry}
+                          onPick={(picked) =>
+                            patchRow(
+                              row.key,
+                              picked
+                                ? {
+                                    countryId: picked.isHistorical ? undefined : picked.id,
+                                    historicalCountryId: picked.isHistorical ? picked.id : undefined,
+                                    countryLabel: picked.name,
+                                  }
+                                : { countryId: undefined, historicalCountryId: undefined, countryLabel: '' },
+                            )
+                          }
+                        />
+                      </CountryCell>
 
                       <RemoveBtn
                         type="button"
@@ -308,6 +393,14 @@ export function CountryAffiliationsSection({
                       />
                     </RowBottom>
 
+                    {row.affiliationType === 'CITIZENSHIP' &&
+                      primaryCountryValue &&
+                      encodeCountryValue(row) === primaryCountryValue && (
+                        <RowNotice>
+                          <FiInfo size={13} />
+                          주 국적과 같은 국가입니다 — 기간이 다른 국적이 아니면 이 행은 없어도 됩니다.
+                        </RowNotice>
+                      )}
                     {err && (
                       <FieldError role="alert">
                         <FiAlertCircle size={13} />
@@ -326,6 +419,11 @@ export function CountryAffiliationsSection({
             </RowList>
           )}
 
+          {rows.length === 0 && (
+            <EmptyHint>
+              출생지·거주지·복무·망명·이중국적처럼 주 국적 밖의 소속을 기간과 함께 적습니다.
+            </EmptyHint>
+          )}
           <AddRowBtn type="button" onClick={addRow}>
             <FiPlus size={16} />
             소속 추가
@@ -376,47 +474,53 @@ const RowCard = styled.div<{ $invalid?: boolean }>`
     theme.mode === 'dark' ? 'rgba(255,255,255,0.02)' : '#fafafa'};
 `
 
+/* 유형 · 국가 · 삭제 — 좁은 폭에선 유형·삭제 한 줄, 국가는 아래 전체 폭 */
 const RowTop = styled.div`
-  display: flex;
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) auto;
+  grid-template-areas: 'type country remove';
   align-items: center;
   gap: 8px;
-`
 
-const TypeSelectWrap = styled.div`
-  position: relative;
-  flex: 0 0 132px;
-`
+  & > button {
+    grid-area: remove;
+  }
 
-const TypeSelect = styled.select`
-  width: 100%;
-  appearance: none;
-  padding: 9px 28px 9px 10px;
-  font-size: ${FONT.label};
-  color: ${({ theme }) => theme.colors.text.primary};
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? 'rgba(255,255,255,0.03)' : '#fff'};
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  border-radius: ${RADIUS.control};
-  cursor: pointer;
-  /* 다크에서 네이티브 OS 드롭다운·옵션이 흰 배경으로 뜨는 것 방지(전역 color-scheme만으론 부족) */
-  color-scheme: ${({ theme }) => (theme.mode === 'dark' ? 'dark' : 'light')};
-  ${mobileInputFontMixin}
-  ${({ theme }) => inputFocusMixin(theme)}
-  option {
-    background-color: ${({ theme }) =>
-      theme.mode === 'dark' ? '#18181b' : '#ffffff'};
-    color: ${({ theme }) => theme.colors.text.primary};
+  @media (max-width: 560px) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'type remove'
+      'country country';
   }
 `
 
-const SelectCaret = styled.span`
-  position: absolute;
-  top: 50%;
-  right: 8px;
-  transform: translateY(-50%);
-  pointer-events: none;
+const TypeCell = styled.div`
+  grid-area: type;
+  min-width: 0;
+`
+
+const CountryCell = styled.div`
+  grid-area: country;
+  min-width: 0;
+`
+
+const RowNotice = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: ${FONT.meta};
+  color: ${({ theme }) => theme.colors.text.secondary};
+
+  svg {
+    flex-shrink: 0;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+const EmptyHint = styled.p`
+  margin: 0;
+  font-size: ${FONT.meta};
   color: ${({ theme }) => theme.colors.text.tertiary};
-  display: inline-flex;
 `
 
 const RemoveBtn = styled.button`
@@ -424,8 +528,8 @@ const RemoveBtn = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 41px;
+  height: 41px;
   border: 1px solid ${({ theme }) => theme.colors.border.default};
   border-radius: ${RADIUS.control};
   background: ${({ theme }) =>
@@ -451,6 +555,9 @@ const DateTriggerBtn = styled.button<{ $hasValue?: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  /* 아래 줄 칸 높이 통일(날짜·메모 36px) */
+  box-sizing: border-box;
+  min-height: 36px;
   padding: 7px 10px;
   font-size: ${FONT.label};
   color: ${({ $hasValue, theme }) =>
@@ -498,6 +605,8 @@ const DateClearBtn = styled.button`
 const NoteInput = styled.input`
   flex: 1 1 140px;
   min-width: 0;
+  box-sizing: border-box;
+  min-height: 36px;
   padding: 7px 10px;
   font-size: ${FONT.label};
   color: ${({ theme }) => theme.colors.text.primary};
