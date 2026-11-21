@@ -228,3 +228,160 @@ export function useModalSubmitShortcut({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [enabled, scrollContainerRef, onSubmit])
 }
+
+// ─── 조립품 — 위 부품을 사건 등록 모달과 같은 모양으로 묶은 것(선거·정당 등록 모달) ─────────
+
+/** 섹션 이동 알약 안의 배지 — 사건 모달 SectionJumpBadge('✓' = 필수 완료, 숫자 = 채운 칸) */
+export const SectionJumpBadge = styled.span<{ $done?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  background: ${({ $done, theme }) =>
+    $done
+      ? theme.mode === 'dark'
+        ? 'rgba(16, 185, 129, 0.2)'
+        : 'rgba(16, 185, 129, 0.14)'
+      : theme.mode === 'dark'
+        ? 'rgba(99, 102, 241, 0.24)'
+        : 'rgba(99, 102, 241, 0.12)'};
+  color: ${({ $done, theme }) =>
+    $done ? (theme.mode === 'dark' ? '#6ee7b7' : '#047857') : theme.colors.primary};
+`
+
+const BadgedSectionJumpBtn = styled(SectionJumpBtn)`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+`
+
+export interface RegisterSectionLink {
+  id: string
+  label: string
+  /** '✓'(필수 완료) · 숫자(채운 칸 수) · null(표시 없음) */
+  badge?: string | null
+}
+
+export function RegisterSectionJumpNav({
+  sections,
+  activeId,
+  onJump,
+  ariaLabel = '폼 섹션 이동',
+}: {
+  sections: ReadonlyArray<RegisterSectionLink>
+  activeId: string
+  onJump: (sectionId: string) => void
+  ariaLabel?: string
+}) {
+  return (
+    <SectionJumpNav aria-label={ariaLabel}>
+      {sections.map((section) => {
+        const isActive = section.id === activeId
+        return (
+          <BadgedSectionJumpBtn
+            key={section.id}
+            type="button"
+            $active={isActive}
+            aria-current={isActive ? 'location' : undefined}
+            onClick={() => onJump(section.id)}
+          >
+            <span>{section.label}</span>
+            {section.badge ? (
+              <SectionJumpBadge $done={section.badge === '✓'} aria-hidden="true">
+                {section.badge}
+              </SectionJumpBadge>
+            ) : null}
+          </BadgedSectionJumpBtn>
+        )
+      })}
+    </SectionJumpNav>
+  )
+}
+
+/**
+ * 스크롤 중 지금 보이는 섹션 — 컨테이너 위 96px 선을 넘은 마지막 섹션(사건 모달과 같은 문턱).
+ * 맨 아래까지 내리면 마지막 섹션(짧은 마지막 묶음이 문턱에 못 닿아도 켜지게).
+ */
+export function activeSectionAt(container: HTMLElement, sectionIds: ReadonlyArray<string>): string {
+  const threshold = container.getBoundingClientRect().top + 96
+  let currentId = sectionIds[0] ?? ''
+  for (const sectionId of sectionIds) {
+    const element = document.getElementById(sectionId)
+    if (element && element.getBoundingClientRect().top <= threshold) currentId = sectionId
+  }
+  const scrollable = container.scrollHeight > container.clientHeight
+  const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 4
+  return scrollable && atBottom ? (sectionIds[sectionIds.length - 1] ?? currentId) : currentId
+}
+
+const FooterProblem = styled.span`
+  color: ${({ theme }) => theme.colors.error};
+`
+
+export interface RegisterFooterShortcut {
+  keys: string
+  label: string
+}
+
+/**
+ * 푸터 왼쪽 상태 — 빠진 필수가 있으면 그 칸으로 가는 알약, 순서·형식 오류면 경고 문장,
+ * 다 채웠으면 '등록 준비 완료' + 단축키.
+ */
+export function RegisterFooterStatus({
+  missing,
+  onJumpToMissing,
+  problem,
+  readyLabel,
+  shortcuts,
+}: {
+  /** 비어 있는 필수 항목 이름(앞에서부터) */
+  missing: ReadonlyArray<string>
+  onJumpToMissing?: () => void
+  /** 필수는 다 찼지만 저장할 수 없는 이유(날짜 순서·형식 등) */
+  problem?: string | null
+  readyLabel: string
+  shortcuts: ReadonlyArray<RegisterFooterShortcut>
+}) {
+  if (missing.length > 0) {
+    return (
+      <FooterHint $warning>
+        <FooterJumpButton
+          type="button"
+          onClick={onJumpToMissing}
+          title="클릭하면 해당 필수 입력 칸으로 이동합니다"
+        >
+          <span>필수 입력: {missing[0]}</span>
+          {missing.length > 1 ? <FooterMissingCount>외 {missing.length - 1}건</FooterMissingCount> : null}
+          <FooterJumpArrow aria-hidden="true">→</FooterJumpArrow>
+        </FooterJumpButton>
+      </FooterHint>
+    )
+  }
+  if (problem) {
+    return (
+      <FooterHint $warning role="alert">
+        <FooterProblem>{problem}</FooterProblem>
+      </FooterHint>
+    )
+  }
+  return (
+    <FooterHint>
+      <FooterReadyGroup>
+        <FooterReadyBadge>{readyLabel}</FooterReadyBadge>
+        {shortcuts.map((shortcut) => (
+          <FooterShortcutItem key={shortcut.keys}>
+            <FooterKbd>{shortcut.keys}</FooterKbd>
+            <span>{shortcut.label}</span>
+          </FooterShortcutItem>
+        ))}
+      </FooterReadyGroup>
+    </FooterHint>
+  )
+}

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { createPortal } from 'react-dom'
 
@@ -17,6 +17,7 @@ import {
   FiChevronLeft,
   FiChevronRight,
   FiChevronUp,
+  FiColumns,
   FiEdit2,
   FiExternalLink,
   FiImage,
@@ -27,11 +28,15 @@ import {
   FiSliders,
   FiTrash2,
   FiX,
+  FiCheckSquare,
+  FiUsers,
+  FiLink,
 } from 'react-icons/fi'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import styled, { useTheme } from 'styled-components'
 
 import { useCountry } from '@/entities/country/api'
+import * as EventFormS from '@/pages/events/create/event-create.styles'
 import {
   BentoActionBtn,
   BentoCard,
@@ -123,6 +128,7 @@ import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
 import { pathKeys } from '@/shared/router'
 import { Z_INDEX } from '@/shared/styles/z-index'
+import { confirm } from '@/shared/ui/confirm-dialog'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { PersonSelectField } from '@/shared/ui/form-fields/person-select-field'
 import { FormSelectNative } from '@/shared/ui/form-select-native'
@@ -143,13 +149,20 @@ import {
   FormRows,
   Input,
   Required,
-  TabButton,
-  TabNavigation,
   Textarea,
 } from '@/shared/ui/register-form-layout'
 import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
 import {
+  FooterActions,
+  HeaderActionsBar,
+  RegisterFooterStatus,
+  RegisterSectionJumpNav,
+  activeSectionAt,
+  useModalSubmitShortcut,
+} from '@/shared/ui/register-modal-shell/register-modal-chrome'
+import {
   PersonRegisterModalBox,
+  PersonRegisterModalCancelBtn,
   PersonRegisterModalFormScroll,
   PersonRegisterModalOverlay,
   PersonRegisterModalPrimaryBtn,
@@ -157,11 +170,7 @@ import {
 } from '@/shared/ui/register-modal-shell/register-modal-shell'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { RichTextProseWithEntityClicks } from '@/shared/ui/rich-text-read-view'
-import { AddButton, SectionTabHeader } from '@/shared/ui/section-page-layout'
-import {
-  UnderlineTabBadge,
-  UnderlineTabButton,
-} from '@/shared/ui/underline-tabs'
+import { AddButton } from '@/shared/ui/section-page-layout'
 import { notify } from '@/shared/ui/toast'
 import { PersonDetailPanel } from '@/widgets/person/person-detail-panel/person-detail-panel'
 
@@ -179,6 +188,17 @@ import {
 import * as DashboardStyles from './country-detail-dashboard.styles'
 import { CountryPoliticalPartiesBlock } from './country-political-parties-block.widget'
 import { LinkedEventPickerField } from './linked-event-picker-field'
+import { PoliticsEmptyState } from './politics-form/politics-empty-state'
+import * as FormS from './military-unit-form/styles'
+import {
+  ELECTION_STATUS_TONE,
+  ELECTION_TYPE_TONE,
+  LEGISLATURE_CLOSURE_TONE,
+  ToneChipGroup,
+  YmdDateField,
+  useSplitLayoutMode,
+  withTones,
+} from './politics-form/politics-form-parts'
 import {
   BallotOptionEditInput,
   BallotOptionEditRow,
@@ -259,17 +279,10 @@ import {
   PartyShareStats,
   PartyShareSwatch,
   PartyTableCellStrong,
-  PoliticsElectionSubTabNav,
-  PoliticsEmptySpecCell,
-  PoliticsEmptySpecCellDesc,
-  PoliticsEmptySpecCellLabel,
-  PoliticsEmptySpecCellTitle,
-  PoliticsEmptySpecGrid,
-  PoliticsEmptySpecHead,
-  PoliticsEmptySpecHeadSub,
-  PoliticsEmptySpecHeadText,
-  PoliticsEmptySpecHeadTitle,
-  PoliticsEmptySpecWrap,
+  PoliticsSubNavBar,
+  PoliticsSubTabBtn,
+  PoliticsSubTabCount,
+  PoliticsSubTabList,
   PoliticsTabPanel,
   PoliticsTabSubsection,
   ReferendumBallotAddRow,
@@ -293,7 +306,6 @@ import {
   SectionHeaderRowNarrative,
   SectionHeaderRowSubsection,
   SplitMainRow,
-  SubsectionAddBtn,
   SubsectionLabel,
   ToolbarGhostBtnSm,
 } from './country-politics-tab.styles'
@@ -1047,6 +1059,13 @@ const ElectionsPoliticsTabSubsection = styled(PoliticsTabSubsection)`
   min-height: 0;
   display: flex;
   flex-direction: column;
+
+  /* 하위 메뉴 줄의 밑선이 이미 구획한다 — 정당 블록용 '위 선 + 28px 띄움'은 여기선 겹선이 된다 */
+  && {
+    margin-top: 0;
+    padding-top: 4px;
+    border-top: none;
+  }
 `
 
 const ElectionListColumnFill = styled.div`
@@ -2257,66 +2276,68 @@ export function CountryElectionsSection({
   return (
     <CountryElectionsSectionRoot>
       <ElectionsPoliticsTabPanel>
-        <SectionTabHeader
-          variant="flat"
-          title="선거·투표"
-          description={
-            historicalCountryId
-              ? '역사 국가 기준 정당·선거 — 탭에서 전환합니다.'
-              : '정당 등록 후 선거·후보에 연결합니다. 탭에서 정당과 선거를 나눕니다.'
-          }
-          rightSlot={
-            politicsViewTab === 'elections' ? (
+        {/*
+          하위 메뉴 한 줄 — 정부·행정 탭(GovSubNavBar)과 같은 꼴: 왼쪽 하위 탭, 오른쪽 등록.
+          예전엔 위 탭('정당·선거') 아래에 제목 '선거·투표' + 사용법 설명 줄이 끼고, 그 아래 위 탭과
+          같은 부품의 탭이 또 서서 두 단계가 구분되지 않았다. 하위 탭은 알약으로 낮춰 위 탭과 가른다.
+        */}
+        <PoliticsSubNavBar>
+          <PoliticsSubTabList role="tablist" aria-label="정당·선거 하위 메뉴">
+            {(
+              [
+                { key: 'parties', label: '정당', count: parties.length },
+                { key: 'elections', label: '선거', count: list.length },
+              ] as const
+            ).map((tab) => {
+              const isActive = politicsViewTab === tab.key
+              return (
+                <PoliticsSubTabBtn
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  $active={isActive}
+                  onClick={() => handlePoliticsViewTab(tab.key)}
+                >
+                  <span>{tab.label}</span>
+                  <PoliticsSubTabCount $active={isActive}>
+                    {tab.count}
+                  </PoliticsSubTabCount>
+                </PoliticsSubTabBtn>
+              )
+            })}
+          </PoliticsSubTabList>
+          {/* 목록이 비어 있으면 빈 상태의 등록 버튼 하나만 — 같은 버튼이 두 개 서지 않게 */}
+          {politicsViewTab === 'elections' ? (
+            listLoading || list.length === 0 ? null : (
               <AddButton
                 type="button"
                 onClick={() => setElectionModal({ mode: 'create' })}
-                aria-label="새 선거 등록"
+                title={
+                  historicalCountryId
+                    ? '이 역사 국가 기준으로 선거를 등록합니다'
+                    : '이 국가의 선거를 등록합니다 — 정당을 먼저 등록하면 집계·후보에 연결할 수 있습니다'
+                }
               >
-                <FiPlus size={14} strokeWidth={2.25} aria-hidden />새 선거
+                <FiPlus size={14} strokeWidth={2.25} aria-hidden />
+                선거 등록
               </AddButton>
-            ) : !electionPartyId ? (
-              <AddButton
-                type="button"
-                onClick={() => setPartyCreateTick((v) => v + 1)}
-                aria-label="정당 등록"
-              >
-                <FiPlus size={14} strokeWidth={2.25} aria-hidden />정당 등록
-              </AddButton>
-            ) : undefined
-          }
-        />
-
-        <PoliticsElectionSubTabNav
-          role="tablist"
-          aria-label="정당·선거 하위 메뉴"
-        >
-          <UnderlineTabButton
-            type="button"
-            role="tab"
-            aria-selected={politicsViewTab === 'parties'}
-            $active={politicsViewTab === 'parties'}
-            data-empty={parties.length === 0 ? 'true' : undefined}
-            onClick={() => handlePoliticsViewTab('parties')}
-          >
-            <span>정당</span>
-            <UnderlineTabBadge $active={politicsViewTab === 'parties'}>
-              {parties.length}
-            </UnderlineTabBadge>
-          </UnderlineTabButton>
-          <UnderlineTabButton
-            type="button"
-            role="tab"
-            aria-selected={politicsViewTab === 'elections'}
-            $active={politicsViewTab === 'elections'}
-            data-empty={list.length === 0 ? 'true' : undefined}
-            onClick={() => handlePoliticsViewTab('elections')}
-          >
-            <span>선거·투표</span>
-            <UnderlineTabBadge $active={politicsViewTab === 'elections'}>
-              {list.length}
-            </UnderlineTabBadge>
-          </UnderlineTabButton>
-        </PoliticsElectionSubTabNav>
+            )
+          ) : !electionPartyId && parties.length > 0 ? (
+            <AddButton
+              type="button"
+              onClick={() => setPartyCreateTick((tick) => tick + 1)}
+              title={
+                historicalCountryId
+                  ? '이 역사 국가 기준으로 정당을 등록합니다'
+                  : '이 국가의 정당을 등록합니다'
+              }
+            >
+              <FiPlus size={14} strokeWidth={2.25} aria-hidden />
+              정당 등록
+            </AddButton>
+          ) : null}
+        </PoliticsSubNavBar>
 
         {politicsViewTab === 'parties' ? (
           <CountryPoliticalPartiesBlock
@@ -2513,71 +2534,35 @@ export function CountryElectionsSection({
             ) : null}
 
             {!listLoading && list.length === 0 ? (
-              <PoliticsEmptySpecWrap>
-                <PoliticsEmptySpecHead>
-                  <PoliticsEmptySpecHeadText>
-                    <PoliticsEmptySpecHeadTitle>
-                      등록된 선거가 없습니다
-                    </PoliticsEmptySpecHeadTitle>
-                    <PoliticsEmptySpecHeadSub>
-                      새 선거를 등록하면 정당별 전국·비례 집계, 선거구·후보자 개표 결과, 국민투표 안건을 관리할 수 있습니다.
-                    </PoliticsEmptySpecHeadSub>
-                  </PoliticsEmptySpecHeadText>
-                  <SubsectionAddBtn
-                    type="button"
-                    onClick={() => setElectionModal({ mode: 'create' })}
-                  >
-                    <FiPlus size={15} strokeWidth={2.25} />
-                    새 선거 등록
-                  </SubsectionAddBtn>
-                </PoliticsEmptySpecHead>
-                <PoliticsEmptySpecGrid>
-                  <PoliticsEmptySpecCell>
-                    <PoliticsEmptySpecCellLabel>
-                      01 · 선거 유형 & 회차
-                    </PoliticsEmptySpecCellLabel>
-                    <PoliticsEmptySpecCellTitle>
-                      대통령·의회(지역구/비례)·지방·국민투표
-                    </PoliticsEmptySpecCellTitle>
-                    <PoliticsEmptySpecCellDesc>
-                      투표일·종료일, 회차(대수), 총 의석 수, 투표율 및 구성 의회 임기·해산 사유를 기록합니다.
-                    </PoliticsEmptySpecCellDesc>
-                  </PoliticsEmptySpecCell>
-                  <PoliticsEmptySpecCell>
-                    <PoliticsEmptySpecCellLabel>
-                      02 · 정당별 집계 & 추이
-                    </PoliticsEmptySpecCellLabel>
-                    <PoliticsEmptySpecCellTitle>
-                      전국 득표율 · 의석 분포 및 전회차 대비 증감
-                    </PoliticsEmptySpecCellTitle>
-                    <PoliticsEmptySpecCellDesc>
-                      정당별 득표수·득표율·의석 수를 집계하고, 동일 유형 직전 선거 대비 증감 및 최근 회차 추이를 자동 비교합니다.
-                    </PoliticsEmptySpecCellDesc>
-                  </PoliticsEmptySpecCell>
-                  <PoliticsEmptySpecCell>
-                    <PoliticsEmptySpecCellLabel>
-                      03 · 후보자 & 개표 결과
-                    </PoliticsEmptySpecCellLabel>
-                    <PoliticsEmptySpecCellTitle>
-                      출마 인물 · 소속 정당 · 선거구 · 당락 기록
-                    </PoliticsEmptySpecCellTitle>
-                    <PoliticsEmptySpecCellDesc>
-                      기표 순번, 비례 명부 순번, 중도 사퇴일, 득표수·득표율·순위·당선 여부를 관리합니다.
-                    </PoliticsEmptySpecCellDesc>
-                  </PoliticsEmptySpecCell>
-                  <PoliticsEmptySpecCell>
-                    <PoliticsEmptySpecCellLabel>
-                      04 · 국민투표 & 사건 연동
-                    </PoliticsEmptySpecCellLabel>
-                    <PoliticsEmptySpecCellTitle>
-                      투표 안건별 찬반 집계 및 역사 연표 사건 연결
-                    </PoliticsEmptySpecCellTitle>
-                    <PoliticsEmptySpecCellDesc>
-                      국민투표 선택지별 득표 비중을 시각화하고, 선거를 역사 사건(Event)으로 생성·연결해 연대표에 노출합니다.
-                    </PoliticsEmptySpecCellDesc>
-                  </PoliticsEmptySpecCell>
-                </PoliticsEmptySpecGrid>
-              </PoliticsEmptySpecWrap>
+              <PoliticsEmptyState
+                Icon={FiCheckSquare}
+                title="아직 등록된 선거가 없습니다"
+                description="첫 선거를 등록하면 정당별 득표·의석, 선거구·후보 개표 결과, 국민투표 안건을 이 국가에 쌓아 갈 수 있습니다."
+                actionLabel="선거 등록"
+                onAction={() => setElectionModal({ mode: 'create' })}
+                features={[
+                  {
+                    Icon: FiCalendar,
+                    title: '유형·회차·투표일',
+                    description: '대통령·의회(지역구/비례)·지방·국민투표, 회차와 투표 기간, 구성 의회의 임기·해산',
+                  },
+                  {
+                    Icon: FiBarChart2,
+                    title: '정당별 집계와 추이',
+                    description: '득표수·득표율·의석, 같은 유형 직전 선거 대비 증감을 자동 비교',
+                  },
+                  {
+                    Icon: FiUsers,
+                    title: '후보와 개표 결과',
+                    description: '출마 인물·소속 정당·선거구, 기표·명부 순번, 득표와 당락',
+                  },
+                  {
+                    Icon: FiLink,
+                    title: '국민투표와 사건 연결',
+                    description: '안건별 찬반 집계, 선거를 역사 사건으로 만들어 연표에 잇기',
+                  },
+                ]}
+              />
             ) : (
             <SplitMainRow>
               <ListColumn $collapsed={listCollapsed}>
@@ -7269,7 +7254,18 @@ function addYearsToYmd(baseYmd: string, years: number): string {
   return dt.toISOString().slice(0, 10)
 }
 
-function ElectionFormModal({
+/** 선거 등록 모달의 세 묶음 — 예전 탭(기본·의회·임기·집계·설명)을 한 화면 묶음으로 */
+const ELECTION_FORM_SECTION_ID = {
+  basic: 'election-form-group-basic',
+  legislature: 'election-form-group-legislature',
+  stats: 'election-form-group-stats',
+} as const
+const ELECTION_FORM_SECTION_IDS = Object.values(ELECTION_FORM_SECTION_ID)
+const ELECTION_SPLIT_LEFT_ID = 'election-form-split-left'
+const ELECTION_SPLIT_RIGHT_ID = 'election-form-split-right'
+const POLL_DATE_ANCHOR_ID = 'election-form-poll-date'
+
+export function ElectionFormModal({
   entityLinkCountryId,
   electionScope,
   mode,
@@ -7319,9 +7315,6 @@ function ElectionFormModal({
       : new Date().toISOString().slice(0, 10),
   )
   const [description, setDescription] = useState(initial?.description ?? '')
-  const [electionFormTab, setElectionFormTab] = useState<
-    'basic' | 'legislature' | 'stats'
-  >(() => initialTab ?? 'basic')
   const [legTermStart, setLegTermStart] = useState(() =>
     toLocalDateYmd(initial?.legislatureTermStart),
   )
@@ -7329,9 +7322,6 @@ function ElectionFormModal({
     toLocalDateYmd(initial?.legislatureTermEnd),
   )
   const playClickSound = useClickSound()
-  const [pollModalOpen, setPollModalOpen] = useState(false)
-  const [termStartModalOpen, setTermStartModalOpen] = useState(false)
-  const [termEndModalOpen, setTermEndModalOpen] = useState(false)
   const [voterTurnout, setVoterTurnout] = useState(
     initial?.voterTurnoutPercent != null &&
       String(initial.voterTurnoutPercent).trim() !== ''
@@ -7344,7 +7334,6 @@ function ElectionFormModal({
   const [pollEndYmd, setPollEndYmd] = useState(() =>
     toLocalDateYmd(initial?.pollEndDate),
   )
-  const [pollEndModalOpen, setPollEndModalOpen] = useState(false)
   const [convOrdinalStr, setConvOrdinalStr] = useState(
     initial?.convocationOrdinal != null
       ? String(initial.convocationOrdinal)
@@ -7356,8 +7345,6 @@ function ElectionFormModal({
   const [resultingClosureYmd, setResultingClosureYmd] = useState(() =>
     toLocalDateYmd(initial?.resultingLegislatureClosureDate),
   )
-  const [resultingClosureModalOpen, setResultingClosureModalOpen] =
-    useState(false)
   const [resultingDissolutionNotes, setResultingDissolutionNotes] = useState(
     initial?.resultingLegislatureDissolutionNotes ?? '',
   )
@@ -7384,7 +7371,6 @@ function ElectionFormModal({
     )
     setPollEndYmd(toLocalDateYmd(initial.pollEndDate))
     setDescription(initial.description ?? '')
-    setElectionFormTab(initialTab ?? 'basic')
     setLegTermStart(toLocalDateYmd(initial.legislatureTermStart))
     setLegTermEnd(toLocalDateYmd(initial.legislatureTermEnd))
     setVoterTurnout(
@@ -7472,19 +7458,6 @@ function ElectionFormModal({
     legTermStart && legTermEnd && legTermEnd < legTermStart,
   )
 
-  const basicFilledCount = useMemo(
-    () =>
-      [
-        name.trim(),
-        shortName.trim(),
-        linkedEventId.trim(),
-        convOrdinalStr.trim(),
-        pollDate,
-        pollEndYmd,
-      ].filter(Boolean).length,
-    [name, shortName, linkedEventId, convOrdinalStr, pollDate, pollEndYmd],
-  )
-
   const legFilledCount = useMemo(
     () =>
       [
@@ -7513,744 +7486,808 @@ function ElectionFormModal({
     [voterTurnout, totalSeatsStr, description],
   )
 
-  const anyChildDateModalOpen =
-    pollModalOpen ||
-    termStartModalOpen ||
-    termEndModalOpen ||
-    pollEndModalOpen ||
-    resultingClosureModalOpen
 
-  const missingRequiredHint = useMemo(() => {
-    const missing: string[] = []
-    if (!name.trim()) missing.push('명칭')
-    if (!pollDate) missing.push('투표일')
-    if (missing.length > 0) return `필수 입력: ${missing.join(', ')}`
-    if (pollDateOrderInvalid)
-      return '투표 종료일이 투표일보다 앞설 수 없습니다.'
-    if (termDateOrderInvalid)
-      return '의회 임기 종료일이 시작일보다 앞설 수 없습니다.'
-    return null
-  }, [name, pollDate, pollDateOrderInvalid, termDateOrderInvalid])
+  const title = mode === 'create' ? '선거 등록' : '선거 수정'
 
-  const title = mode === 'create' ? '새 선거' : '선거 수정'
+  /* ─── 사건·군부대 등록 모달 문법: 2단 분할(좌 기본 / 우 의회·집계) + 머리 섹션 이동 ─── */
+  const { layoutMode, toggleLayoutMode } = useSplitLayoutMode(
+    'papyrus:election-register-layout',
+  )
+  const formScrollRef = useRef<HTMLDivElement | null>(null)
+  const nameInputRef = useRef<HTMLInputElement | null>(null)
+  const [activeSectionId, setActiveSectionId] = useState<string>(
+    ELECTION_FORM_SECTION_ID[initialTab ?? 'basic'],
+  )
+  const [dateErrors, setDateErrors] = useState<Record<string, string | null>>(
+    {},
+  )
+  const setDateError = useCallback(
+    (key: string) => (message: string | null) =>
+      setDateErrors((prev) =>
+        prev[key] === message ? prev : { ...prev, [key]: message },
+      ),
+    [],
+  )
+  const firstDateError =
+    Object.values(dateErrors).find((message) => Boolean(message)) ?? null
+
+  const splitActive = () =>
+    layoutMode === 'split' &&
+    typeof window !== 'undefined' &&
+    window.matchMedia?.(`(min-width: ${FormS.SPLIT_MIN_WIDTH}px)`).matches ===
+      true
+
+  const jumpToSection = (sectionId: string) => {
+    setActiveSectionId(sectionId)
+    if (splitActive()) {
+      if (sectionId === ELECTION_FORM_SECTION_ID.basic) {
+        document
+          .getElementById(ELECTION_SPLIT_LEFT_ID)
+          ?.scrollTo?.({ top: 0, behavior: 'smooth' })
+        return
+      }
+      if (sectionId === ELECTION_FORM_SECTION_ID.legislature) {
+        document
+          .getElementById(ELECTION_SPLIT_RIGHT_ID)
+          ?.scrollTo?.({ top: 0, behavior: 'smooth' })
+        return
+      }
+    }
+    document
+      .getElementById(sectionId)
+      ?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+  }
+
+  /* 서술·설명 편집으로 연 수정 모달 — 그 묶음에서 시작한다(예전 initialTab) */
+  useEffect(() => {
+    if (!initialTab || initialTab === 'basic') return
+    const frame = window.requestAnimationFrame(() => {
+      document
+        .getElementById(ELECTION_FORM_SECTION_ID[initialTab])
+        ?.scrollIntoView?.({ block: 'start' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [initialTab])
+
+  /** 스크롤 위치로 머리 알약을 따라간다 — 2단이면 칸마다 따로 */
+  const handleFormScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null
+    let nextId: string
+    if (target?.id === ELECTION_SPLIT_LEFT_ID) {
+      nextId = ELECTION_FORM_SECTION_ID.basic
+    } else if (target?.id === ELECTION_SPLIT_RIGHT_ID) {
+      nextId = activeSectionAt(target, [
+        ELECTION_FORM_SECTION_ID.legislature,
+        ELECTION_FORM_SECTION_ID.stats,
+      ])
+    } else {
+      nextId = activeSectionAt(event.currentTarget, ELECTION_FORM_SECTION_IDS)
+    }
+    setActiveSectionId((prev) => (prev === nextId ? prev : nextId))
+  }
+
+  const handlePollDateChange = (ymd: string) => {
+    setPollDate(ymd)
+    // 지난 날짜는 '마감', 오늘 이후는 '예정' — 상태를 직접 고르기 전까지만
+    if (mode === 'create' && !statusManuallyChanged && ymd) {
+      const todayYmd = new Date().toISOString().slice(0, 10)
+      if (ymd < todayYmd && status === 'SCHEDULED') setStatus('FINALIZED')
+      else if (ymd >= todayYmd && status === 'FINALIZED') setStatus('SCHEDULED')
+    }
+  }
+
+  const formSnapshot = JSON.stringify([
+    name,
+    shortName,
+    electionType,
+    status,
+    pollDate,
+    pollEndYmd,
+    description,
+    legTermStart,
+    legTermEnd,
+    voterTurnout,
+    totalSeatsStr,
+    convOrdinalStr,
+    resultingClosureKind,
+    resultingClosureYmd,
+    resultingDissolutionNotes,
+    scopeHistoricalCountryId,
+    linkedEventId,
+  ])
+  const [initialSnapshot] = useState(formSnapshot)
+  const isDirty = formSnapshot !== initialSnapshot
+
+  const requestClose = useCallback(async () => {
+    if (saving) return
+    if (
+      isDirty &&
+      !(await confirm({
+        title: '확인',
+        message:
+          mode === 'create'
+            ? '작성 중인 선거 정보가 사라집니다. 창을 닫으시겠습니까?'
+            : '저장하지 않은 변경 사항이 있습니다. 닫으시겠습니까?',
+      }))
+    ) {
+      return
+    }
+    onClose()
+  }, [isDirty, mode, onClose, saving])
+
+  const missingRequired = [
+    !name.trim() ? '명칭' : null,
+    !pollDate ? '투표일' : null,
+  ].filter((label): label is string => label !== null)
+  const orderProblem =
+    firstDateError ??
+    (pollDateOrderInvalid
+      ? '투표 종료일이 투표일보다 앞설 수 없습니다.'
+      : termDateOrderInvalid
+        ? '의회 임기 종료일이 시작일보다 앞설 수 없습니다.'
+        : null)
+  const canSubmit = !saving && missingRequired.length === 0 && !orderProblem
+
+  const focusFirstMissing = () => {
+    if (!name.trim()) {
+      jumpToSection(ELECTION_FORM_SECTION_ID.basic)
+      nameInputRef.current?.focus()
+      return
+    }
+    const pollField = document.getElementById(POLL_DATE_ANCHOR_ID)
+    pollField?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+    pollField?.querySelector<HTMLInputElement>('input')?.focus()
+  }
+
+  const handleSubmit = () => {
+    if (!canSubmit) return
+    if (pollDateOrderInvalid) {
+      notify.error('투표 종료일이 투표일보다 앞설 수 없습니다.')
+      return
+    }
+    if (termDateOrderInvalid) {
+      notify.error(
+        '의회 임기 종료일이 임기 시작일보다 앞설 수 없습니다.',
+      )
+      return
+    }
+    const turnoutParsed = parseOptionalPercent0to100(voterTurnout)
+    if (turnoutParsed === 'invalid') {
+      notify.error(
+        '투표율(참여)은 0~100 사이 숫자(소수 첫째 자리까지)이거나 비워 두세요.',
+      )
+      return
+    }
+    const totalSeatsParsed =
+      parseOptionalNonNegativeInt(totalSeatsStr)
+    if (totalSeatsParsed === 'invalid') {
+      notify.error('총 의석은 0 이상의 정수이거나 비워 두세요.')
+      return
+    }
+    const convOrdinalParsed =
+      parseOptionalNonNegativeInt(convOrdinalStr)
+    if (convOrdinalParsed === 'invalid') {
+      notify.error(
+        '회차(숫자)는 0 이상의 정수이거나 비워 두세요.',
+      )
+      return
+    }
+    const iso = `${pollDate}T12:00:00.000Z`
+    const pollEndIso = pollEndYmd
+      ? `${pollEndYmd}T12:00:00.000Z`
+      : null
+    const termStartIso = legTermStart
+      ? `${legTermStart}T12:00:00.000Z`
+      : null
+    const termEndIso = legTermEnd
+      ? `${legTermEnd}T12:00:00.000Z`
+      : null
+    const resultingClosureIso = resultingClosureYmd
+      ? `${resultingClosureYmd}T12:00:00.000Z`
+      : null
+    const turnoutBody =
+      turnoutParsed === null ? null : String(turnoutParsed)
+    const scopeFields = resolveElectionScopeForSubmit(
+      electionScope,
+      scopeHistoricalCountryId,
+    )
+    const resultingKindVal =
+      resultingClosureKind.trim() === ''
+        ? null
+        : // select 옵션이 LEGISLATURE_CLOSURE_KIND_OPTIONS로 한정되므로 안전
+          (resultingClosureKind as LegislatureTermClosureKind)
+    const chronologyExtra = {
+      pollEndDate: pollEndIso,
+      convocationOrdinal: convOrdinalParsed,
+      resultingLegislatureClosureKind: resultingKindVal,
+      resultingLegislatureClosureDate: resultingClosureIso,
+      resultingLegislatureDissolutionNotes:
+        optionalRichTextHtmlOrNull(resultingDissolutionNotes),
+    }
+    const eventIdBody = linkedEventId.trim() || null
+    if (mode === 'create') {
+      onSubmit({
+        mode: 'create',
+        body: {
+          name: name.trim(),
+          shortName: shortName.trim() || null,
+          electionType,
+          status,
+          pollDate: iso,
+          ...scopeFields,
+          legislatureTermStart: termStartIso,
+          legislatureTermEnd: termEndIso,
+          voterTurnoutPercent: turnoutBody,
+          totalSeats: totalSeatsParsed,
+          description: optionalRichTextHtmlOrNull(description),
+          eventId: eventIdBody,
+          ...chronologyExtra,
+        },
+      })
+    } else {
+      onSubmit({
+        mode: 'edit',
+        id: initial!.id,
+        body: {
+          name: name.trim(),
+          shortName: shortName.trim() || null,
+          electionType,
+          status,
+          pollDate: iso,
+          ...scopeFields,
+          legislatureTermStart: termStartIso,
+          legislatureTermEnd: termEndIso,
+          voterTurnoutPercent: turnoutBody,
+          totalSeats: totalSeatsParsed,
+          description: optionalRichTextHtmlOrNull(description),
+          eventId: eventIdBody,
+          ...chronologyExtra,
+        },
+      })
+    }
+  }
+
+  useModalSubmitShortcut({
+    enabled: canSubmit,
+    scrollContainerRef: formScrollRef,
+    onSubmit: handleSubmit,
+  })
+
+  const electionSections = [
+    {
+      id: ELECTION_FORM_SECTION_ID.basic,
+      label: '기본 정보',
+      badge: missingRequired.length === 0 ? '✓' : null,
+    },
+    {
+      id: ELECTION_FORM_SECTION_ID.legislature,
+      label: '의회·임기',
+      badge: legFilledCount > 0 ? String(legFilledCount) : null,
+    },
+    {
+      id: ELECTION_FORM_SECTION_ID.stats,
+      label: '집계·설명',
+      badge: statsFilledCount > 0 ? String(statsFilledCount) : null,
+    },
+  ]
+
+  const typeChipOptions = withTones(ELECTION_TYPE_OPTIONS, ELECTION_TYPE_TONE)
+  const statusChipOptions = withTones(
+    ELECTION_STATUS_OPTIONS,
+    ELECTION_STATUS_TONE,
+  )
+  const closureChipOptions = withTones(
+    LEGISLATURE_CLOSURE_KIND_OPTIONS,
+    LEGISLATURE_CLOSURE_TONE,
+  )
+
+  const basicSectionNode = (
+    <FormS.FormGroupSection
+      id={ELECTION_FORM_SECTION_ID.basic}
+      aria-labelledby={`${ELECTION_FORM_SECTION_ID.basic}-title`}
+    >
+      <FormS.FormGroupTitle id={`${ELECTION_FORM_SECTION_ID.basic}-title`}>
+        기본 정보
+      </FormS.FormGroupTitle>
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel htmlFor="election-form-name">
+          명칭 <EventFormS.Required>*</EventFormS.Required>
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          <FormS.TitleInput
+            ref={nameInputRef}
+            id="election-form-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            autoComplete="off"
+            aria-required
+            placeholder={`예: 제${activeOrdinalForTemplate}대 ${labelElectionType(electionType)}`}
+          />
+          <FormS.TitleSuggestionRow aria-label="추천 이름·회차">
+            <FormS.TitleSuggestionLabel>추천</FormS.TitleSuggestionLabel>
+            <FormS.TitleSuggestionButton
+              type="button"
+              onClick={handleApplyStandardTemplate}
+              title="선택된 선거 유형과 회차를 기준으로 명칭·짧은 이름·회차를 한 번에 채웁니다"
+            >
+              제{activeOrdinalForTemplate}대 표준 명칭 채우기
+            </FormS.TitleSuggestionButton>
+            {convOrdinalStr !== String(nextSuggestedOrdinal) ? (
+              <FormS.TitleSuggestionButton
+                type="button"
+                onClick={() => setConvOrdinalStr(String(nextSuggestedOrdinal))}
+                title="기존 동일 유형 선거의 다음 순번을 자동으로 입력합니다"
+              >
+                다음 회차 ({nextSuggestedOrdinal}회)
+              </FormS.TitleSuggestionButton>
+            ) : null}
+          </FormS.TitleSuggestionRow>
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel as="div">
+          회차·짧은 이름<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          <FormS.SubTitleGrid>
+            <FormS.SubTitleField>
+              <FormS.SubTitleLabel>회차(숫자)</FormS.SubTitleLabel>
+              <EventFormS.Input
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                value={convOrdinalStr}
+                onChange={(event) =>
+                  setConvOrdinalStr(
+                    sanitizeNonNegativeIntInput(event.target.value),
+                  )
+                }
+                placeholder="예: 21 · 동일 국가·유형 내 순번"
+              />
+            </FormS.SubTitleField>
+            <FormS.SubTitleField>
+              <FormS.SubTitleLabel>짧은 이름</FormS.SubTitleLabel>
+              <EventFormS.Input
+                value={shortName}
+                onChange={(event) => setShortName(event.target.value)}
+                placeholder={`예: 제${activeOrdinalForTemplate}대`}
+              />
+            </FormS.SubTitleField>
+          </FormS.SubTitleGrid>
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel as="div" id="election-form-type-label">
+          유형 <EventFormS.Required>*</EventFormS.Required>
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          <ToneChipGroup
+            ariaLabelledBy="election-form-type-label"
+            value={electionType}
+            onChange={(next) => {
+              if (next) setElectionType(next)
+            }}
+            options={typeChipOptions}
+          />
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel as="div">
+          투표 기간 <EventFormS.Required>*</EventFormS.Required>
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          <FormS.DateRangeGrid>
+            <FormS.DateColumn>
+              <FormS.SubTitleLabel>투표일</FormS.SubTitleLabel>
+              <YmdDateField
+                anchorId={POLL_DATE_ANCHOR_ID}
+                ariaLabel="투표일"
+                pickerTitle="투표일 선택"
+                value={pollDate}
+                onChange={handlePollDateChange}
+                onErrorChange={setDateError('poll')}
+              />
+            </FormS.DateColumn>
+            <FormS.DateColumn>
+              <FormS.SubTitleLabel>투표 종료일 (선택)</FormS.SubTitleLabel>
+              <YmdDateField
+                ariaLabel="투표 종료일"
+                pickerTitle="투표 종료일"
+                value={pollEndYmd}
+                onChange={setPollEndYmd}
+                onErrorChange={setDateError('pollEnd')}
+                error={pollDateOrderInvalid}
+                minDate={pollDate || undefined}
+              />
+            </FormS.DateColumn>
+          </FormS.DateRangeGrid>
+          {pollDateOrderInvalid ? (
+            <EventFormS.ErrorMessage role="alert">
+              투표 종료일({pollEndYmd})이 투표일({pollDate})보다 앞설 수 없습니다.
+            </EventFormS.ErrorMessage>
+          ) : (
+            <EventFormS.Hint>
+              여러 날에 걸친 투표·개표면 종료일을 함께 적습니다.
+            </EventFormS.Hint>
+          )}
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel as="div" id="election-form-status-label">
+          상태
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          <ToneChipGroup
+            ariaLabelledBy="election-form-status-label"
+            value={status}
+            onChange={(next) => {
+              if (!next) return
+              setStatusManuallyChanged(true)
+              setStatus(next)
+            }}
+            options={statusChipOptions}
+          />
+          {mode === 'create' && !statusManuallyChanged ? (
+            <EventFormS.Hint>
+              투표일을 고르면 지난 날짜는 ‘마감’, 오늘 이후는 ‘예정’으로 맞춥니다.
+            </EventFormS.Hint>
+          ) : null}
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+      {showHistoricalCountryPicker ? (
+        <EventFormS.FormRow>
+          <EventFormS.FormLabel htmlFor="election-form-historical-country">
+            역사 국가<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+          </EventFormS.FormLabel>
+          <EventFormS.FormField>
+            <FormSelectNative
+              id="election-form-historical-country"
+              value={scopeHistoricalCountryId}
+              onChange={(event) =>
+                setScopeHistoricalCountryId(event.target.value)
+              }
+            >
+              <option value="">(미지정 · 이 현대 국가에만 연결)</option>
+              {[...historicalCountryOptions]
+                .sort((left, right) =>
+                  left.name.localeCompare(right.name, 'ko', {
+                    sensitivity: 'base',
+                  }),
+                )
+                .map((historical) => (
+                  <option key={historical.id} value={historical.id}>
+                    {historical.name}
+                  </option>
+                ))}
+            </FormSelectNative>
+          </EventFormS.FormField>
+        </EventFormS.FormRow>
+      ) : null}
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel htmlFor="election-form-linked-event">
+          연결 사건<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          {/* 예전엔 사건 UUID를 손으로 붙이는 칸이라 연결이 0건이었다 — 사건 검색으로 고른다 */}
+          <LinkedEventPickerField
+            inputId="election-form-linked-event"
+            value={linkedEventId}
+            initialTitle={initial?.event?.title ?? null}
+            nearYear={Number.parseInt(pollDate.slice(0, 4), 10) || null}
+            onChange={setLinkedEventId}
+          />
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+    </FormS.FormGroupSection>
+  )
+
+  const legislatureSectionNode = (
+    <FormS.FormGroupSection
+      id={ELECTION_FORM_SECTION_ID.legislature}
+      aria-labelledby={`${ELECTION_FORM_SECTION_ID.legislature}-title`}
+    >
+      <FormS.FormGroupTitle id={`${ELECTION_FORM_SECTION_ID.legislature}-title`}>
+        의회·임기
+        {legFilledCount > 0 ? (
+          <FormS.FormGroupSummaryBadge>{legFilledCount}칸</FormS.FormGroupSummaryBadge>
+        ) : null}
+      </FormS.FormGroupTitle>
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel as="div">
+          의회 임기<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          <FormS.DateRangeGrid>
+            <FormS.DateColumn>
+              <FormS.SubTitleLabel>시작</FormS.SubTitleLabel>
+              <YmdDateField
+                ariaLabel="의회 임기 시작일"
+                pickerTitle="의회 임기 시작일"
+                value={legTermStart}
+                onChange={setLegTermStart}
+                onErrorChange={setDateError('termStart')}
+              />
+            </FormS.DateColumn>
+            <FormS.DateColumn>
+              <FormS.SubTitleLabel>종료</FormS.SubTitleLabel>
+              <YmdDateField
+                ariaLabel="의회 임기 종료일"
+                pickerTitle="의회 임기 종료일"
+                value={legTermEnd}
+                onChange={setLegTermEnd}
+                onErrorChange={setDateError('termEnd')}
+                error={termDateOrderInvalid}
+                minDate={legTermStart || undefined}
+              />
+            </FormS.DateColumn>
+          </FormS.DateRangeGrid>
+          {legTermStart || pollDate ? (
+            <FormS.TitleSuggestionRow aria-label="임기 빠른 입력">
+              <FormS.TitleSuggestionLabel>빠른 입력</FormS.TitleSuggestionLabel>
+              {pollDate && legTermStart !== pollDate ? (
+                <FormS.TitleSuggestionButton
+                  type="button"
+                  onClick={() => setLegTermStart(pollDate)}
+                  title="투표일을 임기 시작일로 동일하게 지정합니다"
+                >
+                  시작 = 투표일
+                </FormS.TitleSuggestionButton>
+              ) : null}
+              {[3, 4, 5].map((years) => (
+                <FormS.TitleSuggestionButton
+                  key={years}
+                  type="button"
+                  onClick={() => handleApplyTermDurationYears(years)}
+                  title={`임기 시작일(또는 투표일)로부터 +${years}년 후로 설정`}
+                >
+                  종료 +{years}년
+                </FormS.TitleSuggestionButton>
+              ))}
+            </FormS.TitleSuggestionRow>
+          ) : null}
+          {termDateOrderInvalid ? (
+            <EventFormS.ErrorMessage role="alert">
+              임기 종료일({legTermEnd})이 임기 시작일({legTermStart})보다 앞설 수
+              없습니다.
+            </EventFormS.ErrorMessage>
+          ) : null}
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel as="div" id="election-form-closure-label">
+          실제 종료<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          <ToneChipGroup
+            ariaLabelledBy="election-form-closure-label"
+            value={resultingClosureKind}
+            onChange={setResultingClosureKind}
+            options={closureChipOptions}
+            allowDeselect
+          />
+          <FormS.DateRangeGrid>
+            <FormS.DateColumn>
+              <FormS.SubTitleLabel>실제 종료·해산일</FormS.SubTitleLabel>
+              <YmdDateField
+                ariaLabel="실제 종료·해산일"
+                pickerTitle="이번 의회 실제 종료·해산일"
+                value={resultingClosureYmd}
+                onChange={setResultingClosureYmd}
+                onErrorChange={setDateError('closure')}
+              />
+            </FormS.DateColumn>
+          </FormS.DateRangeGrid>
+          <EventFormS.Hint>
+            이 선거로 꾸려진 의회가 어떻게 끝났는지 — 고른 유형을 다시 누르면
+            해제됩니다.
+          </EventFormS.Hint>
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel as="div">
+          종료 서술<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          <HistoryArticleEditorWrap>
+            <RichTextEditor
+              value={resultingDissolutionNotes}
+              onChange={setResultingDissolutionNotes}
+              placeholder="정시 만료·조기 해산 등 (선택)"
+              entityLinkCountryId={resolvedEntityLinkCountryId}
+              onImageUpload={uploadElectionRichTextImage}
+            />
+          </HistoryArticleEditorWrap>
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+    </FormS.FormGroupSection>
+  )
+
+  const statsSectionNode = (
+    <FormS.FormGroupSection
+      id={ELECTION_FORM_SECTION_ID.stats}
+      aria-labelledby={`${ELECTION_FORM_SECTION_ID.stats}-title`}
+    >
+      <FormS.FormGroupTitle id={`${ELECTION_FORM_SECTION_ID.stats}-title`}>
+        집계·설명
+      </FormS.FormGroupTitle>
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel as="div">
+          집계<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          <FormS.SubTitleGrid>
+            <FormS.SubTitleField>
+              <FormS.SubTitleLabel>투표율(참여) %</FormS.SubTitleLabel>
+              <EventFormS.Input
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                value={voterTurnout}
+                onChange={(event) =>
+                  setVoterTurnout(sanitizePercentInput(event.target.value))
+                }
+                placeholder="0–100 · 소수 첫째 자리까지"
+              />
+            </FormS.SubTitleField>
+            <FormS.SubTitleField>
+              <FormS.SubTitleLabel>총 의석</FormS.SubTitleLabel>
+              <EventFormS.Input
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                value={totalSeatsStr}
+                onChange={(event) =>
+                  setTotalSeatsStr(
+                    sanitizeNonNegativeIntInput(event.target.value),
+                  )
+                }
+                placeholder="0 이상 정수"
+              />
+            </FormS.SubTitleField>
+          </FormS.SubTitleGrid>
+          <EventFormS.Hint>
+            정당별 득표·의석과 후보자 개표 결과는 저장 후 선거 상세에서 입력합니다.
+          </EventFormS.Hint>
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel as="div">
+          설명<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          <HistoryArticleEditorWrap>
+            <RichTextEditor
+              value={description}
+              onChange={setDescription}
+              placeholder="선거에 대한 부가 설명 (선택)"
+              entityLinkCountryId={resolvedEntityLinkCountryId}
+              onImageUpload={uploadElectionRichTextImage}
+            />
+          </HistoryArticleEditorWrap>
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+    </FormS.FormGroupSection>
+  )
 
   return (
-    <>
-      <ElectionsModalShell
-        title={title}
-        onClose={onClose}
-        closeOnEsc={!anyChildDateModalOpen}
-        height="890px"
-        footer={
-          <ModalFooterRow>
-            <ModalFooterStatusText
-              $error={pollDateOrderInvalid || termDateOrderInvalid}
-            >
-              {missingRequiredHint ?? '필수 항목이 모두 입력되었습니다.'}
-            </ModalFooterStatusText>
-            <ModalFooterBtnGroup>
-              <ModalCancelBtn type="button" onClick={onClose} disabled={saving}>
-                취소
-              </ModalCancelBtn>
-              <PersonRegisterModalPrimaryBtn
-                type="button"
-                disabled={
-                  saving ||
-                  !name.trim() ||
-                  !pollDate ||
-                  pollDateOrderInvalid ||
-                  termDateOrderInvalid
-                }
-                onClick={() => {
-                  if (pollDateOrderInvalid) {
-                    notify.error('투표 종료일이 투표일보다 앞설 수 없습니다.')
-                    return
-                  }
-                  if (termDateOrderInvalid) {
-                    notify.error(
-                      '의회 임기 종료일이 임기 시작일보다 앞설 수 없습니다.',
-                    )
-                    return
-                  }
-                  const turnoutParsed = parseOptionalPercent0to100(voterTurnout)
-                  if (turnoutParsed === 'invalid') {
-                    notify.error(
-                      '투표율(참여)은 0~100 사이 숫자(소수 첫째 자리까지)이거나 비워 두세요.',
-                    )
-                    return
-                  }
-                  const totalSeatsParsed =
-                    parseOptionalNonNegativeInt(totalSeatsStr)
-                  if (totalSeatsParsed === 'invalid') {
-                    notify.error('총 의석은 0 이상의 정수이거나 비워 두세요.')
-                    return
-                  }
-                  const convOrdinalParsed =
-                    parseOptionalNonNegativeInt(convOrdinalStr)
-                  if (convOrdinalParsed === 'invalid') {
-                    notify.error(
-                      '회차(숫자)는 0 이상의 정수이거나 비워 두세요.',
-                    )
-                    return
-                  }
-                  const iso = `${pollDate}T12:00:00.000Z`
-                  const pollEndIso = pollEndYmd
-                    ? `${pollEndYmd}T12:00:00.000Z`
-                    : null
-                  const termStartIso = legTermStart
-                    ? `${legTermStart}T12:00:00.000Z`
-                    : null
-                  const termEndIso = legTermEnd
-                    ? `${legTermEnd}T12:00:00.000Z`
-                    : null
-                  const resultingClosureIso = resultingClosureYmd
-                    ? `${resultingClosureYmd}T12:00:00.000Z`
-                    : null
-                  const turnoutBody =
-                    turnoutParsed === null ? null : String(turnoutParsed)
-                  const scopeFields = resolveElectionScopeForSubmit(
-                    electionScope,
-                    scopeHistoricalCountryId,
-                  )
-                  const resultingKindVal =
-                    resultingClosureKind.trim() === ''
-                      ? null
-                      : // select 옵션이 LEGISLATURE_CLOSURE_KIND_OPTIONS로 한정되므로 안전
-                        (resultingClosureKind as LegislatureTermClosureKind)
-                  const chronologyExtra = {
-                    pollEndDate: pollEndIso,
-                    convocationOrdinal: convOrdinalParsed,
-                    resultingLegislatureClosureKind: resultingKindVal,
-                    resultingLegislatureClosureDate: resultingClosureIso,
-                    resultingLegislatureDissolutionNotes:
-                      optionalRichTextHtmlOrNull(resultingDissolutionNotes),
-                  }
-                  const eventIdBody = linkedEventId.trim() || null
-                  if (mode === 'create') {
-                    onSubmit({
-                      mode: 'create',
-                      body: {
-                        name: name.trim(),
-                        shortName: shortName.trim() || null,
-                        electionType,
-                        status,
-                        pollDate: iso,
-                        ...scopeFields,
-                        legislatureTermStart: termStartIso,
-                        legislatureTermEnd: termEndIso,
-                        voterTurnoutPercent: turnoutBody,
-                        totalSeats: totalSeatsParsed,
-                        description: optionalRichTextHtmlOrNull(description),
-                        eventId: eventIdBody,
-                        ...chronologyExtra,
-                      },
-                    })
-                  } else {
-                    onSubmit({
-                      mode: 'edit',
-                      id: initial!.id,
-                      body: {
-                        name: name.trim(),
-                        shortName: shortName.trim() || null,
-                        electionType,
-                        status,
-                        pollDate: iso,
-                        ...scopeFields,
-                        legislatureTermStart: termStartIso,
-                        legislatureTermEnd: termEndIso,
-                        voterTurnoutPercent: turnoutBody,
-                        totalSeats: totalSeatsParsed,
-                        description: optionalRichTextHtmlOrNull(description),
-                        eventId: eventIdBody,
-                        ...chronologyExtra,
-                      },
-                    })
-                  }
-                }}
-              >
-                저장
-              </PersonRegisterModalPrimaryBtn>
-            </ModalFooterBtnGroup>
-          </ModalFooterRow>
-        }
-      >
-        <FormRows>
-          <TabNavigation $hugContent>
-            <TabButton
-              type="button"
-              $active={electionFormTab === 'basic'}
-              onClick={() => setElectionFormTab('basic')}
-            >
-              <FiInfo size={16} />
-              기본
-              {basicFilledCount > 0 ? (
-                <ModalTabCountBadge $active={electionFormTab === 'basic'}>
-                  {basicFilledCount}
-                </ModalTabCountBadge>
-              ) : null}
-            </TabButton>
-            <TabButton
-              type="button"
-              $active={electionFormTab === 'legislature'}
-              onClick={() => setElectionFormTab('legislature')}
-            >
-              <FiCalendar size={16} />
-              의회·임기
-              {legFilledCount > 0 ? (
-                <ModalTabCountBadge $active={electionFormTab === 'legislature'}>
-                  {legFilledCount}
-                </ModalTabCountBadge>
-              ) : null}
-            </TabButton>
-            <TabButton
-              type="button"
-              $active={electionFormTab === 'stats'}
-              onClick={() => setElectionFormTab('stats')}
-            >
-              <FiBarChart2 size={16} />
-              집계·설명
-              {statsFilledCount > 0 ? (
-                <ModalTabCountBadge $active={electionFormTab === 'stats'}>
-                  {statsFilledCount}
-                </ModalTabCountBadge>
-              ) : null}
-            </TabButton>
-          </TabNavigation>
-          {electionFormTab === 'basic' && (
-            <>
-              <FieldRow>
-                <FieldLabel htmlFor="election-form-name">
-                  명칭 <Required>*</Required>
-                </FieldLabel>
-                <ModalFieldWide>
-                  <div
-                    style={{
-                      display: 'flex',
-                      gap: 8,
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: 240 }}>
-                      <Input
-                        id="election-form-name"
-                        value={name}
-                        onChange={(event) => setName(event.target.value)}
-                        autoComplete="off"
-                        aria-required
-                        placeholder={`예: 제${activeOrdinalForTemplate}대 ${labelElectionType(electionType)}`}
-                      />
-                    </div>
-                    <PartyFormAutoCalcBtn
-                      type="button"
-                      onClick={handleApplyStandardTemplate}
-                      title="선택된 선거 유형과 회차를 기준으로 명칭·짧은 이름·회차를 한 번에 채웁니다"
-                    >
-                      제{activeOrdinalForTemplate}대 표준 명칭 채우기
-                    </PartyFormAutoCalcBtn>
-                  </div>
-                </ModalFieldWide>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel>짧은 이름</FieldLabel>
-                <ModalFieldMedium>
-                  <Input
-                    value={shortName}
-                    onChange={(event) => setShortName(event.target.value)}
-                    placeholder={`예: 제${activeOrdinalForTemplate}대`}
-                  />
-                </ModalFieldMedium>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel htmlFor="election-form-linked-event">
-                  연결 사건 (선택)
-                </FieldLabel>
-                <ModalFieldWide>
-                  {/* 예전엔 사건 UUID를 손으로 붙이는 칸이라 연결이 0건이었다 — 사건 검색으로 고른다 */}
-                  <LinkedEventPickerField
-                    inputId="election-form-linked-event"
-                    value={linkedEventId}
-                    initialTitle={initial?.event?.title ?? null}
-                    nearYear={Number.parseInt(pollDate.slice(0, 4), 10) || null}
-                    onChange={setLinkedEventId}
-                  />
-                </ModalFieldWide>
-              </FieldRow>
-              {showHistoricalCountryPicker ? (
-                <FieldRow>
-                  <FieldLabel>역사 국가</FieldLabel>
-                  <ModalFieldWide>
-                    <FormSelectNative
-                      value={scopeHistoricalCountryId}
-                      onChange={(e) =>
-                        setScopeHistoricalCountryId(e.target.value)
-                      }
-                      aria-label="역사 국가 (선택)"
-                    >
-                      <option value="">(미지정 · 이 현대 국가에만 연결)</option>
-                      {[...historicalCountryOptions]
-                        .sort((a, b) =>
-                          a.name.localeCompare(b.name, 'ko', {
-                            sensitivity: 'base',
-                          }),
-                        )
-                        .map((h) => (
-                          <option key={h.id} value={h.id}>
-                            {h.name}
-                          </option>
-                        ))}
-                    </FormSelectNative>
-                  </ModalFieldWide>
-                </FieldRow>
-              ) : null}
-              <FieldRow>
-                <FieldLabel>유형</FieldLabel>
-                <ModalFieldNarrow>
-                  <FormSelectNative
-                    value={electionType}
-                    onChange={(event) => setElectionType(event.target.value)}
-                  >
-                    {ELECTION_TYPE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </FormSelectNative>
-                </ModalFieldNarrow>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel>상태</FieldLabel>
-                <ModalFieldNarrow>
-                  <FormSelectNative
-                    value={status}
-                    onChange={(event) => {
-                      setStatusManuallyChanged(true)
-                      setStatus(event.target.value)
-                    }}
-                  >
-                    {ELECTION_STATUS_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </FormSelectNative>
-                </ModalFieldNarrow>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel>회차(숫자)</FieldLabel>
-                <FieldControl style={{ maxWidth: '100%' }}>
-                  <div
-                    style={{
-                      display: 'flex',
-                      gap: 8,
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <ModalFieldNarrow style={{ flex: 1 }}>
-                      <Input
-                        type="text"
-                        inputMode="numeric"
-                        autoComplete="off"
-                        value={convOrdinalStr}
-                        onChange={(e) =>
-                          setConvOrdinalStr(
-                            sanitizeNonNegativeIntInput(e.target.value),
-                          )
-                        }
-                        placeholder="예: 21 · 동일 국가·유형 내 순번"
-                      />
-                    </ModalFieldNarrow>
-                    {convOrdinalStr !== String(nextSuggestedOrdinal) ? (
-                      <PartyFormAutoCalcBtn
-                        type="button"
-                        onClick={() =>
-                          setConvOrdinalStr(String(nextSuggestedOrdinal))
-                        }
-                        title="기존 동일 유형 선거의 다음 순번을 자동으로 입력합니다"
-                      >
-                        다음 회차 ({nextSuggestedOrdinal}회)
-                      </PartyFormAutoCalcBtn>
-                    ) : null}
-                  </div>
-                </FieldControl>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel>
-                  투표일 <Required>*</Required>
-                </FieldLabel>
-                <FieldControl $variant="datePair">
-                  <SelectClearRow style={{ maxWidth: '100%' }}>
-                    <DateFieldBtn
-                      type="button"
-                      $hasValue={!!pollDate}
-                      onClick={() => {
-                        playClickSound()
-                        setPollModalOpen(true)
-                      }}
-                      aria-required
-                    >
-                      <FiCalendar size={16} />
-                      <span>
-                        {pollDate ? formatPollYmdKo(pollDate) : '투표일 (달력)'}
-                      </span>
-                      <FiChevronDown size={20} />
-                    </DateFieldBtn>
-                    {pollDate ? (
-                      <ClearFieldBtn
-                        type="button"
-                        onClick={() => {
-                          playClickSound()
-                          setPollDate('')
-                        }}
-                        aria-label="투표일 지우기"
-                      >
-                        <FiX size={16} />
-                      </ClearFieldBtn>
-                    ) : null}
-                  </SelectClearRow>
-                </FieldControl>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel>투표 종료일 (선택)</FieldLabel>
-                <FieldControl $variant="datePair">
-                  <SelectClearRow style={{ maxWidth: '100%' }}>
-                    <DateFieldBtn
-                      type="button"
-                      $hasValue={!!pollEndYmd}
-                      onClick={() => {
-                        playClickSound()
-                        setPollEndModalOpen(true)
-                      }}
-                    >
-                      <FiCalendar size={16} />
-                      <span>
-                        {pollEndYmd
-                          ? formatPollYmdKo(pollEndYmd)
-                          : '기간 투표·개표 종료일'}
-                      </span>
-                      <FiChevronDown size={20} />
-                    </DateFieldBtn>
-                    {pollEndYmd ? (
-                      <ClearFieldBtn
-                        type="button"
-                        onClick={() => {
-                          playClickSound()
-                          setPollEndYmd('')
-                        }}
-                        aria-label="투표 종료일 지우기"
-                      >
-                        <FiX size={16} />
-                      </ClearFieldBtn>
-                    ) : null}
-                  </SelectClearRow>
-                  {pollDateOrderInvalid ? (
-                    <PartyFormHint $tone="error">
-                      투표 종료일({pollEndYmd})이 투표일({pollDate})보다 앞설 수
-                      없습니다.
-                    </PartyFormHint>
-                  ) : null}
-                </FieldControl>
-              </FieldRow>
-            </>
-          )}
-          {electionFormTab === 'legislature' && (
-            <>
-              <FieldRow>
-                <FieldLabel>의회 임기 시작</FieldLabel>
-                <FieldControl $variant="datePair">
-                  <div
-                    style={{
-                      display: 'flex',
-                      gap: 8,
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <SelectClearRow style={{ maxWidth: '100%', flex: 1 }}>
-                      <DateFieldBtn
-                        type="button"
-                        $hasValue={!!legTermStart}
-                        onClick={() => {
-                          playClickSound()
-                          setTermStartModalOpen(true)
-                        }}
-                      >
-                        <FiCalendar size={16} />
-                        <span>
-                          {legTermStart
-                            ? formatPollYmdKo(legTermStart)
-                            : '임기 시작일 (선택)'}
-                        </span>
-                        <FiChevronDown size={20} />
-                      </DateFieldBtn>
-                      {legTermStart ? (
-                        <ClearFieldBtn
-                          type="button"
-                          onClick={() => {
-                            playClickSound()
-                            setLegTermStart('')
-                          }}
-                          aria-label="의회 임기 시작일 지우기"
-                        >
-                          <FiX size={16} />
-                        </ClearFieldBtn>
-                      ) : null}
-                    </SelectClearRow>
-                    {pollDate && legTermStart !== pollDate ? (
-                      <PartyFormAutoCalcBtn
-                        type="button"
-                        onClick={() => setLegTermStart(pollDate)}
-                        title="투표일을 임기 시작일로 동일하게 지정합니다"
-                      >
-                        투표일과 동일
-                      </PartyFormAutoCalcBtn>
-                    ) : null}
-                  </div>
-                </FieldControl>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel>의회 임기 종료</FieldLabel>
-                <FieldControl $variant="datePair">
-                  <div
-                    style={{
-                      display: 'flex',
-                      gap: 8,
-                      alignItems: 'center',
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <SelectClearRow style={{ maxWidth: '100%', flex: 1 }}>
-                      <DateFieldBtn
-                        type="button"
-                        $hasValue={!!legTermEnd}
-                        onClick={() => {
-                          playClickSound()
-                          setTermEndModalOpen(true)
-                        }}
-                      >
-                        <FiCalendar size={16} />
-                        <span>
-                          {legTermEnd
-                            ? formatPollYmdKo(legTermEnd)
-                            : '임기 종료일 (선택)'}
-                        </span>
-                        <FiChevronDown size={20} />
-                      </DateFieldBtn>
-                      {legTermEnd ? (
-                        <ClearFieldBtn
-                          type="button"
-                          onClick={() => {
-                            playClickSound()
-                            setLegTermEnd('')
-                          }}
-                          aria-label="의회 임기 종료일 지우기"
-                        >
-                          <FiX size={16} />
-                        </ClearFieldBtn>
-                      ) : null}
-                    </SelectClearRow>
-                    {(legTermStart || pollDate) && (
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        {[3, 4, 5].map((yr) => (
-                          <PartyFormAutoCalcBtn
-                            key={yr}
-                            type="button"
-                            onClick={() => handleApplyTermDurationYears(yr)}
-                            title={`임기 시작일(또는 투표일)로부터 +${yr}년 후로 설정`}
-                          >
-                            +{yr}년
-                          </PartyFormAutoCalcBtn>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {termDateOrderInvalid ? (
-                    <PartyFormHint $tone="error">
-                      임기 종료일({legTermEnd})이 임기 시작일({legTermStart})보다
-                      앞설 수 없습니다.
-                    </PartyFormHint>
-                  ) : null}
-                </FieldControl>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel>이번 의회 실제 종료 유형</FieldLabel>
-                <ModalFieldNarrow>
-                  <FormSelectNative
-                    value={resultingClosureKind}
-                    onChange={(e) => setResultingClosureKind(e.target.value)}
-                  >
-                    <option value="">(미지정)</option>
-                    {LEGISLATURE_CLOSURE_KIND_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </FormSelectNative>
-                </ModalFieldNarrow>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel>실제 종료·해산일</FieldLabel>
-                <FieldControl $variant="datePair">
-                  <SelectClearRow style={{ maxWidth: '100%' }}>
-                    <DateFieldBtn
-                      type="button"
-                      $hasValue={!!resultingClosureYmd}
-                      onClick={() => {
-                        playClickSound()
-                        setResultingClosureModalOpen(true)
-                      }}
-                    >
-                      <FiCalendar size={16} />
-                      <span>
-                        {resultingClosureYmd
-                          ? formatPollYmdKo(resultingClosureYmd)
-                          : '일자 선택'}
-                      </span>
-                      <FiChevronDown size={20} />
-                    </DateFieldBtn>
-                    {resultingClosureYmd ? (
-                      <ClearFieldBtn
-                        type="button"
-                        onClick={() => {
-                          playClickSound()
-                          setResultingClosureYmd('')
-                        }}
-                        aria-label="실제 종료일 지우기"
-                      >
-                        <FiX size={16} />
-                      </ClearFieldBtn>
-                    ) : null}
-                  </SelectClearRow>
-                </FieldControl>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel>이번 의회 종료 서술</FieldLabel>
-                <FullWidthControl>
-                  <HistoryArticleEditorWrap>
-                    <RichTextEditor
-                      value={resultingDissolutionNotes}
-                      onChange={setResultingDissolutionNotes}
-                      placeholder="정시 만료·조기 해산 등 (선택)"
-                      entityLinkCountryId={resolvedEntityLinkCountryId}
-                      onImageUpload={uploadElectionRichTextImage}
-                    />
-                  </HistoryArticleEditorWrap>
-                </FullWidthControl>
-              </FieldRow>
-            </>
-          )}
-          {electionFormTab === 'stats' && (
-            <>
-              <FieldRow>
-                <FieldLabel>투표율(참여) %</FieldLabel>
-                <ModalFieldNarrow>
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    autoComplete="off"
-                    value={voterTurnout}
-                    onChange={(event) =>
-                      setVoterTurnout(sanitizePercentInput(event.target.value))
-                    }
-                    placeholder="0–100 · 소수 첫째 자리까지"
-                  />
-                </ModalFieldNarrow>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel>총 의석</FieldLabel>
-                <ModalFieldNarrow>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    value={totalSeatsStr}
-                    onChange={(event) =>
-                      setTotalSeatsStr(
-                        sanitizeNonNegativeIntInput(event.target.value),
-                      )
-                    }
-                    placeholder="0 이상 정수"
-                  />
-                </ModalFieldNarrow>
-              </FieldRow>
-              <FieldRow>
-                <FieldLabel>설명</FieldLabel>
-                <FullWidthControl>
-                  <HistoryArticleEditorWrap>
-                    <RichTextEditor
-                      value={description}
-                      onChange={setDescription}
-                      placeholder="선거에 대한 부가 설명 (선택)"
-                      entityLinkCountryId={resolvedEntityLinkCountryId}
-                      onImageUpload={uploadElectionRichTextImage}
-                    />
-                  </HistoryArticleEditorWrap>
-                </FullWidthControl>
-              </FieldRow>
-            </>
-          )}
-        </FormRows>
-      </ElectionsModalShell>
-      <DatePickerModal
-        isOpen={pollModalOpen}
-        onClose={() => setPollModalOpen(false)}
-        onSelect={(date) => {
-          setPollDate(date)
-          if (mode === 'create' && !statusManuallyChanged && date) {
-            const todayYmd = new Date().toISOString().slice(0, 10)
-            if (date < todayYmd && status === 'SCHEDULED') {
-              setStatus('FINALIZED')
-            } else if (date >= todayYmd && status === 'FINALIZED') {
-              setStatus('SCHEDULED')
+    <RegisterModal
+      isOpen
+      onClose={() => {
+        void requestClose()
+      }}
+      closeOnEsc={!saving}
+      closeOnOverlayClick={!saving}
+      trapFocus={false}
+      initialFocusRef={mode === 'create' ? nameInputRef : undefined}
+      title={title}
+      headerActions={
+        <HeaderActionsBar>
+          <RegisterSectionJumpNav
+            sections={electionSections}
+            activeId={activeSectionId}
+            onJump={jumpToSection}
+          />
+          <FormS.LayoutModeToggleBtn
+            type="button"
+            $active={layoutMode === 'split'}
+            aria-pressed={layoutMode === 'split'}
+            aria-label={
+              layoutMode === 'split'
+                ? '1단 세로 보기로 전환'
+                : '2단 좌우 분할 보기로 전환'
             }
-          }
-          setPollModalOpen(false)
-        }}
-        initialDate={pollDate}
-        title="투표일 선택"
-      />
-      <DatePickerModal
-        isOpen={termStartModalOpen}
-        onClose={() => setTermStartModalOpen(false)}
-        onSelect={(date) => {
-          setLegTermStart(date)
-          setTermStartModalOpen(false)
-        }}
-        initialDate={legTermStart}
-        title="의회 임기 시작일"
-      />
-      <DatePickerModal
-        isOpen={termEndModalOpen}
-        onClose={() => setTermEndModalOpen(false)}
-        onSelect={(date) => {
-          setLegTermEnd(date)
-          setTermEndModalOpen(false)
-        }}
-        initialDate={legTermEnd}
-        title="의회 임기 종료일"
-      />
-      <DatePickerModal
-        isOpen={pollEndModalOpen}
-        onClose={() => setPollEndModalOpen(false)}
-        onSelect={(date) => {
-          setPollEndYmd(date)
-          setPollEndModalOpen(false)
-        }}
-        initialDate={pollEndYmd}
-        title="투표 종료일"
-      />
-      <DatePickerModal
-        isOpen={resultingClosureModalOpen}
-        onClose={() => setResultingClosureModalOpen(false)}
-        onSelect={(date) => {
-          setResultingClosureYmd(date)
-          setResultingClosureModalOpen(false)
-        }}
-        initialDate={resultingClosureYmd}
-        title="이번 의회 실제 종료·해산일"
-      />
-    </>
+            title={
+              layoutMode === 'split'
+                ? '좌우 2단 분할 보기 중 (클릭 시 1단 세로 보기로 전환)'
+                : '1단 세로 보기 중 (클릭 시 좌우 2단 분할 보기로 전환)'
+            }
+            onClick={toggleLayoutMode}
+          >
+            <FiColumns size={13} aria-hidden="true" />
+            <span>{layoutMode === 'split' ? '2단 분할' : '1단 보기'}</span>
+          </FormS.LayoutModeToggleBtn>
+        </HeaderActionsBar>
+      }
+      maxWidth={
+        layoutMode === 'split' ? 'min(1440px, 96vw)' : 'min(1040px, 96vw)'
+      }
+      minHeight="90vh"
+      height={layoutMode === 'split' ? '90vh' : undefined}
+      fullBleedOnMobile
+    >
+      <FormS.MilitaryModalFormScroll
+        ref={formScrollRef}
+        $layoutMode={layoutMode}
+        onScroll={handleFormScroll}
+        onScrollCapture={handleFormScroll}
+      >
+        {saving ? (
+          <FormS.BusyBar role="status" aria-live="polite">
+            {mode === 'create'
+              ? '선거를 등록하는 중...'
+              : '수정 사항을 저장하는 중...'}
+          </FormS.BusyBar>
+        ) : null}
+        <EventFormS.FormSection>
+          {layoutMode === 'split' ? (
+            <FormS.SplitColumnsGrid>
+              <FormS.SplitColumnLeft id={ELECTION_SPLIT_LEFT_ID}>
+                {basicSectionNode}
+              </FormS.SplitColumnLeft>
+              <FormS.SplitColumnRight id={ELECTION_SPLIT_RIGHT_ID}>
+                {legislatureSectionNode}
+                {statsSectionNode}
+              </FormS.SplitColumnRight>
+            </FormS.SplitColumnsGrid>
+          ) : (
+            <>
+              {basicSectionNode}
+              {legislatureSectionNode}
+              {statsSectionNode}
+            </>
+          )}
+        </EventFormS.FormSection>
+      </FormS.MilitaryModalFormScroll>
+
+      <PersonRegisterModalStickyFooter>
+        <RegisterFooterStatus
+          missing={missingRequired}
+          onJumpToMissing={focusFirstMissing}
+          problem={orderProblem}
+          readyLabel={mode === 'create' ? '등록 준비 완료' : '수정 준비 완료'}
+          shortcuts={[{ keys: '⌘↵', label: '저장' }]}
+        />
+        <FooterActions>
+          <PersonRegisterModalCancelBtn
+            type="button"
+            onClick={() => {
+              void requestClose()
+            }}
+            disabled={saving}
+          >
+            취소
+          </PersonRegisterModalCancelBtn>
+          <FormS.ModalPrimarySubmitBtn
+            type="button"
+            disabled={!canSubmit}
+            title={
+              missingRequired.length > 0
+                ? `필수 입력: ${missingRequired.join(', ')}`
+                : (orderProblem ?? '단축키: ⌘/Ctrl + Enter')
+            }
+            onClick={handleSubmit}
+          >
+            {saving
+              ? mode === 'create'
+                ? '등록 중...'
+                : '수정 중...'
+              : mode === 'create'
+                ? '선거 등록'
+                : '수정 완료'}
+          </FormS.ModalPrimarySubmitBtn>
+        </FooterActions>
+      </PersonRegisterModalStickyFooter>
+    </RegisterModal>
   )
 }
 
@@ -10227,28 +10264,6 @@ const ModalSecondaryBtn = styled.button`
     opacity: 0.5;
     cursor: not-allowed;
   }
-`
-
-const ModalTabCountBadge = styled.span<{ $active?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  margin-left: 4px;
-  font-size: 10.5px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  border-radius: 999px;
-  background: ${({ $active, theme }) =>
-    $active
-      ? 'rgba(99, 102, 241, 0.2)'
-      : theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.08)'
-        : 'rgba(15, 23, 42, 0.08)'};
-  color: ${({ $active, theme }) =>
-    $active ? '#6366f1' : theme.colors.text.secondary};
 `
 
 const ModalCandidacyResultBox = styled.div`

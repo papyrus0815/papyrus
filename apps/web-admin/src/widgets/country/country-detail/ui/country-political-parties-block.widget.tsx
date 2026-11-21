@@ -12,13 +12,17 @@ import {
   FiChevronDown,
   FiChevronLeft,
   FiChevronRight,
+  FiColumns,
   FiEdit2,
   FiImage,
   FiPlus,
   FiSearch,
   FiTrash2,
-  FiUpload,
   FiX,
+  FiFlag,
+  FiSliders,
+  FiGitMerge,
+  FiAward,
 } from 'react-icons/fi'
 import { useNavigate } from 'react-router-dom'
 import styled, { useTheme } from 'styled-components'
@@ -47,6 +51,7 @@ import {
   ledgerSubtleFill,
 } from '@/entities/event/ui/ledger-tokens'
 import { usePersons } from '@/entities/person/api'
+import * as EventFormS from '@/pages/events/create/event-create.styles'
 import {
   type PartyMembershipLeadershipTier,
   type PartyMembershipRoleCategory,
@@ -81,13 +86,29 @@ import { notify } from '@/shared/ui/toast'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { FormSelectNative } from '@/shared/ui/form-select-native'
 import {
+  KitFormLoading,
+  KitUploadActions,
+  KitUploadFilled,
+  KitUploadRemove,
+  KitUploadStrip,
+  KitUploadText,
+  KitUploadThumb,
+  kitC,
+} from '@/shared/ui/register-form-kit/register-form-kit'
+import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
+import {
+  FooterActions,
+  HeaderActionsBar,
+  RegisterFooterStatus,
+  useModalSubmitShortcut,
+} from '@/shared/ui/register-modal-shell/register-modal-chrome'
+import {
   PersonRegisterModalCancelBtn,
-  PersonRegisterModalFormActions,
   PersonRegisterModalPrimaryBtn,
+  PersonRegisterModalStickyFooter,
 } from '@/shared/ui/register-modal-shell/register-modal-shell'
 import {
   DateFieldBtn,
-  DateFieldsRow,
   ErrorMessage,
   FieldControl,
   FieldHint,
@@ -100,7 +121,6 @@ import {
 } from '@/shared/ui/register-form-layout'
 import { RichTextEditor } from '@/shared/ui/rich-text-editor/rich-text-editor'
 import { SidePanel } from '@/shared/ui/side-panel'
-import { PoliticalPartyRegisterViewModal } from '@/widgets/country/country-list/ui/political-party-register-view-modal'
 
 import {
   DetailHeaderIconBtn,
@@ -177,20 +197,18 @@ import {
   PartyTopLeaderRow,
   PartyTopLeadersHint,
   PartyTopLeadersList,
-  PoliticsEmptySpecCell,
-  PoliticsEmptySpecCellDesc,
-  PoliticsEmptySpecCellLabel,
-  PoliticsEmptySpecCellTitle,
-  PoliticsEmptySpecGrid,
-  PoliticsEmptySpecHead,
-  PoliticsEmptySpecHeadSub,
-  PoliticsEmptySpecHeadText,
-  PoliticsEmptySpecHeadTitle,
-  PoliticsEmptySpecWrap,
   RowIconBtn,
   SubsectionAddBtn,
   ToolbarGhostBtnSm,
 } from './country-politics-tab.styles'
+import * as FormS from './military-unit-form/styles'
+import { PoliticsEmptyState } from './politics-form/politics-empty-state'
+import {
+  POSITION_TONE_OPTIONS,
+  ToneChipGroup,
+  YmdDateField,
+  useSplitLayoutMode,
+} from './politics-form/politics-form-parts'
 
 const PartyBlockRoot = styled.div`
   flex: 1 1 0%;
@@ -206,23 +224,6 @@ const PartyListAreaBody = styled.div`
   display: flex;
   flex-direction: column;
   margin-top: 14px;
-`
-
-const FullWidthControl = styled(FieldControl)`
-  max-width: 100% !important;
-  width: 100%;
-`
-
-const ModalFieldWide = styled(FieldControl)`
-  max-width: min(560px, 100%) !important;
-`
-
-const ModalFieldMedium = styled(FieldControl)`
-  max-width: min(400px, 100%) !important;
-`
-
-const ModalFieldNarrow = styled(FieldControl)`
-  max-width: 260px !important;
 `
 
 const SelectClearRow = styled.div`
@@ -252,116 +253,6 @@ const ClearFieldBtn = styled.button`
 `
 
 /** 로고 — 카드형 업로드 대신 썸네일 + 텍스트 액션 (가벼운 한 줄 레이아웃) */
-const PartyLogoRow = styled.div`
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  width: 100%;
-`
-
-const PartyLogoThumb = styled.button`
-  flex-shrink: 0;
-  width: 72px;
-  height: 72px;
-  border-radius: 12px;
-  border: 1px solid ${({ theme }) => theme.colors.border.default};
-  background: ${({ theme }) =>
-    theme.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.04)'
-      : 'rgba(0, 0, 0, 0.02)'};
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  padding: 6px;
-  box-sizing: border-box;
-  overflow: hidden;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
-  &:hover:not(:disabled) {
-    border-color: ${({ theme }) => theme.colors.border.medium};
-    background: ${({ theme }) =>
-      theme.mode === 'dark'
-        ? 'rgba(255, 255, 255, 0.06)'
-        : 'rgba(0, 0, 0, 0.04)'};
-  }
-  &:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-  }
-`
-
-const PartyLogoThumbImg = styled.img`
-  display: block;
-  max-width: 100%;
-  max-height: 100%;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-`
-
-const PartyLogoMeta = styled.div`
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-top: 2px;
-`
-
-const PartyLogoRemoveBtn = styled.button`
-  padding: 0;
-  border: none;
-  background: none;
-  font-size: 13px;
-  font-weight: 400;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-  &:hover:not(:disabled) {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#f87171' : '#b91c1c')};
-  }
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`
-
-const PartyLogoHint = styled.p`
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.45;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-const PartyLogoStatusLine = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-`
-
-const PartyLogoStatusOk = styled.span`
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  color: ${({ theme }) =>
-    theme.mode === 'dark' ? '#86efac' : '#15803d'};
-`
-
-const PartyLogoStatusBusy = styled.span`
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-const PartyBrandColorInput = styled(Input)<{ $invalid?: boolean }>`
-  border-color: ${({ $invalid }) =>
-    $invalid ? '#dc2626' : undefined} !important;
-`
-
 const PartyFilterBar = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -789,14 +680,6 @@ const PartyStatusBadge = styled.span<{ $dissolved?: boolean }>`
           : '#bbf7d0'};
 `
 
-const IdeologyTagRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 8px;
-  min-height: 0;
-`
-
 const IdeologyTag = styled.span`
   display: inline-flex;
   align-items: center;
@@ -808,22 +691,6 @@ const IdeologyTag = styled.span`
   background: ${({ theme }) =>
     theme.mode === 'dark' ? 'rgba(99, 102, 241, 0.22)' : '#eef2ff'};
   color: ${({ theme }) => theme.colors.text.primary};
-`
-
-const IdeologyTagRemove = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  margin: 0;
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  line-height: 1;
-  &:hover {
-    color: ${({ theme }) => (theme.mode === 'dark' ? '#f87171' : '#b91c1c')};
-  }
 `
 
 const POSITION_OPTIONS: { value: PoliticalPosition; label: string }[] = [
@@ -3392,71 +3259,35 @@ export function CountryPoliticalPartiesBlock({
           </PartyListAreaBody>
         ) : parties.length === 0 ? (
           <PartyListAreaBody>
-            <PoliticsEmptySpecWrap>
-              <PoliticsEmptySpecHead>
-                <PoliticsEmptySpecHeadText>
-                  <PoliticsEmptySpecHeadTitle>
-                    등록된 정당이 없습니다
-                  </PoliticsEmptySpecHeadTitle>
-                  <PoliticsEmptySpecHeadSub>
-                    정당을 등록하면 선거·후보·집계 및 배출 최고권력자·계보를 연결할 수 있습니다.
-                  </PoliticsEmptySpecHeadSub>
-                </PoliticsEmptySpecHeadText>
-                <SubsectionAddBtn
-                  type="button"
-                  onClick={() => setModal({ mode: 'create' })}
-                >
-                  <FiPlus size={15} strokeWidth={2.25} />
-                  정당 등록
-                </SubsectionAddBtn>
-              </PoliticsEmptySpecHead>
-              <PoliticsEmptySpecGrid>
-                <PoliticsEmptySpecCell>
-                  <PoliticsEmptySpecCellLabel>
-                    01 · 스펙트럼 & 당색
-                  </PoliticsEmptySpecCellLabel>
-                  <PoliticsEmptySpecCellTitle>
-                    정치 스펙트럼 위치와 브랜드 색
-                  </PoliticsEmptySpecCellTitle>
-                  <PoliticsEmptySpecCellDesc>
-                    극좌~극우·빅텐트 성향과 공식 당색(HEX)·로고를 등록해 스펙트럼 막대와 도넛 차트 색상에 반영합니다.
-                  </PoliticsEmptySpecCellDesc>
-                </PoliticsEmptySpecCell>
-                <PoliticsEmptySpecCell>
-                  <PoliticsEmptySpecCellLabel>
-                    02 · 이념 & 존속 기간
-                  </PoliticsEmptySpecCellLabel>
-                  <PoliticsEmptySpecCellTitle>
-                    주요 이념 태그와 창당·해산일
-                  </PoliticsEmptySpecCellTitle>
-                  <PoliticsEmptySpecCellDesc>
-                    자유주의·보수주의·사회민주주의 등 핵심 노선과 설립일·해산일을 기록해 활동 상태를 구분합니다.
-                  </PoliticsEmptySpecCellDesc>
-                </PoliticsEmptySpecCell>
-                <PoliticsEmptySpecCell>
-                  <PoliticsEmptySpecCellLabel>
-                    03 · 정당 계보
-                  </PoliticsEmptySpecCellLabel>
-                  <PoliticsEmptySpecCellTitle>
-                    창당·합당·분당·개명 전신/후신 연결
-                  </PoliticsEmptySpecCellTitle>
-                  <PoliticsEmptySpecCellDesc>
-                    정당 간 승계·합당·분당·개명 이력을 기준일과 함께 연결해 정당사 흐름을 추적합니다.
-                  </PoliticsEmptySpecCellDesc>
-                </PoliticsEmptySpecCell>
-                <PoliticsEmptySpecCell>
-                  <PoliticsEmptySpecCellLabel>
-                    04 · 선거 성적 & 최고권력자
-                  </PoliticsEmptySpecCellLabel>
-                  <PoliticsEmptySpecCellTitle>
-                    역대 선거 득표·의석 및 배출 수반 연동
-                  </PoliticsEmptySpecCellTitle>
-                  <PoliticsEmptySpecCellDesc>
-                    선거별 정당 집계·출마 후보·소속 당원 및 국가원수·정부수반 배출 이력이 정당 상세에 자동 집계됩니다.
-                  </PoliticsEmptySpecCellDesc>
-                </PoliticsEmptySpecCell>
-              </PoliticsEmptySpecGrid>
-            </PoliticsEmptySpecWrap>
+            <PoliticsEmptyState
+              Icon={FiFlag}
+              title="아직 등록된 정당이 없습니다"
+              description="정당을 등록하면 선거·후보·집계와 배출한 국가원수·정부수반, 정당 계보를 이어 붙일 수 있습니다."
+              actionLabel="정당 등록"
+              onAction={() => setModal({ mode: 'create' })}
+              features={[
+                {
+                  Icon: FiSliders,
+                  title: '스펙트럼과 당색',
+                  description: '극좌~극우·빅텐트 위치, 공식 당색·로고 — 스펙트럼 막대와 득표 차트 색이 된다',
+                },
+                {
+                  Icon: FiCalendar,
+                  title: '이념과 존속 기간',
+                  description: '자유주의·사회민주주의 같은 노선 키워드, 설립·해산일',
+                },
+                {
+                  Icon: FiGitMerge,
+                  title: '정당 계보',
+                  description: '창당·합당·분당·개명의 전신·후신을 기준일과 함께 연결',
+                },
+                {
+                  Icon: FiAward,
+                  title: '선거 성적과 배출 수반',
+                  description: '역대 득표·의석, 소속 후보·당원, 국가원수·정부수반 배출 이력',
+                },
+              ]}
+            />
           </PartyListAreaBody>
         ) : (
           <PartyInfographicSection>
@@ -3905,31 +3736,69 @@ export function CountryPoliticalPartiesBlock({
           </PartyInfographicSection>
         )}
       </PartyBlockRoot>
-      <PoliticalPartyRegisterViewModal
-        isOpen={modal !== null}
-        onClose={() => setModal(null)}
-        title={modal?.mode === 'edit' ? '정당 수정' : '정당 등록'}
-        modalMinHeight="min(640px, 92vh)"
-      >
-        {modal ? (
-          <PartyFormModal
-            key="party-modal"
-            countryId={countryId}
-            historicalCountryId={historicalCountryId}
-            mode={modal.mode}
-            partyId={modal.mode === 'edit' ? modal.id : undefined}
-            saving={createMut.isPending || updateMut.isPending}
-            onClose={() => setModal(null)}
-            onSubmitCreate={(body) => createMut.mutate(body)}
-            onSubmitEdit={(id, body) => updateMut.mutate({ id, body })}
-          />
-        ) : null}
-      </PoliticalPartyRegisterViewModal>
+      {modal ? (
+        <PartyFormModal
+          key={modal.mode === 'edit' ? `party-${modal.id}` : 'party-new'}
+          countryId={countryId}
+          historicalCountryId={historicalCountryId}
+          mode={modal.mode}
+          partyId={modal.mode === 'edit' ? modal.id : undefined}
+          saving={createMut.isPending || updateMut.isPending}
+          onClose={() => setModal(null)}
+          onSubmitCreate={(body) => createMut.mutate(body)}
+          onSubmitEdit={(id, body) => updateMut.mutate({ id, body })}
+        />
+      ) : null}
     </>
   )
 }
 
-function PartyFormModal({
+/** 정당 등록 모달의 세 묶음 — 사건 등록 모달처럼 점+선 머리로 구획 */
+const PARTY_FORM_SECTION_ID = {
+  basic: 'party-form-group-basic',
+  line: 'party-form-group-line',
+  mark: 'party-form-group-mark',
+} as const
+
+interface PartyFormValues {
+  name: string
+  shortName: string
+  localName: string
+  ideologyTags: string[]
+  position: PoliticalPosition | ''
+  foundedDate: string
+  dissolvedDate: string
+  logoUrl: string
+  brandColor: string
+}
+
+const EMPTY_PARTY_FORM: PartyFormValues = {
+  name: '',
+  shortName: '',
+  localName: '',
+  ideologyTags: [],
+  position: '',
+  foundedDate: '',
+  dissolvedDate: '',
+  logoUrl: '',
+  brandColor: '',
+}
+
+/** 이탈 확인용 비교값 — 같은 순서로 직렬화한다 */
+const partyFormSnapshot = (values: PartyFormValues) =>
+  JSON.stringify([
+    values.name,
+    values.shortName,
+    values.localName,
+    values.ideologyTags,
+    values.position,
+    values.foundedDate,
+    values.dissolvedDate,
+    values.logoUrl,
+    values.brandColor,
+  ])
+
+export function PartyFormModal({
   countryId,
   historicalCountryId,
   mode,
@@ -3950,8 +3819,6 @@ function PartyFormModal({
 }) {
   const playClickSound = useClickSound()
   const [loaded, setLoaded] = useState<PoliticalParty | null>(null)
-  const [foundedModalOpen, setFoundedModalOpen] = useState(false)
-  const [dissolvedModalOpen, setDissolvedModalOpen] = useState(false)
   const [name, setName] = useState('')
   const [shortName, setShortName] = useState('')
   const [localName, setLocalName] = useState('')
@@ -3964,6 +3831,23 @@ function PartyFormModal({
   const [brandColor, setBrandColor] = useState('')
   const [logoUploading, setLogoUploading] = useState(false)
   const logoFileInputRef = useRef<HTMLInputElement>(null)
+  const nameInputRef = useRef<HTMLInputElement | null>(null)
+  const formScrollRef = useRef<HTMLDivElement | null>(null)
+  const { layoutMode, toggleLayoutMode } = useSplitLayoutMode(
+    'papyrus:party-register-layout',
+  )
+  const [dateErrors, setDateErrors] = useState<Record<string, string | null>>(
+    {},
+  )
+  const setDateError = (key: string) => (message: string | null) =>
+    setDateErrors((prev) =>
+      prev[key] === message ? prev : { ...prev, [key]: message },
+    )
+  const firstDateError =
+    Object.values(dateErrors).find((message) => Boolean(message)) ?? null
+  const [initialSnapshot, setInitialSnapshot] = useState(() =>
+    partyFormSnapshot(EMPTY_PARTY_FORM),
+  )
 
   const handleLogoFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>,
@@ -3993,17 +3877,29 @@ function PartyFormModal({
       .getById(partyId)
       .then((row) => {
         if (cancelled) return
+        const values: PartyFormValues = {
+          name: row.name,
+          shortName: row.shortName ?? '',
+          localName: row.localName ?? '',
+          ideologyTags: parseIdeologyKeywords(row.ideology),
+          position: (row.position as PoliticalPosition) ?? '',
+          foundedDate: row.foundedDate?.slice(0, 10) ?? '',
+          dissolvedDate: row.dissolvedDate?.slice(0, 10) ?? '',
+          logoUrl: row.logoUrl ?? '',
+          brandColor: row.brandColor ?? '',
+        }
         setLoaded(row)
-        setName(row.name)
-        setShortName(row.shortName ?? '')
-        setLocalName(row.localName ?? '')
-        setIdeologyTags(parseIdeologyKeywords(row.ideology))
+        setName(values.name)
+        setShortName(values.shortName)
+        setLocalName(values.localName)
+        setIdeologyTags(values.ideologyTags)
         setIdeologyInput('')
-        setPosition((row.position as PoliticalPosition) ?? '')
-        setFoundedDate(row.foundedDate?.slice(0, 10) ?? '')
-        setDissolvedDate(row.dissolvedDate?.slice(0, 10) ?? '')
-        setLogoUrl(row.logoUrl ?? '')
-        setBrandColor(row.brandColor ?? '')
+        setPosition(values.position)
+        setFoundedDate(values.foundedDate)
+        setDissolvedDate(values.dissolvedDate)
+        setLogoUrl(values.logoUrl)
+        setBrandColor(values.brandColor)
+        setInitialSnapshot(partyFormSnapshot(values))
       })
       .catch((err: Error) => notify.error(err.message))
     return () => {
@@ -4011,12 +3907,60 @@ function PartyFormModal({
     }
   }, [mode, partyId])
 
-  const submit = () => {
-    const parsedColor = normalizeBrandColorInput(brandColor)
-    if (brandColor.trim() && !parsedColor) {
-      notify.error('브랜드 컬러는 #RRGGBB 형식(예: #e11d48)이거나 비워 두세요.')
+  const loadingEdit = Boolean(mode === 'edit' && !loaded && partyId)
+  const brandColorInvalid =
+    brandColor.trim() !== '' && normalizeBrandColorInput(brandColor) == null
+  const dateOrderInvalid = Boolean(
+    foundedDate && dissolvedDate && dissolvedDate < foundedDate,
+  )
+  const missingRequired = name.trim() ? [] : ['명칭']
+  const formProblem = firstDateError
+    ? firstDateError
+    : brandColorInvalid
+    ? '브랜드 컬러는 #RRGGBB 형식(예: #e11d48)이거나 비워 두세요.'
+    : dateOrderInvalid
+      ? '해산일이 설립일보다 앞설 수 없습니다.'
+      : null
+  const canSubmit =
+    !saving &&
+    !logoUploading &&
+    !loadingEdit &&
+    missingRequired.length === 0 &&
+    !formProblem
+
+  const isDirty =
+    partyFormSnapshot({
+      name,
+      shortName,
+      localName,
+      ideologyTags,
+      position,
+      foundedDate,
+      dissolvedDate,
+      logoUrl,
+      brandColor,
+    }) !== initialSnapshot
+
+  const requestClose = async () => {
+    if (saving) return
+    if (
+      isDirty &&
+      !(await confirm({
+        title: '확인',
+        message:
+          mode === 'create'
+            ? '작성 중인 정당 정보가 사라집니다. 창을 닫으시겠습니까?'
+            : '저장하지 않은 변경 사항이 있습니다. 닫으시겠습니까?',
+      }))
+    ) {
       return
     }
+    onClose()
+  }
+
+  const submit = () => {
+    if (!canSubmit) return
+    const parsedColor = normalizeBrandColorInput(brandColor)
     const scope =
       historicalCountryId != null && historicalCountryId !== ''
         ? { countryId: null as string | null, historicalCountryId }
@@ -4036,356 +3980,531 @@ function PartyFormModal({
       brandColor: parsedColor,
       ...scope,
     }
-    if (!body.name) {
-      notify.error('정당 명칭을 입력하세요.')
-      return
-    }
     if (mode === 'create') onSubmitCreate(body)
     else if (partyId) onSubmitEdit(partyId, body)
   }
 
-  const loadingEdit = mode === 'edit' && !loaded && partyId
+  useModalSubmitShortcut({
+    enabled: canSubmit,
+    scrollContainerRef: formScrollRef,
+    onSubmit: submit,
+  })
+
+  const addIdeologyKeywords = () => {
+    const pieces = ideologyInput
+      .split(/[,，]/)
+      .map((piece) => piece.trim())
+      .filter(Boolean)
+    if (pieces.length === 0) return
+    const next = [...ideologyTags]
+    for (const piece of pieces) {
+      if (next.includes(piece)) continue
+      if (next.length >= 40) {
+        notify.error('키워드는 최대 40개까지입니다.')
+        return
+      }
+      next.push(piece)
+    }
+    setIdeologyTags(next)
+    setIdeologyInput('')
+  }
+
+  const previewColor = normalizeBrandColorInput(brandColor)
+  const positionLabel = POSITION_TONE_OPTIONS.find(
+    (option) => option.value === position,
+  )?.label
+
+  const basicSectionNode = (
+    <FormS.FormGroupSection
+      id={PARTY_FORM_SECTION_ID.basic}
+      aria-labelledby={`${PARTY_FORM_SECTION_ID.basic}-title`}
+    >
+      <FormS.FormGroupTitle id={`${PARTY_FORM_SECTION_ID.basic}-title`}>
+        기본 정보
+      </FormS.FormGroupTitle>
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel htmlFor="party-form-name">
+          명칭 <EventFormS.Required>*</EventFormS.Required>
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          <FormS.TitleInput
+            ref={nameInputRef}
+            id="party-form-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            autoComplete="off"
+            aria-required
+            placeholder="예: 독일 사회민주당"
+          />
+          <FormS.SubTitleGrid>
+            <FormS.SubTitleField>
+              <FormS.SubTitleLabel>약칭 (선택)</FormS.SubTitleLabel>
+              <FormS.AbbrInput
+                id="party-form-short-name"
+                aria-label="약칭"
+                value={shortName}
+                onChange={(event) => setShortName(event.target.value)}
+                placeholder="예: SPD"
+                autoComplete="off"
+              />
+            </FormS.SubTitleField>
+            <FormS.SubTitleField>
+              <FormS.SubTitleLabel>현지어·별도 표기 (선택)</FormS.SubTitleLabel>
+              <FormS.AbbrInput
+                id="party-form-local-name"
+                aria-label="현지어·별도 표기"
+                value={localName}
+                onChange={(event) => setLocalName(event.target.value)}
+                placeholder="예: Sozialdemokratische Partei Deutschlands"
+                autoComplete="off"
+              />
+            </FormS.SubTitleField>
+          </FormS.SubTitleGrid>
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel as="div">
+          존속 기간<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          <FormS.DateRangeGrid>
+            <FormS.DateColumn>
+              <FormS.SubTitleLabel>설립</FormS.SubTitleLabel>
+              <YmdDateField
+                ariaLabel="설립일"
+                pickerTitle="설립일 선택"
+                value={foundedDate}
+                onChange={setFoundedDate}
+                onErrorChange={setDateError('founded')}
+              />
+            </FormS.DateColumn>
+            <FormS.DateColumn>
+              <FormS.SubTitleLabel>해산 (존속 중이면 비움)</FormS.SubTitleLabel>
+              <YmdDateField
+                ariaLabel="해산일"
+                pickerTitle="해산일 선택"
+                value={dissolvedDate}
+                onChange={setDissolvedDate}
+                onErrorChange={setDateError('dissolved')}
+                error={dateOrderInvalid}
+                minDate={foundedDate || undefined}
+              />
+            </FormS.DateColumn>
+          </FormS.DateRangeGrid>
+          {dateOrderInvalid ? (
+            <EventFormS.ErrorMessage role="alert">
+              해산일({dissolvedDate})이 설립일({foundedDate})보다 앞설 수
+              없습니다.
+            </EventFormS.ErrorMessage>
+          ) : null}
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+    </FormS.FormGroupSection>
+  )
+
+  const lineSectionNode = (
+    <FormS.FormGroupSection
+      id={PARTY_FORM_SECTION_ID.line}
+      aria-labelledby={`${PARTY_FORM_SECTION_ID.line}-title`}
+    >
+      <FormS.FormGroupTitle id={`${PARTY_FORM_SECTION_ID.line}-title`}>
+        노선
+        {positionLabel ? (
+          <FormS.FormGroupSummaryBadge>{positionLabel}</FormS.FormGroupSummaryBadge>
+        ) : null}
+      </FormS.FormGroupTitle>
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel as="div" id="party-form-position-label">
+          스펙트럼<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          <ToneChipGroup
+            ariaLabelledBy="party-form-position-label"
+            value={position}
+            onChange={(next) => setPosition(next)}
+            options={POSITION_TONE_OPTIONS}
+            allowDeselect
+          />
+          <EventFormS.Hint>
+            하나만 고릅니다. 고른 칩을 다시 누르면 해제됩니다.
+          </EventFormS.Hint>
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel htmlFor="party-ideology-input">
+          이념·노선 키워드<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          {ideologyTags.length > 0 ? (
+            <EventFormS.SelectedItemsContainer aria-label="등록된 키워드">
+              {ideologyTags.map((tag) => (
+                <EventFormS.SelectedItem key={tag}>
+                  <span>{tag}</span>
+                  <EventFormS.RemoveButton
+                    type="button"
+                    aria-label={`${tag} 제거`}
+                    onClick={() =>
+                      setIdeologyTags((prev) =>
+                        prev.filter((existing) => existing !== tag),
+                      )
+                    }
+                  >
+                    <FiX size={12} />
+                  </EventFormS.RemoveButton>
+                </EventFormS.SelectedItem>
+              ))}
+            </EventFormS.SelectedItemsContainer>
+          ) : null}
+          <EventFormS.Input
+            id="party-ideology-input"
+            value={ideologyInput}
+            onChange={(event) => setIdeologyInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ',') {
+                event.preventDefault()
+                addIdeologyKeywords()
+              }
+            }}
+            onBlur={addIdeologyKeywords}
+            placeholder="예: 자유주의, 친화적 복지 — Enter로 추가"
+            autoComplete="off"
+          />
+          <EventFormS.Hint>
+            쉼표·Enter로 구분해 여러 키워드를 넣습니다(최대 40개). 칸을 벗어나면
+            적던 말도 키워드로 들어갑니다.
+          </EventFormS.Hint>
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+    </FormS.FormGroupSection>
+  )
+
+  const markSectionNode = (
+    <FormS.FormGroupSection
+      id={PARTY_FORM_SECTION_ID.mark}
+      aria-labelledby={`${PARTY_FORM_SECTION_ID.mark}-title`}
+    >
+      <FormS.FormGroupTitle id={`${PARTY_FORM_SECTION_ID.mark}-title`}>
+        표지
+      </FormS.FormGroupTitle>
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel as="div">
+          로고·심벌<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          <input
+            ref={logoFileInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={handleLogoFileChange}
+          />
+          {logoUrl ? (
+            <KitUploadFilled>
+              <KitUploadThumb>
+                <img src={getUploadImageUrl(logoUrl)} alt="" />
+              </KitUploadThumb>
+              <KitUploadText>
+                <strong>로고가 올라갔습니다</strong>
+                <span>정당 목록·득표 표에 이 그림이 붙습니다</span>
+              </KitUploadText>
+              <KitUploadActions>
+                <EventFormS.AddButton
+                  type="button"
+                  disabled={logoUploading}
+                  onClick={() => {
+                    playClickSound()
+                    logoFileInputRef.current?.click()
+                  }}
+                >
+                  바꾸기
+                </EventFormS.AddButton>
+                <KitUploadRemove
+                  type="button"
+                  aria-label="로고 제거"
+                  disabled={logoUploading}
+                  onClick={() => {
+                    playClickSound()
+                    setLogoUrl('')
+                  }}
+                >
+                  <FiX size={14} />
+                </KitUploadRemove>
+              </KitUploadActions>
+            </KitUploadFilled>
+          ) : (
+            <KitUploadStrip
+              type="button"
+              disabled={logoUploading}
+              onClick={() => {
+                playClickSound()
+                logoFileInputRef.current?.click()
+              }}
+            >
+              <KitUploadThumb>
+                <FiImage size={16} />
+              </KitUploadThumb>
+              <KitUploadText>
+                <strong>{logoUploading ? '올리는 중…' : '로고 이미지 올리기'}</strong>
+                <span>JPG · PNG · WebP 권장</span>
+              </KitUploadText>
+            </KitUploadStrip>
+          )}
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel htmlFor="party-brand-color">
+          브랜드 컬러<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          <PartyColorRow>
+            <PartyColorSwatchInput
+              id="party-brand-color-swatch"
+              type="color"
+              value={previewColor ?? '#6366f1'}
+              onChange={(event) => setBrandColor(event.target.value)}
+              aria-label="색 선택 — 선택 시 텍스트 값도 자동 갱신"
+            />
+            <EventFormS.Input
+              id="party-brand-color"
+              value={brandColor}
+              onChange={(event) => setBrandColor(event.target.value)}
+              placeholder="#RRGGBB (선택)"
+              autoComplete="off"
+              aria-invalid={brandColorInvalid || undefined}
+            />
+          </PartyColorRow>
+          {brandColorInvalid ? (
+            <EventFormS.ErrorMessage role="alert">
+              올바른 #RRGGBB 형식이 아닙니다. 색 선택기로 바꾸면 자동 보정됩니다.
+            </EventFormS.ErrorMessage>
+          ) : (
+            <EventFormS.Hint>
+              정당 목록·득표 막대의 색이 됩니다. 선택기와 텍스트는 서로 실시간
+              반영됩니다(#RRGGBB).
+            </EventFormS.Hint>
+          )}
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel as="div">미리보기</EventFormS.FormLabel>
+        <EventFormS.FormField>
+          {/* 목록 카드에서 보일 모습 — 색·로고·약칭을 넣는 즉시 반영 */}
+          <PartyPreviewCard
+            $accent={previewColor ?? undefined}
+            aria-label="정당 표지 미리보기"
+          >
+            <PartyPreviewLogo>
+              {logoUrl ? (
+                <img src={getUploadImageUrl(logoUrl)} alt="" />
+              ) : (
+                <span aria-hidden>
+                  {(shortName.trim() || name.trim() || '정').slice(0, 1)}
+                </span>
+              )}
+            </PartyPreviewLogo>
+            <PartyPreviewText>
+              <strong>{name.trim() || '정당 명칭'}</strong>
+              <span>
+                {[
+                  shortName.trim(),
+                  positionLabel,
+                  foundedDate ? `${foundedDate.slice(0, 4)} 설립` : null,
+                  dissolvedDate ? `${dissolvedDate.slice(0, 4)} 해산` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || '약칭·스펙트럼·설립 연도가 여기 붙습니다'}
+              </span>
+            </PartyPreviewText>
+          </PartyPreviewCard>
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+    </FormS.FormGroupSection>
+  )
 
   return (
-    <>
-      {loadingEdit ? (
-        <EmptyHint>불러오는 중…</EmptyHint>
-      ) : (
-        <FormSectionInner>
-          <FormRows>
-            <FieldRow>
-              <FieldLabel>로고·심벌</FieldLabel>
-              <FullWidthControl>
-                <input
-                  ref={logoFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                  onChange={handleLogoFileChange}
-                />
-                <PartyLogoRow>
-                  <PartyLogoThumb
-                    type="button"
-                    disabled={logoUploading}
-                    aria-label={
-                      logoUrl
-                        ? '로고 이미지 변경 — 클릭해서 새 파일 선택'
-                        : '로고 이미지 업로드'
-                    }
-                    title={logoUrl ? '클릭해서 변경' : '클릭해서 업로드'}
-                    onClick={() => {
-                      playClickSound()
-                      logoFileInputRef.current?.click()
-                    }}
-                  >
-                    {logoUrl ? (
-                      <PartyLogoThumbImg
-                        src={getUploadImageUrl(logoUrl)}
-                        alt=""
-                      />
-                    ) : (
-                      <FiImage size={22} strokeWidth={1.5} />
-                    )}
-                  </PartyLogoThumb>
-                  <PartyLogoMeta>
-                    <PartyLogoStatusLine>
-                      {logoUploading ? (
-                        <PartyLogoStatusBusy>업로드 중…</PartyLogoStatusBusy>
-                      ) : logoUrl ? (
-                        <>
-                          <PartyLogoStatusOk>
-                            <FiUpload size={12} strokeWidth={2} /> 로고가
-                            업로드됐습니다
-                          </PartyLogoStatusOk>
-                          <PartyLogoRemoveBtn
-                            type="button"
-                            disabled={logoUploading}
-                            onClick={() => {
-                              playClickSound()
-                              setLogoUrl('')
-                            }}
-                          >
-                            제거
-                          </PartyLogoRemoveBtn>
-                        </>
-                      ) : (
-                        <PartyLogoHint>
-                          썸네일을 클릭해 업로드 · JPG / PNG / WebP 권장
-                        </PartyLogoHint>
-                      )}
-                    </PartyLogoStatusLine>
-                    {logoUrl && !logoUploading ? (
-                      <PartyLogoHint>
-                        썸네일을 다시 클릭하면 다른 파일로 교체합니다.
-                      </PartyLogoHint>
-                    ) : null}
-                  </PartyLogoMeta>
-                </PartyLogoRow>
-              </FullWidthControl>
-            </FieldRow>
-            <FieldRow>
-              <FieldLabel htmlFor="party-brand-color">브랜드 컬러</FieldLabel>
-              <ModalFieldMedium>
-                <div
-                  style={{ display: 'flex', gap: 10, alignItems: 'center' }}
-                >
-                  <input
-                    id="party-brand-color-swatch"
-                    type="color"
-                    value={normalizeBrandColorInput(brandColor) ?? '#6366f1'}
-                    onChange={(e) => setBrandColor(e.target.value)}
-                    style={{
-                      width: 44,
-                      height: 36,
-                      padding: 0,
-                      border: '1px solid #e2e8f0',
-                      borderRadius: 8,
-                      cursor: 'pointer',
-                    }}
-                    aria-label="색 선택 — 선택 시 텍스트 값도 자동 갱신"
-                  />
-                  <PartyBrandColorInput
-                    id="party-brand-color"
-                    value={brandColor}
-                    onChange={(e) => setBrandColor(e.target.value)}
-                    placeholder="#RRGGBB (선택)"
-                    autoComplete="off"
-                    $invalid={
-                      brandColor.trim() !== '' &&
-                      normalizeBrandColorInput(brandColor) == null
-                    }
-                  />
-                </div>
-                {brandColor.trim() !== '' &&
-                normalizeBrandColorInput(brandColor) == null ? (
-                  <FieldHint
-                    style={{
-                      color: '#dc2626',
-                      marginTop: 6,
-                      fontSize: 11.5,
-                    }}
-                  >
-                    올바른 #RRGGBB 형식이 아닙니다. 색 선택기로 바꾸면 자동
-                    보정됩니다.
-                  </FieldHint>
-                ) : (
-                  <FieldHint style={{ marginTop: 6, fontSize: 11.5 }}>
-                    선택기와 텍스트는 서로 실시간 반영됩니다 (#RRGGBB 6자리).
-                  </FieldHint>
-                )}
-              </ModalFieldMedium>
-            </FieldRow>
-            <FieldRow>
-              <FieldLabel htmlFor="party-form-name">
-                명칭 <Required aria-label="필수" />
-              </FieldLabel>
-              <ModalFieldWide>
-                <Input
-                  id="party-form-name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  autoComplete="off"
-                  aria-required
-                />
-              </ModalFieldWide>
-            </FieldRow>
-            <FieldRow>
-              <FieldLabel>약칭</FieldLabel>
-              <ModalFieldMedium>
-                <Input
-                  value={shortName}
-                  onChange={(event) => setShortName(event.target.value)}
-                />
-              </ModalFieldMedium>
-            </FieldRow>
-            <FieldRow>
-              <FieldLabel>현지어·별도 표기</FieldLabel>
-              <ModalFieldMedium>
-                <Input
-                  value={localName}
-                  onChange={(event) => setLocalName(event.target.value)}
-                />
-              </ModalFieldMedium>
-            </FieldRow>
-            <FieldRow>
-              <FieldLabel htmlFor="party-ideology-input">
-                이념·노선 키워드
-              </FieldLabel>
-              <ModalFieldMedium>
-                <IdeologyTagRow aria-label="등록된 키워드">
-                  {ideologyTags.map((tag) => (
-                    <IdeologyTag key={tag}>
-                      {tag}
-                      <IdeologyTagRemove
-                        type="button"
-                        aria-label={`${tag} 제거`}
-                        onClick={() =>
-                          setIdeologyTags((prev) =>
-                            prev.filter((x) => x !== tag),
-                          )
-                        }
-                      >
-                        <FiX size={14} />
-                      </IdeologyTagRemove>
-                    </IdeologyTag>
-                  ))}
-                </IdeologyTagRow>
-                <Input
-                  id="party-ideology-input"
-                  value={ideologyInput}
-                  onChange={(e) => setIdeologyInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ',') {
-                      e.preventDefault()
-                      const t = ideologyInput
-                        .split(/[,，]/)
-                        .map((s) => s.trim())
-                        .filter(Boolean)
-                      if (t.length === 0) return
-                      const next = [...ideologyTags]
-                      for (const piece of t) {
-                        if (next.includes(piece)) continue
-                        if (next.length >= 40) {
-                          notify.error('키워드는 최대 40개까지입니다.')
-                          return
-                        }
-                        next.push(piece)
-                      }
-                      setIdeologyTags(next)
-                      setIdeologyInput('')
-                    }
-                  }}
-                  placeholder="예: 자유주의, 친화적 복지 — Enter로 추가"
-                  autoComplete="off"
-                />
-                <FieldHint>
-                  쉼표·Enter로 구분해 여러 키워드를 넣을 수 있습니다. 스펙트럼은
-                  아래에서 하나만 지정합니다.
-                </FieldHint>
-              </ModalFieldMedium>
-            </FieldRow>
-            <FieldRow>
-              <FieldLabel>스펙트럼</FieldLabel>
-              <ModalFieldNarrow>
-                <FormSelectNative
-                  value={position}
-                  onChange={(event) =>
-                    setPosition(
-                      (event.target.value || '') as PoliticalPosition | '',
-                    )
-                  }
-                >
-                  <option value="">(미지정)</option>
-                  {POSITION_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </FormSelectNative>
-              </ModalFieldNarrow>
-            </FieldRow>
-            <FieldRow>
-              <FieldLabel>설립·해산</FieldLabel>
-              <FieldControl $variant="datePair">
-                <DateFieldsRow style={{ maxWidth: '100%' }}>
-                  <SelectClearRow>
-                    <DateFieldBtn
-                      type="button"
-                      $hasValue={!!foundedDate}
-                      onClick={() => {
-                        playClickSound()
-                        setFoundedModalOpen(true)
-                      }}
-                    >
-                      <FiCalendar size={16} />
-                      <span>
-                        {foundedDate
-                          ? formatYmdKo(foundedDate)
-                          : '설립일 (달력)'}
-                      </span>
-                      <FiChevronDown size={20} />
-                    </DateFieldBtn>
-                    {foundedDate ? (
-                      <ClearFieldBtn
-                        type="button"
-                        onClick={() => {
-                          playClickSound()
-                          setFoundedDate('')
-                        }}
-                        aria-label="설립일 지우기"
-                      >
-                        <FiX size={16} />
-                      </ClearFieldBtn>
-                    ) : null}
-                  </SelectClearRow>
-                  <SelectClearRow>
-                    <DateFieldBtn
-                      type="button"
-                      $hasValue={!!dissolvedDate}
-                      onClick={() => {
-                        playClickSound()
-                        setDissolvedModalOpen(true)
-                      }}
-                    >
-                      <FiCalendar size={16} />
-                      <span>
-                        {dissolvedDate
-                          ? formatYmdKo(dissolvedDate)
-                          : '해산일 (달력)'}
-                      </span>
-                      <FiChevronDown size={20} />
-                    </DateFieldBtn>
-                    {dissolvedDate ? (
-                      <ClearFieldBtn
-                        type="button"
-                        onClick={() => {
-                          playClickSound()
-                          setDissolvedDate('')
-                        }}
-                        aria-label="해산일 지우기"
-                      >
-                        <FiX size={16} />
-                      </ClearFieldBtn>
-                    ) : null}
-                  </SelectClearRow>
-                </DateFieldsRow>
-              </FieldControl>
-            </FieldRow>
-          </FormRows>
-          <PersonRegisterModalFormActions>
-            <PersonRegisterModalCancelBtn type="button" onClick={onClose}>
-              취소
-            </PersonRegisterModalCancelBtn>
-            <PersonRegisterModalPrimaryBtn
-              type="button"
-              disabled={saving || logoUploading}
-              onClick={submit}
-            >
-              저장
-            </PersonRegisterModalPrimaryBtn>
-          </PersonRegisterModalFormActions>
-        </FormSectionInner>
-      )}
-      <DatePickerModal
-        isOpen={foundedModalOpen}
-        onClose={() => setFoundedModalOpen(false)}
-        onSelect={(date) => {
-          setFoundedDate(date)
-          setFoundedModalOpen(false)
-        }}
-        initialDate={foundedDate}
-        title="설립일 선택"
-      />
-      <DatePickerModal
-        isOpen={dissolvedModalOpen}
-        onClose={() => setDissolvedModalOpen(false)}
-        onSelect={(date) => {
-          setDissolvedDate(date)
-          setDissolvedModalOpen(false)
-        }}
-        initialDate={dissolvedDate}
-        title="해산일 선택"
-      />
-    </>
+    <RegisterModal
+      isOpen
+      onClose={() => {
+        void requestClose()
+      }}
+      closeOnEsc={!saving}
+      closeOnOverlayClick={!saving}
+      trapFocus={false}
+      initialFocusRef={mode === 'create' ? nameInputRef : undefined}
+      title={mode === 'edit' ? '정당 수정' : '정당 등록'}
+      headerActions={
+        <HeaderActionsBar>
+          <FormS.LayoutModeToggleBtn
+            type="button"
+            $active={layoutMode === 'split'}
+            aria-pressed={layoutMode === 'split'}
+            aria-label={
+              layoutMode === 'split'
+                ? '1단 세로 보기로 전환'
+                : '2단 좌우 분할 보기로 전환'
+            }
+            onClick={toggleLayoutMode}
+          >
+            <FiColumns size={13} aria-hidden="true" />
+            <span>{layoutMode === 'split' ? '2단 분할' : '1단 보기'}</span>
+          </FormS.LayoutModeToggleBtn>
+        </HeaderActionsBar>
+      }
+      maxWidth={
+        layoutMode === 'split' ? 'min(1440px, 96vw)' : 'min(1040px, 96vw)'
+      }
+      minHeight="90vh"
+      height={layoutMode === 'split' ? '90vh' : undefined}
+      fullBleedOnMobile
+    >
+      <FormS.MilitaryModalFormScroll ref={formScrollRef} $layoutMode={layoutMode}>
+        {loadingEdit ? (
+          <KitFormLoading label="정당 정보를 불러오는 중" />
+        ) : (
+          <>
+            {saving ? (
+              <FormS.BusyBar role="status" aria-live="polite">
+                {mode === 'create'
+                  ? '정당을 등록하는 중...'
+                  : '수정 사항을 저장하는 중...'}
+              </FormS.BusyBar>
+            ) : null}
+            <EventFormS.FormSection>
+              {layoutMode === 'split' ? (
+                <FormS.SplitColumnsGrid>
+                  <FormS.SplitColumnLeft>
+                    {basicSectionNode}
+                    {lineSectionNode}
+                  </FormS.SplitColumnLeft>
+                  <FormS.SplitColumnRight>{markSectionNode}</FormS.SplitColumnRight>
+                </FormS.SplitColumnsGrid>
+              ) : (
+                <>
+                  {basicSectionNode}
+                  {lineSectionNode}
+                  {markSectionNode}
+                </>
+              )}
+            </EventFormS.FormSection>
+          </>
+        )}
+      </FormS.MilitaryModalFormScroll>
+      <PersonRegisterModalStickyFooter>
+        <RegisterFooterStatus
+          missing={loadingEdit ? [] : missingRequired}
+          onJumpToMissing={() => nameInputRef.current?.focus()}
+          problem={formProblem}
+          readyLabel={mode === 'create' ? '등록 준비 완료' : '수정 준비 완료'}
+          shortcuts={[{ keys: '⌘↵', label: '저장' }]}
+        />
+        <FooterActions>
+          <PersonRegisterModalCancelBtn
+            type="button"
+            onClick={() => {
+              void requestClose()
+            }}
+            disabled={saving}
+          >
+            취소
+          </PersonRegisterModalCancelBtn>
+          <FormS.ModalPrimarySubmitBtn
+            type="button"
+            disabled={!canSubmit}
+            title={
+              missingRequired.length > 0
+                ? '필수 입력: 명칭'
+                : (formProblem ?? '단축키: ⌘/Ctrl + Enter')
+            }
+            onClick={submit}
+          >
+            {saving
+              ? mode === 'create'
+                ? '등록 중...'
+                : '수정 중...'
+              : logoUploading
+                ? '로고 올리는 중...'
+                : mode === 'create'
+                  ? '정당 등록'
+                  : '수정 완료'}
+          </FormS.ModalPrimarySubmitBtn>
+        </FooterActions>
+      </PersonRegisterModalStickyFooter>
+    </RegisterModal>
   )
 }
+
+const PartyColorRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 320px;
+`
+
+const PartyColorSwatchInput = styled.input`
+  flex-shrink: 0;
+  width: 44px;
+  height: 41px;
+  padding: 3px;
+  border: 1px solid ${({ theme }) => kitC(theme).border};
+  border-radius: 8px;
+  background: ${({ theme }) => kitC(theme).content};
+  cursor: pointer;
+`
+
+const PartyPreviewCard = styled.div<{ $accent?: string }>`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 420px;
+  padding: 12px 14px;
+  border: 1px solid ${({ theme }) => kitC(theme).border};
+  border-left: 4px solid
+    ${({ $accent, theme }) => $accent ?? kitC(theme).borderHover};
+  border-radius: 10px;
+  background: ${({ theme }) => kitC(theme).content};
+`
+
+const PartyPreviewLogo = styled.span`
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid ${({ theme }) => kitC(theme).border};
+  background: ${({ theme }) => kitC(theme).section};
+  font-size: 15px;
+  font-weight: 700;
+  color: ${({ theme }) => kitC(theme).textSecondary};
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+`
+
+const PartyPreviewText = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+
+  strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 14px;
+    font-weight: 700;
+    color: ${({ theme }) => kitC(theme).textPrimary};
+  }
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    color: ${({ theme }) => kitC(theme).textSecondary};
+  }
+`
