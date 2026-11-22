@@ -172,3 +172,14 @@ ElectionAlliance에 `allianceOrganizationId?` — 선거마다의 연합이 지�
 - 웹: 이념 고르기(`widgets/ideology/ideology-picker` — 이름·영문·표기로 찾기·없으면 즉석 생성·첫 칩 대표·콤보박스 키보드) · 카탈로그 행 고치기 모달 · 정당 모달의 키워드 칸 대체 · 상세 「이념·스펙트럼」(연결별 시기·메모·대표, 카탈로그 이동, 스펙트럼 기간).
 - 남김: 조직·인물 × 이념 연결 표는 카탈로그만 공용으로 두고 각 지면 작업 때(Organization.ideology 문자열 1건).
 - 검증: API 단위 12 · 실API 16/16 · 웹 스펙 23 · tsc 기준선 동일 · 신규 lint 0 · 1440px 화면(13종·상위·영문, 선택기 목록이 모달 스크롤에 잘리던 것 → 흐름 배치 + 자동 스크롤로 수정).
+
+### B3 조직·당직 — 구현 완료(미커밋)
+- 마이그레이션 `20261123050000_party_organizations_offices` — `political_party_organization` 재구성(0행: 역할 14종 · organizationId|militaryUnitId 정확히 하나는 서비스 검증(Prisma에 CHECK 없음) · 구조화 기간 · 메모) · OrganizationType 5종(당 기구·대중 조직·준군사조직·언론·출판·정치 연합·인터내셔널) · 당원 소속에 officeKind·officeOrdinal·isFounder + 구조화 기간(거울 DATETIME 유지, 8행 백필) · `political_party_leadership` 제거(0행).
+  (migrate diff가 unique 인덱스 교체로 떨어뜨린 정당 FK를 다시 걸지 않아 적용 후 재diff로 찾아 같은 마이그에 추가. 무관 드리프트 medical_career FK·event_political_party_relation 2줄은 제외)
+- 지도부 표 제거 여파: 관계 그래프(당원 소속 LEADERSHIP을 '당직' 엣지로) · 인물 상세 `partyLeaderships`(LEADERSHIP 소속에서 파생, 같은 키) · 경력 힌트 · 정당 _count.
+- API: `/political-parties/:id/organizations` CRUD(즉석 조직 생성 — 유형은 역할에서, 국가는 정당에서, 국제 가입은 국제 범위 · 같은 이름 409 · 기업·행정기관·정당 유형 제외) · `/organization-candidates`(조직: 이름·약칭·현지어·별칭 / 군부대: 이름·영문) · 당원 소속 API가 구조화 start/end·당직·발기인 수용(ISO는 호환 경로, 비지도부면 당직 비움).
+- 웹: 「산하·연계 조직」(역할별 묶음, 조직 지면·부대 지면으로 이동, 연결 풀기는 조직을 남김) · 「소속 인물·당직」을 등록·수정 모달로(당직 종류·대수·위계·직함·발기인·연도만/기원전 기간) — **정당 지면과 인물 지면이 같은 모달**(`widgets/political-party/party-membership-form-modal`, 정당 고정|인물 고정). 인물 지면의 옛 폼은 'YYYY-MM-DD'만 다뤄 정당 지면에서 넣은 '1921년'을 일 정밀로 덮어쓰던 손상 경로라 제거. 곁가지 공용 부품은 `widgets/political-party/party-sidecar-parts`로.
+- 조직 유형 라벨: 웹 4곳의 사본(조직 탭 상수·사이드바·경력·학력 모달)이 `shared/api/organizations` 정본을 다시 쓰게 — 유형을 늘릴 때 어긋나지 않게.
+- 실데이터: 국가 파시스트당 산하 조직 7건(파시즘 대평의회·검은 셔츠단·청년 조직 3기·여성 단체·기관지 이탈리아 인민 — 이름·기간은 나무위키 인포박스).
+- 남김: 무솔리니(두체) 당직은 인물 행이 없어 미입력 · 이탈리아 전투 파쇼가 조직(NGO)으로 있음 → 정당(kind=MOVEMENT)+계보로 옮길 데이터 작업 · 청년 조직 3기 사이의 조직 계보(AGF→ONB→GIL).
+- 검증: 실API 20/20 · API 스펙 176 · 웹 스펙(소속 모달 4·인물 상세 28·정당 23) · tsc 기준선 동일 · 변경 줄 lint 0 · 1440px 화면.
