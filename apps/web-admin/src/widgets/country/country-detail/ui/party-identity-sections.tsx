@@ -671,7 +671,7 @@ export function PartyLegalStatusFormModal({
 
 // ─── 공용 부품 ─────────────────────────────────────────────────────────────
 
-function PeriodPair({
+export function PeriodPair({
   start,
   end,
   onStart,
@@ -725,7 +725,7 @@ function PeriodPair({
   )
 }
 
-function ModalFooter({
+export function ModalFooter({
   problem,
   saving,
   onClose,
@@ -753,25 +753,25 @@ function ModalFooter({
 
 // ─── 스타일 ────────────────────────────────────────────────────────────────
 
-const FactList = styled.div`
+export const FactList = styled.div`
   display: flex;
   flex-direction: column;
   gap: 10px;
 `
 
-const FactGroup = styled.div`
+export const FactGroup = styled.div`
   display: flex;
   flex-direction: column;
   gap: 2px;
 `
 
-const FactGroupLabel = styled.div`
+export const FactGroupLabel = styled.div`
   font-size: 11.5px;
   font-weight: 700;
   color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
-const FactRow = styled.div`
+export const FactRow = styled.div`
   position: relative;
   display: flex;
   flex-direction: column;
@@ -784,7 +784,7 @@ const FactRow = styled.div`
   }
 `
 
-const FactMain = styled.div`
+export const FactMain = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -811,7 +811,7 @@ const FactMain = styled.div`
   }
 `
 
-const FactBadge = styled.span`
+export const FactBadge = styled.span`
   padding: 0 6px;
   border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   border-radius: 999px;
@@ -821,7 +821,7 @@ const FactBadge = styled.span`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-const FactNote = styled.p`
+export const FactNote = styled.p`
   margin: 0;
   font-size: 12.5px;
   line-height: 1.5;
@@ -829,7 +829,7 @@ const FactNote = styled.p`
   color: ${({ theme }) => theme.colors.text.secondary};
 `
 
-const FactActions = styled.div`
+export const FactActions = styled.div`
   position: absolute;
   top: 4px;
   right: 0;
@@ -837,7 +837,7 @@ const FactActions = styled.div`
   gap: 2px;
 `
 
-const IconBtn = styled.button`
+export const IconBtn = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -887,7 +887,7 @@ const StatusBadge = styled.span<{ $status: string }>`
     theme.mode === 'dark' ? theme.colors.text.primary : `rgb(${STATUS_RGB[$status] ?? STATUS_RGB.OTHER})`};
 `
 
-const CheckRow = styled.label`
+export const CheckRow = styled.label`
   display: flex;
   align-items: center;
   gap: 8px;

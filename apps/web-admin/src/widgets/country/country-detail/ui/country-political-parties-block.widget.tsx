@@ -223,6 +223,8 @@ import {
 } from './country-politics-tab.styles'
 import * as FormS from './military-unit-form/styles'
 import { PartyLegalStatusBlock, PartyNamesBlock } from './party-identity-sections'
+import { PartyIdeologyBlock } from './party-ideology-sections'
+import { type IdeologyChip, IdeologyPicker } from '@/widgets/ideology/ideology-picker'
 import { CountryTabEmptyState } from './country-tab-empty-state'
 import {
   PARTY_KIND_TONE_OPTIONS,
@@ -3168,6 +3170,7 @@ export function CountryPoliticalPartiesBlock({
                 countryId={countryId}
                 historicalCountryId={historicalCountryId}
               />
+              <PartyIdeologyBlock partyId={detailParty.id} />
               <PartyLineageBlock
                 partyId={detailParty.id}
                 partyName={detailParty.name}
@@ -3799,7 +3802,7 @@ interface PartyFormValues {
   name: string
   shortName: string
   localName: string
-  ideologyTags: string[]
+  ideologies: IdeologyChip[]
   position: PoliticalPosition | ''
   kind: PoliticalPartyKind
   founded: PeriodDateFormValue
@@ -3812,7 +3815,7 @@ const EMPTY_PARTY_FORM: PartyFormValues = {
   name: '',
   shortName: '',
   localName: '',
-  ideologyTags: [],
+  ideologies: [],
   position: '',
   kind: 'PARTY',
   founded: { ...EMPTY_PERIOD_DATE },
@@ -3848,7 +3851,7 @@ const partyFormSnapshot = (values: PartyFormValues) =>
     values.name,
     values.shortName,
     values.localName,
-    values.ideologyTags,
+    values.ideologies.map((chip) => chip.id),
     values.position,
     values.kind,
     partialOfFormValue(values.founded),
@@ -3888,8 +3891,8 @@ export function PartyFormModal({
   const [name, setName] = useState('')
   const [shortName, setShortName] = useState('')
   const [localName, setLocalName] = useState('')
-  const [ideologyTags, setIdeologyTags] = useState<string[]>([])
-  const [ideologyInput, setIdeologyInput] = useState('')
+  /** 이념 — 카탈로그에서 고른 칩(첫 칩 = 대표) */
+  const [ideologies, setIdeologies] = useState<IdeologyChip[]>([])
   const [position, setPosition] = useState<PoliticalPosition | ''>('')
   const [kind, setKind] = useState<PoliticalPartyKind>('PARTY')
   const [founded, setFounded] = useState<PeriodDateFormValue>({ ...EMPTY_PERIOD_DATE })
@@ -3944,15 +3947,18 @@ export function PartyFormModal({
   React.useEffect(() => {
     if (mode !== 'edit' || !partyId) return
     let cancelled = false
-    politicalPartyApi
-      .getById(partyId)
-      .then((row) => {
+    Promise.all([politicalPartyApi.getById(partyId), politicalPartyApi.getIdeologies(partyId)])
+      .then(([row, ideologyLinks]) => {
         if (cancelled) return
         const values: PartyFormValues = {
           name: row.name,
           shortName: row.shortName ?? '',
           localName: row.localName ?? '',
-          ideologyTags: parseIdeologyKeywords(row.ideology),
+          ideologies: ideologyLinks.map((link) => ({
+            id: link.ideology.id,
+            name: link.ideology.name,
+            category: link.ideology.category,
+          })),
           position: (row.position as PoliticalPosition) ?? '',
           kind: (row.kind as PoliticalPartyKind | undefined) ?? 'PARTY',
           founded: partyFoundedFormValue(row),
@@ -3964,8 +3970,7 @@ export function PartyFormModal({
         setName(values.name)
         setShortName(values.shortName)
         setLocalName(values.localName)
-        setIdeologyTags(values.ideologyTags)
-        setIdeologyInput('')
+        setIdeologies(values.ideologies)
         setPosition(values.position)
         setKind(values.kind)
         setFounded(values.founded)
@@ -4005,7 +4010,7 @@ export function PartyFormModal({
       name,
       shortName,
       localName,
-      ideologyTags,
+      ideologies,
       position,
       kind,
       founded,
@@ -4035,8 +4040,7 @@ export function PartyFormModal({
     setName('')
     setShortName('')
     setLocalName('')
-    setIdeologyTags([])
-    setIdeologyInput('')
+    setIdeologies([])
     setPosition('')
     setKind('PARTY')
     setFounded({ ...EMPTY_PERIOD_DATE })
@@ -4062,7 +4066,7 @@ export function PartyFormModal({
       name: name.trim(),
       shortName: shortName.trim() || null,
       localName: localName.trim() || null,
-      ideology: ideologyTags.length ? ideologyTags.join(', ') : null,
+      ideologyIds: ideologies.map((chip) => chip.id),
       position: position === '' ? null : position,
       kind,
       founded: structuredInputOf(founded),
@@ -4102,25 +4106,6 @@ export function PartyFormModal({
     scrollContainerRef: formScrollRef,
     onSubmit: submit,
   })
-
-  const addIdeologyKeywords = () => {
-    const pieces = ideologyInput
-      .split(/[,，]/)
-      .map((piece) => piece.trim())
-      .filter(Boolean)
-    if (pieces.length === 0) return
-    const next = [...ideologyTags]
-    for (const piece of pieces) {
-      if (next.includes(piece)) continue
-      if (next.length >= 40) {
-        notify.error('키워드는 최대 40개까지입니다.')
-        return
-      }
-      next.push(piece)
-    }
-    setIdeologyTags(next)
-    setIdeologyInput('')
-  }
 
   const previewColor = normalizeBrandColorInput(brandColor)
   const positionLabel = POSITION_TONE_OPTIONS.find(
@@ -4264,46 +4249,12 @@ export function PartyFormModal({
       </EventFormS.FormRow>
       <EventFormS.FormRow>
         <EventFormS.FormLabel htmlFor="party-ideology-input">
-          이념·노선 키워드<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+          이념·노선<FormS.OptionalTag>(선택)</FormS.OptionalTag>
         </EventFormS.FormLabel>
         <EventFormS.FormField>
-          {ideologyTags.length > 0 ? (
-            <EventFormS.SelectedItemsContainer aria-label="등록된 키워드">
-              {ideologyTags.map((tag) => (
-                <EventFormS.SelectedItem key={tag}>
-                  <span>{tag}</span>
-                  <EventFormS.RemoveButton
-                    type="button"
-                    aria-label={`${tag} 제거`}
-                    onClick={() =>
-                      setIdeologyTags((prev) =>
-                        prev.filter((existing) => existing !== tag),
-                      )
-                    }
-                  >
-                    <FiX size={12} />
-                  </EventFormS.RemoveButton>
-                </EventFormS.SelectedItem>
-              ))}
-            </EventFormS.SelectedItemsContainer>
-          ) : null}
-          <EventFormS.Input
-            id="party-ideology-input"
-            value={ideologyInput}
-            onChange={(event) => setIdeologyInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ',') {
-                event.preventDefault()
-                addIdeologyKeywords()
-              }
-            }}
-            onBlur={addIdeologyKeywords}
-            placeholder="예: 자유주의, 친화적 복지 — Enter로 추가"
-            autoComplete="off"
-          />
+          <IdeologyPicker inputId="party-ideology-input" value={ideologies} onChange={setIdeologies} />
           <EventFormS.Hint>
-            쉼표·Enter로 구분해 여러 키워드를 넣습니다(최대 40개). 칸을 벗어나면
-            적던 말도 키워드로 들어갑니다.
+            이념 목록에서 고릅니다 — 첫 칩이 대표. 없으면 친 이름으로 새로 만듭니다. 시기·메모는 정당 상세에서.
           </EventFormS.Hint>
         </EventFormS.FormField>
       </EventFormS.FormRow>

@@ -182,6 +182,48 @@ export type PoliticalPartyLegalStatusInput = {
   sortOrder?: number
 }
 
+/** 정당 × 이념 카탈로그 연결 */
+export type PartyIdeologyLinkDto = StructuredPeriodFields & {
+  id: string
+  partyId: string
+  ideologyId: string
+  isPrimary: boolean
+  note?: string | null
+  sortOrder: number
+  ideology: {
+    id: string
+    name: string
+    englishName?: string | null
+    category: 'IDEOLOGY' | 'POLICY' | 'INTEREST' | 'OTHER'
+    parent?: { id: string; name: string } | null
+  }
+}
+
+export type PartyIdeologyLinkInput = {
+  isPrimary?: boolean
+  start?: StructuredDateInput | null
+  end?: StructuredDateInput | null
+  note?: string | null
+}
+
+/** 스펙트럼 기간 */
+export type PartyPositionPeriodDto = StructuredPeriodFields & {
+  id: string
+  partyId: string
+  position: PoliticalPosition
+  isCurrent: boolean
+  note?: string | null
+  sortOrder: number
+}
+
+export type PartyPositionPeriodInput = {
+  position: PoliticalPosition
+  start?: StructuredDateInput | null
+  end?: StructuredDateInput | null
+  isCurrent?: boolean
+  note?: string | null
+}
+
 export type PoliticalPartyCounts = {
   memberships?: number
   leaderships?: number
@@ -211,6 +253,9 @@ export type CreatePoliticalPartyInput = {
   name: string
   shortName?: string | null
   localName?: string | null
+  /** 이념 카탈로그 id(순서 = 표시 순서) — 정본. 주면 연결을 이 목록에 맞춘다 */
+  ideologyIds?: string[]
+  /** @deprecated 문자열 이념 — 서버가 카탈로그로 풀어 연결한다(빠른 등록 등 구 호출부) */
   ideology?: string | null
   position?: PoliticalPosition | null
   kind?: PoliticalPartyKind
@@ -324,7 +369,15 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     let msg = res.statusText
     try {
       const body = await res.text()
-      if (body) msg = body
+      if (body) {
+        /* 서버 오류 본문({ message })에서 문장만 — 알림에 JSON 원문이 뜨지 않게 */
+        try {
+          const parsed = JSON.parse(body) as { message?: string | string[] }
+          msg = Array.isArray(parsed.message) ? parsed.message.join(' · ') : (parsed.message ?? body)
+        } catch {
+          msg = body
+        }
+      }
     } catch {
       /* ignore */
     }
@@ -541,6 +594,58 @@ export const politicalPartyApi = {
   deleteAlias: async (partyId: string, aliasId: string) => {
     await requestJson<void>(
       `/political-parties/${encodeURIComponent(partyId)}/aliases/${encodeURIComponent(aliasId)}`,
+      { method: 'DELETE' },
+    )
+  },
+
+  /** 이념 연결(카탈로그) — 순서·대표·기간·메모 */
+  getIdeologies: async (partyId: string) => {
+    return requestJson<PartyIdeologyLinkDto[]>(`/political-parties/${encodeURIComponent(partyId)}/ideologies`)
+  },
+
+  setIdeologies: async (partyId: string, ideologyIds: string[]) => {
+    return requestJson<PartyIdeologyLinkDto[]>(`/political-parties/${encodeURIComponent(partyId)}/ideologies`, {
+      method: 'PUT',
+      body: JSON.stringify({ ideologyIds }),
+    })
+  },
+
+  updateIdeologyLink: async (partyId: string, linkId: string, body: PartyIdeologyLinkInput) => {
+    return requestJson<PartyIdeologyLinkDto>(
+      `/political-parties/${encodeURIComponent(partyId)}/ideologies/${encodeURIComponent(linkId)}`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+    )
+  },
+
+  deleteIdeologyLink: async (partyId: string, linkId: string) => {
+    await requestJson<void>(
+      `/political-parties/${encodeURIComponent(partyId)}/ideologies/${encodeURIComponent(linkId)}`,
+      { method: 'DELETE' },
+    )
+  },
+
+  /** 스펙트럼 기간 — 지속 중 행이 대표 스펙트럼이 된다 */
+  getPositionPeriods: async (partyId: string) => {
+    return requestJson<PartyPositionPeriodDto[]>(`/political-parties/${encodeURIComponent(partyId)}/position-periods`)
+  },
+
+  createPositionPeriod: async (partyId: string, body: PartyPositionPeriodInput) => {
+    return requestJson<PartyPositionPeriodDto>(`/political-parties/${encodeURIComponent(partyId)}/position-periods`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  updatePositionPeriod: async (partyId: string, periodId: string, body: Partial<PartyPositionPeriodInput>) => {
+    return requestJson<PartyPositionPeriodDto>(
+      `/political-parties/${encodeURIComponent(partyId)}/position-periods/${encodeURIComponent(periodId)}`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+    )
+  },
+
+  deletePositionPeriod: async (partyId: string, periodId: string) => {
+    await requestJson<void>(
+      `/political-parties/${encodeURIComponent(partyId)}/position-periods/${encodeURIComponent(periodId)}`,
       { method: 'DELETE' },
     )
   },

@@ -1,6 +1,7 @@
 import React from 'react'
 
 import '@testing-library/jest-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 
 import { renderWithTheme } from '@/shared/test/render-with-theme'
@@ -37,6 +38,31 @@ jest.mock('@/shared/api/political-party', () => ({
       logoUrl: null,
       brandColor: '#e3000f',
     })),
+    getIdeologies: jest.fn(async () => [
+      {
+        id: 'link-1',
+        partyId: 'spd',
+        ideologyId: 'socdem',
+        isPrimary: true,
+        sortOrder: 0,
+        ideology: { id: 'socdem', name: '사회민주주의', category: 'IDEOLOGY' },
+      },
+    ]),
+  },
+}))
+
+/** 이념 고르기(카탈로그 조회)가 react-query를 쓴다 */
+const withQuery = (node: React.ReactElement) => (
+  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{node}</QueryClientProvider>
+)
+jest.mock('@/shared/api/ideology', () => ({
+  ...jest.requireActual('@/shared/api/ideology'),
+  ideologyApi: {
+    list: jest.fn(async () => [
+      { id: 'socdem', name: '사회민주주의', englishName: 'Social democracy', category: 'IDEOLOGY', aliases: [] },
+      { id: 'marxism', name: '마르크스주의', englishName: 'Marxism', category: 'IDEOLOGY', aliases: [] },
+    ]),
+    create: jest.fn(async (body: { name: string }) => ({ id: 'new-ideology', name: body.name, category: 'IDEOLOGY' })),
   },
 }))
 jest.mock('@/shared/api/upload', () => ({
@@ -90,14 +116,16 @@ describe('등록 모달 크롬 조립품', () => {
 describe('PartyFormModal — 사건 등록 모달 문법', () => {
   const renderCreate = (onSubmitCreate = jest.fn()) =>
     renderWithTheme(
-      <PartyFormModal
-        countryId="de"
-        mode="create"
-        saving={false}
-        onClose={jest.fn()}
-        onSubmitCreate={onSubmitCreate}
-        onSubmitEdit={jest.fn()}
-      />,
+      withQuery(
+        <PartyFormModal
+          countryId="de"
+          mode="create"
+          saving={false}
+          onClose={jest.fn()}
+          onSubmitCreate={onSubmitCreate}
+          onSubmitEdit={jest.fn()}
+        />,
+      ),
     )
 
   it('세 묶음 머리 · 명칭이 비면 저장이 잠기고 하단이 명칭으로 안내한다', () => {
@@ -109,7 +137,7 @@ describe('PartyFormModal — 사건 등록 모달 문법', () => {
     expect(screen.getByRole('button', { name: /필수 입력: 명칭/ })).toBeInTheDocument()
   })
 
-  it('스펙트럼 칩을 고르고 키워드·약칭과 함께 등록한다', () => {
+  it('스펙트럼 칩·약칭, 이념은 목록에서 고르고 없으면 새로 만들어 등록한다', async () => {
     const onSubmitCreate = jest.fn()
     renderCreate(onSubmitCreate)
     fireEvent.change(screen.getByLabelText(/^명칭/), { target: { value: '독일 사회민주당' } })
@@ -118,10 +146,14 @@ describe('PartyFormModal — 사건 등록 모달 문법', () => {
     fireEvent.click(centerLeft)
     expect(centerLeft).toHaveAttribute('aria-checked', 'true')
     fireEvent.click(screen.getByRole('radio', { name: '좌파' }))
-    const keywordInput = screen.getByLabelText(/이념·노선 키워드/)
-    fireEvent.change(keywordInput, { target: { value: '사회민주주의, 노동' } })
-    fireEvent.keyDown(keywordInput, { key: 'Enter' })
-    expect(screen.getByText('사회민주주의')).toBeInTheDocument()
+
+    const ideologyInput = screen.getByRole('combobox')
+    fireEvent.focus(ideologyInput)
+    fireEvent.click(await screen.findByRole('option', { name: /사회민주주의/ }))
+    fireEvent.change(ideologyInput, { target: { value: '노동조합주의' } })
+    fireEvent.click(await screen.findByRole('option', { name: /「노동조합주의」을 이념 목록에 새로 만들기/ }))
+    await screen.findByRole('button', { name: '노동조합주의 빼기' })
+    expect(screen.getByLabelText('대표')).toBeInTheDocument()
     expect(screen.getByText('등록 준비 완료')).toBeInTheDocument()
     expect(screen.getByLabelText('정당 표지 미리보기')).toHaveTextContent('SPD · 좌파')
 
@@ -131,7 +163,7 @@ describe('PartyFormModal — 사건 등록 모달 문법', () => {
         name: '독일 사회민주당',
         shortName: 'SPD',
         position: 'LEFT',
-        ideology: '사회민주주의, 노동',
+        ideologyIds: ['socdem', 'new-ideology'],
         countryId: 'de',
         historicalCountryId: null,
       }),
@@ -196,18 +228,22 @@ describe('PartyFormModal — 사건 등록 모달 문법', () => {
   it('수정 — 불러온 값으로 채우고, 바꾼 게 없으면 닫을 때 묻지 않는다', async () => {
     const onClose = jest.fn()
     renderWithTheme(
-      <PartyFormModal
-        countryId="de"
-        mode="edit"
-        partyId="spd"
-        saving={false}
-        onClose={onClose}
-        onSubmitCreate={jest.fn()}
-        onSubmitEdit={jest.fn()}
-      />,
+      withQuery(
+        <PartyFormModal
+          countryId="de"
+          mode="edit"
+          partyId="spd"
+          saving={false}
+          onClose={onClose}
+          onSubmitCreate={jest.fn()}
+          onSubmitEdit={jest.fn()}
+        />,
+      ),
     )
     expect(await screen.findByDisplayValue('독일 사회민주당')).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: '중도좌파' })).toHaveAttribute('aria-checked', 'true')
+    /* 이념은 카탈로그 연결에서 불러온다 */
+    expect(screen.getByRole('button', { name: '사회민주주의 빼기' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '수정 완료' })).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: '취소' }))
     await Promise.resolve()
