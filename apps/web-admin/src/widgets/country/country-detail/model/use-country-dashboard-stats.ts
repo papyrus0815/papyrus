@@ -1808,7 +1808,11 @@ export function useCountryDashboardStats(
 
     const out: ExecutiveTimelineItem[] = []
     for (const t of tenures) {
-      if (country?.type === 'modern' && t.historicalCountryId != null) continue
+      /*
+       * 역사 국가가 걸린 재임도 넣는다 — 재임은 현대·역사 국가 두 칸을 다 채우는 규약이라(독일 수반 28건 전부가
+       * 독일 제국·바이마르 등에도 걸림) 이걸 빼면 역대 연표가 거의 모든 나라에서 비었다. '소멸한 정체의 미종료 행이
+       * 현직으로 둔갑'하는 문제는 현직 수반(currentHeads)만의 일이라 그쪽 필터만 남긴다.
+       */
       const pt =
         t?.positionType ??
         t?.positionDefinition?.positionType ??
@@ -2113,8 +2117,8 @@ export function useCountryDashboardStats(
       return m[1] === '-' || era === 'BC' ? -n : n
     }
 
+    /* 헌정 시대 띠도 역대 기록 — 역사 국가 시절 정체(비스마르크 헌법 등)를 빼지 않는다(역대 연표와 같은 이유) */
     const regimeEras: RegimeEraBand[] = sysList
-      .filter((s) => !(country?.type === 'modern' && s.historicalCountryId != null))
       .map((s) => {
         const sY = parseSysYear(s.startDate, s.startEra, s.startYear)
         if (sY == null) return null
