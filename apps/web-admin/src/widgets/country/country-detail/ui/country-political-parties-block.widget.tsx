@@ -221,6 +221,8 @@ import { PartyLegalStatusBlock, PartyNamesBlock } from './party-identity-section
 import { PartyIdeologyBlock } from './party-ideology-sections'
 import { PartyMembershipsBlock } from './party-membership-sections'
 import { PartyOrganizationsBlock } from './party-organization-sections'
+import { PartyCitationButton } from './party-citations'
+import { PartyMetricsBlock } from './party-metric-sections'
 import { PartyExpressionsBlock, PartyHeadquartersBlock, PartySymbolsBlock } from './party-mark-sections'
 import { type IdeologyChip, IdeologyPicker } from '@/widgets/ideology/ideology-picker'
 import { CountryTabEmptyState } from './country-tab-empty-state'
@@ -2779,6 +2781,15 @@ export function CountryPoliticalPartiesBlock({
                     </PartyDetailMetaTileValue>
                   </PartyDetailMetaTile>
                 </PartyDetailMetaGrid>
+                <PartyIdentitySourceRow>
+                  <span>창당·해산·종류·스펙트럼 등 기본 정보의 출처</span>
+                  <PartyCitationButton
+                    partyId={detailParty.id}
+                    targetType="POLITICAL_PARTY"
+                    targetId={detailParty.id}
+                    subject={`${detailParty.name} · 기본 정보`}
+                  />
+                </PartyIdentitySourceRow>
               </PartyDetailMetaSection>
               <PartyNamesBlock partyId={detailParty.id} />
               <PartyLegalStatusBlock
@@ -2791,6 +2802,7 @@ export function CountryPoliticalPartiesBlock({
               <PartySymbolsBlock partyId={detailParty.id} />
               <PartyExpressionsBlock partyId={detailParty.id} />
               <PartyHeadquartersBlock partyId={detailParty.id} countryId={countryId} />
+              <PartyMetricsBlock partyId={detailParty.id} />
               <PartyLineageBlock
                 partyId={detailParty.id}
                 partyName={detailParty.name}
@@ -4235,6 +4247,17 @@ const RegisteredInSessionBar = styled.div`
   .names {
     min-width: 0;
   }
+`
+
+/** 기본 정보 출처 줄 — 메타 격자 아래 오른쪽 */
+const PartyIdentitySourceRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 4px 0 0;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const PaletteRow = styled.div`

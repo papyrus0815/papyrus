@@ -48,6 +48,7 @@ import {
   IconBtn,
 } from '@/widgets/political-party/party-sidecar-parts'
 import { PartyMembershipFormModal } from '@/widgets/political-party/party-membership-form-modal'
+import { PartyCitationButton } from './party-citations'
 
 const membershipsKey = (partyId: string) => ['political-parties', partyId, 'memberships'] as const
 const OFFICE_ORDER = PARTY_OFFICE_KIND_OPTIONS.map((option) => option.value as string)
@@ -131,6 +132,7 @@ export function PartyMembershipsBlock({ partyId }: { partyId: string }) {
         </FactMain>
         {row.notes?.trim() ? <FactNote>{row.notes.trim()}</FactNote> : null}
         <FactActions>
+          <PartyCitationButton partyId={partyId} targetType="PARTY_MEMBERSHIP" targetId={row.id} subject={`소속 · ${name}${office ? ` · ${office}` : ''}`} />
           <IconBtn type="button" aria-label={`${name} 소속 고치기`} onClick={() => setModal({ mode: 'edit', row })}>
             <FiEdit2 size={13} />
           </IconBtn>

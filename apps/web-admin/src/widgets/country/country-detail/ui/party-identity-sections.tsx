@@ -66,6 +66,7 @@ import {
   ModalFooter,
   PeriodPair,
 } from '@/widgets/political-party/party-sidecar-parts'
+import { PartyCitationButton } from './party-citations'
 
 const ALIAS_TYPE_ORDER: PoliticalPartyAliasType[] = POLITICAL_PARTY_ALIAS_TYPE_OPTIONS.map((option) => option.value)
 
@@ -177,6 +178,7 @@ export function PartyNamesBlock({ partyId }: { partyId: string }) {
                     </FactMain>
                     {alias.note ? <FactNote>{alias.note}</FactNote> : null}
                     <FactActions>
+                      <PartyCitationButton partyId={partyId} targetType="PARTY_ALIAS" targetId={alias.id} subject={`이름 · ${alias.name}`} />
                       <IconBtn type="button" aria-label={`${alias.name} 고치기`} onClick={() => setModal({ mode: 'edit', alias })}>
                         <FiEdit2 size={13} />
                       </IconBtn>
@@ -462,6 +464,7 @@ export function PartyLegalStatusBlock({
                 ) : null}
                 {row.note ? <FactNote>{row.note}</FactNote> : null}
                 <FactActions>
+                  <PartyCitationButton partyId={partyId} targetType="PARTY_LEGAL_STATUS" targetId={row.id} subject={`법적 지위 · ${labelPoliticalPartyLegalStatus(row.status)}${period ? ` · ${period}` : ''}`} />
                   <IconBtn type="button" aria-label="법적 지위 고치기" onClick={() => setModal({ mode: 'edit', row })}>
                     <FiEdit2 size={13} />
                   </IconBtn>

@@ -60,6 +60,7 @@ import {
   PeriodPair,
 } from '@/widgets/political-party/party-sidecar-parts'
 import { POSITION_TONE_OPTIONS, ToneChipGroup } from './politics-form/politics-form-parts'
+import { PartyCitationButton } from './party-citations'
 
 const ideologiesKey = (partyId: string) => ['political-parties', partyId, 'ideologies'] as const
 const positionPeriodsKey = (partyId: string) => ['political-parties', partyId, 'position-periods'] as const
@@ -174,6 +175,7 @@ export function PartyIdeologyBlock({ partyId }: { partyId: string }) {
                     </FactMain>
                     {link.note ? <FactNote>{link.note}</FactNote> : null}
                     <FactActions>
+                      <PartyCitationButton partyId={partyId} targetType="PARTY_IDEOLOGY" targetId={link.id} subject={`이념 · ${link.ideology.name}`} />
                       <IconBtn type="button" aria-label={`${link.ideology.name} 시기·메모`} onClick={() => setLinkModal(link)}>
                         <FiEdit2 size={13} />
                       </IconBtn>
@@ -218,6 +220,7 @@ export function PartyIdeologyBlock({ partyId }: { partyId: string }) {
                     </FactMain>
                     {row.note ? <FactNote>{row.note}</FactNote> : null}
                     <FactActions>
+                      <PartyCitationButton partyId={partyId} targetType="PARTY_POSITION_PERIOD" targetId={row.id} subject={`스펙트럼 · ${POLITICAL_POSITION_LABEL[row.position]}${period ? ` · ${period}` : ''}`} />
                       <IconBtn type="button" aria-label="스펙트럼 기간 고치기" onClick={() => setPeriodModal({ mode: 'edit', row })}>
                         <FiEdit2 size={13} />
                       </IconBtn>

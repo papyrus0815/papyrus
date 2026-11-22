@@ -67,6 +67,7 @@ import {
   PartyDetailDescSection,
 } from './country-politics-tab.styles'
 import * as FormS from './military-unit-form/styles'
+import { PartyCitationButton } from './party-citations'
 
 const symbolsKey = (partyId: string) => ['political-parties', partyId, 'symbols'] as const
 const expressionsKey = (partyId: string) => ['political-parties', partyId, 'expressions'] as const
@@ -151,6 +152,7 @@ export function PartySymbolsBlock({ partyId }: { partyId: string }) {
                 </div>
                 {symbol.caption ? <p className="caption">{symbol.caption}</p> : null}
                 <SymbolActions>
+                  <PartyCitationButton partyId={partyId} targetType="PARTY_SYMBOL" targetId={symbol.id} subject={`표지 · ${labelPartySymbolKind(symbol.kind)}${symbol.caption ? ` · ${symbol.caption}` : ''}`} />
                   <IconBtn type="button" aria-label="표지 고치기" onClick={() => setModal({ mode: 'edit', row: symbol })}>
                     <FiEdit2 size={13} />
                   </IconBtn>
@@ -389,6 +391,7 @@ export function PartyExpressionsBlock({ partyId }: { partyId: string }) {
                     {row.translation ? <FactNote>{row.translation}</FactNote> : null}
                     {row.note ? <FactNote>{row.note}</FactNote> : null}
                     <FactActions>
+                      <PartyCitationButton partyId={partyId} targetType="PARTY_EXPRESSION" targetId={row.id} subject={`${labelPartyExpressionKind(row.kind)} · ${row.originalText}`} />
                       <IconBtn type="button" aria-label="고치기" onClick={() => setModal({ mode: 'edit', row })}>
                         <FiEdit2 size={13} />
                       </IconBtn>
@@ -618,6 +621,7 @@ export function PartyHeadquartersBlock({ partyId, countryId }: { partyId: string
                 {row.address && (row.buildingName || row.city) ? <FactNote>{row.address}</FactNote> : null}
                 {row.note ? <FactNote>{row.note}</FactNote> : null}
                 <FactActions>
+                  <PartyCitationButton partyId={partyId} targetType="PARTY_HEADQUARTERS" targetId={row.id} subject={`당사 · ${headquartersTitle(row)}`} />
                   <IconBtn type="button" aria-label="당사 고치기" onClick={() => setModal({ mode: 'edit', row })}>
                     <FiEdit2 size={13} />
                   </IconBtn>

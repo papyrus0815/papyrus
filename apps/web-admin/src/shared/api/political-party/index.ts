@@ -1,4 +1,5 @@
 import { getPoliticalParties as fetchParties, type PoliticalPartyRow } from '../election'
+import type { Citation, CitationInput } from '../evidence'
 
 export type PoliticalPosition =
   | 'FAR_LEFT'
@@ -180,6 +181,25 @@ export type PoliticalPartyLegalStatusInput = {
   eventId?: string | null
   note?: string | null
   sortOrder?: number
+}
+
+/** 정당 기록의 인용 대상 — 정당 본체 + 곁가지 9종 */
+export type PartyCitationTargetType =
+  | 'POLITICAL_PARTY'
+  | 'PARTY_ALIAS'
+  | 'PARTY_LEGAL_STATUS'
+  | 'PARTY_IDEOLOGY'
+  | 'PARTY_POSITION_PERIOD'
+  | 'PARTY_ORGANIZATION'
+  | 'PARTY_MEMBERSHIP'
+  | 'PARTY_SYMBOL'
+  | 'PARTY_EXPRESSION'
+  | 'PARTY_HEADQUARTERS'
+
+export type PartyCitationGroupDto = {
+  targetType: PartyCitationTargetType
+  targetId: string
+  citations: Citation[]
 }
 
 /** 표지 이미지 종류 */
@@ -789,6 +809,20 @@ export const politicalPartyApi = {
       { method: 'DELETE' },
     )
   },
+
+  /** 정당 기록의 출처 — 본체·곁가지 전체를 대상별로(각 행 '출처 N'용) */
+  getCitations: async (partyId: string) =>
+    requestJson<PartyCitationGroupDto[]>(`/political-parties/${encodeURIComponent(partyId)}/citations`),
+
+  /** 한 대상의 인용을 이 목록과 같게 — 빈 배열이면 모두 뗀다 */
+  setCitations: async (
+    partyId: string,
+    body: { targetType: PartyCitationTargetType; targetId: string; citations: CitationInput[] },
+  ) =>
+    requestJson<PartyCitationGroupDto>(`/political-parties/${encodeURIComponent(partyId)}/citations`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
 
   /** 표지 이미지 — 로고·당기·상징·투표 상징·사진·포스터 */
   getSymbols: async (partyId: string) =>

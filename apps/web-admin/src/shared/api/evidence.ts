@@ -30,6 +30,7 @@ export type ObservationSubjectType =
   | 'HISTORICAL_COUNTRY'
   | 'ORGANIZATION'
   | 'PERSON'
+  | 'POLITICAL_PARTY'
 
 export type MetricValueKind = 'COUNT' | 'MONEY' | 'RATIO' | 'INDEX' | 'MEASURE'
 export type MetricAggregation = 'SUM' | 'MAX' | 'LATEST' | 'NONE'
@@ -223,6 +224,13 @@ export const listMetricDefinitions = () => request<MetricDefinition[]>('GET', '/
 /** 사건 단위 측정값 — 사건 + 참여국 줄 + 진영 */
 export const listEventObservations = (eventId: string) =>
   request<Observation[]>('GET', `/events/${encodeURIComponent(eventId)}/observations`)
+
+/** 대상의 측정값 — 정당·인물·국가처럼 사건 밖 대상용 */
+export const listSubjectObservations = (subjectType: ObservationSubjectType, subjectId: string) =>
+  request<Observation[]>(
+    'GET',
+    `/observations?subjectType=${encodeURIComponent(subjectType)}&subjectId=${encodeURIComponent(subjectId)}`,
+  )
 
 export const createObservation = (input: CreateObservationInput) =>
   request<Observation>('POST', '/observations', input)

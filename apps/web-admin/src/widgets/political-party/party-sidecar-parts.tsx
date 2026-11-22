@@ -120,7 +120,8 @@ export const FactRow = styled.div`
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 6px 64px 6px 0;
+  /* 오른쪽 단추 셋(출처·고치기·지우기) 자리 */
+  padding: 6px 100px 6px 0;
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
   &:last-child {

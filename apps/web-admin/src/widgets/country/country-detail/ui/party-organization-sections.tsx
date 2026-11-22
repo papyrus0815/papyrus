@@ -61,6 +61,7 @@ import {
   ModalFooter,
   PeriodPair,
 } from '@/widgets/political-party/party-sidecar-parts'
+import { PartyCitationButton } from './party-citations'
 
 const organizationsKey = (partyId: string) => ['political-parties', partyId, 'organizations'] as const
 
@@ -144,6 +145,7 @@ export function PartyOrganizationsBlock({ partyId }: { partyId: string }) {
                     </FactMain>
                     {link.note ? <FactNote>{link.note}</FactNote> : null}
                     <FactActions>
+                      <PartyCitationButton partyId={partyId} targetType="PARTY_ORGANIZATION" targetId={link.id} subject={`${labelPartyOrganizationRole(link.role)} · ${targetName(link)}`} />
                       <IconBtn type="button" aria-label={`${targetName(link)} 고치기`} onClick={() => setModal({ mode: 'edit', link })}>
                         <FiEdit2 size={13} />
                       </IconBtn>
