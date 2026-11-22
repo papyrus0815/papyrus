@@ -99,6 +99,8 @@ export type PoliticalPartyRow = {
   historicalCountryId?: string | null
   country?: { id: string; name: string } | null
   historicalCountry?: { id: string; name: string } | null
+  /** 이념 위치(`PoliticalPosition` — FAR_LEFT…FAR_RIGHT·BIG_TENT). 의회 좌석도 좌→우 배열에 쓴다 */
+  position?: string | null
 }
 
 // --- Party membership ---

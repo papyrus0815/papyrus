@@ -24,7 +24,6 @@ import {
   FiInfo,
   FiLayers,
   FiPlus,
-  FiSidebar,
   FiSliders,
   FiTrash2,
   FiX,
@@ -45,11 +44,8 @@ import {
   BentoCardHeader,
   BentoCardTitle,
   BentoCardTitleGroup,
-  BentoGrid2Col,
-  MiniSvgSparkline,
   type SegmentSlice,
   type SparkPoint,
-  StackedSegmentBar,
 } from '@/entities/event/ui/bento-primitives'
 import {
   DIGIT_DISPLAY,
@@ -128,6 +124,7 @@ import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
 import { pathKeys } from '@/shared/router'
 import { Z_INDEX } from '@/shared/styles/z-index'
+import { PopoverMenu } from '@/shared/ui/popover-menu'
 import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
@@ -192,6 +189,15 @@ import { CountryPoliticalPartiesBlock } from './country-political-parties-block.
 import { LinkedEventPickerField } from './linked-event-picker-field'
 import { CountryTabEmptyState } from './country-tab-empty-state'
 import * as FormS from './military-unit-form/styles'
+import {
+  ElectionResultHemicycle,
+  politicalPositionRank,
+  sortBySeatingOrder,
+} from './election-result-hemicycle'
+import {
+  ElectionsParliamentStrip,
+  type ParliamentStripItem,
+} from './elections-parliament-strip'
 import {
   ELECTION_STATUS_TONE,
   ELECTION_TYPE_TONE,
@@ -1654,6 +1660,23 @@ export function CountryElectionsSection({
     enabled: !!scopeKey,
   })
 
+  /* 「역대 의회 구성」 — 의석이 있는 선거 최근 8회(없으면 전체 최근 8회)의 상세를 불러 정당별 의석을 얻는다.
+     목록 응답엔 정당 집계가 없다. 상세와 같은 키라 고른 선거를 열 때 캐시를 함께 쓴다. */
+  const parliamentStripElections = useMemo(() => {
+    const withSeats = list.filter((row) => (row.totalSeats ?? 0) > 0)
+    const pool = withSeats.length > 0 ? withSeats : list
+    return [...pool]
+      .sort((left, right) => String(left.pollDate).localeCompare(String(right.pollDate)))
+      .slice(-8)
+  }, [list])
+  const parliamentStripQueries = useQueries({
+    queries: parliamentStripElections.map((row) => ({
+      queryKey: qk.detail(row.id),
+      queryFn: () => getElection(row.id),
+      staleTime: 60_000,
+    })),
+  })
+
   const { data: districts = [] } = useQuery({
     queryKey: qk.districts(scopeKey),
     queryFn: () => getElectoralDistricts(listParams as Record<string, string>),
@@ -2071,7 +2094,6 @@ export function CountryElectionsSection({
   )
   const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('desc')
   const [filtersExpanded, setFiltersExpanded] = useState(false)
-  const [listCollapsed, setListCollapsed] = useState(false)
   const [partyCreateTick, setPartyCreateTick] = useState(0)
 
   const filteredList = useMemo(() => {
@@ -2266,6 +2288,45 @@ export function CountryElectionsSection({
     }
   }, [list, isSectionDark])
 
+  const parliamentStripItems = useMemo<ParliamentStripItem[]>(
+    () =>
+      parliamentStripElections.map((row, idx) => {
+        const detailForRow = parliamentStripQueries[idx]?.data
+        /* 큰 반원과 같은 순서 — 왼쪽 좌파 → 오른쪽 우파 */
+        const partyRows = sortBySeatingOrder(
+          (detailForRow?.partyResults ?? [])
+            .filter((partyRow) => (partyRow.seatsWon ?? 0) > 0)
+            .map((partyRow) => ({
+              row: partyRow,
+              seats: partyRow.seatsWon ?? 0,
+              positionRank: politicalPositionRank(
+                parties.find((party) => party.id === partyRow.partyId)?.position,
+              ),
+            })),
+        ).map((entry) => entry.row)
+        const turnout = Number(row.voterTurnoutPercent)
+        return {
+          id: row.id,
+          year: formatPollYear(row.pollDate),
+          ordinalLabel:
+            row.convocationOrdinal != null ? `제${row.convocationOrdinal}대` : null,
+          turnoutLabel: Number.isFinite(turnout) && turnout > 0 ? `${turnout}%` : null,
+          totalSeats: row.totalSeats ?? null,
+          title: electionPrimaryTitle(row),
+          parties: partyRows.map((partyRow) => ({
+            fill: partyResultSliceFill(
+              partyRow,
+              hueFromPartyId(partyRow.partyId),
+              parties.find((party) => party.id === partyRow.partyId)?.brandColor,
+            ),
+            seats: partyRow.seatsWon ?? 0,
+            label: partyRow.party ? getPartyDisplayName(partyRow.party) : partyRow.partyId,
+          })),
+        }
+      }),
+    [parliamentStripElections, parliamentStripQueries, parties],
+  )
+
   /** 선거 전환 직후 이전 쿼리 데이터가 잠깐 남는 경우를 막아 상세가 뒤섞이지 않게 함 */
   const detailMatchesSelection = Boolean(
     detail && selectedId && detail.id === selectedId,
@@ -2335,186 +2396,54 @@ export function CountryElectionsSection({
         {politicsViewTab === 'elections' ? (
           <ElectionsPoliticsTabSubsection aria-label="선거 목록·상세">
             {!listLoading && list.length > 0 ? (
-              <BentoGrid2Col aria-label="선거 현황 요약 인포그래픽">
-                {/* Left: 역대 투표율 추이 스파크라인 + 선거 유형 분포 */}
-                <BentoCard>
-                  <BentoCardHeader>
-                    <BentoCardTitleGroup>
-                      <BentoCardTitle>
-                        역대 투표율 추이 · 선거 유형 분포
-                      </BentoCardTitle>
-                      <BentoCardBadge>
-                        {electionKpiSummary.avgTurnout != null
-                          ? `평균 투표율 ${electionKpiSummary.avgTurnout}%`
-                          : `${electionKpiSummary.distinctTypeCount}개 유형`}
-                      </BentoCardBadge>
-                    </BentoCardTitleGroup>
-                    {listTypeFilter ? (
-                      <BentoActionBtn
-                        type="button"
-                        onClick={() => setListTypeFilter('')}
-                      >
-                        전체 유형
-                      </BentoActionBtn>
-                    ) : null}
-                  </BentoCardHeader>
-                  <BentoCardBody>
-                    {electionKpiSummary.turnoutSparkPoints.length >= 2 ? (
-                      <ElectionTurnoutSparkWrap>
-                        <ElectionTurnoutMetaRow>
-                          <span>
-                            최근 투표율{' '}
-                            <strong>
-                              {electionKpiSummary.latestTurnoutInfo?.val}%
-                            </strong>{' '}
-                            ({electionKpiSummary.latestTurnoutInfo?.year}년)
-                          </span>
-                          <span className="muted">
-                            집계 {electionKpiSummary.turnoutCount}회
-                          </span>
-                        </ElectionTurnoutMetaRow>
-                        <MiniSvgSparkline
-                          points={electionKpiSummary.turnoutSparkPoints}
-                          color={ledgerAccent(sectionTheme.mode)}
-                          height={38}
-                          formatValue={(val) => `${val.toFixed(1)}%`}
-                        />
-                      </ElectionTurnoutSparkWrap>
-                    ) : electionKpiSummary.turnoutCount === 1 &&
-                      electionKpiSummary.latestTurnoutInfo ? (
-                      <ElectionSingleTurnoutLine>
-                        투표율 기록 1회 ·{' '}
-                        <strong>
-                          {electionKpiSummary.latestTurnoutInfo.year}년{' '}
-                          {electionKpiSummary.latestTurnoutInfo.val}%
-                        </strong>
-                      </ElectionSingleTurnoutLine>
-                    ) : null}
-
-                    <ElectionTypeBarSection>
-                      <StackedSegmentBar
-                        slices={electionKpiSummary.typeSlices}
-                        height={9}
-                        showPercent
-                      />
-                      <ElectionBentoLegendRow>
-                        {electionKpiSummary.typeSlices.map((slice) => (
-                          <ElectionBentoLegendBtn
-                            key={slice.key}
-                            type="button"
-                            $active={listTypeFilter === slice.key}
-                            onClick={() =>
-                              setListTypeFilter((prev) =>
-                                prev === slice.key ? '' : slice.key,
-                              )
-                            }
-                            title={`${slice.label} 필터 토글`}
-                          >
-                            <ElectionBentoDot $color={slice.color} />
-                            <span>{slice.label}</span>
-                            <strong>{slice.meta}</strong>
-                          </ElectionBentoLegendBtn>
-                        ))}
-                      </ElectionBentoLegendRow>
-                    </ElectionTypeBarSection>
-                  </BentoCardBody>
-                </BentoCard>
-
-                {/* Right: 등록 정당 · 확정 선거 요약 */}
-                <BentoCard>
-                  <BentoCardHeader>
-                    <BentoCardTitleGroup>
-                      <BentoCardTitle>
-                        등록 정당 · 확정 선거 요약
-                      </BentoCardTitle>
-                      <BentoCardBadge>
-                        총 {electionKpiSummary.totalCount}회 선거
-                      </BentoCardBadge>
-                    </BentoCardTitleGroup>
-                    <BentoActionBtn
-                      type="button"
-                      onClick={() => handlePoliticsViewTab('parties')}
-                    >
-                      정당 원장 ({parties.length}) →
-                    </BentoActionBtn>
-                  </BentoCardHeader>
-                  <BentoCardBody>
-                    <ElectionRightKpiRow>
-                      <ElectionRightKpiCell
-                        as="button"
-                        type="button"
-                        $clickable
-                        $active={listStatusFilter === '__completed__'}
-                        onClick={() =>
-                          setListStatusFilter((prev) =>
-                            prev === '__completed__' ? '' : '__completed__',
-                          )
-                        }
-                        title="확정·완료 선거만 필터링"
-                      >
-                        <span className="label">확정·완료 선거</span>
-                        <strong className="val">
-                          {electionKpiSummary.completedCount}
-                          <small> / {electionKpiSummary.totalCount}건</small>
-                        </strong>
-                      </ElectionRightKpiCell>
-                      <ElectionRightKpiCell
-                        as="button"
-                        type="button"
-                        $clickable
-                        onClick={() => handlePoliticsViewTab('parties')}
-                        title="정당 탭으로 이동"
-                      >
-                        <span className="label">등록 정당 · 선거구</span>
-                        <strong className="val">
-                          {parties.length}
-                          <small>개당 · {districts.length}곳</small>
-                        </strong>
-                      </ElectionRightKpiCell>
-                      <ElectionRightKpiCell
-                        as="button"
-                        type="button"
-                        $clickable={Boolean(electionKpiSummary.latestElection)}
-                        onClick={() => {
-                          if (electionKpiSummary.latestElection) {
-                            setSelectedId(electionKpiSummary.latestElection.id)
+              <BentoCard aria-label="역대 의회 구성">
+                <BentoCardHeader>
+                  <BentoCardTitleGroup>
+                    <BentoCardTitle>역대 의회 구성</BentoCardTitle>
+                    <BentoCardBadge>
+                      선거 {electionKpiSummary.totalCount}회
+                      {electionKpiSummary.avgTurnout != null
+                        ? ` · 평균 투표율 ${electionKpiSummary.avgTurnout}%`
+                        : ''}
+                    </BentoCardBadge>
+                  </BentoCardTitleGroup>
+                  <BentoActionBtn
+                    type="button"
+                    onClick={() => handlePoliticsViewTab('parties')}
+                  >
+                    정당 {parties.length} →
+                  </BentoActionBtn>
+                </BentoCardHeader>
+                <BentoCardBody>
+                  <ElectionsParliamentStrip
+                    items={parliamentStripItems}
+                    selectedId={selectedId ?? null}
+                    onSelect={(electionId) => setSelectedId(electionId)}
+                  />
+                  {/* 유형이 둘 이상일 때만 거르기 칩 — 한 유형뿐이면 100% 한 색 막대라 아무것도 말하지 않았다 */}
+                  {electionKpiSummary.typeSlices.length > 1 ? (
+                    <ElectionBentoLegendRow>
+                      {electionKpiSummary.typeSlices.map((slice) => (
+                        <ElectionBentoLegendBtn
+                          key={slice.key}
+                          type="button"
+                          $active={listTypeFilter === slice.key}
+                          onClick={() =>
+                            setListTypeFilter((prev) =>
+                              prev === slice.key ? '' : slice.key,
+                            )
                           }
-                        }}
-                        title="최근 실시 선거 선택"
-                      >
-                        <span className="label">최근 실시 선거</span>
-                        <strong className="val date">
-                          {electionKpiSummary.latestElection
-                            ? formatPollDate(
-                                electionKpiSummary.latestElection.pollDate,
-                              )
-                            : '—'}
-                        </strong>
-                      </ElectionRightKpiCell>
-                    </ElectionRightKpiRow>
-
-                    {electionKpiSummary.statusSlices.length > 0 && (
-                      <StackedSegmentBar
-                        slices={electionKpiSummary.statusSlices}
-                        height={8}
-                      />
-                    )}
-
-                    <ElectionBentoFooterLine>
-                      <span>
-                        {electionKpiSummary.latestElection
-                          ? `최신: ${electionPrimaryTitle(electionKpiSummary.latestElection)}`
-                          : '등록 선거 없음'}
-                      </span>
-                      {electionKpiSummary.scheduledCount > 0 && (
-                        <span className="accent">
-                          예정·진행 {electionKpiSummary.scheduledCount}건
-                        </span>
-                      )}
-                    </ElectionBentoFooterLine>
-                  </BentoCardBody>
-                </BentoCard>
-              </BentoGrid2Col>
+                          title={`${slice.label} 필터 토글`}
+                        >
+                          <ElectionBentoDot $color={slice.color} />
+                          <span>{slice.label}</span>
+                          <strong>{slice.meta}</strong>
+                        </ElectionBentoLegendBtn>
+                      ))}
+                    </ElectionBentoLegendRow>
+                  ) : null}
+                </BentoCardBody>
+              </BentoCard>
             ) : null}
 
             {!listLoading && list.length === 0 ? (
@@ -2549,7 +2478,7 @@ export function CountryElectionsSection({
               />
             ) : (
             <SplitMainRow>
-              <ListColumn $collapsed={listCollapsed}>
+              <ListColumn>
                 {!listLoading && list.length > 0 ? (
                   <ElectionListFilterBar>
                     <ElectionListFilterRow>
@@ -2590,14 +2519,6 @@ export function CountryElectionsSection({
                                 : 0)}
                           </FilterBadge>
                         ) : null}
-                      </ElectionListFilterToggleBtn>
-                      <ElectionListFilterToggleBtn
-                        type="button"
-                        onClick={() => setListCollapsed(true)}
-                        aria-label="선거 목록 접기"
-                        title="선거 목록 접기 (상세 화면 넓게 보기)"
-                      >
-                        <FiSidebar size={14} strokeWidth={2.25} aria-hidden />
                       </ElectionListFilterToggleBtn>
                     </ElectionListFilterRow>
                     {filtersExpanded ? (
@@ -2846,11 +2767,6 @@ export function CountryElectionsSection({
                     <ElectionDetailPanel
                       key={detail.id}
                       detail={detail}
-                      listCollapsed={listCollapsed}
-                      onToggleListCollapsed={() =>
-                        setListCollapsed((prev) => !prev)
-                      }
-                      totalElectionCount={list.length}
                       entityLinkCountryId={
                         countryId ?? detail.countryId ?? undefined
                       }
@@ -3205,9 +3121,6 @@ export function CountryElectionsSection({
 
 function ElectionDetailPanel({
   detail,
-  listCollapsed = false,
-  onToggleListCollapsed,
-  totalElectionCount = 0,
   /** 서버 엔티티 검색 한정(정당 등) — 현대 국가 id */
   entityLinkCountryId,
   parties,
@@ -3237,9 +3150,6 @@ function ElectionDetailPanel({
   creatingNarrativeEvent,
 }: {
   detail: ElectionDetailDto
-  listCollapsed?: boolean
-  onToggleListCollapsed?: () => void
-  totalElectionCount?: number
   entityLinkCountryId?: string
   parties: PoliticalPartyRow[]
   sameTypeElections: ElectionListRow[]
@@ -4185,12 +4095,14 @@ function ElectionDetailPanel({
       return {
         mode: 'ballots' as const,
         kicker: '투표 안 비중',
-        segments: referendumBallotBars.map((b) => ({
-          key: b.id,
-          label: b.label,
-          subLabel: b.valueLabel,
-          fill: b.fill,
-          widthPct: Math.max(2, b.widthPct),
+        segments: referendumBallotBars.map((ballotBar) => ({
+          key: ballotBar.id,
+          label: ballotBar.label,
+          subLabel: ballotBar.valueLabel,
+          fill: ballotBar.fill,
+          widthPct: Math.max(2, ballotBar.widthPct),
+          share: Math.max(0, ballotBar.widthPct) / 100,
+          seats: null as number | null,
           partyId: null as string | null,
           personId: null as string | null,
         })),
@@ -4201,29 +4113,37 @@ function ElectionDetailPanel({
         mode: 'parties' as const,
         kicker:
           partyDistributionMetric === 'seats' ? '의석 지형' : '정당 득표 지형',
-        segments: partyPieSlices.segments.map((s) => {
+        segments: partyPieSlices.segments.map((slice) => {
           const name =
-            getPartyShortName(s.row.party) ||
-            getPartyDisplayName(s.row.party) ||
-            s.row.partyId
-          const pct = formatVoteShareLabel(s.row.voteSharePercent)
+            getPartyShortName(slice.row.party) ||
+            getPartyDisplayName(slice.row.party) ||
+            slice.row.partyId
+          const pct = formatVoteShareLabel(slice.row.voteSharePercent)
           const seats =
-            s.row.seatsWon != null && s.row.seatsWon >= 0
-              ? `${s.row.seatsWon}석`
+            slice.row.seatsWon != null && slice.row.seatsWon >= 0
+              ? `${slice.row.seatsWon}석`
               : null
           const subLabel =
             partyDistributionMetric === 'seats'
               ? [seats, pct].filter(Boolean).join(' · ') ||
-                `${(s.fraction * 100).toFixed(1)}%`
+                `${(slice.fraction * 100).toFixed(1)}%`
               : [pct, seats].filter(Boolean).join(' · ') ||
-                `${(s.fraction * 100).toFixed(1)}%`
+                `${(slice.fraction * 100).toFixed(1)}%`
           return {
-            key: s.row.id,
+            key: slice.row.id,
             label: name,
             subLabel,
-            fill: s.fill,
-            widthPct: Math.max(1.5, s.fraction * 100),
-            partyId: s.row.partyId !== '__other__' ? s.row.partyId : null,
+            fill: slice.fill,
+            widthPct: Math.max(1.5, slice.fraction * 100),
+            share: slice.fraction,
+            seats:
+              slice.row.seatsWon != null && slice.row.seatsWon >= 0
+                ? slice.row.seatsWon
+                : null,
+            positionRank: politicalPositionRank(
+              parties.find((party) => party.id === slice.row.partyId)?.position,
+            ),
+            partyId: slice.row.partyId !== '__other__' ? slice.row.partyId : null,
             personId: null as string | null,
           }
         }),
@@ -4269,6 +4189,8 @@ function ElectionDetailPanel({
               subLabel: pctLabel,
               fill,
               widthPct: Math.max(2, (weight / weightSum) * 100),
+              share: weight / weightSum,
+              seats: null as number | null,
               partyId: cand.partyId ?? null,
               personId: cand.personId ?? cand.person?.id ?? null,
             }
@@ -4373,22 +4295,6 @@ function ElectionDetailPanel({
             <ElectionHero>
               <ElectionHeroTopRow>
                 <ElectionHeroBreadcrumbs>
-                  {onToggleListCollapsed ? (
-                    <ElectionListToggleChip
-                      type="button"
-                      onClick={onToggleListCollapsed}
-                      title={
-                        listCollapsed
-                          ? '좌측 선거 목록 펼치기'
-                          : '좌측 선거 목록 접기'
-                      }
-                    >
-                      <FiSidebar size={12} aria-hidden />
-                      {listCollapsed
-                        ? `선거 목록 (${totalElectionCount})`
-                        : '목록 접기'}
-                    </ElectionListToggleChip>
-                  ) : null}
                   <ElectionCategoryChip>
                     {labelElectionType(detail.electionType)}
                     <ElectionCategorySep aria-hidden>›</ElectionCategorySep>
@@ -4440,31 +4346,8 @@ function ElectionDetailPanel({
                   ) : null}
                 </ElectionHeroBreadcrumbs>
 
+                {/* 머리 버튼은 '정보 수정' 하나만 드러내고, 가끔 쓰는 사건 이동·연표 사건 생성·삭제는 ⋯ 메뉴로 */}
                 <ElectionHeroActions>
-                  {detail.eventId ? (
-                    <ElectionHeroActionBtn
-                      type="button"
-                      onClick={() =>
-                        navigate(pathKeys.events.detail(detail.eventId!))
-                      }
-                      title="연결된 사건 상세 페이지로 이동"
-                    >
-                      <FiExternalLink size={12} aria-hidden />
-                      사건 상세
-                    </ElectionHeroActionBtn>
-                  ) : onCreateNarrativeEvent ? (
-                    <ElectionHeroActionBtn
-                      type="button"
-                      disabled={creatingNarrativeEvent}
-                      onClick={onCreateNarrativeEvent}
-                      title="제목·설명·투표일·국가를 이 선거에서 가져와 '정치 › 선거' 사건을 만들고 연결합니다"
-                    >
-                      <FiPlus size={12} aria-hidden />
-                      {creatingNarrativeEvent
-                        ? '사건 생성 중…'
-                        : '연표 사건 생성'}
-                    </ElectionHeroActionBtn>
-                  ) : null}
                   <ElectionHeroActionBtn
                     type="button"
                     onClick={onEditElection}
@@ -4473,15 +4356,44 @@ function ElectionDetailPanel({
                     <FiEdit2 size={12} aria-hidden />
                     정보 수정
                   </ElectionHeroActionBtn>
-                  <ElectionHeroIconBtn
-                    type="button"
-                    $danger
-                    onClick={onDeleteElection}
-                    aria-label="선거 삭제"
-                    title="선거 삭제"
-                  >
-                    <FiTrash2 size={14} aria-hidden />
-                  </ElectionHeroIconBtn>
+                  <PopoverMenu
+                    size="sm"
+                    ariaLabel="선거 작업 메뉴"
+                    title="사건 · 삭제"
+                    items={[
+                      ...(detail.eventId
+                        ? [
+                            {
+                              id: 'open-event',
+                              label: '연결 사건 상세 보기',
+                              icon: <FiExternalLink size={13} />,
+                              onSelect: () =>
+                                navigate(pathKeys.events.detail(detail.eventId!)),
+                            },
+                          ]
+                        : onCreateNarrativeEvent
+                          ? [
+                              {
+                                id: 'create-event',
+                                label: creatingNarrativeEvent
+                                  ? '사건 생성 중…'
+                                  : '연표 사건 만들어 연결',
+                                icon: <FiPlus size={13} />,
+                                disabled: creatingNarrativeEvent,
+                                onSelect: onCreateNarrativeEvent,
+                              },
+                            ]
+                          : []),
+                      { type: 'divider' as const, id: 'divider-danger' },
+                      {
+                        id: 'delete-election',
+                        label: '선거 삭제',
+                        icon: <FiTrash2 size={13} />,
+                        danger: true,
+                        onSelect: onDeleteElection,
+                      },
+                    ]}
+                  />
                 </ElectionHeroActions>
               </ElectionHeroTopRow>
 
@@ -4698,82 +4610,25 @@ function ElectionDetailPanel({
                   ) : null}
 
                   {heroPowerBar ? (
-                    <div>
-                      {detail.totalSeats != null &&
-                      detail.totalSeats > 0 &&
-                      !isReferendum ? (
-                        <ElectionMajorityHeaderRow>
-                          <span>정당별 의석·득표 비중</span>
-                          <span className="maj">
-                            과반 기준{' '}
-                            <strong>
-                              {(
-                                Math.floor(detail.totalSeats / 2) + 1
-                              ).toLocaleString('ko-KR')}
-                              석
-                            </strong>{' '}
-                            / 총 {detail.totalSeats.toLocaleString('ko-KR')}석
-                          </span>
-                        </ElectionMajorityHeaderRow>
-                      ) : null}
-                      <ElectionHeroPartyBarWrap>
-                        <ElectionHeroPartyBar
-                          role="img"
-                          aria-label={heroPowerBar.kicker}
-                        >
-                          {heroPowerBar.segments.map((seg) => (
-                            <ElectionHeroPartySeg
-                              key={seg.key}
-                              $fill={seg.fill}
-                              $pct={seg.widthPct}
-                              title={`${seg.label} · ${seg.subLabel}`}
-                              onClick={() => {
-                                if (seg.partyId) {
-                                  setElectionMentionPartyId(seg.partyId)
-                                } else if (seg.personId) {
-                                  setMentionPersonId(seg.personId)
-                                }
-                              }}
-                            />
-                          ))}
-                        </ElectionHeroPartyBar>
-                        {detail.totalSeats != null &&
-                        detail.totalSeats > 0 &&
-                        !isReferendum ? (
-                          <ElectionMajorityTick
-                            title={`과반선 50% (${Math.floor(detail.totalSeats / 2) + 1}석)`}
-                            aria-hidden
-                          />
-                        ) : null}
-                      </ElectionHeroPartyBarWrap>
-                      <ElectionHeroPartyLegend>
-                        {heroPowerBar.segments.slice(0, 6).map((seg) => (
-                          <ElectionHeroPartyLegendItem
-                            key={seg.key}
-                            $clickable={Boolean(seg.partyId || seg.personId)}
-                            onClick={() => {
-                              if (seg.partyId) {
-                                setElectionMentionPartyId(seg.partyId)
-                              } else if (seg.personId) {
-                                setMentionPersonId(seg.personId)
-                              }
-                            }}
-                          >
-                            <ElectionTimelineLegendDot
-                              $fill={seg.fill}
-                              aria-hidden
-                            />
-                            <span className="name">{seg.label}</span>
-                            <span className="stat">{seg.subLabel}</span>
-                          </ElectionHeroPartyLegendItem>
-                        ))}
-                        {heroPowerBar.segments.length > 6 ? (
-                          <span className="more">
-                            외 {heroPowerBar.segments.length - 6}건
-                          </span>
-                        ) : null}
-                      </ElectionHeroPartyLegend>
-                    </div>
+                    <ElectionResultHemicycle
+                      segments={heroPowerBar.segments}
+                      totalSeats={
+                        !isReferendum &&
+                        heroPowerBar.mode === 'parties' &&
+                        detail.totalSeats != null &&
+                        detail.totalSeats > 0
+                          ? detail.totalSeats
+                          : null
+                      }
+                      kicker={heroPowerBar.kicker}
+                      onSelectSegment={(segment) => {
+                        if (segment.partyId) {
+                          setElectionMentionPartyId(segment.partyId)
+                        } else if (segment.personId) {
+                          setMentionPersonId(segment.personId)
+                        }
+                      }}
+                    />
                   ) : null}
                 </ElectionHeroOutcomeStrip>
               ) : null}
@@ -4872,7 +4727,9 @@ function ElectionDetailPanel({
                         </ElectionSectionSubtitle>
                       ) : null}
                     </ElectionSectionHeaderLeft>
-                    {narrativeEdit !== 'legislature' &&
+                    {/* 비어 있을 땐 본문 자리의 '+ 작성하기' 한 줄만 — 머리 버튼까지 두면 같은 일이 두 번 */}
+                    {hasDescriptionContent &&
+                    narrativeEdit !== 'legislature' &&
                     narrativeEdit !== 'stats' ? (
                       <ElectionSectionActions>
                         <ElectionSectionActionBtn
@@ -4883,7 +4740,7 @@ function ElectionDetailPanel({
                           }}
                         >
                           <FiEdit2 size={12} aria-hidden />
-                          {hasDescriptionContent ? '설명 수정' : '설명 작성'}
+                          수정
                         </ElectionSectionActionBtn>
                       </ElectionSectionActions>
                     ) : null}
@@ -4961,7 +4818,8 @@ function ElectionDetailPanel({
                           </ElectionSectionSubtitle>
                         ) : null}
                       </ElectionSectionHeaderLeft>
-                      {narrativeEdit !== 'legislature' &&
+                      {hasLegislatureNoteContent &&
+                      narrativeEdit !== 'legislature' &&
                       narrativeEdit !== 'stats' ? (
                         <ElectionSectionActions>
                           <ElectionSectionActionBtn
@@ -4975,7 +4833,7 @@ function ElectionDetailPanel({
                             }}
                           >
                             <FiEdit2 size={12} aria-hidden />
-                            {hasLegislatureNoteContent ? '수정' : '작성'}
+                            수정
                           </ElectionSectionActionBtn>
                         </ElectionSectionActions>
                       ) : null}
@@ -5066,23 +4924,17 @@ function ElectionDetailPanel({
                                   : ''}
                               </ElectionSectionSubtitle>
                             </ElectionSectionHeaderLeft>
-                            <ElectionSectionActions>
-                              <ElectionSectionActionBtn
-                                type="button"
-                                onClick={onAddPartyResult}
-                              >
-                                <FiPlus size={12} aria-hidden />
-                                집계 추가
-                              </ElectionSectionActionBtn>
-                              {partyResults.length > 0 ? (
+                            {/* 추가는 '정당 집계·추이' 탭에서 — 요약 카드엔 그 탭으로 가는 길 하나만 */}
+                            {partyResults.length > 0 ? (
+                              <ElectionSectionActions>
                                 <ElectionSectionActionBtn
                                   type="button"
                                   onClick={() => setActiveDetailTab('parties')}
                                 >
-                                  분포·추이 상세 →
+                                  전체 보기 →
                                 </ElectionSectionActionBtn>
-                              ) : null}
-                            </ElectionSectionActions>
+                              </ElectionSectionActions>
+                            ) : null}
                           </ElectionSectionHeader>
 
                           {partyResults.length === 0 ? (
@@ -5239,25 +5091,19 @@ function ElectionDetailPanel({
                                   : ''}
                               </ElectionSectionSubtitle>
                             </ElectionSectionHeaderLeft>
-                            <ElectionSectionActions>
-                              <ElectionSectionActionBtn
-                                type="button"
-                                onClick={onAddCandidacy}
-                              >
-                                <FiPlus size={12} aria-hidden />
-                                후보 추가
-                              </ElectionSectionActionBtn>
-                              {detail.candidacies.length > 0 ? (
+                            {/* 비었을 땐 아래 '첫 후보 추가' 하나, 있으면 후보 탭으로 가는 길 하나 */}
+                            {detail.candidacies.length > 0 ? (
+                              <ElectionSectionActions>
                                 <ElectionSectionActionBtn
                                   type="button"
                                   onClick={() =>
                                     setActiveDetailTab('candidacies')
                                   }
                                 >
-                                  전체 후보·개표 →
+                                  전체 보기 →
                                 </ElectionSectionActionBtn>
-                              ) : null}
-                            </ElectionSectionActions>
+                              </ElectionSectionActions>
+                            ) : null}
                           </ElectionSectionHeader>
 
                           {detail.candidacies.length === 0 ? (
@@ -7241,6 +7087,15 @@ const ELECTION_FORM_SECTION_ID = {
   stats: 'election-form-group-stats',
 } as const
 const ELECTION_FORM_SECTION_IDS = Object.values(ELECTION_FORM_SECTION_ID)
+
+/** 선거 폼 2단은 반반 — 공용(사건·부대) 1.1 : 0.9는 오른쪽이 짧은 폼 기준이라, 의회·서술(긴 글 두 칸)이 좁았다 */
+const ElectionHalfSplitGrid = styled(FormS.SplitColumnsGrid)`
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+
+  @media (max-width: ${FormS.SPLIT_MIN_WIDTH - 1}px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+`
 const ELECTION_SPLIT_LEFT_ID = 'election-form-split-left'
 const ELECTION_SPLIT_RIGHT_ID = 'election-form-split-right'
 const POLL_DATE_ANCHOR_ID = 'election-form-poll-date'
@@ -7446,6 +7301,7 @@ export function ElectionFormModal({
         resultingClosureKind.trim(),
         resultingClosureYmd,
         optionalRichTextHtmlOrNull(resultingDissolutionNotes),
+        optionalRichTextHtmlOrNull(description),
       ].filter(Boolean).length,
     [
       legTermStart,
@@ -7453,6 +7309,7 @@ export function ElectionFormModal({
       resultingClosureKind,
       resultingClosureYmd,
       resultingDissolutionNotes,
+      description,
     ],
   )
 
@@ -7461,9 +7318,8 @@ export function ElectionFormModal({
       [
         voterTurnout.trim(),
         totalSeatsStr.trim(),
-        optionalRichTextHtmlOrNull(description),
       ].filter(Boolean).length,
-    [voterTurnout, totalSeatsStr, description],
+    [voterTurnout, totalSeatsStr],
   )
 
 
@@ -7740,14 +7596,14 @@ export function ElectionFormModal({
       badge: missingRequired.length === 0 ? '✓' : null,
     },
     {
-      id: ELECTION_FORM_SECTION_ID.legislature,
-      label: '의회·임기',
-      badge: legFilledCount > 0 ? String(legFilledCount) : null,
+      id: ELECTION_FORM_SECTION_ID.stats,
+      label: '투표·결과',
+      badge: statsFilledCount > 0 ? String(statsFilledCount) : null,
     },
     {
-      id: ELECTION_FORM_SECTION_ID.stats,
-      label: '집계·설명',
-      badge: statsFilledCount > 0 ? String(statsFilledCount) : null,
+      id: ELECTION_FORM_SECTION_ID.legislature,
+      label: '의회·서술',
+      badge: legFilledCount > 0 ? String(legFilledCount) : null,
     },
   ]
 
@@ -7761,6 +7617,12 @@ export function ElectionFormModal({
     LEGISLATURE_CLOSURE_TONE,
   )
 
+  /*
+   * 칸 배치 = 성격 순서. 왼쪽은 '어떤 선거인가'(유형 → 명칭 → 회차 → 소속 → 연결 사건)와 '언제·어떻게 끝났나'
+   * (투표 기간 → 상태 → 집계), 오른쪽은 이 선거로 꾸려진 의회(임기 → 실제 종료 → 종료 서술)와 긴 글(설명).
+   * 유형이 맨 앞인 까닭: 명칭 추천('제13대 국회·의회 지역구')이 유형을 따라 바뀐다. 예전엔 명칭을 먼저 쓰고
+   * 아래에서 유형을 바꾸면 추천이 뒤늦게 달라졌고, 투표 결과(집계)는 의회 칸 아래 오른쪽 끝에 떨어져 있었다.
+   */
   const basicSectionNode = (
     <FormS.FormGroupSection
       id={ELECTION_FORM_SECTION_ID.basic}
@@ -7769,6 +7631,21 @@ export function ElectionFormModal({
       <FormS.FormGroupTitle id={`${ELECTION_FORM_SECTION_ID.basic}-title`}>
         기본 정보
       </FormS.FormGroupTitle>
+      <EventFormS.FormRow>
+        <EventFormS.FormLabel as="div" id="election-form-type-label">
+          유형 <EventFormS.Required>*</EventFormS.Required>
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          <ToneChipGroup
+            ariaLabelledBy="election-form-type-label"
+            value={electionType}
+            onChange={(next) => {
+              if (next) setElectionType(next)
+            }}
+            options={typeChipOptions}
+          />
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
       <EventFormS.FormRow>
         <EventFormS.FormLabel htmlFor="election-form-name">
           명칭 <EventFormS.Required>*</EventFormS.Required>
@@ -7836,21 +7713,64 @@ export function ElectionFormModal({
           </FormS.SubTitleGrid>
         </EventFormS.FormField>
       </EventFormS.FormRow>
+      {showHistoricalCountryPicker ? (
+        <EventFormS.FormRow>
+          <EventFormS.FormLabel htmlFor="election-form-historical-country">
+            역사 국가<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+          </EventFormS.FormLabel>
+          <EventFormS.FormField>
+            <FormSelectNative
+              id="election-form-historical-country"
+              value={scopeHistoricalCountryId}
+              onChange={(event) =>
+                setScopeHistoricalCountryId(event.target.value)
+              }
+            >
+              <option value="">(미지정 · 이 현대 국가에만 연결)</option>
+              {[...historicalCountryOptions]
+                .sort((left, right) =>
+                  left.name.localeCompare(right.name, 'ko', {
+                    sensitivity: 'base',
+                  }),
+                )
+                .map((historical) => (
+                  <option key={historical.id} value={historical.id}>
+                    {historical.name}
+                  </option>
+                ))}
+            </FormSelectNative>
+          </EventFormS.FormField>
+        </EventFormS.FormRow>
+      ) : null}
       <EventFormS.FormRow>
-        <EventFormS.FormLabel as="div" id="election-form-type-label">
-          유형 <EventFormS.Required>*</EventFormS.Required>
+        <EventFormS.FormLabel htmlFor="election-form-linked-event">
+          연결 사건<FormS.OptionalTag>(선택)</FormS.OptionalTag>
         </EventFormS.FormLabel>
         <EventFormS.FormField>
-          <ToneChipGroup
-            ariaLabelledBy="election-form-type-label"
-            value={electionType}
-            onChange={(next) => {
-              if (next) setElectionType(next)
-            }}
-            options={typeChipOptions}
+          {/* 예전엔 사건 UUID를 손으로 붙이는 칸이라 연결이 0건이었다 — 사건 검색으로 고른다 */}
+          <LinkedEventPickerField
+            inputId="election-form-linked-event"
+            value={linkedEventId}
+            initialTitle={initial?.event?.title ?? null}
+            nearYear={Number.parseInt(pollDate.slice(0, 4), 10) || null}
+            onChange={setLinkedEventId}
           />
         </EventFormS.FormField>
       </EventFormS.FormRow>
+    </FormS.FormGroupSection>
+  )
+
+  const statsSectionNode = (
+    <FormS.FormGroupSection
+      id={ELECTION_FORM_SECTION_ID.stats}
+      aria-labelledby={`${ELECTION_FORM_SECTION_ID.stats}-title`}
+    >
+      <FormS.FormGroupTitle id={`${ELECTION_FORM_SECTION_ID.stats}-title`}>
+        투표·결과
+        {statsFilledCount > 0 ? (
+          <FormS.FormGroupSummaryBadge>{statsFilledCount}칸</FormS.FormGroupSummaryBadge>
+        ) : null}
+      </FormS.FormGroupTitle>
       <EventFormS.FormRow>
         <EventFormS.FormLabel as="div">
           투표 기간 <EventFormS.Required>*</EventFormS.Required>
@@ -7914,48 +7834,44 @@ export function ElectionFormModal({
           ) : null}
         </EventFormS.FormField>
       </EventFormS.FormRow>
-      {showHistoricalCountryPicker ? (
-        <EventFormS.FormRow>
-          <EventFormS.FormLabel htmlFor="election-form-historical-country">
-            역사 국가<FormS.OptionalTag>(선택)</FormS.OptionalTag>
-          </EventFormS.FormLabel>
-          <EventFormS.FormField>
-            <FormSelectNative
-              id="election-form-historical-country"
-              value={scopeHistoricalCountryId}
-              onChange={(event) =>
-                setScopeHistoricalCountryId(event.target.value)
-              }
-            >
-              <option value="">(미지정 · 이 현대 국가에만 연결)</option>
-              {[...historicalCountryOptions]
-                .sort((left, right) =>
-                  left.name.localeCompare(right.name, 'ko', {
-                    sensitivity: 'base',
-                  }),
-                )
-                .map((historical) => (
-                  <option key={historical.id} value={historical.id}>
-                    {historical.name}
-                  </option>
-                ))}
-            </FormSelectNative>
-          </EventFormS.FormField>
-        </EventFormS.FormRow>
-      ) : null}
       <EventFormS.FormRow>
-        <EventFormS.FormLabel htmlFor="election-form-linked-event">
-          연결 사건<FormS.OptionalTag>(선택)</FormS.OptionalTag>
+        <EventFormS.FormLabel as="div">
+          집계<FormS.OptionalTag>(선택)</FormS.OptionalTag>
         </EventFormS.FormLabel>
         <EventFormS.FormField>
-          {/* 예전엔 사건 UUID를 손으로 붙이는 칸이라 연결이 0건이었다 — 사건 검색으로 고른다 */}
-          <LinkedEventPickerField
-            inputId="election-form-linked-event"
-            value={linkedEventId}
-            initialTitle={initial?.event?.title ?? null}
-            nearYear={Number.parseInt(pollDate.slice(0, 4), 10) || null}
-            onChange={setLinkedEventId}
-          />
+          <FormS.SubTitleGrid>
+            <FormS.SubTitleField>
+              <FormS.SubTitleLabel>투표율(참여) %</FormS.SubTitleLabel>
+              <EventFormS.Input
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                value={voterTurnout}
+                onChange={(event) =>
+                  setVoterTurnout(sanitizePercentInput(event.target.value))
+                }
+                placeholder="0–100 · 소수 첫째 자리까지"
+              />
+            </FormS.SubTitleField>
+            <FormS.SubTitleField>
+              <FormS.SubTitleLabel>총 의석</FormS.SubTitleLabel>
+              <EventFormS.Input
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                value={totalSeatsStr}
+                onChange={(event) =>
+                  setTotalSeatsStr(
+                    sanitizeNonNegativeIntInput(event.target.value),
+                  )
+                }
+                placeholder="0 이상 정수"
+              />
+            </FormS.SubTitleField>
+          </FormS.SubTitleGrid>
+          <EventFormS.Hint>
+            정당별 득표·의석과 후보자 개표 결과는 저장 후 선거 상세에서 입력합니다.
+          </EventFormS.Hint>
         </EventFormS.FormField>
       </EventFormS.FormRow>
     </FormS.FormGroupSection>
@@ -7967,7 +7883,7 @@ export function ElectionFormModal({
       aria-labelledby={`${ELECTION_FORM_SECTION_ID.legislature}-title`}
     >
       <FormS.FormGroupTitle id={`${ELECTION_FORM_SECTION_ID.legislature}-title`}>
-        의회·임기
+        의회·서술
         {legFilledCount > 0 ? (
           <FormS.FormGroupSummaryBadge>{legFilledCount}칸</FormS.FormGroupSummaryBadge>
         ) : null}
@@ -8079,57 +7995,6 @@ export function ElectionFormModal({
           </HistoryArticleEditorWrap>
         </EventFormS.FormField>
       </EventFormS.FormRow>
-    </FormS.FormGroupSection>
-  )
-
-  const statsSectionNode = (
-    <FormS.FormGroupSection
-      id={ELECTION_FORM_SECTION_ID.stats}
-      aria-labelledby={`${ELECTION_FORM_SECTION_ID.stats}-title`}
-    >
-      <FormS.FormGroupTitle id={`${ELECTION_FORM_SECTION_ID.stats}-title`}>
-        집계·설명
-      </FormS.FormGroupTitle>
-      <EventFormS.FormRow>
-        <EventFormS.FormLabel as="div">
-          집계<FormS.OptionalTag>(선택)</FormS.OptionalTag>
-        </EventFormS.FormLabel>
-        <EventFormS.FormField>
-          <FormS.SubTitleGrid>
-            <FormS.SubTitleField>
-              <FormS.SubTitleLabel>투표율(참여) %</FormS.SubTitleLabel>
-              <EventFormS.Input
-                type="text"
-                inputMode="decimal"
-                autoComplete="off"
-                value={voterTurnout}
-                onChange={(event) =>
-                  setVoterTurnout(sanitizePercentInput(event.target.value))
-                }
-                placeholder="0–100 · 소수 첫째 자리까지"
-              />
-            </FormS.SubTitleField>
-            <FormS.SubTitleField>
-              <FormS.SubTitleLabel>총 의석</FormS.SubTitleLabel>
-              <EventFormS.Input
-                type="text"
-                inputMode="numeric"
-                autoComplete="off"
-                value={totalSeatsStr}
-                onChange={(event) =>
-                  setTotalSeatsStr(
-                    sanitizeNonNegativeIntInput(event.target.value),
-                  )
-                }
-                placeholder="0 이상 정수"
-              />
-            </FormS.SubTitleField>
-          </FormS.SubTitleGrid>
-          <EventFormS.Hint>
-            정당별 득표·의석과 후보자 개표 결과는 저장 후 선거 상세에서 입력합니다.
-          </EventFormS.Hint>
-        </EventFormS.FormField>
-      </EventFormS.FormRow>
       <EventFormS.FormRow>
         <EventFormS.FormLabel as="div">
           설명<FormS.OptionalTag>(선택)</FormS.OptionalTag>
@@ -8210,20 +8075,20 @@ export function ElectionFormModal({
         ) : null}
         <EventFormS.FormSection>
           {layoutMode === 'split' ? (
-            <FormS.SplitColumnsGrid>
+            <ElectionHalfSplitGrid>
               <FormS.SplitColumnLeft id={ELECTION_SPLIT_LEFT_ID}>
                 {basicSectionNode}
+                {statsSectionNode}
               </FormS.SplitColumnLeft>
               <FormS.SplitColumnRight id={ELECTION_SPLIT_RIGHT_ID}>
                 {legislatureSectionNode}
-                {statsSectionNode}
               </FormS.SplitColumnRight>
-            </FormS.SplitColumnsGrid>
+            </ElectionHalfSplitGrid>
           ) : (
             <>
               {basicSectionNode}
-              {legislatureSectionNode}
               {statsSectionNode}
+              {legislatureSectionNode}
             </>
           )}
         </EventFormS.FormSection>
@@ -10657,9 +10522,14 @@ const ElectionListContentCol = styled.div`
   flex-direction: column;
 `
 
+/*
+ * 글자색을 여기서 테마로 못 박는다 — 전역 body 색(app/index.css)이 다크용 #f9fafb라, 색을 따로 정하지 않은
+ * 정당 이름·의석 수가 라이트 모드 흰 바탕에서 거의 안 보였다(정당 집계 요약 '사회민주당 (SPD) 43석').
+ */
 const ElectionLedgerContainer = styled.div`
   container-type: inline-size;
   width: 100%;
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const ElectionLedgerBody = styled.div`
@@ -10700,29 +10570,6 @@ const ElectionHeroBreadcrumbs = styled.div`
   min-width: 0;
 `
 
-const ElectionListToggleChip = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: 5px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    color 0.12s ease,
-    border-color 0.12s ease,
-    background 0.12s ease;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
-    background: ${({ theme }) => ledgerRowWash(theme.mode)};
-  }
-`
 
 const ElectionCategoryChip = styled.span`
   display: inline-flex;
@@ -10817,31 +10664,6 @@ const ElectionHeroActionBtn = styled.button`
   }
 `
 
-const ElectionHeroIconBtn = styled.button<{ $danger?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 5px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  background: transparent;
-  color: ${({ theme, $danger }) =>
-    $danger ? theme.colors.error : theme.colors.text.secondary};
-  cursor: pointer;
-  transition:
-    color 0.12s ease,
-    border-color 0.12s ease,
-    background 0.12s ease;
-
-  &:hover {
-    color: ${({ theme, $danger }) =>
-      $danger ? theme.colors.error : theme.colors.text.primary};
-    border-color: ${({ theme, $danger }) =>
-      $danger ? theme.colors.error : ledgerAccent(theme.mode)};
-    background: ${({ theme }) => ledgerRowWash(theme.mode)};
-  }
-`
 
 const ElectionHeroTitleRow = styled.div`
   display: flex;
@@ -10898,54 +10720,9 @@ const ElectionWinnerNames = styled.div`
   flex-wrap: wrap;
 `
 
-const ElectionHeroPartyBar = styled.div`
-  display: flex;
-  width: 100%;
-  height: 10px;
-  border-radius: 4px;
-  overflow: hidden;
-  background: ${({ theme }) => ledgerHairline(theme.mode)};
-  gap: 1px;
-`
 
-const ElectionHeroPartySeg = styled.div<{ $fill: string; $pct: number }>`
-  height: 100%;
-  flex: ${({ $pct }) => Math.max($pct, 1)} 0 0;
-  background: ${({ $fill }) => $fill};
-  transition: opacity 0.15s ease;
 
-  &:hover {
-    opacity: 0.85;
-  }
-`
 
-const ElectionHeroPartyLegend = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-`
-
-const ElectionHeroPartyLegendItem = styled.span<{ $clickable?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: ${({ $clickable }) => ($clickable ? 'pointer' : 'default')};
-
-  .mono {
-    font-size: 11.5px;
-    color: ${({ theme }) => theme.colors.text.tertiary};
-    ${DIGIT_DISPLAY}
-  }
-
-  &:hover {
-    color: ${({ theme, $clickable }) =>
-      $clickable ? theme.colors.text.primary : theme.colors.text.secondary};
-  }
-`
 
 const ElectionTabBar = styled.nav`
   position: sticky;
@@ -11205,51 +10982,9 @@ const ElectionHeroFactItem = styled.span`
   }
 `
 
-const ElectionTurnoutSparkWrap = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-`
 
-const ElectionTurnoutMetaRow = styled.div`
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 11.5px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  ${DIGIT_DISPLAY}
 
-  strong {
-    font-weight: 700;
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
 
-  .muted {
-    color: ${({ theme }) => theme.colors.text.tertiary};
-  }
-`
-
-const ElectionSingleTurnoutLine = styled.div`
-  padding-bottom: 6px;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  font-size: 11.5px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  ${DIGIT_DISPLAY}
-
-  strong {
-    font-weight: 700;
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
-
-const ElectionTypeBarSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-`
 
 const ElectionBentoLegendRow = styled.div`
   display: flex;
@@ -11295,93 +11030,8 @@ const ElectionBentoDot = styled.span<{ $color: string }>`
   flex-shrink: 0;
 `
 
-const ElectionRightKpiRow = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
 
-  @media (max-width: 560px) {
-    grid-template-columns: 1fr;
-  }
-`
 
-const ElectionRightKpiCell = styled.div<{
-  $clickable?: boolean
-  $active?: boolean
-}>`
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-width: 0;
-  padding: 6px 8px;
-  margin: -6px -8px;
-  border: 1px solid
-    ${({ $active, theme }) =>
-      $active ? ledgerAccentBorder(theme.mode) : 'transparent'};
-  border-radius: ${RADIUS.SM};
-  background: ${({ $active, theme }) =>
-    $active ? ledgerAccentSubtle(theme.mode) : 'transparent'};
-  font-family: inherit;
-  text-align: left;
-  cursor: ${({ $clickable }) => ($clickable ? 'pointer' : 'default')};
-
-  &:hover {
-    background: ${({ $clickable, $active, theme }) =>
-      $active
-        ? ledgerAccentSubtle(theme.mode)
-        : $clickable
-          ? ledgerRowWash(theme.mode)
-          : 'transparent'};
-  }
-
-  .label {
-    font-size: 11px;
-    font-weight: 600;
-    color: ${({ $active, theme }) =>
-      $active ? ledgerAccent(theme.mode) : theme.colors.text.tertiary};
-  }
-
-  .val {
-    font-size: 16px;
-    font-weight: 800;
-    letter-spacing: -0.02em;
-    color: ${({ $active, theme }) =>
-      $active ? ledgerAccent(theme.mode) : theme.colors.text.primary};
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
-    ${DIGIT_DISPLAY}
-
-    &.date {
-      font-size: 13.5px;
-      font-weight: 700;
-    }
-
-    small {
-      font-size: 11px;
-      font-weight: 600;
-      color: ${({ theme }) => theme.colors.text.tertiary};
-    }
-  }
-`
-
-const ElectionBentoFooterLine = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 6px 10px;
-  font-size: 11.5px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-
-  .accent {
-    font-weight: 700;
-    color: ${({ theme }) => ledgerAccent(theme.mode)};
-    ${DIGIT_DISPLAY}
-  }
-`
 
 const ElectionNavTurnoutTrack = styled.div`
   margin-top: 5px;
@@ -11487,43 +11137,8 @@ const ElectionOverviewPickCard = styled.button`
   }
 `
 
-const ElectionMajorityHeaderRow = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 5px;
-  font-size: 11px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  ${DIGIT_DISPLAY}
 
-  .maj strong {
-    font-weight: 700;
-    color: ${({ theme }) => ledgerAccent(theme.mode)};
-  }
-`
 
-const ElectionHeroPartyBarWrap = styled.div`
-  position: relative;
-  width: 100%;
-  margin-bottom: 7px;
-`
-
-const ElectionMajorityTick = styled.span`
-  position: absolute;
-  left: 50%;
-  top: -3px;
-  bottom: -3px;
-  width: 2px;
-  transform: translateX(-50%);
-  background: ${({ theme }) =>
-    theme.mode === 'dark' ? '#f8fafc' : '#0f172a'};
-  box-shadow: 0 0 0 1px
-    ${({ theme }) =>
-      theme.mode === 'dark' ? 'rgba(0,0,0,0.65)' : 'rgba(255,255,255,0.85)'};
-  pointer-events: none;
-  z-index: 2;
-`
 
 const ElectionOverviewRowStack = styled.div`
   display: flex;

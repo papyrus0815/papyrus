@@ -46,18 +46,19 @@ function renderModal(props: Partial<React.ComponentProps<typeof ElectionFormModa
 }
 
 describe('ElectionFormModal — 사건 등록 모달 문법', () => {
-  it('2단 분할(좌 기본 / 우 의회·집계) + 머리 섹션 이동, 유형·상태는 사건 분야 칩, 날짜는 사건 날짜 칸', () => {
+  it('2단 반반 분할(좌 기본·투표결과 / 우 의회·서술) + 머리 섹션 이동, 유형·상태는 사건 분야 칩, 날짜는 사건 날짜 칸', () => {
     renderModal()
-    for (const heading of ['기본 정보', '의회·임기', '집계·설명']) {
+    for (const heading of ['기본 정보', '투표·결과', '의회·서술']) {
       expect(screen.getByRole('heading', { name: heading })).toBeInTheDocument()
     }
     expect(screen.getByRole('navigation', { name: '폼 섹션 이동' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '1단 세로 보기로 전환' })).toHaveAttribute('aria-pressed', 'true')
-    expect(document.getElementById('election-form-split-left')).toContainElement(
-      screen.getByRole('heading', { name: '기본 정보' }),
-    )
+    /* 성격 순서: 왼쪽 = 어떤 선거인가 → 투표·결과, 오른쪽 = 그 선거로 꾸려진 의회 → 긴 글 */
+    const leftColumn = document.getElementById('election-form-split-left')
+    expect(leftColumn).toContainElement(screen.getByRole('heading', { name: '기본 정보' }))
+    expect(leftColumn).toContainElement(screen.getByRole('heading', { name: '투표·결과' }))
     expect(document.getElementById('election-form-split-right')).toContainElement(
-      screen.getByRole('heading', { name: '집계·설명' }),
+      screen.getByRole('heading', { name: '의회·서술' }),
     )
     expect(screen.getByRole('radiogroup', { name: /^유형/ })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: '국회·의회 지역구' })).toHaveAttribute('aria-checked', 'true')
@@ -100,8 +101,8 @@ describe('ElectionFormModal — 사건 등록 모달 문법', () => {
     renderModal()
     const scrollSpy = jest.mocked(Element.prototype.scrollIntoView)
     scrollSpy.mockClear()
-    fireEvent.click(screen.getByRole('button', { name: /집계·설명/ }))
+    fireEvent.click(screen.getByRole('button', { name: /의회·서술/ }))
     expect(scrollSpy).toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: /집계·설명/ })).toHaveAttribute('aria-current', 'location')
+    expect(screen.getByRole('button', { name: /의회·서술/ })).toHaveAttribute('aria-current', 'location')
   })
 })
