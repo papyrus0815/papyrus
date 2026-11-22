@@ -444,6 +444,8 @@ model Event {
   organizationRelations   EventOrganizationRelation[]
   /// 이 사건에 관여한 정당 — 혁명·봉기·총파업·쿠데타·연정 위기·전당대회 등 정본 PoliticalParty 직접 연결
   politicalPartyRelations EventPoliticalPartyRelation[]
+  /// 이 사건을 계기로 한 정당 법적 지위 구간
+  politicalPartyLegalStatuses PoliticalPartyLegalStatus[] @relation("PoliticalPartyLegalStatusEvent")
   /// 이 사건에 관여한 국가 기관(발령·수령·주체·관여) — OKW가 지령을 하달하는 식
   departmentRelations     EventDepartmentRelation[]
   relatedEvents         EventRelation[]             @relation("EventToRelated")

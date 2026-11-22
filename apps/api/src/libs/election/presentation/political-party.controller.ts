@@ -19,7 +19,11 @@ import {
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 import { AuthGuard } from '@nestjs/passport'
-import { EventMethod, GovernmentPositionType } from '@prisma/client'
+import {
+  EventMethod,
+  GovernmentPositionType,
+  PoliticalPartyKind,
+} from '@prisma/client'
 
 import { PrismaService } from '@prisma/prisma.service'
 import { resolveCountryScopeOr } from '../../country/domain/country-scope.util'
@@ -32,6 +36,16 @@ import {
   membershipOverlapsTenure,
 } from '../domain/party-top-leaders.util'
 import { serializeElectionBigInt } from '../election-serialize.util'
+import {
+  type StructuredDateColumns,
+  type StructuredDateInput,
+  assertStructuredRangeOrder,
+  parseStructuredDateInput,
+  readStructuredDate,
+  structuredDateData,
+  structuredDateFromLegacyIso,
+  structuredDateMirror,
+} from '../domain/party-structured-date.util'
 import { dateYearRangePreview } from '../../shared/notification-preview.util'
 
 export interface AddPartyLawBody {
@@ -40,14 +54,24 @@ export interface AddPartyLawBody {
   sortOrder?: number
 }
 
+const PARTY_KIND_VALUES = new Set<string>(Object.values(PoliticalPartyKind))
+
 export interface CreatePoliticalPartyBody {
   name: string
   shortName?: string | null
   localName?: string | null
   ideology?: string | null
   position?: string | null
+  /** 종류 — PARTY(기본)·MOVEMENT·FACTION·PARLIAMENTARY_GROUP·ELECTORAL_LIST·OTHER */
+  kind?: string | null
   description?: string | null
+  /** 구조화 창당일(BC·연 정밀도) — 있으면 foundedDate보다 우선 */
+  founded?: StructuredDateInput | null
+  /** 구조화 해산일 */
+  dissolved?: StructuredDateInput | null
+  /** @deprecated ISO — 구 클라이언트 호환. founded가 정본 */
   foundedDate?: string | null
+  /** @deprecated ISO — dissolved가 정본 */
   dissolvedDate?: string | null
   logoUrl?: string | null
   headquartersCityId?: string | null
@@ -62,8 +86,13 @@ export interface UpdatePoliticalPartyBody {
   localName?: string | null
   ideology?: string | null
   position?: string | null
+  kind?: string | null
   description?: string | null
+  founded?: StructuredDateInput | null
+  dissolved?: StructuredDateInput | null
+  /** @deprecated ISO — founded가 정본 */
   foundedDate?: string | null
+  /** @deprecated ISO — dissolved가 정본 */
   dissolvedDate?: string | null
   logoUrl?: string | null
   headquartersCityId?: string | null
@@ -531,9 +560,11 @@ export class PoliticalPartyController {
     @Body()
     body: CreatePoliticalPartyBody,
   ): Promise<any> {
-    const foundedDate = this.parseOptionalDate(body.foundedDate, '창당일')
-    const dissolvedDate = this.parseOptionalDate(body.dissolvedDate, '해산일')
-    this.assertPartyDateOrder(foundedDate ?? null, dissolvedDate ?? null)
+    const founded = this.resolvePartyDate(body.founded, body.foundedDate, '창당일')
+    const dissolved = this.resolvePartyDate(body.dissolved, body.dissolvedDate, '해산일')
+    const foundedColumns = founded ?? readStructuredDate({}, 'founded')
+    const dissolvedColumns = dissolved ?? readStructuredDate({}, 'dissolved')
+    assertStructuredRangeOrder(foundedColumns, dissolvedColumns, '해산일은 창당일 이후여야 합니다.')
 
     const row = await this.prisma.politicalParty.create({
       data: {
@@ -542,9 +573,10 @@ export class PoliticalPartyController {
         localName: body.localName ?? undefined,
         ideology: body.ideology ?? undefined,
         position: body.position as any,
+        kind: this.parsePartyKind(body.kind) ?? undefined,
         description: body.description ?? undefined,
-        foundedDate: foundedDate ?? undefined,
-        dissolvedDate: dissolvedDate ?? undefined,
+        ...this.partyDateData('founded', foundedColumns),
+        ...this.partyDateData('dissolved', dissolvedColumns),
         logoUrl: body.logoUrl ?? undefined,
         brandColor: body.brandColor ?? undefined,
         headquartersCityId: body.headquartersCityId ?? undefined,
@@ -571,8 +603,16 @@ export class PoliticalPartyController {
       where: { id },
       select: {
         id: true,
-        foundedDate: true,
-        dissolvedDate: true,
+        foundedEra: true,
+        foundedYear: true,
+        foundedMonth: true,
+        foundedDay: true,
+        foundedPrecision: true,
+        dissolvedEra: true,
+        dissolvedYear: true,
+        dissolvedMonth: true,
+        dissolvedDay: true,
+        dissolvedPrecision: true,
         countryId: true,
         historicalCountryId: true,
       },
@@ -585,28 +625,23 @@ export class PoliticalPartyController {
     if (body.localName !== undefined) data.localName = body.localName
     if (body.ideology !== undefined) data.ideology = body.ideology
     if (body.position !== undefined) data.position = body.position
+    if (body.kind !== undefined) data.kind = this.parsePartyKind(body.kind) ?? PoliticalPartyKind.PARTY
     if (body.description !== undefined) data.description = body.description
-    if (body.foundedDate !== undefined) {
-      data.foundedDate = this.parseOptionalDate(body.foundedDate, '창당일')
-    }
-    if (body.dissolvedDate !== undefined) {
-      data.dissolvedDate = this.parseOptionalDate(body.dissolvedDate, '해산일')
-    }
+    const founded = this.resolvePartyDate(body.founded, body.foundedDate, '창당일')
+    const dissolved = this.resolvePartyDate(body.dissolved, body.dissolvedDate, '해산일')
+    if (founded) Object.assign(data, this.partyDateData('founded', founded))
+    if (dissolved) Object.assign(data, this.partyDateData('dissolved', dissolved))
     if (body.logoUrl !== undefined) data.logoUrl = body.logoUrl
     if (body.brandColor !== undefined) data.brandColor = body.brandColor
     if (body.headquartersCityId !== undefined) data.headquartersCityId = body.headquartersCityId
     if (body.countryId !== undefined) data.countryId = body.countryId
     if (body.historicalCountryId !== undefined) data.historicalCountryId = body.historicalCountryId
 
-    const nextFounded =
-      body.foundedDate !== undefined
-        ? (data.foundedDate as Date | null)
-        : existing.foundedDate
-    const nextDissolved =
-      body.dissolvedDate !== undefined
-        ? (data.dissolvedDate as Date | null)
-        : existing.dissolvedDate
-    this.assertPartyDateOrder(nextFounded ?? null, nextDissolved ?? null)
+    assertStructuredRangeOrder(
+      founded ?? readStructuredDate(existing, 'founded'),
+      dissolved ?? readStructuredDate(existing, 'dissolved'),
+      '해산일은 창당일 이후여야 합니다.',
+    )
 
     const row = await this.prisma.politicalParty.update({
       where: { id },
@@ -633,29 +668,34 @@ export class PoliticalPartyController {
     )
   }
 
-  private parseOptionalDate(
-    raw: string | null | undefined,
+  /**
+   * 창당·해산일 입력 해석 — 구조화(founded)가 정본, 없으면 레거시 ISO(foundedDate).
+   * 둘 다 undefined면 undefined(수정 시 '건드리지 않음').
+   */
+  private resolvePartyDate(
+    structured: StructuredDateInput | null | undefined,
+    legacyIso: string | null | undefined,
     fieldLabel: string,
-  ): Date | null {
-    if (raw == null || raw === '') return null
-    const d = new Date(raw)
-    if (Number.isNaN(d.getTime())) {
-      throw new BadRequestException(`${fieldLabel} 날짜 형식이 올바르지 않습니다.`)
-    }
-    return d
+  ): StructuredDateColumns | undefined {
+    if (structured !== undefined) return parseStructuredDateInput(structured, fieldLabel)
+    if (legacyIso !== undefined) return structuredDateFromLegacyIso(legacyIso, fieldLabel)
+    return undefined
   }
 
-  private assertPartyDateOrder(
-    foundedDate: Date | null,
-    dissolvedDate: Date | null,
-  ): void {
-    if (
-      foundedDate != null &&
-      dissolvedDate != null &&
-      dissolvedDate.getTime() < foundedDate.getTime()
-    ) {
-      throw new BadRequestException('해산일은 창당일 이후여야 합니다.')
+  /** 구조화 칸 + DATETIME 거울(foundedDate/dissolvedDate) */
+  private partyDateData(prefix: 'founded' | 'dissolved', columns: StructuredDateColumns) {
+    return {
+      ...structuredDateData(prefix, columns),
+      [`${prefix}Date`]: structuredDateMirror(columns),
     }
+  }
+
+  private parsePartyKind(raw: string | null | undefined): PoliticalPartyKind | null {
+    if (raw == null || raw === '') return null
+    if (!PARTY_KIND_VALUES.has(raw)) {
+      throw new BadRequestException(`정당 종류가 올바르지 않습니다: ${raw}`)
+    }
+    return raw as PoliticalPartyKind
   }
 
   private async ensureParty(id: string) {

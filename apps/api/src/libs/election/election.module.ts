@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common'
 import { PrismaModule } from '../shared/database'
 import { PoliticalPartyController } from './presentation/political-party.controller'
+import { PoliticalPartyIdentityController } from './presentation/political-party-identity.controller'
 import { PoliticalPartyTransitionController } from './presentation/political-party-transition.controller'
 import { ElectoralDistrictController } from './presentation/electoral-district.controller'
 import { ElectionController } from './presentation/election.controller'
@@ -16,6 +17,7 @@ import { EventModule } from '../event/infrastructure/event.module'
   imports: [PrismaModule, NotificationModule, EventModule],
   controllers: [
     PoliticalPartyController,
+    PoliticalPartyIdentityController,
     PoliticalPartyTransitionController,
     ElectoralDistrictController,
     ElectionController,

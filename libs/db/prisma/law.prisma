@@ -90,6 +90,8 @@ model Law {
   historicalCountry HistoricalCountry? @relation("LawHistoricalCountry", fields: [historicalCountryId], references: [id], onDelete: SetNull)
   /// 정당과의 연결 (`politics.prisma` PoliticalPartyLaw)
   politicalPartyLaws PoliticalPartyLaw[] @relation("PoliticalPartyLawLink")
+  /// 정당 법적 지위의 근거 법령
+  politicalPartyLegalStatuses PoliticalPartyLegalStatus[] @relation("PoliticalPartyLegalStatusLaw")
   /// 이 법령·명령이 제정·적용·위반된 역사적 사건 연결
   eventContextLinks  EventContextLink[]  @relation("EventContextLaw")
 
