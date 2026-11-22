@@ -23,6 +23,7 @@ import {
   EventMethod,
   GovernmentPositionType,
   PoliticalPartyKind,
+  Prisma,
 } from '@prisma/client'
 
 import { PrismaService } from '@prisma/prisma.service'
@@ -37,6 +38,7 @@ import {
 } from '../domain/party-top-leaders.util'
 import { serializeElectionBigInt } from '../election-serialize.util'
 import { ideologyIdsFromText, syncPartyIdeologies } from '../domain/party-ideology.util'
+import { normalizeColorPalette, syncPrimaryLogoFromParty } from '../domain/party-marks.util'
 import {
   type StructuredDateColumns,
   type StructuredDateInput,
@@ -77,11 +79,15 @@ export interface CreatePoliticalPartyBody {
   foundedDate?: string | null
   /** @deprecated ISO — dissolved가 정본 */
   dissolvedDate?: string | null
+  /** 대표 로고 — 표지(LOGO 대표)로 들어간다(logoUrl은 캐시) */
   logoUrl?: string | null
+  /** @deprecated 당사는 /headquarters 이력이 정본(이 칸은 캐시) — 쓰면 무시된다 */
   headquartersCityId?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
   brandColor?: string | null
+  /** 상징색 여러 개 — #RRGGBB 배열(최대 12) */
+  colorPalette?: string[] | null
 }
 
 export interface UpdatePoliticalPartyBody {
@@ -101,10 +107,12 @@ export interface UpdatePoliticalPartyBody {
   /** @deprecated ISO — dissolved가 정본 */
   dissolvedDate?: string | null
   logoUrl?: string | null
+  /** @deprecated 당사는 /headquarters 이력이 정본 — 쓰면 무시된다 */
   headquartersCityId?: string | null
   countryId?: string | null
   historicalCountryId?: string | null
   brandColor?: string | null
+  colorPalette?: string[] | null
 }
 
 /**
@@ -580,14 +588,14 @@ export class PoliticalPartyController {
         description: body.description ?? undefined,
         ...this.partyDateData('founded', foundedColumns),
         ...this.partyDateData('dissolved', dissolvedColumns),
-        logoUrl: body.logoUrl ?? undefined,
         brandColor: body.brandColor ?? undefined,
-        headquartersCityId: body.headquartersCityId ?? undefined,
+        colorPalette: this.parseColorPalette(body.colorPalette) ?? undefined,
         countryId: body.countryId ?? undefined,
         historicalCountryId: body.historicalCountryId ?? undefined,
       },
     })
     await this.applyIdeologies(row.id, body.ideologyIds, body.ideology)
+    if (body.logoUrl) await syncPrimaryLogoFromParty(this.prisma, row.id, body.logoUrl)
     await this.notificationService.notifyPoliticalParty(
       row.name,
       EventMethod.CREATE,
@@ -634,9 +642,8 @@ export class PoliticalPartyController {
     const dissolved = this.resolvePartyDate(body.dissolved, body.dissolvedDate, '해산일')
     if (founded) Object.assign(data, this.partyDateData('founded', founded))
     if (dissolved) Object.assign(data, this.partyDateData('dissolved', dissolved))
-    if (body.logoUrl !== undefined) data.logoUrl = body.logoUrl
     if (body.brandColor !== undefined) data.brandColor = body.brandColor
-    if (body.headquartersCityId !== undefined) data.headquartersCityId = body.headquartersCityId
+    if (body.colorPalette !== undefined) data.colorPalette = this.parseColorPalette(body.colorPalette) ?? Prisma.DbNull
     if (body.countryId !== undefined) data.countryId = body.countryId
     if (body.historicalCountryId !== undefined) data.historicalCountryId = body.historicalCountryId
 
@@ -651,6 +658,7 @@ export class PoliticalPartyController {
       data: data as any,
     })
     await this.applyIdeologies(id, body.ideologyIds, body.ideology)
+    if (body.logoUrl !== undefined) await syncPrimaryLogoFromParty(this.prisma, id, body.logoUrl?.trim() || null)
     const row = await this.prisma.politicalParty.findUniqueOrThrow({ where: { id } })
     await this.notificationService.notifyPoliticalParty(
       row.name,
@@ -710,6 +718,12 @@ export class PoliticalPartyController {
         await syncPartyIdeologies(tx, partyId, ids)
       })
     }
+  }
+
+  private parseColorPalette(raw: unknown): string[] | null {
+    const { value, error } = normalizeColorPalette(raw)
+    if (error) throw new BadRequestException(error)
+    return value
   }
 
   /** 구조화 칸 + DATETIME 거울(foundedDate/dissolvedDate) */

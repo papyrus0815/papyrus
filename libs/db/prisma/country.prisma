@@ -429,6 +429,8 @@ model City {
   Event                  Event[]
   Organizations          Organization[]          @relation("OrganizationHeadquartersCity")
   PoliticalParty         PoliticalParty[]        @relation("PoliticalPartyHeadquartersCity")
+  /// 정당 당사 이력
+  PoliticalPartyHeadquartersHistory PoliticalPartyHeadquarters[] @relation("PoliticalPartyHeadquartersHistoryCity")
   personsBornHere        Person[]                @relation("PersonBirthCity")
   personsDiedHere        Person[]                @relation("PersonDeathCity")
 

@@ -4,6 +4,7 @@ import { PoliticalPartyController } from './presentation/political-party.control
 import { PoliticalPartyIdentityController } from './presentation/political-party-identity.controller'
 import { PoliticalPartyIdeologyController } from './presentation/political-party-ideology.controller'
 import { PoliticalPartyOrganizationController } from './presentation/political-party-organization.controller'
+import { PoliticalPartyMarksController } from './presentation/political-party-marks.controller'
 import { PoliticalPartyTransitionController } from './presentation/political-party-transition.controller'
 import { ElectoralDistrictController } from './presentation/electoral-district.controller'
 import { ElectionController } from './presentation/election.controller'
@@ -22,6 +23,7 @@ import { EventModule } from '../event/infrastructure/event.module'
     PoliticalPartyIdentityController,
     PoliticalPartyIdeologyController,
     PoliticalPartyOrganizationController,
+    PoliticalPartyMarksController,
     PoliticalPartyTransitionController,
     ElectoralDistrictController,
     ElectionController,

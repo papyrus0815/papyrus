@@ -155,13 +155,16 @@ model PoliticalParty {
   dissolvedDay       Int?    @map("dissolved_day")
   dissolvedPrecision String? @map("dissolved_precision") @db.VarChar(10)
 
-  /// 로고
+  /// 대표 로고 캐시 — 정본은 PoliticalPartySymbol(kind=LOGO, isPrimary). 서비스가 같은 트랜잭션에서 맞춘다
   logoUrl String? @map("logo_url") @db.VarChar(255)
 
-  /// 차트·목록 강조용 브랜드 컬러 (#RRGGBB)
+  /// 차트·목록 강조용 브랜드 컬러 (#RRGGBB) — 하나
   brandColor String? @map("brand_color") @db.VarChar(7)
 
-  /// 본부 소재 도시
+  /// 상징색 여러 개 — #RRGGBB 문자열 배열(검정·빨강). 차트용은 brandColor
+  colorPalette Json? @map("color_palette")
+
+  /// 현재 당사 도시 캐시 — 정본은 PoliticalPartyHeadquarters(지속 중 행, 없으면 가장 늦은 행)
   headquartersCityId String? @map("headquarters_city_id") @db.Char(36)
 
   //--- 외래키(국가 맥락)
@@ -186,6 +189,12 @@ model PoliticalParty {
   ideologyLinks        PoliticalPartyIdeology[]
   /// 스펙트럼 기간 변화
   positionPeriods      PoliticalPartyPositionPeriod[]
+  /// 표지 — 로고·당기·상징·투표 상징·사진·포스터
+  symbols              PoliticalPartySymbol[]
+  /// 표현 — 표어·구호·당가·인사법
+  expressions          PoliticalPartyExpression[]
+  /// 당사 이전 이력
+  headquarters         PoliticalPartyHeadquarters[]
   affiliations         PoliticalPartyOrganization[]
   /// 일반 당원·소속 기간
   memberships          PoliticalPartyMembership[]   @relation("PartyMemberships")
@@ -371,6 +380,174 @@ model PoliticalPartyPositionPeriod {
 
   @@index([partyId], name: "idx_party_position_period_partyId")
   @@map("political_party_position_period")
+}
+
+// ========================
+// PoliticalPartySymbol (표지)
+// ========================
+
+enum PoliticalPartySymbolKind {
+  /// 로고·당 휘장
+  LOGO
+  /// 당기
+  FLAG
+  /// 상징물 — 파스케스, 낫과 망치
+  EMBLEM
+  /// 투표 상징 — 인도 국민회의의 손바닥(문맹 유권자용 기표 그림)
+  BALLOT_SYMBOL
+  /// 사진 — 당사·집회
+  PHOTO
+  /// 포스터·선전물
+  POSTER
+  /// 기타
+  OTHER
+}
+
+/// 정당의 표지 이미지 — 종류·기간·캡션. 같은 종류 안의 대표 하나(isPrimary). 대표 LOGO는 PoliticalParty.logoUrl 캐시.
+model PoliticalPartySymbol {
+  id String @id @default(uuid()) @db.Char(36)
+
+  partyId String @map("party_id") @db.Char(36)
+
+  kind PoliticalPartySymbolKind
+
+  /// 업로드 경로(/uploads/…) 또는 외부 URL
+  imageUrl String @map("image_url") @db.VarChar(500)
+
+  /// 캡션 — '1934년 총선 앞둔 당사(팔라초 브라스키)'
+  caption String? @db.Text
+
+  isPrimary Boolean @default(false) @map("is_primary")
+
+  startEra       Era?    @map("start_era")
+  startYear      Int?    @map("start_year")
+  startMonth     Int?    @map("start_month")
+  startDay       Int?    @map("start_day")
+  startPrecision String? @map("start_precision") @db.VarChar(10)
+  endEra         Era?    @map("end_era")
+  endYear        Int?    @map("end_year")
+  endMonth       Int?    @map("end_month")
+  endDay         Int?    @map("end_day")
+  endPrecision   String? @map("end_precision") @db.VarChar(10)
+
+  sortOrder Int @default(0) @map("sort_order")
+
+  party PoliticalParty @relation(fields: [partyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([partyId, kind], name: "idx_party_symbol_party_kind")
+  @@map("political_party_symbol")
+}
+
+// ========================
+// PoliticalPartyExpression (표현)
+// ========================
+
+enum PoliticalPartyExpressionKind {
+  /// 표어 — Credere, Obbedire, Combattere
+  MOTTO
+  /// 선거 구호
+  SLOGAN
+  /// 당가 — Giovinezza
+  ANTHEM
+  /// 당 노래(당가 외)
+  PARTY_SONG
+  /// 인사법·경례
+  SALUTE
+  /// 기타
+  OTHER
+}
+
+/// 정당의 말·노래 — 원문·언어·번역·기간·음원/악보 링크. 같은 종류 안의 대표 하나(isPrimary).
+model PoliticalPartyExpression {
+  id String @id @default(uuid()) @db.Char(36)
+
+  partyId String @map("party_id") @db.Char(36)
+
+  kind PoliticalPartyExpressionKind
+
+  /// 원문(노래는 제목) — 'Credere, Obbedire, Combattere', 'Giovinezza'
+  originalText String @map("original_text") @db.Text
+
+  /// 원문 언어 ISO 639
+  languageCode String? @map("language_code") @db.VarChar(10)
+
+  /// 번역 — '믿고, 따르고, 싸우라', '청춘이여'
+  translation String? @db.Text
+
+  /// 음원·악보·가사 링크
+  mediaUrl String? @map("media_url") @db.VarChar(500)
+
+  isPrimary Boolean @default(false) @map("is_primary")
+
+  startEra       Era?    @map("start_era")
+  startYear      Int?    @map("start_year")
+  startMonth     Int?    @map("start_month")
+  startDay       Int?    @map("start_day")
+  startPrecision String? @map("start_precision") @db.VarChar(10)
+  endEra         Era?    @map("end_era")
+  endYear        Int?    @map("end_year")
+  endMonth       Int?    @map("end_month")
+  endDay         Int?    @map("end_day")
+  endPrecision   String? @map("end_precision") @db.VarChar(10)
+
+  note      String? @db.Text
+  sortOrder Int     @default(0) @map("sort_order")
+
+  party PoliticalParty @relation(fields: [partyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([partyId, kind], name: "idx_party_expression_party_kind")
+  @@map("political_party_expression")
+}
+
+// ========================
+// PoliticalPartyHeadquarters (당사 이력)
+// ========================
+
+/// 당사가 놓였던 곳 — 도시(선택 FK)·건물·주소·기간. 지속 중 행(없으면 가장 늦은 행)의 도시가 PoliticalParty.headquartersCityId 캐시.
+model PoliticalPartyHeadquarters {
+  id String @id @default(uuid()) @db.Char(36)
+
+  partyId String @map("party_id") @db.Char(36)
+
+  cityId String? @map("city_id") @db.Char(36)
+
+  /// 건물 — 팔라초 브라스키(Palazzo Braschi)
+  buildingName String? @map("building_name") @db.VarChar(200)
+
+  address String? @db.VarChar(300)
+
+  startEra       Era?    @map("start_era")
+  startYear      Int?    @map("start_year")
+  startMonth     Int?    @map("start_month")
+  startDay       Int?    @map("start_day")
+  startPrecision String? @map("start_precision") @db.VarChar(10)
+  endEra         Era?    @map("end_era")
+  endYear        Int?    @map("end_year")
+  endMonth       Int?    @map("end_month")
+  endDay         Int?    @map("end_day")
+  endPrecision   String? @map("end_precision") @db.VarChar(10)
+
+  isCurrent Boolean @default(false) @map("is_current")
+
+  note      String? @db.Text
+  sortOrder Int     @default(0) @map("sort_order")
+
+  party PoliticalParty @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  /// FK 이름을 따로 — 기본 이름이 political_party.headquarters_city_id FK와 겹친다
+  city  City?          @relation("PoliticalPartyHeadquartersHistoryCity", fields: [cityId], references: [id], onDelete: SetNull, map: "party_hq_history_city_id_fkey")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([partyId], name: "idx_party_hq_partyId")
+  @@index([cityId], name: "idx_party_hq_cityId")
+  @@map("political_party_headquarters")
 }
 
 // ========================
