@@ -25,13 +25,17 @@ import {
   FiCornerUpLeft,
   FiCornerUpRight,
   FiFlag,
+  FiGitBranch,
   FiHome,
+  FiList,
   FiMapPin,
   FiMoreHorizontal,
   FiPieChart,
   FiRefreshCw,
+  FiTrendingUp,
   FiUmbrella,
   FiUser,
+  FiUsers,
   FiXCircle,
   FiZap,
   FiAlertTriangle,
@@ -169,6 +173,16 @@ export const POSITION_TONE_OPTIONS = [
   { value: 'RIGHT', label: '우파', Icon: FiChevronRight, ...BLUE },
   { value: 'FAR_RIGHT', label: '극우', Icon: FiChevronsRight, ...NAVY },
   { value: 'BIG_TENT', label: '빅텐트', Icon: FiUmbrella, ...AMBER, title: '좌우를 아우르는 포괄 정당' },
+] as const satisfies ReadonlyArray<ToneChipOption>
+
+/** 정당 종류 — 값·라벨 정본은 shared/api/political-party(POLITICAL_PARTY_KIND_OPTIONS) */
+export const PARTY_KIND_TONE_OPTIONS = [
+  { value: 'PARTY', label: '정당', Icon: FiFlag, ...INDIGO, title: '근대 정당' },
+  { value: 'MOVEMENT', label: '정치 운동', Icon: FiTrendingUp, ...ORANGE, title: '정당으로 조직되기 전 단계 — 전투 파쇼(1919)' },
+  { value: 'FACTION', label: '붕당·파벌', Icon: FiGitBranch, ...VIOLET, title: '선거 없는 정치 집단 — 동인·서인, 옵티마테스' },
+  { value: 'PARLIAMENTARY_GROUP', label: '의회 클럽·교섭단체', Icon: FiUsers, ...TEAL, title: '원내 집단' },
+  { value: 'ELECTORAL_LIST', label: '공동 명부', Icon: FiList, ...AMBER, title: '여러 정당이 한 명부로 한 정당처럼 득표' },
+  { value: 'OTHER', label: '기타', Icon: FiMoreHorizontal, ...SLATE },
 ] as const satisfies ReadonlyArray<ToneChipOption>
 
 /** 선거 유형 — 라벨은 ELECTION_TYPE_OPTIONS와 같다(값·라벨 정본은 shared/api/election) */

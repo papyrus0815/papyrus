@@ -101,6 +101,19 @@ export type PoliticalPartyRow = {
   historicalCountry?: { id: string; name: string } | null
   /** 이념 위치(`PoliticalPosition` — FAR_LEFT…FAR_RIGHT·BIG_TENT). 의회 좌석도 좌→우 배열에 쓴다 */
   position?: string | null
+  /** 종류 — PARTY·MOVEMENT·FACTION·PARLIAMENTARY_GROUP·ELECTORAL_LIST·OTHER */
+  kind?: string | null
+  /** 구조화 창당·해산일(진실). foundedDate/dissolvedDate는 AD1000+ 거울 */
+  foundedEra?: 'BC' | 'AD' | null
+  foundedYear?: number | null
+  foundedMonth?: number | null
+  foundedDay?: number | null
+  foundedPrecision?: string | null
+  dissolvedEra?: 'BC' | 'AD' | null
+  dissolvedYear?: number | null
+  dissolvedMonth?: number | null
+  dissolvedDay?: number | null
+  dissolvedPrecision?: string | null
 }
 
 // --- Party membership ---

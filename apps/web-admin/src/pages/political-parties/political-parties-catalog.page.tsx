@@ -48,6 +48,13 @@ import {
   type PoliticalPosition,
 } from '@/shared/api/political-party'
 import { getUploadImageUrl } from '@/shared/api/upload'
+import {
+  formatPartialDate,
+  isPartyDissolved,
+  partialSignedYear,
+  partyDissolvedOn,
+  partyFoundedOn,
+} from '@/shared/lib/party-dates'
 import { pathKeys } from '@/shared/router'
 import { confirm } from '@/shared/ui/confirm-dialog/confirm'
 import { RichTextReadView } from '@/shared/ui/rich-text-read-view'
@@ -86,14 +93,6 @@ const CABINET_PARTY_ROLE_LABEL: Record<string, string> = {
   JUNIOR_COALITION: '연정 파트너',
   CONFIDENCE_AND_SUPPLY: '각외 협력',
   OPPOSITION: '야당',
-}
-
-function parseYear(iso?: string | null): number | null {
-  if (!iso) return null
-  const m = /^(-?\d{4})/.exec(iso)
-  if (!m) return null
-  const yr = Number(m[1])
-  return Number.isFinite(yr) ? yr : null
 }
 
 function formatIsoDateShort(iso?: string | null): string | null {
@@ -258,7 +257,7 @@ export function PoliticalPartiesCatalogPage() {
     for (const pos of SPECTRUM_ORDER) spectrumCounts[pos] = 0
 
     for (const p of allParties) {
-      if (p.dissolvedDate) dissolved += 1
+      if (isPartyDissolved(p)) dissolved += 1
       else active += 1
       if ((p._count?.eventRelations ?? 0) > 0) eventLinked += 1
       if ((p._count?.electionPartyResults ?? 0) > 0) electionLinked += 1
@@ -311,8 +310,8 @@ export function PoliticalPartiesCatalogPage() {
       if (polityFilter !== 'all' && partyPolityKey(p) !== polityFilter) {
         return false
       }
-      if (statusFilter === 'active' && p.dissolvedDate) return false
-      if (statusFilter === 'dissolved' && !p.dissolvedDate) return false
+      if (statusFilter === 'active' && isPartyDissolved(p)) return false
+      if (statusFilter === 'dissolved' && !isPartyDissolved(p)) return false
       if (q) {
         const hay = [
           p.name,
@@ -330,21 +329,21 @@ export function PoliticalPartiesCatalogPage() {
       return true
     })
 
-    return list.sort((a, b) => {
+    return list.sort((partyLeft, partyRight) => {
       if (sortBy === 'name') {
-        return a.name.localeCompare(b.name, 'ko')
+        return partyLeft.name.localeCompare(partyRight.name, 'ko')
       }
       if (sortBy === 'records') {
-        const diff = totalRecordsOf(b) - totalRecordsOf(a)
+        const diff = totalRecordsOf(partyRight) - totalRecordsOf(partyLeft)
         if (diff !== 0) return diff
-        return a.name.localeCompare(b.name, 'ko')
+        return partyLeft.name.localeCompare(partyRight.name, 'ko')
       }
-      const ya = parseYear(a.foundedDate)
-      const yb = parseYear(b.foundedDate)
-      if (ya == null && yb == null) return a.name.localeCompare(b.name, 'ko')
-      if (ya == null) return 1
-      if (yb == null) return -1
-      return sortBy === 'founded_asc' ? ya - yb : yb - ya
+      const yearLeft = partialSignedYear(partyFoundedOn(partyLeft))
+      const yearRight = partialSignedYear(partyFoundedOn(partyRight))
+      if (yearLeft == null && yearRight == null) return partyLeft.name.localeCompare(partyRight.name, 'ko')
+      if (yearLeft == null) return 1
+      if (yearRight == null) return -1
+      return sortBy === 'founded_asc' ? yearLeft - yearRight : yearRight - yearLeft
     })
   }, [allParties, searchQuery, positionFilter, polityFilter, statusFilter, sortBy])
 
@@ -353,7 +352,7 @@ export function PoliticalPartiesCatalogPage() {
     const currentYear = new Date().getFullYear()
     let minYear = 1850
     for (const p of filteredParties) {
-      const fy = parseYear(p.foundedDate)
+      const fy = partialSignedYear(partyFoundedOn(p))
       if (fy != null && fy < minYear) minYear = fy
     }
     return { minYear: Math.min(minYear, currentYear - 20), maxYear: currentYear }
@@ -741,8 +740,8 @@ export function PoliticalPartiesCatalogPage() {
                   {group.parties.map((party) => {
                     const isSelected = party.id === selectedParty?.id
                     const color = partyAccentColor(party)
-                    const fYear = parseYear(party.foundedDate)
-                    const dYear = parseYear(party.dissolvedDate)
+                    const fYear = partialSignedYear(partyFoundedOn(party))
+                    const dYear = partialSignedYear(partyDissolvedOn(party))
                     const spanTotal = Math.max(1, yearBounds.maxYear - yearBounds.minYear)
                     const barLeft =
                       fYear != null
@@ -808,7 +807,7 @@ export function PoliticalPartiesCatalogPage() {
                           </PartyMetaLine>
                         </PartyMainCol>
 
-                        <LifespanYears $dissolved={Boolean(party.dissolvedDate)}>
+                        <LifespanYears $dissolved={isPartyDissolved(party)}>
                           {fYear != null ? fYear : '—'}–{dYear != null ? dYear : '현재'}
                         </LifespanYears>
 
@@ -818,7 +817,7 @@ export function PoliticalPartiesCatalogPage() {
                               $left={barLeft}
                               $width={barWidth}
                               $color={color}
-                              $dissolved={Boolean(party.dissolvedDate)}
+                              $dissolved={isPartyDissolved(party)}
                             />
                           )}
                         </LifespanTrack>
@@ -879,9 +878,9 @@ export function PoliticalPartiesCatalogPage() {
                     <ShortBadge>{detailParty.shortName}</ShortBadge>
                   )}
                   <CatalogStatusPill
-                    $dissolved={Boolean(detailParty.dissolvedDate)}
+                    $dissolved={isPartyDissolved(detailParty)}
                   >
-                    {detailParty.dissolvedDate ? '해산' : '현존'}
+                    {isPartyDissolved(detailParty) ? '해산' : '현존'}
                   </CatalogStatusPill>
                 </InspectorTitleRow>
                 {detailParty.localName && (
@@ -967,14 +966,14 @@ export function PoliticalPartiesCatalogPage() {
                   <MetaCell>
                     <MetaKey>창당일</MetaKey>
                     <MetaVal>
-                      {formatIsoDateShort(detailParty.foundedDate) ?? '미기록'}
+                      {formatPartialDate(partyFoundedOn(detailParty)) || '미기록'}
                     </MetaVal>
                   </MetaCell>
                   <MetaCell>
                     <MetaKey>해산·소멸일</MetaKey>
                     <MetaVal>
-                      {detailParty.dissolvedDate
-                        ? formatIsoDateShort(detailParty.dissolvedDate)
+                      {isPartyDissolved(detailParty)
+                        ? formatPartialDate(partyDissolvedOn(detailParty))
                         : '현존'}
                     </MetaVal>
                   </MetaCell>

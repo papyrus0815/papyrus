@@ -32,6 +32,156 @@ export const POLITICAL_POSITION_COLOR: Record<PoliticalPosition, string> = {
   BIG_TENT: '#0d9488',
 }
 
+/** 구조화 날짜 입력 — year는 크기값, 기원전은 era='BC'. 월 없는 일은 서버가 버린다 */
+export type StructuredDateInput = {
+  era: 'BC' | 'AD'
+  year: number
+  month?: number
+  day?: number
+}
+
+/** 정당 종류 — 근대 정당만이 아니라 운동·붕당·교섭단체·공동 명부까지 */
+export type PoliticalPartyKind =
+  | 'PARTY'
+  | 'MOVEMENT'
+  | 'FACTION'
+  | 'PARLIAMENTARY_GROUP'
+  | 'ELECTORAL_LIST'
+  | 'OTHER'
+
+export const POLITICAL_PARTY_KIND_OPTIONS: Array<{ value: PoliticalPartyKind; label: string; hint: string }> = [
+  { value: 'PARTY', label: '정당', hint: '근대 정당' },
+  { value: 'MOVEMENT', label: '정치 운동', hint: '정당으로 조직되기 전 단계 — 전투 파쇼(1919)' },
+  { value: 'FACTION', label: '붕당·파벌', hint: '선거 없는 정치 집단 — 동인·서인, 옵티마테스' },
+  { value: 'PARLIAMENTARY_GROUP', label: '의회 클럽·교섭단체', hint: '원내 집단' },
+  { value: 'ELECTORAL_LIST', label: '공동 명부', hint: '여러 정당이 한 명부로 한 정당처럼 득표' },
+  { value: 'OTHER', label: '기타', hint: '' },
+]
+
+export function labelPoliticalPartyKind(kind: string | null | undefined): string {
+  return POLITICAL_PARTY_KIND_OPTIONS.find((option) => option.value === kind)?.label ?? '정당'
+}
+
+/** 정당 이름 유형 */
+export type PoliticalPartyAliasType =
+  | 'OFFICIAL'
+  | 'LOCAL_NAME'
+  | 'TRANSLATION'
+  | 'COMMON'
+  | 'ACRONYM'
+  | 'ALIAS'
+  | 'FORMER_NAME'
+
+export const POLITICAL_PARTY_ALIAS_TYPE_OPTIONS: Array<{
+  value: PoliticalPartyAliasType
+  label: string
+  hint: string
+}> = [
+  { value: 'OFFICIAL', label: '공식명(기간)', hint: '그 기간의 공식 명칭 — 개명 이력' },
+  { value: 'LOCAL_NAME', label: '원어명', hint: 'Partito Nazionale Fascista' },
+  { value: 'TRANSLATION', label: '번역명', hint: 'National Fascist Party' },
+  { value: 'COMMON', label: '통칭', hint: '파시스트당' },
+  { value: 'ACRONYM', label: '약칭', hint: 'PNF' },
+  { value: 'ALIAS', label: '별칭', hint: '비공식 명칭' },
+  { value: 'FORMER_NAME', label: '과거명(구)', hint: '예전 입력 — 새로는 공식명 + 기간' },
+]
+
+export function labelPoliticalPartyAliasType(type: string | null | undefined): string {
+  return POLITICAL_PARTY_ALIAS_TYPE_OPTIONS.find((option) => option.value === type)?.label ?? type ?? ''
+}
+
+/** 구조화 기간 칸(응답) — start·end 접두 */
+export type StructuredPeriodFields = {
+  startEra?: 'BC' | 'AD' | null
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
+  startPrecision?: string | null
+  endEra?: 'BC' | 'AD' | null
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
+  endPrecision?: string | null
+}
+
+export type PoliticalPartyAliasDto = StructuredPeriodFields & {
+  id: string
+  partyId: string
+  name: string
+  type: PoliticalPartyAliasType
+  languageCode?: string | null
+  isPrimary: boolean
+  note?: string | null
+  sortOrder: number
+}
+
+export type PoliticalPartyAliasInput = {
+  name: string
+  type: PoliticalPartyAliasType
+  languageCode?: string | null
+  isPrimary?: boolean
+  start?: StructuredDateInput | null
+  end?: StructuredDateInput | null
+  note?: string | null
+  sortOrder?: number
+}
+
+/** 정당 법적 지위 */
+export type PoliticalPartyLegalStatusKind =
+  | 'LEGAL'
+  | 'SOLE_LEGAL'
+  | 'RULING_STATE_PARTY'
+  | 'BANNED'
+  | 'UNDERGROUND'
+  | 'IN_EXILE'
+  | 'SUSPENDED'
+  | 'CONSTITUTIONALLY_DISSOLVED'
+  | 'OTHER'
+
+export const POLITICAL_PARTY_LEGAL_STATUS_OPTIONS: Array<{
+  value: PoliticalPartyLegalStatusKind
+  label: string
+  hint: string
+}> = [
+  { value: 'LEGAL', label: '합법', hint: '합법 활동' },
+  { value: 'SOLE_LEGAL', label: '유일 합법 정당', hint: '다른 정당이 금지된 체제의 유일 정당' },
+  { value: 'RULING_STATE_PARTY', label: '당-국가', hint: '당이 국가 기구 위에 선다' },
+  { value: 'BANNED', label: '불법화', hint: '금지·불법 단체 지정' },
+  { value: 'UNDERGROUND', label: '지하 활동', hint: '금지 아래 비밀 활동' },
+  { value: 'IN_EXILE', label: '망명', hint: '국외에서 활동' },
+  { value: 'SUSPENDED', label: '활동 정지', hint: '일시 정지' },
+  { value: 'CONSTITUTIONALLY_DISSOLVED', label: '강제 해산', hint: '헌법재판·사법 판결로 해산' },
+  { value: 'OTHER', label: '기타', hint: '' },
+]
+
+export function labelPoliticalPartyLegalStatus(status: string | null | undefined): string {
+  return POLITICAL_PARTY_LEGAL_STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status ?? ''
+}
+
+export type PoliticalPartyLegalStatusDto = StructuredPeriodFields & {
+  id: string
+  partyId: string
+  status: PoliticalPartyLegalStatusKind
+  isCurrent: boolean
+  lawId?: string | null
+  eventId?: string | null
+  law?: { id: string; name: string } | null
+  event?: { id: string; title: string } | null
+  note?: string | null
+  sortOrder: number
+}
+
+export type PoliticalPartyLegalStatusInput = {
+  status: PoliticalPartyLegalStatusKind
+  start?: StructuredDateInput | null
+  end?: StructuredDateInput | null
+  isCurrent?: boolean
+  lawId?: string | null
+  eventId?: string | null
+  note?: string | null
+  sortOrder?: number
+}
+
 export type PoliticalPartyCounts = {
   memberships?: number
   leaderships?: number
@@ -51,12 +201,7 @@ export type PoliticalParty = PoliticalPartyRow & {
   dissolvedDate?: string | null
   logoUrl?: string | null
   brandColor?: string | null
-  aliases?: Array<{
-    id: string
-    name: string
-    type: string
-    languageCode?: string | null
-  }>
+  aliases?: PoliticalPartyAliasDto[]
   _count?: PoliticalPartyCounts
   createdAt?: string
   updatedAt?: string
@@ -68,8 +213,15 @@ export type CreatePoliticalPartyInput = {
   localName?: string | null
   ideology?: string | null
   position?: PoliticalPosition | null
+  kind?: PoliticalPartyKind
   description?: string | null
+  /** 구조화 창당일(정본) — null이면 지우기 */
+  founded?: StructuredDateInput | null
+  /** 구조화 해산일(정본) */
+  dissolved?: StructuredDateInput | null
+  /** @deprecated ISO — founded가 정본(빠른 등록 등 구 호출부 호환) */
   foundedDate?: string | null
+  /** @deprecated ISO — dissolved가 정본 */
   dissolvedDate?: string | null
   logoUrl?: string | null
   /** UI·차트용 #RRGGBB */
@@ -363,6 +515,64 @@ export const politicalPartyApi = {
   deleteTransition: async (transitionId: string) => {
     await requestJson<void>(
       `/political-party-transitions/${encodeURIComponent(transitionId)}`,
+      { method: 'DELETE' },
+    )
+  },
+
+  /** 이름 이력 — 공식명(기간)·원어·번역·통칭·약칭 */
+  getAliases: async (partyId: string) => {
+    return requestJson<PoliticalPartyAliasDto[]>(`/political-parties/${encodeURIComponent(partyId)}/aliases`)
+  },
+
+  createAlias: async (partyId: string, body: PoliticalPartyAliasInput) => {
+    return requestJson<PoliticalPartyAliasDto>(`/political-parties/${encodeURIComponent(partyId)}/aliases`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  updateAlias: async (partyId: string, aliasId: string, body: Partial<PoliticalPartyAliasInput>) => {
+    return requestJson<PoliticalPartyAliasDto>(
+      `/political-parties/${encodeURIComponent(partyId)}/aliases/${encodeURIComponent(aliasId)}`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+    )
+  },
+
+  deleteAlias: async (partyId: string, aliasId: string) => {
+    await requestJson<void>(
+      `/political-parties/${encodeURIComponent(partyId)}/aliases/${encodeURIComponent(aliasId)}`,
+      { method: 'DELETE' },
+    )
+  },
+
+  /** 법적 지위 기간 — 합법·유일 합법·불법화·강제 해산 */
+  getLegalStatuses: async (partyId: string) => {
+    return requestJson<PoliticalPartyLegalStatusDto[]>(
+      `/political-parties/${encodeURIComponent(partyId)}/legal-statuses`,
+    )
+  },
+
+  createLegalStatus: async (partyId: string, body: PoliticalPartyLegalStatusInput) => {
+    return requestJson<PoliticalPartyLegalStatusDto>(
+      `/political-parties/${encodeURIComponent(partyId)}/legal-statuses`,
+      { method: 'POST', body: JSON.stringify(body) },
+    )
+  },
+
+  updateLegalStatus: async (
+    partyId: string,
+    statusId: string,
+    body: Partial<PoliticalPartyLegalStatusInput>,
+  ) => {
+    return requestJson<PoliticalPartyLegalStatusDto>(
+      `/political-parties/${encodeURIComponent(partyId)}/legal-statuses/${encodeURIComponent(statusId)}`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+    )
+  },
+
+  deleteLegalStatus: async (partyId: string, statusId: string) => {
+    await requestJson<void>(
+      `/political-parties/${encodeURIComponent(partyId)}/legal-statuses/${encodeURIComponent(statusId)}`,
       { method: 'DELETE' },
     )
   },

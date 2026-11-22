@@ -66,8 +66,11 @@ import {
   type CreatePoliticalPartyInput,
   type PartyTopLeaderTenure,
   type PoliticalParty,
+  type PoliticalPartyKind,
   type PoliticalPartyTransitionKind,
   type PoliticalPosition,
+  POLITICAL_PARTY_KIND_OPTIONS,
+  labelPoliticalPartyKind,
   politicalPartyApi,
 } from '@/shared/api/political-party'
 import {
@@ -77,12 +80,28 @@ import {
 } from '@/shared/api/upload'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
 import { useRichTextProseClick } from '@/shared/hooks/use-rich-text-prose-click'
+import {
+  EMPTY_PERIOD_DATE,
+  type PeriodDateFormValue,
+  formatPartialDate,
+  isPartyDissolved,
+  isPeriodFormInverted,
+  partialOfFormValue,
+  partialSignedYear,
+  partialSortKey,
+  partyDissolvedOn,
+  partyFoundedOn,
+  periodDateFormError,
+  periodDateFormValue,
+  structuredInputOf,
+} from '@/shared/lib/party-dates'
 import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { isLikelyRichTextHtml } from '@/shared/lib/rich-text-read-view'
 import { sanitizeRichTextHtml } from '@/shared/lib/sanitize-rich-text-html'
 import { pathKeys } from '@/shared/router'
 import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
 import { confirm } from '@/shared/ui/confirm-dialog'
+import { PeriodDateField } from '@/shared/ui/period-date-field/period-date-field'
 import { notify } from '@/shared/ui/toast'
 import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import { FormSelectNative } from '@/shared/ui/form-select-native'
@@ -203,11 +222,12 @@ import {
   ToolbarGhostBtnSm,
 } from './country-politics-tab.styles'
 import * as FormS from './military-unit-form/styles'
+import { PartyLegalStatusBlock, PartyNamesBlock } from './party-identity-sections'
 import { CountryTabEmptyState } from './country-tab-empty-state'
 import {
+  PARTY_KIND_TONE_OPTIONS,
   POSITION_TONE_OPTIONS,
   ToneChipGroup,
-  YmdDateField,
   useSplitLayoutMode,
 } from './politics-form/politics-form-parts'
 
@@ -2612,8 +2632,8 @@ export function CountryPoliticalPartiesBlock({
       }
       if (listPositionFilter && party.position !== listPositionFilter)
         return false
-      if (listStatusFilter === 'active' && party.dissolvedDate) return false
-      if (listStatusFilter === 'dissolved' && !party.dissolvedDate) return false
+      if (listStatusFilter === 'active' && isPartyDissolved(party)) return false
+      if (listStatusFilter === 'dissolved' && !isPartyDissolved(party)) return false
       return true
     })
     const mult = listSortDir === 'asc' ? 1 : -1
@@ -2621,12 +2641,10 @@ export function CountryPoliticalPartiesBlock({
       if (listSortKey === 'name') {
         return partyA.name.localeCompare(partyB.name, 'ko') * mult
       }
-      const dateA = partyA.foundedDate
-        ? new Date(partyA.foundedDate).getTime()
-        : 0
-      const dateB = partyB.foundedDate
-        ? new Date(partyB.foundedDate).getTime()
-        : 0
+      /* 부호 연·월·일 키 — 기원전 정당도 바르게, 날짜 없으면 맨 뒤 */
+      const dateA = partialSortKey(partyFoundedOn(partyA))
+      const dateB = partialSortKey(partyFoundedOn(partyB))
+      if (dateA == null || dateB == null) return (dateA == null ? 1 : 0) - (dateB == null ? 1 : 0)
       return (dateA - dateB) * mult
     })
     return rows
@@ -2708,7 +2726,7 @@ export function CountryPoliticalPartiesBlock({
   /** 정당 요약 KPI 및 벤토 인포그래픽 집계 */
   const partyKpiSummary = useMemo(() => {
     const totalCount = parties.length
-    const activeCount = parties.filter((party) => !party.dissolvedDate).length
+    const activeCount = parties.filter((party) => !isPartyDissolved(party)).length
     const dissolvedCount = totalCount - activeCount
     const posSet = new Set<string>()
     const posCounts = new Map<string, number>()
@@ -2742,30 +2760,25 @@ export function CountryPoliticalPartiesBlock({
           rightCount += 1
         }
       }
-      if (party.foundedDate) {
-        const y = new Date(party.foundedDate).getUTCFullYear()
-        if (Number.isFinite(y)) {
-          if (earliestYear == null || y < earliestYear) earliestYear = y
-          if (latestYear == null || y > latestYear) latestYear = y
-        }
+      const foundedYear = partialSignedYear(partyFoundedOn(party))
+      if (foundedYear != null) {
+        if (earliestYear == null || foundedYear < earliestYear) earliestYear = foundedYear
+        if (latestYear == null || foundedYear > latestYear) latestYear = foundedYear
       }
     }
 
     const minYear = earliestYear ?? nowYear - 30
     const spanYears = Math.max(1, nowYear - minYear)
     const lifespanRows = [...parties]
-      .filter((p) => p.foundedDate != null)
-      .sort((a, b) => {
-        const ya = new Date(a.foundedDate!).getUTCFullYear()
-        const yb = new Date(b.foundedDate!).getUTCFullYear()
-        return ya - yb
-      })
+      .filter((party) => partialSignedYear(partyFoundedOn(party)) != null)
+      .sort(
+        (partyLeft, partyRight) =>
+          (partialSignedYear(partyFoundedOn(partyLeft)) ?? 0) - (partialSignedYear(partyFoundedOn(partyRight)) ?? 0),
+      )
       .slice(0, 5)
-      .map((p) => {
-        const fy = new Date(p.foundedDate!).getUTCFullYear()
-        const dy = p.dissolvedDate
-          ? new Date(p.dissolvedDate).getUTCFullYear()
-          : null
+      .map((party) => {
+        const fy = partialSignedYear(partyFoundedOn(party)) ?? nowYear
+        const dy = partialSignedYear(partyDissolvedOn(party))
         const endVal = dy ?? nowYear
         const leftPct = Math.max(
           0,
@@ -2776,10 +2789,10 @@ export function CountryPoliticalPartiesBlock({
           Math.min(100 - leftPct, ((Math.max(fy, endVal) - fy) / spanYears) * 100),
         )
         const color =
-          normalizeBrandColorInput(p.brandColor ?? '') ??
-          partyFallbackBrandColor(p.id)
+          normalizeBrandColorInput(party.brandColor ?? '') ??
+          partyFallbackBrandColor(party.id)
         return {
-          party: p,
+          party,
           fy,
           dy,
           leftPct,
@@ -3013,14 +3026,14 @@ export function CountryPoliticalPartiesBlock({
                     <PartyDetailHeroTitle>
                       {detailParty.name}
                       <PartyStatusBadge
-                        $dissolved={Boolean(detailParty.dissolvedDate)}
+                        $dissolved={isPartyDissolved(detailParty)}
                         aria-label={
-                          detailParty.dissolvedDate
-                            ? `해산 · ${formatDate(detailParty.dissolvedDate)}`
+                          isPartyDissolved(detailParty)
+                            ? `해산 · ${formatPartialDate(partyDissolvedOn(detailParty))}`
                             : '활동 중'
                         }
                       >
-                        {detailParty.dissolvedDate ? '해산' : '활동 중'}
+                        {isPartyDissolved(detailParty) ? '해산' : '활동 중'}
                       </PartyStatusBadge>
                     </PartyDetailHeroTitle>
                     <PartyDetailChipRowCenter>
@@ -3042,12 +3055,18 @@ export function CountryPoliticalPartiesBlock({
                           {labelPoliticalPosition(detailParty.position)}
                         </PartyDetailChip>
                       ) : null}
-                      {detailParty.foundedDate ? (
+                      {detailParty.kind && detailParty.kind !== 'PARTY' ? (
+                        <PartyDetailChip title="종류">
+                          <PartyDetailChipMuted>종류</PartyDetailChipMuted>
+                          {labelPoliticalPartyKind(detailParty.kind)}
+                        </PartyDetailChip>
+                      ) : null}
+                      {partyFoundedOn(detailParty) ? (
                         <PartyDetailChip title="존속 기간">
                           <PartyDetailChipMuted>존속</PartyDetailChipMuted>
-                          {formatDate(detailParty.foundedDate)} ~{' '}
-                          {detailParty.dissolvedDate
-                            ? formatDate(detailParty.dissolvedDate)
+                          {formatPartialDate(partyFoundedOn(detailParty))} ~{' '}
+                          {isPartyDissolved(detailParty)
+                            ? formatPartialDate(partyDissolvedOn(detailParty))
                             : '현재'}
                         </PartyDetailChip>
                       ) : null}
@@ -3130,19 +3149,25 @@ export function CountryPoliticalPartiesBlock({
                     </PartyDetailMetaTileValue>
                   </PartyDetailMetaTile>
                   <PartyDetailMetaTile>
-                    <PartyDetailMetaTileLabel>설립</PartyDetailMetaTileLabel>
+                    <PartyDetailMetaTileLabel>창당</PartyDetailMetaTileLabel>
                     <PartyDetailMetaTileValue>
-                      {formatDate(detailParty.foundedDate)}
+                      {formatPartialDate(partyFoundedOn(detailParty)) || '—'}
                     </PartyDetailMetaTileValue>
                   </PartyDetailMetaTile>
                   <PartyDetailMetaTile>
                     <PartyDetailMetaTileLabel>해산</PartyDetailMetaTileLabel>
                     <PartyDetailMetaTileValue>
-                      {formatDate(detailParty.dissolvedDate)}
+                      {formatPartialDate(partyDissolvedOn(detailParty)) || '—'}
                     </PartyDetailMetaTileValue>
                   </PartyDetailMetaTile>
                 </PartyDetailMetaGrid>
               </PartyDetailMetaSection>
+              <PartyNamesBlock partyId={detailParty.id} />
+              <PartyLegalStatusBlock
+                partyId={detailParty.id}
+                countryId={countryId}
+                historicalCountryId={historicalCountryId}
+              />
               <PartyLineageBlock
                 partyId={detailParty.id}
                 partyName={detailParty.name}
@@ -3355,13 +3380,13 @@ export function CountryPoliticalPartiesBlock({
                             tooltipParts.push(
                               labelPoliticalPosition(p.position),
                             )
-                          if (p.foundedDate)
+                          if (partyFoundedOn(p))
                             tooltipParts.push(
-                              `설립 ${formatDate(p.foundedDate)}`,
+                              `창당 ${formatPartialDate(partyFoundedOn(p))}`,
                             )
-                          if (p.dissolvedDate)
+                          if (isPartyDissolved(p))
                             tooltipParts.push(
-                              `해산 ${formatDate(p.dissolvedDate)}`,
+                              `해산 ${formatPartialDate(partyDissolvedOn(p))}`,
                             )
                           const tooltip = tooltipParts.join(' · ')
                           const goToDetail = () =>
@@ -3664,7 +3689,7 @@ export function CountryPoliticalPartiesBlock({
                   const accent =
                     normalizeBrandColorInput(p.brandColor ?? '') ??
                     partyFallbackBrandColor(p.id)
-                  const dissolved = Boolean(p.dissolvedDate)
+                  const dissolved = isPartyDissolved(p)
                   const ideologyTags = parseIdeologyKeywords(p.ideology).slice(
                     0,
                     3,
@@ -3721,11 +3746,11 @@ export function CountryPoliticalPartiesBlock({
                             </PartyCardIdeologyChip>
                           ))}
                           <span>
-                            {p.foundedDate
-                              ? `설립 ${formatDate(p.foundedDate)}`
-                              : '설립 미상'}
+                            {partyFoundedOn(p)
+                              ? `창당 ${formatPartialDate(partyFoundedOn(p))}`
+                              : '창당 미상'}
                             {dissolved
-                              ? ` · 해산 ${formatDate(p.dissolvedDate)}`
+                              ? ` · 해산 ${formatPartialDate(partyDissolvedOn(p))}`
                               : ''}
                           </span>
                         </PartyInfographicMetaRow>
@@ -3776,8 +3801,9 @@ interface PartyFormValues {
   localName: string
   ideologyTags: string[]
   position: PoliticalPosition | ''
-  foundedDate: string
-  dissolvedDate: string
+  kind: PoliticalPartyKind
+  founded: PeriodDateFormValue
+  dissolved: PeriodDateFormValue
   logoUrl: string
   brandColor: string
 }
@@ -3788,10 +3814,32 @@ const EMPTY_PARTY_FORM: PartyFormValues = {
   localName: '',
   ideologyTags: [],
   position: '',
-  foundedDate: '',
-  dissolvedDate: '',
+  kind: 'PARTY',
+  founded: { ...EMPTY_PERIOD_DATE },
+  dissolved: { ...EMPTY_PERIOD_DATE },
   logoUrl: '',
   brandColor: '',
+}
+
+/** 응답 정당 행 → 창당·해산 칸 값(구조화 칸이 진실, 없으면 거울 DATETIME에서) */
+function partyFoundedFormValue(row: PoliticalParty): PeriodDateFormValue {
+  if (row.foundedYear != null) {
+    return periodDateFormValue(row.foundedEra, row.foundedYear, row.foundedMonth, row.foundedDay)
+  }
+  const mirror = row.foundedDate?.slice(0, 10)
+  if (!mirror) return { ...EMPTY_PERIOD_DATE }
+  const [year, month, day] = mirror.split('-').map(Number)
+  return { era: 'AD', year, month, day }
+}
+
+function partyDissolvedFormValue(row: PoliticalParty): PeriodDateFormValue {
+  if (row.dissolvedYear != null) {
+    return periodDateFormValue(row.dissolvedEra, row.dissolvedYear, row.dissolvedMonth, row.dissolvedDay)
+  }
+  const mirror = row.dissolvedDate?.slice(0, 10)
+  if (!mirror) return { ...EMPTY_PERIOD_DATE }
+  const [year, month, day] = mirror.split('-').map(Number)
+  return { era: 'AD', year, month, day }
 }
 
 /** 이탈 확인용 비교값 — 같은 순서로 직렬화한다 */
@@ -3802,8 +3850,9 @@ const partyFormSnapshot = (values: PartyFormValues) =>
     values.localName,
     values.ideologyTags,
     values.position,
-    values.foundedDate,
-    values.dissolvedDate,
+    values.kind,
+    partialOfFormValue(values.founded),
+    partialOfFormValue(values.dissolved),
     values.logoUrl,
     values.brandColor,
   ])
@@ -3842,8 +3891,9 @@ export function PartyFormModal({
   const [ideologyTags, setIdeologyTags] = useState<string[]>([])
   const [ideologyInput, setIdeologyInput] = useState('')
   const [position, setPosition] = useState<PoliticalPosition | ''>('')
-  const [foundedDate, setFoundedDate] = useState('')
-  const [dissolvedDate, setDissolvedDate] = useState('')
+  const [kind, setKind] = useState<PoliticalPartyKind>('PARTY')
+  const [founded, setFounded] = useState<PeriodDateFormValue>({ ...EMPTY_PERIOD_DATE })
+  const [dissolved, setDissolved] = useState<PeriodDateFormValue>({ ...EMPTY_PERIOD_DATE })
   const [logoUrl, setLogoUrl] = useState('')
   const [brandColor, setBrandColor] = useState('')
   const [logoUploading, setLogoUploading] = useState(false)
@@ -3853,15 +3903,14 @@ export function PartyFormModal({
   const { layoutMode, toggleLayoutMode } = useSplitLayoutMode(
     'papyrus:party-register-layout',
   )
-  const [dateErrors, setDateErrors] = useState<Record<string, string | null>>(
-    {},
-  )
-  const setDateError = (key: string) => (message: string | null) =>
-    setDateErrors((prev) =>
-      prev[key] === message ? prev : { ...prev, [key]: message },
-    )
-  const firstDateError =
-    Object.values(dateErrors).find((message) => Boolean(message)) ?? null
+  /** 날짜 칸 오류 — 칸 값에서 바로 판정(연도 없이 월·일, 없는 날짜) */
+  const foundedError = periodDateFormError(founded)
+  const dissolvedError = periodDateFormError(dissolved)
+  const firstDateError = foundedError
+    ? `창당: ${foundedError}`
+    : dissolvedError
+      ? `해산: ${dissolvedError}`
+      : null
   const [initialSnapshot, setInitialSnapshot] = useState(() =>
     partyFormSnapshot(EMPTY_PARTY_FORM),
   )
@@ -3905,8 +3954,9 @@ export function PartyFormModal({
           localName: row.localName ?? '',
           ideologyTags: parseIdeologyKeywords(row.ideology),
           position: (row.position as PoliticalPosition) ?? '',
-          foundedDate: row.foundedDate?.slice(0, 10) ?? '',
-          dissolvedDate: row.dissolvedDate?.slice(0, 10) ?? '',
+          kind: (row.kind as PoliticalPartyKind | undefined) ?? 'PARTY',
+          founded: partyFoundedFormValue(row),
+          dissolved: partyDissolvedFormValue(row),
           logoUrl: row.logoUrl ?? '',
           brandColor: row.brandColor ?? '',
         }
@@ -3917,8 +3967,9 @@ export function PartyFormModal({
         setIdeologyTags(values.ideologyTags)
         setIdeologyInput('')
         setPosition(values.position)
-        setFoundedDate(values.foundedDate)
-        setDissolvedDate(values.dissolvedDate)
+        setKind(values.kind)
+        setFounded(values.founded)
+        setDissolved(values.dissolved)
         setLogoUrl(values.logoUrl)
         setBrandColor(values.brandColor)
         setInitialSnapshot(partyFormSnapshot(values))
@@ -3932,9 +3983,7 @@ export function PartyFormModal({
   const loadingEdit = Boolean(mode === 'edit' && !loaded && partyId)
   const brandColorInvalid =
     brandColor.trim() !== '' && normalizeBrandColorInput(brandColor) == null
-  const dateOrderInvalid = Boolean(
-    foundedDate && dissolvedDate && dissolvedDate < foundedDate,
-  )
+  const dateOrderInvalid = isPeriodFormInverted(founded, dissolved)
   const missingRequired = name.trim() ? [] : ['명칭']
   const formProblem = firstDateError
     ? firstDateError
@@ -3958,8 +4007,9 @@ export function PartyFormModal({
       localName,
       ideologyTags,
       position,
-      foundedDate,
-      dissolvedDate,
+      kind,
+      founded,
+      dissolved,
       logoUrl,
       brandColor,
     }) !== initialSnapshot
@@ -3988,11 +4038,11 @@ export function PartyFormModal({
     setIdeologyTags([])
     setIdeologyInput('')
     setPosition('')
-    setFoundedDate('')
-    setDissolvedDate('')
+    setKind('PARTY')
+    setFounded({ ...EMPTY_PERIOD_DATE })
+    setDissolved({ ...EMPTY_PERIOD_DATE })
     setLogoUrl('')
     setBrandColor('')
-    setDateErrors({})
     setInitialSnapshot(partyFormSnapshot(EMPTY_PARTY_FORM))
     setFormGeneration((generation) => generation + 1)
     formScrollRef.current?.scrollTo({ top: 0 })
@@ -4014,8 +4064,9 @@ export function PartyFormModal({
       localName: localName.trim() || null,
       ideology: ideologyTags.length ? ideologyTags.join(', ') : null,
       position: position === '' ? null : position,
-      foundedDate: foundedDate ? `${foundedDate}T12:00:00.000Z` : null,
-      dissolvedDate: dissolvedDate ? `${dissolvedDate}T12:00:00.000Z` : null,
+      kind,
+      founded: structuredInputOf(founded),
+      dissolved: structuredInputOf(dissolved),
       logoUrl: logoUrl.trim() || null,
       brandColor: parsedColor,
       ...scope,
@@ -4125,38 +4176,57 @@ export function PartyFormModal({
         </EventFormS.FormField>
       </EventFormS.FormRow>
       <EventFormS.FormRow>
+        <EventFormS.FormLabel as="div" id="party-form-kind-label">
+          종류
+        </EventFormS.FormLabel>
+        <EventFormS.FormField>
+          <ToneChipGroup
+            ariaLabelledBy="party-form-kind-label"
+            value={kind}
+            onChange={(next) => {
+              if (next) setKind(next)
+            }}
+            options={PARTY_KIND_TONE_OPTIONS}
+          />
+          <EventFormS.Hint>
+            {POLITICAL_PARTY_KIND_OPTIONS.find((option) => option.value === kind)?.hint ?? ''}
+          </EventFormS.Hint>
+        </EventFormS.FormField>
+      </EventFormS.FormRow>
+      <EventFormS.FormRow>
         <EventFormS.FormLabel as="div">
           존속 기간<FormS.OptionalTag>(선택)</FormS.OptionalTag>
         </EventFormS.FormLabel>
         <EventFormS.FormField>
           <FormS.DateRangeGrid>
             <FormS.DateColumn>
-              <FormS.SubTitleLabel>설립</FormS.SubTitleLabel>
-              <YmdDateField
-                ariaLabel="설립일"
-                pickerTitle="설립일 선택"
-                value={foundedDate}
-                onChange={setFoundedDate}
-                onErrorChange={setDateError('founded')}
+              <FormS.SubTitleLabel>창당·결성</FormS.SubTitleLabel>
+              <PeriodDateField
+                {...founded}
+                ariaLabel="창당일"
+                pickerTitle="창당일 선택"
+                error={Boolean(foundedError)}
+                onChange={setFounded}
               />
+              {foundedError ? <EventFormS.ErrorMessage role="alert">{foundedError}</EventFormS.ErrorMessage> : null}
             </FormS.DateColumn>
             <FormS.DateColumn>
               <FormS.SubTitleLabel>해산 (존속 중이면 비움)</FormS.SubTitleLabel>
-              <YmdDateField
+              <PeriodDateField
+                {...dissolved}
                 ariaLabel="해산일"
                 pickerTitle="해산일 선택"
-                value={dissolvedDate}
-                onChange={setDissolvedDate}
-                onErrorChange={setDateError('dissolved')}
-                error={dateOrderInvalid}
-                minDate={foundedDate || undefined}
+                error={Boolean(dissolvedError) || dateOrderInvalid}
+                onChange={setDissolved}
               />
+              {dissolvedError ? <EventFormS.ErrorMessage role="alert">{dissolvedError}</EventFormS.ErrorMessage> : null}
             </FormS.DateColumn>
           </FormS.DateRangeGrid>
+          <EventFormS.Hint>연도만 알면 연도만 — 월·일은 비워 둡니다. 기원전은 칸 끝의 서기를 눌러 바꿉니다.</EventFormS.Hint>
           {dateOrderInvalid ? (
             <EventFormS.ErrorMessage role="alert">
-              해산일({dissolvedDate})이 설립일({foundedDate})보다 앞설 수
-              없습니다.
+              해산({formatPartialDate(partialOfFormValue(dissolved))})이 창당(
+              {formatPartialDate(partialOfFormValue(founded))})보다 앞설 수 없습니다.
             </EventFormS.ErrorMessage>
           ) : null}
         </EventFormS.FormField>
@@ -4370,8 +4440,13 @@ export function PartyFormModal({
                 {[
                   shortName.trim(),
                   positionLabel,
-                  foundedDate ? `${foundedDate.slice(0, 4)} 설립` : null,
-                  dissolvedDate ? `${dissolvedDate.slice(0, 4)} 해산` : null,
+                  kind !== 'PARTY' ? labelPoliticalPartyKind(kind) : null,
+                  founded.year != null
+                    ? `${formatPartialDate(partialOfFormValue({ ...founded, month: undefined, day: undefined }))} 창당`
+                    : null,
+                  dissolved.year != null
+                    ? `${formatPartialDate(partialOfFormValue({ ...dissolved, month: undefined, day: undefined }))} 해산`
+                    : null,
                 ]
                   .filter(Boolean)
                   .join(' · ') || '약칭·스펙트럼·설립 연도가 여기 붙습니다'}

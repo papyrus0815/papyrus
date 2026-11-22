@@ -16,6 +16,8 @@ jest.mock('@/shared/api/client', () => ({ getApiConnection: () => ({}) }))
 jest.mock('@/shared/api/api.service', () => ({}))
 jest.mock('@/shared/api/military-unit', () => ({}))
 jest.mock('@/shared/api/political-party', () => ({
+  /* 상수·라벨(종류·이름 유형·법적 지위)은 실제 모듈 그대로 — 네트워크만 막는다 */
+  ...jest.requireActual('@/shared/api/political-party'),
   politicalPartyApi: {
     getById: jest.fn(async () => ({
       id: 'spd',
@@ -24,6 +26,12 @@ jest.mock('@/shared/api/political-party', () => ({
       localName: null,
       ideology: '사회민주주의, 노동',
       position: 'CENTER_LEFT',
+      kind: 'PARTY',
+      foundedEra: 'AD',
+      foundedYear: 1875,
+      foundedMonth: 5,
+      foundedDay: 27,
+      foundedPrecision: 'day',
       foundedDate: '1875-05-27T12:00:00.000Z',
       dissolvedDate: null,
       logoUrl: null,
@@ -130,22 +138,51 @@ describe('PartyFormModal — 사건 등록 모달 문법', () => {
     )
   })
 
-  it('설립·해산은 사건 날짜 칸 — 연·월·일을 직접 치고, 덜 친 날짜는 저장을 막는다', () => {
+  it('창당·해산은 구조화 날짜 — 연도만·기원전도 저장하고, 해산이 앞서면 막는다', () => {
     const onSubmitCreate = jest.fn()
     renderCreate(onSubmitCreate)
-    fireEvent.change(screen.getByLabelText(/^명칭/), { target: { value: '국민당' } })
-    const foundedField = screen.getByLabelText('설립일')
-    const yearInput = foundedField.querySelector('input[aria-label="연도"]') as HTMLInputElement
-    fireEvent.change(yearInput, { target: { value: '1919' } })
-    expect(screen.getByRole('button', { name: '정당 등록' })).toBeDisabled()
-    expect(screen.getAllByText('연·월·일을 모두 입력하세요.').length).toBeGreaterThan(0)
+    fireEvent.change(screen.getByLabelText(/^명칭/), { target: { value: '옵티마테스' } })
+    fireEvent.click(screen.getByRole('radio', { name: '붕당·파벌' }))
 
-    fireEvent.change(foundedField.querySelector('input[aria-label="월"]') as HTMLInputElement, { target: { value: '01' } })
-    fireEvent.change(foundedField.querySelector('input[aria-label="일"]') as HTMLInputElement, { target: { value: '05' } })
+    const foundedField = screen.getByLabelText('창당일')
+    fireEvent.change(foundedField.querySelector('input[aria-label="연도"]') as HTMLInputElement, {
+      target: { value: '133' },
+    })
+    fireEvent.click(foundedField.querySelector('button[title="서기 ↔ 기원전"]') as HTMLButtonElement)
+
+    /* 해산 BC 200 — 창당(BC 133)보다 앞이라 역전 */
+    const dissolvedField = screen.getByLabelText('해산일')
+    fireEvent.change(dissolvedField.querySelector('input[aria-label="연도"]') as HTMLInputElement, {
+      target: { value: '200' },
+    })
+    fireEvent.click(dissolvedField.querySelector('button[title="서기 ↔ 기원전"]') as HTMLButtonElement)
+    expect(screen.getByRole('button', { name: '정당 등록' })).toBeDisabled()
+    expect(screen.getAllByText(/보다 앞설 수 없습니다/).length).toBeGreaterThan(0)
+
+    /* 해산 BC 27로 고치면 저장 — 연 정밀, 월·일 없이 */
+    fireEvent.change(dissolvedField.querySelector('input[aria-label="연도"]') as HTMLInputElement, {
+      target: { value: '27' },
+    })
     fireEvent.click(screen.getByRole('button', { name: '정당 등록' }))
     expect(onSubmitCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ name: '국민당', foundedDate: '1919-01-05T12:00:00.000Z' }),
+      expect.objectContaining({
+        name: '옵티마테스',
+        kind: 'FACTION',
+        founded: { era: 'BC', year: 133 },
+        dissolved: { era: 'BC', year: 27 },
+      }),
     )
+  })
+
+  it('없는 날짜(2월 30일)는 칸 옆에서 막는다', () => {
+    renderCreate()
+    fireEvent.change(screen.getByLabelText(/^명칭/), { target: { value: '국민당' } })
+    const foundedField = screen.getByLabelText('창당일')
+    fireEvent.change(foundedField.querySelector('input[aria-label="연도"]') as HTMLInputElement, { target: { value: '1919' } })
+    fireEvent.change(foundedField.querySelector('input[aria-label="월"]') as HTMLInputElement, { target: { value: '02' } })
+    fireEvent.change(foundedField.querySelector('input[aria-label="일"]') as HTMLInputElement, { target: { value: '30' } })
+    expect(screen.getAllByText('없는 날짜입니다.').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: '정당 등록' })).toBeDisabled()
   })
 
   it('브랜드 컬러 형식이 틀리면 저장이 잠기고 이유를 하단에 적는다', () => {
