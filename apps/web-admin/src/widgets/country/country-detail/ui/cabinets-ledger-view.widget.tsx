@@ -419,7 +419,12 @@ export function CabinetsLedgerView({
   )
 }
 
+/*
+ * 열 접기는 화면 폭이 아니라 이 표의 폭으로 판단한다 — 국가 목록·내비 레일이 460px를 먹어 1440px 화면에서도
+ * 표는 ~980px인데 @media(1120px)는 넓다고 보고 5열(합 1,028px)을 깔아 오른쪽 '구성' 열·상세 버튼이 잘렸다.
+ */
 const LedgerShell = styled.div`
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -442,11 +447,11 @@ const LedgerHeaderRow = styled.div`
   background: ${({ theme }) => ledgerChipFill(theme.mode)};
   border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 
-  @media (max-width: 1120px) {
-    grid-template-columns: 170px 180px minmax(160px, 1fr) 140px;
+  @container (max-width: 1060px) {
+    grid-template-columns: 196px 164px minmax(160px, 1fr) 132px;
   }
 
-  @media (max-width: 720px) {
+  @container (max-width: 640px) {
     display: none;
   }
 `
@@ -454,7 +459,7 @@ const LedgerHeaderRow = styled.div`
 const DesktopOnlyCol = styled.div`
   min-width: 0;
 
-  @media (max-width: 1120px) {
+  @container (max-width: 1060px) {
     display: none;
   }
 `
@@ -543,11 +548,11 @@ const LedgerRow = styled.div<{
     outline-offset: -2px;
   }
 
-  @media (max-width: 1120px) {
-    grid-template-columns: 170px 180px minmax(160px, 1fr) 140px;
+  @container (max-width: 1060px) {
+    grid-template-columns: 196px 164px minmax(160px, 1fr) 132px;
   }
 
-  @media (max-width: 720px) {
+  @container (max-width: 640px) {
     grid-template-columns: 1fr;
     gap: 6px;
     padding: 12px 14px;
@@ -798,7 +803,7 @@ const MetaBadgeCell = styled.div`
   gap: 5px;
   flex-wrap: wrap;
 
-  @media (max-width: 720px) {
+  @container (max-width: 640px) {
     justify-content: flex-start;
   }
 `
