@@ -131,12 +131,11 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
   const [editing, setEditing] = useState<
     Observation | { kind: 'new'; subjectId?: string; metricKey?: string } | null
   >(null)
-  /** 지표 이름 — 빈 비교표의 행 머리(추천 지표) */
+  /** 지표 이름 — 빈 비교표 및 빈 상태 추천 지표 버튼에 사용 */
   const { data: metricDefinitions = [] } = useQuery({
     queryKey: ['metric-definitions'],
     queryFn: listMetricDefinitions,
     staleTime: 10 * 60_000,
-    enabled: (event.sides ?? []).length > 0 || observations.length > 0,
   })
 
   /* 색 없는 진영은 순서대로 팔레트 — 비교 막대가 둘 다 같은 회색이면 어느 편인지 모른다 */
@@ -245,6 +244,15 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
       .filter((definition): definition is NonNullable<typeof definition> => Boolean(definition))
       .map((definition) => ({ key: definition.key, name: definition.name, cells: new Map<string, Observation[]>() }))
   }, [comparedRows.length, sides.length, features.metricPresets, metricDefinitions])
+  const emptyPresetMetrics = useMemo(
+    () =>
+      features.metricPresets
+        .slice(0, 5)
+        .map((presetKey) => metricDefinitions.find((definition) => definition.key === presetKey))
+        .filter((definition): definition is NonNullable<typeof definition> => Boolean(definition)),
+    [features.metricPresets, metricDefinitions],
+  )
+
   const tableRows = comparedRows.length > 0 ? comparedRows : placeholderRows
   const tableSides = useMemo(
     () =>
@@ -399,12 +407,9 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
 
   return (
     <S.Section id="module-metrics">
-      <MetricsHeaderBlock>
+      <S.SectionHeaderGroup>
         <S.SectionHeader>
-          <S.SectionTitle>
-            <S.SectionTitleDot $color={MODULE_COLOR.metrics} />
-            수치
-          </S.SectionTitle>
+          <S.SectionTitle>{features.metricsMenuLabel}</S.SectionTitle>
           {observations.length > 0 && <S.SectionSubtitle>{observations.length}</S.SectionSubtitle>}
           <S.SectionActions>
             {unverifiedCount > 0 && (
@@ -428,15 +433,17 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
             >
               출처 서고
             </LibraryLink>
-            <HeaderControlBtn type="button" onClick={() => setEditing({ kind: 'new' })}>
-              <FiPlus /> 수치 추가
-            </HeaderControlBtn>
+            {(observations.length > 0 || placeholderRows.length > 0) && (
+              <HeaderControlBtn type="button" onClick={() => setEditing({ kind: 'new' })}>
+                <FiPlus /> 수치 추가
+              </HeaderControlBtn>
+            )}
           </S.SectionActions>
         </S.SectionHeader>
         <SectionHintText>
           병력·사상자·피해액 등 숫자로 남는 기록을 출처·추정 범위와 함께 비교합니다. 막대나 숫자를 누르면 수정할 수 있습니다.
         </SectionHintText>
-      </MetricsHeaderBlock>
+      </S.SectionHeaderGroup>
 
       {commentary.length > 0 && (
         /* 해설 — 표를 읽기 전에 '그래서 무슨 뜻인가'. 값이 말하는 것만(배수·손실률), 추정 오차 안쪽은 '비슷' */
@@ -971,9 +978,32 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
         </SubjectBlock>
       ))}
 
-      {/* 빈 비교표가 서 있으면 그 자체가 안내다 — 문장은 진영도 없을 때만 */}
+      {/* 빈 비교표가 서 있지 않은 무진영 빈 상태 — 추천 지표 원클릭 시작 슬롯 */}
       {observations.length === 0 && placeholderRows.length === 0 && (
-        <S.HelperText>{features.metricsEmptyHint}</S.HelperText>
+        <S.EmptyGuide>
+          <S.EmptyGuideBody>
+            <S.EmptyGuideTitle>출처 기반 정량 수치를 기록해 비교하세요</S.EmptyGuideTitle>
+            <S.EmptyGuideDesc>
+              {features.metricsEmptyHint} 사료마다 다른 추정 범위와 출처 인용을 함께 남기면 비교 그래프와 손실률 요약이 자동으로 생성됩니다.
+            </S.EmptyGuideDesc>
+          </S.EmptyGuideBody>
+          <S.EmptyGuideActions>
+            <S.EmptyPrimaryAction type="button" onClick={() => setEditing({ kind: 'new' })}>
+              <FiPlus aria-hidden />
+              수치 직접 기록하기
+            </S.EmptyPrimaryAction>
+            {emptyPresetMetrics.map((metric) => (
+              <S.EmptySecondaryAction
+                key={metric.key}
+                type="button"
+                onClick={() => setEditing({ kind: 'new', metricKey: metric.key })}
+              >
+                <FiPlus aria-hidden />
+                {metric.name}
+              </S.EmptySecondaryAction>
+            ))}
+          </S.EmptyGuideActions>
+        </S.EmptyGuide>
       )}
 
       {editing && (
@@ -996,12 +1026,6 @@ export function ModuleMetrics({ event }: ModuleMetricsProps) {
     </S.Section>
   )
 }
-
-const MetricsHeaderBlock = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-`
 
 /** 그래프·표 전환 — 참여 탭 원장 스위치와 동일한 높이·문법 */
 const ViewSwitchRow = styled.div`

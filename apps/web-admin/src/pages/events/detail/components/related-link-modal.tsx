@@ -95,6 +95,8 @@ interface RelatedLinkModalProps {
   onCreateNew?: () => void
   /** 열 때 거르기 — 본문 '같은 키워드 후보 N'은 'keyword'로 연다 */
   initialFilter?: Filter
+  /** 원인 레인('incoming') 또는 결과 레인('outgoing')에서 열었을 때 기본 방향 */
+  preferredDirection?: EventRelationDirection | null
 }
 
 export function RelatedLinkModal({
@@ -114,6 +116,7 @@ export function RelatedLinkModal({
   onDelete,
   onCreateNew,
   initialFilter = 'all',
+  preferredDirection = null,
 }: RelatedLinkModalProps) {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
@@ -164,7 +167,7 @@ export function RelatedLinkModal({
             other,
             /* 같은 키워드로 고르면 '그 밖의 연관'으로 시작 — 계기·배경은 사람이 판단 */
             relationType: candidate.sharedKeywords?.length ? 'RELATED' : 'LED_TO',
-            direction: inferDirection(self, other) ?? 'incoming',
+            direction: preferredDirection ?? inferDirection(self, other) ?? 'incoming',
             description: '',
           },
     )

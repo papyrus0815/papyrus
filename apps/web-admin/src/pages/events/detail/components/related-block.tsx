@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FiEdit2, FiPlus, FiX } from 'react-icons/fi'
+import { FiArrowRight, FiChevronDown, FiChevronUp, FiEdit2, FiPlus, FiX } from 'react-icons/fi'
+import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
 import {
@@ -161,6 +162,7 @@ export function RelatedBlock({
   const [descriptionDraftId, setDescriptionDraftId] = useState<string | null>(null)
   /** 잇기 창을 열 때의 거르기 */
   const [pickerFilter, setPickerFilter] = useState<RelatedLinkFilter>('all')
+  const [preferredDirection, setPreferredDirection] = useState<EventRelationDirection | null>(null)
   /** 긴 목록에서 펼친 묶음 */
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(() => new Set())
   const [expandedCausalBefore, setExpandedCausalBefore] = useState(false)
@@ -170,8 +172,16 @@ export function RelatedBlock({
     if (openPickerSeq <= 0) return
     setInitialDraft(null)
     setPickerFilter('all')
+    setPreferredDirection(null)
     setPickerOpen(true)
   }, [openPickerSeq])
+
+  const openPickerForDirection = (direction: EventRelationDirection | null) => {
+    setInitialDraft(null)
+    setPickerFilter('all')
+    setPreferredDirection(direction)
+    setPickerOpen(true)
+  }
 
   // ── 후보 검색(서버) — 상위/하위 픽커와 같은 link-candidates 엔드포인트 ──
   const [searchTerm, setSearchTerm] = useState('')
@@ -393,6 +403,7 @@ export function RelatedBlock({
     setSearchTerm('')
     setInitialDraft(null)
     setPickerFilter('all')
+    setPreferredDirection(null)
   }
 
   const handleRemove = async (relation: EventRelationItem) => {
@@ -446,6 +457,68 @@ export function RelatedBlock({
     [relations],
   )
   const selfDateText = candidateDateLabel(self)
+  const hasDetailNotesOrWarnings = useMemo(
+    () =>
+      relations.some(
+        (relation) =>
+          Boolean(relation.description?.trim()) ||
+          directionConflicts(relation.relationType, relation.direction, self, startFieldsOf(relation.event)),
+      ),
+    [relations, self],
+  )
+  const [detailListToggled, setDetailListToggled] = useState<boolean | null>(null)
+  const showDetailList = detailListToggled ?? hasDetailNotesOrWarnings
+
+  const renderCausalPill = (relation: EventRelationItem, dragHint: string) => (
+    <CausalFlowPill
+      key={relation.id}
+      draggable
+      title={dragHint}
+      onMouseEnter={() => {
+        prefetchEvent(relation.event.id)
+        onHoverEvent?.(relation.event.id)
+      }}
+      onMouseLeave={() => onHoverEvent?.(null)}
+      onDragStart={(dragEvent) => {
+        setDraggingRelationId(relation.id)
+        dragEvent.dataTransfer?.setData('text/plain', `relation:${relation.id}`)
+      }}
+      onDragEnd={() => {
+        setDraggingRelationId(null)
+        setDragOverSide(null)
+      }}
+    >
+      <CausalFlowPillLink
+        to={pathKeys.events.detail(relation.event.id)}
+        viewTransition
+        title={`${relation.event.title} (${EVENT_RELATION_LABELS[relation.relationType] ?? relation.relationType})`}
+      >
+        {relation.event.title}
+      </CausalFlowPillLink>
+      <CausalFlowPillEdit
+        type="button"
+        onClick={(clickEvent) => {
+          clickEvent.stopPropagation()
+          openEdit(relation)
+        }}
+        aria-label={`'${relation.event.title}' 관계 수정`}
+        title="관계·설명 수정"
+      >
+        <FiEdit2 size={11} />
+      </CausalFlowPillEdit>
+      <CausalFlowPillRemove
+        type="button"
+        onClick={(clickEvent) => {
+          clickEvent.stopPropagation()
+          void handleRemove(relation)
+        }}
+        aria-label={`'${relation.event.title}' 연결 해제`}
+        title="연결 해제"
+      >
+        ×
+      </CausalFlowPillRemove>
+    </CausalFlowPill>
+  )
 
   return (
     <NetStyles.HierBlock
@@ -454,16 +527,14 @@ export function RelatedBlock({
     >
 
       {isError && <NetStyles.HelperNote>관련 사건을 불러오지 못했습니다</NetStyles.HelperNote>}
-      {relations.length === 0 && !isError && (
+      {relations.length === 0 && !isError && descendantRelationCount > 0 && (
         <NetStyles.HelperNote>
-          {descendantRelationCount > 0
-            ? `이 사건 자체에 이은 관련 사건은 없습니다 — 아래 사건끼리의 연결 ${descendantRelationCount}개는 위 지도에서 보고 고칩니다.`
-            : '아직 연결된 관련 사건이 없습니다. 우측 상단 ‘관련 사건 잇기’를 눌러 기존 사건과 잇거나 새 사건을 등록할 수 있습니다.'}
+          이 사건 자체에 이은 관련 사건은 없습니다 — 아래 사건끼리의 연결 {descendantRelationCount}개는 위 지도에서 보고 고칩니다.
         </NetStyles.HelperNote>
       )}
 
-      {relations.length > 0 && (
-        <CausalFlowBoard role="region" aria-label="인과 흐름 인포그래픽">
+      {!isError && (
+        <CausalFlowBoard $hasRelations={relations.length > 0} role="region" aria-label="인과 흐름 보드">
           <CausalFlowMainGrid>
             <CausalFlowNode
               data-causal-dropzone="before"
@@ -486,44 +557,25 @@ export function RelatedBlock({
               onDrop={(dragEvent) => handleDropToSide(dragEvent, 'before')}
             >
               <CausalFlowHead>
-                <span>← 원인 · 배경</span>
-                <CausalFlowCount>{beforeItems.length}</CausalFlowCount>
+                <span>이전 · 원인 사건</span>
+                {beforeItems.length > 0 && <CausalFlowCount>{beforeItems.length}</CausalFlowCount>}
               </CausalFlowHead>
               {beforeItems.length === 0 ? (
-                <CausalFlowEmpty>사건을 여기로 끌어 원인 지정</CausalFlowEmpty>
+                <CausalFlowEmptySlot>
+                  <CausalFlowEmpty>이 사건을 일으켰거나 배경·도화선이 된 앞선 사건</CausalFlowEmpty>
+                  <CausalQuickAddBtn
+                    type="button"
+                    onClick={() => openPickerForDirection('incoming')}
+                  >
+                    <FiPlus size={12} aria-hidden />
+                    원인 사건 연결
+                  </CausalQuickAddBtn>
+                </CausalFlowEmptySlot>
               ) : (
                 <CausalFlowPillList>
-                  {(expandedCausalBefore ? beforeItems : beforeItems.slice(0, 3)).map((relation) => (
-                    <CausalFlowPill
-                      key={relation.id}
-                      draggable
-                      title="드래그하여 결과·곁으로 이동"
-                      onDragStart={(dragEvent) => {
-                        setDraggingRelationId(relation.id)
-                        dragEvent.dataTransfer?.setData(
-                          'text/plain',
-                          `relation:${relation.id}`,
-                        )
-                      }}
-                      onDragEnd={() => {
-                        setDraggingRelationId(null)
-                        setDragOverSide(null)
-                      }}
-                    >
-                      <CausalFlowPillLabel>{relation.event.title}</CausalFlowPillLabel>
-                      <CausalFlowPillRemove
-                        type="button"
-                        onClick={(clickEvent) => {
-                          clickEvent.stopPropagation()
-                          void handleRemove(relation)
-                        }}
-                        aria-label={`'${relation.event.title}' 연결 해제`}
-                        title="연결 해제"
-                      >
-                        ×
-                      </CausalFlowPillRemove>
-                    </CausalFlowPill>
-                  ))}
+                  {(expandedCausalBefore ? beforeItems : beforeItems.slice(0, 3)).map((relation) =>
+                    renderCausalPill(relation, '드래그하여 결과·동시대로 이동'),
+                  )}
                   {beforeItems.length > 3 && (
                     <CausalFlowMoreBtn
                       type="button"
@@ -536,7 +588,9 @@ export function RelatedBlock({
               )}
             </CausalFlowNode>
 
-            <CausalFlowArrow aria-hidden>──▶</CausalFlowArrow>
+            <CausalFlowArrow aria-hidden>
+              <FiArrowRight size={16} />
+            </CausalFlowArrow>
 
             <CausalFlowSelfNode>
               <CausalFlowSelfBadge>현재 사건</CausalFlowSelfBadge>
@@ -546,7 +600,9 @@ export function RelatedBlock({
               )}
             </CausalFlowSelfNode>
 
-            <CausalFlowArrow aria-hidden>──▶</CausalFlowArrow>
+            <CausalFlowArrow aria-hidden>
+              <FiArrowRight size={16} />
+            </CausalFlowArrow>
 
             <CausalFlowNode
               data-causal-dropzone="after"
@@ -569,44 +625,25 @@ export function RelatedBlock({
               onDrop={(dragEvent) => handleDropToSide(dragEvent, 'after')}
             >
               <CausalFlowHead>
-                <span>결과 · 파생 →</span>
-                <CausalFlowCount>{afterItems.length}</CausalFlowCount>
+                <span>이후 · 결과 사건</span>
+                {afterItems.length > 0 && <CausalFlowCount>{afterItems.length}</CausalFlowCount>}
               </CausalFlowHead>
               {afterItems.length === 0 ? (
-                <CausalFlowEmpty>사건을 여기로 끌어 결과 지정</CausalFlowEmpty>
+                <CausalFlowEmptySlot>
+                  <CausalFlowEmpty>이 사건이 촉발했거나 뒤따라 일어난 후속·대응 사건</CausalFlowEmpty>
+                  <CausalQuickAddBtn
+                    type="button"
+                    onClick={() => openPickerForDirection('outgoing')}
+                  >
+                    <FiPlus size={12} aria-hidden />
+                    결과 사건 연결
+                  </CausalQuickAddBtn>
+                </CausalFlowEmptySlot>
               ) : (
                 <CausalFlowPillList>
-                  {(expandedCausalAfter ? afterItems : afterItems.slice(0, 3)).map((relation) => (
-                    <CausalFlowPill
-                      key={relation.id}
-                      draggable
-                      title="드래그하여 원인·곁으로 이동"
-                      onDragStart={(dragEvent) => {
-                        setDraggingRelationId(relation.id)
-                        dragEvent.dataTransfer?.setData(
-                          'text/plain',
-                          `relation:${relation.id}`,
-                        )
-                      }}
-                      onDragEnd={() => {
-                        setDraggingRelationId(null)
-                        setDragOverSide(null)
-                      }}
-                    >
-                      <CausalFlowPillLabel>{relation.event.title}</CausalFlowPillLabel>
-                      <CausalFlowPillRemove
-                        type="button"
-                        onClick={(clickEvent) => {
-                          clickEvent.stopPropagation()
-                          void handleRemove(relation)
-                        }}
-                        aria-label={`'${relation.event.title}' 연결 해제`}
-                        title="연결 해제"
-                      >
-                        ×
-                      </CausalFlowPillRemove>
-                    </CausalFlowPill>
-                  ))}
+                  {(expandedCausalAfter ? afterItems : afterItems.slice(0, 3)).map((relation) =>
+                    renderCausalPill(relation, '드래그하여 원인·동시대로 이동'),
+                  )}
                   {afterItems.length > 3 && (
                     <CausalFlowMoreBtn
                       type="button"
@@ -647,44 +684,29 @@ export function RelatedBlock({
               {besideItems.length === 0 ? (
                 <CausalFlowEmpty>여기에 놓으면 동시대 관계로 전환</CausalFlowEmpty>
               ) : (
-                besideItems.map((relation) => (
-                  <CausalFlowPill
-                    key={relation.id}
-                    draggable
-                    title="드래그하여 원인·결과로 이동"
-                    onDragStart={(dragEvent) => {
-                      setDraggingRelationId(relation.id)
-                      dragEvent.dataTransfer?.setData(
-                        'text/plain',
-                        `relation:${relation.id}`,
-                      )
-                    }}
-                    onDragEnd={() => {
-                      setDraggingRelationId(null)
-                      setDragOverSide(null)
-                    }}
-                  >
-                    <CausalFlowPillLabel>{relation.event.title}</CausalFlowPillLabel>
-                    <CausalFlowPillRemove
-                      type="button"
-                      onClick={(clickEvent) => {
-                        clickEvent.stopPropagation()
-                        void handleRemove(relation)
-                      }}
-                      aria-label={`'${relation.event.title}' 연결 해제`}
-                      title="연결 해제"
-                    >
-                      ×
-                    </CausalFlowPillRemove>
-                  </CausalFlowPill>
-                ))
+                besideItems.map((relation) =>
+                  renderCausalPill(relation, '드래그하여 원인·결과로 이동'),
+                )
               )}
             </CausalFlowBesideBar>
+          )}
+
+          {relations.length > 0 && (
+            <CausalDetailToggleRow>
+              <CausalDetailToggleBtn
+                type="button"
+                aria-expanded={showDetailList}
+                onClick={() => setDetailListToggled(!showDetailList)}
+              >
+                {showDetailList ? <FiChevronUp size={13} aria-hidden /> : <FiChevronDown size={13} aria-hidden />}
+                {showDetailList ? '상세 목록 접기' : `관계 사유 · 상세 목록 펼치기 (${relations.length}건)`}
+              </CausalDetailToggleBtn>
+            </CausalDetailToggleRow>
           )}
         </CausalFlowBoard>
       )}
 
-      {groups.map((group) => {
+      {showDetailList && groups.map((group) => {
         const folded = relations.length > LONG_LIST && group.items.length > GROUP_PREVIEW + 1 && !expandedGroups.has(group.key)
         const shownItems = folded ? group.items.slice(0, GROUP_PREVIEW) : group.items
         return (
@@ -858,6 +880,7 @@ export function RelatedBlock({
         onQueryChange={setSearchTerm}
         initialDraft={initialDraft}
         initialFilter={pickerFilter}
+        preferredDirection={preferredDirection}
         saving={saveMutation.isPending}
         onSave={async (next) => {
           const saved = await saveMutation.mutateAsync(next)
@@ -884,35 +907,39 @@ export function RelatedBlock({
 
 
 
-const CausalFlowBoard = styled.div`
+const CausalFlowBoard = styled.div<{ $hasRelations: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 0;
-  margin-bottom: 6px;
-  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  gap: 16px;
+  padding: 6px 0 ${({ $hasRelations }) => ($hasRelations ? '20px' : '4px')};
+  margin-bottom: 4px;
+  border-bottom: ${({ $hasRelations, theme }) =>
+    $hasRelations ? `1px solid ${ledgerHairline(theme.mode)}` : 'none'};
 `
 
 const CausalFlowMainGrid = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(140px, 0.9fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(170px, 0.85fr) auto minmax(0, 1fr);
   align-items: stretch;
-  gap: 10px;
+  gap: 16px;
 
-  @media (max-width: 680px) {
+  @media (max-width: 760px) {
     grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
   }
 `
 
 const CausalFlowNode = styled.div<{ $dragOver?: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 4px 10px;
-  border-left: 2px solid
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  border-left: 2.5px solid
     ${({ $dragOver, theme }) =>
       $dragOver ? ledgerAccent(theme.mode) : ledgerHairlineStrong(theme.mode)};
+  border-radius: 8px;
   background: ${({ $dragOver, theme }) =>
     $dragOver ? ledgerAccentSubtle(theme.mode) : 'transparent'};
   outline: ${({ $dragOver, theme }) =>
@@ -927,20 +954,53 @@ const CausalFlowHead = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const CausalFlowCount = styled.span`
   font-variant-numeric: tabular-nums;
+  font-size: 12px;
   font-weight: 600;
   color: ${metaText};
 `
 
 const CausalFlowEmpty = styled.span`
-  font-size: 11.5px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  word-break: keep-all;
   color: ${metaText};
+`
+
+const CausalFlowEmptySlot = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+`
+
+const CausalQuickAddBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 6px;
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  color: ${({ theme }) => theme.colors.text.primary};
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.14s, color 0.14s;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
 `
 
 const CausalFlowPillList = styled.div`
@@ -968,11 +1028,61 @@ const CausalFlowPill = styled.span`
   }
 `
 
-const CausalFlowPillLabel = styled.span`
+const CausalFlowPillLink = styled(Link)`
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 180px;
+  max-width: 190px;
+  color: inherit;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+`
+
+const CausalFlowPillEdit = styled.button`
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: ${metaText};
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+`
+
+const CausalDetailToggleRow = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 2px;
+`
+
+const CausalDetailToggleBtn = styled.button`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 4px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: ${metaText};
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
 `
 
 const CausalFlowPillRemove = styled.button`
@@ -1020,12 +1130,11 @@ const CausalFlowArrow = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
-  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  color: ${metaText};
+  opacity: 0.7;
   user-select: none;
 
-  @media (max-width: 680px) {
+  @media (max-width: 760px) {
     display: none;
   }
 `
@@ -1035,10 +1144,10 @@ const CausalFlowSelfNode = styled.div`
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 2px;
-  padding: 6px 10px;
-  border-left: 2.5px solid ${({ theme }) => ledgerAccent(theme.mode)};
-  border-right: 2.5px solid ${({ theme }) => ledgerAccent(theme.mode)};
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => ledgerAccent(theme.mode)};
   background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
   text-align: center;
   min-width: 0;

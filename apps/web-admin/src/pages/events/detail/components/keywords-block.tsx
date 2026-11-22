@@ -85,7 +85,14 @@ export function KeywordsBlock({ keywords, onPatch }: KeywordsBlockProps) {
 
   return (
     <NetStyles.HierBlock role="group" aria-labelledby="network-keywords-label">
-      <NetStyles.BlockLabel id="network-keywords-label">키워드</NetStyles.BlockLabel>
+      <NetStyles.ParentZoneHead>
+        <NetStyles.ParentZoneTitleGroup>
+          <NetStyles.ParentZoneTitle id="network-keywords-label">
+            키워드 {keywords.length > 0 && <KeywordCount>{keywords.length}</KeywordCount>}
+          </NetStyles.ParentZoneTitle>
+          <NetStyles.ParentZoneHint>이 사건을 검색하고 주제로 묶는 핵심 키워드입니다.</NetStyles.ParentZoneHint>
+        </NetStyles.ParentZoneTitleGroup>
+      </NetStyles.ParentZoneHead>
       <NetStyles.KeywordsRow>
         {visibleKeywords.map((keyword) => (
           <NetStyles.KeywordChip key={keyword}>
@@ -149,6 +156,14 @@ export function KeywordsBlock({ keywords, onPatch }: KeywordsBlockProps) {
     </NetStyles.HierBlock>
   )
 }
+
+const KeywordCount = styled.span`
+  margin-left: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
 
 const KeywordLink = styled(Link)`
   color: inherit;

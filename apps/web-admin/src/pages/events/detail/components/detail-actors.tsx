@@ -8,15 +8,17 @@ import {
   FiGitMerge,
   FiList,
   FiPlus,
+  FiRepeat,
   FiSliders,
 } from 'react-icons/fi'
+import styled from 'styled-components'
 
-import { observationExtent } from '@/entities/evidence/lib/format-observation'
 import { findReplacementForMismatchedCountry } from '@/entities/event/model'
 import { BentoActionBtn } from '@/entities/event/ui/bento-primitives'
+import { ledgerHairline } from '@/entities/event/ui/ledger-tokens'
+import { metaText } from '@/pages/events/styles/theme'
 import { getAllCountries } from '@/shared/api/countries'
-import { type Observation } from '@/shared/api/evidence'
-import { listEventSideUnits, type SideUnitView } from '@/shared/api/event-sides'
+import { type EventSide, listEventSideUnits, type SideUnitView } from '@/shared/api/event-sides'
 import { type UpdateEventDto } from '@/shared/api/events'
 import { getAllHistoricalCountries } from '@/shared/api/historical-countries'
 import { PopoverMenu, type PopoverMenuEntry } from '@/shared/ui/popover-menu'
@@ -24,6 +26,7 @@ import {
   LedgerViewSwitch,
   LedgerViewSwitchItem,
 } from '@/widgets/country/country-detail/ui/country-ledger-primitives'
+import { PersonGroupCreateModal } from '@/widgets/person/person-group-create-modal/person-group-create-modal'
 
 import * as S from '../styles'
 import { type EventDetail, eventKeys, eventObservationsQueryOptions } from '../use-event-detail'
@@ -40,6 +43,7 @@ import {
   isCrossSidePerson,
   participationOptionsOf,
   PERSON_PREVIEW_COUNT,
+  personNameOf,
   shouldCollapse,
 } from './actors/actors.lib'
 import {
@@ -53,15 +57,12 @@ import {
   ActorsHeader,
   ActorsHeaderLeft,
   ActorsHeaderRight,
-  ActorsSubtitle,
   ActorsSummary,
   CountryList,
   CrossSideLabel,
   DelegationCaption,
   DelegationList,
   DelegationMore,
-  EmptyActorsCard,
-  EmptyGroupLine,
   GroupCount,
   GroupLabel,
   HeaderControlBtn,
@@ -72,33 +73,19 @@ import {
   SideColumns,
   SideCountryList,
   SideGroup,
-  SideHead,
-  SideHeadTitle,
-  SideOutcomeTag,
-  SideSwatch,
 } from './actors/actors.styles'
 import { CountryLinkModal } from './actors/country-link-modal'
 import { ActorCountryRow } from './actors/country-row'
 import { PersonLinkModal } from './actors/person-link-modal'
 import { ActorPersonRow } from './actors/person-row'
+import { SideColumnHeader } from './actors/side-column-header'
 import { useActorMutations } from './actors/use-actor-mutations'
+import { useSideManagement } from './actors/use-side-management'
 import { toAxisSpan } from './development-timeline.lib'
 import { groupBySide, makeSideRootOf } from './hero-countries.lib'
 import { withSideColors } from './side-colors'
-import { SubEventSidesRollupPanel } from './side-doctrine-and-weapons'
-import { LOSS_METRIC_PRIORITY, PERSONNEL_METRIC, representativeOf } from './side-metrics.lib'
-import { SIDE_OUTCOME_LABEL } from './side-outcome'
 
 type ActorsViewMode = 'board' | 'ledger'
-
-function pickParticipantHeadlineFigure(list: ReadonlyArray<Observation>): Observation | null {
-  for (const metricKey of [PERSONNEL_METRIC, ...LOSS_METRIC_PRIORITY]) {
-    const candidates = list.filter((entry) => entry.metric.key === metricKey)
-    const picked = representativeOf(candidates)
-    if (picked) return picked
-  }
-  return null
-}
 
 interface CountryLinkTarget {
   open: boolean
@@ -123,8 +110,7 @@ interface DetailActorsProps {
   onPersonClick: (personId: string) => void
   onCountryClick: (countryId: string) => void
   onStartSides?: () => void
-  onManageSides?: () => void
-  /** 참여 요약판의 '수치 자세히' — 수치 모듈로 */
+  /** 참여 요약판의 '수치 자세히' — 수치·전력 탭으로 */
   onShowMetrics?: () => void
 }
 
@@ -136,7 +122,6 @@ export function DetailActors({
   onPersonClick,
   onCountryClick,
   onStartSides,
-  onManageSides,
   onShowMetrics,
 }: DetailActorsProps) {
   const [viewMode, setViewMode] = useState<ActorsViewMode>('board')
@@ -153,6 +138,7 @@ export function DetailActors({
 
   const actors = useActorMutations({ event, onPatch })
   const { persons, countryRows } = actors
+  const sideManager = useSideManagement({ event, actors, enabled: !readOnly })
 
   const { data: observations = [] } = useQuery(eventObservationsQueryOptions(event.id))
   const { data: sideUnits = [] } = useQuery<SideUnitView[]>({
@@ -172,49 +158,6 @@ export function DetailActors({
     }
     return byParticipant
   }, [observations])
-
-  const leadParticipantFigures = useMemo(() => {
-    const headlineByParticipant = new Map<string, Observation>()
-    const metricCounts = new Map<string, number>()
-    for (const [participantId, list] of figuresByParticipant.entries()) {
-      const picked = pickParticipantHeadlineFigure(list)
-      if (!picked) continue
-      headlineByParticipant.set(participantId, picked)
-      if (!picked.atLeast) {
-        metricCounts.set(picked.metric.key, (metricCounts.get(picked.metric.key) ?? 0) + 1)
-      }
-    }
-    const topMetricKey = [...metricCounts.entries()].sort(
-      (left, right) => right[1] - left[1],
-    )[0]?.[0]
-    const byParticipant = new Map<string, { obs: Observation; pct: number | null }>()
-    for (const [participantId, obs] of headlineByParticipant.entries()) {
-      byParticipant.set(participantId, { obs, pct: null })
-    }
-    if (!topMetricKey) {
-      return { byParticipant }
-    }
-    const comparableEntries = [...headlineByParticipant.entries()].filter(
-      ([, obs]) => obs.metric.key === topMetricKey && !obs.atLeast,
-    )
-    if (comparableEntries.length < 2) {
-      return { byParticipant }
-    }
-    const maxVal = Math.max(
-      1,
-      ...comparableEntries.map(([, obs]) => observationExtent(obs)?.center ?? 0),
-    )
-    for (const [participantId, obs] of comparableEntries) {
-      const center = observationExtent(obs)?.center ?? 0
-      if (center > 0) {
-        byParticipant.set(participantId, {
-          obs,
-          pct: Math.max(5, Math.min(100, Math.round((center / maxVal) * 100))),
-        })
-      }
-    }
-    return { byParticipant }
-  }, [figuresByParticipant])
 
   const hasExistenceMismatch = useMemo(
     () => countryRows.some((row) => Boolean(row.existenceWarning)),
@@ -333,26 +276,88 @@ export function DetailActors({
     if (!canManage && manageMode) setManageMode(false)
   }, [canManage, manageMode])
 
-  const countrySideGroups = manageMode ? null : groupBySide(countryRows, event.sides ?? [])
-  /** 소속국 진영 표 — 인물의 실효 진영(따로 정한 진영 ?? 소속국 진영)을 진영 탭과 같은 규칙으로 낸다 */
+  const allSides = useMemo(() => event.sides ?? [], [event.sides])
   const countrySideByKey = useMemo(
     () => countrySideMapOf(event.relatedCountries, event.relatedHistoricalCountries),
     [event.relatedCountries, event.relatedHistoricalCountries],
   )
-  const sideRootOf = useMemo(() => makeSideRootOf(event.sides ?? []), [event.sides])
-  /* 나라가 진영으로 안 갈릴 때는 인물을 실효 진영으로 가른다 — 소속국 진영을 따르는 인물도 그 편에 선다 */
-  const personSideGroups = useMemo(() => {
-    if (manageMode || countrySideGroups) return null
-    const grouped = groupBySide(
-      persons.map((entry) => ({ entry, sideId: effectivePersonSide(entry, countrySideByKey).sideId })),
-      event.sides ?? [],
-    )
-    return grouped
-      ? grouped.map((group) => ({ ...group, items: group.items.map((item) => item.entry) }))
-      : null
-  }, [manageMode, countrySideGroups, persons, countrySideByKey, event.sides])
+  const sideRootOf = useMemo(() => makeSideRootOf(allSides), [allSides])
+  const rootSides = useMemo(() => {
+    const byId = new Set(allSides.map((side) => side.id))
+    return allSides
+      .filter((side) => !side.parentSideId || !byId.has(side.parentSideId))
+      .slice()
+      .sort((left, right) => (left.sortOrder ?? 0) - (right.sortOrder ?? 0))
+  }, [allSides])
+  const rawSideById = useMemo(
+    () => new Map<string, EventSide>(allSides.map((side) => [side.id, side])),
+    [allSides],
+  )
 
-  const coloredSides = withSideColors(event.sides ?? [])
+  const hasCountrySideAssignment = useMemo(
+    () => countryRows.some((row) => Boolean(sideRootOf(row.sideId))),
+    [countryRows, sideRootOf],
+  )
+  const hasPersonOnlySideAssignment = useMemo(
+    () =>
+      !hasCountrySideAssignment &&
+      persons.some((personEntry) =>
+        Boolean(sideRootOf(effectivePersonSide(personEntry, countrySideByKey).sideId)),
+      ),
+    [hasCountrySideAssignment, persons, sideRootOf, countrySideByKey],
+  )
+  const countrySideMode =
+    !manageMode &&
+    rootSides.length > 0 &&
+    (hasCountrySideAssignment ||
+      (!hasPersonOnlySideAssignment && (countryRows.length >= 2 || persons.length === 0)))
+
+  const countrySideGroups = useMemo(() => {
+    if (manageMode || rootSides.length === 0) return null
+    if (readOnly) return groupBySide(countryRows, allSides)
+    if (!countrySideMode) return null
+    const grouped = rootSides.map((side) => ({
+      sideId: side.id as string | null,
+      label: side.name,
+      items: countryRows.filter((row) => sideRootOf(row.sideId) === side.id),
+    }))
+    const rest = countryRows.filter((row) => sideRootOf(row.sideId) === null)
+    return rest.length > 0
+      ? [...grouped, { sideId: null, label: '미배정 · 기타 참여', items: rest }]
+      : grouped
+  }, [manageMode, rootSides, readOnly, countryRows, allSides, countrySideMode, sideRootOf])
+
+  /* 단일 국가 내전·정변·분당 등 국가가 진영으로 나뉘지 않을 때는 인물 섹션에서 진영 열을 세운다 */
+  const personSideGroups = useMemo(() => {
+    if (manageMode || countrySideGroups || rootSides.length === 0) return null
+    if (readOnly) {
+      const grouped = groupBySide(
+        persons.map((entry) => ({
+          entry,
+          sideId: effectivePersonSide(entry, countrySideByKey).sideId,
+        })),
+        allSides,
+      )
+      return grouped
+        ? grouped.map((group) => ({ ...group, items: group.items.map((item) => item.entry) }))
+        : null
+    }
+    const grouped = rootSides.map((side) => ({
+      sideId: side.id as string | null,
+      label: side.name,
+      items: persons.filter(
+        (entry) => sideRootOf(effectivePersonSide(entry, countrySideByKey).sideId) === side.id,
+      ),
+    }))
+    const rest = persons.filter(
+      (entry) => sideRootOf(effectivePersonSide(entry, countrySideByKey).sideId) === null,
+    )
+    return rest.length > 0
+      ? [...grouped, { sideId: null, label: '미배정 · 기타 참여', items: rest }]
+      : grouped
+  }, [manageMode, countrySideGroups, rootSides, readOnly, persons, countrySideByKey, allSides, sideRootOf])
+
+  const coloredSides = withSideColors(allSides)
   const sideColorById = new Map(coloredSides.map((side) => [side.id, side.color] as const))
   const sideById = new Map(
     coloredSides.map(
@@ -415,7 +420,7 @@ export function DetailActors({
     !personSideGroups &&
     personsCollapsedBase &&
     shouldCollapse(listedPersons.length, PERSON_PREVIEW_COUNT)
-  const sideCount = (event.sides ?? []).filter((side) => !side.parentSideId).length
+  const sideCount = rootSides.length
 
   const settingsMenuItems = useMemo<PopoverMenuEntry[]>(() => {
     const entries: PopoverMenuEntry[] = [
@@ -432,12 +437,12 @@ export function DetailActors({
     if (!readOnly) {
       const hasStructureActions =
         (sideCount === 0 && Boolean(onStartSides)) ||
-        (sideCount >= 2 && Boolean(onManageSides)) ||
+        sideCount > 0 ||
         (canManage && viewMode === 'board')
 
       if (hasStructureActions) {
         entries.push({ type: 'divider', id: 'div-structure' })
-        entries.push({ type: 'section', id: 'sec-structure', label: '구도 · 정렬' })
+        entries.push({ type: 'section', id: 'sec-structure', label: '진영 · 순서' })
 
         if (sideCount === 0 && onStartSides) {
           entries.push({
@@ -446,13 +451,21 @@ export function DetailActors({
             icon: <FiGitMerge size={13} />,
             onSelect: () => onStartSides(),
           })
-        } else if (sideCount >= 2 && onManageSides) {
+        } else if (sideCount > 0) {
           entries.push({
-            id: 'manage-sides',
-            label: '진영·수치 탭에서 진영 편집 →',
-            icon: <FiGitMerge size={13} />,
-            onSelect: () => onManageSides(),
+            id: 'add-side',
+            label: '진영 추가',
+            icon: <FiPlus size={13} />,
+            onSelect: () => sideManager.addSide(),
           })
+          if (sideCount >= 2) {
+            entries.push({
+              id: 'swap-sides',
+              label: '1·2번 진영 순서 바꾸기',
+              icon: <FiRepeat size={13} />,
+              onSelect: () => sideManager.swapFirstTwoSides(),
+            })
+          }
         }
 
         if (canManage && viewMode === 'board') {
@@ -473,7 +486,7 @@ export function DetailActors({
     readOnly,
     sideCount,
     onStartSides,
-    onManageSides,
+    sideManager,
     canManage,
     viewMode,
     manageMode,
@@ -590,9 +603,6 @@ export function DetailActors({
         return next
       })
 
-    const leadEntry = row.participantId
-      ? leadParticipantFigures.byParticipant.get(row.participantId)
-      : undefined
     const resolvedSide =
       row.sideId && sideById.get(row.sideId) ? sideById.get(row.sideId) : null
 
@@ -601,10 +611,7 @@ export function DetailActors({
         key={rowKey}
         row={row}
         figures={row.participantId ? figuresByParticipant.get(row.participantId) : undefined}
-        leadObservation={leadEntry?.obs ?? null}
-        leadSharePct={leadEntry?.pct ?? null}
         side={resolvedSide}
-        sideColor={resolvedSide?.color ?? null}
         sideOptions={sideOptions}
         groupSideId={groupSideId}
         replacement={replacementByRowKey.get(rowKey) ?? null}
@@ -723,51 +730,41 @@ export function DetailActors({
   return (
     <>
       <S.Section id="actors">
-        <ActorsHeader>
-          <ActorsHeaderLeft>
-            <S.SectionTitle>
-              참여 국가 · 인물
-              {hasAnything && (
-                <ActorsSummary>
-                  {[
-                    totalCountries > 0 && `국가 ${totalCountries}`,
-                    persons.length > 0 && `인물 ${persons.length}`,
-                    institutionalCount > 0 && `기관·단체 ${institutionalCount}`,
-                    sideCount >= 2 && `진영 ${sideCount}`,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </ActorsSummary>
+        {hasAnything && (
+          <ActorsHeader>
+            <ActorsHeaderLeft>
+              <ActorsSummary>
+                {[
+                  totalCountries > 0 && `국가 ${totalCountries}`,
+                  persons.length > 0 && `인물 ${persons.length}`,
+                  institutionalCount > 0 && `기관·단체 ${institutionalCount}`,
+                  sideCount >= 2 && `진영 ${sideCount}`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </ActorsSummary>
+            </ActorsHeaderLeft>
+
+            <ActorsHeaderRight>
+              {viewMode === 'ledger' && !readOnly && (
+                <>
+                  <HeaderControlBtn
+                    type="button"
+                    onClick={() => setCountryLinkTarget({ open: true })}
+                  >
+                    <FiPlus aria-hidden />
+                    국가 잇기
+                  </HeaderControlBtn>
+                  <HeaderControlBtn
+                    type="button"
+                    onClick={() => setPersonLinkTarget({ open: true })}
+                  >
+                    <FiPlus aria-hidden />
+                    인물 잇기
+                  </HeaderControlBtn>
+                </>
               )}
-            </S.SectionTitle>
-            <ActorsSubtitle>
-              {viewMode === 'ledger'
-                ? '등록된 모든 참여 국가와 인물을 한 표에서 비교하고 편집합니다.'
-                : '사건에 관여한 국가와 인물의 역할을 기록합니다. 인물에 소속국을 지정하면 해당 국가 아래에 묶이며 진영도 함께 따릅니다.'}
-            </ActorsSubtitle>
-          </ActorsHeaderLeft>
 
-          <ActorsHeaderRight>
-            {viewMode === 'ledger' && !readOnly && (
-              <>
-                <HeaderControlBtn
-                  type="button"
-                  onClick={() => setCountryLinkTarget({ open: true })}
-                >
-                  <FiPlus aria-hidden />
-                  국가 잇기
-                </HeaderControlBtn>
-                <HeaderControlBtn
-                  type="button"
-                  onClick={() => setPersonLinkTarget({ open: true })}
-                >
-                  <FiPlus aria-hidden />
-                  인물 잇기
-                </HeaderControlBtn>
-              </>
-            )}
-
-            {hasAnything && (
               <LedgerViewSwitch role="group" aria-label="참여 보기 방식 전환">
                 <LedgerViewSwitchItem
                   type="button"
@@ -786,18 +783,18 @@ export function DetailActors({
                   표로 보기
                 </LedgerViewSwitchItem>
               </LedgerViewSwitch>
-            )}
 
-            <PopoverMenu
-              size="md"
-              items={settingsMenuItems}
-              active={manageMode || !showInfographic}
-              ariaLabel="화면 표시 및 정렬 설정"
-              title="요약 인포그래픽 표시 · 순서 정렬 · 진영 설정"
-              minWidth={220}
-            />
-          </ActorsHeaderRight>
-        </ActorsHeader>
+              <PopoverMenu
+                size="md"
+                items={settingsMenuItems}
+                active={manageMode || !showInfographic}
+                ariaLabel="화면 표시 및 정렬 설정"
+                title="요약 인포그래픽 표시 · 순서 정렬 · 진영 설정"
+                minWidth={220}
+              />
+            </ActorsHeaderRight>
+          </ActorsHeader>
+        )}
 
         <ActorsCanvas>
           {showInfographic && (
@@ -810,7 +807,6 @@ export function DetailActors({
               departmentCount={departmentCount}
               readOnly={readOnly}
               onStartSides={onStartSides}
-              onManageSides={onManageSides}
               onShowMetrics={onShowMetrics}
               onCountryClick={onCountryClick}
               onPersonClick={onPersonClick}
@@ -856,20 +852,16 @@ export function DetailActors({
                     <ActorSectionTitleGroup>
                       <ActorSectionTitleRow>
                         <GroupLabel>참여 국가</GroupLabel>
-                        {totalCountries > 0 ? (
-                          <GroupCount>{totalCountries}개국</GroupCount>
-                        ) : (
-                          <GroupCount $muted>미등록</GroupCount>
-                        )}
+                        {totalCountries > 0 && <GroupCount>{totalCountries}개국</GroupCount>}
                       </ActorSectionTitleRow>
                       <SectionHintText>
-                        {sideCount >= 2
-                          ? '대립 진영별로 국가를 나누어 표시합니다. 행을 다른 진영으로 끌어 옮기거나 편집에서 진영을 바꿀 수 있습니다.'
+                        {countrySideGroups
+                          ? '진영 이름·승패 결과를 바로 수정하고, 국가를 다른 진영으로 끌어 옮길 수 있습니다.'
                           : '주도·대상·중재 등 당사국의 역할과 사건 중 수행한 일을 기록합니다.'}
                       </SectionHintText>
                     </ActorSectionTitleGroup>
 
-                    {!readOnly && (
+                    {!readOnly && (countryRows.length > 0 || Boolean(countrySideGroups)) && (
                       <ActorSectionHeadActions>
                         {sideCount === 0 && onStartSides && countryRows.length >= 2 && (
                           <BentoActionBtn type="button" $accent onClick={onStartSides}>
@@ -877,13 +869,25 @@ export function DetailActors({
                             진영 나누기
                           </BentoActionBtn>
                         )}
-                        {sideCount >= 2 && onManageSides && (
+                        {countrySideGroups && sideCount >= 2 && (
                           <BentoActionBtn
                             type="button"
-                            onClick={onManageSides}
-                            title="진영·수치 탭으로 이동해 진영 이름·승패 결과·전투서열을 편집합니다"
+                            onClick={sideManager.swapFirstTwoSides}
+                            disabled={sideManager.busy}
+                            title="1번·2번 진영 표시 순서를 맞바꿉니다"
                           >
-                            진영·수치 탭에서 편집 →
+                            <FiRepeat size={11} />
+                            순서 바꾸기
+                          </BentoActionBtn>
+                        )}
+                        {countrySideGroups && (
+                          <BentoActionBtn
+                            type="button"
+                            onClick={sideManager.addSide}
+                            disabled={sideManager.busy}
+                          >
+                            <FiPlus size={12} />
+                            진영 추가
                           </BentoActionBtn>
                         )}
                         <HeaderControlBtn
@@ -898,32 +902,34 @@ export function DetailActors({
                   </ActorSectionHead>
 
                   <ActorSectionBody>
-                    {countryRows.length === 0 && (
-                      <EmptyActorsCard>
-                        <strong>등록된 참여 국가가 없습니다.</strong>
-                        <span>
-                          우측 ‘국가 잇기’ 버튼으로 현대 국가나 역사 국가를 찾아 역할과 함께 연결하세요.
-                        </span>
-                      </EmptyActorsCard>
+                    {countryRows.length === 0 && !countrySideGroups && (
+                      <S.EmptyGuide>
+                        <S.EmptyGuideBody>
+                          <S.EmptyGuideTitle>이 사건에 관여한 국가를 역할과 함께 연결하세요</S.EmptyGuideTitle>
+                          <S.EmptyGuideDesc>
+                            교전국 · 조약 당사국 · 중재국 등 현대 국가와 역사 국가를 선택해 연결합니다. 2개국 이상 모이면 대립 진영을 나누어 승패 결과와 세력을 한눈에 비교할 수 있습니다.
+                          </S.EmptyGuideDesc>
+                        </S.EmptyGuideBody>
+                        {!readOnly && (
+                          <S.EmptyGuideActions>
+                            <S.EmptyPrimaryAction
+                              type="button"
+                              onClick={() => setCountryLinkTarget({ open: true })}
+                            >
+                              <FiPlus aria-hidden />
+                              참여 국가 연결하기
+                            </S.EmptyPrimaryAction>
+                          </S.EmptyGuideActions>
+                        )}
+                      </S.EmptyGuide>
                     )}
 
-                    {sideCount >= 2 &&
-                      !manageMode &&
-                      !readOnly &&
-                      !personSideGroups &&
-                      countryRows.length >= 2 &&
-                      !countryRows.some((row) => row.sideId) && (
-                        <EmptyGroupLine>
-                          진영 {sideCount}개가 준비되어 있습니다 — 각 국가 이름 옆의{' '}
-                          <strong>+ 진영 배정</strong> 버튼이나 <strong>편집</strong>에서 진영을 지정하세요.
-                        </EmptyGroupLine>
-                      )}
-
-                    {countryRows.length > 0 &&
+                    {(countryRows.length > 0 || Boolean(countrySideGroups)) &&
                       (countrySideGroups ? (
                         <SideColumns>
                           {countrySideGroups.map((group) => {
                             const color = group.sideId ? sideColorById.get(group.sideId) : undefined
+                            const rawSide = group.sideId ? (rawSideById.get(group.sideId) ?? null) : null
                             const groupTargetKey = `side:${group.sideId ?? 'rest'}`
                             return (
                               <SideGroup
@@ -967,23 +973,93 @@ export function DetailActors({
                                   }
                                 }}
                               >
-                                <SideHead $color={color}>
-                                  <SideHeadTitle>
-                                    {color && <SideSwatch $color={color} aria-hidden />}
-                                    <span>{group.label}</span>
-                                    <GroupCount>{group.items.length}</GroupCount>
-                                    {group.sideId && sideById.get(group.sideId)?.outcome && (
-                                      <SideOutcomeTag
-                                        title={
-                                          sideById.get(group.sideId)?.outcomeNote ?? undefined
-                                        }
-                                      >
-                                        {SIDE_OUTCOME_LABEL[sideById.get(group.sideId)!.outcome!]}
-                                      </SideOutcomeTag>
-                                    )}
-                                  </SideHeadTitle>
-                                </SideHead>
+                                <SideColumnHeader
+                                  side={rawSide}
+                                  label={group.label}
+                                  color={color}
+                                  memberCount={group.items.length}
+                                  readOnly={readOnly}
+                                  busy={sideManager.busy}
+                                  quickAddLabel={rawSide ? '국가' : undefined}
+                                  onQuickAdd={
+                                    rawSide
+                                      ? () =>
+                                          setCountryLinkTarget({
+                                            open: true,
+                                            defaultSideId: rawSide.id,
+                                          })
+                                      : undefined
+                                  }
+                                  showOutcomeNote={
+                                    rawSide
+                                      ? sideManager.isExtraOpened(rawSide.id, 'outcomeNote')
+                                      : false
+                                  }
+                                  showDescription={
+                                    rawSide
+                                      ? sideManager.isExtraOpened(rawSide.id, 'description')
+                                      : false
+                                  }
+                                  showFaction={
+                                    rawSide
+                                      ? sideManager.isExtraOpened(rawSide.id, 'faction')
+                                      : false
+                                  }
+                                  groupOptions={sideManager.groupOptions}
+                                  onOpenExtra={
+                                    rawSide
+                                      ? (extraKey) => sideManager.openExtra(rawSide.id, extraKey)
+                                      : undefined
+                                  }
+                                  onRename={
+                                    rawSide
+                                      ? (nextName) => sideManager.renameSide(rawSide, nextName)
+                                      : undefined
+                                  }
+                                  onSetOutcome={
+                                    rawSide
+                                      ? (patch) => sideManager.setOutcome(rawSide, patch)
+                                      : undefined
+                                  }
+                                  onDescribe={
+                                    rawSide
+                                      ? (desc) => sideManager.describeSide(rawSide, desc)
+                                      : undefined
+                                  }
+                                  onLinkGroup={
+                                    rawSide
+                                      ? (groupId) => void sideManager.linkPersonGroup(rawSide, groupId)
+                                      : undefined
+                                  }
+                                  onImportGroupMembers={
+                                    rawSide?.personGroupId
+                                      ? () =>
+                                          void sideManager.importGroupMembersToSide(
+                                            rawSide.id,
+                                            rawSide.personGroupId!,
+                                          )
+                                      : undefined
+                                  }
+                                  onCreateGroup={
+                                    rawSide
+                                      ? () => sideManager.setCreatingGroupSide(rawSide)
+                                      : undefined
+                                  }
+                                  onRemoveSide={
+                                    rawSide
+                                      ? () => void sideManager.removeSide(rawSide)
+                                      : undefined
+                                  }
+                                />
                                 <SideCountryList>
+                                  {group.items.length === 0 &&
+                                    (!delegationMode ||
+                                      !group.sideId ||
+                                      (crossSideByGroup.get(group.sideId) ?? []).length === 0) && (
+                                      <EmptySideSlot>
+                                        여기로 국가를 끌어 놓거나 상단 <strong>+ 국가</strong> 버튼으로 배정하세요.
+                                      </EmptySideSlot>
+                                    )}
                                   {group.items.map((row) => renderCountryRow(row, group.sideId))}
                                   {delegationMode &&
                                     group.sideId &&
@@ -1055,11 +1131,7 @@ export function DetailActors({
                     <ActorSectionTitleGroup>
                       <ActorSectionTitleRow>
                         <GroupLabel>참여 인물</GroupLabel>
-                        {persons.length > 0 ? (
-                          <GroupCount>{persons.length}명</GroupCount>
-                        ) : (
-                          <GroupCount $muted>미등록</GroupCount>
-                        )}
+                        {persons.length > 0 && <GroupCount>{persons.length}명</GroupCount>}
                       </ActorSectionTitleRow>
                       <SectionHintText>
                         {delegationMode && listedPersons.length === 0
@@ -1070,8 +1142,38 @@ export function DetailActors({
                       </SectionHintText>
                     </ActorSectionTitleGroup>
 
-                    {!readOnly && (
+                    {!readOnly && (persons.length > 0 || Boolean(personSideGroups)) && (
                       <ActorSectionHeadActions>
+                        {sideCount === 0 &&
+                          onStartSides &&
+                          countryRows.length < 2 &&
+                          persons.length >= 2 && (
+                            <BentoActionBtn type="button" $accent onClick={onStartSides}>
+                              <FiGitMerge size={12} />
+                              진영·계파 나누기
+                            </BentoActionBtn>
+                          )}
+                        {personSideGroups && sideCount >= 2 && (
+                          <BentoActionBtn
+                            type="button"
+                            onClick={sideManager.swapFirstTwoSides}
+                            disabled={sideManager.busy}
+                            title="1번·2번 진영 표시 순서를 맞바꿉니다"
+                          >
+                            <FiRepeat size={11} />
+                            순서 바꾸기
+                          </BentoActionBtn>
+                        )}
+                        {personSideGroups && (
+                          <BentoActionBtn
+                            type="button"
+                            onClick={sideManager.addSide}
+                            disabled={sideManager.busy}
+                          >
+                            <FiPlus size={12} />
+                            진영 추가
+                          </BentoActionBtn>
+                        )}
                         <HeaderControlBtn
                           type="button"
                           onClick={() => setPersonLinkTarget({ open: true })}
@@ -1084,32 +1186,43 @@ export function DetailActors({
                   </ActorSectionHead>
 
                   <ActorSectionBody>
-                    {persons.length === 0 && (
-                      <EmptyActorsCard>
-                        <strong>등록된 참여 인물이 없습니다.</strong>
-                        <span>
-                          우측 ‘인물 잇기’ 버튼으로 기존 인물을 찾거나 새 인물을 바로 만들어 연결할 수 있습니다.
-                        </span>
-                      </EmptyActorsCard>
+                    {persons.length === 0 && !personSideGroups && (
+                      <S.EmptyGuide>
+                        <S.EmptyGuideBody>
+                          <S.EmptyGuideTitle>사건을 이끈 주요 인물과 행적을 연결하세요</S.EmptyGuideTitle>
+                          <S.EmptyGuideDesc>
+                            국가원수 · 지휘관 · 외교 대표 · 핵심 주동자 등 사건 당시 활동한 인물을 연결합니다. 소속 국가가 지정된 인물은 위 참여 국가 행 아래 대표단으로 자동 정리됩니다.
+                          </S.EmptyGuideDesc>
+                        </S.EmptyGuideBody>
+                        {!readOnly && (
+                          <S.EmptyGuideActions>
+                            <S.EmptyPrimaryAction
+                              type="button"
+                              onClick={() => setPersonLinkTarget({ open: true })}
+                            >
+                              <FiPlus aria-hidden />
+                              참여 인물 연결하기
+                            </S.EmptyPrimaryAction>
+                            <S.EmptySecondaryAction
+                              type="button"
+                              onClick={() =>
+                                setPersonLinkTarget({ open: true, initialCreateMode: true })
+                              }
+                            >
+                              <FiPlus aria-hidden />
+                              새 인물 바로 등록
+                            </S.EmptySecondaryAction>
+                          </S.EmptyGuideActions>
+                        )}
+                      </S.EmptyGuide>
                     )}
 
-                    {sideCount >= 2 &&
-                      !manageMode &&
-                      !readOnly &&
-                      countryRows.length <= 1 &&
-                      !personSideGroups &&
-                      persons.length >= 2 &&
-                      !persons.some((person) => person.sideId) && (
-                        <EmptyGroupLine>
-                          진영 {sideCount}개가 준비되어 있습니다 — 각 인물 우측 <strong>편집</strong>이나 <strong>⋯</strong> 메뉴에서 진영을 배정하면 진영별로 나뉩니다.
-                        </EmptyGroupLine>
-                      )}
-
-                    {listedPersons.length > 0 &&
+                    {(listedPersons.length > 0 || Boolean(personSideGroups)) &&
                       (personSideGroups ? (
                         <SideColumns>
                           {personSideGroups.map((group) => {
                             const color = group.sideId ? sideColorById.get(group.sideId) : undefined
+                            const rawSide = group.sideId ? (rawSideById.get(group.sideId) ?? null) : null
                             const groupTargetKey = `person-side:${group.sideId ?? 'rest'}`
                             return (
                               <SideGroup
@@ -1145,23 +1258,90 @@ export function DetailActors({
                                   actors.updatePerson(payload.key, { sideId: group.sideId ?? null })
                                 }}
                               >
-                                <SideHead $color={color}>
-                                  <SideHeadTitle>
-                                    {color && <SideSwatch $color={color} aria-hidden />}
-                                    <span>{group.label}</span>
-                                    <GroupCount>{group.items.length}</GroupCount>
-                                    {group.sideId && sideById.get(group.sideId)?.outcome && (
-                                      <SideOutcomeTag
-                                        title={
-                                          sideById.get(group.sideId)?.outcomeNote ?? undefined
-                                        }
-                                      >
-                                        {SIDE_OUTCOME_LABEL[sideById.get(group.sideId)!.outcome!]}
-                                      </SideOutcomeTag>
-                                    )}
-                                  </SideHeadTitle>
-                                </SideHead>
+                                <SideColumnHeader
+                                  side={rawSide}
+                                  label={group.label}
+                                  color={color}
+                                  memberCount={group.items.length}
+                                  readOnly={readOnly}
+                                  busy={sideManager.busy}
+                                  quickAddLabel={rawSide ? '인물' : undefined}
+                                  onQuickAdd={
+                                    rawSide
+                                      ? () =>
+                                          setPersonLinkTarget({
+                                            open: true,
+                                            defaultSideId: rawSide.id,
+                                          })
+                                      : undefined
+                                  }
+                                  showOutcomeNote={
+                                    rawSide
+                                      ? sideManager.isExtraOpened(rawSide.id, 'outcomeNote')
+                                      : false
+                                  }
+                                  showDescription={
+                                    rawSide
+                                      ? sideManager.isExtraOpened(rawSide.id, 'description')
+                                      : false
+                                  }
+                                  showFaction={
+                                    rawSide
+                                      ? sideManager.isExtraOpened(rawSide.id, 'faction')
+                                      : false
+                                  }
+                                  groupOptions={sideManager.groupOptions}
+                                  onOpenExtra={
+                                    rawSide
+                                      ? (extraKey) => sideManager.openExtra(rawSide.id, extraKey)
+                                      : undefined
+                                  }
+                                  onRename={
+                                    rawSide
+                                      ? (nextName) => sideManager.renameSide(rawSide, nextName)
+                                      : undefined
+                                  }
+                                  onSetOutcome={
+                                    rawSide
+                                      ? (patch) => sideManager.setOutcome(rawSide, patch)
+                                      : undefined
+                                  }
+                                  onDescribe={
+                                    rawSide
+                                      ? (desc) => sideManager.describeSide(rawSide, desc)
+                                      : undefined
+                                  }
+                                  onLinkGroup={
+                                    rawSide
+                                      ? (groupId) => void sideManager.linkPersonGroup(rawSide, groupId)
+                                      : undefined
+                                  }
+                                  onImportGroupMembers={
+                                    rawSide?.personGroupId
+                                      ? () =>
+                                          void sideManager.importGroupMembersToSide(
+                                            rawSide.id,
+                                            rawSide.personGroupId!,
+                                          )
+                                      : undefined
+                                  }
+                                  onCreateGroup={
+                                    rawSide
+                                      ? () => sideManager.setCreatingGroupSide(rawSide)
+                                      : undefined
+                                  }
+                                  onRemoveSide={
+                                    rawSide
+                                      ? () => void sideManager.removeSide(rawSide)
+                                      : undefined
+                                  }
+                                />
                                 <SideCountryList>
+                                  {group.items.length === 0 && (
+                                    <EmptySideSlot>
+                                      여기로 인물을 끌어 놓거나 상단 <strong>+ 인물</strong> 버튼으로 배정하세요.
+                                    </EmptySideSlot>
+                                  )}
                                   {group.items.map((entry) => {
                                     const order = persons.indexOf(entry)
                                     return renderPersonRow(
@@ -1209,14 +1389,6 @@ export function DetailActors({
                 </ActorSectionCard>
               )}
             </>
-          )}
-
-          {event.kind === 'COLLECTION' && (
-            <SubEventSidesRollupPanel
-              eventId={event.id}
-              domain={event.domain}
-              defaultOpen={persons.length === 0}
-            />
           )}
         </ActorsCanvas>
       </S.Section>
@@ -1272,6 +1444,50 @@ export function DetailActors({
         onSave={actors.upsertCountry}
         onRemove={actors.removeCountry}
       />
+
+      {sideManager.creatingGroupSide && (
+        <PersonGroupCreateModal
+          defaultType="FACTION"
+          defaultName={sideManager.creatingGroupSide.name}
+          defaultCountryId={event.relatedCountries?.[0]?.id}
+          defaultHistoricalCountryId={event.relatedHistoricalCountries?.[0]?.id}
+          defaultMembers={persons
+            .filter(
+              (personEntry) =>
+                sideRootOf(effectivePersonSide(personEntry, countrySideByKey).sideId) ===
+                sideManager.creatingGroupSide?.id,
+            )
+            .map((personEntry) => ({
+              id: personEntry.personId,
+              name: personNameOf(personEntry),
+            }))}
+          candidatePersons={persons.map((personEntry) => ({
+            id: personEntry.personId,
+            name: personNameOf(personEntry),
+          }))}
+          onClose={() => sideManager.setCreatingGroupSide(null)}
+          onCreated={(createdGroup) => {
+            const targetSide = sideManager.creatingGroupSide
+            sideManager.setCreatingGroupSide(null)
+            if (targetSide) {
+              void sideManager.linkPersonGroup(targetSide, createdGroup.id)
+            }
+          }}
+        />
+      )}
     </>
   )
 }
+
+const EmptySideSlot = styled.li`
+  padding: 12px 6px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  font-size: 12px;
+  line-height: 1.5;
+  color: ${metaText};
+
+  strong {
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+`

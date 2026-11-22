@@ -163,10 +163,13 @@ export function NarrativeSectionList({
     return () => node.removeEventListener(REVEAL_ANCHOR_EVENT, onReveal)
   }, [collapsed])
 
+  const hasRail = rows.length > 0
+
   return (
     <SectionStack
       ref={stackRef}
       $compact={collapsed}
+      $hasRail={hasRail}
       onFocusCapture={(focusEvent) => {
         if (!collapsed || !onRequestExpand) return
         /* 단락(제목 버튼·하나씩 연 본문)은 제자리에서 다룬다 — 섹션 전체를 펴는 건 잘린 요약을 편집할 때뿐 */
@@ -174,13 +177,18 @@ export function NarrativeSectionList({
         onRequestExpand()
       }}
     >
-      {lead && (
-        <SectionItem>
-          <LeadNode aria-hidden />
-          <SectionPeriod>요약</SectionPeriod>
-          {collapsed && clampLead ? <LeadClamp>{lead}</LeadClamp> : lead}
-        </SectionItem>
-      )}
+      {lead &&
+        (hasRail ? (
+          <SectionItem>
+            <LeadNode aria-hidden />
+            <SectionPeriod>개괄</SectionPeriod>
+            {collapsed && clampLead ? <LeadClamp>{lead}</LeadClamp> : lead}
+          </SectionItem>
+        ) : (
+          <PlainLeadItem>
+            {collapsed && clampLead ? <LeadClamp>{lead}</LeadClamp> : lead}
+          </PlainLeadItem>
+        ))}
       {rows.map((row, index) => {
         const hasTitle = row.title.trim().length > 0
         const titleOpen =
@@ -424,26 +432,24 @@ function hasBodyText(html: string): boolean {
  * 좌측 세로선 하나에 단락마다 번호 노드가 꿰이고, 시기가 있으면 노드 옆 날짜 줄이 먼저 온다.
  * 본문은 선 오른쪽으로 들여 쓴다(TIMELINE_INSET).
  */
-const TIMELINE_INSET = 38
+const TIMELINE_INSET = 32
 const NODE_SIZE = 22
 
-export const SectionStack = styled.div<{ $compact?: boolean }>`
+export const SectionStack = styled.div<{ $compact?: boolean; $hasRail?: boolean }>`
   position: relative;
   display: flex;
   flex-direction: column;
   /* 줄여 보기는 목차처럼 촘촘히 — 단락마다 본문 자리였던 32px을 다 띄우면 줄인 보람이 없다 */
   gap: ${({ $compact }) => ($compact ? 14 : 32)}px;
 
-  /* 세로선 — 첫 노드 가운데에서 시작해 마지막 노드 아래로 조금 흘러내린다 */
+  /* 번호·타임라인 단락이 있을 때만 세로선을 그린다(단일 요약 문단은 정통 본문 조판) */
   &::before {
-    content: '';
+    content: ${({ $hasRail = true }) => ($hasRail ? "''" : 'none')};
     position: absolute;
-    left: ${NODE_SIZE / 2 - 1}px;
+    left: ${NODE_SIZE / 2 - 0.5}px;
     top: ${NODE_SIZE / 2}px;
     bottom: 0;
-    width: 2px;
-    border-radius: 1px;
-    /* border.default는 이 지면 배경에서 거의 안 보였다(실측) — 장부 hairline(strong)으로 */
+    width: 1px;
     background: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   }
 
@@ -452,18 +458,24 @@ export const SectionStack = styled.div<{ $compact?: boolean }>`
   }
 `
 
+const PlainLeadItem = styled.div`
+  position: relative;
+  display: flex;
+  flex-direction: column;
+`
+
 const SectionItem = styled.div<{ $timeline?: boolean }>`
   position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-left: ${({ $timeline }) => ($timeline ? 28 : TIMELINE_INSET)}px;
+  padding-left: ${TIMELINE_INSET}px;
 
   @media (max-width: 640px) {
-    padding-left: ${({ $timeline }) => ($timeline ? 24 : TIMELINE_INSET - 8)}px;
+    padding-left: ${TIMELINE_INSET - 6}px;
   }
-  /* 단락 하나를 직접 가리키는 앵커(#background-2) — 헤더 아래로 파묻히지 않게. */
-  scroll-margin-top: 24px;
+  /* 단락 하나를 직접 가리키는 앵커(#background-2) — 고정 탭바 아래로 파묻히지 않게. */
+  scroll-margin-top: 72px;
 
   /* 줄여 보기에서 하나만 연 단락 — 다음 제목 줄과 붙지 않게 본문 아래를 띄운다 */
   &[data-open='true'] {
@@ -807,18 +819,19 @@ const RowActionBtn = styled.button<{ $danger?: boolean }>`
   }
 `
 
-/** 단락 본문 — 섹션 리드 문단과 같은 좌측 기준선·전체 폭을 사용. */
+/** 단락 본문 — 섹션 리드 문단과 같은 좌측 기준선·가독폭(표는 전체 폭)을 사용. */
 const SectionBodyHost = styled.div`
   ${S.longFormEditAffordance}
   ${S.proseTableBreakout}
   ${S.proseHeadingRhythm}
+  ${S.proseMeasure}
   font-size: 15.5px;
   line-height: 1.78;
   color: ${({ theme }) => theme.colors.text.primary};
 
-  /* 목차에서 소제목으로 왔을 때 화면 맨 위에 붙지 않게 — 단락 앵커와 같은 여백 */
+  /* 목차에서 소제목으로 왔을 때 고정 탭바에 붙지 않게 — 단락 앵커와 같은 여백 */
   h1, h2, h3, h4, h5, h6 {
-    scroll-margin-top: 24px;
+    scroll-margin-top: 72px;
   }
 `
 

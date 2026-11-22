@@ -14,6 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as eventDepartmentsApi from '@api/functional/events/departments'
 
 import { getApiConnection } from '@/shared/api/client'
+import { listEventContextLinks } from '@/shared/api/event-context-links'
 import { getEventTerritoryTransfers, territoryTransferKeys } from '@/shared/api/territory-transfers'
 import { syncEventSides } from '@/shared/api/event-sides'
 import { type UpdateEventDto } from '@/shared/api/events'
@@ -65,7 +66,6 @@ import { DetailRail } from './components/detail-rail'
 import { DetailStatehood, statehoodEntries } from './components/detail-statehood'
 import { DetailTerritory } from './components/detail-territory'
 import { DetailWarDeclaration } from './components/detail-war-declaration'
-import { SubEventSidesRollupPanel } from './components/side-doctrine-and-weapons'
 import { FillInStrip } from './components/fill-in-strip'
 import { InlineEditProvider } from './components/inline'
 import { ModuleAdd } from './components/module-add'
@@ -107,8 +107,8 @@ const EVENT_TABS: ReadonlyArray<{ id: EventTabId; label: string; hint: string }>
   { id: 'overview', label: '개요', hint: '배경 · 전개 · 여파 · 댓글' },
   /* 묶음 사건만 — 하위 사건 전부를 한 화면에 모은다 */
   { id: 'survey', label: '조망', hint: '하위 사건 전부 — 전개 간트 · 참여국 · 분포 · 기록 점검' },
-  { id: 'actors', label: '참여', hint: '인물·국가 · 성립·소멸 · 권력 교체 · 기구·기업' },
-  { id: 'modules', label: '진영·수치', hint: '진영 · 수치 · 작전 정보 · 관련 행정부' },
+  { id: 'actors', label: '참여', hint: '참여 국가·인물 · 대립 진영 · 기관·정당·내각 · 성립·영토·권력 변동' },
+  { id: 'modules', label: '수치·전력', hint: '병력·사상자·피해 규모 등 정량 지표와 전투서열·병기·작전 분석' },
   { id: 'links', label: '연관', hint: '조약 · 상위·하위·관련 사건' },
   { id: 'media', label: '자료', hint: '이미지' },
 ]
@@ -130,10 +130,10 @@ const LazyEventOverviewPanel = lazy(() =>
 function tabOfSection(id: string, promoteTreaties: boolean): EventTabId {
   /* 선전포고 당사국 보드는 개요에만 선다(그 사건의 핵심 사실) — 참여 탭에는 같은 나라의 목록이 이미 있다 */
   if (/^(background|narrative|aftermath|comments|development|war-declaration)/.test(id)) return 'overview'
-  if (/^(actors|statehood|territory|power|departments|political-parties|organizations|companies)/.test(id)) return 'actors'
+  if (/^(actors|statehood|territory|power|departments|political-parties|organizations|companies|module-cabinets)/.test(id)) return 'actors'
   if (id.startsWith('module-')) return 'modules'
   if (id === 'treaties') return promoteTreaties ? 'overview' : 'links'
-  if (id === 'network') return 'links'
+  if (id === 'network' || id === 'context-links') return 'links'
   if (id === 'appendix') return 'media'
   return 'overview'
 }
@@ -207,20 +207,29 @@ function EventDetailContent({
   eventId: string
   loadingGate: LoadingGate
 }) {
-  const { event, enabledModules: serverModules } = useEventDetail(eventId)
+  const { event, enabledModules: serverModules, filledModuleCount } = useEventDetail(eventId)
   use(loadingGate)
   /*
-   * 수치 모듈은 저장할 빈 값이 없다 — '모듈 추가'로 펼치면 첫 수치를 기록할 때까지 화면에서만 연다.
-   * (빈 stub을 저장하던 예전 방식은 '전사 0명'이 데이터로 굳는 오염을 낳았다.)
+   * 수치 모듈과 전투서열·병기·교리 모듈은 첫 데이터를 적기 전에도 '모듈 추가'나 #module-sides 딥링크로
+   * 화면에서 바로 펼칠 수 있다(빈 stub을 서버에 미리 저장하지 않는다).
    */
   const [metricsOpened, setMetricsOpened] = useState(false)
-  const enabledModules = useMemo(
+  const [forcesOpened, setForcesOpened] = useState(
     () =>
-      metricsOpened && !serverModules.includes('metrics')
-        ? [...serverModules, 'metrics' as const]
-        : serverModules,
-    [metricsOpened, serverModules],
+      typeof window !== 'undefined' &&
+      (Boolean(new URLSearchParams(window.location.search).get('unit')?.trim()) ||
+        window.location.hash === '#module-sides'),
   )
+  const enabledModules = useMemo(() => {
+    const merged = [...serverModules]
+    if (metricsOpened && !merged.includes('metrics')) {
+      merged.push('metrics')
+    }
+    if (forcesOpened && !merged.includes('sides')) {
+      merged.push('sides')
+    }
+    return merged
+  }, [metricsOpened, forcesOpened, serverModules])
   /* 탭·히스토리 식별 — 사건명을 문서 제목에 반영. */
   useDocumentTitle(event.title)
 
@@ -435,6 +444,14 @@ function EventDetailContent({
   const expectDepartments = features.expectDepartments
   /* 관련 기업·조직 — 연결이 있으면 늘, 경제 사건이면 비어 있어도 보인다 */
   const showOrganizations = features.expectOrganizations || (event.organizations?.length ?? 0) > 0
+  /* 배경 맥락 연결 — 연관 탭 건수·목차와 캐시를 공유한다 */
+  const contextLinksQuery = useQuery({
+    queryKey: eventKeys.contextLinks(event.id),
+    queryFn: () => listEventContextLinks(event.id),
+    staleTime: 30_000,
+  })
+  const contextLinkCount = contextLinksQuery.data?.length ?? 0
+  const childCount = (event.childEvents?.length ?? 0) + (event.extraChildren?.length ?? 0)
   /** 묶음 사건 — 전개 자리는 하위 사건이라 비어 있어도 접지 않는다(빈 상태가 곧 '첫 하위 등록' 안내) */
   const isCollection = event.kind === 'COLLECTION'
   const isVisible = (id: FoldableSectionId) =>
@@ -444,9 +461,15 @@ function EventDetailContent({
     (id === 'narrative' && isCollection)
   const folded = FOLDABLE_SECTIONS.filter((section) => !isVisible(section.id))
   const hasSummary = Boolean(event.description?.trim())
-  /** 묶음의 '전체 글' 안내 — 배경·여파가 둘 다 비어 있고 아직 하나도 펼치지 않았을 때 */
+  /** 묶음의 '전체 글 시작' 안내 — 요약·하위 사건·배경·여파가 전부 비어 있는 초기 상태일 때만 상단에 띄운다 */
   const collectionTextNotice =
-    !trashedView && isCollection && !isVisible('background') && !isVisible('aftermath')
+    !trashedView &&
+    isCollection &&
+    !hasSummary &&
+    !summaryOpen &&
+    childCount === 0 &&
+    !isVisible('background') &&
+    !isVisible('aftermath')
   /**
    * 단일 사건의 '아직 글이 없다' 안내 — 요약·배경·전개·여파가 전부 비었고 아직 아무것도 펼치지 않았을 때.
    * 같은 자리·같은 모양(묶음 안내)으로, 쓰기 버튼을 한 곳에 모은다.
@@ -463,7 +486,33 @@ function EventDetailContent({
   /* 탭 — URL(?tab=)이 정본(replace: 탭을 오가도 '뒤로'가 탭을 되감지 않는다). 개요는 파라미터 없음 */
   const tabParam = searchParams.get('tab')
   const focusUnitId = searchParams.get('unit')?.trim() || null
-  const visibleTabs = isCollection ? EVENT_TABS : EVENT_TABS.filter((tab) => tab.id !== 'survey')
+  const isMilitaryTabContext =
+    event.domain === 'MILITARY' ||
+    features.suggestedModules.includes('military-details') ||
+    features.suggestedModules.includes('sides') ||
+    enabledModules.includes('sides') ||
+    enabledModules.includes('military-details')
+  const hasMultipleSides = (event.sides?.length ?? 0) >= 2
+  const visibleTabs = useMemo(
+    () =>
+      (isCollection ? EVENT_TABS : EVENT_TABS.filter((tab) => tab.id !== 'survey')).map((tab) => {
+        if (tab.id === 'actors' && hasMultipleSides) {
+          return { ...tab, label: '참여 · 진영' }
+        }
+        if (tab.id === 'modules' && !isMilitaryTabContext) {
+          return {
+            ...tab,
+            label: '수치 · 지표',
+            hint: '사상자·피해액·득표율 등 출처 기반 정량 지표 비교',
+          }
+        }
+        if (tab.id === 'modules') {
+          return { ...tab, label: '수치 · 전력' }
+        }
+        return tab
+      }),
+    [isCollection, hasMultipleSides, isMilitaryTabContext],
+  )
   const activeTab: EventTabId =
     isEventTab(tabParam) && visibleTabs.some((tab) => tab.id === tabParam)
       ? tabParam
@@ -503,23 +552,24 @@ function EventDetailContent({
   const countOf = (list?: unknown[] | null) => list?.length ?? 0
   const tabCounts: Record<EventTabId, number> = {
     overview: 0,
-    survey: countOf(event.childEvents) + countOf(event.extraChildren),
+    survey: childCount,
     actors:
       countOf(event.relatedPersons) +
       countOf(event.relatedCountries) +
       countOf(event.relatedHistoricalCountries) +
       departmentCount +
       countOf(event.politicalParties) +
-      countOf(event.organizations),
-    modules: enabledModules.length,
+      countOf(event.organizations) +
+      countOf(event.cabinetEvents) +
+      (territoryQuery.data?.length ?? 0),
+    modules: filledModuleCount,
     links:
       (promoteTreaties ? 0 : countOf(event.treaties)) +
       (event.parentEvent ? 1 : 0) +
       countOf(event.extraParents) +
-      // 묶음의 하위 사건은 조망 탭이 센다 — 1차세계대전이 '조망 18 · 연관 18'로 같은 18건을 두 번 셌다
-      (isCollection ? 0 : countOf(event.childEvents) + countOf(event.extraChildren)) +
-      // 키워드는 세지 않는다 — 사라예보 '연관 15' 중 14가 키워드라 연결이 많은 사건처럼 보였다
-      relatedCount,
+      childCount +
+      relatedCount +
+      contextLinkCount,
     media: countOf(event.eventImages),
   }
 
@@ -612,11 +662,20 @@ function EventDetailContent({
      빈 섹션은 짧아(제목 + 안내 한 줄) 'start'로 올리면 문서 끝에 걸려 위로 지나치기 쉽다 —
      가운데에 세워 앞뒤 맥락과 함께 보이게 한다. */
   const [revealTarget, setRevealTarget] = useState<FoldableSectionId | null>(null)
+  const [narrativeAutoStart, setNarrativeAutoStart] = useState<{
+    kind: 'background' | 'narrative' | 'aftermath'
+    seq: number
+  } | null>(null)
+  const [treatyOpenLinkSeq, setTreatyOpenLinkSeq] = useState(0)
+  const [contextLinkOpenSeq, setContextLinkOpenSeq] = useState(0)
   const revealSection = useCallback(
     (id: FoldableSectionId) => {
       setActiveTab(tabOf(id))
       setPinned((prev) => new Set(prev).add(id))
       setRevealTarget(id)
+      if (id === 'background' || id === 'narrative' || id === 'aftermath') {
+        setNarrativeAutoStart((prev) => ({ kind: id, seq: (prev?.seq ?? 0) + 1 }))
+      }
     },
     [setActiveTab, tabOf],
   )
@@ -705,7 +764,7 @@ function EventDetailContent({
         children: withParagraphs('aftermath'),
       })
     if (promoteTreaties && shown('treaties')) items.push({ id: 'treaties', label: '조약' })
-    if (shown('actors')) items.push({ id: 'actors', label: '참여 국가·인물' })
+    if (!trashedView || shown('actors')) items.push({ id: 'actors', label: '참여 국가·인물' })
     if (departmentCount > 0 || expectDepartments) items.push({ id: 'departments', label: '국가 기관·사령부' })
     const politicalPartyCount = (event.politicalParties ?? []).length
     if (politicalPartyCount > 0 || features.expectPoliticalParties) {
@@ -727,21 +786,23 @@ function EventDetailContent({
     ) {
       items.push({ id: 'companies', label: '관련 기업' })
     }
+    if ((event.cabinetEvents?.length ?? 0) > 0)
+      items.push({ id: 'module-cabinets', label: '관련 행정부' })
     if (showStatehood) items.push({ id: 'statehood', label: '성립·소멸' })
     if (showTerritory) items.push({ id: 'territory', label: '영토 이전' })
     if (showPower) items.push({ id: 'power', label: '권력 교체·선거' })
 
+    if (!trashedView || enabledModules.includes('metrics'))
+      items.push({ id: 'module-metrics', label: isMilitaryTabContext ? '정량 수치' : '수치 · 지표' })
     if (enabledModules.includes('sides'))
-      items.push({ id: 'module-sides', label: '진영' })
-    if (enabledModules.includes('metrics'))
-      items.push({ id: 'module-metrics', label: '수치' })
+      items.push({ id: 'module-sides', label: '전투서열·병기·교리' })
     if (enabledModules.includes('military-details'))
       items.push({ id: 'module-military-details', label: '작전 정보' })
-    if (enabledModules.includes('cabinets'))
-      items.push({ id: 'module-cabinets', label: '관련 행정부' })
 
     if (!promoteTreaties && shown('treaties')) items.push({ id: 'treaties', label: '조약' })
-    if (shown('network')) items.push({ id: 'network', label: '연관' })
+    if (!trashedView || shown('network')) items.push({ id: 'network', label: '연관 사건·키워드' })
+    if (contextLinkCount > 0 || contextLinkOpenSeq > 0)
+      items.push({ id: 'context-links', label: '배경 맥락' })
     if (shown('appendix')) items.push({ id: 'appendix', label: '이미지' })
     // 댓글 — 최상위 사건은 댓글 스레드, 하위 사건은 상위 댓글로 유도하는 안내(둘 다 #comments
     // 앵커를 렌더하므로 rail 항목은 항상 노출). 백엔드가 하위 사건엔 댓글을 노출/허용하지
@@ -749,7 +810,23 @@ function EventDetailContent({
     if (!event.deletedAt) items.push({ id: 'comments', label: '댓글' })
 
     return items
-  }, [visibleKey, event, enabledModules, promoteTreaties, showWarDeclaration, showStatehood, showTerritory, showPower, departmentCount, showOrganizations])
+  }, [
+    visibleKey,
+    event,
+    trashedView,
+    enabledModules,
+    isMilitaryTabContext,
+    promoteTreaties,
+    showWarDeclaration,
+    showStatehood,
+    showTerritory,
+    showPower,
+    departmentCount,
+    expectDepartments,
+    features.expectPoliticalParties,
+    contextLinkCount,
+    contextLinkOpenSeq,
+  ])
 
   /**
    * URL hash → 섹션 스크롤. 사건 id가 바뀐 첫 렌더에서 1회만 실행.
@@ -761,6 +838,8 @@ function EventDetailContent({
   /** 장부의 '바로 가기' — 그 섹션의 탭을 열고, 렌더된 다음 스크롤(해시 진입과 같은 길) */
   const jumpToSection = useCallback(
     (anchorId: string) => {
+      if (anchorId === 'module-metrics') setMetricsOpened(true)
+      if (anchorId === 'module-sides') setForcesOpened(true)
       setActiveTab(tabOf(anchorId))
       setPendingHash(anchorId)
     },
@@ -816,7 +895,7 @@ function EventDetailContent({
           (draft.unassigned.length > 0
             ? ` — ${draft.unassigned.join(', ')}은(는) 역할만으로 편을 알 수 없어 넣지 않습니다.`
             : '') +
-          ' 이름과 소속은 진영 모듈에서 고칠 수 있습니다.',
+          ' 진영 이름과 승패 결과는 바로 이 자리에서 고칠 수 있습니다.',
         confirmLabel: '이대로 만들기',
       })
       if (!ok) return
@@ -852,10 +931,16 @@ function EventDetailContent({
     }
   }
 
-  /* 조약 — 회담/조약 사건이면 본문 바로 뒤, 그 밖에는 모듈 뒤(연관 앞) */
+  const showForcesModule = async () => {
+    setForcesOpened(true)
+    if ((event.sides?.length ?? 0) === 0) {
+      await startSides()
+    }
+  }
   const treatiesSection = isVisible('treaties') ? (
     <DetailTreaties
       event={event}
+      openLinkSeq={treatyOpenLinkSeq}
       onInvalidate={() =>
         void queryClient.invalidateQueries({
           queryKey: eventKeys.detail(event.id),
@@ -865,9 +950,8 @@ function EventDetailContent({
   ) : null
 
   /**
-   * 통째로 빈 탭 — 그려지는 섹션이 하나도 없어 '더 채울 수 있는 것' 띠 한 줄만 남는 탭.
-   * 예전엔 연관 탭을 누르면 77px짜리 띠뿐이라 '고장 났나'로 읽혔다. 진영·수치·자료 탭이 쓰는
-   * 빈 탭 머리(TabEmpty)로 같은 버튼을 들고 '무엇을 둘 수 있는 탭인지'를 말한다.
+   * 통째로 빈 탭 안내(TabEmpty) — 일반 편집 화면에서는 각 탭(참여·수치·연관·자료)이 열리자마자
+   * 바로 입력·연결 UI를 노출하므로, 읽기 전용인 휴지통 사건(trashedView)에서만 빈 상태 안내를 띄운다.
    */
   const hasPoliticalParties = countOf(event.politicalParties) > 0 || features.expectPoliticalParties
   const emptyTab: Partial<Record<EventTabId, { title: string; text: string }>> = {
@@ -878,6 +962,7 @@ function EventDetailContent({
     !showPower &&
     !showOrganizations &&
     !hasPoliticalParties &&
+    countOf(event.cabinetEvents) === 0 &&
     departmentCount === 0 &&
     !expectDepartments
       ? {
@@ -887,11 +972,29 @@ function EventDetailContent({
           },
         }
       : {}),
-    ...((promoteTreaties || !treatiesSection) && !isVisible('network')
+    ...(trashedView && enabledModules.length === 0
+      ? {
+          modules: {
+            title: isMilitaryTabContext
+              ? '기록된 수치 · 전력 정보가 없습니다'
+              : '기록된 수치 · 지표가 없습니다',
+            text: '휴지통에 있는 사건으로 기록된 정량 수치나 전력 데이터가 없습니다.',
+          },
+        }
+      : {}),
+    ...(trashedView && (promoteTreaties || !treatiesSection) && !isVisible('network')
       ? {
           links: {
-            title: '아직 이어 둔 사건·조약이 없습니다',
-            text: '상위·하위·관련 사건과 이 사건이 낳은 조약을 이어 두면 사건을 맥락 속에서 읽을 수 있습니다.',
+            title: '이어 둔 사건·조약이 없습니다',
+            text: '상위·하위·관련 사건이나 조약 연결 기록이 없습니다.',
+          },
+        }
+      : {}),
+    ...(trashedView && !isVisible('appendix')
+      ? {
+          media: {
+            title: '등록된 자료가 없습니다',
+            text: '연결된 사진·지도·문서 이미지가 없습니다.',
           },
         }
       : {}),
@@ -900,14 +1003,10 @@ function EventDetailContent({
   const foldedInActiveTab = folded.filter(
     (section) =>
       tabOf(section.id) === activeTab &&
-      // 참여 탭은 열자마자 국가·인물 검색과 사건명 추천이 바로 뜨므로 접기 단추를 따로 두지 않는다
       !(activeTab === 'actors' && section.id === 'actors') &&
-      // 연관 탭의 조약은 연관 칸 '연결 추가' 줄이 든다 — 추가 자리가 두 곳(연결 추가 · 더 채울 수 있는 것)으로 갈렸다
-      !(activeTab === 'links' && section.id === 'treaties') &&
+      !(activeTab === 'links' && (section.id === 'treaties' || section.id === 'network')) &&
       !(activeTab === 'media' && section.id === 'appendix') &&
-      // 묶음의 '전체 글' 안내가 위에서 배경·여파 쓰기를 이미 든다
       !(collectionTextNotice && (section.id === 'background' || section.id === 'aftermath')) &&
-      // 단일 사건의 '아직 글이 없다' 안내는 배경·전개·여파 쓰기를 든다
       !(singleTextNotice && (section.id === 'background' || section.id === 'narrative' || section.id === 'aftermath')),
   )
 
@@ -915,7 +1014,12 @@ function EventDetailContent({
   const scrollRef = useRef<HTMLDivElement>(null)
   const accentColor = eventDomainDef(event.domain).color
 
-  const overviewOutline = sections.filter((item) => tabOf(item.id) === 'overview')
+  const activeTabOutline = sections.filter((item) => tabOf(item.id) === activeTab)
+  const showRail =
+    activeTab === 'overview'
+      ? activeTabOutline.length >= 3 || activeTabOutline.some((item) => Boolean(item.children?.length))
+      : (activeTab === 'actors' || activeTab === 'modules' || activeTab === 'links') &&
+        activeTabOutline.length >= 2
 
   /**
    * 삭제(휴지통) — 히어로 ⋯ 메뉴. 지우면 목록으로 나간다(지운 사건의 상세에 머물 이유가 없다).
@@ -1014,10 +1118,7 @@ function EventDetailContent({
             <DetailHero
               event={event}
               onPatch={onPatch}
-              onPersonClick={onPersonClick}
-              onCountryClick={onCountryClick}
               withSummary={false}
-              onShowActors={() => setActiveTab('actors')}
               /* 휴지통 사건은 사진이 없으면 '대표 이미지 추가' 칸을 세우지 않는다 */
               onOpenMedia={
                 isTrashed && (event.eventImages?.length ?? 0) === 0 ? undefined : () => setActiveTab('media')
@@ -1029,6 +1130,13 @@ function EventDetailContent({
                     onDelete={() => setDeleteOpen(true)}
                     parentTitle={event.parentEvent?.title ?? null}
                     onDetachFromParent={() => void detachFromParent()}
+                    onAddSubtitle={!event.subtitle?.trim() ? () => setSubtitleOpen(true) : undefined}
+                    onAddOriginalTitle={
+                      !event.originalTitle?.trim() ? () => setOriginalTitleOpen(true) : undefined
+                    }
+                    onAddPrimaryImage={
+                      (event.eventImages?.length ?? 0) === 0 ? () => revealSection('appendix') : undefined
+                    }
                   />
                 )
               }
@@ -1049,11 +1157,7 @@ function EventDetailContent({
                 {visibleTabs.map((tab) => {
                   const count = tabCounts[tab.id]
                   const selected = activeTab === tab.id
-                  /* 묶음의 연관 탭은 건수가 0이어도(하위는 조망이 센다) 하위 사건 관리 칸이 있어 비어 있지 않다 */
-                  const isEmptyTab =
-                    tab.id !== 'overview' &&
-                    count === 0 &&
-                    !(tab.id === 'links' && countOf(event.childEvents) + countOf(event.extraChildren) > 0)
+                  const isEmptyTab = tab.id !== 'overview' && count === 0
                   return (
                     <S.Tab
                       key={tab.id}
@@ -1113,15 +1217,6 @@ function EventDetailContent({
                       onPatch={trashedView ? undefined : onPatch}
                     />
                   )}
-                  {hasSummary && (collectionTextNotice || singleTextNotice) && (
-                    <CollectionWholeTextNotice
-                      onWriteBackground={() => revealSection('background')}
-                      onWriteNarrative={singleTextNotice ? () => revealSection('narrative') : undefined}
-                      onWriteAftermath={() => revealSection('aftermath')}
-                    />
-                  )}
-                  {/* (제거) 개요의 '전개' 간트 — 같은 하위 사건이 바로 아래 '전개' 목록과 조망 탭 간트에
-                      또 나왔다. 시간축으로 보는 자리는 조망 탭 하나다(하위 사건 기간에 맞춘 축). */}
                   <DetailNarrative
                     event={event}
                     onPatch={onPatch}
@@ -1142,6 +1237,7 @@ function EventDetailContent({
                       ) : undefined
                     }
                     onRequestSplit={isCollection ? undefined : () => setSplitOpen(true)}
+                    autoStartTarget={narrativeAutoStart}
                   />
                   {/* 회담/조약 사건은 조약이 그 사건의 결과물이라 개요에 둔다 */}
                   {promoteTreaties && treatiesSection}
@@ -1168,7 +1264,7 @@ function EventDetailContent({
 
               {activeTab === 'actors' && (
                 <>
-                  {/* 1단: 참여 국가 · 인물 */}
+                  {/* 1단: 참여 국가 · 인물 · 대립 진영 */}
                   {(!trashedView || isVisible('actors')) && (
                     <DetailActors
                       event={event}
@@ -1178,23 +1274,11 @@ function EventDetailContent({
                       onPersonClick={onPersonClick}
                       onCountryClick={onCountryClick}
                       onStartSides={trashedView ? undefined : () => void startSides()}
-                      onManageSides={
-                        trashedView ? undefined : () => jumpToSection('module-sides')
-                      }
-                      onShowMetrics={
-                        enabledModules.includes('metrics') ? () => jumpToSection('module-metrics') : undefined
-                      }
-                    />
-                  )}
-                  {trashedView && !isVisible('actors') && isCollection && (
-                    <SubEventSidesRollupPanel
-                      eventId={event.id}
-                      domain={event.domain}
-                      defaultOpen
+                      onShowMetrics={() => jumpToSection('module-metrics')}
                     />
                   )}
 
-                  {/* 2단: 이미 등록되었거나 사건 성격상 기본 펼쳐지는 기관·정당·기구·기업 */}
+                  {/* 2단: 이미 등록되었거나 사건 성격상 기본 펼쳐지는 기관·정당·기구·기업·행정부 */}
                   <DetailDepartments
                     event={event}
                     expectDepartments={expectDepartments}
@@ -1216,6 +1300,7 @@ function EventDetailContent({
                       onPatch={onPatch}
                     />
                   )}
+                  {(event.cabinetEvents?.length ?? 0) > 0 && <ModuleCabinets event={event} />}
 
                   {/* 2단 보조: 아직 비어 있는 기관·단체 추가 연결 안내 (섹션과 뒤섞이지 않게 한곳에 모음) */}
                   {!trashedView && (
@@ -1284,45 +1369,33 @@ function EventDetailContent({
                 </>
               )}
 
-              {activeTab === 'modules' && enabledModules.length === 0 && (
-                <S.TabEmpty aria-labelledby="modules-empty-title">
-                  <S.TabEmptyHead>
-                    <S.TabEmptyTitle id="modules-empty-title">아직 붙인 기능이 없습니다</S.TabEmptyTitle>
-                    <S.TabEmptyText>
-                      진영·수치·작전 정보는 사건마다 필요한 것만 켜는 기록입니다. 하나를 시작하면 이 탭에 자리가 생깁니다.
-                    </S.TabEmptyText>
-                  </S.TabEmptyHead>
-                  <ModuleAdd
-                    variant="cards"
-                    event={event}
-                    enabledModules={enabledModules}
-                    onPatch={onPatch}
-                    onStartSides={startSides}
-                    onShowMetrics={() => setMetricsOpened(true)}
-                  />
-                </S.TabEmpty>
-              )}
-
-              {activeTab === 'modules' && enabledModules.length > 0 && (
+              {activeTab === 'modules' && (!trashedView || enabledModules.length > 0) && (
                 <>
+                  {(!trashedView || enabledModules.includes('metrics')) && (
+                    <ModuleMetrics event={event} />
+                  )}
                   {enabledModules.includes('sides') && (
                     <ModuleSides
                       event={event}
                       onPatch={onPatch}
                       focusUnitId={focusUnitId}
+                      onJumpToActors={() => setActiveTab('actors')}
+                      onStartSides={trashedView ? undefined : startSides}
                     />
                   )}
-                  {enabledModules.includes('metrics') && <ModuleMetrics event={event} />}
                   {enabledModules.includes('military-details') && (
                     <ModuleMilitaryDetails event={event} onPatch={onPatch} />
                   )}
-                  {enabledModules.includes('cabinets') && <ModuleCabinets event={event} />}
                   {!trashedView && (
                     <ModuleAdd
                       event={event}
-                      enabledModules={enabledModules}
+                      enabledModules={
+                        enabledModules.includes('metrics')
+                          ? enabledModules
+                          : [...enabledModules, 'metrics']
+                      }
                       onPatch={onPatch}
-                      onStartSides={startSides}
+                      onShowForces={showForcesModule}
                       onShowMetrics={() => setMetricsOpened(true)}
                     />
                   )}
@@ -1333,33 +1406,38 @@ function EventDetailContent({
                 <>
                   {/* 조약 — 사건과 조약을 잇는 유일한 지점(본문·서명자는 조약이 정본) */}
                   {!promoteTreaties && treatiesSection}
-                  {isVisible('network') && (
+                  {(!trashedView || isVisible('network')) && (
                     <DetailNetwork
                       event={event}
                       onPatch={onPatch}
                       onRequestSplit={() => setSplitOpen(true)}
-                      onAddTreaty={!promoteTreaties && !isVisible('treaties') ? () => revealSection('treaties') : undefined}
+                      onAddTreaty={
+                        !promoteTreaties && !isVisible('treaties')
+                          ? () => {
+                              setTreatyOpenLinkSeq((seq) => seq + 1)
+                              revealSection('treaties')
+                            }
+                          : undefined
+                      }
+                      onAddContextLink={
+                        !trashedView
+                          ? () => setContextLinkOpenSeq((seq) => seq + 1)
+                          : undefined
+                      }
+                      contextLinksOpened={contextLinkOpenSeq > 0}
                     />
                   )}
+                  <DetailContextLinks
+                    event={event}
+                    readOnly={trashedView}
+                    openAddSeq={contextLinkOpenSeq}
+                    hideCollapsedSlot={!trashedView}
+                  />
                 </>
               )}
 
-              {activeTab === 'media' && isVisible('appendix') && (
+              {activeTab === 'media' && (!trashedView || isVisible('appendix')) && (
                 <DetailAppendix event={event} onPatch={onPatch} />
-              )}
-              {activeTab === 'media' && !isVisible('appendix') && (
-                <S.TabEmpty aria-labelledby="media-empty-title">
-                  <S.TabEmptyHead>
-                    <S.TabEmptyTitle id="media-empty-title">아직 자료가 없습니다</S.TabEmptyTitle>
-                    <S.TabEmptyText>
-                      지도·사진·문서 이미지를 캡션과 함께 둘 수 있습니다.
-                    </S.TabEmptyText>
-                  </S.TabEmptyHead>
-                  <S.TabEmptyAction type="button" onClick={() => revealSection('appendix')}>
-                    <FiPlus aria-hidden />
-                    이미지 추가
-                  </S.TabEmptyAction>
-                </S.TabEmpty>
               )}
 
               {activeEmptyTab && (
@@ -1379,10 +1457,6 @@ function EventDetailContent({
                 </S.TabEmpty>
               )}
 
-              {/* 맥락 연결 — 기록이 없으면 한 줄로 접힌다. 빈 탭 머리('아직 이어 둔 사건·조약이 없습니다') **뒤**에 둔다
-                  (예전엔 빈 사건의 연관 탭 맨 위에, 탭에서 가장 큰 글자로 이 섹션 제목이 먼저 섰다) */}
-              {activeTab === 'links' && <DetailContextLinks event={event} readOnly={trashedView} />}
-
               {/* 이 탭에서 내용이 없어 접힌 섹션들 — 누르면 제자리에 펼쳐진다
                   (탭이 통째로 비었으면 위의 빈 탭 머리가 같은 버튼을 이미 든다) */}
               {!activeEmptyTab && !trashedView && (
@@ -1390,13 +1464,15 @@ function EventDetailContent({
               )}
 
               {activeTab === 'overview' && !trashedView && (
-                <S.Section id="comments">
-                  <S.SectionHeader>
-                    <S.SectionTitle>댓글</S.SectionTitle>
-                  </S.SectionHeader>
-                  <SectionHintText>
-                    이 사건 기록의 사료 출처, 보완 의견, 편집 논의를 남깁니다.
-                  </SectionHintText>
+                <CommentsSection id="comments">
+                  <S.SectionHeaderGroup>
+                    <S.SectionHeader>
+                      <S.SectionTitle>댓글</S.SectionTitle>
+                    </S.SectionHeader>
+                    <SectionHintText>
+                      이 사건 기록의 사료 출처, 보완 의견, 편집 논의를 남깁니다.
+                    </SectionHintText>
+                  </S.SectionHeaderGroup>
                   {event.parentEvent ? (
                     // 하위 사건은 자체 댓글 스레드가 없다 — 논의가 이어지는 상위 사건 댓글로 유도.
                     // 분기 기준은 *생존* 상위(parentEvent 객체) — 상위가 소프트삭제되면 스칼라
@@ -1414,7 +1490,7 @@ function EventDetailContent({
                   ) : (
                     <CommentSection ownerType="EVENT" recordId={eventId} />
                   )}
-                </S.Section>
+                </CommentsSection>
               )}
             </S.Main>
 
@@ -1424,7 +1500,7 @@ function EventDetailContent({
                 onPatch={onPatch}
                 contemporaryLink={<ContemporaryHeadsLink event={event} />}
                 onCountryClick={onCountryClick}
-                foldedCount={trashedView ? 0 : folded.length}
+                onPersonClick={onPersonClick}
                 onJump={jumpToSection}
                 onAddSubtitle={trashedView ? undefined : () => setSubtitleOpen(true)}
                 onAddOriginalTitle={trashedView ? undefined : () => setOriginalTitleOpen(true)}
@@ -1433,14 +1509,9 @@ function EventDetailContent({
                     ? undefined
                     : () => revealSection('appendix')
                 }
-                relatedCount={relatedCount}
-                departmentCount={departmentCount}
               />
-              {/* 목차는 긴 글이 있는 개요에서만 — 다른 탭은 탭 자체가 목차다.
-                  두 칸 이하('전개·댓글')면 길을 안내하지 못하고 자리만 차지해 세우지 않는다 */}
-              {activeTab === 'overview' && (overviewOutline.length >= 3 || overviewOutline.some((item) => item.children?.length)) && (
-                <DetailRail sections={overviewOutline} />
-              )}
+              {/* 목차 — 개요뿐 아니라 섹션이 2개 이상 이어지는 참여·수치·연관 탭에서도 현재 탭의 섹션 길을 안내한다 */}
+              {showRail && <DetailRail sections={activeTabOutline} />}
             </S.Aside>
           </S.Body>
         </S.PageInner>
@@ -1482,12 +1553,17 @@ function EventDetailContent({
   )
 }
 
+const CommentsSection = styled(S.Section)`
+  padding-top: 32px;
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+`
+
 const ActorLinkExtrasSection = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-top: 18px;
-  border-top: 1.5px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  gap: 18px;
+  padding-top: 40px;
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 
   &:has(> div:empty) {
     display: none;
@@ -1497,17 +1573,18 @@ const ActorLinkExtrasSection = styled.div`
 const ActorLinkExtrasHeader = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 5px;
 
   span {
-    font-size: 13.5px;
-    font-weight: 750;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
     color: ${({ theme }) => theme.colors.text.primary};
   }
 
   small {
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: 13px;
+    line-height: 1.55;
     color: ${({ theme }) => theme.colors.text.secondary};
   }
 `
@@ -1516,6 +1593,7 @@ const ActorLinkExtrasHeader = styled.div`
 const ActorLinkExtras = styled.div`
   display: flex;
   flex-direction: column;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
   &:empty {
     display: none;
@@ -1525,12 +1603,8 @@ const ActorLinkExtras = styled.div`
     &:has(> :nth-child(2)) {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-      gap: 0 28px;
+      gap: 0 40px;
       align-items: stretch;
-
-      > :nth-child(-n + 3) {
-        border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-      }
     }
   }
 `
@@ -1538,27 +1612,27 @@ const ActorLinkExtras = styled.div`
 const OutcomeChapterSection = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 48px;
   margin-top: 8px;
-  padding-top: 22px;
-  border-top: 2px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  padding-top: 44px;
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
 const OutcomeChapterHeader = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 
   strong {
-    font-size: 15px;
-    font-weight: 800;
-    letter-spacing: -0.01em;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.012em;
     color: ${({ theme }) => theme.colors.text.primary};
   }
 
   small {
     font-size: 12.5px;
-    line-height: 1.45;
+    line-height: 1.5;
     color: ${({ theme }) => theme.colors.text.secondary};
   }
 `

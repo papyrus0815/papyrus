@@ -41,8 +41,8 @@ interface ModuleAddProps {
   event: EventDetail
   enabledModules: EventDetailModuleKey[]
   onPatch: (patch: UpdateEventDto) => void
-  /** 진영 모듈 시작 — 첫 진영 둘 생성 */
-  onStartSides: () => Promise<void>
+  /** 전투서열·병기·교리 모듈 펼치기 (진영이 아직 없으면 기본 진영도 함께 생성) */
+  onShowForces: () => void | Promise<void>
   /** 수치 모듈 펼치기 — 저장 없음 */
   onShowMetrics: () => void
   /**
@@ -54,8 +54,8 @@ interface ModuleAddProps {
 
 /** 모듈이 무엇을 기록하는지 한 줄 안내 */
 const MODULE_DESCRIPTION: Record<EventDetailModuleKey, string> = {
-  sides: '참여 국가·인물·단체를 대립 진영으로 묶고 진영별 결과·투입 부대·병기를 기록합니다.',
-  metrics: '병력·사상자·피해액 등 숫자로 남는 지표를 출처·추정 범위와 함께 비교합니다.',
+  metrics: '병력·사상자·피해액·득표율 등 숫자로 남는 지표를 출처·추정 범위와 함께 비교합니다.',
+  sides: '각 진영에 투입된 군사 부대(전투서열), 병기·장비, 진영별 작전 목표·교리를 기록합니다.',
   'military-details': '작전 목적·전술·전략·전투 유형·전쟁 비용 등 군사 작전 세부 사실을 적습니다.',
   cabinets: '이 사건을 다룬 각국 행정부(내각)를 확인합니다.',
 }
@@ -71,7 +71,7 @@ export function ModuleAdd({
   event,
   enabledModules,
   onPatch,
-  onStartSides,
+  onShowForces,
   onShowMetrics,
   variant = 'directory',
 }: ModuleAddProps) {
@@ -96,14 +96,14 @@ export function ModuleAdd({
 
   const allOptions: ModuleOption[] = [
     {
-      key: 'sides',
-      label: '진영',
-      run: onStartSides,
-    },
-    {
       key: 'metrics',
       label: features.metricsMenuLabel,
       run: onShowMetrics,
+    },
+    {
+      key: 'sides',
+      label: '전투서열 · 병기 · 교리',
+      run: onShowForces,
     },
     {
       key: 'military-details',
@@ -113,14 +113,18 @@ export function ModuleAdd({
   ]
 
   const options = allOptions.filter((opt) => !enabledModules.includes(opt.key))
-  const suggestedOptions = features.suggestedModules.flatMap((key) =>
-    options.filter((opt) => opt.key === key),
-  )
-  const otherOptions = options.filter((opt) => !features.suggestedModules.some((key) => key === opt.key))
+  const isMilitaryContext =
+    event.domain === 'MILITARY' ||
+    features.suggestedModules.includes('military-details') ||
+    features.suggestedModules.includes('sides')
+  const suggestedOptions = features.suggestedModules
+    .filter((key) => key !== 'sides' || isMilitaryContext)
+    .flatMap((key) => options.filter((opt) => opt.key === key))
+  const otherOptions = options.filter((opt) => !suggestedOptions.includes(opt))
   const primaryOptions =
     suggestedOptions.length > 0
       ? suggestedOptions
-      : otherOptions.filter((opt) => opt.key !== 'military-details')
+      : options.filter((opt) => opt.key === 'metrics')
   const foldedOptions = otherOptions.filter((opt) => !primaryOptions.includes(opt))
   const [showFolded, setShowFolded] = useState(false)
 
@@ -193,25 +197,26 @@ export function ModuleAdd({
 const DirectorySection = styled.section`
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-top: 18px;
-  border-top: 1.5px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  gap: 18px;
+  padding-top: 40px;
+  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
 const DirectoryHeader = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 5px;
 
   strong {
-    font-size: 13.5px;
-    font-weight: 750;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
     color: ${({ theme }) => theme.colors.text.primary};
   }
 
   small {
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: 13px;
+    line-height: 1.55;
     color: ${({ theme }) => theme.colors.text.secondary};
   }
 `
@@ -219,6 +224,16 @@ const DirectoryHeader = styled.div`
 const DirectoryList = styled.div`
   display: flex;
   flex-direction: column;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+
+  @container eventdetail (min-width: 1180px) {
+    &:has(> :nth-child(2)) {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0 40px;
+      align-items: stretch;
+    }
+  }
 `
 
 const OptionTitleInline = styled.span`

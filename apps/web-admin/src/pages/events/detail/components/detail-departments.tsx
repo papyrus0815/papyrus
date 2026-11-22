@@ -477,29 +477,29 @@ export function DetailDepartments({
 
   return (
     <S.Section id="departments">
-      <S.SectionHeader>
-        <S.SectionTitle>국가 기관 · 사령부</S.SectionTitle>
-        {relations.length > 0 && <S.SectionSubtitle>{relations.length}곳</S.SectionSubtitle>}
-        {!readOnly && (
-          <S.SectionActions>
-            <HeaderControlBtn
-              type="button"
-              onClick={() => {
-                setInitialDraft(null)
-                setLinkModalOpen(true)
-              }}
-            >
-              <FiPlus aria-hidden />
-              기관·사령부 잇기
-            </HeaderControlBtn>
-          </S.SectionActions>
-        )}
-      </S.SectionHeader>
-      <SectionLeadWrap>
+      <S.SectionHeaderGroup>
+        <S.SectionHeader>
+          <S.SectionTitle $sub>국가 기관 · 사령부</S.SectionTitle>
+          {relations.length > 0 && <S.SectionSubtitle>{relations.length}곳</S.SectionSubtitle>}
+          {!readOnly && (
+            <S.SectionActions>
+              <HeaderControlBtn
+                type="button"
+                onClick={() => {
+                  setInitialDraft(null)
+                  setLinkModalOpen(true)
+                }}
+              >
+                <FiPlus aria-hidden />
+                기관·사령부 잇기
+              </HeaderControlBtn>
+            </S.SectionActions>
+          )}
+        </S.SectionHeader>
         <SectionHintText>
           지령·명령·법령을 내린 기관(발령·주도)과 받아 집행한 기관(수령·관여)의 역할을 기록합니다.
         </SectionHintText>
-      </SectionLeadWrap>
+      </S.SectionHeaderGroup>
 
       {relations.length > 0 && (
         <DepartmentFlowBoard role="region" aria-label="관련 기관 역할 흐름 인포그래픽">
@@ -730,18 +730,13 @@ export function DetailDepartments({
 
 /* ───────────────────────── styles ───────────────────────── */
 
-const SectionLeadWrap = styled.div`
-  margin: -4px 0 10px;
-`
-
 const DepartmentFlowBoard = styled.div`
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(120px, 0.8fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
-  padding: 10px 0 12px;
-  margin-bottom: 8px;
-  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  gap: 14px;
+  padding: 4px 0 16px;
+  margin-bottom: 4px;
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
   @media (max-width: 640px) {

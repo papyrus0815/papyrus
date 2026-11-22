@@ -735,33 +735,33 @@ function DomainOrganizationSection({
 
   return (
     <S.Section id={anchorId}>
-      <S.SectionHeader>
-        <S.SectionTitle>{sectionTitle}</S.SectionTitle>
-        {relations.length > 0 && (
-          <S.SectionSubtitle>{relations.length}곳</S.SectionSubtitle>
-        )}
-        {!readOnly && (
-          <S.SectionActions>
-            <HeaderControlBtn
-              type="button"
-              onClick={() => {
-                setInitialDraft(null)
-                setLinkModalOpen(true)
-              }}
-            >
-              <FiPlus aria-hidden />
-              {isCompanyMode ? '기업 잇기' : '기구·조직 잇기'}
-            </HeaderControlBtn>
-          </S.SectionActions>
-        )}
-      </S.SectionHeader>
-      <SectionLeadWrap>
+      <S.SectionHeaderGroup>
+        <S.SectionHeader>
+          <S.SectionTitle $sub>{sectionTitle}</S.SectionTitle>
+          {relations.length > 0 && (
+            <S.SectionSubtitle>{relations.length}곳</S.SectionSubtitle>
+          )}
+          {!readOnly && (
+            <S.SectionActions>
+              <HeaderControlBtn
+                type="button"
+                onClick={() => {
+                  setInitialDraft(null)
+                  setLinkModalOpen(true)
+                }}
+              >
+                <FiPlus aria-hidden />
+                {isCompanyMode ? '기업 잇기' : '기구·조직 잇기'}
+              </HeaderControlBtn>
+            </S.SectionActions>
+          )}
+        </S.SectionHeader>
         <SectionHintText>
           {isCompanyMode
             ? '이 사건의 당사·수혜·피해 기업과 주요 역할을 기록합니다.'
             : '국제기구·다자협의체 및 민간·노동·학술단체의 역할을 기록합니다. 더보기(⋯)에서 회원국·소속 인물을 일괄 반영할 수 있습니다.'}
         </SectionHintText>
-      </SectionLeadWrap>
+      </S.SectionHeaderGroup>
 
       {relations.length > 0 ? (
         <Rows>
@@ -959,23 +959,18 @@ function OrganizationRow({
 
 /* ───────────────────────── styles ───────────────────────── */
 
-const SectionLeadWrap = styled.div`
-  margin: -4px 0 10px;
-`
-
 const Rows = styled.ul`
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
   @container eventdetail (min-width: 1240px) {
     &:has(> li:nth-child(2)) {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      column-gap: 28px;
+      column-gap: 36px;
       align-items: start;
     }
   }

@@ -4,14 +4,12 @@ import styled from 'styled-components'
 import {
   ledgerAccent,
   ledgerHairline,
-  ledgerHairlineStrong,
 } from '@/entities/event/ui/ledger-tokens'
 import { pathKeys } from '@/shared/router'
 
 import * as S from '../styles'
 import { type EventDetail } from '../use-event-detail'
 import { SectionHintText } from './actors/actors.styles'
-import { MODULE_COLOR } from './module-colors'
 
 interface ModuleCabinetsProps {
   event: EventDetail
@@ -39,18 +37,15 @@ export function ModuleCabinets({ event }: ModuleCabinetsProps) {
 
   return (
     <S.Section id="module-cabinets">
-      <HeaderBlock>
+      <S.SectionHeaderGroup>
         <S.SectionHeader>
-          <S.SectionTitle>
-            <S.SectionTitleDot $color={MODULE_COLOR.cabinets} />
-            관련 행정부
-          </S.SectionTitle>
-          <S.SectionSubtitle>{entries.length}건</S.SectionSubtitle>
+          <S.SectionTitle $sub>관련 행정부</S.SectionTitle>
+          <S.SectionSubtitle>{entries.length}곳</S.SectionSubtitle>
         </S.SectionHeader>
         <SectionHintText>
-          이 사건을 다룬 각국 행정부(내각)입니다. 내각 이름을 누르면 해당 국가 상세로 이동합니다.
+          이 사건 당시 재임하며 사건을 다룬 각국 행정부(내각)입니다. 내각 이름을 누르면 해당 국가 상세로 이동합니다.
         </SectionHintText>
-      </HeaderBlock>
+      </S.SectionHeaderGroup>
 
       <Table>
         {entries.map((entry) => {
@@ -95,22 +90,15 @@ export function ModuleCabinets({ event }: ModuleCabinetsProps) {
   )
 }
 
-const HeaderBlock = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-`
-
 const Table = styled.div`
   display: flex;
   flex-direction: column;
-  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 
   @container eventdetail (min-width: 1240px) {
     &:has(> div:nth-child(2)) {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      column-gap: 28px;
+      column-gap: 36px;
       align-items: start;
     }
   }
@@ -122,20 +110,8 @@ const Row = styled.div`
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 4px 10px 12px;
+  padding: 10px 4px;
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-
-  &::before {
-    content: '';
-    position: absolute;
-    top: 13px;
-    left: 0;
-    width: 3px;
-    height: 14px;
-    border-radius: 2px;
-    background: ${MODULE_COLOR.cabinets};
-    opacity: 0.65;
-  }
 `
 
 const Main = styled.div`

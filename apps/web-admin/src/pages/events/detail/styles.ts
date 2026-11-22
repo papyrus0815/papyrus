@@ -20,6 +20,8 @@ import {
   ledgerHairline,
   ledgerHairlineHover,
   ledgerHairlineStrong,
+  ledgerHoverFill,
+  ledgerSubtleFill,
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
 
@@ -33,7 +35,7 @@ export const PROSE_WIDTH = 880
 export const EDITOR_WIDTH = PROSE_WIDTH
 export const BREAKOUT_MAX = 160
 const ASIDE_WIDTH = 'clamp(300px, 21cqi, 356px)'
-const COLUMN_GAP = 'clamp(24px, 2.2cqi, 36px)'
+const COLUMN_GAP = 'clamp(36px, 3.2cqi, 56px)'
 
 export const breakoutGutter = '0px'
 
@@ -45,19 +47,25 @@ export const breakout = css`
 `
 
 /**
- * 전체 화면 지면 — 개요·참여·진영·연관·자료 모든 탭의 문단과 표가 동일한 본문 열 전체 폭을 쓴다.
+ * 전체 화면 지면 — 다단 보드·표·타임라인은 열 전체 폭을 쓰고,
+ * 순수 줄글(문단·목록·인용)만 와이드 모니터에서 눈이 다음 줄을 놓치지 않도록 적정 가독폭을 유지한다.
  */
+export const PROSE_MAX_WIDTH = '840px'
+
 export const proseMeasure = css`
-  p,
-  ul,
-  ol,
-  blockquote,
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
+  [role='region'] p,
+  [role='region'] ul,
+  [role='region'] ol,
+  [role='region'] blockquote,
+  [role='region'] h2,
+  [role='region'] h3,
+  [role='region'] h4 {
+    max-width: ${PROSE_MAX_WIDTH};
+  }
+
+  [role='region'] table p,
+  [role='region'] table ul,
+  [role='region'] table ol {
     max-width: none;
   }
 `
@@ -109,11 +117,11 @@ export const PageInner = styled.div`
   container-name: eventdetail;
   width: 100%;
   margin: 0;
-  padding: 28px clamp(20px, 2.2vw, 36px) 92px;
+  padding: 40px clamp(28px, 3vw, 48px) 136px;
 
   @media (max-width: 768px) {
-    /* 아래 104px — 좁은 화면엔 좌하단에 떠 있는 메뉴 버튼(전역)이 댓글 입력칸을 덮었다(390px 실측) */
-    padding: 18px 16px 104px;
+    /* 아래 116px — 좁은 화면엔 좌하단에 떠 있는 메뉴 버튼(전역)이 댓글 입력칸을 덮었다(390px 실측) */
+    padding: 24px 16px 116px;
   }
 `
 
@@ -166,7 +174,7 @@ export const Body = styled.div`
       'hero aside'
       'tabs aside'
       'main aside';
-    gap: 20px ${COLUMN_GAP};
+    gap: 28px ${COLUMN_GAP};
     width: 100%;
     max-width: none;
   }
@@ -198,7 +206,7 @@ export const Aside = styled.aside`
   @container eventdetail (min-width: 920px) {
     position: sticky;
     top: 24px;
-    padding-left: 24px;
+    padding-left: clamp(24px, 2.2cqi, 36px);
     border-left: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
     /* 넓은 탭에선 히어로 옆에 머문다(아래 본문이 두 칸을 쓰므로 따라 내려오면 본문을 덮는다) */
@@ -207,7 +215,7 @@ export const Aside = styled.aside`
       max-height: none;
     }
 
-    gap: 24px;
+    gap: 28px;
     max-height: calc(100vh - var(--header-height, 64px) - 60px);
     overflow-y: auto;
     scrollbar-width: thin;
@@ -224,12 +232,14 @@ export const TabsArea = styled.div`
   top: 0;
   z-index: 5;
   min-width: 0;
+  padding-top: 8px;
+  margin-bottom: 24px;
   background: ${({ theme }) => ledgerBackground(theme.mode)};
 `
 
 export const TabBar = styled.div`
   display: flex;
-  gap: 4px;
+  gap: 8px;
   overflow-x: auto;
   scrollbar-width: none;
   border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
@@ -255,7 +265,7 @@ export const Tab = styled.button<{ $active: boolean }>`
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 12px 12px 11px;
+  padding: 13px 14px 12px;
   border: 0;
   background: none;
   font: inherit;
@@ -325,7 +335,7 @@ export const Main = styled.main`
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 64px;
+  gap: 80px;
 
   > * {
     width: 100%;
@@ -333,8 +343,6 @@ export const Main = styled.main`
     margin-inline: 0;
   }
 
-  p,
-  blockquote,
   [data-edit-host],
   [role='region'],
   [data-inline-editing] {
@@ -354,7 +362,7 @@ export const Main = styled.main`
   }
 
   @media (max-width: 768px) {
-    gap: 44px;
+    gap: 56px;
   }
 `
 
@@ -426,7 +434,7 @@ export const HeroText = styled.div`
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 `
 
 /**
@@ -618,7 +626,8 @@ export const Rail = styled.nav`
   @container eventdetail (min-width: 920px) {
     display: flex;
     gap: 28px;
-    padding: 0;
+    padding: 20px 0 0;
+    border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   }
 `
 
@@ -845,8 +854,20 @@ export const RailSubLabel = styled.span`
 export const Section = styled.section`
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  scroll-margin-top: 24px;
+  gap: 28px;
+  scroll-margin-top: 76px;
+`
+
+/**
+ * 섹션 머리글 묶음 — 제목 행(SectionHeader)과 1줄 설명(SectionHintText)을 한 덩어리로 묶고
+ * 하단 헤어라인으로 본문과 경계를 분명하게 나눈다.
+ */
+export const SectionHeaderGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 /**
@@ -856,10 +877,10 @@ export const Section = styled.section`
  */
 export const SectionHeader = styled.header`
   display: flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 4px 14px;
-  margin-bottom: 4px;
+  gap: 6px 14px;
+  margin-bottom: 0;
 `
 
 /**
@@ -867,18 +888,18 @@ export const SectionHeader = styled.header`
  * 24px이던 시절엔 본문의 1.55배로 목록의 단조(1.29배)보다 층이 넓었다.
  * 자간도 한글 규약대로 -0.012 → -0.01em.
  */
-export const SectionTitle = styled.h2`
-  font-size: 20px;
+export const SectionTitle = styled.h2<{ $sub?: boolean }>`
+  font-size: ${({ $sub }) => ($sub ? '16px' : '20px')};
   font-weight: 700;
   line-height: 1.3;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.012em;
   margin: 0;
   color: ${({ theme }) => theme.colors.text.primary};
   display: inline-flex;
   align-items: center;
 
   @media (max-width: 640px) {
-    font-size: 18px;
+    font-size: ${({ $sub }) => ($sub ? '15.5px' : '18px')};
   }
 `
 
@@ -1183,7 +1204,140 @@ export const StateBackLink = styled(Link)`
   }
 `
 
-/* ───────────────────────── Empty state ───────────────────────── */
+/* ───────────────────────── Empty state & Self-Explanatory Guide ───────────────────────── */
+
+/**
+ * 표준 빈 섹션 가이드 — 데이터가 없을 때 "우측 버튼을 누르세요"처럼 떠넘기지 않고,
+ * 넉넉한 상하 여백 속에서 이 기능이 무엇을 기록하며 어떤 결과를 만드는지 한눈에 보여주고
+ * 바로 그 자리에서 1클릭으로 시작하게 유도한다. (중첩 박스 테두리 없음)
+ */
+export const EmptyGuide = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 0 28px;
+  max-width: ${PROSE_MAX_WIDTH};
+`
+
+export const EmptyGuideBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`
+
+export const EmptyGuideTitle = styled.p`
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+export const EmptyGuideDesc = styled.p`
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.65;
+  word-break: keep-all;
+  color: ${({ theme }) => theme.colors.text.secondary};
+`
+
+export const EmptyGuideActions = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+`
+
+export const EmptyPrimaryAction = styled.button`
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid transparent;
+  background: ${({ theme }) => ledgerAccent(theme.mode)};
+  color: ${({ theme }) => (theme.mode === 'dark' ? ledgerBackground('dark') : '#ffffff')};
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: opacity ${MOTION.fast} ease;
+
+  svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+  }
+
+  &:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+  }
+`
+
+export const EmptySecondaryAction = styled.button`
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  color: ${({ theme }) => theme.colors.text.primary};
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color ${MOTION.fast} ease,
+    background ${MOTION.fast} ease,
+    color ${MOTION.fast} ease;
+
+  svg {
+    width: 13px;
+    height: 13px;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    flex-shrink: 0;
+  }
+
+  &:hover:not(:disabled) {
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+
+    svg {
+      color: ${({ theme }) => ledgerAccent(theme.mode)};
+    }
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+  }
+`
 
 /**
  * 섹션 비어 있을 때 통일 placeholder. text + 옵션 CTA가 한 묶음으로 보이도록.

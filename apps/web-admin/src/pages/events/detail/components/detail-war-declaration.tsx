@@ -175,17 +175,19 @@ export function DetailWarDeclaration({
 
   return (
     <S.Section id="war-declaration">
-      <S.SectionHeader>
-        <S.SectionTitle>선전포고 당사국</S.SectionTitle>
-        {entries.length > 0 && (
-          <S.SectionSubtitle>
-            선포 {initiatorEntries.length}곳 → 대상 {targetEntries.length}곳
-          </S.SectionSubtitle>
-        )}
-      </S.SectionHeader>
-      <SectionHintText>
-        누가 어느 나라에 전쟁을 선포했는지 개전 주체(선포국)와 상대국(대상국)을 구분해 기록합니다.
-      </SectionHintText>
+      <S.SectionHeaderGroup>
+        <S.SectionHeader>
+          <S.SectionTitle>선전포고 당사국</S.SectionTitle>
+          {entries.length > 0 && (
+            <S.SectionSubtitle>
+              선포 {initiatorEntries.length}곳 → 대상 {targetEntries.length}곳
+            </S.SectionSubtitle>
+          )}
+        </S.SectionHeader>
+        <SectionHintText>
+          누가 어느 나라에 전쟁을 선포했는지 개전 주체(선포국)와 상대국(대상국)을 구분해 기록합니다.
+        </SectionHintText>
+      </S.SectionHeaderGroup>
 
       {event.parentEvent && (
         <ParentWarBanner>
@@ -506,31 +508,33 @@ const ParentWarOverviewLink = styled(Link)`
 const DeclarationBoard = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-bottom: 10px;
-  padding: 12px 0;
-  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
-  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  gap: 14px;
+  margin-bottom: 6px;
+  padding: 4px 0 18px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   background: transparent;
 `
 
 const DeclarationGrid = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(130px, 0.85fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(140px, 0.85fr) auto minmax(0, 1fr);
   align-items: stretch;
-  gap: 10px;
+  gap: 18px;
 
   @media (max-width: 680px) {
     grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
   }
 `
 
 const DeclarationLane = styled.div<{ $dragOver?: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 4px 0 4px 10px;
-  border-left: 2px solid
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  border-radius: 8px;
+  border-left: 2.5px solid
     ${({ theme, $dragOver }) =>
       $dragOver ? ledgerAccent(theme.mode) : ledgerHairlineStrong(theme.mode)};
   background: ${({ theme, $dragOver }) =>

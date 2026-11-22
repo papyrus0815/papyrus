@@ -23,21 +23,20 @@ import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
 import {
-  DIGIT_DISPLAY,
   MOTION,
   RADIUS,
   ledgerAccent,
   ledgerHairline,
   ledgerHairlineStrong,
+  ledgerSubtleFill,
 } from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { type UpdateEventDto } from '@/shared/api/events'
-import { formatYearLabel, parseIsoDateParts } from '@/shared/lib/iso-date'
+import { parseIsoDateParts } from '@/shared/lib/iso-date'
 import {
   type CityWithHistoricalNames,
   formatHistoricalCityName,
 } from '@/shared/lib/historical-city-name'
-import { commentsQueryOptions } from '@/entities/comment/comment.api'
 import { getEventOverview } from '@/shared/api/event-overview'
 import { eventKeys } from '@/shared/api/event-query-keys'
 import { formatObservationValue } from '@/entities/evidence/lib/format-observation'
@@ -46,12 +45,12 @@ import { PopoverMenu, type PopoverMenuEntry } from '@/shared/ui/popover-menu'
 import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal'
 
 import { type EventDetail, eventObservationsQueryOptions } from '../use-event-detail'
+import { personNameOf } from './actors/actors.lib'
 import {
   durationLabel,
   groupCountriesByRole,
   type RoleCountry,
 } from './event-facts.lib'
-import { heroCardsShowAllCountries } from './hero-countries.lib'
 import { InlineDateRange, InlineText } from './inline'
 import { type LatLng } from './location-picker-map'
 import { LocationPickerModal, formatCoordinate, googleMapsUrl } from './location-picker-modal'
@@ -71,12 +70,9 @@ interface DetailFactsProps {
   contemporaryLink?: React.ReactNode
   /** 나라 이름 → 페이지 레벨 국가 정보 모달(히어로·행위자와 같은 동작). */
   onCountryClick: (countryId: string) => void
-  /** 내용이 없어 본문에서 접힌 섹션 수 — 0이면 안내 줄을 그리지 않는다. */
-  foldedCount: number
-  /**
-   * 섹션으로 가기 — 페이지가 그 섹션의 **탭을 먼저 열고** 스크롤한다. 예전엔 여기서 바로 스크롤만 해서
-   * 개요 탭에서 '인물 4명'(참여 탭)을 누르면 앵커가 없어 아무 일도 없었다. 없으면 같은 탭 안 스크롤만.
-   */
+  /** 인물 이름 → 페이지 레벨 인물 상세 모달. */
+  onPersonClick?: (personId: string) => void
+  /** 섹션으로 가기 — 페이지가 그 섹션의 탭을 먼저 열고 스크롤한다. */
   onJump?: (anchorId: string) => void
   /** 부제·이칭이 비었을 때의 진입점 — 주면 '+ 부제 · 이칭'이 선다 */
   onAddSubtitle?: () => void
@@ -84,14 +80,12 @@ interface DetailFactsProps {
   onAddOriginalTitle?: () => void
   /** 대표 이미지가 비었을 때의 진입점 */
   onAddPrimaryImage?: () => void
-  /** 연결된 관련 사건(인과·배경·동시대) 건수 */
-  relatedCount?: number
-  /** 연결된 국가 기관(부처·위원회) 건수 */
-  departmentCount?: number
 }
 
 /** 배역 한 줄에 세우는 나라 수 — 넘치면 '외 N'(참여 행위자 섹션으로). */
 const COUNTRIES_PER_ROLE = 4
+/** 주요 인물 한 줄에 세우는 인물 수 — 넘치면 '외 N'(참여 행위자 섹션으로). */
+const PERSONS_PREVIEW_LIMIT = 4
 
 /** 장부 '사상자' 줄이 고르는 지표 — 앞에 있을수록 우선(정의가 다른 수를 섞지 않는다) */
 const CASUALTY_METRIC_PRIORITY = [
@@ -111,13 +105,11 @@ export function DetailFacts({
   onPatch,
   contemporaryLink,
   onCountryClick,
-  foldedCount,
+  onPersonClick,
   onJump,
   onAddSubtitle,
   onAddOriginalTitle,
   onAddPrimaryImage,
-  relatedCount = 0,
-  departmentCount = 0,
 }: DetailFactsProps) {
   const jumpTo = (anchorId: string) => (onJump ? onJump(anchorId) : scrollToAnchor(anchorId))
   const [factsOpen, setFactsOpen] = useState(false)
@@ -144,14 +136,6 @@ export function DetailFacts({
   useEffect(() => {
     setRowCount(rowsRef.current?.childElementCount ?? 0)
   })
-  /**
-   * 댓글 — 긴 사건에선 개요 맨 끝(일본 최초 철도: 2만 px 아래)이라 있는지조차 안 보였다. 수를 장부에 두고
-   * 누르면 내려간다. 하위 사건은 자체 댓글이 없어(상위 스레드로 이어진다) 줄을 세우지 않는다.
-   * 쿼리 키가 댓글 섹션과 같아 한 번만 받는다.
-   */
-  const hasOwnComments = !event.parentEvent
-  const { data: comments } = useQuery({ ...commentsQueryOptions('EVENT', event.id), enabled: hasOwnComments })
-  const commentCount = comments?.length ?? 0
   const year = parseIsoDateParts(event.startDate ?? null)?.year ?? null
   const duration = durationLabel(
     event.startDate,
@@ -228,16 +212,9 @@ export function DetailFacts({
     event.type,
   )
 
-  const heroShowsAll = heroCardsShowAllCountries(
-    [...(event.relatedCountries ?? []), ...(event.relatedHistoricalCountries ?? [])],
-    sides,
-  )
-
+  const relatedPersons = event.relatedPersons ?? []
   const parent = event.parentEvent
   const extraParentCount = event.extraParents?.length ?? 0
-  const childCount =
-    (event.childEvents?.length ?? 0) + (event.extraChildren?.length ?? 0)
-  const personCount = event.relatedPersons?.length ?? 0
   const treaties = event.treaties ?? []
   const hasOriginalDate = Boolean(
     event.startCalendar || event.startDateOriginal || event.endCalendar || event.endDateOriginal,
@@ -245,14 +222,6 @@ export function DetailFacts({
 
   const metaAddItems = useMemo<PopoverMenuEntry[]>(() => {
     const items: PopoverMenuEntry[] = []
-    if (!locationText && !locationPoint) {
-      items.push({
-        id: 'add-location',
-        label: '위치 지정 (장소명 · 지도 핀)',
-        icon: <FiMapPin size={13} />,
-        onSelect: () => setLocationModalOpen(true),
-      })
-    }
     if (onAddSubtitle && !event.subtitle?.trim()) {
       items.push({
         id: 'add-subtitle',
@@ -309,22 +278,19 @@ export function DetailFacts({
 
   return (
     <Panel aria-label="사건 개요">
-      {year != null && (
-        <YearDisplay title={`시작 연도 ${formatYearLabel(year)}`}>
-          {formatYearLabel(year)}
-        </YearDisplay>
-      )}
-
-      <DateLine>
-        <InlineDateRange
-          startDate={event.startDate}
-          startDatePrecision={event.startDatePrecision}
-          endDate={event.endDate}
-          endDatePrecision={event.endDatePrecision}
-          allowPartial
-          onSave={(patch) => onPatch(patch)}
-        />
-      </DateLine>
+      <DateHeaderRow>
+        <DatePrimaryLine data-filled={Boolean(event.startDate || event.endDate) || undefined}>
+          <InlineDateRange
+            startDate={event.startDate}
+            startDatePrecision={event.startDatePrecision}
+            endDate={event.endDate}
+            endDatePrecision={event.endDatePrecision}
+            allowPartial
+            onSave={(patch) => onPatch(patch)}
+          />
+        </DatePrimaryLine>
+        {duration && <DurationBadge title={`지속 기간 ${duration}`}>{duration}</DurationBadge>}
+      </DateHeaderRow>
       {(hasOriginalDate || originalDateOpen) && (
         <OriginalDateSlot>
           <OriginalDateLine
@@ -382,6 +348,17 @@ export function DetailFacts({
             <FiMapPin aria-hidden /> 하위 {childPinCount}곳 · 지도 보기
           </ChildMapLink>
         </ChildMapLine>
+      ) : onAddSubtitle ? (
+        <EmptyLocationTrigger
+          type="button"
+          onClick={() => setLocationModalOpen(true)}
+          title="사건이 일어난 장소명이나 지도 좌표를 지정합니다"
+        >
+          <PinIcon aria-hidden>
+            <FiMapPin />
+          </PinIcon>
+          <span>발생 장소 · 지도 위치 지정</span>
+        </EmptyLocationTrigger>
       ) : null}
       {locationPoint && (
         <MiniMapButton
@@ -436,7 +413,11 @@ export function DetailFacts({
       )}
 
       <Rows ref={rowsRef} id="event-facts-rows" data-open={factsOpen || undefined}>
-        {duration && <FactRow label="기간">{duration}</FactRow>}
+        {duration && (
+          <NarrowOnlyFactRow>
+            <FactRow label="기간">{duration}</FactRow>
+          </NarrowOnlyFactRow>
+        )}
         {outcome && (
           <FactRow label="결과" wide>
             <ClampedText title={outcome}>{outcome}</ClampedText>
@@ -444,7 +425,7 @@ export function DetailFacts({
         )}
         {unnamedSides ? (
           <FactRow label="진영">
-            <JumpButton type="button" onClick={() => jumpTo('module-sides')} title="진영 이름이 아직 기본값입니다">
+            <JumpButton type="button" onClick={() => jumpTo('actors')} title="진영 이름이 아직 기본값입니다 — 참여 탭에서 수정">
               {sides.length}개 · 이름 짓기
             </JumpButton>
           </FactRow>
@@ -465,9 +446,8 @@ export function DetailFacts({
           </FactRow>
         )}
 
-        {/* 배역이 하나뿐이면(전원 '참여국') 히어로의 나라 줄과 같은 목록이다 — 편이 갈릴 때만 세운다 */}
-        {/* 히어로 카드가 나라를 다 보여 주면 같은 목록의 반복이다 — 카드가 '+N개국'으로 접힐 때만 장부가 전체를 든다 */}
-        {roleGroups.length > 1 && !heroShowsAll && roleGroups.map((group) => {
+        {/* 헤더에서 국가·인물을 뺐으므로 우측 사실 장부가 참여국과 주요 인물을 요약한다 */}
+        {roleGroups.length > 0 && roleGroups.map((group) => {
           const shown = group.countries.slice(0, COUNTRIES_PER_ROLE)
           const overflow = group.countries.length - shown.length
           return (
@@ -498,27 +478,45 @@ export function DetailFacts({
           )
         })}
 
-        {event.seriesContext && (
-          <FactRow label="정기 시리즈" wide>
-            <ParentLink
-              to={
-                event.seriesContext.organizationId
-                  ? `/organizations?selected=${encodeURIComponent(event.seriesContext.organizationId)}&tab=series&series=${encodeURIComponent(event.seriesContext.id)}`
-                  : `/organizations?view=series&series=${encodeURIComponent(event.seriesContext.id)}`
-              }
-              title={`${event.seriesContext.title} (${event.seriesContext.cadenceLabel})`}
-            >
-              {event.seriesContext.title}
-              {event.seriesContext.currentEditionBadge
-                ? ` · ${event.seriesContext.currentEditionBadge}`
-                : ''}
-            </ParentLink>
-            <JumpButton type="button" onClick={() => setSeriesModalOpen(true)}>
-              편집
-            </JumpButton>
-          </FactRow>
-        )}
-        {parent && (
+        {relatedPersons.length > 0 && (() => {
+          const shownPersons = relatedPersons.slice(0, PERSONS_PREVIEW_LIMIT)
+          const personOverflow = relatedPersons.length - shownPersons.length
+          return (
+            <FactRow label="주요 인물" wide>
+              {shownPersons.map((entry, index) => {
+                const displayName = personNameOf(entry)
+                const roleHint = entry.role?.trim()
+                const tooltip = roleHint ? `${displayName} · ${roleHint}` : displayName
+                return (
+                  <span key={entry.personId}>
+                    {onPersonClick ? (
+                      <PersonButton
+                        type="button"
+                        aria-haspopup="dialog"
+                        title={tooltip}
+                        onClick={() => onPersonClick(entry.personId)}
+                      >
+                        {displayName}
+                      </PersonButton>
+                    ) : (
+                      <span title={tooltip}>{displayName}</span>
+                    )}
+                    {index < shownPersons.length - 1 && <Sep>·</Sep>}
+                  </span>
+                )
+              })}
+              {personOverflow > 0 && (
+                <JumpButton type="button" onClick={() => jumpTo('actors')}>
+                  외 {personOverflow}
+                </JumpButton>
+              )}
+            </FactRow>
+          )
+        })()}
+
+        {/* 단일 상위 사건과 정기 시리즈는 히어로(브레드크럼 · 흐름 띠)에 이미 표시되므로,
+            우측 장부에는 다중 소속(추가 상위 존재)일 때만 보조 노출해 첫 화면 중복을 막는다 */}
+        {parent && extraParentCount > 0 && (
           <FactRow label="상위 사건" wide>
             <ParentLink
               to={pathKeys.events.detail(parent.id)}
@@ -527,69 +525,8 @@ export function DetailFacts({
             >
               {parent.title}
             </ParentLink>
-            {extraParentCount > 0 && (
-              <JumpButton type="button" onClick={() => jumpTo('network')}>
-                외 {extraParentCount}
-              </JumpButton>
-            )}
-          </FactRow>
-        )}
-        {childCount > 0 && (
-          <FactRow label="하위 사건">
             <JumpButton type="button" onClick={() => jumpTo('network')}>
-              {childCount}건
-            </JumpButton>
-          </FactRow>
-        )}
-        {relatedCount > 0 && (
-          <FactRow label="관련 사건">
-            <JumpButton type="button" onClick={() => jumpTo('network')}>
-              {relatedCount}건
-            </JumpButton>
-          </FactRow>
-        )}
-        {personCount > 0 && (
-          <FactRow label="인물">
-            <JumpButton type="button" onClick={() => jumpTo('actors')}>
-              {personCount}명
-            </JumpButton>
-          </FactRow>
-        )}
-        {(event.politicalParties?.length ?? 0) > 0 && (
-          <FactRow label="정당">
-            <JumpButton
-              type="button"
-              onClick={() => jumpTo('political-parties')}
-            >
-              {event.politicalParties?.length ?? 0}개 정당
-            </JumpButton>
-          </FactRow>
-        )}
-        {(event.organizations?.length ?? 0) + departmentCount > 0 && (
-          <FactRow label="기관·조직">
-            <JumpButton
-              type="button"
-              onClick={() => {
-                const orgs = event.organizations ?? []
-                const hasNonCompany = orgs.some((org) => !org.companyId)
-                const hasCompany = orgs.some((org) => Boolean(org.companyId))
-                jumpTo(
-                  hasNonCompany
-                    ? 'organizations'
-                    : hasCompany
-                      ? 'companies'
-                      : 'departments',
-                )
-              }}
-            >
-              {(event.organizations?.length ?? 0) + departmentCount}곳
-            </JumpButton>
-          </FactRow>
-        )}
-        {hasOwnComments && (
-          <FactRow label="댓글">
-            <JumpButton type="button" onClick={() => jumpTo('comments')}>
-              {commentCount > 0 ? `${commentCount}개` : '남기기'}
+              외 {extraParentCount}
             </JumpButton>
           </FactRow>
         )}
@@ -606,28 +543,21 @@ export function DetailFacts({
         )}
       </Rows>
 
-      {(metaAddItems.length > 0 || foldedCount > 0) && (
+      {metaAddItems.length > 0 && (
         <FactsFooterRow>
-          {metaAddItems.length > 0 && (
-            <PopoverMenu
-              items={metaAddItems}
-              align="left"
-              minWidth={210}
-              ariaLabel="부가 메타 정보 추가"
-              renderTrigger={({ ref, isOpen, toggle }) => (
-                <MetaAddTrigger ref={ref} type="button" $active={isOpen} onClick={toggle}>
-                  <FiPlus size={12} aria-hidden />
-                  <span>메타 항목 추가</span>
-                  <FiChevronDown size={11} aria-hidden />
-                </MetaAddTrigger>
-              )}
-            />
-          )}
-          {foldedCount > 0 && (
-            <FoldedNote type="button" onClick={() => jumpTo('fill-in')}>
-              비어 있는 섹션 {foldedCount}개
-            </FoldedNote>
-          )}
+          <PopoverMenu
+            items={metaAddItems}
+            align="left"
+            minWidth={210}
+            ariaLabel="부가 메타 정보 추가"
+            renderTrigger={({ ref, isOpen, toggle }) => (
+              <MetaAddTrigger ref={ref} type="button" $active={isOpen} onClick={toggle}>
+                <FiPlus size={12} aria-hidden />
+                <span>메타 항목 추가</span>
+                <FiChevronDown size={11} aria-hidden />
+              </MetaAddTrigger>
+            )}
+          />
         </FactsFooterRow>
       )}
     </Panel>
@@ -658,7 +588,7 @@ function FactRow({
 const Panel = styled.section`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 
   /**
    * 한 열 배치 — 이 패널은 히어로와 탭 사이에 끼어 **첫 화면을 탭 앞에서 막는다**(1280px에서
@@ -671,35 +601,6 @@ const Panel = styled.section`
     align-items: center;
     column-gap: 20px;
     row-gap: 4px;
-  }
-`
-
-/**
- * 연도 — 이 패널에서 가장 큰 글자. 목록이 "수치를 시각의 1순위로" 둔 것과 같은 규약이고,
- * 사건을 식별하는 첫 번째 축이 연도라서다. mono tabular라 자릿수가 흔들리지 않는다.
- */
-const YearDisplay = styled.div`
-  ${DIGIT_DISPLAY}
-  /**
-   * 한 열로 떨어지면 이 숫자는 **제목 바로 아래**에 놓인다 — 34px이면 h1(36px)과 거의
-   * 같은 크기라 "큰 글자가 두 번" 나오는 인상이 되고, 제목에 이미 날짜가 들어 있는
-   * 사건에서는 같은 값이 두 번 크게 찍힌다. 좁을 땐 장부의 머리글 크기로 내린다.
-   */
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.02em;
-  color: ${({ theme }) => theme.colors.text.primary};
-  margin-bottom: 2px;
-
-  /* 2열일 때는 옆 칼럼이라 제목과 경쟁하지 않는다 — 장부의 첫 축으로 크게. */
-  @container eventdetail (min-width: 920px) {
-    font-size: 34px;
-  }
-
-  /* 한 열에서는 히어로 날짜 줄이 연도를 이미 말한다 */
-  @container eventdetail (max-width: 919px) {
-    display: none;
   }
 `
 
@@ -716,6 +617,61 @@ const EditableLine = styled.div`
     min-width: 0;
     overflow: hidden;
   }
+
+  [data-edit-host] > span:first-child {
+    text-decoration-line: none;
+  }
+
+  [data-edit-host]:hover > span:first-child,
+  [data-edit-host]:focus-within > span:first-child {
+    text-decoration-line: underline;
+  }
+`
+
+/**
+ * 우측 장부 상단 날짜 헤더 — 예전의 34px 연도 + 아래 날짜 중복을 없애고,
+ * 기간 전체와 지속 기간 배지를 한 묶음의 대표 메타로 보여 준다.
+ */
+const DateHeaderRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-bottom: 2px;
+
+  /* 한 열 배치에서는 날짜를 히어로(제목 밑)가 든다 */
+  @container eventdetail (max-width: 919px) {
+    display: none;
+  }
+`
+
+const DatePrimaryLine = styled(EditableLine)`
+  font-size: 15.5px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme }) => theme.colors.text.primary};
+
+  &:not([data-filled]) {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
+`
+
+const DurationBadge = styled.span`
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: ${({ theme }) => ledgerSubtleFill(theme.mode)};
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  color: ${metaText};
 `
 
 /**
@@ -768,15 +724,6 @@ const OriginalDateSlot = styled.div`
   }
 `
 
-const DateLine = styled(EditableLine)`
-  font-variant-numeric: tabular-nums;
-
-  /* 한 열 배치에서는 날짜를 히어로(제목 밑)가 든다 — 같은 값이 두 번 서지 않게 */
-  @container eventdetail (max-width: 919px) {
-    display: none;
-  }
-`
-
 const PinIcon = styled.span`
   display: inline-flex;
   flex-shrink: 0;
@@ -813,6 +760,38 @@ const ChildMapLine = styled.div`
   flex-wrap: wrap;
   align-items: baseline;
   gap: 2px 12px;
+`
+
+const EmptyLocationTrigger = styled.button`
+  appearance: none;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: ${metaText};
+  cursor: pointer;
+  transition: color ${MOTION.fast};
+
+  &:hover {
+    color: ${({ theme }) => ledgerAccent(theme.mode)};
+
+    span:last-child {
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    outline-offset: 2px;
+    border-radius: ${RADIUS.FOCUS};
+  }
 `
 
 const ChildMapLink = styled(Link)`
@@ -951,10 +930,10 @@ const Rows = styled.div`
 
 const Row = styled.div<{ $wide: boolean }>`
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
+  grid-template-columns: 68px minmax(0, 1fr);
   align-items: baseline;
-  gap: 10px;
-  padding: 7px 0;
+  gap: 12px;
+  padding: 9px 0;
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
   @container eventdetail (max-width: 919px) {
@@ -1010,11 +989,38 @@ const focusRing = `
   border-radius: ${RADIUS.FOCUS};
 `
 
+const NarrowOnlyFactRow = styled.div`
+  display: contents;
+
+  @container eventdetail (min-width: 920px) {
+    display: none;
+  }
+`
+
 /* 나라 이름 — 역사 국가는 기울임(히어로와 같은 규약), 누르면 국가 정보 모달. */
 const CountryLink = styled(Link)<{ $historical: boolean }>`
   color: inherit;
   font-style: ${({ $historical }) => ($historical ? 'italic' : 'normal')};
   text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
+    ${focusRing}
+  }
+`
+
+const PersonButton = styled.button`
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
 
   &:hover {
     text-decoration: underline;
@@ -1140,31 +1146,5 @@ const FactsToggle = styled.button`
     outline: 2px solid currentColor;
     outline-offset: 2px;
     border-radius: 2px;
-  }
-`
-
-const FoldedNote = styled.button`
-  @container eventdetail (max-width: 639px) {
-    display: none;
-  }
-
-  padding: 2px 0;
-  border: none;
-  background: transparent;
-  font: inherit;
-  font-size: 12px;
-  color: ${metaText};
-  cursor: pointer;
-  transition: color ${MOTION.fast};
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    ${focusRing}
   }
 `

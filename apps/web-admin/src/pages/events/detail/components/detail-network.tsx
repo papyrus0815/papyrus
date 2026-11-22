@@ -13,6 +13,7 @@ import { useBlocker } from 'react-router-dom'
 import { FiLayers, FiPlus, FiShuffle } from 'react-icons/fi'
 import styled from 'styled-components'
 
+import { ledgerHairline } from '@/entities/event/ui/ledger-tokens'
 import { toParticipants, useEvents } from '@/entities/event/model'
 
 import {
@@ -27,6 +28,7 @@ import { notify } from '@/shared/ui/toast'
 
 import * as S from '../styles'
 import * as NetStyles from './detail-network.styles'
+import { listEventContextLinks } from '@/shared/api/event-context-links'
 import { getEventOverview } from '@/shared/api/event-overview'
 
 import { type EventDetail, eventKeys } from '../use-event-detail'
@@ -46,7 +48,6 @@ import {
   CollapsedActorInfo,
   CollapsedActorSlot,
   HeaderControlBtn,
-  SectionHintText,
 } from './actors/actors.styles'
 import { EventRelationMindmap } from '../../mindmap/event-relation-mindmap'
 import { RelatedHelp } from './related-help'
@@ -70,6 +71,9 @@ const LazyEventRegisterModal = lazy(() =>
 interface DetailNetworkProps {
   /** 조약이 아직 없을 때 '+ 조약' 칩 — 페이지 아래 '더 채울 수 있는 것'과 두 곳에 나뉘어 있던 추가 자리를 이 줄로 모은다 */
   onAddTreaty?: () => void
+  /** 배경 맥락(지형·법령·기후·자원)이 비었을 때 하단 통합 디렉터리에서 바로 열기 */
+  onAddContextLink?: () => void
+  contextLinksOpened?: boolean
   event: EventDetail
   /** opts.savedLabel — 저장 토스트 문구 교체(대상명을 박아야 하는 patch용) */
   onPatch: (patch: UpdateEventDto, opts?: { savedLabel?: string }) => void
@@ -118,12 +122,24 @@ const NETWORK_BLOCKS: ReadonlyArray<{ id: NetworkBlock; label: string; hint: str
  */
 const structuredStart = (node: object) => node as { startEra?: string | null; startYear?: number | null }
 
-export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: DetailNetworkProps) {
+export function DetailNetwork({
+  event,
+  onPatch,
+  onRequestSplit,
+  onAddTreaty,
+  onAddContextLink,
+  contextLinksOpened = false,
+}: DetailNetworkProps) {
   /** 단일 사건은 하위를 가질 수 없다(서버 강제) — 하위 블록·모으기·새로 만들기를 내지 않는다 */
   const isCollection = event.kind === 'COLLECTION'
   const queryClient = useQueryClient()
   // 섹션 부제의 '관련 N' — RelatedBlock과 같은 캐시를 읽는다(추가 요청 없음)
   const relatedQuery = useEventRelations(event.id)
+  const contextLinksQuery = useQuery({
+    queryKey: ['events', 'context-links', event.id],
+    queryFn: () => listEventContextLinks(event.id),
+    staleTime: 30_000,
+  })
   /*
    * 묶음 — 아래 사건들끼리의 관계 수(조망 응답, 전개·조망과 같은 캐시). 지도는 이 수가 있을 때만 의미가 있고,
    * 탭 머리 '연관 4'(하위 수)만으론 지도에 그려진 아래 연결 43개가 보이지 않았다.
@@ -774,13 +790,16 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
       return next
     })
   }, [filledKey])
-  /** 하위 구역에 그릴 것이 있나 — 하위 블록, 또는 단일 사건의 '나누기' 안내(상위는 맨 위 소속 줄) */
+  /** 하위 구역에 그릴 것이 있나 — 묶음 사건이면 늘 표시, 단일 사건은 '나누기' 안내 가능 시 */
   const hierarchyZoneShown = () =>
-    (!isCollection && Boolean(onRequestSplit) && narrativeCount >= 2) ||
-    (isCollection && isBlockShown('children'))
-  /* 관련 사건은 늘 편다 — 사건 대부분(591 중 535)이 관계 0이라, 잇기가 맨 아래 '+ 관련 사건' 칩 안에 숨어 있었다 */
+    (!isCollection && Boolean(onRequestSplit) && narrativeCount >= 2) || isCollection
+  /* 상위 소속·하위(묶음)·관련 사건은 빈 상태여도 바로 노출해 2단계 펼치기 클릭 없이 즉시 연결할 수 있게 한다 */
   const isBlockShown = (block: NetworkBlock) =>
-    block === 'related' || blockFilled[block] || shownBlocks.has(block)
+    block === 'parent' ||
+    block === 'related' ||
+    (block === 'children' && isCollection) ||
+    blockFilled[block] ||
+    shownBlocks.has(block)
   const foldedBlocks = NETWORK_BLOCKS.filter(
     (block) => !isBlockShown(block.id) && (isCollection || block.id !== 'children'),
   )
@@ -803,32 +822,38 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
    * 소속 칸과 같은 말이었다. 묶음은 아래 사건들끼리의 연결이 있으면.
    */
   const mapAvailable = relatedCount > 0 || (isCollection && descendantRelationCount > 0)
+  const descendantContextCount = (overview?.descendants ?? []).reduce(
+    (sum, node) => sum + (node.contextLinks?.length ?? 0),
+    0,
+  )
+  const showContextLinkSlot =
+    Boolean(onAddContextLink) &&
+    !contextLinksOpened &&
+    !contextLinksQuery.isError &&
+    (contextLinksQuery.data?.length ?? 0) === 0 &&
+    descendantContextCount === 0
 
   return (
-    <S.Section id="network">
-      <NetworkHeaderBlock>
-        <S.SectionHeader>
-          <S.SectionTitle>연관</S.SectionTitle>
-          {relationSummary && (
+    <NetworkSection id="network">
+      {(relationSummary || mapAvailable) && (
+        <NetworkTopBar>
+          {relationSummary ? (
             <S.SectionSubtitle>{relationSummary}</S.SectionSubtitle>
+          ) : (
+            <span />
           )}
           {mapAvailable && (
-            <S.SectionActions>
-              <HeaderControlBtn
-                type="button"
-                $active={mapShown}
-                onClick={() => setMapShown(!mapShown)}
-                aria-expanded={mapShown}
-              >
-                {mapShown ? '연결 지도 접기' : '연결 지도 보기'}
-              </HeaderControlBtn>
-            </S.SectionActions>
+            <HeaderControlBtn
+              type="button"
+              $active={mapShown}
+              onClick={() => setMapShown(!mapShown)}
+              aria-expanded={mapShown}
+            >
+              {mapShown ? '연결 지도 접기' : '연결 지도 보기'}
+            </HeaderControlBtn>
           )}
-        </S.SectionHeader>
-        <SectionHintText>
-          이 사건이 속한 상위·하위 묶음과, 전후 원인·결과로 이어진 다른 사건을 기록합니다.
-        </SectionHintText>
-      </NetworkHeaderBlock>
+        </NetworkTopBar>
+      )}
 
       {isBlockShown('parent') && (
         <ParentBlock
@@ -861,9 +886,9 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
         icon={<FiLayers />}
         title="하위 사건"
         titleId="network-zone-hierarchy"
-        description="이 사건 안에서 일어난 작은 사건"
+        description="이 묶음 사건 안에서 일어난 세부 사건들과 포함 사유를 관리합니다."
         actions={
-          isCollection ? (
+          isCollection && children.length > 0 ? (
             <>
               <HeaderControlBtn
                 ref={childAddBtnRef}
@@ -879,7 +904,7 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
                 <FiPlus /> 새 하위 등록
               </HeaderControlBtn>
             </>
-          ) : onRequestSplit && narrativeCount >= 2 ? (
+          ) : !isCollection && onRequestSplit && narrativeCount >= 2 ? (
             <HeaderControlBtn type="button" onClick={onRequestSplit}>
               하위 사건으로 나누기
             </HeaderControlBtn>
@@ -903,6 +928,8 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
           extraChildren={event.extraChildren ?? []}
           onPatch={onPatch}
           addButtonRef={childAddBtnRef}
+          onOpenCreateChild={() => setCreateChildOpen(true)}
+          onOpenGather={() => setChildModalOpen(true)}
         />
       )}
       </NetworkZone>
@@ -913,9 +940,9 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
         <NetworkZone
           kind="related"
           icon={<FiShuffle />}
-          title="관련 사건"
+          title="인과 · 관련 사건"
           titleId="network-related-label"
-          description="묶음과 상관없이 원인·결과로 이어진 다른 사건"
+          description="상하 소속과 별개로 이 사건을 촉발한 앞선 사건(원인)과 이 사건이 낳은 후속 사건(결과)을 잇습니다."
           extra={<RelatedHelp />}
           actions={
             <HeaderControlBtn
@@ -952,13 +979,25 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
         <KeywordsBlock keywords={keywords} onPatch={onPatch} />
       )}
 
-      {(foldedBlocks.length > 0 || onAddTreaty) && (
+      {(foldedBlocks.length > 0 || onAddTreaty || showContextLinkSlot) && (
         <AdditionalLinksSection aria-label="연결 추가">
           <AdditionalLinksHeader>
             <strong>추가 연결 항목</strong>
-            <small>아직 비어 있는 상위 묶음·조약·키워드가 있다면 필요한 것만 선택해 엽니다.</small>
+            <small>이 사건과 관련된 조약·주제 키워드·배경 맥락(지형·법령·기후·자원)이 있다면 선택해 기록합니다.</small>
           </AdditionalLinksHeader>
           <AdditionalLinksList>
+            {onAddTreaty && (
+              <CollapsedActorSlot>
+                <CollapsedActorInfo>
+                  <strong>조약</strong>
+                  <span>이 사건에서 체결·비준·파기된 조약을 연결하거나 새로 만듭니다.</span>
+                </CollapsedActorInfo>
+                <CollapsedActorChipBtn type="button" onClick={onAddTreaty}>
+                  <FiPlus size={12} aria-hidden />
+                  조약 연결 · 생성
+                </CollapsedActorChipBtn>
+              </CollapsedActorSlot>
+            )}
             {foldedBlocks.map((block) => (
               <CollapsedActorSlot key={block.id}>
                 <CollapsedActorInfo>
@@ -967,26 +1006,22 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
                 </CollapsedActorInfo>
                 <CollapsedActorChipBtn
                   type="button"
-                  onClick={() =>
-                    block.id === 'parent'
-                      ? setParentModalOpen(true)
-                      : setShownBlocks((prev) => new Set(prev).add(block.id))
-                  }
+                  onClick={() => setShownBlocks((prev) => new Set(prev).add(block.id))}
                 >
                   <FiPlus size={12} aria-hidden />
-                  {block.id === 'parent' ? `${block.label} 지정` : `${block.label} 추가`}
+                  {block.label} 추가
                 </CollapsedActorChipBtn>
               </CollapsedActorSlot>
             ))}
-            {onAddTreaty && (
+            {showContextLinkSlot && (
               <CollapsedActorSlot>
                 <CollapsedActorInfo>
-                  <strong>조약</strong>
-                  <span>이 사건에서 체결·비준·파기된 조약을 만들거나 연결합니다.</span>
+                  <strong>배경 맥락</strong>
+                  <span>이 사건에 작용한 지형·기반시설·법령·기후·자원·사회 현상을 연결합니다.</span>
                 </CollapsedActorInfo>
-                <CollapsedActorChipBtn type="button" onClick={onAddTreaty}>
+                <CollapsedActorChipBtn type="button" onClick={onAddContextLink}>
                   <FiPlus size={12} aria-hidden />
-                  조약 추가
+                  맥락 연결
                 </CollapsedActorChipBtn>
               </CollapsedActorSlot>
             )}
@@ -1132,36 +1167,48 @@ export function DetailNetwork({ event, onPatch, onRequestSplit, onAddTreaty }: D
           />
         </Suspense>
       )}
-    </S.Section>
+    </NetworkSection>
   )
 }
 
-const NetworkHeaderBlock = styled.div`
+const NetworkTopBar = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: -20px;
+`
+
+const NetworkSection = styled(S.Section)`
+  gap: 68px;
+
+  @media (max-width: 768px) {
+    gap: 48px;
+  }
 `
 
 const AdditionalLinksSection = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 18px;
 `
 
 const AdditionalLinksHeader = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 5px;
 
   strong {
-    font-size: 13.5px;
-    font-weight: 750;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
     color: ${({ theme }) => theme.colors.text.primary};
   }
 
   small {
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: 13px;
+    line-height: 1.55;
     color: ${({ theme }) => theme.colors.text.secondary};
   }
 `
@@ -1169,4 +1216,14 @@ const AdditionalLinksHeader = styled.div`
 const AdditionalLinksList = styled.div`
   display: flex;
   flex-direction: column;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+
+  @container eventdetail (min-width: 1180px) {
+    &:has(> :nth-child(2)) {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 0 40px;
+      align-items: stretch;
+    }
+  }
 `

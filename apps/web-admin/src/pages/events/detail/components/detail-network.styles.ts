@@ -542,11 +542,11 @@ export const ChildList = styled.ol`
   display: flex;
   flex-direction: column;
 
-  @container eventdetail (min-width: 1280px) {
+  @container eventdetail (min-width: 1100px) {
     &:has(> li:nth-child(2)) {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      column-gap: 28px;
+      column-gap: 36px;
       align-items: start;
     }
   }
@@ -897,22 +897,63 @@ export const MembershipBar = styled.div`
   margin: 0 0 14px;
 `
 
-/** 경로 줄 — 본문 링크보다 한 단 낮은 글씨, 이 사건만 진하게. 편집 버튼은 올리면 보인다 */
+export const ParentZoneHead = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+`
+
+export const ParentZoneTitleGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+`
+
+export const ParentZoneTitle = styled.h3`
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  line-height: 1.35;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+export const ParentZoneHint = styled.p`
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: ${metaText};
+`
+
+/** 경로 줄 — 본문 링크보다 한 단 낮은 글씨, 이 사건만 진하게 */
 export const MembershipRow = styled.div<{ $reveal?: boolean }>`
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 2px 4px;
-  font-size: 13px;
-  line-height: 1.5;
+  gap: 4px 6px;
+  padding-top: 4px;
+  font-size: 14px;
+  line-height: 1.55;
   color: ${({ theme }) => theme.colors.text.secondary};
+
+  &:empty {
+    display: none;
+  }
 
   a {
     color: inherit;
     text-decoration: none;
+    font-weight: 600;
   }
   a:hover {
     color: ${({ theme }) => theme.colors.text.primary};
+    text-decoration: underline;
+    text-underline-offset: 2px;
   }
   a:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
@@ -920,42 +961,28 @@ export const MembershipRow = styled.div<{ $reveal?: boolean }>`
     border-radius: 4px;
   }
   strong {
-    font-weight: 600;
+    font-weight: 700;
     color: ${({ theme }) => theme.colors.text.primary};
-  }
-
-  /*
-   * 편집 버튼은 늘 보이되 흐리게 — 숨겨 두었더니(마우스를 올려야 보임) 상위에서 빼기가 '없는 기능'으로 읽혔다.
-   * 행에 들어오면 또렷하게.
-   */
-  ${TextBtn} {
-    /* 0.6이면 라이트 2.87:1·다크 3.39:1로 읽기 어려웠다 — 굵기를 낮춰 조용하게 하되 대비는 AA 위로 */
-    opacity: 0.85;
-    font-weight: 500;
-  }
-  &:hover ${TextBtn}, &:focus-within ${TextBtn}, ${TextBtn}:focus-visible {
-    opacity: 1;
   }
 `
 
 export const MembershipActions = styled.span`
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 0 2px;
-  margin-left: 6px;
+  align-items: center;
+  gap: 8px;
 
   ${TextBtn} {
     white-space: nowrap;
   }
 `
 
-/** 국면 한 줄 — 메타 글씨. '바꾸기'는 꺾이지 않게(휴대폰에서 '바꾸/기'로 두 줄이었다) */
+/** 국면 한 줄 — 메타 글씨 */
 export const MembershipMeta = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0 6px;
-  padding-left: 34px;
   font-size: 12.5px;
   line-height: 1.5;
   color: ${metaText};
@@ -971,7 +998,6 @@ export const SiblingStrip = styled.nav`
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
   width: 100%;
-  padding-left: 30px;
 `
 
 export const SiblingStripLink = styled(Link)<{ $alignEnd?: boolean }>`

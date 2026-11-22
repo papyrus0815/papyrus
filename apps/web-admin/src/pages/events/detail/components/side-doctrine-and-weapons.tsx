@@ -705,29 +705,28 @@ export function SubEventSidesRollupPanel({
 }
 
 const DoctrineContainer = styled.div`
-  margin-bottom: 12px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-radius: ${RADIUS.MD};
-  background: ${({ theme }) => theme.colors.background.secondary};
-  overflow: hidden;
+  margin-bottom: 8px;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
+  background: transparent;
 `
 
 const DoctrineHeaderButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   width: 100%;
-  padding: 8px 12px;
+  padding: 11px 4px;
   border: none;
   background: transparent;
   color: ${({ theme }) => theme.colors.text.primary};
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   text-align: left;
   cursor: pointer;
 
   &:hover {
-    background: ${({ theme }) => theme.colors.background.tertiary};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
   }
 `
 

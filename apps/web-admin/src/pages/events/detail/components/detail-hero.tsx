@@ -1,39 +1,40 @@
-import { type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 
-import { FiArrowLeft, FiAward, FiChevronDown, FiChevronUp, FiHelpCircle } from 'react-icons/fi'
+import {
+  FiArrowLeft,
+  FiAward,
+  FiChevronDown,
+  FiChevronUp,
+  FiHelpCircle,
+  FiPlus,
+} from 'react-icons/fi'
 import { Link } from 'react-router-dom'
 import styled from 'styled-components'
 
 import {
   ledgerAccent,
   ledgerHairlineStrong,
-  ledgerSubtleFill,
+  ledgerHoverFill,
   withAlpha,
   RADIUS,
 } from '@/entities/event/ui/ledger-tokens'
 import { metaText } from '@/pages/events/styles/theme'
 import { type UpdateEventDto } from '@/shared/api/events'
-import { getUploadImageUrl } from '@/shared/api/upload'
 import {
   formatYearLabel,
   parseIsoDateParts,
 } from '@/shared/lib/iso-date'
 import { renderEmphasis } from '@/shared/lib/emphasis-markup'
-import { getPersonDisplayName } from '@/shared/lib/person-display-name'
 import { pathKeys } from '@/shared/router'
-import { shouldInterceptEntityClick } from '@/widgets/country/country-inline-modal'
 
 import { EVENT_DOMAIN_ORDER, EVENT_DOMAINS, eventDomainDef } from '@/entities/event/model/event-domain'
 import { EVENT_TYPES, subtypesForDomain } from '@/entities/event/model/event-type-registry'
 
 import * as S from '../styles'
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
-import { countrySideMapOf, effectivePersonSide } from './actors/actors.lib'
-import { HeroCountryCards } from './hero-country-cards'
 import { HeroThumbnail } from './hero-thumbnail'
 import { ParentFlowStrip } from './parent-flow-strip'
 import { SeriesFlowStrip } from './series-flow-strip'
-import { withSideColors } from './side-colors'
 import {
   InlineSelect,
   InlineText,
@@ -45,21 +46,11 @@ interface DetailHeroProps {
   event: EventDetail
   /** 부분 patch — 필드 단위. 페이지 레벨 mutation이 처리. */
   onPatch: (patch: UpdateEventDto) => void
-  /** 인물 chip 클릭 시 페이지 레벨 모달 트리거. */
-  onPersonClick: (personId: string) => void
-  /** 국가명 클릭 시 페이지 레벨 국가 정보 모달 트리거(관련국 단락과 동일 동작). */
-  onCountryClick: (countryId: string) => void
   /**
    * 요약 단락을 히어로에 둘지(기본 true). 탭 지면은 요약을 '개요' 탭 머리로 옮겨
-   * 히어로를 정체성(제목·행위자·국가)만으로 짧게 한다 — 요약까지 실으면 히어로가 화면 대부분을 먹어
-   * 탭 내용이 접힌 아래에서 시작했다. 옮긴 자리에서는 {@link DetailSummary}를 쓴다.
+   * 히어로를 정체성(분류·제목·부제)만으로 짧게 한다. 옮긴 자리에서는 {@link DetailSummary}를 쓴다.
    */
   withSummary?: boolean
-  /**
-   * '외 N명'·'외 N' — 탭 지면에서는 '참여' 탭을 연다. 없으면 예전처럼 #actors 앵커
-   * (탭 지면에서 앵커는 다른 탭의 섹션이라 아무 데도 가지 않았다).
-   */
-  onShowActors?: () => void
   /** 대표 이미지를 누르면 — 자료 탭. 주면 히어로에 대표 이미지 칸이 선다(탭 지면) */
   onOpenMedia?: () => void
   /** 종류 표지('단일 사건 ?'·'최상위 사건 ?')를 누르면 — 사건 종류 안내 창. 주면 윗줄 끝에 선다 */
@@ -103,10 +94,7 @@ const subtypeOptions = (domain?: string | null): InlineSelectOption[] => {
 export function DetailHero({
   event,
   onPatch,
-  onPersonClick,
-  onCountryClick,
   withSummary = true,
-  onShowActors,
   onOpenMedia,
   onOpenKindGuide,
   menu,
@@ -226,75 +214,74 @@ export function DetailHero({
       {onOpenMedia && <HeroThumbnail event={event} onPatch={onPatch} onOpenMedia={onOpenMedia} />}
 
       <S.HeroText>
-      <TitleHost>
-        <InlineText
-          value={event.title}
-          onSave={(next) => onPatch({ title: next.trim() })}
-          validate={(next) =>
-            next.trim() ? null : '제목은 비워둘 수 없습니다'
-          }
-          placeholder="사건명 입력"
-          label="사건 제목"
-          as="span"
-          /* 긴 제목은 textarea로 줄바꿈 표시 — Enter는 여전히 저장(Shift+Enter 줄바꿈). */
-          multiline
-          multilineEnter={false}
-          /* 제목은 대개 한 줄 — 3줄 상자가 열리며 아래를 85px 밀어내던 것을 막는다. */
-          minRows={1}
-          hint="Enter 저장 · Shift+Enter 줄바꿈 · Esc 취소"
-        />
-      </TitleHost>
-      {/* 부제 · 이칭·작전명 — 사건명을 짧은 고유명사로 유지하고 통칭·작전명·핵심 성격을 한 줄로 받친다.
-          비어 있으면 빈 자리를 세우지 않고 장부의 '+ 부제 · 이칭'으로 연다 */}
-      {(event.subtitle?.trim() || subtitleOpen) && (
-        <SubtitleHost
-          data-filled={event.subtitle?.trim() ? 'true' : undefined}
-          onBlur={(blurEvent) => {
-            if (blurEvent.currentTarget.contains(blurEvent.relatedTarget as Node | null)) return
-            onSubtitleClose?.()
-          }}
-        >
+      <TitleBlock>
+        <TitleHost>
           <InlineText
-            value={event.subtitle ?? ''}
-            onSave={(next) => {
-              onPatch({ subtitle: next.trim() } as UpdateEventDto)
+            value={event.title}
+            onSave={(next) => onPatch({ title: next.trim() })}
+            validate={(next) =>
+              next.trim() ? null : '제목은 비워둘 수 없습니다'
+            }
+            placeholder="사건명 입력"
+            label="사건 제목"
+            as="span"
+            /* 긴 제목은 textarea로 줄바꿈 표시 — Enter는 여전히 저장(Shift+Enter 줄바꿈). */
+            multiline
+            multilineEnter={false}
+            /* 제목은 대개 한 줄 — 3줄 상자가 열리며 아래를 85px 밀어내던 것을 막는다. */
+            minRows={1}
+            hint="Enter 저장 · Shift+Enter 줄바꿈 · Esc 취소"
+          />
+        </TitleHost>
+        {/* 부제 · 이칭·작전명 — 사건명을 짧은 고유명사로 유지하고 통칭·작전명·핵심 성격을 한 줄로 받친다. */}
+        {(event.subtitle?.trim() || subtitleOpen) && (
+          <SubtitleHost
+            data-filled={event.subtitle?.trim() ? 'true' : undefined}
+            onBlur={(blurEvent) => {
+              if (blurEvent.currentTarget.contains(blurEvent.relatedTarget as Node | null)) return
               onSubtitleClose?.()
             }}
-            placeholder="부제 · 이칭·작전명 (예: 바르바로사 작전 — 나치 독일의 소련 침공 지시)"
-            label="사건 부제 · 이칭"
-            as="span"
-            maxLength={150}
-            autoEdit={subtitleOpen && !event.subtitle?.trim()}
-            hint="Enter 저장 · 비우고 저장하면 부제 제거 · Esc 취소"
-          />
-        </SubtitleHost>
-      )}
-      {/* 원어 사건명 — 제목 바로 밑 한 줄. 채운 사건이 없어(0/506) 빈 자리를 늘 세우면 모든 사건에
-          흐린 '원어 사건명'이 서 있었다 — 비어 있으면 장부의 '+ 원어 사건명'으로 연다 */}
-      {(event.originalTitle?.trim() || originalTitleOpen) && (
-        <OriginalTitleHost
-          data-filled={event.originalTitle?.trim() ? 'true' : undefined}
-          onBlur={(blurEvent) => {
-            if (blurEvent.currentTarget.contains(blurEvent.relatedTarget as Node | null)) return
-            onOriginalTitleClose?.()
-          }}
-        >
-          <InlineText
-            value={event.originalTitle ?? ''}
-            onSave={(next) => {
-              onPatch({ originalTitle: next.trim() } as UpdateEventDto)
+          >
+            <InlineText
+              value={event.subtitle ?? ''}
+              onSave={(next) => {
+                onPatch({ subtitle: next.trim() } as UpdateEventDto)
+                onSubtitleClose?.()
+              }}
+              placeholder="부제 · 이칭·작전명 (예: 바르바로사 작전 — 나치 독일의 소련 침공 지시)"
+              label="사건 부제 · 이칭"
+              as="span"
+              maxLength={150}
+              autoEdit={subtitleOpen && !event.subtitle?.trim()}
+              hint="Enter 저장 · 비우고 저장하면 부제 제거 · Esc 취소"
+            />
+          </SubtitleHost>
+        )}
+        {/* 원어 사건명 — 제목·부제 바로 밑 한 줄. */}
+        {(event.originalTitle?.trim() || originalTitleOpen) && (
+          <OriginalTitleHost
+            data-filled={event.originalTitle?.trim() ? 'true' : undefined}
+            onBlur={(blurEvent) => {
+              if (blurEvent.currentTarget.contains(blurEvent.relatedTarget as Node | null)) return
               onOriginalTitleClose?.()
             }}
-            placeholder="원어 사건명"
-            label="원어 사건명"
-            as="span"
-            autoEdit={originalTitleOpen && !event.originalTitle?.trim()}
-          />
-        </OriginalTitleHost>
-      )}
+          >
+            <InlineText
+              value={event.originalTitle ?? ''}
+              onSave={(next) => {
+                onPatch({ originalTitle: next.trim() } as UpdateEventDto)
+                onOriginalTitleClose?.()
+              }}
+              placeholder="원어 사건명"
+              label="원어 사건명"
+              as="span"
+              autoEdit={originalTitleOpen && !event.originalTitle?.trim()}
+            />
+          </OriginalTitleHost>
+        )}
+      </TitleBlock>
 
-      {/* 카테고리 톤 밴드 — 제목과 메타 사이 시각 앵커. 카테고리 색이 옅게
-          좌→우로 흩어지며 페이지 정체성을 한 줄로 표시(밑줄 X, 별도 룰). */}
+      {/* 카테고리 톤 밴드 — 제목 묶음 아래 시각 앵커 */}
       <TitleAccent
         $color={category.color}
         $colorDark={category.dark}
@@ -324,12 +311,6 @@ export function DetailHero({
           onSave={(patch) => onPatch(patch)}
         />
       </NarrowDateLine>
-      <HeroActors
-        event={event}
-        onPersonClick={onPersonClick}
-        onCountryClick={onCountryClick}
-        onShowActors={onShowActors}
-      />
 
       {withSummary && <DetailSummary event={event} onPatch={onPatch} />}
       </S.HeroText>
@@ -348,23 +329,22 @@ export function DetailSummary({
   /** 처음부터 입력칸으로 — 묶음 '전체 글' 안내의 '요약 쓰기'로 열었을 때 */
   autoEdit?: boolean
 }) {
-  /**
-   * 긴 요약은 다섯 줄까지만 — 요약이 600자를 넘는 사건이 44건(최대 1,630자)이고, 일본 최초 철도는 요약만
-   * 5문단(약 770px)이라 배경이 첫 화면 밖으로 밀렸다. 넘칠 때만 '요약 전체 보기'가 생기고, 편집을 시작하면
-   * (포커스 진입) 저절로 펼친다 — 잘린 채 편집하면 커서가 안 보인다.
-   */
+  const [editingEmpty, setEditingEmpty] = useState(false)
+  const category = eventDomainDef(event.domain)
+  const hasDescription = Boolean(event.description?.trim())
   const contentRef = useRef<HTMLDivElement>(null)
   const [overflowing, setOverflowing] = useState(false)
   const [expanded, setExpanded] = useState(false)
+
+  useEffect(() => {
+    if (hasDescription) setEditingEmpty(false)
+  }, [hasDescription])
+
   useEffect(() => {
     const node = contentRef.current
     if (!node) return undefined
     const measure = () => {
       if (expanded) return
-      /*
-       * 두 줄 반까지의 넘침은 접지 않는다 — 발미 전투는 두 단락(7줄)인데 다섯 줄에서 잘려 흐려지고 '요약 전체 보기'가
-       * 붙었다. 버튼 한 줄(≈1.4줄)을 아끼려고 두 줄을 가리는 셈이었다. scrollHeight는 높이 제한과 무관하게 본래 높이다.
-       */
       const lineHeight = parseFloat(getComputedStyle(node).lineHeight) || 28
       setOverflowing(node.scrollHeight > lineHeight * (SUMMARY_LINES + 2.5))
     }
@@ -375,8 +355,37 @@ export function DetailSummary({
   }, [expanded, event.description])
   const clamped = overflowing && !expanded
 
+  if (!hasDescription && !autoEdit && !editingEmpty) {
+    return (
+      <SummaryEmptyHost
+        type="button"
+        $accent={category.color}
+        $accentDark={category.dark}
+        onClick={() => setEditingEmpty(true)}
+      >
+        <SummaryEmptyText>
+          <strong>사건 핵심 요약</strong>
+          <span>
+            이 사건의 성격과 역사적 의의를 한두 문단으로 먼저 요약해 두면 본문을 읽기 전에 전체 맥락이 한눈에 잡힙니다.
+          </span>
+        </SummaryEmptyText>
+        <SummaryEmptyAction>
+          <FiPlus size={13} aria-hidden />
+          요약 작성하기
+        </SummaryEmptyAction>
+      </SummaryEmptyHost>
+    )
+  }
+
   return (
-    <SummaryHost>
+    <SummaryHost
+      $accent={category.color}
+      $accentDark={category.dark}
+      onBlur={(blurEvent) => {
+        if (blurEvent.currentTarget.contains(blurEvent.relatedTarget as Node | null)) return
+        if (!hasDescription) setEditingEmpty(false)
+      }}
+    >
       <SummaryClamp
         ref={contentRef}
         $limit={clamped}
@@ -384,12 +393,13 @@ export function DetailSummary({
         onFocusCapture={() => setExpanded(true)}
       >
         <InlineText
-          autoEdit={autoEdit}
+          autoEdit={autoEdit || editingEmpty}
           value={event.description ?? ''}
-          /* 비우면 빈 문자열 전송 → 컬럼 비움(`|| undefined`는 서버가 무시). */
-          onSave={(next) => onPatch({ description: next.trim() })}
-          /* 빈 요약은 '내용'이 아니라 동작으로 읽혀야 한다 — '요약 — 한두 단락'이 기울임 글로 본문처럼 섰다 */
-          placeholder="+ 요약 쓰기"
+          onSave={(next) => {
+            onPatch({ description: next.trim() })
+            if (!next.trim()) setEditingEmpty(false)
+          }}
+          placeholder="사건의 핵심 성격과 의의를 한두 문단으로 요약하세요"
           multiline
           multilineEnter
           renderRead={renderEmphasis}
@@ -458,11 +468,18 @@ const NarrowDateLine = styled.div`
   }
 `
 
+const TitleBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+`
+
 const TitleAccent = styled.div<{ $color: string; $colorDark?: string }>`
   width: 56px;
   height: 3px;
   border-radius: ${RADIUS.FOCUS};
-  margin-top: -10px;
+  margin-top: -2px;
   background: ${({ theme, $color, $colorDark }) => {
     const applied = theme.mode === 'dark' ? $colorDark ?? $color : $color
     return `linear-gradient(90deg, ${applied} 0%, ${withAlpha(applied, 0)} 100%)`
@@ -609,292 +626,115 @@ const ContemporaryLink = styled(Link)`
   }
 `
 
-/* ───────────────── Hero actor strip — NYT editorial ─────────────────
- * 사건 헤더의 "참여자 라인업" — 신문 byline / dramatis personae 톤.
- * - smallcaps eyebrow 라벨 + 검정 1px 헤어라인 룰
- * - 작은 정사각 b&w 아바타 stack + 세리프 이름(중점·쉼표로 구분)
- * - 국가는 한 단락 — 현대(roman) · 역사(italic)로 weight/style만 구분, flag 미사용
- */
-const PERSON_CAP = 4
-
-function HeroActors({
-  event,
-  onPersonClick,
-  onCountryClick,
-  onShowActors,
-}: {
-  event: EventDetail
-  onPersonClick: (personId: string) => void
-  onCountryClick: (countryId: string) => void
-  onShowActors?: () => void
-}) {
-  /* 넘친 인원·나라 — 탭 지면이면 '참여' 탭으로, 아니면 #actors 앵커로 */
-  const overflowProps = onShowActors
-    ? {
-        href: '?tab=actors',
-        onClick: (clickEvent: MouseEvent<HTMLAnchorElement>) => {
-          if (!shouldInterceptEntityClick(clickEvent)) return
-          clickEvent.preventDefault()
-          onShowActors()
-        },
-      }
-    : { href: '#actors' }
-  const allPersons = event.relatedPersons ?? []
-  const allModern = event.relatedCountries ?? []
-  const allHistorical = event.relatedHistoricalCountries ?? []
-  const sideColorMap = useMemo(
-    () => new Map(withSideColors(event.sides ?? []).map((side) => [side.id, { name: side.name, color: side.color }])),
-    [event.sides],
-  )
-  /* 인물 진영은 참여·진영 탭과 같은 실효 진영(따로 정한 진영 ?? 소속국 진영) */
-  const countrySideByKey = useMemo(
-    () => countrySideMapOf(allModern, allHistorical),
-    [allModern, allHistorical],
-  )
-
-  const persons = allPersons.slice(0, PERSON_CAP)
-
-  const personOverflow = allPersons.length - persons.length
-
-  if (persons.length === 0 && allModern.length + allHistorical.length === 0) return null
-
-  return (
-    <ActorStrip aria-label="참여 행위자 요약">
-      {persons.length > 0 && (
-        <Lineup>
-          <PersonInline>
-            {persons.map((personEntry, personIndex) => {
-              const name = personEntry.person
-                ? getPersonDisplayName({
-                    name: personEntry.person.name ?? '',
-                    surname: personEntry.person.surname,
-                    middleName: personEntry.person.middleName,
-                    nameDisplayOrder: personEntry.person.nameDisplayOrder,
-                    country: personEntry.person.country,
-                  }) || '미상'
-                : '미상'
-              const avatar = personEntry.person?.profileImageUrl ?? undefined
-              const effectiveSideId = effectivePersonSide(personEntry, countrySideByKey).sideId
-              const sideInfo = effectiveSideId ? sideColorMap.get(effectiveSideId) : undefined
-              const tooltip = [sideInfo?.name, personEntry.role].filter(Boolean).join(' · ') || undefined
-              return (
-                <span key={personEntry.personId}>
-                  <PersonInlineButton
-                    type="button"
-                    title={tooltip}
-                    onClick={() => onPersonClick(personEntry.personId)}
-                  >
-                    <PersonAvatar $hasImage={Boolean(avatar)}>
-                      {avatar ? (
-                        <img
-                          src={getUploadImageUrl(avatar) || avatar}
-                          alt=""
-                          loading="lazy"
-                        />
-                      ) : (
-                        <span>{name.charAt(0)}</span>
-                      )}
-                    </PersonAvatar>
-                    {sideInfo && <PersonSideDot $color={sideInfo.color} aria-hidden />}
-                    <PersonName>{name}</PersonName>
-                  </PersonInlineButton>
-                  {personIndex < persons.length - 1 && <PersonSep>·</PersonSep>}
-                </span>
-              )
-            })}
-            {personOverflow > 0 && (
-              <Overflow {...overflowProps}>외 {personOverflow}명</Overflow>
-            )}
-          </PersonInline>
-        </Lineup>
-      )}
-
-      {/* 참여국 — 이름 나열 대신 진영별 국가 카드(역할·참여 형태·대표 수치) */}
-      <HeroCountryCards event={event} onCountryClick={onCountryClick} onShowActors={onShowActors} />
-    </ActorStrip>
-  )
-}
-
-/* ─── Editorial actor strip — sans, NYT 깔끔한 톤만 ───
- * 시그니처: 검정 1px 헤어라인 룰 + smallcaps tracked eyebrow + 깔끔한 위계.
- * 폰트는 앱 기본(Inter/Pretendard) 그대로 — 세리프 미사용.
- */
-/**
- * Hero 하단 ActorStrip 구분선 — 로컬 알파(editorialRule) 대신 페이지 공용
- * hairline 토큰으로 통일(이전 0.78/0.5는 본문보다 진해 시선 분산이 컸음).
- */
-/* 위 구분선(border-top)은 뺐다 — 참여국 카드의 면이 제목·요약과 이미 갈라 준다 */
-const ActorStrip = styled.div`
+const SummaryEmptyHost = styled.button<{ $accent: string; $accentDark?: string }>`
+  appearance: none;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 14px;
-`
-
-const Lineup = styled.div`
-  min-width: 0;
-`
-
-/* ── 인물 인라인 — 작은 b&w 아바타 + 본문 sans 이름 ── */
-
-const PersonInline = styled.div`
-  font-size: 14px;
-  line-height: 1.55;
-  color: ${({ theme }) => theme.colors.text.primary};
-  letter-spacing: -0.005em;
-
-  /*
-   * 한 인물 = 버튼 + 뒤따르는 '·' — 한 덩어리로 묶어 구분점만 다음 줄 머리로 떨어지지
-   * 않게 한다. 폭이 모자라면(390px) 역할이 말줄임으로 줄어든다 — 예전엔 nowrap 토큰이
-   * 화면 밖으로 삐져나갔다.
-   */
-  > span {
-    display: inline-flex;
-    align-items: center;
-    max-width: 100%;
-    vertical-align: middle;
-  }
-`
-
-const PersonInlineButton = styled.button`
-  display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 7px;
-  padding: 0;
+  justify-content: space-between;
+  gap: 12px 20px;
+  width: 100%;
+  max-width: ${S.PROSE_MAX_WIDTH};
+  padding: 12px 16px 12px 18px;
   border: none;
+  border-left: 3px solid
+    ${({ theme, $accent, $accentDark }) =>
+      withAlpha(theme.mode === 'dark' ? ($accentDark ?? $accent) : $accent, 0.45)};
+  border-radius: 0 ${RADIUS.SM} ${RADIUS.SM} 0;
   background: transparent;
-  cursor: pointer;
-  color: inherit;
   font: inherit;
-  /* avatar(22px)와 이름(14.5px)을 함께 묶은 칩이 본문 줄에 자연스럽게 안기도록.
-     baseline로 두면 img가 baseline까지 내려가 위쪽 공백이 비대칭 — middle로 묶음. */
-  vertical-align: middle;
-  /* 한 인물 = atomic 토큰 — 줄 끝에서 이름·역할이 갈라지지 않도록. */
-  white-space: nowrap;
-  min-width: 0;
-  max-width: 100%;
-
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
-    outline-offset: 2px;
-    border-radius: ${RADIUS.FOCUS};
-  }
-`
-
-const PersonAvatar = styled.span<{ $hasImage: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 0; /* 정사각 — editorial photo */
-  overflow: hidden;
-  background: ${({ theme, $hasImage }) =>
-    $hasImage ? 'transparent' : ledgerSubtleFill(theme.mode)};
-  color: ${({ theme }) => theme.colors.text.secondary};
-  /* 22×22 안에서 한글/영문 한 글자가 또렷이 읽히도록. 이전 10px는 한글이
-     사실상 illegible. */
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  line-height: 1;
-  flex-shrink: 0;
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    /* 살짝 desaturate — 깔끔한 사진 톤 */
-    filter: grayscale(0.3) contrast(1.02);
-  }
-`
-
-const PersonSideDot = styled.span<{ $color: string }>`
-  flex-shrink: 0;
-  width: 7px;
-  height: 7px;
-  border-radius: 2px;
-  background: ${({ $color }) => $color};
-`
-
-const PersonName = styled.span`
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: -0.005em;
-  color: ${({ theme }) => theme.colors.text.primary};
-
-  ${PersonInlineButton}:hover &,
-  ${PersonInlineButton}:focus-visible & {
-    text-decoration: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 3px;
-  }
-`
-
-const PersonSep = styled.span`
-  flex-shrink: 0;
-  margin: 0 8px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
-
-/* ── 국가 인라인 — 현대(roman) · 역사(italic) — flag 미사용 ── */
-
-/* italic 제거 — 한글은 italic face가 없어 브라우저가 기울인 가짜 글꼴이 된다.
-   이 레포는 italic을 placeholder 같은 '보조 메타'에만 쓰기로 이미 정리해 두었다. */
-const Overflow = styled.a`
-  white-space: nowrap;
-  font-size: 12.5px;
-  margin-left: 10px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  text-decoration: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
 
   &:hover {
-    color: ${({ theme }) => theme.colors.text.primary};
-    text-decoration: underline;
-    text-underline-offset: 3px;
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    border-left-color: ${({ theme, $accent, $accentDark }) =>
+      theme.mode === 'dark' ? ($accentDark ?? $accent) : $accent};
   }
 
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
-    border-radius: ${RADIUS.FOCUS};
   }
 `
 
-const SummaryHost = styled.div`
-  ${S.longFormEditAffordance}
-  font-size: 16.5px;
-  line-height: 1.65;
-  color: ${({ theme }) => theme.colors.text.secondary};
+const SummaryEmptyText = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 320px;
+  min-width: 0;
+
+  strong {
+    font-size: 14px;
+    font-weight: 700;
+    color: ${({ theme }) => theme.colors.text.primary};
+  }
+
+  span {
+    font-size: 13px;
+    line-height: 1.55;
+    word-break: keep-all;
+    color: ${({ theme }) => theme.colors.text.secondary};
+  }
 `
 
-/** 종류 표지 겸 '?' 안내 버튼 — 윗줄 끝. 상태(무슨 종류)와 길잡이(어떻게 바꾸나)를 한 버튼에 */
+const SummaryEmptyAction = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+`
+
+const SummaryHost = styled.div<{ $accent: string; $accentDark?: string }>`
+  ${S.longFormEditAffordance}
+  max-width: ${S.PROSE_MAX_WIDTH};
+  padding: 2px 0 2px 18px;
+  border-left: 3px solid
+    ${({ theme, $accent, $accentDark }) =>
+      withAlpha(theme.mode === 'dark' ? ($accentDark ?? $accent) : $accent, theme.mode === 'dark' ? 0.65 : 0.55)};
+  font-size: 16px;
+  line-height: 1.78;
+  color: ${({ theme }) => theme.colors.text.primary};
+`
+
+/** 종류 표지 겸 '?' 안내 버튼 — 테두리를 뺀 조용한 메타 표지(마우스 오버 시 윤곽 표시) */
 const KindGuideButton = styled.button`
   margin-left: auto;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 6px 3px 10px;
-  border-radius: 999px;
+  gap: 4px;
+  padding: 3px 7px;
+  border-radius: ${RADIUS.SM};
 
   @container eventdetail (max-width: 639px) {
-    padding: 3px 6px;
+    padding: 3px 5px;
   }
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border: 1px solid transparent;
   background: transparent;
   font: inherit;
   font-size: 12px;
   font-weight: 600;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${metaText};
   cursor: pointer;
 
   svg {
-    width: 15px;
-    height: 15px;
+    width: 13.5px;
+    height: 13.5px;
+    opacity: 0.75;
   }
   &:hover {
-    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
-    color: ${({ theme }) => ledgerAccent(theme.mode)};
+    border-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
+    color: ${({ theme }) => theme.colors.text.primary};
+
+    svg {
+      opacity: 1;
+    }
   }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
@@ -990,7 +830,7 @@ const ExtraParentBadge = styled.a`
  * 부제 · 이칭·작전명 — 사건명 바로 아래 한 줄 표제 부제(단문).
  */
 const SubtitleHost = styled.p`
-  margin: 4px 0 0;
+  margin: 0;
   font-size: clamp(15px, 1.5vw, 17px);
   font-weight: 550;
   line-height: 1.45;
@@ -1016,15 +856,22 @@ const SubtitleHost = styled.p`
 `
 
 /**
- * 원어 사건명 — 제목 밑 한 줄(기울임 없는 보조 글씨). 비어 있으면 흐린 '원어 사건명' 자리만 남아
- * 편집 진입점이 된다 — 값이 생기면 진하게.
+ * 원어 사건명 — 제목·부제 밑 한 줄(기울임 없는 보조 글씨).
  */
 const OriginalTitleHost = styled.p`
-  margin: 4px 0 0;
-  font-size: 15px;
+  margin: 0;
+  font-size: 14.5px;
   font-weight: 500;
   line-height: 1.4;
   color: ${({ theme }) => theme.colors.text.secondary};
+
+  [data-edit-host] > span:first-child {
+    text-decoration-line: none;
+  }
+  [data-edit-host]:hover > span:first-child,
+  [data-edit-host]:focus-within > span:first-child {
+    text-decoration-line: underline;
+  }
 
   &:not([data-filled]) {
     opacity: 0.6;

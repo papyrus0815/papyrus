@@ -235,22 +235,26 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
 
   return (
     <S.Section id="power">
-      <S.SectionHeader>
-        <S.SectionTitle>권력 교체·선거</S.SectionTitle>
-        <S.SectionActions>
-          <HeaderControlBtn type="button" onClick={() => setAccessionPickerOpen(true)}>
-            <FiPlus size={13} aria-hidden />
-            취임·즉위 연결
-          </HeaderControlBtn>
-          <HeaderControlBtn type="button" onClick={() => setElectionPickerOpen(true)}>
-            <FiPlus size={13} aria-hidden />
-            선거 연결
-          </HeaderControlBtn>
-        </S.SectionActions>
-      </S.SectionHeader>
-      <SectionHintText>
-        이 사건으로 일어난 통치자·수반의 권력 승계(취임·즉위)와 관련 선거 결과를 연결합니다.
-      </SectionHintText>
+      <S.SectionHeaderGroup>
+        <S.SectionHeader>
+          <S.SectionTitle $sub>권력 교체·선거</S.SectionTitle>
+          {(accessions.length > 0 || elections.length > 0) && (
+            <S.SectionActions>
+              <HeaderControlBtn type="button" onClick={() => setAccessionPickerOpen(true)}>
+                <FiPlus size={13} aria-hidden />
+                취임·즉위 연결
+              </HeaderControlBtn>
+              <HeaderControlBtn type="button" onClick={() => setElectionPickerOpen(true)}>
+                <FiPlus size={13} aria-hidden />
+                선거 연결
+              </HeaderControlBtn>
+            </S.SectionActions>
+          )}
+        </S.SectionHeader>
+        <SectionHintText>
+          이 사건으로 일어난 통치자·수반의 권력 승계(취임·즉위)와 관련 선거 결과를 연결합니다.
+        </SectionHintText>
+      </S.SectionHeaderGroup>
 
       {accessions.length > 0 && (
         <Rows aria-label="취임·즉위">
@@ -280,10 +284,24 @@ export function DetailPower({ event, expectPower, onPersonClick }: DetailPowerPr
       )}
 
       {accessions.length === 0 && elections.length === 0 && (
-        <S.HelperText>
-          이 사건으로 취임·즉위한 기록이나 이 사건의 선거를 연결하면 전임자에서 후임자로 넘어간 자리와
-          정당별 결과가 여기 모입니다.
-        </S.HelperText>
+        <S.EmptyGuide>
+          <S.EmptyGuideBody>
+            <S.EmptyGuideTitle>권력 승계(취임 · 즉위)와 관련 선거를 연결하세요</S.EmptyGuideTitle>
+            <S.EmptyGuideDesc>
+              이 사건을 계기로 교체된 국가원수·통치자의 취임·즉위 기록이나 선거 결과를 연결하면 전임→후임 승계 구도와 정당별 득표 결과가 한곳에 표시됩니다.
+            </S.EmptyGuideDesc>
+          </S.EmptyGuideBody>
+          <S.EmptyGuideActions>
+            <S.EmptyPrimaryAction type="button" onClick={() => setAccessionPickerOpen(true)}>
+              <FiPlus aria-hidden />
+              취임 · 즉위 기록 연결
+            </S.EmptyPrimaryAction>
+            <S.EmptySecondaryAction type="button" onClick={() => setElectionPickerOpen(true)}>
+              <FiPlus aria-hidden />
+              선거 결과 연결
+            </S.EmptySecondaryAction>
+          </S.EmptyGuideActions>
+        </S.EmptyGuide>
       )}
 
       <SelectModal

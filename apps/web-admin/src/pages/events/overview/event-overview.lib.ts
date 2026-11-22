@@ -1310,7 +1310,7 @@ export const CHECK_FILL_ANCHOR: Record<CheckKey, string> = {
   background: 'background',
   aftermath: 'aftermath',
   images: 'appendix',
-  sides: 'module-sides',
+  sides: 'actors',
   metrics: 'module-metrics',
 }
 

@@ -119,10 +119,9 @@ export interface ActorsInfographicBoardProps {
   departmentCount?: number
   readOnly?: boolean
   onStartSides?: () => void
-  onManageSides?: () => void
   onCountryClick: (countryId: string) => void
   onPersonClick: (personId: string) => void
-  /** 수치 모듈로 — 대립 막대의 숫자를 자세히(지표별 비교·출처) */
+  /** 수치·전력 탭으로 — 대립 막대의 숫자를 자세히(지표별 비교·출처) */
   onShowMetrics?: () => void
 }
 
@@ -438,7 +437,7 @@ export function ActorsInfographicBoard({
             </StripTitleRow>
             {onShowMetrics && (sideStats.mode !== 'count' || sideStats.hasAnyLossData) && (
               <MetricsLink type="button" onClick={onShowMetrics}>
-                수치 그래프 자세히 ↓
+                수치 탭에서 상세 비교 →
               </MetricsLink>
             )}
           </StripHead>
@@ -683,7 +682,7 @@ export function ActorsInfographicBoard({
             </StripTitleRow>
             {onShowMetrics && (
               <MetricsLink type="button" onClick={onShowMetrics}>
-                수치 자세히 ↓
+                수치 탭에서 상세 비교 →
               </MetricsLink>
             )}
           </StripHead>
@@ -744,8 +743,8 @@ export function ActorsInfographicBoard({
 const InfographicStrip = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 12px 0;
+  gap: 16px;
+  padding: 16px 0 18px;
   border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 `

@@ -91,26 +91,30 @@ export const ActorsCanvas = styled.div`
   ${S.breakout}
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 68px;
+
+  @media (max-width: 768px) {
+    gap: 48px;
+  }
 `
 
-export const ActorsHeader = styled(S.SectionHeader)`
+export const ActorsHeader = styled.div`
   ${S.breakout}
   padding-left: ${S.breakoutGutter};
-  margin-bottom: 12px;
+  margin-bottom: -8px;
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 8px 16px;
 `
 
 export const ActorsHeaderLeft = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
   min-width: 0;
-  flex: 1 1 280px;
+  flex: 1 1 200px;
 `
 
 export const ActorsHeaderRight = styled.div`
@@ -129,8 +133,7 @@ export const ActorsSubtitle = styled.p`
 `
 
 export const ActorsSummary = styled.span`
-  margin-left: 10px;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   letter-spacing: 0;
   color: ${({ theme }) => mutedTextColor(theme.mode)};
@@ -254,6 +257,7 @@ export const ManageBanner = styled.div`
 export const ActorSectionCard = styled.div<{ $dragOver?: boolean }>`
   display: flex;
   flex-direction: column;
+  gap: 22px;
   min-width: 0;
   outline: ${({ $dragOver, theme }) =>
     $dragOver ? `2px dashed ${ledgerAccent(theme.mode)}` : 'none'};
@@ -265,15 +269,15 @@ export const ActorSectionHead = styled.div`
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 14px;
-  padding: 0 2px 8px;
-  border-bottom: 1.5px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  gap: 10px 16px;
+  padding: 0 2px 16px;
+  border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
 export const ActorSectionTitleGroup = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 `
 
@@ -281,22 +285,22 @@ export const ActorSectionTitleRow = styled.div`
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
 `
 
 export const SectionHintText = styled.p`
   margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 12.5px;
+  line-height: 1.5;
   color: ${({ theme }) => mutedTextColor(theme.mode)};
 `
 
 export const GroupLabel = styled.h3`
   margin: 0;
-  font-size: 13.5px;
-  font-weight: 750;
-  letter-spacing: -0.01em;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.012em;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
@@ -337,12 +341,12 @@ export const EmptyActorsCard = styled.div`
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 8px;
-  padding: 14px 4px;
+  gap: 6px 10px;
+  padding: 18px 4px;
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
   color: ${({ theme }) => mutedTextColor(theme.mode)};
   font-size: 12.5px;
-  line-height: 1.55;
+  line-height: 1.6;
 
   strong {
     color: ${({ theme }) => theme.colors.text.primary};
@@ -364,8 +368,8 @@ export const EmptyGroupLine = styled.div`
 export const SideColumns = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 18px 28px;
-  padding-top: 12px;
+  gap: 28px 36px;
+  padding-top: 8px;
   align-items: start;
 
   @container eventdetail (max-width: 720px) {
@@ -375,9 +379,9 @@ export const SideColumns = styled.div`
 
 export const SideGroup = styled.div<{ $rest?: boolean; $dragOver?: boolean; $color?: string }>`
   min-width: 0;
-  padding: 10px 0 0;
+  padding: 14px 0 0;
   border-top: ${({ $color, theme }) =>
-    $color ? `2.5px solid ${$color}` : `1.5px solid ${ledgerHairlineStrong(theme.mode)}`};
+    $color ? `2px solid ${$color}` : `1px solid ${ledgerHairlineStrong(theme.mode)}`};
   background: transparent;
   outline: ${({ $dragOver, theme }) =>
     $dragOver ? `2px dashed ${ledgerAccent(theme.mode)}` : 'none'};
@@ -387,7 +391,7 @@ export const SideGroup = styled.div<{ $rest?: boolean; $dragOver?: boolean; $col
 
 export const SideHead = styled.div<{ $color?: string }>`
   margin: 0;
-  padding: 0 2px 8px;
+  padding: 0 2px 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -491,7 +495,7 @@ export const CountryList = styled.ol`
     &:not([data-manage]):has(> li:nth-child(2)) {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      column-gap: 28px;
+      column-gap: 36px;
       align-items: start;
     }
   }
@@ -508,7 +512,7 @@ export const PersonList = styled.ol`
     &:not([data-manage]):has(> li:nth-child(2)) {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      column-gap: 28px;
+      column-gap: 36px;
       align-items: start;
     }
   }
@@ -697,10 +701,10 @@ export const CountryRow = styled.li<{ $dragOver?: boolean; $editing?: boolean; $
 
 export const CountryCard = styled.div`
   position: relative;
-  padding: 10px 6px;
+  padding: 13px 6px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
   ${revealRowControlsOnHover}
 `
@@ -961,7 +965,7 @@ export const PersonRow = styled.li<{
   display: block;
   min-width: 0;
   ${({ $editing }) => ($editing ? 'grid-column: 1 / -1;' : '')}
-  padding: ${({ $compact }) => ($compact ? '4px 6px' : '10px 6px')};
+  padding: ${({ $compact }) => ($compact ? '5px 6px' : '13px 6px')};
   border-radius: ${({ $compact }) => ($compact ? RADIUS.XS : '0')};
   border-bottom: ${({ $compact, theme }) =>
     $compact ? 'none' : `1px solid ${ledgerHairline(theme.mode)}`};
@@ -1464,14 +1468,10 @@ export const CollapsedActorSlot = styled.div`
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 6px 14px;
+  gap: 10px 18px;
   width: 100%;
-  padding: 8px 2px;
+  padding: 16px 4px;
   border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-
-  &:first-child {
-    border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  }
 `
 
 export const CollapsedActorInfo = styled.div`

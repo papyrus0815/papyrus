@@ -13,7 +13,7 @@
  * 서명국, 첫 조항 몇 개. 사건을 읽다가 조약 지면으로 건너가지 않아도 "무엇을 약속했고 언제
  * 깨졌나"까지 답한다. 전문·편집은 여전히 조약 상세가 정본이다(카드는 미리보기만 받는다).
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiExternalLink, FiPlus, FiX } from 'react-icons/fi'
@@ -59,11 +59,17 @@ interface DetailTreatiesProps {
   event: EventDetail
   /** 연결이 바뀌면 사건 상세를 다시 읽어야 한다(treaties는 상세 응답에 실린다). */
   onInvalidate: () => void
+  /** 연관 탭에서 '+ 조약 연결'로 열었을 때 선택 창까지 바로 연다 */
+  openLinkSeq?: number
 }
 
-export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
+export function DetailTreaties({ event, onInvalidate, openLinkSeq = 0 }: DetailTreatiesProps) {
   const queryClient = useQueryClient()
-  const [linkModalOpen, setLinkModalOpen] = useState(false)
+  const [linkModalOpen, setLinkModalOpen] = useState(openLinkSeq > 0)
+
+  useEffect(() => {
+    if (openLinkSeq > 0) setLinkModalOpen(true)
+  }, [openLinkSeq])
   /** 2단계 연결 — 조약을 고른 뒤 '이 사건과의 관계'(체결·비준·파기·관련)를 고른다 */
   const [pendingTreatyId, setPendingTreatyId] = useState<string | null>(null)
   const treaties = useMemo(() => event.treaties ?? [], [event.treaties])
@@ -231,33 +237,35 @@ export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
 
   return (
     <S.Section id="treaties">
-      <TreatiesHeaderBlock>
+      <S.SectionHeaderGroup>
         <S.SectionHeader>
           <S.SectionTitle>조약</S.SectionTitle>
           {treaties.length > 0 && <S.SectionSubtitle>{treaties.length}</S.SectionSubtitle>}
-          <S.SectionActions>
-            <HeaderControlBtn type="button" onClick={() => setLinkModalOpen(true)}>
-              기존 조약 연결
-            </HeaderControlBtn>
-            <HeaderControlBtn
-              type="button"
-              onClick={() => void handleCreate()}
-              disabled={createMutation.isPending}
-              title={
-                hasParticipants
-                  ? '참여국을 서명국 초안으로 옮겨 새 조약을 만듭니다'
-                  : '참여국이 없어 서명국은 빈 채로 만들어집니다'
-              }
-            >
-              <FiPlus size={14} />
-              {createMutation.isPending ? '만드는 중…' : '새 조약 만들기'}
-            </HeaderControlBtn>
-          </S.SectionActions>
+          {treaties.length > 0 && (
+            <S.SectionActions>
+              <HeaderControlBtn type="button" onClick={() => setLinkModalOpen(true)}>
+                기존 조약 연결
+              </HeaderControlBtn>
+              <HeaderControlBtn
+                type="button"
+                onClick={() => void handleCreate()}
+                disabled={createMutation.isPending}
+                title={
+                  hasParticipants
+                    ? '참여국을 서명국 초안으로 옮겨 새 조약을 만듭니다'
+                    : '참여국이 없어 서명국은 빈 채로 만들어집니다'
+                }
+              >
+                <FiPlus size={14} />
+                {createMutation.isPending ? '만드는 중…' : '새 조약 만들기'}
+              </HeaderControlBtn>
+            </S.SectionActions>
+          )}
         </S.SectionHeader>
         <SectionHintText>
           이 사건에서 체결·비준·파기된 조약을 연결합니다. ‘새 조약 만들기’를 누르면 참여국이 서명국 초안으로 반영됩니다.
         </SectionHintText>
-      </TreatiesHeaderBlock>
+      </S.SectionHeaderGroup>
 
       {treaties.length > 0 ? (
         <TreatyList>
@@ -279,11 +287,29 @@ export function DetailTreaties({ event, onInvalidate }: DetailTreatiesProps) {
           ))}
         </TreatyList>
       ) : (
-        <EmptyNote>
-          {hasParticipants
-            ? '아직 연결된 조약이 없습니다. 상단 ‘새 조약 만들기’ 또는 ‘기존 조약 연결’을 눌러 기록하세요.'
-            : '아직 연결된 조약이 없습니다. 이 사건에서 체결된 조약을 만들거나 기존 조약을 연결하세요.'}
-        </EmptyNote>
+        <S.EmptyGuide>
+          <S.EmptyGuideBody>
+            <S.EmptyGuideTitle>이 사건과 연결된 조약 · 협정을 기록하세요</S.EmptyGuideTitle>
+            <S.EmptyGuideDesc>
+              {hasParticipants
+                ? '‘새 조약 만들기’를 실행하면 현재 사건의 참여국들이 서명국 초안으로 자동 반영되어 빠르게 조약을 만들 수 있습니다. 이미 등록된 조약은 검색해 연결합니다.'
+                : '이 사건에서 서명·비준·파기된 기존 조약을 검색해 연결하거나, 사건 정보를 바탕으로 새 조약을 바로 생성할 수 있습니다.'}
+            </S.EmptyGuideDesc>
+          </S.EmptyGuideBody>
+          <S.EmptyGuideActions>
+            <S.EmptyPrimaryAction
+              type="button"
+              onClick={() => void handleCreate()}
+              disabled={createMutation.isPending}
+            >
+              <FiPlus aria-hidden />
+              {createMutation.isPending ? '만드는 중…' : '새 조약 만들기'}
+            </S.EmptyPrimaryAction>
+            <S.EmptySecondaryAction type="button" onClick={() => setLinkModalOpen(true)}>
+              기존 조약 연결
+            </S.EmptySecondaryAction>
+          </S.EmptyGuideActions>
+        </S.EmptyGuide>
       )}
 
       <SelectModal
@@ -583,12 +609,6 @@ const TreatyMeta = styled.div`
   color: ${metaText};
 `
 
-const TreatiesHeaderBlock = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-`
-
 const LifecycleBar = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -753,13 +773,6 @@ const SignatoryTenureMeta = styled.span`
 
 const MoreNote = styled.li`
   font-size: 12.5px;
-  color: ${metaText};
-`
-
-const EmptyNote = styled.p`
-  margin: 0;
-  font-size: 13.5px;
-  line-height: 1.6;
   color: ${metaText};
 `
 

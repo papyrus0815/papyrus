@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiPlus, FiTrash2 } from 'react-icons/fi'
@@ -86,17 +86,27 @@ function toLinkInput(item: EventContextLinkView): EventContextLinkInput {
 interface DetailContextLinksProps {
   event: EventDetail
   readOnly?: boolean
+  /** 외부('연관' 하단 통합 추가 디렉터리)에서 '+ 맥락 연결'을 눌렀을 때 입력 폼 오픈 신호 */
+  openAddSeq?: number
+  /** true이면 빈 상태의 단독 1줄 슬롯을 숨긴다('연관' 하단 추가 그리드에 통합 렌더할 때) */
+  hideCollapsedSlot?: boolean
 }
 
-/**
- * 맥락 연결 — 사건에 작용한 지형·기반시설·법령·기후·자원·시설·사회 현상을 잇는다.
- *
- * **기록이 없으면 섹션을 세우지 않는다**(한 줄 '맥락 연결' 버튼만). 예전엔 모든 사건의 연관 탭 끝에
- * 큰 제목('🌐 다차원 초유기체 맥락 …')과 안내 문단이 늘 서 있었는데, 실DB 연결은 0행이었다.
- */
-export function DetailContextLinks({ event, readOnly = false }: DetailContextLinksProps) {
+export function DetailContextLinks({
+  event,
+  readOnly = false,
+  openAddSeq = 0,
+  hideCollapsedSlot = false,
+}: DetailContextLinksProps) {
   const queryClient = useQueryClient()
   const [adding, setAdding] = useState(false)
+  const handledOpenSeqRef = useRef(openAddSeq)
+  useEffect(() => {
+    if (openAddSeq > handledOpenSeqRef.current) {
+      handledOpenSeqRef.current = openAddSeq
+      setAdding(true)
+    }
+  }, [openAddSeq])
   const [saving, setSaving] = useState(false)
   const [domain, setDomain] = useState<EventContextDomain>('NATURAL_FEATURE')
   const [entityId, setEntityId] = useState('')
@@ -264,9 +274,9 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
 
   const hasContent = links.length > 0 || subEventContextRollup.length > 0
 
-  /* 기록도 없고 펼치지도 않았다 — 섹션 대신 한 줄 안내(참여·연관 공통 디렉터리 줄과 동일 문법) */
+  /* 기록도 없고 펼치지도 않았다 — 통합 디렉터리에 맡기거나 단독일 때만 한 줄 안내 */
   if (!hasContent && !adding && !linksQuery.isError) {
-    if (readOnly) return null
+    if (readOnly || hideCollapsedSlot) return null
     return (
       <CollapsedActorSlot id="context-links">
         <CollapsedActorInfo>
@@ -282,7 +292,7 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
 
   return (
     <S.Section id="context-links">
-      <ContextHeaderBlock>
+      <S.SectionHeaderGroup>
         <S.SectionHeader>
           <S.SectionTitle>배경 맥락</S.SectionTitle>
           {links.length > 0 && <S.SectionSubtitle>{links.length}</S.SectionSubtitle>}
@@ -297,7 +307,7 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
         <SectionHintText>
           이 사건에 작용한 지형·기반시설·법령·기후·자원·사회 현상을 구실과 함께 기록합니다.
         </SectionHintText>
-      </ContextHeaderBlock>
+      </S.SectionHeaderGroup>
 
       {linksQuery.isError && (
         <LoadError
@@ -469,12 +479,6 @@ export function DetailContextLinks({ event, readOnly = false }: DetailContextLin
     </S.Section>
   )
 }
-
-const ContextHeaderBlock = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-`
 
 const LinksGrid = styled.div`
   display: flex;

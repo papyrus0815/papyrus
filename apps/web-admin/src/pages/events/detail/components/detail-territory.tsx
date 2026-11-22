@@ -243,35 +243,49 @@ export function DetailTerritory({ event, expectTerritory, readOnly = false, onCo
 
   return (
     <S.Section id="territory">
-      <S.SectionHeader>
-        <S.SectionTitle>영토 이전</S.SectionTitle>
-        {rows.length > 0 && (
-          <S.SectionSubtitle>
-            {rows.length}줄{totalArea > 0 ? ` · 넘어간 땅 ${formatArea(totalArea)}` : ''}
-          </S.SectionSubtitle>
-        )}
-        {!readOnly && (
-          <S.SectionActions>
-            <HeaderControlBtn type="button" onClick={addRow}>
-              <FiPlus size={13} aria-hidden />
-              영토 이전 추가
-            </HeaderControlBtn>
-          </S.SectionActions>
-        )}
-      </S.SectionHeader>
-      <SectionHintText>
-        이 사건으로 할양·병합·반환된 지역과 면적·인구 변동을 당사국별로 기록합니다.
-      </SectionHintText>
+      <S.SectionHeaderGroup>
+        <S.SectionHeader>
+          <S.SectionTitle $sub>영토 이전</S.SectionTitle>
+          {rows.length > 0 && (
+            <S.SectionSubtitle>
+              {rows.length}줄{totalArea > 0 ? ` · 넘어간 땅 ${formatArea(totalArea)}` : ''}
+            </S.SectionSubtitle>
+          )}
+          {!readOnly && rows.length > 0 && (
+            <S.SectionActions>
+              <HeaderControlBtn type="button" onClick={addRow}>
+                <FiPlus size={13} aria-hidden />
+                영토 이전 추가
+              </HeaderControlBtn>
+            </S.SectionActions>
+          )}
+        </S.SectionHeader>
+        <SectionHintText>
+          이 사건으로 할양·병합·반환된 지역과 면적·인구 변동을 당사국별로 기록합니다.
+        </SectionHintText>
+      </S.SectionHeaderGroup>
 
       {isLoading ? (
         <S.HelperText>영토 이전을 불러오는 중…</S.HelperText>
       ) : isError ? (
         <S.HelperText>영토 이전을 불러오지 못했습니다.</S.HelperText>
       ) : rows.length === 0 ? (
-        <S.HelperText>
-          이 사건으로 어느 땅이 누구에게서 누구에게로 넘어갔는지 한 줄씩 적으면, 나라별로 얼마를 얻고 잃었는지가 여기 모이고
-          각 나라의 ‘영토 변천’에도 이어집니다. 참여국에 없는 나라는 저장할 때 피해국·수혜국으로 채워집니다.
-        </S.HelperText>
+        <S.EmptyGuide>
+          <S.EmptyGuideBody>
+            <S.EmptyGuideTitle>이 사건으로 할양 · 병합 · 반환된 영토를 기록하세요</S.EmptyGuideTitle>
+            <S.EmptyGuideDesc>
+              어느 땅이 어느 국가에서 어느 국가로 넘어갔는지 면적·인구와 함께 적으면 당사국별 득실 합계가 자동 계산되고 각 국가의 ‘영토 변천’ 연표에도 연동됩니다.
+            </S.EmptyGuideDesc>
+          </S.EmptyGuideBody>
+          {!readOnly && (
+            <S.EmptyGuideActions>
+              <S.EmptyPrimaryAction type="button" onClick={addRow}>
+                <FiPlus aria-hidden />
+                첫 영토 이전 기록하기
+              </S.EmptyPrimaryAction>
+            </S.EmptyGuideActions>
+          )}
+        </S.EmptyGuide>
       ) : (
         <>
           {/* 양방향 영토 이동 플로우 인포그래픽 + 나라별 합계 */}

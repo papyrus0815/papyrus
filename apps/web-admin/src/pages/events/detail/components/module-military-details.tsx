@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { FiChevronDown, FiChevronUp } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { ledgerHairlineStrong, RADIUS } from '@/entities/event/ui/ledger-tokens'
+import { RADIUS } from '@/entities/event/ui/ledger-tokens'
 import { type UpdateEventDto } from '@/shared/api/events'
 
 import {
@@ -116,12 +116,9 @@ export function ModuleMilitaryDetails({
 
   return (
     <S.Section id="module-military-details">
-      <HeaderBlock>
+      <S.SectionHeaderGroup>
         <S.SectionHeader>
-          <S.SectionTitle>
-            <S.SectionTitleDot $color={MODULE_COLOR['military-details']} />
-            작전 정보
-          </S.SectionTitle>
+          <S.SectionTitle>작전 정보</S.SectionTitle>
           <S.SectionActions>
             <ModuleRemoveAction
               label="작전 정보"
@@ -136,7 +133,7 @@ export function ModuleMilitaryDetails({
         <SectionHintText>
           작전 목적·전술·전략·전투 유형·전쟁 비용 등 군사 작전 세부 사실을 기록합니다. 값을 누르면 바로 수정됩니다.
         </SectionHintText>
-      </HeaderBlock>
+      </S.SectionHeaderGroup>
 
       <FlatLedgerBody>
         <S.Definitions>
@@ -205,18 +202,10 @@ export function ModuleMilitaryDetails({
   )
 }
 
-const HeaderBlock = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-`
-
 const FlatLedgerBody = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-top: 10px;
-  border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  gap: 10px;
 `
 
 const ChipRow = styled.div`

@@ -24,7 +24,7 @@ interface FillInStripProps {
 
 /**
  * 추가로 작성할 수 있는 항목 — 내용이 비어 본문에서 접어 둔 섹션들을
- * 항목명 + 1줄 용도 설명 + [+ 작성] 버튼의 평면 hairline 행으로 안내한다.
+ * 충분한 상단 여백 아래 항목명 + 1줄 용도 설명 + [+ 작성] 버튼 행으로 정돈해 안내한다.
  */
 export function FillInStrip({ items, onReveal }: FillInStripProps) {
   if (items.length === 0) return null
@@ -33,7 +33,7 @@ export function FillInStrip({ items, onReveal }: FillInStripProps) {
       <StripHeader>
         <StripTitle id="fill-in-title">추가로 작성할 수 있는 항목</StripTitle>
         <StripSubtitle>
-          아직 비어 있어 접어 둔 섹션입니다. 필요한 항목만 열어 기록합니다.
+          아직 비어 있어 접어 둔 섹션입니다. 필요한 항목만 선택해 열면 해당 자리에 편집기가 바로 열립니다.
         </StripSubtitle>
       </StripHeader>
       <SlotList>
@@ -55,21 +55,21 @@ export function FillInStrip({ items, onReveal }: FillInStripProps) {
 }
 
 const Strip = styled(S.Section)`
-  gap: 10px;
+  gap: 18px;
   width: 100%;
-  padding-top: 18px;
+  padding-top: 40px;
   border-top: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
 `
 
 const StripHeader = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 5px;
 `
 
 const StripTitle = styled.h2`
   margin: 0;
-  font-size: 13.5px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.01em;
   color: ${({ theme }) => theme.colors.text.primary};
@@ -77,25 +77,22 @@ const StripTitle = styled.h2`
 
 const StripSubtitle = styled.p`
   margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.55;
   color: ${metaText};
 `
 
 const SlotList = styled.div`
   display: flex;
   flex-direction: column;
+  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
   @container eventdetail (min-width: 1180px) {
     &:has(> :nth-child(2)) {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 0 28px;
+      gap: 0 40px;
       align-items: stretch;
-
-      > :nth-child(-n + 2) {
-        border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-      }
     }
   }
 `

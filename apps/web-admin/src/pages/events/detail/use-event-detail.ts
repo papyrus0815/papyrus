@@ -10,7 +10,11 @@ import {
 
 import type { EventCountryRole } from '@/entities/event/model'
 import { type NormalizedMilitaryEventResponse } from '@/features/event-create/lib'
-import type { EventSide } from '@/shared/api/event-sides'
+import {
+  type EventSide,
+  listEventSideUnits,
+  listEventSideWeapons,
+} from '@/shared/api/event-sides'
 import type { EventSeriesContext } from '@/shared/api/event-series'
 import {
   type EventAccession,
@@ -323,36 +327,72 @@ export function eventDetailQueryOptions(eventId: string) {
 export interface UseEventDetailResult {
   event: EventDetail
   enabledModules: EventDetailModuleKey[]
+  filledModuleCount: number
 }
 
 /**
- * 사건 상세 + 표시 가능한 모듈 키.
+ * 사건 상세 + `수치·전력` 탭의 활성 모듈 키.
  *
- * Suspense 기반 — 로딩은 상위 `<Suspense>`, 에러는 상위 ErrorBoundary가 처리하므로
- * 호출부는 항상 *해소된* event를 받는다(`isLoading`/`isError` 분기 불필요).
+ * 진영 자체(생성·이름·승패·국가/인물 배정)와 관련 행정부(내각)는 `참여` 탭으로 일원화되었으며,
+ * 여기서 판정하는 모듈은 오직 정량 수치(`metrics`), 전투서열·병기·교리(`sides`), 작전 정보(`military-details`)만 다룬다.
  */
 export function useEventDetail(eventId: string): UseEventDetailResult {
   const { data: event } = useSuspenseQuery(eventDetailQueryOptions(eventId))
 
-  // event 전체를 deps로 두면 매 patch/refetch마다 새 배열을 만들어 하위 sections
-  // memo까지 무효화된다. 모듈 활성 여부만 결정하는 원시값으로 deps를 좁힌다.
-  const sideCount = event.sides?.length ?? 0
-  /* 측정값은 상세 본문과 따로 받는다 — 모듈 노출만 정하므로 수만 본다 */
+  const sides = event.sides ?? []
+  const sideCount = sides.length
+  const hasSideDoctrine = sides.some((side) =>
+    Boolean(
+      side.objective?.trim() ||
+        side.strategy?.trim() ||
+        side.tactics?.trim() ||
+        side.intelligence?.trim() ||
+        side.logistics?.trim(),
+    ),
+  )
+
   const { data: observations } = useQuery(eventObservationsQueryOptions(eventId))
   const observationCount = observations?.length ?? 0
+
+  const { data: sideUnits } = useQuery({
+    queryKey: eventKeys.sideUnits(eventId),
+    queryFn: () => listEventSideUnits(eventId),
+    enabled: sideCount > 0,
+    staleTime: 30_000,
+  })
+  const { data: sideWeapons } = useQuery({
+    queryKey: eventKeys.sideWeapons(eventId),
+    queryFn: () => listEventSideWeapons(eventId),
+    enabled: sideCount > 0,
+    staleTime: 30_000,
+  })
+
+  const sideUnitCount = sideUnits?.length ?? 0
+  const sideWeaponCount = sideWeapons?.length ?? 0
+  const hasSideForcesData = sideUnitCount > 0 || sideWeaponCount > 0 || hasSideDoctrine
   const hasMilitaryDetails = Boolean(event.militaryEvent?.militaryDetails)
-  const cabinetCount = event.cabinetEvents?.length ?? 0
+  const isMilitaryDomain = event.domain === 'MILITARY'
+
   const enabledModules = useMemo<EventDetailModuleKey[]>(() => {
     const keys: EventDetailModuleKey[] = []
-    if (sideCount) keys.push('sides')
-    // 진영이 있으면 값이 없어도 수치를 세운다 — 빈 비교표가 '어느 진영에 무엇을 적을지'를 바로 보인다
-    if (observationCount || sideCount) keys.push('metrics')
-    if (hasMilitaryDetails) keys.push('military-details')
-    if (cabinetCount) keys.push('cabinets')
+    if (observationCount > 0 || (sideCount > 0 && isMilitaryDomain)) {
+      keys.push('metrics')
+    }
+    if (hasSideForcesData) {
+      keys.push('sides')
+    }
+    if (hasMilitaryDetails) {
+      keys.push('military-details')
+    }
     return keys
-  }, [sideCount, observationCount, hasMilitaryDetails, cabinetCount])
+  }, [observationCount, sideCount, isMilitaryDomain, hasSideForcesData, hasMilitaryDetails])
 
-  return { event, enabledModules }
+  const filledModuleCount =
+    (observationCount > 0 ? 1 : 0) +
+    (hasSideForcesData ? 1 : 0) +
+    (hasMilitaryDetails ? 1 : 0)
+
+  return { event, enabledModules, filledModuleCount }
 }
 
 /**

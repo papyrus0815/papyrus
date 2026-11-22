@@ -423,31 +423,31 @@ export function DetailPoliticalParties({
 
   return (
     <S.Section id="political-parties">
-      <S.SectionHeader>
-        <S.SectionTitle>관련 정당</S.SectionTitle>
-        {relations.length > 0 && (
-          <S.SectionSubtitle>{relations.length}개 정당</S.SectionSubtitle>
-        )}
-        {!readOnly && (
-          <S.SectionActions>
-            <HeaderControlBtn
-              type="button"
-              onClick={() => {
-                setInitialDraft(null)
-                setLinkModalOpen(true)
-              }}
-            >
-              <FiPlus aria-hidden />
-              정당 잇기
-            </HeaderControlBtn>
-          </S.SectionActions>
-        )}
-      </S.SectionHeader>
-      <SectionLeadWrap>
+      <S.SectionHeaderGroup>
+        <S.SectionHeader>
+          <S.SectionTitle $sub>관련 정당</S.SectionTitle>
+          {relations.length > 0 && (
+            <S.SectionSubtitle>{relations.length}개 정당</S.SectionSubtitle>
+          )}
+          {!readOnly && (
+            <S.SectionActions>
+              <HeaderControlBtn
+                type="button"
+                onClick={() => {
+                  setInitialDraft(null)
+                  setLinkModalOpen(true)
+                }}
+              >
+                <FiPlus aria-hidden />
+                정당 잇기
+              </HeaderControlBtn>
+            </S.SectionActions>
+          )}
+        </S.SectionHeader>
         <SectionHintText>
           사건을 주도·참여했거나 이 사건으로 창당·해산된 정당과 그 입장을 기록합니다.
         </SectionHintText>
-      </SectionLeadWrap>
+      </S.SectionHeaderGroup>
 
       {relations.length > 0 ? (
         <Rows>
@@ -576,23 +576,18 @@ export function DetailPoliticalParties({
   )
 }
 
-const SectionLeadWrap = styled.div`
-  margin: -4px 0 10px;
-`
-
 const Rows = styled.ul`
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  border-top: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
   @container eventdetail (min-width: 1240px) {
     &:has(> li:nth-child(2)) {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      column-gap: 28px;
+      column-gap: 36px;
       align-items: start;
     }
   }

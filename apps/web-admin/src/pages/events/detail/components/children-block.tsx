@@ -1,6 +1,6 @@
 import { type RefObject, useRef, useState } from 'react'
 
-import { FiPlus, FiX } from 'react-icons/fi'
+import { FiLink2, FiPlus, FiX } from 'react-icons/fi'
 
 import { eventDomainDef } from '@/entities/event/model/event-domain'
 import { type UpdateEventDto } from '@/shared/api/events'
@@ -8,6 +8,7 @@ import { formatDateRange } from '@/pages/events/utils/events.utils'
 import { pathKeys } from '@/shared/router'
 import { InlineText } from '@/shared/ui/inline-edit'
 
+import * as S from '../styles'
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
 import { REASON_MAX, focusNextRemovalTarget } from './detail-network.lib'
 import * as NetStyles from './detail-network.styles'
@@ -29,6 +30,10 @@ interface ChildrenBlockProps {
   onPatch: (patch: UpdateEventDto) => void
   /** 마지막 하위 사건 제거 시 포커스를 넘길 구역 헤더 버튼 ref */
   addButtonRef?: RefObject<HTMLButtonElement | null>
+  /** 빈 상태에서 바로 새 하위 등록 모달 열기 */
+  onOpenCreateChild?: () => void
+  /** 빈 상태에서 바로 기존 사건 모으기 모달 열기 */
+  onOpenGather?: () => void
 }
 
 /**
@@ -40,6 +45,8 @@ export function ChildrenBlock({
   extraChildren,
   onPatch,
   addButtonRef,
+  onOpenCreateChild,
+  onOpenGather,
 }: ChildrenBlockProps) {
   const prefetchEvent = usePrefetchEventDetail()
 
@@ -202,9 +209,30 @@ export function ChildrenBlock({
           </NetStyles.MoreBtn>
         )}
         {childEvents.length === 0 && (
-          <NetStyles.HelperNote>
-            아직 묶인 하위 사건이 없습니다. 우측 상단 ‘하위 사건 모으기’ 또는 ‘새 하위 등록’을 눌러 연결하세요.
-          </NetStyles.HelperNote>
+          <S.EmptyGuide>
+            <S.EmptyGuideBody>
+              <S.EmptyGuideTitle>이 사건 안에 속하는 세부 하위 사건을 연결하세요</S.EmptyGuideTitle>
+              <S.EmptyGuideDesc>
+                전투 · 회담 · 협정 같은 하위 사건을 새로 등록하거나 이미 등록된 사건들을 한꺼번에 모아 이 사건의 하위로 편입할 수 있습니다.
+              </S.EmptyGuideDesc>
+            </S.EmptyGuideBody>
+            {(onOpenCreateChild || onOpenGather) && (
+              <S.EmptyGuideActions>
+                {onOpenCreateChild && (
+                  <S.EmptyPrimaryAction type="button" onClick={onOpenCreateChild}>
+                    <FiPlus aria-hidden />
+                    새 하위 사건 등록
+                  </S.EmptyPrimaryAction>
+                )}
+                {onOpenGather && (
+                  <S.EmptySecondaryAction type="button" onClick={onOpenGather}>
+                    <FiLink2 aria-hidden />
+                    기존 사건 모으기
+                  </S.EmptySecondaryAction>
+                )}
+              </S.EmptyGuideActions>
+            )}
+          </S.EmptyGuide>
         )}
       </NetStyles.HierBlock>
 

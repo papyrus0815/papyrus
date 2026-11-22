@@ -66,9 +66,6 @@ import {
   DevelopmentSubtitle,
   DragPreview,
   DropLabel,
-  Empty,
-  EmptyActions,
-  EmptyText,
   FoldLevels,
   FoldedList,
   FoldedRun,
@@ -1754,22 +1751,27 @@ export function CollectionDevelopment({
       </SectionHintText>
 
       {directCount === 0 ? (
-        <Empty>
-          <EmptyText>
-            아직 하위 사건이 없습니다. 전투·회담·조약 같은 세부 사건을 등록하거나 이미 있는 사건을 모아 차례로 쌓습니다.
-          </EmptyText>
-          <EmptyActions>
-            <HeaderControlBtn type="button" onClick={() => setCreateOpen(true)}>
-              <FiPlus size={13} aria-hidden />첫 하위 사건 등록
-            </HeaderControlBtn>
-            <HeaderControlBtn type="button" onClick={onGatherExisting}>
-              <FiLink2 size={13} aria-hidden />기존 사건 모으기
-            </HeaderControlBtn>
-            <HeaderControlBtn type="button" onClick={becomeSingle}>
+        <S.EmptyGuide>
+          <S.EmptyGuideBody>
+            <S.EmptyGuideTitle>이 묶음 사건을 이루는 세부 사건들을 연결하세요</S.EmptyGuideTitle>
+            <S.EmptyGuideDesc>
+              전투 · 회담 · 조약 · 정변 같은 하위 사건을 등록하거나 기존 사건을 모아 연결하면, 날짜와 국면 순서에 맞춰 전체 연표 흐름과 ‘조망’ 대시보드가 구성됩니다.
+            </S.EmptyGuideDesc>
+          </S.EmptyGuideBody>
+          <S.EmptyGuideActions>
+            <S.EmptyPrimaryAction type="button" onClick={() => setCreateOpen(true)}>
+              <FiPlus aria-hidden />
+              첫 하위 사건 등록
+            </S.EmptyPrimaryAction>
+            <S.EmptySecondaryAction type="button" onClick={onGatherExisting}>
+              <FiLink2 aria-hidden />
+              기존 사건 모으기
+            </S.EmptySecondaryAction>
+            <S.EmptySecondaryAction type="button" onClick={becomeSingle}>
               단일 사건으로 전환
-            </HeaderControlBtn>
-          </EmptyActions>
-        </Empty>
+            </S.EmptySecondaryAction>
+          </S.EmptyGuideActions>
+        </S.EmptyGuide>
       ) : chronological ? (
         <ChronologicalFlow tree={tree} chapters={chapters} onOpen={setPreviewId} highlightId={highlightId} />
       ) : (

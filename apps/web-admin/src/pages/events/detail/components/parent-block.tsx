@@ -19,6 +19,7 @@ import { PopoverMenu, type PopoverMenuEntry } from '@/shared/ui/popover-menu'
 import { SelectModal } from '@/shared/ui/select-modal/select-modal'
 
 import { type EventDetail, usePrefetchEventDetail } from '../use-event-detail'
+import { HeaderControlBtn } from './actors/actors.styles'
 import { REASON_MAX, compareEventStart } from './detail-network.lib'
 import { assignPhases, phaseRangeLabel, phaseReach, phaseReachLabel } from './event-phase.lib'
 import { type PickerEvent, signedEndYear, signedStartYear, yearsOutsideParent } from './related-picker.lib'
@@ -201,11 +202,72 @@ export function ParentBlock({
       ]
     : []
 
+  if (!parentEvent && extraParents.length === 0) {
+    return (
+      <NetStyles.MembershipBar role="group" aria-label="소속 상위 사건">
+        <NetStyles.ParentZoneHead>
+          <NetStyles.ParentZoneTitleGroup>
+            <NetStyles.ParentZoneTitle>소속 상위 사건</NetStyles.ParentZoneTitle>
+            <NetStyles.ParentZoneHint>
+              ‘제2차 세계대전 › 노르망디 상륙작전’처럼 이 사건이 더 큰 전쟁·혁명·묶음 사건의 일부라면 상위 사건을 지정합니다.
+            </NetStyles.ParentZoneHint>
+          </NetStyles.ParentZoneTitleGroup>
+          <NetStyles.MembershipActions>
+            <HeaderControlBtn type="button" onClick={onOpenParentModal}>
+              <FiPlus size={13} aria-hidden />
+              상위 사건 지정
+            </HeaderControlBtn>
+          </NetStyles.MembershipActions>
+        </NetStyles.ParentZoneHead>
+      </NetStyles.MembershipBar>
+    )
+  }
+
   return (
-    <NetStyles.MembershipBar role="group" aria-label="소속">
-      <NetStyles.MembershipRow $reveal>
-        <NetStyles.MembershipLabel>소속</NetStyles.MembershipLabel>
-        {parentEvent ? (
+    <NetStyles.MembershipBar role="group" aria-label="소속 상위 사건">
+      <NetStyles.ParentZoneHead>
+        <NetStyles.ParentZoneTitleGroup>
+          <NetStyles.ParentZoneTitle>소속 상위 사건</NetStyles.ParentZoneTitle>
+          <NetStyles.ParentZoneHint>이 사건이 속한 상위 묶음 사건과 계보 경로입니다.</NetStyles.ParentZoneHint>
+        </NetStyles.ParentZoneTitleGroup>
+        <NetStyles.MembershipActions>
+          {parentEvent ? (
+            <>
+              <HeaderControlBtn type="button" onClick={onOpenParentModal} aria-label="상위 사건 변경">
+                변경
+              </HeaderControlBtn>
+              <PopoverMenu
+                align="right"
+                ariaLabel="소속 상위 사건 관리"
+                items={parentMenuEntries}
+                renderTrigger={({ ref, isOpen, toggle }) => (
+                  <HeaderControlBtn
+                    ref={(node) => {
+                      ;(ref as MutableRefObject<HTMLButtonElement | null>).current = node
+                      if (extraParents.length === 0) {
+                        extrasAddRef.current = node
+                      }
+                    }}
+                    type="button"
+                    $active={isOpen}
+                    aria-haspopup="menu"
+                    aria-expanded={isOpen}
+                    onClick={toggle}
+                  >
+                    관리 <FiChevronDown size={12} aria-hidden />
+                  </HeaderControlBtn>
+                )}
+              />
+            </>
+          ) : (
+            <HeaderControlBtn type="button" onClick={onOpenParentModal}>
+              <FiPlus size={13} /> 상위 사건 지정
+            </HeaderControlBtn>
+          )}
+        </NetStyles.MembershipActions>
+      </NetStyles.ParentZoneHead>
+      <NetStyles.MembershipRow>
+        {parentEvent && (
           <>
             {chainTruncated && <span aria-hidden title="더 상위 사건이 있습니다">… ›</span>}
             {chain.map((step) => (
@@ -222,37 +284,7 @@ export function ParentBlock({
               </span>
             ))}
             <strong aria-current="page">{event.title}</strong>
-            <NetStyles.MembershipActions>
-              <NetStyles.TextBtn type="button" onClick={onOpenParentModal} aria-label="상위 사건 변경">
-                변경
-              </NetStyles.TextBtn>
-              <PopoverMenu
-                align="left"
-                ariaLabel="소속 상위 사건 관리"
-                items={parentMenuEntries}
-                renderTrigger={({ ref, isOpen, toggle }) => (
-                  <NetStyles.TextBtn
-                    ref={(node) => {
-                      ;(ref as MutableRefObject<HTMLButtonElement | null>).current = node
-                      if (extraParents.length === 0) {
-                        extrasAddRef.current = node
-                      }
-                    }}
-                    type="button"
-                    aria-haspopup="menu"
-                    aria-expanded={isOpen}
-                    onClick={toggle}
-                  >
-                    관리 <FiChevronDown size={11} aria-hidden />
-                  </NetStyles.TextBtn>
-                )}
-              />
-            </NetStyles.MembershipActions>
           </>
-        ) : (
-          <NetStyles.AddBtn type="button" onClick={onOpenParentModal}>
-            <FiPlus /> 상위 사건 지정
-          </NetStyles.AddBtn>
         )}
       </NetStyles.MembershipRow>
       {outsideBy > 0 && parentStartYear != null && (

@@ -33,10 +33,6 @@ import {
   CountryCard,
   CountryFacts,
   CountryFlag,
-  CountryForceFill,
-  CountryForceHead,
-  CountryForceInline,
-  CountryForceTrack,
   CountryLink,
   CountryNameLine,
   CountryNoteLine,
@@ -68,10 +64,7 @@ const ROLE_LABEL = Object.fromEntries(
 export function ActorCountryRow({
   row,
   figures = [],
-  leadObservation = null,
-  leadSharePct = null,
   side = null,
-  sideColor = null,
   sideOptions = [],
   groupSideId,
   replacement = null,
@@ -97,10 +90,7 @@ export function ActorCountryRow({
 }: {
   row: CountryRowData
   figures?: Observation[]
-  leadObservation?: Observation | null
-  leadSharePct?: number | null
   side?: { name: string; color: string } | null
-  sideColor?: string | null
   sideOptions?: Array<{ value: string; label: string; color?: string }>
   groupSideId?: string | null
   replacement?: { id: string; name: string; isHistorical: boolean } | null
@@ -145,13 +135,7 @@ export function ActorCountryRow({
   const showUnassignedSidePrompt = !readOnly && sideOptions.length > 1 && !row.sideId
   const hasFacts = Boolean(period || participation || showSideFactTag)
 
-  const secondaryFigures = useMemo(
-    () =>
-      leadObservation
-        ? figures.filter((obs) => obs.id !== leadObservation.id)
-        : figures,
-    [figures, leadObservation],
-  )
+  const summaryFigures = useMemo(() => figures.slice(0, 4), [figures])
 
   const roleMenuItems = useMemo<PopoverMenuEntry[]>(() => {
     const visibleOptions = EVENT_COUNTRY_ROLE_OPTIONS.filter(
@@ -435,34 +419,9 @@ export function ActorCountryRow({
             </CountryFacts>
           )}
 
-          {leadObservation && leadSharePct != null && (
-            <CountryForceInline
-              title={
-                [
-                  leadObservation.metric.definition,
-                  formatObservationExact(leadObservation),
-                  leadObservation.qualifier,
-                ]
-                  .filter(Boolean)
-                  .join(' — ') || undefined
-              }
-            >
-              <CountryForceHead>
-                <span>{leadObservation.metric.name}</span>
-                <strong>{formatObservationValue(leadObservation)}</strong>
-              </CountryForceHead>
-              <CountryForceTrack aria-hidden>
-                <CountryForceFill
-                  $color={sideColor ?? side?.color ?? null}
-                  style={{ width: `${leadSharePct}%` }}
-                />
-              </CountryForceTrack>
-            </CountryForceInline>
-          )}
-
-          {secondaryFigures.length > 0 && (
-            <FigureChips aria-label={`${row.name} 수치`}>
-              {secondaryFigures.map((observation) => (
+          {summaryFigures.length > 0 && (
+            <FigureChips aria-label={`${row.name} 주요 수치`}>
+              {summaryFigures.map((observation) => (
                 <FigureChip
                   key={observation.id}
                   title={[

@@ -6,23 +6,41 @@
  */
 import { useEffect, useRef, useState } from 'react'
 
-import { FiCornerLeftUp, FiMoreHorizontal, FiTrash2 } from 'react-icons/fi'
+import { FiCornerLeftUp, FiGlobe, FiImage, FiMoreHorizontal, FiTrash2, FiType } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { ledgerAccent, ledgerBackground, ledgerHairlineStrong, RADIUS } from '@/entities/event/ui/ledger-tokens'
+import {
+  ledgerAccent,
+  ledgerBackground,
+  ledgerHairline,
+  ledgerHairlineStrong,
+  ledgerHoverFill,
+  RADIUS,
+} from '@/entities/event/ui/ledger-tokens'
+import { metaText } from '@/pages/events/styles/theme'
 
 export function EventActionsMenu({
   onDelete,
   parentTitle,
   onDetachFromParent,
+  onAddSubtitle,
+  onAddOriginalTitle,
+  onAddPrimaryImage,
 }: {
   onDelete: () => void
   /** 상위 사건이 있으면 그 제목 — '‘폴란드 분할’에서 빼기' */
   parentTitle?: string | null
   onDetachFromParent?: () => void
+  /** 헤더 부제·이칭 추가 */
+  onAddSubtitle?: () => void
+  /** 헤더 원어 사건명 추가 */
+  onAddOriginalTitle?: () => void
+  /** 대표 이미지 추가 */
+  onAddPrimaryImage?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const hostRef = useRef<HTMLSpanElement>(null)
+  const hasQuickAdds = Boolean(onAddSubtitle || onAddOriginalTitle || onAddPrimaryImage)
 
   /* 바깥 클릭·Esc로 닫기 */
   useEffect(() => {
@@ -48,13 +66,53 @@ export function EventActionsMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="사건 메뉴"
-        title="사건 메뉴"
+        title="표제 항목 추가 · 사건 메뉴"
         onClick={() => setOpen((prev) => !prev)}
       >
         <FiMoreHorizontal aria-hidden />
       </Trigger>
       {open && (
         <Menu role="menu">
+          {onAddSubtitle && (
+            <MenuItem
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false)
+                onAddSubtitle()
+              }}
+            >
+              <FiType aria-hidden />
+              부제 · 이칭 추가
+            </MenuItem>
+          )}
+          {onAddOriginalTitle && (
+            <MenuItem
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false)
+                onAddOriginalTitle()
+              }}
+            >
+              <FiGlobe aria-hidden />
+              원어 사건명 추가
+            </MenuItem>
+          )}
+          {onAddPrimaryImage && (
+            <MenuItem
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false)
+                onAddPrimaryImage()
+              }}
+            >
+              <FiImage aria-hidden />
+              대표 이미지 추가
+            </MenuItem>
+          )}
+          {hasQuickAdds && <MenuDivider role="separator" />}
           {parentTitle && onDetachFromParent && (
             <MenuItem
               type="button"
@@ -105,12 +163,12 @@ const Trigger = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  border: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  width: 26px;
+  height: 26px;
+  border-radius: ${RADIUS.SM};
+  border: 1px solid transparent;
   background: transparent;
-  color: ${({ theme }) => theme.colors.text.secondary};
+  color: ${metaText};
   cursor: pointer;
 
   svg {
@@ -120,12 +178,19 @@ const Trigger = styled.button`
   &:hover,
   &[aria-expanded='true'] {
     color: ${({ theme }) => theme.colors.text.primary};
-    border-color: ${({ theme }) => theme.colors.text.tertiary};
+    border-color: ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+    background: ${({ theme }) => ledgerHoverFill(theme.mode)};
   }
   &:focus-visible {
     outline: 2px solid ${({ theme }) => ledgerAccent(theme.mode)};
     outline-offset: 2px;
   }
+`
+
+const MenuDivider = styled.div`
+  height: 1px;
+  margin: 4px 6px;
+  background: ${({ theme }) => ledgerHairline(theme.mode)};
 `
 
 const Menu = styled.div`
