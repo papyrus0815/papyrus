@@ -374,6 +374,34 @@ const METRICS: MetricSeed[] = [
     definition:
       '진압·숙청·탄압 등으로 체포·구금·기소된 인원. 전투 포로(military.captured)가 아닌 시위대·봉기자·시민 대상.',
   },
+  // ── 정당 (docs/political-party-model-review.md §4.9 — sortOrder 유지를 위해 끝에 추가) ──
+  {
+    key: 'party.members',
+    name: '당원 수',
+    domain: 'politics',
+    valueKind: COUNT,
+    aggregation: LATEST,
+    unit: 'person',
+    definition:
+      '그 시점에 당적을 가진 인원. 당 공식 발표와 연구자 추산이 자주 갈린다 — 산출 방식(공식 발표·추정)과 채택/대안으로 구분해 나란히 적는다.',
+  },
+  {
+    key: 'party.branches',
+    name: '지부 수',
+    domain: 'politics',
+    valueKind: COUNT,
+    aggregation: LATEST,
+    unit: 'branch',
+    definition: '그 시점의 당 지역 조직(지부·지구당·세포) 수. 어느 단위를 셌는지는 단서(qualifier)에 적는다.',
+  },
+  {
+    key: 'party.income',
+    name: '당 재정 수입',
+    domain: 'politics',
+    valueKind: MONEY,
+    aggregation: NONE,
+    definition: '한 해(또는 적은 기간)의 당 수입 — 당비·기부·국고 보조 합계. 기간은 측정값의 시작·끝으로 적는다.',
+  },
 ]
 
 interface CurrencySeed {

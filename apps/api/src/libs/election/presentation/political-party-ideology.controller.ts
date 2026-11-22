@@ -36,6 +36,7 @@ import {
   readStructuredDate,
   structuredDateData,
 } from '../domain/party-structured-date.util'
+import { removePartyCitations } from '../domain/party-evidence.util'
 
 const POSITION_VALUES = new Set<string>(Object.values(PoliticalPosition))
 
@@ -137,6 +138,7 @@ export class PoliticalPartyIdeologyController {
     })
     if (!existing) throw new NotFoundException('이념 연결을 찾을 수 없습니다.')
     await this.prisma.$transaction(async (tx) => {
+      await removePartyCitations(tx, 'PARTY_IDEOLOGY', [linkId])
       await tx.politicalPartyIdeology.delete({ where: { id: linkId } })
       await ensureOnePrimary(tx, partyId)
       await refreshPartyIdeologyCache(tx, partyId)
@@ -220,7 +222,10 @@ export class PoliticalPartyIdeologyController {
     })
     if (!existing) throw new NotFoundException('스펙트럼 기간을 찾을 수 없습니다.')
     /* 대표 position은 그대로 둔다 — 대표값은 정당 정보 수정에서 고른다 */
-    await this.prisma.politicalPartyPositionPeriod.delete({ where: { id: periodId } })
+    await this.prisma.$transaction(async (tx) => {
+      await removePartyCitations(tx, 'PARTY_POSITION_PERIOD', [periodId])
+      await tx.politicalPartyPositionPeriod.delete({ where: { id: periodId } })
+    })
   }
 
   // ── 내부 ──

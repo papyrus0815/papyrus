@@ -34,6 +34,7 @@ import {
   readStructuredDate,
   structuredDateData,
 } from '../domain/party-structured-date.util'
+import { removePartyCitations } from '../domain/party-evidence.util'
 
 const SYMBOL_KINDS = new Set<string>(Object.values(PoliticalPartySymbolKind))
 const EXPRESSION_KINDS = new Set<string>(Object.values(PoliticalPartyExpressionKind))
@@ -166,6 +167,7 @@ export class PoliticalPartyMarksController {
     const existing = await this.prisma.politicalPartySymbol.findFirst({ where: { id: symbolId, partyId }, select: { id: true } })
     if (!existing) throw new NotFoundException('표지를 찾을 수 없습니다.')
     await this.prisma.$transaction(async (tx) => {
+      await removePartyCitations(tx, 'PARTY_SYMBOL', [symbolId])
       await tx.politicalPartySymbol.delete({ where: { id: symbolId } })
       await refreshPartyLogoCache(tx, partyId)
     })
@@ -247,7 +249,10 @@ export class PoliticalPartyMarksController {
   async deleteExpression(@Param('id') partyId: string, @Param('expressionId') expressionId: string): Promise<void> {
     const existing = await this.prisma.politicalPartyExpression.findFirst({ where: { id: expressionId, partyId }, select: { id: true } })
     if (!existing) throw new NotFoundException('표현을 찾을 수 없습니다.')
-    await this.prisma.politicalPartyExpression.delete({ where: { id: expressionId } })
+    await this.prisma.$transaction(async (tx) => {
+      await removePartyCitations(tx, 'PARTY_EXPRESSION', [expressionId])
+      await tx.politicalPartyExpression.delete({ where: { id: expressionId } })
+    })
   }
 
   // ── 당사 ──
@@ -340,6 +345,7 @@ export class PoliticalPartyMarksController {
     const existing = await this.prisma.politicalPartyHeadquarters.findFirst({ where: { id: hqId, partyId }, select: { id: true } })
     if (!existing) throw new NotFoundException('당사 기록을 찾을 수 없습니다.')
     await this.prisma.$transaction(async (tx) => {
+      await removePartyCitations(tx, 'PARTY_HEADQUARTERS', [hqId])
       await tx.politicalPartyHeadquarters.delete({ where: { id: hqId } })
       await refreshPartyHeadquartersCache(tx, partyId)
     })

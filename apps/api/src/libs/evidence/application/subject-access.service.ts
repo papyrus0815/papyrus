@@ -13,6 +13,7 @@ import { PrismaService } from '../../../../prisma/prisma.service'
  * | 사건 · 참여국 줄 · 진영 · 진영 투입 부대 | `event.createdById` | event.service의 수정·연결 가드 |
  * | 현대·역사 국가 · 인물 | `accountId` 일치 | country.repository `where: { id, accountId }` |
  * | 조직 | (소유 개념 없음) | organization 도메인에 계정 필드 없음 |
+ * | 정당 | (소유 개념 없음) | 정당은 공유 정본 — 정당 CRUD도 JWT만 요구 |
  */
 @Injectable()
 export class SubjectAccessService {
@@ -107,6 +108,15 @@ export class SubjectAccessService {
         })
         if (!row) throw notFound()
         return { kind: 'owned', ownerId: row.accountId }
+      }
+      case ObservationSubjectType.POLITICAL_PARTY: {
+        /* 정당은 계정 소유가 없는 공유 정본(정당 CRUD와 같은 규칙) */
+        const row = await this.prisma.politicalParty.findUnique({
+          where: { id: subjectId },
+          select: { id: true },
+        })
+        if (!row) throw notFound()
+        return { kind: 'unowned' }
       }
       case ObservationSubjectType.ORGANIZATION: {
         const row = await this.prisma.organization.findUnique({

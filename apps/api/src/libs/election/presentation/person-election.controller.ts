@@ -32,6 +32,7 @@ import {
   structuredDateFromLegacyIso,
   structuredDateMirror,
 } from '../domain/party-structured-date.util'
+import { removePartyCitations } from '../domain/party-evidence.util'
 
 /**
  * 인물별 정당 소속·선거 후보 (persons 라우트 보조)
@@ -224,7 +225,10 @@ export class PersonElectionController {
       where: { id: membershipId, personId },
     })
     if (!existing) throw new NotFoundException('당원 기록을 찾을 수 없습니다.')
-    await this.prisma.politicalPartyMembership.delete({ where: { id: membershipId } })
+    await this.prisma.$transaction(async (tx) => {
+      await removePartyCitations(tx, 'PARTY_MEMBERSHIP', [membershipId])
+      await tx.politicalPartyMembership.delete({ where: { id: membershipId } })
+    })
   }
 
   /** 구조화(start)가 정본, 없으면 레거시 ISO(startDate). 둘 다 undefined면 undefined(건드리지 않음) */

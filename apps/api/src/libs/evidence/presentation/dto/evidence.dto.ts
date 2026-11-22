@@ -52,6 +52,7 @@ export const OBSERVATION_SUBJECT_VALUES = [
   'HISTORICAL_COUNTRY',
   'ORGANIZATION',
   'PERSON',
+  'POLITICAL_PARTY',
 ] as const
 export type ObservationSubjectValue = (typeof OBSERVATION_SUBJECT_VALUES)[number]
 

@@ -5,6 +5,8 @@ import { PoliticalPartyIdentityController } from './presentation/political-party
 import { PoliticalPartyIdeologyController } from './presentation/political-party-ideology.controller'
 import { PoliticalPartyOrganizationController } from './presentation/political-party-organization.controller'
 import { PoliticalPartyMarksController } from './presentation/political-party-marks.controller'
+import { PoliticalPartyCitationController } from './presentation/political-party-citation.controller'
+import { EvidenceModule } from '../evidence/evidence.module'
 import { PoliticalPartyTransitionController } from './presentation/political-party-transition.controller'
 import { ElectoralDistrictController } from './presentation/electoral-district.controller'
 import { ElectionController } from './presentation/election.controller'
@@ -17,13 +19,14 @@ import { EventModule } from '../event/infrastructure/event.module'
 
 @Module({
   // 사건 모듈 — 선거에서 서사 사건을 만들 때 EventService(포인트·참여국 등 생성 부수효과 포함)를 그대로 쓴다
-  imports: [PrismaModule, NotificationModule, EventModule],
+  imports: [PrismaModule, NotificationModule, EventModule, EvidenceModule],
   controllers: [
     PoliticalPartyController,
     PoliticalPartyIdentityController,
     PoliticalPartyIdeologyController,
     PoliticalPartyOrganizationController,
     PoliticalPartyMarksController,
+    PoliticalPartyCitationController,
     PoliticalPartyTransitionController,
     ElectoralDistrictController,
     ElectionController,

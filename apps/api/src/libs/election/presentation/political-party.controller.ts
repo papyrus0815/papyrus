@@ -39,6 +39,7 @@ import {
 import { serializeElectionBigInt } from '../election-serialize.util'
 import { ideologyIdsFromText, syncPartyIdeologies } from '../domain/party-ideology.util'
 import { normalizeColorPalette, syncPrimaryLogoFromParty } from '../domain/party-marks.util'
+import { removePartyEvidence } from '../domain/party-evidence.util'
 import {
   type StructuredDateColumns,
   type StructuredDateInput,
@@ -672,7 +673,11 @@ export class PoliticalPartyController {
   @Delete(':id')
   async remove(@Param('id') id: string): Promise<any> {
     await this.ensureParty(id)
-    const row = await this.prisma.politicalParty.delete({ where: { id } })
+    /* 인용·측정값은 다형이라 FK CASCADE가 없다 — 곁가지 행보다 먼저 같은 트랜잭션에서 지운다 */
+    const row = await this.prisma.$transaction(async (tx) => {
+      await removePartyEvidence(tx, id)
+      return tx.politicalParty.delete({ where: { id } })
+    })
     await this.notificationService.notifyPoliticalParty(
       row.name,
       EventMethod.DELETE,

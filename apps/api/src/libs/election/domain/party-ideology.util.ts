@@ -74,6 +74,8 @@ export async function syncPartyIdeologies(db: Db, partyId: string, ideologyIds: 
   const keep = new Set(ordered)
   const removed = existing.filter((link) => !keep.has(link.ideologyId)).map((link) => link.id)
   if (removed.length > 0) {
+    /* 빠진 연결의 인용도 — 인용은 다형이라 FK CASCADE가 없다 */
+    await db.citation.deleteMany({ where: { targetType: 'PARTY_IDEOLOGY', targetId: { in: removed } } })
     await db.politicalPartyIdeology.deleteMany({ where: { id: { in: removed } } })
   }
   const byIdeology = new Map(existing.map((link) => [link.ideologyId, link]))

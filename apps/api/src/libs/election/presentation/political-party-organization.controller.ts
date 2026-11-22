@@ -36,6 +36,7 @@ import {
   readStructuredDate,
   structuredDateData,
 } from '../domain/party-structured-date.util'
+import { removePartyCitations } from '../domain/party-evidence.util'
 
 const ROLE_VALUES = new Set<string>(Object.values(PoliticalPartyOrganizationRole))
 
@@ -283,7 +284,10 @@ export class PoliticalPartyOrganizationController {
     })
     if (!existing) throw new NotFoundException('산하·연계 조직 연결을 찾을 수 없습니다.')
     /* 연결만 푼다 — 조직·부대 자체는 남는다 */
-    await this.prisma.politicalPartyOrganization.delete({ where: { id: linkId } })
+    await this.prisma.$transaction(async (tx) => {
+      await removePartyCitations(tx, 'PARTY_ORGANIZATION', [linkId])
+      await tx.politicalPartyOrganization.delete({ where: { id: linkId } })
+    })
   }
 
   // ── 내부 ──

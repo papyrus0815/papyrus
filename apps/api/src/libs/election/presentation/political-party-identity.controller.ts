@@ -35,6 +35,7 @@ import {
   readStructuredDate,
   structuredDateData,
 } from '../domain/party-structured-date.util'
+import { removePartyCitations } from '../domain/party-evidence.util'
 
 const ALIAS_TYPE_VALUES = new Set<string>(Object.values(PoliticalPartyAliasType))
 const LEGAL_STATUS_VALUES = new Set<string>(Object.values(PoliticalPartyLegalStatusKind))
@@ -180,7 +181,10 @@ export class PoliticalPartyIdentityController {
       select: { id: true },
     })
     if (!existing) throw new NotFoundException('정당 이름을 찾을 수 없습니다.')
-    await this.prisma.politicalPartyAlias.delete({ where: { id: aliasId } })
+    await this.prisma.$transaction(async (tx) => {
+      await removePartyCitations(tx, 'PARTY_ALIAS', [aliasId])
+      await tx.politicalPartyAlias.delete({ where: { id: aliasId } })
+    })
   }
 
   // ── 법적 지위 ──────────────────────────────────────────────
@@ -275,7 +279,10 @@ export class PoliticalPartyIdentityController {
       select: { id: true },
     })
     if (!existing) throw new NotFoundException('법적 지위 기록을 찾을 수 없습니다.')
-    await this.prisma.politicalPartyLegalStatus.delete({ where: { id: statusId } })
+    await this.prisma.$transaction(async (tx) => {
+      await removePartyCitations(tx, 'PARTY_LEGAL_STATUS', [statusId])
+      await tx.politicalPartyLegalStatus.delete({ where: { id: statusId } })
+    })
   }
 
   // ── 내부 ──────────────────────────────────────────────────

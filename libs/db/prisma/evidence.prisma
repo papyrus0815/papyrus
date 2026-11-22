@@ -87,6 +87,8 @@ enum ObservationSubjectType {
   ORGANIZATION
   /// 인물
   PERSON
+  /// 정당 — 당원 수·지부 수·재정 (docs/political-party-model-review.md §4.9)
+  POLITICAL_PARTY
 }
 
 /// 인용의 대상 타입 (폴리모픽)
@@ -105,6 +107,26 @@ enum CitationTargetType {
   EVENT_PARTICIPANT
   /// 사건 참여 인물 한 줄
   PERSON_EVENT
+  /// 정당 본체 — 창당·해산 등 정체성 칸 (docs/political-party-model-review.md §4.11)
+  POLITICAL_PARTY
+  /// 정당 이름 이력 한 줄
+  PARTY_ALIAS
+  /// 정당 법적 지위 한 줄
+  PARTY_LEGAL_STATUS
+  /// 정당 × 이념 연결 한 줄
+  PARTY_IDEOLOGY
+  /// 정당 스펙트럼 기간 한 줄
+  PARTY_POSITION_PERIOD
+  /// 정당 산하·연계 조직 한 줄
+  PARTY_ORGANIZATION
+  /// 정당 소속·당직 한 줄
+  PARTY_MEMBERSHIP
+  /// 정당 표지 한 장
+  PARTY_SYMBOL
+  /// 정당 표어·당가 한 줄
+  PARTY_EXPRESSION
+  /// 정당 당사 한 줄
+  PARTY_HEADQUARTERS
 }
 
 /// 지표 값의 성격 — 화면이 숫자를 어떻게 읽고 합칠지 정한다
