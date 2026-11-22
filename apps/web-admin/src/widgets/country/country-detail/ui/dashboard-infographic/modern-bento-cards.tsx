@@ -2866,6 +2866,117 @@ const LineageGanttRowBtn = styled.button`
 
 /* ─── 8. Modern Executive Reign Spectrum Card (MindMap Live Sync) ─────────── */
 
+interface BrokenAxisGap {
+  fromYear: number
+  toYear: number
+  leftPct: number
+  widthPct: number
+}
+
+interface BrokenYearAxis {
+  toPct: (year: number) => number
+  gaps: BrokenAxisGap[]
+  ticks: Array<{ year: number; pct: number }>
+}
+
+/**
+ * 기록이 없는 긴 공백을 접은 연도 축.
+ *
+ * 재임은 현대·역사 국가 두 칸을 다 채우므로 독일 연표에 카롤루스(768)부터 들어온다. 축을 그대로 두면 1038–1694의
+ * 656년 공백이 막대의 절반을 차지해 근대 재임이 손톱만 해졌다. 그렇다고 앞을 자르면 헝가리처럼 기록 대부분이
+ * 옛 시대인 나라는 거의 다 사라진다. 그래서 공백만 접는다 — 공백(앞 기록 끝 → 다음 기록 시작)이
+ * max(60년, 전체의 12%)를 넘으면 그 구간을 좁은 사선 칸 하나로 줄이고, 나머지 폭을 기록 블록의 햇수대로 나눈다.
+ */
+function buildBrokenYearAxis(
+  intervals: Array<{ start: number; end: number }>,
+  minY: number,
+  maxY: number,
+): BrokenYearAxis {
+  const GAP_SLOT_PCT = 3
+  const MIN_BLOCK_PCT = 5
+  const totalSpan = Math.max(4, maxY - minY)
+  const gapThreshold = Math.max(60, Math.round(totalSpan * 0.12))
+
+  const sorted = intervals
+    .filter((iv) => Number.isFinite(iv.start))
+    .map((iv) => ({ start: iv.start, end: Math.max(iv.start + 1, iv.end) }))
+    .sort((left, right) => left.start - right.start)
+
+  const blocks: Array<{ from: number; to: number }> = []
+  for (const iv of sorted) {
+    const last = blocks[blocks.length - 1]
+    if (last && iv.start - last.to <= gapThreshold) {
+      last.to = Math.max(last.to, iv.end)
+    } else {
+      blocks.push({ from: iv.start, to: iv.end })
+    }
+  }
+  if (blocks.length === 0) blocks.push({ from: minY, to: maxY })
+  blocks[blocks.length - 1].to = Math.max(blocks[blocks.length - 1].to, maxY)
+
+  const usable = 100 - GAP_SLOT_PCT * (blocks.length - 1)
+  const years = blocks.map((block) => Math.max(1, block.to - block.from))
+  const yearSum = years.reduce((sum, value) => sum + value, 0)
+  const rawWidths = years.map((value) => Math.max(MIN_BLOCK_PCT, (value / yearSum) * usable))
+  const rawSum = rawWidths.reduce((sum, value) => sum + value, 0)
+  const widths = rawWidths.map((value) => (value / rawSum) * usable)
+
+  const laid: Array<{ from: number; to: number; left: number; width: number }> = []
+  let cursor = 0
+  blocks.forEach((block, idx) => {
+    laid.push({ ...block, left: cursor, width: widths[idx] })
+    cursor += widths[idx] + GAP_SLOT_PCT
+  })
+
+  const toPct = (year: number): number => {
+    for (let idx = 0; idx < laid.length; idx += 1) {
+      const block = laid[idx]
+      if (year <= block.to || idx === laid.length - 1) {
+        if (year < block.from) return block.left
+        const ratio = (Math.min(year, block.to) - block.from) / Math.max(1, block.to - block.from)
+        return Math.max(0, Math.min(100, block.left + ratio * block.width))
+      }
+    }
+    return 100
+  }
+
+  const gaps: BrokenAxisGap[] = laid.slice(0, -1).map((block, idx) => ({
+    fromYear: block.to,
+    toYear: laid[idx + 1].from,
+    leftPct: block.left + block.width,
+    widthPct: GAP_SLOT_PCT,
+  }))
+
+  let ticks: Array<{ year: number; pct: number }>
+  if (laid.length === 1) {
+    const only = laid[0]
+    const blockSpan = only.to - only.from
+    ticks = [0, 0.25, 0.5, 0.75]
+      .map((ratio) => Math.round(only.from + blockSpan * ratio))
+      .map((year) => ({ year, pct: toPct(year) }))
+  } else {
+    /* 블록마다 시작 연도, 넓은 블록(40%+)은 안쪽 눈금 둘 더 — 너무 붙는 눈금(8% 이내)은 빼서 글자가 겹치지 않게 */
+    ticks = []
+    const pushTick = (year: number) => {
+      const pct = toPct(year)
+      const prev = ticks[ticks.length - 1]
+      if (!prev || pct - prev.pct >= 8) ticks.push({ year, pct })
+    }
+    for (const block of laid) {
+      pushTick(block.from)
+      if (block.width >= 40) {
+        const blockSpan = block.to - block.from
+        pushTick(Math.round(block.from + blockSpan / 3))
+        pushTick(Math.round(block.from + (blockSpan * 2) / 3))
+      }
+    }
+  }
+  ticks = ticks.filter((tick) => tick.pct <= 90)
+  ticks.push({ year: maxY, pct: 100 })
+
+  return { toPct, gaps, ticks }
+}
+
 export function ModernExecutiveSpectrumCard({
   timeline,
   regimeEras = [],
@@ -2903,17 +3014,24 @@ export function ModernExecutiveSpectrumCard({
       ...timeline.map((t) => t.endYear ?? nowYr),
       ...regimeEras.map((e) => e.endYear ?? nowYr),
     )
-    const span = Math.max(4, maxY - minY)
+    const axis = buildBrokenYearAxis(
+      [
+        ...timeline.map((t) => ({ start: t.startYear, end: t.endYear ?? nowYr })),
+        ...regimeEras.map((e) => ({ start: e.startYear, end: e.endYear ?? nowYr })),
+      ],
+      minY,
+      maxY,
+    )
 
     const eraBands = regimeEras
       .map((era, idx) => {
         const end = era.endYear ?? nowYr
         const dur = Math.max(0.8, end - era.startYear)
-        const leftPct = Math.max(
-          0,
-          Math.min(98, ((era.startYear - minY) / span) * 100),
+        const leftPct = Math.min(98, axis.toPct(era.startYear))
+        const widthPct = Math.max(
+          2,
+          Math.min(100 - leftPct, axis.toPct(era.startYear + dur) - leftPct),
         )
-        const widthPct = Math.max(2, Math.min(100 - leftPct, (dur / span) * 100))
         return {
           ...era,
           endResolved: end,
@@ -2932,11 +3050,11 @@ export function ModernExecutiveSpectrumCard({
       items.map((item, idx) => {
         const end = item.endYear ?? nowYr
         const dur = Math.max(0.8, end - item.startYear)
-        const leftPct = Math.max(
-          0,
-          Math.min(98.2, ((item.startYear - minY) / span) * 100),
+        const leftPct = Math.min(98.2, axis.toPct(item.startYear))
+        const widthPct = Math.max(
+          1.8,
+          Math.min(100 - leftPct, axis.toPct(item.startYear + dur) - leftPct),
         )
-        const widthPct = Math.max(1.8, Math.min(100 - leftPct, (dur / span) * 100))
         const fallback = theme.mode === 'dark' ? defaultDark : defaultLight
         return {
           ...item,
@@ -2969,21 +3087,13 @@ export function ModernExecutiveSpectrumCard({
       })
     }
 
-    const ticks = [
-      minY,
-      Math.round(minY + span * 0.25),
-      Math.round(minY + span * 0.5),
-      Math.round(minY + span * 0.75),
-      maxY,
-    ]
-    const uniqueTicks = [...new Set(ticks)]
 
     const recentChips = [...timeline]
       .sort((a, b) => (b.endYear ?? nowYr) - (a.endYear ?? nowYr) || b.startYear - a.startYear)
       .slice(0, 10)
       .reverse()
 
-    return { minY, maxY, eraBands, tracks, ticks: uniqueTicks, recentChips }
+    return { minY, maxY, eraBands, tracks, axis, recentChips }
   }, [timeline, regimeEras, theme.mode])
 
   if (!model) {
@@ -3048,6 +3158,7 @@ export function ModernExecutiveSpectrumCard({
                 <ExecTrackAxisLabel>헌정체제</ExecTrackAxisLabel>
               ) : null}
               <RegimeEraBar>
+                <AxisGapMarks gaps={model.axis.gaps} />
                 {model.eraBands.map((band) => (
                   <RegimeEraSegBtn
                     key={band.id}
@@ -3073,6 +3184,7 @@ export function ModernExecutiveSpectrumCard({
                 <ExecTrackAxisLabel>{track.label}</ExecTrackAxisLabel>
               ) : null}
               <ExecSpectrumBar>
+                <AxisGapMarks gaps={model.axis.gaps} />
                 {track.rows.map((seg) => {
                   const isActive = seg.recordId === activeTenureId
                   return (
@@ -3097,11 +3209,20 @@ export function ModernExecutiveSpectrumCard({
             </ExecTrackRow>
           ))}
           <ExecTickRow $indented={hasLabelCol}>
-            {model.ticks.map((yr, i) => (
-              <span key={`${yr}-${i}`}>
-                {i === model.ticks.length - 1 ? `현재(${yr})` : `${yr}년`}
-              </span>
-            ))}
+            <div className="rail">
+              {model.axis.ticks.map((tick, tickIdx) => {
+                const isLast = tickIdx === model.axis.ticks.length - 1
+                return (
+                  <span
+                    key={`${tick.year}-${tickIdx}`}
+                    className={tickIdx === 0 ? 'first' : isLast ? 'last' : undefined}
+                    style={isLast ? undefined : { left: `${tick.pct.toFixed(2)}%` }}
+                  >
+                    {isLast ? `현재(${tick.year})` : `${tick.year}년`}
+                  </span>
+                )
+              })}
+            </div>
           </ExecTickRow>
         </ExecTracksStack>
 
@@ -4110,14 +4231,62 @@ const ExecSegmentBtn = styled.button<{ $active: boolean }>`
 `
 
 const ExecTickRow = styled.div<{ $indented: boolean }>`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   padding-left: ${({ $indented }) => ($indented ? '70px' : '0')};
   font-size: 10px;
   color: ${({ theme }) => theme.colors.text.tertiary};
   ${DIGIT_DISPLAY}
+
+  /* 눈금은 축 좌표에 그대로 — 접힌 구간이 있으면 블록 시작마다 연도가 붙는다 */
+  .rail {
+    position: relative;
+    height: 14px;
+  }
+  .rail > span {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    white-space: nowrap;
+  }
+  .rail > span.first {
+    transform: none;
+  }
+  .rail > span.last {
+    right: 0;
+    transform: none;
+  }
 `
+
+/** 접힌 연도 구간 — 사선 무늬로 '여기는 축을 접었다'를 막대마다 같은 자리에 표시 */
+const AxisGapMark = styled.span`
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  cursor: help;
+  background: repeating-linear-gradient(
+    -55deg,
+    transparent 0 3px,
+    ${({ theme }) => ledgerHairlineStrong(theme.mode)} 3px 4px
+  );
+  border-left: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+  border-right: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
+`
+
+function AxisGapMarks({ gaps }: { gaps: BrokenAxisGap[] }) {
+  if (gaps.length === 0) return null
+  return (
+    <>
+      {gaps.map((gap) => (
+        <AxisGapMark
+          key={gap.fromYear}
+          aria-hidden
+          title={`${gap.fromYear}–${gap.toYear}년 — 기록이 없어 축에서 접은 구간`}
+          style={{ left: `${gap.leftPct.toFixed(2)}%`, width: `${gap.widthPct.toFixed(2)}%` }}
+        />
+      ))}
+    </>
+  )
+}
 
 const ExecQuickChipsRow = styled.div`
   display: flex;
