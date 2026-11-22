@@ -48,7 +48,12 @@ const ORGANIZATION_TYPES: { value: OrganizationType; label: string }[] = [
   { value: 'RELIGIOUS_ORG', label: '종교단체·교단·기사단' },
   { value: 'EDUCATION', label: '교육·학술기관·연구소' },
   { value: 'MILITARY_ACADEMY', label: '군사교육기관' },
-  { value: 'OTHER', label: '기타 민간결사·단체 (예: 자유군단 등)' },
+  { value: 'PARTY_ORGAN', label: '당 기구 (중앙위원회·정치국·대평의회)' },
+  { value: 'MASS_ORGANIZATION', label: '대중 조직 (청년·여성·학생 — 발릴라·콤소몰)' },
+  { value: 'PARAMILITARY', label: '준군사조직 (검은 셔츠단·SA·자유군단)' },
+  { value: 'MEDIA', label: '언론·출판 (신문·잡지·방송 — 기관지)' },
+  { value: 'POLITICAL_ALLIANCE', label: '정치 연합·인터내셔널 (인민전선·코민테른)' },
+  { value: 'OTHER', label: '기타 민간결사·단체' },
 ]
 
 const Page = styled.div`

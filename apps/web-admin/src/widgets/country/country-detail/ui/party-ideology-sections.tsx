@@ -58,7 +58,7 @@ import {
   IconBtn,
   ModalFooter,
   PeriodPair,
-} from './party-identity-sections'
+} from '@/widgets/political-party/party-sidecar-parts'
 import { POSITION_TONE_OPTIONS, ToneChipGroup } from './politics-form/politics-form-parts'
 
 const ideologiesKey = (partyId: string) => ['political-parties', partyId, 'ideologies'] as const

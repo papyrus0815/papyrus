@@ -34,6 +34,11 @@ jest.mock('@/shared/hooks/use-click-sound.hook', () => ({
   useClickSound: () => jest.fn(),
 }))
 
+/* 소속·당직 모달은 정당 지면과 공용 — 여기서는 목록만 본다(모달의 인물 목록 훅이 api.service까지 끌어온다) */
+jest.mock('@/widgets/political-party/party-membership-form-modal', () => ({
+  PartyMembershipFormModal: () => null,
+}))
+
 jest.mock('@/shared/api/election', () => ({
   createPartyMembership: jest.fn(),
   deletePartyMembership: jest.fn(),
@@ -570,7 +575,7 @@ describe('PersonPoliticsSection', () => {
         electionCandidacies={[]}
       />,
     )
-    expect(screen.getByText('1921-07-23 ~ 현재')).toBeInTheDocument()
+    expect(screen.getByText('1921년 7월 23일 ~ 현재')).toBeInTheDocument()
     unmount()
 
     renderWithQuery(
@@ -582,8 +587,8 @@ describe('PersonPoliticsSection', () => {
         electionCandidacies={[]}
       />,
     )
-    expect(screen.getByText('1921-07-23 ~ 미상')).toBeInTheDocument()
-    expect(screen.queryByText('1921-07-23 ~ 현재')).not.toBeInTheDocument()
+    expect(screen.getByText('1921년 7월 23일 ~ 미상')).toBeInTheDocument()
+    expect(screen.queryByText('1921년 7월 23일 ~ 현재')).not.toBeInTheDocument()
   })
 
   it('readOnly=true이면 수정·삭제·추가 버튼을 숨긴다', () => {

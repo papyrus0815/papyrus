@@ -1,23 +1,11 @@
-import type {
-  OrganizationScope,
-  OrganizationType,
+import {
+  ORGANIZATION_TYPE_LABEL as SHARED_ORGANIZATION_TYPE_LABEL,
+  type OrganizationScope,
+  type OrganizationType,
 } from '@/shared/api/organizations'
 
-export const ORGANIZATION_TYPE_LABEL: Record<string, string> = {
-  GOVERNMENT_AGENCY: '정부기관/행정기구',
-  COMPANY: '기업',
-  MILITARY_ACADEMY: '군사학교',
-  POLITICAL_PARTY: '정당',
-  INTERGOVERNMENTAL_ORG: '국제기구',
-  MULTILATERAL_FORUM: '다자 협의체·블록',
-  NGO: 'NGO',
-  TRADE_UNION: '노동조합',
-  MILITARY_ALLIANCE: '군사동맹',
-  RELIGIOUS_ORG: '종교단체',
-  BUSINESS_ASSOCIATION: '경제단체',
-  EDUCATION: '교육기관',
-  OTHER: '기타',
-}
+/** 유형 라벨 정본은 shared/api/organizations — 여기서 따로 두면 유형이 늘 때 어긋난다 */
+export const ORGANIZATION_TYPE_LABEL: Record<string, string> = SHARED_ORGANIZATION_TYPE_LABEL
 
 export const ORGANIZATION_TYPE_OPTIONS: {
   value: OrganizationType
@@ -32,6 +20,11 @@ export const ORGANIZATION_TYPE_OPTIONS: {
   { value: 'RELIGIOUS_ORG', label: '종교단체' },
   { value: 'EDUCATION', label: '교육·학술기관' },
   { value: 'MILITARY_ACADEMY', label: '군사학교' },
+  { value: 'PARTY_ORGAN', label: '당 기구' },
+  { value: 'MASS_ORGANIZATION', label: '대중 조직(청년·여성·학생)' },
+  { value: 'PARAMILITARY', label: '준군사조직' },
+  { value: 'MEDIA', label: '언론·출판' },
+  { value: 'POLITICAL_ALLIANCE', label: '정치 연합·인터내셔널' },
   { value: 'OTHER', label: '기타 민간단체' },
 ]
 

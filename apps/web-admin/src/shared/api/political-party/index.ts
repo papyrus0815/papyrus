@@ -182,6 +182,92 @@ export type PoliticalPartyLegalStatusInput = {
   sortOrder?: number
 }
 
+/** 정당 산하·연계 조직에서 그 조직이 맡은 자리 */
+export type PartyOrganizationRole =
+  | 'GOVERNING_ORGAN'
+  | 'YOUTH_WING'
+  | 'STUDENT_WING'
+  | 'WOMEN_WING'
+  | 'PARAMILITARY_WING'
+  | 'OFFICIAL_MEDIA'
+  | 'THINK_TANK'
+  | 'TRADE_UNION'
+  | 'PARLIAMENTARY_GROUP'
+  | 'REGIONAL_BRANCH'
+  | 'OVERSEAS_BRANCH'
+  | 'INTERNATIONAL_MEMBERSHIP'
+  | 'ALLIANCE_MEMBERSHIP'
+  | 'OTHER'
+
+export const PARTY_ORGANIZATION_ROLE_OPTIONS: Array<{ value: PartyOrganizationRole; label: string; hint: string }> = [
+  { value: 'GOVERNING_ORGAN', label: '지도 기구', hint: '대평의회·중앙위원회·정치국' },
+  { value: 'YOUTH_WING', label: '청년 조직', hint: '발릴라, 히틀러 유겐트, 콤소몰' },
+  { value: 'STUDENT_WING', label: '학생 조직', hint: '' },
+  { value: 'WOMEN_WING', label: '여성 조직', hint: '' },
+  { value: 'PARAMILITARY_WING', label: '준군사조직', hint: '검은 셔츠단, SA — 정규 무력이 됐으면 군부대로' },
+  { value: 'OFFICIAL_MEDIA', label: '기관지·당 매체', hint: '이탈리아 인민, 프라우다' },
+  { value: 'THINK_TANK', label: '싱크탱크·재단', hint: '' },
+  { value: 'TRADE_UNION', label: '계열 노조', hint: '' },
+  { value: 'PARLIAMENTARY_GROUP', label: '원내 교섭단체', hint: '' },
+  { value: 'REGIONAL_BRANCH', label: '지역 지부', hint: '대관구, 지역 지도부' },
+  { value: 'OVERSEAS_BRANCH', label: '해외 지부', hint: '' },
+  { value: 'INTERNATIONAL_MEMBERSHIP', label: '국제 조직 가입', hint: '코민테른, 사회주의 인터내셔널' },
+  { value: 'ALLIANCE_MEMBERSHIP', label: '연합 참여', hint: '인민전선 등 지속 연합' },
+  { value: 'OTHER', label: '기타', hint: '' },
+]
+
+export function labelPartyOrganizationRole(role: string | null | undefined): string {
+  return PARTY_ORGANIZATION_ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role ?? ''
+}
+
+export type PartyOrganizationLinkDto = StructuredPeriodFields & {
+  id: string
+  partyId: string
+  role: PartyOrganizationRole
+  organizationId?: string | null
+  militaryUnitId?: string | null
+  note?: string | null
+  sortOrder: number
+  organization?: {
+    id: string
+    name: string
+    shortName?: string | null
+    localName?: string | null
+    type: string
+    foundedDate?: string | null
+    dissolvedDate?: string | null
+  } | null
+  militaryUnit?: {
+    id: string
+    name: string
+    nameEn?: string | null
+    unitType?: string | null
+    establishedDate?: string | null
+    disbandedDate?: string | null
+  } | null
+}
+
+export type PartyOrganizationCandidate =
+  | { kind: 'organization'; id: string; name: string; shortName?: string | null; localName?: string | null; type: string; foundedDate?: string | null }
+  | { kind: 'militaryUnit'; id: string; name: string; nameEn?: string | null; unitType?: string | null; establishedDate?: string | null }
+
+export type CreatePartyOrganizationInput = {
+  role: PartyOrganizationRole
+  organizationId?: string | null
+  militaryUnitId?: string | null
+  newOrganization?: { name: string; localName?: string | null; type?: string | null } | null
+  start?: StructuredDateInput | null
+  end?: StructuredDateInput | null
+  note?: string | null
+}
+
+export type UpdatePartyOrganizationInput = {
+  role?: PartyOrganizationRole
+  start?: StructuredDateInput | null
+  end?: StructuredDateInput | null
+  note?: string | null
+}
+
 /** 정당 × 이념 카탈로그 연결 */
 export type PartyIdeologyLinkDto = StructuredPeriodFields & {
   id: string
@@ -226,7 +312,6 @@ export type PartyPositionPeriodInput = {
 
 export type PoliticalPartyCounts = {
   memberships?: number
-  leaderships?: number
   electionPartyResults?: number
   cabinetAffiliations?: number
   eventRelations?: number
@@ -409,7 +494,7 @@ export type PartyElectionResultRow = {
 }
 
 /** GET /political-parties/:id/memberships */
-export type PartyMembershipListRow = {
+export type PartyMembershipListRow = StructuredPeriodFields & {
   id: string
   personId: string
   partyId: string
@@ -419,6 +504,9 @@ export type PartyMembershipListRow = {
   leadershipTier?: string | null
   roleTitle?: string | null
   notes?: string | null
+  officeKind?: string | null
+  officeOrdinal?: number | null
+  isFounder?: boolean
   person?: {
     id: string
     name: string
@@ -594,6 +682,40 @@ export const politicalPartyApi = {
   deleteAlias: async (partyId: string, aliasId: string) => {
     await requestJson<void>(
       `/political-parties/${encodeURIComponent(partyId)}/aliases/${encodeURIComponent(aliasId)}`,
+      { method: 'DELETE' },
+    )
+  },
+
+  /** 산하·연계 조직 — 조직·군부대에 역할·기간을 달아 잇는다 */
+  getOrganizations: async (partyId: string) => {
+    return requestJson<PartyOrganizationLinkDto[]>(`/political-parties/${encodeURIComponent(partyId)}/organizations`)
+  },
+
+  getOrganizationCandidates: async (partyId: string, params: { query?: string; target: 'organization' | 'militaryUnit' }) => {
+    const search = new URLSearchParams({ target: params.target })
+    if (params.query?.trim()) search.set('q', params.query.trim())
+    return requestJson<PartyOrganizationCandidate[]>(
+      `/political-parties/${encodeURIComponent(partyId)}/organization-candidates?${search.toString()}`,
+    )
+  },
+
+  createOrganizationLink: async (partyId: string, body: CreatePartyOrganizationInput) => {
+    return requestJson<PartyOrganizationLinkDto>(`/political-parties/${encodeURIComponent(partyId)}/organizations`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  updateOrganizationLink: async (partyId: string, linkId: string, body: UpdatePartyOrganizationInput) => {
+    return requestJson<PartyOrganizationLinkDto>(
+      `/political-parties/${encodeURIComponent(partyId)}/organizations/${encodeURIComponent(linkId)}`,
+      { method: 'PATCH', body: JSON.stringify(body) },
+    )
+  },
+
+  deleteOrganizationLink: async (partyId: string, linkId: string) => {
+    await requestJson<void>(
+      `/political-parties/${encodeURIComponent(partyId)}/organizations/${encodeURIComponent(linkId)}`,
       { method: 'DELETE' },
     )
   },

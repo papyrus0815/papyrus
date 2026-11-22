@@ -11,7 +11,7 @@ import { useQuery } from '@tanstack/react-query'
 import { FiColumns } from 'react-icons/fi'
 
 import { getApiConnection } from '@/shared/api/client'
-import { getOrganizations } from '@/shared/api/organizations'
+import { ORGANIZATION_TYPE_LABEL, getOrganizations } from '@/shared/api/organizations'
 import { getUploadImageUrl } from '@/shared/api/upload'
 import {
   EntityListSidebar,
@@ -24,20 +24,8 @@ import {
 
 const PALETTE = ['#6366f1', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#14b8a6', '#ec4899']
 
-const TYPE_LABEL: Record<string, string> = {
-  INTERGOVERNMENTAL_ORG: '국제기구',
-  MULTILATERAL_FORUM: '다자 협의체·블록',
-  MILITARY_ALLIANCE: '군사동맹',
-  GOVERNMENT_AGENCY: '정부·행정기구',
-  POLITICAL_PARTY: '정당',
-  NGO: 'NGO',
-  TRADE_UNION: '노동조합',
-  RELIGIOUS_ORG: '종교단체',
-  BUSINESS_ASSOCIATION: '상공·업계단체',
-  EDUCATION: '교육·학술기관',
-  MILITARY_ACADEMY: '군사교육기관',
-  OTHER: '기타',
-}
+/** 유형 라벨 정본은 shared/api/organizations */
+const TYPE_LABEL: Record<string, string> = ORGANIZATION_TYPE_LABEL
 
 interface OrganizationListSidebarProps {
   collapsed?: boolean

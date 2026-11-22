@@ -110,9 +110,34 @@ const QUICK_ORG_TYPES: Array<{
     example: '예: 예수회, 성전기사단, 튜튼 기사단',
   },
   {
+    value: 'PARTY_ORGAN',
+    label: '당 기구',
+    example: '예: 파시즘 대평의회, 소련 공산당 정치국, 중앙위원회',
+  },
+  {
+    value: 'MASS_ORGANIZATION',
+    label: '대중 조직(청년·여성·학생)',
+    example: '예: 발릴라, 히틀러 유겐트, 콤소몰',
+  },
+  {
+    value: 'PARAMILITARY',
+    label: '준군사조직',
+    example: '예: 검은 셔츠단, 돌격대(SA), 자유군단(Freikorps)',
+  },
+  {
+    value: 'MEDIA',
+    label: '언론·출판',
+    example: '예: 이탈리아 인민(Il Popolo d’Italia), 프라우다, 타임스',
+  },
+  {
+    value: 'POLITICAL_ALLIANCE',
+    label: '정치 연합·인터내셔널',
+    example: '예: 인민전선, 코민테른, 사회주의 인터내셔널',
+  },
+  {
     value: 'OTHER',
     label: '기타 민간·비국가 단체',
-    example: '예: 자유군단(Freikorps), 의병진, 역사적 민간 결사체',
+    example: '예: 의병진, 역사적 민간 결사체',
   },
 ]
 

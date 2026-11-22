@@ -1,52 +1,45 @@
 /**
  * 인물 상세 — 정당 소속 + 선거 후보 이력(상세 API에서 로드)
- * 당원 소속 추가·수정: 인물 등록 모달과 동일 셸(PoliticalPartyRegisterViewModal)
+ * 당원 소속 추가·수정: 정당 지면과 같은 모달(widgets/political-party/party-membership-form-modal) — 구조화 기간·당직
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  FiCalendar,
-  FiChevronDown,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query'
+import {
   FiEdit2,
   FiFlag,
   FiPlus,
   FiTrash2,
-  FiX,
 } from 'react-icons/fi'
 import { useImperativeHandle, useMemo, useState } from 'react'
 import styled from 'styled-components'
 
 import {
-  createPartyMembership,
   deletePartyMembership,
-  getPoliticalParties,
-  updatePartyMembership,
-  type PartyMembershipLeadershipTier,
-  type PartyMembershipRoleCategory,
   type PartyMembershipRow,
 } from '@/shared/api/election'
 import { personKeys } from '@/entities/person/query-keys'
 import { useClickSound } from '@/shared/hooks/use-click-sound.hook'
-import { compareByDate, dateSortKey, parseIsoDateParts } from '@/shared/lib/iso-date'
+import {
+  compareByDate,
+  parseIsoDateParts,
+} from '@/shared/lib/iso-date'
 import { ConfirmDialog } from '@/shared/ui/confirm-dialog/confirm-dialog'
-import { DatePickerModal } from '@/shared/ui/date-picker/date-picker-modal'
 import {
-  PersonRegisterModalCancelBtn,
-  PersonRegisterModalFormActions,
-  PersonRegisterModalPrimaryBtn,
-} from '@/shared/ui/register-modal-shell/register-modal-shell'
-import {
-  DateFieldBtn,
-  DateFieldsRow,
   FieldControl,
-  FieldLabel,
   FieldRow,
   FormRows,
-  FormSectionInner,
-  Input,
-  Textarea,
 } from '@/shared/ui/register-form-layout'
 import { notify } from '@/shared/ui/toast'
-import { PoliticalPartyRegisterViewModal } from '@/widgets/country/country-list/ui/political-party-register-view-modal'
+import {
+  formatPartyOffice,
+  labelPartyMembershipLeadershipTier,
+  labelPartyMembershipRoleCategory,
+} from '@/shared/lib/party-membership-labels'
+import { formatPartialDate, partialSortKey } from '@/shared/lib/party-dates'
+import { partialDateFromStructured } from '@/shared/lib/partial-date-string'
+import { PartyMembershipFormModal } from '@/widgets/political-party/party-membership-form-modal'
 /** 인물 상세 API의 선거 후보 요약 (상세 패널과 공유) */
 export type ElectionCandidacyDetail = {
   id: string
@@ -107,60 +100,24 @@ function membershipDateToYmd(
   return ''
 }
 
-function membershipEndDisplay(
-  end: string | Date | Record<string, never> | null | undefined,
-  isDeceased = false,
-): string {
-  const openLabel = isDeceased ? '미상' : '현재'
-  if (end == null || end === '') return openLabel
-  if (typeof end === 'object' && !(end instanceof Date)) {
-    if (Object.keys(end).length === 0) return openLabel
-  }
-  return membershipDateToYmd(end as string | Date | null) || '—'
+/** 소속 시작·끝(부분 정밀 부호 문자열) — 구조화 칸이 진실, 없던 옛 응답은 거울 DATETIME */
+function membershipStartOn(row: PartyMembershipRow): string {
+  if (row.startYear != null) return partialDateFromStructured(row.startYear, row.startMonth, row.startDay, row.startEra)
+  return membershipDateToYmd(row.startDate as string | Date | null)
 }
 
-const PARTY_MEMBERSHIP_ROLE_OPTIONS: {
-  value: PartyMembershipRoleCategory
-  label: string
-}[] = [
-  { value: 'GENERAL_MEMBER', label: '일반 당원' },
-  { value: 'LEADERSHIP', label: '지도부' },
-  { value: 'PARLIAMENTARY', label: '국회·의회 당직' },
-  { value: 'LOCAL_ORGANIZATION', label: '지역 조직' },
-  { value: 'WING_ORGAN', label: '산하기구·계파' },
-  { value: 'POLICY_STAFF', label: '정책·당직·사무' },
-  { value: 'HONORARY', label: '고문·자문' },
-  { value: 'OTHER', label: '기타' },
-]
-
-const PARTY_MEMBERSHIP_LEADERSHIP_TIER_OPTIONS: {
-  value: PartyMembershipLeadershipTier
-  label: string
-}[] = [
-  { value: 'TOP', label: '최상위 (대표·당대표 등)' },
-  { value: 'SECOND', label: '2인자 (원내대표 등)' },
-  { value: 'SENIOR', label: '상급 지도부' },
-  { value: 'ORDINARY', label: '일반 지도부' },
-  { value: 'JUNIOR', label: '하급·보좌' },
-  { value: 'UNSPECIFIED', label: '미지정' },
-]
-
-function labelPartyMembershipRoleCategory(
-  value: PartyMembershipRoleCategory | null | undefined,
-): string {
-  if (value == null) return '—'
-  const found = PARTY_MEMBERSHIP_ROLE_OPTIONS.find((item) => item.value === value)
-  return found?.label ?? String(value)
+function membershipEndOn(row: PartyMembershipRow): string {
+  if (row.endYear != null) return partialDateFromStructured(row.endYear, row.endMonth, row.endDay, row.endEra)
+  return membershipDateToYmd(row.endDate as string | Date | null)
 }
 
-function labelPartyMembershipLeadershipTier(
-  value: PartyMembershipLeadershipTier | null | undefined,
-): string {
-  if (value == null) return '—'
-  const found = PARTY_MEMBERSHIP_LEADERSHIP_TIER_OPTIONS.find(
-    (item) => item.value === value,
-  )
-  return found?.label ?? String(value)
+/** '1921년 11월 9일 ~ 1943년' · 끝이 비면 생존 인물은 '현재', 고인은 '미상' */
+function membershipPeriodText(row: PartyMembershipRow, isDeceased: boolean): { text: string; ongoing: boolean; hasStart: boolean } {
+  const startOn = membershipStartOn(row)
+  const endOn = membershipEndOn(row)
+  const startText = startOn ? formatPartialDate(startOn) : '미상'
+  const endText = endOn ? formatPartialDate(endOn) : isDeceased ? '미상' : '현재'
+  return { text: `${startText} ~ ${endText}`, ongoing: !endOn && Boolean(startOn) && !isDeceased, hasStart: Boolean(startOn) }
 }
 
 type Props = {
@@ -202,52 +159,23 @@ export function PersonPoliticsSection({
 }: Props) {
   const queryClient = useQueryClient()
   const playClickSound = useClickSound()
-  const [panelOpen, setPanelOpen] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [startDateModalOpen, setStartDateModalOpen] = useState(false)
-  const [endDateModalOpen, setEndDateModalOpen] = useState(false)
-  const [editPartyId, setEditPartyId] = useState('')
-  const [editRoleCategory, setEditRoleCategory] =
-    useState<PartyMembershipRoleCategory>('OTHER')
-  const [editLeadershipTier, setEditLeadershipTier] =
-    useState<PartyMembershipLeadershipTier>('UNSPECIFIED')
-  const [editStart, setEditStart] = useState('')
-  const [editEnd, setEditEnd] = useState('')
-  const [editRole, setEditRole] = useState('')
-  const [editNotes, setEditNotes] = useState('')
+  /** 소속·당직 모달 — 정당 지면과 같은 모달(구조화 기간·당직). null이면 닫힘 */
+  const [membershipModal, setMembershipModal] = useState<
+    { mode: 'create' } | { mode: 'edit'; row: PartyMembershipRow } | null
+  >(null)
   /** 삭제 확인 대상 (당원 소속 행). null이면 다이얼로그 닫힘 */
   const [deleteTarget, setDeleteTarget] = useState<PartyMembershipRow | null>(
     null,
   )
 
-  const isMembershipModalOpen = panelOpen || editingId !== null
-
-  const { data: parties = [] } = useQuery({
-    queryKey: ['political-parties', countryId ?? 'all'],
-    queryFn: () =>
-      getPoliticalParties(countryId ? { countryId } : undefined),
-    /** 탭에 있을 때는 폼·편집 전에도 목록을 미리 불러 두어 선택 지연을 줄임 */
-    // 정당 목록은 등록 모달에서만 쓴다 — 개요에 상시 놓인 뒤로는 모달이 열릴 때만 받는다
-    enabled: isMembershipModalOpen,
-  })
+  const isMembershipModalOpen = membershipModal !== null
 
   const memberships = useMemo(() => {
     const raw = membershipsProp ?? []
-    return raw.slice().sort((a, b) =>
-      compareByDate(
-        membershipDateToYmd(a.startDate) || null,
-        membershipDateToYmd(b.startDate) || null,
-      ),
-    )
+    /* 구조화 시작(기원전 인지) 오래된 순, 모르면 뒤 */
+    const key = (row: PartyMembershipRow) => partialSortKey(membershipStartOn(row)) ?? Number.POSITIVE_INFINITY
+    return raw.slice().sort((left, right) => key(left) - key(right))
   }, [membershipsProp])
-
-  const isDateRangeReversed = useMemo(() => {
-    if (!editStart || !editEnd) return false
-    const startKey = dateSortKey(editStart)
-    const endKey = dateSortKey(editEnd)
-    if (startKey == null || endKey == null) return false
-    return startKey > endKey
-  }, [editStart, editEnd])
 
   const invalidatePerson = () => {
     queryClient.invalidateQueries({ queryKey: personKeys.detailFull(personId) })
@@ -260,54 +188,6 @@ export function PersonPoliticsSection({
     })
   }
 
-  const createMut = useMutation({
-    mutationFn: () =>
-      createPartyMembership(personId, {
-        partyId: editPartyId,
-        startDate: editStart || null,
-        endDate: editEnd || null,
-        roleCategory: editRoleCategory,
-        leadershipTier:
-          editRoleCategory === 'LEADERSHIP' ? editLeadershipTier : null,
-        roleTitle: editRole.trim() || null,
-        notes: editNotes.trim() || null,
-      }),
-    onSuccess: () => {
-      notify.success('저장했습니다.')
-      setPanelOpen(false)
-      setEditingId(null)
-      resetForm()
-      invalidatePerson()
-    },
-    onError: (e: unknown) => {
-      notify.error(e instanceof Error ? e.message : String(e))
-    },
-  })
-
-  const updateMut = useMutation({
-    mutationFn: () =>
-      updatePartyMembership(personId, editingId!, {
-        partyId: editPartyId,
-        startDate: editStart || null,
-        endDate: editEnd || null,
-        roleCategory: editRoleCategory,
-        leadershipTier:
-          editRoleCategory === 'LEADERSHIP' ? editLeadershipTier : null,
-        roleTitle: editRole.trim() || null,
-        notes: editNotes.trim() || null,
-      }),
-    onSuccess: () => {
-      notify.success('저장했습니다.')
-      setPanelOpen(false)
-      setEditingId(null)
-      resetForm()
-      invalidatePerson()
-    },
-    onError: (e: unknown) => {
-      notify.error(e instanceof Error ? e.message : String(e))
-    },
-  })
-
   const deleteMut = useMutation({
     mutationFn: (id: string) => deletePartyMembership(personId, id),
     onSuccess: () => {
@@ -319,48 +199,17 @@ export function PersonPoliticsSection({
     },
   })
 
-  const resetForm = () => {
-    setEditPartyId('')
-    setEditRoleCategory('OTHER')
-    setEditLeadershipTier('UNSPECIFIED')
-    setEditStart('')
-    setEditEnd('')
-    setEditRole('')
-    setEditNotes('')
-  }
-
   const startEdit = (row: PartyMembershipRow) => {
     if (readOnly) return
-    setPanelOpen(false)
-    setEditingId(row.id)
-    setEditPartyId(row.partyId ?? row.party?.id ?? '')
-    setEditRoleCategory(
-      (row.roleCategory as PartyMembershipRoleCategory | undefined) ?? 'OTHER',
-    )
-    setEditLeadershipTier(
-      (row.leadershipTier as PartyMembershipLeadershipTier | undefined) ??
-        'UNSPECIFIED',
-    )
-    setEditStart(membershipDateToYmd(row.startDate))
-    setEditEnd(membershipDateToYmd(row.endDate))
-    setEditRole(row.roleTitle ?? '')
-    setEditNotes(row.notes ?? '')
+    setMembershipModal({ mode: 'edit', row })
   }
 
   const openCreateModal = () => {
     if (readOnly) return
-    setEditingId(null)
-    resetForm()
-    setPanelOpen(true)
+    setMembershipModal({ mode: 'create' })
   }
 
   useImperativeHandle(actionsRef, () => ({ openCreate: openCreateModal }))
-
-  const closeMembershipModal = () => {
-    setPanelOpen(false)
-    setEditingId(null)
-    resetForm()
-  }
 
   const candidacies = candidaciesProp ?? []
 
@@ -413,230 +262,25 @@ export function PersonPoliticsSection({
       </HeaderRow>
       )}
 
-      <PoliticalPartyRegisterViewModal
-        isOpen={isMembershipModalOpen}
-        onClose={closeMembershipModal}
-        /* 필드 5개짜리 폼 — 기본 960px·라벨 열 360px이면 라벨과 입력 사이가 300px 넘게 비었다 */
-        modalMaxWidth="min(680px, 96vw)"
-        modalMinHeight="auto"
-        title={editingId ? '당원 소속 수정' : '당원 소속 추가'}
-        description="① 역할 분류로 직책 유형을, ② 지도부면 위계를 고르고, ③ 직함·세부에는 정당·국가마다 다른 실제 직책명·공식 표기를 직접 적습니다. 정당 목록은 국가 상세에서 먼저 등록할 수 있습니다."
-      >
-        <FormSectionInner>
-          <CompactFormRows>
-            <FieldRow>
-              <FieldLabel>정당</FieldLabel>
-              <FullWidthFieldControl>
-                <ModalSelect
-                  value={editPartyId}
-                  onChange={(event) => setEditPartyId(event.target.value)}
-                >
-                  <option value="">선택</option>
-                  {parties.map((party) => (
-                    <option key={party.id} value={party.id}>
-                      {party.shortName
-                        ? `${party.name} (${party.shortName})`
-                        : party.name}
-                    </option>
-                  ))}
-                </ModalSelect>
-                {!countryId ? (
-                  <ModalHint>
-                    국가가 없으면 정당 목록이 많을 수 있습니다. 필요 시 국가를
-                    먼저 연결하세요.
-                  </ModalHint>
-                ) : null}
-              </FullWidthFieldControl>
-            </FieldRow>
-            <FieldRow>
-              <FieldLabel>역할 분류</FieldLabel>
-              <ModalFieldMedium>
-                <ModalSelect
-                  value={editRoleCategory}
-                  onChange={(event) => {
-                    const next = event.target.value as PartyMembershipRoleCategory
-                    setEditRoleCategory(next)
-                    if (next !== 'LEADERSHIP') setEditLeadershipTier('UNSPECIFIED')
-                  }}
-                >
-                  {PARTY_MEMBERSHIP_ROLE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </ModalSelect>
-                <ModalHint style={{ marginTop: 8 }}>
-                  예: 청년위원장은 「산하기구」, 국회 원내대표는 「국회·의회 당직」 등
-                </ModalHint>
-              </ModalFieldMedium>
-            </FieldRow>
-            {editRoleCategory === 'LEADERSHIP' ? (
-              <FieldRow>
-                <FieldLabel>지도부 위계</FieldLabel>
-                <ModalFieldMedium>
-                  <ModalSelect
-                    value={editLeadershipTier}
-                    onChange={(event) =>
-                      setEditLeadershipTier(
-                        event.target.value as PartyMembershipLeadershipTier,
-                      )
-                    }
-                  >
-                    {PARTY_MEMBERSHIP_LEADERSHIP_TIER_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </ModalSelect>
-                  <ModalHint style={{ marginTop: 8 }}>
-                    같은 「지도부」 안에서 상대적 순위를 구분합니다. 직함은 아래
-                    「직함·세부」에 적습니다.
-                  </ModalHint>
-                </ModalFieldMedium>
-              </FieldRow>
-            ) : null}
-            <FieldRow>
-              <FieldLabel>소속 기간</FieldLabel>
-              <FieldControl $variant="datePair">
-                <DateFieldsRow style={{ maxWidth: '100%' }}>
-                  <SelectClearRow>
-                    <DateFieldBtn
-                      type="button"
-                      $hasValue={!!editStart}
-                      onClick={() => {
-                        playClickSound()
-                        setStartDateModalOpen(true)
-                      }}
-                    >
-                      <FiCalendar size={16} />
-                      <span>
-                        {editStart ? formatYmdKo(editStart) : '시작일 (달력)'}
-                      </span>
-                      <FiChevronDown size={20} />
-                    </DateFieldBtn>
-                    {editStart ? (
-                      <ClearFieldBtn
-                        type="button"
-                        onClick={() => {
-                          playClickSound()
-                          setEditStart('')
-                        }}
-                        aria-label="시작일 지우기"
-                      >
-                        <FiX size={16} />
-                      </ClearFieldBtn>
-                    ) : null}
-                  </SelectClearRow>
-                  <SelectClearRow>
-                    <DateFieldBtn
-                      type="button"
-                      $hasValue={!!editEnd}
-                      onClick={() => {
-                        playClickSound()
-                        setEndDateModalOpen(true)
-                      }}
-                    >
-                      <FiCalendar size={16} />
-                      <span>
-                        {editEnd ? formatYmdKo(editEnd) : '종료일 (달력)'}
-                      </span>
-                      <FiChevronDown size={20} />
-                    </DateFieldBtn>
-                    {editEnd ? (
-                      <ClearFieldBtn
-                        type="button"
-                        onClick={() => {
-                          playClickSound()
-                          setEditEnd('')
-                        }}
-                        aria-label="종료일 지우기"
-                      >
-                        <FiX size={16} />
-                      </ClearFieldBtn>
-                    ) : null}
-                  </SelectClearRow>
-                </DateFieldsRow>
-                {isDateRangeReversed ? (
-                  <ModalDateError role="alert">
-                    종료일이 시작일보다 빠를 수 없습니다.
-                  </ModalDateError>
-                ) : null}
-              </FieldControl>
-            </FieldRow>
-            <FieldRow>
-              <FieldLabel>직함·세부 (선택)</FieldLabel>
-              <ModalFieldMedium>
-                <Input
-                  value={editRole}
-                  onChange={(event) => setEditRole(event.target.value)}
-                  placeholder="예: 청년위원장, 원내대표 (정당·국가별 실제 호칭)"
-                />
-                <ModalHint style={{ marginTop: 8 }}>
-                  ①②로 유형·위계를 맞춘 뒤, 여기에는 해당 조직의 공식 직책명을
-                  적습니다.
-                </ModalHint>
-              </ModalFieldMedium>
-            </FieldRow>
-            <FieldRow>
-              <FieldLabel>메모</FieldLabel>
-              <FullWidthFieldControl>
-                <Textarea
-                  rows={3}
-                  value={editNotes}
-                  onChange={(event) => setEditNotes(event.target.value)}
-                />
-              </FullWidthFieldControl>
-            </FieldRow>
-          </CompactFormRows>
-          <PersonRegisterModalFormActions>
-            <PersonRegisterModalCancelBtn
-              type="button"
-              onClick={closeMembershipModal}
-            >
-              취소
-            </PersonRegisterModalCancelBtn>
-            <PersonRegisterModalPrimaryBtn
-              type="button"
-              disabled={
-                !editPartyId ||
-                isDateRangeReversed ||
-                (editingId ? updateMut.isPending : createMut.isPending)
-              }
-              onClick={() =>
-                editingId ? updateMut.mutate() : createMut.mutate()
-              }
-            >
-              {editingId
-                ? updateMut.isPending
-                  ? '저장 중…'
-                  : '저장'
-                : createMut.isPending
-                  ? '저장 중…'
-                  : '저장'}
-            </PersonRegisterModalPrimaryBtn>
-          </PersonRegisterModalFormActions>
-        </FormSectionInner>
-        <DatePickerModal
-          isOpen={startDateModalOpen}
-          onClose={() => setStartDateModalOpen(false)}
-          onSelect={(date) => {
-            setEditStart(date)
-            setStartDateModalOpen(false)
+      {membershipModal ? (
+        <PartyMembershipFormModal
+          key={membershipModal.mode === 'edit' ? membershipModal.row.id : 'new'}
+          anchor={{ kind: 'person', personId, countryId }}
+          initial={
+            membershipModal.mode === 'edit'
+              ? {
+                  ...membershipModal.row,
+                  partyId: membershipModal.row.partyId ?? membershipModal.row.party?.id ?? null,
+                }
+              : undefined
+          }
+          onClose={() => setMembershipModal(null)}
+          onSaved={() => {
+            setMembershipModal(null)
+            invalidatePerson()
           }}
-          initialDate={editStart}
-          title="소속 시작일"
         />
-        <DatePickerModal
-          isOpen={endDateModalOpen}
-          onClose={() => setEndDateModalOpen(false)}
-          onSelect={(date) => {
-            setEditEnd(date)
-            setEndDateModalOpen(false)
-          }}
-          initialDate={editEnd}
-          title="소속 종료일"
-        />
-      </PoliticalPartyRegisterViewModal>
+      ) : null}
 
       {variant === 'overview' &&
       memberships.length === 0 &&
@@ -657,25 +301,17 @@ export function PersonPoliticsSection({
       ) : variant === 'overview' ? (
         <OverviewList>
           {memberships.map((membershipRow) => {
-            const roleCatLabel = labelPartyMembershipRoleCategory(
-              membershipRow.roleCategory as PartyMembershipRoleCategory | null,
-            )
+            const roleCatLabel = labelPartyMembershipRoleCategory(membershipRow.roleCategory) || '—'
             const tierLabel =
-              membershipRow.roleCategory === 'LEADERSHIP' &&
-              membershipRow.leadershipTier &&
-              membershipRow.leadershipTier !== 'UNSPECIFIED'
-                ? labelPartyMembershipLeadershipTier(
-                    membershipRow.leadershipTier as PartyMembershipLeadershipTier,
-                  )
+              membershipRow.roleCategory === 'LEADERSHIP'
+                ? labelPartyMembershipLeadershipTier(membershipRow.leadershipTier) || null
                 : null
-            const startYmd = membershipDateToYmd(membershipRow.startDate)
-            const endDisplay = membershipEndDisplay(
-              membershipRow.endDate,
-              isDeceased,
-            )
-            const periodLabel = `${startYmd || '미상'} ~ ${endDisplay}`
-            const isOngoing =
-              !membershipRow.endDate && !!startYmd && !isDeceased
+            /* 당직(제N대 서기장)이 있으면 직함 자리에 — formatPartyOffice가 직함을 함께 붙인다 */
+            const officeLabel = membershipRow.officeKind ? formatPartyOffice(membershipRow) : null
+            const period = membershipPeriodText(membershipRow, isDeceased)
+            const periodLabel = period.text
+            const isOngoing = period.ongoing
+            const startYmd = period.hasStart
             return (
               <OverviewItem
                 key={membershipRow.id}
@@ -713,11 +349,14 @@ export function PersonPoliticsSection({
                     <OverviewTitle>
                       {membershipRow.party?.name ?? membershipRow.partyId}
                     </OverviewTitle>
-                    {membershipRow.roleTitle && (
+                    {officeLabel ? (
+                      <OverviewRoleBadge $accent>{officeLabel}</OverviewRoleBadge>
+                    ) : membershipRow.roleTitle ? (
                       <OverviewRoleBadge $accent>
                         {membershipRow.roleTitle}
                       </OverviewRoleBadge>
-                    )}
+                    ) : null}
+                    {membershipRow.isFounder ? <OverviewRoleBadge>창당 발기인</OverviewRoleBadge> : null}
                     <OverviewRoleBadge>{roleCatLabel}</OverviewRoleBadge>
                     {tierLabel && (
                       <OverviewRoleBadge>{tierLabel}</OverviewRoleBadge>
@@ -748,25 +387,14 @@ export function PersonPoliticsSection({
             {memberships.map((membershipRow) => (
               <tr key={membershipRow.id}>
                 <td>{membershipRow.party?.name ?? membershipRow.partyId}</td>
-                <td>
-                  {labelPartyMembershipRoleCategory(
-                    membershipRow.roleCategory as PartyMembershipRoleCategory | null,
-                  )}
-                </td>
+                <td>{labelPartyMembershipRoleCategory(membershipRow.roleCategory) || '—'}</td>
                 <td>
                   {membershipRow.roleCategory === 'LEADERSHIP'
-                    ? labelPartyMembershipLeadershipTier(
-                        (membershipRow.leadershipTier as
-                          | PartyMembershipLeadershipTier
-                          | null) ?? 'UNSPECIFIED',
-                      )
+                    ? labelPartyMembershipLeadershipTier(membershipRow.leadershipTier) || '위계 미지정'
                     : '—'}
                 </td>
-                <td>
-                  {membershipDateToYmd(membershipRow.startDate) || '—'} ~{' '}
-                  {membershipEndDisplay(membershipRow.endDate, isDeceased)}
-                </td>
-                <td>{membershipRow.roleTitle ?? '—'}</td>
+                <td>{membershipPeriodText(membershipRow, isDeceased).text}</td>
+                <td>{formatPartyOffice(membershipRow) || '—'}</td>
                 {!readOnly && (
                   <td>
                     <IconBtn
@@ -899,8 +527,7 @@ export function PersonPoliticsSection({
                 {deleteTarget.party?.name ?? deleteTarget.partyId}
               </strong>{' '}
               소속 기록(
-              {membershipDateToYmd(deleteTarget.startDate) || '—'} ~{' '}
-              {membershipEndDisplay(deleteTarget.endDate)})을(를) 삭제할까요? 이
+              {membershipPeriodText(deleteTarget, isDeceased).text})을(를) 삭제할까요? 이
               작업은 되돌릴 수 없습니다.
             </>
           ) : (

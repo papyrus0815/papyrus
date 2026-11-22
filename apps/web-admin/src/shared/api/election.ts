@@ -149,7 +149,29 @@ export type PartyMembershipRow = {
   leadershipTier?: PartyMembershipLeadershipTier | null
   roleTitle?: string | null
   notes?: string | null
+  /** 당직 — roleCategory=LEADERSHIP일 때 */
+  officeKind?: string | null
+  officeOrdinal?: number | null
+  isFounder?: boolean
+  /** 구조화 기간(진실) — startDate/endDate는 AD1000+ 거울 */
+  startEra?: 'BC' | 'AD' | null
+  startYear?: number | null
+  startMonth?: number | null
+  startDay?: number | null
+  endEra?: 'BC' | 'AD' | null
+  endYear?: number | null
+  endMonth?: number | null
+  endDay?: number | null
   party?: { id: string; name: string; shortName?: string | null }
+}
+
+/** 당원 소속 쓰기 — 구조화 start/end가 정본(기원전·연도만), startDate/endDate(ISO)는 구 호출부 호환 */
+export type PartyMembershipWriteFields = {
+  start?: { era: 'BC' | 'AD'; year: number; month?: number; day?: number } | null
+  end?: { era: 'BC' | 'AD'; year: number; month?: number; day?: number } | null
+  officeKind?: string | null
+  officeOrdinal?: number | null
+  isFounder?: boolean
 }
 
 export async function getPartyMemberships(personId: string) {
@@ -168,7 +190,7 @@ export async function createPartyMembership(
     leadershipTier?: PartyMembershipLeadershipTier | null
     roleTitle?: string | null
     notes?: string | null
-  },
+  } & PartyMembershipWriteFields,
 ) {
   return requestJson<PartyMembershipRow>(
     `/persons/${encodeURIComponent(personId)}/political-party-memberships`,
@@ -187,7 +209,8 @@ export async function updatePartyMembership(
     leadershipTier: PartyMembershipLeadershipTier | null
     roleTitle: string | null
     notes: string | null
-  }>,
+  }> &
+    PartyMembershipWriteFields,
 ) {
   return requestJson<PartyMembershipRow>(
     `/persons/${encodeURIComponent(personId)}/political-party-memberships/${encodeURIComponent(membershipId)}`,

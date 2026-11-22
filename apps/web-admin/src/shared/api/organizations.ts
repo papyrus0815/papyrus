@@ -20,6 +20,11 @@ export type OrganizationType =
   | 'EDUCATION'
   | 'MILITARY_ACADEMY'
   | 'COMPANY'
+  | 'PARTY_ORGAN'
+  | 'MASS_ORGANIZATION'
+  | 'PARAMILITARY'
+  | 'MEDIA'
+  | 'POLITICAL_ALLIANCE'
   | 'OTHER'
 
 export type OrganizationScope =
@@ -53,6 +58,11 @@ export const ORGANIZATION_TYPE_LABEL: Record<OrganizationType, string> = {
   EDUCATION: '교육·학술기관',
   MILITARY_ACADEMY: '군사교육기관',
   COMPANY: '기업',
+  PARTY_ORGAN: '당 기구',
+  MASS_ORGANIZATION: '대중 조직',
+  PARAMILITARY: '준군사조직',
+  MEDIA: '언론·출판',
+  POLITICAL_ALLIANCE: '정치 연합·인터내셔널',
   OTHER: '기타 조직',
 }
 
@@ -97,6 +107,11 @@ export const NON_COMPANY_ORG_TYPES: OrganizationType[] = [
   'RELIGIOUS_ORG',
   'EDUCATION',
   'MILITARY_ACADEMY',
+  'PARTY_ORGAN',
+  'MASS_ORGANIZATION',
+  'PARAMILITARY',
+  'MEDIA',
+  'POLITICAL_ALLIANCE',
   'OTHER',
 ]
 
@@ -121,6 +136,11 @@ export const ORGANIZATION_TYPE_HUE: Record<OrganizationType, string> = {
   EDUCATION: '#06b6d4',
   MILITARY_ACADEMY: '#64748b',
   COMPANY: '#64748b',
+  PARTY_ORGAN: '#b45309',
+  MASS_ORGANIZATION: '#d946ef',
+  PARAMILITARY: '#57534e',
+  MEDIA: '#0891b2',
+  POLITICAL_ALLIANCE: '#7c3aed',
   OTHER: '#94a3b8',
 }
 

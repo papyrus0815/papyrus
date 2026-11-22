@@ -21,27 +21,15 @@ import { getApiConnection } from '@/shared/api/client'
 import {
   type OrganizationType,
   getOrganizations,
+  ORGANIZATION_TYPE_LABEL as SHARED_ORGANIZATION_TYPE_LABEL,
 } from '@/shared/api/organizations'
 import { personCareerApi } from '@/shared/api/person-career'
 import { Z_INDEX } from '@/shared/styles/z-index'
 import { Modal, ModalBody, ModalFooter } from '@/shared/ui/modal'
 import { notify } from '@/shared/ui/toast'
 
-const ORGANIZATION_TYPE_LABEL: Record<OrganizationType, string> = {
-  POLITICAL_PARTY: '정당',
-  INTERGOVERNMENTAL_ORG: '국제기구',
-  MULTILATERAL_FORUM: '다자 협의체·블록',
-  NGO: 'NGO',
-  TRADE_UNION: '노동조합',
-  GOVERNMENT_AGENCY: '정부기관/행정기구',
-  MILITARY_ALLIANCE: '군사동맹',
-  RELIGIOUS_ORG: '종교단체',
-  BUSINESS_ASSOCIATION: '업계단체',
-  EDUCATION: '교육기관',
-  MILITARY_ACADEMY: '군사교육기관',
-  COMPANY: '기업',
-  OTHER: '기타',
-}
+/** 유형 라벨 정본은 shared/api/organizations — 유형이 늘 때 어긋나지 않게 */
+const ORGANIZATION_TYPE_LABEL: Record<OrganizationType, string> = SHARED_ORGANIZATION_TYPE_LABEL
 
 /** 교육기관성 조직 타입을 목록 앞에 정렬 (필터링은 하지 않음 — 경력 모달과 동일 정책) */
 const ORG_TYPE_PRIORITY: OrganizationType[] = ['EDUCATION', 'MILITARY_ACADEMY']

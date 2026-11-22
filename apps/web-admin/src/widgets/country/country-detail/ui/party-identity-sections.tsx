@@ -10,7 +10,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FiEdit2, FiPlus, FiStar, FiTrash2 } from 'react-icons/fi'
 import styled from 'styled-components'
 
-import { ledgerHairline } from '@/entities/event/ui/ledger-tokens'
 import * as EventFormS from '@/pages/events/create/event-create.styles'
 import { getLaws } from '@/shared/api/election'
 import {
@@ -38,13 +37,9 @@ import {
 import { ChartSkeleton } from '@/shared/ui/chart-skeleton/chart-skeleton'
 import { confirm } from '@/shared/ui/confirm-dialog'
 import { FormSelectNative } from '@/shared/ui/form-select-native'
-import { PeriodDateField } from '@/shared/ui/period-date-field/period-date-field'
 import { RegisterModal } from '@/shared/ui/register-modal-shell/register-modal'
 import {
-  PersonRegisterModalCancelBtn,
   PersonRegisterModalFormScroll,
-  PersonRegisterModalPrimaryBtn,
-  PersonRegisterModalStickyFooter,
 } from '@/shared/ui/register-modal-shell/register-modal-shell'
 import { notify } from '@/shared/ui/toast'
 
@@ -57,6 +52,20 @@ import {
 } from './country-politics-tab.styles'
 import { LinkedEventPickerField } from './linked-event-picker-field'
 import * as FormS from './military-unit-form/styles'
+import {
+  CheckRow,
+  FactActions,
+  FactBadge,
+  FactGroup,
+  FactGroupLabel,
+  FactList,
+  FactMain,
+  FactNote,
+  FactRow,
+  IconBtn,
+  ModalFooter,
+  PeriodPair,
+} from '@/widgets/political-party/party-sidecar-parts'
 
 const ALIAS_TYPE_ORDER: PoliticalPartyAliasType[] = POLITICAL_PARTY_ALIAS_TYPE_OPTIONS.map((option) => option.value)
 
@@ -669,198 +678,16 @@ export function PartyLegalStatusFormModal({
   )
 }
 
-// ─── 공용 부품 ─────────────────────────────────────────────────────────────
-
-export function PeriodPair({
-  start,
-  end,
-  onStart,
-  onEnd,
-  startError,
-  endError,
-  inverted,
-  startLabel,
-  endLabel,
-  endDisabled = false,
-}: {
-  start: PeriodDateFormValue
-  end: PeriodDateFormValue
-  onStart: (next: PeriodDateFormValue) => void
-  onEnd: (next: PeriodDateFormValue) => void
-  startError: string | null
-  endError: string | null
-  inverted: boolean
-  startLabel: string
-  endLabel: string
-  endDisabled?: boolean
-}) {
-  return (
-    <EventFormS.FormRow>
-      <EventFormS.FormLabel as="div">
-        기간<FormS.OptionalTag>(선택)</FormS.OptionalTag>
-      </EventFormS.FormLabel>
-      <EventFormS.FormField>
-        <FormS.DateRangeGrid>
-          <FormS.DateColumn>
-            <FormS.SubTitleLabel>{startLabel}</FormS.SubTitleLabel>
-            <PeriodDateField {...start} ariaLabel={startLabel} pickerTitle={`${startLabel} 선택`} error={Boolean(startError)} onChange={onStart} />
-            {startError ? <EventFormS.ErrorMessage role="alert">{startError}</EventFormS.ErrorMessage> : null}
-          </FormS.DateColumn>
-          <FormS.DateColumn style={endDisabled ? { opacity: 0.45, pointerEvents: 'none' } : undefined} aria-disabled={endDisabled || undefined}>
-            <FormS.SubTitleLabel>{endLabel}</FormS.SubTitleLabel>
-            <PeriodDateField
-              {...end}
-              ariaLabel={endLabel}
-              pickerTitle={`${endLabel} 선택`}
-              error={Boolean(endError) || inverted}
-              onChange={onEnd}
-            />
-            {endError ? <EventFormS.ErrorMessage role="alert">{endError}</EventFormS.ErrorMessage> : null}
-          </FormS.DateColumn>
-        </FormS.DateRangeGrid>
-        <EventFormS.Hint>연도만 알면 연도만. 기원전은 칸 끝의 서기를 눌러 바꿉니다.</EventFormS.Hint>
-        {inverted ? <EventFormS.ErrorMessage role="alert">끝이 시작보다 앞설 수 없습니다.</EventFormS.ErrorMessage> : null}
-      </EventFormS.FormField>
-    </EventFormS.FormRow>
-  )
-}
-
-export function ModalFooter({
-  problem,
-  saving,
-  onClose,
-  onSubmit,
-}: {
-  problem: string | null
-  saving: boolean
-  onClose: () => void
-  onSubmit: () => void
-}) {
-  return (
-    <PersonRegisterModalStickyFooter>
-      <FooterRow>
-        <FooterStatus $error={Boolean(problem && !problem.startsWith('필수'))}>{problem ?? '저장 준비 완료'}</FooterStatus>
-        <PersonRegisterModalCancelBtn type="button" onClick={onClose} disabled={saving}>
-          취소
-        </PersonRegisterModalCancelBtn>
-        <PersonRegisterModalPrimaryBtn type="button" disabled={Boolean(problem) || saving} onClick={onSubmit}>
-          {saving ? '저장 중…' : '저장'}
-        </PersonRegisterModalPrimaryBtn>
-      </FooterRow>
-    </PersonRegisterModalStickyFooter>
-  )
-}
-
 // ─── 스타일 ────────────────────────────────────────────────────────────────
 
-export const FactList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-`
 
-export const FactGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-`
 
-export const FactGroupLabel = styled.div`
-  font-size: 11.5px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-`
 
-export const FactRow = styled.div`
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px 64px 6px 0;
-  border-bottom: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
 
-  &:last-child {
-    border-bottom: none;
-  }
-`
 
-export const FactMain = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 10px;
 
-  .title {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 14px;
-    font-weight: 700;
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-  .primary {
-    color: ${({ theme }) => theme.colors.warning};
-  }
-  .period {
-    font-size: 12.5px;
-    color: ${({ theme }) => theme.colors.text.secondary};
-  }
-  .period.strong {
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.text.primary};
-  }
-`
 
-export const FactBadge = styled.span`
-  padding: 0 6px;
-  border: 1px solid ${({ theme }) => ledgerHairline(theme.mode)};
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 18px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
 
-export const FactNote = styled.p`
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  color: ${({ theme }) => theme.colors.text.secondary};
-`
-
-export const FactActions = styled.div`
-  position: absolute;
-  top: 4px;
-  right: 0;
-  display: inline-flex;
-  gap: 2px;
-`
-
-export const IconBtn = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: ${({ theme }) => theme.colors.text.tertiary};
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    color: ${({ theme }) => theme.colors.text.primary};
-    background: ${({ theme }) => (theme.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(15,23,42,0.05)')};
-  }
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.primary};
-  }
-  &:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
-`
 
 /** 지위별 색 — 합법(초록) · 일당 지위(남색) · 금지·해산(빨강) · 지하·망명(주황) · 정지·기타(회색) */
 const STATUS_RGB: Record<string, string> = {
@@ -887,25 +714,5 @@ const StatusBadge = styled.span<{ $status: string }>`
     theme.mode === 'dark' ? theme.colors.text.primary : `rgb(${STATUS_RGB[$status] ?? STATUS_RGB.OTHER})`};
 `
 
-export const CheckRow = styled.label`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  font-size: 13px;
-  color: ${({ theme }) => theme.colors.text.secondary};
-  cursor: pointer;
-`
 
-const FooterRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-`
 
-const FooterStatus = styled.span<{ $error: boolean }>`
-  margin-right: auto;
-  font-size: 12.5px;
-  color: ${({ theme, $error }) => ($error ? theme.colors.error : theme.colors.text.tertiary)};
-`
