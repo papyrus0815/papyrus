@@ -113,7 +113,7 @@ const TabHeaderSubtitle = styled.p<{ $variant: 'hero' | 'flat' | 'plain' }>`
   font-weight: 400;
   line-height: 1.5;
   max-width: min(100%, 44rem);
-  ${metaText}
+  color: ${metaText};
 
   @media (max-width: 768px) {
     font-size: 12px;
@@ -191,7 +191,7 @@ const HeaderDesc = styled.p`
   line-height: 1.5;
   max-width: 540px;
   font-weight: 400;
-  ${metaText}
+  color: ${metaText};
 `
 
 const KpiOuter = styled.div`
@@ -216,7 +216,7 @@ const KpiLabel = styled.span`
   font-size: 12px;
   font-weight: 600;
   letter-spacing: -0.01em;
-  ${metaText}
+  color: ${metaText};
 `
 
 const KpiValue = styled.span`
@@ -230,7 +230,7 @@ const KpiUnit = styled.span`
   font-size: 12.5px;
   font-weight: 500;
   margin-left: 3px;
-  ${metaText}
+  color: ${metaText};
 `
 
 const EmptyOuter = styled(motion.div)`
@@ -267,7 +267,7 @@ const EmptyDesc = styled.p`
   max-width: 340px;
   line-height: 1.55;
   font-weight: 400;
-  ${metaText}
+  color: ${metaText};
 `
 
 const FormCardOuter = styled.div`

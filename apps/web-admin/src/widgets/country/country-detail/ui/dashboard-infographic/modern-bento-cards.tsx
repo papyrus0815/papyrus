@@ -62,6 +62,7 @@ import {
   formatCountryPeriod,
   getCountryYearRange,
 } from '@/shared/lib/country-period'
+import { formatPopulationKo } from '@/shared/lib/number-format'
 import {
   buildHeadquartersGoogleMapsSpec,
   clampValidWgs84,
@@ -97,6 +98,7 @@ import {
   BentoPill,
   BentoSubLabel,
   CenturyEventMatrixAndMilestones,
+  EmptyBentoCard,
   HdiScaleBar,
   MilitaryForceInfographicBlock,
   MiniDonutRing,
@@ -730,7 +732,11 @@ export function NationalPowerGaugeStrip({
     <BentoCard aria-label="국력 스케일 및 거시경제 한눈 계기판">
       <GaugeStripGrid>
         {/* 1. 인구 · 영토 반원 아크 게이지 */}
-        <GaugeCellBtn type="button" onClick={onOpenDemographics}>
+        <GaugeCellBtn
+          type="button"
+          onClick={onOpenDemographics}
+          title={popNum != null ? `인구 ${formatPopulation(popNum)}명` : undefined}
+        >
           <GaugeCellTop>
             <SparkTitle>인구 · 영토 스케일</SparkTitle>
             {continentComparison.populationRank != null && popRankTotal > 0 ? (
@@ -742,7 +748,8 @@ export function NationalPowerGaugeStrip({
           <GaugeRowInline>
             <SemiCircleGauge
               percent={popTopPct}
-              centerValue={popNum != null ? formatPopulation(popNum) : '—'}
+              // 84px 게이지 가운데에 8자리 숫자가 넘쳐 호와 겹쳤다 — '8,448만'처럼 규모로 줄이고 정확한 값은 툴팁
+              centerValue={popNum != null ? formatPopulationKo(popNum) : '—'}
               subLabel={popYearNote ?? '인구'}
               size={84}
             />
@@ -770,9 +777,11 @@ export function NationalPowerGaugeStrip({
             {gdpYoY ? <DeltaChip>{gdpYoY}</DeltaChip> : null}
           </GaugeCellTop>
           <SparkBigNum>
-            {latestGdpVal != null
-              ? formatMetricValue(latestGdpVal, 'USD')
-              : '미등록'}
+            {latestGdpVal != null ? (
+              formatMetricValue(latestGdpVal, 'USD')
+            ) : (
+              <EmptyValueText>아직 없음</EmptyValueText>
+            )}
             {latestGdpPerCapVal != null ? (
               <SparkYear>
                 1인당 {formatMetricValue(latestGdpPerCapVal, 'USD_CAPITA')}
@@ -853,7 +862,11 @@ export function NationalPowerGaugeStrip({
             <>
               <SparkBigNum>
                 {macroLatestText ??
-                  (latestY10 ? `${latestY10.value.toFixed(2)}%` : '미등록')}
+                  (latestY10 ? (
+                    `${latestY10.value.toFixed(2)}%`
+                  ) : (
+                    <EmptyValueText>아직 없음</EmptyValueText>
+                  ))}
                 {latestY10 && macroLatestText ? (
                   <SparkYear>국채10Y {latestY10.value.toFixed(2)}%</SparkYear>
                 ) : null}
@@ -885,7 +898,13 @@ export function NationalPowerGaugeStrip({
             {hdiDelta ? <DeltaChip>{hdiDelta}</DeltaChip> : null}
           </GaugeCellTop>
           <SparkBigNum>
-            {hdiVal != null ? hdiVal.toFixed(3) : capitalText || '미등록'}
+            {hdiVal != null ? (
+              hdiVal.toFixed(3)
+            ) : capitalText ? (
+              capitalText
+            ) : (
+              <EmptyValueText>아직 없음</EmptyValueText>
+            )}
             {hdiVal != null && capitalText ? (
               <SparkYear>수도 {capitalText}</SparkYear>
             ) : null}
@@ -1159,7 +1178,16 @@ export function DemographicsBentoCard({
     }
   }, [demographicIndicators, theme.mode])
 
-  if (!latestDemo && !latestPyramid && ethnicityCount === 0) return null
+  if (!latestDemo && !latestPyramid && ethnicityCount === 0) {
+    return (
+      <EmptyBentoCard
+        title="인구 구조"
+        text="연령대·성별 인구나 출생률·기대수명 같은 인구 지표를 넣으면 인구 피라미드와 추이가 그려집니다."
+        actionLabel="인구 자료 입력"
+        onAction={onOpenDataManager}
+      />
+    )
+  }
 
   const maxSide = latestPyramid
     ? Math.max(
@@ -1193,7 +1221,7 @@ export function DemographicsBentoCard({
     <BentoCard aria-label="인구 구조 및 연령 피라미드 인포그래픽">
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <BentoCardTitle>인구 구조 · 연령 피라미드</BentoCardTitle>
+          <BentoCardTitle>인구 구조</BentoCardTitle>
           {latestPyramid ? (
             <BentoCardBadge>{latestPyramid.year}년</BentoCardBadge>
           ) : latestDemo ? (
@@ -1347,7 +1375,16 @@ export function TradeAndIndustryBentoCard({
     [latestTrade],
   )
 
-  if (!latestTrade && companyCount === 0) return null
+  if (!latestTrade && companyCount === 0) {
+    return (
+      <EmptyBentoCard
+        title="교역 · 기업"
+        text="연도별 수출·수입이나 이 나라 기업을 등록하면 무역수지와 품목·업종 구성이 그려집니다."
+        actionLabel="교역 자료 입력"
+        onAction={onOpenTrade}
+      />
+    )
+  }
 
   const expVal =
     latestTrade?.exportValue != null ? Number(latestTrade.exportValue) : 0
@@ -1379,7 +1416,7 @@ export function TradeAndIndustryBentoCard({
     <BentoCard aria-label="대외 교역 수지 및 주력 품목 도넛 인포그래픽">
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <BentoCardTitle>무역 수지 · 품목 도넛</BentoCardTitle>
+          <BentoCardTitle>교역 · 기업</BentoCardTitle>
           {latestTrade ? (
             <BentoCardBadge>{latestTrade.year}년</BentoCardBadge>
           ) : null}
@@ -1583,14 +1620,21 @@ export function ModernHistoryForceBentoCard({
     milestoneEvents.length === 0 &&
     militaryCount === 0
   ) {
-    return null
+    return (
+      <EmptyBentoCard
+        title="역사 · 군사"
+        text="사건, 과거 국가, 군 편제를 연결하면 국가 계보 막대와 세기별 사건 지도, 군사력이 여기 모입니다."
+        actionLabel="사건 탭으로"
+        onAction={onOpenEvents}
+      />
+    )
   }
 
   return (
     <BentoCard aria-label="통사 국가 계보 및 사건·군사 리듬">
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <BentoCardTitle>통사 계보 · 세기별 사건 매트릭스 · 군사력</BentoCardTitle>
+          <BentoCardTitle>역사 · 군사</BentoCardTitle>
           {eventCount > 0 ? (
             <BentoCardBadge>사건 {eventCount}건</BentoCardBadge>
           ) : null}
@@ -1756,7 +1800,7 @@ export function CompactGeoBentoCard({
       <BentoCardHeader>
         <BentoCardTitleGroup>
           <FiGlobe size={13.5} />
-          <BentoCardTitle>지리 위치 · 광역 행정구역</BentoCardTitle>
+          <BentoCardTitle>지리</BentoCardTitle>
           {cityCount > 0 ? (
             <BentoCardBadge>{cityCount}곳</BentoCardBadge>
           ) : null}
@@ -1831,77 +1875,89 @@ export function CompactGeoBentoCard({
                   strokeDasharray={gx === 180 ? undefined : '2.5 3.5'}
                 />
               ))}
-              {/* Reticle crosshairs */}
-              <line
-                x1={svgPin.x}
-                y1="0"
-                x2={svgPin.x}
-                y2="180"
-                stroke={ledgerAccent(theme.mode)}
-                strokeOpacity="0.45"
-                strokeWidth="0.9"
-                strokeDasharray="3 3"
-              />
-              <line
-                x1="0"
-                y1={svgPin.y}
-                x2="360"
-                y2={svgPin.y}
-                stroke={ledgerAccent(theme.mode)}
-                strokeOpacity="0.45"
-                strokeWidth="0.9"
-                strokeDasharray="3 3"
-              />
-              {/* Surrounding division orbit nodes */}
-              {topDivisions.slice(0, 6).map((div, idx, arr) => {
-                const ang = -Math.PI / 2 + (idx * 2 * Math.PI) / arr.length
-                const ox = Math.max(16, Math.min(344, svgPin.x + Math.cos(ang) * 34))
-                const oy = Math.max(16, Math.min(164, svgPin.y + Math.sin(ang) * 24))
-                return (
-                  <g key={div.id}>
-                    <line
-                      x1={svgPin.x}
-                      y1={svgPin.y}
-                      x2={ox}
-                      y2={oy}
-                      stroke={ledgerAccent(theme.mode)}
-                      strokeOpacity="0.28"
-                      strokeWidth="0.9"
-                    />
-                    <circle
-                      cx={ox}
-                      cy={oy}
-                      r="2.6"
-                      fill={theme.mode === 'dark' ? '#38bdf8' : '#0284c7'}
-                    />
-                  </g>
-                )
-              })}
-              <circle
-                cx={svgPin.x}
-                cy={svgPin.y}
-                r="13"
-                fill={ledgerAccent(theme.mode)}
-                fillOpacity="0.16"
-                stroke={ledgerAccent(theme.mode)}
-                strokeOpacity="0.55"
-                strokeWidth="1"
-              />
-              <circle
-                cx={svgPin.x}
-                cy={svgPin.y}
-                r="4.5"
-                fill={ledgerAccent(theme.mode)}
-                stroke={ledgerBackground(theme.mode)}
-                strokeWidth="1.5"
-              />
+              {/*
+                좌표가 없으면 조준선·핀을 그리지 않는다 — 예전엔 좌표가 없어도 지도 한가운데(경도 0·적도 근처)에
+                핀을 찍어, 독일·일본·케냐가 모두 같은 '위치'로 보였다. 위치는 '지도' 보기가 국가 이름으로 찾는다.
+              */}
+              {svgPin.hasExact ? (
+                <>
+                {/* Reticle crosshairs */}
+                <line
+                  x1={svgPin.x}
+                  y1="0"
+                  x2={svgPin.x}
+                  y2="180"
+                  stroke={ledgerAccent(theme.mode)}
+                  strokeOpacity="0.45"
+                  strokeWidth="0.9"
+                  strokeDasharray="3 3"
+                />
+                <line
+                  x1="0"
+                  y1={svgPin.y}
+                  x2="360"
+                  y2={svgPin.y}
+                  stroke={ledgerAccent(theme.mode)}
+                  strokeOpacity="0.45"
+                  strokeWidth="0.9"
+                  strokeDasharray="3 3"
+                />
+                {/* Surrounding division orbit nodes */}
+                {topDivisions.slice(0, 6).map((div, idx, arr) => {
+                  const ang = -Math.PI / 2 + (idx * 2 * Math.PI) / arr.length
+                  const ox = Math.max(16, Math.min(344, svgPin.x + Math.cos(ang) * 34))
+                  const oy = Math.max(16, Math.min(164, svgPin.y + Math.sin(ang) * 24))
+                  return (
+                    <g key={div.id}>
+                      <line
+                        x1={svgPin.x}
+                        y1={svgPin.y}
+                        x2={ox}
+                        y2={oy}
+                        stroke={ledgerAccent(theme.mode)}
+                        strokeOpacity="0.28"
+                        strokeWidth="0.9"
+                      />
+                      <circle
+                        cx={ox}
+                        cy={oy}
+                        r="2.6"
+                        fill={theme.mode === 'dark' ? '#38bdf8' : '#0284c7'}
+                      />
+                    </g>
+                  )
+                })}
+                <circle
+                  cx={svgPin.x}
+                  cy={svgPin.y}
+                  r="13"
+                  fill={ledgerAccent(theme.mode)}
+                  fillOpacity="0.16"
+                  stroke={ledgerAccent(theme.mode)}
+                  strokeOpacity="0.55"
+                  strokeWidth="1"
+                />
+                <circle
+                  cx={svgPin.x}
+                  cy={svgPin.y}
+                  r="4.5"
+                  fill={ledgerAccent(theme.mode)}
+                  stroke={ledgerBackground(theme.mode)}
+                  strokeWidth="1.5"
+                />
+                </>
+              ) : null}
             </svg>
             <VectorGeoHud>
               <span>
                 <strong>{country.capital || country.name}</strong>
                 {country.isoCode ? ` · ${country.isoCode}` : ''}
               </span>
-              <span>{coordLabel}</span>
+              <span>
+                {svgPin.hasExact
+                  ? coordLabel
+                  : '좌표 미기재 — ‘지도’에서 국가 이름으로 위치를 봅니다'}
+              </span>
             </VectorGeoHud>
           </VectorGeoAtlasBox>
         ) : mapSpec ? (
@@ -2282,6 +2338,13 @@ const SparkBigNum = styled.div`
   font-weight: 800;
   color: ${({ theme }) => theme.colors.text.primary};
   ${DIGIT_DISPLAY}
+`
+
+/** 빈 값 — 예전엔 '미등록'을 16px/800 큰 숫자 자리에 그대로 써서 빈 칸이 가장 크게 말했다 */
+const EmptyValueText = styled.span`
+  font-size: 13px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const SparkYear = styled.span`
@@ -2923,7 +2986,16 @@ export function ModernExecutiveSpectrumCard({
     return { minY, maxY, eraBands, tracks, ticks: uniqueTicks, recentChips }
   }, [timeline, regimeEras, theme.mode])
 
-  if (!model) return null
+  if (!model) {
+    return (
+      <EmptyBentoCard
+        title="역대 국가수반"
+        text="대통령·총리·군주의 재임을 기록하면 역대 수반의 집권 기간이 한 줄 막대로 그려집니다."
+        actionLabel="재임 기록하기"
+        onAction={onOpenCabinets}
+      />
+    )
+  }
 
   const hoveredItem =
     timeline.find((t) => t.recordId === (hoveredId ?? activeTenureId)) ??
@@ -2934,7 +3006,7 @@ export function ModernExecutiveSpectrumCard({
     <BentoCard aria-label="역대 국가수반 재임 스펙트럼">
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <BentoCardTitle>헌정 체제 · 역대 국가수반 집권 스펙트럼</BentoCardTitle>
+          <BentoCardTitle>역대 국가수반</BentoCardTitle>
           <BentoCardBadge>
             {model.minY}–현재 · {timeline.length}대 재임
           </BentoCardBadge>
@@ -3225,7 +3297,7 @@ export function NationalRadarProfileCard({
     <BentoCard aria-label="6축 국가 역량 레이더 및 도메인 아카이브 밀도">
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <BentoCardTitle>국가 6축 레이더 · 도메인 밀도</BentoCardTitle>
+          <BentoCardTitle>국력 · 기록 밀도</BentoCardTitle>
           <BentoCardBadge>
             {populated}/{domainItems.length}축 ·{' '}
             {totalRecords.toLocaleString('ko-KR')}건
@@ -3403,9 +3475,14 @@ export function ParliamentAndPartyBentoCard({
     [parties],
   )
 
+  /*
+   * 스펙트럼 모수 — 활동 중 정당이 3곳 이상이면 현재 지형, 아니면 역대 전체.
+   * 예전엔 활동 정당이 1곳이라도 있으면 그것만 세서, 정당 13곳(해산 12)인 독일이 '좌파 1당' 한 색 막대가 됐다.
+   */
+  const spectrumUsesActive = activeParties.length >= 3
   const spectrumSlices = useMemo<SegmentSlice[]>(() => {
     const counts = new Map<string, number>()
-    for (const p of activeParties.length > 0 ? activeParties : parties) {
+    for (const p of spectrumUsesActive ? activeParties : parties) {
       const pos = p.position ?? 'UNCLASSIFIED'
       counts.set(pos, (counts.get(pos) ?? 0) + 1)
     }
@@ -3433,7 +3510,7 @@ export function ParliamentAndPartyBentoCard({
       })
     }
     return list
-  }, [activeParties, parties, theme.mode])
+  }, [spectrumUsesActive, activeParties, parties, theme.mode])
 
   const { hemicycleSpec, governanceBalance } = useMemo(() => {
     const lowerSeats = seatsInfo?.lowerSeats ?? null
@@ -3661,7 +3738,7 @@ export function ParliamentAndPartyBentoCard({
     <BentoCard aria-label="의회 의석 아치 및 정당·선거 인포그래픽">
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <BentoCardTitle>의회 · 정당 스펙트럼 · 선거 동향</BentoCardTitle>
+          <BentoCardTitle>의회 · 정당</BentoCardTitle>
           <BentoCardBadge>
             정당 {parties.length} · 선거 {electionCount}
           </BentoCardBadge>
@@ -3723,7 +3800,9 @@ export function ParliamentAndPartyBentoCard({
             {spectrumSlices.length > 0 ? (
               <div>
                 <BentoSubLabel style={{ marginBottom: 5 }}>
-                  <span>정당 이념 스펙트럼 (좌 → 우)</span>
+                  <span>
+                    이념 스펙트럼 · {spectrumUsesActive ? '현재 활동' : '역대'}
+                  </span>
                   <span>
                     활동 {activeParties.length} · 해산{' '}
                     {parties.length - activeParties.length}
@@ -3831,14 +3910,21 @@ export function DiplomacyTreatyLawBentoCard({
   }, [civicSnapshot.recentTreaties, theme.mode])
 
   if (treatyCount === 0 && lawCount === 0 && ethnicityCount === 0) {
-    return null
+    return (
+      <EmptyBentoCard
+        title="조약 · 법령 · 민족"
+        text="맺은 조약, 헌법·법률, 구성 민족을 등록하면 유형 분포와 주요 목록이 여기 모입니다."
+        actionLabel="조약 등록"
+        onAction={onOpenTreaties}
+      />
+    )
   }
 
   return (
     <BentoCard aria-label="외교 조약, 법령 및 구성 민족 현황">
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <BentoCardTitle>외교 조약 · 헌법/법령 · 민족 구성</BentoCardTitle>
+          <BentoCardTitle>조약 · 법령 · 민족</BentoCardTitle>
           <BentoCardBadge>
             조약 {treatyCount} · 법령 {lawCount} · 민족 {ethnicityCount}
           </BentoCardBadge>
@@ -4099,7 +4185,7 @@ const ExecLeaderChipBtn = styled.button<{ $active: boolean }>`
 
 const RadarProfileSplit = styled.div`
   display: grid;
-  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-columns: 236px minmax(0, 1fr);
   align-items: center;
   gap: 14px;
 
@@ -4146,18 +4232,24 @@ const DomainDensityBtn = styled.button<{ $empty: boolean }>`
 
   .top {
     display: flex;
-    align-items: baseline;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 6px;
   }
 
+  /* 칸이 좁을 때 '정부·내각·부/처', '+ 입/력'처럼 글자 중간에서 끊겼다 — 이름은 낱말 단위로만 줄바꿈, 값은 줄바꿈 금지 */
   .lb {
+    min-width: 0;
+    word-break: keep-all;
+    line-height: 1.3;
     font-size: 11px;
     font-weight: 600;
     color: ${({ theme }) => theme.colors.text.secondary};
   }
 
   .val {
+    flex-shrink: 0;
+    white-space: nowrap;
     font-size: 11px;
     font-weight: 700;
     color: ${({ theme, $empty }) =>

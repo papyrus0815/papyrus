@@ -56,6 +56,97 @@ import type {
 
 export * from '@/entities/event/ui/bento-primitives'
 
+/**
+ * 자료가 없는 대시보드 카드 — 카드 틀(제목)은 그대로 두고 안쪽만 빈 안내.
+ *
+ * 2026-09-10 결정: 국가 대시보드는 자료가 있든 없든 **같은 배치**를 그린다(값만 비운다).
+ * 그 뒤 벤토 개편에서 카드마다 `return null`이 다시 들어와, 자료가 없는 나라(케냐)는 묶음 9개 중
+ * 3개가 통째로 사라지고 격자 열 수까지 바뀌었다. 자료가 들어온 뒤 어디에 무엇이 생길지 미리 보이게 한다.
+ */
+export function EmptyBentoCard({
+  title,
+  text,
+  actionLabel,
+  onAction,
+  hint,
+}: {
+  title: string
+  text: string
+  actionLabel?: string
+  onAction?: () => void
+  hint?: string
+}) {
+  return (
+    <BentoCard aria-label={title}>
+      <BentoCardHeader>
+        <BentoCardTitleGroup>
+          <BentoCardTitle>{title}</BentoCardTitle>
+        </BentoCardTitleGroup>
+      </BentoCardHeader>
+      <BentoCardBody>
+        {/* SectionEmpty는 위아래 선이 있어 카드 머리 선과 겹선이 됐다 — 카드 안에선 선 없는 한 줄 */}
+        <EmptyCardRow>
+          <div className="text">
+            <p>{text}</p>
+            {hint ? <span className="hint">{hint}</span> : null}
+          </div>
+          {actionLabel && onAction ? (
+            <EmptyCardAction type="button" onClick={onAction}>
+              + {actionLabel}
+            </EmptyCardAction>
+          ) : null}
+        </EmptyCardRow>
+      </BentoCardBody>
+    </BentoCard>
+  )
+}
+
+const EmptyCardRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 6px 0;
+
+  .text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    flex: 1 1 260px;
+  }
+  p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.55;
+    color: ${({ theme }) => theme.colors.text.secondary};
+    word-break: keep-all;
+  }
+  .hint {
+    font-size: 12px;
+    color: ${({ theme }) => theme.colors.text.tertiary};
+  }
+`
+
+const EmptyCardAction = styled.button`
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid ${({ theme }) => ledgerAccentBorder(theme.mode)};
+  border-radius: 8px;
+  background: ${({ theme }) => ledgerAccentSubtle(theme.mode)};
+  color: ${({ theme }) => ledgerAccent(theme.mode)};
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${({ theme }) => ledgerAccent(theme.mode)};
+  }
+`
+
 /* ─── 6. Military Force Branch & War Summary Strip ───────────────────────── */
 
 const BRANCH_META: Record<string, { label: string; light: string; dark: string }> = {
@@ -100,8 +191,12 @@ export function MilitaryForceInfographicBlock({
   const winRatePct =
     decidedTotal > 0 ? Math.round((warSummary.victories / decidedTotal) * 100) : null
 
+  /*
+   * 승률 도넛은 결과가 난 교전이 5건 이상일 때만 — 예전엔 전투 1건으로 '100% 승률' 도넛이 크게 떴다.
+   * 표본이 적으면 'n승 n패' 글자만 둔다.
+   */
   const outcomeSlices: SegmentSlice[] =
-    decidedTotal > 0
+    decidedTotal >= MIN_DECIDED_FOR_WIN_RATE
       ? [
           {
             key: 'win',
@@ -176,6 +271,9 @@ export function MilitaryForceInfographicBlock({
     </ForceBlock>
   )
 }
+
+/** 승률(%)을 말할 수 있는 최소 표본 — 결과가 난 교전 수 */
+const MIN_DECIDED_FOR_WIN_RATE = 5
 
 const ForceVisualRow = styled.div<{ $hasDonut: boolean }>`
   display: grid;
@@ -488,6 +586,11 @@ export interface RadarAxisMetric {
   score: number
   /** 실제 건수/단위 표기 (예: '42건', '18명') */
   valueLabel: string
+  /**
+   * 자료 없음 — 예전엔 미입력 축도 기본 점수(20 등)나 최솟값으로 꼭짓점을 찍어, 다각형이 자료가 있는
+   * 것처럼 한쪽으로 꺼진 모양이 됐다. 미입력이면 꼭짓점을 찍지 않는다.
+   */
+  missing?: boolean
   onClick?: () => void
 }
 
@@ -530,6 +633,8 @@ export function NationalRadarPolygonChart({
       })
       .join(' ')
 
+  /* 한 축이라도 비면 다각형(면적)은 거짓 모양이 된다 — 있는 축만 바퀴살(중심→값)로 그린다 */
+  const allPresent = axes.every((ax) => !ax.missing)
   const dataPoly = axes
     .map((ax, idx) => {
       const ratio = Math.max(0.12, Math.min(1, ax.score / 100))
@@ -551,7 +656,7 @@ export function NationalRadarPolygonChart({
 
   return (
     <RadarOuterWrap>
-      <RadarSvg viewBox="0 0 220 196" role="img" aria-label="국가 다차원 역량 레이더 차트">
+      <RadarSvg viewBox="-44 0 308 196" role="img" aria-label="국가 다차원 역량 레이더 차트">
         {[0.33, 0.66, 1].map((lv) => (
           <polygon
             key={lv}
@@ -586,14 +691,35 @@ export function NationalRadarPolygonChart({
             strokeLinejoin="round"
           />
         ) : null}
-        <polygon
-          points={dataPoly}
-          fill={accent}
-          fillOpacity={theme.mode === 'dark' ? '0.24' : '0.16'}
-          stroke={accent}
-          strokeWidth="1.8"
-          strokeLinejoin="round"
-        />
+        {allPresent ? (
+          <polygon
+            points={dataPoly}
+            fill={accent}
+            fillOpacity={theme.mode === 'dark' ? '0.24' : '0.16'}
+            stroke={accent}
+            strokeWidth="1.8"
+            strokeLinejoin="round"
+          />
+        ) : (
+          axes.map((ax, idx) => {
+            if (ax.missing) return null
+            const ratio = Math.max(0.12, Math.min(1, ax.score / 100))
+            const pt = pointAt(idx, ratio)
+            return (
+              <line
+                key={`spoke-${ax.key}`}
+                x1={cx}
+                y1={cy}
+                x2={pt.x}
+                y2={pt.y}
+                stroke={accent}
+                strokeWidth="3"
+                strokeLinecap="round"
+                opacity={0.85}
+              />
+            )
+          })
+        )}
         {hasCompare
           ? compareAxes!.map((cAx, idx) => {
               const ratio = Math.max(0.12, Math.min(1, cAx.score / 100))
@@ -627,14 +753,26 @@ export function NationalRadarPolygonChart({
               style={{ cursor: ax.onClick ? 'pointer' : 'default' }}
               onClick={ax.onClick}
             >
-              <circle
-                cx={pt.x}
-                cy={pt.y}
-                r="3.3"
-                fill={accent}
-                stroke={ledgerBackground(theme.mode)}
-                strokeWidth="1.3"
-              />
+              {ax.missing ? (
+                <circle
+                  cx={pointAt(idx, 1).x}
+                  cy={pointAt(idx, 1).y}
+                  r="3"
+                  fill="none"
+                  stroke={gridStroke}
+                  strokeWidth="1.3"
+                  strokeDasharray="2 1.5"
+                />
+              ) : (
+                <circle
+                  cx={pt.x}
+                  cy={pt.y}
+                  r="3.3"
+                  fill={accent}
+                  stroke={ledgerBackground(theme.mode)}
+                  strokeWidth="1.3"
+                />
+              )}
               <text
                 x={labelPt.x}
                 y={labelPt.y - 3}
@@ -651,7 +789,8 @@ export function NationalRadarPolygonChart({
                 textAnchor={anchor}
                 fontSize="9"
                 fontWeight="600"
-                fill={accent}
+                fill={ax.missing ? 'currentColor' : accent}
+                opacity={ax.missing ? 0.6 : 1}
               >
                 {ax.valueLabel}
               </text>
@@ -715,9 +854,10 @@ const RadarCompareLegend = styled.div`
   }
 `
 
+/* 좌우 라벨('인간개발(HDI)')이 그림 밖으로 잘리던 것 — viewBox 좌우를 44씩 넓히고 폭도 같은 비율로 */
 const RadarSvg = styled.svg`
   width: 100%;
-  max-width: 244px;
+  max-width: 320px;
   height: auto;
   overflow: visible;
   ${DIGIT_DISPLAY}
@@ -801,6 +941,11 @@ export function ParliamentHemicycleSvg({
   const displayTotal = totalSeats ?? sumVal
   const majoritySeats = Math.floor(displayTotal / 2) + 1
 
+  const fullCaption =
+    subCaption ?? (showMajorityLine ? `과반 ${majoritySeats}석` : '정원')
+  const [centerCaption, ...captionRest] = fullCaption.split(' · ')
+  const footCaption = captionRest.join(' · ')
+
   return (
     <HemicycleWrap>
       <HemicycleSvgBox>
@@ -830,11 +975,12 @@ export function ParliamentHemicycleSvg({
         </svg>
         <HemicycleCenterText>
           <strong>{displayTotal.toLocaleString('ko-KR')}</strong>
-          <span>
-            {subCaption ?? (showMajorityLine ? `과반 ${majoritySeats}석` : '정원')}
-          </span>
+          <span>{centerCaption}</span>
         </HemicycleCenterText>
       </HemicycleSvgBox>
+      {/* 반원 안쪽은 좁다 — '과반 199석 · 1907년 라이히스탁 선거'를 통째로 넣으면 의석 점 위로 넘쳤다.
+          가운데엔 첫 마디만, 나머지(선거·의회 이름)는 반원 아래 한 줄로 */}
+      {footCaption ? <HemicycleFootCaption>{footCaption}</HemicycleFootCaption> : null}
 
       <HemicycleLegend>
         {valid.slice(0, 6).map((s) => (
@@ -869,6 +1015,17 @@ const HemicycleSvgBox = styled.div`
   }
 `
 
+const HemicycleFootCaption = styled.div`
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.text.tertiary};
+`
+
 const HemicycleCenterText = styled.div`
   position: absolute;
   left: 50%;
@@ -889,6 +1046,10 @@ const HemicycleCenterText = styled.div`
   }
 
   span {
+    max-width: 64px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: 9.5px;
     font-weight: 600;
     color: ${({ theme }) => theme.colors.text.tertiary};
@@ -1092,6 +1253,9 @@ const YieldCurveFooter = styled.div`
 
 /* ─── 11. Century × Domain Heatmap Matrix + Milestone Events Strip ────────── */
 
+/** 히트맵에 빈 세기까지 채워 세울 최대 열 수 — 넘으면 있는 세기만 */
+const MAX_CENTURY_COLUMNS = 24
+
 function formatCenturyCol(century: number): string {
   return century < 0 ? `BC${Math.abs(century)}` : `${century}c`
 }
@@ -1128,6 +1292,27 @@ export function CenturyEventMatrixAndMilestones({
     }
     return max
   }, [buckets, topDomains])
+
+  /*
+   * 히트맵 열 = 처음 세기부터 마지막 세기까지 빠짐없이. 예전엔 사건이 있는 세기만 열로 세워
+   * 4·5·6·8c처럼 7c가 빠진 채 붙어, 세기 사이 간격이 실제와 다르게 읽혔다. 빈 세기는 빈 칸으로 둔다.
+   * 범위가 너무 넓으면(MAX_CENTURY_COLUMNS 초과) 예전처럼 있는 세기만.
+   */
+  const columns = useMemo(() => {
+    if (buckets.length === 0) return buckets
+    const sorted = [...buckets].sort((left, right) => left.century - right.century)
+    const first = sorted[0].century
+    const last = sorted[sorted.length - 1].century
+    const span = last - first + 1 - (first < 0 && last > 0 ? 1 : 0)
+    if (span > MAX_CENTURY_COLUMNS) return sorted
+    const byCentury = new Map(sorted.map((bucket) => [bucket.century, bucket]))
+    const filled: CenturyDomainBucket[] = []
+    for (let century = first; century <= last; century += 1) {
+      if (century === 0) continue // 기원전 1세기 다음은 1세기
+      filled.push(byCentury.get(century) ?? { century, total: 0, domains: {} })
+    }
+    return filled
+  }, [buckets])
 
   if (buckets.length === 0 && milestones.length === 0) return null
 
@@ -1167,14 +1352,14 @@ export function CenturyEventMatrixAndMilestones({
                 <thead>
                   <tr>
                     <th className="dom-head">분야 \ 세기</th>
-                    {buckets.map((b) => (
-                      <th key={b.century}>
+                    {columns.map((bucket) => (
+                      <th key={bucket.century}>
                         <HeatmapCenturyBtn
                           type="button"
-                          onClick={() => onSelectCentury?.(b.century)}
-                          title={`${formatCenturyCol(b.century)} 사건 보기 (${b.total}건)`}
+                          onClick={() => onSelectCentury?.(bucket.century)}
+                          title={`${formatCenturyCol(bucket.century)} 사건 보기 (${bucket.total}건)`}
                         >
-                          {formatCenturyCol(b.century)}
+                          {formatCenturyCol(bucket.century)}
                         </HeatmapCenturyBtn>
                       </th>
                     ))}
@@ -1193,14 +1378,14 @@ export function CenturyEventMatrixAndMilestones({
                           <span>{domainLabel(dom.domain)}</span>
                           <small>{dom.count}</small>
                         </td>
-                        {buckets.map((b) => {
-                          const cnt = b.domains[dom.domain] ?? 0
+                        {columns.map((bucket) => {
+                          const cnt = bucket.domains[dom.domain] ?? 0
                           const alpha =
                             cnt > 0
                               ? 0.18 + (cnt / maxCellCount) * 0.72
                               : 0
                           return (
-                            <td key={b.century}>
+                            <td key={bucket.century}>
                               <HeatmapCellBtn
                                 type="button"
                                 $empty={cnt === 0}
@@ -1214,12 +1399,12 @@ export function CenturyEventMatrixAndMilestones({
                                 }
                                 onClick={() => {
                                   if (onSelectCell) {
-                                    onSelectCell(b.century, dom.domain)
+                                    onSelectCell(bucket.century, dom.domain)
                                   } else {
-                                    onSelectCentury?.(b.century)
+                                    onSelectCentury?.(bucket.century)
                                   }
                                 }}
-                                title={`${formatCenturyCol(b.century)} · ${domainLabel(dom.domain)}: ${cnt}건 (클릭 시 세기+분야 필터)`}
+                                title={`${formatCenturyCol(bucket.century)} · ${domainLabel(dom.domain)}: ${cnt}건 (클릭 시 세기+분야 필터)`}
                               >
                                 {cnt > 0 ? <span>{cnt}</span> : null}
                               </HeatmapCellBtn>
@@ -1475,7 +1660,16 @@ export function FiguresSpotlightBentoCard({
   onOpenPersonsTab: () => void
 }) {
   const theme = useTheme()
-  if (personCount === 0) return null
+  if (personCount === 0) {
+    return (
+      <EmptyBentoCard
+        title="인물"
+        text="이 국가에 속한 인물을 등록하면 역할·시대 분포와 주요 인물 초상이 여기 모입니다."
+        actionLabel="인물 탭에서 등록"
+        onAction={onOpenPersonsTab}
+      />
+    )
+  }
 
   const roleSlices: SegmentSlice[] = [
     {
@@ -1518,7 +1712,7 @@ export function FiguresSpotlightBentoCard({
     <BentoCard aria-label="소속 인물 역할·시대 분포 및 주요 인물 초상">
       <BentoCardHeader>
         <BentoCardTitleGroup>
-          <BentoCardTitle>인물 아카이브 · 역할 분포 & 주요 인물</BentoCardTitle>
+          <BentoCardTitle>인물</BentoCardTitle>
           <BentoCardBadge>총 {personCount.toLocaleString('ko-KR')}명</BentoCardBadge>
         </BentoCardTitleGroup>
         <BentoHeaderActions>

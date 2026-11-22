@@ -2242,7 +2242,7 @@ const ExplorerTitle = styled.h1`
 const ExplorerDescription = styled.p`
   margin: 0;
   font-size: 12.5px;
-  ${metaText}
+  color: ${metaText};
 `
 
 const ExplorerKpiStrip = styled.div`
@@ -2292,7 +2292,7 @@ const ExplorerKpiCell = styled.button`
 const ExplorerKpiLabel = styled.span`
   font-size: 11.5px;
   font-weight: 600;
-  ${metaText}
+  color: ${metaText};
 `
 
 const ExplorerKpiValue = styled.span`
@@ -2308,12 +2308,12 @@ const ExplorerKpiValue = styled.span`
 const ExplorerKpiUnit = styled.span`
   font-size: 12px;
   font-weight: 500;
-  ${metaText}
+  color: ${metaText};
 `
 
 const ExplorerKpiSub = styled.span`
   font-size: 11px;
-  ${metaText}
+  color: ${metaText};
 `
 
 const AtlasBentoGrid = styled.div`
@@ -2376,7 +2376,7 @@ const AtlasCardBadge = styled.span`
 
 const AtlasCardHint = styled.span`
   font-size: 11px;
-  ${metaText}
+  color: ${metaText};
 `
 
 const ContinentBarList = styled.div`
@@ -2438,7 +2438,7 @@ const ContinentRightMeta = styled.span`
 
 const ContinentPopMeta = styled.span`
   font-size: 11px;
-  ${metaText}
+  color: ${metaText};
 `
 
 const ContinentCountValue = styled.span`
@@ -2451,7 +2451,7 @@ const ContinentSharePct = styled.span`
   margin-left: 3px;
   font-size: 11px;
   font-weight: 500;
-  ${metaText}
+  color: ${metaText};
 `
 
 const ContinentTrack = styled.div`
@@ -2622,7 +2622,7 @@ const EraColumnLabel = styled.span`
 const EraColumnSub = styled.span`
   font-size: 10.5px;
   ${DIGIT_DISPLAY}
-  ${metaText}
+  color: ${metaText};
 `
 
 type PolityTone = 'indigo' | 'amber' | 'teal' | 'slate'
@@ -2649,7 +2649,7 @@ const PolityTypeHeader = styled.div`
   justify-content: space-between;
   font-size: 11px;
   font-weight: 600;
-  ${metaText}
+  color: ${metaText};
 `
 
 const PolityStackedTrack = styled.div`
@@ -2727,7 +2727,7 @@ const CoverageRingText = styled.text`
 const CoverageSubText = styled.p`
   margin: 2px 0 0;
   font-size: 11.5px;
-  ${metaText}
+  color: ${metaText};
 `
 
 const RankModeGroup = styled.div`
@@ -2815,7 +2815,7 @@ const WorldAtlasCalloutName = styled.span`
 
 const WorldAtlasCalloutSub = styled.span`
   font-size: 11px;
-  ${metaText}
+  color: ${metaText};
 `
 
 const WorldAtlasCalloutMetric = styled.span`
@@ -2830,7 +2830,7 @@ const WorldAtlasCalloutMetric = styled.span`
   span {
     font-size: 11px;
     font-weight: 500;
-    ${metaText}
+    color: ${metaText};
   }
 `
 
@@ -2843,7 +2843,7 @@ const WorldAtlasIdleMeta = styled.div`
   flex-wrap: wrap;
   font-size: 11px;
   ${DIGIT_DISPLAY}
-  ${metaText}
+  color: ${metaText};
 `
 
 const WorldAtlasSvg = styled.svg`
@@ -3134,7 +3134,7 @@ const ExplorerCardName = styled.span`
 
 const ExplorerCardMeta = styled.span`
   font-size: 11px;
-  ${metaText}
+  color: ${metaText};
   ${DIGIT_DISPLAY}
   white-space: nowrap;
   overflow: hidden;

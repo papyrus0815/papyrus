@@ -108,7 +108,7 @@ export const CompactMeta = styled.span`
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
-  ${metaText}
+  color: ${metaText};
   ${DIGIT_DISPLAY}
 `
 

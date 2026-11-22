@@ -32,7 +32,6 @@ import {
   ArchiveFootprintBar,
   BentoCanvas,
   BentoGrid2Col,
-  BentoGrid3Col,
   FiguresSpotlightBentoCard,
   type MissingAxisChip,
   type RadarAxisMetric,
@@ -383,6 +382,7 @@ export function CountryDetailDashboard({
         label: '인구 규모',
         score: pctRank(popPeers, popNum),
         valueLabel: popNum != null ? formatPopulation(popNum) : '미기재',
+        missing: popNum == null,
         onClick: goStatsPyramid,
       },
       {
@@ -390,6 +390,7 @@ export function CountryDetailDashboard({
         label: '영토 면적',
         score: pctRank(areaPeers, areaNum),
         valueLabel: areaNum != null ? formatAreaValue(areaNum) : '미기재',
+        missing: areaNum == null,
         onClick: () => goRegions(),
       },
       {
@@ -397,6 +398,7 @@ export function CountryDetailDashboard({
         label: '인구 밀도',
         score: pctRank(densPeers, densVal),
         valueLabel: densVal != null ? `${densVal.toFixed(0)}명/km²` : '—',
+        missing: densVal == null,
         onClick: () => goRegions(),
       },
       {
@@ -405,6 +407,7 @@ export function CountryDetailDashboard({
         score: gdpScore,
         valueLabel:
           gdpVal != null ? formatMetricValue(gdpVal, 'USD') : '지표 미입력',
+        missing: gdpVal == null,
         onClick: goStatsIndicators,
       },
       {
@@ -415,6 +418,7 @@ export function CountryDetailDashboard({
           capVal != null
             ? formatMetricValue(capVal, 'USD_CAPITA')
             : '지표 미입력',
+        missing: capVal == null,
         onClick: goStatsIndicators,
       },
       {
@@ -422,6 +426,7 @@ export function CountryDetailDashboard({
         label: '인간개발(HDI)',
         score: hdiScore,
         valueLabel: latestHdi != null ? latestHdi.toFixed(3) : '지표 미입력',
+        missing: latestHdi == null,
         onClick: goStatsIndicators,
       },
     ]
@@ -634,57 +639,40 @@ export function CountryDetailDashboard({
     }
   }
 
-  const hasDemographicsCard =
-    demographicIndicators.length > 0 || stats.ethnicityCount > 0
-  const hasTradeCard = exportImports.length > 0 || countryCompanyCount > 0
-  const hasDiplomacyCard =
-    stats.treatyCount > 0 || stats.lawCount > 0 || stats.ethnicityCount > 0
-  const hasHistoryForceCard =
-    (country.historicalCountries?.length ?? 0) > 0 ||
-    stats.eventCenturyDomainCounts.length > 0 ||
-    stats.milestoneEvents.length > 0 ||
-    stats.militaryCount > 0
-
   const atlasCards: ReactNode[] = []
-  if (hasDemographicsCard) {
-    atlasCards.push(
-      <DemographicsBentoCard
-        key="demographics"
-        demographicIndicators={demographicIndicators}
-        ethnicityCount={stats.ethnicityCount}
-        onOpenPyramid={goStatsPyramid}
-        onOpenEthnicity={goEthnicity}
-        onOpenDataManager={() => setDataManagerTab('pyramid')}
-      />,
-    )
-  }
-  if (hasTradeCard) {
-    atlasCards.push(
-      <TradeAndIndustryBentoCard
-        key="trade"
-        exportImports={exportImports}
-        companyCount={countryCompanyCount}
-        companiesBySector={companiesBySector}
-        onOpenTrade={goTrade}
-        onOpenCompanies={goCompanies}
-      />,
-    )
-  }
-  if (hasDiplomacyCard) {
-    atlasCards.push(
-      <DiplomacyTreatyLawBentoCard
-        key="diplomacy"
-        treatyCount={stats.treatyCount}
-        lawCount={stats.lawCount}
-        ethnicityCount={stats.ethnicityCount}
-        civicSnapshot={stats.civicSnapshot}
-        onOpenTreaties={goTreaty}
-        onSelectTreaty={(tid) => navigate(pathKeys.treaties.detail(tid))}
-        onOpenLaws={goLaws}
-        onOpenEthnicity={goEthnicity}
-      />,
-    )
-  }
+  atlasCards.push(
+    <DemographicsBentoCard
+      key="demographics"
+      demographicIndicators={demographicIndicators}
+      ethnicityCount={stats.ethnicityCount}
+      onOpenPyramid={goStatsPyramid}
+      onOpenEthnicity={goEthnicity}
+      onOpenDataManager={() => setDataManagerTab('pyramid')}
+    />,
+  )
+  atlasCards.push(
+    <TradeAndIndustryBentoCard
+      key="trade"
+      exportImports={exportImports}
+      companyCount={countryCompanyCount}
+      companiesBySector={companiesBySector}
+      onOpenTrade={goTrade}
+      onOpenCompanies={goCompanies}
+    />,
+  )
+  atlasCards.push(
+    <DiplomacyTreatyLawBentoCard
+      key="diplomacy"
+      treatyCount={stats.treatyCount}
+      lawCount={stats.lawCount}
+      ethnicityCount={stats.ethnicityCount}
+      civicSnapshot={stats.civicSnapshot}
+      onOpenTreaties={goTreaty}
+      onSelectTreaty={(tid) => navigate(pathKeys.treaties.detail(tid))}
+      onOpenLaws={goLaws}
+      onOpenEthnicity={goEthnicity}
+    />,
+  )
   atlasCards.push(
     <CompactGeoBentoCard
       key="geo"
@@ -722,22 +710,21 @@ export function CountryDetailDashboard({
           />
 
           {/* 1B단 (통치 스펙트럼): 헌정 체제 & 역대 국가원수·정부수반 재임 바 (클릭 시 상단 마인드맵 즉시 연동) */}
-          {stats.executiveTimeline.length > 0 ? (
-            <ModernExecutiveSpectrumCard
-              timeline={stats.executiveTimeline}
-              regimeEras={stats.civicSnapshot.regimeEras}
-              activeTenureId={activeMindMapTenureId}
-              onFocusTenure={(tid) =>
-                setFocusedTenureState({ cid: country.id, tid })
-              }
-              onSelectPerson={(pid) => setPreviewPersonId(pid)}
-              onOpenCabinets={() => goGovernment('cabinets')}
-              onOpenPoliticalSystem={goPoliticalSystem}
-              onOpenHeadsTab={() =>
-                navigate(pathKeys.countryHeadsOfState(country.id))
-              }
-            />
-          ) : null}
+          {/* 자료가 없어도 같은 자리에 — 카드가 스스로 빈 안내를 그린다(2026-09-10 같은 배치 원칙) */}
+          <ModernExecutiveSpectrumCard
+            timeline={stats.executiveTimeline}
+            regimeEras={stats.civicSnapshot.regimeEras}
+            activeTenureId={activeMindMapTenureId}
+            onFocusTenure={(tid) =>
+              setFocusedTenureState({ cid: country.id, tid })
+            }
+            onSelectPerson={(pid) => setPreviewPersonId(pid)}
+            onOpenCabinets={() => goGovernment('cabinets')}
+            onOpenPoliticalSystem={goPoliticalSystem}
+            onOpenHeadsTab={() =>
+              navigate(pathKeys.countryHeadsOfState(country.id))
+            }
+          />
 
           {/* 2단 (4칸 한줄 계기판): 인구·영토 아크 게이지 | GDP 스파크라인 | 국채 수익률곡선(1M~30Y)·성장 | HDI 스펙트럼 */}
           <NationalPowerGaugeStrip
@@ -787,50 +774,41 @@ export function CountryDetailDashboard({
             />
           </BentoGrid2Col>
 
-          {/* 4단 (빈 칸 없는 적응형 사회·경제·외교·지리 아틀라스) */}
-          {atlasCards.length === 4 ? (
-            <>
-              <BentoGrid2Col>
-                {atlasCards[0]}
-                {atlasCards[1]}
-              </BentoGrid2Col>
-              <BentoGrid2Col>
-                {atlasCards[2]}
-                {atlasCards[3]}
-              </BentoGrid2Col>
-            </>
-          ) : atlasCards.length === 3 ? (
-            <BentoGrid3Col>{atlasCards}</BentoGrid3Col>
-          ) : atlasCards.length === 2 ? (
-            <BentoGrid2Col>{atlasCards}</BentoGrid2Col>
-          ) : (
-            atlasCards[0]
-          )}
+          {/*
+            4단 (인구·교역·조약·지리 2×2) — 예전엔 자료 있는 카드만 골라 1·2·3·4장에 따라 격자 열 수까지
+            바뀌었다(케냐는 지리 1장만). 같은 배치 원칙대로 늘 네 장, 빈 카드는 스스로 빈 안내를 그린다.
+          */}
+          <BentoGrid2Col>
+            {atlasCards[0]}
+            {atlasCards[1]}
+          </BentoGrid2Col>
+          <BentoGrid2Col>
+            {atlasCards[2]}
+            {atlasCards[3]}
+          </BentoGrid2Col>
 
           {/* 5단: 통사 계보 간트 스파인 · 세기×분야 히트맵 매트릭스 & 분수령 사건 · 군사 전력 */}
-          {hasHistoryForceCard ? (
-            <ModernHistoryForceBentoCard
-              countryName={country.name}
-              historicalCountries={country.historicalCountries ?? []}
-              eventCount={stats.eventCount}
-              centuryBuckets={stats.eventCenturyDomainCounts}
-              domainBreakdown={stats.eventDomainBreakdown}
-              milestoneEvents={stats.milestoneEvents}
-              militaryCount={stats.militaryCount}
-              highCommandCount={stats.highCommandCount}
-              militaryBranchBreakdown={stats.militaryBranchBreakdown}
-              warSummary={stats.warSummary}
-              onOpenHistoricalTab={goHistorical}
-              onSelectHistoricalCountry={(hid) =>
-                navigate(pathKeys.countryDetail(hid))
-              }
-              onSelectCentury={(cent) => goEventsCentury(cent)}
-              onSelectCell={(cent, dom) => goEventsCentury(cent, dom)}
-              onSelectEvent={(eid) => setPreviewEventId(eid)}
-              onOpenEvents={goEvents}
-              onOpenMilitary={goMilitary}
-            />
-          ) : null}
+          <ModernHistoryForceBentoCard
+            countryName={country.name}
+            historicalCountries={country.historicalCountries ?? []}
+            eventCount={stats.eventCount}
+            centuryBuckets={stats.eventCenturyDomainCounts}
+            domainBreakdown={stats.eventDomainBreakdown}
+            milestoneEvents={stats.milestoneEvents}
+            militaryCount={stats.militaryCount}
+            highCommandCount={stats.highCommandCount}
+            militaryBranchBreakdown={stats.militaryBranchBreakdown}
+            warSummary={stats.warSummary}
+            onOpenHistoricalTab={goHistorical}
+            onSelectHistoricalCountry={(hid) =>
+              navigate(pathKeys.countryDetail(hid))
+            }
+            onSelectCentury={(cent) => goEventsCentury(cent)}
+            onSelectCell={(cent, dom) => goEventsCentury(cent, dom)}
+            onSelectEvent={(eid) => setPreviewEventId(eid)}
+            onOpenEvents={goEvents}
+            onOpenMilitary={goMilitary}
+          />
 
           {/* 6단: 소속 인물 역할·시대 분포 도넛 & 주요 인물 초상 갤러리 */}
           <FiguresSpotlightBentoCard

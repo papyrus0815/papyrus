@@ -179,7 +179,7 @@ export const CardLabel = styled.span`
   font-size: 12px;
   font-weight: 600;
   letter-spacing: -0.01em;
-  ${metaText}
+  color: ${metaText};
 `
 
 export const CardValue = styled.div`
@@ -3147,7 +3147,7 @@ export const HeroMetaRow = styled.div`
   flex-wrap: wrap;
   gap: 6px 8px;
   font-size: 12.5px;
-  ${metaText}
+  color: ${metaText};
   min-width: 0;
 `
 

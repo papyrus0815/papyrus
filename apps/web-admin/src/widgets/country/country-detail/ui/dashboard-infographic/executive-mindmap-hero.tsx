@@ -764,10 +764,10 @@ export function ExecutiveMindMapBentoHero({
           <BentoCardTitleGroup>
             <BentoCardTitle>
               {branchDomain === 'military'
-                ? '국가 통수권자 · 군 지휘부 마인드맵'
+                ? '군 지휘부'
                 : historicalCountryId
-                  ? '통치 군주 · 조정 관서 마인드맵'
-                  : '국가 통수권자 · 내각 부처 마인드맵'}
+                  ? '조정 구조'
+                  : '통치 구조'}
             </BentoCardTitle>
             {mindmap.activeCabinetLabel ? (
               <BentoCardBadge>{mindmap.activeCabinetLabel}</BentoCardBadge>
@@ -861,19 +861,7 @@ export function ExecutiveMindMapBentoHero({
             </RegimeStepper>
           )}
 
-          {mindmap.activeCabinetId && (
-            <BentoActionBtn
-              type="button"
-              onClick={() =>
-                setAppointmentTarget({
-                  contextType: 'CABINET',
-                })
-              }
-            >
-              <FiPlus size={11} /> 각료 임명
-            </BentoActionBtn>
-          )}
-
+          {/* '각료 임명'은 빈 부처 칸마다 있는 '+ 임명'과 같은 일이라 머리 줄에서 뺐다(조작 9개 → 줄임) */}
           <BentoActionBtn
             type="button"
             $accent
@@ -884,27 +872,22 @@ export function ExecutiveMindMapBentoHero({
         </BentoHeaderActions>
       </BentoCardHeader>
 
-      {/* 2. 슬림 1줄 국가 핵심 개요 배너 */}
-      {(plainOverviewPreview || onEditOverview) && (
+      {/* 2. 슬림 1줄 국가 핵심 개요 배너 — 소개가 있을 때만. 없을 때의 '아직 등록되지 않았습니다' 안내는
+          통치 구조 패널의 일이 아니다(소개 수정은 국가 머리의 '정보 수정'이 맡는다) */}
+      {plainOverviewPreview && (
         <CompactOverviewStrip>
-          {plainOverviewPreview ? (
-            proseExpanded ? (
-              <ExpandedProseWrap>
-                {isLikelyRichTextHtml(cleanDescription) ? (
-                  <RichTextReadView html={cleanDescription} />
-                ) : (
-                  <p>{cleanDescription}</p>
-                )}
-              </ExpandedProseWrap>
-            ) : (
-              <OneLineSummary onClick={() => setProseExpanded(true)}>
-                {plainOverviewPreview}
-              </OneLineSummary>
-            )
+          {proseExpanded ? (
+            <ExpandedProseWrap>
+              {isLikelyRichTextHtml(cleanDescription) ? (
+                <RichTextReadView html={cleanDescription} />
+              ) : (
+                <p>{cleanDescription}</p>
+              )}
+            </ExpandedProseWrap>
           ) : (
-            <EmptyOverviewHint>
-              국가 한 줄 핵심 소개가 아직 등록되지 않았습니다.
-            </EmptyOverviewHint>
+            <OneLineSummary onClick={() => setProseExpanded(true)}>
+              {plainOverviewPreview}
+            </OneLineSummary>
           )}
           <OverviewRightBtns>
             {plainOverviewPreview.length > 95 && (
@@ -1185,11 +1168,6 @@ const ExpandedProseWrap = styled.div`
   p {
     margin: 0;
   }
-`
-
-const EmptyOverviewHint = styled.span`
-  font-size: 11.5px;
-  color: ${({ theme }) => theme.colors.text.tertiary};
 `
 
 const OverviewRightBtns = styled.div`

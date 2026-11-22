@@ -223,5 +223,5 @@ const ItemLabel = styled.span`
 
 const ItemDesc = styled.span`
   font-size: 11px;
-  ${metaText}
+  color: ${metaText};
 `

@@ -148,7 +148,7 @@ const MenuTitle = styled.div`
   padding: 5px 10px 6px;
   font-size: 11px;
   font-weight: 600;
-  ${metaText}
+  color: ${metaText};
   border-bottom: 1px solid ${({ theme }) => ledgerHairlineStrong(theme.mode)};
   margin-bottom: 4px;
   white-space: nowrap;

@@ -1543,18 +1543,24 @@ const ArchiveDomainRowBtn = styled.button<{ $empty: boolean }>`
 
 const ArchiveDomainTop = styled.div`
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 6px;
 `
 
+/* 좁은 칸에서 '구성 민/족', '교역·상/단'처럼 글자 중간에서 끊기던 것 — 낱말 단위로만 줄바꿈, 수치는 한 줄 */
 const ArchiveDomainLabel = styled.span`
+  min-width: 0;
+  word-break: keep-all;
+  line-height: 1.3;
   font-size: 11.5px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text.primary};
 `
 
 const ArchiveDomainCount = styled.span<{ $empty: boolean }>`
+  flex-shrink: 0;
+  white-space: nowrap;
   font-size: 11px;
   font-weight: 700;
   color: ${({ theme, $empty }) =>
